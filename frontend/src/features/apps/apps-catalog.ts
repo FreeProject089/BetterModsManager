@@ -1062,7 +1062,7 @@ function openAppEditor(index: number | null) {
     body.innerHTML = `
     <div class="apps-install-form">
       <h3 class="apps-install-title">${index !== null ? (t('apps.create.editApp')||'Edit App') : (t('apps.create.addApp')||'Add App')}</h3>
-      ${field('id', 'ID (unique, no spaces)', existing.id||'', 'my-app-name')}
+      ${field('id', t('apps.create.fId')||'ID (unique, no spaces)', existing.id||'', 'my-app-name')}
       ${field('title', t('apps.create.fTitle')||'Title', existing.title||'', 'My App')}
       <label class="apps-install-label">${t('apps.create.fDesc')||'Description'}</label>
       <textarea class="apps-path-input" id="cr-description" rows="2" style="resize:vertical;margin-bottom:8px">${escHtml(existing.description||'')}</textarea>
@@ -1070,21 +1070,21 @@ function openAppEditor(index: number | null) {
         <div>
           <label class="apps-install-label">${t('apps.create.fCategory')||'Category'}</label>
           <select class="apps-filter" id="cr-category" style="width:100%">
-            <option value="game"${existing.category==='game'?' selected':''}>Game</option>
-            <option value="utility"${existing.category==='utility'||!existing.category?' selected':''}>Utility</option>
-            <option value="other"${existing.category==='other'?' selected':''}>Other</option>
+            <option value="game"${existing.category==='game'?' selected':''}>${t('apps.cat.game')||'Game'}</option>
+            <option value="utility"${existing.category==='utility'||!existing.category?' selected':''}>${t('apps.cat.utility')||'Utility'}</option>
+            <option value="other"${existing.category==='other'?' selected':''}>${t('apps.cat.other')||'Other'}</option>
           </select>
         </div>
         <div>
           <label class="apps-install-label">${t('apps.create.fPrice')||'Price'}</label>
           <select class="apps-filter" id="cr-price" style="width:100%">
-            <option value="free"${existing.price==='free'||!existing.price?' selected':''}>Free</option>
-            <option value="freemium"${existing.price==='freemium'?' selected':''}>Freemium</option>
-            <option value="paid"${existing.price==='paid'?' selected':''}>Paid</option>
+            <option value="free"${existing.price==='free'||!existing.price?' selected':''}>${t('apps.price.free')||'Free'}</option>
+            <option value="freemium"${existing.price==='freemium'?' selected':''}>${t('apps.price.freemium')||'Freemium'}</option>
+            <option value="paid"${existing.price==='paid'?' selected':''}>${t('apps.price.paid')||'Paid'}</option>
           </select>
         </div>
       </div>
-      ${field('version', 'Version', existing.version||'', '1.0.0')}
+      ${field('version', t('apps.create.fVersion')||'Version', existing.version||'', '1.0.0')}
       ${field('tags', t('apps.create.fTags')||'Tags (comma-separated, max 3)', (existing.tags||[]).join(', '), 'dcs, tool, audio')}
       ${field('requirements', t('apps.requirements')||'Requirements', existing.requirements||'', 'Windows 10+')}
       ${field('thumb', t('apps.create.fThumb')||'Thumbnail URL', existing.images?.thumb||'', 'https://.../thumb.png')}
@@ -1098,7 +1098,7 @@ function openAppEditor(index: number | null) {
             ${['zip','exe','msi','script'].map(v => `<option value="${v}"${(existing.download as any)?.file_type===v?' selected':''}>${v}</option>`).join('')}
           </select>
         </div>
-        <div>${field('size', 'Size (bytes)', String((existing.download as any)?.size||''), '10485760')}</div>
+        <div>${field('size', t('apps.create.fSize')||'Size (bytes)', String((existing.download as any)?.size||''), '10485760')}</div>
       </div>
       ${field('sha256', t('apps.create.fSha')||'SHA-256 checksum (recommended — verified before install)', (existing.download as any)?.sha256||'', 'e3b0c44298fc1c149afbf4c8996fb924…')}
       <div class="apps-install-footer">

@@ -14,6 +14,12 @@ use walkdir;
 
 // ─── Lightweight models (re-defined to avoid pulling Tauri deps) ─────────
 
+// NOTE on `extra` fields: these mirror structs are a SUBSET of BMM's real state
+// (state.rs) — but write_app_data() serializes them back to data.json. Without a
+// catch-all, every write would silently STRIP any field the mirror doesn't know
+// (connected repos, plugin API tokens, CORS allow-list, telemetry consent, …).
+// The flattened `extra` map round-trips every unknown field verbatim.
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BmmProfile {
     pub id: String,
@@ -29,6 +35,8 @@ pub struct BmmProfile {
     pub background_image: Option<String>,
     pub created_at: String,
     pub origin_repo_profile_id: Option<String>,
+    #[serde(flatten)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -43,6 +51,8 @@ pub struct DownloadLink {
     pub url: String,
     pub link_type: String,
     pub label: String,
+    #[serde(flatten)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -61,6 +71,8 @@ pub struct ConflictReport {
     pub file_count: usize,
     #[serde(default)]
     pub activation_order: u32,
+    #[serde(flatten)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -97,6 +109,8 @@ pub struct BmmModEntry {
     pub file_hashes_timestamp: Option<String>,
     #[serde(default)]
     pub file_hashes_invalid: Option<bool>,
+    #[serde(flatten)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -105,6 +119,8 @@ pub struct TagDef {
     pub name: String,
     #[serde(default)]
     pub color: Option<String>,
+    #[serde(flatten)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -153,6 +169,8 @@ pub struct BmmSettings {
     pub api_token: String,
     #[serde(default = "default_api_port")]
     pub api_port: u16,
+    #[serde(flatten)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
 fn default_api_port() -> u16 { 51274 }
@@ -184,6 +202,7 @@ impl Default for BmmSettings {
             history_retention_days: 30,
             api_token: String::new(),
             api_port: default_api_port(),
+            extra: serde_json::Map::new(),
         }
     }
 }
@@ -195,6 +214,8 @@ pub struct LaunchPack {
     pub executable_paths: Vec<PathBuf>,
     pub icon_path: Option<PathBuf>,
     pub created_at: String,
+    #[serde(flatten)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
 /// Top-level persisted data (mirrors state::AppData)
@@ -215,6 +236,8 @@ pub struct BmmAppData {
     pub installed_plugins: Vec<serde_json::Value>,
     #[serde(default)]
     pub modpacks: Vec<serde_json::Value>,
+    #[serde(flatten)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
 // ─── Crash report content ────────────────────────────────────────────────
@@ -338,9 +361,19 @@ pub fn list_crash_reports() -> Vec<CrashReportSummary> {
     reports
 }
 
-/// Read and decompress a crash report zip into structured content
+/// Read and decompress a crash report zip into structured content.
+/// The path must resolve INSIDE the BMM Crashes directory (CWE-22) — this tool
+/// reads crash reports, not arbitrary zips on the machine.
 pub fn read_crash_report(zip_path: &str) -> anyhow::Result<CrashReportContent> {
-    let file = std::fs::File::open(zip_path)
+    let crashes_root = get_bmm_data_dir().join("Crashes");
+    let canon_root = std::fs::canonicalize(&crashes_root)
+        .map_err(|e| anyhow::anyhow!("Crashes directory not found at {:?}: {}", crashes_root, e))?;
+    let canon_zip = std::fs::canonicalize(zip_path)
+        .map_err(|e| anyhow::anyhow!("Cannot open crash zip {:?}: {}", zip_path, e))?;
+    if !canon_zip.starts_with(&canon_root) {
+        anyhow::bail!("Refusing to read outside the Crashes directory: {:?}", zip_path);
+    }
+    let file = std::fs::File::open(&canon_zip)
         .map_err(|e| anyhow::anyhow!("Cannot open crash zip {:?}: {}", zip_path, e))?;
     let mut archive = zip::ZipArchive::new(file)?;
 
@@ -607,6 +640,7 @@ fn compute_file_sha256(path: &std::path::Path) -> anyhow::Result<String> {
 
 /// Create a modpack (simplified JSON structure)
 pub fn create_modpack(name: &str, mod_ids: Vec<String>) -> anyhow::Result<String> {
+    require_plain_name(name)?; // CWE-22: the name becomes a file name under modpacks/
     let data = read_app_data()?;
     let mut pack_mods = Vec::new();
     for id in mod_ids {
@@ -662,8 +696,19 @@ pub fn get_docs_base_path() -> anyhow::Result<std::path::PathBuf> {
     Err(anyhow::anyhow!("Could not find .Assets directory (checked from exe and cwd)"))
 }
 
+/// Reject any name that could escape its base directory (CWE-22): the callers
+/// join user-supplied names under a fixed base, so path separators and `..`
+/// must never be honoured.
+fn require_plain_name(name: &str) -> anyhow::Result<()> {
+    if name.is_empty() || name.contains("..") || name.contains('/') || name.contains('\\') || name.contains(':') {
+        anyhow::bail!("Invalid file name (path components are not allowed): {}", name);
+    }
+    Ok(())
+}
+
 /// Read project documentation from .Assets/.md
 pub fn read_documentation(file_name: &str) -> anyhow::Result<String> {
+    require_plain_name(file_name)?; // CWE-22: "../../…" must not escape the docs dir
     let base_path = get_docs_base_path()?;
     let mut target_path = base_path.join(file_name);
     
@@ -771,6 +816,7 @@ pub fn get_language_list() -> anyhow::Result<Vec<String>> {
 
 /// Read a language file
 pub fn read_language_file(lang_code: &str) -> anyhow::Result<String> {
+    require_plain_name(lang_code)?; // CWE-22: keep the lookup inside frontend/Lang
     let base_path = get_lang_base_path()?;
     let target_path = base_path.join(format!("{}.json", lang_code));
     
@@ -783,6 +829,7 @@ pub fn read_language_file(lang_code: &str) -> anyhow::Result<String> {
 
 /// Generate a production-ready repository manifest and copy files
 pub fn generate_repo(name: &str, mod_ids: Vec<String>) -> anyhow::Result<String> {
+    require_plain_name(name)?; // CWE-22: the name becomes a folder under Exports/
     let app_data = read_app_data()?;
     let base_path = get_bmm_data_dir();
     let output_path = base_path.join("Exports").join(name);
@@ -1068,4 +1115,131 @@ pub fn generate_lightweight_server(
     }
 
     Ok(msg)
+}
+
+// ─── Feature-parity additions (modpacks, tags, repos, themes, plugins, live API) ───
+
+/// List modpacks (raw JSON entries from data.json `modpacks`).
+pub fn list_modpacks() -> anyhow::Result<Vec<serde_json::Value>> {
+    Ok(read_app_data()?.modpacks)
+}
+
+/// List the user's custom mod tags.
+pub fn list_tags() -> anyhow::Result<Vec<TagDef>> {
+    Ok(read_app_data()?.custom_tags)
+}
+
+/// List the Server-Repos this BMM is connected to (stored in settings).
+pub fn list_connected_repos() -> anyhow::Result<serde_json::Value> {
+    let d = read_app_data()?;
+    Ok(d.settings.extra.get("connected_server_repos").cloned().unwrap_or_else(|| serde_json::json!([])))
+}
+
+/// List installed themes (id/name/author/version) + which one is active.
+pub fn list_themes() -> anyhow::Result<serde_json::Value> {
+    let data_dir = get_bmm_data_dir();
+    let active = std::fs::read_to_string(data_dir.join("active_theme.txt")).ok().map(|s| s.trim().to_string());
+    let mut themes = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(data_dir.join("themes")) {
+        for e in entries.flatten() {
+            let tj = e.path().join("theme.json");
+            if !tj.exists() { continue; }
+            if let Ok(txt) = std::fs::read_to_string(&tj) {
+                if let Ok(v) = serde_json::from_str::<serde_json::Value>(&txt) {
+                    let id = v.get("id").and_then(|x| x.as_str()).unwrap_or_default().to_string();
+                    themes.push(serde_json::json!({
+                        "id": id,
+                        "name": v.get("name"),
+                        "author": v.get("author"),
+                        "version": v.get("version"),
+                        "active": active.as_deref() == Some(id.as_str()),
+                    }));
+                }
+            }
+        }
+    }
+    Ok(serde_json::json!({ "active": active, "installed": themes, "count": themes.len() }))
+}
+
+/// Get one installed plugin's full record (matched by manifest id or top-level id).
+pub fn get_plugin(plugin_id: &str) -> anyhow::Result<serde_json::Value> {
+    let plugins = list_plugins()?;
+    plugins.into_iter()
+        .find(|p| p.get("manifest").and_then(|m| m.get("id")).and_then(|v| v.as_str()) == Some(plugin_id)
+            || p.get("id").and_then(|v| v.as_str()) == Some(plugin_id))
+        .ok_or_else(|| anyhow::anyhow!("Plugin not found: {}", plugin_id))
+}
+
+/// Verify a mod's on-disk files against its stored SHA-256 hashes.
+pub fn get_mod_by_id(mod_id: &str) -> anyhow::Result<BmmModEntry> {
+    read_app_data()?.mods.into_iter().find(|m| m.id == mod_id)
+        .ok_or_else(|| anyhow::anyhow!("Mod not found: {}", mod_id))
+}
+
+/// Call the RUNNING BMM app's local plugin API with the local admin token.
+/// This is the live-action bridge: everything the app exposes over /api/*
+/// (repo connect/sync, modpack enable/disable, mod update checks, app launch,
+/// scheduler, …) is reachable when BMM is running. Guardrails: the host/port are
+/// FIXED to 127.0.0.1 + the configured local port (no SSRF surface — the path can
+/// never change the target host), only /api/ paths, only GET/POST.
+pub async fn api_call(method: &str, path: &str, body: Option<serde_json::Value>) -> anyhow::Result<serde_json::Value> {
+    if !path.starts_with("/api/") {
+        anyhow::bail!("Path must start with /api/ (got {:?})", path);
+    }
+    if path.contains("://") || path.contains('\u{0}') {
+        anyhow::bail!("Invalid path");
+    }
+    let m = method.to_uppercase();
+    if m != "GET" && m != "POST" {
+        anyhow::bail!("Only GET and POST are allowed");
+    }
+    let s = read_app_data()?.settings;
+    if s.api_token.is_empty() {
+        anyhow::bail!("BMM API token is not set — launch BMM once so it generates one (Settings → Identity & API)");
+    }
+    let url = format!("http://127.0.0.1:{}{}", s.api_port, path);
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(60))
+        .build()?;
+    let req = if m == "GET" { client.get(&url) } else { client.post(&url).json(&body.unwrap_or_else(|| serde_json::json!({}))) };
+    let res = req.header("Authorization", format!("Bearer {}", s.api_token)).send().await
+        .map_err(|e| anyhow::anyhow!("BMM API unreachable — is the BMM app running? ({})", e))?;
+    let status = res.status().as_u16();
+    let text = res.text().await.unwrap_or_default();
+    let body: serde_json::Value = serde_json::from_str(&text).unwrap_or_else(|_| serde_json::json!({ "raw": text }));
+    Ok(serde_json::json!({ "status": status, "body": body }))
+}
+
+// ─── Scheduler / themes / sessions (offline reads + safe writes) ───────────
+
+/// List saved scheduler tasks (offline read of schedules.json).
+pub fn list_schedules() -> anyhow::Result<serde_json::Value> {
+    let path = get_bmm_data_dir().join("schedules.json");
+    if !path.exists() { return Ok(serde_json::json!([])); }
+    let txt = std::fs::read_to_string(&path)?;
+    Ok(serde_json::from_str(&txt)?)
+}
+
+/// Read one installed theme's full definition (data/themes/<id>/theme.json).
+pub fn get_theme(theme_id: &str) -> anyhow::Result<serde_json::Value> {
+    require_plain_name(theme_id)?; // CWE-22: the id is a folder name
+    let path = get_bmm_data_dir().join("themes").join(theme_id).join("theme.json");
+    let txt = std::fs::read_to_string(&path)
+        .map_err(|_| anyhow::anyhow!("Theme not installed: {} (built-in themes live in app resources — use bmm_list_themes)", theme_id))?;
+    Ok(serde_json::from_str(&txt)?)
+}
+
+/// Set the active theme by id (writes active_theme.txt). Installed themes are
+/// validated against data/themes/; built-in ids are accepted as-is (they live in
+/// the app's resource bundle). Takes effect when the BMM app (re)loads themes.
+pub fn apply_theme(theme_id: &str) -> anyhow::Result<String> {
+    require_plain_name(theme_id)?;
+    let data_dir = get_bmm_data_dir();
+    let installed = data_dir.join("themes").join(theme_id).join("theme.json").exists();
+    std::fs::write(data_dir.join("active_theme.txt"), theme_id)?;
+    Ok(if installed {
+        format!("Theme '{}' set as active (applies when BMM reloads themes).", theme_id)
+    } else {
+        format!("Theme '{}' set as active — not found under installed themes, so it must be a built-in id (applies when BMM reloads themes).", theme_id)
+    })
 }

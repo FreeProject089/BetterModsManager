@@ -507,6 +507,7 @@ fn main() {
             commands::debug::get_debug_stats,
             commands::debug::get_rust_logs,
             commands::window::start_resizing,
+            commands::window::open_external_url,
             commands::ban_manager::ban_user,
             commands::ban_manager::unban_user,
             commands::ban_manager::unban_all,

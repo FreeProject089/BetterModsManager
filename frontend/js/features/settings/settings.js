@@ -4,6 +4,7 @@
  */
 import { invoke, getSettings, updateSettings, pickFile, saveFile } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
+import { getLinks } from '../../core/links-config.js';
 import { initI18nSandbox } from './i18n-sandbox.js';
 import { toast } from '../../ui/app.js';
 import { getProfiles, getActiveProfileId } from '../profiles/profiles.js';
@@ -1352,6 +1353,197 @@ window.recalculateAllHashesPrompt = async () => {
     document.getElementById('btn-recalc-cancel').onclick = cleanup;
     document.getElementById('btn-recalc-x').onclick = cleanup;
 };
+// ── Link this creator id to a BetterCommunity account ──────────────
+// Local-first: BMM works fully offline. This only reaches the server when the user
+// explicitly links; the server returns a short code to enter on the website.
+// TEST MODE: point the linking flow at the LOCAL dev BetterCommunity (localhost).
+// Set to false (or remove) to use the production site from links-config for release.
+const BC_LINK_TEST_MODE = true;
+const BC_LINK_TEST_BASE = 'http://localhost';
+async function openAccountLinkFlow() {
+    let creatorId = '';
+    try {
+        creatorId = (await invoke('get_creator_id'));
+    }
+    catch (_) { }
+    if (!creatorId || creatorId === '—') {
+        toast(t('settings.link.noCreator') || 'No creator id yet.', 'warning');
+        return;
+    }
+    const base = BC_LINK_TEST_MODE
+        ? BC_LINK_TEST_BASE
+        : (getLinks().bettercommunity || 'https://bettercommunity.ch/').replace(/\/+$/, '');
+    let data;
+    try {
+        const res = await fetch(`${base}/api/link/request`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ creatorId }),
+        });
+        data = await res.json();
+    }
+    catch (_) {
+        toast(t('settings.link.offline') || 'Could not reach BetterCommunity (offline?). BMM keeps working locally.', 'warning');
+        return;
+    }
+    if (data?.linked) {
+        toast(t('settings.link.already') || 'This creator id is already linked to an account.', 'info');
+        return;
+    }
+    if (!data?.code) {
+        toast(t('common.error') || 'Failed to get a link code.', 'error');
+        return;
+    }
+    showLinkCodeModal(data.code, base);
+}
+function showLinkCodeModal(code, base) {
+    document.getElementById('bc-link-modal')?.remove();
+    const modal = document.createElement('div');
+    modal.id = 'bc-link-modal';
+    // Absolutely fill the APP window container (not the OS window) so the backdrop
+    // stays inside BMM's rounded frame and clicks land on the modal, not behind it.
+    modal.style.cssText = 'position:absolute;inset:0;z-index:10500;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(0,0,0,0.7);backdrop-filter:blur(6px)';
+    modal.innerHTML = `
+      <div style="width:100%;max-width:420px;background:var(--bmm-bg-elevated,#15171e);border:1px solid rgba(249,115,22,0.3);border-radius:18px;padding:24px;text-align:center;box-shadow:0 24px 70px rgba(0,0,0,0.5)">
+        <div style="font-size:16px;font-weight:800;margin-bottom:6px">${escHtml(t('settings.link.title') || 'Link your BetterCommunity account')}</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px">${escHtml(t('settings.link.desc') || 'Enter this code on the website (Profile → Creator IDs). It expires in 15 minutes.')}</div>
+        <div style="font-family:var(--font-mono,monospace);font-size:28px;font-weight:800;letter-spacing:4px;color:#f97316;padding:14px;border-radius:12px;background:rgba(249,115,22,0.08);border:1px solid rgba(249,115,22,0.2);margin-bottom:14px">${escHtml(code)}</div>
+        <div style="display:flex;gap:8px;justify-content:center">
+          <button id="bc-link-copy" class="btn btn-sm btn-accent">${escHtml(t('common.copy') || 'Copy')}</button>
+          <button id="bc-link-open" class="btn btn-sm">${escHtml(t('settings.link.open') || 'Open website')}</button>
+          <button id="bc-link-close" class="btn btn-sm btn-ghost">${escHtml(t('common.close') || 'Close')}</button>
+        </div>
+      </div>`;
+    (document.getElementById('app-window-outer') || document.body).appendChild(modal);
+    modal.addEventListener('click', e => { if (e.target === modal)
+        modal.remove(); });
+    document.getElementById('bc-link-close')?.addEventListener('click', () => modal.remove());
+    document.getElementById('bc-link-copy')?.addEventListener('click', () => { navigator.clipboard.writeText(code); toast(t('update.copied') || 'Copied!', 'success'); });
+    document.getElementById('bc-link-open')?.addEventListener('click', () => { invoke('open_external_url', { url: `${base}/profile` }).catch(() => window.open(`${base}/profile`, '_blank')); });
+}
+// (BetterCommunity discover modal removed — linking + Discord actions live in the identity card below.)
+function bcBase() {
+    return BC_LINK_TEST_MODE ? BC_LINK_TEST_BASE : (getLinks().bettercommunity || 'https://bettercommunity.ch/').replace(/\/+$/, '');
+}
+// Poll the account-link status and reflect it in the identity card. Detects an unlink
+// (the account was linked and no longer is) and notifies the user.
+async function refreshBcLinkStatus() {
+    const statusEl = document.getElementById('bc-link-status');
+    const linkBtn = document.getElementById('btn-bc-link');
+    const discordBtn = document.getElementById('btn-bc-discord');
+    let creatorId = '';
+    try {
+        creatorId = (await invoke('get_creator_id'));
+    }
+    catch (_) { }
+    if (!creatorId || creatorId === '—') {
+        if (statusEl)
+            statusEl.textContent = t('settings.link.noCreator') || 'No creator id yet.';
+        if (discordBtn)
+            discordBtn.style.display = 'none';
+        return;
+    }
+    let data = null;
+    try {
+        data = await (await fetch(`${bcBase()}/api/link/status?creatorId=${encodeURIComponent(creatorId)}`)).json();
+    }
+    catch (_) { }
+    if (!data) {
+        if (statusEl)
+            statusEl.textContent = t('settings.link.offline2') || 'BetterCommunity unreachable (offline?).';
+        return;
+    }
+    const wasLinked = localStorage.getItem('bc_linked') === '1';
+    if (data.linked) {
+        localStorage.setItem('bc_linked', '1');
+        const dtxt = data.discord?.linked
+            ? ` · Discord: ${escHtml(data.discord.username || 'linked')}`
+            : ` · ${escHtml(t('settings.link.noDiscord') || 'Discord not linked')}`;
+        if (statusEl)
+            statusEl.innerHTML = `<span style="width:8px;height:8px;border-radius:50%;background:#34d399;display:inline-block;flex-shrink:0"></span> ${escHtml(t('settings.link.linkedAs') || 'Linked as')} <b style="color:var(--text)">${escHtml(data.displayName || '')}</b>${dtxt}`;
+        if (linkBtn)
+            linkBtn.textContent = t('settings.link.relink') || 'Re-link account';
+        if (discordBtn) {
+            discordBtn.style.display = '';
+            discordBtn.textContent = data.discord?.linked ? (t('settings.link.relinkDiscord') || 'Re-link Discord') : (t('settings.link.discord') || 'Link Discord');
+        }
+    }
+    else {
+        if (wasLinked) {
+            try {
+                toast(t('settings.link.unlinked') || 'Your BetterCommunity account was unlinked.', 'warning');
+            }
+            catch (_) { }
+        }
+        localStorage.setItem('bc_linked', '0');
+        if (statusEl)
+            statusEl.innerHTML = `<span style="width:8px;height:8px;border-radius:50%;background:var(--text-muted);display:inline-block;flex-shrink:0"></span> ${escHtml(t('settings.link.notLinked') || 'Not linked to a BetterCommunity account.')}`;
+        if (linkBtn)
+            linkBtn.textContent = t('settings.link.button') || 'Link to BetterCommunity account';
+        if (discordBtn)
+            discordBtn.style.display = 'none'; // must link the account before Discord
+    }
+}
+// Link a Discord account from BMM: enter the code from the Discord /link command.
+async function openDiscordLinkFlow() {
+    let creatorId = '';
+    try {
+        creatorId = (await invoke('get_creator_id'));
+    }
+    catch (_) { }
+    if (!creatorId || creatorId === '—') {
+        toast(t('settings.link.noCreator') || 'No creator id yet.', 'warning');
+        return;
+    }
+    document.getElementById('bc-discord-modal')?.remove();
+    const modal = document.createElement('div');
+    modal.id = 'bc-discord-modal';
+    modal.style.cssText = 'position:absolute;inset:0;z-index:10500;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(0,0,0,0.7);backdrop-filter:blur(6px)';
+    modal.innerHTML = `
+      <div style="width:100%;max-width:420px;background:var(--bmm-bg-elevated,#15171e);border:1px solid rgba(249,115,22,0.3);border-radius:18px;padding:24px;box-shadow:0 24px 70px rgba(0,0,0,0.55)">
+        <div style="font-size:16px;font-weight:800;margin-bottom:6px">${escHtml(t('settings.link.discordTitle') || 'Link your Discord')}</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.5">${escHtml(t('settings.link.discordDesc') || 'In the BetterCommunity Discord, run /link to get a code, then enter it here.')}</div>
+        <input id="bc-discord-code" placeholder="XXXX-XXXX" maxlength="9" style="width:100%;box-sizing:border-box;font-family:var(--font-mono,monospace);font-size:18px;font-weight:800;letter-spacing:3px;text-align:center;text-transform:uppercase;padding:12px;border-radius:10px;background:rgba(249,115,22,0.06);border:1px solid rgba(249,115,22,0.25);color:var(--text);outline:none;margin-bottom:14px">
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button id="bc-discord-cancel" class="btn btn-sm btn-ghost">${escHtml(t('common.close') || 'Cancel')}</button>
+          <button id="bc-discord-submit" class="btn btn-sm btn-accent">${escHtml(t('settings.link.discordBtn') || 'Link Discord')}</button>
+        </div>
+      </div>`;
+    (document.getElementById('app-window-outer') || document.body).appendChild(modal);
+    const input = document.getElementById('bc-discord-code');
+    input.addEventListener('input', () => { const s = input.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 8); input.value = s.length > 4 ? `${s.slice(0, 4)}-${s.slice(4)}` : s; });
+    setTimeout(() => input.focus(), 50);
+    modal.addEventListener('click', e => { if (e.target === modal)
+        modal.remove(); });
+    document.getElementById('bc-discord-cancel')?.addEventListener('click', () => modal.remove());
+    const submit = async () => {
+        const code = input.value.trim();
+        if (code.replace(/[^a-zA-Z0-9]/g, '').length < 8) {
+            toast(t('settings.link.badCode') || 'Enter the full code.', 'warning');
+            return;
+        }
+        try {
+            const res = await fetch(`${bcBase()}/api/link/discord`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ creatorId, code }) });
+            const data = await res.json();
+            if (!res.ok) {
+                const err = data?.error;
+                toast(err === 'account_not_linked' ? (t('settings.link.needAccount') || 'Link your BetterCommunity account first.')
+                    : err === 'already_linked' ? (t('settings.link.discordTaken') || 'That Discord account is already linked.')
+                        : err === 'invalid_or_expired' ? (t('settings.link.discordBad') || 'Invalid or expired code.')
+                            : (t('common.error') || 'Failed.'), 'error');
+                return;
+            }
+            toast(t('settings.link.discordOk') || 'Discord linked!', 'success');
+            modal.remove();
+            refreshBcLinkStatus();
+        }
+        catch (_) {
+            toast(t('settings.link.offline') || 'Could not reach BetterCommunity (offline?).', 'warning');
+        }
+    };
+    document.getElementById('bc-discord-submit')?.addEventListener('click', submit);
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter')
+        submit(); });
+}
 // ── Identity & API card ────────────────────────────────────
 async function initSecurityInfoCard() {
     const elCreatorId = document.getElementById('sic-creator-id');
@@ -1369,6 +1561,37 @@ async function initSecurityInfoCard() {
             elApiToken.textContent = apiToken;
     }
     catch (_) { }
+    // BetterCommunity account: live link status (detects unlink), link, link Discord.
+    if (elCreatorId && !document.getElementById('btn-bc-link')) {
+        const card = elCreatorId.closest('.settings-card') || elCreatorId.parentElement?.parentElement || elCreatorId.parentElement;
+        const status = document.createElement('div');
+        status.id = 'bc-link-status';
+        status.style.cssText = 'margin-top:12px;font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:7px';
+        status.textContent = t('settings.link.checking') || 'Checking BetterCommunity link…';
+        card?.appendChild(status);
+        const row = document.createElement('div');
+        row.style.cssText = 'margin-top:8px;display:flex;gap:8px;flex-wrap:wrap';
+        const btn = document.createElement('button');
+        btn.id = 'btn-bc-link';
+        btn.className = 'btn btn-sm btn-accent';
+        btn.textContent = t('settings.link.button') || 'Link to BetterCommunity account';
+        btn.addEventListener('click', async () => { await openAccountLinkFlow(); setTimeout(refreshBcLinkStatus, 400); });
+        row.appendChild(btn);
+        const dbtn = document.createElement('button');
+        dbtn.id = 'btn-bc-discord';
+        dbtn.className = 'btn btn-sm';
+        dbtn.style.display = 'none'; // shown once the account is linked
+        dbtn.textContent = t('settings.link.discord') || 'Link Discord';
+        dbtn.addEventListener('click', openDiscordLinkFlow);
+        row.appendChild(dbtn);
+        card?.appendChild(row);
+        refreshBcLinkStatus();
+        // Keep checking so an unlink done on the website is detected while settings are open.
+        const iv = setInterval(() => { if (document.getElementById('bc-link-status'))
+            refreshBcLinkStatus();
+        else
+            clearInterval(iv); }, 30000);
+    }
     try {
         const tauri = window.__TAURI__;
         const version = tauri?.app?.getVersion ? await tauri.app.getVersion() : '—';

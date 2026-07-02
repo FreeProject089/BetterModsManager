@@ -80,7 +80,8 @@ Les badges (`Official`, `Partner`) sont attribués par BMM selon **l'origine du 
   "download": {
     "url":       "https://github.com/user/repo/releases/download/v1.2.0/app.exe",
     "file_type": "exe",
-    "size":      15728640
+    "size":      15728640,
+    "sha256":    "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
   }
 }
 ```
@@ -108,6 +109,10 @@ Les badges (`Official`, `Partner`) sont attribués par BMM selon **l'origine du 
 | `images.thumb` | string | Miniature de la carte — affichée dans la grille de navigation. Recommandé **16:9**, min 400×225 px. Doit être une URL HTTPS publique (GitHub raw, CDN…). |
 | `images.extra` | tableau | Captures d'écran supplémentaires dans la galerie du modal de détail (bande de miniatures cliquables). Max ~5. Mêmes règles d'URL que thumb. |
 | `download.size` | entier | Taille en octets (affichée avant le téléchargement) |
+| `download.sha256` | chaîne | **Recommandé.** Somme de contrôle SHA-256 du fichier téléchargé. Si présente, BMM vérifie le téléchargement et avertit (modal, installation bloquée par défaut) en cas de non-correspondance — protège des fichiers altérés ou corrompus. |
+
+> [!ASTUCE]
+> Génère la somme avec `sha256sum app.exe` (Linux/macOS) ou `certutil -hashfile app.exe SHA256` (Windows), puis colle la valeur dans `download.sha256`.
 
 ### Héberger des images sur GitHub
 

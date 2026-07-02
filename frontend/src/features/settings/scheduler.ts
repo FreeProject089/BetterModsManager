@@ -662,35 +662,60 @@ function evalExpr(expr: string, ctx: Record<string, number>): number {
 }
 
 // ── List rendering (glass-card) ───────────────────────────────────────────────
+/** Inline SVG icon for a trigger type (clock family / rocket / hand). */
+function triggerIcon(tr: Trigger): string {
+    const P = (d: string) => `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+    switch (tr.type) {
+        case 'once':      return P('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>');
+        case 'interval':
+        case 'hourly':    return P('<polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>');
+        case 'dailyAt':   return P('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>');
+        case 'weeklyAt':
+        case 'monthlyAt': return P('<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>');
+        case 'appStart':  return P('<path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/>');
+        case 'manual':    return P('<path d="M18 11V6a2 2 0 0 0-4 0v5"/><path d="M14 10V4a2 2 0 0 0-4 0v2"/><path d="M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/>');
+    }
+}
+
 export function renderScheduleList(): void {
     const container = document.getElementById('scheduler-list-container');
     if (!container) return;
     if (!_tasks.length) {
-        container.innerHTML = `<p style="font-size:12px;color:var(--text-muted);opacity:.75;margin:0">${
-            t('sched.empty') || 'No scheduled tasks yet. Create one to automate BMM.'}</p>`;
+        // Modern empty state: icon tile + message + hint, instead of a bare line.
+        container.innerHTML = `
+            <div class="sched-empty">
+                <div class="sched-empty-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+                <strong>${t('sched.emptyTitle') || 'No scheduled tasks yet'}</strong>
+                <span>${t('sched.empty') || 'Create one to automate BMM — sync a repo at night, switch profile before a session, launch your tools in one click.'}</span>
+            </div>`;
         return;
     }
     container.innerHTML = '';
+    const I = (d: string) => `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
     for (const task of _tasks) {
         const row = document.createElement('div');
-        row.className = 'sched-row';
+        row.className = `sched-row ${task.enabled ? 'sched-on' : 'sched-off'}`;
         row.innerHTML = `
             <div class="sched-row-main">
-                <label class="plug-toggle sched-toggle">
-                    <input type="checkbox" ${task.enabled ? 'checked' : ''} data-act="toggle">
-                    <span class="plug-toggle-slider"></span>
-                </label>
+                <div class="sched-row-icon">${triggerIcon(task.trigger)}</div>
                 <div class="sched-row-text">
                     <strong>${escHtml(task.name)}</strong>
                     ${task.description ? `<span class="sched-row-desc">${escHtml(task.description)}</span>` : ''}
-                    <span class="sched-row-sub">${escHtml(triggerLabel(task.trigger))} · ${stepCount(task.steps)} ${t('sched.steps') || 'steps'}${
-                        task.lastRun ? ` · ${t('sched.last') || 'last'} ${new Date(task.lastRun).toLocaleString()}` : ''}</span>
+                    <span class="sched-row-sub">
+                        <span class="sched-chip sched-chip-trigger">${escHtml(triggerLabel(task.trigger))}</span>
+                        <span class="sched-chip">${stepCount(task.steps)} ${t('sched.steps') || 'steps'}</span>
+                        ${task.lastRun ? `<span class="sched-chip sched-chip-dim">${t('sched.last') || 'last'} ${new Date(task.lastRun).toLocaleString()}</span>` : ''}
+                    </span>
                 </div>
             </div>
             <div class="sched-row-actions">
-                <button class="btn btn-xs btn-ghost" data-act="run" title="${escAttr(t('sched.runNow') || 'Run now')}">▶</button>
-                <button class="btn btn-xs btn-ghost" data-act="edit">${t('common.edit') || 'Edit'}</button>
-                <button class="btn btn-xs btn-ghost" data-act="del" style="color:var(--danger)">${t('common.delete') || 'Delete'}</button>
+                <label class="plug-toggle sched-toggle" title="${escAttr(task.enabled ? (t('sched.enabled') || 'Enabled') : (t('sched.disabled') || 'Disabled'))}">
+                    <input type="checkbox" ${task.enabled ? 'checked' : ''} data-act="toggle">
+                    <span class="plug-toggle-slider"></span>
+                </label>
+                <button class="btn btn-xs btn-ghost sched-act" data-act="run" title="${escAttr(t('sched.runNow') || 'Run now')}">${I('<polygon points="5 3 19 12 5 21 5 3"/>')}</button>
+                <button class="btn btn-xs btn-ghost sched-act" data-act="edit" title="${escAttr(t('common.edit') || 'Edit')}">${I('<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>')}</button>
+                <button class="btn btn-xs btn-ghost sched-act sched-act-del" data-act="del" title="${escAttr(t('common.delete') || 'Delete')}">${I('<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>')}</button>
             </div>`;
         row.querySelector('[data-act="toggle"]')?.addEventListener('change', async (e) => {
             task.enabled = (e.target as HTMLInputElement).checked; await saveTasks();

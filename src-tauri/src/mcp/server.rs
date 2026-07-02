@@ -239,6 +239,101 @@ impl BmmMcpServer {
             Err(e) => err_result(&e.to_string()),
         }
     }
+
+    // ── Feature-parity tools (modpacks, tags, repos, themes, plugins, live API) ──
+
+    fn tool_list_modpacks(&self) -> Result<CallToolResult, rmcp::ErrorData> {
+        match state_bridge::list_modpacks() {
+            Ok(v) => ok_json(&serde_json::json!({ "count": v.len(), "modpacks": v })),
+            Err(e) => err_result(&e.to_string()),
+        }
+    }
+
+    fn tool_create_modpack(&self, name: &str, mod_ids: Vec<String>) -> Result<CallToolResult, rmcp::ErrorData> {
+        match state_bridge::create_modpack(name, mod_ids) {
+            Ok(msg) => Ok(CallToolResult::success(vec![Content::text(msg)])),
+            Err(e) => err_result(&e.to_string()),
+        }
+    }
+
+    fn tool_delete_mod(&self, mod_id: &str, delete_files: bool) -> Result<CallToolResult, rmcp::ErrorData> {
+        match state_bridge::delete_mod(mod_id, delete_files) {
+            Ok(msg) => Ok(CallToolResult::success(vec![Content::text(msg)])),
+            Err(e) => err_result(&e.to_string()),
+        }
+    }
+
+    fn tool_verify_mod_integrity(&self, mod_id: &str) -> Result<CallToolResult, rmcp::ErrorData> {
+        match state_bridge::verify_integrity(mod_id) {
+            Ok(map) => {
+                let corrupted: Vec<&String> = map.iter().filter(|(_, ok)| !**ok).map(|(f, _)| f).collect();
+                ok_json(&serde_json::json!({ "files_checked": map.len(), "corrupted": corrupted, "ok": corrupted.is_empty(), "files": map }))
+            }
+            Err(e) => err_result(&e.to_string()),
+        }
+    }
+
+    fn tool_list_tags(&self) -> Result<CallToolResult, rmcp::ErrorData> {
+        match state_bridge::list_tags() {
+            Ok(v) => ok_json(&v),
+            Err(e) => err_result(&e.to_string()),
+        }
+    }
+
+    fn tool_list_connected_repos(&self) -> Result<CallToolResult, rmcp::ErrorData> {
+        match state_bridge::list_connected_repos() {
+            Ok(v) => ok_json(&v),
+            Err(e) => err_result(&e.to_string()),
+        }
+    }
+
+    fn tool_list_themes(&self) -> Result<CallToolResult, rmcp::ErrorData> {
+        match state_bridge::list_themes() {
+            Ok(v) => ok_json(&v),
+            Err(e) => err_result(&e.to_string()),
+        }
+    }
+
+    fn tool_get_plugin(&self, plugin_id: &str) -> Result<CallToolResult, rmcp::ErrorData> {
+        match state_bridge::get_plugin(plugin_id) {
+            Ok(v) => ok_json(&v),
+            Err(e) => err_result(&e.to_string()),
+        }
+    }
+
+    async fn tool_api_call(&self, method: &str, path: &str, body: Option<serde_json::Value>) -> Result<CallToolResult, rmcp::ErrorData> {
+        match state_bridge::api_call(method, path, body).await {
+            Ok(v) => ok_json(&v),
+            Err(e) => err_result(&e.to_string()),
+        }
+    }
+
+    fn tool_list_schedules(&self) -> Result<CallToolResult, rmcp::ErrorData> {
+        match state_bridge::list_schedules() {
+            Ok(v) => ok_json(&v),
+            Err(e) => err_result(&e.to_string()),
+        }
+    }
+
+    fn tool_list_sessions(&self) -> Result<CallToolResult, rmcp::ErrorData> {
+        let sessions: Vec<_> = state_bridge::list_crash_reports().into_iter()
+            .filter(|r| r.category.contains("Session")).collect();
+        ok_json(&serde_json::json!({ "count": sessions.len(), "sessions": sessions }))
+    }
+
+    fn tool_apply_theme(&self, theme_id: &str) -> Result<CallToolResult, rmcp::ErrorData> {
+        match state_bridge::apply_theme(theme_id) {
+            Ok(msg) => Ok(CallToolResult::success(vec![Content::text(msg)])),
+            Err(e) => err_result(&e.to_string()),
+        }
+    }
+
+    fn tool_get_theme(&self, theme_id: &str) -> Result<CallToolResult, rmcp::ErrorData> {
+        match state_bridge::get_theme(theme_id) {
+            Ok(v) => ok_json(&v),
+            Err(e) => err_result(&e.to_string()),
+        }
+    }
 }
 
 // ── MCP ServerHandler Implementation ─────────────────────────────────────
@@ -547,6 +642,197 @@ impl ServerHandler for BmmMcpServer {
                 "List the App Catalog state: installed companion apps, favourites, and community catalog sources.",
                 std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": {} })).unwrap()),
             ),
+
+            // ── Modpacks ───────────────────────────────────────────────
+            Tool::new(
+                "bmm_list_modpacks",
+                "List the user's modpacks (name, mods, share settings).",
+                std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": {} })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_create_modpack",
+                "Create a modpack from a list of mod ids.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": {
+                        "name": { "type": "string" },
+                        "mod_ids": { "type": "array", "items": { "type": "string" } }
+                    },
+                    "required": ["name", "mod_ids"]
+                })).unwrap()),
+            ),
+
+            // ── Mods (extra) ───────────────────────────────────────────
+            Tool::new(
+                "bmm_delete_mod",
+                "Delete a mod from BMM. Set delete_files=true to also remove its folder from disk (irreversible).",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": {
+                        "mod_id": { "type": "string" },
+                        "delete_files": { "type": "boolean", "description": "Also delete the mod folder on disk (default false)" }
+                    },
+                    "required": ["mod_id"]
+                })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_verify_mod_integrity",
+                "Verify a mod's on-disk files against its stored SHA-256 hashes. Returns per-file ok/corrupted.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": { "mod_id": { "type": "string" } },
+                    "required": ["mod_id"]
+                })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_list_tags",
+                "List the user's custom mod tags.",
+                std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": {} })).unwrap()),
+            ),
+
+            // ── Server-Repos & Themes ──────────────────────────────────
+            Tool::new(
+                "bmm_list_connected_repos",
+                "List the Server-Repos this BMM is connected to (name, url, sync state).",
+                std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": {} })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_list_themes",
+                "List installed UI themes and which one is active.",
+                std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": {} })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_get_plugin",
+                "Get one installed plugin's full record (manifest, permissions, state) by id.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": { "plugin_id": { "type": "string" } },
+                    "required": ["plugin_id"]
+                })).unwrap()),
+            ),
+
+            // ── Session recorder / Privacy & telemetry (live app) ──────
+            Tool::new(
+                "bmm_recorder_set",
+                "Configure the local Session recorder in the running BMM app. All fields optional: on (master switch), full (full-session capture), rust (Rust-side traces), js (frontend traces).",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": {
+                        "on": { "type": "boolean" }, "full": { "type": "boolean" },
+                        "rust": { "type": "boolean" }, "js": { "type": "boolean" }
+                    }
+                })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_telemetry_consent",
+                "Enable/disable the anonymous-usage telemetry consent in the running BMM app (GDPR opt-in).",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": { "enabled": { "type": "boolean" } },
+                    "required": ["enabled"]
+                })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_telemetry_settings",
+                "Set Privacy & telemetry sub-options in the running BMM app. Omitted fields stay unchanged: replay (session replays), full (full capture), bench (benchmark sharing).",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": {
+                        "replay": { "type": "boolean" }, "full": { "type": "boolean" }, "bench": { "type": "boolean" }
+                    }
+                })).unwrap()),
+            ),
+
+            // ── Scheduling & automation ────────────────────────────────
+            Tool::new(
+                "bmm_list_schedules",
+                "List the saved Scheduling & automation tasks (works offline).",
+                std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": {} })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_run_schedule",
+                "Trigger a saved scheduler task by id in the running BMM app.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": { "id": { "type": "string" } },
+                    "required": ["id"]
+                })).unwrap()),
+            ),
+
+            // ── Benchmark ──────────────────────────────────────────────
+            Tool::new(
+                "bmm_run_benchmark",
+                "Launch a BMM benchmark in the running app. dataset: 'sandbox' (generated) or 'real' (my mods). size: S|M|L|XL|CUSTOM (mb required for CUSTOM). sources: custom mod-folder paths (dataset=real). profiles: profile ids/names whose mods folders are added. mode: 'manual' (opens pre-filled UI) or 'auto' (runs now, returns results).",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": {
+                        "dataset": { "type": "string", "enum": ["sandbox", "real"] },
+                        "size": { "type": "string", "enum": ["S", "M", "L", "XL", "CUSTOM"] },
+                        "mb": { "type": "integer", "description": "Dataset size in MB when size=CUSTOM" },
+                        "sources": { "type": "array", "items": { "type": "string" }, "description": "Custom mod folder paths (dataset=real)" },
+                        "profiles": { "type": "array", "items": { "type": "string" }, "description": "Profile ids/names to benchmark (dataset=real)" },
+                        "mode": { "type": "string", "enum": ["manual", "auto"] }
+                    }
+                })).unwrap()),
+            ),
+
+            // ── Sessions (recorder output) ─────────────────────────────
+            Tool::new(
+                "bmm_list_sessions",
+                "List recorded session reports (the Session recorder's output zips).",
+                std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": {} })).unwrap()),
+            ),
+
+            // ── Translation sandbox ────────────────────────────────────
+            Tool::new(
+                "bmm_get_language_template",
+                "Download the translation template JSON from the running BMM app (translate it, then import with bmm_import_language).",
+                std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": {} })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_import_language",
+                "Import a translated language .json file into the running BMM app.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": { "path": { "type": "string", "description": "Path to the translated .json file" } },
+                    "required": ["path"]
+                })).unwrap()),
+            ),
+
+            // ── Themes & appearance ────────────────────────────────────
+            Tool::new(
+                "bmm_apply_theme",
+                "Set the active BMM theme by id (e.g. bmm-discord, bmm-void, or an installed custom theme). Applies when BMM reloads themes.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": { "theme_id": { "type": "string" } },
+                    "required": ["theme_id"]
+                })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_get_theme",
+                "Read an INSTALLED custom theme's full definition (vars, element overrides).",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": { "theme_id": { "type": "string" } },
+                    "required": ["theme_id"]
+                })).unwrap()),
+            ),
+
+            // ── Live app bridge ────────────────────────────────────────
+            Tool::new(
+                "bmm_api_call",
+                "Call the RUNNING BMM app's local API (requires the BMM app to be open). Covers every live feature: GET /api/status, /api/repo/list, POST /api/repo/sync {repo_url}, /api/repo/connect {url}, /api/modpacks/enable {id}, /api/mods/enable {mod_id}, /api/mod/check-updates, /api/apps/launch {id}, /api/schedule/run, … Only GET/POST to 127.0.0.1/api/* is possible.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": {
+                        "method": { "type": "string", "enum": ["GET", "POST"] },
+                        "path": { "type": "string", "description": "API path starting with /api/ (query string allowed)" },
+                        "body": { "type": "object", "description": "JSON body for POST requests" }
+                    },
+                    "required": ["method", "path"]
+                })).unwrap()),
+            ),
         ];
 
         std::future::ready(Ok(ListToolsResult {
@@ -709,6 +995,96 @@ impl ServerHandler for BmmMcpServer {
 
                 // App Catalog
                 "bmm_list_apps" => self.tool_list_apps(),
+
+                // Modpacks
+                "bmm_list_modpacks" => self.tool_list_modpacks(),
+                "bmm_create_modpack" => {
+                    let name = args.get("name").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing name", None))?;
+                    let mod_ids: Vec<String> = args.get("mod_ids").and_then(|v| v.as_array())
+                        .map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect())
+                        .unwrap_or_default();
+                    self.tool_create_modpack(name, mod_ids)
+                }
+
+                // Mods (extra)
+                "bmm_delete_mod" => {
+                    let id = args.get("mod_id").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing mod_id", None))?;
+                    let files = args.get("delete_files").and_then(|v| v.as_bool()).unwrap_or(false);
+                    self.tool_delete_mod(id, files)
+                }
+                "bmm_verify_mod_integrity" => {
+                    let id = args.get("mod_id").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing mod_id", None))?;
+                    self.tool_verify_mod_integrity(id)
+                }
+                "bmm_list_tags" => self.tool_list_tags(),
+
+                // Server-Repos & Themes
+                "bmm_list_connected_repos" => self.tool_list_connected_repos(),
+                "bmm_list_themes" => self.tool_list_themes(),
+                "bmm_get_plugin" => {
+                    let id = args.get("plugin_id").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing plugin_id", None))?;
+                    self.tool_get_plugin(id)
+                }
+
+                // Session recorder / Privacy & telemetry (live app)
+                "bmm_recorder_set" => {
+                    let mut body = serde_json::Map::new();
+                    for k in ["on", "full", "rust", "js"] { if let Some(v) = args.get(k).and_then(|v| v.as_bool()) { body.insert(k.into(), v.into()); } }
+                    self.tool_api_call("POST", "/api/recorder", Some(serde_json::Value::Object(body))).await
+                }
+                "bmm_telemetry_consent" => {
+                    let enabled = args.get("enabled").and_then(|v| v.as_bool()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing enabled", None))?;
+                    self.tool_api_call("POST", "/api/telemetry/consent", Some(json!({ "enabled": enabled }))).await
+                }
+                "bmm_telemetry_settings" => {
+                    let mut body = serde_json::Map::new();
+                    for k in ["replay", "full", "bench"] { if let Some(v) = args.get(k).and_then(|v| v.as_bool()) { body.insert(k.into(), v.into()); } }
+                    self.tool_api_call("POST", "/api/telemetry/settings", Some(serde_json::Value::Object(body))).await
+                }
+
+                // Scheduling & automation
+                "bmm_list_schedules" => self.tool_list_schedules(),
+                "bmm_run_schedule" => {
+                    let id = args.get("id").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing id", None))?;
+                    self.tool_api_call("POST", "/api/schedule/run", Some(json!({ "id": id }))).await
+                }
+
+                // Benchmark
+                "bmm_run_benchmark" => {
+                    let mut body = serde_json::Map::new();
+                    for k in ["dataset", "size", "mode"] { if let Some(v) = args.get(k).and_then(|v| v.as_str()) { body.insert(k.into(), v.into()); } }
+                    if let Some(mb) = args.get("mb").and_then(|v| v.as_u64()) { body.insert("mb".into(), mb.into()); }
+                    for k in ["sources", "profiles"] { if let Some(v) = args.get(k).and_then(|v| v.as_array()) { body.insert(k.into(), serde_json::Value::Array(v.clone())); } }
+                    self.tool_api_call("POST", "/api/benchmark", Some(serde_json::Value::Object(body))).await
+                }
+
+                // Sessions
+                "bmm_list_sessions" => self.tool_list_sessions(),
+
+                // Translation sandbox
+                "bmm_get_language_template" => self.tool_api_call("GET", "/api/language/template", None).await,
+                "bmm_import_language" => {
+                    let path = args.get("path").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing path", None))?;
+                    self.tool_api_call("POST", "/api/language/import", Some(json!({ "path": path }))).await
+                }
+
+                // Themes & appearance
+                "bmm_apply_theme" => {
+                    let id = args.get("theme_id").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing theme_id", None))?;
+                    self.tool_apply_theme(id)
+                }
+                "bmm_get_theme" => {
+                    let id = args.get("theme_id").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing theme_id", None))?;
+                    self.tool_get_theme(id)
+                }
+
+                // Live app bridge
+                "bmm_api_call" => {
+                    let method = args.get("method").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing method", None))?;
+                    let path = args.get("path").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing path", None))?;
+                    let body = args.get("body").cloned();
+                    self.tool_api_call(method, path, body).await
+                }
 
                 _ => Err(rmcp::ErrorData::new(ErrorCode::METHOD_NOT_FOUND, format!("Tool not found: {}", name), None)),
             }

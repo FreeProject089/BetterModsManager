@@ -328,6 +328,86 @@ async function handleDeepLink(urlStr: string): Promise<void> {
             return;
         }
 
+        // ── BetterCommunity catalog install: bmm://catalog/<kind>/install ──
+        // The web (bettercommunity) generates these for its catalog items. Kind is
+        // app | plugin | theme; `url` is the download (payload) and `name` the label.
+        if (action.startsWith('catalog/') && action.endsWith('/install')) {
+            const kind = action.split('/')[1];
+            const url = parsedUrl.searchParams.get('url') || '';
+            const name = parsedUrl.searchParams.get('name') || kind;
+            const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || kind;
+            // No download URL → open the matching catalog view so the user can pick it.
+            if (!url) {
+                const view = kind === 'app' ? 'apps' : kind === 'theme' ? 'themes' : 'plugins';
+                (document.querySelector(`[data-view="${view}"]`) as HTMLElement | null)?.click();
+                toast(`${t('common.openInBmm') || 'Opened'}: ${name}`, 'info');
+                return;
+            }
+            try {
+                if (kind === 'app') {
+                    await invoke('install_app', {
+                        appId: slug, appTitle: name, downloadUrl: url,
+                        fileType: parsedUrl.searchParams.get('type') || 'exe',
+                        installPath: '', version: null, category: null, thumb: null,
+                    });
+                    toast(`${name} ${t('apps.installed') || 'installed'}`, 'success');
+                } else if (kind === 'plugin') {
+                    await invoke('install_plugin', { downloadUrl: url });
+                    toast(`${name} ${t('plugins.installed') || 'installed'}`, 'success');
+                    window._refreshModsFn?.(true);
+                } else if (kind === 'theme') {
+                    const res = await fetch(url);
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    const themeJson = await res.text();
+                    JSON.parse(themeJson); // validate it's a theme JSON before installing
+                    await invoke('install_theme', { themeJson });
+                    toast(`${name} ${t('themes.installed') || 'installed'}`, 'success');
+                } else {
+                    toast(`${t('common.error')}: unknown catalog kind "${kind}"`, 'error');
+                }
+            } catch (e) { toast(`${t('common.error')}: ${e}`, 'error'); }
+            return;
+        }
+
+        // ── Add a whole catalog as a SOURCE: bmm://catalog/<kind>/add-source?url=… ──
+        // The web (bettercommunity) generates these for its catalog.json feeds so a
+        // user can subscribe to a community app/plugin/theme catalog in one click.
+        if (action.startsWith('catalog/') && action.endsWith('/add-source')) {
+            const kind = action.split('/')[1]; // app | plugin | theme
+            const url = parsedUrl.searchParams.get('url') || '';
+            if (!url || !/^https?:\/\//i.test(url)) {
+                toast(t('plugins.deepLinkMissingUrl') || 'URL manquante dans le deep link.', 'error');
+                return;
+            }
+            const confirmed = await window.confirmCustom!(
+                t('catalog.addSourceTitle') || 'Add a catalog source?',
+                `<p style="font-size:13px;line-height:1.5;margin:10px 0 4px;">${t('catalog.addSourceDesc') || `Add this ${kind} catalog as a source in BMM?`}</p>
+                 <div style="font-size:11px;font-family:var(--font-mono);background:rgba(0,0,0,0.3);padding:6px 10px;border-radius:6px;word-break:break-all;margin-top:8px;color:var(--text-muted);">${escHtml(url)}</div>`,
+                'accent',
+                { yesLabel: t('common.yes'), noLabel: t('common.no') }
+            );
+            if (!confirmed) return;
+            try {
+                const view = kind === 'app' ? 'apps' : kind === 'theme' ? 'themes' : 'plugins';
+                if (kind === 'app') {
+                    await invoke('add_community_source', { url }); // app sources live in the Rust backend
+                } else if (kind === 'plugin' || kind === 'theme') {
+                    // Plugin/theme community sources are localStorage lists (dedup on add).
+                    const KEY = kind === 'plugin' ? 'bmm_plugin_catalogs' : 'bmm_theme_community_sources';
+                    let list: string[] = [];
+                    try { list = JSON.parse(localStorage.getItem(KEY) || '[]'); } catch { list = []; }
+                    if (!list.includes(url)) { list.push(url); localStorage.setItem(KEY, JSON.stringify(list)); }
+                } else {
+                    toast(`${t('common.error')}: unknown catalog kind "${kind}"`, 'error');
+                    return;
+                }
+                // Open the matching view so the new source loads + renders.
+                (document.querySelector(`[data-view="${view}"]`) as HTMLElement | null)?.click();
+                toast(t('catalog.sourceAdded') || 'Catalog source added.', 'success');
+            } catch (e) { toast(`${t('common.error')}: ${e}`, 'error'); }
+            return;
+        }
+
         // ── App Catalog: install / launch ─────────────────────────────────
         if (action === 'app/install') {
             const id = parsedUrl.searchParams.get('id');

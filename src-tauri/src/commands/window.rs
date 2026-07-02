@@ -1,5 +1,17 @@
 use tauri::{Window, Runtime};
 
+/// Open an external http(s) URL in the user's default browser. Registered so the
+/// frontend's invoke('open_external_url', { url }) works (previously the command was
+/// missing, forcing an unreliable window.open fallback inside the Tauri webview).
+#[tauri::command]
+pub fn open_external_url(url: String) -> Result<(), String> {
+    let u = url.trim();
+    if !(u.starts_with("http://") || u.starts_with("https://")) {
+        return Err("only http(s) URLs are allowed".into());
+    }
+    open::that(u).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub async fn start_resizing<R: Runtime>(window: Window<R>, direction: String) {
     #[cfg(target_os = "windows")]

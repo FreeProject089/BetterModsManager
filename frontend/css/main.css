@@ -11315,13 +11315,46 @@ body.tasky-hidden .titlebar-left .titlebar-version {
 
 /* ── Scheduler / automation ─────────────────────────────────────────────── */
 .sched-row { display:flex; align-items:center; justify-content:space-between; gap:12px;
-    padding:10px 12px; background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:10px; }
+    padding:12px 14px; margin-bottom:8px;
+    background:linear-gradient(160deg, var(--bmm-s04, rgba(255,255,255,0.04)) 0%, var(--bmm-s02, rgba(255,255,255,0.02)) 100%);
+    border:1px solid var(--border); border-radius:var(--bmm-radius-card, 12px);
+    position:relative; overflow:hidden;
+    transition:border-color .18s ease, transform .18s ease, box-shadow .18s ease; }
+.sched-row::before { content:''; position:absolute; left:0; top:0; bottom:0; width:3px;
+    background:var(--accent); opacity:0; transition:opacity .18s ease; }
+.sched-row.sched-on::before { opacity:.9; }
+.sched-row:hover { border-color:var(--bmm-border-hover, var(--border));
+    transform:translateY(-1px); box-shadow:var(--bmm-shadow-card, 0 4px 14px rgba(0,0,0,0.18)); }
+.sched-row.sched-off { opacity:.62; }
+.sched-row.sched-off .sched-row-icon { filter:grayscale(1); }
 .sched-row-main { display:flex; align-items:center; gap:12px; min-width:0; }
-.sched-row-text { display:flex; flex-direction:column; min-width:0; }
+.sched-row-icon { width:34px; height:34px; border-radius:10px; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center; color:var(--accent);
+    background:var(--bmm-accent-dim, rgba(var(--bmm-accent-r,245), var(--bmm-accent-g,158), var(--bmm-accent-b,11), 0.14));
+    border:1px solid var(--bmm-border-accent, transparent); }
+.sched-row-text { display:flex; flex-direction:column; gap:2px; min-width:0; }
 .sched-row-text strong { font-size:13px; color:var(--text-primary); }
-.sched-row-sub { font-size:11px; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.sched-row-actions { display:flex; gap:6px; flex-shrink:0; }
-.sched-toggle { flex-shrink:0; }
+.sched-row-desc { font-size:11px; color:var(--text-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.sched-row-sub { display:flex; align-items:center; gap:5px; flex-wrap:wrap; margin-top:2px; }
+.sched-chip { font-size:10px; font-weight:600; color:var(--text-secondary);
+    padding:2px 8px; border-radius:99px; background:var(--bmm-s06, rgba(255,255,255,0.06));
+    border:1px solid var(--border); white-space:nowrap; }
+.sched-chip-trigger { color:var(--accent);
+    background:var(--bmm-accent-dim, rgba(var(--bmm-accent-r,245), var(--bmm-accent-g,158), var(--bmm-accent-b,11), 0.12));
+    border-color:var(--bmm-border-accent, var(--border)); }
+.sched-chip-dim { opacity:.7; font-weight:500; }
+.sched-row-actions { display:flex; align-items:center; gap:6px; flex-shrink:0; }
+.sched-act { display:inline-flex; align-items:center; justify-content:center;
+    width:28px; height:28px; padding:0; border-radius:8px; }
+.sched-act:hover { background:var(--bmm-s08, rgba(255,255,255,0.08)); color:var(--accent); }
+.sched-act-del:hover { color:var(--danger); background:rgba(239,68,68,0.12); }
+.sched-toggle { flex-shrink:0; margin-right:2px; }
+.sched-empty { display:flex; flex-direction:column; align-items:center; gap:6px;
+    padding:26px 18px; text-align:center; border:1px dashed var(--border); border-radius:12px; }
+.sched-empty-icon { width:42px; height:42px; border-radius:12px; display:flex; align-items:center; justify-content:center;
+    color:var(--accent); background:var(--bmm-accent-dim, rgba(var(--bmm-accent-r,245), var(--bmm-accent-g,158), var(--bmm-accent-b,11), 0.12)); margin-bottom:2px; }
+.sched-empty strong { font-size:13px; color:var(--text-primary); }
+.sched-empty span { font-size:11.5px; color:var(--text-muted); max-width:420px; line-height:1.5; }
 
 .sched-modal { width:860px; max-width:96vw; display:flex; flex-direction:column; max-height:90vh; }
 /* overflow:auto (both axes): deeply-nested steps keep a usable min-width and the

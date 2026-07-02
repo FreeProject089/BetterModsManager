@@ -333,15 +333,30 @@ function enforceLightContrast(root: Element | Document): void {
         }
 
         // 2) Light text sitting on a light background → dark text token.
-        let hasText = false;
-        for (const n of el.childNodes) {
-            if (n.nodeType === 3 && (n.textContent || '').trim()) { hasText = true; break; }
+        // Judged by the REAL WCAG contrast ratio instead of a crude "very light
+        // text" threshold, so pale greys and washed-out mid-tones are caught too —
+        // every text gets detected, not just near-white ones. Form fields count as
+        // text-bearing even though their value isn't a text child node.
+        const isFormField = el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT';
+        let hasText = isFormField;
+        if (!hasText) {
+            for (const n of el.childNodes) {
+                if (n.nodeType === 3 && (n.textContent || '').trim()) { hasText = true; break; }
+            }
         }
         if (!hasText) return;
         const col = _parseRgb(cs.color);
         if (!col) return;
-        if (_lum(col[0], col[1], col[2]) > 0.6 && _effectiveBgLum(el) > 0.5) {
-            el.style.setProperty('color', 'var(--bmm-text-primary)', 'important');
+        const bgL = _effectiveBgLum(el);
+        if (bgL <= 0.5) return; // sits on a dark surface — its colours are its own
+        const txtL = _lum(col[0], col[1], col[2]);
+        const ratio = (Math.max(bgL, txtL) + 0.05) / (Math.min(bgL, txtL) + 0.05);
+        // Saturated (accent) colours keep their hue with a laxer bar — links, badges,
+        // status text; plain/grey text is held to a readable minimum.
+        const minRatio = _saturation(col[0], col[1], col[2]) > 0.35 ? 2.2 : 3.2;
+        if (ratio < minRatio) {
+            // Near-white text needs the strongest fix; failing mid-greys just darken.
+            el.style.setProperty('color', txtL > 0.55 ? 'var(--bmm-text-primary)' : 'var(--bmm-text-secondary)', 'important');
             el.setAttribute(CONTRAST_ATTR, '1');
         }
       } catch { /* never let one element abort the whole contrast pass */ }

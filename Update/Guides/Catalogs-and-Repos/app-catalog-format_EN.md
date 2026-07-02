@@ -80,7 +80,8 @@ Badges (`Official`, `Partner`) are assigned by BMM based on **where the catalog 
   "download": {
     "url":       "https://github.com/user/repo/releases/download/v1.2.0/app.exe",
     "file_type": "exe",
-    "size":      15728640
+    "size":      15728640,
+    "sha256":    "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
   }
 }
 ```
@@ -108,6 +109,10 @@ Badges (`Official`, `Partner`) are assigned by BMM based on **where the catalog 
 | `images.thumb` | string | Card thumbnail — shown on the browse grid. Recommended **16:9**, min 400×225 px. Must be a public HTTPS URL (GitHub raw, CDN…). |
 | `images.extra` | array | Extra screenshots shown in the detail gallery (clickable strip). Up to ~5. Same URL rules as thumb. |
 | `download.size` | integer | File size in bytes (shown before download) |
+| `download.sha256` | string | **Recommended.** SHA-256 checksum of the downloaded file. When present, BMM verifies the download and warns (modal, install blocked by default) if it does not match — protecting users from tampered or corrupted files. |
+
+> [!TIP]
+> Generate the checksum with `sha256sum app.exe` (Linux/macOS) or `certutil -hashfile app.exe SHA256` (Windows), then paste the value into `download.sha256`.
 
 ### How to host images on GitHub
 

@@ -1,6 +1,5 @@
 use crate::mcp::state_bridge;
 use anyhow::Result;
-use std::process::Command;
 use std::path::Path;
 
 pub fn list_launch_packs() -> Result<Vec<state_bridge::LaunchPack>> {
@@ -117,6 +116,7 @@ pub fn create_launch_pack(
         executable_paths: exe_paths.into_iter().map(std::path::PathBuf::from).collect(),
         icon_path,
         created_at: chrono::Local::now().to_rfc3339(),
+        extra: Default::default(),
     };
 
     let mut data = state_bridge::read_app_data()?;

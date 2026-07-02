@@ -366,6 +366,7 @@ dependencies = [
  "lazy_static",
  "local-ip-address",
  "mimalloc",
+ "open",
  "percent-encoding",
  "rand 0.8.5",
  "rayon",

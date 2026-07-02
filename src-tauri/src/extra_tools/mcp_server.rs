@@ -26,6 +26,13 @@
 #[path = "../mcp/mod.rs"]
 mod mcp;
 
+// The mcp tools spawn children via `crate::commands::proc` (no-console helpers).
+// This example is self-contained, so mount the same file at the same crate path.
+mod commands {
+    #[path = "../../commands/proc.rs"]
+    pub mod proc;
+}
+
 use clap::{Parser, Subcommand};
 use colored::Colorize;
 use comfy_table::{Table, ContentArrangement, presets::UTF8_FULL_CONDENSED};
@@ -235,8 +242,154 @@ enum Commands {
     /// List installed plugins (id, name, version, permissions)
     Plugins,
 
+    /// Show one installed plugin's full record (manifest, permissions, state)
+    Plugin {
+        /// Plugin id
+        plugin_id: String,
+    },
+
     /// Show the App Catalog state (installed apps, favourites, community sources)
     Apps,
+
+    /// List modpacks
+    Modpacks,
+
+    /// Create a modpack from mod ids (or names)
+    CreateModpack {
+        /// Modpack name
+        name: String,
+        /// Mod ids/names to include
+        #[arg(required = true)]
+        mod_ids: Vec<String>,
+    },
+
+    /// List the user's custom mod tags
+    Tags,
+
+    /// List the Server-Repos this BMM is connected to
+    Repos,
+
+    /// List installed UI themes (and the active one)
+    Themes,
+
+    /// Verify a mod's on-disk files against its stored SHA-256 hashes
+    VerifyMod {
+        /// Mod id
+        mod_id: String,
+    },
+
+    /// Delete a mod from BMM (--files also removes its folder on disk)
+    DeleteMod {
+        /// Mod id
+        mod_id: String,
+        /// Also delete the mod folder on disk (irreversible)
+        #[arg(long, default_value_t = false)]
+        files: bool,
+    },
+
+    /// Call the RUNNING BMM app's local API (e.g. `call GET /api/status`)
+    Call {
+        /// HTTP method: GET or POST
+        method: String,
+        /// API path starting with /api/ (query string allowed)
+        path: String,
+        /// JSON body for POST requests
+        body: Option<String>,
+    },
+
+    /// Configure the local Session recorder (running app)
+    Recorder {
+        /// Master switch: true/false
+        #[arg(long)]
+        on: Option<bool>,
+        /// Full-session capture: true/false
+        #[arg(long)]
+        full: Option<bool>,
+        /// Rust-side traces: true/false
+        #[arg(long)]
+        rust: Option<bool>,
+        /// Frontend traces: true/false
+        #[arg(long)]
+        js: Option<bool>,
+    },
+
+    /// List recorded session reports (Session recorder output)
+    Sessions,
+
+    /// Set the anonymous-usage telemetry consent (running app)
+    TelemetryConsent {
+        /// true = opt in, false = opt out
+        enabled: bool,
+    },
+
+    /// Set Privacy & telemetry sub-options (running app; omitted = unchanged)
+    TelemetrySettings {
+        /// Session replays: true/false
+        #[arg(long)]
+        replay: Option<bool>,
+        /// Full capture: true/false
+        #[arg(long)]
+        full: Option<bool>,
+        /// Benchmark sharing: true/false
+        #[arg(long)]
+        bench: Option<bool>,
+    },
+
+    /// List the saved Scheduling & automation tasks
+    Schedules,
+
+    /// Trigger a saved scheduler task by id (running app)
+    RunSchedule {
+        /// Task id
+        id: String,
+    },
+
+    /// Launch a benchmark (running app)
+    Benchmark {
+        /// Dataset: sandbox (generated) or real (my mods)
+        #[arg(long, default_value = "sandbox")]
+        dataset: String,
+        /// Size: S | M | L | XL | CUSTOM
+        #[arg(long, default_value = "M")]
+        size: String,
+        /// Dataset MB (when --size CUSTOM)
+        #[arg(long)]
+        mb: Option<u64>,
+        /// Custom mod-folder path(s) to benchmark (dataset=real, repeatable)
+        #[arg(long)]
+        source: Vec<String>,
+        /// Profile id(s)/name(s) whose mods folders are benchmarked (repeatable)
+        #[arg(long)]
+        profile: Vec<String>,
+        /// Run now in the background and print results (default: opens the UI pre-filled)
+        #[arg(long, default_value_t = false)]
+        auto: bool,
+    },
+
+    /// Download the translation template JSON (running app)
+    LangTemplate {
+        /// Write to this file instead of stdout
+        #[arg(long)]
+        out: Option<String>,
+    },
+
+    /// Import a translated language .json file (running app)
+    ImportLanguage {
+        /// Path to the translated .json
+        path: String,
+    },
+
+    /// Set the active theme by id (applies when BMM reloads themes)
+    ThemeApply {
+        /// Theme id (e.g. bmm-discord, or an installed custom theme id)
+        theme_id: String,
+    },
+
+    /// Show an installed custom theme's full definition
+    ThemeInfo {
+        /// Theme id
+        theme_id: String,
+    },
 }
 
 // ─── Fancy banner ─────────────────────────────────────────────────────────
@@ -409,6 +562,224 @@ async fn run_cli_command(cmd: Commands) -> anyhow::Result<()> {
                 Some(a) if !a.is_empty() => for s in a { if let Some(u) = s.as_str() { println!("    • {}", u.dimmed()); } },
                 _ => println!("    {}", "none".dimmed()),
             }
+        }
+
+        // ── Plugin detail ────────────────────────────────────────────
+        Commands::Plugin { plugin_id } => {
+            let p = state_bridge::get_plugin(&plugin_id)?;
+            println!("{}", serde_json::to_string_pretty(&p)?);
+        }
+
+        // ── Modpacks ─────────────────────────────────────────────────
+        Commands::Modpacks => {
+            let packs = state_bridge::list_modpacks()?;
+            if packs.is_empty() {
+                println!("  {}", "No modpacks.".dimmed());
+            } else {
+                let mut table = Table::new();
+                table.load_preset(UTF8_FULL_CONDENSED);
+                table.set_content_arrangement(ContentArrangement::Dynamic);
+                table.set_header(vec!["ID", "Name", "Mods"]);
+                for p in &packs {
+                    let s = |k: &str| p.get(k).and_then(|v| v.as_str()).unwrap_or("—").to_string();
+                    let n = p.get("mod_ids").and_then(|v| v.as_array()).map(|a| a.len())
+                        .or_else(|| p.get("mods").and_then(|v| v.as_array()).map(|a| a.len()))
+                        .unwrap_or(0);
+                    table.add_row(vec![s("id"), s("name"), n.to_string()]);
+                }
+                println!("{table}");
+                println!("  {} {}", packs.len().to_string().cyan().bold(), "modpack(s)".dimmed());
+            }
+        }
+        Commands::CreateModpack { name, mod_ids } => {
+            let msg = state_bridge::create_modpack(&name, mod_ids)?;
+            println!("  {} {}", "✓".green().bold(), msg);
+        }
+
+        // ── Tags ─────────────────────────────────────────────────────
+        Commands::Tags => {
+            let tags = state_bridge::list_tags()?;
+            if tags.is_empty() {
+                println!("  {}", "No custom tags.".dimmed());
+            } else {
+                for t in &tags {
+                    println!("  • {} {}", t.name.cyan(), t.color.as_deref().unwrap_or("").dimmed());
+                }
+                println!("\n  {} {}", tags.len().to_string().cyan().bold(), "tag(s)".dimmed());
+            }
+        }
+
+        // ── Connected Server-Repos ───────────────────────────────────
+        Commands::Repos => {
+            let repos = state_bridge::list_connected_repos()?;
+            let list = repos.as_array().cloned().unwrap_or_default();
+            if list.is_empty() {
+                println!("  {}", "No connected Server-Repos.".dimmed());
+            } else {
+                let mut table = Table::new();
+                table.load_preset(UTF8_FULL_CONDENSED);
+                table.set_content_arrangement(ContentArrangement::Dynamic);
+                table.set_header(vec!["Name", "URL"]);
+                for r in &list {
+                    let s = |k: &str| r.get(k).and_then(|v| v.as_str()).unwrap_or("—").to_string();
+                    table.add_row(vec![s("name"), s("url")]);
+                }
+                println!("{table}");
+                println!("  {} {}", list.len().to_string().cyan().bold(), "connected repo(s)".dimmed());
+            }
+        }
+
+        // ── Themes ───────────────────────────────────────────────────
+        Commands::Themes => {
+            let v = state_bridge::list_themes()?;
+            let active = v.get("active").and_then(|x| x.as_str()).unwrap_or("(default)");
+            println!("  {} {}\n", "Active theme:".bold(), active.cyan());
+            let installed = v.get("installed").and_then(|x| x.as_array()).cloned().unwrap_or_default();
+            if installed.is_empty() {
+                println!("  {}", "No custom themes installed.".dimmed());
+            } else {
+                for t in &installed {
+                    let s = |k: &str| t.get(k).and_then(|x| x.as_str()).unwrap_or("—").to_string();
+                    let mark = if t.get("active").and_then(|x| x.as_bool()).unwrap_or(false) { "●" } else { "○" };
+                    println!("  {} {} {} {}", mark.cyan(), s("name").bold(), format!("v{}", s("version")).dimmed(), format!("by {}", s("author")).dimmed());
+                }
+            }
+        }
+
+        // ── Mod integrity / deletion ─────────────────────────────────
+        Commands::VerifyMod { mod_id } => {
+            let map = state_bridge::verify_integrity(&mod_id)?;
+            let bad: Vec<&String> = map.iter().filter(|(_, ok)| !**ok).map(|(f, _)| f).collect();
+            if map.is_empty() {
+                println!("  {}", "No stored hashes for this mod (nothing to verify).".dimmed());
+            } else if bad.is_empty() {
+                println!("  {} {} {}", "✓".green().bold(), map.len().to_string().cyan(), "file(s) verified — all hashes match".green());
+            } else {
+                println!("  {} {} corrupted file(s):", "✗".red().bold(), bad.len().to_string().red().bold());
+                for f in bad { println!("    • {}", f.red()); }
+            }
+        }
+        Commands::DeleteMod { mod_id, files } => {
+            let msg = state_bridge::delete_mod(&mod_id, files)?;
+            println!("  {} {}", "✓".green().bold(), msg);
+        }
+
+        // ── Live app bridge ──────────────────────────────────────────
+        Commands::Call { method, path, body } => {
+            let body_json = match body {
+                Some(b) => Some(serde_json::from_str::<serde_json::Value>(&b)
+                    .map_err(|e| anyhow::anyhow!("Body is not valid JSON: {}", e))?),
+                None => None,
+            };
+            let res = state_bridge::api_call(&method, &path, body_json).await?;
+            let status = res.get("status").and_then(|v| v.as_u64()).unwrap_or(0);
+            let tag = if (200..300).contains(&status) { status.to_string().green().bold() } else { status.to_string().red().bold() };
+            println!("  {} {}", "HTTP".dimmed(), tag);
+            println!("{}", serde_json::to_string_pretty(res.get("body").unwrap_or(&serde_json::Value::Null))?);
+        }
+
+        // ── Session recorder / telemetry (running app) ───────────────
+        Commands::Recorder { on, full, rust, js } => {
+            let mut body = serde_json::Map::new();
+            for (k, v) in [("on", on), ("full", full), ("rust", rust), ("js", js)] {
+                if let Some(b) = v { body.insert(k.into(), b.into()); }
+            }
+            if body.is_empty() { anyhow::bail!("Nothing to change — pass at least one of --on/--full/--rust/--js true|false"); }
+            let res = state_bridge::api_call("POST", "/api/recorder", Some(serde_json::Value::Object(body))).await?;
+            println!("  {} recorder settings sent {}", "✓".green().bold(), format!("(HTTP {})", res.get("status").and_then(|v| v.as_u64()).unwrap_or(0)).dimmed());
+        }
+        Commands::Sessions => {
+            let sessions: Vec<_> = state_bridge::list_crash_reports().into_iter()
+                .filter(|r| r.category.contains("Session")).collect();
+            if sessions.is_empty() {
+                println!("  {}", "No recorded sessions.".dimmed());
+            } else {
+                let mut table = Table::new();
+                table.load_preset(UTF8_FULL_CONDENSED);
+                table.set_content_arrangement(ContentArrangement::Dynamic);
+                table.set_header(vec!["Name", "Category", "Size", "Path"]);
+                for s in &sessions {
+                    table.add_row(vec![s.name.clone(), s.category.clone(), format!("{} KB", s.size / 1024), s.path.clone()]);
+                }
+                println!("{table}");
+                println!("  {} {}", sessions.len().to_string().cyan().bold(), "session report(s)".dimmed());
+            }
+        }
+        Commands::TelemetryConsent { enabled } => {
+            let res = state_bridge::api_call("POST", "/api/telemetry/consent", Some(serde_json::json!({ "enabled": enabled }))).await?;
+            println!("  {} telemetry consent → {} {}", "✓".green().bold(), enabled.to_string().cyan(), format!("(HTTP {})", res.get("status").and_then(|v| v.as_u64()).unwrap_or(0)).dimmed());
+        }
+        Commands::TelemetrySettings { replay, full, bench } => {
+            let mut body = serde_json::Map::new();
+            for (k, v) in [("replay", replay), ("full", full), ("bench", bench)] {
+                if let Some(b) = v { body.insert(k.into(), b.into()); }
+            }
+            if body.is_empty() { anyhow::bail!("Nothing to change — pass at least one of --replay/--full/--bench true|false"); }
+            let res = state_bridge::api_call("POST", "/api/telemetry/settings", Some(serde_json::Value::Object(body))).await?;
+            println!("  {} telemetry settings sent {}", "✓".green().bold(), format!("(HTTP {})", res.get("status").and_then(|v| v.as_u64()).unwrap_or(0)).dimmed());
+        }
+
+        // ── Scheduling & automation ──────────────────────────────────
+        Commands::Schedules => {
+            let v = state_bridge::list_schedules()?;
+            let tasks = v.as_array().cloned().unwrap_or_default();
+            if tasks.is_empty() {
+                println!("  {}", "No scheduled tasks.".dimmed());
+            } else {
+                let mut table = Table::new();
+                table.load_preset(UTF8_FULL_CONDENSED);
+                table.set_content_arrangement(ContentArrangement::Dynamic);
+                table.set_header(vec!["", "ID", "Name", "Trigger", "Actions"]);
+                for t in &tasks {
+                    let s = |k: &str| t.get(k).and_then(|x| x.as_str()).unwrap_or("—").to_string();
+                    let on = t.get("enabled").and_then(|x| x.as_bool()).unwrap_or(true);
+                    let trig = t.get("trigger").map(|x| if x.is_string() { x.as_str().unwrap_or("—").to_string() } else { x.get("kind").and_then(|k| k.as_str()).unwrap_or("custom").to_string() }).unwrap_or_else(|| "—".into());
+                    let n = t.get("actions").and_then(|x| x.as_array()).map(|a| a.len()).unwrap_or(0);
+                    table.add_row(vec![(if on { "●" } else { "○" }).to_string(), s("id"), s("name"), trig, n.to_string()]);
+                }
+                println!("{table}");
+                println!("  {} {}", tasks.len().to_string().cyan().bold(), "task(s)".dimmed());
+            }
+        }
+        Commands::RunSchedule { id } => {
+            let res = state_bridge::api_call("POST", "/api/schedule/run", Some(serde_json::json!({ "id": id }))).await?;
+            println!("  {} schedule '{}' triggered {}", "✓".green().bold(), id.cyan(), format!("(HTTP {})", res.get("status").and_then(|v| v.as_u64()).unwrap_or(0)).dimmed());
+        }
+
+        // ── Benchmark ────────────────────────────────────────────────
+        Commands::Benchmark { dataset, size, mb, source, profile, auto } => {
+            let mut body = serde_json::json!({ "dataset": dataset, "size": size, "mode": if auto { "auto" } else { "manual" } });
+            if let Some(m) = mb { body["mb"] = m.into(); }
+            if !source.is_empty() { body["sources"] = serde_json::json!(source); }
+            if !profile.is_empty() { body["profiles"] = serde_json::json!(profile); }
+            println!("  {} {}", "Launching benchmark…".bold(), if auto { "(auto — waiting for results)".dimmed() } else { "(opens pre-filled in the BMM UI)".dimmed() });
+            let res = state_bridge::api_call("POST", "/api/benchmark", Some(body)).await?;
+            println!("{}", serde_json::to_string_pretty(res.get("body").unwrap_or(&serde_json::Value::Null))?);
+        }
+
+        // ── Translation sandbox ──────────────────────────────────────
+        Commands::LangTemplate { out } => {
+            let res = state_bridge::api_call("GET", "/api/language/template", None).await?;
+            let body = res.get("body").cloned().unwrap_or(serde_json::Value::Null);
+            let pretty = serde_json::to_string_pretty(&body)?;
+            match out {
+                Some(p) => { std::fs::write(&p, &pretty)?; println!("  {} template written to {}", "✓".green().bold(), p.cyan()); }
+                None => println!("{pretty}"),
+            }
+        }
+        Commands::ImportLanguage { path } => {
+            let res = state_bridge::api_call("POST", "/api/language/import", Some(serde_json::json!({ "path": path }))).await?;
+            println!("  {} language import requested {}", "✓".green().bold(), format!("(HTTP {})", res.get("status").and_then(|v| v.as_u64()).unwrap_or(0)).dimmed());
+        }
+
+        // ── Themes ───────────────────────────────────────────────────
+        Commands::ThemeApply { theme_id } => {
+            let msg = state_bridge::apply_theme(&theme_id)?;
+            println!("  {} {}", "✓".green().bold(), msg);
+        }
+        Commands::ThemeInfo { theme_id } => {
+            let v = state_bridge::get_theme(&theme_id)?;
+            println!("{}", serde_json::to_string_pretty(&v)?);
         }
 
         // ── Profiles ─────────────────────────────────────────────────

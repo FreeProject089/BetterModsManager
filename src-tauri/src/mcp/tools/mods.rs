@@ -324,6 +324,7 @@ pub fn add_mod_entry(name: &str, folder_path: &str, version: &str) -> Result<Str
         file_hashes: None,
         file_hashes_invalid: None,
         file_hashes_timestamp: None,
+        extra: Default::default(),
     };
     
     data.mods.push(entry);
@@ -399,7 +400,6 @@ pub fn start_repo_server(path: &str, port: u16) -> Result<String, String> {
     use warp::Filter;
     use std::net::SocketAddr;
     use local_ip_address::local_ip;
-    use tokio::process::Command;
     use std::process::Stdio;
     use tokio::io::{BufReader, AsyncBufReadExt};
 

@@ -1027,14 +1027,21 @@ export function initRepo() {
             // Favourites: optional "favourites only" filter + always float favourites to the top.
             const favOnly = (document.getElementById('repo-browser-fav-filter') as HTMLInputElement | null)?.checked;
             if (favOnly) filtered = filtered.filter(r => isRepoFav(r.url));
-            filtered = [...filtered].sort((a, b) => (isRepoFav(b.url) ? 1 : 0) - (isRepoFav(a.url) ? 1 : 0));
+            // Boosted (paid promotion, from BetterCommunity) float above everything, then favourites.
+            const isBoosted = (r: any) => r.featured === true || (r.featuredUntil && new Date(r.featuredUntil) > new Date());
+            filtered = [...filtered].sort((a, b) => {
+                const boost = (isBoosted(b) ? 1 : 0) - (isBoosted(a) ? 1 : 0);
+                if (boost) return boost;
+                return (isRepoFav(b.url) ? 1 : 0) - (isRepoFav(a.url) ? 1 : 0);
+            });
 
             listEl.innerHTML = filtered.map(repo => `
-                <div class="repo-browser-item" style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:16px; cursor:pointer; transition:all 0.2s ease;" data-url="${escAttr(repo.url)}">
+                <div class="repo-browser-item${isBoosted(repo) ? ' repo-browser-item-boosted' : ''}" style="background:${isBoosted(repo) ? 'linear-gradient(180deg, rgba(245,158,11,0.06), rgba(255,255,255,0.03))' : 'rgba(255,255,255,0.03)'}; border:1px solid ${isBoosted(repo) ? 'rgba(245,158,11,0.35)' : 'rgba(255,255,255,0.08)'}; border-radius:12px; padding:16px; cursor:pointer; transition:all 0.2s ease;" data-url="${escAttr(repo.url)}">
                     <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
                         <div style="flex:1;">
-                            <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+                            <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap;">
                                 <span style="font-size:14px; font-weight:700; color:var(--text-primary);">${escHtml(repo.name)}</span>
+                                ${isBoosted(repo) ? `<span style="font-size:9px; font-weight:800; padding:2px 7px; border-radius:4px; text-transform:uppercase; letter-spacing:0.5px; background:rgba(245,158,11,0.15); color:#f59e0b; border:1px solid rgba(245,158,11,0.35); display:flex; align-items:center; gap:3px;" data-tooltip="${t('repo.boostedServer') || 'Boosted — featured on BetterCommunity'}"><svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M13 2 3 14h7l-1 8 10-12h-7z"/></svg> Boosted</span>` : ''}
                                 <span class="repo-badge" style="font-size:9px; font-weight:800; padding:2px 8px; border-radius:4px; text-transform:uppercase; letter-spacing:0.5px; ${repo.category === 'official' ? 'background:rgba(16,185,129,0.15); color:#10b981;' : 'background:rgba(59,130,246,0.15); color:#3b82f6;'}">${escHtml(repo.category)}</span>
                                 ${repo.hash ? `<span style="font-size:9px; font-weight:800; padding:2px 7px; border-radius:4px; text-transform:uppercase; letter-spacing:0.5px; background:rgba(16,185,129,0.12); color:#10b981; border:1px solid rgba(16,185,129,0.25); display:flex; align-items:center; gap:3px;" data-tooltip="${t('repo.verifiedServer') || 'Verified server — hash validated by the BMM team'}"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> Verified</span>` : ''}
                                 ${repo.whitelist_enabled === true
