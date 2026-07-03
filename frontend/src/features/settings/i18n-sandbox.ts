@@ -88,6 +88,20 @@ export function initI18nSandbox(): void {
         });
     });
 
+    // Jump to the next untranslated key (wraps) — the fastest way to finish a language.
+    document.getElementById('i18n-next-missing')?.addEventListener('click', selectNextMissing);
+
+    // Floating-window opacity (only visible in overlay mode; persisted).
+    const opRange = document.getElementById('i18n-ovl-opacity-range') as HTMLInputElement | null;
+    if (opRange) {
+        opRange.value = localStorage.getItem('bmm_i18n_overlay_opacity') || '100';
+        opRange.addEventListener('input', () => {
+            localStorage.setItem('bmm_i18n_overlay_opacity', opRange.value);
+            const panel = _modal?.querySelector('.modal') as HTMLElement | null;
+            if (panel && _overlayMode) panel.style.opacity = String(Number(opRange.value) / 100);
+        });
+    }
+
     // Hardcoded tab
     document.getElementById('i18n-hc-search')?.addEventListener('input', debouncedRenderHardcoded);
     document.getElementById('i18n-hc-kind')?.addEventListener('change', renderHardcoded);
@@ -101,6 +115,34 @@ export function initI18nSandbox(): void {
         toast(t('i18n.resetDone') || 'Sandbox reset', 'success');
     });
     document.getElementById('i18n-export')?.addEventListener('click', exportSandbox);
+}
+
+/** Header progress: how complete the selected language is (translated / total). */
+function updateProgress(missing: number): void {
+    const fill = document.getElementById('i18n-progress-fill');
+    const txt = document.getElementById('i18n-progress-txt');
+    if (!fill || !txt) return;
+    const total = _allKeys.filter(k => !isObjKey(k) && !isSectionKey(k)).length;
+    const done = Math.max(0, total - missing);
+    const pct = total ? Math.round((done / total) * 100) : 100;
+    (fill as HTMLElement).style.width = pct + '%';
+    (fill as HTMLElement).style.background = pct >= 100 ? 'var(--success)' : pct >= 60 ? 'var(--accent)' : 'var(--danger)';
+    txt.textContent = `${_baseLang.toUpperCase()} · ${done}/${total} (${pct}%)`;
+}
+
+/** Jump to the next missing key after the current selection (wraps around). */
+function selectNextMissing(): void {
+    const isMissing = (k: string) => !isObjKey(k) && !isSectionKey(k) && !valueFor(k, _baseLang).trim();
+    const start = _selectedKey ? _allKeys.indexOf(_selectedKey) + 1 : 0;
+    for (let i = 0; i < _allKeys.length; i++) {
+        const k = _allKeys[(start + i) % _allKeys.length];
+        if (isMissing(k)) {
+            selectKey(k);
+            document.querySelector(`.i18n-key-row[data-key="${CSS.escape(k)}"]`)?.scrollIntoView({ block: 'center' });
+            return;
+        }
+    }
+    toast(t('i18n.noMissing') || 'No missing keys — this language is complete.', 'success');
 }
 
 function switchTab(name: string): void {
@@ -209,6 +251,7 @@ function renderList(): void {
         `<div class="i18n-sb-empty" style="height:auto;margin-top:30px;">${t('i18n.noResults') || 'No keys match'}</div>`;
     if (statsEl) statsEl.innerHTML =
         `<b>${_allKeys.length}</b> ${t('i18n.keys') || 'keys'} · ${shown} ${t('i18n.shown') || 'shown'} · <span style="color:${missing ? 'var(--danger)' : 'var(--text-muted)'}">${missing} ${t('i18n.missingWord') || 'missing'}</span> · ${_baseLang.toUpperCase()}`;
+    updateProgress(missing);
 
     // Row clicks use a single delegated listener (attached once in init), so we
     // don't bind 1500 listeners on every render — that was the list's main lag.
@@ -602,6 +645,9 @@ function toggleOverlayMode(modal: HTMLElement, force?: boolean): void {
         panel.style.height = h + 'px';
         panel.style.left = left + 'px';
         panel.style.top = top + 'px';
+        // Saved floating opacity (the slider in the header controls it live).
+        const savedOp = Number(localStorage.getItem('bmm_i18n_overlay_opacity') || '100');
+        panel.style.opacity = String(Math.min(100, Math.max(35, savedOp)) / 100);
         makeDraggable(panel, modal.querySelector('.i18n-sb-header') as HTMLElement);
         observeResize(panel);
     } else {

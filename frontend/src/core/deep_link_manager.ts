@@ -216,6 +216,10 @@ async function handleDeepLink(urlStr: string): Promise<void> {
                 toast(t('plugins.deepLinkMissingUrl') || 'URL manquante dans le deep link.', 'error');
                 return;
             }
+            if (!/^https?:\/\//i.test(repoUrl)) {
+                toast(t('toast.deeplinkInvalidPath') || 'Deep link: invalid path', 'error');
+                return;
+            }
             const confirmed = await window.confirmCustom!(
                 t('plugins.deepLinkConnectRepoTitle') || 'Connecter un repo ?',
                 `<p style="font-size:13px;line-height:1.5;margin:10px 0 4px;">${t('plugins.deepLinkConnectRepoDesc') || 'Ajouter ce repo à la liste des repos connectés dans BMM ?'}</p>
@@ -247,6 +251,10 @@ async function handleDeepLink(urlStr: string): Promise<void> {
                 toast(t('plugins.deepLinkMissingUrl') || 'URL manquante dans le deep link.', 'error');
                 return;
             }
+            if (!/^https?:\/\//i.test(repoUrl)) {
+                toast(t('toast.deeplinkInvalidPath') || 'Deep link: invalid path', 'error');
+                return;
+            }
             // Navigate to the repo page so the user can complete the sync from there
             const navBtn = document.querySelector('[data-view="repo"]') as HTMLElement;
             if (navBtn) navBtn.click();
@@ -270,6 +278,21 @@ async function handleDeepLink(urlStr: string): Promise<void> {
             if (!apiPath.startsWith('/api/')) { toast(t('toast.deeplinkInvalidPath') || 'Deep link: invalid path', 'error'); return; }
             const params: Record<string, string> = {};
             parsedUrl.searchParams.forEach((v, k) => { if (k !== 'method' && k !== 'path') params[k] = v; });
+            // State-changing calls (enable/disable a mod, restart, change settings…) get
+            // the same confirm-before-acting treatment as repo/connect below — any
+            // website or app can trigger a bmm:// link, so a bare click must not be able
+            // to silently mutate app state via a generic API passthrough.
+            if (method !== 'GET') {
+                const paramsPreview = Object.entries(params).map(([k, v]) => `${escHtml(k)}=${escHtml(v)}`).join('&');
+                const confirmed = await window.confirmCustom!(
+                    t('plugins.deepLinkApiTitle') || 'Run this action?',
+                    `<p style="font-size:13px;line-height:1.5;margin:10px 0 4px;">${t('plugins.deepLinkApiDesc') || 'This link wants to make a change in BMM.'}</p>
+                     <div style="font-size:11px;font-family:var(--font-mono);background:rgba(0,0,0,0.3);padding:6px 10px;border-radius:6px;word-break:break-all;margin-top:8px;color:var(--text-muted);">${method} ${escHtml(apiPath)}${paramsPreview ? `<br>${paramsPreview}` : ''}</div>`,
+                    'accent',
+                    { yesLabel: t('common.yes'), noLabel: t('common.no') }
+                );
+                if (!confirmed) return;
+            }
             try {
                 const tok = await getApiToken();
                 const opts: RequestInit = { method, headers: { 'Authorization': `Bearer ${tok}` } };
@@ -456,6 +479,18 @@ async function handleDeepLink(urlStr: string): Promise<void> {
         // ── Language: import a translation file by path ───────────────────
         if (action === 'language/import') {
             const path = parsedUrl.searchParams.get('path');
+            // A bare path (no dialog) reads whatever local file is named — confirm first,
+            // same as repo/connect, since any website/app can trigger a bmm:// link.
+            if (path) {
+                const confirmed = await window.confirmCustom!(
+                    t('plugins.deepLinkImportLangTitle') || 'Import this language file?',
+                    `<p style="font-size:13px;line-height:1.5;margin:10px 0 4px;">${t('plugins.deepLinkImportLangDesc') || 'This link wants BMM to read a local file as a language file.'}</p>
+                     <div style="font-size:11px;font-family:var(--font-mono);background:rgba(0,0,0,0.3);padding:6px 10px;border-radius:6px;word-break:break-all;margin-top:8px;color:var(--text-muted);">${escHtml(path)}</div>`,
+                    'accent',
+                    { yesLabel: t('common.yes'), noLabel: t('common.no') }
+                );
+                if (!confirmed) return;
+            }
             try { await invoke('import_language', { path: path || null }); toast(t('settings.langImported') || 'Language imported', 'success'); }
             catch (e) { toast(`${t('common.error')}: ${e}`, 'error'); }
             return;

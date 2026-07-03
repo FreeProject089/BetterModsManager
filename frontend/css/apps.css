@@ -197,7 +197,7 @@
     position: absolute;
     top: 8px;
     right: 8px;
-    color: #f59e0b;
+    color: var(--accent);
     font-size: 16px;
     text-shadow: 0 1px 4px rgba(0,0,0,0.5);
 }
@@ -239,9 +239,9 @@
     border: 1px solid transparent;
     line-height: 1.5;
 }
-.apps-price-free    { background: rgba(16,185,129,0.16);  color: #34d399; border-color: rgba(16,185,129,0.38); }
-.apps-price-freemium{ background: rgba(99,102,241,0.16);  color: #a5b4fc; border-color: rgba(99,102,241,0.38); }
-.apps-price-paid    { background: rgba(245,158,11,0.16);  color: #fbbf24; border-color: rgba(245,158,11,0.38); }
+.apps-price-free    { background: rgba(16,185,129,0.16);  color: var(--success); border-color: rgba(16,185,129,0.38); }
+.apps-price-freemium{ background: rgba(99,102,241,0.16);  color: var(--bmm-purple); border-color: rgba(99,102,241,0.38); }
+.apps-price-paid    { background: rgba(245,158,11,0.16);  color: var(--warning); border-color: rgba(245,158,11,0.38); }
 
 .apps-cat-badge {
     display: inline-flex;
@@ -256,9 +256,9 @@
     line-height: 1.6;
 }
 .apps-cat-badge svg { width: 12px; height: 12px; flex: none; }
-.apps-cat-game    { background: rgba(59,130,246,0.14);  color: #60a5fa; border-color: rgba(59,130,246,0.42); }
-.apps-cat-utility { background: rgba(139,92,246,0.14);  color: #a78bfa; border-color: rgba(139,92,246,0.42); }
-.apps-cat-other   { background: rgba(148,163,184,0.12); color: #94a3b8; border-color: rgba(148,163,184,0.34); }
+.apps-cat-game    { background: rgba(59,130,246,0.14);  color: var(--cyan); border-color: rgba(59,130,246,0.42); }
+.apps-cat-utility { background: rgba(139,92,246,0.14);  color: var(--bmm-purple); border-color: rgba(139,92,246,0.42); }
+.apps-cat-other   { background: rgba(148,163,184,0.12); color: var(--text-muted); border-color: rgba(148,163,184,0.34); }
 
 .apps-official-badge {
     display: inline-flex; align-items: center; gap: 3px;
@@ -267,7 +267,7 @@
     padding: 2px 8px;
     border-radius: 999px;
     background: linear-gradient(135deg, rgba(245,158,11,0.26), rgba(245,158,11,0.10));
-    color: #fbbf24;
+    color: var(--warning);
     border: 1px solid rgba(245,158,11,0.45);
 }
 .apps-partner-badge {
@@ -276,7 +276,7 @@
     padding: 2px 8px;
     border-radius: 999px;
     background: rgba(99,102,241,0.14);
-    color: #a5b4fc;
+    color: var(--bmm-purple);
     border: 1px solid rgba(99,102,241,0.42);
 }
 .apps-tag {
@@ -399,9 +399,9 @@
     display: flex; align-items: center; justify-content: center;
     flex-shrink: 0;
 }
-.apps-action-install   { background: rgba(16,185,129,0.14); color: #10b981; }
-.apps-action-launch    { background: rgba(96,165,250,0.14); color: #60a5fa; }
-.apps-action-uninstall { background: rgba(248,113,113,0.14); color: #f87171; }
+.apps-action-install   { background: rgba(16,185,129,0.14); color: var(--success); }
+.apps-action-launch    { background: rgba(96,165,250,0.14); color: var(--cyan); }
+.apps-action-uninstall { background: rgba(248,113,113,0.14); color: var(--danger); }
 
 /* Text */
 .apps-hist-body { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -511,7 +511,7 @@
     transition: color 0.15s;
     flex-shrink: 0;
 }
-.apps-inst-fav-btn:hover, .apps-inst-fav-btn.active { color: #f59e0b; }
+.apps-inst-fav-btn:hover, .apps-inst-fav-btn.active { color: var(--accent); }
 
 /* ── Sources ── */
 .apps-sources-wrap { max-width: 680px; }
@@ -541,7 +541,7 @@
     font-size: 12px;
     color: var(--text-muted);
 }
-.apps-source-official { border-color: rgba(245,158,11,0.3); color: #fbbf24; }
+.apps-source-official { border-color: rgba(245,158,11,0.3); color: var(--warning); }
 .apps-source-url { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: monospace; font-size: 11px; }
 .apps-source-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
 .apps-source-info { font-size: 11px; color: var(--text-muted); margin-top: 8px; display: flex; align-items: center; gap: 5px; }
@@ -671,7 +671,7 @@
 .adm-title { font-size: 19px; font-weight: 800; color: var(--text-primary); margin: 0; line-height: 1.2; }
 .adm-installed-chip {
     display: inline-flex; align-items: center; gap: 4px;
-    background: rgba(16,185,129,0.15); color: #10b981;
+    background: rgba(16,185,129,0.15); color: var(--success);
     font-size: 10px; font-weight: 700; padding: 2px 8px;
     border-radius: 20px; border: 1px solid rgba(16,185,129,0.3);
     flex-shrink: 0; white-space: nowrap;
@@ -686,8 +686,8 @@
     transition: color 0.15s, background 0.15s, border-color 0.15s;
     display: flex; align-items: center; justify-content: center;
 }
-.adm-fav-btn:hover { background: var(--bmm-s06); color: #f59e0b; border-color: rgba(245,158,11,0.4); }
-.adm-fav-active { color: #f59e0b !important; border-color: rgba(245,158,11,0.4) !important; }
+.adm-fav-btn:hover { background: var(--bmm-s06); color: var(--accent); border-color: rgba(245,158,11,0.4); }
+.adm-fav-active { color: var(--accent) !important; border-color: rgba(245,158,11,0.4) !important; }
 .adm-action-btn {
     display: inline-flex; align-items: center; gap: 7px;
     padding: 9px 18px; border-radius: 10px;
@@ -721,9 +721,9 @@
 .adm-info-value { color: var(--text-muted); text-align: right; }
 .adm-info-source { font-family: monospace; font-size: 11px; }
 .adm-info-installed { background: rgba(16,185,129,0.04); }
-.adm-info-installed .adm-info-icon { opacity: 1; color: #10b981; }
+.adm-info-installed .adm-info-icon { opacity: 1; color: var(--success); }
 .adm-info-installed .adm-info-label,
-.adm-info-installed .adm-info-value { color: #10b981; }
+.adm-info-installed .adm-info-value { color: var(--success); }
 
 /* ── README ── */
 .adm-readme { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
@@ -779,7 +779,7 @@
     padding: 4px 6px; border-radius: 6px;
     transition: color 0.15s;
 }
-.adm-uninstall-link:hover { color: #f87171; }
+.adm-uninstall-link:hover { color: var(--danger); }
 .adm-uninstall-choice {
     display: flex; flex-direction: column; gap: 10px;
     padding: 12px 14px;
@@ -800,7 +800,7 @@
     transition: filter 0.15s, background 0.15s;
 }
 .adm-uc-btn:hover { filter: brightness(1.15); }
-.adm-uc-danger { background: rgba(239,68,68,0.15); color: #f87171; border-color: rgba(239,68,68,0.35); }
+.adm-uc-danger { background: rgba(239,68,68,0.15); color: var(--danger); border-color: rgba(239,68,68,0.35); }
 .adm-uc-ghost { background: none; color: var(--text-muted); }
 
 /* ── Install modal ── */
@@ -885,11 +885,11 @@
     padding: 10px 12px;
     line-height: 1.5;
 }
-.apps-install-setup-note svg { flex-shrink: 0; color: #f59e0b; margin-top: 1px; }
+.apps-install-setup-note svg { flex-shrink: 0; color: var(--accent); margin-top: 1px; }
 
 /* ── Pending exe chip ── */
 .apps-pending-exe {
-    color: #f59e0b;
+    color: var(--accent);
     font-size: 10px;
     font-weight: 600;
     background: rgba(245,158,11,0.12);

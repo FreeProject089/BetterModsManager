@@ -7745,7 +7745,11 @@ document.getElementById('inc').addEventListener('click', async () =&gt; {
                                         </div>
                                         <div style="min-width:0;">
                                             <h2 style="margin:0;font-size:17px;" data-i18n="i18n.title">Translation Sandbox</h2>
-                                            <p style="margin:2px 0 0;font-size:12px;color:var(--text-muted);" data-i18n="i18n.subtitle">Edit translations in a sandbox — nothing is saved to BMM until you export.</p>
+                                            <p class="i18n-sb-subtitle" style="margin:2px 0 0;font-size:12px;color:var(--text-muted);" data-i18n="i18n.subtitle">Edit translations in a sandbox — nothing is saved to BMM until you export.</p>
+                                            <div class="i18n-sb-progress" id="i18n-progress">
+                                                <div class="i18n-sb-progress-bar"><span id="i18n-progress-fill"></span></div>
+                                                <span class="i18n-sb-progress-txt" id="i18n-progress-txt"></span>
+                                            </div>
                                         </div>
                                     </div>
                                     <div class="i18n-sb-header-actions">
@@ -7757,6 +7761,10 @@ document.getElementById('inc').addEventListener('click', async () =&gt; {
                                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 11-6 6v3h3l6-6"/><path d="m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"/></svg>
                                             <span data-i18n="i18n.highlightHcShort">Scan</span>
                                         </button>
+                                        <label class="i18n-ovl-opacity" id="i18n-ovl-opacity" data-i18n-title="i18n.overlayOpacity" title="Floating window opacity">
+                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 0 20z" fill="currentColor" stroke="none"/></svg>
+                                            <input type="range" min="35" max="100" value="100" id="i18n-ovl-opacity-range">
+                                        </label>
                                         <button class="i18n-sb-tool" id="i18n-overlay-toggle" data-i18n-title="i18n.overlayMode" title="Overlay mode">
                                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><rect x="12" y="11" width="8" height="7" rx="1" fill="currentColor" stroke="none"/></svg>
                                             <span data-i18n="i18n.overlayModeShort">Float</span>
@@ -7797,6 +7805,10 @@ document.getElementById('inc').addEventListener('click', async () =&gt; {
                                         <div class="i18n-sb-chips">
                                             <button class="i18n-sb-chip active" data-i18n-filter="all"><span data-i18n="i18n.filterAll">All</span></button>
                                             <button class="i18n-sb-chip" data-i18n-filter="missing">⚠ <span data-i18n="i18n.filterMissing">Missing</span></button>
+                                            <button class="i18n-sb-chip i18n-sb-next" id="i18n-next-missing" data-i18n-title="i18n.nextMissing" title="Jump to the next missing key">
+                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                                                <span data-i18n="i18n.nextMissingShort">Next missing</span>
+                                            </button>
                                         </div>
                                         <div id="i18n-stats" class="i18n-sb-stats"></div>
                                         <div id="i18n-key-list" class="i18n-sb-keylist"></div>

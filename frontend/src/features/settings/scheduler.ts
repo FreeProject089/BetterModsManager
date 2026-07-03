@@ -27,14 +27,17 @@ type Trigger =
 
 interface Action { type: string; params: Record<string, any>; }
 interface Condition { type: string; params: Record<string, any>; negate?: boolean; }
-type Step =
+type Step = (
     | { kind: 'action'; action: Action }
     | { kind: 'delay'; seconds: number }
     | { kind: 'waitFor'; condition: Condition; timeoutSec: number; pollSec?: number; onTimeout?: 'abort' | 'continue' }
     | { kind: 'if'; condition: Condition; then: Step[]; else: Step[] }
     // Loop: run `steps` repeatedly — while/until a condition, or a fixed number of
     // times — with a hard max-iterations safety cap and an optional pause between.
-    | { kind: 'repeat'; mode: 'while' | 'until' | 'times'; condition?: Condition; times?: number; maxIters: number; everySec: number; steps: Step[] };
+    | { kind: 'repeat'; mode: 'while' | 'until' | 'times'; condition?: Condition; times?: number; maxIters: number; everySec: number; steps: Step[] }
+    // Editor-only flags shared by every kind: collapsed (folded in the editor) and
+    // disabled (kept in the workflow but skipped at run time — like commenting out).
+) & { collapsed?: boolean; disabled?: boolean };
 
 interface Task {
     id: string;
@@ -47,6 +50,7 @@ interface Task {
     osSchedule?: boolean;   // also register a Windows Scheduled Task (runs when BMM is closed)
     lastRun?: number;       // epoch ms
     lastResult?: string;    // 'ok' | 'error: ...'
+    history?: { at: number; ok: boolean; ms: number; err?: string }[];  // last runs (capped)
 }
 
 // ── State ───────────────────────────────────────────────────────────────────
@@ -204,6 +208,7 @@ async function syncOsSchedule(task: Task): Promise<void> {
 }
 
 async function runTask(task: Task): Promise<void> {
+    const t0 = Date.now();
     try {
         // Per-run variable store: actions (e.g. a benchmark) write measured values
         // here, and `value` conditions read them → "if disk speed > X then Apply".
@@ -222,12 +227,17 @@ async function runTask(task: Task): Promise<void> {
         }
     }
     task.lastRun = Date.now();
+    // Run history (last 20): timestamp, outcome, duration — shown in the editor.
+    const ok = task.lastResult === 'ok';
+    (task.history = task.history || []).push({ at: t0, ok, ms: Date.now() - t0, err: ok ? undefined : task.lastResult });
+    if (task.history.length > 20) task.history = task.history.slice(-20);
     await saveTasks();
     renderScheduleList();
 }
 
 async function runSteps(steps: Step[], task: Task, ctx: Record<string, number>): Promise<void> {
     for (const step of steps || []) {
+        if (step.disabled) continue;   // switched off in the editor — skipped, not deleted
         if (step.kind === 'action') {
             await runAction(step.action, task, ctx);
         } else if (step.kind === 'delay') {
@@ -412,6 +422,15 @@ async function runAction(action: Action, task: Task, ctx: Record<string, number>
         case 'plugin.compare':   dl('plugin/compare', { id: p.id }); break;
         case 'plugin.delete':    if (p.id) await invoke('uninstall_plugin', { pluginId: p.id }); break;
         case 'mods.checkUpdates': dl('mod/check-updates'); break;
+        case 'mods.autoImportOmm': {
+            const n: any = await invoke('auto_import_omm');
+            toast(`${task.name}: ${t('sched.ommImported') || 'imported'} ${n} OMM mod(s)`, 'success');
+            break;
+        }
+        case 'mods.clearHistory':
+            await invoke('clear_activity_history', { profileId: p.id }); break;
+        case 'mods.exportModpack':
+            if (p.id) await invoke('export_modpack', { id: p.id, destDir: p.dir || null }); break;
         case 'file.open':        if (p.path) await invoke('open_file', { path: p.path }); break;
         case 'folder.open':      if (p.path) await invoke('open_folder', { path: p.path }); break;
         case 'repo.connect':     dl('repo/connect', { url: p.url, name: p.name }); break;
@@ -440,6 +459,24 @@ async function runAction(action: Action, task: Task, ctx: Record<string, number>
         case 'discord.rpc':      dl('discord/rpc', { enabled: b(p.enabled) }); break;
         case 'data.exportAuto':  dl('data/export-auto', { dir: p.dir, name: p.name, increment: p.increment }); break;
         case 'restart':          dl('restart'); break;
+        case 'app.checkUpdate': {
+            const info: any = await invoke('check_for_update', { includePrerelease: !!p.enabled });
+            ctx['update.available'] = info?.has_update ? 1 : 0;
+            if (info?.has_update) toast(`${task.name}: ${t('sched.updateAvail') || 'update available'} — v${info.latest_version}`, 'info');
+            break;
+        }
+        case 'system.clearApiLog': await invoke('clear_api_log'); break;
+        case 'system.clearResourceRecords': await invoke('clear_resource_records'); break;
+        case 'perf.diskSpace': {
+            const mount = p.mountPoint || (await firstDiskMount());
+            if (!mount) throw new Error('No disk to check');
+            const r: any = await invoke('check_disk_space', { path: mount });
+            ctx['disk.free_gb'] = Math.round((r?.available_bytes || 0) / 1073741824 * 10) / 10;
+            ctx['disk.total_gb'] = Math.round((r?.total_bytes || 0) / 1073741824 * 10) / 10;
+            ctx['disk.free_percent'] = Math.round((r?.free_percent || 0) * 10) / 10;
+            toast(`${task.name}: ${mount} — ${ctx['disk.free_gb']} GB ${t('sched.free') || 'free'} (${ctx['disk.free_percent']}%)`, 'info');
+            break;
+        }
         case 'open.url': {
             const u = String(p.url || '');
             if (u) { try { await (window as any).__TAURI__?.shell?.open?.(u); } catch { window.open(u, '_blank'); } }
@@ -705,6 +742,7 @@ export function renderScheduleList(): void {
                         <span class="sched-chip sched-chip-trigger">${escHtml(triggerLabel(task.trigger))}</span>
                         <span class="sched-chip">${stepCount(task.steps)} ${t('sched.steps') || 'steps'}</span>
                         ${task.lastRun ? `<span class="sched-chip sched-chip-dim">${t('sched.last') || 'last'} ${new Date(task.lastRun).toLocaleString()}</span>` : ''}
+                        ${task.lastResult ? `<span class="sched-chip ${task.lastResult === 'ok' ? 'sched-chip-ok' : 'sched-chip-err'}" title="${escAttr(task.lastResult)}">${task.lastResult === 'ok' ? 'OK' : 'ERR'}</span>` : ''}
                     </span>
                 </div>
             </div>
@@ -714,6 +752,7 @@ export function renderScheduleList(): void {
                     <span class="plug-toggle-slider"></span>
                 </label>
                 <button class="btn btn-xs btn-ghost sched-act" data-act="run" title="${escAttr(t('sched.runNow') || 'Run now')}">${I('<polygon points="5 3 19 12 5 21 5 3"/>')}</button>
+                <button class="btn btn-xs btn-ghost sched-act" data-act="dup" title="${escAttr(t('sched.dupTask') || 'Duplicate task')}">${I('<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>')}</button>
                 <button class="btn btn-xs btn-ghost sched-act" data-act="edit" title="${escAttr(t('common.edit') || 'Edit')}">${I('<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>')}</button>
                 <button class="btn btn-xs btn-ghost sched-act sched-act-del" data-act="del" title="${escAttr(t('common.delete') || 'Delete')}">${I('<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>')}</button>
             </div>`;
@@ -722,6 +761,20 @@ export function renderScheduleList(): void {
             if (task.osSchedule) await syncOsSchedule(task);
         });
         row.querySelector('[data-act="run"]')?.addEventListener('click', () => runTask(task));
+        // Duplicate: full deep clone under a new id. Deliberately created DISABLED
+        // and without the OS mirror so saving the copy can't double-fire anything.
+        row.querySelector('[data-act="dup"]')?.addEventListener('click', async () => {
+            const copy: Task = JSON.parse(JSON.stringify(task));
+            copy.id = `sched-${Date.now()}`;
+            copy.name = `${task.name} ${t('sched.copySuffix') || '(copy)'}`;
+            copy.enabled = false;
+            copy.osSchedule = false;
+            copy.lastRun = undefined; copy.lastResult = undefined; copy.history = [];
+            _tasks.push(copy);
+            await saveTasks();
+            renderScheduleList();
+            toast(`${t('sched.duplicated') || 'Duplicated'}: ${copy.name}`, 'success');
+        });
         row.querySelector('[data-act="edit"]')?.addEventListener('click', () => openTaskModal(task));
         row.querySelector('[data-act="del"]')?.addEventListener('click', async () => {
             if (!await window.confirmCustom!(t('sched.delTitle') || 'Delete task', `${task.name}?`, 'danger',
@@ -871,45 +924,81 @@ async function openTaskModal(task: Task | null): Promise<void> {
     modal.classList.add('open');
 }
 
+/** Human one-liner for the header summary: "Daily at 08:00 · 3 steps · even when BMM is closed". */
+function draftSummary(): string {
+    const bits = [triggerLabel(_draft.trigger), `${stepCount(_draft.steps)} ${t('sched.steps') || 'steps'}`];
+    if (_draft.osSchedule) bits.push(t('sched.sumOs') || 'even when BMM is closed');
+    if (_draft.allowCustomCommands) bits.push(t('sched.sumCmd') || 'can run commands');
+    return bits.join(' · ');
+}
+function refreshSummary(modal: HTMLElement): void {
+    const el = modal.querySelector('#sched-summary');
+    if (el) el.textContent = draftSummary();
+}
+
 function renderModal(modal: HTMLElement): void {
     modal.innerHTML = `
-      <div class="modal glass sched-modal">
-        <div class="modal-header">
-            <h2 class="modal-title" style="margin:0;font-size:1.15rem">${_editing ? (t('sched.editTitle') || 'Edit task') : (t('sched.newTitle') || 'New scheduled task')}</h2>
+      <div class="modal glass sched-modal sched-full">
+        <div class="modal-header sched-head">
+            <div class="sched-head-main">
+                <div class="sched-head-icon"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+                <div class="sched-head-text">
+                    <h2 class="modal-title">${_editing ? (t('sched.editTitle') || 'Edit task') : (t('sched.newTitle') || 'New scheduled task')}</h2>
+                    <span class="sched-head-summary" id="sched-summary">${escHtml(draftSummary())}</span>
+                </div>
+            </div>
             <button class="modal-close" id="sched-close">&times;</button>
         </div>
-        <div class="modal-body sched-body">
-            <label class="sched-label">${t('sched.fName') || 'Name'}</label>
-            <input class="input" id="sched-name" value="${escAttr(_draft.name)}" placeholder="${escAttr(t('sched.fNamePh') || 'e.g. Activate DCS profile every morning')}">
+        <div class="sched-layout">
+            <aside class="sched-side">
+                <label class="sched-label">${t('sched.fName') || 'Name'}</label>
+                <input class="input sched-name-input" id="sched-name" value="${escAttr(_draft.name)}" placeholder="${escAttr(t('sched.fNamePh') || 'e.g. Activate DCS profile every morning')}">
+                <textarea class="input" id="sched-desc" rows="2" placeholder="${escAttr(t('sched.fDescriptionPh') || 'Description (optional)')}" style="resize:vertical;margin-top:8px">${escHtml(_draft.description || '')}</textarea>
 
-            <label class="sched-label">${t('sched.fDescription') || 'Description'} <span class="sched-hint-inline">${t('common.optional') || '(optional)'}</span></label>
-            <textarea class="input" id="sched-desc" rows="2" placeholder="${escAttr(t('sched.fDescriptionPh') || 'What does this automation do?')}" style="resize:vertical">${escHtml(_draft.description || '')}</textarea>
+                <label class="sched-label" style="margin-top:16px">${t('sched.fTrigger') || 'Trigger'} <span class="sched-hint-inline">${t('sched.fTriggerHint') || '— WHEN it runs'}</span></label>
+                <div id="sched-trigger"></div>
 
-            <label class="sched-label">${t('sched.fTrigger') || 'Trigger'} <span class="sched-hint-inline">${t('sched.fTriggerHint') || '— WHEN it runs'}</span></label>
-            <div id="sched-trigger"></div>
-
-            <label class="sched-label" style="margin-top:14px">${t('sched.fSteps') || 'Steps (run in order)'} <span class="sched-hint-inline">${t('sched.fStepsHint') || '— WHAT it does, top to bottom'}</span></label>
-            <div class="sched-legend">
-                <span><b class="sched-step-tag sched-do">${t('sched.do') || 'DO'}</b> ${t('sched.legendDo') || 'run an action (activate profile, enable modpack, launch app, run a command…)'}</span>
-                <span><b class="sched-step-tag sched-if">${t('sched.if') || 'IF'}</b> ${t('sched.legendIf') || 'branch: do something only if a condition is true (else do other steps)'}</span>
-                <span><b class="sched-step-tag sched-wait">${t('sched.waitUntil') || 'WAIT UNTIL'}</b> ${t('sched.legendWait') || 'pause until a state is reached (all mods active, app running…) then continue'}</span>
-                <span><b class="sched-step-tag" style="background:rgba(148,163,184,.18);color:#94a3b8">${t('sched.delay') || 'WAIT'}</b> ${t('sched.legendDelay') || 'pause a fixed number of seconds'}</span>
-            </div>
-            <div id="sched-steps" class="sched-steps"></div>
-            <div class="sched-add-row" id="sched-root-add"></div>
-
-            <label class="plug-perm-global-card" style="margin-top:14px;display:flex;align-items:center;gap:10px;padding:10px 12px">
-                <input type="checkbox" id="sched-allow-cmd" ${_draft.allowCustomCommands ? 'checked' : ''}>
-                <span style="font-size:12px;color:var(--text-secondary)">${t('sched.allowCmd') || 'Allow this task to run custom external commands (runs real programs on your PC)'}</span>
-            </label>
-
-            <label class="plug-perm-global-card" style="margin-top:8px;display:flex;align-items:center;gap:10px;padding:10px 12px">
-                <input type="checkbox" id="sched-os" ${_draft.osSchedule ? 'checked' : ''}>
-                <span style="font-size:12px;color:var(--text-secondary)">${t('sched.osSchedule') || 'Run even when BMM is closed (registers a Windows Scheduled Task that launches BMM at the trigger time)'}</span>
-            </label>
+                <label class="sched-label" style="margin-top:16px">${t('sched.secOptions') || 'Options'}</label>
+                <label class="sched-opt">
+                    <input type="checkbox" id="sched-allow-cmd" ${_draft.allowCustomCommands ? 'checked' : ''}>
+                    <div><b>${t('sched.allowCmdTitle') || 'Allow custom commands'}</b><span>${t('sched.allowCmd') || 'This task may run real external programs on your PC.'}</span></div>
+                </label>
+                <label class="sched-opt">
+                    <input type="checkbox" id="sched-os" ${_draft.osSchedule ? 'checked' : ''}>
+                    <div><b>${t('sched.osScheduleTitle') || 'Run even when BMM is closed'}</b><span>${t('sched.osSchedule') || 'Registers a Windows Scheduled Task that launches BMM at the trigger time.'}</span></div>
+                </label>
+                ${_editing && _draft.history?.length ? `
+                <label class="sched-label" style="margin-top:16px">${t('sched.history') || 'Recent runs'}</label>
+                <div class="sched-history">
+                    ${[..._draft.history].reverse().slice(0, 8).map(h => `
+                        <div class="sched-hist-row ${h.ok ? 'ok' : 'err'}"${h.err ? ` title="${escAttr(h.err)}"` : ''}>
+                            <span class="sched-hist-dot"></span>
+                            <span class="sched-hist-when">${new Date(h.at).toLocaleString()}</span>
+                            <span class="sched-hist-ms">${h.ms >= 1000 ? (h.ms / 1000).toFixed(1) + 's' : h.ms + 'ms'}</span>
+                        </div>`).join('')}
+                </div>` : ''}
+            </aside>
+            <main class="modal-body sched-body sched-flow">
+                <div class="sched-flow-head">
+                    <span class="sched-flow-start">${t('sched.flowStart') || 'START'}</span>
+                    <span class="sched-flow-hint">${t('sched.fStepsHint') || 'WHAT it does, top to bottom'} — <span class="sched-flow-hint-drag">${t('sched.dragHint') || 'drag any block into an IF/LOOP branch to nest it'}</span></span>
+                    <span class="sched-legend-mini">
+                        <b class="sched-step-tag sched-do" data-tooltip="${escAttr(t('sched.legendDo') || '')}">${t('sched.do') || 'DO'}</b>
+                        <b class="sched-step-tag sched-if" data-tooltip="${escAttr(t('sched.legendIf') || '')}">${t('sched.if') || 'IF'}</b>
+                        <b class="sched-step-tag sched-repeat" data-tooltip="${escAttr(t('sched.legendLoop') || '')}">${t('sched.repeat') || 'LOOP'}</b>
+                        <b class="sched-step-tag sched-wait" data-tooltip="${escAttr(t('sched.legendWait') || '')}">${t('sched.waitUntil') || 'WAIT'}</b>
+                    </span>
+                </div>
+                <div class="sched-timeline">
+                    <div id="sched-steps" class="sched-steps"></div>
+                    <div class="sched-add-row" id="sched-root-add"></div>
+                </div>
+            </main>
         </div>
         <div class="modal-footer sched-footer">
             <button class="btn btn-ghost" id="sched-cancel">${t('common.cancel') || 'Cancel'}</button>
+            <button class="btn btn-ghost sched-test" id="sched-test" title="${escAttr(t('sched.testHint') || 'Run the steps once right now, without saving')}">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:5px"><polygon points="5 3 19 12 5 21 5 3"/></svg>${t('sched.testRun') || 'Test run'}</button>
             <button class="btn btn-primary" id="sched-save">${t('common.save') || 'Save'}</button>
         </div>
       </div>`;
@@ -918,8 +1007,23 @@ function renderModal(modal: HTMLElement): void {
     modal.querySelector('#sched-cancel')?.addEventListener('click', () => modal.classList.remove('open'));
     modal.querySelector('#sched-name')?.addEventListener('input', (e) => { _draft.name = (e.target as HTMLInputElement).value; });
     modal.querySelector('#sched-desc')?.addEventListener('input', (e) => { _draft.description = (e.target as HTMLTextAreaElement).value; });
-    modal.querySelector('#sched-allow-cmd')?.addEventListener('change', (e) => { _draft.allowCustomCommands = (e.target as HTMLInputElement).checked; });
-    modal.querySelector('#sched-os')?.addEventListener('change', (e) => { _draft.osSchedule = (e.target as HTMLInputElement).checked; });
+    modal.querySelector('#sched-allow-cmd')?.addEventListener('change', (e) => { _draft.allowCustomCommands = (e.target as HTMLInputElement).checked; refreshSummary(modal); });
+    modal.querySelector('#sched-os')?.addEventListener('change', (e) => { _draft.osSchedule = (e.target as HTMLInputElement).checked; refreshSummary(modal); });
+    // Test run: execute the CURRENT draft's steps once, without saving the task —
+    // instant feedback while building an automation instead of save→run→edit loops.
+    modal.querySelector('#sched-test')?.addEventListener('click', async () => {
+        if (!_draft.steps.length) { toast(t('sched.testNoSteps') || 'Add at least one step to test.', 'warning'); return; }
+        const btn = modal.querySelector('#sched-test') as HTMLButtonElement;
+        btn.disabled = true;
+        toast(t('sched.testing') || 'Test run started…', 'info', 1500);
+        try {
+            await runSteps(_draft.steps, _draft, {});
+            toast(t('sched.testOk') || 'Test run finished.', 'success');
+        } catch (e) {
+            if (e instanceof _StopTask) toast(`${t('sched.stopped') || 'stopped'}${(e as any).reason ? `: ${(e as any).reason}` : ''}`, 'info');
+            else toast(`${t('sched.testFail') || 'Test run failed'} — ${e}`, 'error');
+        } finally { btn.disabled = false; }
+    });
     modal.querySelector('#sched-save')?.addEventListener('click', async () => {
         if (!_draft.name.trim()) { toast(t('sched.needName') || 'Name required', 'warning'); return; }
         if (_draft.osSchedule && (_draft.trigger.type as string) === 'appStart') {
@@ -939,21 +1043,29 @@ function renderModal(modal: HTMLElement): void {
 
 function renderTriggerEditor(host: HTMLElement): void {
     const tr = _draft.trigger;
-    const opt = (v: string, label: string) => `<option value="${v}" ${tr.type === v ? 'selected' : ''}>${label}</option>`;
+    // Visual trigger picker: one card per trigger type (icon + label) instead of a
+    // bare <select> — the WHEN choice is the heart of a schedule, make it scannable.
+    const kinds: Array<[string, string]> = [
+        ['interval',  t('sched.trEvery')   || 'Every N minutes'],
+        ['hourly',    t('sched.trHourly')  || 'Every N hours'],
+        ['dailyAt',   t('sched.trDaily')   || 'Daily at time'],
+        ['weeklyAt',  t('sched.trWeekly')  || 'Weekly on days'],
+        ['monthlyAt', t('sched.trMonthly') || 'Monthly on a day'],
+        ['once',      t('sched.trOnce')    || 'Once at date/time'],
+        ['appStart',  t('sched.trAppStart')|| 'On BMM start'],
+        ['manual',    t('sched.trManual')  || 'Manual only'],
+    ];
     host.innerHTML = `
-        <select class="input" id="sched-tr-type" style="max-width:240px">
-            ${opt('interval', t('sched.trEvery') || 'Every N minutes')}
-            ${opt('hourly', t('sched.trHourly') || 'Every N hours')}
-            ${opt('dailyAt', t('sched.trDaily') || 'Daily at time')}
-            ${opt('weeklyAt', t('sched.trWeekly') || 'Weekly on days')}
-            ${opt('monthlyAt', t('sched.trMonthly') || 'Monthly on a day')}
-            ${opt('once', t('sched.trOnce') || 'Once at date/time')}
-            ${opt('appStart', t('sched.trAppStart') || 'On BMM start')}
-            ${opt('manual', t('sched.trManual') || 'Manual only (Run button)')}
-        </select>
-        <div id="sched-tr-params" style="margin-top:8px"></div>`;
-    host.querySelector('#sched-tr-type')?.addEventListener('change', (e) => {
-        const v = (e.target as HTMLSelectElement).value;
+        <div class="sched-tr-grid">
+            ${kinds.map(([v, label]) => `
+                <button type="button" class="sched-tr-card ${tr.type === v ? 'active' : ''}" data-tr="${v}">
+                    <span class="sched-tr-card-icon">${triggerIcon({ type: v } as Trigger)}</span>
+                    <span class="sched-tr-card-label">${escHtml(label)}</span>
+                </button>`).join('')}
+        </div>
+        <div id="sched-tr-params" class="sched-tr-params"></div>`;
+    host.querySelectorAll('.sched-tr-card').forEach(card => card.addEventListener('click', () => {
+        const v = (card as HTMLElement).dataset.tr!;
         if (v === 'interval') _draft.trigger = { type: 'interval', everyMinutes: 60 };
         else if (v === 'hourly') _draft.trigger = { type: 'hourly', everyHours: 1 };
         else if (v === 'dailyAt') _draft.trigger = { type: 'dailyAt', time: '08:00' };
@@ -963,8 +1075,11 @@ function renderTriggerEditor(host: HTMLElement): void {
         else if (v === 'manual') _draft.trigger = { type: 'manual' };
         else _draft.trigger = { type: 'appStart' };
         renderTriggerEditor(host);
-    });
+        const m = document.getElementById('modal-scheduler'); if (m) refreshSummary(m);
+    }));
     const ph = host.querySelector('#sched-tr-params') as HTMLElement;
+    // Any param change (time, minutes, day…) refreshes the header summary live.
+    ph.addEventListener('input', () => { const m = document.getElementById('modal-scheduler'); if (m) refreshSummary(m); });
     if (tr.type === 'interval') {
         ph.innerHTML = `<input type="number" class="input" id="sched-tr-min" min="1" value="${tr.everyMinutes}" style="max-width:120px"> ${t('sched.unitMin') || 'min'}`;
         ph.querySelector('#sched-tr-min')?.addEventListener('input', (e) => { (_draft.trigger as any).everyMinutes = parseInt((e.target as HTMLInputElement).value) || 1; });
@@ -1004,27 +1119,59 @@ function renderTriggerEditor(host: HTMLElement): void {
 // Recursive step list editor.
 /** Pointer-based step reordering (reliable in WebView2, unlike native HTML5 DnD).
  *  Grabs the grip handle, tracks the cursor, shows an insertion line, applies on release. */
+// Every rendered step container (root list, IF then/else, LOOP body) registers its
+// backing Step[] here, so a drag can move a step ACROSS containers — into an IF
+// branch, out of a loop, between branches — not just reorder within one list.
+const _zoneSteps = new WeakMap<HTMLElement, Step[]>();
+
+/** Re-render the whole root steps tree (source of truth after a cross-zone move). */
+function _rerenderRootSteps(): void {
+    const m = document.getElementById('modal-scheduler');
+    const root = m?.querySelector('#sched-steps') as HTMLElement | null;
+    if (!m || !root) return;
+    const body = m.querySelector('.sched-body') as HTMLElement | null;
+    const top = body ? body.scrollTop : 0;
+    renderStepsEditor(root, _draft.steps, 0);
+    if (body) body.scrollTop = top;
+    refreshSummary(m as HTMLElement);
+}
+
 function _startStepDrag(ev: MouseEvent, steps: Step[], fromIdx: number, block: HTMLElement, host: HTMLElement, rerender: () => void): void {
     if (ev.button !== 0) return;
     ev.preventDefault();
     const startY = ev.clientY;
     let dragging = false;
     let insertIdx = fromIdx;
-    const stepBlocks = (): HTMLElement[] =>
-        Array.from(host.children).filter(c => (c as HTMLElement).classList.contains('sched-step')) as HTMLElement[];
-    const clearMarks = () => host.querySelectorAll('.sched-drop-before, .sched-drop-after')
-        .forEach(el => el.classList.remove('sched-drop-before', 'sched-drop-after'));
+    let targetZone: HTMLElement = host;
 
-    const computeInsert = (clientY: number) => {
-        const bs = stepBlocks();
+    const clearMarks = () => {
+        document.querySelectorAll('.sched-drop-before, .sched-drop-after').forEach(el => el.classList.remove('sched-drop-before', 'sched-drop-after'));
+        document.querySelectorAll('.sched-drop-into').forEach(el => el.classList.remove('sched-drop-into'));
+    };
+    const zoneBlocks = (zone: HTMLElement): HTMLElement[] =>
+        Array.from(zone.children).filter(c => (c as HTMLElement).classList.contains('sched-step') && c !== block) as HTMLElement[];
+
+    /** The step container under the cursor. A zone inside the dragged block itself
+     *  is invalid (a step can't be dropped into its own branches) → climb out. */
+    const zoneAt = (x: number, y: number): HTMLElement => {
+        let el = document.elementFromPoint(x, y) as HTMLElement | null;
+        let z = el?.closest('.sched-drop-zone') as HTMLElement | null;
+        while (z && block.contains(z)) z = (z.parentElement?.closest('.sched-drop-zone') as HTMLElement | null) ?? null;
+        return (z && _zoneSteps.has(z)) ? z : host;
+    };
+
+    const computeInsert = (e: MouseEvent) => {
         clearMarks();
+        targetZone = zoneAt(e.clientX, e.clientY);
+        const bs = zoneBlocks(targetZone);
         let idx = bs.length;                    // default: append at the end
         for (let k = 0; k < bs.length; k++) {
             const r = bs[k].getBoundingClientRect();
-            if (clientY < r.top + r.height / 2) { idx = k; break; }
+            if (e.clientY < r.top + r.height / 2) { idx = k; break; }
         }
         if (idx < bs.length) bs[idx].classList.add('sched-drop-before');
         else if (bs.length) bs[bs.length - 1].classList.add('sched-drop-after');
+        else targetZone.classList.add('sched-drop-into');   // empty branch → "drop here" ring
         insertIdx = idx;
     };
 
@@ -1033,24 +1180,30 @@ function _startStepDrag(ev: MouseEvent, steps: Step[], fromIdx: number, block: H
             if (Math.abs(e.clientY - startY) < 4) return;   // small threshold before it counts as a drag
             dragging = true;
             block.classList.add('sched-dragging');
+            document.body.classList.add('sched-drag-live'); // reveals empty drop zones
             document.body.style.userSelect = 'none';
         }
-        computeInsert(e.clientY);
+        computeInsert(e);
     };
     const onUp = () => {
         document.removeEventListener('mousemove', onMove);
         document.removeEventListener('mouseup', onUp);
         document.body.style.userSelect = '';
+        document.body.classList.remove('sched-drag-live');
         block.classList.remove('sched-dragging');
         clearMarks();
         if (!dragging) return;
-        let target = insertIdx;
-        if (fromIdx < target) target--;          // removing the source shifts later indices down
-        if (target === fromIdx) return;
+        const targetArr = _zoneSteps.get(targetZone);
+        if (!targetArr) return;
+        const sameZone = targetArr === steps;
+        // The insert index was computed over the list WITHOUT the dragged block, so
+        // within the same zone it maps 1:1 after removal — no extra shift needed.
+        if (sameZone && insertIdx === fromIdx) return;      // dropped where it started
         _snapshot();
         const [moved] = steps.splice(fromIdx, 1);
-        steps.splice(target, 0, moved);
-        rerender();
+        targetArr.splice(Math.min(insertIdx, targetArr.length), 0, moved);
+        // A cross-zone move touches two containers — re-render the whole tree.
+        if (sameZone) rerender(); else _rerenderRootSteps();
     };
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp);
@@ -1058,28 +1211,29 @@ function _startStepDrag(ev: MouseEvent, steps: Step[], fromIdx: number, block: H
 
 function renderStepsEditor(host: HTMLElement, steps: Step[], depth = 0): void {
     host.innerHTML = '';
+    // Register this container as a drop zone so steps can be dragged INTO it
+    // (root list, IF then/else branches, LOOP bodies — all become valid targets).
+    _zoneSteps.set(host, steps);
+    host.classList.add('sched-drop-zone');
     steps.forEach((step, i) => {
         const block = document.createElement('div');
-        block.className = 'sched-step sched-step-' + step.kind + ((step as any).collapsed ? ' collapsed' : '');
+        block.className = 'sched-step sched-step-' + step.kind + (step.collapsed ? ' collapsed' : '') + (step.disabled ? ' sched-disabled' : '');
         // Indentation is handled entirely by the branch containers' padding (one
         // clean guide line per level) — NOT a per-step margin, which used to stack
         // on top of the branch padding and squeezed deep blocks into a tiny column.
         const rerenderHere = () => renderStepsEditor(host, steps, depth);
 
         if (step.kind === 'action') {
-            block.appendChild(actionEditor(step.action, () => _deleteStep(step, steps, i, rerenderHere)));
+            block.appendChild(actionEditor(step.action, rerenderHere));
         } else if (step.kind === 'delay') {
-            block.innerHTML = `<div class="sched-step-head"><span class="sched-step-tag">${t('sched.delay') || 'Wait'}</span>
-                <span class="sched-delay-body"><input type="number" class="input" min="0" value="${step.seconds}" style="max-width:90px"> ${t('sched.unitSec') || 's'}</span>
-                <button class="btn btn-xs btn-ghost sched-del" style="margin-left:auto;color:var(--danger)">${SCHED_X}</button></div>`;
+            block.innerHTML = `<div class="sched-step-head">${_kindTile('delay')}<span class="sched-step-tag sched-pause">${t('sched.delay') || 'Wait'}</span>
+                <span class="sched-delay-body"><input type="number" class="input" min="0" value="${step.seconds}" style="max-width:90px"> ${t('sched.unitSec') || 's'}</span></div>`;
             block.querySelector('input')?.addEventListener('input', (e) => { step.seconds = parseInt((e.target as HTMLInputElement).value) || 0; });
-            block.querySelector('.sched-del')?.addEventListener('click', () => _deleteStep(step, steps, i, rerenderHere));
         } else if (step.kind === 'waitFor') {
             const toMode = step.onTimeout || 'abort';
-            block.innerHTML = `<div class="sched-step-head">${_foldBtn(step)}<span class="sched-step-tag sched-wait">${t('sched.waitUntil') || 'WAIT UNTIL'}</span>
+            block.innerHTML = `<div class="sched-step-head">${_foldBtn(step)}${_kindTile('waitFor')}<span class="sched-step-tag sched-wait">${t('sched.waitUntil') || 'WAIT UNTIL'}</span>
                 <span class="sched-cond-label">${t('sched.condition') || 'condition:'}</span>
-                <div class="sched-cond" style="flex:1"></div>
-                <button class="btn btn-xs btn-ghost sched-del" style="color:var(--danger)">${SCHED_X}</button></div>
+                <div class="sched-cond" style="flex:1"></div></div>
                 <div class="sched-wait-opts">
                     <span class="sched-wait-lbl">${t('sched.checkEvery') || 'check every'}</span>
                     <input type="number" class="input sched-wait-poll" min="1" value="${step.pollSec || 2}" style="max-width:70px"> ${t('sched.unitSec') || 's'}
@@ -1095,17 +1249,14 @@ function renderStepsEditor(host: HTMLElement, steps: Step[], depth = 0): void {
             block.querySelector('.sched-wait-to')?.addEventListener('input', (e) => { step.timeoutSec = parseInt((e.target as HTMLInputElement).value) || 60; });
             block.querySelector('.sched-wait-poll')?.addEventListener('input', (e) => { step.pollSec = parseInt((e.target as HTMLInputElement).value) || 2; });
             block.querySelector('.sched-wait-ot')?.addEventListener('change', (e) => { step.onTimeout = (e.target as HTMLSelectElement).value as any; });
-            block.querySelector('.sched-del')?.addEventListener('click', () => _deleteStep(step, steps, i, rerenderHere));
             _wireFold(block, step);
         } else if (step.kind === 'if') {
-            block.innerHTML = `<div class="sched-step-head">${_foldBtn(step)}<span class="sched-step-tag sched-if">${t('sched.if') || 'IF'}</span>
+            block.innerHTML = `<div class="sched-step-head">${_foldBtn(step)}${_kindTile('if')}<span class="sched-step-tag sched-if">${t('sched.if') || 'IF'}</span>
                 <span class="sched-cond-label">${t('sched.condition') || 'condition:'}</span>
-                <div class="sched-cond" style="flex:1"></div>
-                <button class="btn btn-xs btn-ghost sched-del" style="color:var(--danger)">${SCHED_X}</button></div>
+                <div class="sched-cond" style="flex:1"></div></div>
                 <div class="sched-branch"><div class="sched-branch-label">${t('sched.then') || 'THEN'}</div><div class="sched-then"></div><div class="sched-then-add"></div></div>
                 <div class="sched-branch"><div class="sched-branch-label">${t('sched.else') || 'ELSE'}</div><div class="sched-else"></div><div class="sched-else-add"></div></div>`;
             block.querySelector('.sched-cond')?.appendChild(conditionEditor(step.condition));
-            block.querySelector('.sched-del')?.addEventListener('click', () => _deleteStep(step, steps, i, rerenderHere));
             renderStepsEditor(block.querySelector('.sched-then') as HTMLElement, step.then, depth + 1);
             renderStepsEditor(block.querySelector('.sched-else') as HTMLElement, step.else, depth + 1);
             renderAddRow(block.querySelector('.sched-then-add') as HTMLElement, step.then, depth + 1, host, steps, depth);
@@ -1114,14 +1265,13 @@ function renderStepsEditor(host: HTMLElement, steps: Step[], depth = 0): void {
         } else if (step.kind === 'repeat') {
             const modeSel = (['while', 'until', 'times'] as const).map(m =>
                 `<option value="${m}"${step.mode === m ? ' selected' : ''}>${escHtml(t('sched.loop.' + m) || m)}</option>`).join('');
-            block.innerHTML = `<div class="sched-step-head">${_foldBtn(step)}
+            block.innerHTML = `<div class="sched-step-head">${_foldBtn(step)}${_kindTile('repeat')}
                     <span class="sched-step-tag sched-repeat">${t('sched.repeat') || 'REPEAT'}</span>
                     <select class="input sched-rep-mode" style="max-width:130px">${modeSel}</select>
                     <span class="sched-rep-cond-wrap" style="display:${step.mode === 'times' ? 'none' : 'flex'};align-items:center;gap:6px;flex:1"><div class="sched-cond" style="flex:1"></div></span>
                     <span class="sched-rep-times-wrap" style="display:${step.mode === 'times' ? 'inline-flex' : 'none'};align-items:center;gap:6px"><input type="number" class="input sched-rep-times" min="1" value="${step.times || 3}" style="max-width:90px"> ${t('sched.loopTimes') || 'times'}</span>
                     <span style="font-size:11px;color:var(--text-muted)">${t('sched.loopMax') || 'max'}</span><input type="number" class="input sched-rep-max" min="1" value="${step.maxIters || 100}" style="max-width:90px">
-                    <span style="font-size:11px;color:var(--text-muted)">${t('sched.loopEvery') || 'every'}</span><input type="number" class="input sched-rep-every" min="0" value="${step.everySec || 1}" style="max-width:80px"> ${t('sched.unitSec') || 's'}
-                    <button class="btn btn-xs btn-ghost sched-del" style="color:var(--danger)">${SCHED_X}</button></div>
+                    <span style="font-size:11px;color:var(--text-muted)">${t('sched.loopEvery') || 'every'}</span><input type="number" class="input sched-rep-every" min="0" value="${step.everySec || 1}" style="max-width:80px"> ${t('sched.unitSec') || 's'}</div>
                 <div class="sched-branch"><div class="sched-branch-label">${t('sched.loopBody') || 'LOOP'}</div><div class="sched-loop"></div><div class="sched-loop-add"></div></div>`;
             if (!step.condition) step.condition = { type: 'always', params: {} };
             block.querySelector('.sched-cond')?.appendChild(conditionEditor(step.condition));
@@ -1129,7 +1279,6 @@ function renderStepsEditor(host: HTMLElement, steps: Step[], depth = 0): void {
             block.querySelector('.sched-rep-times')?.addEventListener('input', (e) => { step.times = parseInt((e.target as HTMLInputElement).value) || 1; });
             block.querySelector('.sched-rep-max')?.addEventListener('input', (e) => { step.maxIters = parseInt((e.target as HTMLInputElement).value) || 100; });
             block.querySelector('.sched-rep-every')?.addEventListener('input', (e) => { step.everySec = parseFloat((e.target as HTMLInputElement).value) || 0; });
-            block.querySelector('.sched-del')?.addEventListener('click', () => _deleteStep(step, steps, i, rerenderHere));
             renderStepsEditor(block.querySelector('.sched-loop') as HTMLElement, step.steps, depth + 1);
             renderAddRow(block.querySelector('.sched-loop-add') as HTMLElement, step.steps, depth + 1, host, steps, depth);
             _wireFold(block, step);
@@ -1143,6 +1292,52 @@ function renderStepsEditor(host: HTMLElement, steps: Step[], depth = 0): void {
             _wireFold(block, step);
         }
 
+        // Unified step toolbar (hover): run just this step, duplicate, disable, delete.
+        if (headEl && !headEl.querySelector('.sched-tools')) {
+            const tools = document.createElement('span');
+            tools.className = 'sched-tools';
+            const offTip = step.disabled ? (t('sched.enableStep') || 'Enable this step') : (t('sched.disableStep') || 'Disable this step (skipped at run time)');
+            tools.innerHTML = `
+                <button class="sched-tool sched-run1" title="${escAttr(t('sched.runStep') || 'Run this step now')}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polygon points="5 3 19 12 5 21 5 3"/></svg></button>
+                <button class="sched-tool sched-dup" title="${escAttr(t('sched.dupStep') || 'Duplicate step')}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+                <button class="sched-tool sched-off ${step.disabled ? 'active' : ''}" title="${escAttr(offTip)}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg></button>
+                <button class="sched-tool sched-del2" title="${escAttr(t('common.delete') || 'Delete')}">${SCHED_X}</button>`;
+            headEl.appendChild(tools);
+            tools.querySelector('.sched-run1')?.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const btn = e.currentTarget as HTMLButtonElement;
+                btn.disabled = true;
+                try {
+                    // Run a shallow copy with disabled cleared, so even a switched-off
+                    // step can be test-fired on demand.
+                    await runSteps([{ ...(step as any), disabled: false } as Step], _draft, {});
+                    toast(t('sched.stepDone') || 'Step finished.', 'success');
+                } catch (err) {
+                    if (err instanceof _StopTask) toast(`${t('sched.stopped') || 'stopped'}${(err as any).reason ? `: ${(err as any).reason}` : ''}`, 'info');
+                    else toast(`${t('sched.stepFail') || 'Step failed'} — ${err}`, 'error');
+                } finally { btn.disabled = false; }
+            });
+            tools.querySelector('.sched-dup')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                _snapshot();
+                steps.splice(i + 1, 0, JSON.parse(JSON.stringify(step)));
+                rerenderHere();
+            });
+            tools.querySelector('.sched-off')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                _snapshot();
+                step.disabled = !step.disabled;
+                block.classList.toggle('sched-disabled', !!step.disabled);
+                const b = e.currentTarget as HTMLElement;
+                b.classList.toggle('active', !!step.disabled);
+                b.title = step.disabled ? (t('sched.enableStep') || 'Enable this step') : (t('sched.disableStep') || 'Disable this step (skipped at run time)');
+            });
+            tools.querySelector('.sched-del2')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                _deleteStep(step, steps, i, rerenderHere);
+            });
+        }
+
         // Grip handle — pointer-based reorder (native HTML5 DnD is unreliable in WebView2).
         const handle = document.createElement('span');
         handle.className = 'sched-drag-handle';
@@ -1151,25 +1346,42 @@ function renderStepsEditor(host: HTMLElement, steps: Step[], depth = 0): void {
         handle.addEventListener('mousedown', (e) => _startStepDrag(e, steps, i, block, host, rerenderHere));
         block.prepend(handle);
 
+        // Notion-style insert-between: a slim hover bar between blocks; clicking it
+        // reveals the kind chips and inserts the new step at THAT position.
+        if (i > 0) {
+            const ins = document.createElement('div');
+            ins.className = 'sched-insert';
+            ins.innerHTML = `<button class="sched-insert-btn" title="${escAttr(t('sched.insertHere') || 'Insert a step here')}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M12 5v14M5 12h14"/></svg></button>`;
+            ins.querySelector('.sched-insert-btn')?.addEventListener('click', () => {
+                if (ins.querySelector('.sched-insert-picker')) { ins.querySelector('.sched-insert-picker')?.remove(); return; }
+                const picker = document.createElement('div');
+                picker.className = 'sched-insert-picker sched-add-row';
+                picker.innerHTML = ['action', 'if', 'repeat', 'waitFor', 'delay'].map(k =>
+                    `<button class="btn btn-xs sched-chip sched-add-${k === 'action' ? 'do' : k === 'repeat' ? 'loop' : k === 'waitFor' ? 'wait' : k}" data-ins="${k}">${
+                        k === 'action' ? (t('sched.addAction') || 'Action') : k === 'if' ? (t('sched.addIf') || 'If/Else')
+                        : k === 'repeat' ? (t('sched.addLoop') || 'Loop') : k === 'waitFor' ? (t('sched.addWaitFor') || 'Wait until') : (t('sched.addDelay') || 'Pause')}</button>`).join('');
+                picker.querySelectorAll('[data-ins]').forEach(b => b.addEventListener('click', () => {
+                    _snapshot();
+                    steps.splice(i, 0, _makeStep((b as HTMLElement).dataset.ins!));
+                    renderStepsEditor(host, steps, depth);
+                }));
+                ins.appendChild(picker);
+            });
+            host.appendChild(ins);
+        }
+
         host.appendChild(block);
     });
 }
 
 function renderAddRow(host: HTMLElement, steps: Step[], depth = 0, rerenderHost?: HTMLElement, rerenderSteps?: Step[], rerenderDepth = 0): void {
     host.className = 'sched-add-row';
-    const I = {
-        do: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>',
-        if: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 3v12"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>',
-        wait: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
-        delay: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>',
-        loop: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>',
-    };
     host.innerHTML = `
-        <button class="btn btn-xs sched-chip sched-add-do" data-add="action" title="${escAttr(t('sched.legendDo') || '')}">${I.do} ${t('sched.addAction') || 'Action'}</button>
-        <button class="btn btn-xs sched-chip sched-add-if" data-add="if" title="${escAttr(t('sched.legendIf') || '')}">${I.if} ${t('sched.addIf') || 'If/Else'}</button>
-        <button class="btn btn-xs sched-chip sched-add-loop" data-add="repeat" title="${escAttr(t('sched.legendLoop') || '')}">${I.loop} ${t('sched.addLoop') || 'Loop'}</button>
-        <button class="btn btn-xs sched-chip sched-add-wait" data-add="waitFor" title="${escAttr(t('sched.legendWait') || '')}">${I.wait} ${t('sched.addWaitFor') || 'Wait until'}</button>
-        <button class="btn btn-xs sched-chip sched-add-delay" data-add="delay" title="${escAttr(t('sched.legendDelay') || '')}">${I.delay} ${t('sched.addDelay') || 'Pause'}</button>`;
+        <button class="btn btn-xs sched-chip sched-add-do" data-add="action" title="${escAttr(t('sched.legendDo') || '')}">${KIND_ICON.action} ${t('sched.addAction') || 'Action'}</button>
+        <button class="btn btn-xs sched-chip sched-add-if" data-add="if" title="${escAttr(t('sched.legendIf') || '')}">${KIND_ICON.if} ${t('sched.addIf') || 'If/Else'}</button>
+        <button class="btn btn-xs sched-chip sched-add-loop" data-add="repeat" title="${escAttr(t('sched.legendLoop') || '')}">${KIND_ICON.repeat} ${t('sched.addLoop') || 'Loop'}</button>
+        <button class="btn btn-xs sched-chip sched-add-wait" data-add="waitFor" title="${escAttr(t('sched.legendWait') || '')}">${KIND_ICON.waitFor} ${t('sched.addWaitFor') || 'Wait until'}</button>
+        <button class="btn btn-xs sched-chip sched-add-delay" data-add="delay" title="${escAttr(t('sched.legendDelay') || '')}">${KIND_ICON.delay} ${t('sched.addDelay') || 'Pause'}</button>`;
     const rerender = () => {
         // Preserve the modal's scroll position so adding a step deep in a big task
         // doesn't yank the view back to the top (a real annoyance with lots of content).
@@ -1179,11 +1391,20 @@ function renderAddRow(host: HTMLElement, steps: Step[], depth = 0, rerenderHost?
         else renderStepsEditor(host.previousElementSibling as HTMLElement || host.parentElement!.querySelector('.sched-steps') as HTMLElement, steps, depth);
         if (body) body.scrollTop = top;
     };
-    host.querySelector('[data-add="action"]')?.addEventListener('click', () => { _snapshot(); steps.push({ kind: 'action', action: { type: 'profile.activate', params: {} } }); rerender(); });
-    host.querySelector('[data-add="if"]')?.addEventListener('click', () => { _snapshot(); steps.push({ kind: 'if', condition: { type: 'always', params: {} }, then: [], else: [] }); rerender(); });
-    host.querySelector('[data-add="repeat"]')?.addEventListener('click', () => { _snapshot(); steps.push({ kind: 'repeat', mode: 'while', condition: { type: 'always', params: {} }, maxIters: 100, everySec: 1, steps: [] }); rerender(); });
-    host.querySelector('[data-add="waitFor"]')?.addEventListener('click', () => { _snapshot(); steps.push({ kind: 'waitFor', condition: { type: 'allModsActive', params: {} }, timeoutSec: 120 }); rerender(); });
-    host.querySelector('[data-add="delay"]')?.addEventListener('click', () => { _snapshot(); steps.push({ kind: 'delay', seconds: 5 }); rerender(); });
+    host.querySelectorAll('[data-add]').forEach(btn => btn.addEventListener('click', () => {
+        _snapshot();
+        steps.push(_makeStep((btn as HTMLElement).dataset.add!));
+        rerender();
+    }));
+}
+
+/** A fresh step of the given kind with sane defaults (shared by add rows + inserts). */
+function _makeStep(kind: string): Step {
+    if (kind === 'if') return { kind: 'if', condition: { type: 'always', params: {} }, then: [], else: [] } as Step;
+    if (kind === 'repeat') return { kind: 'repeat', mode: 'while', condition: { type: 'always', params: {} }, maxIters: 100, everySec: 1, steps: [] } as Step;
+    if (kind === 'waitFor') return { kind: 'waitFor', condition: { type: 'allModsActive', params: {} }, timeoutSec: 120 } as Step;
+    if (kind === 'delay') return { kind: 'delay', seconds: 5 } as Step;
+    return { kind: 'action', action: { type: 'profile.activate', params: {} } } as Step;
 }
 
 // group → optgroup label (matches the script generator's categories).
@@ -1199,21 +1420,38 @@ const ACTION_GROUPS: { g: string; label: string }[] = [
 ];
 
 // icon per group (inline SVG, no emoji — matches the BMM icon-only rule).
+// Simplified to clean, single-shape glyphs that stay legible at 14px (the old
+// "look"/"system"/"logic" icons were busy compound paths that read as a blur
+// at tile size — this was the "ugly action-type icons" complaint).
 const GROUP_ICON: Record<string, string> = {
-    mods:    '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>',
-    repo:    '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20a15 15 0 0 1 0-20z"/></svg>',
-    apps:    '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>',
-    look:    '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="13.5" cy="6.5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><path d="M12 2a10 10 0 1 0 0 20a3 3 0 0 0 0-6h-1a2 2 0 0 1 0-4h3a4 4 0 0 0 0-8z"/></svg>',
-    perf:    '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 3 14h9l-1 8 10-12h-9z"/></svg>',
-    privacy: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>',
-    system:  '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
-    logic:   '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h3l3 10h3M14 7h6M14 12h6M14 17h6"/><circle cx="6.5" cy="7" r="1.2"/></svg>',
+    mods:    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>',
+    repo:    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="6" r="3"/><path d="M18 9v3a3 3 0 0 1-3 3H9"/></svg>',
+    apps:    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>',
+    look:    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>',
+    perf:    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9z"/></svg>',
+    privacy: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>',
+    system:  '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>',
+    logic:   '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h6l3 14h7M13 5h7"/></svg>',
 };
 
 // Clean inline X icon for delete buttons (replaces the raw ✕ glyph).
 const SCHED_X = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
-// Fold chevron for collapsible control blocks (if / loop / wait until).
-const SCHED_CHEV = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>';
+// One icon per step kind — used by the head tiles, the add-chips and the pickers.
+const KIND_ICON: Record<string, string> = {
+    action:  '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 3 20 12 6 21 6 3"/></svg>',
+    if:      '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v6a6 6 0 0 0 6 6h6M14 9l4 3-4 3"/></svg>',
+    repeat:  '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2.1 21 6l-4 3.9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 21.9 3 18l4-3.9"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>',
+    waitFor: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v5l3 2"/></svg>',
+    delay:   '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="6.5" y="4.5" width="4" height="15" rx="1.2"/><rect x="13.5" y="4.5" width="4" height="15" rx="1.2"/></svg>',
+};
+/** Kind-coloured icon tile that opens every step head (the visual anchor). */
+function _kindTile(kind: string): string {
+    return `<span class="sched-kind-ic k-${kind}">${KIND_ICON[kind] || ''}</span>`;
+}
+// Fold chevron for collapsible control blocks (if / loop / wait until) — a
+// small rounded chip (not a bare ghost button) so it reads as a control at a
+// glance instead of a stray dot.
+const SCHED_CHEV = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
 // Fold button + a short summary shown only while collapsed.
 function _foldBtn(step: any): string {
     let sum = '';
@@ -1249,6 +1487,9 @@ const ACTION_TYPES: { v: string; label: string; needs?: string; group: string }[
     { v: 'plugin.compare', label: 'Compare plugin', needs: 'pluginId', group: 'mods' },
     { v: 'plugin.delete', label: 'Delete plugin', needs: 'pluginId', group: 'mods' },
     { v: 'mods.checkUpdates', label: 'Check mod updates', group: 'mods' },
+    { v: 'mods.autoImportOmm', label: 'Auto-import Open Mod Manager mods', group: 'mods' },
+    { v: 'mods.clearHistory', label: 'Clear profile activity history', needs: 'profile', group: 'mods' },
+    { v: 'mods.exportModpack', label: 'Export modpack (.bmp)', needs: 'modpackExport', group: 'mods' },
     // ── Repo & sharing ──
     { v: 'repo.connect', label: 'Connect repo', needs: 'repoConnect', group: 'repo' },
     { v: 'repo.sync', label: 'Sync repo', needs: 'repoSync', group: 'repo' },
@@ -1270,6 +1511,7 @@ const ACTION_TYPES: { v: string; label: string; needs?: string; group: string }[
     { v: 'storage.calibration', label: 'Storage: Performance Auto-Calibration', needs: 'toggle', group: 'perf' },
     { v: 'storage.smartIo', label: 'Storage: Smart I/O', needs: 'toggle', group: 'perf' },
     { v: 'storage.flag', label: 'Storage: toggle a setting (advanced)', needs: 'flag', group: 'perf' },
+    { v: 'perf.diskSpace', label: 'Check free disk space', needs: 'disk', group: 'perf' },
     // ── Privacy & recorder ──
     { v: 'telemetry.consent', label: 'Telemetry consent', needs: 'toggle', group: 'privacy' },
     { v: 'telemetry.set', label: 'Telemetry options', needs: 'telemetry', group: 'privacy' },
@@ -1281,6 +1523,9 @@ const ACTION_TYPES: { v: string; label: string; needs?: string; group: string }[
     { v: 'discord.rpc', label: 'Discord Rich Presence', needs: 'toggle', group: 'system' },
     { v: 'data.exportAuto', label: 'Export data (backup)', needs: 'exportAuto', group: 'system' },
     { v: 'var.set', label: 'Set a value (for conditions)', needs: 'var', group: 'system' },
+    { v: 'app.checkUpdate', label: 'Check for BMM update', needs: 'checkUpdate', group: 'system' },
+    { v: 'system.clearApiLog', label: 'Clear API log', group: 'system' },
+    { v: 'system.clearResourceRecords', label: 'Clear resource monitor records', group: 'system' },
     // ── Logic & math ──
     { v: 'math.set', label: 'Math: compute into a variable', needs: 'mathSet', group: 'logic' },
     { v: 'var.ternary', label: 'Ternary: var = cond ? a : b', needs: 'ternary', group: 'logic' },
@@ -1293,7 +1538,7 @@ const ACTION_TYPES: { v: string; label: string; needs?: string; group: string }[
     { v: 'deeplink', label: 'Run bmm:// deeplink', needs: 'url', group: 'system' },
 ];
 
-function actionEditor(action: Action, onDelete: () => void): HTMLElement {
+function actionEditor(action: Action, onStructureChange?: () => void): HTMLElement {
     const el = document.createElement('div');
     const render = () => {
         const def = ACTION_TYPES.find(a => a.v === action.type) || ACTION_TYPES[0];
@@ -1313,13 +1558,14 @@ function actionEditor(action: Action, onDelete: () => void): HTMLElement {
                 <span class="sched-act-icon">${GROUP_ICON[def.group] || ''}</span>
                 <span class="sched-step-tag sched-do">${t('sched.do') || 'DO'}</span>
                 <select class="input sched-act-type">${groupsHtml}</select>
-                <button class="btn btn-xs btn-ghost sched-del" title="${escAttr(t('common.delete') || 'Delete')}" aria-label="delete">${SCHED_X}</button>
             </div>
             <div class="sched-act-params"></div>`;
         el.querySelector('.sched-act-type')?.addEventListener('change', (e) => {
-            _snapshot(); action.type = (e.target as HTMLSelectElement).value; action.params = {}; render();
+            _snapshot(); action.type = (e.target as HTMLSelectElement).value; action.params = {};
+            // Re-render the whole block (not just this card) so the injected step
+            // toolbar / fold controls survive the type switch.
+            if (onStructureChange) onStructureChange(); else render();
         });
-        el.querySelector('.sched-del')?.addEventListener('click', onDelete);
         const paramsHost = el.querySelector('.sched-act-params') as HTMLElement;
         renderParams(paramsHost, def?.needs, action.params);
         // Hide the params row entirely when an action needs no configuration.
@@ -1334,17 +1580,34 @@ function pickerOptions(list: any[], selected: string, labelKey = 'name'): string
         list.map(o => `<option value="${escAttr(o.id)}" ${o.id === selected ? 'selected' : ''}>${escHtml(o[labelKey] || o.title || o.id)}</option>`).join('');
 }
 
+// Micro-label shown above the simple single-picker params (profile/mod/…) so the
+// row never reads as a lone, context-free dropdown floating in empty space.
+const NEEDS_LABEL: Record<string, string> = {
+    profile: 'sched.fldProfile', mod: 'sched.fldMod', modpack: 'sched.fldModpack',
+    theme: 'sched.fldTheme', app: 'sched.fldApp', message: 'sched.fldMessage', url: 'sched.fldUrl',
+    disk: 'sched.fldDisk', pluginId: 'sched.fldPlugin', lpId: 'sched.fldLaunchpack', taskId: 'sched.fldTask',
+};
+const NEEDS_LABEL_FALLBACK: Record<string, string> = {
+    profile: 'Profile', mod: 'Mod', modpack: 'Modpack', theme: 'Theme', app: 'App', message: 'Message', url: 'URL',
+    disk: 'Disk', pluginId: 'Plugin', lpId: 'Launch pack', taskId: 'Task',
+};
+function _field(needs: string, controlHtml: string): string {
+    const key = NEEDS_LABEL[needs];
+    if (!key) return controlHtml;
+    return `<div class="sched-field"><label class="sched-flabel">${t(key) || NEEDS_LABEL_FALLBACK[needs]}</label>${controlHtml}</div>`;
+}
+
 function renderParams(host: HTMLElement, needs: string | undefined, params: Record<string, any>): void {
     if (!needs) { host.innerHTML = ''; return; }
-    if (needs === 'profile') host.innerHTML = `<select class="input sched-p" style="max-width:200px">${pickerOptions(_profiles, params.id)}</select>`;
-    else if (needs === 'mod') host.innerHTML = `<select class="input sched-p" style="max-width:240px">${pickerOptions(_mods, params.id)}</select>`;
-    else if (needs === 'modpack') host.innerHTML = `<select class="input sched-p" style="max-width:200px">${pickerOptions(_modpacks, params.id)}</select>`;
-    else if (needs === 'theme') host.innerHTML = `<select class="input sched-p" style="max-width:200px">${pickerOptions(_themes, params.id)}</select>`;
-    else if (needs === 'app') host.innerHTML = _apps.length
+    if (needs === 'profile') host.innerHTML = _field(needs, `<select class="input sched-p" style="max-width:200px">${pickerOptions(_profiles, params.id)}</select>`);
+    else if (needs === 'mod') host.innerHTML = _field(needs, `<select class="input sched-p" style="max-width:240px">${pickerOptions(_mods, params.id)}</select>`);
+    else if (needs === 'modpack') host.innerHTML = _field(needs, `<select class="input sched-p" style="max-width:200px">${pickerOptions(_modpacks, params.id)}</select>`);
+    else if (needs === 'theme') host.innerHTML = _field(needs, `<select class="input sched-p" style="max-width:200px">${pickerOptions(_themes, params.id)}</select>`);
+    else if (needs === 'app') host.innerHTML = _field(needs, _apps.length
         ? `<select class="input sched-p" style="max-width:220px">${pickerOptions(_apps, params.id)}</select>`
-        : `<input class="input sched-p" placeholder="${escAttr(t('sched.appIdPh') || 'app id (install an app first)')}" value="${escAttr(params.id || '')}" style="max-width:220px">`;
-    else if (needs === 'message') host.innerHTML = `<input class="input sched-p" placeholder="${escAttr(t('sched.message') || 'message')}" value="${escAttr(params.message || '')}">`;
-    else if (needs === 'url') host.innerHTML = `<input class="input sched-p" placeholder="bmm://mod/enable?id=…" value="${escAttr(params.url || '')}">`;
+        : `<input class="input sched-p" placeholder="${escAttr(t('sched.appIdPh') || 'app id (install an app first)')}" value="${escAttr(params.id || '')}" style="max-width:220px">`);
+    else if (needs === 'message') host.innerHTML = _field(needs, `<input class="input sched-p" placeholder="${escAttr(t('sched.message') || 'message')}" value="${escAttr(params.message || '')}">`);
+    else if (needs === 'url') host.innerHTML = _field(needs, `<input class="input sched-p" placeholder="bmm://mod/enable?id=…" value="${escAttr(params.url || '')}">`);
     else if (needs === 'command') host.innerHTML = `
         <div class="sched-cmd-builder">
             <label class="sched-cmd-label">${t('sched.cmdProgram') || '1. Program to run'}</label>
@@ -1402,7 +1665,7 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
     }
     else if (needs === 'toggle') host.innerHTML = `<label style="font-size:12px;display:inline-flex;gap:6px;align-items:center"><input type="checkbox" class="sched-en" ${params.enabled ? 'checked' : ''}> ${t('sched.enableOn') || 'Enable (uncheck = disable)'}</label>`;
     else if (needs === 'flag') host.innerHTML = `<input class="input sched-f-key" placeholder="${escAttr(t('sched.settingKey') || 'setting key (e.g. dcp)')}" value="${escAttr(params.key || '')}" style="max-width:180px"><label style="font-size:12px;margin-left:8px;display:inline-flex;gap:6px;align-items:center"><input type="checkbox" class="sched-en" ${params.enabled ? 'checked' : ''}> on</label>`;
-    else if (needs === 'disk') host.innerHTML = `<select class="input sched-disk" style="max-width:240px">${diskOptions(params.mountPoint)}</select>`;
+    else if (needs === 'disk') host.innerHTML = _field('disk', `<select class="input sched-disk" style="max-width:240px">${diskOptions(params.mountPoint)}</select>`);
     else if (needs === 'applyLimit') host.innerHTML = `<select class="input sched-disk" style="max-width:200px">${diskOptions(params.mountPoint)}</select><input class="input sched-limit" type="number" min="1" placeholder="${escAttr(t('sched.limitPh') || 'MB/s (empty = suggested)')}" value="${escAttr(params.limitMbS || '')}" style="max-width:200px;margin-left:6px">`;
     else if (needs === 'var') host.innerHTML = `<input class="input sched-v-name" placeholder="${escAttr(t('sched.phName') || 'name')}" value="${escAttr(params.name || '')}" style="max-width:140px"><input class="input sched-v-val" type="number" placeholder="${escAttr(t('sched.phValue') || 'value')}" value="${escAttr(params.value || '')}" style="max-width:120px;margin-left:6px">`;
     // ── Logic & math param editors ────────────────────────────────────────────
@@ -1450,9 +1713,9 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
     // ── New script-generator actions ──────────────────────────────────────────
     else if (needs === 'pathFile') host.innerHTML = `<input class="input sched-path" placeholder="${escAttr(t('sched.filePathPh') || 'file or .exe to open/launch')}" value="${escAttr(params.path || '')}" style="min-width:260px"><button type="button" class="btn btn-sm btn-secondary sched-browse-file" style="margin-left:6px">${t('sched.choose') || 'Choose…'}</button>`;
     else if (needs === 'pathFolder') host.innerHTML = `<input class="input sched-path" placeholder="${escAttr(t('sched.folderPathPh') || 'folder to open')}" value="${escAttr(params.path || '')}" style="min-width:260px"><button type="button" class="btn btn-sm btn-secondary sched-browse-folder" style="margin-left:6px">${t('sched.choose') || 'Choose…'}</button>`;
-    else if (needs === 'pluginId') host.innerHTML = `<input class="input sched-p" placeholder="${escAttr(t('sched.pluginIdPh') || 'plugin id (from plugin.json)')}" value="${escAttr(params.id || '')}" style="max-width:260px">`;
-    else if (needs === 'lpId')     host.innerHTML = `<input class="input sched-p" placeholder="${escAttr(t('sched.lpIdPh') || 'launch pack id')}" value="${escAttr(params.id || '')}" style="max-width:260px">`;
-    else if (needs === 'taskId')   host.innerHTML = `<input class="input sched-p" placeholder="${escAttr(t('sched.taskIdPh') || 'scheduled task id')}" value="${escAttr(params.id || '')}" style="max-width:260px">`;
+    else if (needs === 'pluginId') host.innerHTML = _field(needs, `<input class="input sched-p" placeholder="${escAttr(t('sched.pluginIdPh') || 'plugin id (from plugin.json)')}" value="${escAttr(params.id || '')}" style="max-width:260px">`);
+    else if (needs === 'lpId')     host.innerHTML = _field(needs, `<input class="input sched-p" placeholder="${escAttr(t('sched.lpIdPh') || 'launch pack id')}" value="${escAttr(params.id || '')}" style="max-width:260px">`);
+    else if (needs === 'taskId')   host.innerHTML = _field(needs, `<input class="input sched-p" placeholder="${escAttr(t('sched.taskIdPh') || 'scheduled task id')}" value="${escAttr(params.id || '')}" style="max-width:260px">`);
     else if (needs === 'repoConnect') host.innerHTML = `<input class="input sched-r-url" placeholder="${escAttr(t('sched.repoUrlPh') || 'repo.json URL')}" value="${escAttr(params.url || '')}" style="min-width:240px"><input class="input sched-r-name" placeholder="${escAttr(t('sched.repoNamePh') || 'name (optional)')}" value="${escAttr(params.name || '')}" style="max-width:180px;margin-left:6px">`;
     else if (needs === 'repoSync') host.innerHTML = `<input class="input sched-r-url" placeholder="${escAttr(t('sched.repoUrlPh') || 'repo.json URL')}" value="${escAttr(params.url || '')}" style="min-width:240px"><input class="input sched-r-prof" placeholder="${escAttr(t('sched.repoProfPh') || 'remote profile id')}" value="${escAttr(params.profile || '')}" style="max-width:180px;margin-left:6px">`;
     else if (needs === 'repoUpdate') host.innerHTML = `<input class="input sched-r-dir" placeholder="${escAttr(t('sched.repoDirPh') || 'repo folder')}" value="${escAttr(params.dir || '')}" style="min-width:240px"><button type="button" class="btn btn-sm btn-secondary sched-browse-dir" style="margin-left:6px">${t('sched.choose') || 'Choose…'}</button>`;
@@ -1472,6 +1735,12 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
     else if (needs === 'recorder') host.innerHTML = `<label class="sched-tg"><input type="checkbox" class="sched-rc-on" ${params.on ? 'checked' : ''}> ${t('sched.rcOn') || 'Record'}</label><label class="sched-tg"><input type="checkbox" class="sched-rc-full" ${params.full ? 'checked' : ''}> ${t('sched.rcFull') || 'Full'}</label><label class="sched-tg"><input type="checkbox" class="sched-rc-rust" ${params.rust ? 'checked' : ''}> ${t('sched.rcRust') || 'Rust log'}</label><label class="sched-tg"><input type="checkbox" class="sched-rc-js" ${params.js ? 'checked' : ''}> ${t('sched.rcJs') || 'JS log'}</label>`;
     else if (needs === 'replayImport') host.innerHTML = `<input class="input sched-ri-path" placeholder="${escAttr(t('sched.replayPathPh') || 'local .bmmreplay path')}" value="${escAttr(params.path || '')}" style="min-width:220px"><input class="input sched-ri-url" placeholder="${escAttr(t('sched.replayUrlPh') || 'or URL')}" value="${escAttr(params.url || '')}" style="max-width:200px;margin-left:6px">`;
     else if (needs === 'exportAuto') host.innerHTML = `<input class="input sched-ea-dir" placeholder="${escAttr(t('sched.backupDirPh') || 'backup folder')}" value="${escAttr(params.dir || '')}" style="min-width:200px"><button type="button" class="btn btn-sm btn-secondary sched-browse-dir" style="margin-left:6px">${t('sched.choose') || 'Choose…'}</button><input class="input sched-ea-name" placeholder="bmm-backup-{date}" value="${escAttr(params.name || '')}" style="max-width:180px;margin-left:6px"><select class="input sched-ea-inc" style="max-width:150px;margin-left:6px">${['paren', 'underscore', 'timestamp', 'overwrite'].map(o => `<option value="${o}"${(params.increment || 'paren') === o ? ' selected' : ''}>${o}</option>`).join('')}</select>`;
+    else if (needs === 'checkUpdate') host.innerHTML = `<label class="sched-tg"><input type="checkbox" class="sched-en" ${params.enabled ? 'checked' : ''}> ${t('sched.includePrerelease') || 'Include pre-releases'}</label>`;
+    else if (needs === 'modpackExport') host.innerHTML = `
+        <div class="sched-field"><label class="sched-flabel">${t('sched.mpNameLbl') || 'Modpack'}</label>
+            <select class="input sched-p" style="min-width:200px">${pickerOptions(_modpacks, params.id)}</select></div>
+        <div class="sched-field" style="flex:1;min-width:220px"><label class="sched-flabel">${t('sched.exportDirLbl') || 'Destination folder (empty = ask each time)'}</label>
+            <span style="display:flex;gap:6px"><input class="input sched-ea-dir" placeholder="${escAttr(t('sched.backupDirPh') || 'folder')}" value="${escAttr(params.dir || '')}" style="flex:1"><button type="button" class="btn btn-sm btn-secondary sched-browse-dir">${t('sched.choose') || 'Choose…'}</button></span></div>`;
 
     const sel = host.querySelector('.sched-p') as HTMLInputElement | HTMLSelectElement;
     if (sel) {

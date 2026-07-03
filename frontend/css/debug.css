@@ -113,7 +113,7 @@
 .debug-btn {
     background: rgba(255, 255, 255, 0.08);
     border: 1px solid rgba(255, 255, 255, 0.1);
-    color: #e2e8f0;
+    color: var(--text-primary);
     padding: 6px 12px;
     border-radius: 6px;
     font-size: 11px;
@@ -213,9 +213,9 @@
     gap: 8px;
 }
 
-.log-entry.INFO { color: #cbd5e1; border-left: 2px solid transparent; }
-.log-entry.WARN { background: rgba(245, 158, 11, 0.08); color: #fbbf24; border-left: 2px solid #fbbf24; }
-.log-entry.ERROR { background: rgba(239, 68, 68, 0.08); color: #fca5a5; border-left: 2px solid #ef4444; }
+.log-entry.INFO { color: var(--text-secondary); border-left: 2px solid transparent; }
+.log-entry.WARN { background: rgba(245, 158, 11, 0.08); color: var(--warning); border-left: 2px solid #fbbf24; }
+.log-entry.ERROR { background: rgba(239, 68, 68, 0.08); color: var(--danger); border-left: 2px solid #ef4444; }
 .log-entry:hover { background: rgba(255,255,255,0.03); }
 
 /* IPC Entries */
@@ -381,7 +381,7 @@
     line-height: 1.6;
     word-break: break-all;
     box-shadow: inset 0 0 20px rgba(0,0,0,0.5);
-    color: #fca5a5;
+    color: var(--danger);
     position: relative;
     overflow: hidden;
 }
@@ -398,8 +398,8 @@
 
 @keyframes crash-glitch {
     0%, 90%, 100% { transform: translate(0); opacity: 1; }
-    92% { transform: translate(-2px, 1px); opacity: 0.8; color: #3b82f6; }
-    94% { transform: translate(2px, -1px); opacity: 0.8; color: #10b981; }
+    92% { transform: translate(-2px, 1px); opacity: 0.8; color: var(--cyan); }
+    94% { transform: translate(2px, -1px); opacity: 0.8; color: var(--success); }
     96% { transform: translate(-1px, -2px); opacity: 0.9; }
 }
 
@@ -499,7 +499,7 @@
 .debug-modal-text {
     font-size: 14px;
     line-height: 1.6;
-    color: #b5bac1;
+    color: var(--text-secondary);
     margin-bottom: 24px;
 }
 

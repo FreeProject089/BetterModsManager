@@ -105,9 +105,30 @@ function deriveChannels(vars: Record<string, string>): Record<string, string> {
     return out;
 }
 
+// A light theme that only overrides backgrounds (e.g. a hand-tweaked single
+// token, or a community theme authored before text tokens existed) otherwise
+// falls through to BMM's DARK-mode text-token defaults from tokens.css — near-
+// white text on the new light background. The DOM contrast enforcer patches
+// this everywhere it runs, but it deliberately never touches the theme editor's
+// own chrome (`#bmm-theme-editor` is excluded), so THAT surface showed the bug
+// unmitigated: some text (using tokens the theme DID set) turned dark
+// correctly, the rest (relying on unset text tokens) stayed stuck light-on-
+// light. Filling the gap here — at the CSS-variable level — fixes it
+// everywhere at once, editor included, instead of chasing DOM edge cases.
+const LIGHT_TEXT_FALLBACK: Record<string, string> = {
+    '--bmm-text-primary': '#16181d',
+    '--bmm-text-secondary': '#4b5563',
+    '--bmm-text-muted': '#6b7280',
+};
 function buildVarsCSS(theme: BmmTheme): string {
-    const merged = { ...(theme.vars || {}), ...deriveChannels(theme.vars || {}) };
-    const global = theme.vars ? Object.entries(merged)
+    const vars = { ...(theme.vars || {}) };
+    if (isLightTheme(theme)) {
+        for (const [k, v] of Object.entries(LIGHT_TEXT_FALLBACK)) {
+            if (vars[k] === undefined) vars[k] = v;
+        }
+    }
+    const merged = { ...vars, ...deriveChannels(vars) };
+    const global = Object.keys(merged).length ? Object.entries(merged)
         .map(([k, v]) => `  ${k}: ${v};`).join('\n') : '';
 
     const perPage = theme.pages ? Object.entries(theme.pages)
@@ -160,7 +181,7 @@ function buildPatchCSS(theme: BmmTheme): string {
     const success = vars['--bmm-success'];
     const warning = vars['--bmm-warning'];
     const cyan    = vars['--bmm-cyan'];
-    const isLight = theme.mode === 'light';
+    const isLight = isLightTheme(theme);
 
     let css = '';
 
@@ -232,6 +253,26 @@ body { color: var(--bmm-text-primary) !important; }
 
 /** Patch JS-generated inline styles in real-time via MutationObserver.
  *  When elements appear with hardcoded colours, swap them to CSS variables. */
+/** Whether a theme is effectively LIGHT. The declared `mode` wins; when absent
+ *  (typical for user-made themes cloned from a dark base), it is AUTO-DETECTED
+ *  from the base background's luminance — so light custom themes get the same
+ *  contrast patches + enforcer as the built-in light themes, and their texts
+ *  never stay stuck white-on-white. */
+export function isLightTheme(theme: BmmTheme | null | undefined): boolean {
+    if (!theme) return false;
+    if (theme.mode === 'light') return true;
+    if (theme.mode === 'dark') return false;
+    const bg = theme.vars?.['--bmm-bg-base'] || '';
+    const m = bg.match(/#([0-9a-fA-F]{6})/);
+    if (m) {
+        const r = parseInt(m[1].slice(0, 2), 16), g = parseInt(m[1].slice(2, 4), 16), b = parseInt(m[1].slice(4, 6), 16);
+        return _lum(r, g, b) > 0.5;
+    }
+    const rgb = _parseRgb(bg);
+    if (rgb) return _lum(rgb[0], rgb[1], rgb[2]) > 0.5;
+    return false;
+}
+
 // ── Light-mode contrast enforcer ──────────────────────────────────────────────
 // Many components hardcode dark-theme light text colours (incomplete token
 // migration). On light themes that text is invisible. This walks text-bearing
@@ -247,20 +288,49 @@ const CONTRAST_KEY  = 'bmm_contrast_enforce';   // 'false' = user disabled it
 export function isContrastEnforced(): boolean {
     return localStorage.getItem(CONTRAST_KEY) !== 'false';
 }
-/** Remove every inline colour the enforcer applied (restore original styling). */
+/** Remove every inline colour the enforcer applied (restore original styling).
+ *  Elements that HAD an inline colour before the enforcer overwrote it get that
+ *  exact value back (stored in data attrs at enforce time) — so disabling the
+ *  enforcer or resetting the theme returns texts to their true original look. */
 function clearAllEnforced(): void {
     document.querySelectorAll(`[${CONTRAST_ATTR}]`).forEach(node => {
         const el = node as HTMLElement;
-        el.style.removeProperty('color');
-        el.style.removeProperty('background-color');
+        const restore = (prop: string, saved?: string) => {
+            el.style.removeProperty(prop);
+            if (saved) {
+                const [val, pr] = saved.split('||');
+                try { el.style.setProperty(prop, val, pr || ''); } catch {}
+            }
+        };
+        restore('color', el.dataset.bmmContrastOrigC);
+        restore('background-color', el.dataset.bmmContrastOrigB);
+        delete el.dataset.bmmContrastOrigC;
+        delete el.dataset.bmmContrastOrigB;
         el.removeAttribute(CONTRAST_ATTR);
     });
+}
+/** Debounced full-document enforce — used by live preview so the pass runs ~300ms
+ *  after the last change instead of on every keystroke. */
+let _enforceTimer: number | null = null;
+function _scheduleEnforce(): void {
+    if (_enforceTimer !== null) clearTimeout(_enforceTimer);
+    _enforceTimer = window.setTimeout(() => {
+        _enforceTimer = null;
+        try { enforceLightContrast(document); } catch {}
+    }, 300);
+}
+/** Save the element's own inline value (if any) before the enforcer overwrites it. */
+function _saveOrig(el: HTMLElement, prop: 'color' | 'background-color'): void {
+    const key = prop === 'color' ? 'bmmContrastOrigC' : 'bmmContrastOrigB';
+    if (el.dataset[key] !== undefined) return;                    // already saved
+    const val = el.style.getPropertyValue(prop);
+    if (val) el.dataset[key] = `${val}||${el.style.getPropertyPriority(prop)}`;
 }
 /** Turn the contrast enforcer on/off and apply the change immediately. */
 export function setContrastEnforced(on: boolean): void {
     localStorage.setItem(CONTRAST_KEY, on ? 'true' : 'false');
     if (!on) clearAllEnforced();
-    else if (_activeTheme?.mode === 'light') enforceLightContrast(document);
+    else if (isLightTheme(_activeTheme)) enforceLightContrast(document);
 }
 function _lum(r: number, g: number, b: number): number {
     return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
@@ -286,7 +356,7 @@ function _saturation(r: number, g: number, b: number): number {
     return (Math.max(r, g, b) - Math.min(r, g, b)) / 255;
 }
 function enforceLightContrast(root: Element | Document): void {
-    if (!_activeTheme || _activeTheme.mode !== 'light') return;
+    if (!isLightTheme(_activeTheme)) return;
     if (!isContrastEnforced()) return;
     // Elements the user is explicitly styling via the pick tool must win — never
     // let the enforcer's inline !important fight an element_override.
@@ -314,6 +384,7 @@ function enforceLightContrast(root: Element | Document): void {
             if (bg && bg[3] >= 0.85) {
                 const bgLum = _lum(bg[0], bg[1], bg[2]);
                 if (bgLum < 0.16 && _saturation(bg[0], bg[1], bg[2]) < 0.16) {
+                    _saveOrig(el, 'background-color');
                     el.style.setProperty('background-color', 'var(--bmm-bg-elevated)', 'important');
                     el.setAttribute(CONTRAST_ATTR, 'bg');
                 }
@@ -326,6 +397,7 @@ function enforceLightContrast(root: Element | Document): void {
         if (el.tagName === 'svg' || el.tagName === 'SVG') {
             const sc = _parseRgb(cs.color);
             if (sc && _lum(sc[0], sc[1], sc[2]) > 0.6 && _effectiveBgLum(el) > 0.5) {
+                _saveOrig(el, 'color');
                 el.style.setProperty('color', 'var(--bmm-text-secondary)', 'important');
                 el.setAttribute(CONTRAST_ATTR, 'svg');
             }
@@ -356,6 +428,7 @@ function enforceLightContrast(root: Element | Document): void {
         const minRatio = _saturation(col[0], col[1], col[2]) > 0.35 ? 2.2 : 3.2;
         if (ratio < minRatio) {
             // Near-white text needs the strongest fix; failing mid-greys just darken.
+            _saveOrig(el, 'color');
             el.style.setProperty('color', txtL > 0.55 ? 'var(--bmm-text-primary)' : 'var(--bmm-text-secondary)', 'important');
             el.setAttribute(CONTRAST_ATTR, '1');
         }
@@ -372,11 +445,13 @@ function startPatchObserver(theme: BmmTheme): void {
     if (_patchObserver) { _patchObserver.disconnect(); _patchObserver = null; }
     const vars = theme.vars || {};
     const accent = vars['--bmm-accent'];
-    const isLight = theme.mode === 'light';
+    const isLight = isLightTheme(theme);
     // Always patch when a theme is active (even just an accent change), so that
     // ALL hardcoded inline colours follow the theme → 100% customisable.
+    // Light themes keep the observer alive even WITHOUT var overrides: the
+    // contrast enforcer must still cover dynamically-added DOM.
     const hasOverrides = Object.keys(vars).length > 0;
-    if (!hasOverrides) return;
+    if (!hasOverrides && !isLight) return;
 
     // ── Comprehensive hardcoded → token map (covers every common BMM colour) ──
     const patches: [RegExp, string][] = [
@@ -449,12 +524,9 @@ function startPatchObserver(theme: BmmTheme): void {
     };
 
     patchAll(document);
-    // Full-document contrast pass is relatively heavy, so only run it on a real
-    // (non-preview) apply or when first switching INTO light mode — not on every
-    // live-preview keystroke. Already-enforced inline colours use the token and
-    // adapt on their own, and new DOM is handled by the observer below.
-    const wasLight = document.body.classList.contains('bmm-theme-light');
-    if (isLight && (!wasLight || theme.id !== '__preview__')) enforceLightContrast(document);
+    // (The full-document contrast pass is triggered from applyTheme — immediate on
+    // real theme switches, debounced during live preview. Here we only keep the
+    // observer that handles NEW dom nodes.)
     let scheduled = false;
     let pendingRoots: Element[] = [];
     _patchObserver = new MutationObserver(muts => {
@@ -482,10 +554,16 @@ function startPatchObserver(theme: BmmTheme): void {
 
 function buildFontsCSS(theme: BmmTheme): string {
     if (!theme.fonts?.length) return '';
+    // Escape quotes/backslashes in attacker-controlled strings before splicing into
+    // a CSS text node — this is stylesheet text (not innerHTML/eval), so it can't
+    // run script, but an unescaped quote could still break out of the font-family
+    // value and append arbitrary extra CSS rules.
+    const cssStr = (s: string) => String(s ?? '').replace(/[\\']/g, '\\$&').replace(/\r?\n/g, ' ');
+    const cssUrl = (s: string) => String(s ?? '').replace(/["\\]/g, '\\$&').replace(/\r?\n/g, ' ');
     return theme.fonts.map(f => {
-        const src = f.data ? `url("${f.data}")` : f.url ? `url("${f.url}")` : '';
+        const src = f.data ? `url("${cssUrl(f.data)}")` : f.url ? `url("${cssUrl(f.url)}")` : '';
         if (!src) return '';
-        return `@font-face { font-family: '${f.family}'; src: ${src}; font-weight: ${f.weight || 'normal'}; font-style: ${f.style || 'normal'}; font-display: swap; }`;
+        return `@font-face { font-family: '${cssStr(f.family)}'; src: ${src}; font-weight: ${f.weight || 'normal'}; font-style: ${f.style || 'normal'}; font-display: swap; }`;
     }).join('\n');
 }
 
@@ -509,6 +587,37 @@ function clearEnforcedOnOverrides(theme: BmmTheme): void {
     });
 }
 
+// ── HTML sanitization ──────────────────────────────────────────────────────────
+// Themes are files a user can import/share (custom_elements + html_swaps both
+// inject raw HTML via innerHTML). Stripping only <script> tags is NOT enough —
+// `<img src=x onerror="...">`, `<a href="javascript:...">`, `<svg onload="...">`
+// etc. all execute without ever using a <script> tag. This walks the parsed DOM
+// (via a template element — never innerHTML'd onto a live node before cleaning)
+// and removes dangerous elements/attributes before the caller ever inserts it.
+const SANITIZE_DROP_TAGS = new Set(['SCRIPT', 'IFRAME', 'OBJECT', 'EMBED', 'LINK', 'META', 'BASE', 'FORM']);
+function sanitizeHtml(html: string): string {
+    const tpl = document.createElement('template');
+    tpl.innerHTML = String(html ?? '');
+    const walk = (root: DocumentFragment | Element) => {
+        // Snapshot first — removing/mutating nodes while iterating a live NodeList skips siblings.
+        const all = Array.from(root.querySelectorAll('*'));
+        for (const el of all) {
+            if (!root.contains(el)) continue; // already removed along with a dropped ancestor
+            if (SANITIZE_DROP_TAGS.has(el.tagName)) { el.remove(); continue; }
+            for (const attr of Array.from(el.attributes)) {
+                const name = attr.name.toLowerCase();
+                if (name.startsWith('on')) { el.removeAttribute(attr.name); continue; }
+                if ((name === 'href' || name === 'src' || name === 'xlink:href' || name === 'action' || name === 'formaction')
+                    && /^\s*(javascript|data:text\/html|vbscript):/i.test(attr.value)) {
+                    el.removeAttribute(attr.name);
+                }
+            }
+        }
+    };
+    walk(tpl.content);
+    return tpl.innerHTML;
+}
+
 // ── HTML swaps — replace matching elements' innerHTML (e.g. swap an icon's SVG) ─
 const SWAP_ATTR = 'data-bmm-swap';
 function applyHtmlSwaps(theme: BmmTheme): void {
@@ -523,7 +632,6 @@ function applyHtmlSwaps(theme: BmmTheme): void {
     const swaps = (theme.html_swaps || []).filter(s => s.selector && s.html);
     if (!swaps.length) return;
 
-    const strip = (html: string) => html.replace(/<script[\s\S]*?<\/script>/gi, '');
     const applyAll = () => {
         for (const s of swaps) {
             let nodes: NodeListOf<Element>;
@@ -533,7 +641,7 @@ function applyHtmlSwaps(theme: BmmTheme): void {
                 if (el.closest('#bmm-theme-editor, #bte-elov')) return;
                 if (el.getAttribute(SWAP_ATTR) === s.selector) return;   // already swapped
                 if (el.dataset.bmmSwapOrig === undefined) el.dataset.bmmSwapOrig = el.innerHTML;
-                el.innerHTML = strip(s.html);
+                el.innerHTML = sanitizeHtml(s.html);
                 el.setAttribute(SWAP_ATTR, s.selector);
             });
         }
@@ -557,8 +665,7 @@ function applyCustomElements(theme: BmmTheme): void {
             if (host.querySelector(`[data-bmm-ce="${ce.id}"]`)) continue; // already injected
             const div = document.createElement('div');
             div.dataset.bmmCe = ce.id;
-            // sanitise: no <script> tags allowed in imported themes
-            div.innerHTML = ce.html.replace(/<script[\s\S]*?<\/script>/gi, '');
+            div.innerHTML = sanitizeHtml(ce.html);
             if (ce.position === 'prepend') host.prepend(div);
             else if (ce.position === 'append') host.append(div);
             else if (ce.position === 'before') host.before(div);
@@ -596,12 +703,21 @@ export function applyTheme(theme: BmmTheme): void {
     // rendered dynamic elements (mod/profile cards) keep their stale light-mode
     // colours after a Discard / Revert-all / preset / generator switch until they
     // happen to re-render — exactly the "need to refresh to look right" bug.
-    try { if (theme.mode !== 'light' || !isContrastEnforced()) clearAllEnforced(); } catch {}
+    try { if (!isLightTheme(theme) || !isContrastEnforced()) clearAllEnforced(); } catch {}
+    // Light theme + enforcer on → contrast pass on EVERY apply (no "toggle the
+    // setting off/on to see it" dance). Real switches run immediately; live-preview
+    // applies are debounced so editor keystrokes stay snappy.
+    try {
+        if (isLightTheme(theme) && isContrastEnforced()) {
+            if (theme.id === '__preview__') _scheduleEnforce();
+            else enforceLightContrast(document);
+        }
+    } catch {}
     // Disable all animations (intro/exit, Tasky spin, transitions) when speed = 0
     const speed = (theme.vars || {})['--bmm-anim-speed'];
     document.body.classList.toggle('bmm-no-anim', speed === '0' || speed === '0.0');
     // Flag light themes so CSS can fix hover/dropdown contrast that hardcodes light text.
-    document.body.classList.toggle('bmm-theme-light', theme.mode === 'light');
+    document.body.classList.toggle('bmm-theme-light', isLightTheme(theme));
     if (theme.id !== '__preview__') localStorage.setItem(ACTIVE_KEY, theme.id);
 }
 
@@ -649,10 +765,15 @@ export function resetTheme(): void {
     getOrCreate(STYLE_PATCH_ID).textContent = '';
     removeCustomElements();
     applyHtmlSwaps({ id: '', name: '' } as BmmTheme);   // restores swapped elements
+    // Restore every swapped image (mascot, loader, corner art…) back to its true
+    // original src, and drop the custom nav logo. Without this, resetting after a
+    // theme that swapped the mascot left the swapped image on screen forever —
+    // applyAssets() with no assets is exactly what undoes applyAssets(theme).
+    try { applyAssets({ id: '', name: '' } as BmmTheme); } catch {}
     if (_patchObserver) { _patchObserver.disconnect(); _patchObserver = null; }
-    if (_assetObserver) { _assetObserver.disconnect(); _assetObserver = null; }
     // Wipe enforcer inline colours + reset the body flags, otherwise dynamic
     // elements keep stale light-theme styling until they re-render.
+    if (_enforceTimer !== null) { clearTimeout(_enforceTimer); _enforceTimer = null; }
     clearAllEnforced();
     document.body.classList.remove('bmm-theme-light', 'bmm-no-anim');
     document.documentElement.style.removeProperty('--bmm-nav-logo-url');

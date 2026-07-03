@@ -695,6 +695,31 @@ A built-in tool (Settings → Translation Sandbox) that lets anyone create or fi
 | **Export** | Save your language as a `.json` file (full file, order preserved). |
 | **One-Click Share** | A **Share** button produces a `bmm://language/import-inline` link (gzip-compressed); for full translations that exceed the link size limit it falls back to exporting the `.json` to share as a file. |
 
+## 50. Customizable Navbar & Sandboxed Pages (v1.0.0+)
+
+- **Reorder / customize the navbar** — arrange the top navigation to taste.
+- **Sandboxed `bmmpage://` pages** — custom navbar entries can open isolated pages
+  through a permissioned broker, so third-party page content can't touch the core app.
+
+## 51. Plugin Scheduler & Web Catalog (v1.0.0+)
+
+- **Scheduler** — have plugin/script-generation actions run automatically at chosen
+  times (fired via deeplinks).
+- **BetterCommunity Web catalog** — browse & install community apps, plugins and
+  themes straight from BMM (BCWEB `catalog.json` feed), and open web **install /
+  add-source** deeplinks that hand off to the app.
+
+## 52. Theme Store & Sharing (v1.0.0+)
+
+- A growing library of built-in themes (Sombre, White, Discord, Spotify, Brutal,
+  Claude, Nord, Sakura…) plus a **first-class light mode**, and shareable
+  `.bmmtheme.json` files exported/imported from the theme editor.
+
+## 53. Interactive Tutorial Hub (v1.0.0+)
+
+- A guided, step-driven **Tutorial Hub** that walks new users through the app's major
+  workflows on top of the first-run onboarding.
+
 ---
 
 *Better Mod Manager is developed by FreeProject089.*

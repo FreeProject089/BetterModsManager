@@ -15,7 +15,7 @@
     "--bmm-border-hover": "rgba(255,255,255,0.16)",
     "--bmm-text-primary": "#ffffff",
     "--bmm-text-secondary": "#b3b3b3",
-    "--bmm-text-muted": "#6a6a6a",
+    "--bmm-text-muted": "#717171",
     "--bmm-cyan": "#1ED760",
     "--bmm-success": "#1ED760",
     "--bmm-warning": "#ffa42b",

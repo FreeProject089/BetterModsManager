@@ -660,6 +660,37 @@ Un moteur de thèmes à variables CSS appliqué à l'exécution. Frontend : `fro
 | **Mode overlay** | Le modal se détache en overlay déplaçable/redimensionnable ; le `style` inline d'origine est capturé et restauré tel quel à la sortie (évite que le panneau reste à la taille overlay). |
 | **Chemin d'installation** | Les `.json` exportés s'installent via `import_language` ; la commande `import_language_data(code, content)` accepte aussi du JSON brut. |
 
+## 49. Navbar personnalisable & Pages en sandbox (`bmmpage://`)
+
+La barre de navigation est configurable par l'utilisateur (réordonner/ajouter/retirer
+des entrées), et les entrées personnalisées peuvent ouvrir des **pages en sandbox**
+servies via un schéma dédié `bmmpage://`.
+
+| Composant | Implémentation |
+| :--- | :--- |
+| **Schéma custom** | Les pages `bmmpage://` sont rendues dans un contexte isolé, tenant le markup/scripts des pages tierces à l'écart du cœur de l'app. |
+| **Broker à permissions** | Un broker médie chaque appel privilégié tenté par une page en sandbox, n'accordant que les capacités explicitement autorisées (aucun accès ambiant aux commandes Tauri). |
+| **Gestionnaire de deep-links** | `deep_link_manager` (cœur TS + JS) route les invocations externes `bmm://` / `bmmpage://`, y compris les deeplinks web → app d'**installation / d'ajout de source** depuis BetterCommunity Web. |
+
+## 50. Planificateur de plugins & Actions par deeplink
+
+`scheduler.ts` exécute des actions de génération de plugins/scripts selon un planning
+en déclenchant des deeplinks à des horaires choisis.
+
+| Composant | Implémentation |
+| :--- | :--- |
+| **Sources** | Les plugins sont ajoutés via des sources endpoint ou deeplink ; des docs HTML sont livrées à côté. |
+| **Planificateur** | Exécution temporisée d'actions de génération de scripts, dispatchées via le gestionnaire de deep-links pour qu'un run planifié réutilise le même chemin qu'un run manuel. |
+| **Catalogue web** | Le moteur de catalogue d'apps (§43) consomme aussi le flux `catalog.json` de BCWEB (apps/plugins/thèmes) pour que le contenu communautaire soit installable depuis BMM. |
+
+## 51. Plateforme : Migration Tauri v2 & Spawn de processus caché
+
+| Composant | Implémentation |
+| :--- | :--- |
+| **Tauri v2** | Migré vers Tauri v2 (compile au vert sur `cargo` + `tsc` ; validation runtime en cours). Modèle de capacités/permissions mis à jour en conséquence. |
+| **Spawn caché** | Tous les spawns de processus en arrière-plan passent par les helpers `crate::commands::proc` pour qu'aucune fenêtre de console ne clignote (Windows `CREATE_NO_WINDOW`). |
+| **Hub de tutoriels interactif** | `tutorial-engine.ts` alimente un hub de tutoriels in-app guidé pas à pas, superposé au système d'onboarding (§30). |
+
 ---
 
 *Better Mod Manager est développé par FreeProject089 — Conçu pour une performance sans compromis, la sécurité des fichiers et une gestion moderne des mods.*

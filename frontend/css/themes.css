@@ -70,11 +70,11 @@
 }
 .bte-close {
     width: 28px; height: 28px; border-radius: 8px; border: none;
-    background: rgba(239,68,68,0.12); color: var(--bmm-danger);
+    background: rgba(var(--bmm-danger-r,239),var(--bmm-danger-g,68),var(--bmm-danger-b,68),0.12); color: var(--bmm-danger);
     font-size: 14px; cursor: pointer; display: flex;
     align-items: center; justify-content: center; transition: all 0.14s ease;
 }
-.bte-close:hover { background: rgba(239,68,68,0.25); transform: translateY(-1px); }
+.bte-close:hover { background: rgba(var(--bmm-danger-r,239),var(--bmm-danger-g,68),var(--bmm-danger-b,68),0.25); transform: translateY(-1px); }
 
 /* ── Tabs ─────────────────────────────────────────────────────────────────── */
 .bte-tabs {
@@ -118,7 +118,7 @@
 .bte-dirty:empty { display: none; }
 .bte-dirty:not(:empty) {
     flex: 0 1 auto; padding: 3px 9px; border-radius: 20px; overflow: hidden; text-overflow: ellipsis;
-    background: rgba(245,158,11,0.12); border: 1px solid rgba(245,158,11,0.3);
+    background: rgba(var(--bmm-accent-r,245),var(--bmm-accent-g,158),var(--bmm-accent-b,11),0.12); border: 1px solid rgba(var(--bmm-accent-r,245),var(--bmm-accent-g,158),var(--bmm-accent-b,11),0.3);
     display: inline-flex; align-items: center; gap: 5px; white-space: nowrap;
 }
 .bte-dirty:not(:empty)::before {
@@ -338,8 +338,8 @@
 .bte-adv-hint { font-size: 11px; color: var(--bmm-text-muted); }
 .bte-adv-tip {
     font-size: 11px; color: var(--bmm-text-muted); margin: 0 0 8px;
-    padding: 8px 10px; background: rgba(59,130,246,0.07);
-    border-radius: 7px; border: 1px solid rgba(59,130,246,0.15); line-height: 1.5;
+    padding: 8px 10px; background: rgba(var(--bmm-accent-r,59),var(--bmm-accent-g,130),var(--bmm-accent-b,246),0.07);
+    border-radius: 7px; border: 1px solid rgba(var(--bmm-accent-r,59),var(--bmm-accent-g,130),var(--bmm-accent-b,246),0.15); line-height: 1.5;
 }
 .bte-adv-textarea {
     width: 100%; flex: 1; min-height: 200px; border-radius: 9px;
@@ -348,7 +348,7 @@
     font-size: 11.5px; padding: 10px 12px; resize: vertical; line-height: 1.55;
     box-sizing: border-box;
 }
-.bte-adv-textarea:focus { outline: none; border-color: rgba(59,130,246,0.5); }
+.bte-adv-textarea:focus { outline: none; border-color: rgba(var(--bmm-accent-r,59),var(--bmm-accent-g,130),var(--bmm-accent-b,246),0.5); }
 
 /* ── Installed tab ────────────────────────────────────────────────────────── */
 .bte-installed-list { display: flex; flex-direction: column; gap: 7px; }
@@ -359,7 +359,7 @@
 }
 .bte-installed-item:hover { background: var(--bmm-s05); }
 .bte-installed-item.active {
-    border-color: rgba(59,130,246,0.4); background: rgba(59,130,246,0.08);
+    border-color: rgba(var(--bmm-accent-r,59),var(--bmm-accent-g,130),var(--bmm-accent-b,246),0.4); background: rgba(var(--bmm-accent-r,59),var(--bmm-accent-g,130),var(--bmm-accent-b,246),0.08);
 }
 .bte-installed-swatch {
     width: 30px; height: 30px; border-radius: 8px; flex-shrink: 0;
@@ -430,7 +430,7 @@
 }
 .bte-ce-pos {
     font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 5px;
-    background: rgba(245,158,11,0.12); color: var(--bmm-warning);
+    background: rgba(var(--bmm-accent-r,245),var(--bmm-accent-g,158),var(--bmm-accent-b,11),0.12); color: var(--bmm-warning);
 }
 .bte-ce-scope {
     font-size: 10px; color: var(--bmm-text-muted); background: var(--bmm-s05);
@@ -484,8 +484,8 @@ body.bte-picking .bte-ce-pickbtn { background: var(--bmm-accent); color: #fff; }
 
 /* Flash highlight on matched token row */
 .bte-token-highlight {
-    background: rgba(59,130,246,0.15) !important;
-    outline: 1px solid rgba(59,130,246,0.5); border-radius: 5px;
+    background: rgba(var(--bmm-accent-r,59),var(--bmm-accent-g,130),var(--bmm-accent-b,246),0.15) !important;
+    outline: 1px solid rgba(var(--bmm-accent-r,59),var(--bmm-accent-g,130),var(--bmm-accent-b,246),0.5); border-radius: 5px;
     transition: background 0.3s ease;
 }
 
@@ -589,5 +589,5 @@ body.bte-picking #bte-elov, body.bte-picking #bte-elov * { cursor: auto !importa
 .bte-pick-highlight {
     outline: 2px solid var(--bmm-accent) !important;
     outline-offset: 1px !important;
-    background: rgba(59,130,246,0.1) !important;
+    background: rgba(var(--bmm-accent-r,59),var(--bmm-accent-g,130),var(--bmm-accent-b,246),0.1) !important;
 }

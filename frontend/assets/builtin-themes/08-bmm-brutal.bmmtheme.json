@@ -17,7 +17,7 @@
     "--bmm-border-accent": "#e8590c",
     "--bmm-text-primary": "#111111",
     "--bmm-text-secondary": "#2a2a2a",
-    "--bmm-text-muted": "#555555",
+    "--bmm-text-muted": "#3e3e3e",
     "--bmm-success": "#1a7f37",
     "--bmm-warning": "#b45309",
     "--bmm-danger": "#c92a2a",

@@ -591,6 +591,32 @@ Un outil intégré (Paramètres → Bac à sable de traduction) qui permet à n'
 | **Export** | Sauvegardez votre langue en fichier `.json` (fichier complet, ordre préservé). |
 | **Partage en un clic** | Un bouton **Partager** produit un lien `bmm://language/import-inline` (compressé en gzip) ; pour les traductions complètes qui dépassent la taille limite du lien, il bascule sur l'export du `.json` à partager en fichier. |
 
+## 50. Navbar personnalisable & Pages en sandbox (v1.0.0+)
+
+- **Réordonner / personnaliser la navbar** — organiser la navigation du haut à sa guise.
+- **Pages `bmmpage://` en sandbox** — les entrées de navbar personnalisées peuvent
+  ouvrir des pages isolées via un broker à permissions, pour que le contenu des pages
+  tierces ne touche pas le cœur de l'app.
+
+## 51. Planificateur de plugins & Catalogue web (v1.0.0+)
+
+- **Planificateur** — faire s'exécuter automatiquement des actions de génération de
+  plugins/scripts à des horaires choisis (déclenchées via deeplinks).
+- **Catalogue BetterCommunity Web** — parcourir & installer les apps, plugins et thèmes
+  communautaires directement depuis BMM (flux `catalog.json` de BCWEB), et ouvrir les
+  deeplinks web d'**installation / d'ajout de source** qui passent la main à l'app.
+
+## 52. Boutique de thèmes & Partage (v1.0.0+)
+
+- Une bibliothèque croissante de thèmes intégrés (Sombre, White, Discord, Spotify,
+  Brutal, Claude, Nord, Sakura…) plus un **mode clair de première classe**, et des
+  fichiers `.bmmtheme.json` partageables exportés/importés depuis l'éditeur de thèmes.
+
+## 53. Hub de tutoriels interactif (v1.0.0+)
+
+- Un **Hub de tutoriels** guidé pas à pas qui accompagne les nouveaux utilisateurs dans
+  les principaux workflows de l'app, en complément de l'onboarding au premier lancement.
+
 ---
 
 *Better Mod Manager est développé par FreeProject089.*

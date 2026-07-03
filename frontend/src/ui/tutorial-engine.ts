@@ -75,12 +75,17 @@ let _demoPrevActive: string | null = null;
 // concrete example when the user has no real data yet.
 const DEMO_TUTORIALS = new Set(['basics', 'advanced', 'other']);
 
+// Persisted marker so a crash mid-tutorial never strands the example profile:
+// set when the demo is created, cleared on cleanup, checked at next app boot.
+const DEMO_FLAG_KEY = 'bmm_tutorial_demo_active';
+
 async function _setupDemo(): Promise<void> {
     try {
         const res: any = await invoke('tutorial_setup_demo');
         _demoCreated    = !!res?.created;
         _demoPrevActive = res?.prevActive ?? null;
         if (_demoCreated) {
+            try { localStorage.setItem(DEMO_FLAG_KEY, JSON.stringify({ prevActive: _demoPrevActive })); } catch { /* best effort */ }
             // Make the example profile + mods appear in the live UI immediately.
             (window as any)._refreshProfilesFn?.();
             (window as any)._refreshModsFn?.(true);
@@ -89,6 +94,15 @@ async function _setupDemo(): Promise<void> {
         console.warn('[tutorial] setup demo failed:', e);
         _demoCreated = false;
     }
+}
+
+/** Refresh the footer active-profile chip (it doesn't listen to profile refreshes,
+ *  so after removing the demo profile it would keep showing the tutorial name). */
+async function _refreshProfileChip(): Promise<void> {
+    try {
+        const { updateProfileChip } = await import('../features/profiles/profiles.js');
+        await updateProfileChip();
+    } catch { /* footer chip absent — nothing to refresh */ }
 }
 
 async function _cleanupDemo(): Promise<void> {
@@ -100,9 +114,30 @@ async function _cleanupDemo(): Promise<void> {
         await invoke('tutorial_cleanup_demo', { prevActive: prev });
         (window as any)._refreshProfilesFn?.();
         (window as any)._refreshModsFn?.(true);
+        await _refreshProfileChip();
     } catch (e) {
         console.warn('[tutorial] cleanup demo failed:', e);
     }
+    try { localStorage.removeItem(DEMO_FLAG_KEY); } catch { /* best effort */ }
+}
+
+/** Boot-time safety net: if BMM crashed (or was killed) in the middle of a tutorial,
+ *  the example profile survived on disk. Called once at app start — removes it. */
+export async function cleanupOrphanTutorialDemo(): Promise<void> {
+    let raw: string | null = null;
+    try { raw = localStorage.getItem(DEMO_FLAG_KEY); } catch { /* storage unavailable */ }
+    if (!raw) return;
+    try {
+        const { prevActive } = JSON.parse(raw);
+        await invoke('tutorial_cleanup_demo', { prevActive: prevActive ?? null });
+        console.log('[tutorial] removed the orphaned example profile left by a crashed session');
+        (window as any)._refreshProfilesFn?.();
+        (window as any)._refreshModsFn?.(true);
+        await _refreshProfileChip();   // the footer chip otherwise keeps the tutorial name
+    } catch (e) {
+        console.warn('[tutorial] orphan demo cleanup failed:', e);
+    }
+    try { localStorage.removeItem(DEMO_FLAG_KEY); } catch { /* best effort */ }
 }
 
 // ── Public API ───────────────────────────────────────────────────────────────
@@ -140,9 +175,11 @@ export function startTutorialEngine(
     _ensurePanel();
     _renderStep();
     _registerLangListener();
+    _registerKeyboard();
 }
 
 export function closeTutorialEngine(): void {
+    _unregisterKeyboard();
     _unregisterLangListener();
     _cleanup();
     _cleanupDemo();
@@ -160,6 +197,35 @@ export function closeTutorialEngine(): void {
         }
     }
     if (_onClose) _onClose();
+}
+
+// ── Keyboard navigation ──────────────────────────────────────────────────────
+// ←/→ step navigation (→ only when the step doesn't demand an action), M or Escape
+// minimizes to the pill. Disabled while typing in a field so it never steals input.
+let _keyListener: ((e: KeyboardEvent) => void) | null = null;
+function _registerKeyboard(): void {
+    _unregisterKeyboard();
+    _keyListener = (e: KeyboardEvent) => {
+        if (!_tutorial || !document.getElementById('tut-engine-panel')) return;
+        const tgt = e.target as HTMLElement | null;
+        if (tgt && (tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA' || tgt.tagName === 'SELECT' || tgt.isContentEditable)) return;
+        if (_isMinimized) {
+            if (e.key.toLowerCase() === 'm') { e.preventDefault(); const p = document.getElementById('tut-engine-panel'); p?.classList.remove('minimized'); _restore(); }
+            return;
+        }
+        if (e.key === 'ArrowLeft') {
+            e.preventDefault(); _prevStep();
+        } else if (e.key === 'ArrowRight') {
+            const nextBtn = document.getElementById('btn-tut-next') as HTMLButtonElement | null;
+            if (nextBtn && !nextBtn.disabled) { e.preventDefault(); _nextStep(); }
+        } else if (e.key === 'Escape' || e.key.toLowerCase() === 'm') {
+            e.preventDefault(); _minimize();
+        }
+    };
+    document.addEventListener('keydown', _keyListener);
+}
+function _unregisterKeyboard(): void {
+    if (_keyListener) { document.removeEventListener('keydown', _keyListener); _keyListener = null; }
 }
 
 // ── Lang listener ────────────────────────────────────────────────────────────
@@ -482,7 +548,7 @@ function _renderStep(): void {
             </div>
         </div>
 
-        <div class="tut-card-body">
+        <div class="tut-card-body tut-body-enter">
             <div class="tut-step-header">
                 <div class="tut-avatar" style="color:${tut.color}">
                     ${step.icon || tut.icon || ''}
@@ -516,6 +582,7 @@ function _renderStep(): void {
                         <div class="tut-footer-progress-fill" style="width:${globalPct}%;background:${tut.color}"></div>
                     </div>
                     <span class="tut-footer-progress-label">${globalPct}%</span>
+                    <span class="tut-kbd-hint" data-tooltip="${t('tut.kbdHint') || 'Keyboard: ← → navigate · M minimize'}"><kbd>←</kbd><kbd>→</kbd><kbd>M</kbd></span>
                 </div>
             </div>
             <div class="tut-footer-btns">
@@ -738,6 +805,12 @@ function _showUnsavedWarning(onContinue: () => void): void {
     const ov = document.createElement('div');
     ov.id = 'tut-unsaved-overlay';
     ov.className = 'tut-unsaved-overlay';
+    // Anchor INSIDE the rounded app window (like every working modal in BMM):
+    // - the dim + the box's shadow get clipped by the window instead of bleeding
+    //   onto the transparent Tauri margins;
+    // - it hit-tests in the same stacking space as the modal it covers, so clicks
+    //   land on THIS dialog instead of falling through to elements behind it.
+    const host = document.getElementById('app-window-outer') || document.body;
     ov.innerHTML = `
         <div class="tut-unsaved-box">
             <div class="tut-unsaved-icon"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--bmm-warning)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
@@ -749,7 +822,10 @@ function _showUnsavedWarning(onContinue: () => void): void {
                 <button class="tut-next-btn" id="tut-unsaved-continue" style="background:${color};border-color:${color}">${t('tut.unsaved.continue') || 'Continue without saving'}</button>
             </div>
         </div>`;
-    document.body.appendChild(ov);
+    host.appendChild(ov);
+    // Swallow every event at the overlay so nothing reaches the UI underneath.
+    ov.addEventListener('mousedown', (e) => e.stopPropagation());
+    ov.addEventListener('click', (e) => e.stopPropagation());
     ov.querySelector('#tut-unsaved-cancel')?.addEventListener('click', () => ov.remove());
     ov.querySelector('#tut-unsaved-continue')?.addEventListener('click', () => {
         if ((ov.querySelector('#tut-unsaved-remember') as HTMLInputElement | null)?.checked) {

@@ -734,6 +734,36 @@ A runtime CSS-variable theming engine. Frontend: `frontend/src/features/themes/t
 | **Overlay mode** | The modal detaches into a draggable/resizable overlay; the original inline `style` is snapshotted and restored verbatim on exit (avoids the panel sticking at overlay size). |
 | **Install path** | Exported `.json` files install via `import_language`; the `import_language_data(code, content)` command also accepts raw JSON. |
 
+## 49. Customizable Navbar & Sandboxed Pages (`bmmpage://`)
+
+The navigation bar is user-configurable (reorder/add/remove entries), and custom
+entries can open **sandboxed pages** served over a dedicated `bmmpage://` scheme.
+
+| Component | Implementation |
+| :--- | :--- |
+| **Custom scheme** | `bmmpage://` pages are rendered in an isolated context, keeping third-party page markup/scripts away from the core app surface. |
+| **Permissioned broker** | A broker mediates every privileged call a sandboxed page attempts, granting only explicitly-allowed capabilities (no ambient access to Tauri commands). |
+| **Deep-link manager** | `deep_link_manager` (TS + JS core) routes external `bmm://` / `bmmpage://` invocations, incl. web → app **install / add-source** deeplinks from BetterCommunity Web. |
+
+## 50. Plugin Scheduler & Deeplink Actions
+
+`scheduler.ts` runs plugin/script-generation actions on a schedule by firing
+deeplinks at chosen times.
+
+| Component | Implementation |
+| :--- | :--- |
+| **Sources** | Plugins are added via endpoint or deeplink sources; HTML docs ship alongside. |
+| **Scheduler** | Time-based execution of script-generation actions, dispatched through the deep-link manager so a scheduled run reuses the same execution path as a manual one. |
+| **Web catalog** | The App Catalog Engine (§43) also consumes the BCWEB `catalog.json` feed (apps/plugins/themes) so community content is installable from inside BMM. |
+
+## 51. Platform: Tauri v2 Migration & Hidden Process Spawning
+
+| Component | Implementation |
+| :--- | :--- |
+| **Tauri v2** | Migrated to Tauri v2 (compiles green on `cargo` + `tsc`; runtime validation ongoing). Capabilities/permissions model updated accordingly. |
+| **Hidden spawn** | All background process spawns route through the `crate::commands::proc` hidden-spawn helpers so no console window ever flashes (Windows `CREATE_NO_WINDOW`). |
+| **Interactive Tutorial Hub** | `tutorial-engine.ts` powers an in-app, step-driven tutorial hub layered over the onboarding system (§30). |
+
 ---
 
 *Better Mod Manager is developed by FreeProject089 — Engineered for uncompromising performance, file safety, and modern mod management.*

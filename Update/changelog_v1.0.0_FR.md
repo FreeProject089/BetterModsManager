@@ -204,5 +204,35 @@ Cette version marque la transition vers l'étape 1.0, en se concentrant sur l'ut
 - Correction de l'échec de bundling MSI (`light.exe` LGHT0091 symbole dupliqué) en livrant le serveur MCP/CLI comme un `[[example]]` cargo (pour que tauri-bundler ne le récupère pas deux fois) tout en l'embarquant via le sidecar `externalBin`. Le `bmm-mcp-server` embarqué est reconstruit et à jour, et le CLI/MCP sont livrés dans le `.msi` et le `.exe`.
 - WebView2 épinglé en `downloadBootstrapper` (silencieux) pour que l'installeur télécharge WebView2 s'il manque.
 
+## [POST-1.0.0] Écosystème, Personnalisation & Intégration Web
+
+### Navbar personnalisable & Pages en sandbox
+- Les utilisateurs peuvent désormais personnaliser la navbar (réordonner/ajouter des
+  entrées) et ouvrir des **pages `bmmpage://` en sandbox** rendues via un broker à
+  permissions, isolant le contenu des pages tierces du cœur de l'app.
+
+### Système de thèmes v2
+- Moteur + éditeur de thèmes personnalisés complet : thématisation à base de tokens, un
+  ensemble croissant de thèmes intégrés (BMM Sombre, White, Discord, Spotify, Brutal,
+  Claude, Nord, Sakura…), et un **mode clair** de première classe. Les thèmes sont des
+  fichiers `.bmmtheme.json` partageables.
+
+### API Plugins & Planificateur
+- Sources de plugins via endpoint/deeplink, docs HTML, et un **planificateur** qui
+  exécute des actions de génération de scripts via deeplinks à des horaires choisis.
+
+### Intégration BetterCommunity Web
+- BMM consomme le flux **`catalog.json`** de BCWEB (apps/plugins/thèmes) et gère les
+  **deeplinks d'installation / d'ajout de source** depuis le web, reliant l'app desktop
+  au hub communautaire. La télémétrie est passée au dashboard réécrit (Rust/Axum/Postgres
+  + React).
+
+### Plateforme
+- **Migration Tauri v2** (compile au vert, validation runtime en cours).
+- Tous les spawns de processus en arrière-plan passent par des helpers de spawn caché
+  (aucun flash de console).
+- **Hub de tutoriels** interactif et un gestionnaire de crash étendu.
+
 ---
-*La version 1.0.0 représente la consolidation finale de l'ensemble des fonctionnalités de base.*
+*La version 1.0.0 représente la consolidation finale des fonctionnalités de base ; la
+section ci-dessus suit le travail d'écosystème/personnalisation ajouté par-dessus.*

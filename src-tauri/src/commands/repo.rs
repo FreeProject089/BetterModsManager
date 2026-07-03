@@ -1903,10 +1903,21 @@ pub async fn fetch_repo_info(url: String, creator_id: Option<String>) -> Result<
     }
     let client = client_builder.build().map_err(|e| e.to_string())?;
     let res = client.get(&target_url).send().await.map_err(|e| e.to_string())?;
-    
+
     if !res.status().is_success() {
         if res.status() == 403 {
-            return Err("repo.errForbidden".to_string());
+            // The sandbox gate (IP/key/account bans + whitelist, incl. the site-wide
+            // policy) sends a structured body distinguishing WHY access was denied,
+            // so BMM can tell the user what to do instead of a generic "forbidden".
+            #[derive(serde::Deserialize, Default)]
+            struct GateError { error: Option<String>, #[serde(rename = "accountLinked")] account_linked: Option<bool> }
+            let body: GateError = res.json().await.unwrap_or_default();
+            return Err(match body.error.as_deref() {
+                Some("banned") => "repo.errBanned".to_string(),
+                Some("not_whitelisted") if body.account_linked == Some(true) => "repo.errNotWhitelisted".to_string(),
+                Some("not_whitelisted") => "repo.errNotWhitelistedLink".to_string(),
+                _ => "repo.errForbidden".to_string(),
+            });
         }
         return Err("repo.errInvalidRepo".to_string());
     }

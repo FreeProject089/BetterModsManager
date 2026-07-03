@@ -226,5 +226,32 @@ This version represents the transition to the 1.0 milestone, focusing on cross-p
 - Fixed the MSI bundling failure (`light.exe` LGHT0091 duplicate symbol) by shipping the MCP/CLI server as a cargo `[[example]]` (so tauri-bundler doesn't double-harvest it) while still bundling it via the `externalBin` sidecar. The bundled `bmm-mcp-server` is rebuilt and up to date, and the CLI/MCP ship in both the `.msi` and `.exe`.
 - Pinned WebView2 install to `downloadBootstrapper` (silent) so the installer fetches WebView2 if missing.
 
+## [POST-1.0.0] Ecosystem, Customization & Web Integration
+
+### Customizable Navbar & Sandboxed Pages
+- Users can now customize the navbar (reorder/add entries) and open **sandboxed
+  `bmmpage://` pages** rendered through a permissioned broker, isolating third-party
+  page content from the core app.
+
+### Theme System v2
+- Full custom-theme engine + editor: token-based theming, a growing set of built-in
+  themes (BMM Sombre, White, Discord, Spotify, Brutal, Claude, Nord, Sakura…), and a
+  first-class **light mode**. Themes are shareable `.bmmtheme.json` files.
+
+### Plugins API & Scheduler
+- Plugin sources via endpoint/deeplink, HTML docs, and a **scheduler** that runs
+  script-generation actions through deeplinks at chosen times.
+
+### BetterCommunity Web Integration
+- BMM consumes the BCWEB **`catalog.json`** feed (apps/plugins/themes) and handles
+  **install / add-source deeplinks** from the web, tying the desktop app to the
+  community hub. Telemetry moved to the rewritten dashboard (Rust/Axum/Postgres + React).
+
+### Platform
+- **Tauri v2 migration** (compiles green, runtime validation ongoing).
+- All background process spawns routed through hidden-spawn helpers (no console flash).
+- Interactive **Tutorial Hub** and an expanded crash manager.
+
 ---
-*Release 1.0.0 represents the final consolidation of the core feature set.*
+*Release 1.0.0 represents the final consolidation of the core feature set; the section
+above tracks the ecosystem/customization work layered on top of it.*

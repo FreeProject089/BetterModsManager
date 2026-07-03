@@ -936,6 +936,15 @@ async function main() {
             console.warn('[BMM] consent modal failed', e);
         }
     }
+    // 4.95. If BMM crashed (or was killed) in the middle of an interactive tutorial,
+    // the example profile survived on disk — remove it now, before the user sees it.
+    try {
+        const { cleanupOrphanTutorialDemo } = await import('./tutorial-engine.js');
+        await cleanupOrphanTutorialDemo();
+    }
+    catch (e) {
+        console.warn('[BMM] orphan tutorial demo cleanup failed', e);
+    }
     // 5. Show onboarding on first launch (it handles language too, so the standalone
     // picker above won't be repeated — see startOnboarding).
     if (isFirstRun) {
