@@ -481,10 +481,11 @@ fn require_token(
 struct Unauthorized;
 impl warp::reject::Reject for Unauthorized {}
 
-/// Plugin permission gate.
-/// If the request includes `X-BMM-Plugin-Id: <id>`, the plugin's permissions
-/// are looked up in `plugin_permissions`. Without the header, admin access is
-/// assumed (direct API calls, curl, etc.).
+/// Plugin permission gate rejection.
+/// Identity is resolved by `require_permission` from the BEARER TOKEN, never from the
+/// (spoofable) `X-BMM-Plugin-Id` header: the admin token grants full access, and a
+/// per-plugin token maps to that plugin's `plugin_permissions`. A plugin therefore
+/// cannot escalate by omitting or forging the header (CWE-862/863).
 #[derive(Debug)]
 struct PermissionDenied { required: &'static str, plugin_id: String }
 impl warp::reject::Reject for PermissionDenied {}

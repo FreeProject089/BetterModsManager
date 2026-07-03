@@ -100,15 +100,35 @@ permission model. Page ids pass a `sanitize_id()` allow-list. Excellent isolatio
 
 ---
 
+## Remediation (applied 2026-07-03)
+
+- **7z/rar zip-slip guard — FIXED.** `archive.rs` now has an independent
+  `is_unsafe_rel_path()` (rejects `..`, POSIX-absolute, Windows drive-absolute and UNC)
+  and applies it before extracting `.7z` (validates the whole index up front) and `.rar`
+  (validates each entry before `extract_with_base`). This no longer relies solely on the
+  third-party crate for path safety — it mirrors the `enclosed_name()` guarantee used for
+  zip. `cargo check` green.
+- **Stale permission docstring — FIXED.** The comment above `PermissionDenied` in
+  `api/mod.rs` now correctly states that identity/permissions are resolved from the bearer
+  token (not the spoofable header).
+- **Repo server LAN defaults — accepted (documented).** The `0.0.0.0` bind is the
+  intended "server mode" sharing feature; the whitelist already gates every path when
+  enabled and traversal is defended. Left as a documented user choice (enable the
+  whitelist / trusted networks) rather than crippling the feature.
+- **Independent update signature — deferred (Info).** Adding minisign/Ed25519 signing of
+  update artifacts is a feature-sized change, not a fix; current integrity is HTTPS +
+  SHA-256-from-manifest. Tracked for a future release. (BetterInstaller already ships the
+  Ed25519 model as a reference.)
+
 ## Recommendation summary
 
 | Item | Severity | Status / Action |
 |---|---|---|
 | Zip-slip (zip/tar), command injection, plugin-API auth, repo traversal, update HTTPS+SHA-256, `bmmpage://` sandbox | — | **Safe — keep** |
-| Repo server LAN defaults (whitelist off, metadata public) | Low | Document + UI nudge; optional 127.0.0.1 bind |
-| 7z/rar zip-slip via third-party crate | Low | Add independent entry-path validation |
-| No independent update signature | Info | Consider signing releases (minisign/Ed25519) |
-| Stale permission docstring | Info | Update comment |
+| 7z/rar zip-slip via third-party crate | Low | **Fixed** — independent entry-path validation |
+| Stale permission docstring | Info | **Fixed** — comment corrected |
+| Repo server LAN defaults (whitelist off, metadata public) | Low | Accepted — documented user choice |
+| No independent update signature | Info | Deferred — consider minisign/Ed25519 later |
 | Launch-pack VBS/PS escaping | Info | Fine (local-only input) |
 
-No blockers. Items #1 and #2 are the two worth scheduling before wider distribution.
+No blockers.

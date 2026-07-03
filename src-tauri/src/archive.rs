@@ -131,6 +131,24 @@ fn rar_entries(path: &Path) -> std::io::Result<Vec<(String, u64)>> {
     Ok(out)
 }
 
+/// Reject any archive entry path that could escape the extraction dir once joined:
+/// parent-dir traversal (`..`), POSIX-absolute (`/…`), Windows drive-absolute (`C:\…`
+/// / `C:foo`) or UNC (`\\server`). An INDEPENDENT zip-slip guard for the formats whose
+/// crate we otherwise trust for path safety (`.7z` via sevenz_rust, `.rar` via unrar)
+/// — belt-and-suspenders mirroring the `enclosed_name()` guarantee we rely on for zip.
+/// Entry names here are already normalised to forward slashes by the `*_entries` fns.
+fn is_unsafe_rel_path(name: &str) -> bool {
+    let n = name.trim();
+    if n.is_empty() || n.starts_with('/') || n.starts_with('\\') {
+        return true;
+    }
+    let b = n.as_bytes();
+    if b.len() >= 2 && b[0].is_ascii_alphabetic() && b[1] == b':' {
+        return true; // Windows drive-letter prefix "X:"
+    }
+    n.split(['/', '\\']).any(|seg| seg == "..")
+}
+
 /// Extracts the whole archive into `dest` (created if missing).
 pub fn extract_to(path: &Path, dest: &Path) -> std::io::Result<()> {
     std::fs::create_dir_all(dest)?;
@@ -147,11 +165,25 @@ pub fn extract_to(path: &Path, dest: &Path) -> std::io::Result<()> {
             tar::Archive::new(flate2::read::GzDecoder::new(file)).unpack(dest)?;
         }
         Some(Kind::SevenZ) => {
+            // Independent zip-slip guard: refuse the whole archive if ANY entry path
+            // would escape `dest` (sevenz_rust::decompress_file writes everything at
+            // once, so validate the index up front rather than trusting the crate).
+            for (name, _) in sevenz_entries(path)? {
+                if is_unsafe_rel_path(&name) {
+                    return Err(io_err(format!("unsafe path in 7z archive: {name}")));
+                }
+            }
             sevenz_rust::decompress_file(path, dest).map_err(io_err)?;
         }
         Some(Kind::Rar) => {
             let mut archive = unrar::Archive::new(path).open_for_processing().map_err(io_err)?;
             while let Some(header) = archive.read_header().map_err(io_err)? {
+                // Independent zip-slip guard: refuse a traversal/absolute entry before
+                // extract_with_base() joins it onto `dest`.
+                let name = header.entry().filename.to_string_lossy().into_owned();
+                if header.entry().is_file() && is_unsafe_rel_path(&name) {
+                    return Err(io_err(format!("unsafe path in rar archive: {name}")));
+                }
                 archive = if header.entry().is_file() {
                     header.extract_with_base(dest).map_err(io_err)?
                 } else {

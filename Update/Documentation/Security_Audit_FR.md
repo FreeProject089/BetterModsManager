@@ -107,15 +107,36 @@ page passent une liste blanche `sanitize_id()`. Isolation excellente.
 
 ---
 
+## Remédiation (appliquée le 2026-07-03)
+
+- **Garde zip-slip 7z/rar — CORRIGÉ.** `archive.rs` a désormais un `is_unsafe_rel_path()`
+  indépendant (rejette `..`, POSIX-absolu, Windows drive-absolu et UNC) appliqué avant
+  d'extraire les `.7z` (valide tout l'index en amont) et les `.rar` (valide chaque entrée
+  avant `extract_with_base`). Cela ne repose plus uniquement sur la crate tierce pour la
+  sûreté des chemins — cela reflète la garantie `enclosed_name()` utilisée pour zip.
+  `cargo check` au vert.
+- **Docstring de permission périmée — CORRIGÉ.** Le commentaire au-dessus de
+  `PermissionDenied` dans `api/mod.rs` indique maintenant correctement que
+  l'identité/permissions sont résolues depuis le bearer token (pas l'en-tête spoofable).
+- **Défauts LAN du serveur repo — accepté (documenté).** Le bind `0.0.0.0` est la
+  fonctionnalité de partage « mode serveur » voulue ; la whitelist garde déjà tous les
+  chemins quand activée et la traversée est défendue. Laissé comme choix documenté de
+  l'utilisateur (activer la whitelist / réseaux de confiance) plutôt que d'amputer la
+  fonctionnalité.
+- **Signature indépendante des mises à jour — reporté (Info).** Ajouter une signature
+  minisign/Ed25519 des artefacts est un changement de taille d'une fonctionnalité, pas un
+  correctif ; l'intégrité actuelle est HTTPS + SHA-256-du-manifeste. Suivi pour une future
+  release. (BetterInstaller livre déjà le modèle Ed25519 comme référence.)
+
 ## Résumé des recommandations
 
 | Élément | Sévérité | Statut / Action |
 |---|---|---|
 | Zip-slip (zip/tar), injection de commande, auth API plugin, traversée repo, update HTTPS+SHA-256, sandbox `bmmpage://` | — | **Sûr — à conserver** |
-| Défauts LAN du serveur repo (whitelist off, métadonnées publiques) | Faible | Documenter + nudge UI ; bind 127.0.0.1 optionnel |
-| Zip-slip 7z/rar via crate tierce | Faible | Ajouter une validation indépendante des chemins d'entrée |
-| Pas de signature indépendante des mises à jour | Info | Envisager de signer les releases (minisign/Ed25519) |
-| Docstring de permission périmée | Info | Mettre à jour le commentaire |
+| Zip-slip 7z/rar via crate tierce | Faible | **Corrigé** — validation indépendante des chemins |
+| Docstring de permission périmée | Info | **Corrigé** — commentaire corrigé |
+| Défauts LAN du serveur repo (whitelist off, métadonnées publiques) | Faible | Accepté — choix documenté de l'utilisateur |
+| Pas de signature indépendante des mises à jour | Info | Reporté — envisager minisign/Ed25519 plus tard |
 | Échappement VBS/PS des launch-packs | Info | Correct (entrée locale uniquement) |
 
-Aucun bloquant. Les points #1 et #2 sont les deux à planifier avant une distribution plus large.
+Aucun bloquant.
