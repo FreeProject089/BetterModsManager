@@ -234,7 +234,10 @@ function heroCard(p: Post): string {
     <button class="community-hero" data-slug="${escAttr(p.slug)}">
       ${cover}
       <div class="community-hero-body">
-        <span class="community-badge community-badge--${escAttr(projOf(p))}">${escHtml(projName(p))}</span>
+        <div class="community-hero-tags">
+          <span class="community-hero-latest">${escHtml(t('community.latest') || 'Latest')}</span>
+          <span class="community-badge community-badge--${escAttr(projOf(p))}">${escHtml(projName(p))}</span>
+        </div>
         <h2 class="community-hero-title">${escHtml(title)}</h2>
         <p class="community-hero-excerpt">${escHtml(excerpt)}</p>
         <div class="community-card-meta">
