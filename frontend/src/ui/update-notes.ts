@@ -392,8 +392,8 @@ export function sanitizeMd(html: string): string {
     const DP = ensurePurify();
     if (!DP || typeof DP.sanitize !== 'function') return html; // fail closed only if lib missing
     return DP.sanitize(html, {
-        ADD_TAGS: ['iframe'],
-        ADD_ATTR: ['target', 'allow', 'allowfullscreen', 'frameborder', 'controls', 'loading', 'data-lucide', 'style'],
+        ADD_TAGS: ['iframe', 'video', 'source'],
+        ADD_ATTR: ['target', 'allow', 'allowfullscreen', 'frameborder', 'controls', 'loading', 'data-lucide', 'style', 'tabindex'],
         FORBID_TAGS: ['style', 'form', 'input'], // <style>/<form> can be abused; <button> stays (copy btn)
         ALLOW_DATA_ATTR: true,
     });

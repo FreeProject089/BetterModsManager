@@ -74,6 +74,22 @@ export function expandDocBlocks(md: string, opts: ExpandOpts = {}, _top = true):
     const keys = String(k).split('+').map((x) => x.trim()).filter(Boolean);
     return `<span class="md-kbd-combo">${keys.map((key) => `<kbd class="md-kbd">${escHtml(key)}</kbd>`).join('<span class="md-kbd-plus">+</span>')}</span>`;
   });
+  // Inline annotation from the website: <doc-comment data-comment=".." data-img=".."
+  // data-link=".." data-video="..">text</doc-comment> → a dashed-underline span that
+  // reveals a hover card (pure CSS, no runtime JS). Mirrors the site's md.jsx DocComment.
+  // Done here (pre-sanitise) so it survives as plain spans instead of being stripped.
+  s = s.replace(/<doc-comment\b([^>]*)>([\s\S]*?)<\/doc-comment>/gi, (_m, attrs, inner) => {
+    const at = (n: string) => { const mm = String(attrs).match(new RegExp(`data-${n}=("|')([\\s\\S]*?)\\1`, 'i')); return mm ? mm[2] : ''; };
+    const text = at('comment'), link = at('link'), img = at('img'), video = at('video');
+    if (!text && !img && !link && !video) return inner;
+    const card = `<span class="doc-comment-card">`
+      + (img ? `<img class="doc-comment-img" src="${escAttr(img)}" alt="">` : '')
+      + (video ? `<video class="doc-comment-img" src="${escAttr(video)}" controls></video>` : '')
+      + (text ? `<span class="doc-comment-text">${escHtml(text)}</span>` : '')
+      + (link ? `<a class="doc-comment-link" href="${escAttr(link)}" target="_blank" rel="noreferrer">${escHtml(link.replace(/^https?:\/\//, '').slice(0, 40))}</a>` : '')
+      + `</span>`;
+    return `<span class="doc-comment" tabindex="0">${inner}${card}</span>`;
+  });
   s = s.replace(/:icon\[([^\]]+)\](?:\{[^}]*\})?/g, (_m, name) => iconImg(name));            // inline icon → coloured icon
   // :badge[Label]{color=..} → a coloured chip (same look as the site's tags).
   s = s.replace(/:(?:badge|tag)\[([^\]]+)\](?:\{([^}]*)\})?/g, (_m, txt, attrs) => {

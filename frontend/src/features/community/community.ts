@@ -163,7 +163,7 @@ function render(): void {
   _view.innerHTML = `
     <div class="view-header" style="margin-bottom:24px;">
       <div>
-        <h1 class="view-title">${escHtml(t('nav.community') || 'BetterCommunity')}</h1>
+        <h1 class="view-title">${escHtml(t('nav.community') || 'BetterCommunity Blog')}</h1>
         <p class="view-subtitle">${escHtml(t('community.subtitle') || 'News & posts from the BetterCommunity blogs.')}</p>
       </div>
       <div class="view-actions">
