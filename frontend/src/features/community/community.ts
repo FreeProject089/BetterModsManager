@@ -325,7 +325,7 @@ async function openPost(slug: string): Promise<void> {
       <div class="community-article-meta">
         ${authorsHtml}
         <span>·</span>
-        <span>${escHtml(fmtDate(post.publishedAt))}</span>
+        <button class="community-article-date" title="${escAttr(t('community.viewHistory') || 'View edit history')}">${escHtml(fmtDate(post.publishedAt))}<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:.55;margin-left:4px;vertical-align:-1px"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l4 2"/></svg></button>
       </div>
       ${untranslated}
       <div class="community-article-body md-body">${absMedia(renderMarkdown(body, { baseUrl: bcRoot() }))}</div>
@@ -337,4 +337,48 @@ async function openPost(slug: string): Promise<void> {
 
   _view.querySelector('.community-back')?.addEventListener('click', () => { _openSlug = null; render(); });
   _view.querySelector('.community-open-post-web')?.addEventListener('click', () => openExternal(`${bcRoot()}/blog/${slug}`));
+  _view.querySelector('.community-article-date')?.addEventListener('click', () => { if (post.id) openHistory(post.id); });
+}
+
+// Read-only edit-history viewer (public users see a PUBLISHED post's changelog; the
+// BCWEB endpoint gates drafts/restore). Overlay appended to <body> so a re-render of the
+// article view doesn't wipe it.
+async function openHistory(postId: string): Promise<void> {
+  const ov = document.createElement('div');
+  ov.className = 'community-history-overlay';
+  ov.innerHTML = `<div class="community-history-modal">
+    <div class="community-history-head"><span>${escHtml(t('community.history') || 'Edit history')}</span><button class="community-history-close" aria-label="Close">✕</button></div>
+    <div class="community-history-content"><div class="community-empty"><div class="community-spinner"></div></div></div>
+    <div class="community-history-foot">${escHtml(t('community.historyReadonly') || 'Read-only version history for this published post.')}</div>
+  </div>`;
+  document.body.appendChild(ov);
+  const close = () => ov.remove();
+  ov.addEventListener('click', (e) => { if (e.target === ov) close(); });
+  ov.querySelector('.community-history-close')?.addEventListener('click', close);
+  const onEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', onEsc); } };
+  document.addEventListener('keydown', onEsc);
+
+  let revs: any[] = [];
+  try { const r = await fetch(`${apiBase()}/blog/${postId}/history`, { headers: { Accept: 'application/json' } }); if (r.ok) revs = (await r.json()).revisions || []; } catch {}
+  const content = ov.querySelector('.community-history-content')!;
+  if (!revs.length) { content.innerHTML = `<div class="community-empty"><p>${escHtml(t('community.noHistory') || 'No history available for this post.')}</p></div>`; return; }
+  content.innerHTML = `
+    <div class="community-history-list">${revs.map((rv, i) =>
+      `<button class="community-history-item${i === 0 ? ' active' : ''}" data-rev="${escAttr(rv.id)}">
+        <span class="chi-v">v${rv.version}${i === 0 ? ` · ${escHtml(t('community.latest') || 'Latest')}` : ''}</span>
+        <span class="chi-meta">${escHtml(rv.editor || '')} · ${escHtml(fmtDate(rv.createdAt))}</span>
+      </button>`).join('')}</div>
+    <div class="community-history-preview md-body"></div>`;
+  const preview = content.querySelector('.community-history-preview')!;
+  const loadRev = async (revId: string, btn: Element | null) => {
+    content.querySelectorAll('.community-history-item').forEach((b) => b.classList.remove('active'));
+    btn?.classList.add('active');
+    preview.innerHTML = `<div class="community-empty"><div class="community-spinner"></div></div>`;
+    try {
+      const r = await fetch(`${apiBase()}/blog/${postId}/history/${revId}`, { headers: { Accept: 'application/json' } });
+      if (r.ok) { const rev = (await r.json()).revision; preview.innerHTML = absMedia(renderMarkdown(rev.body || '', { baseUrl: bcRoot() })); }
+    } catch { preview.innerHTML = ''; }
+  };
+  content.querySelectorAll('.community-history-item').forEach((b) => b.addEventListener('click', () => loadRev((b as HTMLElement).dataset.rev!, b)));
+  loadRev(revs[0].id, content.querySelector('.community-history-item'));
 }
