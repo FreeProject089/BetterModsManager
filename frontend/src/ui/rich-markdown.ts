@@ -52,6 +52,7 @@ export interface ExpandOpts { baseUrl?: string; }
 
 export function expandDocBlocks(md: string, opts: ExpandOpts = {}, _top = true): string {
   const baseUrl = (opts.baseUrl || '').replace(/\/+$/, '');
+  const abs = (u: string) => (u && u.startsWith('/') && baseUrl) ? `${baseUrl}${u}` : u; // relative site URL → absolute
   let s = md || '';
 
   // ::toc → a "On this page" summary built from the ## / ### headings (top level only).
@@ -121,10 +122,26 @@ export function expandDocBlocks(md: string, opts: ExpandOpts = {}, _top = true):
       let href = attrs.href || attrs.link || '';
       if (href.startsWith('/') && baseUrl) href = `${baseUrl}${href}`; // relative site link → absolute
       const icon = attrs.icon ? iconImg(attrs.icon) : '';
+      // Optional cover media (image / video / colour swatch), like the website's cards.
+      const media = attrs.image
+        ? `<div class="community-inline-card-media" style="background-image:url('${escAttr(abs(attrs.image))}')"></div>`
+        : attrs.video ? `<video class="community-inline-card-media" src="${escAttr(abs(attrs.video))}" controls></video>`
+        : attrs.color ? `<div class="community-inline-card-media" style="background:${escAttr(attrs.color)}"></div>` : '';
       const titleHtml = title
         ? (href ? `<a href="${escAttr(href)}" target="_blank" rel="noreferrer" class="community-inline-card-title">${icon}${escHtml(title)}</a>` : `<span class="community-inline-card-title">${icon}${escHtml(title)}</span>`)
         : '';
-      out.push('', `<div class="community-inline-card">${titleHtml}<div class="community-inline-card-body">${mdInline(innerMd)}</div></div>`, '');
+      out.push('', `<div class="community-inline-card">${media}${titleHtml}<div class="community-inline-card-body">${mdInline(innerMd)}</div></div>`, '');
+    } else if (name === 'file') {
+      // Download card: :::file{name="setup.exe" href="…" size="12 MB"}
+      const fname = label || attrs.name || attrs.title || 'file';
+      let href = attrs.href || attrs.url || attrs.link || '';
+      if (href.startsWith('/') && baseUrl) href = `${baseUrl}${href}`;
+      const size = attrs.size || '';
+      const btns = href
+        ? `<a href="${escAttr(href)}" download class="community-file-btn">Download</a><a href="${escAttr(href)}" target="_blank" rel="noreferrer" class="community-file-btn community-file-btn-ghost">Open</a>`
+        : '';
+      const fileSvg = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
+      out.push('', `<div class="community-file"><span class="community-file-icon">${fileSvg}</span><div class="community-file-info"><div class="community-file-name">${escHtml(fname)}</div>${size ? `<div class="community-file-size">${escHtml(size)}</div>` : ''}</div><div class="community-file-actions">${btns}</div></div>`, '');
     } else if (name === 'details' || name === 'collapse') {
       out.push('', `<details class="community-details"><summary>${escHtml(label || attrs.title || 'Details')}</summary><div class="community-details-body">${mdInline(innerMd)}</div></details>`, '');
     } else if (name === 'center' || name === 'left' || name === 'right') {

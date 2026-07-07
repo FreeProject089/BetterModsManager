@@ -381,7 +381,7 @@ export function sanitizeMd(html) {
         return html; // fail closed only if lib missing
     return DP.sanitize(html, {
         ADD_TAGS: ['iframe', 'video', 'source'],
-        ADD_ATTR: ['target', 'allow', 'allowfullscreen', 'frameborder', 'controls', 'loading', 'data-lucide', 'style', 'tabindex'],
+        ADD_ATTR: ['target', 'allow', 'allowfullscreen', 'frameborder', 'controls', 'loading', 'data-lucide', 'style', 'tabindex', 'download'],
         FORBID_TAGS: ['style', 'form', 'input'], // <style>/<form> can be abused; <button> stays (copy btn)
         ALLOW_DATA_ATTR: true,
     });
