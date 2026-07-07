@@ -419,6 +419,51 @@ pub fn get_creator_id(handle: AppHandle) -> Result<String, String> {
     Ok(hex::encode(verifying_key.to_bytes()))
 }
 
+/// Proxy a GET to a BetterCommunity API URL from Rust. The webview lives at the
+/// `tauri.localhost` origin, so a direct `fetch()` to the BCWEB API is a cross-origin
+/// request subject to browser CORS (and fails when the base doesn't send the right
+/// header, e.g. hitting the wrong port in dev). Doing it here — from the native
+/// process — is not subject to CORS at all, and is harder to tamper with client-side.
+#[tauri::command]
+pub async fn bc_api_get(url: String) -> Result<String, String> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(8))
+        .build()
+        .map_err(|e| e.to_string())?;
+    let resp = client.get(&url).send().await.map_err(|e| e.to_string())?;
+    let status = resp.status();
+    let text = resp.text().await.map_err(|e| e.to_string())?;
+    if !status.is_success() {
+        // Surface the response body on error (it carries the JSON `error` code the
+        // caller may want) — or a synthetic http_<code> when the body is empty.
+        return Err(if text.is_empty() { format!("http_{}", status.as_u16()) } else { text });
+    }
+    Ok(text)
+}
+
+/// Proxy a JSON POST to a BetterCommunity API URL from Rust (same CORS-bypass rationale
+/// as `bc_api_get`). `body` is the raw JSON string to send.
+#[tauri::command]
+pub async fn bc_api_post(url: String, body: String) -> Result<String, String> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(12))
+        .build()
+        .map_err(|e| e.to_string())?;
+    let resp = client
+        .post(&url)
+        .header("Content-Type", "application/json")
+        .body(body)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    let status = resp.status();
+    let text = resp.text().await.map_err(|e| e.to_string())?;
+    if !status.is_success() {
+        return Err(if text.is_empty() { format!("http_{}", status.as_u16()) } else { text });
+    }
+    Ok(text)
+}
+
 /// Sign a message (repo JSON) → returns (author_id_hex, signature_hex)
 pub fn sign_message(handle: &AppHandle, message: &[u8]) -> Result<(String, String), String> {
     let signing_key = load_or_generate_keys(handle)?;

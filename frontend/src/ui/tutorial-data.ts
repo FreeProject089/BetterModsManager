@@ -932,11 +932,13 @@ const OTHER: TutorialDef = {
                     title_key: 'tut.other.automation.s2.title',
                     text_key:  'tut.other.automation.s2.text',
                     nav: 'settings',
-                    selector: 'btn-create-schedule',
+                    // Clicking "Load example" builds a real, ready-to-use simple-loop
+                    // automation (createExampleAutomation) and opens it, so the fields
+                    // below actually contain a working loop the user can inspect.
+                    selector: 'sched-example-btn',
                     modal_selector: 'sched-save',
                     modal_fields: [
                         { sel: 'sched-name',    key: 'tut.other.automation.f.name' },
-                        { sel: 'sched-desc',    key: 'tut.other.automation.f.desc' },
                         { sel: 'sched-trigger', key: 'tut.other.automation.f.trigger' },
                         { sel: 'sched-steps',   key: 'tut.other.automation.f.steps' },
                         { sel: 'sched-save',    key: 'tut.other.automation.f.save' },

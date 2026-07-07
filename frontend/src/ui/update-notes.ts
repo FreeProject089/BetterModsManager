@@ -9,6 +9,7 @@ import { t } from '../core/i18n.js';
 import { toast } from './app.js';
 import { escHtml, escAttr } from '../core/utils.js';
 import { getLinks } from '../core/links-config.js';
+import { expandDocBlocks } from './rich-markdown.js';
 
 // Persistence for expanded folders in the release notes tree
 const expandedFolders = new Set<string>();
@@ -285,8 +286,12 @@ window.copyCodeToClipboard = (text, btn) => {
 };
 
 // Simple Markdown renderer
-export function renderMarkdown(md) {
+export function renderMarkdown(md, opts = {}) {
     if (!md) return '';
+    // Down-convert the site's GitBook-style directives (:::note, ::::cards, :badge,
+    // :icon, :kbd, …) to marked-renderable constructs first, so Release/Update notes
+    // and the Community blog all render the SAME rich markdown as BCWEB.
+    md = expandDocBlocks(md, opts);
     let html = '';
     if (typeof marked !== 'undefined') {
         marked.setOptions({ renderer: new marked.Renderer() });
@@ -466,6 +471,17 @@ export function renderMarkdown(md) {
             color: #f97316;
             border: 1px solid rgba(249, 115, 22, 0.3);
         }
+        /* Site directive output (shared by Community + Release/Update notes):
+           inline icons, coloured :badge chips, and :::card / ::::cards blocks. */
+        .md-body .md-inline-icon { width: 1.05em; height: 1.05em; vertical-align: -0.16em; display: inline-block; opacity: 0.92; }
+        .md-body .community-inline-badge { display: inline-flex; align-items: center; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 700;
+            color: var(--bc, var(--bmm-accent, #f97316)); background: color-mix(in srgb, var(--bc, #f97316) 15%, transparent);
+            border: 1px solid color-mix(in srgb, var(--bc, #f97316) 40%, transparent); vertical-align: 1px; }
+        .md-body .community-inline-card { border: 1px solid var(--border, rgba(255,255,255,0.1)); border-radius: 12px; padding: 12px 14px; margin: 10px 0;
+            background: var(--bmm-bg-elevated, rgba(255,255,255,0.03)); }
+        .md-body .community-inline-card-title { display: block; font-weight: 700; font-size: 15px; color: var(--bmm-accent, #f97316); text-decoration: none; margin-bottom: 3px; }
+        .md-body .community-inline-card-title:hover { text-decoration: underline; }
+        .md-body .community-inline-card-body { font-size: 13px; color: var(--bmm-text-muted, var(--text-muted)); white-space: pre-wrap; }
     `;
     document.head.appendChild(style);
 })();

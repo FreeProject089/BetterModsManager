@@ -12,6 +12,11 @@ pub struct ServerRepo {
     pub created_at: String,
     pub seed: Option<String>,
     pub upload_limit: Option<u32>, // KB/s
+    // When true, the repo server requires the downloader to present a BetterCommunity
+    // identity (x-creator-id / x-creator-key) for EVERY file — i.e. the user must be
+    // signed in to BetterCommunity in BMM to download. Accepts camelCase in JSON.
+    #[serde(default, alias = "requireLogin")]
+    pub require_login: Option<bool>,
     pub profiles: Vec<RepoProfile>,
     pub modpacks: Option<Vec<RepoModpackShare>>,
 }
@@ -112,6 +117,7 @@ impl ServerRepo {
             created_at: chrono::Utc::now().to_rfc3339(),
             seed: None,
             upload_limit: None,
+            require_login: None,
             profiles: Vec::new(),
             modpacks: None,
         }

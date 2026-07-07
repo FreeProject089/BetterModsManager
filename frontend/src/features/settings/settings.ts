@@ -1418,7 +1418,9 @@ async function refreshBcLinkStatus(): Promise<void> {
         return;
     }
     let data: any = null;
-    try { data = await (await fetch(`${bcBase()}/api/link/status?creatorId=${encodeURIComponent(creatorId)}`)).json(); } catch (_) {}
+    // Via the native process (bc_api_get) — a webview fetch to the BCWEB API is
+    // cross-origin (tauri.localhost) and trips CORS; Rust isn't subject to it.
+    try { data = JSON.parse(await invoke('bc_api_get', { url: `${bcBase()}/api/link/status?creatorId=${encodeURIComponent(creatorId)}` }) as string); } catch (_) {}
     if (!data) { if (statusEl) statusEl.textContent = t('settings.link.offline2') || 'BetterCommunity unreachable (offline?).'; return; }
     const wasLinked = localStorage.getItem('bc_linked') === '1';
     if (data.linked) {
@@ -1467,9 +1469,17 @@ async function openDiscordLinkFlow(): Promise<void> {
         const code = input.value.trim();
         if (code.replace(/[^a-zA-Z0-9]/g, '').length < 8) { toast(t('settings.link.badCode') || 'Enter the full code.', 'warning'); return; }
         try {
-            const res = await fetch(`${bcBase()}/api/link/discord`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ creatorId, code }) });
-            const data = await res.json();
-            if (!res.ok) {
+            let data: any = {}; let ok = true;
+            // Native-process POST (bc_api_post) to dodge webview CORS. bc_api_post
+            // rejects on a non-2xx with an `http_<code>` message; a 4xx here still
+            // carries a JSON error body, so fall back to a direct parse on failure.
+            try {
+                data = JSON.parse(await invoke('bc_api_post', { url: `${bcBase()}/api/link/discord`, body: JSON.stringify({ creatorId, code }) }) as string);
+            } catch (e) {
+                ok = false;
+                try { data = JSON.parse(String((e as any)?.message || e || '').replace(/^http_\d+\s*/, '') || '{}'); } catch (_) { data = {}; }
+            }
+            if (!ok) {
                 const err = data?.error;
                 toast(err === 'account_not_linked' ? (t('settings.link.needAccount') || 'Link your BetterCommunity account first.')
                     : err === 'already_linked' ? (t('settings.link.discordTaken') || 'That Discord account is already linked.')

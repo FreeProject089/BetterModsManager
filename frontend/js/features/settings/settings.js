@@ -1443,8 +1443,10 @@ async function refreshBcLinkStatus() {
         return;
     }
     let data = null;
+    // Via the native process (bc_api_get) — a webview fetch to the BCWEB API is
+    // cross-origin (tauri.localhost) and trips CORS; Rust isn't subject to it.
     try {
-        data = await (await fetch(`${bcBase()}/api/link/status?creatorId=${encodeURIComponent(creatorId)}`)).json();
+        data = JSON.parse(await invoke('bc_api_get', { url: `${bcBase()}/api/link/status?creatorId=${encodeURIComponent(creatorId)}` }));
     }
     catch (_) { }
     if (!data) {
@@ -1522,9 +1524,24 @@ async function openDiscordLinkFlow() {
             return;
         }
         try {
-            const res = await fetch(`${bcBase()}/api/link/discord`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ creatorId, code }) });
-            const data = await res.json();
-            if (!res.ok) {
+            let data = {};
+            let ok = true;
+            // Native-process POST (bc_api_post) to dodge webview CORS. bc_api_post
+            // rejects on a non-2xx with an `http_<code>` message; a 4xx here still
+            // carries a JSON error body, so fall back to a direct parse on failure.
+            try {
+                data = JSON.parse(await invoke('bc_api_post', { url: `${bcBase()}/api/link/discord`, body: JSON.stringify({ creatorId, code }) }));
+            }
+            catch (e) {
+                ok = false;
+                try {
+                    data = JSON.parse(String(e?.message || e || '').replace(/^http_\d+\s*/, '') || '{}');
+                }
+                catch (_) {
+                    data = {};
+                }
+            }
+            if (!ok) {
                 const err = data?.error;
                 toast(err === 'account_not_linked' ? (t('settings.link.needAccount') || 'Link your BetterCommunity account first.')
                     : err === 'already_linked' ? (t('settings.link.discordTaken') || 'That Discord account is already linked.')

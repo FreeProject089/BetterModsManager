@@ -762,11 +762,8 @@ function _prevStep(): void {
 
 function _nextStep(): void {
     const step = _currentStep();
-    // Leaving a step whose modal is still open + has unsaved edits → warn first.
-    if (!_skipUnsavedWarning && _isModalDirty(step)) {
-        _showUnsavedWarning(() => _advanceStep(step));
-        return;
-    }
+    // (Removed the mid-tutorial "Unsaved changes" warning modal per user request —
+    // just advance; any open dialog is closed by the normal step cleanup.)
     _advanceStep(step);
 }
 

@@ -36,6 +36,7 @@ import { escHtml, escAttr, formatBytes } from '../core/utils.js';
 import { loadLinks, getLinks } from '../core/links-config.js';
 import { initMapper } from '../features/mapper/mapper.js';
 import { initAppsCatalog } from '../features/apps/apps-catalog.js';
+import { initCommunity, openCommunity } from '../features/community/community.js';
 import { openAdvancedPerfModal } from '../features/bench/benchmark.js';
 import { restoreThemeAtBoot, initDataPage } from '../features/themes/theme-engine.js';
 import { initThemeEditor } from '../features/themes/theme-editor.js';
@@ -203,6 +204,11 @@ function initNavigation() {
                 // Auto-sync when entering library
                 if (viewId === 'library') {
                     window._refreshModsFn?.(true);
+                }
+
+                // Load / render the BetterCommunity blog on entry (fetches once).
+                if (viewId === 'community') {
+                    openCommunity();
                 }
 
                 // Credits video background control
@@ -836,6 +842,7 @@ async function main() {
     initMapper();
     initPlugins();
     initAppsCatalog();
+    initCommunity();
     initThemeEditor();
     initThemeCatalog();
     initCustomSelects();

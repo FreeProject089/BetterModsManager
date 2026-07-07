@@ -157,6 +157,12 @@ function repoSecurityCheck(folder, ip, key, res) {
         res.status(403).send('Banned');
         return false;
     }
+    // Owner requires a BetterCommunity identity to download from this repo.
+    const rj = readJson(path.join(ROOT, folder, 'repo.json'), {});
+    if ((rj.require_login || rj.requireLogin) && !key) {
+        res.status(403).send('BetterCommunity login required');
+        return false;
+    }
     if (wl.enabled && !wl.ips.includes(ip) && !(key && wl.keys.includes(key))) {
         res.status(403).send('Not Whitelisted');
         return false;

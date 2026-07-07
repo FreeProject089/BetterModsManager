@@ -464,8 +464,12 @@ export function initRepo() {
             if (prefill) {
                 // repo-host-path is the directory the server serves from
                 const hostPathInput = document.getElementById('repo-host-path') as HTMLInputElement | null;
-                if (prefill.serveDir && hostPathInput)
+                if (prefill.serveDir && hostPathInput) {
                     hostPathInput.value = prefill.serveDir;
+                    // Reflect the repo's saved "require BetterCommunity login" flag.
+                    const reqCb = document.getElementById('repo-host-require-login') as HTMLInputElement | null;
+                    if (reqCb) { invoke('get_repo_require_login', { repoDir: prefill.serveDir }).then((v) => { reqCb.checked = !!v; }).catch(() => {}); }
+                }
                 if (prefill.port && elements.inputServerPort)
                     (elements.inputServerPort as HTMLInputElement).value = String(prefill.port);
                 if (prefill.uploadLimit !== undefined && elements.inputServerUploadLimit)

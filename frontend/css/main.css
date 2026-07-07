@@ -11508,10 +11508,17 @@ body.sched-drag-live .sched-branch .sched-drop-zone:empty {
 /* The inner SVG must NOT capture the drag (a WebView would start an image-drag and
    the handle's dragstart would never fire). */
 .sched-drag-handle svg { pointer-events:none; }
-.sched-step.sched-dragging { opacity:.4; }
-/* Insertion line above/below the hovered block. */
-.sched-step.sched-drop-before { box-shadow:0 -3px 0 -1px var(--accent); }
-.sched-step.sched-drop-after  { box-shadow:0 3px 0 -1px var(--accent); }
+.sched-step.sched-dragging { opacity:.35; }
+/* Insertion indicator: a clear glowing accent bar (with an end cap) showing exactly
+   where the dragged card will land — the old 2px shadow line was too subtle. */
+.sched-step.sched-drop-before, .sched-step.sched-drop-after { position:relative; }
+.sched-step.sched-drop-before::before, .sched-step.sched-drop-after::after {
+    content:''; position:absolute; left:24px; right:6px; height:3px; border-radius:3px;
+    background:var(--accent); box-shadow:0 0 0 3px var(--bmm-bg-elevated), 0 0 12px 1px var(--accent);
+    z-index:6;
+}
+.sched-step.sched-drop-before::before { top:-6px; }
+.sched-step.sched-drop-after::after  { bottom:-6px; }
 .sched-do { background:rgba(59,130,246,0.15); color: var(--cyan); }
 .sched-if { background:rgba(245,158,11,0.15); color: var(--accent); }
 .sched-wait { background:rgba(16,185,129,0.15); color: var(--success); }
@@ -11553,13 +11560,19 @@ body.sched-drag-live .sched-branch .sched-drop-zone:empty {
     border-left:3px solid var(--accent);
     border-radius:10px;
     background:var(--bmm-s03, rgba(255,255,255,0.025));
-    overflow:hidden;
+    /* `visible` (not hidden) so the round-cornered icon tile / hover toolbar never
+       gets clipped by the card's corner — the header & params round themselves. */
+    overflow:visible;
     transition:border-color .14s ease, box-shadow .14s ease;
 }
 .sched-act-card:hover { border-color:var(--border-hover); box-shadow:0 2px 10px rgba(0,0,0,0.10); }
+.sched-act-card > .sched-act-head { border-radius:9px 9px 0 0; }
+.sched-act-card > .sched-act-head:last-child { border-radius:9px; }
+.sched-act-card > .sched-act-params:last-child { border-radius:0 0 9px 9px; }
 .sched-act-card .sched-act-head {
     display:flex; align-items:center; gap:8px;
     padding:8px 10px;
+    min-width:0;
 }
 .sched-act-icon {
     display:inline-flex; align-items:center; justify-content:center;
@@ -11626,15 +11639,22 @@ body.sched-drag-live .sched-branch .sched-drop-zone:empty {
 /* Fold toggle: a small rounded chip (not a bare ghost button) so it reads as
    an actual control, with a visible resting background instead of a stray dot. */
 .sched-fold {
-    width:22px; height:22px; padding:0; flex-shrink:0;
+    width:24px; height:24px; padding:0; flex-shrink:0;
     display:inline-flex; align-items:center; justify-content:center;
-    color:var(--text-secondary); border-radius:7px;
-    background:var(--bmm-s08, rgba(255,255,255,0.08));
-    border:1px solid var(--bmm-s04, rgba(255,255,255,0.04));
+    color:var(--text-secondary); border-radius:8px;
+    background:var(--bmm-s06, rgba(255,255,255,0.06));
+    border:1px solid var(--bmm-s08, rgba(255,255,255,0.08));
+    transition:background .12s ease, color .12s ease, border-color .12s ease;
 }
-.sched-fold:hover { color:var(--text-primary); background:var(--bmm-s12, rgba(255,255,255,0.12)); }
-.sched-fold svg { transition:transform .15s ease; }
+.sched-fold:hover { color:var(--text-primary); background:var(--bmm-s15, rgba(255,255,255,0.15)); border-color:var(--bmm-border-hover, var(--border)); }
+.sched-fold svg { transition:transform .18s ease; }
 .sched-step.collapsed .sched-fold svg { transform:rotate(-90deg); }
+/* Collapsed → highlight the fold control so it's obvious the card is folded. */
+.sched-step.collapsed .sched-fold {
+    color:var(--accent);
+    background:color-mix(in srgb, var(--accent) 13%, transparent);
+    border-color:color-mix(in srgb, var(--accent) 42%, transparent);
+}
 .sched-fold-sum { display:none; font-size:11px; font-weight:600; color:var(--text-muted); }
 .sched-step.collapsed .sched-fold-sum { display:inline-block; }
 /* Collapsed → hide every step body, whatever the kind. */
@@ -11748,10 +11768,21 @@ body.sched-drag-live .sched-branch .sched-drop-zone:empty {
 /* Params row v2: was a lone control floating in a bare strip ("mid" per feedback)
    — now every field gets a label above it, consistent padding/indent under the
    head's icon tile, and inputs/selects get a touch more presence. */
+/* Params = a clean inset panel (mirrors the IF/LOOP branch panels) instead of a
+   bare tinted strip — was "moche" per feedback. Rounded, subtle border, its own
+   fields laid out with proper labels. */
 .sched-modal .sched-act-card .sched-act-params {
-    padding:11px 12px 12px 30px;
-    gap:10px 14px;
-    background:var(--bmm-s02, rgba(255,255,255,0.018));
+    padding:12px 13px 13px;
+    margin:6px 0 2px 4px;
+    gap:12px 16px;
+    background:var(--bmm-s02, rgba(255,255,255,0.02));
+    border:1px solid var(--bmm-s05, rgba(255,255,255,0.05));
+    border-top:1px solid var(--bmm-s05, rgba(255,255,255,0.05));
+    border-radius:11px;
+}
+.sched-modal .sched-act-params .sched-flabel {
+    font-size:10px; font-weight:700; letter-spacing:.05em; text-transform:uppercase;
+    color:var(--text-muted); margin-bottom:1px;
 }
 .sched-modal .sched-act-params .sched-field { min-width:0; }
 .sched-modal .sched-act-params > .input,

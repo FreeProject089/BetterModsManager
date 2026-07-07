@@ -5,8 +5,37 @@ import { t } from '../../core/i18n.js';
 import { renderProfiles } from '../profiles/profiles.js';
 import { formatBytes } from '../../core/utils.js';
 import { checkModUpdates } from './mod-updates.js';
+import { getLinks } from '../../core/links-config.js';
 let lastFetchedRepo = null;
 let lastFetchedRepoSaltedId = null;
+// Is this BMM signed in to a BetterCommunity account? Verifies the (raw) creator id
+// against BCWEB's link-status, falling back to the cached `bc_linked` flag offline.
+async function isBcLinked() {
+    try {
+        const cid = await invoke('get_creator_id');
+        if (!cid)
+            return false;
+        const base = (getLinks()?.bettercommunity || 'https://bettercommunity.ch/').replace(/\/+$/, '');
+        // Go through the native process (bc_api_get) instead of a webview fetch —
+        // the webview is a cross-origin (tauri.localhost) client and a direct fetch
+        // trips CORS; the Rust side isn't subject to it.
+        const txt = await invoke('bc_api_get', { url: `${base}/api/link/status?creatorId=${encodeURIComponent(cid)}` });
+        const d = JSON.parse(txt);
+        try {
+            localStorage.setItem('bc_linked', d?.linked ? '1' : '0');
+        }
+        catch { }
+        return !!d?.linked;
+    }
+    catch {
+        try {
+            return localStorage.getItem('bc_linked') === '1';
+        }
+        catch {
+            return false;
+        }
+    }
+}
 // ── Repo verification detail modal ───────────────────────────────────────────
 // reason: optional override describing WHY verification failed.
 //   'mismatch'  → live repo signature differs from the BMM-recorded one
@@ -497,6 +526,12 @@ export function initRepoSync(elements) {
                         if (current_file)
                             syncDetails.textContent = current_file;
                     });
+                }
+                // Repo owner requires a BetterCommunity login to download. Enforced in
+                // the client for normal users (a hardened server-side proof is a follow-up).
+                if ((lastFetchedRepo?.require_login || lastFetchedRepo?.requireLogin) && !(await isBcLinked())) {
+                    toast(t('repo.requireLogin.blocked') || 'This repo requires a BetterCommunity account — sign in from Settings to download.', 'error');
+                    return;
                 }
                 const finalCreatorId = lastFetchedRepoSaltedId || await invoke('get_creator_id');
                 const syncMode = document.getElementById('repo-sync-mode')?.value || 'missing';

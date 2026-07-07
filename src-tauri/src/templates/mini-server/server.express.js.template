@@ -95,14 +95,19 @@ app.use((req, res, next) => {
     }
     
     // Security check
-    const { bans, whitelist } = getSecurityData();
+    const { bans, whitelist, repo } = getSecurityData();
     const isLocal = ip === '127.0.0.1' || ip === '::1';
     if (!isLocal) {
-        if (bans.banned_ips.includes(ip) || (key !== "UNKNOWN" && bans.banned_keys.includes(key))) { 
+        if (bans.banned_ips.includes(ip) || (key !== "UNKNOWN" && bans.banned_keys.includes(key))) {
             addToHistory(ip, key, "REJECTED", "Banned identity");
-            return res.status(403).send('Banned'); 
+            return res.status(403).send('Banned');
         }
-        if (whitelist.enabled && !whitelist.ips.includes(ip) && !(key !== "UNKNOWN" && whitelist.keys.includes(key))) { 
+        // Owner requires a BetterCommunity identity to download from this repo.
+        if ((repo && (repo.require_login || repo.requireLogin)) && key === "UNKNOWN") {
+            addToHistory(ip, key, "REJECTED", "BetterCommunity login required");
+            return res.status(403).send('BetterCommunity login required');
+        }
+        if (whitelist.enabled && !whitelist.ips.includes(ip) && !(key !== "UNKNOWN" && whitelist.keys.includes(key))) {
             addToHistory(ip, key, "REJECTED", "Access denied (whitelist)");
             return res.status(403).send('Not Whitelisted'); 
         }

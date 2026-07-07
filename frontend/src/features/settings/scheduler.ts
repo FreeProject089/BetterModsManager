@@ -79,6 +79,31 @@ async function saveTasks(): Promise<void> {
     catch (e) { toast(`${t('common.error') || 'Error'}: ${e}`, 'error'); }
 }
 
+// Build a real, ready-to-use "simple loop" automation for the user (used by the
+// "Load example" button and the interactive tutorial). Created disabled so it never
+// fires unexpectedly — the user inspects it, then flips the toggle to enable it.
+export async function createExampleAutomation(): Promise<void> {
+    const id = (globalThis.crypto?.randomUUID?.() || `ex-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
+    const task: Task = {
+        id,
+        name: t('sched.example.name') || 'Example — simple loop',
+        description: t('sched.example.desc') || 'Every hour, loop 3× and show a notification each time.',
+        enabled: false,
+        trigger: { type: 'hourly', everyHours: 1 },
+        steps: [
+            { kind: 'repeat', mode: 'times', times: 3, maxIters: 3, everySec: 2, steps: [
+                { kind: 'action', action: { type: 'notify', params: { message: t('sched.example.msg') || 'Hello from your automation! 🎉' } } },
+            ] },
+        ],
+        allowCustomCommands: false,
+    };
+    _tasks.push(task);
+    await saveTasks();
+    renderScheduleList();
+    openTaskModal(task);
+    toast(t('sched.example.created') || 'Example automation created — a simple loop. Toggle it on when ready.', 'success');
+}
+
 // ── Engine ───────────────────────────────────────────────────────────────────
 export async function initScheduler(): Promise<void> {
     await loadTasks();
@@ -102,10 +127,20 @@ export async function initScheduler(): Promise<void> {
             imp.style.gap = '6px';
             imp.textContent = t('sched.importBmmpa') || 'Import .BMMPA';
             imp.addEventListener('click', () => importTasksFile());
+            const ex = document.createElement('button');
+            ex.id = 'sched-example-btn';
+            ex.className = 'btn btn-ghost btn-sm';
+            ex.style.gap = '6px';
+            ex.textContent = t('sched.loadExample') || 'Load example';
+            ex.title = t('sched.loadExample.d') || 'Create a ready-made simple-loop automation you can inspect and enable.';
+            ex.addEventListener('click', () => createExampleAutomation());
             row.appendChild(exp);
             row.appendChild(imp);
+            row.appendChild(ex);
         }
     }
+    // Let the interactive tutorial build a real automation for the user.
+    (window as any).bmmCreateExampleAutomation = createExampleAutomation;
     if (!_langWired) {
         _langWired = true;
         document.addEventListener('langChanged', () => renderScheduleList());

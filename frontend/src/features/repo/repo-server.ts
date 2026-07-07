@@ -162,6 +162,11 @@ export function initRepoServer(elements) {
                     if (inputServerPort) inputServerPort.disabled = true;
                     const uploadLimit = parseInt(inputServerUploadLimit ? inputServerUploadLimit.value : "0") || 0;
 
+                    // Persist the owner's "require BetterCommunity login to download" choice
+                    // into repo.json before the server reads it.
+                    const reqLoginCb = document.getElementById('repo-host-require-login') as HTMLInputElement | null;
+                    if (reqLoginCb) { try { await invoke('set_repo_require_login', { repoDir: path, require: !!reqLoginCb.checked }); } catch (_) {} }
+
                     const result = await invoke('start_repo_server', { path, port, uploadLimit });
                     isServerRunning = true;
 

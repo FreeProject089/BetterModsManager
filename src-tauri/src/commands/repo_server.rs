@@ -118,6 +118,31 @@ pub fn set_repo_busy(state: tauri::State<'_, RepoServerState>, kind: String, bus
     }
 }
 
+/// Read the "require a BetterCommunity login to download" flag from a repo's repo.json.
+#[tauri::command]
+pub fn get_repo_require_login(repo_dir: String) -> bool {
+    let manifest = std::path::PathBuf::from(&repo_dir).join("repo.json");
+    std::fs::read_to_string(&manifest).ok()
+        .and_then(|c| serde_json::from_str::<serde_json::Value>(&c).ok())
+        .and_then(|v| v.get("require_login").or_else(|| v.get("requireLogin")).and_then(|b| b.as_bool()))
+        .unwrap_or(false)
+}
+
+/// Set the "require a BetterCommunity login to download" flag in a repo's repo.json.
+#[tauri::command]
+pub fn set_repo_require_login(repo_dir: String, require: bool) -> Result<(), String> {
+    let manifest = std::path::PathBuf::from(&repo_dir).join("repo.json");
+    let content = std::fs::read_to_string(&manifest).map_err(|e| e.to_string())?;
+    let mut val: serde_json::Value = serde_json::from_str(&content).map_err(|e| e.to_string())?;
+    if let Some(obj) = val.as_object_mut() {
+        obj.insert("require_login".into(), serde_json::Value::Bool(require));
+        obj.remove("requireLogin");
+    }
+    let out = serde_json::to_string_pretty(&val).map_err(|e| e.to_string())?;
+    std::fs::write(&manifest, out).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 async fn get_cloudflared_path(handle: &tauri::AppHandle) -> Result<PathBuf, String> {
     // 1. Check user settings first
     let state = handle.state::<crate::state::AppState>();
@@ -231,6 +256,9 @@ pub async fn start_repo_server(
         }
     };
 
+    // Repo owner may require a BetterCommunity identity for every download.
+    let require_login = repo_data.require_login.unwrap_or(false);
+
     // 3. Create graceful shutdown channel
     let (tx, rx) = oneshot::channel();
     {
@@ -280,6 +308,12 @@ pub async fn start_repo_server(
                 if rel_path.split(|c| c == '/' || c == '\\').any(|seg| seg == ".." || seg == "...") {
                     println!("[Server] Security Block: path traversal attempt '{}' from {}", rel_path, ip);
                     return Err(warp::reject::not_found());
+                }
+
+                // 0b. Owner requires a BetterCommunity identity for EVERY file.
+                if require_login && key.is_none() {
+                    println!("[Server] Access Denied: repo requires a BetterCommunity login (no creator id) from {}", ip);
+                    return Err(warp::reject::custom(BanError));
                 }
 
                 // 1. Mandatory Creator ID for any file in /mods/

@@ -32,6 +32,7 @@ import { initPlugins } from '../features/plugins/plugins.js';
 import { loadLinks, getLinks } from '../core/links-config.js';
 import { initMapper } from '../features/mapper/mapper.js';
 import { initAppsCatalog } from '../features/apps/apps-catalog.js';
+import { initCommunity, openCommunity } from '../features/community/community.js';
 import { restoreThemeAtBoot } from '../features/themes/theme-engine.js';
 import { initThemeEditor } from '../features/themes/theme-editor.js';
 import { initThemeCatalog } from '../features/themes/theme-catalog.js';
@@ -181,6 +182,10 @@ function initNavigation() {
                 // Auto-sync when entering library
                 if (viewId === 'library') {
                     window._refreshModsFn?.(true);
+                }
+                // Load / render the BetterCommunity blog on entry (fetches once).
+                if (viewId === 'community') {
+                    openCommunity();
                 }
                 // Credits video background control
                 const creditsVideo = document.getElementById('credits-bg-video');
@@ -813,6 +818,7 @@ async function main() {
     initMapper();
     initPlugins();
     initAppsCatalog();
+    initCommunity();
     initThemeEditor();
     initThemeCatalog();
     initCustomSelects();
