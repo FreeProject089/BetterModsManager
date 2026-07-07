@@ -193,6 +193,14 @@ function render(): void {
   wire();
 }
 
+// Reaction types are stored as icon *names* (see BCWEB reactions.jsx). Render them as
+// emoji here so they show as real icons, not raw text like "party" (webview-safe, no
+// CDN/mask dependency).
+const REACTION_EMOJI: Record<string, string> = {
+  'thumbs-up': '👍', heart: '❤️', fire: '🔥', party: '🎉', star: '⭐',
+  rocket: '🚀', laugh: '😂', smile: '🙂', sparkles: '✨', check: '✅',
+};
+
 // Project logo (like the website's coverless cards) — falls back to a monogram.
 const PROJ_LOGO: Record<string, string> = { community: 'assets/BC.webp', bmm: 'assets/BMm.png' };
 function projMono(p: Post): string {
@@ -301,7 +309,7 @@ async function openPost(slug: string): Promise<void> {
   const counts = post.reactionCounts || {};
   const reactions = (post.reactionsEnabled && (post.reactionTypes || []).length)
     ? `<div class="community-reactions">${post.reactionTypes.map((rt: string) =>
-        `<span class="community-reaction"><span class="community-reaction-emoji">${escHtml(rt)}</span><span class="community-reaction-count">${counts[rt] || 0}</span></span>`).join('')}
+        `<span class="community-reaction" title="${escAttr(rt)}"><span class="community-reaction-emoji">${REACTION_EMOJI[rt] || '⭐'}</span><span class="community-reaction-count">${counts[rt] || 0}</span></span>`).join('')}
        <span class="community-reaction-hint">${escHtml(t('community.reactHint') || 'React on the website')}</span></div>`
     : '';
 
