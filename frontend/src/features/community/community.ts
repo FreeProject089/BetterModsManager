@@ -19,6 +19,11 @@ const BC_TEST_BASE = 'http://localhost:5176/';
 function bcRoot(): string {
   return (BC_TEST_MODE ? BC_TEST_BASE : (getLinks()?.bettercommunity || 'https://bettercommunity.ch/')).replace(/\/+$/, '');
 }
+// Root-relative media URLs (/api/media/…, /media/…) would resolve against the webview
+// origin (tauri.localhost) and 404. Rewrite them to absolute BCWEB URLs so images,
+// video, audio and covers actually load. Absolute (https://, data:, //) are left alone.
+function absUrl(u?: string): string { return u && u.startsWith('/') && !u.startsWith('//') ? `${bcRoot()}${u}` : (u || ''); }
+function absMedia(html: string): string { return html.replace(/(\s(?:src|poster)=["'])\/(?!\/)/g, `$1${bcRoot()}/`); }
 
 type Author = { id?: string; displayName?: string; avatar?: any };
 type Post = {
@@ -39,7 +44,7 @@ const FILTERS = [
 
 let _posts: Post[] | null = null;
 let _loading = false;
-let _filter = 'bmm';
+let _filter = 'all'; // show every blog by default (no need to click "show all")
 let _search = '';
 // Display language for blog content. Follows BMM's language when it's one the blog
 // has (en/fr); any other BMM language falls back to English. User-switchable below.
@@ -48,17 +53,22 @@ let _blogLang = getLang() === 'fr' ? 'fr' : 'en';
 let _view: HTMLElement | null = null;
 let _openSlug: string | null = null;
 
-// Contributor avatar. Uses BCWEB's /api/avatar/:id endpoint, which renders the EXACT
-// same Boring Avatar (or uploaded photo) the website shows — so the pfp is correct.
-// Falls back to a coloured initials chip if there's no id.
+function avatarSrc(a: Author): string {
+  if (a?.id) return `${apiBase()}/avatar/${a.id}?size=64`;
+  return typeof a?.avatar === 'string' ? a.avatar : (a?.avatar && (a.avatar as any).image) || '';
+}
+// Contributor avatar — the real pfp (Boring Avatar via /api/avatar/:id, or an uploaded
+// photo) loaded DIRECTLY as an <img> so it shows on first render (no refresh needed);
+// the coloured initials sit underneath and reappear if the image fails to load. The
+// webview CSP now allows the BCWEB origin, so no native data-URL round-trip is required.
 function contribAvatar(a: Author, size = 22): string {
   const name = (a?.displayName || '?').trim();
-  if (a?.id) return `<span class="community-avatar" style="width:${size}px;height:${size}px;background-image:url('${escAttr(`${apiBase()}/avatar/${a.id}?size=${size * 2}`)}')"></span>`;
-  const img = typeof a?.avatar === 'string' ? a.avatar : (a?.avatar && (a.avatar as any).image) || '';
-  if (img) return `<span class="community-avatar" style="width:${size}px;height:${size}px;background-image:url('${escAttr(img)}')"></span>`;
+  const src = absUrl(avatarSrc(a));
   const initials = (name.split(/\s+/).slice(0, 2).map((w) => w[0] || '').join('') || '?').toUpperCase();
   let h = 0; for (const c of name) h = (h * 31 + c.charCodeAt(0)) >>> 0;
-  return `<span class="community-avatar community-avatar--init" style="width:${size}px;height:${size}px;background:hsl(${h % 360} 50% 42%);font-size:${Math.round(size * 0.42)}px">${escHtml(initials)}</span>`;
+  const style = `width:${size}px;height:${size}px;font-size:${Math.round(size * 0.42)}px;background:hsl(${h % 360} 50% 42%)`;
+  const img = src ? `<img class="community-avatar-img" src="${escAttr(src)}" alt="" loading="lazy" onerror="this.style.display='none'">` : '';
+  return `<span class="community-avatar community-avatar--init" style="${style}">${escHtml(initials)}${img}</span>`;
 }
 // Author + collaborators row: solo → avatar + name; 2+ → avatars only (like the site).
 function authorsRow(p: Post): string {
@@ -196,7 +206,7 @@ function card(p: Post): string {
   const { title, excerpt } = pick(p);
   // No cover → show the project logo (like the website's coverless cards).
   const cover = p.cover
-    ? `<div class="community-card-cover" style="background-image:url('${escAttr(p.cover)}')"></div>`
+    ? `<div class="community-card-cover" style="background-image:url('${escAttr(absUrl(p.cover))}')"></div>`
     : `<div class="community-card-cover community-card-cover--none">${projMono(p)}</div>`;
   return `
     <button class="community-card" data-slug="${escAttr(p.slug)}">
@@ -218,7 +228,7 @@ function card(p: Post): string {
 function heroCard(p: Post): string {
   const { title, excerpt } = pick(p);
   const cover = p.cover
-    ? `<div class="community-hero-cover" style="background-image:url('${escAttr(p.cover)}')"></div>`
+    ? `<div class="community-hero-cover" style="background-image:url('${escAttr(absUrl(p.cover))}')"></div>`
     : `<div class="community-hero-cover community-card-cover--none">${projMono(p)}</div>`;
   return `
     <button class="community-hero" data-slug="${escAttr(p.slug)}">
@@ -238,7 +248,7 @@ function heroCard(p: Post): string {
 function wire(): void {
   if (!_view) return;
   _view.querySelectorAll('.community-chip').forEach((el) => el.addEventListener('click', () => {
-    _filter = (el as HTMLElement).dataset.filter || 'bmm'; render();
+    _filter = (el as HTMLElement).dataset.filter || 'all'; render();
   }));
   // Cards AND the featured hero both carry data-slug → open the post.
   _view.querySelectorAll('[data-slug]').forEach((el) => el.addEventListener('click', () => {
@@ -298,7 +308,7 @@ async function openPost(slug: string): Promise<void> {
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
         ${escHtml(t('community.back') || 'Back')}
       </button>
-      ${post.cover ? `<div class="community-article-cover" style="background-image:url('${escAttr(post.cover)}')"></div>` : ''}
+      ${post.cover ? `<div class="community-article-cover" style="background-image:url('${escAttr(absUrl(post.cover))}')"></div>` : ''}
       <span class="community-badge community-badge--${escAttr(post.project?.key || 'community')}">${escHtml(post.project?.name || post.showcaseProject?.name || 'Community')}</span>
       <h1 class="community-article-title">${escHtml(title)}</h1>
       <div class="community-article-meta">
@@ -307,7 +317,7 @@ async function openPost(slug: string): Promise<void> {
         <span>${escHtml(fmtDate(post.publishedAt))}</span>
       </div>
       ${untranslated}
-      <div class="community-article-body md-body">${renderMarkdown(body, { baseUrl: bcRoot() })}</div>
+      <div class="community-article-body md-body">${absMedia(renderMarkdown(body, { baseUrl: bcRoot() }))}</div>
       ${reactions}
       <div class="community-article-footer">
         <button class="btn btn-secondary community-open-post-web">${escHtml(t('community.openWeb') || 'Open on website')}</button>

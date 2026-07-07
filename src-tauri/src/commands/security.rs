@@ -464,6 +464,32 @@ pub async fn bc_api_post(url: String, body: String) -> Result<String, String> {
     Ok(text)
 }
 
+/// Fetch a URL and return it as a `data:<type>;base64,…` URL. Used for BetterCommunity
+/// avatars: the webview's CSP `img-src` doesn't allow the (dev) BCWEB origin, and a
+/// cross-origin `background-image` would be blocked — but a `data:` URL always renders.
+/// Works for both boring-avatar SVGs and uploaded photos (follows the 302 redirect).
+#[tauri::command]
+pub async fn bc_fetch_data_url(url: String) -> Result<String, String> {
+    use base64::Engine;
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(8))
+        .build()
+        .map_err(|e| e.to_string())?;
+    let resp = client.get(&url).send().await.map_err(|e| e.to_string())?;
+    if !resp.status().is_success() {
+        return Err(format!("http_{}", resp.status().as_u16()));
+    }
+    let ct = resp
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("image/svg+xml")
+        .to_string();
+    let bytes = resp.bytes().await.map_err(|e| e.to_string())?;
+    let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
+    Ok(format!("data:{};base64,{}", ct, b64))
+}
+
 /// Sign a message (repo JSON) → returns (author_id_hex, signature_hex)
 pub fn sign_message(handle: &AppHandle, message: &[u8]) -> Result<(String, String), String> {
     let signing_key = load_or_generate_keys(handle)?;

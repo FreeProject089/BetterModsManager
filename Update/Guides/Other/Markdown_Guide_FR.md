@@ -146,4 +146,36 @@ Trois tirets seuls sur une ligne pour une ligne horizontale :
 ---
 ```
 
+---
+
+## 9. Blocs enrichis — icônes, badges & cartes
+
+Les blocs façon GitBook du site s'affichent désormais aussi dans BMM (notes de
+version, notes de mise à jour **et** le blog BetterCommunity) :
+
+```md
+:icon[rocket]   :icon[simple:github]        icône en ligne (lucide / marque)
+:badge[Nouveau]{color="#16a34a"}            une pastille colorée
+:kbd[Ctrl+S]                                un raccourci clavier
+
+:::note[À noter]
+Un encart. Aussi : tip / warning / danger / success / info.
+:::
+
+:::details[Cliquer pour déplier]
+Contenu masqué révélé au clic.
+:::
+
+::::cards
+:::card[Lire la doc]{href="/docs/getting-started"}
+Une carte cliquable avec un titre et un corps.
+:::
+::::
+```
+
+- Les **icônes** viennent de **lucide** (ex. `rocket`, `download`, `shield`) ou de
+  **Simple Icons** avec le préfixe `simple:` (ex. `simple:discord`, `simple:steam`).
+- Les **couleurs** et URLs contenant `#` doivent être entre guillemets : `{color="#16a34a"}`.
+- Les conteneurs externes ont **plus de deux-points** que les internes (`::::cards` entoure `:::card`).
+
 Voilà tout. Combine badges + encarts + puces courtes pour des notes propres et lisibles.

@@ -502,6 +502,7 @@ fn main() {
             commands::security::get_creator_id,
             commands::security::bc_api_get,
             commands::security::bc_api_post,
+            commands::security::bc_fetch_data_url,
             commands::security::get_salted_creator_id,
             commands::security::verify_repo_signature,
             commands::crash::finalize_and_close_app,

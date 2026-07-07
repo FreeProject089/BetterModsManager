@@ -8,7 +8,7 @@ import { t } from '../core/i18n.js';
 import { toast } from './app.js';
 import { escHtml, escAttr } from '../core/utils.js';
 import { getLinks } from '../core/links-config.js';
-import { expandDocBlocks } from './rich-markdown.js';
+import { expandDocBlocks, headingSlug } from './rich-markdown.js';
 // Persistence for expanded folders in the release notes tree
 const expandedFolders = new Set();
 // ── Navbar Version Button ────────────────────────────────
@@ -283,6 +283,11 @@ export function renderMarkdown(md, opts = {}) {
     else {
         html = md.replace(/\n/g, '<br>');
     }
+    // Give ## / ### headings anchor ids so the generated ::toc links can jump to them.
+    html = html.replace(/<(h[23])>([\s\S]*?)<\/\1>/g, (_m, tag, inner) => {
+        const text = inner.replace(/<[^>]+>/g, ' ').replace(/&[a-z]+;/gi, ' ').trim();
+        return `<${tag} id="${headingSlug(text)}">${inner}</${tag}>`;
+    });
     // Replace badges with styled spans
     // FR badges
     html = html.replace(/\[NOUVEAU\]/g, '<span class="md-badge md-badge-new">' + t('update.badge.new') + '</span>');
@@ -313,17 +318,90 @@ export function renderMarkdown(md, opts = {}) {
         else if (tLower === 'note' || tLower === 'remarque')
             alertClass = 'note';
         const title = t(`update.alert.${alertClass}`);
-        return `<blockquote class="md-alert md-alert-${alertClass}"><div class="md-alert-title">${title}</div><p>`;
+        // Icon per type (lucide, CSS-masked → inherits the alert's accent colour) so
+        // callouts look like the website's instead of a bare title.
+        const iconName = { note: 'info', tip: 'lightbulb', important: 'message-square-warning', warning: 'triangle-alert', caution: 'flame' }[alertClass] || 'info';
+        const iconHtml = `<span class="md-alert-icon md-inline-icon md-inline-icon--mask" data-lucide="${iconName}"></span>`;
+        return `<blockquote class="md-alert md-alert-${alertClass}"><div class="md-alert-title">${iconHtml}${title}</div><p>`;
     });
-    // Add Copy buttons to code blocks
+    // Add Copy buttons to code blocks. The click is handled by a delegated listener
+    // (see below) instead of an inline onclick — inline handlers get stripped by the
+    // HTML sanitiser and are a CSP smell.
     html = html.replace(/<pre><code([^>]*)>([\s\S]*?)<\/code><\/pre>/g, (match, attrs, content) => {
         return `
         <div class="md-code-block" style="position: relative; margin: 10px 0;">
             <pre style="margin: 0; padding-top: 36px; position: relative;"><code${attrs}>${content}</code></pre>
-            <button class="md-copy-btn" onclick="let b=this; let code=this.previousElementSibling.innerText; navigator.clipboard.writeText(code).then(()=>{ b.innerHTML='${t('update.copied') || 'Copied!'}'; setTimeout(()=>b.innerHTML='${t('update.copy') || 'Copy'}', 2000) })" style="position: absolute; top: 8px; right: 8px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: var(--text-secondary); border-radius: 4px; padding: 4px 8px; font-size: 10px; cursor: pointer; transition: 0.2s; text-transform: uppercase;">${t('update.copy') || 'Copy'}</button>
+            <button type="button" class="md-copy-btn" style="position: absolute; top: 8px; right: 8px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: var(--text-secondary); border-radius: 4px; padding: 4px 8px; font-size: 10px; cursor: pointer; transition: 0.2s; text-transform: uppercase;">${t('update.copy') || 'Copy'}</button>
         </div>`;
     });
+    // ── Sanitise (CWE-79) ──────────────────────────────────────────────────────
+    // Blog/notes bodies can contain author-written raw HTML. Strip anything that can
+    // execute (scripts, on* handlers, javascript: URLs, arbitrary iframes) while
+    // keeping the doc-block markup, media and embeds. This matters most in BMM: the
+    // webview can call Tauri commands, so an unsanitised post = potential RCE.
+    html = sanitizeMd(html);
     return `<div class="md-body">${html}</div>`;
+}
+// DOMPurify config shared by every renderMarkdown call. Allows the elements our
+// markdown produces (details/summary, kbd, media, YouTube iframes, doc-block divs)
+// and re-materialises the lucide mask icons + gates iframes to YouTube via hooks.
+let _purifyReady = false;
+function ensurePurify() {
+    const DP = globalThis.DOMPurify;
+    if (!DP || _purifyReady)
+        return DP;
+    _purifyReady = true;
+    DP.addHook('afterSanitizeAttributes', (node) => {
+        // Lucide icon → real CSS mask (the url was carried on data-lucide so it
+        // survived sanitisation; we only ever build it from [a-z0-9-], so it's safe).
+        if (node.getAttribute && node.getAttribute('data-lucide')) {
+            const name = String(node.getAttribute('data-lucide')).replace(/[^a-z0-9-]/g, '');
+            const url = `https://cdn.jsdelivr.net/npm/lucide-static@latest/icons/${name}.svg`;
+            node.style.webkitMask = `url('${url}') center/contain no-repeat`;
+            node.style.mask = `url('${url}') center/contain no-repeat`;
+        }
+        // Only YouTube (no-cookie) iframes are allowed; anything else is neutralised.
+        if (node.tagName === 'IFRAME') {
+            const src = node.getAttribute('src') || '';
+            if (!/^https:\/\/(www\.)?youtube(-nocookie)?\.com\//i.test(src)) {
+                node.parentNode && node.parentNode.removeChild(node);
+                return;
+            }
+            node.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-presentation');
+        }
+        // External links open safely.
+        if (node.tagName === 'A' && node.getAttribute('target') === '_blank')
+            node.setAttribute('rel', 'noopener noreferrer');
+    });
+    return DP;
+}
+export function sanitizeMd(html) {
+    const DP = ensurePurify();
+    if (!DP || typeof DP.sanitize !== 'function')
+        return html; // fail closed only if lib missing
+    return DP.sanitize(html, {
+        ADD_TAGS: ['iframe'],
+        ADD_ATTR: ['target', 'allow', 'allowfullscreen', 'frameborder', 'controls', 'loading', 'data-lucide', 'style'],
+        FORBID_TAGS: ['style', 'form', 'input'], // <style>/<form> can be abused; <button> stays (copy btn)
+        ALLOW_DATA_ATTR: true,
+    });
+}
+// Delegated handler for the code-block "Copy" buttons (replaces the old inline
+// onclick, which the sanitiser strips). Registered once.
+if (typeof document !== 'undefined') {
+    document.addEventListener('click', (e) => {
+        const btn = e.target?.closest?.('.md-copy-btn');
+        if (!btn)
+            return;
+        const code = btn.closest('.md-code-block')?.querySelector('code');
+        if (!code)
+            return;
+        navigator.clipboard?.writeText(code.innerText).then(() => {
+            const prev = btn.innerHTML;
+            btn.innerHTML = t('update.copied') || 'Copied!';
+            setTimeout(() => { btn.innerHTML = prev; }, 2000);
+        }).catch(() => { });
+    });
 }
 // Inject markdown body styles once
 (function injectMarkdownStyles() {
@@ -456,8 +534,32 @@ export function renderMarkdown(md, opts = {}) {
             border: 1px solid rgba(249, 115, 22, 0.3);
         }
         /* Site directive output (shared by Community + Release/Update notes):
-           inline icons, coloured :badge chips, and :::card / ::::cards blocks. */
-        .md-body .md-inline-icon { width: 1.05em; height: 1.05em; vertical-align: -0.16em; display: inline-block; opacity: 0.92; }
+           inline icons, coloured :badge chips, cards, columns, collapsibles, toc. */
+        .md-body .md-inline-icon { width: 1.05em; height: 1.05em; vertical-align: -0.16em; display: inline-block; opacity: 0.95; }
+        .md-body .md-inline-icon--mask { background-color: currentColor; }
+        .md-body .md-alert-title { display: flex; align-items: center; gap: 7px; }
+        .md-body .md-alert-icon { width: 1.05em; height: 1.05em; flex: none; opacity: 1; }
+        .md-body .md-kbd-combo { display: inline-flex; align-items: center; gap: 4px; vertical-align: middle; }
+        .md-body .md-kbd-plus { color: var(--bmm-text-muted, var(--text-muted)); font-size: 0.8em; }
+        .md-body .md-kbd { font: 600 0.82em ui-monospace, monospace; background: var(--bmm-bg-elevated, rgba(255,255,255,0.06)); border: 1px solid var(--border, rgba(255,255,255,0.14)); border-bottom-width: 2px; border-radius: 5px; padding: 1.5px 7px; min-width: 1.1em; text-align: center; display: inline-block; }
+        .md-body .community-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin: 14px 0; }
+        .md-body .community-cards .community-inline-card { margin: 0; }
+        .md-body .community-columns { display: flex; flex-wrap: wrap; gap: 16px; margin: 14px 0; }
+        .md-body .community-column { flex: 1; min-width: 200px; }
+        .md-body .community-column > :first-child, .md-body .community-inline-card-body > :first-child, .md-body .community-details-body > :first-child { margin-top: 0; }
+        .md-body .community-column > :last-child, .md-body .community-inline-card-body > :last-child, .md-body .community-details-body > :last-child { margin-bottom: 0; }
+        .md-body .community-details { border: 1px solid var(--border, rgba(255,255,255,0.1)); border-radius: 12px; padding: 4px 14px; margin: 12px 0; background: var(--bmm-bg-elevated, rgba(255,255,255,0.03)); }
+        .md-body .community-details > summary { cursor: pointer; font-weight: 600; padding: 8px 0; list-style: none; }
+        .md-body .community-details > summary::-webkit-details-marker { display: none; }
+        .md-body .community-details[open] > summary { border-bottom: 1px solid var(--border, rgba(255,255,255,0.08)); margin-bottom: 8px; }
+        .md-body .community-details-body { padding-bottom: 8px; }
+        .md-body .community-align { margin: 12px 0; }
+        .md-body .md-toc { border: 1px solid var(--border, rgba(255,255,255,0.1)); border-radius: 12px; padding: 12px 16px; margin: 8px 0 18px; background: var(--bmm-bg-elevated, rgba(255,255,255,0.03)); }
+        .md-body .md-toc-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--bmm-text-muted, var(--text-muted)); margin-bottom: 6px; }
+        .md-body .md-toc-item { display: block; text-decoration: none; color: var(--bmm-text-secondary, var(--text-secondary)); font-size: 13px; padding: 3px 0; }
+        .md-body .md-toc-item:hover { color: var(--bmm-accent, #f97316); }
+        .md-body .md-toc-l3 { padding-left: 14px; font-size: 12.5px; opacity: 0.85; }
+        .md-body .community-inline-card-title { display: inline-flex; align-items: center; gap: 6px; }
         .md-body .community-inline-badge { display: inline-flex; align-items: center; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 700;
             color: var(--bc, var(--bmm-accent, #f97316)); background: color-mix(in srgb, var(--bc, #f97316) 15%, transparent);
             border: 1px solid color-mix(in srgb, var(--bc, #f97316) 40%, transparent); vertical-align: 1px; }

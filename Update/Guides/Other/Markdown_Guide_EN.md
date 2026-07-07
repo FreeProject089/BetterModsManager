@@ -145,4 +145,36 @@ Use three dashes on their own line for a horizontal rule:
 ---
 ```
 
+---
+
+## 9. Rich blocks — icons, badges & cards
+
+The website's GitBook-style blocks now render in BMM too (Release notes,
+update notes **and** the BetterCommunity blog):
+
+```md
+:icon[rocket]   :icon[simple:github]        inline icon (lucide / brand)
+:badge[New]{color="#16a34a"}                a coloured pill
+:kbd[Ctrl+S]                                a keyboard shortcut
+
+:::note[Heads up]
+A callout block. Also: tip / warning / danger / success / info.
+:::
+
+:::details[Click to expand]
+Hidden content revealed on click.
+:::
+
+::::cards
+:::card[Read the docs]{href="/docs/getting-started"}
+A clickable card with a title and body.
+:::
+::::
+```
+
+- **Icons** come from **lucide** (e.g. `rocket`, `download`, `shield`) or from
+  **Simple Icons** with the `simple:` prefix (e.g. `simple:discord`, `simple:steam`).
+- **Colours** and URLs that contain `#` must be quoted: `{color="#16a34a"}`.
+- Outer containers need **more colons** than the inner ones (`::::cards` wraps `:::card`).
+
 That's everything. Combine badges + callouts + short bullets for clean, readable notes.

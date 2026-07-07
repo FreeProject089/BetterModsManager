@@ -53,6 +53,8 @@
 .community-authors { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
 .community-authors .community-avatar:not(:first-child) { margin-left: -8px; }
 .community-avatar {
+  position: relative;
+  overflow: hidden;
   display: inline-grid;
   place-items: center;
   border-radius: 50%;
@@ -63,6 +65,8 @@
   font-weight: 700;
   flex: none;
 }
+/* Real pfp layered over the initials fallback (initials show if the image errors). */
+.community-avatar-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
 .community-author-name { color: var(--bmm-text-muted); font-size: 12px; margin-left: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .community-chip {
   padding: 6px 14px;
@@ -275,6 +279,10 @@
   margin-bottom: 26px;
 }
 .community-article-body { font-size: 15px; line-height: 1.7; color: var(--bmm-text-secondary); }
+/* Responsive media inside a post (images, video, audio, iframes). */
+.community-article-body img, .community-article-body video { max-width: 100%; height: auto; border-radius: 12px; }
+.community-article-body audio { width: 100%; margin: 8px 0; }
+.community-article-body iframe { max-width: 100%; border-radius: 12px; border: 0; }
 
 /* Reactions (read-only in-app; reacting happens on the website) */
 .community-reactions {
