@@ -25,6 +25,52 @@ function bcRoot(): string {
 function absUrl(u?: string): string { return u && u.startsWith('/') && !u.startsWith('//') ? `${bcRoot()}${u}` : (u || ''); }
 function absMedia(html: string): string { return html.replace(/(\s(?:src|poster)=["'])\/(?!\/)/g, `$1${bcRoot()}/`); }
 
+// ── GitHub-style line diff (mirrors BCWEB merge3.js) ──────────────────────────
+// LCS of two line arrays → matched index pairs [i, j] (a[i] === b[j]), increasing.
+const DIFF_CAP = 8000;
+function lcsPairs(a: string[], b: string[]): [number, number][] {
+  const n = a.length, m = b.length;
+  const dp = Array.from({ length: n + 1 }, () => new Int32Array(m + 1));
+  for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--)
+    dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+  const pairs: [number, number][] = []; let i = 0, j = 0;
+  while (i < n && j < m) {
+    if (a[i] === b[j]) { pairs.push([i, j]); i++; j++; }
+    else if (dp[i + 1][j] >= dp[i][j + 1]) i++; else j++;
+  }
+  return pairs;
+}
+// a → b as an ordered list of { type:'same'|'add'|'del', text }.
+function diffLines(a: string, b: string): { type: string; text: string }[] {
+  const A = String(a ?? '').split('\n'), B = String(b ?? '').split('\n');
+  if (A.length > DIFF_CAP || B.length > DIFF_CAP) return [{ type: 'del', text: String(a ?? '') }, { type: 'add', text: String(b ?? '') }];
+  const out: { type: string; text: string }[] = []; let i = 0, j = 0;
+  for (const [pi, pj] of lcsPairs(A, B)) {
+    while (i < pi) out.push({ type: 'del', text: A[i++] });
+    while (j < pj) out.push({ type: 'add', text: B[j++] });
+    out.push({ type: 'same', text: A[i] }); i++; j++;
+  }
+  while (i < A.length) out.push({ type: 'del', text: A[i++] });
+  while (j < B.length) out.push({ type: 'add', text: B[j++] });
+  return out;
+}
+function lineStat(a: string, b: string): { added: number; removed: number } {
+  const A = String(a ?? '').split('\n'), B = String(b ?? '').split('\n');
+  if (A.length > DIFF_CAP || B.length > DIFF_CAP) return { added: B.length, removed: A.length };
+  const matched = lcsPairs(A, B).length;
+  return { added: B.length - matched, removed: A.length - matched };
+}
+// Render a diff as HTML rows (green additions / red deletions / plain context).
+function diffHtml(a: string, b: string, vsLabel: string): string {
+  const rows = diffLines(a, b), st = lineStat(a, b);
+  const body = rows.map((r) => {
+    const cls = r.type === 'add' ? ' cdiff-add' : r.type === 'del' ? ' cdiff-del' : '';
+    const sign = r.type === 'add' ? '+' : r.type === 'del' ? '−' : '';
+    return `<div class="cdiff-row${cls}"><span class="cdiff-gutter">${sign}</span><span class="cdiff-text">${escHtml(r.text) || '&nbsp;'}</span></div>`;
+  }).join('');
+  return `<div class="cdiff-stat"><span class="cdiff-added">+${st.added}</span> <span class="cdiff-removed">−${st.removed}</span> <span class="cdiff-vs">${escHtml(vsLabel)}</span></div><div class="cdiff">${body}</div>`;
+}
+
 type Author = { id?: string; displayName?: string; avatar?: any };
 type Post = {
   slug: string; title: string; titleFr?: string; excerpt?: string; excerptFr?: string;
@@ -93,6 +139,7 @@ function fmtDate(d?: string) { try { return d ? new Date(d).toLocaleDateString(g
 export function initCommunity(): void {
   _view = document.getElementById('view-community');
   (window as any).openCommunityBlog = openCommunity;
+  installLightbox();
 }
 
 // Called when the user navigates to the view — fetches once, then renders.
@@ -284,6 +331,32 @@ function openExternal(url: string) {
   invoke('open_external_url', { url }).catch(() => { try { window.open(url, '_blank'); } catch {} });
 }
 
+// Click any image in a post / comment / history body → blow it up full-screen; click
+// anywhere (or Esc) to shrink it back. One document-level delegated handler covers the
+// article view AND the body-appended overlays (history/comments), incl. future ones.
+function openLightbox(src: string): void {
+  if (!src) return;
+  const ov = document.createElement('div');
+  ov.className = 'community-lightbox';
+  ov.innerHTML = `<img src="${escAttr(src)}" alt="" /><button class="community-lightbox-close" aria-label="${escAttr(t('community.close') || 'Close')}">✕</button>`;
+  document.body.appendChild(ov);
+  const close = () => { ov.remove(); document.removeEventListener('keydown', onEsc); };
+  ov.addEventListener('click', close); // click the backdrop OR the image → shrink back
+  const onEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
+  document.addEventListener('keydown', onEsc);
+  requestAnimationFrame(() => ov.classList.add('open'));
+}
+function installLightbox(): void {
+  if ((window as any).__bcLightbox) return;
+  (window as any).__bcLightbox = true;
+  document.addEventListener('click', (e) => {
+    const img = (e.target as HTMLElement)?.closest?.('.community-article-body img, .community-comment-body img, .community-history-preview img') as HTMLImageElement | null;
+    if (!img || img.closest('.community-lightbox')) return;
+    e.preventDefault();
+    openLightbox(img.currentSrc || img.src);
+  });
+}
+
 async function openPost(slug: string): Promise<void> {
   if (!_view) return;
   _openSlug = slug;
@@ -355,10 +428,15 @@ async function openPost(slug: string): Promise<void> {
 // BCWEB endpoint gates drafts/restore). Overlay appended to <body> so a re-render of the
 // article view doesn't wipe it.
 async function openHistory(postId: string): Promise<void> {
-  const fr = getLang() === 'fr';
-  const L = fr
-    ? { title: 'Historique des modifications', readonly: 'Historique en lecture seule pour ce post publié.', none: 'Aucun historique disponible pour ce post.', latest: 'Dernière', by: 'par', close: 'Fermer' }
-    : { title: 'Edit history', readonly: 'Read-only version history for this published post.', none: 'No history available for this post.', latest: 'Latest', by: 'by', close: 'Close' };
+  const L = {
+    title: t('community.history.title') || 'Edit history',
+    readonly: t('community.history.readonly') || 'Read-only version history for this published post.',
+    none: t('community.history.none') || 'No history available for this post.',
+    latest: t('community.history.latest') || 'Latest', by: t('community.history.by') || 'by',
+    rendered: t('community.history.rendered') || 'Rendered', diff: t('community.history.diff') || 'Diff',
+    first: t('community.history.firstVersion') || 'First version — nothing to compare against.',
+    vsPrev: t('community.history.vsPrev') || 'vs previous version', close: t('community.close') || 'Close',
+  };
   const ov = document.createElement('div');
   ov.className = 'community-history-overlay';
   ov.innerHTML = `<div class="community-history-modal">
@@ -377,34 +455,91 @@ async function openHistory(postId: string): Promise<void> {
   try { const r = await fetch(`${apiBase()}/blog/${postId}/history`, { headers: { Accept: 'application/json' } }); if (r.ok) revs = (await r.json()).revisions || []; } catch {}
   const content = ov.querySelector('.community-history-content')!;
   if (!revs.length) { content.innerHTML = `<div class="community-empty"><p>${escHtml(L.none)}</p></div>`; return; }
+
+  // View state: which revision, rendered-vs-diff, and en-vs-fr language.
+  let mode: 'rendered' | 'diff' = 'rendered';
+  let lang: 'en' | 'fr' = _blogLang === 'fr' ? 'fr' : 'en';
+  let activeIdx = 0;
+  const revCache: Record<string, any> = {};
+  const bodyOf = (rev: any) => (lang === 'fr' ? (rev?.bodyFr ?? rev?.body) : rev?.body) || '';
+  const fetchRev = async (revId: string) => {
+    if (revCache[revId]) return revCache[revId];
+    try { const r = await fetch(`${apiBase()}/blog/${postId}/history/${revId}`, { headers: { Accept: 'application/json' } }); if (r.ok) return (revCache[revId] = (await r.json()).revision); } catch {}
+    return null;
+  };
+
   content.innerHTML = `
     <div class="community-history-list">${revs.map((rv, i) =>
-      `<button class="community-history-item${i === 0 ? ' active' : ''}" data-rev="${escAttr(rv.id)}">
+      `<button class="community-history-item${i === 0 ? ' active' : ''}" data-idx="${i}" data-rev="${escAttr(rv.id)}">
         <span class="chi-v">v${rv.version}${i === 0 ? ` · ${escHtml(L.latest)}` : ''}</span>
         <span class="chi-meta">${rv.editor ? escHtml(`${L.by} ${rv.editor}`) + ' · ' : ''}${escHtml(fmtDate(rv.createdAt))}</span>
       </button>`).join('')}</div>
-    <div class="community-history-preview md-body"></div>`;
+    <div class="community-history-main">
+      <div class="community-history-toolbar">
+        <div class="community-seg" data-seg="mode">
+          <button data-val="rendered" class="active">${escHtml(L.rendered)}</button>
+          <button data-val="diff">${escHtml(L.diff)}</button>
+        </div>
+        <div class="community-seg community-seg-lang" data-seg="lang" hidden>
+          <button data-val="en"${lang === 'en' ? ' class="active"' : ''}>EN</button>
+          <button data-val="fr"${lang === 'fr' ? ' class="active"' : ''}>FR</button>
+        </div>
+      </div>
+      <div class="community-history-preview md-body"></div>
+    </div>`;
+
   const preview = content.querySelector('.community-history-preview')!;
-  const loadRev = async (revId: string, btn: Element | null) => {
-    content.querySelectorAll('.community-history-item').forEach((b) => b.classList.remove('active'));
-    btn?.classList.add('active');
+  const langSeg = content.querySelector('[data-seg="lang"]') as HTMLElement;
+
+  const paint = async () => {
     preview.innerHTML = `<div class="community-empty"><div class="community-spinner"></div></div>`;
-    try {
-      const r = await fetch(`${apiBase()}/blog/${postId}/history/${revId}`, { headers: { Accept: 'application/json' } });
-      if (r.ok) { const rev = (await r.json()).revision; preview.innerHTML = absMedia(renderMarkdown(rev.body || '', { baseUrl: bcRoot() })); }
-    } catch { preview.innerHTML = ''; }
+    const cur = await fetchRev(revs[activeIdx].id);
+    if (!cur) { preview.innerHTML = ''; return; }
+    // FR toggle only makes sense when a French body exists for this or the compared version.
+    const older = revs[activeIdx + 1] ? await fetchRev(revs[activeIdx + 1].id) : null;
+    const hasFr = !!(cur.bodyFr || older?.bodyFr);
+    langSeg.hidden = !hasFr;
+    if (!hasFr) lang = 'en';
+    if (mode === 'diff') {
+      preview.classList.add('community-history-preview--diff');
+      preview.innerHTML = older
+        ? diffHtml(bodyOf(older), bodyOf(cur), L.vsPrev)
+        : `<div class="community-empty"><p>${escHtml(L.first)}</p></div>`;
+    } else {
+      preview.classList.remove('community-history-preview--diff');
+      preview.innerHTML = absMedia(renderMarkdown(bodyOf(cur) || '', { baseUrl: bcRoot() }));
+    }
   };
-  content.querySelectorAll('.community-history-item').forEach((b) => b.addEventListener('click', () => loadRev((b as HTMLElement).dataset.rev!, b)));
-  loadRev(revs[0].id, content.querySelector('.community-history-item'));
+
+  content.querySelectorAll('.community-history-item').forEach((b) => b.addEventListener('click', () => {
+    activeIdx = Number((b as HTMLElement).dataset.idx);
+    content.querySelectorAll('.community-history-item').forEach((x) => x.classList.remove('active'));
+    b.classList.add('active');
+    paint();
+  }));
+  content.querySelectorAll('.community-seg').forEach((seg) => seg.querySelectorAll('button').forEach((btn) => btn.addEventListener('click', () => {
+    const which = (seg as HTMLElement).dataset.seg, val = (btn as HTMLElement).dataset.val!;
+    if (which === 'mode') mode = val as any; else lang = val as any;
+    seg.querySelectorAll('button').forEach((x) => x.classList.remove('active'));
+    btn.classList.add('active');
+    paint();
+  })));
+  paint();
 }
 
 // Read-only comments viewer (only reachable when the post is commentsPublic). Threads
 // render with the author pfp + full markdown body; posting is done on the website.
 async function openComments(postId: string): Promise<void> {
-  const fr = getLang() === 'fr';
-  const L = fr
-    ? { title: 'Commentaires', none: 'Aucun commentaire pour l\'instant.', readonly: 'Lecture seule — commentez sur le site.', resolved: 'résolu', edited: 'modifié', close: 'Fermer' }
-    : { title: 'Comments', none: 'No comments yet.', readonly: 'Read-only — comment on the website.', resolved: 'resolved', edited: 'edited', close: 'Close' };
+  const L = {
+    title: t('community.comments.title') || 'Comments', none: t('community.comments.none') || 'No comments yet.',
+    readonly: t('community.comments.readonly') || 'Read-only — comment on the website.',
+    resolved: t('community.comments.resolved') || 'resolved', edited: t('community.comments.edited') || 'edited',
+    history: t('community.comments.viewHistory') || 'Edit history', historyNone: t('community.comments.historyNone') || 'No edit history for this comment.',
+    latest: t('community.history.latest') || 'Latest', by: t('community.history.by') || 'by',
+    rendered: t('community.history.rendered') || 'Rendered', diff: t('community.history.diff') || 'Diff',
+    first: t('community.history.firstVersion') || 'First version — nothing to compare against.',
+    vsPrev: t('community.history.vsPrev') || 'vs previous version', close: t('community.close') || 'Close',
+  };
   const ov = document.createElement('div');
   ov.className = 'community-history-overlay';
   ov.innerHTML = `<div class="community-history-modal">
@@ -428,7 +563,7 @@ async function openComments(postId: string): Promise<void> {
     <div class="community-comment${isReply ? ' community-comment-reply' : ''}">
       <div class="community-comment-head">${contribAvatar({ displayName: c.author?.name, avatar: c.author?.avatar } as any, 24)}
         <span class="community-comment-name">${escHtml(c.author?.name || '')}</span>
-        <span class="community-comment-time">${escHtml(fmtDate(c.createdAt))}${c.edited ? ' · ' + L.edited : ''}</span>
+        <span class="community-comment-time">${escHtml(fmtDate(c.createdAt))}${c.edited ? ' · <button class="community-comment-hist" data-cid="' + escAttr(c.id) + '">' + escHtml(L.edited) + '</button>' : ''}</span>
         ${c.resolved ? `<span class="community-comment-resolved">✓ ${escHtml(L.resolved)}</span>` : ''}</div>
       ${c.anchor && !isReply ? `<div class="community-comment-anchor"># ${escHtml(c.anchor)}</div>` : ''}
       <div class="community-comment-body md-body">${absMedia(renderMarkdown(c.body || '', { baseUrl: bcRoot() }))}</div>
@@ -436,8 +571,76 @@ async function openComments(postId: string): Promise<void> {
   content.innerHTML = roots.map((c) => one(c) + comments.filter((r) => r.parentId === c.id).map((r) => one(r, true)).join('')).join('');
   // Links inside comment bodies open in the real browser, not the webview.
   content.addEventListener('click', (e) => {
-    const a = (e.target as HTMLElement)?.closest?.('a[href]') as HTMLAnchorElement | null;
+    const target = e.target as HTMLElement;
+    const histBtn = target?.closest?.('.community-comment-hist') as HTMLElement | null;
+    if (histBtn) { e.preventDefault(); openCommentHistory(postId, histBtn.dataset.cid!, L); return; }
+    const a = target?.closest?.('a[href]') as HTMLAnchorElement | null;
     const href = a?.getAttribute('href') || '';
     if (/^https?:\/\//i.test(href)) { e.preventDefault(); openExternal(href); }
   });
+}
+
+// Per-comment edit history (nested overlay). Same git-style diff + rendered toggle as
+// the post history; comment revisions are single-language so there's no EN/FR switch.
+async function openCommentHistory(postId: string, cid: string, L: any): Promise<void> {
+  const ov = document.createElement('div');
+  ov.className = 'community-history-overlay community-history-overlay--nested';
+  ov.innerHTML = `<div class="community-history-modal">
+    <div class="community-history-head"><span>${escHtml(L.history)}</span><button class="community-history-close" aria-label="${escAttr(L.close)}" title="${escAttr(L.close)}">✕</button></div>
+    <div class="community-history-content"><div class="community-empty"><div class="community-spinner"></div></div></div>
+    <div class="community-history-foot">${escHtml(L.readonly)}</div>
+  </div>`;
+  document.body.appendChild(ov);
+  const close = () => { ov.remove(); document.removeEventListener('keydown', onEsc); };
+  ov.addEventListener('click', (e) => { if (e.target === ov) close(); });
+  ov.querySelector('.community-history-close')?.addEventListener('click', close);
+  const onEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
+  document.addEventListener('keydown', onEsc);
+
+  let revs: any[] = [];
+  try { const r = await fetch(`${apiBase()}/blog/${postId}/comments/${cid}/history`, { headers: { Accept: 'application/json' } }); if (r.ok) revs = (await r.json()).revisions || []; } catch {}
+  const content = ov.querySelector('.community-history-content')!;
+  if (!revs.length) { content.innerHTML = `<div class="community-empty"><p>${escHtml(L.historyNone)}</p></div>`; return; }
+
+  let mode: 'rendered' | 'diff' = 'rendered';
+  let activeIdx = 0;
+  content.innerHTML = `
+    <div class="community-history-list">${revs.map((rv, i) =>
+      `<button class="community-history-item${i === 0 ? ' active' : ''}" data-idx="${i}">
+        <span class="chi-v">v${revs.length - i}${i === 0 ? ` · ${escHtml(L.latest)}` : ''}</span>
+        <span class="chi-meta">${rv.editor ? escHtml(`${L.by} ${rv.editor}`) + ' · ' : ''}${escHtml(fmtDate(rv.createdAt))}</span>
+      </button>`).join('')}</div>
+    <div class="community-history-main">
+      <div class="community-history-toolbar">
+        <div class="community-seg" data-seg="mode">
+          <button data-val="rendered" class="active">${escHtml(L.rendered)}</button>
+          <button data-val="diff">${escHtml(L.diff)}</button>
+        </div>
+      </div>
+      <div class="community-history-preview md-body"></div>
+    </div>`;
+  const preview = content.querySelector('.community-history-preview')!;
+  const paint = () => {
+    const cur = revs[activeIdx], older = revs[activeIdx + 1];
+    if (mode === 'diff') {
+      preview.classList.add('community-history-preview--diff');
+      preview.innerHTML = older
+        ? diffHtml(older.body || '', cur.body || '', L.vsPrev)
+        : `<div class="community-empty"><p>${escHtml(L.first)}</p></div>`;
+    } else {
+      preview.classList.remove('community-history-preview--diff');
+      preview.innerHTML = absMedia(renderMarkdown(cur.body || '', { baseUrl: bcRoot() }));
+    }
+  };
+  content.querySelectorAll('.community-history-item').forEach((b) => b.addEventListener('click', () => {
+    activeIdx = Number((b as HTMLElement).dataset.idx);
+    content.querySelectorAll('.community-history-item').forEach((x) => x.classList.remove('active'));
+    b.classList.add('active'); paint();
+  }));
+  content.querySelectorAll('[data-seg="mode"] button').forEach((btn) => btn.addEventListener('click', () => {
+    mode = (btn as HTMLElement).dataset.val as any;
+    content.querySelectorAll('[data-seg="mode"] button').forEach((x) => x.classList.remove('active'));
+    btn.classList.add('active'); paint();
+  }));
+  paint();
 }
