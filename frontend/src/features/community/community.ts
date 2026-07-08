@@ -338,6 +338,15 @@ async function openPost(slug: string): Promise<void> {
   _view.querySelector('.community-back')?.addEventListener('click', () => { _openSlug = null; render(); });
   _view.querySelector('.community-open-post-web')?.addEventListener('click', () => openExternal(`${bcRoot()}/blog/${slug}`));
   _view.querySelector('.community-article-date')?.addEventListener('click', () => { if (post.id) openHistory(post.id); });
+  // Any link inside the article body (download/open buttons, doc-block links, inline
+  // links) must open in the user's real browser — not navigate the webview (which left
+  // you stuck on the download URL). Delegated so it also covers dynamically-built blocks.
+  _view.querySelector('.community-article-body')?.addEventListener('click', (e) => {
+    const a = (e.target as HTMLElement)?.closest?.('a[href]') as HTMLAnchorElement | null;
+    if (!a) return;
+    const href = a.getAttribute('href') || '';
+    if (/^https?:\/\//i.test(href)) { e.preventDefault(); openExternal(href); }
+  });
 }
 
 // Read-only edit-history viewer (public users see a PUBLISHED post's changelog; the

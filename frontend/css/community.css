@@ -203,10 +203,12 @@
 .community-file-name { font-weight: 600; color: var(--bmm-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .community-file-size { font-size: 12px; color: var(--bmm-text-muted); margin-top: 1px; }
 .community-file-actions { display: flex; gap: 8px; flex-shrink: 0; }
-.community-file-btn { padding: 7px 15px; border-radius: 8px; font-size: 13px; font-weight: 600; background: var(--bmm-accent); color: #fff; text-decoration: none; white-space: nowrap; }
-.community-file-btn:hover { filter: brightness(1.08); }
-.community-file-btn-ghost { background: transparent; color: var(--bmm-text-secondary); border: 1px solid var(--bmm-border); }
-.community-file-btn-ghost:hover { border-color: var(--bmm-border-accent); color: var(--bmm-text-primary); filter: none; }
+/* Scoped under .community-file so these win over the global `.md-body a { color: accent }`
+   rule (otherwise the filled Download button was accent text on an accent bg = invisible). */
+.community-file .community-file-btn { padding: 7px 15px; border-radius: 8px; font-size: 13px; font-weight: 600; background: var(--bmm-accent); color: #fff; text-decoration: none; white-space: nowrap; }
+.community-file .community-file-btn:hover { filter: brightness(1.08); text-decoration: none; }
+.community-file .community-file-btn-ghost { background: transparent; color: var(--bmm-text-secondary); border: 1px solid var(--bmm-border); }
+.community-file .community-file-btn-ghost:hover { border-color: var(--bmm-border-accent); color: var(--bmm-text-primary); filter: none; }
 .community-card-body { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 7px; flex: 1; }
 .community-card-title { font-size: 16px; font-weight: 700; color: var(--bmm-text-primary); margin: 0; line-height: 1.3; }
 .community-card-excerpt {
