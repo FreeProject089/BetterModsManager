@@ -331,12 +331,14 @@ async function openPost(slug: string): Promise<void> {
       <div class="community-article-body md-body">${absMedia(renderMarkdown(body, { baseUrl: bcRoot() }))}</div>
       ${reactions}
       <div class="community-article-footer">
+        ${post.commentsPublic ? `<button class="btn btn-secondary community-open-comments">💬 ${escHtml(t('community.comments') || 'Comments')}</button>` : ''}
         <button class="btn btn-secondary community-open-post-web">${escHtml(t('community.openWeb') || 'Open on website')}</button>
       </div>
     </div>`;
 
   _view.querySelector('.community-back')?.addEventListener('click', () => { _openSlug = null; render(); });
   _view.querySelector('.community-open-post-web')?.addEventListener('click', () => openExternal(`${bcRoot()}/blog/${slug}`));
+  _view.querySelector('.community-open-comments')?.addEventListener('click', () => { if (post.id) openComments(post.id); });
   _view.querySelector('.community-article-date')?.addEventListener('click', () => { if (post.id) openHistory(post.id); });
   // Any link inside the article body (download/open buttons, doc-block links, inline
   // links) must open in the user's real browser — not navigate the webview (which left
@@ -353,29 +355,33 @@ async function openPost(slug: string): Promise<void> {
 // BCWEB endpoint gates drafts/restore). Overlay appended to <body> so a re-render of the
 // article view doesn't wipe it.
 async function openHistory(postId: string): Promise<void> {
+  const fr = getLang() === 'fr';
+  const L = fr
+    ? { title: 'Historique des modifications', readonly: 'Historique en lecture seule pour ce post publié.', none: 'Aucun historique disponible pour ce post.', latest: 'Dernière', by: 'par', close: 'Fermer' }
+    : { title: 'Edit history', readonly: 'Read-only version history for this published post.', none: 'No history available for this post.', latest: 'Latest', by: 'by', close: 'Close' };
   const ov = document.createElement('div');
   ov.className = 'community-history-overlay';
   ov.innerHTML = `<div class="community-history-modal">
-    <div class="community-history-head"><span>${escHtml(t('community.history') || 'Edit history')}</span><button class="community-history-close" aria-label="Close">✕</button></div>
+    <div class="community-history-head"><span>${escHtml(L.title)}</span><button class="community-history-close" aria-label="${escAttr(L.close)}" title="${escAttr(L.close)}">✕</button></div>
     <div class="community-history-content"><div class="community-empty"><div class="community-spinner"></div></div></div>
-    <div class="community-history-foot">${escHtml(t('community.historyReadonly') || 'Read-only version history for this published post.')}</div>
+    <div class="community-history-foot">${escHtml(L.readonly)}</div>
   </div>`;
   document.body.appendChild(ov);
-  const close = () => ov.remove();
+  const close = () => { ov.remove(); document.removeEventListener('keydown', onEsc); };
   ov.addEventListener('click', (e) => { if (e.target === ov) close(); });
   ov.querySelector('.community-history-close')?.addEventListener('click', close);
-  const onEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', onEsc); } };
+  const onEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
   document.addEventListener('keydown', onEsc);
 
   let revs: any[] = [];
   try { const r = await fetch(`${apiBase()}/blog/${postId}/history`, { headers: { Accept: 'application/json' } }); if (r.ok) revs = (await r.json()).revisions || []; } catch {}
   const content = ov.querySelector('.community-history-content')!;
-  if (!revs.length) { content.innerHTML = `<div class="community-empty"><p>${escHtml(t('community.noHistory') || 'No history available for this post.')}</p></div>`; return; }
+  if (!revs.length) { content.innerHTML = `<div class="community-empty"><p>${escHtml(L.none)}</p></div>`; return; }
   content.innerHTML = `
     <div class="community-history-list">${revs.map((rv, i) =>
       `<button class="community-history-item${i === 0 ? ' active' : ''}" data-rev="${escAttr(rv.id)}">
-        <span class="chi-v">v${rv.version}${i === 0 ? ` · ${escHtml(t('community.latest') || 'Latest')}` : ''}</span>
-        <span class="chi-meta">${escHtml(rv.editor || '')} · ${escHtml(fmtDate(rv.createdAt))}</span>
+        <span class="chi-v">v${rv.version}${i === 0 ? ` · ${escHtml(L.latest)}` : ''}</span>
+        <span class="chi-meta">${rv.editor ? escHtml(`${L.by} ${rv.editor}`) + ' · ' : ''}${escHtml(fmtDate(rv.createdAt))}</span>
       </button>`).join('')}</div>
     <div class="community-history-preview md-body"></div>`;
   const preview = content.querySelector('.community-history-preview')!;
@@ -390,4 +396,48 @@ async function openHistory(postId: string): Promise<void> {
   };
   content.querySelectorAll('.community-history-item').forEach((b) => b.addEventListener('click', () => loadRev((b as HTMLElement).dataset.rev!, b)));
   loadRev(revs[0].id, content.querySelector('.community-history-item'));
+}
+
+// Read-only comments viewer (only reachable when the post is commentsPublic). Threads
+// render with the author pfp + full markdown body; posting is done on the website.
+async function openComments(postId: string): Promise<void> {
+  const fr = getLang() === 'fr';
+  const L = fr
+    ? { title: 'Commentaires', none: 'Aucun commentaire pour l\'instant.', readonly: 'Lecture seule — commentez sur le site.', resolved: 'résolu', edited: 'modifié', close: 'Fermer' }
+    : { title: 'Comments', none: 'No comments yet.', readonly: 'Read-only — comment on the website.', resolved: 'resolved', edited: 'edited', close: 'Close' };
+  const ov = document.createElement('div');
+  ov.className = 'community-history-overlay';
+  ov.innerHTML = `<div class="community-history-modal">
+    <div class="community-history-head"><span>${escHtml(L.title)}</span><button class="community-history-close" aria-label="${escAttr(L.close)}" title="${escAttr(L.close)}">✕</button></div>
+    <div class="community-comments-content"><div class="community-empty"><div class="community-spinner"></div></div></div>
+    <div class="community-history-foot">${escHtml(L.readonly)}</div>
+  </div>`;
+  document.body.appendChild(ov);
+  const close = () => { ov.remove(); document.removeEventListener('keydown', onEsc); };
+  ov.addEventListener('click', (e) => { if (e.target === ov) close(); });
+  ov.querySelector('.community-history-close')?.addEventListener('click', close);
+  const onEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
+  document.addEventListener('keydown', onEsc);
+
+  let comments: any[] = [];
+  try { const r = await fetch(`${apiBase()}/blog/${postId}/comments`, { headers: { Accept: 'application/json' } }); if (r.ok) comments = (await r.json()).comments || []; } catch {}
+  const content = ov.querySelector('.community-comments-content')!;
+  const roots = comments.filter((c) => !c.parentId);
+  if (!roots.length) { content.innerHTML = `<div class="community-empty"><p>${escHtml(L.none)}</p></div>`; return; }
+  const one = (c: any, isReply = false) => `
+    <div class="community-comment${isReply ? ' community-comment-reply' : ''}">
+      <div class="community-comment-head">${contribAvatar({ displayName: c.author?.name, avatar: c.author?.avatar } as any, 24)}
+        <span class="community-comment-name">${escHtml(c.author?.name || '')}</span>
+        <span class="community-comment-time">${escHtml(fmtDate(c.createdAt))}${c.edited ? ' · ' + L.edited : ''}</span>
+        ${c.resolved ? `<span class="community-comment-resolved">✓ ${escHtml(L.resolved)}</span>` : ''}</div>
+      ${c.anchor && !isReply ? `<div class="community-comment-anchor"># ${escHtml(c.anchor)}</div>` : ''}
+      <div class="community-comment-body md-body">${absMedia(renderMarkdown(c.body || '', { baseUrl: bcRoot() }))}</div>
+    </div>`;
+  content.innerHTML = roots.map((c) => one(c) + comments.filter((r) => r.parentId === c.id).map((r) => one(r, true)).join('')).join('');
+  // Links inside comment bodies open in the real browser, not the webview.
+  content.addEventListener('click', (e) => {
+    const a = (e.target as HTMLElement)?.closest?.('a[href]') as HTMLAnchorElement | null;
+    const href = a?.getAttribute('href') || '';
+    if (/^https?:\/\//i.test(href)) { e.preventDefault(); openExternal(href); }
+  });
 }
