@@ -1345,18 +1345,30 @@ window.recalculateAllHashesPrompt = async () => {
 // ── Link this creator id to a BetterCommunity account ──────────────
 // Local-first: BMM works fully offline. This only reaches the server when the user
 // explicitly links; the server returns a short code to enter on the website.
-// TEST MODE: point the linking flow at the LOCAL dev BetterCommunity (localhost).
-// Set to false (or remove) to use the production site from links-config for release.
-const BC_LINK_TEST_MODE = true;
-const BC_LINK_TEST_BASE = 'http://localhost';
+// TEST MODE: point the linking flow at a LOCAL/staging BetterCommunity instead of
+// the production site. Both the toggle and the base URL are stored in localStorage
+// so they can be changed from Settings (or the console) WITHOUT rebuilding — handy
+// when the dev site moves ports. Default base is the Caddy dev port (:5176), NOT
+// bare :80 (that's the telemetry origin and returns an empty response).
+function bcTestMode(): boolean {
+    const v = localStorage.getItem('bmm_bc_testmode');
+    return v == null ? true : v === '1';
+}
+function setBcTestMode(on: boolean): void { localStorage.setItem('bmm_bc_testmode', on ? '1' : '0'); }
+function bcTestBase(): string {
+    return (localStorage.getItem('bmm_bc_base') || 'http://localhost:5176').replace(/\/+$/, '');
+}
+function setBcTestBase(url: string): void {
+    const u = String(url || '').trim().replace(/\/+$/, '');
+    if (u) localStorage.setItem('bmm_bc_base', u);
+    else localStorage.removeItem('bmm_bc_base');
+}
 
 async function openAccountLinkFlow(): Promise<void> {
     let creatorId = '';
     try { creatorId = (await invoke('get_creator_id')) as string; } catch (_) {}
     if (!creatorId || creatorId === '—') { toast(t('settings.link.noCreator') || 'No creator id yet.', 'warning'); return; }
-    const base = BC_LINK_TEST_MODE
-        ? BC_LINK_TEST_BASE
-        : (getLinks().bettercommunity || 'https://bettercommunity.ch/').replace(/\/+$/, '');
+    const base = bcBase();
     let data: any;
     try {
         const res = await fetch(`${base}/api/link/request`, {
@@ -1401,7 +1413,7 @@ function showLinkCodeModal(code: string, base: string): void {
 // (BetterCommunity discover modal removed — linking + Discord actions live in the identity card below.)
 
 function bcBase(): string {
-    return BC_LINK_TEST_MODE ? BC_LINK_TEST_BASE : (getLinks().bettercommunity || 'https://bettercommunity.ch/').replace(/\/+$/, '');
+    return bcTestMode() ? bcTestBase() : (getLinks().bettercommunity || 'https://bettercommunity.ch/').replace(/\/+$/, '');
 }
 
 // Poll the account-link status and reflect it in the identity card. Detects an unlink
@@ -1541,6 +1553,30 @@ async function initSecurityInfoCard() {
         dbtn.addEventListener('click', openDiscordLinkFlow);
         row.appendChild(dbtn);
         card?.appendChild(row);
+        // Dev/test config — point linking at a local/staging BetterCommunity without a
+        // rebuild. Collapsed by default so it doesn't clutter the normal identity card.
+        const cfg = document.createElement('details');
+        cfg.style.cssText = 'margin-top:10px;font-size:12px;color:var(--text-muted)';
+        const inStyle = 'flex:1;min-width:0;padding:6px 9px;border-radius:8px;border:1px solid var(--bmm-border,rgba(255,255,255,0.12));background:var(--bmm-bg,rgba(0,0,0,0.2));color:var(--text)';
+        cfg.innerHTML = `
+          <summary style="cursor:pointer;user-select:none">${escHtml(t('settings.link.advanced') || 'Server / test mode')}</summary>
+          <label style="display:flex;align-items:center;gap:7px;margin-top:8px">
+            <input type="checkbox" id="bc-testmode"> ${escHtml(t('settings.link.testmode') || 'Test mode (use a local/staging server)')}
+          </label>
+          <div id="bc-base-row" style="display:flex;gap:6px;margin-top:8px">
+            <input id="bc-base-url" type="text" style="${inStyle}" placeholder="http://localhost:5176">
+            <button id="bc-base-save" class="btn btn-sm">${escHtml(t('common.save') || 'Save')}</button>
+          </div>
+          <div style="margin-top:6px;opacity:.7">${escHtml(t('settings.link.testhint') || 'Local dev runs on http://localhost:5176 (not :80 — that returns an empty response).')}</div>`;
+        card?.appendChild(cfg);
+        const tmEl = cfg.querySelector('#bc-testmode') as HTMLInputElement;
+        const urlEl = cfg.querySelector('#bc-base-url') as HTMLInputElement;
+        const baseRow = cfg.querySelector('#bc-base-row') as HTMLElement;
+        tmEl.checked = bcTestMode();
+        urlEl.value = bcTestBase();
+        baseRow.style.display = tmEl.checked ? 'flex' : 'none';
+        tmEl.addEventListener('change', () => { setBcTestMode(tmEl.checked); baseRow.style.display = tmEl.checked ? 'flex' : 'none'; refreshBcLinkStatus(); });
+        cfg.querySelector('#bc-base-save')?.addEventListener('click', () => { setBcTestBase(urlEl.value); toast(t('common.saved') || 'Saved.', 'success'); refreshBcLinkStatus(); });
 
         refreshBcLinkStatus();
         // Keep checking so an unlink done on the website is detected while settings are open.
