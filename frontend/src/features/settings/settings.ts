@@ -1370,12 +1370,12 @@ async function openAccountLinkFlow(): Promise<void> {
     if (!creatorId || creatorId === '—') { toast(t('settings.link.noCreator') || 'No creator id yet.', 'warning'); return; }
     const base = bcBase();
     let data: any;
+    // Go through the native process (bc_api_post) — a direct webview fetch to the
+    // BCWEB API is cross-origin (tauri.localhost) and is blocked by CORS preflight.
+    // Rust isn't subject to CORS, so the request actually goes through.
     try {
-        const res = await fetch(`${base}/api/link/request`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ creatorId }),
-        });
-        data = await res.json();
+        const raw = await invoke('bc_api_post', { url: `${base}/api/link/request`, body: JSON.stringify({ creatorId }) }) as string;
+        data = JSON.parse(raw);
     } catch (_) {
         toast(t('settings.link.offline') || 'Could not reach BetterCommunity (offline?). BMM keeps working locally.', 'warning');
         return;

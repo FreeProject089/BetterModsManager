@@ -13,11 +13,18 @@ import { renderMarkdown } from '../../ui/update-notes.js';
 import { getLinks } from '../../core/links-config.js';
 
 // Same BetterCommunity base resolution as the account link in settings.ts: a dev
-// test-mode override (Caddy on :80/localhost), else the configured production site.
-const BC_TEST_MODE = true;
-const BC_TEST_BASE = 'http://localhost:5176/';
+// test-mode override, else the configured production site. Both the toggle and the
+// base URL are localStorage-backed (keys shared with settings.ts) so the "Test mode"
+// checkbox in Settings drives the blog/community feed too — no rebuild, no divergence.
+function bcTestMode(): boolean {
+  const v = localStorage.getItem('bmm_bc_testmode');
+  return v == null ? true : v === '1';
+}
+function bcTestBase(): string {
+  return (localStorage.getItem('bmm_bc_base') || 'http://localhost:5176').replace(/\/+$/, '');
+}
 function bcRoot(): string {
-  return (BC_TEST_MODE ? BC_TEST_BASE : (getLinks()?.bettercommunity || 'https://bettercommunity.ch/')).replace(/\/+$/, '');
+  return (bcTestMode() ? bcTestBase() : (getLinks()?.bettercommunity || 'https://bettercommunity.ch/')).replace(/\/+$/, '');
 }
 // Root-relative media URLs (/api/media/…, /media/…) would resolve against the webview
 // origin (tauri.localhost) and 404. Rewrite them to absolute BCWEB URLs so images,
