@@ -369,6 +369,18 @@ pub fn analytics_track(
     Ok(())
 }
 
+/// Telemetry is sent over HTTPS in production. For LOCAL dev we also accept plain
+/// http to LOOPBACK (localhost / 127.0.0.1 / *.localhost) so the desktop app can post
+/// to a local BCWEB/telemetry stack without an HTTPS tunnel. Never plaintext to a
+/// non-loopback host (that would leak telemetry in the clear over the network).
+fn endpoint_allowed(e: &str) -> bool {
+    let e = e.trim();
+    e.starts_with("https://")
+        || e.starts_with("http://localhost")
+        || e.starts_with("http://127.0.0.1")
+        || e.starts_with("http://telemetry.localhost")
+}
+
 /// Flush the queued events to a PostHog-compatible capture endpoint in one batch.
 /// `endpoint`/`api_key` come from the frontend config; empty endpoint = keep local.
 #[tauri::command]
@@ -380,8 +392,8 @@ pub async fn analytics_flush(
 ) -> Result<usize, String> {
     if !consent_granted(&state) { return Ok(0); }
     let endpoint = match endpoint.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
-        Some(e) if e.starts_with("https://") => e.to_string(),
-        _ => return Ok(0), // not configured (or not HTTPS) → keep buffering locally
+        Some(e) if endpoint_allowed(e) => e.to_string(),
+        _ => return Ok(0), // not configured (or plaintext to a remote host) → keep buffering locally
     };
     let batch = read_queue(&app_handle);
     if batch.is_empty() { return Ok(0); }
@@ -472,7 +484,7 @@ pub async fn analytics_packet_status(
 ) -> Value {
     let base = endpoint.unwrap_or_default();
     let base = base.trim().trim_end_matches('/').trim_end_matches("/batch");
-    if !base.starts_with("https://") || ids.is_empty() {
+    if !endpoint_allowed(base) || ids.is_empty() {
         return json!({});
     }
     let url = format!("{}/api/packet-status?ids={}", base, ids.join(","));
@@ -515,7 +527,7 @@ pub async fn analytics_request_deletion(
     let base = endpoint.unwrap_or_default();
     // Derive the delete URL from the configured /batch/ endpoint.
     let url = base.trim().trim_end_matches('/').trim_end_matches("/batch").to_string() + "/delete-request";
-    if !url.starts_with("https://") { return Err("telemetry endpoint not configured".into()); }
+    if !endpoint_allowed(&url) { return Err("telemetry endpoint not configured".into()); }
 
     let client = reqwest::Client::builder().user_agent("BetterModsManager")
         .timeout(std::time::Duration::from_secs(15)).build().map_err(|e| e.to_string())?;
@@ -556,7 +568,7 @@ pub async fn analytics_request_data(
     if !email.contains('@') || email.len() < 5 { return Err("invalid email".into()); }
     let base = endpoint.unwrap_or_default();
     let url = base.trim().trim_end_matches('/').trim_end_matches("/batch").to_string() + "/data-request";
-    if !url.starts_with("https://") { return Err("telemetry endpoint not configured".into()); }
+    if !endpoint_allowed(&url) { return Err("telemetry endpoint not configured".into()); }
     let creator_id = crate::commands::security::get_creator_id(app_handle.clone()).unwrap_or_default();
 
     let client = reqwest::Client::builder().user_agent("BetterModsManager")
