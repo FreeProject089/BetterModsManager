@@ -1212,6 +1212,8 @@
   "mapper.loadProfileHint": "Load a profile to view the game folder",
   "mapper.mappingCancelled": "{count} mappings cancelled",
   "mapper.mappingHint": "Mapping: Select on the left, then double-click on a folder on the right.",
+  "mapper.hideTips": "Hide tips",
+  "mapper.showTips": "Show tips",
   "mapper.modRoot": "Mod Root",
   "mapper.modSide": "Mod Structure",
   "mapper.multiSelectHint": "Hold Ctrl to select multiple files or folders.",

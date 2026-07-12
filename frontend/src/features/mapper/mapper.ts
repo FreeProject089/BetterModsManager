@@ -433,6 +433,27 @@ function setupFilters(): void {
     document.getElementById('btn-mapper-mod-collapse')?.addEventListener('click', () => toggleAll('mapper-mod-tree', false));
     document.getElementById('btn-mapper-game-expand')?.addEventListener('click', () => toggleAll('mapper-game-tree', true));
     document.getElementById('btn-mapper-game-collapse')?.addEventListener('click', () => toggleAll('mapper-game-tree', false));
+
+    // Dismissible tip banner — once the user knows the drag-map flow the dense
+    // banner is just clutter, so let them hide it (persisted). A compact "Show
+    // tips" pill brings it back.
+    const hintBanner = document.getElementById('mapper-help-banner');
+    const hintClose  = document.getElementById('btn-mapper-hint-close');
+    const hintShow   = document.getElementById('btn-mapper-hint-show');
+    const HINT_KEY   = 'bmm_mapper_hint_hidden';
+    const applyHintState = (hidden: boolean) => {
+        if (hintBanner) hintBanner.hidden = hidden;
+        if (hintShow)   hintShow.hidden   = !hidden;
+    };
+    try { applyHintState(localStorage.getItem(HINT_KEY) === '1'); } catch { /* ignore */ }
+    hintClose?.addEventListener('click', () => {
+        try { localStorage.setItem(HINT_KEY, '1'); } catch { /* ignore */ }
+        applyHintState(true);
+    });
+    hintShow?.addEventListener('click', () => {
+        try { localStorage.removeItem(HINT_KEY); } catch { /* ignore */ }
+        applyHintState(false);
+    });
 }
 
 function toggleAll(containerId: string, expand: boolean): void {

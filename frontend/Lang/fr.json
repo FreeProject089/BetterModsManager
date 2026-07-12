@@ -1211,6 +1211,8 @@
   "mapper.loadProfileHint": "Chargez un profil pour voir le dossier du jeu",
   "mapper.mappingCancelled": "{count} mappages annulés",
   "mapper.mappingHint": "Mapping : Sélectionnez à gauche, puis double-cliquez sur un dossier à droite.",
+  "mapper.hideTips": "Masquer les astuces",
+  "mapper.showTips": "Afficher les astuces",
   "mapper.modRoot": "Racine du Mod",
   "mapper.modSide": "Structure du Mod",
   "mapper.multiSelectHint": "Maintenez Ctrl pour sélectionner plusieurs fichiers ou dossiers.",

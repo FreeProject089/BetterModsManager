@@ -19,6 +19,45 @@
     border-radius: 12px;
     margin-bottom: 5px;
 }
+.mapper-help-banner[hidden] { display: none; }
+
+/* Dismiss (×) — pushed to the far right of the banner. */
+.mapper-hint-close {
+    margin-left: auto;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 7px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: color .12s, background .12s;
+}
+.mapper-hint-close:hover { color: var(--text-primary); background: var(--bmm-s08); }
+
+/* Compact "Show tips" pill shown once the banner is dismissed. */
+.mapper-hint-show {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 5px;
+    padding: 5px 11px;
+    border-radius: 999px;
+    border: 1px solid rgba(59, 130, 246, 0.25);
+    background: rgba(59, 130, 246, 0.05);
+    color: var(--accent);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .12s, border-color .12s;
+}
+.mapper-hint-show:hover { background: rgba(59, 130, 246, 0.1); border-color: rgba(59, 130, 246, 0.4); }
+.mapper-hint-show[hidden] { display: none; }
+.mapper-hint-show svg { flex: none; }
 
 .help-icon {
     font-size: 1.2rem;
