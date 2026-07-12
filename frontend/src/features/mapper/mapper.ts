@@ -1438,14 +1438,13 @@ async function showMapperPreview(): Promise<void> {
             if (yesBtn) yesBtn.style.display = 'none';
             if (noBtn) noBtn.textContent = t("common.close");
 
-            // Fixed-position tooltip for cells inside the overflow scroll container
-            // (CSS ::after tooltips get clipped by overflow:auto on .preview-list-wrapper)
-            attachPreviewTooltip(confirmMsg);
+            // NOTE: the [data-tooltip] paths are handled by the global fixed-position
+            // tooltip system (ui/tooltips.ts). We used to ALSO attach a mapper-specific
+            // tooltip here — which showed the path TWICE on hover. Removed.
 
             const closeFn = () => {
                 confirmModal.classList.remove('open');
                 confirmModal.classList.remove('modal-large');
-                detachPreviewTooltip();
                 if (yesBtn) yesBtn.style.display = 'block';
                 if (noBtn) noBtn.textContent = t("common.cancel");
             };
