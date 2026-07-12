@@ -2070,7 +2070,7 @@ body.is-maximized .titlebar-spacer {
 .repo-browser-filter[data-filter="all"].active {
     border-color: var(--accent);
     background: var(--accent);
-    color: #fff;
+    color: var(--text-on-accent);
 }
 
 /* ── Quicklink cards ── */
@@ -6187,7 +6187,7 @@ select.input-field option {
 ═══════════════════════════════════ */
 .lang-btn.active-lang {
     background: var(--accent) !important;
-    color: #fff !important;
+    color: var(--text-on-accent) !important;
     border-color: var(--accent) !important;
 }
 
@@ -6615,7 +6615,7 @@ select:focus {
 
 .search-mode-pill.active {
     background: var(--accent);
-    color: #fff;
+    color: var(--text-on-accent);
     box-shadow: 0 1px 6px rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.35);
 }
 
@@ -7289,7 +7289,7 @@ select:focus {
 
 .icon-option.selected {
     background: var(--accent);
-    color: white;
+    color: var(--text-on-accent);
     box-shadow: 0 0 15px var(--accent-glow);
 }
 
@@ -8189,7 +8189,7 @@ select:focus {
 
 .pip-btn.start:hover {
     background: var(--bmm-success);
-    color: #fff;
+    color: var(--text-on-accent);
     box-shadow: 0 0 15px rgba(16, 185, 129, 0.4);
 }
 
@@ -8201,7 +8201,7 @@ select:focus {
 
 .pip-btn.stop:hover {
     background: var(--bmm-danger);
-    color: #fff;
+    color: var(--text-on-accent);
     box-shadow: 0 0 15px rgba(239,68,68,0.4);
 }
 
@@ -8886,11 +8886,11 @@ select:focus {
 .credit-link-card-license { border-left: 3px solid #2563eb; }
 .credit-link-card-eula { border-left: 3px solid #8b5cf6; }
 
-.credit-icon-box-github { background: var(--bmm-s08); color: #fff; }
+.credit-icon-box-github { background: var(--bmm-s08); color: var(--text-primary); }
 .credit-icon-box-discord { background: rgba(88,101,242,0.1); color: #5865F2; }
 /* Reddit brand: solid orange box + white alien (was accent-blue — off-brand and
    unreadable on some themes). White-on-#ff4500 works in dark AND light mode. */
-.credit-icon-box-reddit { background: #ff4500; color: #fff; }
+.credit-icon-box-reddit { background: #ff4500; color: var(--text-on-accent); }
 .credit-icon-box-ed { background: rgba(0,0,0,0.4); border-radius: 10px; overflow: hidden; padding: 0; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; }
 .credit-icon-box-license { background: rgba(37,99,235,0.1); color: var(--cyan); }
 .credit-icon-box-eula { background: rgba(139,92,246,0.1); color: var(--bmm-purple); }
@@ -10416,7 +10416,7 @@ body.tasky-hidden .titlebar-left .titlebar-version {
 .contributor-modal-info p { color: var(--cyan); font-weight: 600; margin: 5px 0 0; font-size: 1rem; }
 .contributor-modal-bio { font-size: 1.05rem; line-height: 1.6; color: rgba(var(--bmm-surface-r),var(--bmm-surface-g),var(--bmm-surface-b),0.8); margin-bottom: 30px; padding: 20px; background: var(--bmm-s03); border-radius: 15px; }
 .contributor-modal-links { display: flex; gap: 15px; }
-.contributor-link-btn { flex: 1; display: flex; align-items: center; justify-content: center; gap: 10px; padding: 12px; border-radius: 10px; background: var(--bmm-s05); color: #fff; text-decoration: none; font-weight: 600; transition: all 0.2s; border: 1px solid var(--bmm-s10); }
+.contributor-link-btn { flex: 1; display: flex; align-items: center; justify-content: center; gap: 10px; padding: 12px; border-radius: 10px; background: var(--bmm-s05); color: var(--text-primary); text-decoration: none; font-weight: 600; transition: all 0.2s; border: 1px solid var(--bmm-s10); }
 .contributor-link-btn:hover { background: var(--bmm-s10); border-color: var(--bmm-s20); transform: scale(1.02); }
 
 /* Hashing Global Loader */
@@ -11456,7 +11456,7 @@ body.tasky-hidden .titlebar-left .titlebar-version {
 .sched-insert::before { content:''; position:absolute; left:0; right:0; top:50%; height:1.5px; background:var(--accent); opacity:.4; }
 .sched-insert-btn { position:relative; z-index:1; width:20px; height:20px; border-radius:50%; border:1.5px solid var(--accent);
     background:var(--bmm-bg-elevated); color:var(--accent); display:flex; align-items:center; justify-content:center; cursor:pointer; }
-.sched-insert-btn:hover { background:var(--accent); color:#fff; }
+.sched-insert-btn:hover { background:var(--accent); color:var(--text-on-accent); }
 .sched-insert:has(.sched-insert-picker) { opacity:1; height:auto; padding:6px 0; flex-direction:column; gap:6px; }
 .sched-insert-picker { position:relative; z-index:1; background:var(--bmm-bg-elevated); padding:6px 8px; border-radius:10px; border:1px solid var(--border); }
 /* Modal header: icon tile + live summary line that updates as the task is edited. */
@@ -13569,7 +13569,7 @@ body.sched-drag-live .sched-branch .sched-drop-zone:empty {
     color: var(--cyan);
     transition: background 0.14s, transform 0.1s;
 }
-.plug-mod-add-btn:hover { background: var(--accent); color: #fff; transform: scale(1.08); }
+.plug-mod-add-btn:hover { background: var(--accent); color: var(--text-on-accent); transform: scale(1.08); }
 .plug-mod-add-btn svg { width: 14px; height: 14px; }
 /* Selected items improvements */
 .plug-selected-item:hover {
