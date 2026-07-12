@@ -1784,11 +1784,21 @@ body.is-maximized .titlebar-spacer {
     min-width: 840px;
     box-sizing: border-box;
     min-height: 100%;
-    animation: fadeIn 0.2s ease;
+    /* Opacity-only fade (NOT translateY): the view is the ancestor of many
+       backdrop-filter:blur children (toolbar pill, cards). Animating a transform
+       on that ancestor makes those children re-sample the backdrop every frame at
+       a shifting offset → tearing / paint artifacts on tab switch. Fading opacity
+       only avoids the transform entirely. */
+    animation: viewFadeIn 0.2s ease;
 }
 
 .view.active {
     display: block;
+}
+
+@keyframes viewFadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
 }
 
 @keyframes fadeIn {
