@@ -543,6 +543,9 @@ window.openHistoryDetail = (cacheKey) => {
     try {
         const changes = JSON.parse(item.details);
         console.log('Changes to display:', changes);
+        // Accumulate rows then write once — `container.innerHTML +=` per iteration
+        // re-serialises + re-parses the whole container every time (O(n²)).
+        const parts: string[] = [];
         changes.forEach(c => {
             const fieldLabel = t('detail.' + c.field) || c.field;
             
@@ -571,7 +574,7 @@ window.openHistoryDetail = (cacheKey) => {
             const oldVal = formatValue(c.old);
             const newVal = formatValue(c.new);
             
-            container.innerHTML += `
+            parts.push(`
                 <div class="diff-row" style="background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:12px; overflow:hidden">
                     <div style="background:rgba(59,130,246,0.1); padding:8px 15px; border-bottom:1px solid var(--border); font-weight:700; font-size:11px; color:var(--accent); text-transform:uppercase; letter-spacing:0.05em; display:flex; justify-content:space-between; align-items:center">
                         <span>${escHtml(truncate(fieldLabel, 50))}</span>
@@ -594,9 +597,10 @@ window.openHistoryDetail = (cacheKey) => {
                         </div>
                     </div>
                 </div>
-            `;
+            `);
         });
-        
+        container.innerHTML = parts.join('');
+
         // Add Revert Button if applicable
         const footer = modal.querySelector('.modal-footer');
         if (footer) {
