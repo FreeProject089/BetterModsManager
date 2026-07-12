@@ -43,7 +43,9 @@ pub fn log_line(line: impl Into<String>) {
             .append(true)
             .open(get_realtime_log_path()) {
             let _ = writeln!(file, "{}", entry);
-            let _ = file.sync_all(); // Force physical write to disk
+            // sync_data (fdatasync) forces the appended bytes to disk for crash-safety
+            // WITHOUT the extra metadata flush of sync_all — cheaper on a per-line path.
+            let _ = file.sync_data();
         }
     }
 }
@@ -66,8 +68,12 @@ pub fn is_shutting_down() -> bool {
 
 // ─── DIRECTORIES & PATHS ─────────────────────────────────────────────────────
 
-fn get_realtime_log_path() -> PathBuf {
-    get_crash_dir(None).join(format!("session_{}.log", std::process::id()))
+/// The current session's realtime log path. Cached: the crash dir + PID are constant
+/// for the process, so this used to re-read the APPDATA env var and allocate a fresh
+/// PathBuf on *every* `log_line()` call (the hottest path in the app).
+fn get_realtime_log_path() -> &'static Path {
+    static PATH: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+    PATH.get_or_init(|| get_crash_dir(None).join(format!("session_{}.log", std::process::id())))
 }
 
 /// Read the tail of the current session's realtime Rust log — used by the local
@@ -191,7 +197,7 @@ pub fn init_session() {
 
     // 2. Start our own log for this session
     let log_path = get_realtime_log_path();
-    if let Ok(mut file) = fs::File::create(&log_path) {
+    if let Ok(mut file) = fs::File::create(log_path) {
         let _ = writeln!(file, "--- NEW SESSION STARTED AT {} (PID: {}) ---", chrono::Local::now().to_rfc3339(), my_pid);
         let _ = file.sync_all();
     }
@@ -238,7 +244,7 @@ pub fn generate_report(
     override_log: Option<String>,
     frontend_dump: Option<String>,
 ) -> Option<PathBuf> {
-    generate_report_internal(is_crash, reason, app_state, override_log, Some(get_realtime_log_path()), frontend_dump)
+    generate_report_internal(is_crash, reason, app_state, override_log, Some(get_realtime_log_path().to_path_buf()), frontend_dump)
 }
 
 fn generate_report_internal(
