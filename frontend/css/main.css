@@ -5681,6 +5681,27 @@ select.input-field option {
 .crashmgr-pre { background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 11px; font-family: var(--font-mono, monospace); white-space: pre-wrap; word-break: break-word; max-height: 220px; overflow: auto; margin: 0; color: var(--text-secondary); }
 .crashmgr-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
 
+/* ── Per-file reader (D1): browse & read any text file inside a report zip ── */
+.crashmgr-fileshint { font-size: 11px; color: var(--text-muted); margin: 2px 0 6px; }
+.crashmgr-filelist { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.crashmgr-file {
+    font-family: var(--font-mono, monospace); font-size: 11px;
+    padding: 4px 9px; border-radius: 7px; cursor: pointer;
+    background: var(--bmm-s04); color: var(--text-secondary);
+    border: 1px solid var(--border); transition: color .12s, border-color .12s, background .12s;
+}
+.crashmgr-file:hover { color: var(--accent); border-color: var(--border-accent); background: var(--bmm-s06); }
+.crashmgr-file.active { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
+/* Non-text entries (binaries, the .bmmreplay recording) — shown but not clickable. */
+.crashmgr-file-bin { cursor: default; opacity: 0.55; }
+.crashmgr-file-bin:hover { color: var(--text-secondary); border-color: var(--border); background: var(--bmm-s04); }
+.crashmgr-fileview[hidden] { display: none; }
+.crashmgr-fileview-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.crashmgr-fileview-name { font-family: var(--font-mono, monospace); font-size: 12px; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.crashmgr-fileview-trunc { font-size: 10px; font-weight: 700; color: var(--warning); background: var(--bmm-warning-dim); padding: 1px 7px; border-radius: 999px; flex-shrink: 0; }
+.crashmgr-fileview-head [data-fileclose] { margin-left: auto; flex-shrink: 0; }
+.crashmgr-fileview-body { max-height: 340px; }
+
 .nbe-code { font-family: var(--font-mono, monospace); font-size: 12px; resize: vertical; min-height: 56px; }
 .nbe-pages > summary { color: var(--accent); }
 .nbe-page-block { border: 1px solid var(--border); border-radius: 8px; background: rgba(255,255,255,0.025); padding: 8px; margin-bottom: 8px; }

@@ -534,6 +534,7 @@ fn main() {
             commands::crash::list_crash_reports,
             commands::crash::delete_crash_report,
             commands::crash::read_crash_report,
+            commands::crash::read_crash_report_file,
             commands::crash::read_crash_session,
             commands::crash::copy_file,
             commands::modpack::save_modpack,

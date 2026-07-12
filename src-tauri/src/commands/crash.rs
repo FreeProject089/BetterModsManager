@@ -740,6 +740,62 @@ pub fn read_crash_report(path: String) -> Result<serde_json::Value, String> {
     }))
 }
 
+/// Allow-list of extensions we will surface as readable TEXT from a report zip.
+/// Anything else (binaries, the .bmmreplay recording, …) is refused by the reader.
+fn is_readable_text_ext(name: &str) -> bool {
+    matches!(
+        std::path::Path::new(&name.to_ascii_lowercase())
+            .extension()
+            .and_then(|s| s.to_str()),
+        Some("txt" | "md" | "log" | "json" | "cfg" | "toml" | "csv" | "yaml" | "yml" | "ini")
+    )
+}
+
+/// Hard cap on how much of a single report file we read into memory (2 MB).
+const CRASH_FILE_MAX_BYTES: u64 = 2 * 1024 * 1024;
+
+/// Read ONE text file out of a managed report .zip so the user can inspect any of
+/// its contents in-app (not just the 3 summarised files).
+///
+/// Security:
+/// - the archive itself must live inside BMM's own Crashes tree
+///   (`is_managed_crash_zip` canonicalises + checks the prefix → CWE-22 on the
+///   zip path is covered);
+/// - the entry is matched by its EXACT stored name via `by_name` and read straight
+///   from the archive — nothing is written to disk, so there is no Zip-Slip / path
+///   traversal on the entry either;
+/// - only allow-listed text extensions are served, and reads are capped at 2 MB and
+///   lossy-decoded (a split multibyte boundary or non-UTF-8 bytes can't error out).
+/// The frontend renders the returned string as TEXT (escaped), never as HTML.
+#[tauri::command]
+pub fn read_crash_report_file(path: String, entry: String) -> Result<serde_json::Value, String> {
+    if !is_managed_crash_zip(&path) {
+        return Err("Not a managed crash report".into());
+    }
+    if !is_readable_text_ext(&entry) {
+        return Err("This file type can't be opened as text".into());
+    }
+    let file = fs::File::open(&path).map_err(|e| e.to_string())?;
+    let mut zip = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
+    let mut f = zip
+        .by_name(&entry)
+        .map_err(|_| "File not found in report".to_string())?;
+    let declared = f.size();
+    use std::io::Read;
+    let mut bytes: Vec<u8> = Vec::new();
+    (&mut f)
+        .take(CRASH_FILE_MAX_BYTES)
+        .read_to_end(&mut bytes)
+        .map_err(|e| e.to_string())?;
+    let content = String::from_utf8_lossy(&bytes).to_string();
+    Ok(serde_json::json!({
+        "name": entry,
+        "content": content,
+        "size": declared,
+        "truncated": declared > CRASH_FILE_MAX_BYTES,
+    }))
+}
+
 /// Extract the attached session recording (session_replay.bmmreplay) from a report
 /// zip and return its JSON so the in-app player can replay it directly.
 #[tauri::command]

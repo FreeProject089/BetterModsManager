@@ -171,15 +171,53 @@ export async function openCrashManager(): Promise<void> {
             detail.innerHTML = `<p class="crashmgr-empty">${t('common.loading') || 'Loading…'}</p>`;
             try {
                 const r = await invoke('read_crash_report', { path }) as { metadata: string; systemInfo: string; logs: string; files: string[]; hasSession: boolean; };
+                // Which entries the backend will serve as text (mirrors its allow-list).
+                const TEXT_EXTS = ['txt', 'md', 'log', 'json', 'cfg', 'toml', 'csv', 'yaml', 'yml', 'ini'];
+                const isText = (n: string) => TEXT_EXTS.includes((n.split('.').pop() || '').toLowerCase());
+                const filesList = r.files.map(fn => isText(fn)
+                    ? `<button class="crashmgr-file" data-file="${esc(fn)}">${esc(fn)}</button>`
+                    : `<span class="crashmgr-file crashmgr-file-bin" title="${esc(t('crashmgr.notText') || 'Not a readable text file')}">${esc(fn)}</span>`
+                ).join('');
                 detail.innerHTML = `
                     ${r.hasSession ? `<button class="btn btn-xs btn-accent" data-play style="margin-bottom:8px">${t('crashmgr.playSession') || '▶ Play session'}</button>` : ''}
                     ${r.metadata ? `<h5>metadata</h5><pre class="crashmgr-pre">${esc(r.metadata)}</pre>` : ''}
                     ${r.logs ? `<h5>app logs (tail)</h5><pre class="crashmgr-pre">${esc(r.logs)}</pre>` : ''}
                     ${r.systemInfo ? `<details class="crashmgr-sub"><summary>system_info</summary><pre class="crashmgr-pre">${esc(r.systemInfo)}</pre></details>` : ''}
-                    <details class="crashmgr-sub"><summary>${t('crashmgr.files') || 'Files in report'} (${r.files.length})</summary><pre class="crashmgr-pre">${esc(r.files.join('\n'))}</pre></details>`;
+                    <details class="crashmgr-sub" open><summary>${t('crashmgr.files') || 'Files in report'} (${r.files.length})</summary>
+                        <p class="crashmgr-fileshint">${t('crashmgr.filesHint') || 'Click a file to read its contents.'}</p>
+                        <div class="crashmgr-filelist">${filesList}</div>
+                        <div class="crashmgr-fileview" data-fileview hidden></div>
+                    </details>`;
                 detail.querySelector('[data-play]')?.addEventListener('click', async () => {
                     try { const json = await invoke('read_crash_session', { path }) as string; await playReplayJson(json); }
                     catch (e) { toast(String(e), 'error'); }
+                });
+                // Read-only per-file viewer. Content is rendered as escaped text in a
+                // <pre> — never as HTML — and served through the sandboxed backend command.
+                const fileview = detail.querySelector('[data-fileview]') as HTMLElement | null;
+                detail.querySelectorAll('.crashmgr-file[data-file]').forEach(btn => {
+                    btn.addEventListener('click', async () => {
+                        if (!fileview) return;
+                        const entry = (btn as HTMLElement).dataset.file || '';
+                        detail.querySelectorAll('.crashmgr-file.active').forEach(b => b.classList.remove('active'));
+                        btn.classList.add('active');
+                        fileview.hidden = false;
+                        fileview.innerHTML = `<p class="crashmgr-empty">${t('common.loading') || 'Loading…'}</p>`;
+                        try {
+                            const fd = await invoke('read_crash_report_file', { path, entry }) as { name: string; content: string; size: number; truncated: boolean };
+                            fileview.innerHTML = `
+                                <div class="crashmgr-fileview-head">
+                                    <span class="crashmgr-fileview-name">${esc(fd.name)}</span>
+                                    ${fd.truncated ? `<span class="crashmgr-fileview-trunc">${t('crashmgr.truncated') || 'truncated to 2 MB'}</span>` : ''}
+                                    <button class="btn btn-xs btn-ghost" data-fileclose>${t('common.close') || 'Close'}</button>
+                                </div>
+                                <pre class="crashmgr-pre crashmgr-fileview-body">${esc(fd.content)}</pre>`;
+                            fileview.querySelector('[data-fileclose]')?.addEventListener('click', () => {
+                                fileview.hidden = true; fileview.innerHTML = '';
+                                btn.classList.remove('active');
+                            });
+                        } catch (e) { fileview.innerHTML = `<p class="crashmgr-empty">${esc(String(e))}</p>`; }
+                    });
                 });
             } catch (e) { detail.innerHTML = `<p class="crashmgr-empty">${esc(String(e))}</p>`; }
         }

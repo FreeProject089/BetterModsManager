@@ -60,8 +60,6 @@ let _skipUnsavedWarning = false;
 
 // Drag state
 let _isDragging = false;
-let _dragOffX   = 0;
-let _dragOffY   = 0;
 let _panelLeft: number | null = null;
 let _panelTop:  number | null = null;
 
@@ -331,6 +329,8 @@ function _makeDraggable(handle: HTMLElement, panel: HTMLElement): void {
         const parent = panel.parentElement;
         if (!parent) return;
 
+        // First drag: convert from bottom/center anchoring to explicit left/top so
+        // the transform channel below is free to carry the live drag offset.
         if (_panelLeft === null) {
             const pr   = parent.getBoundingClientRect();
             const r    = panel.getBoundingClientRect();
@@ -343,24 +343,39 @@ function _makeDraggable(handle: HTMLElement, panel: HTMLElement): void {
         }
 
         _isDragging = true;
-        _dragOffX   = e.clientX - _panelLeft!;
-        _dragOffY   = e.clientY - _panelTop!;
+        // Drag purely on the compositor: keep left/top fixed at their committed
+        // value and carry the live offset in transform: translate3d(). Writing
+        // left/top every mousemove (the old code) forced a layout each frame → the
+        // visible lag. We rAF-throttle and bake the transform into left/top on drop.
+        const startX = e.clientX, startY = e.clientY;
+        const baseLeft = _panelLeft!, baseTop = _panelTop!;
+        const pr0  = parent.getBoundingClientRect();
+        const maxL = pr0.width  - panel.offsetWidth;
+        const maxT = pr0.height - panel.offsetHeight;
         panel.classList.add('dragging');
+        panel.style.willChange = 'transform';
         e.preventDefault();
 
+        let curL = baseLeft, curT = baseTop, rafId = 0;
+        const paint = () => {
+            rafId = 0;
+            panel.style.transform = `translate3d(${curL - baseLeft}px, ${curT - baseTop}px, 0)`;
+        };
         function onMove(me: MouseEvent) {
             if (!_isDragging) return;
-            const pr = parent!.getBoundingClientRect();
-            let l  = me.clientX - _dragOffX;
-            let tp = me.clientY - _dragOffY;
-            l  = Math.max(0, Math.min(l,  pr.width  - panel.offsetWidth));
-            tp = Math.max(0, Math.min(tp, pr.height - panel.offsetHeight));
-            _panelLeft = l; _panelTop = tp;
-            panel.style.left = `${l}px`;
-            panel.style.top  = `${tp}px`;
+            curL = Math.max(0, Math.min(baseLeft + (me.clientX - startX), maxL));
+            curT = Math.max(0, Math.min(baseTop  + (me.clientY - startY), maxT));
+            _panelLeft = curL; _panelTop = curT;
+            if (!rafId) rafId = requestAnimationFrame(paint);
         }
         function onUp() {
             _isDragging = false;
+            if (rafId) { cancelAnimationFrame(rafId); rafId = 0; }
+            // Bake the final offset back into left/top, then clear the transform.
+            panel.style.transform = 'none';
+            panel.style.left      = `${_panelLeft}px`;
+            panel.style.top       = `${_panelTop}px`;
+            panel.style.willChange = '';
             panel.classList.remove('dragging');
             document.removeEventListener('mousemove', onMove);
             document.removeEventListener('mouseup',   onUp);
