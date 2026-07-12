@@ -191,7 +191,6 @@ function _renderTutorialCard(tut: TutorialDef): string {
         `;
     } else {
         actionBtn = `
-            <span class="tut-card-hint">${t('hub.notStartedHint')}</span>
             <button class="btn btn-primary tut-card-cta" data-tut-start="${tut.id}" style="background:${tut.color};border-color:${tut.color};box-shadow:0 4px 18px -4px ${tut.color}55">${t('hub.start')} →</button>
         `;
     }

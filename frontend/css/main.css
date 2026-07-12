@@ -298,7 +298,7 @@ body.is-maximized .titlebar-spacer {
     font-weight: 700;
     font-style: italic;
     font-size: 19px;
-    color: rgba(var(--bmm-surface-r),var(--bmm-surface-g),var(--bmm-surface-b),0.6);
+    color: var(--bmm-brand-better);   /* fixed — never recolours with the theme */
     letter-spacing: 0.02em;
 }
 
@@ -307,7 +307,7 @@ body.is-maximized .titlebar-spacer {
     font-weight: 900;
     font-style: italic;
     font-size: 24px;
-    color: var(--bmm-warning);
+    color: var(--bmm-brand-mm);       /* fixed brand amber */
     letter-spacing: -0.01em;
     text-shadow: 0 0 15px rgba(245, 158, 11, 0.3);
 }
@@ -1099,6 +1099,14 @@ body.is-maximized .titlebar-spacer {
     cursor: pointer;
     user-select: none;
     transition: var(--transition);
+    /* Match the section radius so the :hover fill never overflows the rounded
+       corners. Expanded → round only the top (content continues below);
+       collapsed → the header IS the whole section, so round all four. */
+    border-radius: 11px 11px 0 0;
+}
+
+.collapsible-section.collapsed .collapsible-header {
+    border-radius: 11px;
 }
 
 .collapsible-header:hover {
@@ -10101,12 +10109,12 @@ select:focus {
     margin-bottom: 4px;
 }
 .tasky-hidden-logo .brand-better {
-    color: var(--text-primary);
+    color: var(--bmm-brand-better);   /* fixed — never recolours with the theme */
     font-size: 13px;
     font-weight: 700;
 }
 .tasky-hidden-logo .brand-modmanager {
-    background: linear-gradient(135deg, #fbbf24, var(--bmm-warning));
+    background: linear-gradient(135deg, var(--bmm-brand-mm-2), var(--bmm-brand-mm));
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;

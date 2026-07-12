@@ -295,6 +295,19 @@
 .apps-card:hover .apps-tag { background: rgba(var(--accent-rgb), 0.13); color: var(--text-primary); }
 .apps-version { font-size: 11px; color: var(--text-muted); }
 
+/* Price on browse cards: quiet meta text (not a loud overlay pill). A leading
+   dot separates it from the category/version to its left. */
+.apps-card-price {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    display: inline-flex;
+    align-items: center;
+}
+.apps-card-price::before { content: "·"; margin-right: 5px; opacity: 0.6; }
+.apps-card-price-paid     { color: var(--warning); }
+.apps-card-price-freemium { color: var(--bmm-purple); }
+
 /* ── Installed List ── */
 .apps-installed-list { display: flex; flex-direction: column; gap: 8px; }
 .apps-installed-row {

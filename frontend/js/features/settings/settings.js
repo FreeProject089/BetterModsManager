@@ -1452,10 +1452,6 @@ async function refreshBcLinkStatus() {
         return;
     }
     const wasLinked = localStorage.getItem('bc_linked') === '1';
-    // The "what you unlock" value line is only useful before linking — hide it once linked.
-    const valueEl = document.getElementById('bc-link-value');
-    if (valueEl)
-        valueEl.style.display = data.linked ? 'none' : 'flex';
     if (data.linked) {
         localStorage.setItem('bc_linked', '1');
         const dtxt = data.discord?.linked
@@ -1587,12 +1583,6 @@ async function initSecurityInfoCard() {
         status.style.cssText = 'margin-top:12px;font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:7px';
         status.textContent = t('settings.link.checking') || 'Checking BetterCommunity link…';
         card?.appendChild(status);
-        // Reciprocity: show what linking gives BEFORE the ask, so the effort feels worth it.
-        const valueEl = document.createElement('div');
-        valueEl.id = 'bc-link-value';
-        valueEl.style.cssText = 'margin-top:8px;font-size:12px;color:var(--text-secondary);display:flex;align-items:flex-start;gap:7px;line-height:1.45';
-        valueEl.innerHTML = `<span style="color:#f59e0b;flex:0 0 auto">✦</span><span>${escHtml(t('settings.link.value') || 'Unlocks whitelisted private repos, multi-PC sync and your creator badge.')}</span>`;
-        card?.appendChild(valueEl);
         const row = document.createElement('div');
         row.style.cssText = 'margin-top:8px;display:flex;gap:8px;flex-wrap:wrap';
         const btn = document.createElement('button');

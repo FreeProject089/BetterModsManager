@@ -54,6 +54,15 @@
     --bmm-success-dim: rgba(16, 185, 129, 0.15);
     --bmm-warning-dim: rgba(245, 158, 11, 0.15);
 
+    /* ── Brand wordmark (FIXED — never theme-overridable) ─────────────────────
+       The "Better ModManager" logo must read the same under every theme, so it
+       uses its own tokens that the theme system + theme editor deliberately do
+       NOT expose. Neutral grey stays legible on dark AND light sidebars; the
+       amber is the brand accent. Do not point these at --bmm-surface/-warning. */
+    --bmm-brand-better: #9ca3af;   /* neutral, legible on dark and light */
+    --bmm-brand-mm:     #f59e0b;   /* fixed brand amber */
+    --bmm-brand-mm-2:   #fbbf24;   /* lighter amber for the wordmark gradient */
+
     /* ── Diagrams (Help & other interactive flowcharts) ──────────────────── */
     --bmm-diagram-node:        var(--bmm-bg-elevated);   /* node fill — follows theme */
     --bmm-diagram-node-border: var(--bmm-border-accent);

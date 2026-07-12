@@ -385,28 +385,40 @@ function renderAppCard(app: AppEntry) {
         <div class="apps-card-thumb-placeholder">${thumbIcon(app.category)}</div>
         ${thumb ? `<img class="apps-card-thumb-img" src="${escAttr(thumb)}" alt="" loading="lazy" onerror="this.style.display='none'">` : ''}
         <div class="apps-card-badges">
-          ${app.official ? `<span class="apps-official-badge">✦ Official</span>` : ''}
-          ${app.partner && !app.official ? `<span class="apps-partner-badge">Partner</span>` : ''}
-          ${priceBadge(app.price)}
+          ${installed
+            ? `<span class="apps-card-installed-chip">${IC.check} ${t('apps.installed')||'Installed'}</span>`
+            : app.official ? `<span class="apps-official-badge">✦ Official</span>`
+            : app.partner ? `<span class="apps-partner-badge">Partner</span>`
+            : ''}
         </div>
         ${fav ? `<div class="apps-card-fav-star">${IC.starFill}</div>` : ''}
-        ${installed ? `<div class="apps-card-installed-chip">${IC.check} Installed</div>` : ''}
       </div>
       <div class="apps-card-body">
         <span class="apps-card-title">${escHtml(app.title)}</span>
         <div class="apps-card-meta">
           <span class="apps-cat-badge apps-cat-${app.category}">${catIconSm(app.category)}${escHtml(app.category)}</span>
           ${app.version ? `<span class="apps-version">v${escHtml(app.version)}</span>` : ''}
+          ${priceText(app.price)}
         </div>
         <p class="apps-card-desc">${escHtml(app.description)}</p>
-        <div class="apps-card-tags">${app.tags.slice(0,3).map(tag=>`<span class="apps-tag">${escHtml(tag)}</span>`).join('')}${app.tags.length>3?`<span class="apps-tag apps-tag-more">+${app.tags.length-3}</span>`:''}</div>
+        <div class="apps-card-tags">${app.tags.slice(0,2).map(tag=>`<span class="apps-tag">${escHtml(tag)}</span>`).join('')}${app.tags.length>2?`<span class="apps-tag apps-tag-more">+${app.tags.length-2}</span>`:''}</div>
       </div>
     </div>`;
 }
 
+/** Loud pill kept for the detail modal (priceBadge); the browse card uses the
+ *  quieter priceText() below so the card carries only one prominent signal. */
 function priceBadge(price: string) {
     const cls: Record<string,string> = { free:'apps-price-free', freemium:'apps-price-freemium', paid:'apps-price-paid' };
     return `<span class="apps-price-badge ${cls[price]||''}">${escHtml(price)}</span>`;
+}
+
+/** Subtle, localized price as muted meta text (not a loud overlay pill). */
+function priceText(price: string) {
+    const label = price === 'paid' ? (t('apps.price.paid') || 'Paid')
+        : price === 'freemium' ? (t('apps.price.freemium') || 'Freemium')
+        : (t('apps.price.free') || 'Free');
+    return `<span class="apps-card-price apps-card-price-${escAttr(price)}">${escHtml(label)}</span>`;
 }
 
 /** Small (badge-sized) category icon — drawn at 12px via CSS. */
