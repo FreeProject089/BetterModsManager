@@ -595,13 +595,10 @@ pub async fn install_app(
     std::fs::create_dir_all(&target_dir).map_err(|e| format!("mkdir failed: {}", e))?;
 
     // Download
-    let client = reqwest::Client::builder()
-        .user_agent("BetterModsManager/1.0")
+    let resp = crate::commands::net::client().get(&download_url)
+        .header(reqwest::header::USER_AGENT, "BetterModsManager/1.0")
         .timeout(std::time::Duration::from_secs(300))
-        .build()
-        .map_err(|e| e.to_string())?;
-
-    let resp = client.get(&download_url).send().await
+        .send().await
         .map_err(|e| format!("Download failed: {}", e))?;
 
     if !resp.status().is_success() {

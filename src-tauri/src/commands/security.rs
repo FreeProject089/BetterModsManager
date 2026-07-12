@@ -419,15 +419,13 @@ pub fn get_creator_id(handle: AppHandle) -> Result<String, String> {
     Ok(hex::encode(verifying_key.to_bytes()))
 }
 
-/// Shared HTTP client for all BetterCommunity API calls (blog feed, account link,
-/// avatars). A `reqwest::Client` owns a connection pool + TLS session cache, so
-/// building a fresh one per request — as each of these commands used to — threw the
-/// pool away every call and forced a new TCP + TLS handshake to the same host. One
-/// process-wide client reuses keep-alive connections; per-request timeouts are set on
-/// the RequestBuilder so a single client still serves every call site.
+/// Shared HTTP client for the BetterCommunity API calls (blog feed, account link,
+/// avatars) — the process-wide pooled client from `commands::net`, so these keep-alive
+/// to the BC host instead of rebuilding a client + TLS handshake per call. Per-request
+/// timeouts are set on the RequestBuilder.
+#[inline]
 fn bc_http_client() -> &'static reqwest::Client {
-    static CLIENT: std::sync::OnceLock<reqwest::Client> = std::sync::OnceLock::new();
-    CLIENT.get_or_init(|| reqwest::Client::builder().build().unwrap_or_default())
+    crate::commands::net::client()
 }
 
 /// Proxy a GET to a BetterCommunity API URL from Rust. The webview lives at the

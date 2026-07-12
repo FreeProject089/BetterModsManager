@@ -584,11 +584,9 @@ pub async fn page_fetch<R: Runtime>(
         return Err("origin_not_allowed".into());
     }
     // 3) Plain GET, no BMM credentials, size-capped.
-    let client = reqwest::Client::builder()
+    let resp = crate::commands::net::client().get(&url)
         .timeout(std::time::Duration::from_secs(20))
-        .build()
-        .map_err(|e| e.to_string())?;
-    let resp = client.get(&url).send().await.map_err(|e| e.to_string())?;
+        .send().await.map_err(|e| e.to_string())?;
     let status = resp.status().as_u16();
     let bytes = resp.bytes().await.map_err(|e| e.to_string())?;
     if bytes.len() > MAX_FETCH_BYTES {

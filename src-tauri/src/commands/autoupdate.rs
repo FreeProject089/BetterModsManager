@@ -312,12 +312,9 @@ pub async fn download_and_install_update(url: String, filename: String) -> Resul
 #[tauri::command]
 pub async fn fetch_update_manifest(url: String) -> Result<UpdateManifest, String> {
     log_line(format!("[UPDATE] Fetching incremental manifest from: {}", url));
-    let client = reqwest::Client::builder()
-        .user_agent("BetterModManager")
-        .build()
-        .map_err(|e| format!("HTTP client error: {}", e))?;
-
-    let response = client.get(&url).send().await.map_err(|e| format!("Network error: {}", e))?;
+    let response = crate::commands::net::client().get(&url)
+        .header(reqwest::header::USER_AGENT, "BetterModManager")
+        .send().await.map_err(|e| format!("Network error: {}", e))?;
     if !response.status().is_success() {
         return Err(format!("Manifest fetch failed: {}", response.status()));
     }

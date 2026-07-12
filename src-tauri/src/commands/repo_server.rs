@@ -177,12 +177,9 @@ async fn get_cloudflared_path(handle: &tauri::AppHandle) -> Result<PathBuf, Stri
         };
         let url = format!("https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-{}.exe", arch);
         
-        let client = reqwest::Client::builder()
-            .user_agent("BetterModsManager/1.0")
-            .build()
-            .map_err(|e| format!("Client error: {}", e))?;
-
-        let response = client.get(&url).send().await.map_err(|e| format!("Download error: {}", e))?;
+        let response = crate::commands::net::client().get(&url)
+            .header(reqwest::header::USER_AGENT, "BetterModsManager/1.0")
+            .send().await.map_err(|e| format!("Download error: {}", e))?;
         if !response.status().is_success() {
             return Err(format!("Échec du téléchargement (Status {}): {}", response.status(), url));
         }

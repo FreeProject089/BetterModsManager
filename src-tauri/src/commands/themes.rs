@@ -297,16 +297,11 @@ pub async fn fetch_theme_catalogs(
     official_url: String,
     community_urls: Vec<String>,
 ) -> Result<String, String> {
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(8))
-        .build()
-        .map_err(|e| e.to_string())?;
-
     let urls: Vec<String> = std::iter::once(official_url).chain(community_urls).collect();
     let mut all: Vec<serde_json::Value> = Vec::new();
 
     for url in urls {
-        if let Ok(resp) = client.get(&url).send().await {
+        if let Ok(resp) = crate::commands::net::client().get(&url).timeout(std::time::Duration::from_secs(8)).send().await {
             if let Ok(json) = resp.json::<serde_json::Value>().await {
                 let list = if json.is_array() {
                     json.as_array().cloned().unwrap_or_default()

@@ -134,10 +134,11 @@ fn detect_vm(model: &str, manuf: &str, gpu: &str) -> bool {
 
 /// Best-effort public IP (HTTPS to a plain IP-echo service). Empty on failure.
 async fn public_ip() -> String {
-    let client = match reqwest::Client::builder().timeout(std::time::Duration::from_secs(6)).build() {
-        Ok(c) => c, Err(_) => return String::new(),
-    };
-    match client.get("https://api.ipify.org").send().await {
+    match crate::commands::net::client()
+        .get("https://api.ipify.org")
+        .timeout(std::time::Duration::from_secs(6))
+        .send().await
+    {
         Ok(r) => r.text().await.unwrap_or_default().trim().to_string(),
         Err(_) => String::new(),
     }
@@ -402,21 +403,22 @@ pub async fn analytics_flush(
     // erasure of that exact batch (the dashboard deletes everything tagged with it).
     let packet_id = uuid::Uuid::new_v4().to_string();
     let body = json!({ "api_key": api_key.unwrap_or_default(), "packet_id": packet_id, "batch": batch });
-    let client = reqwest::Client::builder()
-        .user_agent("BetterModsManager")
-        .timeout(std::time::Duration::from_secs(15))
-        .build().map_err(|e| e.to_string())?;
     // Gzip the payload (telemetry batches — especially rrweb replay chunks —
     // compress heavily) to cut upload size & bandwidth. The server transparently
     // decompresses Content-Encoding: gzip request bodies.
     let raw = serde_json::to_vec(&body).map_err(|e| e.to_string())?;
     let req = match gzip_bytes(&raw) {
-        Some(gz) => client.post(&endpoint)
+        Some(gz) => crate::commands::net::client().post(&endpoint)
             .header(reqwest::header::CONTENT_TYPE, "application/json")
             .header(reqwest::header::CONTENT_ENCODING, "gzip")
             .body(gz),
-        None => client.post(&endpoint).json(&body),
+        None => crate::commands::net::client().post(&endpoint).json(&body),
     };
+    // UA + timeout per-request (the shared client carries neither) — preserves the
+    // previous behaviour without rebuilding a client for every flush.
+    let req = req
+        .header(reqwest::header::USER_AGENT, "BetterModsManager")
+        .timeout(std::time::Duration::from_secs(15));
     let resp = match req.send().await {
         Ok(r) => r,
         Err(_) => return Ok(0), // Silently fail on network error to prevent console spam
@@ -488,16 +490,10 @@ pub async fn analytics_packet_status(
         return json!({});
     }
     let url = format!("{}/api/packet-status?ids={}", base, ids.join(","));
-    let client = match reqwest::Client::builder()
-        .user_agent("BetterModsManager")
-        .timeout(std::time::Duration::from_secs(10))
-        .build()
-    {
-        Ok(c) => c,
-        Err(_) => return json!({}),
-    };
-    let resp = match client
+    let resp = match crate::commands::net::client()
         .get(&url)
+        .header(reqwest::header::USER_AGENT, "BetterModsManager")
+        .timeout(std::time::Duration::from_secs(10))
         .header("ngrok-skip-browser-warning", "true")
         .send()
         .await
@@ -529,10 +525,11 @@ pub async fn analytics_request_deletion(
     let url = base.trim().trim_end_matches('/').trim_end_matches("/batch").to_string() + "/delete-request";
     if !endpoint_allowed(&url) { return Err("telemetry endpoint not configured".into()); }
 
-    let client = reqwest::Client::builder().user_agent("BetterModsManager")
-        .timeout(std::time::Duration::from_secs(15)).build().map_err(|e| e.to_string())?;
     let body = json!({ "api_key": api_key.unwrap_or_default(), "packet_id": packet_id });
-    let resp = client.post(&url).json(&body).send().await.map_err(|e| format!("request failed: {}", e))?;
+    let resp = crate::commands::net::client().post(&url)
+        .header(reqwest::header::USER_AGENT, "BetterModsManager")
+        .timeout(std::time::Duration::from_secs(15))
+        .json(&body).send().await.map_err(|e| format!("request failed: {}", e))?;
     if !resp.status().is_success() { return Err(format!("HTTP {}", resp.status())); }
     // The dashboard returns when the packet will be auto-erased (≤ delay window).
     let scheduled = resp.json::<Value>().await.ok()
@@ -571,10 +568,11 @@ pub async fn analytics_request_data(
     if !endpoint_allowed(&url) { return Err("telemetry endpoint not configured".into()); }
     let creator_id = crate::commands::security::get_creator_id(app_handle.clone()).unwrap_or_default();
 
-    let client = reqwest::Client::builder().user_agent("BetterModsManager")
-        .timeout(std::time::Duration::from_secs(15)).build().map_err(|e| e.to_string())?;
     let body = json!({ "api_key": api_key.unwrap_or_default(), "creator_id": creator_id, "email": email });
-    let resp = client.post(&url).json(&body).send().await.map_err(|e| format!("request failed: {}", e))?;
+    let resp = crate::commands::net::client().post(&url)
+        .header(reqwest::header::USER_AGENT, "BetterModsManager")
+        .timeout(std::time::Duration::from_secs(15))
+        .json(&body).send().await.map_err(|e| format!("request failed: {}", e))?;
     if !resp.status().is_success() { return Err(format!("HTTP {}", resp.status())); }
     log_line(format!("[ANALYTICS] data-access request filed for creator {}", creator_id));
     Ok(())

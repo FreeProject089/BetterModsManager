@@ -30,13 +30,9 @@ fn copy_dir_recursive(src: &std::path::Path, dst: &std::path::Path) -> std::io::
 #[tauri::command]
 pub async fn fetch_plugin_catalog(catalog_url: Option<String>) -> Result<CatalogResponse, String> {
     let url = catalog_url.as_deref().unwrap_or(CATALOG_URL);
-    let client = reqwest::Client::builder()
-        .user_agent("BetterModsManager/1.0")
+    let resp = crate::commands::net::client().get(url)
+        .header(reqwest::header::USER_AGENT, "BetterModsManager/1.0")
         .timeout(std::time::Duration::from_secs(15))
-        .build()
-        .map_err(|e| format!("Client build error: {}", e))?;
-
-    let resp = client.get(url)
         .send()
         .await
         .map_err(|e| format!("Network error: {}", e))?;
@@ -66,13 +62,9 @@ pub async fn install_plugin(
 ) -> Result<InstalledPlugin, String> {
     log_line(format!("[PLUGINS] Installing from: {}", download_url));
 
-    let client = reqwest::Client::builder()
-        .user_agent("BetterModsManager/1.0")
+    let bytes = crate::commands::net::client().get(&download_url)
+        .header(reqwest::header::USER_AGENT, "BetterModsManager/1.0")
         .timeout(std::time::Duration::from_secs(60))
-        .build()
-        .map_err(|e| e.to_string())?;
-
-    let bytes = client.get(&download_url)
         .send().await.map_err(|e| format!("Download error: {}", e))?
         .bytes().await.map_err(|e| format!("Read error: {}", e))?;
 
