@@ -256,7 +256,7 @@ function wireFeedbackModal(): void {
         descEl.addEventListener('input', () => {
             const len = descEl.value.length;
             descCount.textContent = `${len}/4500`;
-            descCount.style.color = len > 4200 ? 'var(--error, #ef4444)' : 'var(--text-muted)';
+            descCount.style.color = len > 4200 ? 'var(--danger)' : 'var(--text-muted)';
         });
     }
 
@@ -628,7 +628,7 @@ async function renderCrashReports(): Promise<void> {
             list.appendChild(item);
         });
     } catch (err) {
-        list.innerHTML = `<div class="bh-report-error" style="color:#ef4444;padding:10px;font-size:11px">${t('betahub.errorListReports')}: ${err}</div>`;
+        list.innerHTML = `<div class="bh-report-error" style="color:var(--danger);padding:10px;font-size:11px">${t('betahub.errorListReports')}: ${err}</div>`;
     }
 }
 
@@ -648,7 +648,7 @@ function wireCharCounter(inputId: string, counterId: string, max: number): void 
     el.addEventListener('input', () => {
         const len = el.value.length;
         counter.textContent = `${len}/${max}`;
-        counter.style.color = len > max * 0.93 ? 'var(--error, #ef4444)' : 'var(--text-muted)';
+        counter.style.color = len > max * 0.93 ? 'var(--danger)' : 'var(--text-muted)';
     });
 }
 
@@ -1121,7 +1121,7 @@ function formatFileSize(bytes: number): string {
 function showFieldError(fieldId: string, message: string): void {
     const field = document.getElementById(fieldId);
     if (!field) return;
-    field.style.borderColor = '#ef4444';
+    field.style.borderColor = 'var(--danger)';
     const errorEl = document.createElement('div');
     errorEl.className = 'bh-field-error';
     errorEl.textContent = message;
@@ -1496,10 +1496,10 @@ function updateStrengthGauge(modal: 'feedback' | 'bug', score: number): void {
     needleGroup.style.transform = `rotate(${rotation}deg)`;
 
     // 2. Dynamic Needle Color
-    let needleColor = '#ef4444'; // Bad
-    if (score >= 25 && score < 50) needleColor = '#f59e0b'; // Well
-    else if (score >= 50 && score < 75) needleColor = '#3b82f6'; // Good
-    else if (score >= 75) needleColor = '#10b981'; // Best
+    let needleColor = 'var(--danger)'; // Bad
+    if (score >= 25 && score < 50) needleColor = 'var(--warning)'; // Well
+    else if (score >= 50 && score < 75) needleColor = 'var(--info)'; // Good
+    else if (score >= 75) needleColor = 'var(--success)'; // Best
     
     needleGroup.style.color = needleColor;
 
