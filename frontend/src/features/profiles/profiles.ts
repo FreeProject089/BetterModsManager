@@ -536,7 +536,15 @@ async function confirmCreateProfile() {
             try { await invoke('import_profile_icon', { profileId: profile.id, sourcePath: newIconSrc }); } catch (e) { console.warn('[profiles] import icon failed', e); }
         }
         document.getElementById('modal-new-profile').classList.remove('open');
-        toast(t('prof.created').replace('{name}', profile.name), 'success');
+        // IKEA effect: celebrate the FIRST profile the user ever builds (one time), then
+        // fall back to the normal toast for subsequent ones.
+        const isFirstProfile = (() => { try { return !localStorage.getItem('bmm_first_profile_done'); } catch { return false; } })();
+        if (isFirstProfile) {
+            try { localStorage.setItem('bmm_first_profile_done', '1'); } catch {}
+            celebrateFirstProfile();
+        } else {
+            toast(t('prof.created').replace('{name}', profile.name), 'success');
+        }
         dispatchBmmAction(BMM_ACTIONS.PROFILE_CREATED, { profileId: profile.id, name: profile.name });
         await renderProfiles();
         updateProfileChip();
@@ -555,6 +563,29 @@ async function confirmCreateProfile() {
     } catch (err) {
         toast(cleanRustErr(err) || t('common.error'), 'error');
     }
+}
+
+// One-time celebration for the user's first profile — turns the effort just invested
+// into a small moment of pride + reminds them it's customizable (color/icon).
+function celebrateFirstProfile(): void {
+    document.getElementById('first-profile-celebrate')?.remove();
+    const o = document.createElement('div');
+    o.id = 'first-profile-celebrate';
+    o.style.cssText = 'position:absolute;inset:0;z-index:10600;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(8,10,16,0.72);backdrop-filter:blur(8px);opacity:0;transition:opacity .3s ease';
+    o.innerHTML = `
+      <div class="fpc-card" style="position:relative;width:min(400px,92vw);padding:30px 26px 24px;border-radius:20px;text-align:center;overflow:hidden;
+        background:linear-gradient(160deg,rgba(59,130,246,0.14),var(--bg-elevated,#161b26) 65%);border:1px solid rgba(59,130,246,0.4);
+        box-shadow:0 24px 70px rgba(0,0,0,0.55);transform:translateY(16px) scale(.96);transition:transform .35s cubic-bezier(.2,.9,.3,1.2)">
+        <img src="assets/Tasky_Happy.png" alt="" style="width:84px;height:84px;object-fit:contain;filter:drop-shadow(0 6px 14px rgba(0,0,0,.4))" />
+        <h3 style="margin:12px 0 8px;font-size:19px;font-weight:800;color:var(--text-primary,#fff)">${t('prof.firstTitle') || 'Your first profile is ready! 🎉'}</h3>
+        <p style="margin:0 0 20px;font-size:13px;line-height:1.6;color:var(--text-secondary,#c8c8d4)">${t('prof.firstDesc') || 'Everything you enable is saved here, safe from game updates. Customize it anytime.'}</p>
+        <button id="fpc-go" class="btn btn-primary btn-lg" style="padding:11px 26px">${t('prof.firstCta') || "Let's mod"}</button>
+      </div>`;
+    (document.getElementById('app-window-outer') || document.body).appendChild(o);
+    requestAnimationFrame(() => { o.style.opacity = '1'; const c = o.querySelector('.fpc-card') as HTMLElement | null; if (c) c.style.transform = 'translateY(0) scale(1)'; });
+    const close = () => { o.style.opacity = '0'; setTimeout(() => o.remove(), 320); };
+    o.querySelector('#fpc-go')?.addEventListener('click', close);
+    o.addEventListener('click', e => { if (e.target === o) close(); });
 }
 
 async function confirmEditProfile() {

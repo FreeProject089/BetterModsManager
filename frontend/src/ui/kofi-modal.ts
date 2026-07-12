@@ -56,6 +56,12 @@ export function showKofiReminder(): void {
         <p class="kofi-text">${t('kofi.text') || 'BMM is free and made on my own time. If it saves you some, a small tip on Ko-fi keeps the project alive and ad-free. No pressure — it stays 100% free either way. 💛'}</p>
 
         <div class="kofi-actions">
+          <div class="kofi-tiers" role="group">
+            <a class="kofi-tier" href="${KOFI_URL}" target="_blank" rel="noopener noreferrer" data-kofi-go><span class="kofi-tier-amt">☕</span><span class="kofi-tier-lbl">1</span></a>
+            <a class="kofi-tier kofi-tier--pop" href="${KOFI_URL}" target="_blank" rel="noopener noreferrer" data-kofi-go><span class="kofi-pop">${t('kofi.popular') || 'Popular'}</span><span class="kofi-tier-amt">☕☕☕</span><span class="kofi-tier-lbl">3</span></a>
+            <a class="kofi-tier" href="${KOFI_URL}" target="_blank" rel="noopener noreferrer" data-kofi-go><span class="kofi-tier-amt">☕☕☕☕☕</span><span class="kofi-tier-lbl">5</span></a>
+          </div>
+          <div class="kofi-tier-hint">${t('kofi.tierHint') || 'Pick an amount — it opens Ko-fi.'}</div>
           <a class="kofi-btn-primary" href="${KOFI_URL}" target="_blank" rel="noopener noreferrer" id="kofi-go">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M2 7h15a4 4 0 0 1 0 8h-1.1A6 6 0 0 1 10 19H7a5 5 0 0 1-5-5V7zm15 6a2 2 0 0 0 0-4h-1v4h1z"/></svg>
             <span>${t('kofi.support') || 'Support on Ko-fi'}</span>
@@ -84,7 +90,8 @@ export function showKofiReminder(): void {
         try { localStorage.setItem(OPTOUT_KEY, '1'); } catch {}
         close();
     });
-    overlay.querySelector('#kofi-go')?.addEventListener('click', () => setTimeout(close, 150));
+    // Both the main button and the amount chips open Ko-fi, then close the reminder.
+    overlay.querySelectorAll('#kofi-go, [data-kofi-go]').forEach((el) => el.addEventListener('click', () => setTimeout(close, 150)));
     overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
 }
 
@@ -117,6 +124,23 @@ function injectStyles(): void {
     .kofi-title{margin:0 0 8px;font-size:19px;font-weight:800;color:var(--text-primary,#fff)}
     .kofi-text{margin:0 0 22px;font-size:13.5px;line-height:1.6;color:var(--text-secondary,#c8c8d4)}
     .kofi-actions{display:flex;flex-direction:column;gap:10px}
+    /* Anchored amount chips: the middle "popular" tier sits larger + highlighted so it
+       becomes the mental reference point (contrast/anchoring). All open Ko-fi. */
+    .kofi-tiers{display:flex;align-items:flex-end;justify-content:center;gap:10px;margin-bottom:2px}
+    .kofi-tier{position:relative;display:flex;flex-direction:column;align-items:center;gap:3px;text-decoration:none;cursor:pointer;
+      padding:10px 12px;min-width:64px;border-radius:13px;color:var(--text-secondary,#c8c8d4);
+      border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.04);transition:.16s}
+    .kofi-tier:hover{transform:translateY(-2px);border-color:rgba(255,107,74,0.5);color:#fff}
+    .kofi-tier-amt{font-size:13px;line-height:1;letter-spacing:-1px}
+    .kofi-tier-lbl{font-size:15px;font-weight:800;color:var(--text-primary,#fff)}
+    .kofi-tier--pop{padding:14px 14px 12px;border-color:rgba(255,107,74,0.55);
+      background:linear-gradient(160deg,rgba(255,107,74,0.16),rgba(255,94,91,0.06));box-shadow:0 6px 18px rgba(255,94,91,0.2)}
+    .kofi-tier--pop .kofi-tier-amt{font-size:15px}
+    .kofi-tier--pop .kofi-tier-lbl{font-size:18px}
+    .kofi-pop{position:absolute;top:-9px;left:50%;transform:translateX(-50%);white-space:nowrap;
+      font-size:9px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;padding:2px 7px;border-radius:999px;color:#fff;
+      background:linear-gradient(135deg,#ff6b4a,#ff5e5b);box-shadow:0 3px 8px rgba(255,94,91,0.45)}
+    .kofi-tier-hint{font-size:11px;color:var(--text-muted,#8a8a96);margin:-2px 0 6px}
     .kofi-secondary-row{display:flex;align-items:center;justify-content:center;gap:14px;margin-top:2px}
     .kofi-btn-optout{opacity:0.7;font-size:11.5px}
     .kofi-btn-optout:hover{opacity:1;text-decoration:underline}
