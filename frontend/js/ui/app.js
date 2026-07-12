@@ -29,7 +29,7 @@ import { initInteractionLogging } from './user-logger.js';
 import { initDebugMenu } from '../features/debug/debug-menu.js';
 import { checkSecurityMode } from './security-modal.js';
 import { initPlugins } from '../features/plugins/plugins.js';
-import { loadLinks, getLinks } from '../core/links-config.js';
+import { loadLinks, loadBcConfig, getLinks } from '../core/links-config.js';
 import { initMapper } from '../features/mapper/mapper.js';
 import { initAppsCatalog } from '../features/apps/apps-catalog.js';
 import { initCommunity, openCommunity } from '../features/community/community.js';
@@ -652,6 +652,8 @@ async function main() {
     console.log('[BMM] App starting from generated TypeScript!');
     // Load external link registry first so every module can call getLinks() safely
     await loadLinks();
+    // Resolve the BetterCommunity test-mode/base from app.cfg (blog + account link).
+    await loadBcConfig();
     patchHtmlLinks();
     // Initialize Offline Detection
     initOfflineDetection();

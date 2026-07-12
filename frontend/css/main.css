@@ -15312,3 +15312,13 @@ body.i18n-picking, body.i18n-picking * { cursor: crosshair !important; }
 .monitoring-table tbody tr:hover { background: rgba(6, 182, 212, 0.07); }
 #ban-list-container > *:hover, #whitelist-list-container > *:hover { background: rgba(255, 255, 255, 0.035); border-radius: 10px; }
 .server-modal-header { backdrop-filter: blur(4px); }
+
+/* ── Large-title rendering refinement (Senior UI/UX pass) ──────────────────────
+   Tighter tracking + line-height on the biggest headings for crisper, more legible
+   display type. Font family is UNCHANGED — only spacing/leading are tuned, per spec
+   (letter-spacing -2%, line-height ~115%). Scoped to h1 to avoid touching the wide
+   uppercase kicker/label styles. */
+h1 {
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}

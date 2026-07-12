@@ -373,6 +373,38 @@ pub fn is_auto_eula_enabled(app_handle: tauri::AppHandle) -> bool {
 
 
 #[derive(serde::Serialize)]
+pub struct BcConfig {
+    pub test_mode: bool,
+    pub base_url: String,
+}
+
+/// BetterCommunity blog/community test mode + base URL, read from `app.cfg`:
+///   BCTestMode=true|false        — when true, the in-app blog/community hits BCTestBase
+///   BCTestBase=http://host[:port] — the staging/local base (with OR without a port)
+/// When BCTestMode is false the app falls back to the production `bettercommunity` link
+/// from links-config.ts (resolved on the frontend). Mirrors the other app.cfg flags.
+#[tauri::command]
+pub fn get_bc_config(app_handle: tauri::AppHandle) -> BcConfig {
+    let mut test_mode = false;
+    let mut base_url = String::new();
+    if let Some(path) = resolve_path(&app_handle, "app.cfg") {
+        if let Ok(content) = std::fs::read_to_string(&path) {
+            for line in content.lines() {
+                if let Some((k, v)) = line.trim().split_once('=') {
+                    match k.trim().to_lowercase().as_str() {
+                        "bctestmode" => test_mode = v.trim().eq_ignore_ascii_case("true"),
+                        "bctestbase" => base_url = v.trim().to_string(),
+                        _ => {}
+                    }
+                }
+            }
+        }
+    }
+    info!("[BC] test_mode={}, base_url='{}'", test_mode, base_url);
+    BcConfig { test_mode, base_url }
+}
+
+#[derive(serde::Serialize)]
 pub struct QuickLinksConfig {
     pub card1_disabled: bool,
     pub card2_disabled: bool,

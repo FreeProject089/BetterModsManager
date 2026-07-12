@@ -333,6 +333,7 @@ fn main() {
             commands::settings::is_update_disabled,
             commands::settings::is_auto_eula_enabled,
             commands::settings::get_quicklinks_config,
+            commands::settings::get_bc_config,
             commands::settings::get_license_text,
             commands::settings::get_eula_text,
             commands::settings::get_privacy_text,

@@ -49,11 +49,11 @@ const DEFAULTS: BmmLinks = {
     contributors:     'https://raw.githubusercontent.com/BetterDCS/BMM_Contributors/refs/heads/main/contributors.json',
     autoupdate_api:   'https://api.github.com/repos/FreeProject089/BetterModsManager/releases',
     apps_catalog:     'https://raw.githubusercontent.com/BetterDCS/BMM_App_Catalogue/main/catalog.json',
-    // Telemetry: point this at your dashboard collector. MUST be HTTPS (BMM
-    // refuses plain HTTP), so during local testing expose the dashboard with an
-    // HTTPS tunnel (ngrok/cloudflared) and paste the tunnel URL here + "/batch/".
-    // e.g. 'https://abcd-1234.ngrok-free.app/batch/'. Empty = buffer locally only.
-    analytics_endpoint: 'https://unrivalling-amiyah-hyperpure.ngrok-free.dev/batch/',   // ← your ngrok/cloudflared HTTPS URL, MUST end with /batch/
+    // Telemetry: production collector (MUST be HTTPS — BMM refuses plain HTTP, so the
+    // old localhost dev default only worked in test builds). For LOCAL testing, override
+    // via a hosted links.json or an HTTPS tunnel (ngrok/cloudflared) ending in "/batch/".
+    // Empty = buffer locally only.
+    analytics_endpoint: 'https://telemetry.bettercommunity.ch/batch/',   // production collector — MUST end with /batch/
     analytics_key:      'bmm_pk_3aab75ffc7b964990178682c918f117767ba2657',   // PUBLIC ingest key — safe to ship
     github_repo:      'https://github.com/FreeProject089/BetterModsManager',
     discord:          'https://discord.com/invite/CTaaEF9R75',
@@ -108,4 +108,37 @@ export async function loadLinks(): Promise<void> {
 /** Returns the cached links (call loadLinks() first at app startup). */
 export function getLinks(): Readonly<BmmLinks> {
     return _links;
+}
+
+// ── BetterCommunity base resolution (blog / community / account link) ──────────
+// Test mode + base URL come from app.cfg (BCTestMode / BCTestBase), read once at
+// startup via the get_bc_config Tauri command. When test mode is OFF, everything uses
+// the production `bettercommunity` link above. The base URL may include a port or not.
+let _bcTestMode = false;
+let _bcTestBase = 'http://localhost:5176';
+let _bcLoaded = false;
+
+export async function loadBcConfig(): Promise<void> {
+    if (_bcLoaded) return;
+    _bcLoaded = true;
+    try {
+        const { invoke } = await import('./api.js');
+        const cfg = await invoke('get_bc_config') as { testMode?: boolean; test_mode?: boolean; baseUrl?: string; base_url?: string };
+        if (cfg) {
+            _bcTestMode = !!(cfg.testMode ?? cfg.test_mode);
+            const base = cfg.baseUrl ?? cfg.base_url;
+            if (base && base.trim()) _bcTestBase = base.trim();
+        }
+        console.log(`[BMM] BC config: testMode=${_bcTestMode}, base=${_bcTestBase}`);
+    } catch (_) { /* not in Tauri / cfg unreadable → production defaults */ }
+}
+
+/** Whether the in-app BetterCommunity blog/community points at a test/staging base. */
+export function bcTestMode(): boolean { return _bcTestMode; }
+/** The configured test base URL (with or without a port), trailing slash trimmed. */
+export function bcTestBase(): string { return _bcTestBase.replace(/\/+$/, ''); }
+/** The effective BetterCommunity root: the test base when test mode is on, else the
+ *  production `bettercommunity` link from the loaded links. */
+export function bcRoot(): string {
+    return (_bcTestMode ? bcTestBase() : (_links.bettercommunity || 'https://bettercommunity.ch/')).replace(/\/+$/, '');
 }

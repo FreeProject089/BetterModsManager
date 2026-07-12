@@ -10,22 +10,11 @@ import { t, getLang } from '../../core/i18n.js';
 import { toast } from '../../ui/app.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { renderMarkdown } from '../../ui/update-notes.js';
-import { getLinks } from '../../core/links-config.js';
+import { bcRoot } from '../../core/links-config.js';
 
-// Same BetterCommunity base resolution as the account link in settings.ts: a dev
-// test-mode override, else the configured production site. Both the toggle and the
-// base URL are localStorage-backed (keys shared with settings.ts) so the "Test mode"
-// checkbox in Settings drives the blog/community feed too — no rebuild, no divergence.
-function bcTestMode(): boolean {
-  const v = localStorage.getItem('bmm_bc_testmode');
-  return v == null ? true : v === '1';
-}
-function bcTestBase(): string {
-  return (localStorage.getItem('bmm_bc_base') || 'http://localhost:5176').replace(/\/+$/, '');
-}
-function bcRoot(): string {
-  return (bcTestMode() ? bcTestBase() : (getLinks()?.bettercommunity || 'https://bettercommunity.ch/')).replace(/\/+$/, '');
-}
+// BetterCommunity base resolution is centralized in links-config.ts and driven by
+// app.cfg (BCTestMode / BCTestBase): test mode → the staging base, else the production
+// `bettercommunity` link. Loaded once at startup (loadBcConfig), so bcRoot() is sync.
 // Root-relative media URLs (/api/media/…, /media/…) would resolve against the webview
 // origin (tauri.localhost) and 404. Rewrite them to absolute BCWEB URLs so images,
 // video, audio and covers actually load. Absolute (https://, data:, //) are left alone.
@@ -380,7 +369,10 @@ async function openPost(slug: string): Promise<void> {
   const title = (fr && post.titleFr) || post.title;
   const body = (fr && post.bodyFr) || post.body || '';
   const untranslated = !translated
-    ? `<div class="community-untranslated">${escHtml(t('community.untranslated') || "Cet article n'est pas encore traduit en français — version anglaise affichée.")}</div>`
+    ? `<div class="community-untranslated" role="note">
+         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+         <span><b>${escHtml(t('community.untranslatedTag') || 'Non traduit')}</b> — ${escHtml(t('community.untranslated') || "cet article n'est pas encore traduit en français ; version anglaise affichée.")}</span>
+       </div>`
     : '';
   const authorList: Author[] = [post.author, ...((post.coAuthors || []) as Author[])].filter(Boolean);
   const authorsHtml = authorList.length

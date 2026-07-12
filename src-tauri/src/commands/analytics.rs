@@ -378,7 +378,7 @@ fn endpoint_allowed(e: &str) -> bool {
     e.starts_with("https://")
         || e.starts_with("http://localhost")
         || e.starts_with("http://127.0.0.1")
-        || e.starts_with("http://telemetry.localhost")
+        || e.starts_with("http://telemetry.localhost:5176")
 }
 
 /// Flush the queued events to a PostHog-compatible capture endpoint in one batch.
