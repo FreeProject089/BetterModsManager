@@ -778,13 +778,24 @@ pub fn read_crash_report_file(path: String, entry: String) -> Result<serde_json:
     if !is_managed_crash_zip(&path) {
         return Err("Not a managed crash report".into());
     }
-    if !is_readable_text_ext(&entry) {
-        return Err("This file type can't be opened as text".into());
-    }
     let file = fs::File::open(&path).map_err(|e| e.to_string())?;
     let mut zip = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
+    read_zip_text_entry(&mut zip, &entry)
+}
+
+/// Read one allow-listed text entry from an open report archive. Split out of the
+/// command so the security-relevant core — extension allow-list, EXACT-name match
+/// (never a path-normalised one → no Zip-Slip), size cap and lossy decode — is
+/// unit-testable without the filesystem path guard. Nothing is written to disk.
+fn read_zip_text_entry<R: std::io::Read + std::io::Seek>(
+    zip: &mut zip::ZipArchive<R>,
+    entry: &str,
+) -> Result<serde_json::Value, String> {
+    if !is_readable_text_ext(entry) {
+        return Err("This file type can't be opened as text".into());
+    }
     let mut f = zip
-        .by_name(&entry)
+        .by_name(entry)
         .map_err(|_| "File not found in report".to_string())?;
     let declared = f.size();
     use std::io::Read;
@@ -793,10 +804,9 @@ pub fn read_crash_report_file(path: String, entry: String) -> Result<serde_json:
         .take(CRASH_FILE_MAX_BYTES)
         .read_to_end(&mut bytes)
         .map_err(|e| e.to_string())?;
-    let content = String::from_utf8_lossy(&bytes).to_string();
     Ok(serde_json::json!({
         "name": entry,
-        "content": content,
+        "content": String::from_utf8_lossy(&bytes).to_string(),
         "size": declared,
         "truncated": declared > CRASH_FILE_MAX_BYTES,
     }))
@@ -818,4 +828,99 @@ pub fn read_crash_session(path: String) -> Result<String, String> {
     let mut s = String::new();
     f.read_to_string(&mut s).map_err(|e| e.to_string())?;
     Ok(s)
+}
+
+// ─── TESTS: D1 sandboxed report-file reader ──────────────────────────────────
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+
+    /// Build an in-memory report zip from (name, bytes) pairs.
+    fn make_zip(entries: &[(&str, &[u8])]) -> Vec<u8> {
+        let mut buf = std::io::Cursor::new(Vec::new());
+        {
+            let mut w = zip::ZipWriter::new(&mut buf);
+            for (name, data) in entries {
+                let opts = zip::write::FileOptions::default()
+                    .compression_method(zip::CompressionMethod::Stored);
+                w.start_file(*name, opts).unwrap();
+                w.write_all(data).unwrap();
+            }
+            w.finish().unwrap();
+        }
+        buf.into_inner()
+    }
+
+    fn open(bytes: Vec<u8>) -> zip::ZipArchive<std::io::Cursor<Vec<u8>>> {
+        zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap()
+    }
+
+    #[test]
+    fn ext_allowlist_accepts_text_and_rejects_the_rest() {
+        for ok in ["a.txt", "a.md", "a.log", "a.json", "a.cfg", "a.toml", "a.csv",
+                   "a.yaml", "a.yml", "a.ini", "A.TXT", "deep/dir/x.LOG"] {
+            assert!(is_readable_text_ext(ok), "{ok} should be readable");
+        }
+        for bad in ["a.exe", "a.dll", "a.png", "a.zip", "a.bmmreplay",
+                    "session_replay.bmmreplay", "noext", "a.sh", "a.bat"] {
+            assert!(!is_readable_text_ext(bad), "{bad} must be rejected");
+        }
+    }
+
+    #[test]
+    fn reads_a_text_entry() {
+        let mut z = open(make_zip(&[("notes.txt", b"hello crash log")]));
+        let v = read_zip_text_entry(&mut z, "notes.txt").unwrap();
+        assert_eq!(v["content"].as_str().unwrap(), "hello crash log");
+        assert_eq!(v["truncated"].as_bool().unwrap(), false);
+        assert_eq!(v["size"].as_u64().unwrap(), 15);
+    }
+
+    #[test]
+    fn rejects_binary_extension_even_if_present() {
+        let mut z = open(make_zip(&[("evil.exe", b"MZ\x90\x00")]));
+        assert!(read_zip_text_entry(&mut z, "evil.exe").is_err());
+    }
+
+    #[test]
+    fn rejects_the_binary_replay_via_ext_gate() {
+        let mut z = open(make_zip(&[("session_replay.bmmreplay", b"{}")]));
+        assert!(read_zip_text_entry(&mut z, "session_replay.bmmreplay").is_err());
+    }
+
+    #[test]
+    fn missing_or_traversal_named_entry_is_not_found() {
+        // The archive holds only notes.txt. A traversal-style name that isn't the
+        // EXACT stored entry returns "not found" (by_name is exact; nothing is written
+        // to disk, so there is no path-traversal / Zip-Slip surface to begin with).
+        let mut z = open(make_zip(&[("notes.txt", b"ok")]));
+        assert!(read_zip_text_entry(&mut z, "../../etc/passwd").is_err());
+        assert!(read_zip_text_entry(&mut z, "../secret.txt").is_err());
+        assert!(read_zip_text_entry(&mut z, "missing.log").is_err());
+    }
+
+    #[test]
+    fn caps_oversized_entry_at_2mb() {
+        let big = vec![b'a'; (CRASH_FILE_MAX_BYTES as usize) + 500_000];
+        let mut z = open(make_zip(&[("huge.log", &big)]));
+        let v = read_zip_text_entry(&mut z, "huge.log").unwrap();
+        assert_eq!(v["truncated"].as_bool().unwrap(), true);
+        assert_eq!(v["size"].as_u64().unwrap(), big.len() as u64);
+        // Only the first 2 MB is materialised into the returned string.
+        assert_eq!(v["content"].as_str().unwrap().len(), CRASH_FILE_MAX_BYTES as usize);
+    }
+
+    #[test]
+    fn lossy_decodes_non_utf8_without_panicking() {
+        let mut z = open(make_zip(&[("bad.txt", &[0xff, 0xfe, b'h', b'i'])]));
+        let v = read_zip_text_entry(&mut z, "bad.txt").unwrap();
+        assert!(v["content"].as_str().unwrap().contains("hi"));
+    }
+
+    #[test]
+    fn managed_zip_guard_rejects_non_zip_and_nonexistent() {
+        assert!(!is_managed_crash_zip("C:/whatever/report.txt")); // wrong extension → early false
+        assert!(!is_managed_crash_zip("Z:/nope/does-not-exist.zip")); // canonicalize fails → false
+    }
 }
