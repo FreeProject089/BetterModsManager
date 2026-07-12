@@ -652,7 +652,7 @@ pub async fn install_app(
 
     // Detect installer type from extension or filename.
     // Scripts are never treated as installers, even if named "install.ps1".
-    let url_filename = download_url.split('/').last().unwrap_or("").to_lowercase();
+    let url_filename = download_url.split('/').next_back().unwrap_or("").to_lowercase();
     let is_script = ext == "script"
         || url_filename.ends_with(".ps1") || url_filename.ends_with(".bat")
         || url_filename.ends_with(".cmd") || url_filename.ends_with(".sh")

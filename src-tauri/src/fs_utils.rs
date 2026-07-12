@@ -552,7 +552,7 @@ pub fn resolve_path(app_handle: &tauri::AppHandle, path: &str) -> Option<std::pa
         path.to_string(), // As requested (e.g. "Lang/en.json")
         format!("_up_/{}", path), // Bundled relative parent (e.g. "_up_/app.cfg")
         format!("_up_/frontend/{}", path), // Bundled relative sibling (e.g. "_up_/frontend/Lang/en.json")
-        path.split('/').last().unwrap_or(path).to_string(), // Flattened (e.g. "en.json")
+        path.split('/').next_back().unwrap_or(path).to_string(), // Flattened (e.g. "en.json")
         format!("frontend/{}", path), // Deep (e.g. "frontend/Lang/en.json")
     ];
 

@@ -1742,7 +1742,7 @@ pub async fn download_mod(
                 }
             }
         } else {
-            let filename = url.split('/').last().unwrap_or("mod_file");
+            let filename = url.split('/').next_back().unwrap_or("mod_file");
             let filepath = target_dir_for_thread.join(filename);
             std::fs::write(&filepath, &bytes).map_err(|e| e.to_string())?;
         }
@@ -2012,7 +2012,7 @@ pub async fn install_from_modlist(
                             }
                         }
                     } else {
-                        let fname = url.split('/').last().unwrap_or("mod.file");
+                        let fname = url.split('/').next_back().unwrap_or("mod.file");
                         std::fs::write(t_dir.join(fname), bytes).map_err(|e| e.to_string())?;
                     }
                     Ok(())
