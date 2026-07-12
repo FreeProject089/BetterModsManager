@@ -46,6 +46,13 @@
     --bmm-danger-dim: rgba(239, 68, 68, 0.15);
     --bmm-amber:   #f59e0b;
     --bmm-purple:  #a855f7;
+    /* Info = a fixed blue (stays semantic even when a theme recolours --bmm-accent).
+       Completes the semantic set: blue=info, green=success, yellow=warning, red=error. */
+    --bmm-info:    #3b82f6;
+    --bmm-info-r: 59; --bmm-info-g: 130; --bmm-info-b: 246;
+    --bmm-info-dim: rgba(59, 130, 246, 0.15);
+    --bmm-success-dim: rgba(16, 185, 129, 0.15);
+    --bmm-warning-dim: rgba(245, 158, 11, 0.15);
 
     /* ── Diagrams (Help & other interactive flowcharts) ──────────────────── */
     --bmm-diagram-node:        var(--bmm-bg-elevated);   /* node fill — follows theme */
@@ -176,9 +183,14 @@
     --cyan:          var(--bmm-cyan);
     --cyan-dim:      var(--bmm-cyan-dim);
     --success:       var(--bmm-success);
+    --success-dim:   var(--bmm-success-dim);
     --warning:       var(--bmm-warning);
+    --warning-dim:   var(--bmm-warning-dim);
     --danger:        var(--bmm-danger);
     --danger-dim:    var(--bmm-danger-dim);
+    --error:         var(--bmm-danger);
+    --info:          var(--bmm-info);
+    --info-dim:      var(--bmm-info-dim);
     --amber:         var(--bmm-amber);
     --text-primary:  var(--bmm-text-primary);
     --text-secondary: var(--bmm-text-secondary);

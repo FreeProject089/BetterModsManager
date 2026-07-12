@@ -15322,3 +15322,33 @@ h1 {
   letter-spacing: -0.02em;
   line-height: 1.15;
 }
+
+/* ── Interaction & accessibility polish (Senior UI/UX pass) ───────────────────
+   Additive, low-risk global states that were missing:
+   1) A visible KEYBOARD focus ring (many components set outline:none, leaving
+      keyboard users with no focus indicator). :focus-visible only shows for
+      keyboard/AT nav — mouse clicks never see it. !important + :where() (0 spec)
+      so it reliably beats the scattered `outline:none` rules without raising
+      specificity anywhere else. */
+:where(a, button, input, select, textarea, summary, [role="button"], [role="tab"], [tabindex]:not([tabindex="-1"]), .btn):focus-visible {
+  outline: 2px solid var(--bmm-accent, #3b82f6) !important;
+  outline-offset: 2px !important;
+}
+
+/* 2) A consistent DISABLED button state (default/hover/active/disabled were all
+      styled except disabled). */
+.btn:disabled, .btn[disabled] { opacity: 0.5; cursor: not-allowed; }
+.btn:disabled::after, .btn[disabled]::after { opacity: 0 !important; }
+.btn:disabled:hover, .btn[disabled]:hover,
+.btn:disabled:active, .btn[disabled]:active { transform: none; box-shadow: none; }
+
+/* 3) Respect prefers-reduced-motion globally — near-zero durations (not 0) so
+      transitionend listeners still fire, but no perceived motion. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
