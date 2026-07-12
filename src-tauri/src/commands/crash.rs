@@ -501,9 +501,23 @@ pub fn append_api_log(line: String) -> Result<(), String> {
 /// Return the last `limit` API activity log entries (JSON strings, oldest→newest).
 #[tauri::command]
 pub fn read_api_log(limit: usize) -> Vec<String> {
+    if limit == 0 { return Vec::new(); }
     let path = get_api_log_path();
-    let content = match fs::read_to_string(&path) { Ok(c) => c, Err(_) => return Vec::new() };
-    let lines: Vec<&str> = content.lines().filter(|l| !l.trim().is_empty()).collect();
+    let Ok(mut f) = fs::File::open(&path) else { return Vec::new() };
+    let len = match f.metadata() { Ok(m) => m.len(), Err(_) => return Vec::new() };
+    // Read only the TAIL, not the whole (up to ~1.5 MB) file: the Plugins & API panel
+    // polls this for the last ~N lines. Budget ~1 KB per JSON entry with a 64 KB floor,
+    // capped at the file length. If we didn't start at byte 0 the first line may be
+    // partial, so it's dropped.
+    use std::io::{Read, Seek, SeekFrom};
+    let want = ((limit as u64).saturating_mul(1024).max(64 * 1024)).min(len);
+    let start = len - want;
+    if start > 0 && f.seek(SeekFrom::Start(start)).is_err() { return Vec::new(); }
+    let mut buf = Vec::with_capacity(want as usize);
+    if (&mut f).take(want).read_to_end(&mut buf).is_err() { return Vec::new(); }
+    let text = String::from_utf8_lossy(&buf);
+    let mut lines: Vec<&str> = text.lines().filter(|l| !l.trim().is_empty()).collect();
+    if start > 0 && !lines.is_empty() { lines.remove(0); } // drop the partial first line
     let n = limit.min(lines.len());
     if n == 0 { return Vec::new(); }
     lines[lines.len() - n..].iter().map(|s| s.to_string()).collect()
