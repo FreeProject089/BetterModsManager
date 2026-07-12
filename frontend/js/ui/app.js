@@ -29,6 +29,7 @@ import { initInteractionLogging } from './user-logger.js';
 import { initDebugMenu } from '../features/debug/debug-menu.js';
 import { checkSecurityMode } from './security-modal.js';
 import { initPlugins } from '../features/plugins/plugins.js';
+import { escHtml } from '../core/utils.js';
 import { loadLinks, loadBcConfig, getLinks } from '../core/links-config.js';
 import { initMapper } from '../features/mapper/mapper.js';
 import { initAppsCatalog } from '../features/apps/apps-catalog.js';
@@ -1248,8 +1249,10 @@ export function startCreditsMarquee() {
         if (!CREDITS_MESSAGES.length)
             return; // guard: no messages → no % 0 = NaN
         const key = CREDITS_MESSAGES[msgIndex % CREDITS_MESSAGES.length];
-        // The CSS animation on .credits-marquee-content handles entry/exit each time.
-        marqueeContainer.innerHTML = `<div class="credits-marquee-content"><span class="marquee-msg">${t(key) || key}</span></div>`;
+        // Escape: messages can come from the remote contributors.json (data.messages),
+        // and t() returns the raw string when the key isn't a translation — never trust
+        // it in an innerHTML sink. The CSS animation handles entry/exit each time.
+        marqueeContainer.innerHTML = `<div class="credits-marquee-content"><span class="marquee-msg">${escHtml(t(key) || key)}</span></div>`;
         msgIndex = (msgIndex + 1) % CREDITS_MESSAGES.length;
     };
     updateMarquee();

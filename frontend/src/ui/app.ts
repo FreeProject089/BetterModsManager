@@ -1297,8 +1297,10 @@ export function startCreditsMarquee(): void {
     const updateMarquee = () => {
         if (!CREDITS_MESSAGES.length) return; // guard: no messages → no % 0 = NaN
         const key = CREDITS_MESSAGES[msgIndex % CREDITS_MESSAGES.length];
-        // The CSS animation on .credits-marquee-content handles entry/exit each time.
-        marqueeContainer.innerHTML = `<div class="credits-marquee-content"><span class="marquee-msg">${t(key) || key}</span></div>`;
+        // Escape: messages can come from the remote contributors.json (data.messages),
+        // and t() returns the raw string when the key isn't a translation — never trust
+        // it in an innerHTML sink. The CSS animation handles entry/exit each time.
+        marqueeContainer.innerHTML = `<div class="credits-marquee-content"><span class="marquee-msg">${escHtml(t(key) || key)}</span></div>`;
         msgIndex = (msgIndex + 1) % CREDITS_MESSAGES.length;
     };
     updateMarquee();
