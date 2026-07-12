@@ -192,6 +192,9 @@ function initNavigation() {
                 const marqueeContainer = document.getElementById('credits-marquee-container');
                 if (viewId === 'credits') {
                     creditsVideo?.play().catch(() => { });
+                    // Restart the marquee — it was cleared when leaving credits, and
+                    // without this it stays frozen/blank on every re-entry.
+                    startCreditsMarquee();
                 }
                 else {
                     // Pause video and clear marquee interval to free memory
@@ -652,8 +655,6 @@ async function main() {
     console.log('[BMM] App starting from generated TypeScript!');
     // Load external link registry first so every module can call getLinks() safely
     await loadLinks();
-    // Resolve the BetterCommunity test-mode/base from app.cfg (blog + account link).
-    await loadBcConfig();
     patchHtmlLinks();
     // Initialize Offline Detection
     initOfflineDetection();
@@ -719,6 +720,10 @@ async function main() {
         }
     };
     await loadTauri();
+    // Resolve the BetterCommunity test-mode/base from app.cfg (blog + account link).
+    // MUST run AFTER loadTauri() — get_bc_config is a Tauri command, and calling it
+    // before the bridge is ready threw "Tauri bridge not initialized".
+    await loadBcConfig();
     try {
         await invoke('log_frontend_line', { line: '[BMM] App started from generated TypeScript!' });
     }
@@ -1228,28 +1233,31 @@ async function fetchContributors() {
     }
 }
 // Messages will be updated by fetchContributors()
-function initCredits() {
+/** (Re)start the rotating credits marquee. Idempotent — safe to call every time
+ *  the credits view is opened. The nav handler clears the interval when leaving
+ *  credits (to save work), so this MUST run again on re-entry or the marquee stays
+ *  frozen/blank after the first navigation. */
+export function startCreditsMarquee() {
     const marqueeContainer = document.getElementById('credits-marquee-container');
+    if (!marqueeContainer)
+        return;
+    if (marqueeContainer._marqueeInterval)
+        return; // already running
+    let msgIndex = 0;
+    const updateMarquee = () => {
+        if (!CREDITS_MESSAGES.length)
+            return; // guard: no messages → no % 0 = NaN
+        const key = CREDITS_MESSAGES[msgIndex % CREDITS_MESSAGES.length];
+        // The CSS animation on .credits-marquee-content handles entry/exit each time.
+        marqueeContainer.innerHTML = `<div class="credits-marquee-content"><span class="marquee-msg">${t(key) || key}</span></div>`;
+        msgIndex = (msgIndex + 1) % CREDITS_MESSAGES.length;
+    };
+    updateMarquee();
+    marqueeContainer._marqueeInterval = setInterval(updateMarquee, 7000);
+}
+function initCredits() {
     const contributorsGrid = document.getElementById('contributors-grid');
-    if (marqueeContainer) {
-        let msgIndex = 0;
-        const updateMarquee = () => {
-            const key = CREDITS_MESSAGES[msgIndex];
-            const newContent = `<div class="credits-marquee-content"><span class="marquee-msg">${t(key) || key}</span></div>`;
-            // If first run, just set it
-            if (marqueeContainer.children.length === 0) {
-                marqueeContainer.innerHTML = newContent;
-            }
-            else {
-                // Smooth replacement: the CSS animation handles the entry/exit
-                marqueeContainer.innerHTML = newContent;
-            }
-            msgIndex = (msgIndex + 1) % CREDITS_MESSAGES.length;
-        };
-        updateMarquee();
-        // Store interval ID on container so navigation can clear it
-        marqueeContainer._marqueeInterval = setInterval(updateMarquee, 7000);
-    }
+    startCreditsMarquee();
     if (contributorsGrid) {
         const sections = [
             { id: 'staff', title: 'credits.sections.staff' },

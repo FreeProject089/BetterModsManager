@@ -7229,7 +7229,7 @@ select:focus {
 
 .credit-subtitle {
     font-size: 12px;
-    color: var(--text-muted);
+    color: var(--text-secondary);   /* was --text-muted (#475569) — too dark to read on the card */
     margin-top: 2px;
     white-space: nowrap;
     overflow: hidden;
@@ -8902,7 +8902,7 @@ select:focus {
 .credit-title-license { color: var(--cyan); font-size: 15px; }
 .credit-title-eula { color: var(--bmm-purple); font-size: 15px; }
 
-.credit-subtitle-muted { font-size: 12px; opacity: 0.7; }
+.credit-subtitle-muted { font-size: 12px; opacity: 0.85; }
 
 .credits-footer-legal {
     margin-top: 40px;

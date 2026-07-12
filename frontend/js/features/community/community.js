@@ -137,7 +137,10 @@ function apiBase() { return `${bcRoot()}/api`; }
 // null on any failure (offline, 404, bad JSON) so callers degrade gracefully.
 async function bcGet(path) {
     try {
-        const raw = await invoke('bc_api_get', { url: `${apiBase()}${path}` });
+        // quiet: the blog feed is optional and may 404 when the endpoint isn't
+        // deployed at the production host — the caller degrades gracefully, so
+        // there's no need to spill an RPC warning into the console every time.
+        const raw = await invoke('bc_api_get', { url: `${apiBase()}${path}` }, { quiet: true });
         return JSON.parse(raw);
     }
     catch {

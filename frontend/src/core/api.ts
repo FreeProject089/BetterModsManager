@@ -105,9 +105,9 @@ export async function loadTauri(): Promise<void> {
     }
 }
 
-export async function invoke(command: string, args: Record<string, unknown> = {}): Promise<any> {
+export async function invoke(command: string, args: Record<string, unknown> = {}, opts?: { quiet?: boolean }): Promise<any> {
     if (!_invoke) {
-        console.error(`[RPC ERROR] Cannot invoke ${command}: Tauri bridge not initialized`);
+        if (!opts?.quiet) console.error(`[RPC ERROR] Cannot invoke ${command}: Tauri bridge not initialized`);
         throw new Error('Tauri bridge not initialized');
     }
     const startTime = performance.now();
@@ -133,7 +133,10 @@ export async function invoke(command: string, args: Record<string, unknown> = {}
         // Rust backend throws AppError::NotFound / validation messages that are
         // already shown to the user as toasts by the caller — downgrade to warn.
         const isValidation = /Ressource non trouvée|not found|introuvable|n.existe pas|does not exist|n.a pas été trouvé|invalid|invalide|requis|required|errNoExistingRepo|errNoProfile|errNoUrl|errNoOutDir|errNoAuthor/i.test(errStr);
-        if (isCancelled) {
+        if (opts?.quiet) {
+            // Caller owns this failure entirely (e.g. an optional feed that may 404
+            // when the endpoint isn't deployed) — keep the console clean.
+        } else if (isCancelled) {
             console.warn(`[RPC CANCEL] ${command}: ${errStr}`);
         } else if (isNetwork) {
             console.warn(`[RPC NET] ${command}: ${errStr}`);

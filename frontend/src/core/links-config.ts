@@ -120,7 +120,6 @@ let _bcLoaded = false;
 
 export async function loadBcConfig(): Promise<void> {
     if (_bcLoaded) return;
-    _bcLoaded = true;
     try {
         const { invoke } = await import('./api.js');
         const cfg = await invoke('get_bc_config') as { testMode?: boolean; test_mode?: boolean; baseUrl?: string; base_url?: string };
@@ -131,6 +130,9 @@ export async function loadBcConfig(): Promise<void> {
         }
         console.log(`[BMM] BC config: testMode=${_bcTestMode}, base=${_bcTestBase}`);
     } catch (_) { /* not in Tauri / cfg unreadable → production defaults */ }
+    // Mark loaded only AFTER the attempt — never before (a premature call that
+    // failed once must not lock the config to defaults forever).
+    _bcLoaded = true;
 }
 
 /** Whether the in-app BetterCommunity blog/community points at a test/staging base. */
