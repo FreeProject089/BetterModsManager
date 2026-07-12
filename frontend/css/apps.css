@@ -50,7 +50,7 @@
 .apps-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
 .apps-tab-badge {
     background: var(--accent);
-    color: #fff;
+    color: var(--text-on-accent);
     font-size: 10px;
     font-weight: 700;
     padding: 1px 5px;
@@ -206,7 +206,7 @@
     bottom: 6px;
     right: 6px;
     background: rgba(16,185,129,0.85);
-    color: #fff;
+    color: var(--text-on-accent);
     font-size: 10px;
     font-weight: 600;
     padding: 2px 7px;
@@ -704,7 +704,7 @@
 .adm-action-btn {
     display: inline-flex; align-items: center; gap: 7px;
     padding: 9px 18px; border-radius: 10px;
-    font-size: 13px; font-weight: 700; color: #fff;
+    font-size: 13px; font-weight: 700; color: var(--text-on-accent);
     cursor: pointer; border: none; flex-shrink: 0; white-space: nowrap;
     box-shadow: 0 4px 14px rgba(0,0,0,0.3);
     transition: filter 0.15s, transform 0.1s;

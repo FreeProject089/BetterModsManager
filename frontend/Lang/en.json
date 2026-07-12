@@ -603,6 +603,8 @@
   "themes.tabCss": "CSS",
   "themes.tabInstalled": "Installed",
   "themes.resetToDefault": "Reset to default",
+  "themes.resetGroup": "Reset this section",
+  "themes.resetGroupHint": "Reset every field in this section to its default",
   "themes.advGlobal": "Global (all pages)",
   "themes.advScoped": "Scoped to selected page",
   "themes.advTip2": "for theming-safe values. CSS is scoped to",

@@ -237,7 +237,7 @@
 
 .bh-submit-btn {
     background: var(--accent);
-    color: #ffffff;
+    color: var(--text-on-accent);
     border: none;
     height: 40px;
     padding: 0 24px;
@@ -367,7 +367,7 @@
 }
 
 .bh-step-input:focus {
-    color: #ffffff;
+    color: var(--text-primary);
 }
 
 .bh-step-remove {
@@ -766,7 +766,7 @@
 
 .bh-report-item.selected .bh-report-icon {
     background: #6366f1;
-    color: white;
+    color: var(--text-on-accent);
 }
 
 .bh-report-info {
@@ -1012,7 +1012,7 @@
 
 .bh-crash-btn-betahub {
     background: linear-gradient(135deg, #6366f1, #4f46e5);
-    color: white !important;
+    color: var(--text-on-accent) !important;
     border: none !important;
     box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
 }
@@ -1109,7 +1109,7 @@
 /* Indigo Variant (BetaHub) */
 .bh-btn-indigo {
     background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
-    color: #ffffff;
+    color: var(--text-on-accent);
     border-color: rgba(255, 255, 255, 0.1);
     box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
 }
@@ -1123,7 +1123,7 @@
 /* Discord Variant (Join Discord) */
 .bh-btn-discord {
     background: #5865F2;
-    color: #ffffff;
+    color: var(--text-on-accent);
     border-color: rgba(255, 255, 255, 0.1);
     box-shadow: 0 4px 15px rgba(88, 101, 242, 0.3);
 }

@@ -601,6 +601,8 @@
   "themes.tabCss": "CSS",
   "themes.tabInstalled": "Installés",
   "themes.resetToDefault": "Réinitialiser",
+  "themes.resetGroup": "Réinitialiser cette section",
+  "themes.resetGroupHint": "Remet chaque champ de cette section à sa valeur par défaut",
   "themes.advGlobal": "Global (toutes les pages)",
   "themes.advScoped": "Limité à la page sélectionnée",
   "themes.advTip2": "pour des valeurs compatibles avec les thèmes. Le CSS est limité à",

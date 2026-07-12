@@ -725,6 +725,7 @@ function buildSimpleTab(): string {
             </button>
             <div class="bte-group-body">
             ${info.desc ? `<p class="bte-group-desc">${escHtml(info.desc)}</p>` : ''}
+            ${customCount ? `<button class="bte-group-reset" data-group="${escAttr(grp)}" title="${escAttr(t('themes.resetGroupHint')||'Reset every field in this section to its default')}">${ICON.reset(11)} ${(t('themes.resetGroup')||'Reset this section')} (${customCount})</button>` : ''}
             ${tokens.map(tok => {
                 const custom = vars[tok.key] || '';
                 const ph = pickerHex(tok.key, custom);
@@ -803,6 +804,18 @@ function wireSimple(): void {
     // Collapsible token groups
     _panel?.querySelectorAll('.bte-group-head').forEach(head => {
         head.addEventListener('click', () => head.parentElement?.classList.toggle('open'));
+    });
+    // Reset every override within one group at once
+    _panel?.querySelectorAll('.bte-group-reset').forEach(btn => {
+        btn.addEventListener('click', e => {
+            e.stopPropagation();
+            const grp = (btn as HTMLElement).dataset.group || '';
+            if (!_draft.vars) return;
+            for (const tok of TOKENS) {
+                if (tok.group === grp) delete _draft.vars[tok.key];
+            }
+            previewTheme(_draft); renderTab('simple');
+        });
     });
     // Change tracker — revert individual changes or all at once
     _panel?.querySelectorAll('.bte-chg-revert').forEach(btn => {

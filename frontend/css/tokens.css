@@ -78,12 +78,30 @@
     --bmm-text-primary:   #f1f5f9;
     --bmm-text-secondary: #94a3b8;
     --bmm-text-muted:     #475569;
+    /* Text that sits ON a coloured accent/badge fill (buttons, chips). Fixed white
+       by default; a light-accent theme can override it to a dark colour. This is
+       what hard-coded `color:#fff` on accent surfaces should point at. */
+    --bmm-text-on-accent: #ffffff;
 
     /* ── Typography ───────────────────────────────────────────────────────── */
     --bmm-font-sans:      'Inter', system-ui, sans-serif;
     --bmm-font-mono:      'JetBrains Mono', 'Fira Code', monospace;
     --bmm-font-size-base: 13px;
     --bmm-font-scale:     1;       /* multiply all font sizes by this */
+
+    /* ── Spacing scale (4-pt grid) ────────────────────────────────────────────
+       Adopt incrementally on new/edited components so paddings/margins/gaps
+       land on a consistent rhythm. Do NOT mass-rewrite existing inline values. */
+    --space-1:  4px;
+    --space-2:  8px;
+    --space-3:  12px;
+    --space-4:  16px;
+    --space-5:  20px;
+    --space-6:  24px;
+    --space-8:  32px;
+    --space-10: 40px;
+    --space-12: 48px;
+    --space-16: 64px;
 
     /* ── Spacing / Shape ──────────────────────────────────────────────────── */
     --bmm-radius-card:  14px;
@@ -204,6 +222,7 @@
     --text-primary:  var(--bmm-text-primary);
     --text-secondary: var(--bmm-text-secondary);
     --text-muted:    var(--bmm-text-muted);
+    --text-on-accent: var(--bmm-text-on-accent);
     --font-sans:     var(--bmm-font-sans);
     --font-mono:     var(--bmm-font-mono);
     --radius-card:   var(--bmm-radius-card);

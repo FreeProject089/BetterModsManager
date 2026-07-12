@@ -64,7 +64,7 @@
   background-size: cover;
   background-position: center;
   box-shadow: 0 0 0 2px var(--bmm-bg-elevated);
-  color: #fff;
+  color: var(--text-on-accent);
   font-weight: 700;
   flex: none;
 }
@@ -86,7 +86,7 @@
 .community-chip.active {
   background: var(--bmm-accent);
   border-color: var(--bmm-accent);
-  color: #fff;
+  color: var(--text-on-accent);
 }
 
 /* Featured (hero) post — the newest, shown wide above the grid like the website. */
