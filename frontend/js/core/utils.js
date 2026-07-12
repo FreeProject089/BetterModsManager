@@ -1,15 +1,17 @@
 /**
  * utils.ts — Reusable Utility Functions
  */
+const ESC_MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 export function escHtml(str) {
     if (str == null)
         return '';
-    return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
+    const s = String(str);
+    // One pass instead of the old 5 chained .replace() calls (each scanned the whole
+    // string and allocated a new one). The .test() short-circuits when there's nothing
+    // to escape — the common case — so most calls do a single scan and allocate nothing.
+    // Single-pass replace is also correct: replacement text isn't re-scanned, so the
+    // '&' introduced by '&amp;' is never double-encoded.
+    return /[&<>"']/.test(s) ? s.replace(/[&<>"']/g, (c) => ESC_MAP[c]) : s;
 }
 export function escAttr(str) {
     return escHtml(str);

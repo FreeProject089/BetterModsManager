@@ -419,6 +419,17 @@ pub fn get_creator_id(handle: AppHandle) -> Result<String, String> {
     Ok(hex::encode(verifying_key.to_bytes()))
 }
 
+/// Shared HTTP client for all BetterCommunity API calls (blog feed, account link,
+/// avatars). A `reqwest::Client` owns a connection pool + TLS session cache, so
+/// building a fresh one per request — as each of these commands used to — threw the
+/// pool away every call and forced a new TCP + TLS handshake to the same host. One
+/// process-wide client reuses keep-alive connections; per-request timeouts are set on
+/// the RequestBuilder so a single client still serves every call site.
+fn bc_http_client() -> &'static reqwest::Client {
+    static CLIENT: std::sync::OnceLock<reqwest::Client> = std::sync::OnceLock::new();
+    CLIENT.get_or_init(|| reqwest::Client::builder().build().unwrap_or_default())
+}
+
 /// Proxy a GET to a BetterCommunity API URL from Rust. The webview lives at the
 /// `tauri.localhost` origin, so a direct `fetch()` to the BCWEB API is a cross-origin
 /// request subject to browser CORS (and fails when the base doesn't send the right
@@ -426,11 +437,12 @@ pub fn get_creator_id(handle: AppHandle) -> Result<String, String> {
 /// process — is not subject to CORS at all, and is harder to tamper with client-side.
 #[tauri::command]
 pub async fn bc_api_get(url: String) -> Result<String, String> {
-    let client = reqwest::Client::builder()
+    let resp = bc_http_client()
+        .get(&url)
         .timeout(std::time::Duration::from_secs(8))
-        .build()
+        .send()
+        .await
         .map_err(|e| e.to_string())?;
-    let resp = client.get(&url).send().await.map_err(|e| e.to_string())?;
     let status = resp.status();
     let text = resp.text().await.map_err(|e| e.to_string())?;
     if !status.is_success() {
@@ -445,12 +457,9 @@ pub async fn bc_api_get(url: String) -> Result<String, String> {
 /// as `bc_api_get`). `body` is the raw JSON string to send.
 #[tauri::command]
 pub async fn bc_api_post(url: String, body: String) -> Result<String, String> {
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(12))
-        .build()
-        .map_err(|e| e.to_string())?;
-    let resp = client
+    let resp = bc_http_client()
         .post(&url)
+        .timeout(std::time::Duration::from_secs(12))
         .header("Content-Type", "application/json")
         .body(body)
         .send()
@@ -471,11 +480,12 @@ pub async fn bc_api_post(url: String, body: String) -> Result<String, String> {
 #[tauri::command]
 pub async fn bc_fetch_data_url(url: String) -> Result<String, String> {
     use base64::Engine;
-    let client = reqwest::Client::builder()
+    let resp = bc_http_client()
+        .get(&url)
         .timeout(std::time::Duration::from_secs(8))
-        .build()
+        .send()
+        .await
         .map_err(|e| e.to_string())?;
-    let resp = client.get(&url).send().await.map_err(|e| e.to_string())?;
     if !resp.status().is_success() {
         return Err(format!("http_{}", resp.status().as_u16()));
     }
