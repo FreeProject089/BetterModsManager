@@ -129,6 +129,21 @@ function authorsRow(p) {
     return `<span class="community-authors">${avatars}${name}</span>`;
 }
 function apiBase() { return `${bcRoot()}/api`; }
+// CORS-safe GET. The webview lives at the tauri.localhost origin, so a direct
+// fetch() to the BCWEB API is cross-origin and blocked by CORS preflight (the exact
+// "No 'Access-Control-Allow-Origin'" error seen against bettercommunity.ch). Route
+// through the native bridge (bc_api_get) instead — Rust isn't subject to CORS. The
+// bridge returns the body on 2xx and rejects on non-2xx; we parse JSON and return
+// null on any failure (offline, 404, bad JSON) so callers degrade gracefully.
+async function bcGet(path) {
+    try {
+        const raw = await invoke('bc_api_get', { url: `${apiBase()}${path}` });
+        return JSON.parse(raw);
+    }
+    catch {
+        return null;
+    }
+}
 function pick(p) {
     const fr = _blogLang === 'fr';
     return { title: (fr && p.titleFr) || p.title, excerpt: (fr && p.excerptFr) || p.excerpt || '' };
@@ -162,10 +177,9 @@ async function loadPosts() {
     _loading = true;
     render();
     try {
-        const res = await fetch(`${apiBase()}/blog`, { headers: { Accept: 'application/json' } });
-        if (!res.ok)
-            throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
+        const data = await bcGet('/blog');
+        if (!data)
+            throw new Error('blog load failed');
         _posts = Array.isArray(data.posts) ? data.posts : [];
     }
     catch (e) {
@@ -389,9 +403,9 @@ async function openPost(slug) {
     _view.innerHTML = `<div class="community-empty"><div class="community-spinner"></div></div>`;
     let post = null;
     try {
-        const res = await fetch(`${apiBase()}/blog/${encodeURIComponent(slug)}`, { headers: { Accept: 'application/json' } });
-        if (res.ok)
-            post = (await res.json()).post;
+        const data = await bcGet(`/blog/${encodeURIComponent(slug)}`);
+        if (data)
+            post = data.post;
     }
     catch { }
     if (!post) {
@@ -489,12 +503,11 @@ async function openHistory(postId) {
         close(); };
     document.addEventListener('keydown', onEsc);
     let revs = [];
-    try {
-        const r = await fetch(`${apiBase()}/blog/${postId}/history`, { headers: { Accept: 'application/json' } });
-        if (r.ok)
-            revs = (await r.json()).revisions || [];
+    {
+        const d = await bcGet(`/blog/${postId}/history`);
+        if (d)
+            revs = d.revisions || [];
     }
-    catch { }
     const content = ov.querySelector('.community-history-content');
     if (!revs.length) {
         content.innerHTML = `<div class="community-empty"><p>${escHtml(L.none)}</p></div>`;
@@ -509,12 +522,11 @@ async function openHistory(postId) {
     const fetchRev = async (revId) => {
         if (revCache[revId])
             return revCache[revId];
-        try {
-            const r = await fetch(`${apiBase()}/blog/${postId}/history/${revId}`, { headers: { Accept: 'application/json' } });
-            if (r.ok)
-                return (revCache[revId] = (await r.json()).revision);
+        {
+            const d = await bcGet(`/blog/${postId}/history/${revId}`);
+            if (d)
+                return (revCache[revId] = d.revision);
         }
-        catch { }
         return null;
     };
     content.innerHTML = `
@@ -608,12 +620,11 @@ async function openComments(postId) {
         close(); };
     document.addEventListener('keydown', onEsc);
     let comments = [];
-    try {
-        const r = await fetch(`${apiBase()}/blog/${postId}/comments`, { headers: { Accept: 'application/json' } });
-        if (r.ok)
-            comments = (await r.json()).comments || [];
+    {
+        const d = await bcGet(`/blog/${postId}/comments`);
+        if (d)
+            comments = d.comments || [];
     }
-    catch { }
     const content = ov.querySelector('.community-comments-content');
     const roots = comments.filter((c) => !c.parentId);
     if (!roots.length) {
@@ -668,12 +679,11 @@ async function openCommentHistory(postId, cid, L) {
     } };
     document.addEventListener('keydown', onEsc);
     let revs = [];
-    try {
-        const r = await fetch(`${apiBase()}/blog/${postId}/comments/${cid}/history`, { headers: { Accept: 'application/json' } });
-        if (r.ok)
-            revs = (await r.json()).revisions || [];
+    {
+        const d = await bcGet(`/blog/${postId}/comments/${cid}/history`);
+        if (d)
+            revs = d.revisions || [];
     }
-    catch { }
     const content = ov.querySelector('.community-history-content');
     if (!revs.length) {
         content.innerHTML = `<div class="community-empty"><p>${escHtml(L.historyNone)}</p></div>`;

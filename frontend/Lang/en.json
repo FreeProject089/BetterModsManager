@@ -5399,7 +5399,6 @@
   "settings.link.button": "Link to BetterCommunity account",
   "settings.link.testmodeOn": "Test mode ON (staging server)",
   "settings.link.testmodeOff": "Production",
-  "settings.link.cfghint": "Controlled from app.cfg — set BCTestMode=true and BCTestBase=http://host[:port] to point at a staging server, or BCTestMode=false for production.",
   "settings.link.title": "Link your BetterCommunity account",
   "settings.link.desc": "Enter this code on the website (Profile → Creator IDs). It expires in 15 minutes.",
   "settings.link.already": "This creator id is already linked to an account.",

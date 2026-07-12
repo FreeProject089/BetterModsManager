@@ -5397,7 +5397,6 @@
   "settings.link.button": "Lier mon compte BetterCommunity",
   "settings.link.testmodeOn": "Mode test ACTIF (serveur de préproduction)",
   "settings.link.testmodeOff": "Production",
-  "settings.link.cfghint": "Contrôlé depuis app.cfg — mets BCTestMode=true et BCTestBase=http://hôte[:port] pour pointer vers un serveur de préproduction, ou BCTestMode=false pour la production.",
   "settings.link.title": "Lie ton compte BetterCommunity",
   "settings.link.desc": "Entre ce code sur le site (Profil → Creator IDs). Il expire dans 15 minutes.",
   "settings.link.already": "Ce creator id est déjà lié à un compte.",

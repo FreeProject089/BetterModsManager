@@ -1610,8 +1610,7 @@ async function initSecurityInfoCard() {
             <span style="width:8px;height:8px;border-radius:50%;background:${on ? 'var(--bmm-warning,#f59e0b)' : 'var(--bmm-success,#22c55e)'}"></span>
             ${on ? escHtml(t('settings.link.testmodeOn') || 'Test mode ON (staging server)') : escHtml(t('settings.link.testmodeOff') || 'Production')}
           </div>
-          <div style="margin-top:6px;font-family:var(--font-mono,monospace);word-break:break-all">${escHtml(bcRoot())}</div>
-          <div style="margin-top:6px;opacity:.7">${escHtml(t('settings.link.cfghint') || 'Controlled from app.cfg — set BCTestMode=true and BCTestBase=http://host[:port] to point at a staging server, or BCTestMode=false for production.')}</div>`;
+          <div style="margin-top:6px;font-family:var(--font-mono,monospace);word-break:break-all">${escHtml(bcRoot())}</div>`;
         card?.appendChild(cfg);
         refreshBcLinkStatus();
         // Keep checking so an unlink done on the website is detected while settings are open.
