@@ -1,0 +1,77 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   kit.css — styles for the src/ui/kit.ts component helpers.
+   Consumes the design tokens on purpose: --space-* (4-pt grid) and the semantic
+   colour tokens (--bmm-info/-success/-warning/-danger/-accent + -dim). Every new
+   screen built with kit.ts inherits this rhythm + palette for free.
+   Buttons reuse the existing .btn / .btn-* rules in main.css — no duplication.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Loading spinner (kit.spinner) — relies on the app-wide @keyframes spin. */
+.kit-spin { animation: spin 0.8s linear infinite; flex: none; }
+
+/* ── Badge ─────────────────────────────────────────────────────────────────── */
+.kit-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: 2px var(--space-2);
+    border-radius: 999px;
+    font-size: 10.5px;
+    font-weight: 700;
+    line-height: 1.5;
+    border: 1px solid transparent;
+    white-space: nowrap;
+}
+.kit-badge svg { width: 12px; height: 12px; flex: none; }
+
+.kit-badge-neutral { background: var(--bmm-s08); color: var(--bmm-text-secondary); border-color: var(--bmm-border); }
+.kit-badge-info    { background: var(--bmm-info-dim);    color: var(--bmm-info);    border-color: rgba(var(--bmm-info-r),var(--bmm-info-g),var(--bmm-info-b),0.35); }
+.kit-badge-success { background: var(--bmm-success-dim); color: var(--bmm-success); border-color: rgba(var(--bmm-success-r),var(--bmm-success-g),var(--bmm-success-b),0.35); }
+.kit-badge-warning { background: var(--bmm-warning-dim); color: var(--bmm-warning); border-color: rgba(var(--bmm-warning-r),var(--bmm-warning-g),var(--bmm-warning-b),0.35); }
+.kit-badge-danger  { background: var(--bmm-danger-dim);  color: var(--bmm-danger);  border-color: rgba(var(--bmm-danger-r),var(--bmm-danger-g),var(--bmm-danger-b),0.35); }
+.kit-badge-accent  { background: var(--bmm-accent-dim);  color: var(--bmm-accent);  border-color: var(--bmm-border-accent); }
+
+/* ── Card ──────────────────────────────────────────────────────────────────── */
+.kit-card {
+    background: var(--bmm-bg-elevated);
+    border: 1px solid var(--bmm-border);
+    border-radius: var(--bmm-radius-card);
+    padding: var(--space-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+.kit-card-title {
+    font-size: 13px;
+    font-weight: 800;
+    color: var(--bmm-text-primary);
+    letter-spacing: -0.01em;
+}
+
+/* ── Field (labelled form row) ─────────────────────────────────────────────── */
+.kit-field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+}
+.kit-field-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--bmm-text-secondary);
+}
+.kit-field-hint {
+    font-size: 11px;
+    color: var(--bmm-text-muted);
+    line-height: 1.4;
+}
+
+/* ── Meta line (muted, dot-separated) ──────────────────────────────────────── */
+.kit-meta {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: 11px;
+    color: var(--bmm-text-muted);
+    flex-wrap: wrap;
+}
+.kit-meta-sep { opacity: 0.5; }

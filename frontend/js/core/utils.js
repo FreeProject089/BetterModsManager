@@ -30,6 +30,10 @@ export class TrustedHtml {
     constructor(value) {
         this.value = value;
     }
+    /** So a TrustedHtml also embeds correctly in a *plain* template literal
+     *  (`${trustedFragment}`), not only inside safeHtml. safeHtml still checks
+     *  `instanceof TrustedHtml` before any coercion, so this never double-escapes. */
+    toString() { return this.value; }
 }
 export function trustedHtml(html) {
     return new TrustedHtml(html);
