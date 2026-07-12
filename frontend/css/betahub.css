@@ -931,12 +931,12 @@
     list-style: none;
     padding: 0;
     margin: 0;
-    font-size: 10px;
-    color: var(--text-muted);
+    font-size: 11px;                 /* was 10px — too small to read comfortably */
+    color: var(--text-secondary);    /* was --text-muted (#475569) — near-illegible */
     display: flex;
     flex-direction: column;
     gap: 8px;
-    line-height: 1.4;
+    line-height: 1.45;
 }
 
 .bh-guidance-list strong {
