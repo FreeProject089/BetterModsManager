@@ -53,12 +53,15 @@ export async function initMapper(): Promise<void> {
         view.addEventListener('mouseover', (e) => {
             const el = (e.target as HTMLElement).closest('[data-tooltip]') as HTMLElement | null;
             if (!el) return;
+            // The FINAL PREVIEW modal has its OWN mouse-follow tooltip (_previewTipEl);
+            // don't also fire the Tasky one there or the path shows twice.
+            if (el.closest('.mapper-preview-container')) return;
             const tip = el.getAttribute('data-tooltip') || '';
             if (tip) (window as any).showTaskyHelp?.(tip, 'info', true);
         });
         view.addEventListener('mouseout', (e) => {
             const el = (e.target as HTMLElement).closest('[data-tooltip]') as HTMLElement | null;
-            if (el) (window as any).hideTaskyHelp?.();
+            if (el && !el.closest('.mapper-preview-container')) (window as any).hideTaskyHelp?.();
         });
     }
 
