@@ -15330,7 +15330,9 @@ h1 {
       keyboard/AT nav — mouse clicks never see it. !important + :where() (0 spec)
       so it reliably beats the scattered `outline:none` rules without raising
       specificity anywhere else. */
-:where(a, button, input, select, textarea, summary, [role="button"], [role="tab"], [tabindex]:not([tabindex="-1"]), .btn):focus-visible {
+/* Inputs/selects/textareas already carry their own focus ring (.form-input:focus etc.),
+   so target only the interactive elements that commonly lack one — no double indicator. */
+:where(a, button, summary, [role="button"], [role="tab"], [role="menuitem"], [tabindex]:not([tabindex="-1"]), .btn):focus-visible {
   outline: 2px solid var(--bmm-accent, #3b82f6) !important;
   outline-offset: 2px !important;
 }
