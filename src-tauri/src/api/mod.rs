@@ -1589,23 +1589,14 @@ pub async fn start_api_server(
         .and(warp::get())
         .and_then(|| async move {
             let current = env!("CARGO_PKG_VERSION");
-            let client = match reqwest::Client::builder()
-                .user_agent("BetterModManager")
-                .timeout(std::time::Duration::from_secs(10))
-                .build()
-            {
-                Ok(c) => c,
-                Err(e) => return Ok::<_, warp::Rejection>(warp::reply::with_status(
-                    warp::reply::json(&ApiError { error: format!("HTTP client error: {}", e) }),
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                )),
-            };
-            let resp = client
+            let resp = crate::commands::net::client()
                 .get("https://api.github.com/repos/FreeProject089/BetterModsManager/releases/latest")
+                .header(reqwest::header::USER_AGENT, "BetterModManager")
+                .timeout(std::time::Duration::from_secs(10))
                 .send().await;
             let body: serde_json::Value = match resp {
                 Ok(r) if r.status().is_success() => r.json().await.unwrap_or(serde_json::Value::Null),
-                Ok(r) => return Ok(warp::reply::with_status(
+                Ok(r) => return Ok::<_, warp::Rejection>(warp::reply::with_status(
                     warp::reply::json(&ApiError { error: format!("GitHub returned {}", r.status()) }),
                     StatusCode::BAD_GATEWAY,
                 )),
@@ -1794,17 +1785,10 @@ pub async fn start_api_server(
             };
             let target = if url.ends_with("repo.json") { url.clone() }
                          else { format!("{}/repo.json", url.trim_end_matches('/')) };
-            let client = match reqwest::Client::builder()
-                .user_agent("BetterModManager")
+            match crate::commands::net::client().get(&target)
+                .header(reqwest::header::USER_AGENT, "BetterModManager")
                 .timeout(std::time::Duration::from_secs(15))
-                .build() {
-                Ok(c) => c,
-                Err(e) => return Ok(warp::reply::with_status(
-                    warp::reply::json(&ApiError { error: format!("HTTP client error: {}", e) }),
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                )),
-            };
-            match client.get(&target).send().await {
+                .send().await {
                 Ok(r) if r.status().is_success() => {
                     match r.json::<serde_json::Value>().await {
                         Ok(repo) => Ok(warp::reply::with_status(
@@ -1855,19 +1839,16 @@ pub async fn start_api_server(
                          else { format!("{}/repo.json", url.trim_end_matches('/')) };
             let repo_name = match body.name.filter(|n| !n.trim().is_empty()) {
                 Some(n) => n,
-                None => match reqwest::Client::builder()
-                    .user_agent("BetterModManager")
+                None => match crate::commands::net::client().get(&target)
+                    .header(reqwest::header::USER_AGENT, "BetterModManager")
                     .timeout(std::time::Duration::from_secs(8))
-                    .build()
+                    .send().await
                 {
-                    Ok(client) => match client.get(&target).send().await {
-                        Ok(r) if r.status().is_success() => {
-                            let j: serde_json::Value = r.json().await.unwrap_or_default();
-                            j["name"].as_str().unwrap_or(&url).to_string()
-                        },
-                        _ => url.clone(),
+                    Ok(r) if r.status().is_success() => {
+                        let j: serde_json::Value = r.json().await.unwrap_or_default();
+                        j["name"].as_str().unwrap_or(&url).to_string()
                     },
-                    Err(_) => url.clone(),
+                    _ => url.clone(),
                 },
             };
             {
