@@ -1784,21 +1784,18 @@ body.is-maximized .titlebar-spacer {
     min-width: 840px;
     box-sizing: border-box;
     min-height: 100%;
-    /* Opacity-only fade (NOT translateY): the view is the ancestor of many
-       backdrop-filter:blur children (toolbar pill, cards). Animating a transform
-       on that ancestor makes those children re-sample the backdrop every frame at
-       a shifting offset → tearing / paint artifacts on tab switch. Fading opacity
-       only avoids the transform entirely. */
-    animation: viewFadeIn 0.2s ease;
+    /* NO entrance animation on the view.
+       The view is the ancestor of backdrop-filter:blur children (the sticky
+       library/apps/modlist toolbar pill, glass cards). Chromium renders
+       backdrop-filter INCORRECTLY whenever an ancestor has opacity < 1 (the
+       opacity creates an isolated group the filter can't sample the backdrop
+       through) — so ANY fade on .view (opacity or transform) glitches exactly
+       those views while leaving plain ones fine ("pas partout"). Switching tabs
+       instantly is the only artifact-free option here. */
 }
 
 .view.active {
     display: block;
-}
-
-@keyframes viewFadeIn {
-    from { opacity: 0; }
-    to   { opacity: 1; }
 }
 
 @keyframes fadeIn {
