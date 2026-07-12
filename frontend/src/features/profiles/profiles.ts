@@ -48,6 +48,18 @@ export async function initProfiles() {
                     await renderProfiles();
                     updateProfileChip();
                     updateLibraryProfileSelector();
+                    // Show the imported profile's mods in Library immediately — activate the
+                    // newest profile and refresh, so no manual profile switch/reload is needed.
+                    try {
+                        const _profs = await getProfiles();
+                        if (_profs.length) {
+                            await invoke('set_active_profile', { profileId: _profs[_profs.length - 1].id });
+                            updateProfileChip();
+                            updateLibraryProfileSelector();
+                        }
+                        const { refreshMods } = await import('../mods/mods.js');
+                        await refreshMods(true);
+                    } catch (_) {}
                     // Kick-off background SHA hashing for newly imported mods
                     invoke('trigger_sha_background_population').catch(() => {});
 
@@ -85,6 +97,18 @@ export async function initProfiles() {
                     await renderProfiles();
                     updateProfileChip();
                     updateLibraryProfileSelector();
+                    // Show the imported profile's mods in Library immediately — activate the
+                    // newest profile and refresh, so no manual profile switch/reload is needed.
+                    try {
+                        const _profs = await getProfiles();
+                        if (_profs.length) {
+                            await invoke('set_active_profile', { profileId: _profs[_profs.length - 1].id });
+                            updateProfileChip();
+                            updateLibraryProfileSelector();
+                        }
+                        const { refreshMods } = await import('../mods/mods.js');
+                        await refreshMods(true);
+                    } catch (_) {}
                     // Kick-off background SHA hashing for newly imported mods
                     invoke('trigger_sha_background_population').catch(() => {});
                 } else {
@@ -119,6 +143,18 @@ export async function initProfiles() {
                     await renderProfiles();
                     updateProfileChip();
                     updateLibraryProfileSelector();
+                    // Show the imported profile's mods in Library immediately — activate the
+                    // newest profile and refresh, so no manual profile switch/reload is needed.
+                    try {
+                        const _profs = await getProfiles();
+                        if (_profs.length) {
+                            await invoke('set_active_profile', { profileId: _profs[_profs.length - 1].id });
+                            updateProfileChip();
+                            updateLibraryProfileSelector();
+                        }
+                        const { refreshMods } = await import('../mods/mods.js');
+                        await refreshMods(true);
+                    } catch (_) {}
                     // Kick-off background SHA hashing for newly imported mods
                     invoke('trigger_sha_background_population').catch(() => {});
 
@@ -530,6 +566,9 @@ async function confirmCreateProfile() {
 
     try {
         const profile = await invoke('create_profile', { payload: { name, gameName, gamePath, modsPath, backupPath, color, icon } });
+        // Make the just-created profile active so Library immediately reflects it —
+        // no manual profile switch / reload needed to see its mods.
+        try { await invoke('set_active_profile', { profileId: profile.id }); } catch (_) {}
         // Import a custom icon image if the user picked one.
         const newIconSrc = (document.getElementById('prof-icon-image') as HTMLInputElement)?.value || '';
         if (newIconSrc && newIconSrc !== '__REMOVE__') {
