@@ -10306,15 +10306,20 @@ body.tasky-hidden .titlebar-left .titlebar-version {
     backdrop-filter: blur(10px); 
 }
 
-.credits-marquee-content { 
-    position: absolute; 
-    width: 100%; 
-    text-align: center; 
-    display: flex; 
-    align-items: center; 
-    justify-content: center; 
+.credits-marquee-content {
+    position: absolute;
+    width: 100%;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     animation: credits-scroll-pause 7s cubic-bezier(0.4, 0, 0.2, 1) infinite; /* Faster cycle */
-    opacity: 0; 
+    /* Visible by DEFAULT (opacity:1), not opacity:0. The slide keyframe adds the
+       fade/scroll when motion is allowed, but under prefers-reduced-motion (or the
+       bmm-no-anim kill-switch) the animation is forced to ~0ms and lands on its
+       end-state — with opacity:0 that left the message permanently invisible ("the
+       messages don't show/scroll"). opacity:1 keeps them readable in every case. */
+    opacity: 1;
 }
 
 .marquee-msg { 

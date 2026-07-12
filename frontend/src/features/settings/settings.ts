@@ -1359,7 +1359,7 @@ async function openAccountLinkFlow(): Promise<void> {
     // BCWEB API is cross-origin (tauri.localhost) and is blocked by CORS preflight.
     // Rust isn't subject to CORS, so the request actually goes through.
     try {
-        const raw = await invoke('bc_api_post', { url: `${base}/api/link/request`, body: JSON.stringify({ creatorId }) }) as string;
+        const raw = await invoke('bc_api_post', { url: `${base}/api/link/request`, body: JSON.stringify({ creatorId }) }, { quiet: true }) as string;
         data = JSON.parse(raw);
     } catch (_) {
         toast(t('settings.link.offline') || 'Could not reach BetterCommunity (offline?). BMM keeps working locally.', 'warning');
@@ -1417,7 +1417,7 @@ async function refreshBcLinkStatus(): Promise<void> {
     let data: any = null;
     // Via the native process (bc_api_get) — a webview fetch to the BCWEB API is
     // cross-origin (tauri.localhost) and trips CORS; Rust isn't subject to it.
-    try { data = JSON.parse(await invoke('bc_api_get', { url: `${bcBase()}/api/link/status?creatorId=${encodeURIComponent(creatorId)}` }) as string); } catch (_) {}
+    try { data = JSON.parse(await invoke('bc_api_get', { url: `${bcBase()}/api/link/status?creatorId=${encodeURIComponent(creatorId)}` }, { quiet: true }) as string); } catch (_) {}
     if (!data) { if (statusEl) statusEl.textContent = t('settings.link.offline2') || 'BetterCommunity unreachable (offline?).'; return; }
     const wasLinked = localStorage.getItem('bc_linked') === '1';
     if (data.linked) {
@@ -1471,7 +1471,7 @@ async function openDiscordLinkFlow(): Promise<void> {
             // rejects on a non-2xx with an `http_<code>` message; a 4xx here still
             // carries a JSON error body, so fall back to a direct parse on failure.
             try {
-                data = JSON.parse(await invoke('bc_api_post', { url: `${bcBase()}/api/link/discord`, body: JSON.stringify({ creatorId, code }) }) as string);
+                data = JSON.parse(await invoke('bc_api_post', { url: `${bcBase()}/api/link/discord`, body: JSON.stringify({ creatorId, code }) }, { quiet: true }) as string);
             } catch (e) {
                 ok = false;
                 try { data = JSON.parse(String((e as any)?.message || e || '').replace(/^http_\d+\s*/, '') || '{}'); } catch (_) { data = {}; }

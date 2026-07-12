@@ -1375,7 +1375,7 @@ async function openAccountLinkFlow() {
     // BCWEB API is cross-origin (tauri.localhost) and is blocked by CORS preflight.
     // Rust isn't subject to CORS, so the request actually goes through.
     try {
-        const raw = await invoke('bc_api_post', { url: `${base}/api/link/request`, body: JSON.stringify({ creatorId }) });
+        const raw = await invoke('bc_api_post', { url: `${base}/api/link/request`, body: JSON.stringify({ creatorId }) }, { quiet: true });
         data = JSON.parse(raw);
     }
     catch (_) {
@@ -1443,7 +1443,7 @@ async function refreshBcLinkStatus() {
     // Via the native process (bc_api_get) — a webview fetch to the BCWEB API is
     // cross-origin (tauri.localhost) and trips CORS; Rust isn't subject to it.
     try {
-        data = JSON.parse(await invoke('bc_api_get', { url: `${bcBase()}/api/link/status?creatorId=${encodeURIComponent(creatorId)}` }));
+        data = JSON.parse(await invoke('bc_api_get', { url: `${bcBase()}/api/link/status?creatorId=${encodeURIComponent(creatorId)}` }, { quiet: true }));
     }
     catch (_) { }
     if (!data) {
@@ -1527,7 +1527,7 @@ async function openDiscordLinkFlow() {
             // rejects on a non-2xx with an `http_<code>` message; a 4xx here still
             // carries a JSON error body, so fall back to a direct parse on failure.
             try {
-                data = JSON.parse(await invoke('bc_api_post', { url: `${bcBase()}/api/link/discord`, body: JSON.stringify({ creatorId, code }) }));
+                data = JSON.parse(await invoke('bc_api_post', { url: `${bcBase()}/api/link/discord`, body: JSON.stringify({ creatorId, code }) }, { quiet: true }));
             }
             catch (e) {
                 ok = false;
