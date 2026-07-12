@@ -1617,7 +1617,7 @@ async function initSecurityInfoCard() {
         cfg.innerHTML = `
           <summary style="cursor:pointer;user-select:none">${escHtml(t('settings.link.advanced') || 'Server / test mode')}</summary>
           <div style="margin-top:8px;display:flex;align-items:center;gap:7px">
-            <span style="width:8px;height:8px;border-radius:50%;background:${on ? '#f59e0b' : '#22c55e'}"></span>
+            <span style="width:8px;height:8px;border-radius:50%;background:${on ? 'var(--bmm-warning,#f59e0b)' : 'var(--bmm-success,#22c55e)'}"></span>
             ${on ? escHtml(t('settings.link.testmodeOn') || 'Test mode ON (staging server)') : escHtml(t('settings.link.testmodeOff') || 'Production')}
           </div>
           <div style="margin-top:6px;font-family:var(--font-mono,monospace);word-break:break-all">${escHtml(bcRoot())}</div>

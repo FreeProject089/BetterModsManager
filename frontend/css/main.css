@@ -15342,6 +15342,12 @@ h1 {
 .btn:disabled:hover, .btn[disabled]:hover,
 .btn:disabled:active, .btn[disabled]:active { transform: none; box-shadow: none; }
 
+/* 2b) A DISTINCT pressed state: press-DOWN (scale) instead of the same lift as hover.
+      `.btn:active:hover` (0,3,0) outranks the variants' `:hover` (0,2,0) so it wins
+      during a click without !important. */
+.btn:active, .btn:active:hover { transform: scale(0.97); }
+.btn:disabled:active, .btn[disabled]:active { transform: none; }
+
 /* 3) Respect prefers-reduced-motion globally — near-zero durations (not 0) so
       transitionend listeners still fire, but no perceived motion. */
 @media (prefers-reduced-motion: reduce) {

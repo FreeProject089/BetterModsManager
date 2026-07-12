@@ -46,11 +46,12 @@
 .community-untranslated {
   display: flex; align-items: flex-start; gap: 8px;
   padding: 10px 12px; margin: 0 0 18px; border-radius: 10px;
-  border: 1px solid rgba(245, 158, 11, .35); background: rgba(245, 158, 11, .09);
+  border: 1px solid rgba(var(--bmm-warning-r,245), var(--bmm-warning-g,158), var(--bmm-warning-b,11), .35);
+  background: rgba(var(--bmm-warning-r,245), var(--bmm-warning-g,158), var(--bmm-warning-b,11), .09);
   color: var(--bmm-text-secondary); font-size: 13px; line-height: 1.45;
 }
-.community-untranslated svg { color: #f59e0b; flex: 0 0 auto; margin-top: 1px; }
-.community-untranslated b { color: #f59e0b; font-weight: 700; }
+.community-untranslated svg { color: var(--bmm-warning, #f59e0b); flex: 0 0 auto; margin-top: 1px; }
+.community-untranslated b { color: var(--bmm-warning, #f59e0b); font-weight: 700; }
 /* Contributor avatars */
 .community-authors { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
 .community-authors .community-avatar:not(:first-child) { margin-left: -8px; }
