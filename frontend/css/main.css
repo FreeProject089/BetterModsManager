@@ -10331,12 +10331,24 @@ body.tasky-hidden .titlebar-left .titlebar-version {
     text-shadow: 0 0 20px rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.5); 
 }
 
-@keyframes credits-scroll-pause { 
-    0% { transform: translateX(100%); opacity: 0; } 
-    10% { transform: translateX(0); opacity: 1; } 
-    85% { transform: translateX(0); opacity: 1; } 
-    95% { transform: translateX(-100%); opacity: 0; } 
-    100% { transform: translateX(-100%); opacity: 0; } 
+/* Left → right slide: each message enters from the LEFT, holds centre, exits RIGHT. */
+@keyframes credits-scroll-pause {
+    0%   { transform: translateX(-100%); opacity: 0; }
+    10%  { transform: translateX(0);     opacity: 1; }
+    85%  { transform: translateX(0);     opacity: 1; }
+    95%  { transform: translateX(100%);  opacity: 0; }
+    100% { transform: translateX(100%);  opacity: 0; }
+}
+
+/* The credits marquee is a small, owner-requested decorative ticker — keep it sliding
+   even under prefers-reduced-motion (which otherwise forces the global ~0ms/1-iteration
+   kill and freezes it). Scoped to this one element so the a11y rule still governs
+   everything else. */
+@media (prefers-reduced-motion: reduce) {
+    .credits-marquee-content {
+        animation-duration: 7s !important;
+        animation-iteration-count: infinite !important;
+    }
 }
 
 /* Technical Stack Modal Styles */

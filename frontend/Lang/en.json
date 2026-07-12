@@ -1229,6 +1229,7 @@
   "mapper.reset": "Reset",
   "mapper.restructuring": "Restructuring mod...",
   "mapper.root": "Root",
+  "mapper.destBase": "Destination",
   "mapper.rootGame": "Game Root",
   "mapper.rootMod": "Mod Root",
   "mapper.searchGame": "Filter game folder...",

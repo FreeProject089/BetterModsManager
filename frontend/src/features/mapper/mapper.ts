@@ -1320,28 +1320,27 @@ async function showMapperPreview(): Promise<void> {
         const files: string[] = await invoke('list_mod_files_recursive', { modId: selectedModId });
         dispatchBmmAction(BMM_ACTIONS.MAPPER_OPENED);
         
+        const gamePath = activeProfile?.game_path || '';
+        const rootCount = files.filter(f => !f.includes('\\') && !f.includes('/')).length;
+        const subCount = files.filter(f => f.includes('\\') || f.includes('/')).length;
         let html = `
         <div class="mapper-preview-container">
-            <div class="preview-header">
-                <div class="preview-explanation">
-                    <h3>${t("mapper.diagnosticTitle")}</h3>
-                    <p>${t("mapper.diagnosticDesc")}</p>
+            <div class="mpv-header">
+                <div class="mpv-heading">
+                    <h3 class="mpv-title">${escHtml(t("mapper.diagnosticTitle"))}</h3>
+                    <p class="mpv-desc">${escHtml(t("mapper.diagnosticDesc"))}</p>
                 </div>
-                <div class="preview-stats">
-                    <div class="stat-pill"><span class="dot orange"></span> ${t("mapper.statsRoot")}: ${files.filter(f => !f.includes('\\') && !f.includes('/')).length}</div>
-                    <div class="stat-pill"><span class="dot green"></span> ${t("mapper.statsSub")}: ${files.filter(f => f.includes('\\') || f.includes('/')).length}</div>
+                <div class="mpv-stats">
+                    <span class="mpv-stat mpv-stat-root"><span class="mpv-dot"></span> ${escHtml(t("mapper.statsRoot"))}: <b>${rootCount}</b></span>
+                    <span class="mpv-stat mpv-stat-sub"><span class="mpv-dot"></span> ${escHtml(t("mapper.statsSub"))}: <b>${subCount}</b></span>
                 </div>
             </div>
-            <div class="preview-list-wrapper">
-                <table class="preview-table">
-                    <thead>
-                        <tr>
-                            <th>${t("mapper.tableSource")}</th>
-                            <th style="width: 40px;"></th>
-                            <th>${t("mapper.tableDest")}</th>
-                        </tr>
-                    </thead>
-                    <tbody>
+            <div class="mpv-base" data-tooltip="${escHtml(gamePath)}">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>
+                <span class="mpv-base-label">${escHtml(t("mapper.destBase") || 'Destination')}</span>
+                <code class="mpv-base-path">${escHtml(gamePath)}\\…</code>
+            </div>
+            <div class="mpv-list">
         `;
 
         let previewItems = files.map(f => {
@@ -1391,46 +1390,34 @@ async function showMapperPreview(): Promise<void> {
         });
 
         if (previewItems.length === 0) {
-            html += `<tr><td colspan="3" class="empty-hint">${t("mapper.noFiles")}</td></tr>`;
+            html += `<div class="mpv-empty">${escHtml(t("mapper.noFiles"))}</div>`;
         } else {
             previewItems.forEach(item => {
-                const statusClass = item.isPending ? 'pending-path' : (item.isRoot ? 'root-warning' : 'ok-path');
-                const targetPath = `${activeProfile?.game_path}\\${item.finalPath}`;
-                
-                let icon = '';
-                if (item.isPending) {
-                    icon = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>`;
-                } else if (item.isRoot) {
-                    icon = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2.5">
-                        <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/>
-                        <path d="m3.3 7 8.7 5 8.7-5"/>
-                        <path d="M12 22V12"/>
-                    </svg>`;
-                } else {
-                    icon = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`;
-                }
-
+                const status = item.isPending ? 'pending' : (item.isRoot ? 'root' : 'ok');
+                const targetPath = `${gamePath}\\${item.finalPath}`;
+                const label = status === 'pending' ? (t('mapper.newBadge') || 'NEW')
+                    : status === 'root' ? (t('mapper.root') || 'Root')
+                    : (t('mapper.subfolder') || 'Sub-folder');
+                const icon = status === 'pending'
+                    ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>`
+                    : status === 'root'
+                    ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 9v4M12 17h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/></svg>`
+                    : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>`;
+                // Source = the file's path inside the mod; destination = the FINAL relative
+                // path. The huge absolute game-path prefix is NOT repeated per row (it's on
+                // the base line above + in the tooltip), so rows stay scannable.
                 html += `
-                <tr class="${statusClass}" ${item.isPending ? 'style="background: rgba(var(--accent-rgb), 0.1);"' : ''}>
-                    <td>
-                        <div class="path-cell">
-                            ${icon}
-                            <span class="path-text main">${item.isPending ? `<span class="pending-badge">${t('mapper.newBadge') || 'NOUVEAU'}</span> ` : ''}${item.finalPath}</span>
-                        </div>
-                    </td>
-                    <td class="arrow-cell">→</td>
-                    <td>
-                        <div class="path-cell">
-                            <span class="path-text muted" data-tooltip="${targetPath}">${targetPath}</span>
-                        </div>
-                    </td>
-                </tr>`;
+                <div class="mpv-row mpv-row-${status}">
+                    <span class="mpv-badge" title="${escHtml(label)}">${icon}</span>
+                    <span class="mpv-src" data-tooltip="${escHtml(item.original)}">${escHtml(item.original)}</span>
+                    <svg class="mpv-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+                    <span class="mpv-dst" data-tooltip="${escHtml(targetPath)}">${escHtml(item.finalPath)}</span>
+                    ${item.isPending ? `<span class="mpv-chip">${escHtml(t('mapper.newBadge') || 'NEW')}</span>` : ''}
+                </div>`;
             });
         }
 
         html += `
-                    </tbody>
-                </table>
             </div>
         </div>`;
 

@@ -1228,6 +1228,7 @@
   "mapper.reset": "Réinitialiser",
   "mapper.restructuring": "Restructuration du mod...",
   "mapper.root": "Racine",
+  "mapper.destBase": "Destination",
   "mapper.rootGame": "Racine du Jeu",
   "mapper.rootMod": "Racine du Mod",
   "mapper.searchGame": "Filtrer le dossier du jeu...",
