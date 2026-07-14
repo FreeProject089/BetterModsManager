@@ -3699,6 +3699,40 @@ body.bmm-toolbar-opaque .lib-header-shell {
     color: var(--accent);
     padding: 3px 9px;
 }
+/* Bundled-file chips (edit mode) — removable with staged removal + undo. */
+.plug-bundled-chip {
+    background: rgba(96,165,250,0.10);
+    border-color: rgba(96,165,250,0.30);
+    padding-left: 6px;
+}
+.plug-bundled-tag {
+    font-size: 8.5px;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    font-weight: 800;
+    color: var(--accent);
+    background: rgba(96,165,250,0.18);
+    border-radius: 4px;
+    padding: 1px 4px;
+}
+.plug-bundled-removed { opacity: .85; border-style: dashed; border-color: rgba(239,68,68,0.4); background: rgba(239,68,68,0.06); }
+.plug-bundled-rm { background: none; border: none; color: var(--text-muted); cursor: pointer; display: inline-flex; padding: 2px; border-radius: 4px; }
+.plug-bundled-rm:hover { color: var(--danger); background: rgba(239,68,68,0.12); }
+.plug-bundled-rm svg { width: 11px; height: 11px; }
+.plug-bundled-undo {
+    background: none; border: none; cursor: pointer;
+    color: var(--accent); font-size: 10px; font-weight: 700;
+    padding: 1px 4px; border-radius: 4px;
+}
+.plug-bundled-undo:hover { background: rgba(96,165,250,0.15); }
+/* Mod rows: name over a copyable, monospace id. */
+.plug-mod-item-col { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; overflow: hidden; }
+.plug-mod-id {
+    background: none; border: none; cursor: pointer; text-align: left;
+    font-family: var(--font-mono); font-size: 9.5px; color: var(--text-muted);
+    opacity: .7; padding: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.plug-mod-id:hover { opacity: 1; color: var(--accent); text-decoration: underline; }
 .plug-script-rm {
     background: none;
     border: none;

@@ -296,7 +296,12 @@ pub async fn apply_plugin_modlist(
     {
         let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         for req in &modlist.required_mods {
-            if let Some(m) = data.mods.iter().find(|m| m.name.to_lowercase() == req.name.to_lowercase()) {
+            // Prefer the stable id when the manifest carries one (survives renames);
+            // fall back to a case-insensitive name match for older manifests.
+            let found = req.id.as_ref()
+                .and_then(|id| data.mods.iter().find(|m| &m.id == id))
+                .or_else(|| data.mods.iter().find(|m| m.name.to_lowercase() == req.name.to_lowercase()));
+            if let Some(m) = found {
                 enabled_ids.push(m.id.clone());
             } else if !req.optional {
                 not_found.push(req.name.clone());
@@ -1493,6 +1498,29 @@ pub fn get_app_exe_path() -> Result<String, String> {
 
 // ── Create local plugin (from Create tab, no zip needed) ──────────────────
 
+/// Bundled scripts/folders the user staged for removal in the editor. Values are the
+/// manifest-relative paths ("scripts/x.bat", "bundle/mydir").
+#[derive(Debug, serde::Deserialize, Default)]
+pub struct RemovedBundled {
+    #[serde(default)]
+    pub scripts: Vec<String>,
+    #[serde(default)]
+    pub folders: Vec<String>,
+}
+
+/// Resolve a manifest-relative bundled path ("<subdir>/<name>") to an absolute path
+/// INSIDE the plugin folder, or None if it doesn't fit that exact shape. Guards against
+/// path traversal: exactly two components, the first must equal `subdir`, the second a
+/// single non-empty name with no separators or "..".
+fn safe_bundled_path(plugin_dir: &std::path::Path, rel: &str, subdir: &str) -> Option<std::path::PathBuf> {
+    let rel = rel.trim().replace('\\', "/");
+    let parts: Vec<&str> = rel.split('/').filter(|s| !s.is_empty()).collect();
+    if parts.len() != 2 || parts[0] != subdir { return None; }
+    let name = parts[1];
+    if name == ".." || name.contains('/') || name.contains('\\') { return None; }
+    Some(plugin_dir.join(subdir).join(name))
+}
+
 #[tauri::command]
 pub fn create_local_plugin(
     state: State<'_, AppState>,
@@ -1502,6 +1530,7 @@ pub fn create_local_plugin(
     icon_svg: Option<String>,
     script_src_paths: Option<Vec<String>>,
     folder_src_paths: Option<Vec<String>>,
+    removed_bundled: Option<RemovedBundled>,
 ) -> Result<InstalledPlugin, String> {
     let mut manifest = manifest;
     if manifest.id.is_empty() || manifest.name.is_empty() {
@@ -1513,40 +1542,56 @@ pub fn create_local_plugin(
     let plugin_dir = app_dir.join("plugins").join(&manifest.id);
     std::fs::create_dir_all(&plugin_dir).map_err(|e| e.to_string())?;
 
+    // ── Staged removals: physically delete bundled scripts/folders the user removed
+    //    in the editor. The frontend already excluded them from manifest.scripts/folders;
+    //    here we reclaim the files on disk. Paths are constrained to the plugin's own
+    //    scripts/ and bundle/ subdirs (single filename component, no traversal) so a
+    //    crafted manifest can never delete outside the plugin folder (CWE-22 guard).
+    if let Some(removed) = &removed_bundled {
+        for rel in &removed.scripts {
+            if let Some(safe) = safe_bundled_path(&plugin_dir, rel, "scripts") {
+                let _ = std::fs::remove_file(&safe);
+            }
+        }
+        for rel in &removed.folders {
+            if let Some(safe) = safe_bundled_path(&plugin_dir, rel, "bundle") {
+                let _ = std::fs::remove_dir_all(&safe);
+            }
+        }
+    }
+
     // ── Import folders: copy each chosen directory into the plugin's bundle/.
     if let Some(dirs) = folder_src_paths {
         let bundle_dir = plugin_dir.join("bundle");
-        let mut names: Vec<String> = Vec::new();
         for src in dirs.iter().filter(|s| !s.trim().is_empty()) {
             let src_path = std::path::Path::new(src);
             if let Some(fname) = src_path.file_name().and_then(|f| f.to_str()) {
                 let dest = bundle_dir.join(fname);
                 if copy_dir_recursive(src_path, &dest).is_ok() {
-                    names.push(format!("bundle/{}", fname));
+                    // Append to the carried-over (already-filtered) set instead of
+                    // replacing it, so adding a folder while editing doesn't drop the
+                    // bundled ones the user kept.
+                    let rel = format!("bundle/{}", fname);
+                    if !manifest.folders.contains(&rel) { manifest.folders.push(rel); }
                 }
             }
         }
-        if !names.is_empty() { manifest.folders = names; }
     }
 
     // ── Import script files: copy each into the plugin folder and record its
     //    filename in manifest.scripts. Presence of scripts flips has_scripts on.
     if let Some(srcs) = script_src_paths {
         let scripts_dir = plugin_dir.join("scripts");
-        let mut names: Vec<String> = Vec::new();
         for src in srcs.iter().filter(|s| !s.trim().is_empty()) {
             let src_path = std::path::Path::new(src);
             if let Some(fname) = src_path.file_name().and_then(|f| f.to_str()) {
                 let _ = std::fs::create_dir_all(&scripts_dir);
                 let dest = scripts_dir.join(fname);
                 if std::fs::copy(src_path, &dest).is_ok() {
-                    names.push(format!("scripts/{}", fname));
+                    let rel = format!("scripts/{}", fname);
+                    if !manifest.scripts.contains(&rel) { manifest.scripts.push(rel); }
                 }
             }
-        }
-        if !names.is_empty() {
-            manifest.scripts = names;
-            manifest.has_scripts = true;
         }
     }
     if !manifest.scripts.is_empty() { manifest.has_scripts = true; }

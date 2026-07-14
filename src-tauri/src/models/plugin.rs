@@ -3,6 +3,11 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct PluginModRequirement {
     pub name: String,
+    /// Stable mod id, when known. Optional + serde(default) so older manifests that
+    /// only stored `name` still parse. When present, mod matching prefers the id
+    /// (rename-proof) and falls back to the name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
     #[serde(default)]
     pub optional: bool,
     #[serde(default)]

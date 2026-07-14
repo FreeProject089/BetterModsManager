@@ -2882,7 +2882,10 @@ pub fn compute_compare(
     let mut missing_required = 0;
 
     for req in &modlist.required_mods {
-        let found_mod = mods.iter().find(|m| m.name.to_lowercase() == req.name.to_lowercase());
+        // Prefer the stable id when present (rename-proof), else match by name.
+        let found_mod = req.id.as_ref()
+            .and_then(|id| mods.iter().find(|m| &m.id == id))
+            .or_else(|| mods.iter().find(|m| m.name.to_lowercase() == req.name.to_lowercase()));
         let found = found_mod.is_some();
         let mod_id = found_mod.map(|m| m.id.clone());
         let active = mod_id.as_ref().map(|id| active_mods.contains(id)).unwrap_or(false);

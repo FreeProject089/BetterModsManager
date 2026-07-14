@@ -54,6 +54,10 @@ let _allMods = [];
 let _allModsAll: any[] = [];   // flattened, deduped mods across ALL profiles (for the creator)
 let _editScripts: string[] = []; // existing bundled scripts carried over when editing a plugin
 let _editFolders: string[] = []; // existing bundled folders carried over when editing a plugin
+let _removedScripts: string[] = []; // bundled scripts (manifest-rel paths) staged for removal — undo until save
+let _removedFolders: string[] = []; // bundled folders staged for removal — undo until save
+let _renderPcScripts: (() => void) | null = null; // re-render hooks set by renderCreate() so prefill can refresh the lists
+let _renderPcFolders: (() => void) | null = null;
 let _allProfiles = [];
 let _apiToken = '';
 let _exePath = '';
@@ -2873,6 +2877,8 @@ function renderCreate(container: HTMLElement) {
     // Reset edit-carry state — a fresh Create tab starts with no bundled files.
     _editScripts = [];
     _editFolders = [];
+    _removedScripts = [];
+    _removedFolders = [];
     container.innerHTML = `
         <div class="plug-create-layout">
             <div class="plug-create-form-col">
@@ -2987,7 +2993,10 @@ function renderCreate(container: HTMLElement) {
                     <div class="plug-mod-available" id="pc-available-mods">
                         ${_allModsAll.length ? _allModsAll.map(m => `
                             <div class="plug-mod-item" data-id="${escHtml(m.id)}" data-name="${escHtml(m.name || m.id)}" data-profiles="${escHtml((m.profileIds || []).join(','))}">
-                                <span class="plug-mod-item-name">${escHtml(m.name || m.id)}</span>
+                                <span class="plug-mod-item-col">
+                                    <span class="plug-mod-item-name">${escHtml(m.name || m.id)}</span>
+                                    <button class="plug-mod-id" data-copy-id="${escAttr(m.id)}" data-tooltip="${t('plugins.copyId') || 'Copy mod id'}">${escHtml(m.id)}</button>
+                                </span>
                                 <span class="plug-mod-profile-badge" style="display:none;" data-tooltip="${t('plugins.activeInProfile')}">${IC.checkCircle}</span>
                                 <label class="plug-mod-optional-lbl" data-tooltip="${t('plugins.optional')}">
                                     <input type="checkbox" class="plug-mod-optional-cb" tabindex="-1"> opt
@@ -3017,21 +3026,46 @@ function renderCreate(container: HTMLElement) {
     let iconBuiltinSvg = ''; // SVG string when user picks a builtin icon
     const scriptPaths: string[] = []; // absolute paths of scripts to bundle
 
+    // A chip for a file/folder ALREADY bundled with the plugin (edit mode). Removal is
+    // STAGED (struck-through + Undo) so nothing is lost until the user saves.
+    const bundledChip = (rel: string, removed: boolean, kind: 'script' | 'folder') => {
+        const fname = (rel.split('/').pop() || rel) + (kind === 'folder' ? '/' : '');
+        const label = removed
+            ? `<span style="text-decoration:line-through;opacity:.55;">${escHtml(fname)}</span>`
+            : `<span>${escHtml(fname)}</span>`;
+        const action = removed
+            ? `<button class="plug-bundled-undo" data-rel="${escAttr(rel)}" data-kind="${kind}" data-tooltip="${t('plugins.undoRemove') || 'Undo removal'}">${t('plugins.undo') || 'Undo'}</button>`
+            : `<button class="plug-bundled-rm" data-rel="${escAttr(rel)}" data-kind="${kind}" data-tooltip="${t('common.remove') || 'Remove'}">${IC.x}</button>`;
+        return `<div class="plug-script-chip plug-bundled-chip${removed ? ' plug-bundled-removed' : ''}"><span class="plug-bundled-tag">${t('plugins.bundledTag') || 'bundled'}</span>${label}${action}</div>`;
+    };
+
     // ── Scripts: toggle row + import ──────────────────────────────────────────
     const renderScriptsList = () => {
         const list = document.getElementById('pc-scripts-list');
         if (!list) return;
-        list.innerHTML = scriptPaths.length
-            ? scriptPaths.map((p, i) => {
-                const fname = p.split(/[\\/]/).pop() || p;
-                return `<div class="plug-script-chip"><span>${escHtml(fname)}</span><button class="plug-script-rm" data-i="${i}" data-tooltip="${t('common.remove') || 'Remove'}">${IC.x}</button></div>`;
-            }).join('')
-            : `<span style="font-size:11px;color:var(--text-muted);">${t('plugins.noScripts') || 'No script imported yet.'}</span>`;
+        const bundled = _editScripts.map(rel => bundledChip(rel, _removedScripts.includes(rel), 'script')).join('');
+        const picked = scriptPaths.map((p, i) => {
+            const fname = p.split(/[\\/]/).pop() || p;
+            return `<div class="plug-script-chip"><span>${escHtml(fname)}</span><button class="plug-script-rm" data-i="${i}" data-tooltip="${t('common.remove') || 'Remove'}">${IC.x}</button></div>`;
+        }).join('');
+        list.innerHTML = (bundled + picked)
+            || `<span style="font-size:11px;color:var(--text-muted);">${t('plugins.noScripts') || 'No script imported yet.'}</span>`;
         list.querySelectorAll('.plug-script-rm').forEach(b => b.addEventListener('click', () => {
             scriptPaths.splice(parseInt((b as HTMLElement).dataset.i!, 10), 1);
             renderScriptsList();
         }));
+        list.querySelectorAll('.plug-bundled-rm').forEach(b => b.addEventListener('click', () => {
+            const rel = (b as HTMLElement).dataset.rel!;
+            if (!_removedScripts.includes(rel)) _removedScripts.push(rel);
+            renderScriptsList();
+        }));
+        list.querySelectorAll('.plug-bundled-undo').forEach(b => b.addEventListener('click', () => {
+            const rel = (b as HTMLElement).dataset.rel!;
+            _removedScripts = _removedScripts.filter(r => r !== rel);
+            renderScriptsList();
+        }));
     };
+    _renderPcScripts = renderScriptsList;
     container.querySelector('#pc-has-scripts')?.addEventListener('change', (e) => {
         const on = (e.target as HTMLInputElement).checked;
         const row = document.getElementById('pc-scripts-row');
@@ -3052,17 +3086,29 @@ function renderCreate(container: HTMLElement) {
     const renderFoldersList = () => {
         const list = document.getElementById('pc-folders-list');
         if (!list) return;
-        list.innerHTML = folderPaths.length
-            ? folderPaths.map((p, i) => {
-                const fname = p.split(/[\\/]/).filter(Boolean).pop() || p;
-                return `<div class="plug-script-chip"><span>${escHtml(fname)}/</span><button class="plug-folder-rm" data-i="${i}" data-tooltip="${t('common.remove') || 'Remove'}">${IC.x}</button></div>`;
-            }).join('')
-            : `<span style="font-size:11px;color:var(--text-muted);">${t('plugins.noFolders') || 'No folder imported yet.'}</span>`;
+        const bundled = _editFolders.map(rel => bundledChip(rel, _removedFolders.includes(rel), 'folder')).join('');
+        const picked = folderPaths.map((p, i) => {
+            const fname = p.split(/[\\/]/).filter(Boolean).pop() || p;
+            return `<div class="plug-script-chip"><span>${escHtml(fname)}/</span><button class="plug-folder-rm" data-i="${i}" data-tooltip="${t('common.remove') || 'Remove'}">${IC.x}</button></div>`;
+        }).join('');
+        list.innerHTML = (bundled + picked)
+            || `<span style="font-size:11px;color:var(--text-muted);">${t('plugins.noFolders') || 'No folder imported yet.'}</span>`;
         list.querySelectorAll('.plug-folder-rm').forEach(b => b.addEventListener('click', () => {
             folderPaths.splice(parseInt((b as HTMLElement).dataset.i!, 10), 1);
             renderFoldersList();
         }));
+        list.querySelectorAll('.plug-bundled-rm').forEach(b => b.addEventListener('click', () => {
+            const rel = (b as HTMLElement).dataset.rel!;
+            if (!_removedFolders.includes(rel)) _removedFolders.push(rel);
+            renderFoldersList();
+        }));
+        list.querySelectorAll('.plug-bundled-undo').forEach(b => b.addEventListener('click', () => {
+            const rel = (b as HTMLElement).dataset.rel!;
+            _removedFolders = _removedFolders.filter(r => r !== rel);
+            renderFoldersList();
+        }));
     };
+    _renderPcFolders = renderFoldersList;
     renderFoldersList();
     container.querySelector('#pc-import-folders')?.addEventListener('click', async () => {
         const dir = await pickFolder();
@@ -3126,7 +3172,10 @@ function renderCreate(container: HTMLElement) {
         item.className = 'plug-selected-item';
         item.dataset.id = id;
         item.innerHTML = `
-            <span class="plug-selected-name">${escHtml(name)}</span>
+            <span class="plug-mod-item-col">
+                <span class="plug-selected-name">${escHtml(name)}</span>
+                <button class="plug-mod-id" data-copy-id="${escAttr(id)}" data-tooltip="${t('plugins.copyId') || 'Copy mod id'}">${escHtml(id)}</button>
+            </span>
             <label class="plug-sel-opt">
                 <input type="checkbox" ${optional ? 'checked' : ''}> ${t('plugins.optional')}
             </label>
@@ -3188,10 +3237,27 @@ function renderCreate(container: HTMLElement) {
             ? t('plugins.strictOn') : t('plugins.strictOff');
     });
 
+    // Click a mod id (available or selected list) to copy it — handy when hand-editing
+    // a catalog or debugging a mod-list match.
+    container.addEventListener('click', (e) => {
+        const idBtn = (e.target as HTMLElement).closest?.('.plug-mod-id[data-copy-id]') as HTMLElement | null;
+        if (!idBtn) return;
+        e.preventDefault();
+        e.stopPropagation();
+        navigator.clipboard?.writeText(idBtn.dataset.copyId!).then(
+            () => toast(t('plugins.idCopied') || 'Mod id copied', 'success'),
+            () => toast(`${t('common.error')}`, 'error'),
+        );
+    });
+
     function buildManifest() {
         const id = (document.getElementById('pc-id') as HTMLInputElement)?.value.trim();
         const name = (document.getElementById('pc-name') as HTMLInputElement)?.value.trim();
         if (!id || !name) { toast(t('plugins.createIdNameRequired'), 'warning'); return null; }
+        // Bundled files the user KEPT (existing minus staged removals). The backend
+        // appends newly-picked files to these and deletes the removed ones.
+        const keptScripts = _editScripts.filter(s => !_removedScripts.includes(s));
+        const keptFolders = _editFolders.filter(f => !_removedFolders.includes(f));
         return {
             id, name,
             version: (document.getElementById('pc-version') as HTMLInputElement)?.value.trim() || '1.0.0',
@@ -3199,18 +3265,20 @@ function renderCreate(container: HTMLElement) {
             description: (document.getElementById('pc-desc') as HTMLTextAreaElement)?.value.trim() || '',
             game: (document.getElementById('pc-game') as HTMLInputElement)?.value.trim() || '',
             official: false, permissions: [], tags: [], website: '',
-            has_scripts: ((document.getElementById('pc-has-scripts') as HTMLInputElement)?.checked) || _editScripts.length > 0 || _editFolders.length > 0,
-            // Preserve scripts/folders already bundled with the plugin when editing
-            // (the backend only overwrites these when NEW source paths are picked).
-            scripts: _editScripts,
-            folders: _editFolders,
+            has_scripts: ((document.getElementById('pc-has-scripts') as HTMLInputElement)?.checked) || keptScripts.length > 0 || scriptPaths.length > 0 || keptFolders.length > 0 || folderPaths.length > 0,
+            scripts: keptScripts,
+            folders: keptFolders,
             apply_mode: (document.getElementById('pc-apply-mode') as HTMLSelectElement)?.value || 'modlist',
             modlist: {
                 strict: (document.getElementById('pc-strict') as HTMLInputElement)?.checked || false,
-                required_mods: Array.from(selectedMods.entries()).map(([_id, { name, optional }]) => ({ name, optional, sha256: null })),
+                // The map KEY is the mod id — carry it so matching survives a rename
+                // (the backend prefers id, falls back to name).
+                required_mods: Array.from(selectedMods.entries()).map(([mid, { name, optional }]) => ({ id: mid, name, optional, sha256: null })),
             },
         };
     }
+    // Bundled files staged for removal — the backend physically deletes these on save.
+    const removedBundledPayload = () => ({ scripts: _removedScripts.slice(), folders: _removedFolders.slice() });
 
     container.querySelector('#pc-save-local')?.addEventListener('click', async () => {
         const manifest = buildManifest();
@@ -3222,6 +3290,7 @@ function renderCreate(container: HTMLElement) {
                 iconSvg: iconBuiltinSvg || null,
                 scriptSrcPaths: scriptPaths.length ? scriptPaths : null,
                 folderSrcPaths: folderPaths.length ? folderPaths : null,
+                removedBundled: removedBundledPayload(),
             });
             _installedPlugins = _installedPlugins.filter(p => p.manifest.id !== manifest.id);
             _installedPlugins.push(plugin);
@@ -3241,6 +3310,7 @@ function renderCreate(container: HTMLElement) {
                 iconSvg: iconBuiltinSvg || null,
                 scriptSrcPaths: scriptPaths.length ? scriptPaths : null,
                 folderSrcPaths: folderPaths.length ? folderPaths : null,
+                removedBundled: removedBundledPayload(),
             });
             await invoke('export_plugin', { pluginId: manifest.id, destPath: path });
             toast(t('plugins.exportSuccess', { name: manifest.name }), 'success');
@@ -8909,27 +8979,22 @@ function prefillCreateTab(manifest: any) {
         hasScriptsCb.checked = !!(manifest.has_scripts || existingScripts.length || existingFolders.length);
         hasScriptsCb.dispatchEvent(new Event('change'));
     }
-    const existChip = (label: string) =>
-        `<div class="plug-script-chip plug-existing-chip" data-tooltip="${t('plugins.existingBundled') || 'Already bundled — kept on save'}">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:.7"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
-            <span>${escHtml(label)}</span>
-        </div>`;
-    const sList = document.getElementById('pc-scripts-list');
-    if (sList && existingScripts.length) sList.insertAdjacentHTML('afterbegin', existingScripts.map(existChip).join(''));
-    const fList = document.getElementById('pc-folders-list');
-    if (fList && existingFolders.length) fList.insertAdjacentHTML('afterbegin', existingFolders.map(f => existChip(f + '/')).join(''));
+    // Render the bundled scripts/folders as removable chips (staged removal + undo)
+    // via the create tab's own list renderers, now that _editScripts/_editFolders are set.
+    _renderPcScripts?.();
+    _renderPcFolders?.();
 
-    // Pre-select mods (resolved against the full all-profiles mod list)
-    const mods: { name: string; optional: boolean }[] = manifest.modlist?.required_mods || [];
+    // Pre-select mods (resolved against the full all-profiles mod list). Prefer the
+    // stored id (survives a rename), fall back to a case-insensitive name match.
+    const mods: { id?: string; name: string; optional: boolean }[] = manifest.modlist?.required_mods || [];
     for (const mod of mods) {
-        const items = document.querySelectorAll('.plug-mod-item');
-        for (const item of Array.from(items) as HTMLElement[]) {
-            if ((item.dataset.name || '').toLowerCase() === mod.name.toLowerCase()) {
-                const optCb = item.querySelector('.plug-mod-optional-cb') as HTMLInputElement | null;
-                if (optCb) optCb.checked = mod.optional;
-                (item.querySelector('.plug-mod-add-btn') as HTMLElement)?.click();
-                break;
-            }
+        const items = Array.from(document.querySelectorAll('.plug-mod-item')) as HTMLElement[];
+        const item = (mod.id && items.find(it => it.dataset.id === mod.id))
+            || items.find(it => (it.dataset.name || '').toLowerCase() === (mod.name || '').toLowerCase());
+        if (item) {
+            const optCb = item.querySelector('.plug-mod-optional-cb') as HTMLInputElement | null;
+            if (optCb) optCb.checked = mod.optional;
+            (item.querySelector('.plug-mod-add-btn') as HTMLElement)?.click();
         }
     }
 }
