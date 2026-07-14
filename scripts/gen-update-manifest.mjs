@@ -38,9 +38,18 @@ const tauriConf = JSON.parse(
     readFileSync(join(ROOT, 'src-tauri', 'tauri.conf.json'), 'utf8')
 );
 
-// Allow --version flag override
-const versionArg = process.argv.find(a => a.startsWith('--version='))?.split('=')[1];
-const VERSION    = versionArg ?? tauriConf.package.version;
+// Allow a --version override, accepting either `--version=1.2.3` or `--version 1.2.3`.
+const argv       = process.argv.slice(2);
+const eqArg      = argv.find(a => a.startsWith('--version='))?.split('=')[1];
+const spaceArg   = (() => { const i = argv.indexOf('--version'); return i >= 0 ? argv[i + 1] : undefined; })();
+const versionArg = eqArg ?? spaceArg;
+// Tauri v2 moved the version to the top level of tauri.conf.json (it used to live under
+// `package.version` in v1); fall back to the old location for safety.
+const VERSION    = versionArg ?? tauriConf.version ?? tauriConf.package?.version;
+if (!VERSION) {
+    console.error('[gen-update-manifest] No version found — pass --version <x.y.z> or set "version" in src-tauri/tauri.conf.json.');
+    process.exit(1);
+}
 const TAG        = `v${VERSION}`;
 
 // ── GitHub config ─────────────────────────────────────────────────────────────

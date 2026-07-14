@@ -98,7 +98,7 @@ pub fn get_crash_dir(app_handle: Option<&tauri::AppHandle>) -> PathBuf {
             .join("Crashes")
     } else {
         let appdata = std::env::var("APPDATA").unwrap_or_else(|_| ".".into());
-        PathBuf::from(appdata).join("com.bettermm.app").join("Crashes")
+        PathBuf::from(appdata).join("com.bettermm.desktop").join("Crashes")
     }
 }
 
@@ -459,7 +459,7 @@ pub fn log_frontend_line(line: String) {
 // survives restarts; the frontend keeps only a tiny in-memory window.
 
 fn get_api_log_path() -> PathBuf {
-    // <appdata>/com.bettermm.app/api-activity.log  (sibling of the Crashes dir)
+    // <appdata>/com.bettermm.desktop/api-activity.log  (sibling of the Crashes dir)
     get_crash_dir(None)
         .parent()
         .map(|p| p.to_path_buf())

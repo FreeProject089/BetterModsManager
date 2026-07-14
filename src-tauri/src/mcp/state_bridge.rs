@@ -271,7 +271,7 @@ pub fn get_bmm_data_dir() -> PathBuf {
         return PathBuf::from(custom);
     }
     let appdata = std::env::var("APPDATA").unwrap_or_else(|_| ".".into());
-    PathBuf::from(appdata).join("com.bettermm.app")
+    PathBuf::from(appdata).join("com.bettermm.desktop")
 }
 
 /// Read-only snapshot of BMM's entire persisted state
