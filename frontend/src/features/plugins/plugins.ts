@@ -67,6 +67,49 @@ let _allModpacks: any[] = [];
 let _scriptClickHandler: EventListener | null = null;
 // Endpoint def cache for on-demand code generation in all language tabs
 const _epCodeCache = new Map<string, EndpointDef>();
+// Cached, language-keyed HTML for the (static, expensive) endpoint + deep-link lists in
+// the API & Scripts tab. Building ~50 syntax-highlighted rows on every tab open was the
+// lag; now it's built once per language and reused. See epListHtml()/dlListHtml().
+let _epListHtmlCache: { lang: string; html: string } | null = null;
+let _dlListHtmlCache: { lang: string; html: string } | null = null;
+
+// Build (or reuse) the documented endpoint list. Always refreshes the cheap _epCodeCache
+// so on-demand code generation still works, but only rebuilds the heavy highlighted HTML
+// when the language changed.
+function epListHtml(): string {
+    const defs = getEndpointDefs();
+    const methodOrder: Record<string, number> = { GET: 0, POST: 1, PUT: 2, DELETE: 3, PATCH: 4 };
+    defs.sort((a, b) => (methodOrder[a.method] ?? 9) - (methodOrder[b.method] ?? 9));
+    defs.forEach(ep => {
+        const sid = (ep.method.toLowerCase() + '_' + ep.path).replace(/\//g, '_').replace(/^_/, '').replace(/:/g, '');
+        _epCodeCache.set(sid, ep);
+    });
+    if (_epListHtmlCache && _epListHtmlCache.lang === getLang()) return _epListHtmlCache.html;
+    const methodCls: Record<string, string> = { GET: 'plug-method-get', POST: 'plug-method-post', PUT: 'plug-method-put', DELETE: 'plug-method-delete', PATCH: 'plug-method-patch' };
+    const methods = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'];
+    const html = methods.map(mth => {
+        const group = defs.filter(d => d.method === mth);
+        if (group.length === 0) return '';
+        const cls = methodCls[mth] || '';
+        const rows = group.map(ep => buildEndpointRow(ep)).join('');
+        return `<div class="plug-ep-group" data-method="${mth}">
+            <div class="plug-ep-group-header" role="button" tabindex="0">
+                <svg class="plug-ep-group-chevron" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+                <span class="plug-method ${cls}" style="font-size:11px;">${mth}</span>
+                <span class="plug-ep-group-count">${group.length} endpoint${group.length > 1 ? 's' : ''}</span>
+            </div>
+            <div class="plug-ep-group-body">${rows}</div>
+        </div>`;
+    }).join('');
+    _epListHtmlCache = { lang: getLang(), html };
+    return html;
+}
+function dlListHtml(): string {
+    if (_dlListHtmlCache && _dlListHtmlCache.lang === getLang()) return _dlListHtmlCache.html;
+    const html = getDeepLinkDefs().map(dl => buildDeepLinkRow(dl)).join('');
+    _dlListHtmlCache = { lang: getLang(), html };
+    return html;
+}
 
 // ── Init ───────────────────────────────────────────────────────────────────
 
@@ -3528,84 +3571,6 @@ function renderScripts(container: HTMLElement) {
     // panel (setupUnifiedQuickTest) reads getEndpointDefs() directly, so there is a
     // single source of truth for endpoints. The documented endpoint list below also
     // comes from getEndpointDefs().
-    const _QT_REMOVED = true; void _QT_REMOVED;
-    const QT_ENDPOINTS_DEAD = false ? [
-        // ═══ GET ═══════════════════════════════════════════════════════════════
-        { m: 'GET', p: '/api/health',                  l: t('plugins.ep.health')      || 'Health',                icon: IC.checkCircle },
-        { m: 'GET', p: '/api/status',                  l: t('plugins.ep.status')      || 'Status',                icon: IC.info },
-        { m: 'GET', p: '/api/check-update',            l: t('plugins.ep.checkUpdate') || 'Check Update',          icon: IC.refresh },
-        { m: 'GET', p: '/api/mods',                    l: t('plugins.ep.allMods')     || 'All Mods',              icon: IC.list },
-        { m: 'GET', p: '/api/mods/active',             l: t('plugins.ep.activeMods')  || 'Active Mods',           icon: IC.check },
-        { m: 'GET', p: '/api/modpacks',                l: t('plugins.ep.modpacks')    || 'List Modpacks',         icon: IC.list },
-        { m: 'GET', p: '/api/profiles',                l: t('plugins.ep.profiles')    || 'Profiles',              icon: IC.puzzle },
-        { m: 'GET', p: '/api/plugins',                 l: t('plugins.ep.plugins')     || 'Plugins',               icon: IC.zap },
-        { m: 'GET', p: '/api/creator-id',              l: t('plugins.ep.creatorId')   || 'Creator ID',            icon: IC.shield },
-        { m: 'GET', p: '/api/repo/info',               l: t('plugins.ep.repoInfo')    || 'Repo Info',             icon: IC.info,     body: '?url=' },
-        { m: 'GET', p: '/api/repo/list',               l: t('plugins.ep.repoList')    || 'Connected Repos',       icon: IC.list },
-        { m: 'GET', p: '/api/apps',                    l: t('plugins.ep.installedApps')|| 'Installed Apps',       icon: IC.list },
-        { m: 'GET', p: '/api/catalog',                 l: t('plugins.ep.catalog')     || 'Local Catalog',         icon: IC.list },
-        { m: 'GET', p: '/api/language/template',       l: t('plugins.ep.langTemplate')|| 'Lang Template',         icon: IC.download },
-        { m: 'GET', p: '/api/apps/permissions',        l: t('plugins.ep.listPerms')   || 'List Permissions',      icon: IC.shield },
-        { m: 'GET', p: '/api/apps/permissions/:id',    l: t('plugins.ep.getPerms')    || 'Get Plugin Perms',      icon: IC.shield },
-        // ═══ POST ══════════════════════════════════════════════════════════════
-        { m: 'POST', p: '/api/mods/enable',             l: t('plugins.ep.enableMod')   || 'Enable Mod',           icon: IC.check,    body: '{"mod_id":""}' },
-        { m: 'POST', p: '/api/mods/disable',            l: t('plugins.ep.disableMod')  || 'Disable Mod',          icon: IC.x,        body: '{"mod_id":""}' },
-        { m: 'POST', p: '/api/profiles',                l: t('plugins.ep.createProf')  || 'Create Profile',       icon: IC.plus,     body: '{"name":"","game_path":"","mods_path":"","backup_path":""}' },
-        { m: 'POST', p: '/api/profiles/activate',       l: t('plugins.ep.activateProf')|| 'Activate Profile',     icon: IC.puzzle,   body: '{"profile_id":""}' },
-        { m: 'POST', p: '/api/plugins/apply',           l: t('plugins.ep.applyPlugin') || 'Apply Plugin',         icon: IC.zap,      body: '{"plugin_id":"","force_strict":false}' },
-        { m: 'POST', p: '/api/plugins/compare',         l: t('plugins.ep.cmpPlugin')   || 'Compare Plugin',       icon: IC.shield,   body: '{"plugin_id":""}' },
-        { m: 'POST', p: '/api/modpacks/enable',         l: t('plugins.ep.enableMp')    || 'Enable Modpack',       icon: IC.folder,   body: '{"modpack_id":""}' },
-        { m: 'POST', p: '/api/modpacks/disable',        l: t('plugins.ep.disableMp')   || 'Disable Modpack',      icon: IC.folder,   body: '{"modpack_id":""}' },
-        { m: 'POST', p: '/api/modpacks/create',         l: t('plugins.ep.createMp')    || 'Create Modpack',       icon: IC.plus,     body: '{"name":"","profile_id":""}' },
-        { m: 'POST', p: '/api/restart',                 l: t('plugins.ep.restart')     || 'Restart BMM',          icon: IC.refresh,  body: '' },
-        { m: 'POST', p: '/api/benchmark',               l: t('plugins.ep.benchmark')   || 'Run Benchmark',        icon: IC.zap,      body: '{"dataset":"sandbox","size":"M","mode":"manual","sources":[],"profiles":[]}' },
-        { m: 'POST', p: '/api/telemetry/consent',       l: t('plugins.ep.telConsent')  || 'Telemetry Consent',    icon: IC.shield,   body: '{"enabled":true}' },
-        { m: 'POST', p: '/api/telemetry/settings',      l: t('plugins.ep.telSettings') || 'Telemetry Settings',   icon: IC.shield,   body: '{"replay":true,"full":false,"bench":true}' },
-        { m: 'POST', p: '/api/recorder',                l: t('plugins.ep.recorder')    || 'Session Recorder',     icon: IC.zap,      body: '{"on":true,"full":false,"rust":true,"js":true}' },
-        { m: 'POST', p: '/api/replay/export',           l: t('plugins.ep.replayExport')|| 'Export Replay',        icon: IC.upload,   body: '' },
-        { m: 'POST', p: '/api/replay/import',           l: t('plugins.ep.replayImport')|| 'Import Replay',        icon: IC.download, body: '{"path":"","url":""}' },
-        { m: 'POST', p: '/api/launchpack/run',          l: t('plugins.ep.runLaunchpack')|| 'Run Launch Pack',     icon: IC.play,     body: '{"id":""}' },
-        { m: 'POST', p: '/api/schedule/run',            l: t('plugins.ep.runTask')     || 'Run Scheduled Task',   icon: IC.play,     body: '{"id":""}' },
-        { m: 'POST', p: '/api/discord/rpc',             l: t('plugins.ep.discordRpc')  || 'Discord RPC',          icon: IC.globe,    body: '{"enabled":true}' },
-        { m: 'POST', p: '/api/data/export-auto',        l: t('plugins.ep.exportAuto')  || 'Auto Backup',          icon: IC.upload,   body: '{"dir":"C:/BMM/Backups","name":"bmm-backup-{date}","increment":"paren"}' },
-        { m: 'POST', p: '/api/repo/connect',            l: t('plugins.ep.repoConnect') || 'Connect Repo',         icon: IC.globe,    body: '{"url":"","name":""}' },
-        { m: 'POST', p: '/api/repo/sync',               l: t('plugins.ep.repoSync')    || 'Sync Repo',            icon: IC.refresh,  body: '{}' },
-        { m: 'POST', p: '/api/repo/gen',                l: t('plugins.ep.repoGen')     || 'Gen Repo',             icon: IC.upload,   body: '{}' },
-        { m: 'POST', p: '/api/repo/update',             l: t('plugins.ep.repoUpdate')  || 'Update Repo',          icon: IC.refresh,  body: '{"repoDir":"C:/BMM/MyRepo"}' },
-        { m: 'POST', p: '/api/repo/host',               l: t('plugins.ep.repoHost')    || 'Host HTTP',            icon: IC.globe,    body: '{"serveDir":"C:/BMM/Export","port":8080}' },
-        { m: 'POST', p: '/api/apps/install',            l: t('plugins.ep.installApp')  || 'Install App',          icon: IC.download },
-        { m: 'POST', p: '/api/apps/launch',             l: t('plugins.ep.launchApp')   || 'Launch App',           icon: IC.play },
-        { m: 'POST', p: '/api/catalog/new',             l: t('plugins.ep.catNew')      || 'Create Catalog',       icon: IC.plus },
-        { m: 'POST', p: '/api/catalog/apps',            l: t('plugins.ep.catAddApp')   || 'Add App to Catalog',   icon: IC.plus },
-        { m: 'POST', p: '/api/data/export',             l: t('plugins.ep.exportData')  || 'Export Data',          icon: IC.upload },
-        { m: 'POST', p: '/api/data/import',             l: t('plugins.ep.importData')  || 'Import Data',          icon: IC.download },
-        { m: 'POST', p: '/api/modlists/export',         l: t('plugins.ep.exportMl')    || 'Export Mod List',      icon: IC.upload },
-        { m: 'POST', p: '/api/modlists/import',         l: t('plugins.ep.importMl')    || 'Import Mod List',      icon: IC.download },
-        { m: 'POST', p: '/api/modpacks/import',         l: t('plugins.ep.importMp')    || 'Import Modpack',       icon: IC.download },
-        { m: 'POST', p: '/api/modpacks/export',         l: t('plugins.ep.exportMp')    || 'Export Modpack',       icon: IC.upload,   body: '{"id":""}' },
-        { m: 'POST', p: '/api/plugins/import',          l: t('plugins.ep.importPlugin')|| 'Import Plugin',        icon: IC.download },
-        { m: 'POST', p: '/api/plugins/export',          l: t('plugins.ep.exportPlugin')|| 'Export Plugin',        icon: IC.upload,   body: '{"id":""}' },
-        { m: 'POST', p: '/api/language/import',         l: t('plugins.ep.importLang')  || 'Import Language',      icon: IC.download },
-        { m: 'POST', p: '/api/profiles/import/ovgme',   l: t('plugins.ep.importOvgme') || 'Import OvGME',         icon: IC.download },
-        { m: 'POST', p: '/api/profiles/import/omm',     l: t('plugins.ep.importOmm')   || 'Import OMM/OMX',       icon: IC.download },
-        // ═══ PUT ═══════════════════════════════════════════════════════════════
-        { m: 'PUT',  p: '/api/mods/:id',                l: t('plugins.ep.updateMod')   || 'Update Mod',           icon: IC.editIcon, body: '{"name":""}' },
-        { m: 'PUT',  p: '/api/profiles/:id',            l: t('plugins.ep.updateProf')  || 'Update Profile',       icon: IC.editIcon, body: '{"name":""}' },
-        { m: 'PUT',  p: '/api/modpacks/:id',            l: t('plugins.ep.updateMp')    || 'Update Modpack',       icon: IC.editIcon, body: '{"name":""}' },
-        { m: 'PUT',  p: '/api/apps/permissions/:id',    l: t('plugins.ep.setPerms')    || 'Set Plugin Perms',     icon: IC.shield,   body: '{"permissions":["app.read","app.write","catalog.read","catalog.write"]}' },
-        { m: 'PUT',  p: '/api/catalog/apps/:id',        l: t('plugins.ep.catUpdateApp')|| 'Update Catalog App',   icon: IC.editIcon, body: '{"version":"2.0"}' },
-        // ═══ DELETE ════════════════════════════════════════════════════════════
-        { m: 'DELETE', p: '/api/repo/sync/cancel',      l: t('plugins.ep.cancelSync')  || 'Cancel Sync',          icon: IC.x },
-        { m: 'DELETE', p: '/api/repo/gen/cancel',       l: t('plugins.ep.cancelGen')   || 'Cancel Gen',           icon: IC.x },
-        { m: 'DELETE', p: '/api/repo/host',             l: t('plugins.ep.stopHost')    || 'Stop Host',            icon: IC.x },
-        { m: 'DELETE', p: '/api/repo',                  l: t('plugins.ep.disconnRepo') || 'Disconnect Repo',      icon: IC.trash,    body: '{"url":""}' },
-        { m: 'DELETE', p: '/api/mods/:id',              l: t('plugins.ep.deleteMod')   || 'Delete Mod',           icon: IC.trash },
-        { m: 'DELETE', p: '/api/profiles/:id',          l: t('plugins.ep.deleteProf')  || 'Delete Profile',       icon: IC.trash },
-        { m: 'DELETE', p: '/api/modpacks/:id',          l: t('plugins.ep.deleteMp')    || 'Delete Modpack',       icon: IC.trash },
-        { m: 'DELETE', p: '/api/apps/:id',              l: t('plugins.ep.uninstallApp')|| 'Uninstall App',        icon: IC.trash },
-        { m: 'DELETE', p: '/api/catalog/apps/:id',      l: t('plugins.ep.catRemApp')   || 'Remove from Catalog',  icon: IC.trash },
-    ] : [];
-    void QT_ENDPOINTS_DEAD;
 
     container.innerHTML = `
         <div class="plug-scripts-root">
@@ -3701,34 +3666,7 @@ function renderScripts(container: HTMLElement) {
                     <button class="btn btn-xs btn-ghost" id="plug-ep-collapse-all">${t('plugins.epCollapseAll') || 'Collapse all'}</button>
                 </div>
                 <div class="plug-endpoint-list" id="plug-ep-list">
-                    ${(() => {
-                        const defs = getEndpointDefs();
-                        const methodOrder: Record<string, number> = { GET: 0, POST: 1, PUT: 2, DELETE: 3, PATCH: 4 };
-                        defs.sort((a, b) => (methodOrder[a.method] ?? 9) - (methodOrder[b.method] ?? 9));
-                        defs.forEach(ep => {
-                            const sid = (ep.method.toLowerCase() + '_' + ep.path).replace(/\//g, '_').replace(/^_/, '').replace(/:/g, '');
-                            _epCodeCache.set(sid, ep);
-                        });
-                        const methodCls: Record<string, string> = { GET: 'plug-method-get', POST: 'plug-method-post', PUT: 'plug-method-put', DELETE: 'plug-method-delete', PATCH: 'plug-method-patch' };
-                        const methods = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'];
-                        // All groups collapsed by default — click a header to expand.
-                        const defaultOpen: Record<string, boolean> = {};
-                        return methods.map(mth => {
-                            const group = defs.filter(d => d.method === mth);
-                            if (group.length === 0) return '';
-                            const cls = methodCls[mth] || '';
-                            const open = !!defaultOpen[mth];
-                            const rows = group.map(ep => buildEndpointRow(ep)).join('');
-                            return `<div class="plug-ep-group ${open ? 'open' : ''}" data-method="${mth}">
-                                <div class="plug-ep-group-header" role="button" tabindex="0">
-                                    <svg class="plug-ep-group-chevron" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
-                                    <span class="plug-method ${cls}" style="font-size:11px;">${mth}</span>
-                                    <span class="plug-ep-group-count">${group.length} endpoint${group.length > 1 ? 's' : ''}</span>
-                                </div>
-                                <div class="plug-ep-group-body">${rows}</div>
-                            </div>`;
-                        }).join('');
-                    })()}
+                    ${epListHtml()}
                 </div>
 
                 <h3 class="plug-section-title plug-dl-foldhead" id="plug-dl-foldhead" role="button" tabindex="0" style="margin-top:18px;cursor:pointer;">
@@ -3750,7 +3688,7 @@ function renderScripts(container: HTMLElement) {
                         <button class="btn btn-xs btn-ghost" id="plug-dl-collapse-all">${t('plugins.epCollapseAll') || 'Collapse all'}</button>
                     </div>
                     <div class="plug-endpoint-list" id="plug-dl-list">
-                        ${getDeepLinkDefs().map(dl => buildDeepLinkRow(dl)).join('')}
+                        ${dlListHtml()}
                     </div>
                 </div>
             </div>
