@@ -190,27 +190,30 @@ async function fetchCatalog(force = false): Promise<void> {
     if (listEl) listEl.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--bmm-text-muted);font-size:13px;">${t('common.loading') || 'Loading…'}</div>`;
 
     try {
-        const urls = [OFFICIAL_CATALOG, ..._communitySources];
-        const results = await Promise.allSettled(urls.map(u =>
-            fetch(`${u}?t=${force ? Date.now() : ''}`, { cache: force ? 'no-store' : 'default' })
-                .then(r => r.ok ? r.json() : [])
-                .catch(() => [])
-        ));
+        const isUrl = (s: string) => /^https?:\/\//i.test(s);
+        const urlSources = _communitySources.filter(isUrl);
+        const fileSources = _communitySources.filter(s => !isUrl(s));
         const all: BmmTheme[] = [];
-        for (const r of results) {
-            if (r.status === 'fulfilled') {
-                const list = Array.isArray(r.value) ? r.value : r.value?.themes || [];
-                all.push(...list);
-            }
-        }
-        // Also try backend command (which may include locally-registered sources)
+        // URL sources + the official catalog go through the backend — it sends the site
+        // identity header (so PRIVATE community catalogs resolve) and, unlike a browser
+        // fetch, isn't bound by the CSP connect-src allowlist.
         try {
             const fromBackend: string = await invoke('fetch_theme_catalogs', {
                 officialUrl: OFFICIAL_CATALOG,
-                communityUrls: _communitySources,
+                communityUrls: urlSources,
             });
             all.push(...(JSON.parse(fromBackend || '[]')));
         } catch {}
+        // LOCAL FILE sources (e.g. a catalog you exported + "added as source") can't be
+        // fetch()ed — the CSP blocks file:// — so read them through the Rust file reader.
+        for (const path of fileSources) {
+            try {
+                const text: string = await invoke('read_file_text', { path });
+                const json = JSON.parse(text);
+                const list = Array.isArray(json) ? json : (json?.themes || []);
+                all.push(...list);
+            } catch {}
+        }
         // Deduplicate by id
         const seen = new Set<string>();
         _catalog = all.filter(th => { if (seen.has(th.id)) return false; seen.add(th.id); return true; });
