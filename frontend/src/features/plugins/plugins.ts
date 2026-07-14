@@ -500,6 +500,7 @@ async function renderCatalog(container: HTMLElement) {
             </div>
             <button class="btn btn-sm btn-ghost" id="plug-refresh-catalog">${IC.refresh} ${t('plugins.refresh')}</button>
             <button class="btn btn-sm btn-ghost" id="plug-toggle-sources">${IC.globe} ${t('plugins.communityCatalogs') || 'Community catalogs'}</button>
+            <button class="btn btn-sm btn-ghost" id="plug-my-catalogs">${IC.list} ${t('plugins.myCatalogs') || 'My catalogs'}</button>
             <button class="btn btn-sm btn-secondary" id="plug-import-file-cat">${IC.upload} ${t('plugins.importFile')}</button>
         </div>
         <div id="plug-sources-panel" class="plug-sources-panel" style="display:none">
@@ -520,6 +521,7 @@ async function renderCatalog(container: HTMLElement) {
         await renderCatalog(container);
     });
     container.querySelector('#plug-import-file-cat')?.addEventListener('click', handleImportFile);
+    container.querySelector('#plug-my-catalogs')?.addEventListener('click', () => openPluginCatalogBuilder(() => renderCatalog(container)));
     container.querySelector('#plug-catalog-search')?.addEventListener('input', (e) => {
         filterCatalogGrid((e.target as HTMLInputElement).value);
     });
@@ -573,6 +575,202 @@ async function renderCatalog(container: HTMLElement) {
                 <a class="btn btn-sm btn-ghost" href="${getLinks().plugin_github}" target="_blank">${IC.globe} GitHub</a>
             </div>`;
     }
+}
+
+// ── Plugin-catalog BUILDER ────────────────────────────────────────────────────
+// Create/edit your own plugin catalog.json: pull entries straight from installed
+// plugins, edit them, then export the file or add it as a local source. Drafts are
+// small (metadata only — no plugin files) so they live in localStorage.
+interface PlugCatEntry {
+    id: string; name: string; version: string; author: string; description: string;
+    game: string; official: boolean; download_url: string; tags: string[]; icon_url?: string | null;
+}
+interface PlugCatDraft { id: string; name: string; version: string; plugins: PlugCatEntry[] }
+
+const MY_PLUG_CAT_KEY = 'bmm_my_plugin_catalogs';
+function getMyPluginCatalogs(): PlugCatDraft[] {
+    try { return JSON.parse(localStorage.getItem(MY_PLUG_CAT_KEY) || '[]'); }
+    catch { return []; }
+}
+function setMyPluginCatalogs(list: PlugCatDraft[]): void {
+    localStorage.setItem(MY_PLUG_CAT_KEY, JSON.stringify(list));
+}
+// The BMM-native catalog.json shape a draft exports to (matches fetch_plugin_catalog).
+function draftToCatalogJson(d: PlugCatDraft): string {
+    return JSON.stringify({
+        version: d.version || '1.0',
+        name: d.name || 'My catalog',
+        plugins: d.plugins.map(p => ({
+            id: p.id, name: p.name, version: p.version || '1.0.0', author: p.author || '',
+            description: p.description || '', game: p.game || '', official: false,
+            download_url: p.download_url || '', tags: p.tags || [], icon_url: p.icon_url || null,
+        })),
+    }, null, 2);
+}
+
+function openPluginCatalogBuilder(onSourcesChanged: () => void) {
+    const ov = createOverlay('');
+    const panel = ov.querySelector('.plug-overlay-panel') as HTMLElement;
+    let editing: PlugCatDraft | null = null; // null = list view
+
+    const close = () => ov.remove();
+    const saveDraft = (d: PlugCatDraft) => {
+        const all = getMyPluginCatalogs();
+        const i = all.findIndex(x => x.id === d.id);
+        if (i >= 0) all[i] = d; else all.push(d);
+        setMyPluginCatalogs(all);
+    };
+
+    // ── List view ──
+    const renderList = () => {
+        const drafts = getMyPluginCatalogs();
+        panel.innerHTML = `
+            <div class="plug-ov-head">
+                <h3>${IC.list} ${t('plugins.myCatalogs') || 'My plugin catalogs'}</h3>
+                <button class="plug-ov-close-btn btn btn-sm btn-ghost">${IC.x}</button>
+            </div>
+            <p class="plug-cat-desc">${t('plugins.myCatalogsDesc') || 'Build your own plugin catalog from your installed plugins, then export it or add it as a source. To share it publicly, host it on BetterCommunity.'}</p>
+            <div class="plug-cat-list">
+                ${drafts.length ? drafts.map(d => `
+                    <div class="plug-cat-row" data-id="${escAttr(d.id)}">
+                        <div class="plug-cat-row-info">
+                            <span class="plug-cat-row-name">${escHtml(d.name || t('plugins.untitledCatalog') || 'Untitled catalog')}</span>
+                            <span class="plug-cat-row-meta">v${escHtml(d.version || '1.0')} · ${d.plugins.length} ${t('plugins.pluginsCount') || 'plugin(s)'}</span>
+                        </div>
+                        <button class="btn btn-xs btn-secondary plug-cat-edit" data-id="${escAttr(d.id)}">${t('plugins.edit') || 'Edit'}</button>
+                        <button class="btn btn-xs btn-ghost plug-cat-export" data-id="${escAttr(d.id)}">${IC.exportIcon} ${t('plugins.export') || 'Export'}</button>
+                        <button class="btn btn-xs btn-ghost plug-cat-del" data-id="${escAttr(d.id)}" style="color:var(--danger)">${IC.trash || IC.x}</button>
+                    </div>`).join('') : `<p class="plug-sources-empty">${t('plugins.noMyCatalogs') || 'No catalog yet — create your first one.'}</p>`}
+            </div>
+            <div class="plug-ov-actions">
+                <button class="btn btn-accent" id="plug-cat-new">${IC.plus} ${t('plugins.newCatalog') || 'New catalog'}</button>
+            </div>`;
+        panel.querySelector('.plug-ov-close-btn')?.addEventListener('click', close);
+        panel.querySelector('#plug-cat-new')?.addEventListener('click', () => {
+            editing = { id: `cat-${Date.now().toString(36)}`, name: '', version: '1.0', plugins: [] };
+            renderEditor();
+        });
+        panel.querySelectorAll('.plug-cat-edit').forEach(b => b.addEventListener('click', () => {
+            editing = JSON.parse(JSON.stringify(drafts.find(d => d.id === (b as HTMLElement).dataset.id)));
+            renderEditor();
+        }));
+        panel.querySelectorAll('.plug-cat-export').forEach(b => b.addEventListener('click', () => {
+            const d = drafts.find(x => x.id === (b as HTMLElement).dataset.id);
+            if (d) exportDraft(d);
+        }));
+        panel.querySelectorAll('.plug-cat-del').forEach(b => b.addEventListener('click', async () => {
+            const ok = await window.confirmCustom!(t('plugins.deleteCatalog') || 'Delete catalog?', t('plugins.deleteCatalogDesc') || 'This removes the draft from this device. Exported files are not affected.', 'danger', { yesLabel: t('common.delete') || 'Delete', noLabel: t('common.cancel') || 'Cancel' });
+            if (!ok) return;
+            setMyPluginCatalogs(getMyPluginCatalogs().filter(x => x.id !== (b as HTMLElement).dataset.id));
+            renderList();
+        }));
+    };
+
+    // ── Export helpers ──
+    const exportDraft = async (d: PlugCatDraft): Promise<string | null> => {
+        const slug = (d.name || 'catalog').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'catalog';
+        const path = await saveFile({ defaultPath: `${slug}.json`, filters: [{ name: 'JSON catalog', extensions: ['json'] }] });
+        if (!path) return null;
+        try {
+            await invoke('write_text_file', { path, content: draftToCatalogJson(d) });
+            toast(t('plugins.catalogExported') || 'Catalog exported', 'success');
+            return path;
+        } catch (e) { toast(`${t('common.error')}: ${e}`, 'error'); return null; }
+    };
+
+    // ── Editor view ──
+    const renderEditor = () => {
+        const d = editing!;
+        panel.innerHTML = `
+            <div class="plug-ov-head">
+                <h3>${IC.list} ${t('plugins.editCatalog') || 'Edit catalog'}</h3>
+                <button class="plug-ov-close-btn btn btn-sm btn-ghost">${IC.x}</button>
+            </div>
+            <div class="plug-cat-meta">
+                <div class="plug-form-row"><label class="plug-form-label">${t('plugins.catalogName') || 'Catalog name'} *</label><input type="text" id="pcb-name" class="input" value="${escAttr(d.name)}" placeholder="My Server Plugins"></div>
+                <div class="plug-form-row" style="max-width:120px;"><label class="plug-form-label">${t('plugins.createVersion')}</label><input type="text" id="pcb-version" class="input" value="${escAttr(d.version)}"></div>
+            </div>
+            <div class="plug-cat-addbar">
+                <select id="pcb-pick" class="select select-sm">
+                    <option value="">${t('plugins.addFromInstalled') || '+ Add from installed plugin…'}</option>
+                    ${_installedPlugins.map(p => `<option value="${escAttr(p.manifest.id)}">${escHtml(p.manifest.name || p.manifest.id)}</option>`).join('')}
+                </select>
+                <button class="btn btn-sm btn-ghost" id="pcb-add-empty">${IC.plus} ${t('plugins.addManual') || 'Add empty entry'}</button>
+            </div>
+            <div id="pcb-entries" class="plug-cat-entries"></div>
+            <div class="plug-ov-actions">
+                <button class="btn btn-ghost" id="pcb-back">${t('common.back') || 'Back'}</button>
+                <div style="flex:1"></div>
+                <button class="btn btn-secondary" id="pcb-export">${IC.exportIcon} ${t('plugins.export') || 'Export'}</button>
+                <button class="btn btn-secondary" id="pcb-export-source">${IC.globe} ${t('plugins.exportAndSource') || 'Export & add as source'}</button>
+                <button class="btn btn-accent" id="pcb-save">${IC.save} ${t('plugins.saveLocal') || 'Save'}</button>
+            </div>`;
+        renderEntries();
+        panel.querySelector('.plug-ov-close-btn')?.addEventListener('click', close);
+        panel.querySelector('#pcb-back')?.addEventListener('click', () => { editing = null; renderList(); });
+        const readMeta = () => {
+            d.name = (panel.querySelector('#pcb-name') as HTMLInputElement).value.trim();
+            d.version = (panel.querySelector('#pcb-version') as HTMLInputElement).value.trim() || '1.0';
+        };
+        panel.querySelector('#pcb-pick')?.addEventListener('change', (e) => {
+            const id = (e.target as HTMLSelectElement).value;
+            if (!id) return;
+            const pl = _installedPlugins.find(p => p.manifest.id === id);
+            if (pl && !d.plugins.some(x => x.id === pl.manifest.id)) {
+                const m = pl.manifest;
+                d.plugins.push({ id: m.id, name: m.name || m.id, version: m.version || '1.0.0', author: m.author || '', description: m.description || '', game: m.game || '', official: false, download_url: '', tags: m.tags || [], icon_url: null });
+                renderEntries();
+            }
+            (e.target as HTMLSelectElement).value = '';
+        });
+        panel.querySelector('#pcb-add-empty')?.addEventListener('click', () => {
+            d.plugins.push({ id: '', name: '', version: '1.0.0', author: '', description: '', game: '', official: false, download_url: '', tags: [], icon_url: null });
+            renderEntries();
+        });
+        panel.querySelector('#pcb-save')?.addEventListener('click', () => {
+            readMeta();
+            if (!d.name) { toast(t('plugins.catalogNameRequired') || 'A catalog name is required', 'warning'); return; }
+            saveDraft(d); toast(t('plugins.catalogSaved') || 'Catalog saved', 'success'); editing = null; renderList();
+        });
+        panel.querySelector('#pcb-export')?.addEventListener('click', async () => { readMeta(); saveDraft(d); await exportDraft(d); });
+        panel.querySelector('#pcb-export-source')?.addEventListener('click', async () => {
+            readMeta(); saveDraft(d);
+            const path = await exportDraft(d);
+            if (!path) return;
+            const list = getPluginCatalogSources();
+            if (!list.includes(path)) { list.push(path); setPluginCatalogSources(list); }
+            toast(t('plugins.addedAsSource') || 'Added as a local source', 'success');
+            onSourcesChanged();
+            close();
+        });
+    };
+
+    const renderEntries = () => {
+        const wrap = panel.querySelector('#pcb-entries') as HTMLElement;
+        const d = editing!;
+        if (!d.plugins.length) { wrap.innerHTML = `<p class="plug-sources-empty">${t('plugins.noEntries') || 'No entry yet. Add one from an installed plugin above.'}</p>`; return; }
+        wrap.innerHTML = d.plugins.map((p, i) => `
+            <div class="plug-cat-entry" data-i="${i}">
+                <div class="plug-cat-entry-grid">
+                    <input class="input pcb-f" data-f="id" data-i="${i}" value="${escAttr(p.id)}" placeholder="${t('plugins.createId') || 'id'} *">
+                    <input class="input pcb-f" data-f="name" data-i="${i}" value="${escAttr(p.name)}" placeholder="${t('plugins.createName') || 'name'} *">
+                    <input class="input pcb-f" data-f="version" data-i="${i}" value="${escAttr(p.version)}" placeholder="1.0.0">
+                    <input class="input pcb-f" data-f="download_url" data-i="${i}" value="${escAttr(p.download_url)}" placeholder="https://.../plugin.bmmplug *">
+                </div>
+                <button class="btn btn-xs btn-ghost pcb-rm" data-i="${i}" style="color:var(--danger)">${IC.x}</button>
+            </div>`).join('');
+        wrap.querySelectorAll('.pcb-f').forEach(inp => inp.addEventListener('input', (e) => {
+            const el = e.target as HTMLInputElement;
+            const i = parseInt(el.dataset.i!, 10);
+            (d.plugins[i] as any)[el.dataset.f!] = el.value;
+        }));
+        wrap.querySelectorAll('.pcb-rm').forEach(b => b.addEventListener('click', () => {
+            d.plugins.splice(parseInt((b as HTMLElement).dataset.i!, 10), 1);
+            renderEntries();
+        }));
+    };
+
+    renderList();
 }
 
 function renderSourcesList(container: HTMLElement) {

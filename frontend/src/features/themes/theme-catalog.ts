@@ -3,7 +3,7 @@
 // Fetches official / partner / community theme lists (same pattern as app-catalog)
 // and displays a gallery with preview, install & apply buttons.
 
-import { invoke } from '../../core/api.js';
+import { invoke, saveFile } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
 import { toast } from '../../ui/app.js';
 import { escHtml, escAttr } from '../../core/utils.js';
@@ -74,6 +74,7 @@ function buildModal(): void {
             <div id="theme-cat-list" style="flex:1;overflow-y:auto;padding:16px 18px;display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;"></div>
             <div class="modal-footer" style="padding:12px 18px;border-top:1px solid rgba(255,255,255,0.06);font-size:11px;color:var(--bmm-text-muted);">
                 <span id="theme-cat-count"></span>
+                <button class="btn btn-ghost btn-sm" id="theme-cat-build">${t('themes.createCatalog') || 'Create theme catalog'}</button>
                 <button class="btn btn-ghost btn-sm" id="theme-cat-import-file">${t('themes.importFile') || 'Import .bmmtheme / .json file'}</button>
             </div>
         </div>`;
@@ -93,6 +94,94 @@ function buildModal(): void {
     });
     _modal.querySelector('#theme-cat-add-community')!.addEventListener('click', addCommunitySource);
     _modal.querySelector('#theme-cat-import-file')!.addEventListener('click', importFromFile);
+    _modal.querySelector('#theme-cat-build')!.addEventListener('click', openThemeCatalogBuilder);
+}
+
+// ── Theme-catalog BUILDER ─────────────────────────────────────────────────────
+// Pick installed/custom themes → export a catalog.json ({version,name,themes:[full
+// theme objects, vars inline]}) that this app AND the BCWEB theme feed both consume.
+function openThemeCatalogBuilder(): void {
+    const builder = document.createElement('div');
+    builder.className = 'modal-overlay open';
+    builder.style.zIndex = '10000';
+    const themes = getInstalledThemes();
+    // Optionally include built-in presets that are still installed (not hidden).
+    const builtins = (_builtins || []).filter((b: any) => !b._hidden);
+    const picked = new Set<string>();
+
+    const themeRow = (th: any, isBuiltin: boolean) => {
+        const accent = th.vars?.['--bmm-accent'] || '#3b82f6';
+        return `
+            <label class="tcb-row">
+                <input type="checkbox" class="tcb-cb" data-id="${escAttr(th.id)}" data-builtin="${isBuiltin ? '1' : '0'}">
+                <span class="tcb-swatch" style="background:${accent}"></span>
+                <span class="tcb-name">${escHtml(th.name || th.id)}${isBuiltin ? ` <span class="tcb-tag">${t('themes.builtin') || 'Default'}</span>` : ''}</span>
+            </label>`;
+    };
+
+    builder.innerHTML = `
+        <div class="modal glass" style="max-width:520px;width:95%;max-height:82vh;display:flex;flex-direction:column;">
+            <div class="modal-header">
+                <div>
+                    <h2 style="margin:0;font-size:15px;">${t('themes.createCatalog') || 'Create theme catalog'}</h2>
+                    <p style="margin:2px 0 0;font-size:11px;color:var(--bmm-text-muted);">${t('themes.createCatalogDesc') || 'Pick the themes to include, then export the catalog or add it as a source. Host it on BetterCommunity to share it.'}</p>
+                </div>
+                <button class="modal-close" id="tcb-close"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+            </div>
+            <div style="padding:12px 18px;flex-shrink:0;">
+                <input id="tcb-name" class="input" placeholder="${t('themes.catalogName') || 'Catalog name'}" style="width:100%;">
+            </div>
+            <div id="tcb-list" style="flex:1;overflow-y:auto;padding:0 18px 8px;display:flex;flex-direction:column;gap:4px;">
+                ${themes.length || builtins.length
+                    ? (themes.map((th: any) => themeRow(th, false)).join('') + builtins.map((th: any) => themeRow(th, true)).join(''))
+                    : `<p style="font-size:12px;color:var(--bmm-text-muted);padding:12px 0;">${t('themes.noInstalledThemes') || 'No installed themes to add. Create one in the theme editor first.'}</p>`}
+            </div>
+            <div class="modal-footer" style="padding:12px 18px;border-top:1px solid rgba(255,255,255,0.06);display:flex;gap:8px;align-items:center;">
+                <span id="tcb-count" style="font-size:11px;color:var(--bmm-text-muted);">0 ${t('themes.themes') || 'theme(s)'}</span>
+                <div style="flex:1"></div>
+                <button class="btn btn-ghost btn-sm" id="tcb-export">${t('themes.exportBtn') || 'Export'}</button>
+                <button class="btn btn-accent btn-sm" id="tcb-export-source">${t('themes.exportAndSource') || 'Export & add as source'}</button>
+            </div>
+        </div>`;
+    (document.getElementById('app-window-outer') || document.body).appendChild(builder);
+    const close = () => builder.remove();
+    builder.querySelector('#tcb-close')!.addEventListener('click', close);
+    builder.addEventListener('click', e => { if (e.target === builder) close(); });
+    const countEl = builder.querySelector('#tcb-count') as HTMLElement;
+    builder.querySelectorAll('.tcb-cb').forEach(cb => cb.addEventListener('change', (e) => {
+        const el = e.target as HTMLInputElement;
+        if (el.checked) picked.add(el.dataset.id!); else picked.delete(el.dataset.id!);
+        countEl.textContent = `${picked.size} ${t('themes.themes') || 'theme(s)'}`;
+    }));
+
+    const buildCatalog = () => {
+        const name = (builder.querySelector('#tcb-name') as HTMLInputElement).value.trim() || 'My theme catalog';
+        const all = [...themes, ...builtins];
+        const chosen = all.filter((th: any) => picked.has(th.id));
+        return { name, json: JSON.stringify({ version: '1.0', name, themes: chosen }, null, 2) };
+    };
+    const doExport = async (): Promise<string | null> => {
+        if (picked.size === 0) { toast(t('themes.pickAtLeastOne') || 'Pick at least one theme', 'warning'); return null; }
+        const { name, json } = buildCatalog();
+        const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'themes';
+        const path = await saveFile({ defaultPath: `${slug}.json`, filters: [{ name: 'JSON catalog', extensions: ['json'] }] });
+        if (!path) return null;
+        try { await invoke('write_text_file', { path, content: json }); toast(t('themes.catalogExported') || 'Catalog exported', 'success'); return path; }
+        catch (e) { toast(`${t('common.error')}: ${e}`, 'error'); return null; }
+    };
+    builder.querySelector('#tcb-export')!.addEventListener('click', doExport);
+    builder.querySelector('#tcb-export-source')!.addEventListener('click', async () => {
+        const path = await doExport();
+        if (!path) return;
+        if (!_communitySources.includes(path)) {
+            _communitySources.push(path);
+            localStorage.setItem(COMMUNITY_SRC_KEY, JSON.stringify(_communitySources));
+        }
+        toast(t('themes.addedAsSource') || 'Added as a local source', 'success');
+        close();
+        await fetchCatalog(true);
+        renderCatalog();
+    });
 }
 
 // ── Fetch ─────────────────────────────────────────────────────────────────────
