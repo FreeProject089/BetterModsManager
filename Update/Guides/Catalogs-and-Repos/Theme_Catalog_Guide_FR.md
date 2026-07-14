@@ -4,6 +4,14 @@ Les thèmes BMM re-stylisent l'interface de l'app. Ils se partagent via le **cat
 de thèmes** et sont empaquetés dans un fichier `.bmmtheme` (un ZIP). Ce guide couvre
 le format et la publication.
 
+> **Construire un catalogue dans l'app :** ouvre le **Catalogue de thèmes** et clique sur
+> **« Créer un catalogue de thèmes »** — coche les thèmes installés à inclure et **Exporte**
+> le `catalog.json` (ou « Exporter & ajouter comme source » pour le tester tout de suite).
+> Héberge le fichier n'importe où et ajoute son URL comme source communautaire, ou héberge-le
+> sur **BetterCommunity** (`/submit → Héberger mon propre catalogue`) en catalogue public ou
+> **privé** (sur invitation). Les fichiers locaux `.json`/`.bmmtheme` ajoutés comme sources
+> sont lus directement (sans passer par le serveur).
+
 ---
 
 ## 1. Structure du paquet `.bmmtheme`

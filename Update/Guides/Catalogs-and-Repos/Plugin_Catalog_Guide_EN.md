@@ -2,6 +2,15 @@
 
 > This guide explains how to structure, host, and list community plugins in the **BetterModsManager_Plugins** catalog so they appear in BMM's **Catalog** tab.
 
+> **Prefer not to hand-write JSON?** In BMM open **Plugins & API → Catalog → "My catalogs"**
+> to *build* a catalog visually: add entries straight from your installed plugins (id /
+> name / version / author / description prefilled), then **Export** the `catalog.json` or
+> **"Export & add as source"** to test it instantly. To share it publicly, host the file
+> anywhere (GitHub raw, etc.) and add its URL as a source — or host it on **BetterCommunity**
+> (`/submit → Host my own catalog`), where you can make it **public or private** (private =
+> gated by IP / creator id / BC id / email / Discord). BMM sends your identity automatically
+> when fetching a private BetterCommunity catalog, so it just works once you're on the list.
+
 ---
 
 ## 1. Overview

@@ -4,6 +4,13 @@ BMM themes restyle the app UI. They are shared through the **theme catalog** and
 packaged as a `.bmmtheme` file (a ZIP). This guide covers the package format and how
 to publish one.
 
+> **Build a catalog in-app:** open the **Theme Catalogue** and click **"Create theme
+> catalog"** — tick the installed themes to include and **Export** the `catalog.json`
+> (or "Export & add as source" to test it right away). Host the file anywhere and add its
+> URL as a community source, or host it on **BetterCommunity** (`/submit → Host my own
+> catalog`) as a public or **private** (invite-only) catalog. Local `.json`/`.bmmtheme`
+> files added as sources are read directly (no server round-trip).
+
 ---
 
 ## 1. `.bmmtheme` package structure

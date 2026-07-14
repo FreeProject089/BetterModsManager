@@ -2,6 +2,17 @@
 
 > Ce guide explique comment structurer, héberger et référencer des plugins communautaires dans le catalogue **BetterModsManager_Plugins** afin qu'ils apparaissent dans l'onglet **Catalogue** de BMM.
 
+> **Pas envie d'écrire le JSON à la main ?** Dans BMM, ouvre **Plugins & API → Catalogue →
+> « Mes catalogues »** pour *construire* un catalogue visuellement : ajoute des entrées
+> directement depuis tes plugins installés (id / nom / version / auteur / description
+> préremplis), puis **Exporte** le `catalog.json` ou **« Exporter & ajouter comme source »**
+> pour le tester tout de suite. Pour le partager publiquement, héberge le fichier n'importe
+> où (GitHub raw, etc.) et ajoute son URL comme source — ou héberge-le sur **BetterCommunity**
+> (`/submit → Héberger mon propre catalogue`), où tu peux le rendre **public ou privé**
+> (privé = protégé par IP / creator id / BC id / e-mail / Discord). BMM envoie ton identité
+> automatiquement quand il récupère un catalogue privé BetterCommunity — ça marche dès que
+> tu es sur la liste.
+
 ---
 
 ## 1. Vue d'ensemble
