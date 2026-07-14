@@ -1,8 +1,8 @@
 {
   "plugin_catalog":   "https://raw.githubusercontent.com/BetterDCS/BetterModsManager_Plugins/main/catalog.json",
   "plugin_github":    "https://github.com/BetterDCS/BetterModsManager_Plugins",
-  "server_browse":    "https://raw.githubusercontent.com/BetterDCS/Better_ModManager_ServerBrowse/main/repos.json",
-  "contributors":     "https://raw.githubusercontent.com/BetterDCS/BMM_Contributors/refs/heads/main/contributors.json",
+  "server_browse":    "https://bettercommunity.ch/api/repos.json",
+  "contributors":     "https://bettercommunity.ch/api/assets/contributors.json",
   "autoupdate_api":   "https://api.github.com/repos/FreeProject089/BetterModsManager/releases",
   "apps_catalog":     "https://raw.githubusercontent.com/BetterDCS/BMM_App_Catalogue/main/catalog.json",
   "github_repo":      "https://github.com/FreeProject089/BetterModsManager",
@@ -13,7 +13,8 @@
   "ed_forum":         "https://forum.dcs.world/topic/385941-better-modmanager/",
   "bettercommunity":  "https://bettercommunity.ch/",
 
-  "_comment_rpc": "Discord Rich Presence buttons. Button 1 = 'Website' (its URL gets ?creator=<id> appended at runtime). Button 2 = 'GitHub'. BoutonRPC1 picks which WebSiteRPC link (1 or 2), BoutonRPC2 picks which github_RPC link (1 or 2). Edited here, picked up from GitHub first, local copy as backup.",
+  "_comment_source": "BMM fetches this file BCWEB-first (https://bettercommunity.ch/api/assets/links.json), then the GitHub copy, then this bundled local file. Edit the canonical copy under BetterCommunity → Admin → Downloads & assets.",
+  "_comment_rpc": "Discord Rich Presence buttons. Button 1 = 'Website' (its URL gets ?creator=<id> appended at runtime). Button 2 = 'GitHub'. BoutonRPC1 picks which WebSiteRPC link (1 or 2), BoutonRPC2 picks which github_RPC link (1 or 2).",
   "WebSiteRPC1": "https://bettercommunity.ch/",
   "WebSiteRPC2": "https://freeproject089.github.io/BMM_Web/",
   "github_RPC1": "https://github.com/FreeProject089/BetterModsManager",

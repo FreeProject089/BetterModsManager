@@ -2,16 +2,20 @@
  * Central link registry — all external URLs live in links.json.
  *
  * Load order (first success wins, rest skipped):
- *   1. REMOTE_LINKS_URL  — hosted JSON, change links without touching the app
- *   2. assets/links.json — local bundled fallback
- *   3. Built-in DEFAULTS — hardcoded last resort
+ *   1. BCWEB_LINKS_URL   — links.json hosted on BetterCommunity (edit from the admin panel)
+ *   2. REMOTE_LINKS_URL  — the copy on GitHub (fallback if BCWEB is down)
+ *   3. assets/links.json — local bundled fallback (offline)
+ *   4. Built-in DEFAULTS — hardcoded last resort
  *
- * To switch hosting: change REMOTE_LINKS_URL below and recompile once.
- * After that, edit the hosted JSON freely — no recompile needed.
- * Set REMOTE_LINKS_URL to '' to skip remote and always use local/defaults.
+ * BCWEB is authoritative: edit links.json under Admin → Downloads & assets and every app
+ * picks it up with no recompile. GitHub + the local bundle only matter if BCWEB is
+ * unreachable. Set a URL to '' to skip that source.
  */
 
-// ── Where to fetch links.json remotely (leave empty to disable) ────────────
+// ── BCWEB-hosted links.json (primary; served at /api/assets/links.json) ─────
+const BCWEB_LINKS_URL = 'https://bettercommunity.ch/api/assets/links.json';
+
+// ── GitHub copy (fallback if BCWEB is unreachable) ─────────────────────────
 const REMOTE_LINKS_URL = 'https://raw.githubusercontent.com/FreeProject089/BetterModsManager/refs/heads/Tdev/frontend/assets/links.json';
 
 // ── Local fallback path (relative, served by Tauri) ────────────────────────
@@ -45,8 +49,8 @@ export interface BmmLinks {
 const DEFAULTS: BmmLinks = {
     plugin_catalog:   'https://raw.githubusercontent.com/BetterDCS/BetterModsManager_Plugins/main/catalog.json',
     plugin_github:    'https://github.com/BetterDCS/BetterModsManager_Plugins',
-    server_browse:    'https://raw.githubusercontent.com/BetterDCS/Better_ModManager_ServerBrowse/main/repos.json',
-    contributors:     'https://raw.githubusercontent.com/BetterDCS/BMM_Contributors/refs/heads/main/contributors.json',
+    server_browse:    'https://bettercommunity.ch/api/repos.json',
+    contributors:     'https://bettercommunity.ch/api/assets/contributors.json',
     autoupdate_api:   'https://api.github.com/repos/FreeProject089/BetterModsManager/releases',
     apps_catalog:     'https://raw.githubusercontent.com/BetterDCS/BMM_App_Catalogue/main/catalog.json',
     // Telemetry: production collector (MUST be HTTPS — BMM refuses plain HTTP, so the
@@ -83,21 +87,19 @@ export async function loadLinks(): Promise<void> {
 
     let source = 'built-in defaults';
 
-    // 1. Try remote
-    if (REMOTE_LINKS_URL) {
-        const data = await tryFetch(REMOTE_LINKS_URL);
+    // Try each source in priority order; first success wins.
+    const sources: Array<[string, string]> = [
+        [BCWEB_LINKS_URL,  `BCWEB (${BCWEB_LINKS_URL})`],
+        [REMOTE_LINKS_URL, `GitHub (${REMOTE_LINKS_URL})`],
+        [LOCAL_LINKS_PATH, `local file (${LOCAL_LINKS_PATH})`],
+    ];
+    for (const [url, label] of sources) {
+        if (!url) continue;
+        const data = await tryFetch(url);
         if (data) {
             _links = data;
-            source = `remote (${REMOTE_LINKS_URL})`;
-        }
-    }
-
-    // 2. Try local bundled file
-    if (source === 'built-in defaults') {
-        const data = await tryFetch(LOCAL_LINKS_PATH);
-        if (data) {
-            _links = data;
-            source = `local file (${LOCAL_LINKS_PATH})`;
+            source = label;
+            break;
         }
     }
 
