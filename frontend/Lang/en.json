@@ -1866,7 +1866,7 @@
   "repo.whitelistToggle": "Enable Whitelist Protection",
   "repo.whitelistUpdated": "Whitelist updated.",
   "repo.yourServerId": "Your ID on this server",
-  "repo.zipHelp": "Large repositories (20GB+) can take several minutes to hash and compress. This depends on your CPU and Disk speed.",
+  "repo.zipHelp": "Packs the WHOLE repo into one .zip archive for the export (vs. a plain folder tree). Large repos (20GB+) can take several minutes to hash and compress, depending on your CPU and disk. Different from \"Zip each mod\" below, which makes one .zip per mod instead of a single big archive.",
   "repo.zipping": "Compressing into ZIP...",
   "__SECTION_STORAGE__": "--- STORAGE MANAGER ---",
   "hashes.status.calculating": "Calculating...",

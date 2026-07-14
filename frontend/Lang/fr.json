@@ -1864,7 +1864,7 @@
   "repo.whitelistToggle": "Activer la protection par liste blanche",
   "repo.whitelistUpdated": "Liste blanche mise à jour.",
   "repo.yourServerId": "Votre ID sur ce serveur",
-  "repo.zipHelp": "Les gros dépôts (20Go+) peuvent prendre plusieurs minutes pour le hachage et la compression. Cela dépend de votre processeur et de votre disque.",
+  "repo.zipHelp": "Empaquette TOUT le dépôt en une seule archive .zip pour l’export (au lieu d’une arborescence de dossiers). Les gros dépôts (20Go+) peuvent prendre plusieurs minutes de hachage et compression, selon le processeur et le disque. Différent de « Zip each mod » ci-dessous, qui fait un .zip par mod au lieu d’une seule grosse archive.",
   "repo.zipping": "Compression ZIP en cours...",
   "__SECTION_STORAGE__": "--- STORAGE MANAGER ---",
   "hashes.status.calculating": "Calcul en cours...",
