@@ -4632,6 +4632,7 @@
   "plugins.undoRemove": "Annuler le retrait",
   "plugins.copyId": "Copier l'id du mod",
   "plugins.idCopied": "Id du mod copié",
+  "plugins.sourcePrivate": "Ce catalogue est privé — demande l'accès à son propriétaire, ou utilise un lien de partage (…?k=…).",
   "plugins.myCatalogs": "Mes catalogues",
   "plugins.myCatalogsDesc": "Crée ton propre catalogue de plugins à partir de tes plugins installés, puis exporte-le ou ajoute-le comme source. Pour le partager publiquement, héberge-le sur BetterCommunity.",
   "plugins.myCatalogsTitle": "Mes catalogues de plugins",

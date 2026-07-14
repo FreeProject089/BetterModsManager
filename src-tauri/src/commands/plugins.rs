@@ -28,10 +28,11 @@ fn copy_dir_recursive(src: &std::path::Path, dst: &std::path::Path) -> std::io::
 // ── Catalog ────────────────────────────────────────────────────────────────
 
 #[tauri::command]
-pub async fn fetch_plugin_catalog(catalog_url: Option<String>) -> Result<CatalogResponse, String> {
+pub async fn fetch_plugin_catalog(app: tauri::AppHandle, catalog_url: Option<String>) -> Result<CatalogResponse, String> {
     let url = catalog_url.as_deref().unwrap_or(CATALOG_URL);
-    let resp = crate::commands::net::client().get(url)
-        .header(reqwest::header::USER_AGENT, "BetterModsManager/1.0")
+    // catalog_get carries the site identity header for first-party (BetterCommunity)
+    // URLs so PRIVATE community catalogs gate correctly; a third-party feed gets none.
+    let resp = crate::commands::net::catalog_get(&app, url)
         .timeout(std::time::Duration::from_secs(15))
         .send()
         .await
@@ -40,6 +41,11 @@ pub async fn fetch_plugin_catalog(catalog_url: Option<String>) -> Result<Catalog
     if resp.status().as_u16() == 404 {
         // Catalog not published yet — return empty gracefully
         return Ok(CatalogResponse { version: String::new(), plugins: vec![] });
+    }
+    // A private catalog the caller isn't allowed to see — surface it distinctly so the
+    // UI can show a "private / access denied" state instead of a generic fetch error.
+    if resp.status().as_u16() == 403 {
+        return Err("forbidden: this catalog is private".to_string());
     }
     if !resp.status().is_success() {
         return Err(format!("Catalog fetch failed (HTTP {})", resp.status()));
@@ -62,8 +68,10 @@ pub async fn install_plugin(
 ) -> Result<InstalledPlugin, String> {
     log_line(format!("[PLUGINS] Installing from: {}", download_url));
 
-    let bytes = crate::commands::net::client().get(&download_url)
-        .header(reqwest::header::USER_AGENT, "BetterModsManager/1.0")
+    // catalog_get carries the identity header for a first-party (BetterCommunity) /dl
+    // link so a PRIVATE managed-catalog payload passes the gate before redirecting to
+    // storage; third-party download URLs get no header.
+    let bytes = crate::commands::net::catalog_get(&handle, &download_url)
         .timeout(std::time::Duration::from_secs(60))
         .send().await.map_err(|e| format!("Download error: {}", e))?
         .bytes().await.map_err(|e| format!("Read error: {}", e))?;

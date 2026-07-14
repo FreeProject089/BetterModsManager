@@ -294,6 +294,7 @@ pub async fn export_theme(
 /// Fetches remote theme catalog JSON arrays and returns a merged deduplicated list.
 #[tauri::command]
 pub async fn fetch_theme_catalogs(
+    app: tauri::AppHandle,
     official_url: String,
     community_urls: Vec<String>,
 ) -> Result<String, String> {
@@ -301,7 +302,9 @@ pub async fn fetch_theme_catalogs(
     let mut all: Vec<serde_json::Value> = Vec::new();
 
     for url in urls {
-        if let Ok(resp) = crate::commands::net::client().get(&url).timeout(std::time::Duration::from_secs(8)).send().await {
+        // Identity header on first-party URLs → private theme catalogs resolve here (the
+        // front-end's own fetch of the same URL just gets an empty 403 and is ignored).
+        if let Ok(resp) = crate::commands::net::catalog_get(&app, &url).timeout(std::time::Duration::from_secs(8)).send().await {
             if let Ok(json) = resp.json::<serde_json::Value>().await {
                 let list = if json.is_array() {
                     json.as_array().cloned().unwrap_or_default()

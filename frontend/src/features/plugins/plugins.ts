@@ -539,7 +539,12 @@ async function renderCatalog(container: HTMLElement) {
         if (list.includes(src)) { toast(t('plugins.sourceExists') || 'Source already added', 'info'); return; }
         // Validate it actually loads before persisting.
         try { await fetchCommunityCatalog(src); }
-        catch (e) { toast(`${t('plugins.sourceLoadFail') || 'Could not load catalog'}: ${e}`, 'error'); return; }
+        catch (e) {
+            // A private community catalog the caller isn't allowed to see (the identity
+            // header didn't match its access list). Point them at the share-link path.
+            if (/forbidden|private/i.test(String(e))) { toast(t('plugins.sourcePrivate') || 'This catalog is private — ask its owner for access, or use a share link (…?k=…).', 'error'); return; }
+            toast(`${t('plugins.sourceLoadFail') || 'Could not load catalog'}: ${e}`, 'error'); return;
+        }
         list.push(src);
         setPluginCatalogSources(list);
         toast(t('plugins.sourceAdded') || 'Catalog added', 'success');

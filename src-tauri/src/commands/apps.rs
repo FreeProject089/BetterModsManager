@@ -106,10 +106,13 @@ fn push_history(state: &mut AppsState, action: &str, app_id: &str, title: &str) 
 //   Tier 2 — Community (community_imports + user-added sources)
 //     → official = false, partner = false (stripped regardless of JSON content)
 
-async fn fetch_raw_catalog(client: &reqwest::Client, url: &str) -> Option<AppCatalog> {
+async fn fetch_raw_catalog(app: &tauri::AppHandle, url: &str) -> Option<AppCatalog> {
     let bust = format!("{}?t={}", url,
         SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs());
-    let resp = client.get(&bust).send().await.ok()?;
+    // catalog_get adds the site identity header for first-party URLs so private community
+    // app catalogs gate by the caller's linked account; third-party sources get none.
+    let resp = crate::commands::net::catalog_get(app, &bust)
+        .timeout(std::time::Duration::from_secs(15)).send().await.ok()?;
     if !resp.status().is_success() { return None; }
     resp.json::<AppCatalog>().await.ok()
 }
@@ -127,15 +130,10 @@ fn apply_trust(apps: &mut Vec<AppEntry>, is_official: bool, is_partner: bool, so
 
 #[tauri::command]
 pub async fn fetch_app_catalogs(
+    app: tauri::AppHandle,
     catalog_url: String,
     extra_community_urls: Vec<String>,
 ) -> Result<MergedCatalog, String> {
-    let client = reqwest::Client::builder()
-        .user_agent("BetterModsManager/1.0")
-        .timeout(std::time::Duration::from_secs(15))
-        .build()
-        .map_err(|e| e.to_string())?;
-
     let mut all_apps: Vec<AppEntry> = Vec::new();
     let mut sources_loaded: Vec<String> = Vec::new();
     let mut sources_failed: Vec<String> = Vec::new();
@@ -148,7 +146,7 @@ pub async fn fetch_app_catalogs(
     let mut partner_urls: Vec<String> = Vec::new();
     let mut community_urls: Vec<String> = extra_community_urls;
 
-    match fetch_raw_catalog(&client, &catalog_url).await {
+    match fetch_raw_catalog(&app, &catalog_url).await {
         Some(mut cat) => {
             apply_trust(&mut cat.apps, true, false, &catalog_url);
             sources_loaded.push(catalog_url.clone());
@@ -174,7 +172,7 @@ pub async fn fetch_app_catalogs(
     for url in &partner_urls {
         if !visited.insert(url.clone()) { continue; }
         log_line(format!("[APPS] Fetching partner catalog: {}", url));
-        match fetch_raw_catalog(&client, url).await {
+        match fetch_raw_catalog(&app, url).await {
             Some(mut cat) => {
                 apply_trust(&mut cat.apps, false, true, url);
                 sources_loaded.push(url.clone());
@@ -198,7 +196,7 @@ pub async fn fetch_app_catalogs(
         i += 1;
         if !visited.insert(url.clone()) { continue; }
         log_line(format!("[APPS] Fetching community catalog: {}", url));
-        match fetch_raw_catalog(&client, &url).await {
+        match fetch_raw_catalog(&app, &url).await {
             Some(mut cat) => {
                 apply_trust(&mut cat.apps, false, false, &url);
                 sources_loaded.push(url.clone());

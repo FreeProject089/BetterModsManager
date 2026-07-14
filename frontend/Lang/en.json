@@ -4625,6 +4625,7 @@
   "plugins.undoRemove": "Undo removal",
   "plugins.copyId": "Copy mod id",
   "plugins.idCopied": "Mod id copied",
+  "plugins.sourcePrivate": "This catalog is private — ask its owner for access, or use a share link (…?k=…).",
   "plugins.myCatalogs": "My catalogs",
   "plugins.myCatalogsDesc": "Build your own plugin catalog from your installed plugins, then export it or add it as a source. To share it publicly, host it on BetterCommunity.",
   "plugins.myCatalogsTitle": "My plugin catalogs",
