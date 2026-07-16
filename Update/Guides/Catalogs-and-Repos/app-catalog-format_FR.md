@@ -184,4 +184,4 @@ https://github.com/VotreUser/VotreRepo/releases/download/v1.0.0/thumb.png
 - **Tags** : minuscules, sans espaces, max 3.
 - **Images** : utilisez des URLs raw GitHub ou un CDN public. Pas d'URLs nécessitant une authentification.
 - **Size** : renseignez-la toujours — affichée à l'utilisateur avant le téléchargement.
-- Les chaînes `community_imports` sont chargées récursivement jusqu'à 20 sources maximum.
+- Les chaînes `community_imports` sont chargées récursivement jusqu'à 30 sources maximum.

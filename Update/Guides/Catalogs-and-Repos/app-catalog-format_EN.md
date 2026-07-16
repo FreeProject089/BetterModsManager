@@ -184,4 +184,4 @@ https://github.com/YourUser/YourRepo/releases/download/v1.0.0/thumb.png
 - **Tags**: lowercase, no spaces, max 3.
 - **Images**: use raw GitHub URLs or a public CDN. No auth-required URLs.
 - **Size**: always fill it — shown to the user before they download.
-- `community_imports` chains are loaded recursively up to 20 sources total.
+- `community_imports` chains are loaded recursively up to 30 sources total.
