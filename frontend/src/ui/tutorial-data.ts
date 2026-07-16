@@ -695,7 +695,36 @@ const OTHER: TutorialDef = {
                 },
             ],
         },
-        // ── Part 3 : Benchmark ─────────────────────────────────────
+        // ── Part 3 : Data & Backup ─────────────────────────────────
+        {
+            id: 'backup',
+            title_key: 'tut.other.backup.title',
+            steps: [
+                {
+                    id: 's1',
+                    title_key: 'tut.other.backup.s1.title',
+                    text_key:  'tut.other.backup.s1.text',
+                    nav: 'settings',
+                    icon: ICON.shield,
+                    selector: 'btn-export-data',
+                },
+                {
+                    id: 's2',
+                    title_key: 'tut.other.backup.s2.title',
+                    text_key:  'tut.other.backup.s2.text',
+                    nav: 'settings',
+                    selector: 'btn-export-data',
+                },
+                {
+                    id: 's3',
+                    title_key: 'tut.other.backup.s3.title',
+                    text_key:  'tut.other.backup.s3.text',
+                    nav: 'settings',
+                    selector: 'btn-import-data',
+                },
+            ],
+        },
+        // ── Part 4 : Benchmark ─────────────────────────────────────
         {
             id: 'benchmark',
             title_key: 'tut.other.benchmark.title',
