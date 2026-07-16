@@ -40,7 +40,8 @@ Links a mod to its update repo(s).
   "updateSources": [                           // optional, additional repos
     { "repoUrl": "https://host/repo.json", "repoModId": "abc" },
     { "repoUrl": "https://mirror/repo.json" }  // repoModId falls back to repoModId above
-  ]
+  ],
+  "directUrl": "https://host/mod-v2.zip"       // optional, "" clears it — direct-download archive URL
 }
 ```
 
@@ -113,9 +114,11 @@ by `repo_mod_id`), `version`, and an optional author `changelog`.
 3. Build `repo_mod_id → (version, changelog)` from every profile in the manifest.
 4. Emit an update wherever `repo_version != installed_version`.
 
-The command returns `{ updates: [...], errors: [...], checked: <n> }`. `checked`
-is how many mods were trackable — `0` means nothing is linked yet (the UI shows a
-*"no mods are linked to a repo"* hint instead of *"up to date"*).
+The command returns `{ updates: [...], errors: [...], checked: <n>, baselined: [...] }`.
+`checked` is how many mods were trackable — `0` means nothing is linked yet (the UI
+shows a *"no mods are linked to a repo"* hint instead of *"up to date"*). `baselined`
+lists mods seen against a repo for the first time and recorded as a baseline (so a
+first sight isn't mistaken for an update).
 
 ---
 

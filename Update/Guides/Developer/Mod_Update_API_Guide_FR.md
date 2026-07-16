@@ -42,7 +42,8 @@ Lie un mod à son/ses repo(s) de mise à jour.
   "updateSources": [                             // optionnel, repos additionnels
     { "repoUrl": "https://host/repo.json", "repoModId": "abc" },
     { "repoUrl": "https://mirror/repo.json" }   // repoModId retombe sur celui ci-dessus
-  ]
+  ],
+  "directUrl": "https://host/mod-v2.zip"         // optionnel, "" l'efface — URL d'archive en téléchargement direct
 }
 ```
 
@@ -118,9 +119,11 @@ l'utilisateur confirme dans l'app) :
    manifeste.
 4. Émet une mise à jour partout où `version_repo != version_installée`.
 
-La commande renvoie `{ updates: [...], errors: [...], checked: <n> }`. `checked`
-est le nombre de mods traçables — `0` signifie que rien n'est encore lié (l'UI
-affiche un message *« aucun mod n'est lié à un repo »* au lieu de *« à jour »*).
+La commande renvoie `{ updates: [...], errors: [...], checked: <n>, baselined: [...] }`.
+`checked` est le nombre de mods traçables — `0` signifie que rien n'est encore lié
+(l'UI affiche un message *« aucun mod n'est lié à un repo »* au lieu de *« à jour »*).
+`baselined` liste les mods vus pour la première fois contre un repo et enregistrés
+comme référence (pour qu'une première détection ne soit pas prise pour une mise à jour).
 
 ---
 
