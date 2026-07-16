@@ -187,6 +187,15 @@ Deeplinks are clickable URLs (web pages, Discord, scripts) that drive BMM when i
 | `bmm://data/export-auto?dir=<folder>&name=<template>&increment=<paren\|underscore\|timestamp\|overwrite>` | `POST /api/data/export-auto` |
 | `bmm://launchpack/run?id=<launchpack_id>` | `POST /api/launchpack/run` |
 | `bmm://schedule/run?id=<task_id>` | `POST /api/schedule/run` |
+| `bmm://mod/update?url=<repo_url>` | opens Repo → mod-updates (with `url`, pre-fills connect; without, runs the update check) |
+| `bmm://plugin/delete?id=<plugin_id>` | `DELETE /api/plugins/:id` (uninstall a plugin) |
+| `bmm://catalog/<app\|plugin\|theme>/install?url=<download_url>&name=<label>&type=<exe\|zip\|msi\|script>` | one-click install a BetterCommunity catalog item (`type` applies to `app`; omit `url` to just open the matching view) |
+| `bmm://catalog/<app\|plugin\|theme>/add-source?url=<catalog_url>` | subscribe to a community app/plugin/theme catalog (asks for confirmation) |
+| `bmm://theme/apply?id=<theme_id>` | activate an installed theme |
+| `bmm://theme/import?url=<theme_json_url>` | import + install a theme from a JSON URL |
+| `bmm://theme/editor` | open the theme editor |
+| `bmm://settings/layout?code=<code>` | apply a shared Settings card-layout code |
+| `bmm://settings/navbar?code=<code>` | apply a shared navbar-layout code |
 | `bmm://restart` | restart BMM |
 | `bmm://install?url=<mod_url>` (aliases: `import`, `download`) | one-click mod install |
 | `bmm://api?method=<M>&path=<api_path>&<field>=<value>…` | **generic passthrough — hits ANY endpoint.** Extra params become the JSON body (POST/PUT) or query string (GET/DELETE). Ex: `bmm://api?method=POST&path=/api/mods/enable&mod_id=abc` |

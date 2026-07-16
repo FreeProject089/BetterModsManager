@@ -187,6 +187,15 @@ Les deeplinks sont des URL cliquables (pages web, Discord, scripts) qui pilotent
 | `bmm://data/export-auto?dir=<dossier>&name=<modèle>&increment=<paren\|underscore\|timestamp\|overwrite>` | `POST /api/data/export-auto` |
 | `bmm://launchpack/run?id=<launchpack_id>` | `POST /api/launchpack/run` |
 | `bmm://schedule/run?id=<task_id>` | `POST /api/schedule/run` |
+| `bmm://mod/update?url=<repo_url>` | ouvre Dépôt → mises à jour de mods (avec `url`, pré-remplit la connexion ; sans, lance la vérification des mises à jour) |
+| `bmm://plugin/delete?id=<plugin_id>` | `DELETE /api/plugins/:id` (désinstalle un plugin) |
+| `bmm://catalog/<app\|plugin\|theme>/install?url=<download_url>&name=<label>&type=<exe\|zip\|msi\|script>` | installe en un clic un élément du catalogue BetterCommunity (`type` s'applique à `app` ; sans `url`, ouvre simplement la vue correspondante) |
+| `bmm://catalog/<app\|plugin\|theme>/add-source?url=<catalog_url>` | s'abonner à un catalogue communautaire app/plugin/thème (demande confirmation) |
+| `bmm://theme/apply?id=<theme_id>` | active un thème installé |
+| `bmm://theme/import?url=<theme_json_url>` | importe + installe un thème depuis une URL JSON |
+| `bmm://theme/editor` | ouvre l'éditeur de thèmes |
+| `bmm://settings/layout?code=<code>` | applique un code de disposition des cartes Paramètres partagé |
+| `bmm://settings/navbar?code=<code>` | applique un code de disposition de barre de navigation partagé |
 | `bmm://restart` | redémarre BMM |
 | `bmm://install?url=<mod_url>` (alias : `import`, `download`) | installation de mod en 1 clic |
 | `bmm://api?method=<M>&path=<chemin_api>&<champ>=<valeur>…` | **passe-partout — atteint N'IMPORTE QUEL endpoint.** Les params deviennent le corps JSON (POST/PUT) ou la query string (GET/DELETE). Ex : `bmm://api?method=POST&path=/api/mods/enable&mod_id=abc` |
