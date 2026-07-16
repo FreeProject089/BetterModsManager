@@ -11,7 +11,7 @@ Ce document sert de référence visuelle et technique pour tous les badges stand
 | **Logique** | <span style="background:rgba(245,158,11,0.15);color:#f59e0b;border:1px solid rgba(245,158,11,0.3);padding:2px 10px;border-radius:6px;font-size:11px;font-weight:800;text-transform:uppercase;">AMÉLIORÉ</span> | `[AMÉLIORÉ]` | Améliorations de la logique ou des performances. |
 | **Correction** | <span style="background:rgba(239,68,68,0.15);color:#ef4444;border:1px solid rgba(239,68,68,0.3);padding:2px 10px;border-radius:6px;font-size:11px;font-weight:800;text-transform:uppercase;">FIXÉ</span> | `[FIXÉ]` | Résolutions de bugs et corrections de stabilité. |
 | **Interface** | <span style="background:rgba(168,85,247,0.15);color:#a855f7;border:1px solid rgba(168,85,247,0.3);padding:2px 10px;border-radius:6px;font-size:11px;font-weight:800;text-transform:uppercase;">VISUEL</span> | `[VISUEL]` | Changements graphiques, styles ou animations. |
-| **Système** | <span style="background:rgba(156,163,175,0.15);color:#9ca3af;border:1px solid rgba(156,163,175,0.3);padding:2px 10px;border-radius:6px;font-size:11px;font-weight:800;text-transform:uppercase;">SYSTÈME</span> | `[SYSTÈME]` | Changements du moteur principal ou du backend. |
+| **Majeur** | <span style="background:rgba(249,115,22,0.15);color:#f97316;border:1px solid rgba(249,115,22,0.3);padding:2px 10px;border-radius:6px;font-size:11px;font-weight:800;text-transform:uppercase;">MAJEUR</span> | `[MAJEUR]` | Changements majeurs ou cassants, et fonctionnalités phares. |
 
 ## 📢 Alertes de style GitHub
 
