@@ -18,7 +18,7 @@ Les fichiers doivent suivre ce modèle :
 
 1. **Filtrage** : Lorsque la modal des Notes de Version ou de la Documentation est ouverte, BMM vérifie la langue active de l'utilisateur (ex: `FR`).
 2. **Fichiers Masqués** : Tout fichier se terminant par un suffixe qui ne correspond **pas** à la langue actuelle (ex: `_EN.md` quand l'application est en français) est automatiquement masqué dans l'arborescence.
-3. **Repli (Fallback)** : Si un fichier existe sans suffixe (ex: `GuideGeneral.md`), il sera visible pour toutes les langues par défaut.
+3. **Pas de repli sans suffixe** : Le filtre ne conserve *que* les fichiers se terminant par le suffixe de la langue active (`_EN.md` / `_FR.md`). Un fichier sans suffixe de langue (ex: `GuideGeneral.md`) ne correspond à aucun et est masqué dans **toutes** les langues — chaque document a donc besoin d'un fichier `_EN` **et** d'un fichier `_FR` pour apparaître.
 4. **Synchronisation** : Lorsque vous changez de langue dans les paramètres, l'arborescence se met à jour instantanément pour afficher la version correcte des fichiers.
 
 ## Bonnes Pratiques

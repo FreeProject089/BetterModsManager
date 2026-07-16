@@ -18,7 +18,7 @@ Files should follow this pattern:
 
 1. **Filtering**: When the Release Notes or Documentation modal is opened, BMM checks the user's active language (e.g., `FR`).
 2. **Hidden Files**: Any file ending with a suffix that does **not** match the current language (e.g., `_EN.md` when the app is in French) is automatically hidden from the tree view.
-3. **Fallback**: If a file exists without a suffix (e.g., `GeneralGuide.md`), it will be visible for all languages as a fallback.
+3. **No untagged fallback**: The filter keeps *only* files ending in the active language's suffix (`_EN.md` / `_FR.md`). A file with no language suffix (e.g. `GeneralGuide.md`) matches neither and is hidden in **every** language — so each document needs an `_EN` **and** an `_FR` file to appear at all.
 4. **Synchronization**: When you switch languages in the settings, the tree view updates instantly to show the correct version of the files.
 
 ## Best Practices
