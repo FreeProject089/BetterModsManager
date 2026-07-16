@@ -52,11 +52,13 @@ Contenu minimal (un seul champ suffit) :
 
 | Champ | Requis | Notes |
 |---|---|---|
-| `id` | **Oui** (pour être utile) | Globalement unique. Minuscules, sans espaces. |
-| `name` | Non | Remplace le nom du dossier dans BMM |
-| `version` | Non | Affiché dans BMM |
-| `author` | Non | Affiché dans BMM |
-| `description` | Non | Affiché dans BMM |
+| `id` | **Oui** | Le seul champ que BMM lit aujourd'hui. Globalement unique, minuscules, sans espaces. Un `id` non vide fixe l'identité cross-machine du mod. |
+| `name` | Non | Métadonnée descriptive pour les humains / autres outils. **BMM ne le lit pas** — il ne remplace pas le nom du dossier affiché dans l'app. |
+| `version` | Non | Métadonnée descriptive. **Non lue par BMM.** |
+| `author` | Non | Métadonnée descriptive. **Non lue par BMM.** |
+| `description` | Non | Métadonnée descriptive. **Non lue par BMM.** |
+
+> Seul `id` change le comportement de BMM. Les autres champs peuvent être inclus sans risque (ils ne cassent rien) et servent d'auto-documentation ou pour des outils externes, mais BMM les ignore actuellement — le nom affiché du mod reste celui du dossier.
 
 ---
 

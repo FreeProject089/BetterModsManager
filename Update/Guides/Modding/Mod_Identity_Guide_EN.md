@@ -52,11 +52,13 @@ Minimal content (one field is enough):
 
 | Field | Required | Notes |
 |---|---|---|
-| `id` | **Yes** (to be useful) | Globally unique. Lowercase, no spaces. |
-| `name` | No | Overrides the folder name in BMM |
-| `version` | No | Displayed in BMM |
-| `author` | No | Displayed in BMM |
-| `description` | No | Displayed in BMM |
+| `id` | **Yes** | The only field BMM reads today. Globally unique, lowercase, no spaces. A non-empty `id` pins the mod's cross-machine identity. |
+| `name` | No | Descriptive metadata for humans / other tools. **BMM does not read it** — it does not override the folder name shown in the app. |
+| `version` | No | Descriptive metadata. **Not read by BMM.** |
+| `author` | No | Descriptive metadata. **Not read by BMM.** |
+| `description` | No | Descriptive metadata. **Not read by BMM.** |
+
+> Only `id` changes BMM's behavior. The other fields are safe to include (they won't break anything) and are useful as self-documentation or for external tooling, but BMM currently ignores them — the mod's displayed name stays the folder name.
 
 ---
 
