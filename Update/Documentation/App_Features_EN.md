@@ -671,7 +671,7 @@ A complete theming engine that restyles 100% of BMM with **no CSS knowledge requ
 
 | Feature | Description |
 | :--- | :--- |
-| **7 Built-in Presets** | Ready-made themes (Sombre, Void, Full White, Discord, Orange, Spotify…), including light themes. |
+| **12 Built-in Presets** | Ready-made themes (BMM Default, Sombre, Void, Full White, Discord, Orange, Spotify Green, Brutalist, Glass, Clay, Nord, Sakura), including light themes. |
 | **Auto-Palette** | Pick a single colour and generate a full, coherent dark or light theme from it. |
 | **Element Picker** | Right-click any element in the app to edit its text/background/border colours, hover & active states, custom CSS, icon (SVG swap) or image. |
 | **Design Tokens** | Themes are JSON of `--bmm-*` CSS variables injected as `<style>` blocks — source files are never modified, everything is reversible. |

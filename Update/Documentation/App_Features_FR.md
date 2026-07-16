@@ -567,7 +567,7 @@ Un moteur de thèmes complet qui restyle 100% de BMM **sans aucune connaissance 
 
 | Fonction | Description |
 | :--- | :--- |
-| **7 presets intégrés** | Thèmes prêts à l'emploi (Sombre, Void, Full White, Discord, Orange, Spotify…), thèmes clairs inclus. |
+| **12 presets intégrés** | Thèmes prêts à l'emploi (BMM Default, Sombre, Void, Full White, Discord, Orange, Spotify Green, Brutalist, Glass, Clay, Nord, Sakura), thèmes clairs inclus. |
 | **Auto-palette** | Choisissez une seule couleur et générez un thème complet et cohérent, sombre ou clair. |
 | **Pioche d'éléments** | Clic droit sur n'importe quel élément pour éditer ses couleurs texte/fond/bordure, états survol & actif, CSS perso, icône (swap SVG) ou image. |
 | **Tokens de design** | Les thèmes sont du JSON de variables CSS `--bmm-*` injectées en blocs `<style>` — les fichiers sources ne sont jamais modifiés, tout est réversible. |

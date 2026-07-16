@@ -15,7 +15,7 @@ Ouvrez l'**éditeur de thèmes** (panneau flottant). Il a quatre onglets :
 
 ## Démarrage rapide
 
-1. Choisissez un des **7 presets intégrés** (Sombre, Void/Noir, Full White, Discord, Orange/Noir, Spotify Green…), ou
+1. Choisissez un des **12 presets intégrés** (BMM Default, Sombre, Void/Noir, Full White, Discord, Orange/Noir, Spotify Green, Brutalist, Glass, Clay, Nord, Sakura), ou
 2. Utilisez l'**auto-palette** : choisissez une couleur → *Générer sombre* / *Générer clair* construit un thème complet et cohérent.
 3. Ajustez ce que vous voulez dans les groupes repliables (Fond, Accent, Texte, Typographie, Forme, Effets, Boutons, Graphes, Diagrammes, Intro & Outro…).
 4. **Enregistrer sous…** pour le garder (vous pouvez stocker autant de thèmes que vous voulez).
