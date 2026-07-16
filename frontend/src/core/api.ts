@@ -27,15 +27,25 @@ const originalLog = console.log;
 const originalWarn = console.warn;
 const originalError = console.error;
 
+// Re-entrancy guard: forwarding a log to the backend can itself log (e.g. the
+// browser mock's mockInvoke console.logs the command it received). Without this
+// guard that recurses infinitely — bridgeLog → log_frontend_line → console.log →
+// bridgeLog → … — flooding output and freezing the main thread. Prod invoke never
+// re-enters synchronously, so this is a no-op there.
+let _bridging = false;
 function bridgeLog(level: string, args: any[]): void {
     debugHub.recordLog(level, args);
+    if (_bridging || !_invoke) return;
 
-    const message = args.map((arg: any) => 
+    const message = args.map((arg: any) =>
         typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
     ).join(' ');
-    
-    if (_invoke) {
+
+    _bridging = true;
+    try {
         _invoke('log_frontend_line', { line: `[${level}] ${message}` }).catch(() => {});
+    } finally {
+        _bridging = false;
     }
 }
 
