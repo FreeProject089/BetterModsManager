@@ -22,17 +22,17 @@ This document is the single source of truth for everything that can be driven pr
 |---|---|---|---|
 | `/api/health` | no | Liveness probe | `{ ok, service, port }` |
 | `/api/status` | no | App version, active profile, counts | `{ ok, version, active_profile, mod_count, profile_count, plugin_count }` |
-| `/api/check-update` | no | Compare running version to latest GitHub release | `{ ok, current, latest, has_update, release_url }` |
+| `/api/check-update` | no | Compare running version to latest GitHub release | `{ ok, has_update, current_version, latest_version, release_url }` |
 | `/api/mods` | no | All mods in the active profile | `{ ok, data:[{id,name,active,enabled,path}] }` |
 | `/api/mods/active` | no | Only enabled mods of active profile | `{ ok, data:[…] }` |
 | `/api/mods/all` | no | **Every mod across ALL profiles**, grouped by profile + total | `{ ok, total_mods, profiles:[{profile_id,profile_name,mod_count,mods:[…]}] }` |
 | `/api/data` | yes | **Full BMM data export** (`data.json`) — profiles, mods, modpacks, plugins, settings… | JSON file (`bmm-data.json`) |
-| `/api/modpacks` | no | All modpacks (name + mod count) | `{ ok, data:[{id,name,mod_count,active}] }` |
-| `/api/profiles` | no | All profiles incl. their mod lists | `[{id,name,active_mods:[…]}]` |
-| `/api/plugins` | no | Installed plugins | `[{id,name,version,…}]` |
+| `/api/modpacks` | no | All modpacks (full objects) | `{ ok, data:[{id,name,description,mods:[…],multi_profile,dependency_mode,…}] }` (mod count = `mods.length`) |
+| `/api/profiles` | no | All profiles (summary, no mod list) | `{ ok, data:[{id,name,game,active}] }` |
+| `/api/plugins` | no | Installed plugins | `{ ok, data:[…] }` |
 | `/api/creator-id` | no | This user's creator ID (public key) | `{ ok, creator_id }` |
 | `/api/repo/info?url=` | no | Metadata for a remote repo | repo manifest summary |
-| `/api/repo/list` | no | Connected repos | `[{url,name,…}]` |
+| `/api/repo/list` | no | Connected repos | `{ ok, data:[{url,name,…}] }` |
 | `/api/apps` | yes · `app.read` | Installed App-Catalog apps + usage stats | `{ installed:{ id:{…} } }` |
 | `/api/catalog` | yes · `catalog.read` | Local `apps-catalog.json` | catalog object |
 | `/api/language/template` | no | Download `lang-template.json` (all i18n keys → English defaults) | JSON file (`Content-Disposition: attachment`) |
@@ -86,7 +86,7 @@ This document is the single source of truth for everything that can be driven pr
 ### App Catalog
 | Path | Auth · Perm | Body |
 |---|---|---|
-| `/api/apps/install` | yes · `app.write` | `{ appId, appTitle, downloadUrl, fileType, installPath?, version?, category?, thumb? }` — `fileType` ∈ `exe·zip·msi·script` |
+| `/api/apps/install` | yes · `app.write` | `{ appId, appTitle, downloadUrl, fileType, installPath, version?, category?, thumb? }` — `installPath` is required; `fileType` ∈ `exe·zip·msi·script` |
 | `/api/apps/launch` | yes · `app.write` | `{ appId, exePath }` |
 | `/api/catalog/new` | yes · `catalog.write` | `{ name?, description?, partner_catalogs?, community_imports?, apps? }` |
 | `/api/catalog/apps` | yes · `catalog.write` | `{ id, title, description?, category?, price?, tags?, download:{url,file_type,size?}, requirements?, md_link?, images?, official?, partner? }` |

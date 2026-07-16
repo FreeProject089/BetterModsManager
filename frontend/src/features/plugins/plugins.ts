@@ -5090,7 +5090,7 @@ function getEndpointDefs(): EndpointDef[] {
             desc: t('plugins.endpointCheckUpdate'),
             about: 'Interroge la dernière release GitHub et la compare à la version en cours d\'exécution. Retourne si une mise à jour est disponible et l\'URL de la release.',
             fields: null,
-            responseStatuses: [{ code: 200, label: 'OK', body: '{ "ok": true, "current": "1.2.0", "latest": "1.3.0", "has_update": true, "release_url": "https://github.com/FreeProject089/BetterModsManager/releases/latest" }' }],
+            responseStatuses: [{ code: 200, label: 'OK', body: '{ "ok": true, "has_update": true, "current_version": "1.2.0", "latest_version": "1.3.0", "release_url": "https://github.com/FreeProject089/BetterModsManager/releases/latest" }' }],
         },
         {
             method: 'POST', path: '/api/restart', auth: true,
@@ -5603,10 +5603,10 @@ function getEndpointDefs(): EndpointDef[] {
         {
             method: 'GET', path: '/api/modpacks', auth: false,
             desc: t('plugins.endpointGetModpacks'),
-            about: 'Returns all profiles treated as modpacks, including their mod count and metadata. A modpack in BMM is essentially a named profile with a list of mods.',
+            about: 'Returns every saved modpack (a named snapshot of a mod selection). Each entry is a full modpack object; its mod count is <code>mods.length</code>.',
             fields: [],
             responseStatuses: [
-                { code: 200, label: 'OK', body: '{ "ok": true, "data": [{ "id": "...", "name": "My Pack", "mod_count": 12, "active": true }] }' },
+                { code: 200, label: 'OK', body: '{ "ok": true, "data": [{ "id": "...", "name": "My Pack", "description": null, "mods": [{ "mod_id": "...", "mod_name": "...", "mod_version": "1.0" }], "multi_profile": false, "dependency_mode": "manual" }] }' },
             ],
         },
         {
