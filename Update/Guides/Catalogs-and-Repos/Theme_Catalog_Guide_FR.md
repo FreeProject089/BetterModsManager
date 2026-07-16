@@ -31,26 +31,34 @@ Un `.bmmtheme` est une archive ZIP contenant :
   "name": "Midnight Orange",
   "author": "FreeProject089",
   "version": "1.0.0",
-  "tokens": {
-    "--bmm-bg": "#0e0c09",
-    "--bmm-surface": "#15171e",
+  "mode": "dark",
+  "vars": {
+    "--bmm-bg-base": "#0e0c09",
+    "--bmm-bg-elevated": "#15171e",
     "--bmm-accent": "#f97316",
-    "--bmm-text": "#e2e6ee"
+    "--bmm-text-primary": "#e2e6ee"
   },
-  "overrides": {
-    ".sidebar": { "border-radius": "14px" }
-  }
+  "element_overrides": [
+    { "selector": ".sidebar", "props": { "border-radius": "14px" } }
+  ]
 }
 ```
 
 | Champ | Type | Requis | Rôle |
 |---|---|---|---|
-| `id` | string | **Oui** | Slug unique (minuscules, tirets) |
-| `name` | string | **Oui** | Nom affiché |
-| `author` | string | **Oui** | Auteur / pseudo GitHub |
-| `version` | string | **Oui** | Version SemVer |
-| `tokens` | object | **Oui** | Variables CSS `--bmm-*` → valeurs |
-| `overrides` | object | Non | Surcharges CSS par sélecteur |
+| `id` | string | **Oui** | Slug unique (minuscules, tirets). Le seul champ strictement exigé par l'installateur. |
+| `name` | string | Oui (en pratique) | Nom affiché dans la liste des thèmes |
+| `author` | string | Non | Auteur / pseudo GitHub |
+| `version` | string | Non | Version SemVer |
+| `vars` | object | Non | Variables CSS `--bmm-*` → valeurs (c'est ce champ, **pas** `tokens`) |
+| `element_overrides` | array | Non | CSS par sélecteur : `[{ "selector": "...", "props": { ... } }]` (un **tableau**, pas un objet) |
+| `mode` | `"dark"`\|`"light"` | Non | Les thèmes clairs reçoivent des correctifs de contraste automatiques |
+
+> Le moteur lit plusieurs autres champs optionnels — `description`, `preview`, `fonts`,
+> `assets`, `global_css`, `pages` (surcharges par vue), `html_swaps`, `custom_elements`,
+> `bmm_min_version`. Noms `--bmm-*` réels : `--bmm-bg-base`, `--bmm-bg-elevated`,
+> `--bmm-bg-sidebar`, `--bmm-accent`, `--bmm-border`, `--bmm-text-primary/secondary/muted`.
+> Le plus simple : laisser l'**Éditeur de thèmes** exporter un manifeste valide.
 
 > [!ASTUCE]
 > Pars de l'**Éditeur de thème** intégré — il exporte un `.bmmtheme` valide avec tous

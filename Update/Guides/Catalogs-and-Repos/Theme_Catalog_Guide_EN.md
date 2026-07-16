@@ -30,26 +30,34 @@ A `.bmmtheme` is a ZIP archive containing:
   "name": "Midnight Orange",
   "author": "FreeProject089",
   "version": "1.0.0",
-  "tokens": {
-    "--bmm-bg": "#0e0c09",
-    "--bmm-surface": "#15171e",
+  "mode": "dark",
+  "vars": {
+    "--bmm-bg-base": "#0e0c09",
+    "--bmm-bg-elevated": "#15171e",
     "--bmm-accent": "#f97316",
-    "--bmm-text": "#e2e6ee"
+    "--bmm-text-primary": "#e2e6ee"
   },
-  "overrides": {
-    ".sidebar": { "border-radius": "14px" }
-  }
+  "element_overrides": [
+    { "selector": ".sidebar", "props": { "border-radius": "14px" } }
+  ]
 }
 ```
 
 | Field | Type | Required | Purpose |
 |---|---|---|---|
-| `id` | string | **Yes** | Unique slug (lowercase, dashes) |
-| `name` | string | **Yes** | Display name |
-| `author` | string | **Yes** | Author name / GitHub handle |
-| `version` | string | **Yes** | SemVer version |
-| `tokens` | object | **Yes** | `--bmm-*` CSS variables → values |
-| `overrides` | object | No | Per-selector CSS overrides |
+| `id` | string | **Yes** | Unique slug (lowercase, dashes). The only field the installer strictly requires. |
+| `name` | string | Yes (in practice) | Display name shown in the theme list |
+| `author` | string | No | Author name / GitHub handle |
+| `version` | string | No | SemVer version |
+| `vars` | object | No | `--bmm-*` CSS variables → values (this is the field, **not** `tokens`) |
+| `element_overrides` | array | No | Per-selector CSS: `[{ "selector": "...", "props": { ... } }]` (an **array**, not an object) |
+| `mode` | `"dark"`\|`"light"` | No | Light themes get automatic contrast patches |
+
+> The engine reads several more optional fields — `description`, `preview`, `fonts`,
+> `assets`, `global_css`, `pages` (per-view overrides), `html_swaps`, `custom_elements`,
+> `bmm_min_version`. Real `--bmm-*` names include `--bmm-bg-base`, `--bmm-bg-elevated`,
+> `--bmm-bg-sidebar`, `--bmm-accent`, `--bmm-border`, `--bmm-text-primary/secondary/muted`.
+> Easiest path: let the **Theme Editor** export a valid manifest.
 
 > [!TIP]
 > Start from the in-app **Theme Editor** — it exports a valid `.bmmtheme` with all
