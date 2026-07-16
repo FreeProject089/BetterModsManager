@@ -36,6 +36,7 @@ const ICON = {
     catalog: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 9l1-5h16l1 5"/><path d="M5 9v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9"/><path d="M9 13h6"/></svg>`,
     translate:`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg>`,
     palette: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.563-2.512 5.563-5.563C22 6.012 17.5 2 12 2z"/></svg>`,
+    disk:    `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="22" y1="12" x2="2" y2="12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><line x1="6" y1="16" x2="6.01" y2="16"/><line x1="10" y1="16" x2="10.01" y2="16"/></svg>`,
 };
 
 // ── Tutorial: BMM Modding Basics ─────────────────────────────────────────────
@@ -666,7 +667,35 @@ const OTHER: TutorialDef = {
                 },
             ],
         },
-        // ── Part 2 : Benchmark ─────────────────────────────────────
+        // ── Part 2 : Storage & Smart I/O ───────────────────────────
+        {
+            id: 'storage',
+            title_key: 'tut.other.storage.title',
+            steps: [
+                {
+                    id: 's1',
+                    title_key: 'tut.other.storage.s1.title',
+                    text_key:  'tut.other.storage.s1.text',
+                    nav: 'settings',
+                    icon: ICON.disk,
+                    selector: 'settings-storage-section',
+                },
+                {
+                    id: 's2',
+                    title_key: 'tut.other.storage.s2.title',
+                    text_key:  'tut.other.storage.s2.text',
+                    nav: 'settings',
+                    selector: 'btn-open-storage',
+                },
+                {
+                    id: 's3',
+                    title_key: 'tut.other.storage.s3.title',
+                    text_key:  'tut.other.storage.s3.text',
+                    nav: 'settings',
+                },
+            ],
+        },
+        // ── Part 3 : Benchmark ─────────────────────────────────────
         {
             id: 'benchmark',
             title_key: 'tut.other.benchmark.title',
