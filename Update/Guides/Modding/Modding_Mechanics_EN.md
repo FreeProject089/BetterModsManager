@@ -69,16 +69,15 @@ Mod:  Mods/aircraft/F-16C/textures/skin.dds
 ## 4. Conflict Management & Priority
 
 When two active mods modify the same file:
-1.  **Weight System:** The mod with the highest priority (Weight) wins.
-2.  **Last Enabled:** If weights are equal, the last mod you enabled takes priority.
-3.  **Restoration:** Disabling a mod automatically restores the previous version (from another mod or the original).
+1.  **Load order wins:** BMM stacks active mods in their activation order; the mod applied later takes precedence. Re-ordering the active list or re-enabling a mod changes which one wins — there is no separate numeric "weight" value.
+2.  **Restoration:** Disabling a mod automatically restores the previous version — from another mod still active on that file, or the original from backup.
 
 ---
 
 ## 5. The Backup System (Zero Risk)
 
 BMM follows a **No Data Loss** policy.
-*   **Originals are Sacred:** Any file overwritten is moved to `.BMM_Data/Backups/`.
+*   **Originals are Sacred:** Any file overwritten is moved to the profile's configured **backup folder** (chosen per profile — BMM requires it when you create one).
 *   **Auto-Recovery:** If BMM is closed unexpectedly, it checks the game folder and offers a full restoration.
 
 ---
