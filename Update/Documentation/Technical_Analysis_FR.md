@@ -463,8 +463,8 @@ BMM v1.0.0 introduit un moteur d'assistance centralisé et de raffinement visuel
 | :--- | :--- |
 | **Moteur d'Aide Tasky** | `window.showTaskyHelp(key, type)` déclenche des bulles localisées. Le moteur mappe les clés i18n aux positions DOM via `getBoundingClientRect()` par rapport à la vue active. |
 | **Isolation des Tooltips** | Les bulles d'aide sont rendues dans un portail à z-index élevé pour éviter le découpage par les conteneurs parents `overflow: hidden`. |
-| **Logique des Resize Strips** | Un moteur de redimensionnement personnalisé dans `main.ts` écoute le `mousedown` sur les bandes de bordure et utilise `tauri::window::start_dragging` ou un calcul manuel des limites pour plus de précision. |
-| **Tokens Glassmorphism** | Variables CSS standardisées (`--bg-glass`, `--border-glass`) utilisées sur tous les composants 1.0 pour une cohérence visuelle. |
+| **Logique des Resize Strips** | Un moteur de redimensionnement personnalisé dans `titlebar.ts` écoute le `mousedown` sur les bandes de bordure et utilise `tauri::window::start_dragging` ou un calcul manuel des limites pour plus de précision. |
+| **Tokens Glassmorphism** | Variables CSS standardisées (`--bmm-glass-bg`, `--bmm-glass-border`) utilisées sur tous les composants 1.0 pour une cohérence visuelle. |
 
 ---
 

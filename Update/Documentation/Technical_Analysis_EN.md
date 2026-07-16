@@ -537,8 +537,8 @@ BMM v1.0.0 introduces a centralized assistance and visual refinement engine.
 | :--- | :--- |
 | **Tasky Help Engine** | `window.showTaskyHelp(key, type)` triggers localized bubbles. (v1.0.0) Redesigned for compactness with centered alignment, reduced padding, and optimized anchor positioning. |
 | **Tooltip Isolation** | Tooltips are rendered in a high-z-index portal to prevent clipping from parent `overflow: hidden` containers. |
-| **Resize Strip Logic** | A custom resize engine in `main.ts` listens for `mousedown` on edge strips and uses `tauri::window::start_dragging` or manual bounds calculation for precision. |
-| **Glassmorphism Tokens** | Standardized CSS variables (`--bg-glass`, `--border-glass`) used across all 1.0 components for visual consistency. |
+| **Resize Strip Logic** | A custom resize engine in `titlebar.ts` listens for `mousedown` on edge strips and uses `tauri::window::start_dragging` or manual bounds calculation for precision. |
+| **Glassmorphism Tokens** | Standardized CSS variables (`--bmm-glass-bg`, `--bmm-glass-border`) used across all 1.0 components for visual consistency. |
 
 ---
 
