@@ -68,6 +68,28 @@ bmm-mcp-server disable <MOD_ID>
 
 # Synchroniser (appliquer les changements)
 bmm-mcp-server sync
+
+# Vérifier les fichiers d'un mod contre ses hachages SHA-256 stockés
+bmm-mcp-server verify-mod <MOD_ID>
+
+# Supprimer un mod (ajoutez --files pour aussi retirer son dossier du disque — irréversible)
+bmm-mcp-server delete-mod <MOD_ID>
+bmm-mcp-server delete-mod <MOD_ID> --files
+
+# Lister vos tags de mods personnalisés
+bmm-mcp-server tags
+```
+
+---
+
+## 🎁 Modpacks
+
+```bash
+# Lister les modpacks
+bmm-mcp-server modpacks
+
+# Créer un modpack à partir d'ids/noms de mods (nom d'abord, puis un ou plusieurs mods)
+bmm-mcp-server create-modpack "Mon Pack" <MOD_ID> <MOD_ID> …
 ```
 
 ---
@@ -111,6 +133,11 @@ bmm-mcp-server generate-lightweight \
 | `-v, --server-version` | Version du serveur (1 = hybrid, 2 = Lux v2) | `2` |
 | `--password` | Mot de passe administrateur | `admin` |
 
+```bash
+# Lister les Server-Repos auxquels ce BMM est connecté
+bmm-mcp-server repos
+```
+
 ---
 
 ## 🔍 Diagnostics & Rapports
@@ -130,6 +157,14 @@ bmm-mcp-server crash "C:\...\crash_2026-05-06.zip"
 
 # Exporter la configuration BMM
 bmm-mcp-server export-config "C:\backup\data.json"
+
+# Lancer un benchmark. Par défaut ouvre l'UI pré-remplie ; --auto exécute maintenant et affiche les résultats.
+bmm-mcp-server benchmark --dataset sandbox --size M
+bmm-mcp-server benchmark --dataset real --profile <PROFILE_ID> --auto
+bmm-mcp-server benchmark --size CUSTOM --mb 500 --auto
+
+# Lister les rapports de session enregistrés
+bmm-mcp-server sessions
 ```
 
 ---
@@ -158,6 +193,9 @@ bmm-mcp-server open-pack <PACK_ID>
 # Lister les plugins installés (id, nom, version, permissions)
 bmm-mcp-server plugins
 
+# Afficher la fiche complète d'un plugin (manifeste, permissions, état)
+bmm-mcp-server plugin <PLUGIN_ID>
+
 # Afficher l'URL, le port & le token de l'API Plugin locale (token masqué)
 bmm-mcp-server api
 
@@ -170,6 +208,72 @@ bmm-mcp-server apps
 
 > [!NOTE]
 > `plugins`, `apps` et le `api` masqué lisent les données BMM sur disque : ils fonctionnent même BMM fermé. L'API elle-même ne répond que si BMM est **lancé** (port `51274` par défaut, configurable dans Paramètres → Identité & API).
+
+---
+
+## 🎨 Thèmes
+
+```bash
+# Lister les thèmes d'interface installés (et l'actif)
+bmm-mcp-server themes
+
+# Afficher la définition complète d'un thème personnalisé installé
+bmm-mcp-server theme-info <THEME_ID>
+
+# Définir le thème actif (s'applique au rechargement des thèmes)
+bmm-mcp-server theme-apply bmm-discord
+```
+
+---
+
+## ⏰ Planification & Automatisation
+
+```bash
+# Lister les tâches de Planification & automatisation enregistrées (hors ligne)
+bmm-mcp-server schedules
+
+# Déclencher une tâche enregistrée par id (app en cours d'exécution)
+bmm-mcp-server run-schedule <TASK_ID>
+```
+
+---
+
+## 🔒 Confidentialité & Télémétrie
+
+Ces commandes pilotent l'app **en cours d'exécution**. Les drapeaux booléens omis laissent le réglage inchangé.
+
+```bash
+# Configurer l'enregistreur de sessions local (tous les drapeaux optionnels)
+bmm-mcp-server recorder --on true --full false --rust true --js true
+
+# Définir le consentement à la télémétrie d'usage anonyme (booléen positionnel)
+bmm-mcp-server telemetry-consent true
+
+# Définir les sous-options de télémétrie (omis = inchangé)
+bmm-mcp-server telemetry-settings --replay true --full false --bench true
+```
+
+---
+
+## 🌍 Traduction
+
+```bash
+# Télécharger le modèle de traduction JSON (stdout, ou --out <fichier>)
+bmm-mcp-server lang-template --out template.json
+
+# Importer un .json traduit dans l'app en cours d'exécution
+bmm-mcp-server import-language "C:\chemin\vers\ma-langue.json"
+```
+
+---
+
+## 🔗 Pont API live
+
+```bash
+# Appeler directement l'API locale de l'app en cours d'exécution (GET/POST vers /api/*)
+bmm-mcp-server call GET /api/status
+bmm-mcp-server call POST /api/mods/enable '{"mod_id":"abc"}'
+```
 
 ---
 
