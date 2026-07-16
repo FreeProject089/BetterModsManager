@@ -9197,10 +9197,10 @@ function renderDocs(container: HTMLElement) {
         }
     });
     container.querySelector('#doc-guide-en')?.addEventListener('click', () => {
-        invoke('open_file', { path: 'Update\\Guides\\Mod_Identity_Guide_EN.md' }).catch(() => {});
+        invoke('open_file', { path: 'Update\\Guides\\Modding\\Mod_Identity_Guide_EN.md' }).catch(() => {});
     });
     container.querySelector('#doc-guide-fr')?.addEventListener('click', () => {
-        invoke('open_file', { path: 'Update\\Guides\\Mod_Identity_Guide_FR.md' }).catch(() => {});
+        invoke('open_file', { path: 'Update\\Guides\\Modding\\Mod_Identity_Guide_FR.md' }).catch(() => {});
     });
     container.querySelector('#doc-catalog-guide')?.addEventListener('click', () => {
         invoke('open_file', { path: 'Update\\Guides\\Catalogs-and-Repos\\Plugin_Catalog_Guide_EN.md' }).catch(() => {});
