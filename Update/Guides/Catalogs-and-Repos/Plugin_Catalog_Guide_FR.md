@@ -104,7 +104,7 @@ mon-plugin.bmmplug  (ZIP contenant)
   "game": "DCS World",
   "description": "Mods requis pour Mon Serveur",
   "official": false,
-  "permissions": ["read_mods", "enable_mods"],
+  "permissions": ["mods.write"],
   "tags": ["dcs", "multijoueur"],
   "website": "https://monserveur.example.com",
   "modlist": {
@@ -170,12 +170,23 @@ Déclarez les permissions dont votre plugin a besoin dans `plugin.json` :
 
 | Permission | Ce qu'elle permet |
 |-----------|------------------|
-| `read_mods` | Lire la liste des mods installés |
-| `enable_mods` | Activer des mods via lien profond / API |
-| `disable_mods` | Désactiver des mods via lien profond / API |
-| `switch_profile` | Changer le profil actif |
-| `apply_modlist` | Appliquer la liste de mods complète du plugin |
-| `compare_modlist` | Lancer une comparaison de liste de mods |
+| `mods.write` | Activer / désactiver / éditer / supprimer des mods |
+| `profiles.write` | Créer / activer / éditer / supprimer des profils |
+| `modpacks.write` | Créer / activer / désactiver / éditer / supprimer des modpacks |
+| `plugins.read` | Comparer une modlist (`POST /api/plugins/compare`) |
+| `plugins.write` | Appliquer une modlist (`POST /api/plugins/apply`) |
+| `repo.write` | Connecter / déconnecter / synchroniser / générer un dépôt serveur |
+| `app.read` · `app.write` | Lire les apps installées · installer / lancer / désinstaller |
+| `catalog.read` · `catalog.write` | Lire le catalogue local · créer / éditer / supprimer des entrées |
+
+Ce sont les seules valeurs que BMM applique — voir `require_permission(...)` dans
+`src-tauri/src/api/mod.rs`. Toute autre valeur placée dans `permissions` est stockée telle
+quelle et ne contrôle rien : une faute de frappe échoue donc silencieusement.
+
+**Ne demandez pas de permission de lecture — il n'y en a pas.** `GET /api/mods`,
+`/api/profiles` et `/api/plugins` ne demandent ni token ni permission : un plugin qui se
+contente de lire doit déclarer `"permissions": []`. Seuls `app`, `catalog` et `plugins`
+contrôlent une lecture.
 
 BMM demandera à l'utilisateur d'accorder les permissions la première fois.
 

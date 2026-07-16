@@ -4514,7 +4514,7 @@
   "plugins.epAbout.appsDel": "Retire une app du registre BMM. Les fichiers sont conservés sur disque. Requiert app.write.",
   "plugins.epAbout.permsGet": "Retourne une carte plugin_id → [permissions] montrant les permissions API actuelles de chaque plugin.",
   "plugins.epAbout.permsGetOne": "Retourne la liste de permissions d'un plugin spécifique.",
-  "plugins.epAbout.permsSet": "Remplace la liste complète de permissions d'un plugin. Disponibles : app.read, app.write, catalog.read, catalog.write, mods.read, mods.write, profiles.read, profiles.write.",
+  "plugins.epAbout.permsSet": "Remplace la liste complète de permissions d'un plugin. Disponibles : app.read, app.write, catalog.read, catalog.write, modpacks.write, mods.write, plugins.read, plugins.write, profiles.write, repo.write. Les endpoints de lecture (GET /api/mods, /api/profiles, /api/plugins) ne sont pas soumis aux permissions : il n'y a donc ni mods.read ni profiles.read à accorder.",
   "plugins.epAbout.catGet": "Retourne le catalogue local apps-catalog.json. Format BMM standard, prêt à héberger. Requiert catalog.read pour les plugins.",
   "plugins.epAbout.catNew": "Crée ou réinitialise le fichier catalogue local. Tous les champs sont optionnels. Requiert catalog.write.",
   "plugins.epAbout.catAddApp": "Ajoute une entrée d'app au catalogue local. Requiert catalog.write.",

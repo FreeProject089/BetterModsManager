@@ -6755,7 +6755,7 @@
   "game":        "DCS World",
   "description": "Required mods for My Server",
   "official":    false,
-  "permissions": ["mods.read", "mods.write"],
+  "permissions": ["mods.write"],
   "tags":        ["dcs", "multiplayer"],
   "website":     "https://myserver.example.com",
   "modlist": {
@@ -7173,18 +7173,22 @@ Invoke-RestMethod -Uri "http://127.0.0.1:51274/api/repo/connect" `
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        <tr><td><code>mods.read</code> / <code>mods.write</code></td><td>Read mods · enable / disable / edit / delete mods</td></tr>
-                                        <tr><td><code>profiles.read</code> / <code>profiles.write</code></td><td>Read profiles · create / activate / edit / delete profiles</td></tr>
-                                        <tr><td><code>modpacks.read</code> / <code>modpacks.write</code></td><td>Read modpacks · create / enable / disable / edit / delete</td></tr>
+                                        <tr><td><code>mods.write</code></td><td>Enable / disable / edit / delete mods</td></tr>
+                                        <tr><td><code>profiles.write</code></td><td>Create / activate / edit / delete profiles</td></tr>
+                                        <tr><td><code>modpacks.write</code></td><td>Create / enable / disable / edit / delete modpacks</td></tr>
                                         <tr><td><code>plugins.read</code> / <code>plugins.write</code></td><td>Compare a plugin modlist · apply a plugin</td></tr>
-                                        <tr><td><code>repo.read</code> / <code>repo.write</code></td><td>Read repo info · connect / sync / gen / host / disconnect</td></tr>
+                                        <tr><td><code>repo.write</code></td><td>Connect / sync / gen / disconnect a repo</td></tr>
                                         <tr><td><code>app.read</code> / <code>app.write</code></td><td>Read installed apps · install / launch / uninstall</td></tr>
                                         <tr><td><code>catalog.read</code> / <code>catalog.write</code></td><td>Read local catalog · create / edit / delete catalog entries</td></tr>
                                     </tbody>
                                 </table>
                                 <div class="plug-doc-tip" style="margin-top:10px;">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+                                    <span>Reads are not gated. <code>GET /api/mods</code>, <code>/api/profiles</code> and <code>/api/plugins</code> need no token and no scope — there is no <code>mods.read</code> or <code>profiles.read</code> to grant. What bounds them is the loopback bind and the CORS allow-list, not permissions.</span>
+                                </div>
+                                <div class="plug-doc-tip" style="margin-top:10px;">
                                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                                    <span>Declare requested scopes in <code>plugin.json</code> → <code>"permissions": ["mods.read", "mods.write"]</code>. Grant/revoke per plugin in the Permissions tab. <strong>Global Plugin Trust</strong> skips the confirmation dialogs for trusted plugins.</span>
+                                    <span>Declare requested scopes in <code>plugin.json</code> → <code>"permissions": ["mods.write"]</code>. Grant/revoke per plugin in the Permissions tab. <strong>Global Plugin Trust</strong> skips the confirmation dialogs for trusted plugins.</span>
                                 </div>
                             </div>
                         </details>

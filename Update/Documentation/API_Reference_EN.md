@@ -205,18 +205,16 @@ Permissions only apply when a request carries `X-BMM-Plugin-Id`. Granted via `PU
 | `app.write` | install / launch / uninstall apps |
 | `catalog.read` | read the local catalog |
 | `catalog.write` | create / edit / delete catalog entries |
-| `mods.read` | read mods |
 | `mods.write` | enable / disable / edit / delete mods |
-| `profiles.read` | read profiles |
 | `profiles.write` | create / edit / delete / activate profiles |
-| `modpacks.read` | read modpacks |
 | `modpacks.write` | create / enable / disable / edit / delete modpacks |
 | `plugins.read` | compare a plugin's modlist |
 | `plugins.write` | apply a plugin |
-| `repo.read` | read repo info / list |
-| `repo.write` | connect / sync / gen / host / disconnect repos |
+| `repo.write` | connect / disconnect / sync / gen repos |
 
 > These scopes are enforced server-side in `src-tauri/src/api/mod.rs` via `require_permission(...)` and are exactly the checkboxes shown in **Plugins & API → Permissions** (grouped by domain). Granting one in the UI unlocks the matching endpoints for that plugin.
+
+> **There is no read scope for mods, profiles, modpacks or repo.** Those GET routes (marked *Auth: no* above) carry no permission filter, so there is nothing to grant or withhold — a plugin can already read them. Only `app`, `catalog` and `plugins` gate a read. Unknown permission strings are stored verbatim by `PUT /api/apps/permissions/:id` and gate nothing.
 
 Without the header → admin (all allowed). With the header → only the granted permissions are allowed; everything else returns `403`.
 

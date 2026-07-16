@@ -102,7 +102,7 @@ my-plugin.bmmplug  (ZIP containing)
   "game": "DCS World",
   "description": "Required mods for My Server",
   "official": false,
-  "permissions": ["read_mods", "enable_mods"],
+  "permissions": ["mods.write"],
   "tags": ["dcs", "multiplayer"],
   "website": "https://myserver.example.com",
   "modlist": {
@@ -168,12 +168,22 @@ Declare the permissions your plugin needs in `plugin.json`:
 
 | Permission | What it allows |
 |-----------|---------------|
-| `read_mods` | Read the list of installed mods |
-| `enable_mods` | Enable mods via deep link / API |
-| `disable_mods` | Disable mods via deep link / API |
-| `switch_profile` | Switch the active profile |
-| `apply_modlist` | Apply the full plugin modlist |
-| `compare_modlist` | Run a compare check |
+| `mods.write` | Enable / disable / edit / delete mods |
+| `profiles.write` | Create / activate / edit / delete profiles |
+| `modpacks.write` | Create / enable / disable / edit / delete modpacks |
+| `plugins.read` | Compare a modlist (`POST /api/plugins/compare`) |
+| `plugins.write` | Apply a modlist (`POST /api/plugins/apply`) |
+| `repo.write` | Connect / disconnect / sync / generate a server repo |
+| `app.read` · `app.write` | Read installed apps · install / launch / uninstall |
+| `catalog.read` · `catalog.write` | Read the local catalog · create / edit / delete entries |
+
+These are the only values BMM enforces — see `require_permission(...)` in
+`src-tauri/src/api/mod.rs`. Anything else you put in `permissions` is stored as-is and gates
+nothing, so a typo fails silently rather than erroring.
+
+**Don't ask for a read permission — there isn't one.** `GET /api/mods`, `/api/profiles` and
+`/api/plugins` need no token and no scope, so a plugin that only reads should declare
+`"permissions": []`. Only `app`, `catalog` and `plugins` gate a read.
 
 BMM will prompt the user before granting permissions the first time.
 

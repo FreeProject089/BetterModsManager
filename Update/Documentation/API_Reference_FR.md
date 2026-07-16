@@ -205,18 +205,16 @@ Les permissions ne s'appliquent que lorsqu'une requête porte `X-BMM-Plugin-Id`.
 | `app.write` | installer / lancer / désinstaller des apps |
 | `catalog.read` | lire le catalogue local |
 | `catalog.write` | créer / éditer / supprimer des entrées de catalogue |
-| `mods.read` | lire les mods |
 | `mods.write` | activer / désactiver / éditer / supprimer des mods |
-| `profiles.read` | lire les profils |
 | `profiles.write` | créer / éditer / supprimer / activer des profils |
-| `modpacks.read` | lire les modpacks |
 | `modpacks.write` | créer / activer / désactiver / éditer / supprimer des modpacks |
 | `plugins.read` | comparer la modlist d'un plugin |
 | `plugins.write` | appliquer un plugin |
-| `repo.read` | lire info / liste des repos |
-| `repo.write` | connecter / synchroniser / générer / héberger / déconnecter des repos |
+| `repo.write` | connecter / déconnecter / synchroniser / générer des repos |
 
 > Ces scopes sont appliqués côté serveur dans `src-tauri/src/api/mod.rs` via `require_permission(...)` et correspondent exactement aux cases affichées dans **Plugins & API → Permissions** (groupées par domaine). En accorder une dans l'UI débloque les endpoints correspondants pour ce plugin.
+
+> **Il n'existe aucune permission de lecture pour mods, profiles, modpacks ou repo.** Ces routes GET (marquées *Auth : non* plus haut) n'ont aucun filtre de permission : il n'y a donc rien à accorder ni à refuser — un plugin peut déjà les lire. Seuls `app`, `catalog` et `plugins` contrôlent une lecture. Les permissions inconnues sont stockées telles quelles par `PUT /api/apps/permissions/:id` et ne contrôlent rien.
 
 Sans l'en-tête → admin (tout autorisé). Avec l'en-tête → seules les permissions accordées passent, le reste renvoie `403`.
 
