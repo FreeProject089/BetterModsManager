@@ -509,7 +509,7 @@ BMM v1.0.0 features a professional-grade JSON-RPC implementation for AI integrat
 | :--- | :--- |
 | **Protocol** | JSON-RPC 2.0 over standard I/O (stdio) streams. |
 | **Serialization** | Intensive use of `serde` and `serde_json` for type-safe tool definitions and result mapping. |
-| **Tool Surface** | Over 25 atomic tools exposed via the `mcp-server` binary, covering the entire BMM command surface. |
+| **Tool Surface** | ~50 atomic tools exposed via the `mcp-server` binary, covering the entire BMM command surface. |
 | **State Bridge** | The MCP binary initializes a secondary instance of the `AppState` engine to access local data without requiring the main BMM UI to be running. |
 | **Async Handling** | Fully asynchronous request processing using `tokio` to handle concurrent tool calls from AI agents. |
 
@@ -689,7 +689,7 @@ Implemented in `src-tauri/src/commands/plugins.rs` with models in `models/plugin
 
 | Aspect | Detail |
 | :--- | :--- |
-| **Routes** | ~40 endpoints via `path!("api" / ...)`: `health`, `status`, `mods` (+ `active`/`enable`/`disable`/`{id}`), `profiles` (+ `activate`/`{id}`), `plugins` (+ `compare`/`apply`), `modpacks` (+ `create`/`enable`/`disable`/`import`/`{id}`), `repo` (`info`/`connect`/`list`/`sync`/`gen`/`host`), `data` (`export`/`import`), `modlists` (`export`/`import`), `creator-id`, `check-update`, `restart`. |
+| **Routes** | ~75 endpoints via `path!("api" / ...)`: `health`, `status`, `mods` (+ `active`/`enable`/`disable`/`{id}`), `profiles` (+ `activate`/`{id}`), `plugins` (+ `compare`/`apply`), `modpacks` (+ `create`/`enable`/`disable`/`import`/`{id}`), `repo` (`info`/`connect`/`list`/`sync`/`gen`/`host`), `data` (`export`/`import`), `modlists` (`export`/`import`), `creator-id`, `check-update`, `restart`. |
 | **Auth** | A per-install token (`get_api_token` / `reset_api_token`) guards mutating routes; SHA-256 is used for token handling. |
 | **Concurrency** | Shares `AppData` via `Arc`; uses a `oneshot` channel + `AtomicBool` for graceful shutdown. |
 | **Consumers** | The in-app API explorer, generated automation scripts, and external companion tools. |

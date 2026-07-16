@@ -435,7 +435,7 @@ BMM v1.0.0 propose une implémentation JSON-RPC de niveau professionnel pour l'i
 | :--- | :--- |
 | **Protocole** | JSON-RPC 2.0 sur les flux d'entrées/sorties standard (stdio). |
 | **Sérialisation** | Utilisation intensive de `serde` et `serde_json` pour les définitions d'outils typées et le mapping des résultats. |
-| **Surface d'Outils** | Plus de 25 outils atomiques exposés via le binaire `mcp-server`, couvrant toute la surface de commande de BMM. |
+| **Surface d'Outils** | ~50 outils atomiques exposés via le binaire `mcp-server`, couvrant toute la surface de commande de BMM. |
 | **Pont d'État** | Le binaire MCP initialise une instance secondaire du moteur `AppState` pour accéder aux données locales sans nécessiter que l'interface principale de BMM soit lancée. |
 | **Gestion Asynchrone** | Traitement des requêtes entièrement asynchrone utilisant `tokio` pour gérer les appels d'outils concurrents des agents IA. |
 
@@ -615,7 +615,7 @@ Implémenté dans `src-tauri/src/commands/plugins.rs` avec les modèles dans `mo
 
 | Aspect | Détail |
 | :--- | :--- |
-| **Routes** | ~40 endpoints via `path!("api" / ...)` : `health`, `status`, `mods` (+ `active`/`enable`/`disable`/`{id}`), `profiles` (+ `activate`/`{id}`), `plugins` (+ `compare`/`apply`), `modpacks` (+ `create`/`enable`/`disable`/`import`/`{id}`), `repo` (`info`/`connect`/`list`/`sync`/`gen`/`host`), `data` (`export`/`import`), `modlists` (`export`/`import`), `creator-id`, `check-update`, `restart`. |
+| **Routes** | ~75 endpoints via `path!("api" / ...)` : `health`, `status`, `mods` (+ `active`/`enable`/`disable`/`{id}`), `profiles` (+ `activate`/`{id}`), `plugins` (+ `compare`/`apply`), `modpacks` (+ `create`/`enable`/`disable`/`import`/`{id}`), `repo` (`info`/`connect`/`list`/`sync`/`gen`/`host`), `data` (`export`/`import`), `modlists` (`export`/`import`), `creator-id`, `check-update`, `restart`. |
 | **Auth** | Un token par installation (`get_api_token` / `reset_api_token`) protège les routes mutantes ; SHA-256 est utilisé pour la gestion du token. |
 | **Concurrence** | Partage `AppData` via `Arc` ; utilise un canal `oneshot` + `AtomicBool` pour un arrêt propre. |
 | **Consommateurs** | L'explorateur d'API intégré, les scripts d'automatisation générés et les outils compagnons externes. |

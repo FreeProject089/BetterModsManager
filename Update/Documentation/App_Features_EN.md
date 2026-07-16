@@ -645,7 +645,7 @@ BMM runs a local HTTP server on `127.0.0.1:51274`, letting external tools and pl
 
 | Feature | Description |
 | :--- | :--- |
-| **~40 Endpoints** | Mods, profiles, plugins, modpacks, repository, and data import/export are all controllable over `/api/`. |
+| **~75 Endpoints** | Mods, profiles, plugins, modpacks, repository, and data import/export are all controllable over `/api/`. |
 | **Token Auth** | A per-install API token protects the endpoints; it can be viewed or regenerated from the Plugins view. |
 | **Automation Ready** | Powers companion tools and macro setups (e.g. Stream Deck), and the in-app API explorer. |
 | **Script Helpers** | One click generates authenticated request snippets for any action. |
