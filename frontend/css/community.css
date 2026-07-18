@@ -412,3 +412,22 @@
 .community-comment-body { margin-top: 8px; font-size: 14px; }
 .community-comment-body > :first-child { margin-top: 0; }
 .community-comment-body > :last-child { margin-bottom: 0; }
+
+/* Inline session-replay embed (:::replay) — a click-to-play card that opens the app's
+   full replay viewer (see playReplayFromUrl). Rendered inside .md-body content. */
+.bmm-replay-embed {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+  margin: 14px 0; padding: 14px 16px; cursor: pointer;
+  border: 1px solid var(--border, #2a2f3a); border-radius: 14px;
+  background: var(--panel, #161b22); color: var(--text, #e6edf3);
+  transition: border-color .15s, transform .15s, box-shadow .15s;
+}
+.bmm-replay-embed:hover { border-color: var(--accent, #3b82f6); transform: translateY(-1px); box-shadow: 0 6px 20px rgba(0,0,0,.25); }
+.bmm-replay-embed:focus-visible { outline: 2px solid var(--accent, #3b82f6); outline-offset: 2px; }
+.bmm-replay-embed-icon {
+  flex: 0 0 auto; display: grid; place-items: center; width: 40px; height: 40px;
+  border-radius: 999px; background: var(--accent, #3b82f6); color: #fff; font-size: 14px;
+}
+.bmm-replay-embed-text { display: flex; flex-direction: column; min-width: 0; }
+.bmm-replay-embed-title { font-weight: 600; }
+.bmm-replay-embed-sub { font-size: 12px; opacity: .7; }

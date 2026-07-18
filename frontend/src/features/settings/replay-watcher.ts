@@ -245,6 +245,17 @@ async function loadAndPlay(path: string): Promise<void> {
   await playBundle(bundle);
 }
 
+/** Play a .bmmreplay fetched from a URL — used by :::replay embeds in rendered markdown
+ *  (release/update notes + the in-app Community blog). Reuses the full in-app viewer. */
+export async function playReplayFromUrl(url: string): Promise<void> {
+  let bundle: any;
+  try { const res = await fetch(url); if (!res.ok) throw new Error('http'); bundle = await res.json(); }
+  catch { toast(t('watcher.badFile') || 'Fichier illisible', 'error'); return; }
+  const events = Array.isArray(bundle) ? bundle : bundle?.events;
+  if (!Array.isArray(events) || events.length < 2) { toast(t('watcher.empty') || 'Empty recording', 'error'); return; }
+  await playBundle(Array.isArray(bundle) ? { events } : bundle);
+}
+
 /** Pick a .bmmreplay file and replay it in an in-app viewer. */
 export async function importAndPlay(): Promise<void> {
   const src = await pickFile({ filters: [{ name: 'BMM Replay', extensions: ['bmmreplay', 'json'] }] }).catch(() => null);

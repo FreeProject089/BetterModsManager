@@ -412,6 +412,14 @@ if (typeof document !== 'undefined') {
             setTimeout(() => { btn.innerHTML = prev; }, 2000);
         }).catch(() => {});
     });
+    // Delegated handler for :::replay embeds (a play card in rendered markdown). Loads the
+    // replay viewer lazily on click — no cost until someone actually watches a recording.
+    document.addEventListener('click', (e) => {
+        const el = (e.target as HTMLElement)?.closest?.('.bmm-replay-embed') as HTMLElement | null;
+        const src = el?.dataset?.src;
+        if (!src) return;
+        import('../features/settings/replay-watcher.js').then((m) => m.playReplayFromUrl(src)).catch(() => {});
+    });
 }
 
 // Inject markdown body styles once

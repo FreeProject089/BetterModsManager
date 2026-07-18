@@ -5,6 +5,7 @@
 // markdown displays the SAME way in the Community blog AND the Release/Update notes —
 // cards, columns, collapsibles, coloured icons and the table of contents included.
 import { escHtml, escAttr } from '../core/utils.js';
+import { t } from '../core/i18n.js';
 
 const CALLOUT_ALERT: Record<string, string> = {
   note: 'NOTE', info: 'NOTE', tip: 'TIP', hint: 'TIP', success: 'TIP',
@@ -144,6 +145,20 @@ export function expandDocBlocks(md: string, opts: ExpandOpts = {}, _top = true):
       out.push('', `<div class="community-file"><span class="community-file-icon">${fileSvg}</span><div class="community-file-info"><div class="community-file-name">${escHtml(fname)}</div>${size ? `<div class="community-file-size">${escHtml(size)}</div>` : ''}</div><div class="community-file-actions">${btns}</div></div>`, '');
     } else if (name === 'details' || name === 'collapse') {
       out.push('', `<details class="community-details"><summary>${escHtml(label || attrs.title || 'Details')}</summary><div class="community-details-body">${mdInline(innerMd)}</div></details>`, '');
+    } else if (name === 'replay' || name === 'bmmreplay') {
+      // Inline BMM session replay. The same :::replay{src="…" title="…"} the BCWEB site
+      // uses. BMM has no inline rrweb player, so this renders a play card that opens the
+      // app's own full replay viewer (playReplayFromUrl) via the delegated click handler
+      // in update-notes.ts. `src` is made absolute against baseUrl for site content.
+      const src = abs(attrs.src || attrs.href || '');
+      const title = label || attrs.title || '';
+      if (src) {
+        const caption = t('watcher.playEmbed') || 'Play the recorded session';
+        out.push('', `<button type="button" class="bmm-replay-embed" data-src="${escAttr(src)}"${title ? ` data-title="${escAttr(title)}"` : ''}>`
+          + `<span class="bmm-replay-embed-icon" aria-hidden="true">▶</span>`
+          + `<span class="bmm-replay-embed-text"><span class="bmm-replay-embed-title">${escHtml(title || (t('watcher.replayTitle') || 'Session replay'))}</span>`
+          + `<span class="bmm-replay-embed-sub">${escHtml(caption)}</span></span></button>`, '');
+      }
     } else if (name === 'center' || name === 'left' || name === 'right') {
       out.push('', `<div class="community-align" style="text-align:${name}">${mdInline(innerMd)}</div>`, '');
     } else if (CALLOUT_ALERT[name]) {

@@ -5775,6 +5775,8 @@
   "watcher.export": "Exporter la session",
   "watcher.import": "Importer & rejouer",
   "watcher.viewerTitle": "Lecture de session",
+  "watcher.replayTitle": "Replay de session",
+  "watcher.playEmbed": "Lire la session enregistrée",
   "watcher.masked": "masqué",
   "watcher.nothing": "Rien à exporter pour le moment",
   "watcher.exported": "Session exportée",
