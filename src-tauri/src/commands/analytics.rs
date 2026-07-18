@@ -601,10 +601,20 @@ pub fn save_local_replay(app_handle: AppHandle, content: String) -> Result<Strin
     Ok(path.to_string_lossy().to_string())
 }
 
-/// Delete a specific replay file.
+/// Delete a specific replay file. Confined to the app's own `Replays` folder — the
+/// frontend only ever deletes files it listed from there, so an unvalidated path (e.g.
+/// from a compromised webview) can't remove arbitrary files off disk (CWE-22 hardening).
+/// `AppHandle` is injected by Tauri, so the JS `invoke('delete_local_replay', { path })`
+/// call is unchanged.
 #[tauri::command]
-pub fn delete_local_replay(path: String) -> Result<(), String> {
-    std::fs::remove_file(&path).map_err(|e| e.to_string())
+pub fn delete_local_replay(app_handle: AppHandle, path: String) -> Result<(), String> {
+    let root = app_handle.path().app_data_dir().map_err(|e| e.to_string())?.join("Replays");
+    let canon_root = root.canonicalize().map_err(|e| e.to_string())?;
+    let canon_target = std::path::PathBuf::from(&path).canonicalize().map_err(|e| e.to_string())?;
+    if !canon_target.starts_with(&canon_root) {
+        return Err("refused: path is outside the Replays folder".into());
+    }
+    std::fs::remove_file(&canon_target).map_err(|e| e.to_string())
 }
 
 /// Overwrite the single rolling "crash buffer". The session is ALWAYS recorded in
