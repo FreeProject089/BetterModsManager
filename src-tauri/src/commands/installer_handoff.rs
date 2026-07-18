@@ -192,6 +192,18 @@ fn apply_settings(
     if let Some(tel) = s.get("telemetry").and_then(|v| v.as_bool()) {
         settings.analytics_consent = Some(tel);
     }
+    // Optional preferences the installer can pre-set (each a plain bool the user picked on
+    // the Configuration page; absent key → BMM's own default is left untouched). Keys are
+    // the flat form of the installer.toml `maps_to` (the `settings.` prefix is stripped).
+    if let Some(v) = s.get("discord_rpc").and_then(|v| v.as_bool()) {
+        settings.discord_rpc_enabled = v;
+    }
+    if let Some(v) = s.get("smart_io").and_then(|v| v.as_bool()) {
+        settings.smart_io_enabled = v;
+    }
+    if let Some(v) = s.get("sound_effects").and_then(|v| v.as_bool()) {
+        settings.sound_effects_enabled = v;
+    }
 
     let privacy = s.get("privacy_accepted").and_then(|v| v.as_bool()).unwrap_or(false);
     let tos = s.get("tos_accepted").and_then(|v| v.as_bool()).unwrap_or(false);
@@ -215,7 +227,10 @@ mod tests {
             "privacy_accepted": true,
             "tos_accepted": true,
             "skip_tutorial": true,
-            "telemetry": false
+            "telemetry": false,
+            "discord_rpc": true,
+            "smart_io": false,
+            "sound_effects": false
         }
     }"#;
 
@@ -233,6 +248,23 @@ mod tests {
         assert_eq!(settings.language, "fr");
         assert!(settings.onboarding_shown); // tutorial skipped
         assert_eq!(settings.analytics_consent, Some(false));
+        // Optional preferences applied (each overrides BMM's default when present).
+        assert!(settings.discord_rpc_enabled); // default false → set true
+        assert!(!settings.smart_io_enabled); // default true → set false
+        assert!(!settings.sound_effects_enabled); // default true → set false
+    }
+
+    #[test]
+    fn omitted_preferences_leave_defaults_untouched() {
+        // A handoff that doesn't mention the optional prefs must NOT change them.
+        let json = r#"{ "source":"betterinstaller", "settings": { "language":"en" } }"#;
+        let file: HandoffFile = serde_json::from_str(json).unwrap();
+        let defaults = crate::state::AppSettings::default();
+        let mut settings = crate::state::AppSettings::default();
+        apply_settings(&file.settings, &mut settings);
+        assert_eq!(settings.discord_rpc_enabled, defaults.discord_rpc_enabled);
+        assert_eq!(settings.smart_io_enabled, defaults.smart_io_enabled);
+        assert_eq!(settings.sound_effects_enabled, defaults.sound_effects_enabled);
     }
 
     #[test]
