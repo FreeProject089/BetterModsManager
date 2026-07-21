@@ -260,7 +260,7 @@ Changer de profil ne re-lie que ce qui a changé : instantané même avec de gra
     blurb: { en: 'Isolated setups, shared storage, backups and launch packs.', fr: 'Configurations isolées, stockage partagé, sauvegardes et launch packs.' },
     articles: [
       {
-        id: 'shared-storage', diagram: 'profile-customization',
+        id: 'shared-storage',
         title: { en: 'Shared storage', fr: 'Stockage partagé' },
         summary: { en: 'Keep one copy of a mod on disk, used by many profiles.', fr: 'Gardez une seule copie d’un mod sur le disque, utilisée par plusieurs profils.' },
         keywords: 'shared storage dedupe link space disk stockage partagé espace',
@@ -350,7 +350,7 @@ Changer de profil ne re-lie que ce qui a changé : instantané même avec de gra
         },
       },
       {
-        id: 'custom-pages', diagram: 'premium-interactions',
+        id: 'custom-pages',
         title: { en: 'Custom pages', fr: 'Pages personnalisées' },
         summary: { en: 'Add your own sandboxed pages to the navbar.', fr: 'Ajoutez vos propres pages sandbox à la barre de navigation.' },
         keywords: 'custom pages navbar bmmpage sandbox pages personnalisées',
