@@ -13,6 +13,7 @@
 
 import { getLang, t, getSynonyms } from '../core/i18n.js';
 import { diagrams } from './interactive-docs.js';
+import { renderDocMarkdown } from './md-lite.js';
 
 // The published mkdocs documentation site (see BMM Docs/mkdocs.yml site_url).
 const DOCS_SITE = 'https://freeproject089.github.io/BMM-Docs/';
@@ -106,9 +107,42 @@ const CATEGORIES: Category[] = [
         title: { en: 'Create your first profile', fr: 'Créer votre premier profil' },
         summary: { en: 'Point BMM at your game folder and set up an isolated mod profile.', fr: 'Indiquez à BMM votre dossier de jeu et créez un profil de mods isolé.' },
         keywords: 'profile setup game path folder create profil',
+        // Authored in md-lite (the BCWEB-style directive markdown) — steps + a tip callout.
         body: {
-          en: '<p>A <b>profile</b> is an isolated set of mods. Keep a "clean" profile, a "multiplayer" profile and an experimental one — and swap between them in seconds.</p><h4>Steps</h4><ul><li>Open <b>Profiles</b> → <b>New profile</b>.</li><li>Set the game / mods folder BMM should manage.</li><li>Give it a name and colour so it’s easy to recognise.</li></ul><p>Switching re-links only what changed, so it stays instant even with large collections.</p>',
-          fr: '<p>Un <b>profil</b> est un ensemble isolé de mods. Gardez un profil « propre », un profil « multijoueur » et un profil expérimental — et basculez entre eux en quelques secondes.</p><h4>Étapes</h4><ul><li>Ouvrez <b>Profils</b> → <b>Nouveau profil</b>.</li><li>Définissez le dossier de jeu / mods que BMM doit gérer.</li><li>Donnez-lui un nom et une couleur pour le reconnaître.</li></ul><p>Changer de profil ne re-lie que ce qui a changé : instantané même avec de grandes collections.</p>',
+          en: `A **profile** is an isolated set of mods. Keep a "clean" profile, a "multiplayer" profile and an experimental one — and swap between them in seconds.
+
+:::steps
+:::step[Open Profiles → New profile]
+Head to the **Profiles** screen and choose **New profile**.
+:::
+:::step[Point it at your game folder]
+Set the game / mods folder BMM should manage for this profile.
+:::
+:::step[Name & colour it]
+Give it a name and a colour so it's easy to recognise at a glance.
+:::
+:::
+
+:::tip[Switching is instant]
+Switching profiles re-links only what changed, so it stays instant even with large collections.
+:::`,
+          fr: `Un **profil** est un ensemble isolé de mods. Gardez un profil « propre », un profil « multijoueur » et un profil expérimental — et basculez entre eux en quelques secondes.
+
+:::steps
+:::step[Ouvrez Profils → Nouveau profil]
+Allez sur l'écran **Profils** et choisissez **Nouveau profil**.
+:::
+:::step[Indiquez le dossier du jeu]
+Définissez le dossier de jeu / mods que BMM doit gérer pour ce profil.
+:::
+:::step[Nommez-le et donnez une couleur]
+Donnez-lui un nom et une couleur pour le reconnaître d'un coup d'œil.
+:::
+:::
+
+:::tip[Changement instantané]
+Changer de profil ne re-lie que ce qui a changé : instantané même avec de grandes collections.
+:::`,
         },
       },
       {
@@ -618,7 +652,7 @@ function articleView(cat: Category, a: Article): string {
       <h2>${tr(a.title)}</h2>
       <p class="dh-lead">${tr(a.summary)}</p>
       ${a.media ? mediaBlock(a.media) : ''}
-      <div class="dh-content">${tr(a.body)}</div>
+      <div class="dh-content">${renderDocMarkdown(tr(a.body))}</div>
       <div class="dh-rels">${rel}</div>
     </article>`;
 }
