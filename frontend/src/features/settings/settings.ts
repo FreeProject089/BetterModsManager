@@ -7,6 +7,7 @@ import { invoke, getSettings, updateSettings, pickFile, saveFile } from '../../c
 import { t } from '../../core/i18n.js';
 import { getLinks, bcRoot, bcTestMode, bcTestBase } from '../../core/links-config.js';
 import { initI18nSandbox } from './i18n-sandbox.js';
+import { renderShortcutsManager } from '../../core/commands.js';
 import { toast } from '../../ui/app.js';
 import { getProfiles, getActiveProfileId } from '../profiles/profiles.js';
 import { formatBytes, escHtml } from '../../core/utils.js';
@@ -1675,8 +1676,10 @@ export async function initSettings() {
     await initShaSettings();
     await initDiscordRpcSettings();
     await initSoundSettings();
-    await initShortcuts();
-    renderSettingsShortcuts();
+    // Keyboard shortcuts are now a central, rebindable command registry (core/commands.ts) —
+    // the global dispatcher is started once in app.ts. Here we just mount the manager UI.
+    const skHost = document.getElementById('shortcuts-manager');
+    if (skHost) renderShortcutsManager(skHost);
     await initStorageSettings();
     await initLanguageSettings();
     initI18nSandbox();

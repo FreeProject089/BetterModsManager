@@ -8,6 +8,15 @@ import type { AppSettings } from '../types/models.js';
 
 let _invoke: ((cmd: string, args?: Record<string, unknown>) => Promise<any>) | null = null;
 
+// Bridge-readiness gate. The bridge is wired up by loadTauri(), but some boot code (e.g.
+// loadLinks → fetch_links_json) can invoke BEFORE loadTauri() has run. Rather than fail those
+// with "Tauri bridge not initialized", invoke() awaits this promise first — loadTauri resolves
+// it on every path (real bridge, unpkg dev, or browser mock), so an early call just waits a
+// few ms instead of throwing.
+let _markBridgeReady: (() => void) | null = null;
+const _bridgeReady: Promise<void> = new Promise((res) => { _markBridgeReady = res; });
+function markBridgeReady(): void { if (_markBridgeReady) { _markBridgeReady(); _markBridgeReady = null; } }
+
 // ── Local Plugin API base URL (configurable port) ─────────────────────────────
 // The port comes from settings.api_port (default 51274). Cached in localStorage
 // so it's correct synchronously at boot; refreshed once settings load.
@@ -84,6 +93,7 @@ export async function loadTauri(): Promise<void> {
         };
         _notifModule = null;
         console.log('[BMM] Using local Tauri v2 bridge');
+        markBridgeReady();
         return;
     }
 
@@ -95,6 +105,7 @@ export async function loadTauri(): Promise<void> {
         console.error('[SECURITY] Tauri bridge missing in production! Fallback to CDN disabled for security.');
         _invoke = mockInvoke;
         _dialog = { open: async () => null, save: async () => null };
+        markBridgeReady();
         return;
     }
 
@@ -113,12 +124,18 @@ export async function loadTauri(): Promise<void> {
         _notifModule = null;
         _convertFileSrc = (path: string) => `file://${path}`;
     }
+    markBridgeReady();
 }
 
 export async function invoke(command: string, args: Record<string, unknown> = {}, opts?: { quiet?: boolean }): Promise<any> {
     if (!_invoke) {
-        if (!opts?.quiet) console.error(`[RPC ERROR] Cannot invoke ${command}: Tauri bridge not initialized`);
-        throw new Error('Tauri bridge not initialized');
+        // Early boot call before loadTauri() finished — wait for the bridge (max 5s) instead
+        // of failing outright. loadTauri() resolves _bridgeReady on every path.
+        await Promise.race([_bridgeReady, new Promise((r) => setTimeout(r, 5000))]);
+        if (!_invoke) {
+            if (!opts?.quiet) console.error(`[RPC ERROR] Cannot invoke ${command}: Tauri bridge not initialized`);
+            throw new Error('Tauri bridge not initialized');
+        }
     }
     const startTime = performance.now();
     const _call = debugHub.recordIPC(command, args, 'pending');

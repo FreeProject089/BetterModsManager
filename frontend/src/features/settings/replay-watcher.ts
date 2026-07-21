@@ -394,27 +394,40 @@ async function playBundle(bundle: any): Promise<void> {
   await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
   host.innerHTML = '';
   const rep = new rrweb.Replayer(bundle.events, { root: host, speed: 1, skipInactive: true, showWarning: false, mouseTail: { strokeStyle: '#5b8cff' } });
-  const fit = () => {
+  const m4 = bundle.events.find((e: any) => e.type === 4);
+  const recW = m4?.data?.width || 1280;
+  const recH = m4?.data?.height || 800;
+  // A Replay-Studio recording can carry a `regions` timeline (the moving capture frame).
+  // When present we crop the host to the active region and follow it; the host's overflow
+  // clips the rest. No regions → the whole recording, centered, exactly as before.
+  const regs: any[] = (Array.isArray(bundle.regions) ? bundle.regions : []).filter((r: any) => r && r.rect && r.rect.w).sort((a: any, b: any) => a.t - b.t);
+  const hasRegions = regs.length > 0;
+  if (hasRegions) host.style.overflow = 'hidden';
+  const rectAt = (ms: number) => { let r = { x: 0, y: 0, w: recW, h: recH }; for (const k of regs) { if (k.t <= ms) r = k.rect; else break; } return r; };
+  const fit = (ms?: number) => {
     const wrap = (rep as any).wrapper as HTMLElement | undefined;
-    const m4 = bundle.events.find((e: any) => e.type === 4);
-    const recW = m4?.data?.width || 1280;
-    const recH = m4?.data?.height || 800;
     const w = host.clientWidth, h = host.clientHeight;
     if (!wrap || !w || !h) return;
-    // Contain inside the host (fit both axes), centered — no dead space on a side.
-    const s = Math.min(w / recW, h / recH);
+    const rect = hasRegions ? rectAt(ms ?? rep.getCurrentTime()) : { x: 0, y: 0, w: recW, h: recH };
+    // Contain the (region or full) box inside the host, centered; position so the box's
+    // top-left lands at the centre offset — the host clips anything outside it.
+    const s = Math.min(w / rect.w, h / rect.h);
+    const offX = Math.max(0, (w - rect.w * s) / 2);
+    const offY = Math.max(0, (h - rect.h * s) / 2);
     wrap.style.position = 'absolute';
     wrap.style.transformOrigin = 'top left';
     wrap.style.transform = `scale(${s})`;
-    wrap.style.left = `${Math.max(0, (w - recW * s) / 2)}px`;
-    wrap.style.top = `${Math.max(0, (h - recH * s) / 2)}px`;
+    wrap.style.left = `${offX - rect.x * s}px`;
+    wrap.style.top = `${offY - rect.y * s}px`;
+    if (hasRegions) wrap.style.transition = 'left .35s ease, top .35s ease, transform .35s ease';
   };
   const md = rep.getMetaData();
   const startAbs = md.startTime;
   const total = md.totalTime || 1;
+  const onResize = () => fit();
   rep.play();
-  setTimeout(fit, 60);
-  window.addEventListener('resize', fit);
+  setTimeout(onResize, 60);
+  window.addEventListener('resize', onResize);
 
   const mmss = (ms: number) => { const s = Math.max(0, Math.round(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 
@@ -445,11 +458,14 @@ async function playBundle(bundle: any): Promise<void> {
 
   const seek = overlay.querySelector('#rw-seek') as HTMLInputElement;
   const timeEl = overlay.querySelector('#rw-time') as HTMLElement;
-  let raf = 0; let lastHi = -1;
+  let raf = 0; let lastHi = -1; let lastRegionIdx = -2;
   const tick = () => {
     const cur = Math.min(rep.getCurrentTime(), total);
     seek.value = String(Math.round((cur / total) * 1000));
     timeEl.textContent = `${mmss(cur)} / ${mmss(total)}`;
+    // Follow the capture frame — re-fit only when the active region changes so the CSS
+    // transition animates the pan/zoom instead of thrashing layout every frame.
+    if (hasRegions) { let i = -1; for (let k = 0; k < regs.length; k++) { if (regs[k].t <= cur) i = k; else break; } if (i !== lastRegionIdx) { lastRegionIdx = i; fit(cur); } }
     // highlight the latest JS log at/before the current absolute time
     const absNow = startAbs + cur;
     let hi = -1;
@@ -467,7 +483,7 @@ async function playBundle(bundle: any): Promise<void> {
   let playing = true;
   const playBtn = overlay.querySelector('#rw-play') as HTMLButtonElement;
   playBtn.onclick = () => { playing = !playing; if (playing) { rep.play(rep.getCurrentTime()); playBtn.textContent = '⏸'; } else { rep.pause(); playBtn.textContent = '▶'; } };
-  const close = () => { try { cancelAnimationFrame(raf); window.removeEventListener('resize', fit); rep.pause(); (rep as any).destroy?.(); } catch { /* ignore */ } overlay.remove(); };
+  const close = () => { try { cancelAnimationFrame(raf); window.removeEventListener('resize', onResize); rep.pause(); (rep as any).destroy?.(); } catch { /* ignore */ } overlay.remove(); };
   (overlay.querySelector('#rw-close') as HTMLElement).onclick = close;
   overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
 }

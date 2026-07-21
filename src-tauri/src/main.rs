@@ -107,6 +107,44 @@ pub fn apply_fs_security_mode(app: tauri::AppHandle) {
     }
 }
 
+/// The bundle identifier moved (com.bettermm.app → com.bettermm.desktop), and Tauri derives the
+/// app-data dir from it, so a fresh 1.0 install looks in a brand-new empty folder while a user's
+/// real data (data.json, profiles, Replays, caches…) still sits under the OLD id. Copy it across
+/// ONCE, before anything reads `data.json`. Copy (not move) so the old folder stays as a safety
+/// net; guarded so it only runs when the new dir has no data yet and the old dir clearly does.
+fn migrate_legacy_appdata(new_dir: &std::path::Path) {
+    const OLD_ID: &str = "com.bettermm.app";
+    if new_dir.join("data.json").exists() { return; }           // already has data — never overwrite
+    let Some(parent) = new_dir.parent() else { return; };
+    let old_dir = parent.join(OLD_ID);
+    if old_dir == new_dir || !old_dir.join("data.json").exists() { return; } // nothing to bring over
+    if std::fs::create_dir_all(new_dir).is_err() { return; }
+    match copy_dir_recursive(&old_dir, new_dir) {
+        Ok(n) => crate::commands::crash::log_line(format!(
+            "[MIGRATE] copied {n} legacy app-data entries from {} → {}", old_dir.display(), new_dir.display())),
+        Err(e) => crate::commands::crash::log_line(format!("[MIGRATE] legacy app-data copy failed: {e}")),
+    }
+}
+
+/// Recursively copy `src` INTO `dst` (contents-only), returning the file count. Skips entries that
+/// already exist in `dst` so a partial/retried migration never clobbers newer files.
+fn copy_dir_recursive(src: &std::path::Path, dst: &std::path::Path) -> std::io::Result<u64> {
+    let mut copied = 0u64;
+    for entry in std::fs::read_dir(src)? {
+        let entry = entry?;
+        let from = entry.path();
+        let to = dst.join(entry.file_name());
+        if entry.file_type()?.is_dir() {
+            std::fs::create_dir_all(&to)?;
+            copied += copy_dir_recursive(&from, &to)?;
+        } else if !to.exists() {
+            std::fs::copy(&from, &to)?;
+            copied += 1;
+        }
+    }
+    Ok(copied)
+}
+
 fn main() {
     // Worker subprocess fast-path: do the heavy file IO and exit without
     // booting Tauri, WebView2, or anything else.  Called by the parent BMM
@@ -202,6 +240,10 @@ fn main() {
         .plugin(tauri_plugin_cli::init())
         .setup(|app| {
             let app_dir = app.path().app_data_dir().ok().unwrap_or_else(|| PathBuf::from("."));
+            // The bundle identifier changed (com.bettermm.app → com.bettermm.desktop), which moves
+            // the app-data dir. Bring a pre-1.0 user's data across BEFORE we read data.json, so
+            // upgrading from 0.9.x doesn't silently start from an empty profile.
+            migrate_legacy_appdata(&app_dir);
             let data_path = app_dir.join("data.json");
             let app_state = AppState::load(data_path);
             
@@ -553,6 +595,7 @@ fn main() {
             crate::commands::mapper::open_game_item_in_explorer,
             crate::commands::mapper::create_mod_folder,
             crate::commands::mapper::rename_mod_item,
+            commands::net::fetch_remote_json,
             commands::plugins::fetch_plugin_catalog,
             commands::plugins::install_plugin,
             commands::plugins::install_plugin_from_file,

@@ -46,3 +46,25 @@ pub fn catalog_get(handle: &tauri::AppHandle, url: &str) -> reqwest::RequestBuil
     }
     req
 }
+
+/// Fetch a small remote JSON config (links.json, contributors.json, …) over the Rust HTTP
+/// client and return its body as text. The frontend used a browser `fetch()` for these, but the
+/// webview enforces CORS and `bettercommunity.ch/api/assets/*` sends no
+/// `Access-Control-Allow-Origin`, so those requests were blocked ("has been blocked by CORS
+/// policy"). Going through the backend sidesteps CORS entirely and reuses the pooled client + BC
+/// identity header. Only http(s) URLs are accepted; local bundled fallbacks stay webview fetches.
+#[tauri::command]
+pub async fn fetch_remote_json(handle: tauri::AppHandle, url: String) -> Result<String, String> {
+    if !(url.starts_with("https://") || url.starts_with("http://")) {
+        return Err("only http(s) URLs are supported".into());
+    }
+    let resp = catalog_get(&handle, &url)
+        .timeout(std::time::Duration::from_secs(10))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    if !resp.status().is_success() {
+        return Err(format!("HTTP {}", resp.status().as_u16()));
+    }
+    resp.text().await.map_err(|e| e.to_string())
+}

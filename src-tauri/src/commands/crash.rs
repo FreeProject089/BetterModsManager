@@ -212,9 +212,22 @@ fn generate_report_from_content(is_crash: bool, reason: &str, app_state: Option<
 
 // ─── COLLECTE DES DONNÉES DIAGNOSTICS ────────────────────────────────────────
 
-fn get_system_snapshot() -> String {
-    let mut s = System::new_all();
-    s.refresh_all();
+fn get_system_snapshot() -> String { get_system_snapshot_impl(true) }
+
+// `full` = crash reports, where the extra detail is worth the cost. A CLEAN exit uses the
+// LIGHT path: `new_all()`+`refresh_all()` enumerates every process, disk, network and component
+// on the machine — hundreds of ms to seconds on Windows — and made closing the app feel slow.
+// The light path refreshes only global memory + THIS process (and takes the CPU count from the
+// std lib), which is all the report actually shows, and returns in microseconds.
+fn get_system_snapshot_impl(full: bool) -> String {
+    let pid = Pid::from(std::process::id() as usize);
+    let mut s = System::new();
+    if full {
+        s.refresh_all();
+    } else {
+        s.refresh_memory();
+        s.refresh_process(pid);
+    }
 
     let mut info = String::new();
     info.push_str("=== SYSTEM DIAGNOSTICS ===\n");
@@ -223,10 +236,10 @@ fn get_system_snapshot() -> String {
     info.push_str(&format!("Kernel Version:  {}\n", System::kernel_version().unwrap_or_default()));
     info.push_str(&format!("Total Memory:    {} MB\n", s.total_memory() / 1024 / 1024));
     info.push_str(&format!("Free Memory:     {} MB\n", s.free_memory() / 1024 / 1024));
-    info.push_str(&format!("CPU Count:       {}\n", s.cpus().len()));
-    
+    let cpu_count = if full { s.cpus().len() } else { std::thread::available_parallelism().map(|n| n.get()).unwrap_or(0) };
+    info.push_str(&format!("CPU Count:       {}\n", cpu_count));
+
     info.push_str("\n=== PROCESS INFO ===\n");
-    let pid = Pid::from(std::process::id() as usize);
     if let Some(process) = s.process(pid) {
         info.push_str(&format!("Memory Usage:    {} KB\n", process.memory()));
         info.push_str(&format!("CPU Usage:       {}%\n", process.cpu_usage()));
@@ -281,9 +294,9 @@ fn generate_report_internal(
         let _ = zip.write_all(format!("{:?}", bt).as_bytes());
     }
 
-    // 3. system_info.txt
+    // 3. system_info.txt — full enumeration only for crashes; clean exits use the light path.
     let _ = zip.start_file("system_info.txt", opts);
-    let _ = zip.write_all(get_system_snapshot().as_bytes());
+    let _ = zip.write_all(get_system_snapshot_impl(is_crash).as_bytes());
 
     // 4. app_logs.txt
     let logs_text = if let Some(content) = override_log {
@@ -331,6 +344,10 @@ fn generate_report_internal(
     //    <app_data>/last_crash_session.bmmreplay (NOT a saved replay — that only
     //    happens if the user enables the Session recorder). Attach that buffer so a
     //    report shows what happened. Local-only data; never leaves unless you share.
+    // Attach only for CRASHES — the recording is what makes a crash debuggable, but reading and
+    // Deflate-compressing a multi-MB replay on every CLEAN close was a large, pointless part of
+    // the shutdown time. A clean session log doesn't need it.
+    if is_crash {
     if let Some(app_data) = get_crash_dir(None).parent().map(|p| p.to_path_buf()) {
         let buffer = app_data.join("last_crash_session.bmmreplay");
         let chosen = if buffer.exists() {
@@ -356,6 +373,7 @@ fn generate_report_internal(
             }
         }
     }
+    } // end: crash-only session-replay attachment
 
     let _ = zip.finish();
 

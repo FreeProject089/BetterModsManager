@@ -38,8 +38,11 @@ function enhanceAll(): void {
     document.querySelectorAll('select:not([data-bmm-csel]):not([multiple])')
         .forEach(s => {
             // Leave the theme editor's own selects native — enhancing them interferes
-            // with the editor's re-renders and control wiring.
-            if ((s as HTMLElement).closest('#bmm-theme-editor, #bte-elov')) return;
+            // with the editor's re-renders and control wiring. Same for the DevTools studios:
+            // their panels sit at the max z-index, and the custom menu (lower z-index) would
+            // render BEHIND the panel — a native <select> popup renders in the OS top layer,
+            // always above it.
+            if ((s as HTMLElement).closest('#bmm-theme-editor, #bte-elov, .anim-panel, .rstudio-bar')) return;
             enhance(s as HTMLSelectElement);
         });
 }

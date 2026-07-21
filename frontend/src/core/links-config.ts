@@ -72,7 +72,18 @@ let _links: BmmLinks = { ...DEFAULTS };
 let _loaded = false;
 
 async function tryFetch(url: string): Promise<BmmLinks | null> {
-    try {   
+    try {
+        // Remote (http/https) sources go through the Rust backend: the webview enforces CORS
+        // and bettercommunity.ch/api/assets/* sends no Access-Control-Allow-Origin, so a direct
+        // browser fetch of the PRIMARY source is blocked. The backend (reqwest) has no CORS and
+        // reuses the pooled client + BC identity header. The local bundled path is same-origin,
+        // so it stays a plain webview fetch (works offline, before the backend bridge is ready).
+        if (/^https?:\/\//i.test(url)) {
+            const { invoke } = await import('./api.js');
+            const text = await invoke('fetch_remote_json', { url }, { quiet: true }) as string;
+            if (text) return { ...DEFAULTS, ...JSON.parse(text) };
+            return null;
+        }
         const res = await fetch(url, { cache: 'no-cache' });
         if (res.ok) {
             const data = await res.json();

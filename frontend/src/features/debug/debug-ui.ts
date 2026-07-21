@@ -129,6 +129,12 @@ class DebugUI {
                     <button class="debug-btn" id="debug-btn-export" onmouseenter="window.showTaskyHelp('dev.tool.exportTip', 'help')" onmouseleave="window.hideTaskyHelp()">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
                     </button>
+                    <button class="debug-btn" id="debug-btn-rstudio" onmouseenter="window.showTaskyHelp('dev.tool.rstudioTip', 'help')" onmouseleave="window.hideTaskyHelp()">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>
+                    </button>
+                    <button class="debug-btn" id="debug-btn-anim" onmouseenter="window.showTaskyHelp('dev.tool.animTip', 'help')" onmouseleave="window.hideTaskyHelp()">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 2 3 14h7l-1 8 10-12h-7z"/></svg>
+                    </button>
                     <button class="debug-btn" id="dbg-clear-all" onmouseenter="window.showTaskyHelp('dev.tool.clearAllTip', 'help')" onmouseleave="window.hideTaskyHelp()">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/></svg>
                     </button>
@@ -578,6 +584,16 @@ class DebugUI {
                 console.log("F12 is the standard fallback for opening DevTools.", e);
                 this.showAlert('Chrome DevTools', "Tauri devtools API couldn't be invoked automatically. Please press F12 on your keyboard to open the Chrome DevTools inspector.");
             }
+        });
+
+        // Replay Studio — record a .bmmreplay with a movable frame + pause/resume.
+        this._get('debug-btn-rstudio')?.addEventListener('click', async () => {
+            try { (await import('./replay-studio.js')).openReplayStudio(); } catch (e) { console.log('replay studio failed to open', e); }
+        });
+
+        // Animation Studio — inject/define GSAP animations on live BMM elements.
+        this._get('debug-btn-anim')?.addEventListener('click', async () => {
+            try { (await import('./anim-studio.js')).openAnimStudio(); } catch (e) { console.log('animation studio failed to open', e); }
         });
 
         // Debugger Rust

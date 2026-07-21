@@ -116,7 +116,21 @@ export const BLOCK_SELECTOR = [
   'video', 'canvas', '[data-bmm-no-record]',
 ].join(', ');
 
+// Extra, user-defined selectors to exclude from the recording (set live from the Replay
+// Studio "Hidden elements" control). Merged into blockSelector; changing them restarts the
+// shared recorder so the next snapshot honours the new list. Empty = base BLOCK_SELECTOR only.
+let _extraBlock: string[] = [];
+export async function setExtraBlockSelectors(selectors: string[]): Promise<void> {
+  _extraBlock = Array.from(new Set((selectors || []).map((s) => s.trim()).filter(Boolean)));
+  await syncSharedRecorder();
+}
+export function getExtraBlockSelectors(): string[] { return [..._extraBlock]; }
+function effectiveBlockSelector(): string {
+  return _extraBlock.length ? `${BLOCK_SELECTOR}, ${_extraBlock.join(', ')}` : BLOCK_SELECTOR;
+}
+
 let _stop: (() => void) | null = null;
+let _appliedBlock = '';   // the blockSelector the live recorder was started with
 let _buf: any[] = [];
 let _flushTimer: number | null = null;
 let _seq = 0;
@@ -184,11 +198,13 @@ export async function gzipToBase64(value: any): Promise<string | null> {
 async function syncSharedRecorder() {
   if (_listeners.size === 0) {
     if (_stop) { try { _stop(); } catch {} _stop = null; }
+    _appliedBlock = '';
     return;
   }
   const wantsMask = Array.from(_listeners).some(l => l.requiresMasking);
   const newFull = !wantsMask;
-  if (_stop && _full === newFull) return; // already running with correct masking
+  const block = effectiveBlockSelector();
+  if (_stop && _full === newFull && _appliedBlock === block) return; // already running with the right config
 
   if (_stop) { try { _stop(); } catch {} _stop = null; }
 
@@ -197,6 +213,7 @@ async function syncSharedRecorder() {
   if (!rrweb?.record) return;
 
   _full = newFull;
+  _appliedBlock = block;
 
   _stop = rrweb.record({
     emit: (ev: any, isCheckout?: boolean) => {
