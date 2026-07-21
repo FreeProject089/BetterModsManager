@@ -27,6 +27,14 @@ path = "src/main.rs"
 bench = false
 test = false
 
+# Resource collector — peak heap + time for the real hot ops (companion to the Criterion
+# time benches). `cargo run --bin bmm-bench-mem --release` → table + results/mem-report.json.
+[[bin]]
+name = "bmm-bench-mem"
+path = "src/bin/mem.rs"
+bench = false
+test = false
+
 [dependencies]
 # ── deps required to compile the REAL archive.rs verbatim ──
 zip = { version = "0.6", features = ["deflate"] }
