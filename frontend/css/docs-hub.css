@@ -138,6 +138,22 @@
 }
 .dh-replay:hover { transform: translateY(-1px); border-color: var(--bmm-accent, #3b82f6); }
 
+/* Two-tree comparison (mod structure article): game folder ↔ the mod that mirrors it */
+.dh-treecmp { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 4px 0 8px; align-items: start; }
+@media (max-width: 560px) { .dh-treecmp { grid-template-columns: 1fr; } }
+.dh-treecol { border: 1px solid var(--bmm-border, #2a3242); border-radius: 12px; overflow: hidden; background: var(--bmm-bg-base, #0f1420); }
+.dh-treecol-accent { border-color: color-mix(in srgb, var(--bmm-accent, #3b82f6) 45%, transparent); }
+.dh-treecol-h { font-size: 12px; font-weight: 700; padding: 9px 12px; border-bottom: 1px solid var(--bmm-border, #2a3242); color: var(--bmm-text-secondary, #a3adba); }
+.dh-treecol-accent .dh-treecol-h { color: var(--bmm-accent, #3b82f6); background: color-mix(in srgb, var(--bmm-accent, #3b82f6) 8%, transparent); }
+.dh-tree-list { padding: 10px 12px; font-family: var(--bmm-font-mono, ui-monospace, monospace); font-size: 12.5px; }
+.dh-fld { display: flex; align-items: center; gap: 7px; padding: 3px 0; white-space: nowrap; color: var(--bmm-text-primary, #e6edf3); }
+.dh-fld .fi { opacity: .9; }
+.dh-fld small { font-family: var(--bmm-font-sans, system-ui); font-size: 10.5px; color: var(--bmm-text-muted, #7c8698); font-weight: 600; }
+.dh-fld-1 { padding-left: 20px; } .dh-fld-2 { padding-left: 40px; } .dh-fld-3 { padding-left: 60px; }
+.dh-fld-mut { color: var(--bmm-text-muted, #7c8698); }
+.dh-fld-hit { color: var(--bmm-accent, #3b82f6); font-weight: 700; }
+.dh-treecmp-note { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 2px 0 16px; font-size: 12.5px; color: var(--bmm-text-muted, #7c8698); font-style: italic; }
+
 /* folder-tree code block (mod structure article) */
 .dh-tree {
   font-family: var(--bmm-font-mono, ui-monospace, monospace); font-size: 13px; line-height: 1.7; white-space: pre;
@@ -200,6 +216,8 @@
   transition: border-color .15s, transform .1s;
 }
 .dh-rel:hover { transform: translateY(-1px); }
+.dh-rel-open { background: var(--bmm-accent, #3b82f6); border-color: var(--bmm-accent, #3b82f6); color: var(--bmm-text-on-accent, #fff); }
+.dh-rel-open:hover { filter: brightness(1.08); }
 .dh-rel-tut { border-color: color-mix(in srgb, var(--bmm-accent, #3b82f6) 45%, transparent); color: var(--bmm-accent, #3b82f6); }
 .dh-rel-dia { border-color: color-mix(in srgb, #8b5cf6 45%, transparent); color: #8b5cf6; }
 

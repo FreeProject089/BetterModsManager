@@ -34,7 +34,14 @@ interface Article {
   tutorial?: TutorialLink; // deep-link into the interactive tutorial (right part+step)
   diagram?: string;        // diagram registry id → window.openDiagram
   docsPath?: string;       // appended to DOCS_SITE for "Read full docs"
+  view?: string;           // a nav data-view → "Open in BMM" button that jumps to that screen
   keywords?: string;       // extra search terms (any language, space separated)
+}
+// The displayed label of a live navbar item (custom names + current language), for the
+// "Open in BMM" button; falls back to the view id.
+function navLabel(view: string): string {
+  const el = document.querySelector(`.nav-item[data-view="${view}"] .nav-label`) as HTMLElement | null;
+  return (el?.textContent || view).trim();
 }
 interface Category { id: string; part: Part; icon: string; title: L; blurb: L; articles: Article[]; }
 
@@ -62,27 +69,6 @@ const ICON: Record<string, string> = {
 const svg = (name: string, size = 20): string =>
   `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${ICON[name] || ''}</svg>`;
 
-// A folder-tree illustration for the "how a mod must be structured" article — a stored mod
-// carries the full path the game expects, from the game root down. Theme-aware via CSS vars.
-const FOLDER = 'M2 4.2A1.6 1.6 0 0 1 3.6 2.6h4.2L9.6 4.2h6.8A1.6 1.6 0 0 1 18 5.8v8.6A1.6 1.6 0 0 1 16.4 16H3.6A1.6 1.6 0 0 1 2 14.4z';
-function folderRow(x: number, y: number, label: string, opts: { root?: boolean; leaf?: boolean } = {}): string {
-  const color = opts.leaf ? 'var(--bmm-accent, #3b82f6)' : (opts.root ? 'var(--bmm-text-primary, #e6edf3)' : 'var(--bmm-text-secondary, #a3adba)');
-  const weight = opts.root || opts.leaf ? 700 : 600;
-  return `<g transform="translate(${x},${y})">
-    <path d="${FOLDER}" fill="${color}" opacity="${opts.leaf ? 1 : 0.9}"/>
-    <text x="26" y="13" font-family="var(--bmm-font-mono, monospace)" font-size="14" font-weight="${weight}" fill="${color}">${label}</text>
-  </g>`;
-}
-const MOD_TREE_SVG = `<svg viewBox="0 0 480 236" width="100%" role="img" aria-label="Nested folder structure of a stored mod">
-  <style>.tw{stroke:var(--bmm-border,#2a3242);stroke-width:2;fill:none;}</style>
-  <path class="tw" d="M12 34 V196 M12 76 H40 M52 76 V196 M52 118 H80 M92 118 V196 M92 160 H120"/>
-  ${folderRow(4, 18, 'My Awesome Mod', { root: true })}
-  ${folderRow(44, 60, 'Mods')}
-  ${folderRow(84, 102, 'aircraft')}
-  ${folderRow(124, 144, 'MyAircraft', { leaf: true })}
-  <text x="150" y="182" font-family="var(--bmm-font-sans, system-ui)" font-size="12" fill="var(--bmm-accent, #3b82f6)">↑ your files land here</text>
-  <text x="4" y="222" font-family="var(--bmm-font-sans, system-ui)" font-size="12.5" fill="var(--bmm-text-muted, #7c8698)">The mod = the top folder; inside it, the exact tree the game expects (Mods / aircraft / …).</text>
-</svg>`;
 
 // ── the documentation content ────────────────────────────────────────────────────
 const CATEGORIES: Category[] = [
@@ -103,7 +89,7 @@ const CATEGORIES: Category[] = [
         },
       },
       {
-        id: 'first-profile', tutorial: { id: 'basics', part: 'profiles', step: 's1' }, diagram: 'profile-system',
+        id: 'first-profile', view: 'profiles', tutorial: { id: 'basics', part: 'profiles', step: 's1' }, diagram: 'profile-system',
         title: { en: 'Create your first profile', fr: 'Créer votre premier profil' },
         summary: { en: 'Point BMM at your game folder and set up an isolated mod profile.', fr: 'Indiquez à BMM votre dossier de jeu et créez un profil de mods isolé.' },
         keywords: 'profile setup game path folder create profil',
@@ -146,7 +132,7 @@ Changer de profil ne re-lie que ce qui a changé : instantané même avec de gra
         },
       },
       {
-        id: 'scan', tutorial: { id: 'basics', part: 'scan', step: 's0' }, diagram: 'mod-sync',
+        id: 'scan', view: 'library', tutorial: { id: 'basics', part: 'scan', step: 's0' }, diagram: 'mod-sync',
         title: { en: 'Scan & sync your mods', fr: 'Scanner et synchroniser vos mods' },
         summary: { en: 'Let BMM index what you already have and keep it up to date.', fr: 'Laissez BMM indexer ce que vous avez déjà et le tenir à jour.' },
         keywords: 'scan sync index refresh detect scanner',
@@ -173,18 +159,71 @@ Changer de profil ne re-lie que ce qui a changé : instantané même avec de gra
     blurb: { en: 'Structure, activate, resolve conflicts, map and bundle.', fr: 'Structurer, activer, résoudre les conflits, mapper et regrouper.' },
     articles: [
       {
-        id: 'mod-structure', tutorial: { id: 'basics', part: 'map' }, diagram: 'mod-mapper',
+        id: 'mod-structure', tutorial: { id: 'basics', part: 'map' }, diagram: 'mod-mapper', view: 'mapper',
         title: { en: 'How a mod must be structured', fr: 'Comment un mod doit être structuré' },
-        summary: { en: 'Give each mod the full folder tree your game expects — and use the mapper when it doesn’t.', fr: 'Donnez à chaque mod l’arborescence complète attendue par le jeu — et utilisez le mappeur sinon.' },
-        keywords: 'structure ovgme folder tree config mapper arborescence dossier configuration store',
-        media: { kind: 'svg', svg: MOD_TREE_SVG, caption: { en: 'A stored mod carries the full path the game expects, from the game root down.', fr: 'Un mod stocké porte le chemin complet attendu par le jeu, depuis la racine du jeu.' } },
+        summary: { en: 'A mod is a folder that copies the game’s own folder tree — here’s what that means.', fr: 'Un mod est un dossier qui copie l’arborescence du jeu — voici ce que ça veut dire.' },
+        keywords: 'structure ovgme folder tree config mapper arborescence dossier configuration store mirror',
         body: {
-          en: '<p>BMM stores your mods and applies them to the game non-destructively (the same idea as OvGME). For that to work, each mod must contain the <b>full folder tree</b> as it should appear in the game — not just the loose files. The diagram above shows the shape: the top folder is the mod, and everything under it is the exact path a file must land in.</p><h4>Set up a profile per target</h4><p>The cleanest setup is one profile per destination:</p><ul><li><b>Install folder</b> profile → <code>Program Files\\Eagle Dynamics\\DCS World</code></li><li><b>Saved Games</b> profile → <code>C:\\Users\\&lt;you&gt;\\Saved Games\\DCS</code></li></ul><p>The <b>Configuration → mods folder</b> is the storage folder for that profile’s mods — one per profile.</p><h4>When a download has the wrong shape</h4><p>Many archives ship the files loose, or zipped from the wrong folder, so those parent folders (<code>Mods/aircraft/…</code>) are missing. Don’t reshape it by hand in Explorer — open the <b>mod mapper</b>, drag the files to where they belong, and save that mapping. It’s stored with the mod, so re-installs and future versions with the same layout apply in one click.</p>',
-          fr: '<p>BMM stocke vos mods et les applique au jeu de façon non destructive (le même principe qu’OvGME). Pour cela, chaque mod doit contenir l’<b>arborescence complète</b> telle qu’elle doit apparaître dans le jeu — pas seulement les fichiers en vrac. Le diagramme ci-dessus montre la forme : le dossier du haut est le mod, et tout ce qui est en dessous est le chemin exact où un fichier doit atterrir.</p><h4>Créer un profil par cible</h4><p>Le plus propre est un profil par destination :</p><ul><li>profil <b>dossier d’install</b> → <code>Program Files\\Eagle Dynamics\\DCS World</code></li><li>profil <b>Saved Games</b> → <code>C:\\Users\\&lt;toi&gt;\\Saved Games\\DCS</code></li></ul><p>La ligne <b>Configuration → dossier des mods</b> est le dossier de stockage des mods de ce profil — un par profil.</p><h4>Quand un téléchargement a la mauvaise forme</h4><p>Beaucoup d’archives livrent les fichiers en vrac, ou zippés depuis le mauvais dossier, si bien que les dossiers parents (<code>Mods/aircraft/…</code>) manquent. Ne réorganisez pas à la main dans l’Explorateur — ouvrez le <b>mappeur de mods</b>, glissez les fichiers à leur place, et enregistrez ce mapping. Il est stocké avec le mod : les réinstallations et les futures versions au même agencement s’appliquent en un clic.</p>',
+          en: `<p>BMM applies your mods <b>without ever moving your originals</b> (the same idea as OvGME). The trick that makes that possible: <b>a mod is just a folder that mirrors the game’s own folder tree.</b> Whatever path a file needs inside the game, your mod recreates that exact path — so BMM can lay one straight over the other.</p>
+<div class="dh-treecmp">
+  <div class="dh-treecol">
+    <div class="dh-treecol-h">① The game folder — what DCS already has</div>
+    <div class="dh-tree-list">
+      <div class="dh-fld dh-fld-0"><span class="fi">📁</span> DCS World <small>game root</small></div>
+      <div class="dh-fld dh-fld-1"><span class="fi">📁</span> Mods</div>
+      <div class="dh-fld dh-fld-2"><span class="fi">📁</span> aircraft</div>
+      <div class="dh-fld dh-fld-3 dh-fld-mut"><span class="fi">📄</span> the stock aircraft…</div>
+    </div>
+  </div>
+  <div class="dh-treecol dh-treecol-accent">
+    <div class="dh-treecol-h">② Your mod — the very same shape</div>
+    <div class="dh-tree-list">
+      <div class="dh-fld dh-fld-0"><span class="fi">📁</span> My Cool Jet <small>= the mod</small></div>
+      <div class="dh-fld dh-fld-1"><span class="fi">📁</span> Mods</div>
+      <div class="dh-fld dh-fld-2"><span class="fi">📁</span> aircraft</div>
+      <div class="dh-fld dh-fld-3 dh-fld-hit"><span class="fi">📁</span> My Cool Jet <small>slots in here</small></div>
+    </div>
+  </div>
+</div>
+<div class="dh-treecmp-note">↔ the <code>Mods / aircraft</code> path is the same on both sides — so your mod drops straight onto the game.</div>
+<h4>Set up a profile per target</h4>
+<p>The two folders a game reads from get one profile each:</p>
+<ul><li><b>Install folder</b> → <code>Program Files\\Eagle Dynamics\\DCS World</code></li><li><b>Saved Games</b> → <code>C:\\Users\\&lt;you&gt;\\Saved Games\\DCS</code></li></ul>
+<p>Each profile has its own <b>mods folder</b> (the “Configuration → mods folder” line) where BMM stores that profile’s mods.</p>
+<h4>When a download has the wrong shape</h4>
+<p>Plenty of archives ship the files loose, or zipped one folder too deep, so the <code>Mods/aircraft/…</code> parents are missing. Don’t rebuild them by hand — open the <b>Mapper</b>, drag each file to where it belongs, and save. The mapping travels with the mod, so the next install (or a new version with the same layout) is one click.</p>`,
+          fr: `<p>BMM applique vos mods <b>sans jamais déplacer vos originaux</b> (le même principe qu’OvGME). L’astuce qui rend ça possible : <b>un mod n’est qu’un dossier qui copie l’arborescence du jeu.</b> Quel que soit le chemin dont un fichier a besoin dans le jeu, votre mod recrée ce chemin exact — BMM peut alors poser l’un directement sur l’autre.</p>
+<div class="dh-treecmp">
+  <div class="dh-treecol">
+    <div class="dh-treecol-h">① Le dossier du jeu — ce que DCS a déjà</div>
+    <div class="dh-tree-list">
+      <div class="dh-fld dh-fld-0"><span class="fi">📁</span> DCS World <small>racine du jeu</small></div>
+      <div class="dh-fld dh-fld-1"><span class="fi">📁</span> Mods</div>
+      <div class="dh-fld dh-fld-2"><span class="fi">📁</span> aircraft</div>
+      <div class="dh-fld dh-fld-3 dh-fld-mut"><span class="fi">📄</span> les avions d’origine…</div>
+    </div>
+  </div>
+  <div class="dh-treecol dh-treecol-accent">
+    <div class="dh-treecol-h">② Votre mod — exactement la même forme</div>
+    <div class="dh-tree-list">
+      <div class="dh-fld dh-fld-0"><span class="fi">📁</span> Mon Super Jet <small>= le mod</small></div>
+      <div class="dh-fld dh-fld-1"><span class="fi">📁</span> Mods</div>
+      <div class="dh-fld dh-fld-2"><span class="fi">📁</span> aircraft</div>
+      <div class="dh-fld dh-fld-3 dh-fld-hit"><span class="fi">📁</span> Mon Super Jet <small>se glisse ici</small></div>
+    </div>
+  </div>
+</div>
+<div class="dh-treecmp-note">↔ le chemin <code>Mods / aircraft</code> est identique des deux côtés — votre mod se pose donc directement sur le jeu.</div>
+<h4>Un profil par cible</h4>
+<p>Les deux dossiers que lit un jeu ont chacun leur profil :</p>
+<ul><li><b>Dossier d’install</b> → <code>Program Files\\Eagle Dynamics\\DCS World</code></li><li><b>Saved Games</b> → <code>C:\\Users\\&lt;toi&gt;\\Saved Games\\DCS</code></li></ul>
+<p>Chaque profil a son propre <b>dossier des mods</b> (la ligne « Configuration → dossier des mods ») où BMM stocke les mods de ce profil.</p>
+<h4>Quand un téléchargement a la mauvaise forme</h4>
+<p>Beaucoup d’archives livrent les fichiers en vrac, ou zippés un dossier trop bas, si bien que les parents <code>Mods/aircraft/…</code> manquent. Ne les reconstruisez pas à la main — ouvrez le <b>Mappeur</b>, glissez chaque fichier à sa place, et enregistrez. Le mapping voyage avec le mod : la prochaine installation (ou une nouvelle version au même agencement) se fait en un clic.</p>`,
         },
       },
       {
-        id: 'activation', tutorial: { id: 'basics', part: 'activate' }, diagram: 'mod-activation',
+        id: 'activation', view: 'library', tutorial: { id: 'basics', part: 'activate' }, diagram: 'mod-activation',
         title: { en: 'Activate & deactivate mods', fr: 'Activer et désactiver des mods' },
         summary: { en: 'Toggle mods on or off per profile without moving files by hand.', fr: 'Activez ou désactivez des mods par profil sans déplacer les fichiers à la main.' },
         keywords: 'activate enable disable toggle deploy activer désactiver',
@@ -194,7 +233,7 @@ Changer de profil ne re-lie que ce qui a changé : instantané même avec de gra
         },
       },
       {
-        id: 'conflicts', tutorial: { id: 'basics', part: 'conflicts' }, diagram: 'conflict-management',
+        id: 'conflicts', view: 'library', tutorial: { id: 'basics', part: 'conflicts' }, diagram: 'conflict-management',
         title: { en: 'Resolve conflicts', fr: 'Résoudre les conflits' },
         summary: { en: 'See exactly which mods fight over the same file and choose a winner.', fr: 'Voyez quels mods se disputent le même fichier et choisissez un gagnant.' },
         keywords: 'conflict overwrite priority order resolve conflit priorité',
@@ -204,7 +243,7 @@ Changer de profil ne re-lie que ce qui a changé : instantané même avec de gra
         },
       },
       {
-        id: 'modpacks', tutorial: { id: 'basics', part: 'modpacks' }, diagram: 'modpack-flow',
+        id: 'modpacks', view: 'modpacks', tutorial: { id: 'basics', part: 'modpacks' }, diagram: 'modpack-flow',
         title: { en: 'Modpacks', fr: 'Modpacks' },
         summary: { en: 'Bundle a curated set of mods into one shareable pack.', fr: 'Regroupez un ensemble de mods sélectionnés en un pack partageable.' },
         keywords: 'modpack bundle collection pack export import',
@@ -231,7 +270,7 @@ Changer de profil ne re-lie que ce qui a changé : instantané même avec de gra
         },
       },
       {
-        id: 'backups', diagram: 'backup-system',
+        id: 'backups', view: 'profiles', diagram: 'backup-system',
         title: { en: 'Backups', fr: 'Sauvegardes' },
         summary: { en: 'Snapshot a profile so you can always roll back.', fr: 'Prenez un instantané d’un profil pour pouvoir toujours revenir en arrière.' },
         keywords: 'backup snapshot restore rollback safety sauvegarde restaurer',
@@ -241,7 +280,7 @@ Changer de profil ne re-lie que ce qui a changé : instantané même avec de gra
         },
       },
       {
-        id: 'launch-packs', diagram: 'launch-packs',
+        id: 'launch-packs', view: 'profiles', diagram: 'launch-packs',
         title: { en: 'Launch packs', fr: 'Launch packs' },
         summary: { en: 'Bundle a ready-to-run setup — mods, order and launch — into one thing.', fr: 'Regroupez une configuration prête à lancer — mods, ordre et lancement — en une seule chose.' },
         keywords: 'launch pack bundle run start launcher lançable',
@@ -258,7 +297,7 @@ Changer de profil ne re-lie que ce qui a changé : instantané même avec de gra
     blurb: { en: 'Server repos, catalogs and the BetterCommunity hub.', fr: 'Dépôts serveur, catalogues et le hub BetterCommunity.' },
     articles: [
       {
-        id: 'server-repo', diagram: 'server-mode', docsPath: '',
+        id: 'server-repo', view: 'repo', diagram: 'server-mode', docsPath: '',
         title: { en: 'Server repositories', fr: 'Dépôts serveur' },
         summary: { en: 'Publish a profile so a whole group installs and stays in sync in one click.', fr: 'Publiez un profil pour qu’un groupe entier l’installe et reste synchronisé en un clic.' },
         keywords: 'server repo host publish group community sync dépôt hébergement squadron',
@@ -274,7 +313,7 @@ Changer de profil ne re-lie que ce qui a changé : instantané même avec de gra
         },
       },
       {
-        id: 'catalogs', diagram: 'app-catalog',
+        id: 'catalogs', view: 'apps', diagram: 'app-catalog',
         title: { en: 'Catalogs & BetterCommunity', fr: 'Catalogues et BetterCommunity' },
         summary: { en: 'Browse and install mods, apps and themes from community catalogs.', fr: 'Parcourez et installez mods, applis et thèmes depuis les catalogues.' },
         keywords: 'catalog community bettercommunity browse install apps themes catalogue',
@@ -291,7 +330,7 @@ Changer de profil ne re-lie que ce qui a changé : instantané même avec de gra
     blurb: { en: 'Themes, plugins & API, custom pages, integrations, scheduler.', fr: 'Thèmes, plugins & API, pages personnalisées, intégrations, planificateur.' },
     articles: [
       {
-        id: 'themes', diagram: 'theme-system',
+        id: 'themes', view: 'settings', diagram: 'theme-system',
         title: { en: 'Themes & appearance', fr: 'Thèmes et apparence' },
         summary: { en: 'Recolour BMM — pick a built-in theme or design and share your own.', fr: 'Recolorez BMM — choisissez un thème intégré ou créez et partagez le vôtre.' },
         keywords: 'theme appearance color dark light editor custom thème apparence couleur',
@@ -301,7 +340,7 @@ Changer de profil ne re-lie que ce qui a changé : instantané même avec de gra
         },
       },
       {
-        id: 'plugins', diagram: 'mcp-server', docsPath: '',
+        id: 'plugins', view: 'plugins', diagram: 'mcp-server', docsPath: '',
         title: { en: 'Plugins & the API', fr: 'Plugins et API' },
         summary: { en: 'Add features BMM doesn’t ship — and automate it from scripts or an AI assistant.', fr: 'Ajoutez des fonctions que BMM ne fournit pas — et automatisez-le depuis des scripts ou une IA.' },
         keywords: 'plugin api mcp automation script install extend plugins étendre',
@@ -331,7 +370,7 @@ Changer de profil ne re-lie que ce qui a changé : instantané même avec de gra
         },
       },
       {
-        id: 'scheduler', diagram: 'scheduler',
+        id: 'scheduler', view: 'settings', diagram: 'scheduler',
         title: { en: 'Scheduler', fr: 'Planificateur' },
         summary: { en: 'Run actions on a schedule — updates, backups, syncs.', fr: 'Exécutez des actions planifiées — mises à jour, sauvegardes, synchros.' },
         keywords: 'scheduler cron automate task timer planificateur automatiser',
@@ -341,7 +380,7 @@ Changer de profil ne re-lie que ce qui a changé : instantané même avec de gra
         },
       },
       {
-        id: 'benchmarks', diagram: 'blake3-hashing',
+        id: 'benchmarks', view: 'settings', diagram: 'blake3-hashing',
         title: { en: 'Benchmarks & performance', fr: 'Benchmarks et performances' },
         summary: { en: 'Measure how fast BMM scans, hashes and deploys on your machine.', fr: 'Mesurez la vitesse de scan, de hachage et de déploiement sur votre machine.' },
         keywords: 'benchmark performance speed hash blake3 measure performances vitesse',
@@ -358,7 +397,7 @@ Changer de profil ne re-lie que ce qui a changé : instantané même avec de gra
     blurb: { en: 'Common questions and quick fixes.', fr: 'Questions fréquentes et solutions rapides.' },
     articles: [
       {
-        id: 'faq-pat', docsPath: '',
+        id: 'faq-pat', view: 'settings', docsPath: '',
         title: { en: 'GitHub rate limits & Personal Access Token (PAT)', fr: 'Limites GitHub et jeton d’accès personnel (PAT)' },
         summary: { en: 'Why some GitHub actions hit a limit, and how a PAT raises it.', fr: 'Pourquoi certaines actions GitHub atteignent une limite, et comment un PAT l’augmente.' },
         keywords: 'pat github token rate limit api 403 jeton limite',
@@ -683,6 +722,7 @@ function mediaBlock(m: Media): string {
 
 function articleView(cat: Category, a: Article): string {
   const rel = [
+    a.view ? `<button class="dh-rel dh-rel-open" data-nav="${a.view}">${svg('arrow', 15)} ${tr({ en: 'Open', fr: 'Ouvrir' })} ${navLabel(a.view)} ${tr({ en: 'in BMM', fr: 'dans BMM' })}</button>` : '',
     a.tutorial ? `<button class="dh-rel dh-rel-tut" data-tut="${a.tutorial.id}" data-tut-part="${a.tutorial.part || ''}" data-tut-step="${a.tutorial.step || ''}">${svg('play', 15)} ${tr({ en: 'Try it in the tutorial', fr: 'Essayer dans le tutoriel' })}</button>` : '',
     a.diagram ? `<button class="dh-rel dh-rel-dia" data-diagram="${a.diagram}">${svg('diagram', 15)} ${tr({ en: 'Open the diagram', fr: 'Ouvrir le diagramme' })}</button>` : '',
     `<a class="dh-rel dh-rel-ext" href="${DOCS_SITE}${a.docsPath || ''}" target="_blank" rel="noreferrer">${svg('ext', 15)} ${tr({ en: 'Read full docs', fr: 'Lire la doc complète' })}</a>`,
@@ -809,6 +849,9 @@ function onClick(e: Event) {
   }
   const rep = hit('[data-replay]');
   if (rep) { playReplay(rep.getAttribute('data-replay') || ''); return; }
+
+  const navBtn = hit('[data-nav]');
+  if (navBtn) { const v = navBtn.getAttribute('data-nav'); (document.querySelector(`.nav-item[data-view="${v}"]`) as HTMLElement | null)?.click(); return; }
 
   const tutBtn = hit('[data-tut]');
   if (tutBtn) { launchTutorial(tutBtn.getAttribute('data-tut') || '', tutBtn.getAttribute('data-tut-part') || '', tutBtn.getAttribute('data-tut-step') || ''); return; }
