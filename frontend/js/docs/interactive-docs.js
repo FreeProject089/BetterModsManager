@@ -16,11 +16,9 @@ import { faqDeletedMod } from './diagrams/faq-deleted-mod.js';
 import { bestPractices } from './diagrams/best-practices.js';
 import { crashReporting } from './diagrams/crash-reporting.js';
 import { cacheManagement } from './diagrams/cache-management.js';
-import { dedicatedHosting } from './diagrams/dedicated-hosting.js';
 import { modArchitecture } from './diagrams/mod-architecture.js';
 import { diskIoLimiter } from './diagrams/disk-io-limiter.js';
 import { hostingFlow } from './diagrams/hosting-flow.js';
-import { lightweightArchitecture } from './diagrams/lightweight-architecture.js';
 import { oneClickInstall } from './diagrams/one-click-install.js';
 import { docsLogic } from './diagrams/docs-logic.js';
 import { discordRpc } from './diagrams/discord-rpc.js';
@@ -40,7 +38,6 @@ import { dockerDeployment } from './diagrams/docker-deployment.js';
 import { modActivation } from './diagrams/mod-activation.js';
 import { themeSystem } from './diagrams/theme-system.js';
 import { appCatalog } from './diagrams/app-catalog.js';
-import { modUpdates } from './diagrams/mod-updates.js';
 import { blake3Hashing } from './diagrams/blake3-hashing.js';
 import { scheduler } from './diagrams/scheduler.js';
 import { updateSystem } from './diagrams/update-system.js';
@@ -62,11 +59,9 @@ export const diagrams = {
     'best-practices': bestPractices,
     'crash-reporting': crashReporting,
     'cache-management': cacheManagement,
-    'dedicated-hosting': dedicatedHosting,
     'mod-architecture': modArchitecture,
     'disk-io-limiter': diskIoLimiter,
     'hosting-flow': hostingFlow,
-    'lightweight-architecture': lightweightArchitecture,
     'one-click-install': oneClickInstall,
     'docs-logic': docsLogic,
     'discord-rpc': discordRpc,
@@ -86,7 +81,6 @@ export const diagrams = {
     'mod-activation': modActivation,
     'theme-system': themeSystem,
     'app-catalog': appCatalog,
-    'mod-updates': modUpdates,
     'blake3-hashing': blake3Hashing,
     'scheduler': scheduler,
     'update-system': updateSystem,

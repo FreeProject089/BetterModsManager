@@ -13,7 +13,8 @@ import { openTutorialHub } from './tutorial-hub.js';
 import { initRepo } from '../features/repo/repo.js';
 import { appState } from '../core/state.js';
 import { initInteractiveDocs, openDiagram } from '../docs/interactive-docs.js';
-import { initDocsUI } from '../docs/docs-ui.js';
+import { initDocsHub } from '../docs/docs-hub.js';
+import { initCommands } from '../core/commands.js';
 import { initDeepLinks } from '../core/deep_link_manager.js';
 import { initAnalytics, trackView } from '../core/analytics.js';
 import { initApiActivity } from '../core/api_activity.js';
@@ -791,8 +792,9 @@ async function main() {
     await initTitlebar();
     initModlist();
     initRepo();
-    initInteractiveDocs();
-    initDocsUI();
+    initInteractiveDocs(); // diagram modal engine + Tasky tooltips (still used app-wide)
+    initDocsHub(); // the rebuilt Help & documentation hub (owns #view-docs)
+    initCommands(); // command registry + Ctrl+K palette + global shortcut dispatcher
     initDeepLinks();
     initApiActivity();
     initAnalytics().catch(() => { });
@@ -1005,6 +1007,14 @@ async function main() {
     initInteractionLogging();
     // Debug Menu
     initDebugMenu();
+    // Run any user-defined auto-animations (Animation Studio). Guarded on a cheap string
+    // check so the module is only loaded when the user actually created auto-run entries.
+    try {
+        if (localStorage.getItem('bmm_custom_anims')?.includes('"auto":true')) {
+            import('../features/debug/anim-studio.js').then((m) => m.installAutoAnimations()).catch(() => { });
+        }
+    }
+    catch { /* ignore */ }
     // PTB Mode check
     checkPtbMode();
     const restartBtn = document.getElementById('btn-restart-tutorial');
@@ -1209,13 +1219,16 @@ async function fetchContributors() {
         }
     };
     try {
-        console.log("[BMM] Fetching contributors from remote...");
-        const response = await fetch(getLinks().contributors, { cache: 'no-cache' });
-        if (response.ok) {
-            const data = await response.json();
-            applyData(data);
-            console.log("[BMM] Successfully loaded remote contributors.");
-            return;
+        // Route through the Rust backend (reqwest) — the webview blocks a direct cross-origin
+        // fetch of bettercommunity.ch/api/assets/* on CORS. `quiet` keeps a 404 (endpoint not
+        // deployed) out of the console; we just fall back to the bundled copy below.
+        const remoteUrl = getLinks().contributors;
+        if (/^https?:\/\//i.test(remoteUrl)) {
+            const text = await invoke('fetch_remote_json', { url: remoteUrl }, { quiet: true });
+            if (text) {
+                applyData(JSON.parse(text));
+                return;
+            }
         }
     }
     catch (e) {

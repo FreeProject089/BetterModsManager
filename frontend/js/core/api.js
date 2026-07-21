@@ -4,6 +4,17 @@
  */
 import { debugHub } from '../features/debug/debug.js';
 let _invoke = null;
+// Bridge-readiness gate. The bridge is wired up by loadTauri(), but some boot code (e.g.
+// loadLinks → fetch_links_json) can invoke BEFORE loadTauri() has run. Rather than fail those
+// with "Tauri bridge not initialized", invoke() awaits this promise first — loadTauri resolves
+// it on every path (real bridge, unpkg dev, or browser mock), so an early call just waits a
+// few ms instead of throwing.
+let _markBridgeReady = null;
+const _bridgeReady = new Promise((res) => { _markBridgeReady = res; });
+function markBridgeReady() { if (_markBridgeReady) {
+    _markBridgeReady();
+    _markBridgeReady = null;
+} }
 // ── Local Plugin API base URL (configurable port) ─────────────────────────────
 // The port comes from settings.api_port (default 51274). Cached in localStorage
 // so it's correct synchronously at boot; refreshed once settings load.
@@ -22,11 +33,23 @@ let _convertFileSrc = null;
 const originalLog = console.log;
 const originalWarn = console.warn;
 const originalError = console.error;
+// Re-entrancy guard: forwarding a log to the backend can itself log (e.g. the
+// browser mock's mockInvoke console.logs the command it received). Without this
+// guard that recurses infinitely — bridgeLog → log_frontend_line → console.log →
+// bridgeLog → … — flooding output and freezing the main thread. Prod invoke never
+// re-enters synchronously, so this is a no-op there.
+let _bridging = false;
 function bridgeLog(level, args) {
     debugHub.recordLog(level, args);
+    if (_bridging || !_invoke)
+        return;
     const message = args.map((arg) => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ');
-    if (_invoke) {
+    _bridging = true;
+    try {
         _invoke('log_frontend_line', { line: `[${level}] ${message}` }).catch(() => { });
+    }
+    finally {
+        _bridging = false;
     }
 }
 console.log = (...args) => {
@@ -60,6 +83,7 @@ export async function loadTauri() {
         };
         _notifModule = null;
         console.log('[BMM] Using local Tauri v2 bridge');
+        markBridgeReady();
         return;
     }
     // SECURITY: In production, we should NEVER fallback to unpkg without SRI (Issue 5)
@@ -69,6 +93,7 @@ export async function loadTauri() {
         console.error('[SECURITY] Tauri bridge missing in production! Fallback to CDN disabled for security.');
         _invoke = mockInvoke;
         _dialog = { open: async () => null, save: async () => null };
+        markBridgeReady();
         return;
     }
     try {
@@ -87,12 +112,18 @@ export async function loadTauri() {
         _notifModule = null;
         _convertFileSrc = (path) => `file://${path}`;
     }
+    markBridgeReady();
 }
 export async function invoke(command, args = {}, opts) {
     if (!_invoke) {
-        if (!opts?.quiet)
-            console.error(`[RPC ERROR] Cannot invoke ${command}: Tauri bridge not initialized`);
-        throw new Error('Tauri bridge not initialized');
+        // Early boot call before loadTauri() finished — wait for the bridge (max 5s) instead
+        // of failing outright. loadTauri() resolves _bridgeReady on every path.
+        await Promise.race([_bridgeReady, new Promise((r) => setTimeout(r, 5000))]);
+        if (!_invoke) {
+            if (!opts?.quiet)
+                console.error(`[RPC ERROR] Cannot invoke ${command}: Tauri bridge not initialized`);
+            throw new Error('Tauri bridge not initialized');
+        }
     }
     const startTime = performance.now();
     const _call = debugHub.recordIPC(command, args, 'pending');
