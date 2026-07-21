@@ -5799,6 +5799,8 @@
   "rstudio.pick": "Hide element",
   "rstudio.pick.active": "Click one…",
   "rstudio.pick.hint": "Hover to highlight, click to hide it from the recording — Esc to cancel",
+  "rstudio.showstudios": "Show studios in rec",
+  "rstudio.showstudios.tip": "Include the Replay/Animation Studio panels in the recording (off by default)",
   "dev.tool.rstudioTip": "Replay Studio — record a .bmmreplay with a movable frame + pause/resume",
   "anim.title": "Animation Studio",
   "anim.none": "No animations yet — add one below.",

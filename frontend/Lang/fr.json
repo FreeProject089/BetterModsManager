@@ -5799,6 +5799,8 @@
   "rstudio.pick": "Masquer un élément",
   "rstudio.pick.active": "Clique un élément…",
   "rstudio.pick.hint": "Survole pour surligner, clique pour l'exclure de l'enregistrement — Échap pour annuler",
+  "rstudio.showstudios": "Afficher les studios dans le rec",
+  "rstudio.showstudios.tip": "Inclure les panneaux Studio Replay/Animation dans l'enregistrement (désactivé par défaut)",
   "dev.tool.rstudioTip": "Studio Replay — enregistre un .bmmreplay avec un cadre mobile + pause/reprise",
   "anim.title": "Studio d'animation",
   "anim.none": "Aucune animation — ajoutes-en une ci-dessous.",

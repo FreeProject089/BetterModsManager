@@ -134,21 +134,32 @@ function registerCloseListeners(): void {
   } catch {}
 }
 
-/** Build the current session bundle (rrweb events + console + Rust log). */
+/** Build the current session bundle (rrweb events + console + Rust log).
+ *  In full mode, inlined mod-thumbnail data-URLs can push the buffer past V8's max string
+ *  length (~512 MB) → `JSON.stringify` threw `RangeError: Invalid string length` and the whole
+ *  flush failed. Each chunk starts with a checkout full-snapshot, so it's self-contained: if the
+ *  serialise overflows we drop the OLDEST chunk and retry, keeping the most recent, playable
+ *  segment instead of losing everything. */
 async function buildBundle(): Promise<string | null> {
-  const events = _chunks.flat();
-  if (events.length < 2) return null;
+  if (_chunks.flat().length < 2) return null;
   const rustLog = watcherRust() ? (await invoke('read_session_log_tail', { maxBytes: 262144 }).catch(() => '') as string) : '';
-  return JSON.stringify({
-    bmmReplay: 1,
-    app: 'BetterModsManager',
-    createdAt: new Date().toISOString(),
-    masked: !watcherFull(),
-    durationMs: Date.now() - _startedAt,
-    events,
-    console: watcherJs() ? _console : [],
-    rustLog,
-  });
+  const meta = { bmmReplay: 1, app: 'BetterModsManager', createdAt: new Date().toISOString(), masked: !watcherFull(), durationMs: Date.now() - _startedAt };
+  // Work on a copy so a size-driven trim never mutates the live rolling buffer.
+  let chunks = _chunks.map((c) => c);
+  for (;;) {
+    const events = chunks.flat();
+    if (events.length < 2) return null;
+    try {
+      return JSON.stringify({ ...meta, events, console: watcherJs() ? _console : [], rustLog });
+    } catch (e) {
+      // Overflow (RangeError) or out-of-memory: shed the oldest self-contained chunk and retry.
+      if (chunks.length > 1) { chunks = chunks.slice(1); continue; }
+      // A single chunk is still too big — drop the front half of its events as a last resort.
+      if (events.length > 4) { chunks = [events.slice(Math.floor(events.length / 2))]; continue; }
+      console.warn('buildBundle: session too large to serialise, skipping', e);
+      return null;
+    }
+  }
 }
 
 /**

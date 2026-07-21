@@ -158,6 +158,7 @@ function runActive() {
 export function openCommandPalette() {
   if (paletteOpen) return;
   ensurePaletteStyles();
+  refreshNavCommands();   // palette always shows the current navbar (custom pages included)
   paletteOpen = true;
   overlay = document.createElement('div');
   overlay.className = 'cp-overlay';
@@ -201,6 +202,7 @@ export function closePalette() { paletteOpen = false; overlay?.remove(); overlay
 let recording: { id: string; row: HTMLElement } | null = null;
 export function renderShortcutsManager(container: HTMLElement) {
   ensurePaletteStyles();   // the .sk-* rules live in the same injected sheet as the palette
+  refreshNavCommands();    // reflect the current navbar (custom pages, renames, reorders)
   const groups: Command['category'][] = ['nav', 'profiles', 'mods', 'tools', 'help'];
   const catTitle: Record<Command['category'], L> = {
     nav: { en: 'Navigation', fr: 'Navigation' }, profiles: { en: 'Profiles', fr: 'Profils' }, mods: { en: 'Mods', fr: 'Mods' },
@@ -264,19 +266,28 @@ const clickAfterNav = (view: string, btnId: string, delay = 60) => () => {
   setTimeout(() => document.getElementById(btnId)?.click(), delay);
 };
 
-function registerCore() {
-  const NAV: Array<[string, L]> = [
-    ['library', { en: 'Library', fr: 'Bibliothèque' }], ['profiles', { en: 'Profiles', fr: 'Profils' }],
-    ['modlist', { en: 'Mod list', fr: 'Liste des mods' }], ['modpacks', { en: 'Modpacks', fr: 'Modpacks' }],
-    ['mapper', { en: 'Mod mapper', fr: 'Mappeur' }], ['repo', { en: 'Server repos', fr: 'Dépôts serveur' }],
-    ['plugins', { en: 'Plugins & API', fr: 'Plugins et API' }], ['apps', { en: 'Apps', fr: 'Applis' }],
-    ['community', { en: 'Community', fr: 'Communauté' }], ['docs', { en: 'Help & docs', fr: 'Aide et docs' }],
-    ['credits', { en: 'Credits', fr: 'Crédits' }], ['settings', { en: 'Settings', fr: 'Réglages' }],
-  ];
-  for (const [view, label] of NAV) registerCommand({
-    id: `nav.${view}`, category: 'nav', title: { en: `Go to ${label.en}`, fr: `Aller à ${label.fr}` },
-    keywords: `${label.en} ${label.fr} open navigate view page`, run: clickNav(view), defaultChord: null,
+// Nav commands are built from the LIVE navbar so they always match what's actually there —
+// including custom pages, reordered/renamed items, and anything hidden/shown via navbar
+// customisation. Rebuilt on demand (Settings render + palette open). Bindings persist by id.
+export function refreshNavCommands() {
+  for (const id of [..._cmds.keys()]) if (id.startsWith('nav.')) _cmds.delete(id);
+  const seen = new Set<string>();
+  document.querySelectorAll('.nav-item[data-view]').forEach((el) => {
+    const view = (el as HTMLElement).getAttribute('data-view');
+    if (!view || seen.has(view)) return;
+    seen.add(view);
+    // Use the label as displayed (custom names + current language); fall back to the view id.
+    const lbl = ((el.querySelector('.nav-label') as HTMLElement | null)?.textContent
+      || (el as HTMLElement).getAttribute('title') || view).trim();
+    registerCommand({
+      id: `nav.${view}`, category: 'nav', title: { en: `Go to ${lbl}`, fr: `Aller à ${lbl}` },
+      keywords: `${lbl} open navigate view page aller`, run: clickNav(view), defaultChord: null,
+    });
   });
+}
+
+function registerCore() {
+  refreshNavCommands();
 
   // The four legacy actions — same defaults as before (Ctrl+letter), now rebindable + in the palette.
   registerCommand({ id: 'profiles.new', category: 'profiles', title: { en: 'New profile', fr: 'Nouveau profil' }, keywords: 'create profile add', run: clickAfterNav('profiles', 'btn-new-profile', 50), defaultChord: { ctrl: true, key: 'n' } });
@@ -301,7 +312,8 @@ function ensurePaletteStyles() {
   const s = document.createElement('style');
   s.id = 'cp-styles';
   s.textContent = `
-  .cp-overlay{position:fixed;inset:0;z-index:2147483200;display:flex;align-items:flex-start;justify-content:center;
+  .cp-overlay{position:fixed;inset:0;z-index:2147483646;isolation:isolate;pointer-events:auto;
+    display:flex;align-items:flex-start;justify-content:center;
     padding-top:14vh;background:rgba(0,0,0,.5);backdrop-filter:blur(3px);}
   .cp-box{width:min(620px,92vw);max-height:66vh;display:flex;flex-direction:column;border-radius:16px;overflow:hidden;
     background:var(--bmm-bg-elevated,#1a2130);border:1px solid var(--bmm-border,#2a3242);box-shadow:0 24px 70px -18px rgba(0,0,0,.7);

@@ -61,6 +61,28 @@ const ICON: Record<string, string> = {
 const svg = (name: string, size = 20): string =>
   `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${ICON[name] || ''}</svg>`;
 
+// A folder-tree illustration for the "how a mod must be structured" article — a stored mod
+// carries the full path the game expects, from the game root down. Theme-aware via CSS vars.
+const FOLDER = 'M2 4.2A1.6 1.6 0 0 1 3.6 2.6h4.2L9.6 4.2h6.8A1.6 1.6 0 0 1 18 5.8v8.6A1.6 1.6 0 0 1 16.4 16H3.6A1.6 1.6 0 0 1 2 14.4z';
+function folderRow(x: number, y: number, label: string, opts: { root?: boolean; leaf?: boolean } = {}): string {
+  const color = opts.leaf ? 'var(--bmm-accent, #3b82f6)' : (opts.root ? 'var(--bmm-text-primary, #e6edf3)' : 'var(--bmm-text-secondary, #a3adba)');
+  const weight = opts.root || opts.leaf ? 700 : 600;
+  return `<g transform="translate(${x},${y})">
+    <path d="${FOLDER}" fill="${color}" opacity="${opts.leaf ? 1 : 0.9}"/>
+    <text x="26" y="13" font-family="var(--bmm-font-mono, monospace)" font-size="14" font-weight="${weight}" fill="${color}">${label}</text>
+  </g>`;
+}
+const MOD_TREE_SVG = `<svg viewBox="0 0 480 236" width="100%" role="img" aria-label="Nested folder structure of a stored mod">
+  <style>.tw{stroke:var(--bmm-border,#2a3242);stroke-width:2;fill:none;}</style>
+  <path class="tw" d="M12 34 V196 M12 76 H40 M52 76 V196 M52 118 H80 M92 118 V196 M92 160 H120"/>
+  ${folderRow(4, 18, 'My Awesome Mod', { root: true })}
+  ${folderRow(44, 60, 'Mods')}
+  ${folderRow(84, 102, 'aircraft')}
+  ${folderRow(124, 144, 'MyAircraft', { leaf: true })}
+  <text x="150" y="182" font-family="var(--bmm-font-sans, system-ui)" font-size="12" fill="var(--bmm-accent, #3b82f6)">↑ your files land here</text>
+  <text x="4" y="222" font-family="var(--bmm-font-sans, system-ui)" font-size="12.5" fill="var(--bmm-text-muted, #7c8698)">The mod = the top folder; inside it, the exact tree the game expects (Mods / aircraft / …).</text>
+</svg>`;
+
 // ── the documentation content ────────────────────────────────────────────────────
 const CATEGORIES: Category[] = [
   // ═══════════════════════ USER PART ═══════════════════════
@@ -111,9 +133,10 @@ const CATEGORIES: Category[] = [
         title: { en: 'How a mod must be structured', fr: 'Comment un mod doit être structuré' },
         summary: { en: 'Give each mod the full folder tree your game expects — and use the mapper when it doesn’t.', fr: 'Donnez à chaque mod l’arborescence complète attendue par le jeu — et utilisez le mappeur sinon.' },
         keywords: 'structure ovgme folder tree config mapper arborescence dossier configuration store',
+        media: { kind: 'svg', svg: MOD_TREE_SVG, caption: { en: 'A stored mod carries the full path the game expects, from the game root down.', fr: 'Un mod stocké porte le chemin complet attendu par le jeu, depuis la racine du jeu.' } },
         body: {
-          en: '<p>BMM stores your mods and applies them to the game non-destructively (the same idea as OvGME). For that to work, each mod must contain the <b>full folder tree</b> as it should appear in the game — not just the loose files.</p><h4>Set up a profile per target</h4><p>The cleanest setup is one profile per destination:</p><ul><li><b>Install folder</b> profile → <code>Program Files\\Eagle Dynamics\\DCS World</code></li><li><b>Saved Games</b> profile → <code>C:\\Users\\&lt;you&gt;\\Saved Games\\DCS</code></li></ul><p>The <b>Configuration → mods folder</b> is the storage folder for that profile’s mods (one per profile).</p><h4>The tree a stored mod needs</h4><p>When you store a mod, make sure the whole path under the game root is present. Example for an aircraft mod:</p><pre class="dh-tree">\\My Awesome Mod\n   |_ Mods\n        |_ aircraft\n             |_ MyAircraft</pre><p>So <code>My Awesome Mod</code> is the mod, and inside it the exact tree (<code>Mods/aircraft/MyAircraft</code>) that the file needs to land in. If your download is missing those parent folders, don’t reshape it by hand — use the <b>mod mapper</b> to drag files into place and save that mapping, so every re-install is one click.</p>',
-          fr: '<p>BMM stocke vos mods et les applique au jeu de façon non destructive (le même principe qu’OvGME). Pour cela, chaque mod doit contenir l’<b>arborescence complète</b> telle qu’elle doit apparaître dans le jeu — pas seulement les fichiers en vrac.</p><h4>Créer un profil par cible</h4><p>Le plus propre est un profil par destination :</p><ul><li>profil <b>dossier d’install</b> → <code>Program Files\\Eagle Dynamics\\DCS World</code></li><li>profil <b>Saved Games</b> → <code>C:\\Users\\&lt;toi&gt;\\Saved Games\\DCS</code></li></ul><p>La ligne <b>Configuration → dossier des mods</b> est le dossier de stockage des mods de ce profil (un par profil).</p><h4>L’arborescence d’un mod stocké</h4><p>Quand on stocke un mod, il faut s’assurer que tout le chemin sous la racine du jeu est présent. Exemple pour un mod d’avion :</p><pre class="dh-tree">\\Mon Mod Génial\n   |_ Mods\n        |_ aircraft\n             |_ MonAvion</pre><p>Donc <code>Mon Mod Génial</code> est le mod, et à l’intérieur l’arborescence exacte (<code>Mods/aircraft/MonAvion</code>) où le fichier doit atterrir. Si votre téléchargement n’a pas ces dossiers parents, ne le réorganisez pas à la main — utilisez le <b>mappeur de mods</b> pour glisser les fichiers au bon endroit et enregistrer ce mapping : chaque réinstallation se fait en un clic.</p>',
+          en: '<p>BMM stores your mods and applies them to the game non-destructively (the same idea as OvGME). For that to work, each mod must contain the <b>full folder tree</b> as it should appear in the game — not just the loose files. The diagram above shows the shape: the top folder is the mod, and everything under it is the exact path a file must land in.</p><h4>Set up a profile per target</h4><p>The cleanest setup is one profile per destination:</p><ul><li><b>Install folder</b> profile → <code>Program Files\\Eagle Dynamics\\DCS World</code></li><li><b>Saved Games</b> profile → <code>C:\\Users\\&lt;you&gt;\\Saved Games\\DCS</code></li></ul><p>The <b>Configuration → mods folder</b> is the storage folder for that profile’s mods — one per profile.</p><h4>When a download has the wrong shape</h4><p>Many archives ship the files loose, or zipped from the wrong folder, so those parent folders (<code>Mods/aircraft/…</code>) are missing. Don’t reshape it by hand in Explorer — open the <b>mod mapper</b>, drag the files to where they belong, and save that mapping. It’s stored with the mod, so re-installs and future versions with the same layout apply in one click.</p>',
+          fr: '<p>BMM stocke vos mods et les applique au jeu de façon non destructive (le même principe qu’OvGME). Pour cela, chaque mod doit contenir l’<b>arborescence complète</b> telle qu’elle doit apparaître dans le jeu — pas seulement les fichiers en vrac. Le diagramme ci-dessus montre la forme : le dossier du haut est le mod, et tout ce qui est en dessous est le chemin exact où un fichier doit atterrir.</p><h4>Créer un profil par cible</h4><p>Le plus propre est un profil par destination :</p><ul><li>profil <b>dossier d’install</b> → <code>Program Files\\Eagle Dynamics\\DCS World</code></li><li>profil <b>Saved Games</b> → <code>C:\\Users\\&lt;toi&gt;\\Saved Games\\DCS</code></li></ul><p>La ligne <b>Configuration → dossier des mods</b> est le dossier de stockage des mods de ce profil — un par profil.</p><h4>Quand un téléchargement a la mauvaise forme</h4><p>Beaucoup d’archives livrent les fichiers en vrac, ou zippés depuis le mauvais dossier, si bien que les dossiers parents (<code>Mods/aircraft/…</code>) manquent. Ne réorganisez pas à la main dans l’Explorateur — ouvrez le <b>mappeur de mods</b>, glissez les fichiers à leur place, et enregistrez ce mapping. Il est stocké avec le mod : les réinstallations et les futures versions au même agencement s’appliquent en un clic.</p>',
         },
       },
       {
@@ -183,11 +206,17 @@ const CATEGORIES: Category[] = [
       {
         id: 'server-repo', diagram: 'server-mode', docsPath: '',
         title: { en: 'Server repositories', fr: 'Dépôts serveur' },
-        summary: { en: 'Publish a profile so a whole group installs it in one click.', fr: 'Publiez un profil pour qu’un groupe entier l’installe en un clic.' },
-        keywords: 'server repo host publish group community sync dépôt hébergement',
+        summary: { en: 'Publish a profile so a whole group installs and stays in sync in one click.', fr: 'Publiez un profil pour qu’un groupe entier l’installe et reste synchronisé en un clic.' },
+        keywords: 'server repo host publish group community sync dépôt hébergement squadron',
         body: {
-          en: '<p>A server repo turns a profile into a hosted source. Members point BMM at its link and get the exact same mods, versions and settings — and stay in sync as you update it.</p><ul><li>Access can be public, email- or password-gated.</li><li>Each repo has a fingerprint so members can verify authenticity.</li></ul>',
-          fr: '<p>Un dépôt serveur transforme un profil en source hébergée. Les membres pointent BMM sur son lien et obtiennent exactement les mêmes mods, versions et réglages — et restent synchronisés à mesure que vous le mettez à jour.</p><ul><li>L’accès peut être public, protégé par e-mail ou mot de passe.</li><li>Chaque dépôt a une empreinte pour vérifier son authenticité.</li></ul>',
+          en: '<p>A server repo turns a profile into a <b>hosted source of truth</b>. You publish once; everyone who subscribes gets the exact same mods, versions and load order — and stays converged as you update it. It\'s the tool for a squadron, a community, or just keeping your own machines identical.</p>'
+            + '<h4>Publishing one</h4><ul><li>Open <b>Server Repo</b> and point it at the profile you want to share.</li><li>BMM builds a <b>manifest</b> — the list of files with their hashes — and gives you a link to hand out.</li><li>Update it any time; subscribers see the change on their next sync.</li></ul>'
+            + '<h4>How members stay in sync</h4><p>A subscriber\'s BMM never blindly re-downloads. It fetches the manifest, compares it to what it already has, and pulls <b>only the difference</b> — then verifies every transferred file by hash before deploying. That\'s why a small change to a 10&nbsp;GB collection costs a few MB and a few seconds.</p>'
+            + '<h4>Access & authenticity</h4><ul><li><b>Public</b> — anyone with the link.</li><li><b>Email-gated</b> — only whitelisted accounts.</li><li><b>Password-gated</b> — only password holders.</li></ul><p>Every repo carries a stable <b>fingerprint</b> (<code>BCR-XXXX-XXXX</code>) so members can confirm they\'re subscribed to the genuine source, not an impostor. Hosting can be your own machine or dedicated hosting via BetterCommunity.</p>',
+          fr: '<p>Un dépôt serveur transforme un profil en <b>source de vérité hébergée</b>. Vous publiez une fois ; tous les abonnés obtiennent exactement les mêmes mods, versions et ordre de chargement — et restent alignés à mesure que vous mettez à jour. C\'est l\'outil pour une escadrille, une communauté, ou simplement garder vos propres machines identiques.</p>'
+            + '<h4>En publier un</h4><ul><li>Ouvrez <b>Dépôt Serveur</b> et pointez-le sur le profil à partager.</li><li>BMM construit un <b>manifeste</b> — la liste des fichiers avec leurs hachages — et vous donne un lien à distribuer.</li><li>Mettez-le à jour quand vous voulez ; les abonnés voient le changement à leur prochaine synchro.</li></ul>'
+            + '<h4>Comment les membres restent synchronisés</h4><p>Le BMM d\'un abonné ne re-télécharge jamais à l\'aveugle. Il récupère le manifeste, le compare à ce qu\'il possède déjà, et ne tire que la <b>différence</b> — puis vérifie chaque fichier transféré par hachage avant de déployer. D\'où le coût de quelques Mo et quelques secondes pour un petit changement dans une collection de 10&nbsp;Go.</p>'
+            + '<h4>Accès & authenticité</h4><ul><li><b>Public</b> — quiconque a le lien.</li><li><b>Par e-mail</b> — seulement les comptes en liste blanche.</li><li><b>Par mot de passe</b> — seulement les détenteurs du mot de passe.</li></ul><p>Chaque dépôt porte une <b>empreinte</b> stable (<code>BCR-XXXX-XXXX</code>) pour que les membres confirment qu\'ils sont abonnés à la vraie source, pas un imposteur. L\'hébergement peut être votre propre machine ou un hébergement dédié via BetterCommunity.</p>',
         },
       },
       {
@@ -205,8 +234,18 @@ const CATEGORIES: Category[] = [
   {
     id: 'power', part: 'user', icon: 'bolt',
     title: { en: 'Power features', fr: 'Fonctions avancées' },
-    blurb: { en: 'Plugins, custom pages, scheduler and benchmarks.', fr: 'Plugins, pages personnalisées, planificateur et benchmarks.' },
+    blurb: { en: 'Themes, custom pages, scheduler and benchmarks.', fr: 'Thèmes, pages personnalisées, planificateur et benchmarks.' },
     articles: [
+      {
+        id: 'themes', diagram: 'theme-system',
+        title: { en: 'Themes & appearance', fr: 'Thèmes et apparence' },
+        summary: { en: 'Recolour BMM — pick a built-in theme or design and share your own.', fr: 'Recolorez BMM — choisissez un thème intégré ou créez et partagez le vôtre.' },
+        keywords: 'theme appearance color dark light editor custom thème apparence couleur',
+        body: {
+          en: '<p>BMM ships <b>seven themes</b> (light and dark) — switch in <b>Settings → Appearance</b>. If none fits, the built-in <b>theme editor</b> lets you recolour every part of the UI live and save it as your own.</p><ul><li>Start from any built-in theme and tweak colours, accents and radii.</li><li>Save, name, and <b>export/share</b> your theme — or import one someone sent you.</li><li>Themes are just data, so they never affect your mods or profiles.</li></ul><p>Curious how it works under the hood? See <b>Developer → Theme system</b>.</p>',
+          fr: '<p>BMM livre <b>sept thèmes</b> (clairs et sombres) — changez dans <b>Réglages → Apparence</b>. Si aucun ne convient, l\'<b>éditeur de thèmes</b> intégré vous laisse recolorer chaque partie de l\'UI en direct et l\'enregistrer comme le vôtre.</p><ul><li>Partez d\'un thème intégré et ajustez couleurs, accents et rayons.</li><li>Enregistrez, nommez et <b>exportez/partagez</b> votre thème — ou importez celui qu\'on vous a envoyé.</li><li>Les thèmes ne sont que des données : ils n\'affectent jamais vos mods ni vos profils.</li></ul><p>Curieux du fonctionnement ? Voir <b>Développeur → Système de thèmes</b>.</p>',
+        },
+      },
       {
         id: 'custom-pages', diagram: 'premium-interactions',
         title: { en: 'Custom pages', fr: 'Pages personnalisées' },
@@ -293,10 +332,22 @@ const CATEGORIES: Category[] = [
     title: { en: 'Architecture', fr: 'Architecture' },
     blurb: { en: 'How BMM is built — the stack, threads and layout.', fr: 'Comment BMM est bâti — stack, threads et découpage.' },
     articles: [
-      devArticle('code-stack', { en: 'The tech stack', fr: 'La stack technique' }, { en: 'Tauri shell, a native Rust core and a TypeScript UI — and why.', fr: 'Coquille Tauri, cœur natif Rust et UI TypeScript — et pourquoi.' }, 'stack rust tauri typescript'),
-      devArticle('lightweight-architecture', { en: 'Lightweight architecture', fr: 'Architecture légère' }, { en: 'Why BMM stays small and fast where an Electron app would be heavy.', fr: 'Pourquoi BMM reste léger et rapide là où un Electron serait lourd.' }, 'lightweight memory ram léger'),
-      devArticle('engine-threads', { en: 'Engine & threads', fr: 'Moteur et threads' }, { en: 'How work is split across threads to keep the UI responsive.', fr: 'Comment le travail est réparti sur les threads pour garder l’UI réactive.' }, 'threads async engine concurrency'),
-      devArticle('mod-architecture', { en: 'Mod data model', fr: 'Modèle de données des mods' }, { en: 'How a mod, its files and its metadata are represented.', fr: 'Comment un mod, ses fichiers et ses métadonnées sont représentés.' }, 'model data mod files'),
+      devArticle('code-stack', { en: 'The tech stack', fr: 'La stack technique' }, { en: 'Tauri shell, a native Rust core and a TypeScript UI — and why.', fr: 'Coquille Tauri, cœur natif Rust et UI TypeScript — et pourquoi.' }, 'stack rust tauri typescript', {
+        en: '<p>BMM is a <b>Tauri</b> app: the UI is TypeScript running in the OS\'s native webview, and every real operation — scanning, hashing, copying, networking — is a compiled <b>Rust</b> core. The UI never touches the disk directly; it calls the core over a single typed <code>invoke()</code> channel, and all state lives in the core. That split is why BMM launches fast and stays lean where a JavaScript-everywhere app would be heavy.</p>',
+        fr: '<p>BMM est une app <b>Tauri</b> : l\'interface est en TypeScript dans la webview native de l\'OS, et chaque opération réelle — scan, hachage, copie, réseau — est un cœur <b>Rust</b> compilé. L\'interface ne touche jamais le disque directement ; elle appelle le cœur via un unique canal typé <code>invoke()</code>, et tout l\'état vit dans le cœur. Ce découpage explique pourquoi BMM démarre vite et reste léger là où une app tout-JavaScript serait lourde.</p>',
+      }),
+      devArticle('lightweight-architecture', { en: 'Lightweight architecture', fr: 'Architecture légère' }, { en: 'Why BMM stays small and fast where an Electron app would be heavy.', fr: 'Pourquoi BMM reste léger et rapide là où un Electron serait lourd.' }, 'lightweight memory ram léger', {
+        en: '<p>An Electron app ships a whole copy of Chromium (~150&nbsp;MB) and runs its logic in JavaScript. BMM reuses the OS webview and does the heavy lifting in native Rust, so it idles at a few dozen MB and runs file operations at native speed. Because state lives in the core, the UI can be reloaded at any time without losing your session.</p>',
+        fr: '<p>Une app Electron embarque une copie complète de Chromium (~150&nbsp;Mo) et exécute sa logique en JavaScript. BMM réutilise la webview de l\'OS et fait le gros du travail en Rust natif : il tourne au repos à quelques dizaines de Mo et exécute les opérations fichier à vitesse native. Comme l\'état vit dans le cœur, l\'interface peut être rechargée à tout moment sans perdre votre session.</p>',
+      }),
+      devArticle('engine-threads', { en: 'Engine & threads', fr: 'Moteur et threads' }, { en: 'How work is split across threads to keep the UI responsive.', fr: 'Comment le travail est réparti sur les threads pour garder l’UI réactive.' }, 'threads async engine concurrency', {
+        en: '<p>Long jobs never run on the UI thread. A scan or a deploy is handed to a <b>worker</b> that streams progress back, so the interface stays live and cancellable. The very heaviest file operations can even run in a short-lived <b>subprocess</b> whose memory is reclaimed the instant it exits — so a spike or a rare crash there can\'t take the whole app down.</p>',
+        fr: '<p>Les longues tâches ne tournent jamais sur le thread de l\'interface. Un scan ou un déploiement est confié à un <b>worker</b> qui renvoie la progression en flux, pour que l\'interface reste vivante et annulable. Les opérations les plus lourdes peuvent même tourner dans un <b>sous-processus</b> éphémère dont la mémoire est récupérée dès qu\'il se termine — un pic ou un rare plantage là ne peut pas emporter toute l\'app.</p>',
+      }),
+      devArticle('mod-architecture', { en: 'Mod data model', fr: 'Modèle de données des mods' }, { en: 'How a mod, its files and its metadata are represented.', fr: 'Comment un mod, ses fichiers et ses métadonnées sont représentés.' }, 'model data mod files', {
+        en: '<p>A mod is modelled as a set of files — each with a destination path, size, modification time and content hash — plus metadata (name, version, author, source). Everything else in BMM (conflict detection, integrity, sync) reads that model rather than re-walking the disk, which is what makes those operations cheap.</p>',
+        fr: '<p>Un mod est modélisé comme un ensemble de fichiers — chacun avec un chemin de destination, une taille, une date de modification et un hachage de contenu — plus des métadonnées (nom, version, auteur, source). Tout le reste dans BMM (détection de conflits, intégrité, synchro) lit ce modèle au lieu de reparcourir le disque, ce qui rend ces opérations peu coûteuses.</p>',
+      }),
     ],
   },
   {
@@ -304,11 +355,26 @@ const CATEGORIES: Category[] = [
     title: { en: 'Core engine', fr: 'Moteur central' },
     blurb: { en: 'Hashing, integrity, caching and I/O throttling.', fr: 'Hachage, intégrité, cache et limitation d’E/S.' },
     articles: [
-      devArticle('blake3-hashing', { en: 'BLAKE3 hashing', fr: 'Hachage BLAKE3' }, { en: 'The fast content hash behind change detection and integrity.', fr: 'Le hachage de contenu rapide derrière la détection de changement et l’intégrité.' }, 'blake3 hash sha checksum'),
-      devArticle('integrity-engine', { en: 'Integrity engine', fr: 'Moteur d’intégrité' }, { en: 'How every file is verified before it reaches your game.', fr: 'Comment chaque fichier est vérifié avant d’atteindre le jeu.' }, 'integrity verify corrupt intégrité'),
-      devArticle('mtime-cache', { en: 'mtime cache', fr: 'Cache mtime' }, { en: 'Skip re-hashing unchanged files using modification times.', fr: 'Éviter de re-hacher les fichiers inchangés via les dates de modification.' }, 'mtime cache incremental'),
-      devArticle('disk-io-limiter', { en: 'Disk I/O limiter', fr: 'Limiteur d’E/S disque' }, { en: 'Keep the app responsive during big copies.', fr: 'Garder l’app réactive pendant les grosses copies.' }, 'io disk throttle limiter'),
-      devArticle('semantic-search', { en: 'Semantic search', fr: 'Recherche sémantique' }, { en: 'How the fuzzy/synonym search matches what you mean.', fr: 'Comment la recherche floue/synonymes comprend votre intention.' }, 'search semantic fuzzy synonym'),
+      devArticle('blake3-hashing', { en: 'BLAKE3 hashing', fr: 'Hachage BLAKE3' }, { en: 'The fast content hash behind change detection and integrity.', fr: 'Le hachage de contenu rapide derrière la détection de changement et l’intégrité.' }, 'blake3 hash sha checksum', {
+        en: '<p>Every file gets a <b>BLAKE3</b> content fingerprint — a short value that changes completely if a single byte does. BLAKE3 is cryptographically strong and parallelises across CPU cores, so hashing a large mod is limited by your disk, not the algorithm. That one fingerprint powers change detection, integrity checks and server-repo sync alike.</p>',
+        fr: '<p>Chaque fichier reçoit une empreinte de contenu <b>BLAKE3</b> — une valeur courte qui change complètement si un seul octet change. BLAKE3 est cryptographiquement solide et se parallélise sur les cœurs du CPU : hacher un gros mod est limité par votre disque, pas par l\'algorithme. Cette empreinte unique alimente la détection de changement, les contrôles d\'intégrité et la synchro des dépôts.</p>',
+      }),
+      devArticle('integrity-engine', { en: 'Integrity engine', fr: 'Moteur d’intégrité' }, { en: 'How every file is verified before it reaches your game.', fr: 'Comment chaque fichier est vérifié avant d’atteindre le jeu.' }, 'integrity verify corrupt intégrité', {
+        en: '<p>The fingerprint is checked at every boundary: after a download (does it match what the source promised?), before a deploy (is the Library copy still intact?), and during repo sync. A file that doesn\'t match is blocked before it can reach your game — catching corruption that no filename or size check ever would.</p>',
+        fr: '<p>L\'empreinte est vérifiée à chaque frontière : après un téléchargement (correspond-il à ce que la source a promis ?), avant un déploiement (la copie de la Bibliothèque est-elle intacte ?), et pendant la synchro d\'un dépôt. Un fichier qui ne correspond pas est bloqué avant d\'atteindre le jeu — détectant une corruption qu\'aucun contrôle de nom ou de taille ne verrait.</p>',
+      }),
+      devArticle('mtime-cache', { en: 'mtime cache', fr: 'Cache mtime' }, { en: 'Skip re-hashing unchanged files using modification times.', fr: 'Éviter de re-hacher les fichiers inchangés via les dates de modification.' }, 'mtime cache incremental', {
+        en: '<p>Re-hashing gigabytes on every launch would be pointless — almost nothing changes between runs. BMM uses the filesystem\'s modification time and size as a cheap "did this change?" filter, and only re-hashes files that fail it. A warm re-scan therefore reads metadata only and spends real I/O solely on what actually moved.</p>',
+        fr: '<p>Re-hacher des gigaoctets à chaque lancement serait inutile — presque rien ne change entre deux sessions. BMM utilise la date de modification et la taille du système de fichiers comme filtre bon marché « est-ce que ça a changé ? », et ne re-hache que les fichiers qui échouent. Un re-scan à chaud ne lit donc que les métadonnées et ne dépense de vraies E/S que sur ce qui a bougé.</p>',
+      }),
+      devArticle('disk-io-limiter', { en: 'Disk I/O limiter', fr: 'Limiteur d’E/S disque' }, { en: 'Keep the app responsive during big copies.', fr: 'Garder l’app réactive pendant les grosses copies.' }, 'io disk throttle limiter', {
+        en: '<p>Copying at full tilt can peg a drive and make the whole system stutter — BMM included. Copies run through a <b>per-disk rate limiter</b> you set: under the cap they run flat out, near it BMM paces itself so the drive and the app stay responsive. "Smart I/O" also picks the cheapest correct operation — a hard-link when possible (instant, zero bytes copied), a real copy only when it must.</p>',
+        fr: '<p>Copier à fond peut monopoliser un disque et faire saccader tout le système — BMM compris. Les copies passent par un <b>limiteur de débit par disque</b> que vous réglez : sous le plafond elles vont à fond, à l\'approche BMM se régule pour que le disque et l\'app restent réactifs. Le « Smart I/O » choisit aussi l\'opération correcte la moins coûteuse — un lien physique si possible (instantané, zéro octet copié), une vraie copie seulement quand il le faut.</p>',
+      }),
+      devArticle('semantic-search', { en: 'Semantic search', fr: 'Recherche sémantique' }, { en: 'How the fuzzy/synonym search matches what you mean.', fr: 'Comment la recherche floue/synonymes comprend votre intention.' }, 'search semantic fuzzy synonym', {
+        en: '<p>Beyond exact matches, semantic mode expands your query with synonyms and tolerates typos, so "delete" also finds "remove" and "uninstall". Results are scored by how many of the expanded terms they contain, so the closest matches rank first — the same engine powers the docs search and the Ctrl+K command palette.</p>',
+        fr: '<p>Au-delà des correspondances exactes, le mode sémantique étend votre requête avec des synonymes et tolère les fautes de frappe : « supprimer » trouve aussi « retirer » et « désinstaller ». Les résultats sont classés selon le nombre de termes étendus qu\'ils contiennent, donc les plus proches remontent en premier — le même moteur alimente la recherche de la doc et la palette Ctrl+K.</p>',
+      }),
     ],
   },
   {
@@ -316,11 +382,26 @@ const CATEGORIES: Category[] = [
     title: { en: 'Data & sync', fr: 'Données et synchro' },
     blurb: { en: 'Profiles, syncing, resumable downloads and updates.', fr: 'Profils, synchro, téléchargements repris et mises à jour.' },
     articles: [
-      devArticle('profile-system', { en: 'Profile system', fr: 'Système de profils' }, { en: 'How isolated profiles are modelled and switched.', fr: 'Comment les profils isolés sont modélisés et basculés.' }, 'profile system switch'),
-      devArticle('mod-sync', { en: 'Mod sync', fr: 'Synchro des mods' }, { en: 'Reconciling on-disk mods with the index.', fr: 'Réconcilier les mods sur disque avec l’index.' }, 'sync reconcile index'),
-      devArticle('resumable-downloads', { en: 'Resumable downloads', fr: 'Téléchargements repris' }, { en: 'How interrupted downloads pick up where they left off.', fr: 'Comment un téléchargement interrompu reprend où il s’est arrêté.' }, 'download resume range'),
-      devArticle('update-system', { en: 'Update system', fr: 'Système de mise à jour' }, { en: 'How BMM and mods check for and apply updates.', fr: 'Comment BMM et les mods vérifient et appliquent les mises à jour.' }, 'update version release'),
-      devArticle('mod-updates', { en: 'Mod updates', fr: 'Mises à jour des mods' }, { en: 'Detecting and staging new mod versions.', fr: 'Détecter et préparer les nouvelles versions de mods.' }, 'mod update version'),
+      devArticle('profile-system', { en: 'Profile system', fr: 'Système de profils' }, { en: 'How isolated profiles are modelled and switched.', fr: 'Comment les profils isolés sont modélisés et basculés.' }, 'profile system switch', {
+        en: '<p>A profile is a small record — a name, a target folder, and an ordered list of which mods are on. It stores no files, so you can keep a dozen for almost nothing. Switching one reconciles only the <b>difference</b> between the current game folder and the profile\'s list, which is why it\'s instant even with hundreds of mods.</p>',
+        fr: '<p>Un profil est un petit enregistrement — un nom, un dossier cible et une liste ordonnée des mods actifs. Il ne stocke aucun fichier, vous pouvez donc en garder une douzaine pour presque rien. Changer de profil ne réconcilie que la <b>différence</b> entre le dossier du jeu actuel et la liste du profil, d\'où l\'instantanéité même avec des centaines de mods.</p>',
+      }),
+      devArticle('mod-sync', { en: 'Mod sync', fr: 'Synchro des mods' }, { en: 'Reconciling on-disk mods with the index.', fr: 'Réconcilier les mods sur disque avec l’index.' }, 'sync reconcile index', {
+        en: '<p>Sync reconciles what\'s on disk with the index: new files are hashed and added, changed ones re-hashed, missing ones flagged. It\'s incremental (it leans on the mtime cache) and strictly read-only — it builds knowledge, it never rewrites your mods.</p>',
+        fr: '<p>La synchro réconcilie ce qui est sur le disque avec l\'index : les nouveaux fichiers sont hachés et ajoutés, les modifiés re-hachés, les manquants signalés. Elle est incrémentale (elle s\'appuie sur le cache mtime) et strictement en lecture seule — elle construit une connaissance, elle ne réécrit jamais vos mods.</p>',
+      }),
+      devArticle('resumable-downloads', { en: 'Resumable downloads', fr: 'Téléchargements repris' }, { en: 'How interrupted downloads pick up where they left off.', fr: 'Comment un téléchargement interrompu reprend où il s’est arrêté.' }, 'download resume range', {
+        en: '<p>A download records how many bytes it already holds. If it\'s interrupted, it asks the server for the <b>remaining range</b> instead of starting over — so a dropped connection on a large mod costs seconds, not the whole file. The finished file is then hash-verified before it\'s trusted.</p>',
+        fr: '<p>Un téléchargement note combien d\'octets il possède déjà. S\'il est interrompu, il demande au serveur la <b>plage restante</b> au lieu de tout recommencer — une connexion coupée sur un gros mod coûte des secondes, pas le fichier entier. Le fichier terminé est ensuite vérifié par hachage avant d\'être considéré fiable.</p>',
+      }),
+      devArticle('update-system', { en: 'Update system', fr: 'Système de mise à jour' }, { en: 'How BMM and mods check for and apply updates.', fr: 'Comment BMM et les mods vérifient et appliquent les mises à jour.' }, 'update version release', {
+        en: '<p>BMM compares a source\'s published version with what you have and only fetches when they differ. Downloaded updates are hash-verified before they\'re applied, and the app\'s own updates are cryptographically <b>signed</b> and checked — so an intercepted download can\'t install a tampered build.</p>',
+        fr: '<p>BMM compare la version publiée d\'une source avec la vôtre et ne télécharge que si elles diffèrent. Les mises à jour téléchargées sont vérifiées par hachage avant application, et les mises à jour de l\'app elle-même sont <b>signées</b> cryptographiquement et vérifiées — un téléchargement intercepté ne peut pas installer une version altérée.</p>',
+      }),
+      devArticle('mod-updates', { en: 'Mod updates', fr: 'Mises à jour des mods' }, { en: 'Detecting and staging new mod versions.', fr: 'Détecter et préparer les nouvelles versions de mods.' }, 'mod update version', {
+        en: '<p>For each mod with a known source, BMM compares the source\'s latest version to your installed one and stages the new files without disturbing the rest of the profile. You review what changed and apply it — the update is non-destructive like everything else.</p>',
+        fr: '<p>Pour chaque mod ayant une source connue, BMM compare la dernière version de la source à celle installée et prépare les nouveaux fichiers sans toucher au reste du profil. Vous examinez ce qui change et l\'appliquez — la mise à jour est non destructive comme le reste.</p>',
+      }),
     ],
   },
   {
@@ -328,11 +409,26 @@ const CATEGORIES: Category[] = [
     title: { en: 'Extending BMM', fr: 'Étendre BMM' },
     blurb: { en: 'Plugins, the API, MCP, custom pages and catalogs.', fr: 'Plugins, API, MCP, pages personnalisées et catalogues.' },
     articles: [
-      devArticle('mcp-server', { en: 'MCP server & local API', fr: 'Serveur MCP et API locale' }, { en: 'Drive BMM from scripts or an AI client.', fr: 'Piloter BMM depuis des scripts ou un client IA.' }, 'mcp api plugin automation endpoint', ''),
-      devArticle('app-catalog', { en: 'App catalog', fr: 'Catalogue d’applis' }, { en: 'How catalog feeds are fetched and installed.', fr: 'Comment les flux de catalogue sont récupérés et installés.' }, 'catalog feed install'),
-      devArticle('launch-packs', { en: 'Launch packs', fr: 'Launch packs' }, { en: 'Bundling a launchable setup.', fr: 'Regrouper une configuration lançable.' }, 'launch pack bundle'),
-      devArticle('theme-system', { en: 'Theme system', fr: 'Système de thèmes' }, { en: 'How themes and the editor tokenise the UI.', fr: 'Comment les thèmes et l’éditeur tokenisent l’UI.' }, 'theme editor tokens css'),
-      devArticle('one-click-install', { en: 'One-click install', fr: 'Installation en un clic' }, { en: 'The deeplink flow behind install buttons.', fr: 'Le flux deeplink derrière les boutons d’installation.' }, 'deeplink install oneclick'),
+      devArticle('mcp-server', { en: 'MCP server & local API', fr: 'Serveur MCP et API locale' }, { en: 'Drive BMM from scripts or an AI client.', fr: 'Piloter BMM depuis des scripts ou un client IA.' }, 'mcp api plugin automation endpoint', {
+        en: '<p>Everything the UI can do, it does by asking the core. That same core is exposed as a <b>local HTTP API</b> (bound to localhost) and as an <b>MCP server</b> (over stdio, not a public port), so plugins, scripts and AI assistants can scan, activate, build packs and more. The full endpoint reference lives in the online docs.</p>',
+        fr: '<p>Tout ce que l\'interface sait faire, elle le fait en demandant au cœur. Ce même cœur est exposé comme <b>API HTTP locale</b> (sur localhost) et comme <b>serveur MCP</b> (via stdio, pas un port public), donc plugins, scripts et assistants IA peuvent scanner, activer, construire des packs, etc. La référence complète des endpoints est dans la documentation en ligne.</p>',
+      }, ''),
+      devArticle('app-catalog', { en: 'App catalog', fr: 'Catalogue d’applis' }, { en: 'How catalog feeds are fetched and installed.', fr: 'Comment les flux de catalogue sont récupérés et installés.' }, 'catalog feed install', {
+        en: '<p>A catalog is a JSON feed of installable items (apps, tools). BMM fetches it, shows the entries, and installs straight from them — the same pipeline whether the feed is official or community-hosted, and every download is hash-checked before it lands.</p>',
+        fr: '<p>Un catalogue est un flux JSON d\'éléments installables (applis, outils). BMM le récupère, affiche les entrées et installe directement depuis elles — le même pipeline que le flux soit officiel ou communautaire, et chaque téléchargement est vérifié par hachage avant d\'atterrir.</p>',
+      }),
+      devArticle('launch-packs', { en: 'Launch packs', fr: 'Launch packs' }, { en: 'Bundling a launchable setup.', fr: 'Regrouper une configuration lançable.' }, 'launch pack bundle', {
+        en: '<p>A launch pack bundles a ready-to-run setup — the mods, their order and the launch action — into one unit, so a full configuration can be launched (and handed to someone) as a single thing rather than reassembled by hand.</p>',
+        fr: '<p>Un launch pack regroupe une configuration prête à lancer — les mods, leur ordre et l\'action de lancement — en une seule unité, pour qu\'une configuration complète se lance (et se transmette) d\'un bloc au lieu d\'être réassemblée à la main.</p>',
+      }),
+      devArticle('theme-system', { en: 'Theme system', fr: 'Système de thèmes' }, { en: 'How themes tokenise the UI — and how you make your own.', fr: 'Comment les thèmes tokenisent l’UI — et comment créer le vôtre.' }, 'theme editor tokens css couleurs', {
+        en: '<p>The whole UI is drawn from CSS <b>design tokens</b> (colours, radii, fonts). A theme is simply a set of token values, so seven ship by default and the built-in editor lets you change them live. This isn\'t dev-only: <b>you can create and save your own theme</b> and share it — see <em>Themes &amp; appearance</em> in the user guide for the hands-on side.</p>',
+        fr: '<p>Toute l\'interface est dessinée à partir de <b>tokens</b> CSS (couleurs, rayons, polices). Un thème n\'est qu\'un jeu de valeurs de tokens : sept sont livrés par défaut et l\'éditeur intégré permet de les changer en direct. Ce n\'est pas réservé aux devs : <b>vous pouvez créer et enregistrer votre propre thème</b> et le partager — voir <em>Thèmes &amp; apparence</em> dans le guide utilisateur pour la pratique.</p>',
+      }),
+      devArticle('one-click-install', { en: 'One-click install', fr: 'Installation en un clic' }, { en: 'The deeplink flow behind install buttons.', fr: 'Le flux deeplink derrière les boutons d’installation.' }, 'deeplink install oneclick', {
+        en: '<p>Install buttons on the web use a <code>bmm://</code> <b>deeplink</b> the app registers with the OS. Clicking one hands the request to the running app, which confirms with you before acting — so an install is one click, with no copy-pasting URLs and no silent action.</p>',
+        fr: '<p>Les boutons d\'installation sur le web utilisent un <b>deeplink</b> <code>bmm://</code> que l\'app enregistre auprès de l\'OS. Cliquer sur l\'un transmet la requête à l\'app en cours, qui confirme avec vous avant d\'agir — une installation en un clic, sans copier-coller d\'URL ni action silencieuse.</p>',
+      }),
     ],
   },
   {
@@ -340,25 +436,47 @@ const CATEGORIES: Category[] = [
     title: { en: 'Deploy & operations', fr: 'Déploiement et exploitation' },
     blurb: { en: 'Hosting, Docker, security, telemetry and reporting.', fr: 'Hébergement, Docker, sécurité, télémétrie et rapports.' },
     articles: [
-      devArticle('security-system', { en: 'Security model', fr: 'Modèle de sécurité' }, { en: 'Trust boundaries, path guards and signed payloads.', fr: 'Frontières de confiance, gardes de chemins et charges signées.' }, 'security cwe path signing sécurité', ''),
-      devArticle('docker-deployment', { en: 'Docker deployment', fr: 'Déploiement Docker' }, { en: 'Running the community/server pieces in containers.', fr: 'Exécuter les briques communauté/serveur en conteneurs.' }, 'docker deploy container'),
-      devArticle('dedicated-hosting', { en: 'Dedicated hosting', fr: 'Hébergement dédié' }, { en: 'How a hosted repo is served.', fr: 'Comment un dépôt hébergé est servi.' }, 'hosting dedicated server'),
-      devArticle('hosting-flow', { en: 'Hosting flow', fr: 'Flux d’hébergement' }, { en: 'The end-to-end publish → subscribe path.', fr: 'Le chemin complet publier → s’abonner.' }, 'hosting flow publish subscribe'),
-      devArticle('crash-reporting', { en: 'Crash reporting', fr: 'Rapports de plantage' }, { en: 'What a report contains and how it’s built.', fr: 'Ce que contient un rapport et comment il est construit.' }, 'crash report diagnostics'),
-      devArticle('discord-rpc', { en: 'Discord RPC', fr: 'Discord RPC' }, { en: 'Rich presence integration.', fr: 'Intégration de la rich presence.' }, 'discord rpc presence'),
-      devArticle('betahub-reporting', { en: 'BetaHub reporting', fr: 'Rapports BetaHub' }, { en: 'In-app bug reporting pipeline.', fr: 'Pipeline de signalement de bugs intégré.' }, 'betahub bug report'),
+      devArticle('security-system', { en: 'Security model', fr: 'Modèle de sécurité' }, { en: 'Trust boundaries, path guards and signed payloads.', fr: 'Frontières de confiance, gardes de chemins et charges signées.' }, 'security cwe path signing sécurité', {
+        en: '<p>BMM treats the UI and anything from the network as <b>untrusted</b> and verifies at the core. Path operations reject <code>..</code> / absolute escapes and stay confined to their target folder; downloads are hash-checked before deploy; app and package updates must pass a <b>signature</b> check. Extensions are confined too — custom pages via a permission broker, MCP over stdio, the API on localhost.</p>',
+        fr: '<p>BMM considère l\'interface et tout ce qui vient du réseau comme <b>non fiable</b> et vérifie au cœur. Les opérations de chemin rejettent <code>..</code> / les échappements absolus et restent confinées à leur dossier cible ; les téléchargements sont vérifiés par hachage avant déploiement ; les mises à jour de l\'app et des paquets doivent passer un contrôle de <b>signature</b>. Les extensions sont aussi confinées — pages perso via un courtier de permissions, MCP via stdio, API sur localhost.</p>',
+      }, ''),
+      devArticle('docker-deployment', { en: 'Docker deployment', fr: 'Déploiement Docker' }, { en: 'Running the community/server pieces in containers.', fr: 'Exécuter les briques communauté/serveur en conteneurs.' }, 'docker deploy container', {
+        en: '<p>The community and server-side pieces (the web hub, repo hosting) run as containers via Docker Compose, so a host can bring the whole stack up reproducibly and update it in place. This is for people self-hosting the infrastructure, not for using BMM itself.</p>',
+        fr: '<p>Les briques communauté et côté serveur (le hub web, l\'hébergement de dépôts) tournent en conteneurs via Docker Compose : un hébergeur peut monter toute la stack de façon reproductible et la mettre à jour sur place. C\'est pour ceux qui auto-hébergent l\'infrastructure, pas pour utiliser BMM lui-même.</p>',
+      }),
+      devArticle('dedicated-hosting', { en: 'Dedicated hosting', fr: 'Hébergement dédié' }, { en: 'How a hosted repo is served.', fr: 'Comment un dépôt hébergé est servi.' }, 'hosting dedicated server', {
+        en: '<p>A hosted repo serves a <b>manifest</b> (files + their hashes) and the files themselves. A client diffs the manifest against what it already has and pulls only the difference, verifying each transferred file by hash — which is why a small update to a huge collection costs a few MB.</p>',
+        fr: '<p>Un dépôt hébergé sert un <b>manifeste</b> (fichiers + leurs hachages) et les fichiers eux-mêmes. Un client compare le manifeste à ce qu\'il possède déjà et ne tire que la différence, en vérifiant chaque fichier transféré par hachage — d\'où le coût de quelques Mo pour une petite mise à jour d\'une énorme collection.</p>',
+      }),
+      devArticle('hosting-flow', { en: 'Hosting flow', fr: 'Flux d’hébergement' }, { en: 'The end-to-end publish → subscribe path.', fr: 'Le chemin complet publier → s’abonner.' }, 'hosting flow publish subscribe', {
+        en: '<p>Publishing turns a profile into a repo with a manifest and access rules; subscribing points a client at its link, which then diffs and syncs and stays in sync as the owner updates. This is the end-to-end path from one person\'s setup to a whole group running the exact same thing.</p>',
+        fr: '<p>Publier transforme un profil en dépôt avec un manifeste et des règles d\'accès ; s\'abonner pointe un client sur son lien, qui compare, synchronise et reste synchronisé à mesure que le propriétaire met à jour. C\'est le chemin complet, de la configuration d\'une personne à tout un groupe faisant exactement la même chose.</p>',
+      }),
+      devArticle('crash-reporting', { en: 'Crash reporting', fr: 'Rapports de plantage' }, { en: 'What a report contains and how it’s built.', fr: 'Ce que contient un rapport et comment il est construit.' }, 'crash report diagnostics', {
+        en: '<p>On a crash BMM writes a self-contained zip — logs, system info, and the rolling session recording — that you can review and share. A clean exit writes a lighter session log; the expensive parts (a full system snapshot, the recording) are collected only for real crashes, so closing the app stays fast.</p>',
+        fr: '<p>En cas de plantage, BMM écrit un zip autonome — journaux, infos système et l\'enregistrement de session glissant — que vous pouvez relire et partager. Une fermeture propre écrit un journal plus léger ; les parties coûteuses (instantané système complet, enregistrement) ne sont collectées que pour de vrais plantages, pour que fermer l\'app reste rapide.</p>',
+      }),
+      devArticle('discord-rpc', { en: 'Discord RPC', fr: 'Discord RPC' }, { en: 'Rich presence integration.', fr: 'Intégration de la rich presence.' }, 'discord rpc presence', {
+        en: '<p>BMM can show your current activity as Discord <b>rich presence</b>, updating as you switch profiles or work. It\'s an optional integration you turn on in Settings — off by default, and it sends only the activity text you\'d expect.</p>',
+        fr: '<p>BMM peut afficher votre activité en cours en <b>rich presence</b> Discord, mise à jour quand vous changez de profil ou travaillez. C\'est une intégration optionnelle activée dans les Réglages — désactivée par défaut, et elle n\'envoie que le texte d\'activité attendu.</p>',
+      }),
+      devArticle('betahub-reporting', { en: 'BetaHub reporting', fr: 'Rapports BetaHub' }, { en: 'In-app bug reporting pipeline.', fr: 'Pipeline de signalement de bugs intégré.' }, 'betahub bug report', {
+        en: '<p>The in-app bug reporter packages your description plus context — and optionally a session recording — and sends it through the BetaHub pipeline, so a report arrives with enough to reproduce the issue instead of a bare "it broke".</p>',
+        fr: '<p>Le rapporteur de bugs intégré empaquette votre description plus le contexte — et éventuellement un enregistrement de session — et l\'envoie via le pipeline BetaHub, pour qu\'un rapport arrive avec de quoi reproduire le problème au lieu d\'un simple « ça a planté ».</p>',
+      }),
     ],
   },
 ];
 
-// A compact factory for the Dev "diagram articles": concept intro + open-diagram + full-docs.
-// (Depth lives in the diagram itself and the mkdocs site, so these stay short by design.)
-function devArticle(diagramId: string, title: L, summary: L, keywords: string, docsPath = '#'): Article {
+// Factory for the Dev articles. Each carries a REAL explanation (`body`); we only append a short
+// pointer to the matching interactive diagram — never a placeholder, and never a repeat of the
+// summary shown above the article.
+function devArticle(diagramId: string, title: L, summary: L, keywords: string, body: L, docsPath = '#'): Article {
   return {
     id: diagramId, title, summary, diagram: diagramId, docsPath: docsPath === '#' ? undefined : docsPath, keywords,
     body: {
-      en: `<p>${summary.en}</p><p>Open the interactive diagram to explore the flow — pan, zoom and hover each node for a live explanation. For the full technical write-up, see the online documentation.</p>`,
-      fr: `<p>${summary.fr}</p><p>Ouvrez le diagramme interactif pour explorer le flux — déplacez, zoomez et survolez chaque nœud pour une explication en direct. Pour l’analyse technique complète, voir la documentation en ligne.</p>`,
+      en: `${body.en}<p class="dh-diagnote">Open the interactive diagram (button below) to follow this step by step — pan, zoom and hover each node.</p>`,
+      fr: `${body.fr}<p class="dh-diagnote">Ouvrez le diagramme interactif (bouton ci-dessous) pour suivre étape par étape — déplacez, zoomez et survolez chaque nœud.</p>`,
     },
   };
 }

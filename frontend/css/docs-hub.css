@@ -157,6 +157,7 @@
 .dh-content li::before { content: ""; position: absolute; left: 4px; top: 9px; width: 6px; height: 6px; border-radius: 50%; background: var(--bmm-accent, #3b82f6); }
 .dh-content b { color: var(--bmm-text-primary, #e6edf3); font-weight: 700; }
 .dh-content code { font-family: var(--bmm-font-mono, ui-monospace, monospace); font-size: .9em; padding: 1px 6px; border-radius: 6px; background: var(--bmm-bg-base, #0f1420); border: 1px solid var(--bmm-border, #2a3242); }
+.dh-content .dh-diagnote { font-size: 12.5px; color: var(--bmm-text-muted, #7c8698); font-style: italic; margin-top: 14px; }
 
 /* related-action buttons under an article */
 .dh-rels { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--bmm-border, #2a3242); }

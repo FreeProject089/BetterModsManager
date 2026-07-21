@@ -33,6 +33,7 @@ interface StudioState {
   frame: Rect;
   hideSelectors: string[]; // user-chosen selectors to exclude from the recording
   picking: boolean;        // element-picker active (for "hide this element")
+  showStudios: boolean;    // include the studio panels themselves in the recording (default: no)
 }
 
 let S: StudioState | null = null;
@@ -202,6 +203,17 @@ function applyHideSelectors() {
   if (S.recording) setExtraBlockSelectors(S.hideSelectors);
 }
 
+// Toggle whether BOTH studio panels count as recordable. The studios normally carry
+// `bmm-no-record` (the recorder blocks them); when the user opts to SHOW them in the rec we strip
+// those markers so rrweb captures them as real content, and restore them afterwards so the next
+// (telemetry) recording excludes them again.
+function markStudioRecordable(recordable: boolean) {
+  document.querySelectorAll('.rstudio-bar, .rstudio-frame, .anim-panel').forEach((el) => {
+    if (recordable) { el.classList.remove('bmm-no-record'); el.removeAttribute('data-bmm-no-record'); }
+    else { el.classList.add('bmm-no-record'); el.setAttribute('data-bmm-no-record', '1'); }
+  });
+}
+
 // ── recording lifecycle ──
 export async function studioStart() {
   if (!S || S.recording) return;
@@ -218,10 +230,11 @@ export async function studioStart() {
   // then exclude the studio overlays + any user-chosen selectors from the very first snapshot.
   try { await loadRrweb(); } catch { /* ignore */ }
   await setExtraBlockSelectors(S.hideSelectors);
-  hideNoRecord(true);
+  markStudioRecordable(!!S.showStudios);
+  if (!S.showStudios) hideNoRecord(true);
   await subscribeReplay(listener);
   await takeSnapshot();          // seed the buffer with a self-contained full snapshot
-  hideNoRecord(false);           // reveal — a blocked-element mutation, ignored by the recorder
+  if (!S.showStudios) hideNoRecord(false); // reveal — a blocked-element mutation, ignored by the recorder
   pushRegion();                  // initial frame keyframe
   renderFrame();
   renderBar();
@@ -247,6 +260,7 @@ export async function studioStop() {
   S.recording = false; S.paused = false;
   if (listener) { await unsubscribeReplay(listener); listener = null; }
   await setExtraBlockSelectors([]);  // restore the shared recorder (e.g. telemetry) to base blocking
+  markStudioRecordable(false);       // studios excluded again for any later (telemetry) recording
   renderFrame();
   renderBar();                   // switches the bar to the review/export state
 }
@@ -334,8 +348,9 @@ function renderBar() {
   const showHide = rec || S.events.length < 2;
   const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   const chips = S.hideSelectors.map((s) => `<span class="rstudio-chip" title="${esc(s)}">${esc(s)}<button data-act="unhide" data-sel="${esc(s)}" aria-label="remove">✕</button></span>`).join('');
+  const studioToggle = `<label class="rstudio-showstudios" title="${t('rstudio.showstudios.tip') || 'Include the Replay/Animation Studio panels in the recording'}"><input type="checkbox" data-act="showstudios" ${S.showStudios ? 'checked' : ''} ${rec ? 'disabled' : ''}> ${t('rstudio.showstudios') || 'Show studios in rec'}</label>`;
   const hideRow = showHide
-    ? `<div class="rstudio-hide"><span class="rstudio-hide-lbl">${t('rstudio.hidden') || 'Hidden'}:</span>${chips || `<span class="rstudio-hide-none">${t('rstudio.hidden.none') || 'nothing'}</span>`}<button class="rstudio-btn rstudio-mini ${S.picking ? 'rstudio-primary' : ''}" data-act="pick-hide">${S.picking ? (t('rstudio.pick.active') || 'Click one…') : '＋ ' + (t('rstudio.pick') || 'Hide element')}</button></div>`
+    ? `<div class="rstudio-hide"><span class="rstudio-hide-lbl">${t('rstudio.hidden') || 'Hidden'}:</span>${chips || `<span class="rstudio-hide-none">${t('rstudio.hidden.none') || 'nothing'}</span>`}<button class="rstudio-btn rstudio-mini ${S.picking ? 'rstudio-primary' : ''}" data-act="pick-hide">${S.picking ? (t('rstudio.pick.active') || 'Click one…') : '＋ ' + (t('rstudio.pick') || 'Hide element')}</button>${studioToggle}</div>`
     : '';
   bar.innerHTML = `<div class="rstudio-main"><div class="rstudio-title">${t('rstudio.title') || 'Replay Studio'}</div>${controls}<button class="rstudio-btn rstudio-x" data-act="close">✕</button></div>${hideRow}`;
 }
@@ -369,10 +384,16 @@ function onBarClick(e: Event) {
 }
 function onBarChange(e: Event) {
   const el = e.target as HTMLElement;
-  if (!S || el.getAttribute('data-act') !== 'preset') return;
-  S.preset = (el as HTMLSelectElement).value as Preset;
-  S.frame = presetRect(S.preset);
-  renderFrame();
+  if (!S) return;
+  const act = el.getAttribute('data-act');
+  if (act === 'preset') {
+    S.preset = (el as HTMLSelectElement).value as Preset;
+    S.frame = presetRect(S.preset);
+    renderFrame();
+  } else if (act === 'showstudios') {
+    // Only changeable before recording (the checkbox is disabled while recording).
+    S.showStudios = (el as HTMLInputElement).checked;
+  }
 }
 
 // Self-contained styles (injected once) so the studio doesn't depend on the build's CSS.
@@ -390,6 +411,8 @@ function ensureStyles() {
   .rstudio-hide{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding-top:7px;border-top:1px solid #2a2f3a;}
   .rstudio-hide-lbl{font-weight:700;opacity:.7;font-size:11px;text-transform:uppercase;letter-spacing:.04em;}
   .rstudio-hide-none{opacity:.5;font-weight:500;font-size:12px;}
+  .rstudio-showstudios{display:inline-flex;align-items:center;gap:6px;margin-left:auto;font-size:11.5px;font-weight:600;opacity:.85;cursor:pointer;white-space:nowrap;}
+  .rstudio-showstudios input{cursor:pointer;}
   .rstudio-chip{display:inline-flex;align-items:center;gap:5px;background:#0d1117;border:1px solid #2a2f3a;border-radius:999px;
     padding:2px 4px 2px 9px;font:600 11px/1.4 ui-monospace,monospace;max-width:200px;}
   .rstudio-chip>span,.rstudio-chip{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
@@ -423,7 +446,7 @@ function ensureStyles() {
 export function openReplayStudio() {
   ensureStyles();
   if (bar) { bar.style.display = 'flex'; return; }
-  S = { recording: false, paused: false, events: [], regions: [], pauses: [], startTs: 0, pauseStart: 0, preset: 'fullscreen', frame: presetRect('fullscreen'), hideSelectors: [], picking: false };
+  S = { recording: false, paused: false, events: [], regions: [], pauses: [], startTs: 0, pauseStart: 0, preset: 'fullscreen', frame: presetRect('fullscreen'), hideSelectors: [], picking: false, showStudios: false };
   bar = document.createElement('div');
   bar.className = 'rstudio-bar bmm-no-record';
   bar.setAttribute('data-bmm-no-record', '1');
@@ -436,6 +459,7 @@ export function openReplayStudio() {
 export function closeReplayStudio() {
   if (S?.recording && listener) { unsubscribeReplay(listener); listener = null; }
   setExtraBlockSelectors([]);   // never leave studio-only block rules on the shared recorder
+  markStudioRecordable(false);
   hideNoRecord(false);
   removeFrame();
   bar?.remove(); bar = null;
