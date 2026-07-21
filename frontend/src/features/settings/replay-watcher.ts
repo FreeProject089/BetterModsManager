@@ -101,6 +101,11 @@ export async function startWatcher(): Promise<void> {
     }
     _chunks[_chunks.length - 1].push(ev);
     if (_chunks.length > 3) _chunks.shift(); // keep max ~6 minutes
+    // Hard cap on retained events regardless of chunk boundaries: a very active session — or a
+    // burst of DOM churn — can bloat a single chunk between the 2-min checkouts and grow memory
+    // without bound. Drop whole (self-contained) oldest chunks until back under budget.
+    let total = 0; for (const c of _chunks) total += c.length;
+    while (total > 24000 && _chunks.length > 1) { total -= (_chunks.shift() as any[]).length; }
   }) as ReplaySubscriber;
   _listener.requiresMasking = !watcherFull();
 

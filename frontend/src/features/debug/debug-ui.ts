@@ -113,6 +113,11 @@ class DebugUI {
 
         const div = document.createElement('div');
         div.id = 'bmm-debug-overlay';
+        // Keep the whole DevTools overlay OUT of the session recorder. It re-renders constantly
+        // (logs, IPC, metrics) and open/close churns a huge DOM — recording all of that was a
+        // major source of memory growth (and could OOM the webview on repeated open/close).
+        div.classList.add('bmm-no-record');
+        div.setAttribute('data-bmm-no-record', '1');
         div.innerHTML = `
             <div class="debug-header">
                 <div class="debug-title">
@@ -364,7 +369,7 @@ class DebugUI {
 
         // Modal components
         const modalOverlay = document.createElement('div'); // Declare modalOverlay here
-        modalOverlay.className = 'debug-modal-overlay';
+        modalOverlay.className = 'debug-modal-overlay bmm-no-record';
         modalOverlay.innerHTML = `
             <div id="debug-modal-content" class="debug-modal-content">
                 <h3 id="debug-modal-title" style="margin:0 0 12px 0; font-size:18px; color:var(--text-primary); font-weight:800" data-i18n="dev.modal.confirmTitle">Confirm Action</h3>
@@ -386,7 +391,7 @@ class DebugUI {
 
         // Create Crash Overlay
         const crashDiv = document.createElement('div');
-        crashDiv.className = 'debug-crash-overlay';
+        crashDiv.className = 'debug-crash-overlay bmm-no-record';
         crashDiv.innerHTML = `
             <div style="background: radial-gradient(circle at center, rgba(239, 68, 68, 0.15) 0%, transparent 70%); position: absolute; top:0; left:0; right:0; bottom:0; z-index:-1; pointer-events:none;"></div>
             <img src="assets/Tasky.png" style="width:120px; height:auto; filter: grayscale(1) contrast(2) brightness(0.6) sepia(1) hue-rotate(-50deg) drop-shadow(0 0 30px rgba(239, 68, 68, 0.3)); margin-bottom:32px; opacity:0.8; animation: pulse-tasky 4s infinite;">

@@ -51,6 +51,9 @@ async function resolveImg(src: string): Promise<string> {
   let d = '';
   if (isAssetUrl(src)) { if (_full) { try { d = (await invoke('replay_asset_data_url', { url: src })) as string || ''; } catch { /* ignore */ } } }
   else if (isAppAsset(src)) d = await fetchDataUrl(src);
+  // Bound the cache — each entry can be a multi-hundred-KB data URL, and a long session would
+  // otherwise retain every image it ever saw. Evict oldest (insertion order) past the cap.
+  if (_assetCache.size >= 160) { const first = _assetCache.keys().next().value; if (first !== undefined) _assetCache.delete(first); }
   _assetCache.set(src, d);
   return d;
 }

@@ -124,9 +124,11 @@ class DebugHub {
     }
 
     recordLog(level: string, args: any[]): void {
-        const message = args.map((arg: any) => 
+        let message = args.map((arg: any) =>
             typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
         ).join(' ');
+        // A single logged object can be enormous; never retain more than a few KB per line.
+        if (message.length > 4000) message = message.slice(0, 4000) + `…(+${message.length - 4000} chars)`;
 
         const item: LogItem = { level, message, id: Math.random().toString(36).substr(2, 9) };
         this.logs.push(item);
@@ -135,16 +137,34 @@ class DebugHub {
         this.emit('log', item);
     }
 
+    // Shrink a value before it's stored in a debug buffer, so the panel never RETAINS a
+    // multi-MB payload. The session `content` string passed to save_crash_session/
+    // save_local_replay used to be held (by reference) across up to maxItems IPC records —
+    // every 45s flush leaked another copy, which could OOM the webview. Truncates long strings,
+    // caps arrays, and flattens nested objects.
+    private _slim(v: any, maxStr = 1500): any {
+        if (typeof v === 'string') return v.length > maxStr ? v.slice(0, maxStr) + `…(+${v.length - maxStr} chars)` : v;
+        if (v == null || typeof v !== 'object') return v;
+        if (Array.isArray(v)) return v.length > 40 ? [`…${v.length} items`] : v.map((x) => this._slim(x, 400));
+        const out: Record<string, unknown> = {};
+        for (const k of Object.keys(v)) { const val = (v as any)[k]; out[k] = (val && typeof val === 'object') ? '[object]' : this._slim(val, 600); }
+        return out;
+    }
+
     recordIPC(command: string, args: Record<string, unknown>, status: string = 'pending', result: unknown = null, duration: number = 0): IPCCall {
-        let call = this.ipcCalls.find(c => c.command === command && c.args === args && c.status === 'pending');
-        
+        // Match the most recent still-pending call for this command (we can no longer match by
+        // `args` reference — a slimmed copy is stored to avoid retaining huge payloads).
+        let call: IPCCall | undefined;
+        for (let i = this.ipcCalls.length - 1; i >= 0; i--) {
+            if (this.ipcCalls[i].command === command && this.ipcCalls[i].status === 'pending') { call = this.ipcCalls[i]; break; }
+        }
         if (!call) {
-            call = { 
+            call = {
                 id: Math.random().toString(36).substr(2, 9),
-                command, 
-                args, 
-                status, 
-                result, 
+                command,
+                args: this._slim(args) as Record<string, unknown>,
+                status,
+                result: this._slim(result),
                 duration,
                 timestamp: Date.now()
             };
@@ -152,7 +172,7 @@ class DebugHub {
             if (this.ipcCalls.length > this.maxItems) this.ipcCalls.shift();
         } else {
             call.status = status;
-            call.result = result;
+            call.result = this._slim(result);
             call.duration = duration;
         }
 
@@ -176,6 +196,7 @@ class DebugHub {
         }
         
         this.patches.push(patch);
+        if (this.patches.length > this.maxItems) this.patches.shift();
         this.emit('patches', this.patches);
         this.recordAction('PATCH_APPLY', { tagName: 'PATCH', id: id }, type);
         return id;
