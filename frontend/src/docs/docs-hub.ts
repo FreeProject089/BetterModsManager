@@ -155,6 +155,16 @@ Changer de profil ne re-lie que ce qui a changé : instantané même avec de gra
           fr: '<p>Le premier scan lit votre dossier de mods et construit un index — noms, versions, tailles et un hachage de contenu par fichier.</p><ul><li>Les re-scans sont <b>incrémentaux</b> : seuls les fichiers modifiés sont re-hachés.</li><li>Tout élément non reconnu est listé pour le nommer ou le mapper.</li><li>Le scan est en lecture seule — il ne modifie jamais vos fichiers.</li></ul>',
         },
       },
+      {
+        id: 'staying-updated', diagram: 'update-system',
+        title: { en: 'Staying up to date', fr: 'Rester à jour' },
+        summary: { en: 'How BMM and your mods keep current — safely.', fr: 'Comment BMM et vos mods restent à jour — en toute sécurité.' },
+        keywords: 'update updates version upgrade current mise à jour mettre',
+        body: {
+          en: '<p>BMM checks for new versions of itself and of any mod with a known source, and only fetches when something actually changed.</p><ul><li><b>Mods</b> — when an update is available BMM stages the new files and lets you review before applying; nothing is forced, and the rest of your profile is untouched.</li><li><b>The app</b> — its own updates are cryptographically <b>signed</b> and checked before installing, so a tampered build can’t sneak in.</li><li>Want it hands-off? The <b>Scheduler</b> can run update checks on a timer.</li></ul><p>Curious how the check works? See <b>Developer → Update system</b>.</p>',
+          fr: '<p>BMM vérifie les nouvelles versions de lui-même et de tout mod ayant une source connue, et ne télécharge que si quelque chose a réellement changé.</p><ul><li><b>Les mods</b> — quand une mise à jour est dispo, BMM prépare les nouveaux fichiers et vous laisse vérifier avant d’appliquer ; rien n’est forcé, et le reste du profil n’est pas touché.</li><li><b>L’app</b> — ses propres mises à jour sont <b>signées</b> cryptographiquement et vérifiées avant installation, donc une version altérée ne peut pas se glisser.</li><li>Vous voulez que ce soit automatique ? Le <b>Planificateur</b> peut lancer les vérifs à intervalle régulier.</li></ul><p>Curieux du fonctionnement ? Voir <b>Développeur → Système de mise à jour</b>.</p>',
+        },
+      },
     ],
   },
   {
@@ -208,7 +218,7 @@ Changer de profil ne re-lie que ce qui a changé : instantané même avec de gra
   {
     id: 'profiles', part: 'user', icon: 'save',
     title: { en: 'Profiles & backups', fr: 'Profils et sauvegardes' },
-    blurb: { en: 'Isolated setups, shared storage and safety nets.', fr: 'Configurations isolées, stockage partagé et filets de sécurité.' },
+    blurb: { en: 'Isolated setups, shared storage, backups and launch packs.', fr: 'Configurations isolées, stockage partagé, sauvegardes et launch packs.' },
     articles: [
       {
         id: 'shared-storage', diagram: 'profile-customization',
@@ -228,6 +238,16 @@ Changer de profil ne re-lie que ce qui a changé : instantané même avec de gra
         body: {
           en: '<p>Take a snapshot before a big change. If something goes wrong, restore the profile exactly how it was — mods, order and choices included.</p>',
           fr: '<p>Prenez un instantané avant un grand changement. En cas de problème, restaurez le profil exactement comme il était — mods, ordre et choix compris.</p>',
+        },
+      },
+      {
+        id: 'launch-packs', diagram: 'launch-packs',
+        title: { en: 'Launch packs', fr: 'Launch packs' },
+        summary: { en: 'Bundle a ready-to-run setup — mods, order and launch — into one thing.', fr: 'Regroupez une configuration prête à lancer — mods, ordre et lancement — en une seule chose.' },
+        keywords: 'launch pack bundle run start launcher lançable',
+        body: {
+          en: '<p>A <b>launch pack</b> captures a whole ready-to-run setup — the mods, their order, and the action that launches the game — as a single unit. It’s handy when you want to jump straight in, or hand a friend a configuration they can run without reassembling it by hand.</p><p>Curious how it’s bundled? See <b>Developer → Launch packs</b>.</p>',
+          fr: '<p>Un <b>launch pack</b> capture toute une configuration prête à lancer — les mods, leur ordre, et l’action qui lance le jeu — en une seule unité. Pratique pour démarrer directement, ou pour donner à un ami une configuration qu’il peut lancer sans la réassembler à la main.</p><p>Curieux de l’assemblage ? Voir <b>Développeur → Launch packs</b>.</p>',
         },
       },
     ],
@@ -268,7 +288,7 @@ Changer de profil ne re-lie que ce qui a changé : instantané même avec de gra
   {
     id: 'power', part: 'user', icon: 'bolt',
     title: { en: 'Power features', fr: 'Fonctions avancées' },
-    blurb: { en: 'Themes, custom pages, scheduler and benchmarks.', fr: 'Thèmes, pages personnalisées, planificateur et benchmarks.' },
+    blurb: { en: 'Themes, plugins & API, custom pages, integrations, scheduler.', fr: 'Thèmes, plugins & API, pages personnalisées, intégrations, planificateur.' },
     articles: [
       {
         id: 'themes', diagram: 'theme-system',
@@ -281,13 +301,33 @@ Changer de profil ne re-lie que ce qui a changé : instantané même avec de gra
         },
       },
       {
+        id: 'plugins', diagram: 'mcp-server', docsPath: '',
+        title: { en: 'Plugins & the API', fr: 'Plugins et API' },
+        summary: { en: 'Add features BMM doesn’t ship — and automate it from scripts or an AI assistant.', fr: 'Ajoutez des fonctions que BMM ne fournit pas — et automatisez-le depuis des scripts ou une IA.' },
+        keywords: 'plugin api mcp automation script install extend plugins étendre',
+        body: {
+          en: '<p>Not everything is built in — and it doesn’t have to be. The <b>Plugins &amp; API</b> screen lets you install plugins that add new features, and add plugin sources so you can find more.</p><ul><li><b>Install a plugin</b> from a catalog or a file; enable or disable it any time.</li><li>Power users: BMM also exposes a <b>local API</b> and an <b>MCP server</b>, so scripts — or an AI assistant — can drive it (scan, activate, build packs…).</li></ul><p>Curious how that works? See <b>Developer → MCP server &amp; local API</b>, or the full endpoint reference in the online docs.</p>',
+          fr: '<p>Tout n’est pas intégré — et ça n’a pas à l’être. L’écran <b>Plugins &amp; API</b> vous laisse installer des plugins qui ajoutent des fonctions, et ajouter des sources de plugins pour en trouver d’autres.</p><ul><li><b>Installez un plugin</b> depuis un catalogue ou un fichier ; activez-le ou désactivez-le quand vous voulez.</li><li>Utilisateurs avancés : BMM expose aussi une <b>API locale</b> et un <b>serveur MCP</b>, pour que des scripts — ou une IA — le pilotent (scanner, activer, construire des packs…).</li></ul><p>Curieux du fonctionnement ? Voir <b>Développeur → Serveur MCP et API locale</b>, ou la référence complète des endpoints dans la doc en ligne.</p>',
+        },
+      },
+      {
         id: 'custom-pages', diagram: 'premium-interactions',
         title: { en: 'Custom pages', fr: 'Pages personnalisées' },
         summary: { en: 'Add your own sandboxed pages to the navbar.', fr: 'Ajoutez vos propres pages sandbox à la barre de navigation.' },
         keywords: 'custom pages navbar bmmpage sandbox pages personnalisées',
         body: {
-          en: '<p>Build a sandboxed <code>bmmpage://</code> page — a mini app inside BMM — and pin it to the navbar with scoped permissions.</p>',
-          fr: '<p>Créez une page <code>bmmpage://</code> en sandbox — une mini-application dans BMM — et épinglez-la à la barre de navigation avec des permissions cadrées.</p>',
+          en: '<p>Build a sandboxed <code>bmmpage://</code> page — a mini app inside BMM — and pin it to the navbar. Each page only gets the permissions you grant it, so it can’t reach anything you didn’t allow. Great for a personal dashboard, a launcher, or a tool the community shares.</p><p>Curious how the sandbox works? See <b>Developer → Extending BMM</b>.</p>',
+          fr: '<p>Créez une page <code>bmmpage://</code> en sandbox — une mini-application dans BMM — et épinglez-la à la barre de navigation. Chaque page n’obtient que les permissions que vous accordez, elle ne peut donc rien atteindre que vous n’avez pas autorisé. Idéal pour un tableau de bord perso, un lanceur, ou un outil partagé par la communauté.</p><p>Curieux du fonctionnement du sandbox ? Voir <b>Développeur → Étendre BMM</b>.</p>',
+        },
+      },
+      {
+        id: 'integrations', diagram: 'discord-rpc',
+        title: { en: 'Discord & integrations', fr: 'Discord et intégrations' },
+        summary: { en: 'Show what you’re doing on Discord, and other optional hooks.', fr: 'Affichez votre activité sur Discord, et autres intégrations optionnelles.' },
+        keywords: 'discord rpc rich presence integration integrations intégration',
+        body: {
+          en: '<p>BMM can display your current activity as <b>Discord rich presence</b> — updating as you switch profiles or work. It’s optional and off by default; turn it on in <b>Settings</b>. Only the activity text you’d expect is ever sent.</p>',
+          fr: '<p>BMM peut afficher votre activité en cours en <b>rich presence Discord</b> — mise à jour quand vous changez de profil ou travaillez. C’est optionnel et désactivé par défaut ; activez-le dans les <b>Réglages</b>. Seul le texte d’activité attendu est envoyé.</p>',
         },
       },
       {
