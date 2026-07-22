@@ -175,6 +175,7 @@ Transformez BMM en serveur web pour héberger vos mods et permettre la synchroni
 | **Vérification de Sécurité** | Chaque fichier téléchargé est vérifié par rapport à son hachage cryptographique avant l'installation. |
 | **Support Tunnels** | Support intégré pour le partage local (LAN) et public via UPnP ou redirection de port manuelle. |
 | **Browse des serveurs vérifiés** | Le navigateur public de serveurs n'affiche que les dépôts portant un champ `hash` validé dans `repos.json`. Chaque serveur listé affiche un badge vert "Verified". |
+| **Mot de passe de téléchargement (optionnel)** | L'hôte peut exiger un mot de passe côté abonnés : défini à la génération du serveur, demandé une fois aux abonnés (envoyé en `X-Repo-Password`, mémorisé pour les synchros suivantes). Vide = dépôt ouvert. Distinct du mot de passe admin, qui ne protège que le panneau d'admin de l'hôte. |
 
 ---
 
@@ -616,6 +617,39 @@ Un outil intégré (Paramètres → Bac à sable de traduction) qui permet à n'
 
 - Un **Hub de tutoriels** guidé pas à pas qui accompagne les nouveaux utilisateurs dans
   les principaux workflows de l'app, en complément de l'onboarding au premier lancement.
+
+---
+
+## 54. Palette de commandes & raccourcis réassignables (v1.0.0+)
+
+Une seule barre de recherche sur toute l'app : appuyez sur **Ctrl/⌘+K** n'importe où.
+
+| Fonctionnalité | Description |
+| :--- | :--- |
+| **Aller partout** | Sautez sur n'importe quel écran — y compris vos pages de navbar personnalisées, détectées en direct. |
+| **Lancer des actions** | Ajouter un mod, scanner, vérifier l'intégrité, importer des profils (OvGME/OMM), piloter toute la surface Dépôt Serveur (sync/host, générer un serveur, start/stop, monitoring, copier l'ID créateur), vérifier les mises à jour, ouvrir les stats de stockage/hachage. |
+| **Deux modes de recherche** | Classique (littéral) et **Sémantique** — étendue par synonymes : « mise à jour » trouve aussi « upgrade / nouvelle version ». |
+| **Tout réassigner** | Réglages → Raccourcis clavier liste chaque commande : enregistrez une combinaison, revenez au défaut, ou effacez ; les conflits sont signalés. Les pages perso ont aussi leurs raccourcis. |
+
+## 55. Confidentialité, télémétrie & mode hors ligne (v1.0.0+)
+
+| Fonctionnalité | Description |
+| :--- | :--- |
+| **Télémétrie strictement opt-in** | Rien n'est collecté avant l'acceptation explicite de la boîte de consentement ; refuser efface tout tampon. |
+| **Ce qui part** | Pages, clics (libellés seulement — jamais les valeurs tapées), échantillons de perf, erreurs, un profil matériel anonyme. Pas de chemins, pas de contenu de mods, pas d'identité. |
+| **Replay de session masqué** | Replay rrweb optionnel avec noms de mods/profils et chemins rendus en •••• ; le démasquage est un interrupteur séparé et explicite. |
+| **Pipeline local-first** | Les événements s'accumulent dans un fichier local plafonné à 10 Mo ; l'envoi se fait en lots gzip via HTTPS uniquement. Pas d'endpoint configuré = les données ne quittent jamais la machine. |
+| **Contrôles RGPD** | Exportez le tampon brut ; consultez chaque paquet envoyé (noms/comptes d'événements seulement) et demandez sa suppression, honorée sous 72 h. |
+| **Mode hors ligne** | Vraies sondes de connectivité (pas juste le drapeau OS) ; bandeau discret, fonctions réseau en pause avec toasts clairs, tout le local continue, reprise auto (re-sonde 15 s). |
+
+## 56. Suite documentation & tutoriels (v1.0.0+)
+
+| Fonctionnalité | Description |
+| :--- | :--- |
+| **Hub Help & Other** | Articles bilingues pilotés par les données (parties utilisateur + développeur), recherche classique & sémantique, 41 diagrammes Mermaid interactifs avec explications par nœud. |
+| **Site BMM Docs** | Le site miroite le contenu in-app (sans les éléments interactifs) avec diagrammes Mermaid et une référence API complète — prêt pour le PDF. |
+| **Tutoriels interactifs** | Tutoriels guidés (coach-card) pilotant la vraie UI, avec un bac à sable auto-nettoyant (profil d'exemple, mods avec conflit volontaire, modpack d'exemple). Couvre désormais aussi la palette de commandes & les raccourcis. |
+| **Traduire BMM** | Le Bac à sable de traduction : créez une langue, traduisez clé par clé avec aperçus en direct et barre de progression, exportez/importez — sans recompilation. |
 
 ---
 

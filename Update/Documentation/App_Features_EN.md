@@ -210,6 +210,7 @@ Server Mode is the premium synchronization system for large-scale mod sharing.
 | **Security Verification** | Every downloaded file is verified against its cryptographic hash before installation. |
 | **Tunneling Support** | Integrated support for local sharing (LAN) and public sharing via UPnP or manual port forwarding. |
 | **Verified Server Browse** | The public server browser only displays repositories carrying a validated `hash` field in `repos.json`. Each listed server shows a green "Verified" badge. |
+| **Download Password (optional)** | A host can require a subscriber-facing download password: set at server generation, requested once from subscribers (sent as `X-Repo-Password`, remembered for later syncs). Blank = open repo. Distinct from the admin password, which only guards the host's admin panel. |
 
 ---
 
@@ -719,6 +720,39 @@ A built-in tool (Settings → Translation Sandbox) that lets anyone create or fi
 
 - A guided, step-driven **Tutorial Hub** that walks new users through the app's major
   workflows on top of the first-run onboarding.
+
+---
+
+## 54. Command Palette & Rebindable Shortcuts (v1.0.0+)
+
+One search box over the whole app: press **Ctrl/⌘+K** anywhere.
+
+| Feature | Description |
+| :--- | :--- |
+| **Go anywhere** | Jump to any screen — including your own custom navbar pages, detected live. |
+| **Run actions** | Add a mod, scan, verify integrity, import profiles (OvGME/OMM), drive the whole Server Repo surface (sync/host, generate server, start/stop, monitoring, copy creator ID), check app updates, open storage/hashing stats. |
+| **Two search modes** | Classic (literal) and **Semantic** — synonym-expanded, so "update" also finds "upgrade / new version". |
+| **Rebind everything** | Settings → Keyboard shortcuts lists every command: record a new combo, reset to default, or clear it; conflicts are flagged. Custom pages get shortcuts too. |
+
+## 55. Privacy, Telemetry & Offline Mode (v1.0.0+)
+
+| Feature | Description |
+| :--- | :--- |
+| **Strictly opt-in telemetry** | Nothing is collected until the consent dialog is explicitly accepted; declining wipes any buffer. |
+| **What's sent** | Pages, clicks (labels only — never typed values), perf samples, errors, an anonymous hardware profile. No paths, no mod contents, no identity. |
+| **Masked session replay** | Optional rrweb replay with mod/profile names and paths rendered as ••••; unmasking is a separate explicit toggle. |
+| **Local-first pipeline** | Events buffer to a local 10 MB-capped file; upload is gzip-batched over HTTPS only. No endpoint configured = data never leaves the machine. |
+| **GDPR controls** | Export the raw buffer; view every sent packet (event names/counts only) and request per-packet deletion, honoured within 72 h. |
+| **Offline mode** | Real connectivity probes (not just the OS flag); a discreet banner, paused network features with clear toasts, everything local keeps working, auto-recovery (15 s re-probe). |
+
+## 56. Documentation & Tutorial Suite (v1.0.0+)
+
+| Feature | Description |
+| :--- | :--- |
+| **Help & Other hub** | Data-driven bilingual articles (user + developer parts), classic & semantic search, 41 interactive Mermaid diagrams with per-node explanations. |
+| **BMM Docs site** | The website mirrors the in-app content (minus interactive elements) with Mermaid diagrams and a full API reference — PDF-ready. |
+| **Interactive tutorials** | Guided coach-card tutorials driving the real UI, with a self-cleaning practice sandbox (example profile, mods with a deliberate conflict, example modpack). Now also covers the command palette & shortcuts. |
+| **Translate BMM** | The Translation Sandbox: create a language, translate key-by-key with live previews and a progress bar, export/import — no rebuild. |
 
 ---
 

@@ -252,6 +252,59 @@ This version represents the transition to the 1.0 milestone, focusing on cross-p
 - All background process spawns routed through hidden-spawn helpers (no console flash).
 - Interactive **Tutorial Hub** and an expanded crash manager.
 
+### Command Palette & Rebindable Shortcuts
+- **Ctrl/⌘+K command palette** over the whole app: jump to any screen (including your
+  own custom navbar pages, picked up live) or run actions directly — add a mod, scan,
+  verify integrity, profile import (OvGME/OMM), the whole Server Repo surface
+  (sync/host tabs, generate server, start/stop, monitoring, copy creator ID), app
+  updates, storage & hashing stats. Classic + **semantic** (synonym-expanded) search.
+- Every command is **rebindable** from Settings → Keyboard shortcuts (record, reset,
+  clear; conflict warning), replacing the old hardcoded 4-shortcut system. Custom nav
+  pages get shortcuts too.
+- Fixed the palette rendering: interaction (z-index/pointer) and the backdrop/box-shadow
+  bleeding outside the rounded app window (now mounted inside the clipped frame).
+
+### Server Repos: Optional Download Password
+- Self-hosted repos can now require a **download password**: set it when generating the
+  server; subscribers are prompted once (sent as `X-Repo-Password`, remembered for later
+  syncs). Blank = open repo. Distinct from the admin password, which only guards the
+  host's admin panel.
+- Threaded end-to-end: host forms (mini-server + export), subscriber prompt with retry,
+  `GET /api/repo/info?password=` and `POST /api/repo/sync {password}`, the Plugins
+  Quick Test, and the `bmm://repo/sync` deeplink — which was also **fixed** (it
+  previously navigated without pre-filling; it now drives the sync form, honouring
+  url/dirs/profile/password).
+
+### Documentation Overhaul (Help & Other + BMM Docs)
+- Help & Other rebuilt as a data-driven bilingual hub (md-lite directives, user/dev
+  split) with a correctness pass: conflicts = **last-enabled wins** (no priority list),
+  server hosting vs sync split, SHA-256 on the wire, generalist examples (no
+  game-specific placeholders).
+- New articles + **3 new interactive diagrams** (offline-mode, telemetry-pipeline,
+  i18n-system) with full node descriptions; new coverage for offline mode, privacy &
+  telemetry (opt-in model, masked replay, per-packet 72 h deletion), repo admin &
+  monitoring, launch packs (corrected: application groups, not mod bundles), and the
+  translation system.
+- The **BMM Docs** website mirrors the in-app content (minus interactive elements) with
+  Mermaid diagrams, new pages (command palette, launch packs, privacy/telemetry) and an
+  updated API reference.
+
+### Security
+- **rmcp 0.16 → 1.8** clears RUSTSEC-2026-0189 (DNS-rebinding in the HTTP transport;
+  BMM's MCP server is stdio-only so it was unreachable — advisory now gone anyway).
+  `cargo audit`: 0 vulnerabilities.
+- Generated mini-server & hub-server templates now compare passwords in
+  **constant time** (`crypto.timingSafeEqual`, CWE-208) for both the download password
+  and the admin gate.
+- npm: dompurify advisory fixed (`npm audit fix` → 0).
+
+### Fixes
+- Session-flush `RangeError` + rrweb recorder perf/lag; webview OOM fix.
+- Startup fetch errors (links.json CORS via Rust bridge, contributors.json, stray
+  callbacks); faster app shutdown; legacy app-data migration to the new bundle id.
+- Replay/Animation Studios: simpler UX, recording-visibility toggle, preset dropdown
+  layering, pointer-events fixes.
+
 ---
 *Release 1.0.0 represents the final consolidation of the core feature set; the section
 above tracks the ecosystem/customization work layered on top of it.*

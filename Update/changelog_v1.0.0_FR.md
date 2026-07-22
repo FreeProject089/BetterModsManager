@@ -233,6 +233,62 @@ Cette version marque la transition vers l'étape 1.0, en se concentrant sur l'ut
   (aucun flash de console).
 - **Hub de tutoriels** interactif et un gestionnaire de crash étendu.
 
+### Palette de commandes & raccourcis réassignables
+- **Palette Ctrl/⌘+K** sur toute l'app : aller sur n'importe quel écran (y compris vos
+  pages de navbar personnalisées, détectées en direct) ou lancer des actions — ajouter
+  un mod, scanner, vérifier l'intégrité, importer un profil (OvGME/OMM), toute la
+  surface Dépôt Serveur (onglets sync/host, générer un serveur, start/stop, monitoring,
+  copier l'ID créateur), mises à jour de l'app, stats de stockage & hachage. Recherche
+  classique + **sémantique** (étendue par synonymes).
+- Chaque commande est **réassignable** depuis Réglages → Raccourcis clavier (enregistrer,
+  réinitialiser, effacer ; alerte de conflit), remplaçant l'ancien système de 4 raccourcis
+  codés en dur. Les pages perso ont aussi leurs raccourcis.
+- Rendu de la palette corrigé : interaction (z-index/pointeur) et l'ombre/le fond qui
+  débordaient hors de la fenêtre arrondie (montée désormais dans le cadre clippé).
+
+### Dépôts serveur : mot de passe de téléchargement optionnel
+- Les dépôts auto-hébergés peuvent exiger un **mot de passe de téléchargement** : défini à
+  la génération du serveur ; les abonnés le saisissent une fois (envoyé en
+  `X-Repo-Password`, mémorisé pour les synchros suivantes). Vide = dépôt ouvert. Distinct
+  du mot de passe admin, qui ne protège que le panneau d'admin de l'hôte.
+- Câblé de bout en bout : formulaires hôte (mini-serveur + export), invite abonné avec
+  réessai, `GET /api/repo/info?password=` et `POST /api/repo/sync {password}`, le Quick
+  Test des Plugins, et le deeplink `bmm://repo/sync` — également **réparé** (il naviguait
+  sans pré-remplir ; il pilote maintenant le formulaire de synchro, en honorant
+  url/dossiers/profil/password).
+
+### Refonte de la documentation (Help & Other + BMM Docs)
+- Help & Other reconstruit en hub bilingue piloté par les données (directives md-lite,
+  séparation utilisateur/dev) avec une passe de véracité : conflits = **le dernier activé
+  gagne** (pas de liste de priorité), hébergement vs synchro séparés, SHA-256 sur le
+  réseau, exemples généralistes (aucun placeholder lié à un jeu).
+- Nouveaux articles + **3 nouveaux diagrammes interactifs** (mode hors ligne, pipeline de
+  télémétrie, système i18n) avec descriptions complètes des nœuds ; nouvelle couverture du
+  mode hors ligne, de la confidentialité & télémétrie (modèle opt-in, replay masqué,
+  suppression par paquet sous 72 h), de l'admin & monitoring des dépôts, des launch packs
+  (corrigés : groupes d'applications, pas des bundles de mods), et de la traduction.
+- Le site **BMM Docs** miroite le contenu in-app (sans les éléments interactifs) avec des
+  diagrammes Mermaid, de nouvelles pages (palette de commandes, launch packs,
+  confidentialité/télémétrie) et une référence API à jour.
+
+### Sécurité
+- **rmcp 0.16 → 1.8** efface RUSTSEC-2026-0189 (DNS rebinding du transport HTTP ; le
+  serveur MCP de BMM est stdio-only donc inatteignable — l'advisory disparaît quand même).
+  `cargo audit` : 0 vulnérabilité.
+- Les templates de mini-serveur & hub-server générés comparent désormais les mots de passe
+  en **temps constant** (`crypto.timingSafeEqual`, CWE-208), tant pour le mot de passe de
+  téléchargement que pour la porte admin.
+- npm : advisory dompurify corrigée (`npm audit fix` → 0).
+
+### Correctifs
+- `RangeError` du flush de session + perf/lag de l'enregistreur rrweb ; correctif OOM de
+  la webview.
+- Erreurs de fetch au démarrage (CORS links.json via le pont Rust, contributors.json,
+  callbacks orphelins) ; fermeture de l'app plus rapide ; migration des données de
+  l'ancien bundle id.
+- Studios Replay/Animation : UX simplifiée, bascule de visibilité d'enregistrement,
+  superposition du menu de presets, correctifs pointer-events.
+
 ---
 *La version 1.0.0 représente la consolidation finale des fonctionnalités de base ; la
 section ci-dessus suit le travail d'écosystème/personnalisation ajouté par-dessus.*

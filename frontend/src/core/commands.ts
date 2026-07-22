@@ -161,6 +161,8 @@ export function openCommandPalette() {
   ensurePaletteStyles();
   refreshNavCommands();   // palette always shows the current navbar (custom pages included)
   paletteOpen = true;
+  // Tutorial hook — lets the interactive tutorial gate a step on "open the palette".
+  try { document.dispatchEvent(new CustomEvent('bmm:action:palette-opened', { detail: {} })); } catch { /* ignore */ }
   overlay = document.createElement('div');
   overlay.className = 'cp-overlay';
   overlay.innerHTML = `

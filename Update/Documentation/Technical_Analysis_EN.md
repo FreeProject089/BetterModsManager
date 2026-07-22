@@ -766,5 +766,43 @@ deeplinks at chosen times.
 
 ---
 
+## 52. Command Registry & Palette (v1.0.0+)
+
+One registry (`frontend/src/core/commands.ts`) powers BOTH the Ctrl/⌘+K palette and the rebindable shortcuts manager in Settings.
+
+| Component | Implementation |
+| :--- | :--- |
+| **Command model** | `{ id, category, title:{en,fr}, keywords, run(), defaultChord }` in a `Map` registry. Categories: nav / mods / profiles / repo / tools / settings / help. |
+| **Dynamic nav commands** | `refreshNavCommands()` rebuilds `nav.*` commands from the LIVE navbar (`.nav-item[data-view]` + `[data-custom-id]`) on every palette open — custom sandboxed pages are first-class, rebindable targets. |
+| **Bindings** | User overrides persist in `localStorage` (`bmm_cmd_bindings`) layered over defaults; a single global keydown dispatcher matches chords (modifier-less chords are suppressed while typing). Conflict detection warns on double-assignment. |
+| **Palette rendering** | The overlay mounts inside `#app-window-outer` (the rounded, clipped app frame) as `position:absolute` — this is what keeps the backdrop/box-shadow from bleeding into the transparent OS-webview margin. Classic search is substring scoring; Semantic expands query tokens through the merged `_synonyms` map from the language files. |
+| **Actions** | Commands run through the exact UI paths a human would use (`clickNav`, `clickAfterNav`, tab-switch helpers), so dialogs/confirmations still apply. The palette dispatches `bmm:action:palette-opened` for the tutorial engine. |
+
+## 53. Repo Download Password (v1.0.0+)
+
+An optional subscriber-facing gate for self-hosted repos, distinct from `admin_password` (which only guards the host's `/admin` panel).
+
+| Layer | Implementation |
+| :--- | :--- |
+| **Generated server** | `DOWNLOAD_PASSWORD` is templated into `server.express.js`; when non-empty, every content request (repo.json + mod files) must carry `X-Repo-Password` (or `?pw=`) or receives 401. `/dashboard`, `/monitoring.json`, `/admin/*` and local access are exempt. Comparison is constant-time (`crypto.timingSafeEqual`, CWE-208) — as is the admin `Authorization` gate, in both the single-repo and hub-server templates. |
+| **Rust client** | `fetch_repo_info(url, creator_id, password)` and `SyncArgs.password` send the header; a remote 401 surfaces as the typed error `repo.errPasswordRequired`. |
+| **Frontend** | On that error the subscriber gets a themed prompt; the password is kept for the session (`setRepoPassword`) and passed to `sync_server_repo`. Host forms (mini-server + export) expose a "download password (optional)" field. |
+| **API / automation** | `GET /api/repo/info?password=`, `POST /api/repo/sync {password}`, the Plugins Quick Test fields, and the `bmm://repo/sync` deeplink (`&password=`) all thread it through — the deeplink was also rewired to actually pre-fill and drive the sync form via `bmm:repo-focus`. |
+
+## 54. Offline Mode & Telemetry Pipeline (v1.0.0+)
+
+| Subsystem | Implementation |
+| :--- | :--- |
+| **Offline detection** | `core/offline.ts` probes two lightweight endpoints (5 s timeout) instead of trusting `navigator.onLine`; offline state shows a banner, dispatches `bmm-connectivity`, and gates features via `requireOnline()` / `safeFetch()`. Re-probe every 15 s offline / 120 s online. |
+| **Telemetry consent** | Opt-in only (`settings.analytics_consent: Option<bool>`, `None` = never asked → nothing collected; declining wipes the buffer). Sub-toggles: benchmark/extra-hardware, session replay, replay unmask. |
+| **Pipeline** | Events buffer to `analytics_queue.jsonl` (10 MB cap) and flush as ONE gzipped batch (packet id) every 90 s while visible; endpoint allow-list accepts `https://` (or loopback) only. |
+| **Session replay** | rrweb with no mouse-move capture, masked-by-default sensitive selectors, animating subtrees blocked; chunks gzip via `CompressionStream`. Local `.bmmreplay` files + a rolling crash-session buffer, pruned by retention limits (30 / 2 GB defaults). |
+| **GDPR** | Export raw buffer; per-packet deletion requests honoured within 72 h; sent-packet list shows event names/counts only. |
+
+### §34 addendum — MCP dependency
+The MCP server now builds against **rmcp 1.8** (stdio transport unchanged), clearing RUSTSEC-2026-0189; `ServerInfo`/`Implementation` are `#[non_exhaustive]` in 1.x and are built via mutate-from-`Default`.
+
+---
+
 *Better Mod Manager is developed by FreeProject089 — Engineered for uncompromising performance, file safety, and modern mod management.*
 

@@ -693,5 +693,43 @@ en déclenchant des deeplinks à des horaires choisis.
 
 ---
 
+## 52. Registre de commandes & Palette (v1.0.0+)
+
+Un seul registre (`frontend/src/core/commands.ts`) alimente À LA FOIS la palette Ctrl/⌘+K et le gestionnaire de raccourcis réassignables des Réglages.
+
+| Composant | Implémentation |
+| :--- | :--- |
+| **Modèle de commande** | `{ id, category, title:{en,fr}, keywords, run(), defaultChord }` dans un registre `Map`. Catégories : nav / mods / profiles / repo / tools / settings / help. |
+| **Commandes nav dynamiques** | `refreshNavCommands()` reconstruit les commandes `nav.*` depuis la navbar EN DIRECT (`.nav-item[data-view]` + `[data-custom-id]`) à chaque ouverture — les pages sandbox personnalisées sont des cibles de premier rang, réassignables. |
+| **Assignations** | Les overrides utilisateur persistent dans `localStorage` (`bmm_cmd_bindings`) par-dessus les défauts ; un unique dispatcher keydown global matche les combinaisons (celles sans modificateur sont ignorées pendant la saisie). La détection de conflits alerte en cas de double assignation. |
+| **Rendu de la palette** | L'overlay se monte dans `#app-window-outer` (le cadre arrondi et clippé de l'app) en `position:absolute` — c'est ce qui empêche le fond/l'ombre de baver dans la marge transparente de la webview OS. La recherche classique score par sous-chaîne ; la sémantique étend les tokens via la table `_synonyms` fusionnée des fichiers de langue. |
+| **Actions** | Les commandes passent par les chemins UI exacts d'un humain (`clickNav`, `clickAfterNav`, helpers d'onglets), donc dialogues/confirmations s'appliquent toujours. La palette émet `bmm:action:palette-opened` pour le moteur de tutoriels. |
+
+## 53. Mot de passe de téléchargement des dépôts (v1.0.0+)
+
+Une porte optionnelle côté abonnés pour les dépôts auto-hébergés, distincte d'`admin_password` (qui ne protège que le panneau `/admin` de l'hôte).
+
+| Couche | Implémentation |
+| :--- | :--- |
+| **Serveur généré** | `DOWNLOAD_PASSWORD` est injecté dans `server.express.js` ; s'il est non vide, chaque requête de contenu (repo.json + fichiers de mods) doit porter `X-Repo-Password` (ou `?pw=`) sous peine de 401. `/dashboard`, `/monitoring.json`, `/admin/*` et l'accès local sont exemptés. La comparaison est en temps constant (`crypto.timingSafeEqual`, CWE-208) — comme la porte admin `Authorization`, dans les templates mono-dépôt et hub. |
+| **Client Rust** | `fetch_repo_info(url, creator_id, password)` et `SyncArgs.password` envoient le header ; un 401 distant remonte comme l'erreur typée `repo.errPasswordRequired`. |
+| **Frontend** | Sur cette erreur, l'abonné reçoit une invite thémée ; le mot de passe est retenu pour la session (`setRepoPassword`) et passé à `sync_server_repo`. Les formulaires hôte (mini-serveur + export) exposent un champ « mot de passe de téléchargement (optionnel) ». |
+| **API / automatisation** | `GET /api/repo/info?password=`, `POST /api/repo/sync {password}`, les champs du Quick Test des Plugins, et le deeplink `bmm://repo/sync` (`&password=`) le transmettent tous — le deeplink a aussi été re-câblé pour réellement pré-remplir et piloter le formulaire de synchro via `bmm:repo-focus`. |
+
+## 54. Mode hors ligne & pipeline de télémétrie (v1.0.0+)
+
+| Sous-système | Implémentation |
+| :--- | :--- |
+| **Détection hors ligne** | `core/offline.ts` sonde deux endpoints légers (timeout 5 s) au lieu de croire `navigator.onLine` ; l'état hors ligne affiche un bandeau, émet `bmm-connectivity`, et gate les fonctions via `requireOnline()` / `safeFetch()`. Re-sonde toutes les 15 s hors ligne / 120 s en ligne. |
+| **Consentement télémétrie** | Opt-in uniquement (`settings.analytics_consent: Option<bool>`, `None` = jamais demandé → rien de collecté ; refuser efface le tampon). Sous-interrupteurs : benchmark/matériel étendu, replay de session, démasquage du replay. |
+| **Pipeline** | Les événements s'accumulent dans `analytics_queue.jsonl` (plafond 10 Mo) et partent en UN lot gzip (id de paquet) toutes les 90 s fenêtre visible ; la liste blanche d'endpoints n'accepte que `https://` (ou loopback). |
+| **Replay de session** | rrweb sans capture de mouvements de souris, sélecteurs sensibles masqués par défaut, sous-arbres animés bloqués ; chunks gzip via `CompressionStream`. Fichiers `.bmmreplay` locaux + tampon de session de crash glissant, élagués par limites de rétention (défauts 30 / 2 Go). |
+| **RGPD** | Export du tampon brut ; demandes de suppression par paquet honorées sous 72 h ; la liste des paquets envoyés ne montre que noms/comptes d'événements. |
+
+### Addendum §34 — dépendance MCP
+Le serveur MCP se compile désormais contre **rmcp 1.8** (transport stdio inchangé), effaçant RUSTSEC-2026-0189 ; `ServerInfo`/`Implementation` sont `#[non_exhaustive]` en 1.x et se construisent par mutation depuis `Default`.
+
+---
+
 *Better Mod Manager est développé par FreeProject089 — Conçu pour une performance sans compromis, la sécurité des fichiers et une gestion moderne des mods.*
 
