@@ -170,23 +170,23 @@ Changer de profil ne re-lie que ce qui a changé : instantané même avec de gra
     <div class="dh-treecol-h">① The game folder — what your game already has</div>
     <div class="dh-tree-list">
       <div class="dh-fld dh-fld-0"><span class="fi">📁</span> Your Game <small>game root</small></div>
-      <div class="dh-fld dh-fld-1"><span class="fi">📁</span> mods</div>
-      <div class="dh-fld dh-fld-2"><span class="fi">📁</span> characters</div>
-      <div class="dh-fld dh-fld-3 dh-fld-mut"><span class="fi">📄</span> the built-in files…</div>
+      <div class="dh-fld dh-fld-1"><span class="fi">📁</span> Data</div>
+      <div class="dh-fld dh-fld-2"><span class="fi">📁</span> Textures</div>
+      <div class="dh-fld dh-fld-3 dh-fld-mut"><span class="fi">📄</span> the game’s own textures…</div>
     </div>
   </div>
   <div class="dh-treecol dh-treecol-accent">
     <div class="dh-treecol-h">② Your mod — the very same shape</div>
     <div class="dh-tree-list">
-      <div class="dh-fld dh-fld-0"><span class="fi">📁</span> My Cool Mod <small>= the mod</small></div>
-      <div class="dh-fld dh-fld-1"><span class="fi">📁</span> mods</div>
-      <div class="dh-fld dh-fld-2"><span class="fi">📁</span> characters</div>
-      <div class="dh-fld dh-fld-3 dh-fld-hit"><span class="fi">📁</span> My Cool Mod <small>slots in here</small></div>
+      <div class="dh-fld dh-fld-0"><span class="fi">📁</span> HD Texture Pack <small>= the mod</small></div>
+      <div class="dh-fld dh-fld-1"><span class="fi">📁</span> Data</div>
+      <div class="dh-fld dh-fld-2"><span class="fi">📁</span> Textures</div>
+      <div class="dh-fld dh-fld-3 dh-fld-hit"><span class="fi">📁</span> HD Texture Pack <small>slots in here</small></div>
     </div>
   </div>
 </div>
-<div class="dh-treecmp-note">↔ the <code>mods / characters</code> path is the same on both sides — so your mod drops straight onto the game.</div>
-<p class="dh-diagnote">The exact folder names (<code>mods</code>, <code>characters</code>, …) are whatever <b>your</b> game uses — the rule is simply that your mod recreates that same path, from the game root down.</p>
+<div class="dh-treecmp-note">↔ the <code>Data / Textures</code> path is the same on both sides — so your mod drops straight onto the game.</div>
+<p class="dh-diagnote">The exact folder names (<code>Data</code>, <code>Textures</code>, …) are whatever <b>your</b> game uses — the rule is simply that your mod recreates that same path, from the game root down.</p>
 <h4>Set up a profile per target folder</h4>
 <p>Some games read mods from more than one place — often the <b>install folder</b> and a separate <b>user / config folder</b>. Give each one its own profile pointing at that folder.</p>
 <p>Each profile also has its own <b>mods folder</b> (the “Configuration → mods folder” line) where BMM stores that profile’s mods.</p>
@@ -198,23 +198,23 @@ Changer de profil ne re-lie que ce qui a changé : instantané même avec de gra
     <div class="dh-treecol-h">① Le dossier du jeu — ce que votre jeu a déjà</div>
     <div class="dh-tree-list">
       <div class="dh-fld dh-fld-0"><span class="fi">📁</span> Votre Jeu <small>racine du jeu</small></div>
-      <div class="dh-fld dh-fld-1"><span class="fi">📁</span> mods</div>
-      <div class="dh-fld dh-fld-2"><span class="fi">📁</span> personnages</div>
-      <div class="dh-fld dh-fld-3 dh-fld-mut"><span class="fi">📄</span> les fichiers d’origine…</div>
+      <div class="dh-fld dh-fld-1"><span class="fi">📁</span> Data</div>
+      <div class="dh-fld dh-fld-2"><span class="fi">📁</span> Textures</div>
+      <div class="dh-fld dh-fld-3 dh-fld-mut"><span class="fi">📄</span> les textures d’origine du jeu…</div>
     </div>
   </div>
   <div class="dh-treecol dh-treecol-accent">
     <div class="dh-treecol-h">② Votre mod — exactement la même forme</div>
     <div class="dh-tree-list">
-      <div class="dh-fld dh-fld-0"><span class="fi">📁</span> Mon Super Mod <small>= le mod</small></div>
-      <div class="dh-fld dh-fld-1"><span class="fi">📁</span> mods</div>
-      <div class="dh-fld dh-fld-2"><span class="fi">📁</span> personnages</div>
-      <div class="dh-fld dh-fld-3 dh-fld-hit"><span class="fi">📁</span> Mon Super Mod <small>se glisse ici</small></div>
+      <div class="dh-fld dh-fld-0"><span class="fi">📁</span> Pack de Textures HD <small>= le mod</small></div>
+      <div class="dh-fld dh-fld-1"><span class="fi">📁</span> Data</div>
+      <div class="dh-fld dh-fld-2"><span class="fi">📁</span> Textures</div>
+      <div class="dh-fld dh-fld-3 dh-fld-hit"><span class="fi">📁</span> Pack de Textures HD <small>se glisse ici</small></div>
     </div>
   </div>
 </div>
-<div class="dh-treecmp-note">↔ le chemin <code>mods / personnages</code> est identique des deux côtés — votre mod se pose donc directement sur le jeu.</div>
-<p class="dh-diagnote">Les noms de dossiers exacts (<code>mods</code>, <code>personnages</code>, …) sont ceux que <b>votre</b> jeu utilise — la règle est simplement que votre mod recrée ce même chemin, depuis la racine du jeu.</p>
+<div class="dh-treecmp-note">↔ le chemin <code>Data / Textures</code> est identique des deux côtés — votre mod se pose donc directement sur le jeu.</div>
+<p class="dh-diagnote">Les noms de dossiers exacts (<code>Data</code>, <code>Textures</code>, …) sont ceux que <b>votre</b> jeu utilise — la règle est simplement que votre mod recrée ce même chemin, depuis la racine du jeu.</p>
 <h4>Un profil par dossier cible</h4>
 <p>Certains jeux lisent les mods à plusieurs endroits — souvent le <b>dossier d’installation</b> et un <b>dossier utilisateur / config</b> séparé. Donnez à chacun son propre profil pointant sur ce dossier.</p>
 <p>Chaque profil a aussi son propre <b>dossier des mods</b> (la ligne « Configuration → dossier des mods ») où BMM stocke les mods de ce profil.</p>

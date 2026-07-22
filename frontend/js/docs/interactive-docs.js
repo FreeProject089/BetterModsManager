@@ -10,24 +10,20 @@ import { backupSystem } from './diagrams/backup-system.js';
 import { perfMonitoring } from './diagrams/perf-monitoring.js';
 import { serverMode } from './diagrams/server-mode.js';
 import { profileCustomization } from './diagrams/profile-customization.js';
-import { moddingMechanics } from './diagrams/modding-mechanics.js';
 import { faqDiskFull } from './diagrams/faq-disk-full.js';
 import { faqDeletedMod } from './diagrams/faq-deleted-mod.js';
-import { bestPractices } from './diagrams/best-practices.js';
 import { crashReporting } from './diagrams/crash-reporting.js';
 import { cacheManagement } from './diagrams/cache-management.js';
 import { modArchitecture } from './diagrams/mod-architecture.js';
 import { diskIoLimiter } from './diagrams/disk-io-limiter.js';
 import { hostingFlow } from './diagrams/hosting-flow.js';
 import { oneClickInstall } from './diagrams/one-click-install.js';
-import { docsLogic } from './diagrams/docs-logic.js';
 import { discordRpc } from './diagrams/discord-rpc.js';
 import { engineThreads } from './diagrams/engine-threads.js';
 import { codeStack } from './diagrams/code-stack.js';
 import { semanticSearch } from './diagrams/semantic-search.js';
 import { integrityEngine } from './diagrams/integrity-engine.js';
 import { mtimeCache } from './diagrams/mtime-cache.js';
-import { premiumInteractions } from './diagrams/premium-interactions.js';
 import { betahubReporting } from './diagrams/betahub-reporting.js';
 import { modpackFlow } from './diagrams/modpack-flow.js';
 import { securitySystem } from './diagrams/security-system.js';
@@ -53,24 +49,20 @@ export const diagrams = {
     'perf-monitoring': perfMonitoring,
     'server-mode': serverMode,
     'profile-customization': profileCustomization,
-    'modding-mechanics': moddingMechanics,
     'faq-disk-full': faqDiskFull,
     'faq-deleted-mod': faqDeletedMod,
-    'best-practices': bestPractices,
     'crash-reporting': crashReporting,
     'cache-management': cacheManagement,
     'mod-architecture': modArchitecture,
     'disk-io-limiter': diskIoLimiter,
     'hosting-flow': hostingFlow,
     'one-click-install': oneClickInstall,
-    'docs-logic': docsLogic,
     'discord-rpc': discordRpc,
     'engine-threads': engineThreads,
     'code-stack': codeStack,
     'semantic-search': semanticSearch,
     'integrity-engine': integrityEngine,
     'mtime-cache': mtimeCache,
-    'premium-interactions': premiumInteractions,
     'betahub-reporting': betahubReporting,
     'modpack-flow': modpackFlow,
     'security-system': securitySystem,
