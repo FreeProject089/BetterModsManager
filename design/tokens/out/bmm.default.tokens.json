@@ -458,6 +458,56 @@
         "$type": "number",
         "$description": "CSS: --bmm-font-scale"
       },
+      "space-1": {
+        "$value": "4px",
+        "$type": "dimension",
+        "$description": "CSS: --space-1"
+      },
+      "space-2": {
+        "$value": "8px",
+        "$type": "dimension",
+        "$description": "CSS: --space-2"
+      },
+      "space-3": {
+        "$value": "12px",
+        "$type": "dimension",
+        "$description": "CSS: --space-3"
+      },
+      "space-4": {
+        "$value": "16px",
+        "$type": "dimension",
+        "$description": "CSS: --space-4"
+      },
+      "space-5": {
+        "$value": "20px",
+        "$type": "dimension",
+        "$description": "CSS: --space-5"
+      },
+      "space-6": {
+        "$value": "24px",
+        "$type": "dimension",
+        "$description": "CSS: --space-6"
+      },
+      "space-8": {
+        "$value": "32px",
+        "$type": "dimension",
+        "$description": "CSS: --space-8"
+      },
+      "space-10": {
+        "$value": "40px",
+        "$type": "dimension",
+        "$description": "CSS: --space-10"
+      },
+      "space-12": {
+        "$value": "48px",
+        "$type": "dimension",
+        "$description": "CSS: --space-12"
+      },
+      "space-16": {
+        "$value": "64px",
+        "$type": "dimension",
+        "$description": "CSS: --space-16"
+      },
       "radius-card": {
         "$value": "14px",
         "$type": "dimension",

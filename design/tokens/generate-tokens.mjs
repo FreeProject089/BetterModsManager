@@ -38,11 +38,16 @@ function parseCssVars(css) {
   let m;
   while ((m = re.exec(noComments)) !== null) {
     const name = m[1].trim();
-    if (!name.startsWith('--bmm-')) continue; // legacy aliases are not the surface
+    // The surface is every --bmm-* token PLUS the --space-* scale (which has no --bmm-
+    // counterpart). All other bare --name tokens are legacy compat aliases → skipped.
+    if (!name.startsWith('--bmm-') && !name.startsWith('--space-')) continue;
     vars.set(name, m[2].trim().replace(/\s+/g, ' '));
   }
   return vars;
 }
+
+// Bare token name (drop the --bmm-/-- prefix) — used for grouping + the DTCG key.
+const bareName = (name) => name.replace(/^--(bmm-)?/, '');
 
 // ── 2. Classify a token → DTCG $type (or null = leave untyped) ─────────────
 const COLOR_VALUE = /^(#([0-9a-fA-F]{3,8})|rgba?\([^)]*\)|hsla?\([^)]*\)|transparent|white|black)$/;
@@ -50,7 +55,7 @@ const DIMENSION = /^-?\d+(\.\d+)?(px|rem|em|vh|vw|%)$/;
 const NUMBER = /^-?\d+(\.\d+)?$/;
 
 function classify(name, value) {
-  const bare = name.replace(/^--bmm-/, '');
+  const bare = bareName(name);
   // Pure var() reference → alias (type comes from the target at import time).
   const aliasMatch = value.match(/^var\((--bmm-[a-zA-Z0-9-]+)\)$/);
   if (aliasMatch) return { type: null, alias: aliasMatch[1] };
@@ -81,13 +86,13 @@ function toDtcg(vars, { description }) {
   const rootGroup = { $description: description };
   let typed = 0, untyped = 0, aliases = 0;
   for (const [name, value] of vars) {
-    const bare = name.replace(/^--bmm-/, '');
+    const bare = bareName(name);
     const cls = classify(name, value);
     const grp = groupOf(bare, cls.type);
     rootGroup[grp] ??= {};
     const token = {};
     if (cls.alias) {
-      const target = cls.alias.replace(/^--bmm-/, '');
+      const target = bareName(cls.alias);
       const targetVal = vars.get(cls.alias);
       const targetCls = targetVal ? classify(cls.alias, targetVal) : { type: null };
       const targetGrp = groupOf(target, targetCls.type);
