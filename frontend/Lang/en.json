@@ -4783,6 +4783,7 @@
   "plugins.fldBackupFolder": "Backup folder",
   "plugins.fldGameRootOpt": "Game root (opt)",
   "plugins.fldDlLimit": "DL limit (KB/s)",
+  "plugins.fldRepoPassword": "Download password",
   "plugins.fldOverwriteAll": "Overwrite all",
   "plugins.fldDeleteExtra": "Delete extra",
   "plugins.fldProfileUuid": "Profile UUID",

@@ -258,10 +258,26 @@ async function handleDeepLink(urlStr) {
             if (navBtn)
                 navBtn.click();
             toast(t('plugins.deepLinkSyncRepoNav') || 'Ouvre la page Serveur Repo pour lancer la synchronisation.', 'info');
-            // Dispatch a custom event so the repo page can pre-fill the URL
+            // Pre-fill the sync form and auto-fetch via the repo page's bmm:repo-focus handler
+            // (the same path the API/Quick Test uses). Honours the optional params — including
+            // a download password for a password-protected self-hosted repo.
+            const sp = parsedUrl.searchParams;
+            const profileId = sp.get('profile');
+            const localProfile = sp.get('local_profile');
+            const prefill = { url: repoUrl };
+            if (sp.get('game_dir'))
+                prefill.gameDir = sp.get('game_dir');
+            if (sp.get('mods_dir'))
+                prefill.modsDir = sp.get('mods_dir');
+            if (sp.get('backup_dir'))
+                prefill.backupDir = sp.get('backup_dir');
+            if (sp.get('password'))
+                prefill.password = sp.get('password');
+            if (profileId)
+                prefill.choices = [{ repoProfileId: profileId, ...(localProfile ? { targetLocalProfileId: localProfile } : {}) }];
             setTimeout(() => {
-                window.dispatchEvent(new CustomEvent('bmm:deeplink-repo-sync', { detail: { url: repoUrl } }));
-            }, 300);
+                document.dispatchEvent(new CustomEvent('bmm:repo-focus', { detail: { section: 'sync', prefill } }));
+            }, 400);
             return;
         }
         // ── Generic passthrough: bmm://api?method=&path=&<field>=… ────────

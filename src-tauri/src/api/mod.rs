@@ -213,6 +213,9 @@ struct RepoSyncBody {
     delete_extra: bool,
     #[serde(default = "default_dl_limit")]
     download_limit: u32,
+    /// Optional download password for a password-protected self-hosted repo.
+    #[serde(default)]
+    password: Option<String>,
 }
 
 /// POST /api/repo/gen — generate repo structure (formerly "host")
@@ -1785,10 +1788,13 @@ pub async fn start_api_server(
             };
             let target = if url.ends_with("repo.json") { url.clone() }
                          else { format!("{}/repo.json", url.trim_end_matches('/')) };
-            match crate::commands::net::client().get(&target)
+            // Optional download password for a password-protected self-hosted repo — forwarded
+            // as X-Repo-Password so a caller (quicktest / MCP / CLI) can read a protected repo.
+            let mut req = crate::commands::net::client().get(&target)
                 .header(reqwest::header::USER_AGENT, "BetterModManager")
-                .timeout(std::time::Duration::from_secs(15))
-                .send().await {
+                .timeout(std::time::Duration::from_secs(15));
+            if let Some(pw) = query.get("password") { if !pw.is_empty() { req = req.header("X-Repo-Password", pw.clone()); } }
+            match req.send().await {
                 Ok(r) if r.status().is_success() => {
                     match r.json::<serde_json::Value>().await {
                         Ok(repo) => Ok(warp::reply::with_status(
@@ -1801,6 +1807,10 @@ pub async fn start_api_server(
                         )),
                     }
                 },
+                Ok(r) if r.status() == reqwest::StatusCode::UNAUTHORIZED => Ok(warp::reply::with_status(
+                    warp::reply::json(&ApiError { error: "Repo password required (401)".into() }),
+                    StatusCode::UNAUTHORIZED,
+                )),
                 Ok(r) if r.status() == reqwest::StatusCode::FORBIDDEN => Ok(warp::reply::with_status(
                     warp::reply::json(&ApiError { error: "Access denied (403)".into() }),
                     StatusCode::FORBIDDEN,
@@ -1984,6 +1994,7 @@ pub async fn start_api_server(
                     "overwriteAll": body.overwrite_all,
                     "deleteExtra": body.delete_extra,
                     "downloadLimit": body.download_limit,
+                    "password": body.password,
                     "choices": choices,
                 }
             }));

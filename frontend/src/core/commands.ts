@@ -16,7 +16,7 @@ const tr = (s: L): string => (getLang() === 'fr' ? s.fr : s.en);
 export interface Chord { ctrl?: boolean; shift?: boolean; alt?: boolean; key: string; }
 export interface Command {
   id: string;
-  category: 'nav' | 'mods' | 'profiles' | 'tools' | 'help';
+  category: 'nav' | 'mods' | 'profiles' | 'repo' | 'tools' | 'settings' | 'help';
   title: L;
   keywords?: string;
   run: () => void;
@@ -132,7 +132,8 @@ function searchCommands(q: string): Command[] {
 }
 const CAT_LABEL: Record<Command['category'], L> = {
   nav: { en: 'Go to', fr: 'Aller à' }, mods: { en: 'Mods', fr: 'Mods' }, profiles: { en: 'Profiles', fr: 'Profils' },
-  tools: { en: 'Tools', fr: 'Outils' }, help: { en: 'Help', fr: 'Aide' },
+  repo: { en: 'Server Repo', fr: 'Dépôt serveur' }, tools: { en: 'Tools', fr: 'Outils' },
+  settings: { en: 'Settings', fr: 'Paramètres' }, help: { en: 'Help', fr: 'Aide' },
 };
 function renderPalette() {
   const list = overlay?.querySelector('.cp-list') as HTMLElement | null;
@@ -175,7 +176,10 @@ export function openCommandPalette() {
       <div class="cp-list"></div>
       <div class="cp-foot"><kbd>↑</kbd><kbd>↓</kbd> ${tr({ en: 'navigate', fr: 'naviguer' })} · <kbd>↵</kbd> ${tr({ en: 'run', fr: 'exécuter' })} · <kbd>Esc</kbd> ${tr({ en: 'close', fr: 'fermer' })}</div>
     </div>`;
-  document.body.appendChild(overlay);
+  // Mount inside the visible, rounded, clipped app window (#app-window-outer) so the backdrop
+  // and the box's drop-shadow can't bleed into the transparent OS-webview margin around BMM.
+  // Falls back to <body> if the frame element isn't present.
+  (document.getElementById('app-window-outer') || document.body).appendChild(overlay);
   const input = overlay.querySelector('.cp-input') as HTMLInputElement;
   updateResults('');
   input.focus();
@@ -203,10 +207,11 @@ let recording: { id: string; row: HTMLElement } | null = null;
 export function renderShortcutsManager(container: HTMLElement) {
   ensurePaletteStyles();   // the .sk-* rules live in the same injected sheet as the palette
   refreshNavCommands();    // reflect the current navbar (custom pages, renames, reorders)
-  const groups: Command['category'][] = ['nav', 'profiles', 'mods', 'tools', 'help'];
+  const groups: Command['category'][] = ['nav', 'profiles', 'mods', 'repo', 'tools', 'settings', 'help'];
   const catTitle: Record<Command['category'], L> = {
     nav: { en: 'Navigation', fr: 'Navigation' }, profiles: { en: 'Profiles', fr: 'Profils' }, mods: { en: 'Mods', fr: 'Mods' },
-    tools: { en: 'Tools', fr: 'Outils' }, help: { en: 'Help', fr: 'Aide' },
+    repo: { en: 'Server Repo', fr: 'Dépôt serveur' }, tools: { en: 'Tools', fr: 'Outils' },
+    settings: { en: 'Settings', fr: 'Paramètres' }, help: { en: 'Help', fr: 'Aide' },
   };
   const rowFor = (c: Command) => {
     const ch = bindingOf(c.id);
@@ -265,6 +270,20 @@ const clickAfterNav = (view: string, btnId: string, delay = 60) => () => {
   (document.querySelector(`.nav-item[data-view="${view}"]`) as HTMLElement | null)?.click();
   setTimeout(() => document.getElementById(btnId)?.click(), delay);
 };
+// Go to a view, switch one of its inner tabs, then (optionally) click a button inside that tab.
+const clickTab = (view: string, tabSel: string, delay = 70) => () => {
+  (document.querySelector(`.nav-item[data-view="${view}"]`) as HTMLElement | null)?.click();
+  setTimeout(() => (document.querySelector(tabSel) as HTMLElement | null)?.click(), delay);
+};
+const clickTabThen = (view: string, tabSel: string, btnId: string, d1 = 70, d2 = 150) => () => {
+  (document.querySelector(`.nav-item[data-view="${view}"]`) as HTMLElement | null)?.click();
+  setTimeout(() => (document.querySelector(tabSel) as HTMLElement | null)?.click(), d1);
+  setTimeout(() => document.getElementById(btnId)?.click(), d2);
+};
+// A button that lives outside any view (present in the static shell) — click it directly.
+const clickId = (btnId: string) => () => document.getElementById(btnId)?.click();
+// A window-global entry point (modal openers exposed on window); no-op if not yet wired.
+const callGlobal = (name: string) => () => { try { (window as any)[name]?.(); } catch { /* ignore */ } };
 
 // Nav commands are built from the LIVE navbar so they always match what's actually there —
 // including custom pages, reordered/renamed items, and anything hidden/shown via navbar
@@ -303,8 +322,38 @@ function registerCore() {
   registerCommand({ id: 'mods.export', category: 'mods', title: { en: 'Export mod list', fr: 'Exporter la liste' }, keywords: 'export modlist save', run: clickAfterNav('modlist', 'btn-export-mm', 100), defaultChord: { ctrl: true, key: 'e' } });
   registerCommand({ id: 'mods.import', category: 'mods', title: { en: 'Import mod list', fr: 'Importer la liste' }, keywords: 'import modlist load', run: clickAfterNav('modlist', 'btn-import-mm', 100), defaultChord: { ctrl: true, key: 'i' } });
 
-  // Tools
+  // ── Library / mods actions ──────────────────────────────────────────────────
+  registerCommand({ id: 'mods.scan', category: 'mods', title: { en: 'Scan mods folder', fr: 'Scanner le dossier de mods' }, keywords: 'scan rescan refresh detect library analyser', run: clickAfterNav('library', 'btn-scan-mods'), defaultChord: null });
+  registerCommand({ id: 'mods.verify', category: 'mods', title: { en: 'Verify mod integrity', fr: 'Vérifier l’intégrité des mods' }, keywords: 'verify integrity hash checksum corrupt vérifier', run: clickAfterNav('library', 'btn-verify-integrity'), defaultChord: null });
+  registerCommand({ id: 'mods.history', category: 'mods', title: { en: 'Show mod history', fr: 'Afficher l’historique des mods' }, keywords: 'history log recent activity historique', run: clickAfterNav('library', 'btn-show-history'), defaultChord: null });
+  registerCommand({ id: 'mods.enableAll', category: 'mods', title: { en: 'Enable all mods', fr: 'Activer tous les mods' }, keywords: 'enable all activate deploy tout activer', run: clickAfterNav('library', 'btn-enable-all'), defaultChord: null });
+  registerCommand({ id: 'mods.disableAll', category: 'mods', title: { en: 'Disable all mods', fr: 'Désactiver tous les mods' }, keywords: 'disable all off remove tout désactiver', run: clickAfterNav('library', 'btn-disable-all-alt'), defaultChord: null });
+  registerCommand({ id: 'mods.checkUpdates', category: 'mods', title: { en: 'Check mods for updates', fr: 'Vérifier les mises à jour des mods' }, keywords: 'update updates check mods mise à jour', run: clickAfterNav('library', 'btn-lib-check-updates'), defaultChord: null });
+
+  // ── Profiles ────────────────────────────────────────────────────────────────
+  registerCommand({ id: 'profiles.import', category: 'profiles', title: { en: 'Import a profile (OvGME / OMM)', fr: 'Importer un profil (OvGME / OMM)' }, keywords: 'import ovgme omm migrate profile importer', run: clickAfterNav('profiles', 'btn-import-menu'), defaultChord: null });
+  registerCommand({ id: 'profiles.disableAllGlobal', category: 'profiles', title: { en: 'Disable every profile', fr: 'Désactiver tous les profils' }, keywords: 'disable all profiles global clear tout désactiver', run: clickAfterNav('profiles', 'btn-disable-all-global'), defaultChord: null });
+
+  // ── Server Repo ─────────────────────────────────────────────────────────────
+  registerCommand({ id: 'repo.sync', category: 'repo', title: { en: 'Sync from a server repo', fr: 'Synchroniser depuis un dépôt serveur' }, keywords: 'sync subscribe download repo server synchroniser abonner', run: clickTab('repo', '[data-repo-tab="sync"]'), defaultChord: null });
+  registerCommand({ id: 'repo.host', category: 'repo', title: { en: 'Host a server repo', fr: 'Héberger un dépôt serveur' }, keywords: 'host publish serve share repo server héberger publier', run: clickTab('repo', '[data-repo-tab="host"]'), defaultChord: null });
+  registerCommand({ id: 'repo.browse', category: 'repo', title: { en: 'Browse saved repos', fr: 'Parcourir les dépôts enregistrés' }, keywords: 'browse repos saved list history parcourir', run: clickAfterNav('repo', 'btn-browse-repos'), defaultChord: null });
+  registerCommand({ id: 'repo.generateServer', category: 'repo', title: { en: 'Generate a standalone server', fr: 'Générer un serveur autonome' }, keywords: 'generate server standalone mini node docker générer', run: clickTabThen('repo', '[data-repo-tab="host"]', 'btn-generate-mini-server'), defaultChord: null });
+  registerCommand({ id: 'repo.toggleServer', category: 'repo', title: { en: 'Start / stop the built-in server', fr: 'Démarrer / arrêter le serveur intégré' }, keywords: 'start stop server toggle host démarrer arrêter', run: clickAfterNav('repo', 'btn-toggle-repo-server'), defaultChord: null });
+  registerCommand({ id: 'repo.monitoring', category: 'repo', title: { en: 'Open server monitoring', fr: 'Ouvrir le monitoring du serveur' }, keywords: 'monitoring dashboard traffic downloads stats surveiller', run: clickAfterNav('repo', 'btn-open-monitoring'), defaultChord: null });
+  registerCommand({ id: 'repo.checkUpdates', category: 'repo', title: { en: 'Check subscribed repos for updates', fr: 'Vérifier les mises à jour des dépôts' }, keywords: 'check updates repo sync new version mise à jour', run: clickAfterNav('repo', 'btn-check-mod-updates'), defaultChord: null });
+  registerCommand({ id: 'repo.copyCreatorId', category: 'repo', title: { en: 'Copy my creator ID', fr: 'Copier mon ID créateur' }, keywords: 'copy creator id whitelist identity copier', run: clickAfterNav('repo', 'btn-copy-my-creator-id'), defaultChord: null });
+
+  // ── Tools ───────────────────────────────────────────────────────────────────
   registerCommand({ id: 'palette.open', category: 'tools', title: { en: 'Open command palette', fr: 'Ouvrir la palette de commandes' }, keywords: 'palette search command ctrl k', run: () => openCommandPalette(), defaultChord: { ctrl: true, key: 'k' } });
+  registerCommand({ id: 'tools.checkAppUpdates', category: 'tools', title: { en: 'Check for app updates', fr: 'Vérifier les mises à jour de l’app' }, keywords: 'update app version check upgrade mise à jour application', run: clickId('btn-check-updates'), defaultChord: null });
+  registerCommand({ id: 'tools.restartOnboarding', category: 'tools', title: { en: 'Restart the onboarding tour', fr: 'Relancer la visite d’accueil' }, keywords: 'onboarding tour welcome restart guide accueil tutoriel', run: clickId('btn-restart-onboarding'), defaultChord: null });
+
+  // ── Settings ────────────────────────────────────────────────────────────────
+  registerCommand({ id: 'settings.storage', category: 'settings', title: { en: 'Storage & disk usage', fr: 'Stockage & espace disque' }, keywords: 'storage disk space usage dedupe stockage disque', run: callGlobal('_renderStorageModal'), defaultChord: null });
+  registerCommand({ id: 'settings.hashing', category: 'settings', title: { en: 'Hashing statistics', fr: 'Statistiques de hachage' }, keywords: 'hash hashing blake3 cache stats hachage', run: callGlobal('showHashingStats'), defaultChord: null });
+
+  // ── Help ────────────────────────────────────────────────────────────────────
   registerCommand({ id: 'help.search', category: 'help', title: { en: 'Search the documentation', fr: 'Rechercher dans la documentation' }, keywords: 'docs help search find', run: () => { (window as any).openDocsHome?.(); (document.querySelector('.nav-item[data-view="docs"]') as HTMLElement)?.click(); setTimeout(() => (document.querySelector('#view-docs .dh-search') as HTMLInputElement)?.focus(), 80); }, defaultChord: null });
 }
 
@@ -320,9 +369,10 @@ function ensurePaletteStyles() {
   const s = document.createElement('style');
   s.id = 'cp-styles';
   s.textContent = `
-  .cp-overlay{position:fixed;inset:0;z-index:2147483646;isolation:isolate;pointer-events:auto;
+  .cp-overlay{position:absolute;inset:0;z-index:2147483646;isolation:isolate;pointer-events:auto;
     display:flex;align-items:flex-start;justify-content:center;
-    padding-top:14vh;background:rgba(0,0,0,.5);backdrop-filter:blur(3px);}
+    padding-top:14vh;background:rgba(0,0,0,.5);backdrop-filter:blur(3px);
+    border-radius:inherit;overflow:hidden;}
   .cp-box{width:min(620px,92vw);max-height:66vh;display:flex;flex-direction:column;border-radius:16px;overflow:hidden;
     background:var(--bmm-bg-elevated,#1a2130);border:1px solid var(--bmm-border,#2a3242);box-shadow:0 24px 70px -18px rgba(0,0,0,.7);
     font-family:var(--bmm-font-sans,system-ui,sans-serif);animation:cp-in .12s ease;}

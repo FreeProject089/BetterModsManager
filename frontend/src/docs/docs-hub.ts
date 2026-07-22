@@ -91,43 +91,59 @@ const CATEGORIES: Category[] = [
       {
         id: 'first-profile', view: 'profiles', tutorial: { id: 'basics', part: 'profiles', step: 's1' }, diagram: 'profile-system',
         title: { en: 'Create your first profile', fr: 'Créer votre premier profil' },
-        summary: { en: 'Point BMM at your game folder and set up an isolated mod profile.', fr: 'Indiquez à BMM votre dossier de jeu et créez un profil de mods isolé.' },
-        keywords: 'profile setup game path folder create profil',
+        summary: { en: 'A profile = one game folder + the exact mods enabled in it. Here are the three folders it needs.', fr: 'Un profil = un dossier de jeu + les mods exacts qui y sont activés. Voici les trois dossiers qu’il demande.' },
+        keywords: 'profile setup game path mods backup folder create profil dossier',
         // Authored in md-lite (the BCWEB-style directive markdown) — steps + a tip callout.
         body: {
-          en: `A **profile** is an isolated set of mods. Keep a "clean" profile, a "multiplayer" profile and an experimental one — and swap between them in seconds.
+          en: `A **profile** ties one game folder to the exact set of mods you enable in it. Keep a clean
+profile, a multiplayer one, and an experimental one side by side — each remembers its own enabled mods.
 
 :::steps
 :::step[Open Profiles → New profile]
-Head to the **Profiles** screen and choose **New profile**.
+Go to the **Profiles** screen and click **New profile**.
 :::
-:::step[Point it at your game folder]
-Set the game / mods folder BMM should manage for this profile.
+:::step[Fill in the three folders]
+A profile keeps your library, your game, and your safety net in separate places, so you point it at three paths:
+- **Game folder** — where the game actually reads its files (this is where enabled mods get deployed).
+- **Mods folder** — where BMM keeps this profile's mod library on disk.
+- **Backup folder** — where BMM stashes any original file it has to overwrite, so every change is reversible.
+
+Also give it a **name** and a **game name** (the game name is what groups several profiles of the same game together).
 :::
-:::step[Name & colour it]
-Give it a name and a colour so it's easy to recognise at a glance.
+:::step[Pick a colour, then create]
+Choose a colour and icon and confirm. BMM creates the profile and makes it **active** right away.
 :::
 :::
 
-:::tip[Switching is instant]
-Switching profiles re-links only what changed, so it stays instant even with large collections.
+:::tip[What "active" actually does]
+One profile is active per game at a time. Activating it **deploys** that profile's enabled mods into the
+game folder and backs up whatever it replaces; switching away puts the previous state back. Your downloaded
+mods are never edited in place — BMM only links or copies them into the game.
 :::`,
-          fr: `Un **profil** est un ensemble isolé de mods. Gardez un profil « propre », un profil « multijoueur » et un profil expérimental — et basculez entre eux en quelques secondes.
+          fr: `Un **profil** relie un dossier de jeu à l'ensemble exact des mods que vous y activez. Gardez un profil
+propre, un profil multijoueur et un profil expérimental côte à côte — chacun mémorise ses propres mods activés.
 
 :::steps
 :::step[Ouvrez Profils → Nouveau profil]
-Allez sur l'écran **Profils** et choisissez **Nouveau profil**.
+Allez sur l'écran **Profils** et cliquez **Nouveau profil**.
 :::
-:::step[Indiquez le dossier du jeu]
-Définissez le dossier de jeu / mods que BMM doit gérer pour ce profil.
+:::step[Renseignez les trois dossiers]
+Un profil garde votre bibliothèque, votre jeu et votre filet de sécurité à des endroits distincts ; vous indiquez donc trois chemins :
+- **Dossier du jeu** — là où le jeu lit réellement ses fichiers (c'est là que les mods activés sont déployés).
+- **Dossier des mods** — là où BMM stocke sur le disque la bibliothèque de mods de ce profil.
+- **Dossier de backup** — là où BMM met de côté chaque fichier original qu'il doit écraser, pour que tout changement soit réversible.
+
+Donnez-lui aussi un **nom** et un **nom de jeu** (le nom de jeu regroupe plusieurs profils d'un même jeu).
 :::
-:::step[Nommez-le et donnez une couleur]
-Donnez-lui un nom et une couleur pour le reconnaître d'un coup d'œil.
+:::step[Choisissez une couleur, puis créez]
+Choisissez une couleur et une icône, puis confirmez. BMM crée le profil et le rend **actif** aussitôt.
 :::
 :::
 
-:::tip[Changement instantané]
-Changer de profil ne re-lie que ce qui a changé : instantané même avec de grandes collections.
+:::tip[Ce que fait vraiment « activer »]
+Un seul profil est actif par jeu à la fois. L'activer **déploie** les mods activés de ce profil dans le
+dossier du jeu et sauvegarde ce qu'il remplace ; revenir en arrière restaure l'état précédent. Vos mods
+téléchargés ne sont jamais modifiés sur place — BMM ne fait que les lier ou les copier dans le jeu.
 :::`,
         },
       },
@@ -248,8 +264,8 @@ Changer de profil ne re-lie que ce qui a changé : instantané même avec de gra
         summary: { en: 'Bundle a curated set of mods into one shareable pack.', fr: 'Regroupez un ensemble de mods sélectionnés en un pack partageable.' },
         keywords: 'modpack bundle collection pack export import',
         body: {
-          en: '<p>A modpack captures a whole set of mods (and their order/choices) into a single artefact you can export, re-import, or share with friends.</p>',
-          fr: '<p>Un modpack capture tout un ensemble de mods (et leur ordre/choix) dans un seul artefact que vous pouvez exporter, réimporter ou partager.</p>',
+          en: '<p>A modpack is a saved recipe: a named set of mods, kept in the order and with the choices you picked. Apply it to a profile and BMM enables exactly those mods — nothing else in the profile is touched.</p><ul><li><b>Create</b> one from the Modpacks screen (or capture what you have enabled right now), then <b>quick-apply</b> it to any profile in one click.</li><li><b>Share</b> it — export the pack, or attach it to a server repo so subscribers can pull it; when hosted you choose who may download it (public, or a whitelist).</li><li>A modpack <b>references</b> mods, it doesn’t re-bundle their files — so it stays tiny and always resolves to the current version of each mod.</li></ul>',
+          fr: '<p>Un modpack est une recette enregistrée : un ensemble de mods nommé, dans l’ordre et avec les choix que vous avez faits. Appliquez-le à un profil et BMM active exactement ces mods — rien d’autre dans le profil n’est modifié.</p><ul><li><b>Créez</b>-en un depuis l’écran Modpacks (ou capturez ce que vous avez activé maintenant), puis <b>appliquez-le</b> à n’importe quel profil en un clic.</li><li><b>Partagez</b>-le — exportez le pack, ou attachez-le à un dépôt serveur pour que les abonnés le récupèrent ; une fois hébergé, vous choisissez qui peut le télécharger (public ou liste blanche).</li><li>Un modpack <b>référence</b> les mods, il ne re-empaquette pas leurs fichiers — il reste minuscule et pointe toujours vers la version actuelle de chaque mod.</li></ul>',
         },
       },
     ],
@@ -265,8 +281,8 @@ Changer de profil ne re-lie que ce qui a changé : instantané même avec de gra
         summary: { en: 'Keep one copy of a mod on disk, used by many profiles.', fr: 'Gardez une seule copie d’un mod sur le disque, utilisée par plusieurs profils.' },
         keywords: 'shared storage dedupe link space disk stockage partagé espace',
         body: {
-          en: '<p>Instead of duplicating a mod in every profile, BMM keeps one copy and links it where needed — saving disk space without giving up isolation.</p>',
-          fr: '<p>Au lieu de dupliquer un mod dans chaque profil, BMM garde une copie unique et la lie là où c’est nécessaire — pour économiser l’espace disque sans perdre l’isolation.</p>',
+          en: '<p>Enable the same mod in three profiles and BMM still keeps <b>one</b> copy of its files on disk — each profile links to that shared copy instead of duplicating it. You get per-profile isolation without paying for it three times in space.</p><ul><li>Deduplication is by <b>content</b>: two mods (or two versions) that contain identical files share the stored bytes.</li><li>Editing or removing a mod in one profile never touches the others — each keeps its own view.</li><li>Open <b>Storage &amp; disk usage</b> in Settings to see how much space this is saving you.</li></ul>',
+          fr: '<p>Activez le même mod dans trois profils et BMM ne garde qu’<b>une</b> copie de ses fichiers sur le disque — chaque profil pointe vers cette copie partagée au lieu de la dupliquer. Vous gardez l’isolation par profil sans la payer trois fois en espace.</p><ul><li>La déduplication se fait par <b>contenu</b> : deux mods (ou deux versions) contenant des fichiers identiques partagent les octets stockés.</li><li>Modifier ou supprimer un mod dans un profil ne touche jamais les autres — chacun garde sa propre vue.</li><li>Ouvrez <b>Stockage &amp; espace disque</b> dans les Paramètres pour voir l’espace ainsi économisé.</li></ul>',
         },
       },
       {
@@ -275,8 +291,8 @@ Changer de profil ne re-lie que ce qui a changé : instantané même avec de gra
         summary: { en: 'Snapshot a profile so you can always roll back.', fr: 'Prenez un instantané d’un profil pour pouvoir toujours revenir en arrière.' },
         keywords: 'backup snapshot restore rollback safety sauvegarde restaurer',
         body: {
-          en: '<p>Take a snapshot before a big change. If something goes wrong, restore the profile exactly how it was — mods, order and choices included.</p>',
-          fr: '<p>Prenez un instantané avant un grand changement. En cas de problème, restaurez le profil exactement comme il était — mods, ordre et choix compris.</p>',
+          en: '<p>Every profile has a <b>backup folder</b> (the third path you set when creating it). Two things use it:</p><ul><li><b>Automatic</b> — whenever deploying a mod would overwrite an existing game file, BMM copies the original into the backup folder first. That’s what makes disabling a mod a clean, exact undo.</li><li><b>Manual snapshots</b> — take a snapshot before a big change; if it goes wrong, restore the profile exactly how it was, mods, order and choices included.</li></ul>',
+          fr: '<p>Chaque profil a un <b>dossier de backup</b> (le troisième chemin que vous définissez à sa création). Deux choses l’utilisent :</p><ul><li><b>Automatique</b> — dès que déployer un mod écraserait un fichier de jeu existant, BMM copie d’abord l’original dans le dossier de backup. C’est ce qui fait de la désactivation d’un mod une annulation propre et exacte.</li><li><b>Instantanés manuels</b> — prenez un instantané avant un grand changement ; en cas de problème, restaurez le profil exactement comme il était, mods, ordre et choix compris.</li></ul>',
         },
       },
       {
@@ -334,8 +350,8 @@ Changer de profil ne re-lie que ce qui a changé : instantané même avec de gra
         summary: { en: 'Browse and install mods, apps and themes from community catalogs.', fr: 'Parcourez et installez mods, applis et thèmes depuis les catalogues.' },
         keywords: 'catalog community bettercommunity browse install apps themes catalogue',
         body: {
-          en: '<p>Catalogs are curated feeds of mods, apps and themes. Install straight from them, and publish your own through the BetterCommunity hub.</p>',
-          fr: '<p>Les catalogues sont des flux sélectionnés de mods, applis et thèmes. Installez directement depuis eux, et publiez les vôtres via le hub BetterCommunity.</p>',
+          en: '<p>Catalogs are feeds of ready-to-install content — mods, apps, themes and plugins — that BMM reads from a URL. The <b>App Catalog</b> screen browses them; installing is one click (BMM handles the download and, for apps, the setup).</p><ul><li><b>Official</b> catalogs are curated; you can also add a <b>community</b> catalog by URL.</li><li>Install buttons are plain <code>bmm://</code> deeplinks, so a catalog can live on any website — or in the BetterCommunity hub.</li><li>Publish your own through <b>BetterCommunity</b>. Note it’s a separate hosted service from a self-hosted server repo.</li></ul>',
+          fr: '<p>Les catalogues sont des flux de contenu prêt à installer — mods, applis, thèmes et plugins — que BMM lit depuis une URL. L’écran <b>App Catalog</b> les parcourt ; l’installation se fait en un clic (BMM gère le téléchargement et, pour les applis, l’installation).</p><ul><li>Les catalogues <b>officiels</b> sont sélectionnés ; vous pouvez aussi ajouter un catalogue <b>communautaire</b> par URL.</li><li>Les boutons d’installation sont de simples deeplinks <code>bmm://</code>, un catalogue peut donc vivre sur n’importe quel site — ou dans le hub BetterCommunity.</li><li>Publiez les vôtres via <b>BetterCommunity</b>. C’est un service hébergé, distinct d’un dépôt serveur auto-hébergé.</li></ul>',
         },
       },
     ],
@@ -376,6 +392,20 @@ Changer de profil ne re-lie que ce qui a changé : instantané même avec de gra
         },
       },
       {
+        id: 'command-palette', view: 'settings',
+        title: { en: 'Command palette & shortcuts', fr: 'Palette de commandes et raccourcis' },
+        summary: { en: 'Press Ctrl/⌘+K to jump anywhere or run any action — and rebind every shortcut.', fr: 'Ctrl/⌘+K pour aller partout ou lancer n’importe quelle action — et réassignez chaque raccourci.' },
+        keywords: 'palette command ctrl k shortcut keyboard search rebind raccourci clavier recherche',
+        body: {
+          en: '<p>Press <kbd>Ctrl/⌘ + K</kbd> anywhere in BMM to open the <b>command palette</b> — one search box over every page and action. Start typing, use ↑/↓ and <kbd>Enter</kbd> to run.</p>'
+            + '<h4>What it can reach</h4><ul><li><b>Go to</b> any screen — including your own <b>custom navbar pages</b> (they show up automatically, so a page you pinned yesterday is searchable today).</li><li><b>Run actions</b> across the app: add a mod, scan, verify integrity, create/import a profile, sync or host a server repo, generate a server, check for updates, open storage or hashing stats, and more.</li><li>Two search modes: <b>Classic</b> (literal match) and <b>Semantic</b>, which expands your words through synonyms so “update” also finds “upgrade / new version”.</li></ul>'
+            + '<h4>Rebind anything</h4><p>The same actions are listed in <b>Settings → Keyboard shortcuts</b>, where you can record a new key combo, reset to default, or clear a shortcut. Custom nav pages appear here too, so you can bind a hotkey straight to one. Combos with a modifier (Ctrl/Shift/Alt) are recommended so they don’t clash with typing.</p>',
+          fr: '<p>Appuyez sur <kbd>Ctrl/⌘ + K</kbd> n’importe où dans BMM pour ouvrir la <b>palette de commandes</b> — une seule barre de recherche sur toutes les pages et actions. Tapez, utilisez ↑/↓ et <kbd>Entrée</kbd> pour exécuter.</p>'
+            + '<h4>Ce qu’elle atteint</h4><ul><li><b>Aller à</b> n’importe quel écran — y compris vos <b>pages de navbar personnalisées</b> (elles apparaissent automatiquement : une page épinglée hier est cherchable aujourd’hui).</li><li><b>Lancer des actions</b> partout : ajouter un mod, scanner, vérifier l’intégrité, créer/importer un profil, synchroniser ou héberger un dépôt serveur, générer un serveur, vérifier les mises à jour, ouvrir le stockage ou les stats de hachage, etc.</li><li>Deux modes : <b>Classique</b> (correspondance littérale) et <b>Sémantique</b>, qui étend vos mots via des synonymes — « mise à jour » trouve aussi « upgrade / nouvelle version ».</li></ul>'
+            + '<h4>Tout réassigner</h4><p>Les mêmes actions sont listées dans <b>Réglages → Raccourcis clavier</b>, où vous pouvez enregistrer une nouvelle combinaison, revenir au défaut, ou effacer un raccourci. Les pages perso y figurent aussi, vous pouvez donc en lier une à une touche. Les combinaisons avec un modificateur (Ctrl/Maj/Alt) sont recommandées pour ne pas gêner la saisie.</p>',
+        },
+      },
+      {
         id: 'integrations', diagram: 'discord-rpc',
         title: { en: 'Discord & integrations', fr: 'Discord et intégrations' },
         summary: { en: 'Show what you’re doing on Discord, and other optional hooks.', fr: 'Affichez votre activité sur Discord, et autres intégrations optionnelles.' },
@@ -391,8 +421,8 @@ Changer de profil ne re-lie que ce qui a changé : instantané même avec de gra
         summary: { en: 'Run actions on a schedule — updates, backups, syncs.', fr: 'Exécutez des actions planifiées — mises à jour, sauvegardes, synchros.' },
         keywords: 'scheduler cron automate task timer planificateur automatiser',
         body: {
-          en: '<p>Schedule recurring actions (update checks, backups, repo syncs) so BMM keeps your setup fresh without you lifting a finger.</p>',
-          fr: '<p>Planifiez des actions récurrentes (vérifs de mise à jour, sauvegardes, synchros de dépôts) pour que BMM garde votre configuration à jour sans effort.</p>',
+          en: '<p>The <b>Scheduler</b> runs actions for you on a timer — update checks, backups and repo syncs — so your setup stays fresh without you opening BMM.</p><ul><li>Each job pairs a trigger (an interval, or a time of day) with an action; enable or disable them one by one.</li><li>Jobs run through the same internal actions the buttons use, so a scheduled sync behaves exactly like one you start by hand.</li><li>Find it in <b>Settings → Scheduler</b>.</li></ul>',
+          fr: '<p>Le <b>Planificateur</b> exécute des actions pour vous à intervalle — vérifs de mise à jour, sauvegardes et synchros de dépôts — pour garder votre configuration à jour sans ouvrir BMM.</p><ul><li>Chaque tâche associe un déclencheur (un intervalle, ou une heure) à une action ; activez-les ou désactivez-les une par une.</li><li>Les tâches passent par les mêmes actions internes que les boutons : une synchro planifiée se comporte exactement comme une synchro lancée à la main.</li><li>Trouvez-le dans <b>Réglages → Planificateur</b>.</li></ul>',
         },
       },
       {
@@ -401,8 +431,8 @@ Changer de profil ne re-lie que ce qui a changé : instantané même avec de gra
         summary: { en: 'Measure how fast BMM scans, hashes and deploys on your machine.', fr: 'Mesurez la vitesse de scan, de hachage et de déploiement sur votre machine.' },
         keywords: 'benchmark performance speed hash blake3 measure performances vitesse',
         body: {
-          en: '<p>The built-in benchmark suite measures scanning, hashing and copy throughput so you can see exactly how BMM performs on your hardware.</p>',
-          fr: '<p>La suite de benchmarks intégrée mesure le débit de scan, de hachage et de copie pour voir exactement comment BMM se comporte sur votre matériel.</p>',
+          en: '<p>The built-in benchmark suite measures the three things BMM does most — <b>scanning</b> a folder, <b>hashing</b> file content (BLAKE3), and <b>copying / deploying</b> — and reports throughput for your actual disk and CPU.</p><ul><li>Run it to compare drives (an SSD vs. a network share), or to sanity-check a sync that felt slow.</li><li>Results stay local — nothing is uploaded.</li><li>Find it in <b>Settings</b>; for the internals, see <b>Developer → BLAKE3 hashing</b>.</li></ul>',
+          fr: '<p>La suite de benchmarks intégrée mesure les trois opérations que BMM fait le plus — <b>scanner</b> un dossier, <b>hacher</b> le contenu (BLAKE3) et <b>copier / déployer</b> — et rapporte le débit pour votre disque et votre CPU réels.</p><ul><li>Lancez-la pour comparer des disques (un SSD contre un partage réseau), ou vérifier une synchro qui a semblé lente.</li><li>Les résultats restent locaux — rien n’est envoyé.</li><li>Trouvez-la dans les <b>Réglages</b> ; pour les détails, voir <b>Développeur → Hachage BLAKE3</b>.</li></ul>',
         },
       },
     ],

@@ -9,7 +9,7 @@ import { t } from '../../core/i18n.js';
 // Sub-modules
 import { initRepoServer } from './repo-server.js';
 import { initRepoMonitoring } from './repo-monitoring.js';
-import { initRepoSync, showSyncSummary } from './repo-sync.js';
+import { initRepoSync, showSyncSummary, setRepoPassword } from './repo-sync.js';
 import { initModUpdates } from './mod-updates.js';
 import { initRepoAdmin } from './repo-admin.js';
 import { initModpackCreator } from '../mods/modpack-creator.js';
@@ -395,6 +395,8 @@ export function initRepo() {
         if (section === 'sync') {
             // ── Pre-fill sync form fields from QT data ──
             if (prefill) {
+                // A password-protected repo: seed it so the auto-fetch below doesn't prompt.
+                if (typeof prefill.password === 'string') setRepoPassword(prefill.password);
                 if (prefill.url && elements.inputSyncUrl)
                     (elements.inputSyncUrl as HTMLInputElement).value = prefill.url;
                 if (prefill.gameDir && elements.inputSyncGamePath)
@@ -444,6 +446,7 @@ export function initRepo() {
 
         } else if (section === 'connect') {
             // Fill URL in sync form and auto-fetch the repo info
+            if (typeof prefill?.password === 'string') setRepoPassword(prefill.password);
             if (prefill?.url && elements.inputSyncUrl)
                 (elements.inputSyncUrl as HTMLInputElement).value = prefill.url;
             const connectTarget = elements.syncUrlCard ?? elements.inputSyncUrl;

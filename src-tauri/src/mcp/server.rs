@@ -822,7 +822,7 @@ impl ServerHandler for BmmMcpServer {
             // ── Live app bridge ────────────────────────────────────────
             Tool::new(
                 "bmm_api_call",
-                "Call the RUNNING BMM app's local API (requires the BMM app to be open). Covers every live feature: GET /api/status, /api/repo/list, POST /api/repo/sync {repo_url}, /api/repo/connect {url}, /api/modpacks/enable {id}, /api/mods/enable {mod_id}, /api/mod/check-updates, /api/apps/launch {id}, /api/schedule/run, … Only GET/POST to 127.0.0.1/api/* is possible.",
+                "Call the RUNNING BMM app's local API (requires the BMM app to be open). Covers every live feature: GET /api/status, /api/repo/list, GET /api/repo/info?url=&password= (password optional, for a password-protected repo), POST /api/repo/sync {url, …, password?}, /api/repo/connect {url}, /api/modpacks/enable {id}, /api/mods/enable {mod_id}, /api/mod/check-updates, /api/apps/launch {id}, /api/schedule/run, … For a password-protected self-hosted repo, pass \"password\" in the sync body or as the info query param. Only GET/POST to 127.0.0.1/api/* is possible.",
                 std::sync::Arc::new(serde_json::from_value(json!({
                     "type": "object",
                     "properties": {

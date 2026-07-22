@@ -56,6 +56,10 @@ function promptRepoPassword(): Promise<string | null> {
     });
 }
 
+// Pre-seed the session download password (e.g. from a deeplink / API-driven sync that
+// already carries it), so the auto-driven fetch doesn't have to prompt the user.
+export function setRepoPassword(pw: string | null): void { lastRepoPassword = pw && pw.length ? pw : null; }
+
 // fetch_repo_info, but transparently handling a password-protected repo: on the
 // `repo.errPasswordRequired` signal from the backend, ask the user once, remember it
 // for this session, and retry. Cancelling re-throws so the caller's normal error path runs.
