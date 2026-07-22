@@ -37,6 +37,9 @@ import { appCatalog } from './diagrams/app-catalog.js';
 import { blake3Hashing } from './diagrams/blake3-hashing.js';
 import { scheduler } from './diagrams/scheduler.js';
 import { updateSystem } from './diagrams/update-system.js';
+import { offlineMode } from './diagrams/offline-mode.js';
+import { telemetryPipeline } from './diagrams/telemetry-pipeline.js';
+import { i18nSystem } from './diagrams/i18n-system.js';
 // Diagram Registry
 export const diagrams = {
     'resumable-downloads': resumableDownloads,
@@ -76,6 +79,9 @@ export const diagrams = {
     'blake3-hashing': blake3Hashing,
     'scheduler': scheduler,
     'update-system': updateSystem,
+    'offline-mode': offlineMode,
+    'telemetry-pipeline': telemetryPipeline,
+    'i18n-system': i18nSystem,
 };
 // State
 let currentDiagramID = null;

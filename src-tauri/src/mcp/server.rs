@@ -340,27 +340,28 @@ impl BmmMcpServer {
 
 impl ServerHandler for BmmMcpServer {
     fn get_info(&self) -> ServerInfo {
-        ServerInfo {
-            protocol_version: ProtocolVersion::V_2024_11_05,
-            capabilities: ServerCapabilities::builder()
-                .enable_tools()
-                .build(),
-            server_info: Implementation {
-                name: "bmm-mcp-server".to_string(),
-                version: env!("CARGO_PKG_VERSION").to_string(),
-                title: Some("Better Mods Manager MCP Server".to_string()),
-                description: Some("Provides full access to BMM's data and lifecycle for AI agents.".to_string()),
-                icons: None,
-                website_url: Some("https://github.com/FreeProject089/BetterModsManager".to_string()),
-            },
-            instructions: Some(
-                "Better Mods Manager (BMM) MCP Server. \
-                 Allows AI agents to manage profiles, mods, and analyze crashes. \
-                 Now includes support for reading UI translation files (Lang) \
-                 and documentation (.md)."
-                    .to_string(),
-            ),
-        }
+        // rmcp 1.x marks ServerInfo/Implementation #[non_exhaustive], so they can't be
+        // built with a struct literal from outside the crate — mutate from Default instead.
+        let mut imp = Implementation::default();
+        imp.name = "bmm-mcp-server".to_string();
+        imp.version = env!("CARGO_PKG_VERSION").to_string();
+        imp.title = Some("Better Mods Manager MCP Server".to_string());
+        imp.description = Some("Provides full access to BMM's data and lifecycle for AI agents.".to_string());
+        imp.icons = None;
+        imp.website_url = Some("https://github.com/FreeProject089/BetterModsManager".to_string());
+
+        let mut info = ServerInfo::default();
+        info.protocol_version = ProtocolVersion::V_2024_11_05;
+        info.capabilities = ServerCapabilities::builder().enable_tools().build();
+        info.server_info = imp;
+        info.instructions = Some(
+            "Better Mods Manager (BMM) MCP Server. \
+             Allows AI agents to manage profiles, mods, and analyze crashes. \
+             Now includes support for reading UI translation files (Lang) \
+             and documentation (.md)."
+                .to_string(),
+        );
+        info
     }
 
     fn list_tools(

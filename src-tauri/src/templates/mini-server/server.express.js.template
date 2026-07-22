@@ -2,6 +2,14 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const cors = require('cors');
+const crypto = require('crypto');
+
+// Constant-time string compare (CWE-208) — used for both password gates below.
+function safeEqual(a, b) {
+    const A = Buffer.from(String(a ?? ''));
+    const B = Buffer.from(String(b ?? ''));
+    return A.length === B.length && crypto.timingSafeEqual(A, B);
+}
 
 // Configuration
 const PORT = {{PORT}};
@@ -118,7 +126,7 @@ app.use((req, res, next) => {
         // and the separately-authed admin panel are exempt (as is local access, above).
         if (DOWNLOAD_PASSWORD && !req.path.startsWith('/admin') && req.path !== '/dashboard' && req.path !== '/monitoring.json') {
             const given = req.headers['x-repo-password'] || req.query.pw || '';
-            if (given !== DOWNLOAD_PASSWORD) {
+            if (!safeEqual(given, DOWNLOAD_PASSWORD)) {
                 addToHistory(ip, key, "REJECTED", "Wrong or missing repo password");
                 return res.status(401).send('Repo password required');
             }
@@ -130,7 +138,7 @@ app.use((req, res, next) => {
 
 // Admin Authentication Middleware
 const authAdmin = (req, res, next) => {
-    if (req.headers['authorization'] === ADMIN_PASSWORD) {
+    if (safeEqual(req.headers['authorization'], ADMIN_PASSWORD)) {
         next();
     } else {
         res.status(401).json({ err: "Unauthorized" });

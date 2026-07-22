@@ -95,7 +95,7 @@ winreg = "0.52"
 rayon = "1.8"
 tauri-plugin-single-instance = "2"
 jwalk = "0.8"
-rmcp = { version = "0.16", features = ["server", "transport-io"] }
+rmcp = { version = "1.4", features = ["server", "transport-io"] }
 schemars = "0.8"
 clap = { version = "4", features = ["derive"] }
 colored = "2"

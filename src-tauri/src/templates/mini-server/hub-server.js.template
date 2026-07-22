@@ -25,6 +25,14 @@ const express = require('express');
 const fs      = require('fs');
 const path    = require('path');
 const cors    = require('cors');
+const crypto  = require('crypto');
+
+// Constant-time string compare (CWE-208) — used for the admin-password gate.
+function safeEqual(a, b) {
+    const A = Buffer.from(String(a ?? ''));
+    const B = Buffer.from(String(b ?? ''));
+    return A.length === B.length && crypto.timingSafeEqual(A, B);
+}
 
 const PORT           = {{PORT}};
 const UPLOAD_LIMIT   = {{UPLOAD_LIMIT}}; // KB/s per client, 0 = unlimited
@@ -128,7 +136,7 @@ app.use(express.json());
 
 // Admin auth middleware
 const authAdmin = (req, res, next) => {
-    if (ADMIN_PASSWORD === '' || req.headers['authorization'] === ADMIN_PASSWORD) return next();
+    if (ADMIN_PASSWORD === '' || safeEqual(req.headers['authorization'], ADMIN_PASSWORD)) return next();
     res.status(401).json({ error: 'Unauthorized' });
 };
 
