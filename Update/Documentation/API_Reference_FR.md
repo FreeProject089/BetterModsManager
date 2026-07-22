@@ -31,7 +31,7 @@ Ce document est la source de vérité unique pour tout ce qui est pilotable par 
 | `/api/plugins` | non | Plugins installés | `{ ok, data:[…] }` |
 | `/api/creator-id` | non | Votre creator ID (clé publique) | `{ ok, creator_id }` |
 | `/api/data` | oui | **Export complet des données BMM** (`data.json`) — profils, mods, modpacks, plugins, réglages, tags… | fichier JSON (`bmm-data.json`) |
-| `/api/repo/info?url=` | non | Métadonnées d'un repo distant | résumé du manifeste repo |
+| `/api/repo/info?url=` | non | Métadonnées d'un repo distant. `&password=` optionnel pour un dépôt auto-hébergé protégé (envoyé en `X-Repo-Password` ; absent/faux → 401) | résumé du manifeste repo |
 | `/api/repo/list` | non | Repos connectés | `{ ok, data:[{url,name,…}] }` |
 | `/api/apps` | oui · `app.read` | Apps installées du Catalogue + stats d'usage | `{ installed:{ id:{…} } }` |
 | `/api/catalog` | oui · `catalog.read` | `apps-catalog.json` local | objet catalogue |
@@ -78,7 +78,7 @@ Ce document est la source de vérité unique pour tout ce qui est pilotable par 
 | Chemin | Auth · Perm | Corps |
 |---|---|---|
 | `/api/repo/connect` | oui · `repo.write` | `{ url, name? }` |
-| `/api/repo/sync` | oui · `repo.write` | `{ url, creator_id?, game_dir?, mods_dir?, backup_dir?, choices?, download_limit? }` (UI-driven) |
+| `/api/repo/sync` | oui · `repo.write` | `{ url, creator_id?, game_dir?, mods_dir?, backup_dir?, choices?, download_limit?, password? }` (UI-driven ; `password` = mot de passe de téléchargement optionnel d'un dépôt protégé) |
 | `/api/repo/gen` | oui · `repo.write` | `{ profileIds[], outputDir, authorName, … }` (UI-driven) |
 | `/api/repo/update` | oui | `{ repoDir }` — ouvre le modal de mise à jour incrémentale pré-rempli |
 | `/api/repo/host` | oui · `repo.write` | `{ serveDir, port?, uploadLimit? }` |
@@ -168,7 +168,7 @@ Les deeplinks sont des URL cliquables (pages web, Discord, scripts) qui pilotent
 | `bmm://modpack/enable?id=<id>` | `POST /api/modpacks/enable` |
 | `bmm://modpack/disable?id=<id>` | `POST /api/modpacks/disable` |
 | `bmm://repo/connect?url=<url>` | `POST /api/repo/connect` |
-| `bmm://repo/sync?url=<url>&profile=<repo_profile_id>` | `POST /api/repo/sync` |
+| `bmm://repo/sync?url=<url>&profile=<repo_profile_id>[&password=<pw>]` | `POST /api/repo/sync` |
 | `bmm://repo/gen` | ouvre la section Gen (sélection de profils requise) |
 | `bmm://repo/update?dir=<repoDir>` | ouvre le modal de mise à jour incrémentale |
 | `bmm://repo/host?dir=<serveDir>&port=<port>` | ouvre la section host HTTP |

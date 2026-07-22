@@ -195,6 +195,8 @@ npm run build
 
 | Ressource | Lien |
 |-----------|------|
+| **📚 BMM Docs — le site de documentation complet** (guide utilisateur, fonctionnement interne, référence API, FR/EN) | https://freeproject089.github.io/BMM-Docs/ |
+| Aide intégrée | **Help & other** dans BMM — articles bilingues, 41 diagrammes interactifs, tutoriels. Appuyez sur **Ctrl+K** n'importe où pour chercher dans toute l'app. |
 | Aperçu des fonctionnalités | [App_Features_FR.md](Update/Documentation/App_Features_FR.md) |
 | Architecture technique | [Technical_Analysis_FR.md](Update/Documentation/Technical_Analysis_FR.md) |
 | Système Creator ID | [creator_id.md](.Assets/.md/creator_id.md) |

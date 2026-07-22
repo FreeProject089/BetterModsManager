@@ -31,7 +31,7 @@ This document is the single source of truth for everything that can be driven pr
 | `/api/profiles` | no | All profiles (summary, no mod list) | `{ ok, data:[{id,name,game,active}] }` |
 | `/api/plugins` | no | Installed plugins | `{ ok, data:[…] }` |
 | `/api/creator-id` | no | This user's creator ID (public key) | `{ ok, creator_id }` |
-| `/api/repo/info?url=` | no | Metadata for a remote repo | repo manifest summary |
+| `/api/repo/info?url=` | no | Metadata for a remote repo. Optional `&password=` for a password-protected self-hosted repo (sent as `X-Repo-Password`; wrong/missing → 401) | repo manifest summary |
 | `/api/repo/list` | no | Connected repos | `{ ok, data:[{url,name,…}] }` |
 | `/api/apps` | yes · `app.read` | Installed App-Catalog apps + usage stats | `{ installed:{ id:{…} } }` |
 | `/api/catalog` | yes · `catalog.read` | Local `apps-catalog.json` | catalog object |
@@ -78,7 +78,7 @@ This document is the single source of truth for everything that can be driven pr
 | Path | Auth | Body |
 |---|---|---|
 | `/api/repo/connect` | yes | `{ url, name? }` |
-| `/api/repo/sync` | yes | `{ url, creator_id?, game_dir?, mods_dir?, backup_dir?, choices?, download_limit? }` (UI-driven) |
+| `/api/repo/sync` | yes | `{ url, creator_id?, game_dir?, mods_dir?, backup_dir?, choices?, download_limit?, password? }` (UI-driven; `password` = optional download password for a protected repo) |
 | `/api/repo/gen` | yes | `{ profileIds[], outputDir, authorName, … }` (UI-driven) |
 | `/api/repo/update` | yes | `{ repoDir }` — opens the incremental-update modal pre-filled |
 | `/api/repo/host` | yes | `{ serveDir, port?, uploadLimit? }` |
@@ -168,7 +168,7 @@ Deeplinks are clickable URLs (web pages, Discord, scripts) that drive BMM when i
 | `bmm://modpack/enable?id=<id>` | `POST /api/modpacks/enable` |
 | `bmm://modpack/disable?id=<id>` | `POST /api/modpacks/disable` |
 | `bmm://repo/connect?url=<url>` | `POST /api/repo/connect` |
-| `bmm://repo/sync?url=<url>&profile=<repo_profile_id>` | `POST /api/repo/sync` |
+| `bmm://repo/sync?url=<url>&profile=<repo_profile_id>[&password=<pw>]` | `POST /api/repo/sync` |
 | `bmm://repo/gen` | opens the Gen section (needs profile selection) |
 | `bmm://repo/update?dir=<repoDir>` | opens the incremental-update modal |
 | `bmm://repo/host?dir=<serveDir>&port=<port>` | opens the HTTP host section |
