@@ -1,5 +1,7 @@
 # Theme System
 
+> 📚 **Canonical docs:** the [BMM Docs site — Themes & Appearance](https://freeproject089.github.io/BMM-Docs/features/themes/) and the in-app **Help & other → Themes** article (tokens, `.bmmtheme` format, `bmm://` share links, WCAG contrast enforcement). This file is a quick tour.
+
 BMM ships a full theming engine: **100% of the interface is customisable without any CSS knowledge** — and power users still get raw CSS when they want it.
 
 ## Opening the editor

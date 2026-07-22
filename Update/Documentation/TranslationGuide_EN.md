@@ -1,9 +1,18 @@
 # Translation Guide - Better Mod Manager
 
+> 📚 **The comfortable way:** you don't need to hand-edit files at all. **Settings → Language**
+> has a downloadable template, an **Import** button, and the **Translation Sandbox** — create a
+> language, translate key by key with live previews and a progress bar, then export/import.
+> Full guide: [BMM Docs — Settings → Language](https://freeproject089.github.io/BMM-Docs/features/settings/)
+> and the in-app **Help & other → Translate BMM** article. The rest of this file covers the
+> manual file-based route.
+
 Want to add your own language to BMM? It's very easy!
 
 ## 1. Create the File
-Navigate to the `frontend/Lang` folder in the application directory.
+Go to the app's `Lang/` folder — next to the installed application (in a development checkout
+it's `frontend/Lang`). If you'd rather not hunt for it, **Settings → Language → Import** copies
+your file there for you.
 Create a new file in `.json` format, for example `es.json` for Spanish or `de.json` for German.
 
 ## 2. File Structure

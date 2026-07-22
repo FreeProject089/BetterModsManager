@@ -132,3 +132,12 @@ permission model. Page ids pass a `sanitize_id()` allow-list. Excellent isolatio
 | Launch-pack VBS/PS escaping | Info | Fine (local-only input) |
 
 No blockers.
+
+## Remediation (applied 2026-07-22)
+
+| Item | Severity | Action |
+|---|---|---|
+| **rmcp RUSTSEC-2026-0189** (DNS rebinding in the Streamable HTTP transport, CVSS 8.8) | High (unreachable) | **Fixed** — rmcp 0.16 → **1.8**. BMM's MCP server is stdio-only, so the vulnerable transport was never reachable; the bump clears the advisory anyway. `cargo audit` now reports **0 vulnerabilities**. Only breakage: `ServerInfo`/`Implementation` became `#[non_exhaustive]` → built via mutate-from-`Default`. |
+| **Timing-unsafe password compares** in the generated mini-server & hub-server templates (CWE-208) | Low | **Fixed** — both the new subscriber **download password** gate and the admin `Authorization` gate now use `crypto.timingSafeEqual` in `server.express.js.template` and `hub-server.js.template`. |
+| **dompurify** low-severity advisory (GHSA-c2j3-45gr-mqc4) in root npm tooling | Low | **Fixed** — `npm audit fix` → 0 vulnerabilities. |
+| New feature reviewed: **repo download password** | — | Header-based (`X-Repo-Password`), guarded `HeaderValue` construction on the Rust client, 401 surfaced as a typed error, exempt paths limited to dashboard/monitoring/admin/local. No secrets logged (history records only "wrong or missing password"). |

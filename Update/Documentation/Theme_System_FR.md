@@ -1,5 +1,7 @@
 # Système de Thèmes
 
+> 📚 **Docs canoniques :** le [site BMM Docs — Thèmes & Apparence](https://freeproject089.github.io/BMM-Docs/features/themes/) et l'article **Help & other → Thèmes** dans l'app (tokens, format `.bmmtheme`, liens de partage `bmm://`, contraste WCAG). Ce fichier est un tour rapide.
+
 BMM embarque un moteur de thèmes complet : **100 % de l'interface est personnalisable sans aucune connaissance CSS** — et les utilisateurs avancés gardent accès au CSS brut.
 
 ## Ouvrir l'éditeur

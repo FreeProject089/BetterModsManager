@@ -140,3 +140,12 @@ page passent une liste blanche `sanitize_id()`. Isolation excellente.
 | Échappement VBS/PS des launch-packs | Info | Correct (entrée locale uniquement) |
 
 Aucun bloquant.
+
+## Remédiation (appliquée le 2026-07-22)
+
+| Élément | Sévérité | Action |
+|---|---|---|
+| **rmcp RUSTSEC-2026-0189** (DNS rebinding du transport Streamable HTTP, CVSS 8.8) | Haute (inatteignable) | **Corrigé** — rmcp 0.16 → **1.8**. Le serveur MCP de BMM est stdio-only, le transport vulnérable n'était donc jamais atteignable ; le bump efface l'advisory quand même. `cargo audit` rapporte désormais **0 vulnérabilité**. Seule casse : `ServerInfo`/`Implementation` devenus `#[non_exhaustive]` → construits par mutation depuis `Default`. |
+| **Comparaisons de mots de passe non constantes** dans les templates mini-serveur & hub-server générés (CWE-208) | Faible | **Corrigé** — la nouvelle porte **mot de passe de téléchargement** côté abonnés ET la porte admin `Authorization` utilisent désormais `crypto.timingSafeEqual` dans `server.express.js.template` et `hub-server.js.template`. |
+| Advisory **dompurify** de faible sévérité (GHSA-c2j3-45gr-mqc4) dans l'outillage npm racine | Faible | **Corrigé** — `npm audit fix` → 0 vulnérabilité. |
+| Nouvelle fonctionnalité passée en revue : **mot de passe de téléchargement des dépôts** | — | Basé sur header (`X-Repo-Password`), construction `HeaderValue` gardée côté client Rust, 401 remonté en erreur typée, chemins exemptés limités à dashboard/monitoring/admin/local. Aucun secret journalisé (l'historique n'enregistre que « mot de passe absent ou faux »). |
