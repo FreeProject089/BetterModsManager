@@ -116,6 +116,15 @@ writeFileSync(join(OUT_DIR, 'bmm.default.tokens.json'), JSON.stringify(def.tree,
 console.log(`bmm.default.tokens.json  — ${def.stats.total} tokens (${def.stats.typed} typed, ${def.stats.aliases} aliases, ${def.stats.untyped} raw)`);
 
 // ── 5. One overlay file per built-in theme (only its overrides) ────────────
+// Also accumulate everything into a single Tokens-Studio-style bundle so the whole
+// system (default + all themes, with theme-switching pre-wired) imports in ONE go.
+const bundle = { default: def.tree };                 // each top-level key = a token SET
+const bundleThemes = [
+  // Base theme: only the default set active.
+  { name: 'BMM Default', selectedTokenSets: { default: 'enabled' } },
+];
+const setOrder = ['default'];                          // later sets override earlier ones
+
 for (const file of readdirSync(THEMES_DIR).filter(f => f.endsWith('.bmmtheme.json')).sort()) {
   const theme = JSON.parse(readFileSync(join(THEMES_DIR, file), 'utf8'));
   const vars = new Map(Object.entries(theme.vars || {}).filter(([k]) => k.startsWith('--bmm-')));
@@ -126,5 +135,22 @@ for (const file of readdirSync(THEMES_DIR).filter(f => f.endsWith('.bmmtheme.jso
   const out = `bmm.${theme.id}.tokens.json`;
   writeFileSync(join(OUT_THEMES, out), JSON.stringify(tree, null, 2) + '\n');
   console.log(`themes/${out}  — ${stats.total} overrides (${stats.typed} typed)`);
+
+  const setName = `themes/${theme.id}`;
+  bundle[setName] = tree;
+  setOrder.push(setName);                             // after "default" → its overrides win
+  bundleThemes.push({
+    name: theme.name || theme.id,
+    // default provides the base values; the theme set overrides on top.
+    selectedTokenSets: { default: 'enabled', [setName]: 'enabled' },
+  });
 }
-console.log('\nDone. Import bmm.default.tokens.json first; add a theme file as a second set to preview that theme.');
+
+// ── 6. Single-file bundle (Tokens Studio format Penpot understands) ────────
+bundle.$themes = bundleThemes;
+bundle.$metadata = { tokenSetOrder: setOrder };
+writeFileSync(join(OUT_DIR, 'bmm.penpot-bundle.tokens.json'), JSON.stringify(bundle, null, 2) + '\n');
+console.log(`\nbmm.penpot-bundle.tokens.json — 1 base set + ${setOrder.length - 1} theme sets, ${bundleThemes.length} switchable themes`);
+console.log('\nDone.');
+console.log('  • One-shot:  import bmm.penpot-bundle.tokens.json → all sets + a theme per built-in.');
+console.log('  • Manual:    import bmm.default.tokens.json first, then a themes/bmm.<id> file as a second set.');

@@ -133,7 +133,7 @@ board; then rebuild interactive pieces as real components on top of the imported
 (so they recolour per theme). No first-party HTML importer as mature as html.to.design yet.
 
 ### Recommended order
-1. Import `tokens/out/bmm.default.tokens.json` (+ a theme set) — **done, ready now**.
+1. Import `tokens/out/bmm.penpot-bundle.tokens.json` (default + all 12 themes, switchable) — **done, ready now**. See [`tokens/README.md`](tokens/README.md#use-them-in-penpot) for the click-path.
 2. Build the ~8 core components above as components/variants, wired to the tokens.
 3. Snapshot the ⭐ screens and recompose them from those components.
 4. Add the remaining views as needed.
