@@ -3526,6 +3526,7 @@ async fn do_api_repo_gen(
             upload_limit: body.upload_limit.unwrap_or(0),
             server_version: body.server_version,
             admin_password: body.admin_password.clone(),
+            download_password: None, // local API export doesn't set a subscriber password
             enable_docker: body.enable_docker,
             docker_host_type: body.docker_host_type.clone(),
             server_type: body.server_type.clone(),

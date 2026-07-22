@@ -9,6 +9,69 @@ import { getLinks } from '../../core/links-config.js';
 
 let lastFetchedRepo = null;
 let lastFetchedRepoSaltedId = null;
+// Download password for a password-protected self-hosted repo. The host sets an optional
+// DOWNLOAD_PASSWORD on the mini-server; content requests then need `X-Repo-Password`.
+// We remember what the user typed for this session so the follow-up fetch + the sync reuse it.
+let lastRepoPassword: string | null = null;
+
+// Small themed modal that asks the subscriber for the repo's download password.
+// Resolves to the entered string, or null if the user cancels.
+function promptRepoPassword(): Promise<string | null> {
+    return new Promise((resolve) => {
+        const overlay = document.createElement('div');
+        overlay.style.cssText = 'position:fixed;inset:0;z-index:2147483647;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.55);backdrop-filter:blur(2px);';
+        const box = document.createElement('div');
+        box.style.cssText = 'background:var(--bg-secondary,#1b1b1f);border:1px solid var(--border,rgba(255,255,255,0.1));border-radius:12px;padding:22px;width:min(90vw,380px);box-shadow:0 20px 60px rgba(0,0,0,0.5);';
+        const title = document.createElement('div');
+        title.textContent = t('repo.passwordPrompt.title') || 'Password required';
+        title.style.cssText = 'font-weight:700;font-size:15px;margin-bottom:6px;color:var(--text-primary,#fff);';
+        const desc = document.createElement('div');
+        desc.textContent = t('repo.passwordPrompt.desc') || 'This repository is protected. Enter its download password to continue.';
+        desc.style.cssText = 'font-size:12px;color:var(--text-secondary,#aaa);margin-bottom:14px;line-height:1.4;';
+        const input = document.createElement('input');
+        input.type = 'password';
+        input.autocomplete = 'off';
+        input.placeholder = t('repo.passwordPrompt.placeholder') || 'Download password';
+        input.style.cssText = 'width:100%;box-sizing:border-box;padding:9px 11px;border-radius:8px;border:1px solid var(--border,rgba(255,255,255,0.15));background:var(--bg-primary,#111);color:var(--text-primary,#fff);font-size:13px;margin-bottom:16px;';
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;gap:8px;justify-content:flex-end;';
+        const cancel = document.createElement('button');
+        cancel.textContent = t('common.cancel') || 'Cancel';
+        cancel.style.cssText = 'padding:8px 14px;border-radius:8px;border:1px solid var(--border,rgba(255,255,255,0.15));background:transparent;color:var(--text-secondary,#ccc);cursor:pointer;font-size:13px;';
+        const ok = document.createElement('button');
+        ok.textContent = t('common.confirm') || 'Confirm';
+        ok.style.cssText = 'padding:8px 14px;border-radius:8px;border:none;background:var(--accent,#5b8def);color:#fff;cursor:pointer;font-size:13px;font-weight:600;';
+        const done = (val: string | null) => { try { overlay.remove(); } catch {} resolve(val); };
+        cancel.onclick = () => done(null);
+        ok.onclick = () => done(input.value);
+        input.addEventListener('keydown', (ev) => {
+            if (ev.key === 'Enter') { ev.preventDefault(); done(input.value); }
+            else if (ev.key === 'Escape') { ev.preventDefault(); done(null); }
+        });
+        row.append(cancel, ok);
+        box.append(title, desc, input, row);
+        overlay.append(box);
+        document.body.append(overlay);
+        setTimeout(() => input.focus(), 30);
+    });
+}
+
+// fetch_repo_info, but transparently handling a password-protected repo: on the
+// `repo.errPasswordRequired` signal from the backend, ask the user once, remember it
+// for this session, and retry. Cancelling re-throws so the caller's normal error path runs.
+async function fetchRepoInfoWithPassword(url: string, creatorId: string | null) {
+    try {
+        return await invoke('fetch_repo_info', { url, creatorId, password: lastRepoPassword });
+    } catch (e) {
+        if (String(e) === 'repo.errPasswordRequired') {
+            const pw = await promptRepoPassword();
+            if (pw == null) throw e;
+            lastRepoPassword = pw;
+            return await invoke('fetch_repo_info', { url, creatorId, password: pw });
+        }
+        throw e;
+    }
+}
 
 // Is this BMM signed in to a BetterCommunity account? Verifies the (raw) creator id
 // against BCWEB's link-status, falling back to the cached `bc_linked` flag offline.
@@ -171,12 +234,12 @@ export function initRepoSync(elements) {
             try {
                 btnFetchInfo.disabled = true;
                 
-                let repo = await invoke('fetch_repo_info', { url, creatorId: null });
+                let repo = await fetchRepoInfoWithPassword(url, null);
                 let saltedCreatorId = null;
                 if (repo.seed) {
                     saltedCreatorId = await invoke('get_salted_creator_id', { salt: repo.seed });
                     lastFetchedRepoSaltedId = saltedCreatorId;
-                    repo = await invoke('fetch_repo_info', { url, creatorId: saltedCreatorId });
+                    repo = await fetchRepoInfoWithPassword(url, saltedCreatorId);
                 }
 
                 if (window.saveClientHistory) window.saveClientHistory(url, repo);
@@ -611,7 +674,7 @@ export function initRepoSync(elements) {
                     args: {
                         url, creatorId: finalCreatorId, gameDir, modsDir, backupDir, choices,
                         overwriteAll: syncMode === 'all', deleteExtra: cleanExtra, downloadLimit,
-                        unzipArchives: !keepZipped
+                        unzipArchives: !keepZipped, password: lastRepoPassword
                     }
                 });
 

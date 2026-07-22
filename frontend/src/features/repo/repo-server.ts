@@ -403,6 +403,8 @@ export function initRepoServer(elements) {
             const lang = localStorage.getItem('bmm-lang') || 'en';
 
             const adminPassword = document.getElementById('repo-mini-server-password')?.value || "admin";
+            // Optional subscriber-facing download password. Empty = the repo stays open.
+            const downloadPassword = document.getElementById('repo-mini-server-download-password')?.value || "";
 
             const enableDocker = cbDocker ? cbDocker.checked : false;
             const dockerHostType = dockerHostSelect ? dockerHostSelect.value : "linux";
@@ -415,7 +417,7 @@ export function initRepoServer(elements) {
 
                 await invoke('generate_standalone_server', {
                     payload: {
-                        repoPath: jsonPath, port, autoStart, useCloudflare, useUpnp, lang, uploadLimit, serverVersion, adminPassword, enableDocker, dockerHostType, serverType
+                        repoPath: jsonPath, port, autoStart, useCloudflare, useUpnp, lang, uploadLimit, serverVersion, adminPassword, downloadPassword, enableDocker, dockerHostType, serverType
                     }
                 });
 

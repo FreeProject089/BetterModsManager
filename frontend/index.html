@@ -1681,6 +1681,28 @@
                                                 </div>
                                             </div>
 
+                                            <div class="form-group" style="margin-bottom:10px;">
+                                                <label class="form-label" style="font-size:10px;"
+                                                    data-i18n="repo.miniServerDownloadPassword">Download Password</label>
+                                                <div style="position:relative; display:flex; align-items:center;">
+                                                    <input type="password" id="repo-export-server-download-pass"
+                                                        class="form-input" value="" placeholder="none"
+                                                        style="font-size:12px; padding:5px; padding-right:30px; background:rgba(0,0,0,0.3); width:100%; border:1px solid rgba(255,255,255,0.05); border-radius:4px;" />
+                                                    <button type="button"
+                                                        onclick="const p=document.getElementById('repo-export-server-download-pass'); p.type = p.type==='password'?'text':'password';"
+                                                        style="position:absolute; right:8px; background:none; border:none; color:var(--text-secondary); cursor:pointer; padding:0; display:flex; align-items:center; z-index:5;">
+                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                                                            stroke="currentColor" stroke-width="2">
+                                                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z">
+                                                            </path>
+                                                            <circle cx="12" cy="12" r="3"></circle>
+                                                        </svg>
+                                                    </button>
+                                                </div>
+                                                <div style="font-size:10px; color:var(--text-muted); margin-top:3px;"
+                                                    data-i18n="repo.miniServerDownloadPasswordHint">Optional. When set, subscribers must enter this password to download from the repo.</div>
+                                            </div>
+
                                             <div style="display:flex; flex-direction:column; gap:6px;">
                                                 <label class="checkbox-container" style="font-size: 11px;">
                                                     <input type="checkbox" id="repo-export-server-cloudflare" checked />
@@ -2159,6 +2181,29 @@
                                                     </button>
                                                     <input type="password" id="repo-mini-server-password"
                                                         class="form-input" value="admin"
+                                                        style="width:80px; height:24px; font-size:11px; padding:0 8px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:4px; color:var(--warning); font-weight:700;">
+                                                </div>
+                                            </div>
+                                            <div
+                                                style="display:flex; align-items:center; justify-content:space-between;"
+                                                title="Optional. When set, subscribers must enter this password to download from the repo. Leave blank for an open repo."
+                                                data-i18n-title="repo.miniServerDownloadPasswordHint">
+                                                <span
+                                                    style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:700;"
+                                                    data-i18n="repo.miniServerDownloadPassword">DOWNLOAD PASSWORD</span>
+                                                <div style="display:flex; align-items:center; gap:5px;">
+                                                    <button
+                                                        onclick="const p = document.getElementById('repo-mini-server-download-password'); p.type = p.type === 'password' ? 'text' : 'password';"
+                                                        class="btn btn-sm"
+                                                        style="height:24px; width:24px; padding:0; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,0.05); border-radius:4px;">
+                                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                                                            stroke="currentColor" stroke-width="2">
+                                                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                                                            <circle cx="12" cy="12" r="3" />
+                                                        </svg>
+                                                    </button>
+                                                    <input type="password" id="repo-mini-server-download-password"
+                                                        class="form-input" value="" placeholder="none"
                                                         style="width:80px; height:24px; font-size:11px; padding:0 8px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:4px; color:var(--warning); font-weight:700;">
                                                 </div>
                                             </div>

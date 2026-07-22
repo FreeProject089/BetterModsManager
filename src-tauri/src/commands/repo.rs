@@ -40,6 +40,10 @@ pub struct MiniServerExportOptions {
     pub port: u16,
     pub upload_limit: u32,
     pub admin_password: String,
+    /// Optional password a SUBSCRIBER must supply to download from this repo (empty = open).
+    /// Distinct from admin_password, which only protects the host's own admin panel.
+    #[serde(default)]
+    pub download_password: String,
     pub server_version: u8,
     pub use_cloudflare: bool,
     pub use_upnp: bool,
@@ -521,6 +525,7 @@ pub async fn export_server_repo(
             opt.upload_limit,
             opt.server_version,
             &opt.admin_password,
+            &opt.download_password,
             enable_docker,
             &docker_host_type,
             &server_type,
@@ -1160,7 +1165,7 @@ pub async fn check_mod_updates(
         if flagged.contains(&c.mod_id) { continue; }
 
         if !repo_cache.contains_key(&c.repo_url) {
-            match fetch_repo_info(c.repo_url.clone(), creator_id.clone()).await {
+            match fetch_repo_info(c.repo_url.clone(), creator_id.clone(), None).await {
                 Ok(manifest) => {
                     let mut map = std::collections::HashMap::new();
                     for p in &manifest.profiles {
@@ -1647,6 +1652,7 @@ fn generate_mini_server_files(
     upload_limit: u32,
     server_version: u8,
     admin_password: &str,
+    download_password: &str,
     enable_docker: bool,
     docker_host_type: &str,
     server_type: &str,
@@ -1672,6 +1678,7 @@ fn generate_mini_server_files(
         let mut server_js_content = server_js_template.replace("{{PORT}}", &port.to_string());
         server_js_content = server_js_content.replace("{{UPLOAD_LIMIT}}", &upload_limit.to_string());
         server_js_content = server_js_content.replace("{{ADMIN_PASSWORD}}", admin_password);
+        server_js_content = server_js_content.replace("{{DOWNLOAD_PASSWORD}}", download_password);
 
         let public_dir = output_path.join("public");
         if !public_dir.exists() {
@@ -1831,6 +1838,7 @@ pub struct StandaloneServerConfig {
     pub upload_limit: u32,
     pub server_version: Option<u8>,
     pub admin_password: Option<String>,
+    pub download_password: Option<String>,
     pub enable_docker: Option<bool>,
     pub docker_host_type: Option<String>,
     pub server_type: Option<String>,
@@ -1853,6 +1861,7 @@ pub async fn generate_standalone_server(
         upload_limit,
         server_version,
         admin_password,
+        download_password,
         enable_docker,
         docker_host_type,
         server_type,
@@ -1875,16 +1884,16 @@ pub async fn generate_standalone_server(
     let enable_docker = enable_docker.unwrap_or(false);
     let docker_host_type = docker_host_type.unwrap_or_else(|| "linux".to_string());
     let stype = server_type.unwrap_or_else(|| "user".to_string());
-    generate_mini_server_files(&handle, output_path, port, auto_start, use_cloudflare, use_upnp, &lang, upload_limit, version, &pw, enable_docker, &docker_host_type, &stype)
+    generate_mini_server_files(&handle, output_path, port, auto_start, use_cloudflare, use_upnp, &lang, upload_limit, version, &pw, &download_password.unwrap_or_default(), enable_docker, &docker_host_type, &stype)
 }
 
 #[tauri::command]
-pub async fn fetch_repo_info(url: String, creator_id: Option<String>) -> Result<ServerRepo, String> {
+pub async fn fetch_repo_info(url: String, creator_id: Option<String>, password: Option<String>) -> Result<ServerRepo, String> {
     let mut target_url = url.trim().to_string();
     if !target_url.starts_with("http://") && !target_url.starts_with("https://") {
         target_url = format!("http://{}", target_url);
     }
-    
+
     if !target_url.ends_with("repo.json") {
         if target_url.ends_with('/') {
             target_url.push_str("repo.json");
@@ -1894,17 +1903,28 @@ pub async fn fetch_repo_info(url: String, creator_id: Option<String>) -> Result<
     }
 
     let mut client_builder = reqwest::Client::builder();
+    let mut headers = reqwest::header::HeaderMap::new();
     if let Some(ref cid) = creator_id {
-        let mut headers = reqwest::header::HeaderMap::new();
         if let Ok(hv) = reqwest::header::HeaderValue::from_str(cid) {
             headers.insert("X-Creator-ID", hv);
         }
+    }
+    if let Some(ref pw) = password {
+        if !pw.is_empty() {
+            if let Ok(hv) = reqwest::header::HeaderValue::from_str(pw) { headers.insert("X-Repo-Password", hv); }
+        }
+    }
+    if !headers.is_empty() {
         client_builder = client_builder.default_headers(headers);
     }
     let client = client_builder.build().map_err(|e| e.to_string())?;
     let res = client.get(&target_url).send().await.map_err(|e| e.to_string())?;
 
     if !res.status().is_success() {
+        // 401 = this repo requires a download password (or the one given is wrong).
+        if res.status() == 401 {
+            return Err("repo.errPasswordRequired".to_string());
+        }
         if res.status() == 403 {
             // The sandbox gate (IP/key/account bans + whitelist, incl. the site-wide
             // policy) sends a structured body distinguishing WHY access was denied,
@@ -1940,6 +1960,9 @@ pub struct SyncChoice {
 pub struct SyncArgs {
     pub url: String,
     pub creator_id: Option<String>,
+    /// Optional download password for a password-protected repo (sent as X-Repo-Password).
+    #[serde(default)]
+    pub password: Option<String>,
     pub game_dir: String,
     pub mods_dir: String,
     pub backup_dir: String,
@@ -2001,7 +2024,7 @@ pub async fn sync_server_repo(
         current_file: url.clone(),
     });
     
-    let repo = fetch_repo_info(url.clone(), args.creator_id.clone()).await?;
+    let repo = fetch_repo_info(url.clone(), args.creator_id.clone(), args.password.clone()).await?;
 
     // Determine the base URL for downloading files
     let base_url = if url.ends_with("repo.json") {
@@ -2125,12 +2148,15 @@ pub async fn sync_server_repo(
             if let Some(ref arch) = repo_mod.archive {
                 let zip_url = format!("{}{}", base_url, arch.relative_path.replace("\\", "/"));
                 let mut cb = reqwest::Client::builder();
-                if let Some(ref cid) = args.creator_id {
+                {
                     let mut headers = reqwest::header::HeaderMap::new();
-                    if let Ok(hv) = reqwest::header::HeaderValue::from_str(cid) {
-                        headers.insert("X-Creator-ID", hv);
+                    if let Some(ref cid) = args.creator_id {
+                        if let Ok(hv) = reqwest::header::HeaderValue::from_str(cid) { headers.insert("X-Creator-ID", hv); }
                     }
-                    cb = cb.default_headers(headers);
+                    if let Some(ref pw) = args.password { if !pw.is_empty() {
+                        if let Ok(hv) = reqwest::header::HeaderValue::from_str(pw) { headers.insert("X-Repo-Password", hv); }
+                    } }
+                    if !headers.is_empty() { cb = cb.default_headers(headers); }
                 }
                 let client = cb.build().map_err(|e| e.to_string())?;
                 let _ = window.emit("bmm://repo-sync-progress", RepoProgress {
@@ -2200,12 +2226,15 @@ pub async fn sync_server_repo(
 
                     let file_url = format!("{}mods/{}/{}", base_url, repo_mod.id, file.relative_path.replace("\\", "/"));
                     let mut client_builder = reqwest::Client::builder();
-                    if let Some(ref cid) = args.creator_id {
+                    {
                         let mut headers = reqwest::header::HeaderMap::new();
-                        if let Ok(hv) = reqwest::header::HeaderValue::from_str(cid) {
-                            headers.insert("X-Creator-ID", hv);
+                        if let Some(ref cid) = args.creator_id {
+                            if let Ok(hv) = reqwest::header::HeaderValue::from_str(cid) { headers.insert("X-Creator-ID", hv); }
                         }
-                        client_builder = client_builder.default_headers(headers);
+                        if let Some(ref pw) = args.password { if !pw.is_empty() {
+                            if let Ok(hv) = reqwest::header::HeaderValue::from_str(pw) { headers.insert("X-Repo-Password", hv); }
+                        } }
+                        if !headers.is_empty() { client_builder = client_builder.default_headers(headers); }
                     }
                     let client = client_builder.build().map_err(|e| e.to_string())?;
 

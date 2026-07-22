@@ -6,6 +6,9 @@ const cors = require('cors');
 // Configuration
 const PORT = {{PORT}};
 const ADMIN_PASSWORD = "{{ADMIN_PASSWORD}}";
+// Optional download password. When non-empty, every content request (repo.json + mod files)
+// must carry it in the `x-repo-password` header (or ?pw=). Empty = the repo stays open.
+const DOWNLOAD_PASSWORD = "{{DOWNLOAD_PASSWORD}}";
 const UPLOAD_LIMIT = {{UPLOAD_LIMIT}}; // KB/s
 
 // State
@@ -109,7 +112,16 @@ app.use((req, res, next) => {
         }
         if (whitelist.enabled && !whitelist.ips.includes(ip) && !(key !== "UNKNOWN" && whitelist.keys.includes(key))) {
             addToHistory(ip, key, "REJECTED", "Access denied (whitelist)");
-            return res.status(403).send('Not Whitelisted'); 
+            return res.status(403).send('Not Whitelisted');
+        }
+        // Optional download password — gates content only. The host's own dashboard/monitoring
+        // and the separately-authed admin panel are exempt (as is local access, above).
+        if (DOWNLOAD_PASSWORD && !req.path.startsWith('/admin') && req.path !== '/dashboard' && req.path !== '/monitoring.json') {
+            const given = req.headers['x-repo-password'] || req.query.pw || '';
+            if (given !== DOWNLOAD_PASSWORD) {
+                addToHistory(ip, key, "REJECTED", "Wrong or missing repo password");
+                return res.status(401).send('Repo password required');
+            }
         }
     }
 
