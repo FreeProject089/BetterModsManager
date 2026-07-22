@@ -1,0 +1,277 @@
+{
+  "bmm": {
+    "$description": "BMM theme \"Brutalist\" (bmm-brutal, light) — token OVERRIDES over bmm.default. Generated from frontend/assets/builtin-themes/08-bmm-brutal.bmmtheme.json.",
+    "color": {
+      "bg-base": {
+        "$value": "#e7e3d8",
+        "$type": "color",
+        "$description": "CSS: --bmm-bg-base"
+      },
+      "bg-elevated": {
+        "$value": "#fcfbf6",
+        "$type": "color",
+        "$description": "CSS: --bmm-bg-elevated"
+      },
+      "bg-overlay": {
+        "$value": "#fcfbf6",
+        "$type": "color",
+        "$description": "CSS: --bmm-bg-overlay"
+      },
+      "bg-sidebar": {
+        "$value": "#f0ece1",
+        "$type": "color",
+        "$description": "CSS: --bmm-bg-sidebar"
+      },
+      "bg-titlebar": {
+        "$value": "#fcfbf6",
+        "$type": "color",
+        "$description": "CSS: --bmm-bg-titlebar"
+      },
+      "titlebar-bg": {
+        "$value": "#fcfbf6",
+        "$type": "color",
+        "$description": "CSS: --bmm-titlebar-bg"
+      },
+      "border": {
+        "$value": "#111111",
+        "$type": "color",
+        "$description": "CSS: --bmm-border"
+      },
+      "border-hover": {
+        "$value": "#000000",
+        "$type": "color",
+        "$description": "CSS: --bmm-border-hover"
+      },
+      "border-accent": {
+        "$value": "#e8590c",
+        "$type": "color",
+        "$description": "CSS: --bmm-border-accent"
+      },
+      "text-primary": {
+        "$value": "#111111",
+        "$type": "color",
+        "$description": "CSS: --bmm-text-primary"
+      },
+      "text-secondary": {
+        "$value": "#2a2a2a",
+        "$type": "color",
+        "$description": "CSS: --bmm-text-secondary"
+      },
+      "text-muted": {
+        "$value": "#3e3e3e",
+        "$type": "color",
+        "$description": "CSS: --bmm-text-muted"
+      },
+      "success": {
+        "$value": "#1a7f37",
+        "$type": "color",
+        "$description": "CSS: --bmm-success"
+      },
+      "warning": {
+        "$value": "#b45309",
+        "$type": "color",
+        "$description": "CSS: --bmm-warning"
+      },
+      "danger": {
+        "$value": "#c92a2a",
+        "$type": "color",
+        "$description": "CSS: --bmm-danger"
+      },
+      "cyan": {
+        "$value": "#0c7489",
+        "$type": "color",
+        "$description": "CSS: --bmm-cyan"
+      },
+      "tasky-bubble-bg": {
+        "$value": "#faf8f2",
+        "$type": "color",
+        "$description": "CSS: --bmm-tasky-bubble-bg"
+      },
+      "tasky-bubble-text": {
+        "$value": "#111111",
+        "$type": "color",
+        "$description": "CSS: --bmm-tasky-bubble-text"
+      },
+      "tasky-bubble-border": {
+        "$value": "#111111",
+        "$type": "color",
+        "$description": "CSS: --bmm-tasky-bubble-border"
+      },
+      "s02": {
+        "$value": "rgba(0,0,0,0.03)",
+        "$type": "color",
+        "$description": "CSS: --bmm-s02"
+      },
+      "s03": {
+        "$value": "rgba(0,0,0,0.04)",
+        "$type": "color",
+        "$description": "CSS: --bmm-s03"
+      },
+      "s04": {
+        "$value": "rgba(0,0,0,0.05)",
+        "$type": "color",
+        "$description": "CSS: --bmm-s04"
+      },
+      "s05": {
+        "$value": "rgba(0,0,0,0.06)",
+        "$type": "color",
+        "$description": "CSS: --bmm-s05"
+      },
+      "s06": {
+        "$value": "rgba(0,0,0,0.07)",
+        "$type": "color",
+        "$description": "CSS: --bmm-s06"
+      },
+      "s07": {
+        "$value": "rgba(0,0,0,0.08)",
+        "$type": "color",
+        "$description": "CSS: --bmm-s07"
+      },
+      "s08": {
+        "$value": "rgba(0,0,0,0.09)",
+        "$type": "color",
+        "$description": "CSS: --bmm-s08"
+      },
+      "s09": {
+        "$value": "rgba(0,0,0,0.10)",
+        "$type": "color",
+        "$description": "CSS: --bmm-s09"
+      },
+      "s10": {
+        "$value": "rgba(0,0,0,0.11)",
+        "$type": "color",
+        "$description": "CSS: --bmm-s10"
+      },
+      "s12": {
+        "$value": "rgba(0,0,0,0.13)",
+        "$type": "color",
+        "$description": "CSS: --bmm-s12"
+      },
+      "s15": {
+        "$value": "rgba(0,0,0,0.16)",
+        "$type": "color",
+        "$description": "CSS: --bmm-s15"
+      },
+      "s20": {
+        "$value": "rgba(0,0,0,0.22)",
+        "$type": "color",
+        "$description": "CSS: --bmm-s20"
+      },
+      "glass-bg": {
+        "$value": "rgba(0,0,0,0.04)",
+        "$type": "color",
+        "$description": "CSS: --bmm-glass-bg"
+      },
+      "glass-border": {
+        "$value": "#111111",
+        "$type": "color",
+        "$description": "CSS: --bmm-glass-border"
+      },
+      "bg-hover": {
+        "$value": "rgba(0,0,0,0.06)",
+        "$type": "color",
+        "$description": "CSS: --bmm-bg-hover"
+      },
+      "accent": {
+        "$value": "#e8590c",
+        "$type": "color",
+        "$description": "CSS: --bmm-accent"
+      },
+      "accent-dim": {
+        "$value": "rgba(232,89,12,0.18)",
+        "$type": "color",
+        "$description": "CSS: --bmm-accent-dim"
+      }
+    },
+    "asset": {
+      "loader-bg": {
+        "$value": "#e7e3d8",
+        "$type": "color",
+        "$description": "CSS: --bmm-loader-bg"
+      }
+    },
+    "shadow": {
+      "card-glow": {
+        "$value": "0 0 0 transparent",
+        "$description": "CSS: --bmm-card-glow"
+      },
+      "shadow-card": {
+        "$value": "4px 4px 0 #111111",
+        "$description": "CSS: --bmm-shadow-card"
+      },
+      "shadow-modal": {
+        "$value": "8px 8px 0 #111111",
+        "$description": "CSS: --bmm-shadow-modal"
+      },
+      "accent-glow": {
+        "$value": "0 0 0 transparent",
+        "$description": "CSS: --bmm-accent-glow"
+      }
+    },
+    "size": {
+      "card-hover-lift": {
+        "$value": "0px",
+        "$type": "dimension",
+        "$description": "CSS: --bmm-card-hover-lift"
+      },
+      "radius-card": {
+        "$value": "0px",
+        "$type": "dimension",
+        "$description": "CSS: --bmm-radius-card"
+      },
+      "radius-btn": {
+        "$value": "0px",
+        "$type": "dimension",
+        "$description": "CSS: --bmm-radius-btn"
+      },
+      "radius-input": {
+        "$value": "0px",
+        "$type": "dimension",
+        "$description": "CSS: --bmm-radius-input"
+      },
+      "radius-chip": {
+        "$value": "0px",
+        "$type": "dimension",
+        "$description": "CSS: --bmm-radius-chip"
+      }
+    },
+    "channel": {
+      "surface-r": {
+        "$value": "0",
+        "$type": "number",
+        "$description": "CSS: --bmm-surface-r"
+      },
+      "surface-g": {
+        "$value": "0",
+        "$type": "number",
+        "$description": "CSS: --bmm-surface-g"
+      },
+      "surface-b": {
+        "$value": "0",
+        "$type": "number",
+        "$description": "CSS: --bmm-surface-b"
+      },
+      "accent-r": {
+        "$value": "232",
+        "$type": "number",
+        "$description": "CSS: --bmm-accent-r"
+      },
+      "accent-g": {
+        "$value": "89",
+        "$type": "number",
+        "$description": "CSS: --bmm-accent-g"
+      },
+      "accent-b": {
+        "$value": "12",
+        "$type": "number",
+        "$description": "CSS: --bmm-accent-b"
+      }
+    },
+    "other": {
+      "color-scheme": {
+        "$value": "light",
+        "$description": "CSS: --bmm-color-scheme"
+      }
+    }
+  }
+}

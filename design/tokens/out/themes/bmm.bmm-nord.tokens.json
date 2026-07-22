@@ -1,0 +1,153 @@
+{
+  "bmm": {
+    "$description": "BMM theme \"Nord\" (bmm-nord) — token OVERRIDES over bmm.default. Generated from frontend/assets/builtin-themes/11-bmm-nord.bmmtheme.json.",
+    "color": {
+      "bg-base": {
+        "$value": "#2e3440",
+        "$type": "color",
+        "$description": "CSS: --bmm-bg-base"
+      },
+      "bg-elevated": {
+        "$value": "#3b4252",
+        "$type": "color",
+        "$description": "CSS: --bmm-bg-elevated"
+      },
+      "bg-overlay": {
+        "$value": "#434c5e",
+        "$type": "color",
+        "$description": "CSS: --bmm-bg-overlay"
+      },
+      "bg-sidebar": {
+        "$value": "#272c36",
+        "$type": "color",
+        "$description": "CSS: --bmm-bg-sidebar"
+      },
+      "bg-titlebar": {
+        "$value": "#272c36",
+        "$type": "color",
+        "$description": "CSS: --bmm-bg-titlebar"
+      },
+      "titlebar-bg": {
+        "$value": "#272c36",
+        "$type": "color",
+        "$description": "CSS: --bmm-titlebar-bg"
+      },
+      "border": {
+        "$value": "rgba(216,222,233,0.08)",
+        "$type": "color",
+        "$description": "CSS: --bmm-border"
+      },
+      "border-hover": {
+        "$value": "rgba(216,222,233,0.16)",
+        "$type": "color",
+        "$description": "CSS: --bmm-border-hover"
+      },
+      "text-primary": {
+        "$value": "#ffffff",
+        "$type": "color",
+        "$description": "CSS: --bmm-text-primary"
+      },
+      "text-secondary": {
+        "$value": "#d8dee9",
+        "$type": "color",
+        "$description": "CSS: --bmm-text-secondary"
+      },
+      "text-muted": {
+        "$value": "#bac2cd",
+        "$type": "color",
+        "$description": "CSS: --bmm-text-muted"
+      },
+      "cyan": {
+        "$value": "#88c0d0",
+        "$type": "color",
+        "$description": "CSS: --bmm-cyan"
+      },
+      "success": {
+        "$value": "#a3be8c",
+        "$type": "color",
+        "$description": "CSS: --bmm-success"
+      },
+      "warning": {
+        "$value": "#ebcb8b",
+        "$type": "color",
+        "$description": "CSS: --bmm-warning"
+      },
+      "danger": {
+        "$value": "#bf616a",
+        "$type": "color",
+        "$description": "CSS: --bmm-danger"
+      },
+      "tasky-bubble-bg": {
+        "$value": "rgba(39,44,54,0.95)",
+        "$type": "color",
+        "$description": "CSS: --bmm-tasky-bubble-bg"
+      },
+      "accent": {
+        "$value": "#81a1c1",
+        "$type": "color",
+        "$description": "CSS: --bmm-accent"
+      },
+      "accent-dim": {
+        "$value": "rgba(129,161,193,0.18)",
+        "$type": "color",
+        "$description": "CSS: --bmm-accent-dim"
+      },
+      "border-accent": {
+        "$value": "rgba(129,161,193,0.4)",
+        "$type": "color",
+        "$description": "CSS: --bmm-border-accent"
+      }
+    },
+    "asset": {
+      "loader-bg": {
+        "$value": "#2e3440",
+        "$type": "color",
+        "$description": "CSS: --bmm-loader-bg"
+      }
+    },
+    "size": {
+      "radius-btn": {
+        "$value": "10px",
+        "$type": "dimension",
+        "$description": "CSS: --bmm-radius-btn"
+      },
+      "radius-card": {
+        "$value": "12px",
+        "$type": "dimension",
+        "$description": "CSS: --bmm-radius-card"
+      },
+      "card-hover-lift": {
+        "$value": "-1px",
+        "$type": "dimension",
+        "$description": "CSS: --bmm-card-hover-lift"
+      }
+    },
+    "shadow": {
+      "shadow-card": {
+        "$value": "0 2px 8px rgba(0,0,0,0.25)",
+        "$description": "CSS: --bmm-shadow-card"
+      },
+      "accent-glow": {
+        "$value": "0 0 20px rgba(129,161,193,0.30)",
+        "$description": "CSS: --bmm-accent-glow"
+      }
+    },
+    "channel": {
+      "accent-r": {
+        "$value": "129",
+        "$type": "number",
+        "$description": "CSS: --bmm-accent-r"
+      },
+      "accent-g": {
+        "$value": "161",
+        "$type": "number",
+        "$description": "CSS: --bmm-accent-g"
+      },
+      "accent-b": {
+        "$value": "193",
+        "$type": "number",
+        "$description": "CSS: --bmm-accent-b"
+      }
+    }
+  }
+}
