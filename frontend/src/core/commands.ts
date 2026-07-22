@@ -272,16 +272,24 @@ const clickAfterNav = (view: string, btnId: string, delay = 60) => () => {
 export function refreshNavCommands() {
   for (const id of [..._cmds.keys()]) if (id.startsWith('nav.')) _cmds.delete(id);
   const seen = new Set<string>();
-  document.querySelectorAll('.nav-item[data-view]').forEach((el) => {
-    const view = (el as HTMLElement).getAttribute('data-view');
-    if (!view || seen.has(view)) return;
-    seen.add(view);
-    // Use the label as displayed (custom names + current language); fall back to the view id.
-    const lbl = ((el.querySelector('.nav-label') as HTMLElement | null)?.textContent
-      || (el as HTMLElement).getAttribute('title') || view).trim();
+  // Built-in views carry data-view; user-added custom buttons AND custom sandboxed pages carry
+  // data-custom-id (they have no data-view). Include both so a custom nav item is rebindable.
+  document.querySelectorAll('.nav-item[data-view], .nav-item[data-custom-id]').forEach((el) => {
+    const node = el as HTMLElement;
+    if (node.id === 'nav-customize-btn') return;                 // the "customize" button isn't a destination
+    const view = node.getAttribute('data-view');
+    const custom = node.getAttribute('data-custom-id');
+    const key = view || custom;                                  // stable id for the command + its binding
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    const lbl = ((node.querySelector('.nav-label') as HTMLElement | null)?.textContent
+      || node.getAttribute('title') || key).trim();
+    const clickIt = view
+      ? clickNav(view)
+      : () => (document.querySelector(`.nav-item[data-custom-id="${CSS.escape(custom!)}"]`) as HTMLElement | null)?.click();
     registerCommand({
-      id: `nav.${view}`, category: 'nav', title: { en: `Go to ${lbl}`, fr: `Aller à ${lbl}` },
-      keywords: `${lbl} open navigate view page aller`, run: clickNav(view), defaultChord: null,
+      id: `nav.${key}`, category: 'nav', title: { en: `Go to ${lbl}`, fr: `Aller à ${lbl}` },
+      keywords: `${lbl} open navigate view page custom aller`, run: clickIt, defaultChord: null,
     });
   });
 }

@@ -167,59 +167,59 @@ Changer de profil ne re-lie que ce qui a changé : instantané même avec de gra
           en: `<p>BMM applies your mods <b>without ever moving your originals</b> (the same idea as OvGME). The trick that makes that possible: <b>a mod is just a folder that mirrors the game’s own folder tree.</b> Whatever path a file needs inside the game, your mod recreates that exact path — so BMM can lay one straight over the other.</p>
 <div class="dh-treecmp">
   <div class="dh-treecol">
-    <div class="dh-treecol-h">① The game folder — what DCS already has</div>
+    <div class="dh-treecol-h">① The game folder — what your game already has</div>
     <div class="dh-tree-list">
-      <div class="dh-fld dh-fld-0"><span class="fi">📁</span> DCS World <small>game root</small></div>
-      <div class="dh-fld dh-fld-1"><span class="fi">📁</span> Mods</div>
-      <div class="dh-fld dh-fld-2"><span class="fi">📁</span> aircraft</div>
-      <div class="dh-fld dh-fld-3 dh-fld-mut"><span class="fi">📄</span> the stock aircraft…</div>
+      <div class="dh-fld dh-fld-0"><span class="fi">📁</span> Your Game <small>game root</small></div>
+      <div class="dh-fld dh-fld-1"><span class="fi">📁</span> mods</div>
+      <div class="dh-fld dh-fld-2"><span class="fi">📁</span> characters</div>
+      <div class="dh-fld dh-fld-3 dh-fld-mut"><span class="fi">📄</span> the built-in files…</div>
     </div>
   </div>
   <div class="dh-treecol dh-treecol-accent">
     <div class="dh-treecol-h">② Your mod — the very same shape</div>
     <div class="dh-tree-list">
-      <div class="dh-fld dh-fld-0"><span class="fi">📁</span> My Cool Jet <small>= the mod</small></div>
-      <div class="dh-fld dh-fld-1"><span class="fi">📁</span> Mods</div>
-      <div class="dh-fld dh-fld-2"><span class="fi">📁</span> aircraft</div>
-      <div class="dh-fld dh-fld-3 dh-fld-hit"><span class="fi">📁</span> My Cool Jet <small>slots in here</small></div>
+      <div class="dh-fld dh-fld-0"><span class="fi">📁</span> My Cool Mod <small>= the mod</small></div>
+      <div class="dh-fld dh-fld-1"><span class="fi">📁</span> mods</div>
+      <div class="dh-fld dh-fld-2"><span class="fi">📁</span> characters</div>
+      <div class="dh-fld dh-fld-3 dh-fld-hit"><span class="fi">📁</span> My Cool Mod <small>slots in here</small></div>
     </div>
   </div>
 </div>
-<div class="dh-treecmp-note">↔ the <code>Mods / aircraft</code> path is the same on both sides — so your mod drops straight onto the game.</div>
-<h4>Set up a profile per target</h4>
-<p>The two folders a game reads from get one profile each:</p>
-<ul><li><b>Install folder</b> → <code>Program Files\\Eagle Dynamics\\DCS World</code></li><li><b>Saved Games</b> → <code>C:\\Users\\&lt;you&gt;\\Saved Games\\DCS</code></li></ul>
-<p>Each profile has its own <b>mods folder</b> (the “Configuration → mods folder” line) where BMM stores that profile’s mods.</p>
+<div class="dh-treecmp-note">↔ the <code>mods / characters</code> path is the same on both sides — so your mod drops straight onto the game.</div>
+<p class="dh-diagnote">The exact folder names (<code>mods</code>, <code>characters</code>, …) are whatever <b>your</b> game uses — the rule is simply that your mod recreates that same path, from the game root down.</p>
+<h4>Set up a profile per target folder</h4>
+<p>Some games read mods from more than one place — often the <b>install folder</b> and a separate <b>user / config folder</b>. Give each one its own profile pointing at that folder.</p>
+<p>Each profile also has its own <b>mods folder</b> (the “Configuration → mods folder” line) where BMM stores that profile’s mods.</p>
 <h4>When a download has the wrong shape</h4>
-<p>Plenty of archives ship the files loose, or zipped one folder too deep, so the <code>Mods/aircraft/…</code> parents are missing. Don’t rebuild them by hand — open the <b>Mapper</b>, drag each file to where it belongs, and save. The mapping travels with the mod, so the next install (or a new version with the same layout) is one click.</p>`,
+<p>Plenty of archives ship the files loose, or zipped one folder too deep, so the parent folders the game expects are missing. Don’t rebuild them by hand — open the <b>Mapper</b>, drag each file to where it belongs, and save. The mapping travels with the mod, so the next install (or a new version with the same layout) is one click.</p>`,
           fr: `<p>BMM applique vos mods <b>sans jamais déplacer vos originaux</b> (le même principe qu’OvGME). L’astuce qui rend ça possible : <b>un mod n’est qu’un dossier qui copie l’arborescence du jeu.</b> Quel que soit le chemin dont un fichier a besoin dans le jeu, votre mod recrée ce chemin exact — BMM peut alors poser l’un directement sur l’autre.</p>
 <div class="dh-treecmp">
   <div class="dh-treecol">
-    <div class="dh-treecol-h">① Le dossier du jeu — ce que DCS a déjà</div>
+    <div class="dh-treecol-h">① Le dossier du jeu — ce que votre jeu a déjà</div>
     <div class="dh-tree-list">
-      <div class="dh-fld dh-fld-0"><span class="fi">📁</span> DCS World <small>racine du jeu</small></div>
-      <div class="dh-fld dh-fld-1"><span class="fi">📁</span> Mods</div>
-      <div class="dh-fld dh-fld-2"><span class="fi">📁</span> aircraft</div>
-      <div class="dh-fld dh-fld-3 dh-fld-mut"><span class="fi">📄</span> les avions d’origine…</div>
+      <div class="dh-fld dh-fld-0"><span class="fi">📁</span> Votre Jeu <small>racine du jeu</small></div>
+      <div class="dh-fld dh-fld-1"><span class="fi">📁</span> mods</div>
+      <div class="dh-fld dh-fld-2"><span class="fi">📁</span> personnages</div>
+      <div class="dh-fld dh-fld-3 dh-fld-mut"><span class="fi">📄</span> les fichiers d’origine…</div>
     </div>
   </div>
   <div class="dh-treecol dh-treecol-accent">
     <div class="dh-treecol-h">② Votre mod — exactement la même forme</div>
     <div class="dh-tree-list">
-      <div class="dh-fld dh-fld-0"><span class="fi">📁</span> Mon Super Jet <small>= le mod</small></div>
-      <div class="dh-fld dh-fld-1"><span class="fi">📁</span> Mods</div>
-      <div class="dh-fld dh-fld-2"><span class="fi">📁</span> aircraft</div>
-      <div class="dh-fld dh-fld-3 dh-fld-hit"><span class="fi">📁</span> Mon Super Jet <small>se glisse ici</small></div>
+      <div class="dh-fld dh-fld-0"><span class="fi">📁</span> Mon Super Mod <small>= le mod</small></div>
+      <div class="dh-fld dh-fld-1"><span class="fi">📁</span> mods</div>
+      <div class="dh-fld dh-fld-2"><span class="fi">📁</span> personnages</div>
+      <div class="dh-fld dh-fld-3 dh-fld-hit"><span class="fi">📁</span> Mon Super Mod <small>se glisse ici</small></div>
     </div>
   </div>
 </div>
-<div class="dh-treecmp-note">↔ le chemin <code>Mods / aircraft</code> est identique des deux côtés — votre mod se pose donc directement sur le jeu.</div>
-<h4>Un profil par cible</h4>
-<p>Les deux dossiers que lit un jeu ont chacun leur profil :</p>
-<ul><li><b>Dossier d’install</b> → <code>Program Files\\Eagle Dynamics\\DCS World</code></li><li><b>Saved Games</b> → <code>C:\\Users\\&lt;toi&gt;\\Saved Games\\DCS</code></li></ul>
-<p>Chaque profil a son propre <b>dossier des mods</b> (la ligne « Configuration → dossier des mods ») où BMM stocke les mods de ce profil.</p>
+<div class="dh-treecmp-note">↔ le chemin <code>mods / personnages</code> est identique des deux côtés — votre mod se pose donc directement sur le jeu.</div>
+<p class="dh-diagnote">Les noms de dossiers exacts (<code>mods</code>, <code>personnages</code>, …) sont ceux que <b>votre</b> jeu utilise — la règle est simplement que votre mod recrée ce même chemin, depuis la racine du jeu.</p>
+<h4>Un profil par dossier cible</h4>
+<p>Certains jeux lisent les mods à plusieurs endroits — souvent le <b>dossier d’installation</b> et un <b>dossier utilisateur / config</b> séparé. Donnez à chacun son propre profil pointant sur ce dossier.</p>
+<p>Chaque profil a aussi son propre <b>dossier des mods</b> (la ligne « Configuration → dossier des mods ») où BMM stocke les mods de ce profil.</p>
 <h4>Quand un téléchargement a la mauvaise forme</h4>
-<p>Beaucoup d’archives livrent les fichiers en vrac, ou zippés un dossier trop bas, si bien que les parents <code>Mods/aircraft/…</code> manquent. Ne les reconstruisez pas à la main — ouvrez le <b>Mappeur</b>, glissez chaque fichier à sa place, et enregistrez. Le mapping voyage avec le mod : la prochaine installation (ou une nouvelle version au même agencement) se fait en un clic.</p>`,
+<p>Beaucoup d’archives livrent les fichiers en vrac, ou zippés un dossier trop bas, si bien que les dossiers parents attendus par le jeu manquent. Ne les reconstruisez pas à la main — ouvrez le <b>Mappeur</b>, glissez chaque fichier à sa place, et enregistrez. Le mapping voyage avec le mod : la prochaine installation (ou une nouvelle version au même agencement) se fait en un clic.</p>`,
         },
       },
       {
@@ -234,12 +234,12 @@ Changer de profil ne re-lie que ce qui a changé : instantané même avec de gra
       },
       {
         id: 'conflicts', view: 'library', tutorial: { id: 'basics', part: 'conflicts' }, diagram: 'conflict-management',
-        title: { en: 'Resolve conflicts', fr: 'Résoudre les conflits' },
-        summary: { en: 'See exactly which mods fight over the same file and choose a winner.', fr: 'Voyez quels mods se disputent le même fichier et choisissez un gagnant.' },
-        keywords: 'conflict overwrite priority order resolve conflit priorité',
+        title: { en: 'Conflicts (who wins)', fr: 'Conflits (qui gagne)' },
+        summary: { en: 'Two mods sharing a file: the one you enable LAST wins. BMM warns you first.', fr: 'Deux mods partageant un fichier : le dernier activé gagne. BMM vous prévient avant.' },
+        keywords: 'conflict overwrite order last enable resolve conflit ordre écrase',
         body: {
-          en: '<p>When two mods provide the same file, BMM surfaces the conflict with a clear side-by-side view instead of silently letting one win.</p><ul><li>Pick a winner per file, or set a priority order.</li><li>Choices are remembered per profile.</li></ul>',
-          fr: '<p>Quand deux mods fournissent le même fichier, BMM met le conflit en évidence avec une vue comparative claire, au lieu de laisser l’un gagner en silence.</p><ul><li>Choisissez un gagnant par fichier, ou un ordre de priorité.</li><li>Les choix sont mémorisés par profil.</li></ul>',
+          en: '<p>Two mods are in <b>conflict</b> when they ship the same file. BMM doesn’t hide it: before it deploys, it detects the overlap and shows you exactly which files two mods share.</p><h4>Who wins?</h4><p>The rule is simple — <b>whichever mod you enable last wins</b>. Its file overwrites the earlier one in the game folder. So your control is the <b>order you enable mods in</b>: enable the one you want to win last.</p><ul><li>BMM warns you when you activate and lists the overlapping files (you can open them to compare).</li><li>Nothing is lost: your original game files are backed up, and if you later disable the winning mod, BMM puts back the file from the next mod that provides it — or the original game file.</li></ul><p>There is <b>no per-file winner picker and no priority list</b> — it’s the enable order, tracked per profile.</p>',
+          fr: '<p>Deux mods sont en <b>conflit</b> quand ils fournissent le même fichier. BMM ne le cache pas : avant de déployer, il détecte le chevauchement et vous montre exactement quels fichiers deux mods partagent.</p><h4>Qui gagne ?</h4><p>La règle est simple — <b>le dernier mod que vous activez gagne</b>. Son fichier écrase le précédent dans le dossier du jeu. Votre levier, c’est donc l’<b>ordre dans lequel vous activez les mods</b> : activez en dernier celui qui doit gagner.</p><ul><li>BMM vous avertit à l’activation et liste les fichiers qui se chevauchent (vous pouvez les ouvrir pour comparer).</li><li>Rien n’est perdu : vos fichiers de jeu d’origine sont sauvegardés, et si vous désactivez ensuite le mod gagnant, BMM remet le fichier du mod suivant qui le fournit — ou le fichier de jeu d’origine.</li></ul><p>Il n’y a <b>pas de sélecteur de gagnant par fichier ni de liste de priorité</b> — c’est l’ordre d’activation, mémorisé par profil.</p>',
         },
       },
       {
@@ -294,22 +294,38 @@ Changer de profil ne re-lie que ce qui a changé : instantané même avec de gra
   {
     id: 'share', part: 'user', icon: 'share',
     title: { en: 'Sharing & hosting', fr: 'Partage et hébergement' },
-    blurb: { en: 'Server repos, catalogs and the BetterCommunity hub.', fr: 'Dépôts serveur, catalogues et le hub BetterCommunity.' },
+    blurb: { en: 'Host a repo, subscribe & sync, catalogs and BetterCommunity.', fr: 'Héberger un dépôt, s’abonner & synchro, catalogues et BetterCommunity.' },
     articles: [
       {
-        id: 'server-repo', view: 'repo', diagram: 'server-mode', docsPath: '',
-        title: { en: 'Server repositories', fr: 'Dépôts serveur' },
-        summary: { en: 'Publish a profile so a whole group installs and stays in sync in one click.', fr: 'Publiez un profil pour qu’un groupe entier l’installe et reste synchronisé en un clic.' },
-        keywords: 'server repo host publish group community sync dépôt hébergement squadron',
+        id: 'server-host', view: 'repo', diagram: 'hosting-flow', docsPath: '',
+        title: { en: 'Host your own repository', fr: 'Héberger votre propre dépôt' },
+        summary: { en: 'Turn a profile into a hosted source others can subscribe to.', fr: 'Transformez un profil en source hébergée à laquelle d’autres peuvent s’abonner.' },
+        keywords: 'server repo host publish self-host manifest hosting dépôt héberger squadron',
         body: {
-          en: '<p>A server repo turns a profile into a <b>hosted source of truth</b>. You publish once; everyone who subscribes gets the exact same mods, versions and load order — and stays converged as you update it. It\'s the tool for a squadron, a community, or just keeping your own machines identical.</p>'
-            + '<h4>Publishing one</h4><ul><li>Open <b>Server Repo</b> and point it at the profile you want to share.</li><li>BMM builds a <b>manifest</b> — the list of files with their hashes — and gives you a link to hand out.</li><li>Update it any time; subscribers see the change on their next sync.</li></ul>'
-            + '<h4>How members stay in sync</h4><p>A subscriber\'s BMM never blindly re-downloads. It fetches the manifest, compares it to what it already has, and pulls <b>only the difference</b> — then verifies every transferred file by hash before deploying. That\'s why a small change to a 10&nbsp;GB collection costs a few MB and a few seconds.</p>'
-            + '<h4>Access & authenticity</h4><ul><li><b>Public</b> — anyone with the link.</li><li><b>Email-gated</b> — only whitelisted accounts.</li><li><b>Password-gated</b> — only password holders.</li></ul><p>Every repo carries a stable <b>fingerprint</b> (<code>BCR-XXXX-XXXX</code>) so members can confirm they\'re subscribed to the genuine source, not an impostor. Hosting can be your own machine or dedicated hosting via BetterCommunity.</p>',
-          fr: '<p>Un dépôt serveur transforme un profil en <b>source de vérité hébergée</b>. Vous publiez une fois ; tous les abonnés obtiennent exactement les mêmes mods, versions et ordre de chargement — et restent alignés à mesure que vous mettez à jour. C\'est l\'outil pour une escadrille, une communauté, ou simplement garder vos propres machines identiques.</p>'
-            + '<h4>En publier un</h4><ul><li>Ouvrez <b>Dépôt Serveur</b> et pointez-le sur le profil à partager.</li><li>BMM construit un <b>manifeste</b> — la liste des fichiers avec leurs hachages — et vous donne un lien à distribuer.</li><li>Mettez-le à jour quand vous voulez ; les abonnés voient le changement à leur prochaine synchro.</li></ul>'
-            + '<h4>Comment les membres restent synchronisés</h4><p>Le BMM d\'un abonné ne re-télécharge jamais à l\'aveugle. Il récupère le manifeste, le compare à ce qu\'il possède déjà, et ne tire que la <b>différence</b> — puis vérifie chaque fichier transféré par hachage avant de déployer. D\'où le coût de quelques Mo et quelques secondes pour un petit changement dans une collection de 10&nbsp;Go.</p>'
-            + '<h4>Accès & authenticité</h4><ul><li><b>Public</b> — quiconque a le lien.</li><li><b>Par e-mail</b> — seulement les comptes en liste blanche.</li><li><b>Par mot de passe</b> — seulement les détenteurs du mot de passe.</li></ul><p>Chaque dépôt porte une <b>empreinte</b> stable (<code>BCR-XXXX-XXXX</code>) pour que les membres confirment qu\'ils sont abonnés à la vraie source, pas un imposteur. L\'hébergement peut être votre propre machine ou un hébergement dédié via BetterCommunity.</p>',
+          en: '<p>Hosting turns a profile into a <b>source of truth</b> others subscribe to — a squadron, a community, or just keeping your own machines identical.</p>'
+            + '<h4>What BMM builds</h4><ul><li>A <b>manifest</b> (<code>repo.json</code>) listing every file with its <b>SHA-256</b> hash (plus 4&nbsp;MB chunk hashes, for efficient updates).</li><li>A cryptographic <b>signature</b> tied to your identity (an author id + ed25519 signature), so subscribers can confirm a repo really came from you.</li></ul>'
+            + '<h4>Serving it</h4><p>Open <b>Server Repo</b> and pick the profile to share. Then either run BMM’s <b>built-in mini-server</b>, or generate a small standalone server (Node, or a <code>.bat</code>/<code>.sh</code> script) to run on a dedicated machine. Serve it over HTTP — <b>HTTPS is strongly recommended</b>. Hand out the resulting link.</p>'
+            + '<h4>Who can download it</h4><p>A self-hosted repo is <b>public by default</b>. You can restrict it with a <b>whitelist / ban list</b>, matched automatically against a subscriber’s linked account or device identity — there is <b>no download password</b> to type. The optional <b>admin password</b> you set protects only <b>your</b> server’s admin panel (pushing new versions); it is not a subscriber gate.</p>'
+            + '<h4>BetterCommunity is different</h4><p>The BetterCommunity hub adds things a repo you host yourself does <b>not</b> have: a <code>BCR-XXXX-XXXX</code> repo fingerprint, account-based (email / password) access, and managed hosting. Don’t confuse the two.</p>',
+          fr: '<p>Héberger transforme un profil en <b>source de vérité</b> à laquelle d’autres s’abonnent — une escadrille, une communauté, ou juste garder vos propres machines identiques.</p>'
+            + '<h4>Ce que BMM construit</h4><ul><li>Un <b>manifeste</b> (<code>repo.json</code>) listant chaque fichier avec son hachage <b>SHA-256</b> (plus des hachages de blocs de 4&nbsp;Mo, pour des mises à jour efficaces).</li><li>Une <b>signature</b> cryptographique liée à votre identité (un author id + signature ed25519), pour que les abonnés confirment qu’un dépôt vient bien de vous.</li></ul>'
+            + '<h4>Le servir</h4><p>Ouvrez <b>Dépôt Serveur</b> et choisissez le profil à partager. Puis lancez le <b>mini-serveur intégré</b> de BMM, ou générez un petit serveur autonome (Node, ou un script <code>.bat</code>/<code>.sh</code>) à exécuter sur une machine dédiée. Servez-le en HTTP — <b>le HTTPS est fortement recommandé</b>. Distribuez le lien obtenu.</p>'
+            + '<h4>Qui peut le télécharger</h4><p>Un dépôt auto-hébergé est <b>public par défaut</b>. Vous pouvez le restreindre avec une <b>liste blanche / liste de bannis</b>, comparée automatiquement au compte lié ou à l’identité d’appareil d’un abonné — il n’y a <b>aucun mot de passe de téléchargement</b> à taper. Le <b>mot de passe admin</b> optionnel que vous définissez protège seulement le panneau d’admin de <b>votre</b> serveur (pousser de nouvelles versions) ; ce n’est pas une barrière pour les abonnés.</p>'
+            + '<h4>BetterCommunity, c’est autre chose</h4><p>Le hub BetterCommunity ajoute des choses qu’un dépôt auto-hébergé n’a <b>pas</b> : une empreinte <code>BCR-XXXX-XXXX</code>, un accès par compte (e-mail / mot de passe), et de l’hébergement géré. Ne confondez pas les deux.</p>',
+        },
+      },
+      {
+        id: 'server-sync', view: 'repo', diagram: 'server-mode', docsPath: '',
+        title: { en: 'Subscribe & keep in sync', fr: 'S’abonner et rester synchronisé' },
+        summary: { en: 'Point BMM at a repo link — get the exact same mods, and only fetch what changes.', fr: 'Pointez BMM sur un lien de dépôt — mêmes mods exacts, et seul ce qui change est téléchargé.' },
+        keywords: 'subscribe sync update repo download manifest s’abonner synchro mise à jour',
+        body: {
+          en: '<p>Subscribing points your BMM at a repo’s link; you get the exact same mods, versions and order as the host, and stay converged as they update.</p>'
+            + '<h4>How a sync works</h4><p>Your BMM never blindly re-downloads. It fetches the <b>manifest</b> and compares it to what you already have:</p><ul><li>Unchanged files (same SHA-256) are <b>skipped</b>.</li><li>For a changed file, BMM compares 4&nbsp;MB <b>chunks</b> and Range-fetches only the mismatched ones — so a small change to a 10&nbsp;GB collection costs a few MB.</li><li>Every downloaded file is <b>verified against its SHA-256</b> before it’s deployed.</li></ul>'
+            + '<h4>Getting updates</h4><p>BMM spots a new version by comparing the repo’s <b>published version string</b> with what you installed. When it differs, the update checker flags it; applying re-runs the sync above — fetching only what actually changed and removing mods the host dropped.</p>',
+          fr: '<p>S’abonner pointe votre BMM sur le lien d’un dépôt ; vous obtenez exactement les mêmes mods, versions et ordre que l’hôte, et restez alignés à mesure qu’il met à jour.</p>'
+            + '<h4>Comment marche une synchro</h4><p>Votre BMM ne re-télécharge jamais à l’aveugle. Il récupère le <b>manifeste</b> et le compare à ce que vous avez déjà :</p><ul><li>Les fichiers inchangés (même SHA-256) sont <b>ignorés</b>.</li><li>Pour un fichier modifié, BMM compare les <b>blocs</b> de 4&nbsp;Mo et ne récupère (par Range) que ceux qui diffèrent — un petit changement dans 10&nbsp;Go coûte quelques Mo.</li><li>Chaque fichier téléchargé est <b>vérifié par son SHA-256</b> avant d’être déployé.</li></ul>'
+            + '<h4>Recevoir les mises à jour</h4><p>BMM repère une nouvelle version en comparant la <b>chaîne de version publiée</b> du dépôt à celle installée. Quand elle diffère, le vérificateur de mises à jour le signale ; appliquer relance la synchro ci-dessus — en ne récupérant que ce qui a réellement changé et en retirant les mods que l’hôte a supprimés.</p>',
         },
       },
       {
