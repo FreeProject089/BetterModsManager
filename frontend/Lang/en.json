@@ -3663,7 +3663,7 @@
   "docs.diagram.hosting.node.WEBSRV.desc": "System service handling static file serving and HTTP flow optimization (Gzip, Cache-Control).",
   "docs.diagram.hosting.title": "Hosting Flow",
   "docs.diagram.server.node.AUTH": "Authentication",
-  "docs.diagram.server.node.AUTH.desc": "Checks your access token or repo key before allowing the sync.",
+  "docs.diagram.server.node.AUTH.desc": "Checks the subscriber against the repo's whitelist / ban list (by linked account or device id). Public repos skip this - there is no download password.",
   "docs.diagram.server.node.META": "JSON Manifests",
   "docs.diagram.server.node.META.desc": "The repo.json manifest — the list of every server mod with its structure, hashes and metadata.",
   "docs.diagram.server.node.MODS": "Mod Assets",

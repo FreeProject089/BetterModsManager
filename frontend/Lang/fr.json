@@ -3670,7 +3670,7 @@
   "docs.diagram.hosting.node.WEBSRV.desc": "Service système gérant le service statique des fichiers et l'optimisation des flux HTTP (Gzip, Cache-Control).",
   "docs.diagram.hosting.title": "Flux de Mise en Ligne",
   "docs.diagram.server.node.AUTH": "Authentification",
-  "docs.diagram.server.node.AUTH.desc": "Vérifie votre jeton d'accès ou clé de dépôt avant d'autoriser la synchro.",
+  "docs.diagram.server.node.AUTH.desc": "Vérifie l'abonné face à la liste blanche / liste de bannis du dépôt (par compte lié ou id d'appareil). Les dépôts publics sautent cette étape — il n'y a pas de mot de passe de téléchargement.",
   "docs.diagram.server.node.META": "Manifestes JSON",
   "docs.diagram.server.node.META.desc": "Le manifeste repo.json — la liste de chaque mod du serveur avec sa structure, ses hachages et ses métadonnées.",
   "docs.diagram.server.node.MODS": "Assets des Mods",
