@@ -117,10 +117,11 @@ Choose a colour and icon and confirm. BMM creates the profile and makes it **act
 :::
 :::
 
-:::tip[What "active" actually does]
-One profile is active per game at a time. Activating it **deploys** that profile's enabled mods into the
-game folder and backs up whatever it replaces; switching away puts the previous state back. Your downloaded
-mods are never edited in place — BMM only links or copies them into the game.
+:::tip[What switching a profile really does]
+Switching the active profile **moves no files** — it only changes which profile you're working in. Mods
+you've already enabled **stay deployed** in the game; switching away never undeploys them. The one thing that
+touches files is **enabling or disabling a mod** (it copies the files into the game and backs up whatever it
+replaces, or removes them again). Your downloaded mods are never edited in place — BMM only links or copies them.
 :::`,
           fr: `Un **profil** relie un dossier de jeu à l'ensemble exact des mods que vous y activez. Gardez un profil
 propre, un profil multijoueur et un profil expérimental côte à côte — chacun mémorise ses propres mods activés.
@@ -142,10 +143,11 @@ Choisissez une couleur et une icône, puis confirmez. BMM crée le profil et le 
 :::
 :::
 
-:::tip[Ce que fait vraiment « activer »]
-Un seul profil est actif par jeu à la fois. L'activer **déploie** les mods activés de ce profil dans le
-dossier du jeu et sauvegarde ce qu'il remplace ; revenir en arrière restaure l'état précédent. Vos mods
-téléchargés ne sont jamais modifiés sur place — BMM ne fait que les lier ou les copier dans le jeu.
+:::tip[Ce que fait vraiment le changement de profil]
+Changer de profil actif **ne déplace aucun fichier** — ça change seulement le profil dans lequel vous travaillez.
+Les mods déjà activés **restent déployés** dans le jeu ; revenir en arrière ne les retire jamais. La seule chose
+qui touche aux fichiers, c'est **activer ou désactiver un mod** (ça copie les fichiers dans le jeu et sauvegarde
+ce qu'il remplace, ou les retire). Vos mods téléchargés ne sont jamais modifiés sur place — BMM ne fait que les lier ou les copier.
 :::`,
         },
       },
@@ -246,8 +248,8 @@ téléchargés ne sont jamais modifiés sur place — BMM ne fait que les lier o
         summary: { en: 'Toggle mods on or off per profile without moving files by hand.', fr: 'Activez ou désactivez des mods par profil sans déplacer les fichiers à la main.' },
         keywords: 'activate enable disable toggle deploy activer désactiver',
         body: {
-          en: '<p>Toggling a mod stages it into the active profile: its files are linked or copied into the game folder, and any game file it replaces is <b>backed up first</b>. BMM tracks exactly which files belong to which mod, so deactivating removes only those — and puts the backed-up originals (or the next mod’s file) back. Cleanly, every time.</p><ul><li>Enable with a single click or a <b>double-click on the card</b>; batch-toggle a whole category, or everything, at once.</li><li>Activation is <b>transactional</b>: an interrupted deploy rolls back instead of leaving a half-state.</li><li>If two enabled mods ship the same file, the one you enabled <b>last</b> wins — see <i>Conflicts (who wins)</i>.</li></ul>',
-          fr: '<p>Activer un mod le met en place dans le profil actif : ses fichiers sont liés ou copiés dans le dossier du jeu, et tout fichier du jeu qu’il remplace est <b>d’abord sauvegardé</b>. BMM sait exactement quels fichiers appartiennent à quel mod : la désactivation ne retire que ceux-là — et remet les originaux sauvegardés (ou le fichier du mod suivant). Proprement, à chaque fois.</p><ul><li>Activez d’un clic ou d’un <b>double-clic sur la carte</b> ; basculez toute une catégorie, ou tout, d’un coup.</li><li>L’activation est <b>transactionnelle</b> : un déploiement interrompu est annulé au lieu de laisser un état incomplet.</li><li>Si deux mods activés fournissent le même fichier, le dernier activé <b>gagne</b> — voir <i>Conflits (qui gagne)</i>.</li></ul>',
+          en: '<p>Toggling a mod stages it into the active profile: its files are linked or copied into the game folder, and any game file it replaces is <b>backed up first</b>. BMM tracks exactly which files belong to which mod, so deactivating removes only those — and puts the backed-up originals (or the next mod’s file) back. Cleanly, every time.</p><ul><li>Enable with a single click or a <b>double-click on the card</b>; batch-toggle a whole category, or everything, at once.</li><li>Activation is <b>transactional</b>: an interrupted deploy rolls back instead of leaving a half-state.</li><li>If two enabled mods ship the same file, the one you enabled <b>last</b> wins — see <button class="dh-xref" data-art="conflicts">Conflicts (who wins)</button>.</li></ul><h4>Enabling ≠ switching profiles</h4><p><b>Enabling/disabling a mod is the only thing that moves files.</b> Changing the active profile does not — it just picks which profile you’re working in; whatever is already enabled stays deployed in the game. And profiles that point at the <b>same game + mods folders share their enabled mods</b> (so a mod can’t be enabled in two of them at once); profiles with <i>different</i> folders are fully independent setups.</p>',
+          fr: '<p>Activer un mod le met en place dans le profil actif : ses fichiers sont liés ou copiés dans le dossier du jeu, et tout fichier du jeu qu’il remplace est <b>d’abord sauvegardé</b>. BMM sait exactement quels fichiers appartiennent à quel mod : la désactivation ne retire que ceux-là — et remet les originaux sauvegardés (ou le fichier du mod suivant). Proprement, à chaque fois.</p><ul><li>Activez d’un clic ou d’un <b>double-clic sur la carte</b> ; basculez toute une catégorie, ou tout, d’un coup.</li><li>L’activation est <b>transactionnelle</b> : un déploiement interrompu est annulé au lieu de laisser un état incomplet.</li><li>Si deux mods activés fournissent le même fichier, le dernier activé <b>gagne</b> — voir <button class="dh-xref" data-art="conflicts">Conflits (qui gagne)</button>.</li></ul><h4>Activer ≠ changer de profil</h4><p><b>Activer/désactiver un mod est la seule chose qui déplace des fichiers.</b> Changer de profil actif, non — ça choisit juste le profil dans lequel vous travaillez ; ce qui est déjà activé reste déployé dans le jeu. Et les profils qui pointent vers les <b>mêmes dossiers jeu + mods partagent leurs mods activés</b> (un mod ne peut donc pas être activé dans deux d’entre eux à la fois) ; les profils avec des dossiers <i>différents</i> sont des configurations totalement indépendantes.</p>',
         },
       },
       {
@@ -1015,6 +1017,12 @@ export function initDocsHub() {
 
   // Public deep-link hooks (used by Settings' FAQ/PAT/disk buttons; supersedes old openHelpTo).
   (window as any).openDocsArticle = openArticle;
+  // Open an article by id alone (category resolved from the id) — used by the
+  // bmm://docs/open?article=<id> deeplink so BMM Docs pages can link into the app.
+  (window as any).openDocsArticleById = (artId: string) => {
+    const f = findArticle(artId);
+    if (f) openArticle(f.cat.id, f.art.id); else (window as any).openDocsHome();
+  };
   (window as any).openDocsHome = () => { route = { ...route, view: 'hub', catId: undefined, artId: undefined }; showDocs(); paint(); };
   (window as any).openHelpTo = (key: string) => {
     const map = LEGACY_HELP[key];

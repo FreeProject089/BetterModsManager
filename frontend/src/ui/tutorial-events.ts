@@ -48,6 +48,7 @@ export const BMM_ACTIONS = {
     MODLIST_EXPORTED:'bmm:action:modlist-exported',
     MAPPER_OPENED:     'bmm:action:mapper-opened',
     MAPPER_MOD_SELECTED: 'bmm:action:mapper-mod-selected',
+    MAPPER_FOLDER_STAGED: 'bmm:action:mapper-folder-staged',
     PLUGIN_INSTALLED:  'bmm:action:plugin-installed',
     SCRIPT_GENERATED:  'bmm:action:script-generated',
     API_TOKEN_COPIED:  'bmm:action:api-token-copied',

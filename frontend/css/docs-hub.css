@@ -251,3 +251,18 @@
   .dh-searchbar { height: auto; flex-wrap: wrap; padding: 8px 12px; }
   .dh-search { flex: 1 1 100%; order: -1; height: 30px; }
 }
+
+/* Inline cross-link between articles (data-art) + keyboard-key runs (:kbd[...]) */
+.dh-body .dh-xref {
+    background: none; border: 0; padding: 0; margin: 0; cursor: pointer;
+    font: inherit; color: var(--bmm-accent, #3b82f6); font-weight: 600;
+    text-decoration: underline; text-underline-offset: 2px; text-decoration-thickness: 1px;
+}
+.dh-body .dh-xref:hover { color: var(--bmm-accent-dim, #60a5fa); }
+.dh-body .dh-kbd { display: inline-flex; align-items: center; gap: 3px; vertical-align: baseline; }
+.dh-body .dh-kbd kbd {
+    font-family: var(--bmm-font-mono, ui-monospace, monospace); font-size: 0.85em; font-weight: 600; line-height: 1;
+    padding: 2px 6px; border-radius: 6px; color: var(--bmm-text-secondary, #a3adba);
+    background: var(--bmm-bg-base, #0f1420); border: 1px solid var(--bmm-border, #2a3242);
+    box-shadow: 0 1px 0 var(--bmm-border, #2a3242);
+}

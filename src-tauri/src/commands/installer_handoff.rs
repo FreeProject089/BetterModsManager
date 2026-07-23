@@ -77,6 +77,11 @@ pub struct HandoffResult {
     pub languages_imported: u32,
     /// How many bundled themes were copied into the themes dir.
     pub themes_imported: u32,
+    /// Local session recorder preference the installer chose. `Some(false)` means the
+    /// user unchecked it → the frontend mirrors it to the `bmm_replay_enabled`
+    /// localStorage flag (that setting lives on the JS side, not in AppSettings).
+    /// `None`/`Some(true)` → leave BMM's default (on).
+    pub session_recorder: Option<bool>,
 }
 
 #[tauri::command]
@@ -204,6 +209,16 @@ fn apply_settings(
     if let Some(v) = s.get("sound_effects").and_then(|v| v.as_bool()) {
         settings.sound_effects_enabled = v;
     }
+    // System Access Control → BMM's fs_security_mode (only "full" / "limited" are valid).
+    if let Some(mode) = s.get("fs_security_mode").and_then(|v| v.as_str()) {
+        let mode = mode.trim();
+        if mode == "full" || mode == "limited" {
+            settings.fs_security_mode = Some(mode.to_string());
+        }
+    }
+    // Local session recorder — no AppSettings field (it's a JS/localStorage flag), so we
+    // just surface the choice; the frontend mirrors it to `bmm_replay_enabled`.
+    res.session_recorder = s.get("session_recorder").and_then(|v| v.as_bool());
 
     let privacy = s.get("privacy_accepted").and_then(|v| v.as_bool()).unwrap_or(false);
     let tos = s.get("tos_accepted").and_then(|v| v.as_bool()).unwrap_or(false);

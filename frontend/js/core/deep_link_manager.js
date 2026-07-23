@@ -631,6 +631,17 @@ async function handleDeepLink(urlStr) {
             window.openThemeEditor?.();
             return;
         }
+        // Open a Help & Other article in-app. Lets BMM Docs (the website) link straight
+        // into the integrated docs: bmm://docs/open?article=<id> (or no id → docs home).
+        if (action === 'docs/open') {
+            const id = parsedUrl.searchParams.get('article');
+            document.querySelector('.nav-item[data-view="docs"]')?.click();
+            if (id)
+                window.openDocsArticleById?.(id);
+            else
+                window.openDocsHome?.();
+            return;
+        }
         if (action === 'theme/import-inline') {
             const data = parsedUrl.searchParams.get('data');
             if (data) {

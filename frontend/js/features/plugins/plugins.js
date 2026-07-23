@@ -5208,6 +5208,13 @@ function getDeepLinkDefs() {
             about: 'Ouvre l\'éditeur de thème intégré.',
             example: 'bmm://theme/editor',
         },
+        {
+            scheme: 'docs/open',
+            params: [{ name: 'article', required: false, desc: 'ID de l\'article Help & Other à ouvrir (ex. conflicts, first-profile, server-host). Omis = page d\'accueil de la doc.' }],
+            desc: 'Ouvrir la documentation intégrée',
+            about: 'Ouvre la page Help & Other de BMM, éventuellement sur un article précis. Utilisé par le site BMM Docs pour renvoyer vers la doc intégrée dans l\'app.',
+            example: 'bmm://docs/open?article=conflicts',
+        },
         // ── Automatisation / exécution ───────────────────────────────────────
         {
             scheme: 'schedule/run',

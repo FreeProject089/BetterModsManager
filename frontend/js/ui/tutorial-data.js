@@ -304,6 +304,15 @@ const BASICS = {
                     ],
                 },
                 {
+                    // Create a folder inside the mod (staged; cancelable before Save).
+                    id: 's5b',
+                    title_key: 'tut.basics.map.s5b.title',
+                    text_key: 'tut.basics.map.s5b.text',
+                    nav: 'mapper',
+                    selector: 'btn-mapper-new-folder',
+                    action: { event: BMM_ACTIONS.MAPPER_FOLDER_STAGED, desc_key: 'tut.basics.map.s5b.action' },
+                },
+                {
                     // Preview the full diagnostic before touching anything.
                     id: 's6',
                     title_key: 'tut.basics.map.s6.title',

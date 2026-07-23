@@ -771,6 +771,9 @@ async function main() {
                 localStorage.setItem('bmm_privacy_seen', 'true');
             }
             if (ho.language_set) localStorage.setItem('bmm_lang_selected', 'true');
+            // Local session recorder is a JS-side setting (localStorage bmm_replay_enabled,
+            // default on). The installer only needs to act when the user turned it OFF.
+            if (ho.session_recorder === false) localStorage.setItem('bmm_replay_enabled', '0');
             // Pre-import a bundled preset (themes / translations / catalogue / plugins)
             // through the same path as a manual backup import. Runs before i18n init
             // so freshly-imported languages are available immediately.
