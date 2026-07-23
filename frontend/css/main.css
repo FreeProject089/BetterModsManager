@@ -10209,11 +10209,26 @@ select:focus {
 .tasky-bubble-container {
     pointer-events: none !important;
 }
+/* The help bubble is a passive, mouse-following tooltip — it must NEVER be a hit
+ * target. The base rules gave .tasky-speech-bubble / .tasky-mascot-wrapper
+ * pointer-events:auto, which re-enabled hit-testing on the children even though the
+ * container is pointer-events:none — so the (often invisible / opacity-0) bubble sat
+ * over modals and buttons and swallowed clicks. Force the entire subtree transparent
+ * to the mouse so clicks always fall through to the UI underneath. */
+.tasky-bubble-container,
+.tasky-bubble-container * {
+    pointer-events: none !important;
+}
 .tasky-speech-bubble {
     flex-shrink: 0 !important;
     min-width: 250px !important;
     width: auto !important;
     max-width: 420px !important;
+}
+/* When Tasky is hidden from Settings, the whole global help layer is inert: no
+ * bubble, no mascot, nothing in the DOM flow that could overlay other elements. */
+body.tasky-hidden #tasky-bubble-docs {
+    display: none !important;
 }
 .titlebar-left {
     gap: 5px !important;

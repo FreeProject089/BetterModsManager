@@ -301,6 +301,9 @@ export function showTaskyHelp(key, iconClass = 'info', isLiteral = false) {
     // Respect user preference to disable tooltips
     if (window.__taskyTooltipEnabled === false)
         return;
+    // If Tasky is hidden from Settings, the mascot bubble stays gone too.
+    if (window.__taskyVisible === false)
+        return;
     // Don't show tooltips when dropdown is open
     if (window.__dropdownOpen === true)
         return;
