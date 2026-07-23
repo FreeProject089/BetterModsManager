@@ -10225,9 +10225,10 @@ select:focus {
     width: auto !important;
     max-width: 420px !important;
 }
-/* When Tasky is hidden from Settings, the whole global help layer is inert: no
- * bubble, no mascot, nothing in the DOM flow that could overlay other elements. */
-body.tasky-hidden #tasky-bubble-docs {
+/* "Afficher Tasky" OFF → the corner mascot's dedicated div is fully removed, so no
+ * absolutely-positioned layer lingers in the top-left corner. This targets ONLY the
+ * corner mascot — the help bubbles keep their own independent toggle. */
+body.tasky-hidden #app-mascot-container {
     display: none !important;
 }
 .titlebar-left {

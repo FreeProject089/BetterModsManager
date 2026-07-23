@@ -1097,19 +1097,11 @@ window.applyTaskySettings = function () {
     // Apply visibility - when hidden, show text logo in sidebar like fullscreen
     if (container) container.style.display = isVisible ? '' : 'none';
 
-    // Toggle class on body for global styling adjustments (like sidebar logo)
+    // Toggle class on body for global styling adjustments: the sidebar text logo
+    // AND the CSS rule that fully removes the corner-mascot div (#app-mascot-container)
+    // when hidden. The help bubbles are NOT affected — they have their own toggle.
     if (isVisible) document.body.classList.remove('tasky-hidden');
     else document.body.classList.add('tasky-hidden');
-
-    // Hiding Tasky hides its whole self, including the mouse-following help bubble
-    // (which renders the mascot). Expose the flag the bubble checks, and tear down
-    // any bubble that's currently on screen so nothing lingers as an overlay.
-    (window as any).__taskyVisible = isVisible;
-    if (!isVisible) {
-        (window as any).hideTaskyHelp?.();
-        const docBubble = document.getElementById('tasky-bubble-docs');
-        if (docBubble) { docBubble.style.display = 'none'; docBubble.style.opacity = '0'; }
-    }
 
     // Sidebar brand: removed redundant fallback logo logic
 
@@ -1235,11 +1227,13 @@ window.applyTaskySettings = function () {
     if (opacityLabel) opacityLabel.textContent = opacity + '%';
 
     (window as any).__taskyTooltipEnabled = tooltipEnabled;
-    (window as any).__taskyVisible = isVisible;
     document.documentElement.style.setProperty('--tasky-bubble-opacity', String(opacity / 100));
 
     if (container) container.style.display = isVisible ? '' : 'none';
+    // Reflect the hidden state as a body class on load too (was only set on toggle),
+    // so the corner-mascot removal + sidebar logo apply from the first paint.
     if (!isVisible) document.body.classList.add('tasky-hidden');
+    else document.body.classList.remove('tasky-hidden');
 
     // The titlebar version badge duplicates the corner Tasky's role; when the
     // corner Tasky is hidden, hide the lone badge too (cleaner titlebar).

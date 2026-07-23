@@ -335,10 +335,10 @@ let lastTooltipIcon: string | null = null;
 let lastTooltipLiteral: boolean = false;
 
 export function showTaskyHelp(key, iconClass = 'info', isLiteral = false) {
-    // Respect user preference to disable tooltips
+    // Respect user preference to disable tooltips. NOTE: this is the ONLY switch that
+    // governs the help bubbles — the "Afficher Tasky" (corner mascot) toggle is
+    // independent and must not silence tooltips.
     if ((window as any).__taskyTooltipEnabled === false) return;
-    // If Tasky is hidden from Settings, the mascot bubble stays gone too.
-    if ((window as any).__taskyVisible === false) return;
 
     // Don't show tooltips when dropdown is open
     if ((window as any).__dropdownOpen === true) return;
