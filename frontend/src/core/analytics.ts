@@ -939,7 +939,7 @@ async function renderSentPackets(): Promise<void> {
 
         return `<div class="apv-pkt">
             <div class="apv-pkt-row">
-                <span class="apv-pkt-id" title="${escHtml(p.id)}">${escHtml(String(p.id).slice(0, 8))}…</span>
+                <span class="apv-pkt-id" data-tooltip="${escHtml(p.id)}">${escHtml(String(p.id).slice(0, 8))}…</span>
                 <span class="apv-pkt-meta">${escHtml(when)}</span>
                 <span class="apv-pkt-spacer"></span>
                 ${control}

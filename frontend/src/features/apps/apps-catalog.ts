@@ -502,7 +502,7 @@ function renderInstalled() {
         </div>
         <div class="apps-installed-info">
           <div class="apps-installed-title">${escHtml(app.title)}</div>
-          <div class="apps-installed-path" title="${escAttr(app.install_path)}">${escHtml(app.install_path||'—')}</div>
+          <div class="apps-installed-path" data-tooltip="${escAttr(app.install_path)}">${escHtml(app.install_path||'—')}</div>
           <div class="apps-installed-meta">
             ${app.version ? `<span>v${escHtml(app.version)}</span>` : ''}
             <span>${t('apps.usage')||'Usage'}: ${formatDuration(app.usage_seconds)}</span>
@@ -510,13 +510,13 @@ function renderInstalled() {
           </div>
         </div>
         <div class="apps-installed-actions">
-          <button class="apps-inst-fav-btn${_state.favorites.includes(app.id)?' active':''}" data-action="fav" data-id="${escAttr(app.id)}" title="${_state.favorites.includes(app.id)?(t('apps.unfavorite')||'Unfavorite'):(t('apps.favorite')||'Favorite')}">
+          <button class="apps-inst-fav-btn${_state.favorites.includes(app.id)?' active':''}" data-action="fav" data-id="${escAttr(app.id)}" data-tooltip="${_state.favorites.includes(app.id)?(t('apps.unfavorite')||'Unfavorite'):(t('apps.favorite')||'Favorite')}">
             ${_state.favorites.includes(app.id) ? IC.starFill : IC.star}
           </button>
           ${app.exe_path
             ? `<button class="btn btn-sm btn-accent" data-action="launch" data-id="${escAttr(app.id)}" data-exe="${escAttr(app.exe_path)}">${IC.play} ${t('apps.launch')||'Launch'}</button>`
             : `<button class="btn btn-sm btn-ghost" data-action="pick-exe" data-id="${escAttr(app.id)}">${IC.monitor} ${t('apps.pickExe')||'Set exe'}</button>`}
-          ${app.exe_path ? `<button class="btn btn-sm btn-ghost" data-action="change-launcher" data-id="${escAttr(app.id)}" title="${escAttr(app.exe_path)}">${IC.replace || IC.replace}</button>` : ''}
+          ${app.exe_path ? `<button class="btn btn-sm btn-ghost" data-action="change-launcher" data-id="${escAttr(app.id)}" data-tooltip="${escAttr(app.exe_path)}">${IC.replace || IC.replace}</button>` : ''}
           <button class="btn btn-sm btn-ghost" data-action="folder" data-id="${escAttr(app.id)}" data-path="${escAttr(app.install_path)}">${IC.folder}</button>
           <button class="btn btn-sm btn-ghost btn-danger-ghost" data-action="uninstall" data-id="${escAttr(app.id)}">${IC.trash}</button>
         </div>
@@ -748,7 +748,7 @@ function renderAppCardWithCollMenu(app: AppEntry) {
     const inColls = _collections.filter(c => c.appIds.includes(app.id));
     return base.replace('</div>\n    </div>', `
       <div style="margin-top:4px;position:relative">
-        <button class="apps-tag-chip" id="btn-${menuId}" title="${t('apps.fav.addToCollection')||'Add to collection'}">
+        <button class="apps-tag-chip" id="btn-${menuId}" data-tooltip="${t('apps.fav.addToCollection')||'Add to collection'}">
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
           ${inColls.length ? inColls.map(c => escHtml(c.name)).join(', ') : (t('apps.fav.addToCollection')||'Collection')}
         </button>
@@ -904,7 +904,7 @@ function renderSources() {
         ${_state.community_sources.map(url => `
         <div class="apps-source-row">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-          <span class="apps-source-url" title="${escAttr(url)}">${escHtml(url)}</span>
+          <span class="apps-source-url" data-tooltip="${escAttr(url)}">${escHtml(url)}</span>
           <button class="btn btn-xs btn-ghost btn-danger-ghost apps-source-remove" data-url="${escAttr(url)}">${IC.close}</button>
         </div>`).join('')}
       </div>
@@ -1244,7 +1244,7 @@ function openDetailModal(appId: string) {
             </div>
           </div>
           <div class="adm-header-actions">
-            <button class="adm-fav-btn${fav?' adm-fav-active':''}" id="adm-fav-btn" title="${fav?(t('apps.unfavorite')||'Unfavorite'):(t('apps.favorite')||'Favorite')}">
+            <button class="adm-fav-btn${fav?' adm-fav-active':''}" id="adm-fav-btn" data-tooltip="${fav?(t('apps.unfavorite')||'Unfavorite'):(t('apps.favorite')||'Favorite')}">
               ${fav ? IC.starFill : IC.star}
             </button>
             ${installed

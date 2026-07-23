@@ -854,7 +854,7 @@
                                     </button>
                                     <!-- Check-for-updates: same style as the view-mode toggle, its own icon -->
                                     <button id="btn-lib-check-updates" class="btn btn-icon btn-ghost btn-compact-toggle"
-                                        data-i18n-title="lib.checkUpdates" title="Check for mod updates"
+                                        data-i18n-tooltip="lib.checkUpdates"
                                         onmouseenter="window.showTaskyHelp('lib.checkUpdatesTip', 'refresh')"
                                         onmouseleave="window.hideTaskyHelp()">
                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
@@ -2186,8 +2186,8 @@
                                             </div>
                                             <div
                                                 style="display:flex; align-items:center; justify-content:space-between;"
-                                                title="Optional. When set, subscribers must enter this password to download from the repo. Leave blank for an open repo."
-                                                data-i18n-title="repo.miniServerDownloadPasswordHint">
+                                                data-tooltip="Optional. When set, subscribers must enter this password to download from the repo. Leave blank for an open repo."
+                                                data-i18n-tooltip="repo.miniServerDownloadPasswordHint">
                                                 <span
                                                     style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:700;"
                                                     data-i18n="repo.miniServerDownloadPassword">DOWNLOAD PASSWORD</span>
@@ -2580,7 +2580,7 @@
                                 </select>
                             </div>
                             <button class="btn btn-icon btn-secondary mapper-icon-btn" id="btn-mapper-refresh"
-                                data-i18n-title="mapper.refreshTip" aria-label="Refresh">
+                                data-i18n-tooltip="mapper.refreshTip" aria-label="Refresh">
                                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                     stroke-width="2.2">
                                     <path
@@ -2640,14 +2640,14 @@
                                         data-i18n="mapper.subfolder">Sous-dossier</span></span>
                             </div>
                         </div>
-                        <button class="mapper-hint-close" id="btn-mapper-hint-close" data-i18n-title="mapper.hideTips"
-                            title="Hide tips" aria-label="Hide tips">
+                        <button class="mapper-hint-close" id="btn-mapper-hint-close" data-i18n-tooltip="mapper.hideTips"
+                            data-tooltip="Hide tips" aria-label="Hide tips">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="2.4" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
                         </button>
                     </div>
-                    <button class="mapper-hint-show" id="btn-mapper-hint-show" data-i18n-title="mapper.showTips"
-                        title="Show tips" aria-label="Show tips" hidden>
+                    <button class="mapper-hint-show" id="btn-mapper-hint-show" data-i18n-tooltip="mapper.showTips"
+                        data-tooltip="Show tips" aria-label="Show tips" hidden>
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2.2"><path
                                 d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A5 5 0 0 0 8 8c0 1.3.5 2.6 1.5 3.5.8.8 1.3 1.5 1.5 2.5" />
@@ -2665,14 +2665,14 @@
                                     <div class="selection-counter" id="mapper-selection-count">0 sélectionné</div>
                                     <div class="tree-controls">
                                         <button class="btn-icon-small" id="btn-mapper-mod-expand"
-                                            data-i18n-title="mapper.expandAll">
+                                            data-i18n-tooltip="mapper.expandAll">
                                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
                                                 stroke="currentColor" stroke-width="2.5">
                                                 <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
                                             </svg>
                                         </button>
                                         <button class="btn-icon-small" id="btn-mapper-mod-collapse"
-                                            data-i18n-title="mapper.collapseAll">
+                                            data-i18n-tooltip="mapper.collapseAll">
                                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
                                                 stroke="currentColor" stroke-width="2.5">
                                                 <path d="M4 14h6v6M20 10h-6V4M14 10l7-7M10 14l-7 7" />
@@ -2708,14 +2708,14 @@
                                     <h3 class="panel-title" data-i18n="mapper.gameSide">Dossier du Jeu</h3>
                                     <div class="tree-controls">
                                         <button class="btn-icon-small" id="btn-mapper-game-expand"
-                                            data-i18n-title="mapper.expandAll">
+                                            data-i18n-tooltip="mapper.expandAll">
                                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
                                                 stroke="currentColor" stroke-width="2.5">
                                                 <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
                                             </svg>
                                         </button>
                                         <button class="btn-icon-small" id="btn-mapper-game-collapse"
-                                            data-i18n-title="mapper.collapseAll">
+                                            data-i18n-tooltip="mapper.collapseAll">
                                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
                                                 stroke="currentColor" stroke-width="2.5">
                                                 <path d="M4 14h6v6M20 10h-6V4M14 10l7-7M10 14l-7 7" />
@@ -3162,19 +3162,19 @@
                                         </div>
                                     </div>
                                     <div class="i18n-sb-header-actions">
-                                        <button class="i18n-sb-tool" id="i18n-pick-screen" data-i18n-title="i18n.pickScreen" title="Pick text from the app">
+                                        <button class="i18n-sb-tool" id="i18n-pick-screen" data-i18n-tooltip="i18n.pickScreen">
                                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
                                             <span data-i18n="i18n.pickScreenShort">Pick</span>
                                         </button>
-                                        <button class="i18n-sb-tool" id="i18n-highlight-hc" data-i18n-title="i18n.highlightHc" title="Highlight hardcoded text on screen">
+                                        <button class="i18n-sb-tool" id="i18n-highlight-hc" data-i18n-tooltip="i18n.highlightHc">
                                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 11-6 6v3h3l6-6"/><path d="m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"/></svg>
                                             <span data-i18n="i18n.highlightHcShort">Scan</span>
                                         </button>
-                                        <label class="i18n-ovl-opacity" id="i18n-ovl-opacity" data-i18n-title="i18n.overlayOpacity" title="Floating window opacity">
+                                        <label class="i18n-ovl-opacity" id="i18n-ovl-opacity" data-i18n-tooltip="i18n.overlayOpacity">
                                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 0 20z" fill="currentColor" stroke="none"/></svg>
                                             <input type="range" min="35" max="100" value="100" id="i18n-ovl-opacity-range">
                                         </label>
-                                        <button class="i18n-sb-tool" id="i18n-overlay-toggle" data-i18n-title="i18n.overlayMode" title="Overlay mode">
+                                        <button class="i18n-sb-tool" id="i18n-overlay-toggle" data-i18n-tooltip="i18n.overlayMode">
                                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><rect x="12" y="11" width="8" height="7" rx="1" fill="currentColor" stroke="none"/></svg>
                                             <span data-i18n="i18n.overlayModeShort">Float</span>
                                         </button>
@@ -3203,7 +3203,7 @@
                                     <div class="i18n-sb-left">
                                         <div class="i18n-sb-filters">
                                             <select id="i18n-base-lang" class="i18n-sb-lang"></select>
-                                            <button class="i18n-sb-newlang" id="i18n-new-lang" data-i18n-title="i18n.newLang" title="Create a new language">
+                                            <button class="i18n-sb-newlang" id="i18n-new-lang" data-i18n-tooltip="i18n.newLang">
                                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14"/></svg>
                                             </button>
                                             <div class="i18n-sb-search-wrap">
@@ -3214,7 +3214,7 @@
                                         <div class="i18n-sb-chips">
                                             <button class="i18n-sb-chip active" data-i18n-filter="all"><span data-i18n="i18n.filterAll">All</span></button>
                                             <button class="i18n-sb-chip" data-i18n-filter="missing">⚠ <span data-i18n="i18n.filterMissing">Missing</span></button>
-                                            <button class="i18n-sb-chip i18n-sb-next" id="i18n-next-missing" data-i18n-title="i18n.nextMissing" title="Jump to the next missing key">
+                                            <button class="i18n-sb-chip i18n-sb-next" id="i18n-next-missing" data-i18n-tooltip="i18n.nextMissing">
                                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
                                                 <span data-i18n="i18n.nextMissingShort">Next missing</span>
                                             </button>
@@ -5375,8 +5375,8 @@
                             <button class="btn btn-secondary btn-sm" id="btn-pick-mod-folder"
                                 data-i18n="prof.browse">Parcourir</button>
                             <button class="btn btn-secondary btn-sm" id="btn-pick-mod-archive"
-                                data-i18n="mod.pickArchive" data-i18n-title="mod.pickArchiveTip"
-                                title="Add an archived mod (.zip .rar .7z .tar .tar.gz) — kept compressed, extracted on activation">Archive</button>
+                                data-i18n="mod.pickArchive" data-i18n-tooltip="mod.pickArchiveTip"
+                                data-tooltip="Add an archived mod (.zip .rar .7z .tar .tar.gz) — kept compressed, extracted on activation">Archive</button>
                         </div>
                     </div>
                     <div class="form-row">
@@ -6009,7 +6009,7 @@
                         </div>
                     </div>
                     <div style="display:flex;align-items:center;gap:8px;">
-                        <button id="btn-refresh-repo-browser" title="Refresh list" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;cursor:pointer;color:var(--text-muted);transition:all 0.15s;" onmouseover="this.style.color='var(--text-primary)'" onmouseout="this.style.color='var(--text-muted)'">
+                        <button id="btn-refresh-repo-browser" data-tooltip="Refresh list" aria-label="Refresh list" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;cursor:pointer;color:var(--text-muted);transition:all 0.15s;" onmouseover="this.style.color='var(--text-primary)'" onmouseout="this.style.color='var(--text-muted)'">
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.36"/></svg>
                         </button>
                         <button class="modal-close" data-close="modal-repo-browser">

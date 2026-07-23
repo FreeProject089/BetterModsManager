@@ -146,7 +146,7 @@ export function expandDocBlocks(md: string, opts: ExpandOpts = {}, _top = true):
     } else if (name === 'details' || name === 'collapse') {
       out.push('', `<details class="community-details"><summary>${escHtml(label || attrs.title || 'Details')}</summary><div class="community-details-body">${mdInline(innerMd)}</div></details>`, '');
     } else if (name === 'replay' || name === 'bmmreplay') {
-      // Inline BMM session replay. The same :::replay{src="…" title="…"} the BCWEB site
+      // Inline BMM session replay. The same :::replay{src="…" data-tooltip="…"} the BCWEB site
       // uses. BMM has no inline rrweb player, so this renders a play card that opens the
       // app's own full replay viewer (playReplayFromUrl) via the delegated click handler
       // in update-notes.ts. `src` is made absolute against baseUrl for site content.

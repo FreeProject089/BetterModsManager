@@ -336,17 +336,17 @@ export async function openAdvancedPerfModal() {
                         <span style="font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.08em; color:var(--text-muted);">${t('bench.scale') || 'Size'}</span>
                         <div style="display:flex; align-items:center; gap:8px;">
                             <div id="bench-scale-seg" style="display:flex; gap:3px; background:rgba(0,0,0,0.32); padding:3px; border-radius:9px;">
-                                <button class="bench-seg" data-scale="small" title="${t('bench.sizeSmallTip') || '~6 MB'}">S</button>
-                                <button class="bench-seg active" data-scale="medium" title="${t('bench.sizeMediumTip') || '~48 MB'}">M</button>
-                                <button class="bench-seg" data-scale="large" title="${t('bench.sizeLargeTip') || '~160 MB'}">L</button>
-                                <button class="bench-seg" data-scale="xlarge" title="${t('bench.xlargeTip') || '~400 MB'}">XL</button>
-                                <button class="bench-seg" data-scale="custom" title="${t('bench.sizeCustomTip') || 'Custom total size'}">${t('bench.sizeCustom') || 'Custom'}</button>
+                                <button class="bench-seg" data-scale="small" data-tooltip="${t('bench.sizeSmallTip') || '~6 MB'}">S</button>
+                                <button class="bench-seg active" data-scale="medium" data-tooltip="${t('bench.sizeMediumTip') || '~48 MB'}">M</button>
+                                <button class="bench-seg" data-scale="large" data-tooltip="${t('bench.sizeLargeTip') || '~160 MB'}">L</button>
+                                <button class="bench-seg" data-scale="xlarge" data-tooltip="${t('bench.xlargeTip') || '~400 MB'}">XL</button>
+                                <button class="bench-seg" data-scale="custom" data-tooltip="${t('bench.sizeCustomTip') || 'Custom total size'}">${t('bench.sizeCustom') || 'Custom'}</button>
                             </div>
                             <div id="bench-custom-wrap" style="display:none; align-items:center; gap:5px;">
-                                <input id="bench-custom-mb" type="number" min="1" max="8192" value="250" title="${t('bench.sizeCustomMaxTip') || 'Total dataset size in MB (1–8192).'}" style="width:74px; height:30px; background:rgba(0,0,0,0.32); border:1px solid var(--bmm-s08,rgba(255,255,255,0.08)); border-radius:8px; color:var(--text-primary); font-size:12px; font-weight:700; text-align:right; padding:0 7px;" />
+                                <input id="bench-custom-mb" type="number" min="1" max="8192" value="250" data-tooltip="${t('bench.sizeCustomMaxTip') || 'Total dataset size in MB (1–8192).'}" style="width:74px; height:30px; background:rgba(0,0,0,0.32); border:1px solid var(--bmm-s08,rgba(255,255,255,0.08)); border-radius:8px; color:var(--text-primary); font-size:12px; font-weight:700; text-align:right; padding:0 7px;" />
                                 <span style="font-size:11px; font-weight:700; color:var(--text-muted);">MB</span>
                                 <span style="font-size:11px; color:var(--text-muted); margin:0 1px;">×</span>
-                                <input id="bench-custom-files" type="number" min="1" max="200000" placeholder="auto" title="${t('bench.filesCountTip') || 'Number of files (blank = auto from size). Raise it to stress-test scanning/hashing of many files.'}" style="width:78px; height:30px; background:rgba(0,0,0,0.32); border:1px solid var(--bmm-s08,rgba(255,255,255,0.08)); border-radius:8px; color:var(--text-primary); font-size:12px; font-weight:700; text-align:right; padding:0 7px;" />
+                                <input id="bench-custom-files" type="number" min="1" max="200000" placeholder="auto" data-tooltip="${t('bench.filesCountTip') || 'Number of files (blank = auto from size). Raise it to stress-test scanning/hashing of many files.'}" style="width:78px; height:30px; background:rgba(0,0,0,0.32); border:1px solid var(--bmm-s08,rgba(255,255,255,0.08)); border-radius:8px; color:var(--text-primary); font-size:12px; font-weight:700; text-align:right; padding:0 7px;" />
                                 <span style="font-size:11px; font-weight:700; color:var(--text-muted);">${t('bench.filesUnit') || 'files'}</span>
                             </div>
                         </div>
@@ -605,10 +605,10 @@ export async function openAdvancedPerfModal() {
         if (!srcList) return;
         const prof = benchProfiles.map(p => {
             const on = benchSelected.has(p.id);
-            return `<button class="bench-chip ${on ? 'active' : ''}" data-pid="${escA(p.id)}" title="${escA(p.mods_path || '')}" style="display:inline-flex;align-items:center;gap:6px;">${on ? checkIcon : ''}${escA(p.name || p.id)}</button>`;
+            return `<button class="bench-chip ${on ? 'active' : ''}" data-pid="${escA(p.id)}" data-tooltip="${escA(p.mods_path || '')}" style="display:inline-flex;align-items:center;gap:6px;">${on ? checkIcon : ''}${escA(p.name || p.id)}</button>`;
         }).join('');
         const custom = benchCustom.map((f, i) =>
-            `<button class="bench-chip active" data-custom="${i}" title="${escA(f)}" style="display:inline-flex;align-items:center;gap:6px;">${folderIcon}${escA(shortPath(f))}${xIcon}</button>`).join('');
+            `<button class="bench-chip active" data-custom="${i}" data-tooltip="${escA(f)}" style="display:inline-flex;align-items:center;gap:6px;">${folderIcon}${escA(shortPath(f))}${xIcon}</button>`).join('');
         srcList.innerHTML = (prof + custom) || `<span style="font-size:12px;color:var(--text-muted);">${t('bench.noProfilesFound') || 'No profiles found — use the Folder button.'}</span>`;
         srcList.querySelectorAll('.bench-chip[data-pid]').forEach(c => ((c as HTMLElement).onclick = () => {
             const id = (c as HTMLElement).dataset.pid!;

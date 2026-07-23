@@ -293,7 +293,7 @@ function activateCustom(item: CustomNavItem): void {
         // "open in browser" escape + hint in the bar.
         view.innerHTML = `
             <div class="custom-url-bar">
-                <span class="custom-url-addr" title="${escAttr(item.target)}">${escAttr(item.target)}</span>
+                <span class="custom-url-addr" data-tooltip="${escAttr(item.target)}">${escAttr(item.target)}</span>
                 <span class="custom-url-hint">${t('navedit.embedHint') || 'Some sites block embedding'}</span>
                 <button class="custom-url-open" type="button">${t('navedit.openExternal') || 'Open in browser ↗'}</button>
             </div>
@@ -409,10 +409,10 @@ export function openNavbarEditor(): void {
             const label = cfg.groups[id]?.label || '';
             return `
             <div class="nbe-row nbe-row-group" data-id="${id}" draggable="false">
-                <span class="nbe-grip" title="${t('common.dragReorder') || 'Drag to reorder'}">⠿</span>
+                <span class="nbe-grip" data-tooltip="${t('common.dragReorder') || 'Drag to reorder'}">⠿</span>
                 <span class="nbe-section-tag">${t('navedit.section') || 'SECTION'}</span>
                 <input class="nbe-name input" value="${escAttr(label)}" placeholder="${t('navedit.sectionName') || 'Section name'}">
-                <button class="nbe-del" data-del="${id}" title="${t('common.delete') || 'Delete'}">✕</button>
+                <button class="nbe-del" data-del="${id}" data-tooltip="${t('common.delete') || 'Delete'}">✕</button>
             </div>`;
         }
         const el = items().find(e => idOf(e) === id);
@@ -423,13 +423,13 @@ export function openNavbarEditor(): void {
         const isCustom = id.startsWith('custom:');
         return `
         <div class="nbe-row" data-id="${id}" draggable="false">
-            <span class="nbe-grip" title="${t('common.dragReorder') || 'Drag to reorder'}">⠿</span>
+            <span class="nbe-grip" data-tooltip="${t('common.dragReorder') || 'Drag to reorder'}">⠿</span>
             <span class="nbe-icon">${icon}</span>
             <input class="nbe-name input" value="${escAttr(name)}" placeholder="${escAttr(id)}">
-            <button class="nbe-eye ${hidden ? 'is-hidden' : ''}" title="${t('navedit.toggle') || 'Show / hide'}" ${prot ? 'disabled' : ''}>
+            <button class="nbe-eye ${hidden ? 'is-hidden' : ''}" data-tooltip="${t('navedit.toggle') || 'Show / hide'}" ${prot ? 'disabled' : ''}>
                 ${hidden ? eyeOff() : eyeOn()}
             </button>
-            ${isCustom ? `<button class="nbe-edit" data-edit="${id}" title="${t('navedit.editBtn') || 'Edit'}">✎</button><button class="nbe-del" data-del="${id}" title="${t('common.delete') || 'Delete'}">✕</button>` : ''}
+            ${isCustom ? `<button class="nbe-edit" data-edit="${id}" data-tooltip="${t('navedit.editBtn') || 'Edit'}">✎</button><button class="nbe-del" data-del="${id}" data-tooltip="${t('common.delete') || 'Delete'}">✕</button>` : ''}
         </div>`;
     }).join('');
 
@@ -613,13 +613,13 @@ export function openNavbarEditor(): void {
                     <span class="nbe-name">${escAttr(p.name)}</span>
                     <button class="btn btn-xs btn-ghost nbe-editpage" data-editpage="${escAttr(p.id)}">${t('navedit.editBtn') || 'Edit'}</button>
                     <button class="btn btn-xs btn-ghost nbe-importfile" data-importpage="${escAttr(p.id)}">${t('navedit.importFile') || 'Import file (.wasm…)'}</button>
-                    <button class="nbe-del" data-delpage="${escAttr(p.id)}" title="${t('common.delete') || 'Delete'}">✕</button>
+                    <button class="nbe-del" data-delpage="${escAttr(p.id)}" data-tooltip="${t('common.delete') || 'Delete'}">✕</button>
                 </div>
                 <div class="nbe-presets">
                     <span class="nbe-preset-lbl">${t('navedit.preset') || 'Preset'}:</span>
-                    <button class="btn btn-xs btn-ghost" data-preset="strict" data-pg="${escAttr(p.id)}" title="${t('navedit.presetStrictTip') || 'Fully isolated — no permissions'}">${t('navedit.presetStrict') || 'Strict'}</button>
-                    <button class="btn btn-xs btn-ghost" data-preset="mid" data-pg="${escAttr(p.id)}" title="${t('navedit.presetMidTip') || 'Local only: storage, notifications, app info'}">${t('navedit.presetMid') || 'Mid'}</button>
-                    <button class="btn btn-xs btn-ghost" data-preset="low" data-pg="${escAttr(p.id)}" title="${t('navedit.presetLowTip') || 'All of Mid + internet (add origins below)'}">${t('navedit.presetLow') || 'Low'}</button>
+                    <button class="btn btn-xs btn-ghost" data-preset="strict" data-pg="${escAttr(p.id)}" data-tooltip="${t('navedit.presetStrictTip') || 'Fully isolated — no permissions'}">${t('navedit.presetStrict') || 'Strict'}</button>
+                    <button class="btn btn-xs btn-ghost" data-preset="mid" data-pg="${escAttr(p.id)}" data-tooltip="${t('navedit.presetMidTip') || 'Local only: storage, notifications, app info'}">${t('navedit.presetMid') || 'Mid'}</button>
+                    <button class="btn btn-xs btn-ghost" data-preset="low" data-pg="${escAttr(p.id)}" data-tooltip="${t('navedit.presetLowTip') || 'All of Mid + internet (add origins below)'}">${t('navedit.presetLow') || 'Low'}</button>
                 </div>
                 <div class="nbe-caps">
                     ${cap('storage', t('navedit.capStorage') || 'storage')}

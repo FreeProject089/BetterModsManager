@@ -290,7 +290,7 @@ async function renderDetail(key: string): Promise<void> {
 
     detail.innerHTML = `
         <div class="i18n-detail-head">
-            <code class="i18n-detail-key" id="i18n-copy-key" title="${t('i18n.copyKey') || 'Copy key'}">${escHtml(key)}</code>
+            <code class="i18n-detail-key" id="i18n-copy-key" data-tooltip="${t('i18n.copyKey') || 'Copy key'}">${escHtml(key)}</code>
             ${isObj ? `<span class="i18n-kind-badge" style="color:var(--accent);border-color:rgba(124,131,253,0.4);">JSON</span>` : ''}
             ${edited ? `<span class="i18n-edited-badge">${t('i18n.edited') || 'edited'}</span>` : ''}
         </div>
@@ -375,7 +375,7 @@ async function renderDetail(key: string): Promise<void> {
         <div class="i18n-usage-file">
             <div class="i18n-usage-file-name">${escHtml(file)} <span class="i18n-sb-muted">(${list.length})</span></div>
             ${list.slice(0, 8).map(u => `
-                <div class="i18n-usage-line" data-loc="${escAttr(file + ':' + u.line)}" title="${t('i18n.copyLoc') || 'Click to copy file:line'}">
+                <div class="i18n-usage-line" data-loc="${escAttr(file + ':' + u.line)}" data-tooltip="${t('i18n.copyLoc') || 'Click to copy file:line'}">
                     <span class="i18n-usage-ln">L${u.line}</span>
                     ${/toast\s*\(/.test(u.snippet || '') ? `<span class="i18n-usage-toast-tag">toast</span>` : ''}
                     ${/showTaskyHelp\s*\(/.test(u.snippet || '') ? `<span class="i18n-usage-toast-tag" style="color:var(--cyan);background:rgba(6,182,212,0.15);">tooltip</span>` : ''}
@@ -421,7 +421,7 @@ async function showHardcodedDetail(text: string): Promise<void> {
         return;
     }
     locEl.innerHTML = `<div class="i18n-detail-section-title">${t('i18n.usedIn') || 'Found in'}</div>` + hits.map(h => `
-        <div class="i18n-usage-line" data-loc="${escAttr(h.file + ':' + h.line)}" title="${t('i18n.copyLoc') || 'Click to copy file:line'}">
+        <div class="i18n-usage-line" data-loc="${escAttr(h.file + ':' + h.line)}" data-tooltip="${t('i18n.copyLoc') || 'Click to copy file:line'}">
             <span class="i18n-usage-ln">${escHtml(h.file)}:${h.line}</span>
             <span class="i18n-usage-snip">${escHtml(h.snippet)}</span>
         </div>`).join('');
@@ -498,7 +498,7 @@ function setHover(el: HTMLElement | null) {
 }
 function nearestTextEl(target: HTMLElement): HTMLElement | null {
     // Prefer an i18n element; otherwise the closest element that directly holds text.
-    const i18nEl = target.closest('[data-i18n],[data-i18n-placeholder],[data-i18n-title]') as HTMLElement | null;
+    const i18nEl = target.closest('[data-i18n],[data-i18n-placeholder],[data-i18n-title],[data-i18n-tooltip]') as HTMLElement | null;
     if (i18nEl) return i18nEl;
     let el: HTMLElement | null = target;
     while (el && !_modal?.contains(el)) {
@@ -516,7 +516,7 @@ function onPickClick(e: MouseEvent) {
     const el = nearestTextEl(e.target as HTMLElement);
     if (!el) return;
     e.preventDefault(); e.stopPropagation();
-    const key = el.getAttribute('data-i18n') || el.getAttribute('data-i18n-placeholder') || el.getAttribute('data-i18n-title');
+    const key = el.getAttribute('data-i18n') || el.getAttribute('data-i18n-placeholder') || el.getAttribute('data-i18n-title') || el.getAttribute('data-i18n-tooltip');
     if (key) { selectKey(key); toast(`${t('i18n.picked') || 'Picked'}: ${key}`, 'success', 1500); }
     else {
         const txt = (el.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 200);
@@ -555,7 +555,7 @@ function auditHardcodedScreen(): void {
             if (['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE', 'svg', 'path'].includes(p.tagName)) return NodeFilter.FILTER_REJECT;
             const txt = (node.textContent || '').trim();
             if (txt.length < 2 || !/[A-Za-zÀ-ÿ]{2,}/.test(txt)) return NodeFilter.FILTER_REJECT;
-            if (p.closest('[data-i18n],[data-i18n-placeholder],[data-i18n-title]')) return NodeFilter.FILTER_REJECT;
+            if (p.closest('[data-i18n],[data-i18n-placeholder],[data-i18n-title],[data-i18n-tooltip]')) return NodeFilter.FILTER_REJECT;
             return NodeFilter.FILTER_ACCEPT;
         }
     } as any);

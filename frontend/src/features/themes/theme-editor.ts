@@ -233,8 +233,8 @@ function buildPanel(): void {
             <div class="bte-logo">${ICON.palette(17)}</div>
             <span class="bte-title">${t('themes.editorTitle')||'Theme Editor'}</span>
             <div class="bte-header-actions">
-                <button class="bte-tool" id="bte-pick-token" title="${t('themes.pickElement')||'Pick element to edit token'}">${ICON.eyedropper(14)}</button>
-                <button class="bte-tool" id="bte-reset" title="${t('common.reset')||'Reset'}">${ICON.reset(13)}</button>
+                <button class="bte-tool" id="bte-pick-token" data-tooltip="${t('themes.pickElement')||'Pick element to edit token'}">${ICON.eyedropper(14)}</button>
+                <button class="bte-tool" id="bte-reset" data-tooltip="${t('common.reset')||'Reset'}">${ICON.reset(13)}</button>
                 <button class="bte-close" id="bte-close">${ICON.close(14)}</button>
             </div>
         </div>
@@ -248,15 +248,15 @@ function buildPanel(): void {
         <div class="bte-footer">
             <span class="bte-dirty" id="bte-dirty"></span>
             <div class="bte-footer-actions">
-                <button class="btn btn-ghost btn-sm" id="bte-import-file" title="${t('themes.import')||'Import .bmmtheme / .json'}">${t('themes.import')||'⬆ Import .bmmtheme / .json'}</button>
+                <button class="btn btn-ghost btn-sm" id="bte-import-file" data-tooltip="${t('themes.import')||'Import .bmmtheme / .json'}">${t('themes.import')||'⬆ Import .bmmtheme / .json'}</button>
                 <button class="btn btn-ghost btn-sm" id="bte-discard">${t('themes.discard')||'Discard'}</button>
-                <button class="btn btn-ghost btn-sm" id="bte-save-as" title="${t('themes.saveAsHint')||'Save as a new theme'}">${t('themes.saveAs')||'Save as…'}</button>
+                <button class="btn btn-ghost btn-sm" id="bte-save-as" data-tooltip="${t('themes.saveAsHint')||'Save as a new theme'}">${t('themes.saveAs')||'Save as…'}</button>
                 <button class="btn btn-secondary btn-sm" id="bte-save">${t('themes.saveTheme')||'Save'}</button>
-                <button class="btn btn-ghost btn-sm" id="bte-share" title="${t('themes.share')||'Copy share link'}">
+                <button class="btn btn-ghost btn-sm" id="bte-share" data-tooltip="${t('themes.share')||'Copy share link'}">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
                     ${t('themes.share')||'Share'}
                 </button>
-                <button class="btn btn-accent btn-sm" id="bte-export" title="${t('themes.export')||'Export'} .bmmtheme">${t('themes.export')||'Export'}</button>
+                <button class="btn btn-accent btn-sm" id="bte-export" data-tooltip="${t('themes.export')||'Export'} .bmmtheme">${t('themes.export')||'Export'}</button>
             </div>
         </div>`;
 
@@ -599,35 +599,35 @@ function buildChangesPanel(): string {
         rows.push(`<div class="bte-chg-row" data-chg="var" data-key="${escAttr(k)}">
             ${sw}<span class="bte-chg-name">${escHtml(labelOf(k))}</span>
             <code class="bte-chg-val">${escHtml(String(v).slice(0, 22))}</code>
-            <button class="bte-chg-revert" title="${t('themes.revert')||'Revert'}">↩</button>
+            <button class="bte-chg-revert" data-tooltip="${t('themes.revert')||'Revert'}">↩</button>
         </div>`);
     }
     for (const o of (_draft.element_overrides || [])) {
         rows.push(`<div class="bte-chg-row" data-chg="ov" data-key="${escAttr(o.selector)}">
             <span class="bte-chg-name">${gi('<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/>')} <code>${escHtml(o.selector.slice(0, 30))}</code></span>
             <span class="bte-chg-val">${Object.keys(o.props).length} ${t('themes.props')||'props'}</span>
-            <button class="bte-chg-revert" title="${t('themes.revert')||'Revert'}">↩</button>
+            <button class="bte-chg-revert" data-tooltip="${t('themes.revert')||'Revert'}">↩</button>
         </div>`);
     }
     for (const k of Object.keys(_draft.assets || {})) {
         rows.push(`<div class="bte-chg-row" data-chg="asset" data-key="${escAttr(k)}">
             <span class="bte-chg-name">${gi('<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/>')} ${escHtml(k)}</span>
             <span class="bte-chg-val">${t('themes.custom')||'custom'}</span>
-            <button class="bte-chg-revert" title="${t('themes.revert')||'Revert'}">↩</button>
+            <button class="bte-chg-revert" data-tooltip="${t('themes.revert')||'Revert'}">↩</button>
         </div>`);
     }
     for (const s of (_draft.html_swaps || [])) {
         rows.push(`<div class="bte-chg-row" data-chg="swap" data-key="${escAttr(s.selector)}">
             <span class="bte-chg-name">${gi('<path d="M3 2v6h6"/><path d="M21 12A9 9 0 0 0 6 5.3L3 8"/><path d="M21 22v-6h-6"/><path d="M3 12a9 9 0 0 0 15 6.7l3-2.7"/>')} <code>${escHtml(s.selector.slice(0, 30))}</code></span>
             <span class="bte-chg-val">${t('themes.iconSwap')||'icon'}</span>
-            <button class="bte-chg-revert" title="${t('themes.revert')||'Revert'}">↩</button>
+            <button class="bte-chg-revert" data-tooltip="${t('themes.revert')||'Revert'}">↩</button>
         </div>`);
     }
     if (_draft.global_css) {
         rows.push(`<div class="bte-chg-row" data-chg="globalcss" data-key="">
             <span class="bte-chg-name">⌨ ${t('themes.customCssLabel')||'Custom CSS'}</span>
             <span class="bte-chg-val"></span>
-            <button class="bte-chg-revert" title="${t('themes.revert')||'Revert'}">↩</button>
+            <button class="bte-chg-revert" data-tooltip="${t('themes.revert')||'Revert'}">↩</button>
         </div>`);
     }
     if (!rows.length) return '';
@@ -636,7 +636,7 @@ function buildChangesPanel(): string {
             <div class="bte-group-head" role="button">
                 <span class="bte-group-title">${gi('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h6"/>')} ${t('themes.yourChanges')||'Your changes'}</span>
                 <span class="bte-group-badge">${rows.length}</span>
-                <button class="bte-chg-revert-all" title="${t('themes.revertAll')||'Revert all'}">${t('themes.revertAll')||'Revert all'}</button>
+                <button class="bte-chg-revert-all" data-tooltip="${t('themes.revertAll')||'Revert all'}">${t('themes.revertAll')||'Revert all'}</button>
                 <svg class="bte-group-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
             </div>
             <div class="bte-group-body">${rows.join('')}</div>
@@ -725,12 +725,12 @@ function buildSimpleTab(): string {
             </button>
             <div class="bte-group-body">
             ${info.desc ? `<p class="bte-group-desc">${escHtml(info.desc)}</p>` : ''}
-            ${customCount ? `<button class="bte-group-reset" data-group="${escAttr(grp)}" title="${escAttr(t('themes.resetGroupHint')||'Reset every field in this section to its default')}">${ICON.reset(11)} ${(t('themes.resetGroup')||'Reset this section')} (${customCount})</button>` : ''}
+            ${customCount ? `<button class="bte-group-reset" data-group="${escAttr(grp)}" data-tooltip="${escAttr(t('themes.resetGroupHint')||'Reset every field in this section to its default')}">${ICON.reset(11)} ${(t('themes.resetGroup')||'Reset this section')} (${customCount})</button>` : ''}
             ${tokens.map(tok => {
                 const custom = vars[tok.key] || '';
                 const ph = pickerHex(tok.key, custom);
                 const liveLabel = custom ? '' : `<span class="bte-token-live">${escHtml(currentLabel(tok.key, tok.type))}</span>`;
-                const mdnLink = tok.mdn ? `<a class="bte-mdn" href="${MDN_BASE}${tok.mdn}" target="_blank" title="MDN: ${tok.mdn}" onmouseenter="window.showTaskyHelp('${escJs('Open the MDN documentation for the CSS property: ' + tok.mdn)}','info',true)" onmouseleave="window.hideTaskyHelp()">?</a>` : '';
+                const mdnLink = tok.mdn ? `<a class="bte-mdn" href="${MDN_BASE}${tok.mdn}" target="_blank" data-tooltip="MDN: ${tok.mdn}" onmouseenter="window.showTaskyHelp('${escJs('Open the MDN documentation for the CSS property: ' + tok.mdn)}','info',true)" onmouseleave="window.hideTaskyHelp()">?</a>` : '';
                 let inp = '';
                 if (tok.type === 'color') {
                     inp = `<div class="bte-color-wrap">
@@ -756,7 +756,7 @@ function buildSimpleTab(): string {
                         onmouseenter="window.showTaskyHelp('${escJs(tok.desc)}','info',true)" onmouseleave="window.hideTaskyHelp()">${escHtml(tok.label)} ${mdnLink}</label>
                     <div class="bte-token-ctrl">
                         ${inp}
-                        ${custom ? `<button class="bte-token-revert" data-var="${tok.key}" title="${t('themes.resetToDefault')||'Reset to default'}">↩</button>` : liveLabel}
+                        ${custom ? `<button class="bte-token-revert" data-var="${tok.key}" data-tooltip="${t('themes.resetToDefault')||'Reset to default'}">↩</button>` : liveLabel}
                     </div>
                 </div>`;
             }).join('')}
@@ -772,11 +772,11 @@ function buildSimpleTab(): string {
         <div class="bte-section-title">${t('themes.quickPresets')||'Quick presets'}</div>
         <div class="bte-presets">${presets}</div>
         <div class="bte-gen-row">
-            <input type="color" id="bte-gen-color" value="${pickerHex('--bmm-accent', _draft.vars?.['--bmm-accent']||'')}" title="${escAttr(t('themes.genHint')||'Pick a colour to generate a full matching theme')}">
+            <input type="color" id="bte-gen-color" value="${pickerHex('--bmm-accent', _draft.vars?.['--bmm-accent']||'')}" data-tooltip="${escAttr(t('themes.genHint')||'Pick a colour to generate a full matching theme')}">
             <button class="btn btn-secondary btn-sm" id="bte-gen-dark">${t('themes.genDark')||'Generate dark'}</button>
             <button class="btn btn-secondary btn-sm" id="bte-gen-light">${t('themes.genLight')||'Generate light'}</button>
         </div>
-        <label class="bte-contrast-toggle" title="${escAttr(t('themes.contrastHint')||'Auto-darkens light text/surfaces on light themes. Turn off for full manual control.')}">
+        <label class="bte-contrast-toggle" data-tooltip="${escAttr(t('themes.contrastHint')||'Auto-darkens light text/surfaces on light themes. Turn off for full manual control.')}">
             <input type="checkbox" id="bte-contrast-toggle" ${isContrastEnforced() ? 'checked' : ''}>
             <span>${t('themes.contrastToggle')||'Auto contrast on light themes'}</span>
         </label>
@@ -1048,8 +1048,8 @@ function buildElementsTab(): string {
             </div>
             <div class="bte-ce-row-preview">${escHtml(ce.html.replace(/<[^>]+>/g, '').trim().slice(0, 50)) || '⟨html⟩'}</div>
             <div class="bte-ce-row-actions">
-                <button class="bte-icon-btn bte-ce-edit" data-ce-id="${escAttr(ce.id)}" title="${t('common.edit')||'Edit'}">${ICON.edit(13)}</button>
-                <button class="bte-icon-btn danger bte-ce-del" data-ce-id="${escAttr(ce.id)}" title="${t('common.delete')||'Delete'}">${ICON.trash(13)}</button>
+                <button class="bte-icon-btn bte-ce-edit" data-ce-id="${escAttr(ce.id)}" data-tooltip="${t('common.edit')||'Edit'}">${ICON.edit(13)}</button>
+                <button class="bte-icon-btn danger bte-ce-del" data-ce-id="${escAttr(ce.id)}" data-tooltip="${t('common.delete')||'Delete'}">${ICON.trash(13)}</button>
             </div>
         </div>`).join('') : `<div class="bte-empty" style="margin:14px 0;">${t('themes.noCe')||'No custom elements yet — add one below.'}</div>`;
 
@@ -1310,7 +1310,7 @@ function buildInstalledTab(): string {
                         ${!isBuiltin?`<button class="btn btn-xs btn-ghost bte-export-theme" data-id="${th.id}">${t('themes.export')||'Export'}</button>`:''}
                         ${!isBuiltin
                             ? `<button class="btn btn-xs btn-danger bte-delete-theme" data-id="${th.id}">✕</button>`
-                            : `<button class="btn btn-xs btn-ghost bte-hide-builtin" data-id="${th.id}" title="${escAttr(t('themes.uninstall')||'Uninstall')}">${t('themes.uninstall')||'Uninstall'}</button>`}
+                            : `<button class="btn btn-xs btn-ghost bte-hide-builtin" data-id="${th.id}" data-tooltip="${escAttr(t('themes.uninstall')||'Uninstall')}">${t('themes.uninstall')||'Uninstall'}</button>`}
                     </div>
                 </div>`;
             }).join('')}
@@ -1585,13 +1585,13 @@ function openElementOverrideEditor(el: HTMLElement, forcedSel?: string): void {
         <label class="bte-elov-row">
             <span>${label}</span>
             <input type="color" data-prop="${prop}" value="#000000">
-            <button class="bte-elov-clear" data-prop="${prop}" title="${t('themes.clear')||'Clear'}">✕</button>
+            <button class="bte-elov-clear" data-prop="${prop}" data-tooltip="${t('themes.clear')||'Clear'}">✕</button>
         </label>`;
     pop.innerHTML = `
         <div class="bte-elov-head">
-            <span class="bte-elov-grip" title="${t('themes.dragMove')||'Drag to move'}"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg></span>
+            <span class="bte-elov-grip" data-tooltip="${t('themes.dragMove')||'Drag to move'}"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg></span>
             <strong>${ICON.eyedropper(14)} ${t('themes.overrideElement')||'Edit this element'}</strong>
-            <button class="bte-elov-close" title="${t('common.close')||'Close'}">${ICON.close(13)}</button>
+            <button class="bte-elov-close" data-tooltip="${t('common.close')||'Close'}">${ICON.close(13)}</button>
         </div>
         <div class="bte-elov-body">
             <label class="bte-elov-sellabel">${t('themes.selector')||'Selector'}
@@ -1606,9 +1606,9 @@ function openElementOverrideEditor(el: HTMLElement, forcedSel?: string): void {
             ${row(t('themes.border')||'Border', 'border-color')}
             <div class="bte-elov-gradient">
                 <span class="bte-elov-grad-label">${t('themes.gradient')||'Gradient'}</span>
-                <input type="color" class="bte-grad-c1" value="#3b82f6" title="${t('themes.gradColor1')||'Start colour'}">
-                <input type="color" class="bte-grad-c2" value="#8b5cf6" title="${t('themes.gradColor2')||'End colour'}">
-                <select class="bte-grad-dir" title="${t('themes.gradDirection')||'Direction'}">
+                <input type="color" class="bte-grad-c1" value="#3b82f6" data-tooltip="${t('themes.gradColor1')||'Start colour'}">
+                <input type="color" class="bte-grad-c2" value="#8b5cf6" data-tooltip="${t('themes.gradColor2')||'End colour'}">
+                <select class="bte-grad-dir" data-tooltip="${t('themes.gradDirection')||'Direction'}">
                     <option value="135deg">↘</option>
                     <option value="90deg">→</option>
                     <option value="180deg">↓</option>
@@ -1617,11 +1617,11 @@ function openElementOverrideEditor(el: HTMLElement, forcedSel?: string): void {
                     <option value="circle">◉</option>
                 </select>
                 <button class="btn btn-secondary btn-xs bte-grad-apply">${t('themes.applyGradient')||'Apply'}</button>
-                <button class="btn btn-ghost btn-xs bte-grad-clear" title="${t('themes.clear')||'Clear'}">✕</button>
+                <button class="btn btn-ghost btn-xs bte-grad-clear" data-tooltip="${t('themes.clear')||'Clear'}">✕</button>
             </div>
             <div class="bte-elov-imgrow">
                 <button class="btn btn-secondary btn-xs bte-elov-img">${t('themes.replaceImage')||'Set / replace image'}</button>
-                <button class="btn btn-ghost btn-xs bte-elov-img-clear" title="${t('themes.clear')||'Clear'}">✕</button>
+                <button class="btn btn-ghost btn-xs bte-elov-img-clear" data-tooltip="${t('themes.clear')||'Clear'}">✕</button>
             </div>
             <label class="bte-elov-csslabel">${t('themes.replaceIcon')||'Replace icon (paste SVG)'}</label>
             <textarea class="bte-elov-svg" spellcheck="false" placeholder='<svg viewBox="0 0 24 24" ...>…</svg>'></textarea>

@@ -302,7 +302,7 @@ export function showConflictContextMenu(e, mod1Id, mod2Id) {
            onmouseover="this.style.background='rgba(59,130,246,0.15)';this.style.borderLeft='2px solid var(--accent)'"
            onmouseout="this.style.background='transparent';this.style.borderLeft='none'"
            onclick="window.showFileConflictSelector(event,'${escAttr(escJs(f))}','${mod1Id}','${mod2Id}')"
-           data-tooltip="${escAttr(f)}" title="${escAttr(f)}">
+           data-tooltip="${escAttr(f)}" data-tooltip="${escAttr(f)}">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;color:var(--accent)"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
         <span style="flex:1;overflow:hidden;text-overflow:ellipsis;font-size:11.5px;color:var(--text-primary)">${escHtml(f)}</span>
       </div>`).join('');

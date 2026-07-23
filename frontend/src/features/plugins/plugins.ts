@@ -832,7 +832,7 @@ function renderSourcesList(container: HTMLElement) {
     list.innerHTML = sources.map(src => `
         <div class="plug-source-row">
             <span class="plug-source-icon">${isUrlSource(src) ? IC.globe : IC.folder}</span>
-            <span class="plug-source-url" title="${escAttr(src)}">${escHtml(src)}</span>
+            <span class="plug-source-url" data-tooltip="${escAttr(src)}">${escHtml(src)}</span>
             <button class="btn btn-xs btn-ghost plug-source-del" data-src="${escAttr(src)}">${IC.trash}</button>
         </div>`).join('');
     list.querySelectorAll('.plug-source-del').forEach(btn => {
@@ -6682,7 +6682,7 @@ function _renderField(cardId: string, f: _Field): string {
                 <input id="${id}" type="text" class="input input-sm" data-field="${f.key}" style="flex:1;min-width:0"
                     placeholder="${escHtml(f.placeholder || '')}" value="${val}">
                 <button type="button" class="btn btn-sm plug-act-browse" data-browse="${f.type}" data-for="${id}"
-                    title="${escHtml(t('plugins.browse') || 'Browse…')}" style="flex-shrink:0;display:flex;align-items:center;gap:5px">
+                    data-tooltip="${escHtml(t('plugins.browse') || 'Browse…')}" style="flex-shrink:0;display:flex;align-items:center;gap:5px">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ic}</svg>
                     <span>${escHtml(t('plugins.browse') || 'Browse')}</span>
                 </button>
@@ -6750,7 +6750,7 @@ function _renderActionCard(def: _ActionDef): HTMLElement {
 
     card.innerHTML = `
         <div class="plug-act-stripe" style="background:${meta.color};"></div>
-        <div class="plug-act-grip" title="${t('common.move') || 'Move'}">
+        <div class="plug-act-grip" data-tooltip="${t('common.move') || 'Move'}">
             <svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor"><circle cx="2" cy="3" r="1.2"/><circle cx="8" cy="3" r="1.2"/><circle cx="2" cy="8" r="1.2"/><circle cx="8" cy="8" r="1.2"/><circle cx="2" cy="13" r="1.2"/><circle cx="8" cy="13" r="1.2"/></svg>
         </div>
         <div class="plug-act-main">
@@ -6759,13 +6759,13 @@ function _renderActionCard(def: _ActionDef): HTMLElement {
                 <span class="plug-act-icon" style="color:${meta.color};">${def.iconSvg}</span>
                 <span class="plug-act-title">${escHtml(def.label)}</span>
                 <div class="plug-act-toolbar">
-                    <button class="plug-act-btn plug-act-up" title="${t('common.moveUp') || 'Move up'}">
+                    <button class="plug-act-btn plug-act-up" data-tooltip="${t('common.moveUp') || 'Move up'}">
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg>
                     </button>
-                    <button class="plug-act-btn plug-act-down" title="${t('common.moveDown') || 'Move down'}">
+                    <button class="plug-act-btn plug-act-down" data-tooltip="${t('common.moveDown') || 'Move down'}">
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
                     </button>
-                    <button class="plug-act-btn plug-act-del" title="${t('common.delete') || 'Delete'}">
+                    <button class="plug-act-btn plug-act-del" data-tooltip="${t('common.delete') || 'Delete'}">
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                     </button>
                 </div>
@@ -6801,8 +6801,8 @@ function _renderActionCard(def: _ActionDef): HTMLElement {
         const set = (arr: string[]) => { hidden.value = Array.from(new Set(arr)).join(';'); hidden.dispatchEvent(new Event('input', { bubbles: true })); render(); };
         const render = () => {
             chipsEl.innerHTML = get().map((p, i) => `<span class="pill" style="display:inline-flex;align-items:center;gap:6px;background:var(--bg-tertiary,#1b2230);max-width:100%">
-                <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:240px" title="${escHtml(p)}">${escHtml((p.split(/[\\/]/).pop() || p))}</span>
-                <button type="button" class="plug-fl-rm" data-i="${i}" title="${escHtml(t('common.remove') || 'Remove')}" style="background:none;border:0;color:var(--text-muted,#8a8f98);cursor:pointer;padding:0;display:inline-flex"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+                <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:240px" data-tooltip="${escHtml(p)}">${escHtml((p.split(/[\\/]/).pop() || p))}</span>
+                <button type="button" class="plug-fl-rm" data-i="${i}" data-tooltip="${escHtml(t('common.remove') || 'Remove')}" style="background:none;border:0;color:var(--text-muted,#8a8f98);cursor:pointer;padding:0;display:inline-flex"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
             </span>`).join('') || `<span style="font-size:11px;color:var(--text-muted,#8a8f98)">${escHtml(t('plugins.noSources') || 'No source — sandbox dataset will be used.')}</span>`;
             chipsEl.querySelectorAll('.plug-fl-rm').forEach((rm) => rm.addEventListener('click', () => {
                 const arr = get(); arr.splice(Number((rm as HTMLElement).dataset.i), 1); set(arr);
@@ -8628,7 +8628,7 @@ async function renderPerms(container: HTMLElement) {
             ? specific.map(o => `
                 <div class="plug-source-row">
                     <span class="plug-source-icon">${IC.globe}</span>
-                    <span class="plug-source-url" title="${escAttr(o)}">${escHtml(o)}</span>
+                    <span class="plug-source-url" data-tooltip="${escAttr(o)}">${escHtml(o)}</span>
                     <button class="btn btn-xs btn-ghost plug-cors-del" data-o="${escAttr(o)}">${IC.trash}</button>
                 </div>`).join('')
             : `<p class="plug-sources-empty">${t('plugins.corsNone') || 'No extra origins — API is reachable only from BMM itself.'}</p>`;

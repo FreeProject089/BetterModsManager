@@ -37,7 +37,7 @@ export const toggleRepoFav = (url) => {
 // Star button markup (shared between browse + history)
 const repoStarBtn = (url) => {
     const fav = isRepoFav(url);
-    return `<button class="repo-fav-btn${fav ? ' active' : ''}" data-fav-url="${escAttr(url)}" title="${fav ? (t('repo.unfavorite') || 'Unfavorite') : (t('repo.favorite') || 'Favorite')}">
+    return `<button class="repo-fav-btn${fav ? ' active' : ''}" data-fav-url="${escAttr(url)}" data-tooltip="${fav ? (t('repo.unfavorite') || 'Unfavorite') : (t('repo.favorite') || 'Favorite')}">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="${fav ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
     </button>`;
 };
@@ -1080,7 +1080,7 @@ export function initRepo() {
                             </a>
                             ` : ''}
                             ${repo.discord_link ? `
-                            <a href="${escAttr(repo.discord_link)}" target="_blank" title="Discord" style="width:22px; height:22px; display:flex; align-items:center; justify-content:center; background:#5865F2; border-radius:5px; text-decoration:none; flex-shrink:0; transition:opacity 0.15s;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">
+                            <a href="${escAttr(repo.discord_link)}" target="_blank" data-tooltip="Discord" style="width:22px; height:22px; display:flex; align-items:center; justify-content:center; background:#5865F2; border-radius:5px; text-decoration:none; flex-shrink:0; transition:opacity 0.15s;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">
                                 <svg width="13" height="10" viewBox="0 0 71 55" fill="white" xmlns="http://www.w3.org/2000/svg">
                                     <path d="M60.1 4.9A58.5 58.5 0 0 0 45.6.7a.2.2 0 0 0-.2.1 40.8 40.8 0 0 0-1.8 3.7 54 54 0 0 0-16.2 0A37.5 37.5 0 0 0 25.6.8a.2.2 0 0 0-.2-.1 58.3 58.3 0 0 0-14.5 4.2.2.2 0 0 0-.1.1C1.6 18.5-.9 31.7.3 44.8v.1a58.7 58.7 0 0 0 17.7 9 .2.2 0 0 0 .2-.1 42 42 0 0 0 3.6-5.9.2.2 0 0 0-.1-.3 38.7 38.7 0 0 1-5.5-2.6.2.2 0 0 1 0-.4c.4-.3.7-.6 1.1-.8a.2.2 0 0 1 .2 0c11.6 5.3 24.1 5.3 35.5 0a.2.2 0 0 1 .2 0l1.1.8a.2.2 0 0 1 0 .4 36 36 0 0 1-5.5 2.6.2.2 0 0 0-.1.3 47 47 0 0 0 3.6 5.9.2.2 0 0 0 .2.1 58.5 58.5 0 0 0 17.7-9v-.1c1.5-15.3-2.5-28.4-10.7-40.1a.2.2 0 0 0-.1 0ZM23.7 37c-3.5 0-6.4-3.2-6.4-7.2s2.8-7.2 6.4-7.2c3.6 0 6.5 3.3 6.4 7.2 0 4-2.8 7.2-6.4 7.2Zm23.6 0c-3.5 0-6.4-3.2-6.4-7.2s2.8-7.2 6.4-7.2c3.6 0 6.5 3.3 6.4 7.2 0 4-2.8 7.2-6.4 7.2Z"/>
                                 </svg>
@@ -1373,7 +1373,7 @@ export function initRepo() {
                             <div style="display:flex;align-items:center;gap:6px;margin:1px 0 3px 22px;font-size:9px;color:var(--text-muted);font-family:var(--font-mono);">
                                 <span>repo_mod_id:</span>
                                 <span style="color:var(--text-secondary);user-select:all;">${escHtml(m.id)}</span>
-                                <button type="button" class="repo-up-copy-id" data-mid="${escAttr(m.id)}" title="${escAttr(t('common.copy') || 'Copy')}" style="border:none;background:rgba(255,255,255,0.06);color:var(--text-secondary);border-radius:3px;padding:1px 5px;cursor:pointer;font-size:9px;">${t('common.copy') || 'Copy'}</button>
+                                <button type="button" class="repo-up-copy-id" data-mid="${escAttr(m.id)}" data-tooltip="${escAttr(t('common.copy') || 'Copy')}" style="border:none;background:rgba(255,255,255,0.06);color:var(--text-secondary);border-radius:3px;padding:1px 5px;cursor:pointer;font-size:9px;">${t('common.copy') || 'Copy'}</button>
                             </div>
                         </div>`).join('')}
                     </div>
@@ -1437,7 +1437,7 @@ export function initRepo() {
                                     <div style="display:flex;align-items:center;gap:6px;margin:0 0 4px 22px;font-size:9px;color:var(--text-muted);font-family:var(--font-mono);">
                                         <span>repo_mod_id:</span>
                                         <span style="color:var(--text-secondary);user-select:all;">${escHtml(m.id)}</span>
-                                        <button type="button" class="repo-up-copy-id" data-mid="${escAttr(m.id)}" title="${escAttr(t('common.copy') || 'Copy')}" style="border:none;background:rgba(255,255,255,0.06);color:var(--text-secondary);border-radius:3px;padding:1px 5px;cursor:pointer;font-size:9px;">${t('common.copy') || 'Copy'}</button>
+                                        <button type="button" class="repo-up-copy-id" data-mid="${escAttr(m.id)}" data-tooltip="${escAttr(t('common.copy') || 'Copy')}" style="border:none;background:rgba(255,255,255,0.06);color:var(--text-secondary);border-radius:3px;padding:1px 5px;cursor:pointer;font-size:9px;">${t('common.copy') || 'Copy'}</button>
                                     </div>
                                 </div>`).join('') || `<div style="font-size:11px;color:var(--text-muted);">${t('repo.update.noMods') || 'No mods in this profile'}</div>`}`;
                             box.dataset.loaded = '1';

@@ -768,10 +768,10 @@ async function initLanguageSettings() {
                             ${l.active ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="3" style="margin-left:auto"><polyline points="20 6 9 17 4 12"/></svg>' : ''}
                         </button>
                         ${protectedLang ? '' : `
-                            <button class="nav-lang-dl" data-lang-dl="${l.code}" title="${t('settings.langDownload') || 'Download .json'}">
+                            <button class="nav-lang-dl" data-lang-dl="${l.code}" data-tooltip="${t('settings.langDownload') || 'Download .json'}">
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                             </button>
-                            <button class="nav-lang-del" data-lang-del="${l.code}" data-lang-name="${escHtml(l.name)}" title="${t('settings.langRemove') || 'Remove language'}">
+                            <button class="nav-lang-del" data-lang-del="${l.code}" data-lang-name="${escHtml(l.name)}" data-tooltip="${t('settings.langRemove') || 'Remove language'}">
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                             </button>`}
                     </div>`;

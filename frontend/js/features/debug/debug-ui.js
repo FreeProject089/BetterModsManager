@@ -115,7 +115,7 @@ class DebugUI {
                     BMM DEVTOOLS
                 </div>
                 <div class="debug-controls">
-                    <button class="debug-btn" id="debug-btn-devtools" data-i18n-title="dev.btn.openDevtools" onmouseenter="window.showTaskyHelp('dev.msg.jsDesc', 'icon-help')" onmouseleave="window.hideTaskyHelp()">
+                    <button class="debug-btn" id="debug-btn-devtools" data-i18n-tooltip="dev.btn.openDevtools" onmouseenter="window.showTaskyHelp('dev.msg.jsDesc', 'icon-help')" onmouseleave="window.hideTaskyHelp()">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
                     </button>
                     <button class="debug-btn" id="debug-btn-inspect" onmouseenter="window.showTaskyHelp('dev.tool.inspectTip', 'icon-help')" onmouseleave="window.hideTaskyHelp()">
@@ -150,7 +150,7 @@ class DebugUI {
                 <div class="debug-pane active" id="pane-console">
                     <div class="console-tools" style="padding:8px; border-bottom:1px solid rgba(255,255,255,0.05); display:flex; gap:8px">
                     <input type="text" id="console-search" data-i18n-placeholder="dev.placeholder.search" placeholder="Search..." style="flex:1; background:rgba(0,0,0,0.2); border:1px solid var(--debug-border); border-radius:4px; color:white; font-size:10px; padding:4px 8px; outline:none">
-                        <button class="debug-btn" id="console-clear-manual" data-i18n-title="dev.btn.clearConsole" onmouseenter="window.showTaskyHelp('dev.tool.clearConsoleTip', 'help')" onmouseleave="window.hideTaskyHelp()">
+                        <button class="debug-btn" id="console-clear-manual" data-i18n-tooltip="dev.btn.clearConsole" onmouseenter="window.showTaskyHelp('dev.tool.clearConsoleTip', 'help')" onmouseleave="window.hideTaskyHelp()">
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/></svg>
                         </button>
                     </div>
@@ -164,7 +164,7 @@ class DebugUI {
                         <button class="filter-btn" data-filter="tasks" data-i18n="dev.label.tasks">TASKS</button>
                         <button class="filter-btn" data-filter="error" data-i18n="dev.label.error">ERR</button>
                         <div style="flex:1"></div>
-                        <button class="debug-btn" id="timeline-clear-manual" data-i18n-title="dev.btn.clearHistory" onmouseenter="window.showTaskyHelp('dev.tool.clearHistoryTip', 'help')" onmouseleave="window.hideTaskyHelp()">
+                        <button class="debug-btn" id="timeline-clear-manual" data-i18n-tooltip="dev.btn.clearHistory" onmouseenter="window.showTaskyHelp('dev.tool.clearHistoryTip', 'help')" onmouseleave="window.hideTaskyHelp()">
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/></svg>
                         </button>
                     </div>
@@ -1610,7 +1610,7 @@ class DebugUI {
                 if (!node.textContent.trim())
                     return NodeFilter.FILTER_REJECT;
                 // Skip if already has i18n
-                if (node.parentElement?.closest('[data-i18n], [data-i18n-placeholder], [data-i18n-title]'))
+                if (node.parentElement?.closest('[data-i18n], [data-i18n-placeholder], [data-i18n-title], [data-i18n-tooltip]'))
                     return NodeFilter.FILTER_REJECT;
                 return NodeFilter.FILTER_ACCEPT;
             }

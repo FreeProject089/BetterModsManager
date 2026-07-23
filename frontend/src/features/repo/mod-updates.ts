@@ -463,7 +463,7 @@ export function openModUpdateConfig(modId: string): void {
                 value="${escAttr(s.repo_url || '')}" style="flex:2;font-size:11px;padding:5px 7px;" />
             <input type="text" class="muc-src-rid form-input" placeholder="${escAttr(t('repo.cfgModIdPh') || 'repo_mod_id (optional)')}"
                 value="${escAttr(s.repo_mod_id || '')}" style="flex:1;font-size:11px;padding:5px 7px;${kind === 'direct' ? 'display:none;' : ''}" />
-            <button class="muc-src-del" title="${escAttr(t('common.remove') || 'Remove')}" style="flex-shrink:0;width:26px;height:26px;border:none;border-radius:5px;background:rgba(231,76,60,0.15);color:#e74c3c;cursor:pointer;font-weight:700;">✕</button>
+            <button class="muc-src-del" data-tooltip="${escAttr(t('common.remove') || 'Remove')}" style="flex-shrink:0;width:26px;height:26px;border:none;border-radius:5px;background:rgba(231,76,60,0.15);color:#e74c3c;cursor:pointer;font-weight:700;">✕</button>
         </div>`;
     };
 

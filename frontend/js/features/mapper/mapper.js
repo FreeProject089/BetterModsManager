@@ -1434,7 +1434,7 @@ async function showMapperPreview() {
                 // the base line above + in the tooltip), so rows stay scannable.
                 html += `
                 <div class="mpv-row mpv-row-${status}">
-                    <span class="mpv-badge" title="${escHtml(label)}">${icon}</span>
+                    <span class="mpv-badge" data-tooltip="${escHtml(label)}">${icon}</span>
                     <span class="mpv-src" data-tooltip="${escHtml(item.original)}">${escHtml(item.original)}</span>
                     <svg class="mpv-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
                     <span class="mpv-dst" data-tooltip="${escHtml(targetPath)}">${escHtml(item.finalPath)}</span>

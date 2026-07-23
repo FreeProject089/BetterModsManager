@@ -220,8 +220,8 @@ export function renderShortcutsManager(container: HTMLElement) {
     return `<div class="sk-row" data-id="${c.id}">
       <span class="sk-label">${tr(c.title)}</span>
       <button class="sk-chord ${ch ? '' : 'sk-none'}" data-act="record">${ch ? chordToStr(ch) : tr({ en: 'Not set', fr: 'Non défini' })}</button>
-      <button class="sk-reset" data-act="reset" title="${tr({ en: 'Reset to default', fr: 'Réinitialiser' })}">⟲</button>
-      <button class="sk-clear" data-act="clear" title="${tr({ en: 'Clear', fr: 'Effacer' })}">✕</button>
+      <button class="sk-reset" data-act="reset" data-tooltip="${tr({ en: 'Reset to default', fr: 'Réinitialiser' })}">⟲</button>
+      <button class="sk-clear" data-act="clear" data-tooltip="${tr({ en: 'Clear', fr: 'Effacer' })}">✕</button>
     </div>`;
   };
   container.innerHTML = groups.map((g) => {

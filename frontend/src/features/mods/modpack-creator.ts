@@ -870,7 +870,7 @@ function _openMultiSelectModal(listEl) {
     footer.innerHTML = `
         <span style="font-size:11px; color:var(--text-muted);" id="ms-footer-count"></span>
         <div style="display:flex; align-items:center; gap:14px;">
-            <label style="display:flex; align-items:center; gap:6px; font-size:11px; color:var(--text-muted); cursor:pointer;" title="${t('modpack.autoUpdateSrcTip') || 'For mods linked to a repo, set that repo as a Server Repo fallback link.'}">
+            <label style="display:flex; align-items:center; gap:6px; font-size:11px; color:var(--text-muted); cursor:pointer;" data-tooltip="${t('modpack.autoUpdateSrcTip') || 'For mods linked to a repo, set that repo as a Server Repo fallback link.'}">
                 <input type="checkbox" id="ms-auto-update-src" checked>
                 <span>${t('modpack.autoUpdateSrc') || 'Auto-add update repo as fallback'}</span>
             </label>

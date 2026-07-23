@@ -176,7 +176,7 @@ export async function openCrashManager(): Promise<void> {
                 const isText = (n: string) => TEXT_EXTS.includes((n.split('.').pop() || '').toLowerCase());
                 const filesList = r.files.map(fn => isText(fn)
                     ? `<button class="crashmgr-file" data-file="${esc(fn)}">${esc(fn)}</button>`
-                    : `<span class="crashmgr-file crashmgr-file-bin" title="${esc(t('crashmgr.notText') || 'Not a readable text file')}">${esc(fn)}</span>`
+                    : `<span class="crashmgr-file crashmgr-file-bin" data-tooltip="${esc(t('crashmgr.notText') || 'Not a readable text file')}">${esc(fn)}</span>`
                 ).join('');
                 detail.innerHTML = `
                     ${r.hasSession ? `<button class="btn btn-xs btn-accent" data-play style="margin-bottom:8px">${t('crashmgr.playSession') || '▶ Play session'}</button>` : ''}

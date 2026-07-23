@@ -231,7 +231,7 @@ function render(): void {
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
           ${escHtml(t('community.openWeb') || 'Open website')}
         </button>
-        <button class="btn btn-secondary" id="community-refresh" title="${escAttr(t('community.refresh') || 'Refresh')}">
+        <button class="btn btn-secondary" id="community-refresh" data-tooltip="${escAttr(t('community.refresh') || 'Refresh')}">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
         </button>
       </div>
@@ -243,7 +243,7 @@ function render(): void {
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
           <input class="community-search" id="community-search" placeholder="${escAttr(t('community.search') || 'Search posts…')}" value="${escAttr(_search)}" />
         </div>
-        <select class="community-lang" id="community-lang" title="${escAttr(t('community.lang') || 'Blog language')}">
+        <select class="community-lang" id="community-lang" data-tooltip="${escAttr(t('community.lang') || 'Blog language')}">
           ${BLOG_LANGS.map((l) => `<option value="${l.code}"${l.code === _blogLang ? ' selected' : ''}>${escHtml(l.label)}</option>`).join('')}
         </select>
       </div>
@@ -398,7 +398,7 @@ async function openPost(slug: string): Promise<void> {
   const counts = post.reactionCounts || {};
   const reactions = (post.reactionsEnabled && (post.reactionTypes || []).length)
     ? `<div class="community-reactions">${post.reactionTypes.map((rt: string) =>
-        `<span class="community-reaction" title="${escAttr(rt)}"><span class="community-reaction-emoji">${REACTION_EMOJI[rt] || '⭐'}</span><span class="community-reaction-count">${counts[rt] || 0}</span></span>`).join('')}
+        `<span class="community-reaction" data-tooltip="${escAttr(rt)}"><span class="community-reaction-emoji">${REACTION_EMOJI[rt] || '⭐'}</span><span class="community-reaction-count">${counts[rt] || 0}</span></span>`).join('')}
        <span class="community-reaction-hint">${escHtml(t('community.reactHint') || 'React on the website')}</span></div>`
     : '';
 
@@ -414,7 +414,7 @@ async function openPost(slug: string): Promise<void> {
       <div class="community-article-meta">
         ${authorsHtml}
         <span>·</span>
-        <button class="community-article-date" title="${escAttr(t('community.viewHistory') || 'View edit history')}">${escHtml(fmtDate(post.publishedAt))}<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:.55;margin-left:4px;vertical-align:-1px"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l4 2"/></svg></button>
+        <button class="community-article-date" data-tooltip="${escAttr(t('community.viewHistory') || 'View edit history')}">${escHtml(fmtDate(post.publishedAt))}<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:.55;margin-left:4px;vertical-align:-1px"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l4 2"/></svg></button>
       </div>
       ${untranslated}
       <div class="community-article-body md-body">${absMedia(renderMarkdown(body, { baseUrl: bcRoot() }))}</div>
@@ -456,7 +456,7 @@ async function openHistory(postId: string): Promise<void> {
   const ov = document.createElement('div');
   ov.className = 'community-history-overlay';
   ov.innerHTML = `<div class="community-history-modal">
-    <div class="community-history-head"><span>${escHtml(L.title)}</span><button class="community-history-close" aria-label="${escAttr(L.close)}" title="${escAttr(L.close)}">✕</button></div>
+    <div class="community-history-head"><span>${escHtml(L.title)}</span><button class="community-history-close" aria-label="${escAttr(L.close)}" data-tooltip="${escAttr(L.close)}">✕</button></div>
     <div class="community-history-content"><div class="community-empty"><div class="community-spinner"></div></div></div>
     <div class="community-history-foot">${escHtml(L.readonly)}</div>
   </div>`;
@@ -559,7 +559,7 @@ async function openComments(postId: string): Promise<void> {
   const ov = document.createElement('div');
   ov.className = 'community-history-overlay';
   ov.innerHTML = `<div class="community-history-modal">
-    <div class="community-history-head"><span>${escHtml(L.title)}</span><button class="community-history-close" aria-label="${escAttr(L.close)}" title="${escAttr(L.close)}">✕</button></div>
+    <div class="community-history-head"><span>${escHtml(L.title)}</span><button class="community-history-close" aria-label="${escAttr(L.close)}" data-tooltip="${escAttr(L.close)}">✕</button></div>
     <div class="community-comments-content"><div class="community-empty"><div class="community-spinner"></div></div></div>
     <div class="community-history-foot">${escHtml(L.readonly)}</div>
   </div>`;
@@ -602,7 +602,7 @@ async function openCommentHistory(postId: string, cid: string, L: any): Promise<
   const ov = document.createElement('div');
   ov.className = 'community-history-overlay community-history-overlay--nested';
   ov.innerHTML = `<div class="community-history-modal">
-    <div class="community-history-head"><span>${escHtml(L.history)}</span><button class="community-history-close" aria-label="${escAttr(L.close)}" title="${escAttr(L.close)}">✕</button></div>
+    <div class="community-history-head"><span>${escHtml(L.history)}</span><button class="community-history-close" aria-label="${escAttr(L.close)}" data-tooltip="${escAttr(L.close)}">✕</button></div>
     <div class="community-history-content"><div class="community-empty"><div class="community-spinner"></div></div></div>
     <div class="community-history-foot">${escHtml(L.readonly)}</div>
   </div>`;

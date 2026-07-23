@@ -777,19 +777,19 @@ export function renderScheduleList(): void {
                         <span class="sched-chip sched-chip-trigger">${escHtml(triggerLabel(task.trigger))}</span>
                         <span class="sched-chip">${stepCount(task.steps)} ${t('sched.steps') || 'steps'}</span>
                         ${task.lastRun ? `<span class="sched-chip sched-chip-dim">${t('sched.last') || 'last'} ${new Date(task.lastRun).toLocaleString()}</span>` : ''}
-                        ${task.lastResult ? `<span class="sched-chip ${task.lastResult === 'ok' ? 'sched-chip-ok' : 'sched-chip-err'}" title="${escAttr(task.lastResult)}">${task.lastResult === 'ok' ? 'OK' : 'ERR'}</span>` : ''}
+                        ${task.lastResult ? `<span class="sched-chip ${task.lastResult === 'ok' ? 'sched-chip-ok' : 'sched-chip-err'}" data-tooltip="${escAttr(task.lastResult)}">${task.lastResult === 'ok' ? 'OK' : 'ERR'}</span>` : ''}
                     </span>
                 </div>
             </div>
             <div class="sched-row-actions">
-                <label class="plug-toggle sched-toggle" title="${escAttr(task.enabled ? (t('sched.enabled') || 'Enabled') : (t('sched.disabled') || 'Disabled'))}">
+                <label class="plug-toggle sched-toggle" data-tooltip="${escAttr(task.enabled ? (t('sched.enabled') || 'Enabled') : (t('sched.disabled') || 'Disabled'))}">
                     <input type="checkbox" ${task.enabled ? 'checked' : ''} data-act="toggle">
                     <span class="plug-toggle-slider"></span>
                 </label>
-                <button class="btn btn-xs btn-ghost sched-act" data-act="run" title="${escAttr(t('sched.runNow') || 'Run now')}">${I('<polygon points="5 3 19 12 5 21 5 3"/>')}</button>
-                <button class="btn btn-xs btn-ghost sched-act" data-act="dup" title="${escAttr(t('sched.dupTask') || 'Duplicate task')}">${I('<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>')}</button>
-                <button class="btn btn-xs btn-ghost sched-act" data-act="edit" title="${escAttr(t('common.edit') || 'Edit')}">${I('<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>')}</button>
-                <button class="btn btn-xs btn-ghost sched-act sched-act-del" data-act="del" title="${escAttr(t('common.delete') || 'Delete')}">${I('<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>')}</button>
+                <button class="btn btn-xs btn-ghost sched-act" data-act="run" data-tooltip="${escAttr(t('sched.runNow') || 'Run now')}">${I('<polygon points="5 3 19 12 5 21 5 3"/>')}</button>
+                <button class="btn btn-xs btn-ghost sched-act" data-act="dup" data-tooltip="${escAttr(t('sched.dupTask') || 'Duplicate task')}">${I('<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>')}</button>
+                <button class="btn btn-xs btn-ghost sched-act" data-act="edit" data-tooltip="${escAttr(t('common.edit') || 'Edit')}">${I('<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>')}</button>
+                <button class="btn btn-xs btn-ghost sched-act sched-act-del" data-act="del" data-tooltip="${escAttr(t('common.delete') || 'Delete')}">${I('<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>')}</button>
             </div>`;
         row.querySelector('[data-act="toggle"]')?.addEventListener('change', async (e) => {
             task.enabled = (e.target as HTMLInputElement).checked; await saveTasks();
@@ -1006,7 +1006,7 @@ function renderModal(modal: HTMLElement): void {
                 <label class="sched-label" style="margin-top:16px">${t('sched.history') || 'Recent runs'}</label>
                 <div class="sched-history">
                     ${[..._draft.history].reverse().slice(0, 8).map(h => `
-                        <div class="sched-hist-row ${h.ok ? 'ok' : 'err'}"${h.err ? ` title="${escAttr(h.err)}"` : ''}>
+                        <div class="sched-hist-row ${h.ok ? 'ok' : 'err'}"${h.err ? ` data-tooltip="${escAttr(h.err)}"` : ''}>
                             <span class="sched-hist-dot"></span>
                             <span class="sched-hist-when">${new Date(h.at).toLocaleString()}</span>
                             <span class="sched-hist-ms">${h.ms >= 1000 ? (h.ms / 1000).toFixed(1) + 's' : h.ms + 'ms'}</span>
@@ -1032,7 +1032,7 @@ function renderModal(modal: HTMLElement): void {
         </div>
         <div class="modal-footer sched-footer">
             <button class="btn btn-ghost" id="sched-cancel">${t('common.cancel') || 'Cancel'}</button>
-            <button class="btn btn-ghost sched-test" id="sched-test" title="${escAttr(t('sched.testHint') || 'Run the steps once right now, without saving')}">
+            <button class="btn btn-ghost sched-test" id="sched-test" data-tooltip="${escAttr(t('sched.testHint') || 'Run the steps once right now, without saving')}">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:5px"><polygon points="5 3 19 12 5 21 5 3"/></svg>${t('sched.testRun') || 'Test run'}</button>
             <button class="btn btn-primary" id="sched-save">${t('common.save') || 'Save'}</button>
         </div>
@@ -1333,10 +1333,10 @@ function renderStepsEditor(host: HTMLElement, steps: Step[], depth = 0): void {
             tools.className = 'sched-tools';
             const offTip = step.disabled ? (t('sched.enableStep') || 'Enable this step') : (t('sched.disableStep') || 'Disable this step (skipped at run time)');
             tools.innerHTML = `
-                <button class="sched-tool sched-run1" title="${escAttr(t('sched.runStep') || 'Run this step now')}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polygon points="5 3 19 12 5 21 5 3"/></svg></button>
-                <button class="sched-tool sched-dup" title="${escAttr(t('sched.dupStep') || 'Duplicate step')}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
-                <button class="sched-tool sched-off ${step.disabled ? 'active' : ''}" title="${escAttr(offTip)}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg></button>
-                <button class="sched-tool sched-del2" title="${escAttr(t('common.delete') || 'Delete')}">${SCHED_X}</button>`;
+                <button class="sched-tool sched-run1" data-tooltip="${escAttr(t('sched.runStep') || 'Run this step now')}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polygon points="5 3 19 12 5 21 5 3"/></svg></button>
+                <button class="sched-tool sched-dup" data-tooltip="${escAttr(t('sched.dupStep') || 'Duplicate step')}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+                <button class="sched-tool sched-off ${step.disabled ? 'active' : ''}" data-tooltip="${escAttr(offTip)}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg></button>
+                <button class="sched-tool sched-del2" data-tooltip="${escAttr(t('common.delete') || 'Delete')}">${SCHED_X}</button>`;
             headEl.appendChild(tools);
             tools.querySelector('.sched-run1')?.addEventListener('click', async (e) => {
                 e.stopPropagation();
@@ -1386,7 +1386,7 @@ function renderStepsEditor(host: HTMLElement, steps: Step[], depth = 0): void {
         if (i > 0) {
             const ins = document.createElement('div');
             ins.className = 'sched-insert';
-            ins.innerHTML = `<button class="sched-insert-btn" title="${escAttr(t('sched.insertHere') || 'Insert a step here')}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M12 5v14M5 12h14"/></svg></button>`;
+            ins.innerHTML = `<button class="sched-insert-btn" data-tooltip="${escAttr(t('sched.insertHere') || 'Insert a step here')}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M12 5v14M5 12h14"/></svg></button>`;
             ins.querySelector('.sched-insert-btn')?.addEventListener('click', () => {
                 if (ins.querySelector('.sched-insert-picker')) { ins.querySelector('.sched-insert-picker')?.remove(); return; }
                 const picker = document.createElement('div');
@@ -1412,11 +1412,11 @@ function renderStepsEditor(host: HTMLElement, steps: Step[], depth = 0): void {
 function renderAddRow(host: HTMLElement, steps: Step[], depth = 0, rerenderHost?: HTMLElement, rerenderSteps?: Step[], rerenderDepth = 0): void {
     host.className = 'sched-add-row';
     host.innerHTML = `
-        <button class="btn btn-xs sched-chip sched-add-do" data-add="action" title="${escAttr(t('sched.legendDo') || '')}">${KIND_ICON.action} ${t('sched.addAction') || 'Action'}</button>
-        <button class="btn btn-xs sched-chip sched-add-if" data-add="if" title="${escAttr(t('sched.legendIf') || '')}">${KIND_ICON.if} ${t('sched.addIf') || 'If/Else'}</button>
-        <button class="btn btn-xs sched-chip sched-add-loop" data-add="repeat" title="${escAttr(t('sched.legendLoop') || '')}">${KIND_ICON.repeat} ${t('sched.addLoop') || 'Loop'}</button>
-        <button class="btn btn-xs sched-chip sched-add-wait" data-add="waitFor" title="${escAttr(t('sched.legendWait') || '')}">${KIND_ICON.waitFor} ${t('sched.addWaitFor') || 'Wait until'}</button>
-        <button class="btn btn-xs sched-chip sched-add-delay" data-add="delay" title="${escAttr(t('sched.legendDelay') || '')}">${KIND_ICON.delay} ${t('sched.addDelay') || 'Pause'}</button>`;
+        <button class="btn btn-xs sched-chip sched-add-do" data-add="action" data-tooltip="${escAttr(t('sched.legendDo') || '')}">${KIND_ICON.action} ${t('sched.addAction') || 'Action'}</button>
+        <button class="btn btn-xs sched-chip sched-add-if" data-add="if" data-tooltip="${escAttr(t('sched.legendIf') || '')}">${KIND_ICON.if} ${t('sched.addIf') || 'If/Else'}</button>
+        <button class="btn btn-xs sched-chip sched-add-loop" data-add="repeat" data-tooltip="${escAttr(t('sched.legendLoop') || '')}">${KIND_ICON.repeat} ${t('sched.addLoop') || 'Loop'}</button>
+        <button class="btn btn-xs sched-chip sched-add-wait" data-add="waitFor" data-tooltip="${escAttr(t('sched.legendWait') || '')}">${KIND_ICON.waitFor} ${t('sched.addWaitFor') || 'Wait until'}</button>
+        <button class="btn btn-xs sched-chip sched-add-delay" data-add="delay" data-tooltip="${escAttr(t('sched.legendDelay') || '')}">${KIND_ICON.delay} ${t('sched.addDelay') || 'Pause'}</button>`;
     const rerender = () => {
         // Preserve the modal's scroll position so adding a step deep in a big task
         // doesn't yank the view back to the top (a real annoyance with lots of content).
@@ -1494,7 +1494,7 @@ function _foldBtn(step: any): string {
     else if (step.kind === 'repeat') sum = `${step.steps?.length || 0} ${t('sched.stepsInside') || 'inside'}`;
     else if (step.kind === 'delay') sum = `${step.seconds || 0}${t('sched.unitSec') || 's'}`;
     const sumHtml = sum ? `<span class="sched-fold-sum">${sum}</span>` : '';
-    return `<button class="btn btn-xs btn-ghost sched-fold" title="${escAttr(t('sched.foldTip') || 'Collapse / expand')}" aria-label="fold">${SCHED_CHEV}</button>${sumHtml}`;
+    return `<button class="btn btn-xs btn-ghost sched-fold" data-tooltip="${escAttr(t('sched.foldTip') || 'Collapse / expand')}" aria-label="fold">${SCHED_CHEV}</button>${sumHtml}`;
 }
 function _wireFold(block: HTMLElement, step: any): void {
     block.querySelector('.sched-fold')?.addEventListener('click', (e) => {
@@ -1684,7 +1684,7 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
         const renderChips = () => {
             const arr: string[] = params.sources;
             chips.innerHTML = arr.length ? arr.map((p, i) => `<span class="pill" style="display:inline-flex;align-items:center;gap:6px;max-width:100%">
-                <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:220px" title="${escAttr(p)}">${escHtml((p.split(/[\\/]/).pop() || p))}</span>
+                <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:220px" data-tooltip="${escAttr(p)}">${escHtml((p.split(/[\\/]/).pop() || p))}</span>
                 <button type="button" class="sched-b-rm" data-i="${i}" style="background:none;border:0;color:var(--text-muted);cursor:pointer;display:inline-flex"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
             </span>`).join('') : `<span style="font-size:11px;color:var(--text-muted)">${t('bench.noProfile') || 'Pick profiles / folders (else sandbox is used)'}</span>`;
             chips.querySelectorAll('.sched-b-rm').forEach(b => b.addEventListener('click', () => { params.sources.splice(Number((b as HTMLElement).dataset.i), 1); renderChips(); }));

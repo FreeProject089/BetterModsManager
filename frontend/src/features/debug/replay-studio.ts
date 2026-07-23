@@ -347,8 +347,8 @@ function renderBar() {
   // review/export state.
   const showHide = rec || S.events.length < 2;
   const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-  const chips = S.hideSelectors.map((s) => `<span class="rstudio-chip" title="${esc(s)}">${esc(s)}<button data-act="unhide" data-sel="${esc(s)}" aria-label="remove">✕</button></span>`).join('');
-  const studioToggle = `<label class="rstudio-showstudios" title="${t('rstudio.showstudios.tip') || 'Include the Replay/Animation Studio panels in the recording'}"><input type="checkbox" data-act="showstudios" ${S.showStudios ? 'checked' : ''} ${rec ? 'disabled' : ''}> ${t('rstudio.showstudios') || 'Show studios in rec'}</label>`;
+  const chips = S.hideSelectors.map((s) => `<span class="rstudio-chip" data-tooltip="${esc(s)}">${esc(s)}<button data-act="unhide" data-sel="${esc(s)}" aria-label="remove">✕</button></span>`).join('');
+  const studioToggle = `<label class="rstudio-showstudios" data-tooltip="${t('rstudio.showstudios.tip') || 'Include the Replay/Animation Studio panels in the recording'}"><input type="checkbox" data-act="showstudios" ${S.showStudios ? 'checked' : ''} ${rec ? 'disabled' : ''}> ${t('rstudio.showstudios') || 'Show studios in rec'}</label>`;
   const hideRow = showHide
     ? `<div class="rstudio-hide"><span class="rstudio-hide-lbl">${t('rstudio.hidden') || 'Hidden'}:</span>${chips || `<span class="rstudio-hide-none">${t('rstudio.hidden.none') || 'nothing'}</span>`}<button class="rstudio-btn rstudio-mini ${S.picking ? 'rstudio-primary' : ''}" data-act="pick-hide">${S.picking ? (t('rstudio.pick.active') || 'Click one…') : '＋ ' + (t('rstudio.pick') || 'Hide element')}</button>${studioToggle}</div>`
     : '';
