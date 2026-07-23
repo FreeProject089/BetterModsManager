@@ -212,8 +212,6 @@ fn generate_report_from_content(is_crash: bool, reason: &str, app_state: Option<
 
 // ─── COLLECTE DES DONNÉES DIAGNOSTICS ────────────────────────────────────────
 
-fn get_system_snapshot() -> String { get_system_snapshot_impl(true) }
-
 // `full` = crash reports, where the extra detail is worth the cost. A CLEAN exit uses the
 // LIGHT path: `new_all()`+`refresh_all()` enumerates every process, disk, network and component
 // on the machine — hundreds of ms to seconds on Windows — and made closing the app feel slow.
