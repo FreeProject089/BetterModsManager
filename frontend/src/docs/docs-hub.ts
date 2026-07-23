@@ -456,13 +456,49 @@ ce qu'il remplace, ou les retire). Vos mods téléchargés ne sont jamais modifi
         },
       },
       {
-        id: 'scheduler', view: 'settings', diagram: 'scheduler',
-        title: { en: 'Scheduler', fr: 'Planificateur' },
-        summary: { en: 'Run actions on a schedule — updates, backups, syncs.', fr: 'Exécutez des actions planifiées — mises à jour, sauvegardes, synchros.' },
-        keywords: 'scheduler cron automate task timer planificateur automatiser',
+        id: 'scheduler', view: 'settings', diagram: 'scheduler', docsPath: 'features/scheduler/',
+        title: { en: 'Scheduling & automation', fr: 'Planification & automatisation' },
+        summary: { en: 'A real automation builder — triggers, conditions, loops and ~60 actions.', fr: 'Un vrai constructeur d’automatisations — déclencheurs, conditions, boucles et ~60 actions.' },
+        keywords: 'scheduler cron automate task timer trigger loop condition bmmpa planificateur automatiser boucle',
         body: {
-          en: '<p>The <b>Scheduler</b> runs actions for you on a timer — update checks, backups and repo syncs — so your setup stays fresh without you opening BMM.</p><ul><li>Each job pairs a trigger (an interval, or a time of day) with an action; enable or disable them one by one.</li><li>Jobs run through the same internal actions the buttons use, so a scheduled sync behaves exactly like one you start by hand.</li><li>Find it in <b>Settings → Scheduler</b>.</li></ul>',
-          fr: '<p>Le <b>Planificateur</b> exécute des actions pour vous à intervalle — vérifs de mise à jour, sauvegardes et synchros de dépôts — pour garder votre configuration à jour sans ouvrir BMM.</p><ul><li>Chaque tâche associe un déclencheur (un intervalle, ou une heure) à une action ; activez-les ou désactivez-les une par une.</li><li>Les tâches passent par les mêmes actions internes que les boutons : une synchro planifiée se comporte exactement comme une synchro lancée à la main.</li><li>Trouvez-le dans <b>Réglages → Planificateur</b>.</li></ul>',
+          en: `The **Scheduler** turns BMM into an automation tool: a task pairs a **trigger** (when) with a **workflow** (what) — and workflows can branch, loop and wait, not just run a flat list.
+
+:::steps
+:::step[Pick a trigger]
+Every N minutes/hours, daily/weekly/monthly at a time, once, on app start, or manual (you run it).
+:::
+:::step[Build the workflow]
+Add actions (~60 — activate a profile, enable a modpack, sync a repo, benchmark a disk, launch an app…), plus **IF/ELSE**, **LOOP** and **WAIT UNTIL** blocks, with per-run variables so a measured value can drive a later branch.
+:::
+:::step[Let it run]
+While BMM is open a timer fires due tasks. Hit :kbd[▶] **Run now** any time, or **Test run** the unsaved draft.
+:::
+:::
+
+:::tip[Run even when BMM is closed]
+Flip this and the task registers with your OS scheduler, so it fires on time whether or not BMM is open. Deleting it in BMM removes the OS task too.
+:::
+
+It can drive [Launch Packs](doc:launch-packs), your [storage](doc:storage-manager) limits and [benchmarks](doc:benchmarks). Share a whole set with **Export/Import .BMMPA** — imports arrive disabled and never register OS tasks on their own. Find it in **Settings → Scheduler**.`,
+          fr: `Le **Planificateur** transforme BMM en outil d’automatisation : une tâche associe un **déclencheur** (quand) à un **workflow** (quoi) — et un workflow peut se ramifier, boucler et attendre, pas seulement dérouler une liste plate.
+
+:::steps
+:::step[Choisis un déclencheur]
+Toutes les N minutes/heures, chaque jour/semaine/mois à une heure, une fois, au démarrage de l’app, ou manuel (tu le lances).
+:::
+:::step[Construis le workflow]
+Ajoute des actions (~60 — activer un profil, appliquer un modpack, synchroniser un dépôt, benchmarker un disque, lancer une app…), plus des blocs **SI/SINON**, **BOUCLE** et **ATTENDRE**, avec des variables par exécution pour qu’une valeur mesurée pilote une branche suivante.
+:::
+:::step[Laisse-le tourner]
+Tant que BMM est ouvert, une minuterie déclenche les tâches dues. Fais :kbd[▶] **Lancer maintenant** à tout moment, ou **Test** sur le brouillon non enregistré.
+:::
+:::
+
+:::tip[Exécuter même quand BMM est fermé]
+Active ça et la tâche s’enregistre auprès du planificateur de l’OS : elle part à l’heure, que BMM soit ouvert ou non. La supprimer dans BMM supprime aussi la tâche OS.
+:::
+
+Il peut piloter les [Launch Packs](doc:launch-packs), tes limites de [stockage](doc:storage-manager) et les [benchmarks](doc:benchmarks). Partage tout un jeu avec **Exporter/Importer .BMMPA** — les imports arrivent désactivés et n’enregistrent jamais de tâches OS tout seuls. Dans **Réglages → Planificateur**.`,
         },
       },
       {
@@ -473,6 +509,46 @@ ce qu'il remplace, ou les retire). Vos mods téléchargés ne sont jamais modifi
         body: {
           en: '<p>The built-in benchmark suite measures the three things BMM does most — <b>scanning</b> a folder, <b>hashing</b> file content (BLAKE3), and <b>copying / deploying</b> — and reports throughput for your actual disk and CPU.</p><ul><li>Run it to compare drives (an SSD vs. a network share), or to sanity-check a sync that felt slow.</li><li>Results stay local — nothing is uploaded.</li><li>Find it in <b>Settings</b>; for the internals, see <b>Developer → BLAKE3 hashing</b>.</li></ul>',
           fr: '<p>La suite de benchmarks intégrée mesure les trois opérations que BMM fait le plus — <b>scanner</b> un dossier, <b>hacher</b> le contenu (BLAKE3) et <b>copier / déployer</b> — et rapporte le débit pour votre disque et votre CPU réels.</p><ul><li>Lancez-la pour comparer des disques (un SSD contre un partage réseau), ou vérifier une synchro qui a semblé lente.</li><li>Les résultats restent locaux — rien n’est envoyé.</li><li>Trouvez-la dans les <b>Réglages</b> ; pour les détails, voir <b>Développeur → Hachage BLAKE3</b>.</li></ul>',
+        },
+      },
+      {
+        id: 'storage-manager', view: 'settings', docsPath: 'features/storage/',
+        title: { en: 'Storage & disk I/O', fr: 'Stockage & E/S disque' },
+        summary: { en: 'Per-disk speed limits, space alerts, and Smart I/O.', fr: 'Limites de vitesse par disque, alertes d’espace, et Smart I/O.' },
+        keywords: 'storage disk io space cache ssd hdd throttle smart limit stockage disque espace',
+        body: {
+          en: `The **Storage Manager** (**Settings → Storage**) shows every disk with a live space breakdown, and controls how hard BMM pushes your drives.
+
+:::tip[Smart I/O — the one to know]
+On by default: mod copies use a bounded thread pool with tiny yields so the interface stays smooth. Turn it **off** to saturate every CPU core for maximum speed.
+:::
+
+- **Per-disk speed limit** in MB/s (\`0\` = unlimited) — stop a slow HDD or a cloud drive from lagging the whole machine during a big copy.
+- **Benchmark a disk** → read/write MB/s plus a suggested limit you can apply in one click.
+- **Auto Performance Calibration** benchmarks the disks your profiles use and sets sensible limits for you.
+- **Low-space alerts** with warning/critical thresholds colour the per-disk bars before a drive fills.
+
+:::tip[Archived mods save space]
+A \`.zip\` / \`.7z\` / \`.rar\` mod stays compressed in your mods folder; BMM extracts it to a temp cache only when needed. There's no "clear cache" button — the OS manages temp.
+:::
+
+Automate it from the [Scheduler](doc:scheduler): benchmark a disk, apply a limit, or check free space and branch on the result.`,
+          fr: `Le **Gestionnaire de Stockage** (**Réglages → Stockage**) montre chaque disque avec une répartition d’espace en direct, et contrôle jusqu’où BMM sollicite tes disques.
+
+:::tip[Smart I/O — celui à connaître]
+Activé par défaut : les copies de mods utilisent un pool de threads borné avec de petites pauses pour garder l’interface fluide. Désactive-le pour saturer tous les cœurs CPU et une vitesse maximale.
+:::
+
+- **Limite de vitesse par disque** en Mo/s (\`0\` = illimité) — empêche un HDD lent ou un disque cloud de ralentir toute la machine pendant une grosse copie.
+- **Benchmarker un disque** → Mo/s lecture/écriture plus une limite suggérée applicable en un clic.
+- **Auto-calibration des performances** benchmarke les disques de tes profils et te fixe des limites raisonnables.
+- **Alertes d’espace faible** avec seuils avertissement/critique qui colorent les barres par disque avant saturation.
+
+:::tip[Les mods archivés économisent de la place]
+Un mod \`.zip\` / \`.7z\` / \`.rar\` reste compressé dans ton dossier de mods ; BMM ne l’extrait dans un cache temporaire qu’au besoin. Pas de bouton « vider le cache » — l’OS gère le temp.
+:::
+
+Automatise-le depuis le [Planificateur](doc:scheduler) : benchmarke un disque, applique une limite, ou vérifie l’espace libre et branche sur le résultat.`,
         },
       },
       {
