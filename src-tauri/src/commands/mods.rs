@@ -471,6 +471,10 @@ fn ensure_cache_populated(state: &State<AppState>) -> Result<(), AppError> {
             let is_arch = crate::archive::is_archive(&m.mod_folder_path);
             let files = match &m.cached_files {
                 Some(cached) if m.last_scan_mtime == current_mtime && current_mtime != 0 => cached.clone(),
+                // Root unreachable (external drive unplugged)? A folder mod would list zero
+                // files, blanking its cache and re-queuing a pointless re-hash. Keep whatever
+                // we already had and retry when the drive is back — don't churn state offline.
+                _ if !is_arch && !m.mod_folder_path.exists() => m.cached_files.clone().unwrap_or_default(),
                 _ => {
                     let f_strings: Vec<String> = if is_arch {
                         crate::archive::archive_entries(&m.mod_folder_path)
@@ -1571,14 +1575,34 @@ pub async fn scan_mods_folder(state: State<'_, AppState>) -> Result<ScanResult, 
             .map(|p| p.mods_path.canonicalize().unwrap_or(p.mods_path.clone()))
             .collect();
 
+        // Profile mods-folders that are reachable RIGHT NOW. Pruning a mod for
+        // "folder missing" is only safe when its owning root is present. If an
+        // external/removable drive is unplugged (or comes back under a different
+        // letter), the whole root is absent and every mod on it would look deleted —
+        // wiping metadata, hashes and active_mods for content that's merely offline.
+        // Guard against that: an absent root means "temporarily unreachable", not "gone".
+        let present_roots: Vec<PathBuf> = data.profiles.iter()
+            .map(|p| p.mods_path.clone())
+            .filter(|p| p.exists())
+            .collect();
+
         data.mods.retain(|m| {
             let mod_p = &m.mod_folder_path;
-            
-            // 1. Prune if folder is gone from disk
+
+            // 1. Prune if folder is gone from disk — but ONLY when its owning root is
+            //    reachable, so an unplugged drive can't masquerade as a mass deletion.
             if !mod_p.exists() {
-                log_line(format!("[MOD-SCAN] Pruning missing mod globally: {:?} (ID: {})", mod_p, m.id));
-                to_remove_ids.push(m.id.clone());
-                return false;
+                let owning_root_present = present_roots.iter().any(|root| mod_p.starts_with(root));
+                if owning_root_present {
+                    log_line(format!("[MOD-SCAN] Pruning missing mod globally: {:?} (ID: {})", mod_p, m.id));
+                    to_remove_ids.push(m.id.clone());
+                    return false;
+                }
+                // Owning root is offline (drive unplugged / re-lettered). Keep the mod
+                // and its activation state so a replug restores everything intact rather
+                // than re-adding it as a brand-new, un-hashed, disabled entry.
+                log_line(format!("[MOD-SCAN] Keeping offline-root mod (drive unplugged?): {:?} (ID: {})", mod_p, m.id));
+                return true;
             }
 
             // 2. Prune if mod doesn't belong to any existing profile's mods_path (Orphan)
@@ -3135,6 +3159,12 @@ fn process_single_mod_hashing(
         // unzipped twin (content_id parity + correct integrity).
         let read_root = crate::archive::mod_read_root(&mod_path);
         if let Ok(current_files) = fs_utils::list_mod_files(&read_root) {
+          // An unreachable root (external drive unplugged) lists zero files. Overwriting a
+          // real hash baseline with an empty map would silently wipe the integrity record,
+          // so bail out and keep the existing hashes when the folder itself is gone.
+          if current_files.is_empty() && !read_root.exists() {
+            log_line(format!("[SHA-CALC] Skipping mod {} — root unreachable ({:?}); keeping existing hashes", id, read_root));
+          } else {
             let mut tracker = crate::commands::resource_tracker::OpTracker::start("BLAKE3/compute")
                 .with_subject(id);
             let items: Vec<(String, std::path::PathBuf)> = current_files.iter()
@@ -3181,6 +3211,7 @@ fn process_single_mod_hashing(
             }
             
             log_line(format!("[SHA-CALC] Completed mod {} ({} files)", id, calculated));
+          }
         } else {
             log_line(format!("[SHA-CALC] Failed to list mod files for mod: {}", id));
         }
