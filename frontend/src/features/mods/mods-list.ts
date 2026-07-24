@@ -279,8 +279,13 @@ export function createModCard(mod) {
       if (toggle.checked) {
         const warningMsg = await invoke('enable_mod', { modId: mod.id, bypassSha: false });
         if (warningMsg && warningMsg.startsWith('WARNING_SPACE|')) {
+          // Protocol: WARNING_SPACE|<label>|<free>|<limit>. free/limit are the trailing
+          // numbers; the label sits in the middle and may itself contain '|', so rebuild it
+          // from everything between — never assume a fixed part index.
           const parts = warningMsg.split('|');
-          toast(t('storage.alertWarningMod', { label: parts[1], free: parts[2], limit: parts[3] }), 'warning', 5000);
+          const limit = parts[parts.length - 1], free = parts[parts.length - 2];
+          const label = parts.slice(1, -2).join('|');
+          toast(t('storage.alertWarningMod', { label, free, limit }), 'warning', 5000);
         } else if (!isCancelledOp(mod.id)) {
           toast(t('mod.activated', { name: mod.name }), 'success');
           try { if (localStorage.getItem('bmm_sysNotif') === 'true') sendOsNotification('Better Mod Manager', t('mod.activated', { name: mod.name })); } catch(e) {}
@@ -331,13 +336,18 @@ export function createModCard(mod) {
         // and the Rust side already cleaned up any partial files via the inverse undo.
         // No error toast, no state desync.
       } else if (typeof err === 'string' && err.startsWith('CRITICAL_SPACE|')) {
+        // CRITICAL_SPACE|<label>|<free>|<limit> — see WARNING_SPACE above; label may contain '|'.
         const parts = err.split('|');
-        toast(t('storage.alertCriticalMod', { label: parts[1], free: parts[2], limit: parts[3] }), 'error', 6000);
+        const limit = parts[parts.length - 1], free = parts[parts.length - 2];
+        const label = parts.slice(1, -2).join('|');
+        toast(t('storage.alertCriticalMod', { label, free, limit }), 'error', 6000);
         toggle.checked = false;
       } else if (typeof err === 'string' && err.startsWith('MISSING_SHA|')) {
+        // MISSING_SHA|<id>|<name>. The id is a UUID (never contains '|'); the name is free-form
+        // (a URL-imported mod name can contain '|'), so it's the trailing field — rejoin the rest.
         const parts = err.split('|');
         const mId = parts[1];
-        const mName = parts[2];
+        const mName = parts.slice(2).join('|');
         
         toggle.checked = false;
         
