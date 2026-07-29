@@ -723,7 +723,13 @@ function makeDraggable(panel: HTMLElement, handle: HTMLElement): void {
     (handle as any)._i18nDrag = true;
     handle.classList.add('i18n-drag-handle');
     handle.addEventListener('mousedown', (e: MouseEvent) => {
-        if ((e.target as HTMLElement).closest('button')) return;
+        // Anything interactive in the header must keep working while floating. The guard
+        // used to cover buttons only, so mousedown on the opacity slider (an <input
+        // type="range"> living in this same header) was swallowed by preventDefault() and
+        // dragged the whole window instead of moving the thumb — the control was simply
+        // unusable in overlay mode. `label` matters too: the slider is wrapped in one.
+        if ((e.target as HTMLElement).closest('button, input, select, textarea, label, a, [contenteditable]')) return;
+        if (e.button !== 0) return;   // left-drag only; right/middle keep their own meaning
         if (!_overlayMode) return;
         e.preventDefault();
         const rect = panel.getBoundingClientRect();

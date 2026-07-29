@@ -15041,6 +15041,9 @@ body.bmm-toolbar-stacked-labels .profile-select-icon-wrap select { width: 100% !
     background: rgba(6,182,212,0.15); border-radius: 10px;
 }
 .i18n-sb-header-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.i18n-overlay-active .i18n-sb-header { flex-wrap: wrap; row-gap: 8px; }
+.i18n-overlay-active .i18n-sb-header-actions { flex-wrap: wrap; row-gap: 6px; margin-left: auto; }
+.i18n-overlay-active .i18n-ovl-opacity { background: var(--bmm-s05); }
 .i18n-sb-tool {
     display: inline-flex; align-items: center; gap: 6px;
     height: 32px; padding: 0 11px; border-radius: 8px;
@@ -15324,6 +15327,12 @@ body.i18n-picking, body.i18n-picking * { cursor: crosshair !important; }
 
 /* drag handle affordance in overlay mode */
 .i18n-overlay-active .i18n-drag-handle { cursor: move; }
+/* …but the controls living IN the drag handle must not claim to be draggable. Pairing this
+   with the mousedown guard means the header now reads correctly: grab anywhere on the bar,
+   except on a control, which keeps its own cursor and its own behaviour. */
+.i18n-overlay-active .i18n-drag-handle :is(button, input, select, textarea, label, a) { cursor: auto; }
+.i18n-overlay-active .i18n-drag-handle :is(button, a) { cursor: pointer; }
+.i18n-overlay-active .i18n-drag-handle input[type="range"] { cursor: ew-resize; }
 /* Overlay panel polish + accent edge */
 .i18n-overlay-active .modal {
     border: 1px solid var(--bmm-s10) !important;
