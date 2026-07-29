@@ -207,6 +207,19 @@
 .doc-details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-size: 13.5px; background: var(--bmm-bg-base, #0f1420); }
 .doc-details-body { padding: 12px 14px; font-size: 13.5px; line-height: 1.6; }
 
+/* reference tables (md-lite GFM). The WRAPPER scrolls — a wide lookup table must never widen
+   the article column, which would put the whole page into horizontal scroll. */
+.dh-table-wrap { margin: 0 0 16px; overflow-x: auto; border: 1px solid var(--bmm-border, #2a3242); border-radius: 10px; background: var(--bmm-bg-base, #0f1420); }
+.dh-table { width: 100%; border-collapse: collapse; font-size: 13px; line-height: 1.55; }
+.dh-table th, .dh-table td { text-align: left; padding: 8px 12px; vertical-align: top; border-bottom: 1px solid var(--bmm-border, #2a3242); }
+.dh-table thead th { position: sticky; top: 0; z-index: 1; font-weight: 700; font-size: 12px; letter-spacing: .02em; text-transform: uppercase; color: var(--bmm-text-muted, #7c8698); background: var(--bmm-bg-elevated, #1a2130); }
+.dh-table tbody tr:last-child td { border-bottom: 0; }
+.dh-table tbody tr:hover { background: var(--bmm-bg-hover, #222b3b); }
+.dh-table td { color: var(--bmm-text-secondary, #b7c0cc); }
+.dh-table td code { white-space: nowrap; }
+/* A reference article is mostly tables — give it the room the prose pages don't need. */
+.dh-article.dh-wide { max-width: 1080px; }
+
 /* related-action buttons under an article */
 .dh-rels { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--bmm-border, #2a3242); }
 .dh-rel {

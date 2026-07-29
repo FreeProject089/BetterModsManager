@@ -36,6 +36,7 @@ interface Article {
   docsPath?: string;       // appended to DOCS_SITE for "Read full docs"
   view?: string;           // a nav data-view → "Open in BMM" button that jumps to that screen
   keywords?: string;       // extra search terms (any language, space separated)
+  wide?: boolean;          // reference article: mostly lookup tables → widen the column
 }
 // The displayed label of a live navbar item (custom names + current language), for the
 // "Open in BMM" button; falls back to the view id.
@@ -502,53 +503,1121 @@ Il peut piloter les [Launch Packs](doc:launch-packs), tes limites de [stockage](
         },
       },
       {
-        id: 'actions-reference', view: 'plugins', docsPath: 'reference/actions/',
+        id: 'actions-reference', view: 'plugins', docsPath: 'reference/actions/', wide: true,
         title: { en: 'Action reference', fr: 'Référence des actions' },
-        summary: { en: 'Everything the scheduler and the script generator can do.', fr: 'Tout ce que le planificateur et le générateur de scripts savent faire.' },
-        keywords: 'action list catalogue scheduler script generator deeplink endpoint liste catalogue planificateur générateur',
+        summary: { en: 'Every action the scheduler and the script generator can perform — the complete list.', fr: 'Toutes les actions du planificateur et du générateur de scripts — la liste complète.' },
+        keywords: 'action list catalogue scheduler script generator deeplink endpoint condition variable liste catalogue planificateur générateur',
         body: {
           en: `BMM has **two action catalogues**. They overlap in capability but are separate systems — pick by *who runs it*.
 
-:::columns
-:::column
-**Scheduled-task actions**
-Steps inside a workflow BMM runs by itself on a trigger. Grouped as: mods & profiles, repo & sharing, apps & launch, appearance, benchmarks & storage, privacy & recorder, system & flow, logic & maths. Only these have **real nested blocks** (IF / LOOP / WAIT UNTIL) and the storage actions.
-:::
-:::column
-**Script generator actions**
-Blocks that emit a script you run *outside* BMM. Adds the full CRUD and read endpoints, process control, raw code, and textual control flow (\`If…\` / \`Else\` / \`End block\`) since a script is flat text.
-:::
+| | Where | What it drives |
+|---|---|---|
+| **Scheduled-task actions** | Settings → Scheduler | Steps inside a workflow BMM runs on a trigger |
+| **Script generator actions** | Plugins & API → script generator | Blocks that emit a runnable script (\`bmm://\` deeplinks and/or HTTP calls) |
+
+:::tip[Which one do I want?]
+Use the **scheduler** when BMM should do it *by itself*. Use the **script generator** when you want a script you can run from outside BMM — a batch file, another tool, a game launcher.
 :::
 
-:::tip[Things worth knowing]
-- Scheduled **enable** actions bypass the SHA check — a background run can't stop to ask you.
-- *Allow custom commands* is per-task and off by default; it gates only *Run custom command*, not *Open URL* or raw deeplinks.
-- A telemetry/recorder **“Full”** switch means *unmasked* — names and paths stop being \`••••\`.
-- On repo sync, *delete extra* removes local files the remote doesn't have.
+## Part 1 — Scheduled-task actions
+
+Grouped exactly as the action dropdown groups them.
+
+#### Mods & profiles
+
+| Action | What it does | You provide |
+|---|---|---|
+| Activate profile | Switches the active profile | profile |
+| Enable mod | Enables one mod | mod |
+| Disable mod | Disables one mod | mod |
+| Enable modpack | Enables every mod in a modpack | modpack |
+| Disable modpack | Disables every mod in a modpack | modpack |
+| Create modpack | Creates an empty modpack | name, profile |
+| Add a mod (from URL) | Downloads and installs a mod | URL, name |
+| Export a mod list (.mmlist) | Writes a mod list | — |
+| Import a mod list (.mmlist) | Reads a mod list back | — |
+| Enable all mods | Enables everything in the profile | — |
+| Disable all mods | Disables everything in the profile | — |
+| Scan mods folder | Re-scans for new mods | — |
+| Apply plugin | Applies a plugin's mod list | plugin id |
+| Compare plugin | Compares against a plugin's list | plugin id |
+| Delete plugin | Uninstalls a plugin | plugin id |
+| Check mod updates | Checks mods for new versions | — |
+| Auto-import Open Mod Manager mods | Imports mods from an OMM setup | — |
+| Clear profile activity history | Wipes the profile's history | profile |
+| Export modpack (.bmp) | Writes a modpack file | modpack, destination |
+
+:::warning[Enable actions skip the integrity check]
+*Enable mod*, *Enable modpack* and *Enable all mods* run with the SHA check bypassed — a scheduled run can't stop to ask you about a missing hash. Enable by hand if you want the prompt.
 :::
 
-The full list — every action, its parameters and the deeplink/endpoint it emits — is on BMM Docs. See also [Scheduling & automation](doc:scheduler) and [Plugins & API](doc:plugins).`,
+#### Repo & sharing
+
+| Action | What it does | You provide |
+|---|---|---|
+| Connect repo | Adds a remote repo | repo.json URL, name |
+| Sync repo | Downloads and integrates a remote profile | repo URL, remote profile |
+| Generate repo | Opens repo generation | — |
+| Update repo | Updates a repo folder | repo folder |
+| Host repo (HTTP) | **Serves a folder over HTTP** | folder, port |
+
+#### Apps & launch
+
+| Action | What it does | You provide |
+|---|---|---|
+| Launch app | Starts a registered app | app (or exe path) |
+| Open / launch a file or program | **Runs any file**, including \`.exe\` | path |
+| Open a folder | Opens a folder in the explorer | path |
+| Install app | Downloads and installs an app | app id, URL, title |
+| Run launch pack | Runs a Launch Pack | launch pack |
+
+#### Appearance
+
+| Action | What it does | You provide |
+|---|---|---|
+| Set theme | Applies a theme | theme |
+
+#### Benchmarks & storage
+
+| Action | What it does | Captures |
+|---|---|---|
+| Run benchmark | Runs the app benchmark (dataset, size S/M/L/XL or custom MB) | \`benchmark.mbps\`, \`benchmark.total_ms\` |
+| Benchmark a disk | Measures a disk's read/write speed | \`disk.read_mbps\`, \`disk.write_mbps\`, \`disk.suggested_limit\` |
+| Apply disk speed limit | Sets a per-disk MB/s cap — empty uses the suggested value from a preceding benchmark, \`0\` = unlimited | — |
+| Performance Auto-Calibration | Turns auto-calibration on/off | — |
+| Smart I/O | Turns Smart I/O on/off | — |
+| Toggle a setting (advanced) | Flips **any** boolean setting by key | — |
+| Check free disk space | Reads free space | \`disk.free_gb\`, \`disk.total_gb\`, \`disk.free_percent\` |
+
+Those captured values are what the \`value\` condition compares against — that's how you build *“benchmark the disk, and if it's slower than 50 MB/s, warn me”*.
+
+#### Privacy & recorder
+
+| Action | What it does |
+|---|---|
+| Telemetry consent | Turns telemetry on/off |
+| Telemetry options | Replay / **Full (unmasked)** / benchmark reporting |
+| Session recorder | Record on/off, **Full (unmasked)**, Rust log, JS log |
+| Export replay | Exports the current recording |
+| Import replay | Loads a \`.bmmreplay\` from a path or URL |
+
+:::danger[“Full” means unmasked]
+Normally replays mask mod names, profile names and paths as \`••••\`. The *Full* switches turn that masking **off**. Don't schedule it unless you know where the data goes.
+:::
+
+#### System & flow
+
+| Action | What it does | Notes |
+|---|---|---|
+| Show notification | Toasts a message | |
+| Discord Rich Presence | Turns Discord RPC on/off | |
+| Export data (backup) | Writes a backup — the filename template supports \`{date}\`, \`{time}\`, \`{datetime}\` | the *overwrite* collision mode **replaces** an existing backup |
+| Set a value | Sets a variable for later conditions | |
+| Check for BMM update | Checks for a new version | captures \`update.available\` |
+| Clear API log | Empties the API log | |
+| Clear resource monitor records | Empties the resource records | |
+| Run another scheduled task | Runs another task and waits | sets \`lasttask.ok\` (1/0) — **a task calling itself recurses** |
+| Restart BMM | Restarts the app | ends the running task |
+| Open a URL / link | Opens a link in your browser | |
+| Run custom command | **Runs an arbitrary program** | requires *Allow custom commands* on the task |
+| Run \`bmm://\` deeplink | Fires any deeplink | can reach any deeplink action |
+
+#### Logic & maths
+
+| Action | What it does |
+|---|---|
+| Compute into a variable | Arithmetic (\`+ - * / % ^\`, parentheses, variables, functions). A real parser — **no \`eval\`** |
+| Ternary | \`var = condition ? a : b\` |
+| Rule table | Walks rows, **first match wins**, writes the result into a variable |
+| Stop the task (guard clause) | Ends the task **cleanly** — not an error |
+
+#### Conditions
+
+Used by **IF**, **WAIT UNTIL** and **LOOP**. Every condition has a **NOT** box.
+
+| Condition | True when |
+|---|---|
+| \`always\` | Always — no gate |
+| \`value\` | A captured number compares (\`>\` \`<\` \`>=\` \`<=\` \`==\` \`!=\`) against your threshold |
+| \`profileActive\` | A given profile is the active one |
+| \`modEnabled\` / \`modDisabled\` | A given mod is on / off |
+| \`modpackActive\` / \`modpackInactive\` | Every mod in a modpack is on / off |
+| \`allModsActive\` | Everything in the active profile is on |
+| \`appRunning\` / \`appNotRunning\` | A process (by exe name) is / isn't running |
+| \`fileExists\` | A path exists |
+| \`fileHash\` | A file's hash (blake3/sha256) matches |
+| \`fileSize\` | A file's size compares |
+| \`fileType\` | A file's extension matches |
+| \`fileName\` | A file name contains a substring |
+| \`fileNewer\` | A file was modified within N minutes |
+| \`online\` | There's an internet connection |
+| \`timeReached\` | The clock has passed a time |
+| \`dayOfWeek\` | Today is one of the days you picked |
+| \`timeRange\` | The clock is inside a range (**wraps over midnight**) |
+| \`commandSucceeds\` | An external command exits \`0\` — note this **runs the program** just to evaluate the condition |
+
+:::note[Missing data is false, not an error]
+If a \`value\` condition names a variable that was never captured, it's simply false — it won't fire on missing data.
+:::
+
+**Capturable variables:** \`disk.read_mbps\`, \`disk.write_mbps\`, \`disk.suggested_limit\`, \`benchmark.mbps\`, \`benchmark.total_ms\`, \`lasttask.ok\`, \`disk.free_gb\`, \`disk.total_gb\`, \`disk.free_percent\`, \`update.available\`, plus any variable you set yourself.
+
+## Part 2 — Script generator actions
+
+Each block is either a **deeplink** (\`bmm://…\`), an **HTTP call** to BMM's local API, or a **native** operation (a wait, a loop, a print) that needs no API at all.
+
+:::note[Deeplink or HTTP?]
+In deeplink mode, actions that have a native \`bmm://\` URL emit one; everything else falls back to an HTTP call — and an HTTP call needs an API token. Anything without a dedicated deeplink can still be reached through the generic passthrough \`bmm://api?method=<M>&path=<path>&<field>=<value>\`.
+:::
+
+#### Mods
+
+| Action | Emits |
+|---|---|
+| Enable mod | \`bmm://mod/enable?id=\` · \`POST /api/mods/enable\` |
+| Disable mod | \`bmm://mod/disable?id=\` · \`POST /api/mods/disable\` |
+| Switch profile | \`bmm://profile/activate?id=\` · \`POST /api/profiles/activate\` |
+| Enable modpack | \`bmm://modpack/enable?id=\` · \`POST /api/modpacks/enable\` |
+| Disable modpack | \`bmm://modpack/disable?id=\` · \`POST /api/modpacks/disable\` |
+| Apply plugin | \`bmm://plugin/activate?id=\` · \`POST /api/plugins/apply\` |
+| Compare plugin | \`bmm://plugin/compare?id=\` · \`POST /api/plugins/compare\` |
+| Update modpack | \`PUT /api/modpacks/{id}\` |
+| Delete mod | \`DELETE /api/mods/{id}\` |
+| Update mod | \`PUT /api/mods/{id}\` — name, version, author, description |
+| Create profile | \`POST /api/profiles\` — name, game, the three folders |
+| Update profile | \`PUT /api/profiles/{id}\` |
+| Delete profile | \`DELETE /api/profiles/{id}\` |
+| Create modpack | \`POST /api/modpacks/create\` |
+| Delete modpack | \`DELETE /api/modpacks/{id}\` |
+| Run benchmark | \`bmm://benchmark/run?…\` · \`POST /api/benchmark\` |
+| Check mod updates | \`bmm://mod/check-updates\` · \`POST /api/mod/check-updates\` |
+
+#### Repo
+
+| Action | Emits |
+|---|---|
+| Sync repo | \`POST /api/repo/sync\` — URL, folders, speed cap, **download password**, overwrite, *delete extra* |
+| Cancel sync | \`DELETE /api/repo/sync/cancel\` |
+| Generate repo | \`POST /api/repo/gen\` — profile, output, author, port, admin password, zip, auto-start |
+| Cancel gen | \`DELETE /api/repo/gen/cancel\` |
+| Start HTTP host | \`POST /api/repo/host\` — folder, port, upload cap |
+| Stop HTTP host | \`DELETE /api/repo/host\` |
+| Update repo | \`POST /api/repo/update\` |
+| Connect repo | \`POST /api/repo/connect\` |
+| Remove repo | \`DELETE /api/repo\` |
+
+:::warning[“Delete extra” removes local files]
+On *Sync repo*, that switch makes the local copy match the remote exactly — anything extra on your side is deleted.
+:::
+
+#### Apps
+
+| Action | Emits |
+|---|---|
+| Install app | \`POST /api/apps/install\` — id, title, URL, file type |
+| Launch app | \`POST /api/apps/launch\` |
+| List installed apps | \`GET /api/apps\` |
+| Uninstall app | \`DELETE /api/apps/{appId}\` — deregisters, files stay on disk |
+
+#### Read — all \`GET\`, no token needed, print JSON
+
+\`GET /api/status\` · \`/api/mods\` · \`/api/mods/active\` · \`/api/mods/all\` · \`/api/profiles\` · \`/api/plugins\` · \`/api/modpacks\` · \`/api/check-update\` · \`/api/creator-id\` · \`/api/health\` · \`/api/repo/list\` · \`/api/repo/info?url=&password=\`
+
+:::warning[Repo info puts the password in the query string]
+*Repo info* passes the download password as a URL parameter. Don't paste the generated line into a shared log or a chat.
+:::
+
+#### System
+
+| Action | Emits |
+|---|---|
+| Wait | native pause (seconds) |
+| Kill process | native — **force-terminates** a process by name |
+| Open URL | native shell open |
+| Show message | native popup, waits for the user |
+| Launch game | native — **runs an arbitrary executable** |
+| Log line | native print |
+| Restart BMM | \`POST /api/restart\` |
+| Run launch pack | \`bmm://launchpack/run?id=\` · \`POST /api/launchpack/run\` |
+| Discord Rich Presence | \`bmm://discord/rpc?enabled=\` · \`POST /api/discord/rpc\` |
+| Export data (backup) | \`bmm://data/export-auto?…\` · \`POST /api/data/export-auto\` |
+| Telemetry consent | \`bmm://telemetry/consent?enabled=\` · \`POST /api/telemetry/consent\` |
+| Telemetry options | \`bmm://telemetry/set?…\` · \`POST /api/telemetry/settings\` |
+| Session recorder | \`bmm://recorder/set?…\` · \`POST /api/recorder\` |
+| Export replay | \`bmm://replay/export\` · \`POST /api/replay/export\` |
+| Import replay | \`bmm://replay/import?…\` · \`POST /api/replay/import\` |
+
+#### Control flow
+
+| Action | What it does |
+|---|---|
+| Run scheduled task | \`bmm://schedule/run?id=\` · \`POST /api/schedule/run\` — bridges to the scheduler |
+| Comment | A comment line; runs nothing |
+| Set variable | Assigns a variable |
+| If file exists / is missing | Opens a conditional block |
+| If variable == / != | Opens a conditional block |
+| If API call OK / failed | **Runs the linked API call**, then branches on its result |
+| Else | The other branch |
+| End block | Closes an \`if\` / \`else\` |
+| Pause (wait for key) | Waits for a keypress |
+| Stop script | Exits immediately |
+| Raw code | Inserts verbatim code into the generated script |
+| Loop (repeat N times) / End loop | A counted loop |
+| Verify file (hash → variable) | SHA-256 of a file into a variable |
+| Wait until file exists | Polls until it appears, or times out |
+| Math (compute → variable) | Arithmetic into a variable |
+| Ternary | Conditional assignment |
+| Guard clause (stop if…) | Exits when a condition holds |
+
+:::note[The two catalogues are separate on purpose]
+The scheduler has **real nested steps** (IF / LOOP / WAIT UNTIL blocks that contain other steps). The generator, producing flat text, uses **block markers** instead (\`If…\` / \`Else\` / \`End block\`). Some actions exist only on one side: the scheduler owns the storage actions, *Enable/Disable all*, *Scan*, *Set theme* and raw deeplinks; the generator owns the full CRUD and read endpoints, *Kill process*, *Raw code* and the textual control flow.
+:::
+
+See also [API & deeplinks](doc:api-reference), [Scheduling & automation](doc:scheduler) and [Plugins & API](doc:plugins).`,
           fr: `BMM a **deux catalogues d’actions**. Leurs capacités se recoupent mais ce sont deux systèmes distincts — choisis selon *qui l’exécute*.
 
-:::columns
-:::column
-**Actions de tâche planifiée**
-Des étapes d’un workflow que BMM exécute seul sur un déclencheur. Groupes : mods & profils, dépôt & partage, apps & lancement, apparence, benchmarks & stockage, confidentialité & enregistreur, système & flux, logique & maths. Seules elles ont de **vrais blocs imbriqués** (SI / BOUCLE / ATTENDRE) et les actions de stockage.
-:::
-:::column
-**Actions du générateur de scripts**
-Des blocs qui produisent un script lancé *hors* de BMM. S’y ajoutent le CRUD complet et les endpoints de lecture, le contrôle de processus, le code brut, et un contrôle de flux textuel (\`Si…\` / \`Sinon\` / \`Fin de bloc\`) puisqu’un script est du texte plat.
-:::
+| | Où | Ce que ça pilote |
+|---|---|---|
+| **Actions de tâche planifiée** | Réglages → Planificateur | Des étapes d’un workflow que BMM exécute sur un déclencheur |
+| **Actions du générateur de scripts** | Plugins & API → générateur de scripts | Des blocs qui produisent un script exécutable (deeplinks \`bmm://\` et/ou appels HTTP) |
+
+:::tip[Lequel je veux ?]
+Le **planificateur** quand BMM doit le faire *tout seul*. Le **générateur de scripts** quand tu veux un script lançable hors de BMM — un fichier batch, un autre outil, un lanceur de jeu.
 :::
 
-:::tip[Bon à savoir]
-- Les actions planifiées d’**activation** contournent le contrôle SHA — une exécution de fond ne peut pas s’arrêter pour te demander.
-- *Autoriser les commandes personnalisées* est par tâche et désactivé par défaut ; ça ne verrouille que *Lancer une commande personnalisée*, pas *Ouvrir une URL* ni les deeplinks bruts.
-- Un interrupteur **« Complet »** de télémétrie/enregistreur signifie *démasqué* — noms et chemins ne sont plus \`••••\`.
-- À la synchro d’un dépôt, *supprimer les extras* efface les fichiers locaux absents du distant.
+## Partie 1 — Actions de tâche planifiée
+
+Regroupées exactement comme dans le menu déroulant des actions.
+
+#### Mods & profils
+
+| Action | Ce que ça fait | Tu fournis |
+|---|---|---|
+| Activer un profil | Change le profil actif | profil |
+| Activer un mod | Active un mod | mod |
+| Désactiver un mod | Désactive un mod | mod |
+| Activer un modpack | Active tous les mods d’un modpack | modpack |
+| Désactiver un modpack | Désactive tous les mods d’un modpack | modpack |
+| Créer un modpack | Crée un modpack vide | nom, profil |
+| Ajouter un mod (depuis une URL) | Télécharge et installe un mod | URL, nom |
+| Exporter une liste de mods (.mmlist) | Écrit une liste de mods | — |
+| Importer une liste de mods (.mmlist) | Relit une liste de mods | — |
+| Activer tous les mods | Active tout dans le profil | — |
+| Désactiver tous les mods | Désactive tout dans le profil | — |
+| Scanner le dossier mods | Recherche les nouveaux mods | — |
+| Appliquer un plugin | Applique la liste de mods d’un plugin | id du plugin |
+| Comparer un plugin | Compare avec la liste d’un plugin | id du plugin |
+| Supprimer un plugin | Désinstalle un plugin | id du plugin |
+| Vérifier les mises à jour de mods | Cherche de nouvelles versions | — |
+| Auto-importer les mods Open Mod Manager | Importe depuis une install OMM | — |
+| Effacer l’historique d’activité du profil | Vide l’historique du profil | profil |
+| Exporter un modpack (.bmp) | Écrit un fichier modpack | modpack, destination |
+
+:::warning[Les actions d’activation sautent le contrôle d’intégrité]
+*Activer un mod*, *Activer un modpack* et *Activer tous les mods* tournent avec le contrôle SHA contourné — une exécution planifiée ne peut pas s’arrêter pour te parler d’un hash manquant. Active à la main si tu veux la question.
 :::
 
-La liste complète — chaque action, ses paramètres et le deeplink/endpoint émis — est sur BMM Docs. Voir aussi [Planification & automatisation](doc:scheduler) et [Plugins & API](doc:plugins).`,
+#### Dépôt & partage
+
+| Action | Ce que ça fait | Tu fournis |
+|---|---|---|
+| Connecter un dépôt | Ajoute un dépôt distant | URL du repo.json, nom |
+| Synchroniser un dépôt | Télécharge et intègre un profil distant | URL du dépôt, profil distant |
+| Générer un dépôt | Ouvre la génération de dépôt | — |
+| Mettre à jour un dépôt | Met à jour un dossier de dépôt | dossier du dépôt |
+| Héberger un dépôt (HTTP) | **Sert un dossier en HTTP** | dossier, port |
+
+#### Apps & lancement
+
+| Action | Ce que ça fait | Tu fournis |
+|---|---|---|
+| Lancer une app | Démarre une app enregistrée | app (ou chemin de l’exe) |
+| Ouvrir / lancer un fichier ou programme | **Exécute n’importe quel fichier**, \`.exe\` compris | chemin |
+| Ouvrir un dossier | Ouvre un dossier dans l’explorateur | chemin |
+| Installer une app | Télécharge et installe une app | id, URL, titre |
+| Exécuter un launch pack | Lance un Launch Pack | launch pack |
+
+#### Apparence
+
+| Action | Ce que ça fait | Tu fournis |
+|---|---|---|
+| Définir le thème | Applique un thème | thème |
+
+#### Benchmarks & stockage
+
+| Action | Ce que ça fait | Capture |
+|---|---|---|
+| Lancer un benchmark | Lance le benchmark de l’app (jeu de données, taille S/M/L/XL ou Mo perso) | \`benchmark.mbps\`, \`benchmark.total_ms\` |
+| Benchmarker un disque | Mesure la vitesse lecture/écriture d’un disque | \`disk.read_mbps\`, \`disk.write_mbps\`, \`disk.suggested_limit\` |
+| Appliquer une limite de vitesse disque | Pose un plafond Mo/s par disque — vide = la valeur suggérée par un benchmark précédent, \`0\` = illimité | — |
+| Auto-calibration des performances | Active/désactive l’auto-calibration | — |
+| Smart I/O | Active/désactive Smart I/O | — |
+| Basculer un réglage (avancé) | Inverse **n’importe quel** réglage booléen par clé | — |
+| Vérifier l’espace disque libre | Lit l’espace libre | \`disk.free_gb\`, \`disk.total_gb\`, \`disk.free_percent\` |
+
+Ces valeurs capturées sont ce que la condition \`value\` compare — c’est comme ça qu’on construit *« benchmarke le disque, et s’il est sous 50 Mo/s, préviens-moi »*.
+
+#### Confidentialité & enregistreur
+
+| Action | Ce que ça fait |
+|---|---|
+| Consentement télémétrie | Active/désactive la télémétrie |
+| Options de télémétrie | Replay / **Complet (démasqué)** / rapport de benchmark |
+| Enregistreur de session | Enregistrement on/off, **Complet (démasqué)**, log Rust, log JS |
+| Exporter le replay | Exporte l’enregistrement courant |
+| Importer un replay | Charge un \`.bmmreplay\` depuis un chemin ou une URL |
+
+:::danger[« Complet » veut dire démasqué]
+Normalement les replays masquent noms de mods, noms de profils et chemins en \`••••\`. Les interrupteurs *Complet* **coupent** ce masquage. Ne le planifie pas sans savoir où vont les données.
+:::
+
+#### Système & flux
+
+| Action | Ce que ça fait | Notes |
+|---|---|---|
+| Afficher une notification | Affiche un toast | |
+| Discord Rich Presence | Active/désactive Discord RPC | |
+| Exporter les données (sauvegarde) | Écrit une sauvegarde — le modèle de nom accepte \`{date}\`, \`{time}\`, \`{datetime}\` | le mode de collision *écraser* **remplace** une sauvegarde existante |
+| Définir une valeur | Pose une variable pour les conditions suivantes | |
+| Vérifier les mises à jour de BMM | Cherche une nouvelle version | capture \`update.available\` |
+| Effacer le journal API | Vide le journal API | |
+| Effacer les relevés du moniteur de ressources | Vide les relevés | |
+| Exécuter une autre tâche planifiée | Lance une autre tâche et attend | pose \`lasttask.ok\` (1/0) — **une tâche qui s’appelle elle-même récurse** |
+| Redémarrer BMM | Redémarre l’app | met fin à la tâche en cours |
+| Ouvrir une URL / un lien | Ouvre un lien dans le navigateur | |
+| Lancer une commande personnalisée | **Exécute un programme arbitraire** | exige *Autoriser les commandes personnalisées* sur la tâche |
+| Exécuter un deeplink \`bmm://\` | Déclenche n’importe quel deeplink | peut atteindre toute action deeplink |
+
+#### Logique & maths
+
+| Action | Ce que ça fait |
+|---|---|
+| Calculer dans une variable | Arithmétique (\`+ - * / % ^\`, parenthèses, variables, fonctions). Un vrai parseur — **pas d’\`eval\`** |
+| Ternaire | \`var = condition ? a : b\` |
+| Table de règles | Parcourt les lignes, **la première qui correspond gagne**, écrit le résultat dans une variable |
+| Arrêter la tâche (garde) | Termine la tâche **proprement** — pas une erreur |
+
+#### Conditions
+
+Utilisées par **SI**, **ATTENDRE JUSQU’À** et **BOUCLE**. Chaque condition a une case **NON**.
+
+| Condition | Vraie quand |
+|---|---|
+| \`always\` | Toujours — aucune barrière |
+| \`value\` | Un nombre capturé se compare (\`>\` \`<\` \`>=\` \`<=\` \`==\` \`!=\`) à ton seuil |
+| \`profileActive\` | Un profil donné est l’actif |
+| \`modEnabled\` / \`modDisabled\` | Un mod donné est activé / désactivé |
+| \`modpackActive\` / \`modpackInactive\` | Tous les mods d’un modpack sont on / off |
+| \`allModsActive\` | Tout est activé dans le profil actif |
+| \`appRunning\` / \`appNotRunning\` | Un processus (par nom d’exe) tourne / ne tourne pas |
+| \`fileExists\` | Un chemin existe |
+| \`fileHash\` | Le hash d’un fichier (blake3/sha256) correspond |
+| \`fileSize\` | La taille d’un fichier se compare |
+| \`fileType\` | L’extension d’un fichier correspond |
+| \`fileName\` | Un nom de fichier contient une sous-chaîne |
+| \`fileNewer\` | Un fichier a été modifié dans les N dernières minutes |
+| \`online\` | Il y a une connexion Internet |
+| \`timeReached\` | L’horloge a passé une heure |
+| \`dayOfWeek\` | Aujourd’hui est l’un des jours choisis |
+| \`timeRange\` | L’horloge est dans une plage (**passe minuit**) |
+| \`commandSucceeds\` | Une commande externe sort en \`0\` — note que ça **exécute le programme** juste pour évaluer la condition |
+
+:::note[Une donnée absente est fausse, pas une erreur]
+Si une condition \`value\` nomme une variable jamais capturée, elle est simplement fausse — elle ne se déclenchera pas sur une donnée manquante.
+:::
+
+**Variables capturables :** \`disk.read_mbps\`, \`disk.write_mbps\`, \`disk.suggested_limit\`, \`benchmark.mbps\`, \`benchmark.total_ms\`, \`lasttask.ok\`, \`disk.free_gb\`, \`disk.total_gb\`, \`disk.free_percent\`, \`update.available\`, plus toute variable que tu poses toi-même.
+
+## Partie 2 — Actions du générateur de scripts
+
+Chaque bloc est soit un **deeplink** (\`bmm://…\`), soit un **appel HTTP** à l’API locale de BMM, soit une opération **native** (une attente, une boucle, un affichage) qui n’a besoin d’aucune API.
+
+:::note[Deeplink ou HTTP ?]
+En mode deeplink, les actions qui ont une URL \`bmm://\` native en émettent une ; tout le reste retombe sur un appel HTTP — et un appel HTTP exige un token d’API. Tout ce qui n’a pas de deeplink dédié reste atteignable via le passe-plat générique \`bmm://api?method=<M>&path=<chemin>&<champ>=<valeur>\`.
+:::
+
+#### Mods
+
+| Action | Émet |
+|---|---|
+| Activer un mod | \`bmm://mod/enable?id=\` · \`POST /api/mods/enable\` |
+| Désactiver un mod | \`bmm://mod/disable?id=\` · \`POST /api/mods/disable\` |
+| Changer de profil | \`bmm://profile/activate?id=\` · \`POST /api/profiles/activate\` |
+| Activer un modpack | \`bmm://modpack/enable?id=\` · \`POST /api/modpacks/enable\` |
+| Désactiver un modpack | \`bmm://modpack/disable?id=\` · \`POST /api/modpacks/disable\` |
+| Appliquer un plugin | \`bmm://plugin/activate?id=\` · \`POST /api/plugins/apply\` |
+| Comparer un plugin | \`bmm://plugin/compare?id=\` · \`POST /api/plugins/compare\` |
+| Mettre à jour un modpack | \`PUT /api/modpacks/{id}\` |
+| Supprimer un mod | \`DELETE /api/mods/{id}\` |
+| Mettre à jour un mod | \`PUT /api/mods/{id}\` — nom, version, auteur, description |
+| Créer un profil | \`POST /api/profiles\` — nom, jeu, les trois dossiers |
+| Mettre à jour un profil | \`PUT /api/profiles/{id}\` |
+| Supprimer un profil | \`DELETE /api/profiles/{id}\` |
+| Créer un modpack | \`POST /api/modpacks/create\` |
+| Supprimer un modpack | \`DELETE /api/modpacks/{id}\` |
+| Lancer un benchmark | \`bmm://benchmark/run?…\` · \`POST /api/benchmark\` |
+| Vérifier les mises à jour de mods | \`bmm://mod/check-updates\` · \`POST /api/mod/check-updates\` |
+
+#### Dépôt
+
+| Action | Émet |
+|---|---|
+| Synchroniser un dépôt | \`POST /api/repo/sync\` — URL, dossiers, plafond de vitesse, **mot de passe de téléchargement**, écraser, *supprimer les extras* |
+| Annuler la synchro | \`DELETE /api/repo/sync/cancel\` |
+| Générer un dépôt | \`POST /api/repo/gen\` — profil, sortie, auteur, port, mot de passe admin, zip, démarrage auto |
+| Annuler la génération | \`DELETE /api/repo/gen/cancel\` |
+| Démarrer l’hébergement HTTP | \`POST /api/repo/host\` — dossier, port, plafond d’upload |
+| Arrêter l’hébergement HTTP | \`DELETE /api/repo/host\` |
+| Mettre à jour un dépôt | \`POST /api/repo/update\` |
+| Connecter un dépôt | \`POST /api/repo/connect\` |
+| Retirer un dépôt | \`DELETE /api/repo\` |
+
+:::warning[« Supprimer les extras » efface des fichiers locaux]
+Sur *Synchroniser un dépôt*, cet interrupteur aligne exactement la copie locale sur le distant — tout ce qui est en trop chez toi est supprimé.
+:::
+
+#### Apps
+
+| Action | Émet |
+|---|---|
+| Installer une app | \`POST /api/apps/install\` — id, titre, URL, type de fichier |
+| Lancer une app | \`POST /api/apps/launch\` |
+| Lister les apps installées | \`GET /api/apps\` |
+| Désinstaller une app | \`DELETE /api/apps/{appId}\` — désenregistre, les fichiers restent sur le disque |
+
+#### Lecture — tous en \`GET\`, sans token, affichent le JSON
+
+\`GET /api/status\` · \`/api/mods\` · \`/api/mods/active\` · \`/api/mods/all\` · \`/api/profiles\` · \`/api/plugins\` · \`/api/modpacks\` · \`/api/check-update\` · \`/api/creator-id\` · \`/api/health\` · \`/api/repo/list\` · \`/api/repo/info?url=&password=\`
+
+:::warning[Repo info met le mot de passe dans la query string]
+*Repo info* passe le mot de passe de téléchargement en paramètre d’URL. Ne colle pas la ligne générée dans un journal partagé ou un chat.
+:::
+
+#### Système
+
+| Action | Émet |
+|---|---|
+| Attendre | pause native (secondes) |
+| Tuer un processus | natif — **termine de force** un processus par nom |
+| Ouvrir une URL | ouverture shell native |
+| Afficher un message | popup native, attend l’utilisateur |
+| Lancer le jeu | natif — **exécute un exécutable arbitraire** |
+| Écrire une ligne de log | affichage natif |
+| Redémarrer BMM | \`POST /api/restart\` |
+| Exécuter un launch pack | \`bmm://launchpack/run?id=\` · \`POST /api/launchpack/run\` |
+| Discord Rich Presence | \`bmm://discord/rpc?enabled=\` · \`POST /api/discord/rpc\` |
+| Exporter les données (sauvegarde) | \`bmm://data/export-auto?…\` · \`POST /api/data/export-auto\` |
+| Consentement télémétrie | \`bmm://telemetry/consent?enabled=\` · \`POST /api/telemetry/consent\` |
+| Options de télémétrie | \`bmm://telemetry/set?…\` · \`POST /api/telemetry/settings\` |
+| Enregistreur de session | \`bmm://recorder/set?…\` · \`POST /api/recorder\` |
+| Exporter le replay | \`bmm://replay/export\` · \`POST /api/replay/export\` |
+| Importer un replay | \`bmm://replay/import?…\` · \`POST /api/replay/import\` |
+
+#### Contrôle de flux
+
+| Action | Ce que ça fait |
+|---|---|
+| Exécuter une tâche planifiée | \`bmm://schedule/run?id=\` · \`POST /api/schedule/run\` — passerelle vers le planificateur |
+| Commentaire | Une ligne de commentaire ; n’exécute rien |
+| Définir une variable | Assigne une variable |
+| Si le fichier existe / est absent | Ouvre un bloc conditionnel |
+| Si variable == / != | Ouvre un bloc conditionnel |
+| Si l’appel API réussit / échoue | **Exécute l’appel API lié**, puis branche sur son résultat |
+| Sinon | L’autre branche |
+| Fin de bloc | Ferme un \`if\` / \`else\` |
+| Pause (attendre une touche) | Attend une frappe |
+| Arrêter le script | Sort immédiatement |
+| Code brut | Insère du code verbatim dans le script généré |
+| Boucle (répéter N fois) / Fin de boucle | Une boucle comptée |
+| Vérifier un fichier (hash → variable) | Le SHA-256 d’un fichier dans une variable |
+| Attendre qu’un fichier existe | Interroge jusqu’à ce qu’il apparaisse, ou expire |
+| Maths (calcul → variable) | Arithmétique dans une variable |
+| Ternaire | Assignation conditionnelle |
+| Garde (arrêter si…) | Sort quand une condition est vraie |
+
+:::note[Les deux catalogues sont séparés exprès]
+Le planificateur a de **vraies étapes imbriquées** (des blocs SI / BOUCLE / ATTENDRE qui contiennent d’autres étapes). Le générateur, qui produit du texte plat, utilise à la place des **marqueurs de bloc** (\`Si…\` / \`Sinon\` / \`Fin de bloc\`). Certaines actions n’existent que d’un côté : le planificateur détient les actions de stockage, *Activer/Désactiver tout*, *Scanner*, *Définir le thème* et les deeplinks bruts ; le générateur détient le CRUD complet et les endpoints de lecture, *Tuer un processus*, *Code brut* et le contrôle de flux textuel.
+:::
+
+Voir aussi [API & deeplinks](doc:api-reference), [Planification & automatisation](doc:scheduler) et [Plugins & API](doc:plugins).`,
+        },
+      },
+      {
+        id: 'api-reference', view: 'plugins', docsPath: 'reference/api/', wide: true,
+        title: { en: 'API & deeplink reference', fr: 'Référence API & deeplinks' },
+        summary: { en: 'Every bmm:// deeplink and every HTTP endpoint — the complete list.', fr: 'Chaque deeplink bmm:// et chaque endpoint HTTP — la liste complète.' },
+        keywords: 'api deeplink endpoint bmm:// token permission curl http port 51274 rest liste complète endpoints',
+        body: {
+          en: `Two ways to drive BMM from outside: **deeplinks** (\`bmm://…\`, no token, fired at the running window) and a **local HTTP API** (token, \`127.0.0.1\` only).
+
+:::tip[Which one?]
+A deeplink is a URL — anything that can open a link can trigger it (a \`.bat\`, a shortcut, a website) and it needs no secret. The HTTP API is for reading data back and for payloads a URL cannot express. If a thing exists as both, prefer the deeplink.
+:::
+
+## Transport
+
+| | |
+|---|---|
+| Base URL | \`http://127.0.0.1:51274\` |
+| Bind address | **\`127.0.0.1\` only** — never \`0.0.0.0\`, so nothing off-machine can reach it |
+| Port | \`51274\` by default; override with \`api_port\` in settings (\`0\` = the default). Needs a restart |
+| Effective port | Read it at runtime from \`GET /api/health\` → \`port\` |
+| Rate limiting | **None.** Do not expose this port |
+
+:::warning[If the port is already taken, the API does not start at all]
+It does **not** fall back to another port. If something already holds 51274 — typically a zombie instance after an in-app restart — the API is **disabled for that whole session** and a line goes to the crash log. The app keeps working normally, so a script failing to connect is the only symptom. Check \`GET /api/health\` first.
+:::
+
+**CORS.** In a release build, origins are limited to \`https://tauri.localhost\`, \`tauri://localhost\`, \`http://tauri.localhost\`, \`https://bettercommunity.ch\`, plus anything you add under **CORS** on this page (a lone \`*\` entry opts into allow-any). The list is read **once when the API starts**. \`curl\` and deeplinks send no \`Origin\`, so none of this affects them.
+
+## Authenticating
+
+\`\`\`bash
+curl -H "Authorization: Bearer <token>" http://127.0.0.1:51274/api/mods
+\`\`\`
+
+\`Authorization: Bearer …\` is the only accepted form, and it is compared in **constant time**.
+
+| | Where it comes from | Scope |
+|---|---|---|
+| **Admin token** | A UUID v4 minted on first run. Rotate it on this page | Everything. Bypasses all permission checks |
+| **Plugin token** | Issued per plugin | Only what that plugin has been granted |
+
+The token is re-read on **every** request, so rotating takes effect immediately — no restart. For a plugin token the caller's identity comes **from the token**, never from the \`X-BMM-Plugin-Id\` header, so a plugin cannot escalate by forging it. The ten grants: \`app.read\` · \`app.write\` · \`catalog.read\` · \`catalog.write\` · \`modpacks.write\` · \`mods.write\` · \`plugins.read\` · \`plugins.write\` · \`profiles.write\` · \`repo.write\`
+
+:::note[Read endpoints are not permission-gated]
+There is no \`mods.read\` / \`profiles.read\`. Routes marked *no token* below are open to anything that can reach the port; routes marked *token* accept **any** valid token, including a plugin token with no permissions at all.
+:::
+
+| Status | Body |
+|---|---|
+| \`401\` | invalid or missing token |
+| \`403\` | the plugin lacks a permission — the message names it and the route that grants it |
+| \`400\` | bad JSON body |
+| \`404\` / \`405\` / \`500\` | \`{"error":"…"}\` |
+
+## Deeplinks
+
+Fired at the running window — **no token**. \`*\` marks a required parameter. Each one shows a toast on receipt, and a global kill switch refuses all of them.
+
+\`\`\`bat
+start "" "bmm://mod/enable?id=my-mod-folder"
+\`\`\`
+
+#### Mods, profiles, modpacks
+
+| Deeplink | Params | Does |
+|---|---|---|
+| \`bmm://mod/enable\` | \`id\`* | Enables a mod in the active profile |
+| \`bmm://mod/disable\` | \`id\`* | Disables it |
+| \`bmm://profile/activate\` | \`id\`* (profile UUID) | Switches the active profile |
+| \`bmm://modpack/enable\` | \`id\`* | Enables every mod in a modpack — \`id\` accepts a **modpack or a profile** id |
+| \`bmm://modpack/disable\` | \`id\`* | The inverse |
+| \`bmm://modpack/create\` | \`name\`*, \`profile\` | Creates a modpack from a profile's active mods |
+| \`bmm://install\` | \`url\`*, \`name\` | Downloads a mod and opens the install dialog |
+
+#### Plugins, repo & updates
+
+| Deeplink | Params | Does |
+|---|---|---|
+| \`bmm://plugin/activate\` | \`id\`* | Applies the plugin's modlist (and disables the rest if strict) |
+| \`bmm://plugin/compare\` | \`id\`* | Opens the modlist-vs-active comparison |
+| \`bmm://plugin/delete\` | \`id\`* | Uninstalls it — registry, permissions and files |
+| \`bmm://repo/connect\` | \`url\`*, \`name\` | Registers a remote repo (the parent folder is enough) |
+| \`bmm://repo/sync\` | \`url\`*, \`profile\`*, \`game_dir\`, \`mods_dir\`, \`backup_dir\`, \`local_profile\`, \`password\` | Opens sync pre-filled and starts the fetch |
+| \`bmm://repo/gen\` | — | Opens the Generation section |
+| \`bmm://repo/update\` | \`dir\` | Opens Update, pre-filled |
+| \`bmm://repo/host\` | \`dir\`, \`port\` | Opens Hosting, pre-filled |
+| \`bmm://mod/check-updates\` | — | Runs the update check |
+| \`bmm://mod/update\` | \`url\` | Pre-fills the connection, or runs the check if omitted |
+
+#### Apps, themes, language
+
+| Deeplink | Params | Does |
+|---|---|---|
+| \`bmm://app/install\` | \`id\`*, \`url\`*, \`title\`, \`type\`, \`path\` | Downloads and installs an app |
+| \`bmm://app/launch\` | \`id\`*, \`exe\`* | Launches an installed app |
+| \`bmm://theme/apply\` | \`id\`* | Activates an installed theme |
+| \`bmm://theme/import\` | \`url\`* | Downloads and installs a \`.bmmtheme.json\` |
+| \`bmm://theme/editor\` | — | Opens the theme editor |
+| \`bmm://language/import\` | \`path\` | Imports a translation \`.json\` (picker if omitted) |
+
+#### Automation, privacy, misc
+
+| Deeplink | Params | Does |
+|---|---|---|
+| \`bmm://schedule/run\` | \`id\`* | Runs a scheduled task — the hook the Windows Scheduler uses |
+| \`bmm://launchpack/run\` | \`id\`* | Runs a Launch Pack |
+| \`bmm://benchmark/run\` | \`dataset\`, \`size\`, \`mb\`, \`mode\`, \`sources\`, \`profiles\`, \`folders\` | Opens the benchmark pre-configured. **Auto-runs unless \`mode=manual\`** |
+| \`bmm://telemetry/consent\` | \`enabled\`* | Global telemetry consent; declining also purges the local queue |
+| \`bmm://telemetry/set\` | \`replay\`, \`full\`, \`bench\` | Sub-options. \`full\` means **unmasked** |
+| \`bmm://recorder/set\` | \`on\`, \`full\`, \`rust\`, \`js\` | Configures the local session recorder |
+| \`bmm://replay/export\` | — | Exports the session as \`.bmmreplay\` |
+| \`bmm://replay/import\` | \`path\`, \`url\` | Imports and plays a \`.bmmreplay\` |
+| \`bmm://discord/rpc\` | \`enabled\`* | Discord Rich Presence |
+| \`bmm://data/export-auto\` | \`dir\`*, \`name\`, \`increment\` | Unattended backup. \`name\` takes \`{date}\` \`{time}\` \`{datetime}\`; \`increment\` is \`paren\`, \`underscore\`, \`timestamp\` or \`overwrite\` |
+| \`bmm://settings/layout\` | \`code\`* | Applies a shared card layout |
+| \`bmm://docs/open\` | \`article\` | Opens Help & other, optionally at an article id |
+| \`bmm://restart\` | — | Restarts the app |
+
+#### Also works — previously undocumented
+
+Handled by the router but missing from the list above for a long time. They are real and supported; several are what the BetterCommunity website generates.
+
+| Deeplink | Params | Does |
+|---|---|---|
+| \`bmm://catalog/app/install\` | \`url\`, \`name\`, \`type\` | One-click install from a catalog feed (no \`url\` → opens Apps) |
+| \`bmm://catalog/plugin/install\` | \`url\`, \`name\` | Same, for a plugin |
+| \`bmm://catalog/theme/install\` | \`url\`, \`name\` | Same, for a theme (validated as JSON first) |
+| \`bmm://catalog/app/add-source\` | \`url\`* | Subscribes to a community app catalog (asks first) |
+| \`bmm://catalog/plugin/add-source\` | \`url\`* | Subscribes to a plugin catalog |
+| \`bmm://catalog/theme/add-source\` | \`url\`* | Subscribes to a theme catalog |
+| \`bmm://language/import-inline\` | \`data\`* (base64url), \`code\`, \`gz\` | A whole translation carried in the link; \`gz=1\` for gzipped |
+| \`bmm://theme/import-inline\` | \`data\`* (base64 JSON) | Installs **and activates** a theme from the link |
+| \`bmm://settings/navbar\` | \`code\`* | Applies a shared navbar layout |
+| \`bmm://benchmark/open\` | as \`benchmark/run\` | Same handler, **inverted default** — only auto-runs when \`mode=auto\` |
+| \`bmm://import\` · \`bmm://download\` | \`url\`*, \`name\` | Aliases of \`bmm://install\` |
+
+**Undocumented aliases:** \`telemetry/consent\` and \`telemetry/set\` accept \`consent\` for \`enabled\` and \`replayFull\` for \`full\`; \`benchmark/run\` also reads \`folders\`, and splits lists on \`;\` **or** \`|\`.
+
+**Which ones ask first** — safe to hand to a user, because they confirm before acting: \`repo/connect\`, \`language/import\` with a bare \`path\`, every \`catalog/*/add-source\`, \`bmm://api\` for any non-GET method, and the install / import / download flow. URL parameters on \`repo/connect\`, \`repo/sync\` and \`catalog/*/add-source\` are rejected unless they are \`http(s)\`.
+
+## The \`bmm://api\` passthrough
+
+Any endpoint without a dedicated deeplink is still reachable:
+
+\`\`\`
+bmm://api?method=POST&path=/api/mods/enable&mod_id=my-mod
+\`\`\`
+
+- \`method\` defaults to \`GET\`; \`path\` is **required and must start with \`/api/\`**.
+- Every other parameter becomes the payload: a query string for \`GET\`/\`DELETE\`, a **JSON body** otherwise, with \`"true"\` / \`"false"\` / integers coerced to real types.
+- The **admin token is attached automatically**, so a passthrough link runs with full rights.
+- Any non-\`GET\` method **asks for confirmation** first.
+
+:::warning[Two hard limits]
+**It cannot express nested data.** Parameters are flat, so endpoints taking an array or object — \`choices\`, \`mod_overrides\`, \`permissions\`, \`updateSources\`, \`addProfiles\` — need a real HTTP client.
+
+**It never gives you the response body.** You get a success/status toast and nothing else, so it is useless for reading data back. Use the HTTP API for that.
+:::
+
+## Endpoints
+
+**Auth** — \`—\` = no token · \`token\` = any valid token · a permission name = that grant is required (the admin token bypasses it). **DL** = has a dedicated deeplink.
+
+#### Reading
+
+| Method | Path | Auth | Returns |
+|---|---|---|---|
+| \`GET\` | \`/api/health\` | — | \`{ok, service, port}\` — the liveness probe, and how to learn the real port |
+| \`GET\` | \`/api/status\` | — | App version, active profile, mod/profile/plugin counts |
+| \`GET\` | \`/api/check-update\` | — | Latest GitHub release vs current: \`has_update\`, \`release_url\` |
+| \`GET\` | \`/api/mods\` | — | Visible mods of the active profile |
+| \`GET\` | \`/api/mods/active\` | — | Only the enabled ones |
+| \`GET\` | \`/api/mods/all\` | — | Every mod of **every** profile, grouped, plus \`total_mods\` |
+| \`GET\` | \`/api/profiles\` | — | All profiles with their mod lists |
+| \`GET\` | \`/api/plugins\` | — | Installed plugins (manifest + \`enabled\`) |
+| \`GET\` | \`/api/modpacks\` | — | All saved modpacks |
+| \`GET\` | \`/api/creator-id\` | — | This install's creator id |
+| \`GET\` | \`/api/repo/info\` | — | Fetches a remote \`repo.json\`. Query \`url\`*, \`password\`. \`401\` if protected, \`502\` if the remote fails |
+| \`GET\` | \`/api/repo/list\` | — | Registered remote repos |
+| \`GET\` | \`/api/language/template\` | — | \`lang-template.json\`, a flat \`{"key": "English"}\` map |
+| \`GET\` | \`/api/data\` | token | **Full \`data.json\` dump** |
+| \`GET\` | \`/api/apps\` | \`app.read\` | Apps installed through the catalog |
+| \`GET\` | \`/api/apps/permissions\` | token | \`plugin_id → [permissions]\` |
+| \`GET\` | \`/api/apps/permissions/:id\` | token | One plugin's permissions |
+| \`GET\` | \`/api/catalog\` | \`catalog.read\` | The local app catalog |
+
+:::danger[GET /api/data is the whole database]
+It returns everything, \`settings\` included — and \`settings\` holds the admin token and the plugin tokens. Any token that can call it can read the admin token and mint itself full access. Treat granting it as equivalent to handing over admin rights.
+:::
+
+#### Mods & profiles
+
+| Method | Path | Auth | Body | DL |
+|---|---|---|---|---|
+| \`POST\` | \`/api/mods/enable\` | \`mods.write\` | \`mod_id\`* | ✓ |
+| \`POST\` | \`/api/mods/disable\` | \`mods.write\` | \`mod_id\`* | ✓ |
+| \`PUT\` | \`/api/mods/:id\` | \`mods.write\` | \`name\`, \`version\`, \`author\`, \`description\`, \`tags[]\`, \`install_notes\` | |
+| \`DELETE\` | \`/api/mods/:id\` | \`mods.write\` | — · removes the entry, **keeps the files** | |
+| \`POST\` | \`/api/mod/config\` | \`mods.write\` | \`modId\`*, \`repoModId\`, \`updateUrl\`, \`directUrl\`, \`updateSources[]\` | |
+| \`POST\` | \`/api/profiles\` | \`profiles.write\` | \`name\`*, \`game_path\`*, \`mods_path\`*, \`backup_path\`*, \`game_name\`, \`color\`, \`icon\` · **not** activated | |
+| \`POST\` | \`/api/profiles/activate\` | \`profiles.write\` | \`profile_id\`* | ✓ |
+| \`PUT\` | \`/api/profiles/:id\` | \`profiles.write\` | \`name\`, \`color\`, \`icon\`, and the three paths | |
+| \`DELETE\` | \`/api/profiles/:id\` | \`profiles.write\` | — · refuses the active profile | |
+
+#### Modpacks & plugins
+
+| Method | Path | Auth | Body | DL |
+|---|---|---|---|---|
+| \`POST\` | \`/api/modpacks/create\` | \`modpacks.write\` | \`name\`*, \`mod_ids[]\`, \`source_profile_id\`, \`description\`, \`game_name\`, \`sr_link\`, \`multi_profile\`, \`skip_integrity_check\`, \`dependency_mode\`, \`mod_overrides[]\` → \`201\` | ✓ |
+| \`POST\` | \`/api/modpacks/enable\` | \`modpacks.write\` | \`modpack_id\`* (legacy \`profile_id\` also accepted) | ✓ |
+| \`POST\` | \`/api/modpacks/disable\` | \`modpacks.write\` | idem | ✓ |
+| \`PUT\` | \`/api/modpacks/:id\` | \`modpacks.write\` | any of the create fields | |
+| \`DELETE\` | \`/api/modpacks/:id\` | \`modpacks.write\` | — · irreversible, local mods kept | |
+| \`POST\` | \`/api/plugins/compare\` | \`plugins.read\` | \`plugin_id\`* → \`missing_required\`, \`strict_extra\` | ✓ |
+| \`POST\` | \`/api/plugins/apply\` | \`plugins.write\` | \`plugin_id\`*, \`force_strict\` → \`enabled\`, \`not_found\` | ✓ |
+| \`DELETE\` | \`/api/plugins/:id\` | token | — · registry + permissions + files | ✓ |
+
+#### Server repo
+
+| Method | Path | Auth | Body | DL |
+|---|---|---|---|---|
+| \`POST\` | \`/api/repo/connect\` | \`repo.write\` | \`url\`*, \`name\` | ✓ |
+| \`DELETE\` | \`/api/repo\` | \`repo.write\` | \`url\`* · files kept | |
+| \`POST\` | \`/api/repo/sync\` | \`repo.write\` | \`url\`*, \`choices[]\`*, \`gameDir\`, \`modsDir\`, \`backupDir\`, \`creatorId\`, \`password\`, \`overwriteAll\`, \`deleteExtra\`, \`downloadLimit\` → \`202 {job_id}\`. **One at a time** (\`409\`) | ✓ |
+| \`DELETE\` | \`/api/repo/sync/cancel\` | token | — · stops at the next mod boundary | |
+| \`POST\` | \`/api/repo/gen\` | \`repo.write\` | \`profileIds[]\`*, \`outputDir\`*, \`authorName\`*, \`seed\`, \`generateServer\`, \`port\`, \`uploadLimit\`, \`adminPassword\`, \`useCloudflare\`, \`useUpnp\`, \`autoStart\`, \`lang\`, \`serverVersion\` (number), \`serverType\` (\`std\`/\`lux\`), \`lightweight\`, \`zipOutput\`, \`useDocker\`, \`dockerOs\` → \`202\` | ✓ |
+| \`DELETE\` | \`/api/repo/gen/cancel\` | token | — | |
+| \`POST\` | \`/api/repo/update\` | token | \`repoDir\`*, \`authorName\`, \`removeModIds[]\`, \`removeProfileIds[]\`, \`addProfiles[]\`, \`modChangelogs{}\` → \`202\` | ✓ |
+| \`POST\` | \`/api/repo/host\` | token | \`serveDir\`*, \`port\`, \`uploadLimit\` → \`202\`, \`409\` if already serving | ✓ |
+| \`DELETE\` | \`/api/repo/host\` | token | — | |
+| \`POST\` | \`/api/mod/check-updates\` | token | — → \`202\` | ✓ |
+| \`POST\` | \`/api/mod/update\` | token | \`repoUrl\` → \`202\` | ✓ |
+
+#### Apps & catalog
+
+| Method | Path | Auth | Body | DL |
+|---|---|---|---|---|
+| \`POST\` | \`/api/apps/install\` | \`app.write\` | \`appId\`*, \`appTitle\`*, \`downloadUrl\`*, \`fileType\`*, \`installPath\`, \`version\`, \`category\`, \`thumb\` → \`202\` | ✓ |
+| \`POST\` | \`/api/apps/launch\` | \`app.write\` | \`appId\`*, \`exePath\`* | ✓ |
+| \`DELETE\` | \`/api/apps/:id\` | \`app.write\` | — · deregisters, files kept | |
+| \`PUT\` | \`/api/apps/permissions/:id\` | token | \`permissions[]\`* · **replaces** the list; \`[]\` revokes everything | |
+| \`POST\` | \`/api/catalog/new\` | \`catalog.write\` | \`name\`, \`description\`, \`partner_catalogs[]\`, \`community_imports[]\`, \`apps[]\` → \`201\` | |
+| \`POST\` | \`/api/catalog/apps\` | \`catalog.write\` | \`id\`*, \`title\`*, \`download\`* (\`url\`, \`file_type\`), \`description\`, \`category\`, \`price\`, \`tags\` (max 3), \`requirements\`, \`md_link\` → \`201\` | |
+| \`PUT\` | \`/api/catalog/apps/:id\` | \`catalog.write\` | \`title\`, \`description\`, \`version\`, \`category\`, \`download\` | |
+| \`DELETE\` | \`/api/catalog/apps/:id\` | \`catalog.write\` | — | |
+
+#### Import / export — these drive the UI
+
+Each opens the matching in-app flow and returns \`202\`. They are **not** headless; the one exception is \`data/export-auto\`.
+
+| Method | Path | Auth | Body | DL |
+|---|---|---|---|---|
+| \`POST\` | \`/api/data/export\` · \`/api/data/import\` | token | — | |
+| \`POST\` | \`/api/data/export-auto\` | token | \`dir\`*, \`name\`, \`increment\` · **unattended**, no dialog | ✓ |
+| \`POST\` | \`/api/modlists/export\` · \`/api/modlists/import\` | token | — · \`.mmlist\`, metadata only, no mod files | |
+| \`POST\` | \`/api/modpacks/import\` | token | \`path\` | |
+| \`POST\` | \`/api/modpacks/export\` | token | \`id\`*, \`destDir\` | |
+| \`POST\` | \`/api/plugins/import\` | token | — | |
+| \`POST\` | \`/api/plugins/export\` | token | \`id\`* → \`.bmmplug\` | |
+| \`POST\` | \`/api/language/import\` | token | \`path\` · the filename becomes the language code; \`template.json\` is refused | ✓ |
+| \`POST\` | \`/api/profiles/import/ovgme\` | token | — · scans the OvGME folder | |
+| \`POST\` | \`/api/profiles/import/omm\` | token | — · OpenModManager \`.omm\`/\`.omx\` | |
+
+#### Automation & privacy
+
+| Method | Path | Auth | Body | DL |
+|---|---|---|---|---|
+| \`POST\` | \`/api/schedule/run\` | token | \`id\`* | ✓ |
+| \`POST\` | \`/api/launchpack/run\` | token | \`id\`* | ✓ |
+| \`POST\` | \`/api/benchmark\` | token | \`dataset\`, \`size\`, \`mode\`, \`sources[]\`, \`profiles[]\` | ✓ |
+| \`POST\` | \`/api/telemetry/consent\` | token | \`enabled\`* | ✓ |
+| \`POST\` | \`/api/telemetry/settings\` | token | \`replay\`, \`full\`, \`bench\` | ✓ |
+| \`POST\` | \`/api/recorder\` | token | \`on\`, \`full\`, \`rust\`, \`js\` | ✓ |
+| \`POST\` | \`/api/replay/export\` | token | — | ✓ |
+| \`POST\` | \`/api/replay/import\` | token | \`path\`, \`url\` | ✓ |
+| \`POST\` | \`/api/discord/rpc\` | token | \`enabled\`* | ✓ |
+| \`POST\` | \`/api/restart\` | token | — · the API is briefly unavailable | ✓ |
+
+## Known inconsistencies
+
+Recorded because this page and the server do not agree on every detail:
+
+- **Permission gates are narrower than they look.** \`mod/check-updates\`, \`mod/update\`, \`repo/update\`, \`repo/host\` (both methods), both cancel routes, \`DELETE /api/plugins/:id\` and every \`/api/apps/permissions*\` route are **token-only** — a plugin token with zero permissions passes them.
+- **\`POST /api/repo/gen\`** takes \`serverVersion\` (a number) **and** \`serverType\` (\`"std"\` / \`"lux"\`) — the string goes in \`serverType\`.
+- **\`POST /api/repo/host\`** drives the native Server Repo UI and returns \`202\`, not \`200\`.
+- **\`bmm://telemetry/settings\`** is **not routed** — only \`bmm://telemetry/set\` works.
+- Error responses re-add \`access-control-allow-origin: *\` unconditionally, even in release.
+
+Every \`/api/\` request emits an event carrying method, path and status — that is what produces the toasts and the API log on the Plugins & API page, so you can watch external calls arrive without instrumenting your own script.
+
+See also [Action reference](doc:actions-reference) and [Plugins & API](doc:plugins).`,
+          fr: `Deux façons de piloter BMM depuis l’extérieur : les **deeplinks** (\`bmm://…\`, sans token, envoyés à la fenêtre en cours) et une **API HTTP locale** (token, \`127.0.0.1\` uniquement).
+
+:::tip[Lequel choisir ?]
+Un deeplink est une URL — tout ce qui sait ouvrir un lien peut le déclencher (un \`.bat\`, un raccourci, un site) et ça ne demande aucun secret. L’API HTTP sert à **relire** des données et à envoyer des payloads qu’une URL ne peut pas exprimer. Si la chose existe sous les deux formes, préfère le deeplink.
+:::
+
+## Transport
+
+| | |
+|---|---|
+| URL de base | \`http://127.0.0.1:51274\` |
+| Adresse d’écoute | **\`127.0.0.1\` uniquement** — jamais \`0.0.0.0\`, rien hors de la machine n’y accède |
+| Port | \`51274\` par défaut ; surchargeable via \`api_port\` dans les réglages (\`0\` = le défaut). Nécessite un redémarrage |
+| Port effectif | À lire à l’exécution sur \`GET /api/health\` → \`port\` |
+| Limitation de débit | **Aucune.** N’expose pas ce port |
+
+:::warning[Si le port est déjà pris, l’API ne démarre pas du tout]
+Elle ne **bascule pas** sur un autre port. Si quelque chose occupe déjà 51274 — typiquement une instance zombie après un redémarrage in-app — l’API est **désactivée pour toute la session** et une ligne part dans le journal de crash. L’app continue de fonctionner normalement, donc le seul symptôme est un script qui n’arrive pas à se connecter. Commence par \`GET /api/health\`.
+:::
+
+**CORS.** En build release, les origines sont limitées à \`https://tauri.localhost\`, \`tauri://localhost\`, \`http://tauri.localhost\`, \`https://bettercommunity.ch\`, plus ce que tu ajoutes sous **CORS** sur cette page (une entrée \`*\` seule = tout autoriser). La liste est lue **une seule fois au démarrage de l’API**. \`curl\` et les deeplinks n’envoient pas d’\`Origin\`, rien de tout ça ne les concerne.
+
+## S’authentifier
+
+\`\`\`bash
+curl -H "Authorization: Bearer <token>" http://127.0.0.1:51274/api/mods
+\`\`\`
+
+\`Authorization: Bearer …\` est la seule forme acceptée, et la comparaison est faite en **temps constant**.
+
+| | D’où il vient | Portée |
+|---|---|---|
+| **Token admin** | Un UUID v4 généré au premier lancement. Rotation sur cette page | Tout. Contourne tous les contrôles de permission |
+| **Token plugin** | Émis par plugin | Uniquement ce qui a été accordé à ce plugin |
+
+Le token est relu à **chaque** requête : une rotation prend effet immédiatement, sans redémarrage. Pour un token plugin, l’identité de l’appelant vient **du token**, jamais de l’en-tête \`X-BMM-Plugin-Id\` : un plugin ne peut donc pas s’élever en le forgeant. Les dix droits : \`app.read\` · \`app.write\` · \`catalog.read\` · \`catalog.write\` · \`modpacks.write\` · \`mods.write\` · \`plugins.read\` · \`plugins.write\` · \`profiles.write\` · \`repo.write\`
+
+:::note[Les endpoints de lecture ne sont pas soumis aux permissions]
+Il n’existe pas de \`mods.read\` / \`profiles.read\`. Les routes marquées *sans token* sont ouvertes à tout ce qui atteint le port ; celles marquées *token* acceptent **n’importe quel** token valide, y compris un token plugin sans aucune permission.
+:::
+
+| Statut | Corps |
+|---|---|
+| \`401\` | token invalide ou absent |
+| \`403\` | le plugin manque d’une permission — le message la nomme, ainsi que la route qui l’accorde |
+| \`400\` | corps JSON invalide |
+| \`404\` / \`405\` / \`500\` | \`{"error":"…"}\` |
+
+## Deeplinks
+
+Envoyés à la fenêtre en cours — **sans token**. \`*\` marque un paramètre obligatoire. Chacun affiche un toast à la réception, et un coupe-circuit global les refuse tous.
+
+\`\`\`bat
+start "" "bmm://mod/enable?id=mon-dossier-de-mod"
+\`\`\`
+
+#### Mods, profils, modpacks
+
+| Deeplink | Params | Effet |
+|---|---|---|
+| \`bmm://mod/enable\` | \`id\`* | Active un mod dans le profil actif |
+| \`bmm://mod/disable\` | \`id\`* | Le désactive |
+| \`bmm://profile/activate\` | \`id\`* (UUID du profil) | Change le profil actif |
+| \`bmm://modpack/enable\` | \`id\`* | Active tous les mods d’un modpack — \`id\` accepte un id de **modpack ou de profil** |
+| \`bmm://modpack/disable\` | \`id\`* | L’inverse |
+| \`bmm://modpack/create\` | \`name\`*, \`profile\` | Crée un modpack depuis les mods actifs d’un profil |
+| \`bmm://install\` | \`url\`*, \`name\` | Télécharge un mod et ouvre la boîte d’installation |
+
+#### Plugins, dépôt & mises à jour
+
+| Deeplink | Params | Effet |
+|---|---|---|
+| \`bmm://plugin/activate\` | \`id\`* | Applique la modlist du plugin (et désactive le reste si strict) |
+| \`bmm://plugin/compare\` | \`id\`* | Ouvre la comparaison modlist / mods actifs |
+| \`bmm://plugin/delete\` | \`id\`* | Le désinstalle — registre, permissions et fichiers |
+| \`bmm://repo/connect\` | \`url\`*, \`name\` | Enregistre un dépôt distant (le dossier parent suffit) |
+| \`bmm://repo/sync\` | \`url\`*, \`profile\`*, \`game_dir\`, \`mods_dir\`, \`backup_dir\`, \`local_profile\`, \`password\` | Ouvre la synchro pré-remplie et lance la récupération |
+| \`bmm://repo/gen\` | — | Ouvre la section Génération |
+| \`bmm://repo/update\` | \`dir\` | Ouvre Mise à jour, pré-rempli |
+| \`bmm://repo/host\` | \`dir\`, \`port\` | Ouvre Hébergement, pré-rempli |
+| \`bmm://mod/check-updates\` | — | Lance la vérification des mises à jour |
+| \`bmm://mod/update\` | \`url\` | Pré-remplit la connexion, ou lance la vérification si omis |
+
+#### Apps, thèmes, langue
+
+| Deeplink | Params | Effet |
+|---|---|---|
+| \`bmm://app/install\` | \`id\`*, \`url\`*, \`title\`, \`type\`, \`path\` | Télécharge et installe une app |
+| \`bmm://app/launch\` | \`id\`*, \`exe\`* | Lance une app installée |
+| \`bmm://theme/apply\` | \`id\`* | Active un thème installé |
+| \`bmm://theme/import\` | \`url\`* | Télécharge et installe un \`.bmmtheme.json\` |
+| \`bmm://theme/editor\` | — | Ouvre l’éditeur de thème |
+| \`bmm://language/import\` | \`path\` | Importe une traduction \`.json\` (sélecteur si omis) |
+
+#### Automatisation, confidentialité, divers
+
+| Deeplink | Params | Effet |
+|---|---|---|
+| \`bmm://schedule/run\` | \`id\`* | Exécute une tâche planifiée — le hook utilisé par le Planificateur Windows |
+| \`bmm://launchpack/run\` | \`id\`* | Exécute un Launch Pack |
+| \`bmm://benchmark/run\` | \`dataset\`, \`size\`, \`mb\`, \`mode\`, \`sources\`, \`profiles\`, \`folders\` | Ouvre le benchmark préconfiguré. **Se lance automatiquement sauf si \`mode=manual\`** |
+| \`bmm://telemetry/consent\` | \`enabled\`* | Consentement télémétrie global ; refuser purge aussi la file locale |
+| \`bmm://telemetry/set\` | \`replay\`, \`full\`, \`bench\` | Sous-options. \`full\` veut dire **non masqué** |
+| \`bmm://recorder/set\` | \`on\`, \`full\`, \`rust\`, \`js\` | Configure l’enregistreur de session local |
+| \`bmm://replay/export\` | — | Exporte la session en \`.bmmreplay\` |
+| \`bmm://replay/import\` | \`path\`, \`url\` | Importe et joue un \`.bmmreplay\` |
+| \`bmm://discord/rpc\` | \`enabled\`* | Discord Rich Presence |
+| \`bmm://data/export-auto\` | \`dir\`*, \`name\`, \`increment\` | Sauvegarde sans intervention. \`name\` accepte \`{date}\` \`{time}\` \`{datetime}\` ; \`increment\` vaut \`paren\`, \`underscore\`, \`timestamp\` ou \`overwrite\` |
+| \`bmm://settings/layout\` | \`code\`* | Applique une disposition de cartes partagée |
+| \`bmm://docs/open\` | \`article\` | Ouvre Aide & autres, éventuellement sur un id d’article |
+| \`bmm://restart\` | — | Redémarre l’app |
+
+#### Fonctionnent aussi — jusqu’ici non documentés
+
+Gérés par le routeur mais longtemps absents de la liste ci-dessus. Ils sont réels et supportés ; plusieurs sont ceux que génère le site BetterCommunity.
+
+| Deeplink | Params | Effet |
+|---|---|---|
+| \`bmm://catalog/app/install\` | \`url\`, \`name\`, \`type\` | Installation en un clic depuis un flux de catalogue (sans \`url\` → ouvre Apps) |
+| \`bmm://catalog/plugin/install\` | \`url\`, \`name\` | Idem, pour un plugin |
+| \`bmm://catalog/theme/install\` | \`url\`, \`name\` | Idem, pour un thème (validé comme JSON d’abord) |
+| \`bmm://catalog/app/add-source\` | \`url\`* | S’abonne à un catalogue d’apps communautaire (demande confirmation) |
+| \`bmm://catalog/plugin/add-source\` | \`url\`* | S’abonne à un catalogue de plugins |
+| \`bmm://catalog/theme/add-source\` | \`url\`* | S’abonne à un catalogue de thèmes |
+| \`bmm://language/import-inline\` | \`data\`* (base64url), \`code\`, \`gz\` | Une traduction entière portée par le lien ; \`gz=1\` si gzippée |
+| \`bmm://theme/import-inline\` | \`data\`* (JSON base64) | Installe **et active** un thème depuis le lien |
+| \`bmm://settings/navbar\` | \`code\`* | Applique une disposition de navbar partagée |
+| \`bmm://benchmark/open\` | comme \`benchmark/run\` | Même handler, **défaut inversé** — ne se lance que si \`mode=auto\` |
+| \`bmm://import\` · \`bmm://download\` | \`url\`*, \`name\` | Alias de \`bmm://install\` |
+
+**Alias non documentés :** \`telemetry/consent\` et \`telemetry/set\` acceptent \`consent\` pour \`enabled\` et \`replayFull\` pour \`full\` ; \`benchmark/run\` lit aussi \`folders\`, et découpe les listes sur \`;\` **ou** \`|\`.
+
+**Lesquels demandent confirmation** — sûrs à donner à un utilisateur, parce qu’ils confirment avant d’agir : \`repo/connect\`, \`language/import\` avec un \`path\` nu, tous les \`catalog/*/add-source\`, \`bmm://api\` pour toute méthode autre que GET, et le flux install / import / download. Les paramètres URL de \`repo/connect\`, \`repo/sync\` et \`catalog/*/add-source\` sont rejetés s’ils ne sont pas en \`http(s)\`.
+
+## Le passe-plat \`bmm://api\`
+
+Tout endpoint sans deeplink dédié reste atteignable :
+
+\`\`\`
+bmm://api?method=POST&path=/api/mods/enable&mod_id=mon-mod
+\`\`\`
+
+- \`method\` vaut \`GET\` par défaut ; \`path\` est **obligatoire et doit commencer par \`/api/\`**.
+- Tous les autres paramètres deviennent le payload : une query string pour \`GET\`/\`DELETE\`, un **corps JSON** sinon, avec \`"true"\` / \`"false"\` / les entiers convertis en vrais types.
+- Le **token admin est attaché automatiquement** : un lien passe-plat s’exécute avec tous les droits.
+- Toute méthode autre que \`GET\` **demande confirmation** d’abord.
+
+:::warning[Deux limites dures]
+**Il ne peut pas exprimer de données imbriquées.** Les paramètres sont plats, donc les endpoints qui prennent un tableau ou un objet — \`choices\`, \`mod_overrides\`, \`permissions\`, \`updateSources\`, \`addProfiles\` — exigent un vrai client HTTP.
+
+**Il ne te rend jamais le corps de la réponse.** Tu obtiens un toast succès/statut et rien d’autre : inutile pour relire des données. Passe par l’API HTTP.
+:::
+
+## Endpoints
+
+**Auth** — \`—\` = sans token · \`token\` = n’importe quel token valide · un nom de permission = ce droit est requis (le token admin le contourne). **DL** = possède un deeplink dédié.
+
+#### Lecture
+
+| Méthode | Chemin | Auth | Renvoie |
+|---|---|---|---|
+| \`GET\` | \`/api/health\` | — | \`{ok, service, port}\` — la sonde de vie, et le moyen de connaître le vrai port |
+| \`GET\` | \`/api/status\` | — | Version de l’app, profil actif, nombre de mods/profils/plugins |
+| \`GET\` | \`/api/check-update\` | — | Dernière release GitHub vs actuelle : \`has_update\`, \`release_url\` |
+| \`GET\` | \`/api/mods\` | — | Mods visibles du profil actif |
+| \`GET\` | \`/api/mods/active\` | — | Uniquement les activés |
+| \`GET\` | \`/api/mods/all\` | — | Tous les mods de **tous** les profils, groupés, plus \`total_mods\` |
+| \`GET\` | \`/api/profiles\` | — | Tous les profils avec leurs listes de mods |
+| \`GET\` | \`/api/plugins\` | — | Plugins installés (manifest + \`enabled\`) |
+| \`GET\` | \`/api/modpacks\` | — | Tous les modpacks sauvegardés |
+| \`GET\` | \`/api/creator-id\` | — | L’id créateur de cette installation |
+| \`GET\` | \`/api/repo/info\` | — | Récupère un \`repo.json\` distant. Query \`url\`*, \`password\`. \`401\` si protégé, \`502\` si le distant échoue |
+| \`GET\` | \`/api/repo/list\` | — | Dépôts distants enregistrés |
+| \`GET\` | \`/api/language/template\` | — | \`lang-template.json\`, une map plate \`{"clé": "English"}\` |
+| \`GET\` | \`/api/data\` | token | **Dump complet de \`data.json\`** |
+| \`GET\` | \`/api/apps\` | \`app.read\` | Apps installées via le catalogue |
+| \`GET\` | \`/api/apps/permissions\` | token | \`plugin_id → [permissions]\` |
+| \`GET\` | \`/api/apps/permissions/:id\` | token | Les permissions d’un plugin |
+| \`GET\` | \`/api/catalog\` | \`catalog.read\` | Le catalogue d’apps local |
+
+:::danger[GET /api/data c’est toute la base]
+Il renvoie tout, \`settings\` inclus — et \`settings\` contient le token admin et les tokens de plugins. N’importe quel token capable de l’appeler peut lire le token admin et se fabriquer un accès total. Accorder cet endpoint équivaut à céder les droits admin.
+:::
+
+#### Mods & profils
+
+| Méthode | Chemin | Auth | Corps | DL |
+|---|---|---|---|---|
+| \`POST\` | \`/api/mods/enable\` | \`mods.write\` | \`mod_id\`* | ✓ |
+| \`POST\` | \`/api/mods/disable\` | \`mods.write\` | \`mod_id\`* | ✓ |
+| \`PUT\` | \`/api/mods/:id\` | \`mods.write\` | \`name\`, \`version\`, \`author\`, \`description\`, \`tags[]\`, \`install_notes\` | |
+| \`DELETE\` | \`/api/mods/:id\` | \`mods.write\` | — · retire l’entrée, **garde les fichiers** | |
+| \`POST\` | \`/api/mod/config\` | \`mods.write\` | \`modId\`*, \`repoModId\`, \`updateUrl\`, \`directUrl\`, \`updateSources[]\` | |
+| \`POST\` | \`/api/profiles\` | \`profiles.write\` | \`name\`*, \`game_path\`*, \`mods_path\`*, \`backup_path\`*, \`game_name\`, \`color\`, \`icon\` · **pas** activé | |
+| \`POST\` | \`/api/profiles/activate\` | \`profiles.write\` | \`profile_id\`* | ✓ |
+| \`PUT\` | \`/api/profiles/:id\` | \`profiles.write\` | \`name\`, \`color\`, \`icon\`, et les trois chemins | |
+| \`DELETE\` | \`/api/profiles/:id\` | \`profiles.write\` | — · refuse le profil actif | |
+
+#### Modpacks & plugins
+
+| Méthode | Chemin | Auth | Corps | DL |
+|---|---|---|---|---|
+| \`POST\` | \`/api/modpacks/create\` | \`modpacks.write\` | \`name\`*, \`mod_ids[]\`, \`source_profile_id\`, \`description\`, \`game_name\`, \`sr_link\`, \`multi_profile\`, \`skip_integrity_check\`, \`dependency_mode\`, \`mod_overrides[]\` → \`201\` | ✓ |
+| \`POST\` | \`/api/modpacks/enable\` | \`modpacks.write\` | \`modpack_id\`* (l’ancien \`profile_id\` est aussi accepté) | ✓ |
+| \`POST\` | \`/api/modpacks/disable\` | \`modpacks.write\` | idem | ✓ |
+| \`PUT\` | \`/api/modpacks/:id\` | \`modpacks.write\` | n’importe quel champ de création | |
+| \`DELETE\` | \`/api/modpacks/:id\` | \`modpacks.write\` | — · irréversible, les mods locaux sont conservés | |
+| \`POST\` | \`/api/plugins/compare\` | \`plugins.read\` | \`plugin_id\`* → \`missing_required\`, \`strict_extra\` | ✓ |
+| \`POST\` | \`/api/plugins/apply\` | \`plugins.write\` | \`plugin_id\`*, \`force_strict\` → \`enabled\`, \`not_found\` | ✓ |
+| \`DELETE\` | \`/api/plugins/:id\` | token | — · registre + permissions + fichiers | ✓ |
+
+#### Dépôt serveur
+
+| Méthode | Chemin | Auth | Corps | DL |
+|---|---|---|---|---|
+| \`POST\` | \`/api/repo/connect\` | \`repo.write\` | \`url\`*, \`name\` | ✓ |
+| \`DELETE\` | \`/api/repo\` | \`repo.write\` | \`url\`* · fichiers conservés | |
+| \`POST\` | \`/api/repo/sync\` | \`repo.write\` | \`url\`*, \`choices[]\`*, \`gameDir\`, \`modsDir\`, \`backupDir\`, \`creatorId\`, \`password\`, \`overwriteAll\`, \`deleteExtra\`, \`downloadLimit\` → \`202 {job_id}\`. **Un seul à la fois** (\`409\`) | ✓ |
+| \`DELETE\` | \`/api/repo/sync/cancel\` | token | — · s’arrête à la prochaine frontière de mod | |
+| \`POST\` | \`/api/repo/gen\` | \`repo.write\` | \`profileIds[]\`*, \`outputDir\`*, \`authorName\`*, \`seed\`, \`generateServer\`, \`port\`, \`uploadLimit\`, \`adminPassword\`, \`useCloudflare\`, \`useUpnp\`, \`autoStart\`, \`lang\`, \`serverVersion\` (nombre), \`serverType\` (\`std\`/\`lux\`), \`lightweight\`, \`zipOutput\`, \`useDocker\`, \`dockerOs\` → \`202\` | ✓ |
+| \`DELETE\` | \`/api/repo/gen/cancel\` | token | — | |
+| \`POST\` | \`/api/repo/update\` | token | \`repoDir\`*, \`authorName\`, \`removeModIds[]\`, \`removeProfileIds[]\`, \`addProfiles[]\`, \`modChangelogs{}\` → \`202\` | ✓ |
+| \`POST\` | \`/api/repo/host\` | token | \`serveDir\`*, \`port\`, \`uploadLimit\` → \`202\`, \`409\` si déjà en service | ✓ |
+| \`DELETE\` | \`/api/repo/host\` | token | — | |
+| \`POST\` | \`/api/mod/check-updates\` | token | — → \`202\` | ✓ |
+| \`POST\` | \`/api/mod/update\` | token | \`repoUrl\` → \`202\` | ✓ |
+
+#### Apps & catalogue
+
+| Méthode | Chemin | Auth | Corps | DL |
+|---|---|---|---|---|
+| \`POST\` | \`/api/apps/install\` | \`app.write\` | \`appId\`*, \`appTitle\`*, \`downloadUrl\`*, \`fileType\`*, \`installPath\`, \`version\`, \`category\`, \`thumb\` → \`202\` | ✓ |
+| \`POST\` | \`/api/apps/launch\` | \`app.write\` | \`appId\`*, \`exePath\`* | ✓ |
+| \`DELETE\` | \`/api/apps/:id\` | \`app.write\` | — · désenregistre, fichiers conservés | |
+| \`PUT\` | \`/api/apps/permissions/:id\` | token | \`permissions[]\`* · **remplace** la liste ; \`[]\` révoque tout | |
+| \`POST\` | \`/api/catalog/new\` | \`catalog.write\` | \`name\`, \`description\`, \`partner_catalogs[]\`, \`community_imports[]\`, \`apps[]\` → \`201\` | |
+| \`POST\` | \`/api/catalog/apps\` | \`catalog.write\` | \`id\`*, \`title\`*, \`download\`* (\`url\`, \`file_type\`), \`description\`, \`category\`, \`price\`, \`tags\` (3 max), \`requirements\`, \`md_link\` → \`201\` | |
+| \`PUT\` | \`/api/catalog/apps/:id\` | \`catalog.write\` | \`title\`, \`description\`, \`version\`, \`category\`, \`download\` | |
+| \`DELETE\` | \`/api/catalog/apps/:id\` | \`catalog.write\` | — | |
+
+#### Import / export — ceux-ci pilotent l’interface
+
+Chacun ouvre le flux in-app correspondant et renvoie \`202\`. Ils ne sont **pas** headless ; la seule exception est \`data/export-auto\`.
+
+| Méthode | Chemin | Auth | Corps | DL |
+|---|---|---|---|---|
+| \`POST\` | \`/api/data/export\` · \`/api/data/import\` | token | — | |
+| \`POST\` | \`/api/data/export-auto\` | token | \`dir\`*, \`name\`, \`increment\` · **sans intervention**, aucune boîte de dialogue | ✓ |
+| \`POST\` | \`/api/modlists/export\` · \`/api/modlists/import\` | token | — · \`.mmlist\`, métadonnées seules, aucun fichier de mod | |
+| \`POST\` | \`/api/modpacks/import\` | token | \`path\` | |
+| \`POST\` | \`/api/modpacks/export\` | token | \`id\`*, \`destDir\` | |
+| \`POST\` | \`/api/plugins/import\` | token | — | |
+| \`POST\` | \`/api/plugins/export\` | token | \`id\`* → \`.bmmplug\` | |
+| \`POST\` | \`/api/language/import\` | token | \`path\` · le nom de fichier devient le code de langue ; \`template.json\` est refusé | ✓ |
+| \`POST\` | \`/api/profiles/import/ovgme\` | token | — · scanne le dossier OvGME | |
+| \`POST\` | \`/api/profiles/import/omm\` | token | — · OpenModManager \`.omm\`/\`.omx\` | |
+
+#### Automatisation & confidentialité
+
+| Méthode | Chemin | Auth | Corps | DL |
+|---|---|---|---|---|
+| \`POST\` | \`/api/schedule/run\` | token | \`id\`* | ✓ |
+| \`POST\` | \`/api/launchpack/run\` | token | \`id\`* | ✓ |
+| \`POST\` | \`/api/benchmark\` | token | \`dataset\`, \`size\`, \`mode\`, \`sources[]\`, \`profiles[]\` | ✓ |
+| \`POST\` | \`/api/telemetry/consent\` | token | \`enabled\`* | ✓ |
+| \`POST\` | \`/api/telemetry/settings\` | token | \`replay\`, \`full\`, \`bench\` | ✓ |
+| \`POST\` | \`/api/recorder\` | token | \`on\`, \`full\`, \`rust\`, \`js\` | ✓ |
+| \`POST\` | \`/api/replay/export\` | token | — | ✓ |
+| \`POST\` | \`/api/replay/import\` | token | \`path\`, \`url\` | ✓ |
+| \`POST\` | \`/api/discord/rpc\` | token | \`enabled\`* | ✓ |
+| \`POST\` | \`/api/restart\` | token | — · l’API est brièvement indisponible | ✓ |
+
+## Incohérences connues
+
+Consignées parce que cette page et le serveur ne s’accordent pas sur tous les détails :
+
+- **Les barrières de permission sont plus étroites qu’elles n’y paraissent.** \`mod/check-updates\`, \`mod/update\`, \`repo/update\`, \`repo/host\` (les deux méthodes), les deux routes d’annulation, \`DELETE /api/plugins/:id\` et toutes les routes \`/api/apps/permissions*\` sont **token seul** — un token plugin sans aucune permission y passe.
+- **\`POST /api/repo/gen\`** prend \`serverVersion\` (un nombre) **et** \`serverType\` (\`"std"\` / \`"lux"\`) — la chaîne va dans \`serverType\`.
+- **\`POST /api/repo/host\`** pilote l’UI native Dépôt Serveur et renvoie \`202\`, pas \`200\`.
+- **\`bmm://telemetry/settings\`** n’est **pas routé** — seul \`bmm://telemetry/set\` fonctionne.
+- Les réponses d’erreur rajoutent \`access-control-allow-origin: *\` sans condition, même en release.
+
+Chaque requête \`/api/\` émet un événement portant la méthode, le chemin et le statut — c’est ce qui produit les toasts et le journal API de la page Plugins & API : tu peux donc voir arriver les appels externes sans instrumenter ton propre script.
+
+Voir aussi [Référence des actions](doc:actions-reference) et [Plugins & API](doc:plugins).`,
         },
       },
       {
@@ -956,7 +2025,7 @@ function articleView(cat: Category, a: Article): string {
     `<a class="dh-rel dh-rel-ext" href="${DOCS_SITE}${a.docsPath || ''}" target="_blank" rel="noreferrer">${svg('ext', 15)} ${tr({ en: 'Read full docs', fr: 'Lire la doc complète' })}</a>`,
   ].filter(Boolean).join('');
   return `
-    <article class="dh-article">
+    <article class="dh-article${a.wide ? ' dh-wide' : ''}">
       <h2>${tr(a.title)}</h2>
       <p class="dh-lead">${tr(a.summary)}</p>
       ${a.media ? mediaBlock(a.media) : ''}

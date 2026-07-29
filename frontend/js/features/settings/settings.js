@@ -434,7 +434,7 @@ const _renderStorageModal = async () => {
                         <input type="number" id="input-warning-pct" class="form-input" value="${warningPct}" min="1" max="99" style="width:100%; font-size:13px; padding:8px 10px;">
                     </div>
                     <div style="flex:1; min-width:200px;">
-                        <label style="font-size:11px; font-weight:600; color:#ef4444; display:block; margin-bottom:4px;">${t('storage.alertCritical')}</label>
+                        <label style="font-size:11px; font-weight:600; color:var(--bmm-danger); display:block; margin-bottom:4px;">${t('storage.alertCritical')}</label>
                         <input type="number" id="input-critical-pct" class="form-input" value="${criticalPct}" min="0" max="99" style="width:100%; font-size:13px; padding:8px 10px; border-color:rgba(239,68,68,0.3);">
                     </div>
                 </div>` : `
@@ -534,14 +534,14 @@ const _renderStorageModal = async () => {
         const getKindBadge = (disk) => {
             if (disk.is_cloud && disk.cloud_provider) {
                 if (disk.kind === 'Network')
-                    return `<span style="background:rgba(245,158,11,0.15);color:#fbbf24;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;">🌐 ${disk.cloud_provider}</span>`;
-                return `<span style="background:rgba(168,85,247,0.15);color:#c084fc;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;">☁️ ${disk.cloud_provider}</span>`;
+                    return `<span style="background:rgba(245,158,11,0.15);color:var(--bmm-warning);padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;">🌐 ${disk.cloud_provider}</span>`;
+                return `<span style="background:rgba(168,85,247,0.15);color:var(--bmm-purple);padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;">☁️ ${disk.cloud_provider}</span>`;
             }
             if (disk.kind === 'SSD')
-                return '<span style="background:rgba(59,130,246,0.15);color:#60a5fa;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;">SSD</span>';
+                return '<span style="background:rgba(59,130,246,0.15);color:var(--bmm-accent);padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;">SSD</span>';
             if (disk.kind === 'HDD')
-                return '<span style="background:rgba(245,158,11,0.15);color:#fbbf24;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;">HDD</span>';
-            return '<span style="background:rgba(156,163,175,0.15);color:#9ca3af;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;">' + disk.kind + '</span>';
+                return '<span style="background:rgba(245,158,11,0.15);color:var(--bmm-warning);padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;">HDD</span>';
+            return '<span style="background:rgba(156,163,175,0.15);color:var(--bmm-text-muted);padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;">' + disk.kind + '</span>';
         };
         const subContainer = document.getElementById('disks-list-subcontainer');
         subContainer.innerHTML = disks.map(disk => {
@@ -626,10 +626,10 @@ const _renderStorageModal = async () => {
                         <div class="storage-usage-bar">
                             <div class="storage-usage-fill" style="width:${barPct}%;background:${barCol};box-shadow:0 0 12px ${barCol}55;transition:width 0.4s ease;"></div>
                         </div>
-                        ${isCrit ? `<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;margin-top:8px;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);border-radius:10px;font-size:11px;color:#f87171;font-weight:700;animation:pulse-danger 2s infinite;">
+                        ${isCrit ? `<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;margin-top:8px;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);border-radius:10px;font-size:11px;color:var(--bmm-danger);font-weight:700;animation:pulse-danger 2s infinite;">
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
                             ${t('storage.profilesCritical') || 'Profile mods (' + formatBytes(profileTotal) + ') exceed available space (' + formatBytes(avail) + ')'}
-                        </div>` : isWarn ? `<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;margin-top:8px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);border-radius:10px;font-size:11px;color:#fbbf24;font-weight:600;">
+                        </div>` : isWarn ? `<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;margin-top:8px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);border-radius:10px;font-size:11px;color:var(--bmm-warning);font-weight:600;">
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
                             ${t('storage.profilesWarning') || 'Profile mods are using ' + Math.round(ratio * 100) + '% of available disk space'}
                         </div>` : ''}
@@ -679,11 +679,11 @@ const _renderStorageModal = async () => {
                 try {
                     const res = await invoke('benchmark_disk', { mountPoint });
                     resultSpan.innerHTML = `
-                        <span style="color:#60a5fa;">↓ ${res.read_mb_s} MB/s</span>
+                        <span style="color:var(--bmm-accent);">↓ ${res.read_mb_s} MB/s</span>
                         <span style="margin:0 4px;">·</span>
-                        <span style="color:#a78bfa;">↑ ${res.write_mb_s} MB/s</span>
+                        <span style="color:var(--bmm-purple);">↑ ${res.write_mb_s} MB/s</span>
                         <span style="margin:0 4px;">·</span>
-                        <span style="color:#34d399;">${t('storage.suggestedLimit')}: ${res.suggested_limit} MB/s</span>
+                        <span style="color:var(--bmm-success);">${t('storage.suggestedLimit')}: ${res.suggested_limit} MB/s</span>
                         <button class="btn btn-ghost btn-sm disk-apply-suggestion" data-mount="${mountPoint}" data-value="${res.suggested_limit}" style="font-size:10px;padding:2px 8px;margin-left:4px;">${t('storage.applySuggested')}</button>
                     `;
                     resultSpan.querySelector('.disk-apply-suggestion')?.addEventListener('click', async (ev) => {
@@ -1182,7 +1182,7 @@ window.showHashingStats = async () => {
                     <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:16px">
                         <!-- Valid -->
                         <div style="background:rgba(16, 185, 129, 0.05); border:1px solid rgba(16, 185, 129, 0.15); border-radius:14px; padding:16px; box-shadow:inset 0 0 15px rgba(0,0,0,0.1)">
-                            <div style="font-size:11px; color:#10b981; text-transform:uppercase; font-weight:700; margin-bottom:6px; letter-spacing:0.05em; display:flex; align-items:center; gap:6px">
+                            <div style="font-size:11px; color:var(--bmm-success); text-transform:uppercase; font-weight:700; margin-bottom:6px; letter-spacing:0.05em; display:flex; align-items:center; gap:6px">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
                                 ${t('hashes.status.verified') || 'Valid'}
                             </div>
@@ -1191,7 +1191,7 @@ window.showHashingStats = async () => {
                         
                         <!-- Invalid -->
                         <div style="background:rgba(239, 68, 68, 0.05); border:1px solid rgba(239, 68, 68, 0.15); border-radius:14px; padding:16px; box-shadow:inset 0 0 15px rgba(0,0,0,0.1)">
-                            <div style="font-size:11px; color:#ef4444; text-transform:uppercase; font-weight:700; margin-bottom:6px; letter-spacing:0.05em; display:flex; align-items:center; gap:6px">
+                            <div style="font-size:11px; color:var(--bmm-danger); text-transform:uppercase; font-weight:700; margin-bottom:6px; letter-spacing:0.05em; display:flex; align-items:center; gap:6px">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
                                 ${t('hashes.status.invalid') || 'Invalid'}
                             </div>
@@ -1404,7 +1404,7 @@ function showLinkCodeModal(code, base) {
       <div style="width:100%;max-width:420px;background:var(--bmm-bg-elevated,#15171e);border:1px solid rgba(249,115,22,0.3);border-radius:18px;padding:24px;text-align:center;box-shadow:0 24px 70px rgba(0,0,0,0.5)">
         <div style="font-size:16px;font-weight:800;margin-bottom:6px">${escHtml(t('settings.link.title') || 'Link your BetterCommunity account')}</div>
         <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px">${escHtml(t('settings.link.desc') || 'Enter this code on the website (Profile → Creator IDs). It expires in 15 minutes.')}</div>
-        <div style="font-family:var(--font-mono,monospace);font-size:28px;font-weight:800;letter-spacing:4px;color:#f97316;padding:14px;border-radius:12px;background:rgba(249,115,22,0.08);border:1px solid rgba(249,115,22,0.2);margin-bottom:14px">${escHtml(code)}</div>
+        <div style="font-family:var(--font-mono,monospace);font-size:28px;font-weight:800;letter-spacing:4px;color:var(--bmm-warning);padding:14px;border-radius:12px;background:rgba(249,115,22,0.08);border:1px solid rgba(249,115,22,0.2);margin-bottom:14px">${escHtml(code)}</div>
         <div style="display:flex;gap:8px;justify-content:center">
           <button id="bc-link-copy" class="btn btn-sm btn-accent">${escHtml(t('common.copy') || 'Copy')}</button>
           <button id="bc-link-open" class="btn btn-sm">${escHtml(t('settings.link.open') || 'Open website')}</button>
