@@ -33,20 +33,8 @@
     "--bmm-surface-r": "0",
     "--bmm-surface-g": "0",
     "--bmm-surface-b": "0",
-    "--bmm-s02": "rgba(0,0,0,0.02)",
-    "--bmm-s03": "rgba(0,0,0,0.03)",
-    "--bmm-s04": "rgba(0,0,0,0.04)",
-    "--bmm-s05": "rgba(0,0,0,0.05)",
-    "--bmm-s06": "rgba(0,0,0,0.06)",
-    "--bmm-s07": "rgba(0,0,0,0.07)",
-    "--bmm-s08": "rgba(0,0,0,0.08)",
-    "--bmm-s09": "rgba(0,0,0,0.09)",
     "--bmm-s10": "rgba(0,0,0,0.10)",
-    "--bmm-s12": "rgba(0,0,0,0.12)",
-    "--bmm-s15": "rgba(0,0,0,0.15)",
     "--bmm-s20": "rgba(0,0,0,0.20)",
-    "--bmm-glass-bg": "rgba(0,0,0,0.03)",
-    "--bmm-glass-border": "rgba(0,0,0,0.08)",
     "--bmm-bg-hover": "rgba(0,0,0,0.045)",
     "--bmm-color-scheme": "light",
     "--bmm-accent": "#1d4ed8",
@@ -54,6 +42,7 @@
     "--bmm-accent-r": "29",
     "--bmm-accent-g": "78",
     "--bmm-accent-b": "216",
-    "--bmm-accent-glow": "0 0 20px rgba(29,78,216,0.35)"
+    "--bmm-accent-glow": "0 0 20px rgba(29,78,216,0.35)",
+    "--bmm-text-on-accent": "#ffffff"
   }
 }

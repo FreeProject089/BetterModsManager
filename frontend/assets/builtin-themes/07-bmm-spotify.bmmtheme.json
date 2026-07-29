@@ -31,6 +31,7 @@
     "--bmm-accent-g": "215",
     "--bmm-accent-b": "96",
     "--bmm-border-accent": "rgba(30,215,96,0.4)",
-    "--bmm-accent-glow": "0 0 20px rgba(30,215,96,0.35)"
+    "--bmm-accent-glow": "0 0 20px rgba(30,215,96,0.35)",
+    "--bmm-text-on-accent": "#0f1115"
   }
 }

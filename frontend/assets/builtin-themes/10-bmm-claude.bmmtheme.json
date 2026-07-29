@@ -33,17 +33,7 @@
     "--bmm-surface-r": "60",
     "--bmm-surface-g": "50",
     "--bmm-surface-b": "40",
-    "--bmm-s02": "rgba(60,50,40,0.02)",
-    "--bmm-s03": "rgba(60,50,40,0.03)",
-    "--bmm-s04": "rgba(60,50,40,0.04)",
-    "--bmm-s05": "rgba(60,50,40,0.05)",
-    "--bmm-s06": "rgba(60,50,40,0.06)",
-    "--bmm-s07": "rgba(60,50,40,0.07)",
-    "--bmm-s08": "rgba(60,50,40,0.08)",
-    "--bmm-s09": "rgba(60,50,40,0.09)",
     "--bmm-s10": "rgba(60,50,40,0.10)",
-    "--bmm-s12": "rgba(60,50,40,0.12)",
-    "--bmm-s15": "rgba(60,50,40,0.15)",
     "--bmm-s20": "rgba(60,50,40,0.20)",
     "--bmm-glass-bg": "rgba(60,50,40,0.04)",
     "--bmm-glass-border": "rgba(60,50,40,0.1)",
@@ -54,7 +44,8 @@
     "--bmm-accent-r": "200",
     "--bmm-accent-g": "97",
     "--bmm-accent-b": "63",
-    "--bmm-accent-glow": "0 0 18px rgba(200,97,63,0.28)"
+    "--bmm-accent-glow": "0 0 18px rgba(200,97,63,0.28)",
+    "--bmm-text-on-accent": "#0f1115"
   },
   "global_css": "body{background:linear-gradient(180deg,#f4f1e8 0%, #efeadf 100%) !important;background-attachment:fixed}\n.glass-card,.modpack-card,.profile-card{transition:transform .16s ease, box-shadow .16s ease, border-color .16s ease}\n.glass-card:hover,.modpack-card:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(120,80,40,0.1);border-color:rgba(200,97,63,0.3)}\n.btn-primary{background:linear-gradient(180deg,#d27a4f 0%, #c8613f 100%);border:none;color:#fff;font-weight:600;border-radius:999px;box-shadow:0 2px 8px rgba(200,97,63,0.3)}\n.btn:not(.btn-primary),.pill,.tag{border-radius:999px}\nh1,h2,h3,.card-title{letter-spacing:-.015em}"
 }
