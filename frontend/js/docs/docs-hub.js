@@ -187,7 +187,8 @@ ce qu'il remplace, ou les retire). Vos mods téléchargés ne sont jamais modifi
 <p>Some games read mods from more than one place — often the <b>install folder</b> and a separate <b>user / config folder</b>. Give each one its own profile pointing at that folder.</p>
 <p>Each profile also has its own <b>mods folder</b> (the “Configuration → mods folder” line) where BMM stores that profile’s mods.</p>
 <h4>When a download has the wrong shape</h4>
-<p>Plenty of archives ship the files loose, or zipped one folder too deep, so the parent folders the game expects are missing. Don’t rebuild them by hand — open the <b>Mapper</b>, drag each file to where it belongs, and save. The mapping travels with the mod, so the next install (or a new version with the same layout) is one click.</p>`,
+<p>Plenty of archives ship the files loose, or zipped one folder too deep, so the parent folders the game expects are missing. Don’t rebuild them by hand — open the <b>Mapper</b>, drag each file to where it belongs, and save. Nothing moves until you save, and the left pane shows the mod <i>as it will be</i>, so you can stage a dozen changes and check the result first.</p>
+<p>Note what saving does: it <b>restructures the mod folder on disk</b>. It is not a mapping table replayed at each deploy, so a new version of the mod with the same wrong layout has to be re-mapped. Restructuring also changes the mod’s content id (unless it ships a <code>bmm.json</code> id) and invalidates its integrity baseline — re-run the check afterwards.</p>`,
                     fr: `<p>BMM applique vos mods <b>sans jamais déplacer vos originaux</b> (le même principe qu’OvGME). L’astuce qui rend ça possible : <b>un mod n’est qu’un dossier qui copie l’arborescence du jeu.</b> Quel que soit le chemin dont un fichier a besoin dans le jeu, votre mod recrée ce chemin exact — BMM peut alors poser l’un directement sur l’autre.</p>
 <div class="dh-treecmp">
   <div class="dh-treecol">
@@ -215,7 +216,8 @@ ce qu'il remplace, ou les retire). Vos mods téléchargés ne sont jamais modifi
 <p>Certains jeux lisent les mods à plusieurs endroits — souvent le <b>dossier d’installation</b> et un <b>dossier utilisateur / config</b> séparé. Donnez à chacun son propre profil pointant sur ce dossier.</p>
 <p>Chaque profil a aussi son propre <b>dossier des mods</b> (la ligne « Configuration → dossier des mods ») où BMM stocke les mods de ce profil.</p>
 <h4>Quand un téléchargement a la mauvaise forme</h4>
-<p>Beaucoup d’archives livrent les fichiers en vrac, ou zippés un dossier trop bas, si bien que les dossiers parents attendus par le jeu manquent. Ne les reconstruisez pas à la main — ouvrez le <b>Mappeur</b>, glissez chaque fichier à sa place, et enregistrez. Le mapping voyage avec le mod : la prochaine installation (ou une nouvelle version au même agencement) se fait en un clic.</p>`,
+<p>Beaucoup d’archives livrent les fichiers en vrac, ou zippés un dossier trop bas, si bien que les dossiers parents attendus par le jeu manquent. Ne les reconstruisez pas à la main — ouvrez le <b>Mappeur</b>, glissez chaque fichier à sa place, et enregistrez. Rien ne bouge avant l’enregistrement, et le volet de gauche montre le mod <i>tel qu’il sera</i> : vous pouvez donc préparer une dizaine de changements et vérifier le résultat d’abord.</p>
+<p>À noter, ce que fait l’enregistrement : il <b>restructure le dossier du mod sur le disque</b>. Ce n’est pas une table rejouée à chaque déploiement, donc une nouvelle version du mod au même mauvais agencement doit être re-mappée. La restructuration change aussi l’id de contenu du mod (sauf s’il embarque un id dans <code>bmm.json</code>) et invalide sa baseline d’intégrité — relancez le contrôle ensuite.</p>`,
                 },
             },
             {
