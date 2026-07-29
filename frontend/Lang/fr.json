@@ -6642,5 +6642,6 @@
   "credits.stackPkg.puppeteer-core": "Pilote un navigateur headless, utilisé par l’outillage développeur et la capture d’écran.",
   "credits.stackPkg.prisma": "Client de base de données typé, utilisé par l’outillage qui dialogue avec le schéma BetterCommunity.",
   "credits.stackDocsBlurb": "Envie de l’architecture derrière ces briques — comment elles s’assemblent ?",
-  "credits.stackDocsCta": "Lire sur BMM Docs"
+  "credits.stackDocsCta": "Lire sur BMM Docs",
+  "conflict.treeTruncated": "Affichage des {n} premiers fichiers partagés sur {total}."
 }

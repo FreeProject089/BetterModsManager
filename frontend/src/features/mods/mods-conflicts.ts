@@ -293,7 +293,13 @@ export function showConflictContextMenu(e, mod1Id, mod2Id) {
     container.innerHTML = `<div style="text-align:center;padding:20px;color:var(--text-muted)">${t('conflict.loadingTree')||"Chargement de l'arbre..."}</div>`;
     
     try {
-      const files = await invoke('get_conflict_file_tree', { modId: mod1Id, otherModId: mod2Id });
+      // The command now returns { files, total, truncated } and caps the list: two mods can
+      // share tens of thousands of paths, and this view builds one DOM row per entry, so an
+      // uncapped answer cost a huge payload, a huge HTML string and thousands of nodes at once.
+      const tree = await invoke('get_conflict_file_tree', { modId: mod1Id, otherModId: mod2Id });
+      const files = Array.isArray(tree) ? tree : (tree?.files || []);          // tolerate the old shape
+      const total = Array.isArray(tree) ? tree.length : (tree?.total ?? files.length);
+      const truncated = Array.isArray(tree) ? false : !!tree?.truncated;
       if (files.length === 0) {
         container.innerHTML = `<div style="text-align:center;padding:20px;color:var(--text-muted)">${t('conflict.noTreeFiles')}</div>`;
         return;
@@ -306,6 +312,13 @@ export function showConflictContextMenu(e, mod1Id, mod2Id) {
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;color:var(--accent)"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
         <span style="flex:1;overflow:hidden;text-overflow:ellipsis;font-size:11.5px;color:var(--text-primary)">${escHtml(f)}</span>
       </div>`).join('');
+      // Say so when the list was cut, rather than silently implying these are all of them.
+      if (truncated) {
+        container.innerHTML += `<div style="padding:10px;text-align:center;font-size:11px;color:var(--text-muted)">`
+          + (t('conflict.treeTruncated') || 'Showing the first {n} of {total} shared files.')
+              .replace('{n}', String(files.length)).replace('{total}', String(total))
+          + `</div>`;
+      }
     } catch (err) {
       container.innerHTML = `<span style="color:var(--danger)">${t('common.error')||"Error"}: ${err}</span>`;
     }

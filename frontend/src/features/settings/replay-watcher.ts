@@ -35,6 +35,17 @@ let _chunkBytes: number[] = [];
 // ~48 MB of retained rrweb events. Well clear of anything a normal session produces, and far
 // enough below the webview's ceiling to leave room for the rest of the app.
 const RETAIN_BYTE_BUDGET = 48 * 1024 * 1024;
+// What we allow ONE bundle to serialise to. Lower than the retention budget on purpose:
+// JSON.stringify holds the source objects AND the resulting string at the same time, so the
+// peak is roughly double. buildBundle() already catches the failure and sheds chunks, but a
+// catch is only reliable for RangeError (the string-length limit) — a genuine V8 heap
+// exhaustion can abort the process instead of throwing, and this runs on a 45s timer. So bound
+// it BEFORE stringifying, using the per-chunk byte counts we already keep.
+const SERIALISE_BYTE_BUDGET = 20 * 1024 * 1024;
+// Console lines are capped by count (5000) but each can be 2000 chars, i.e. ~20 MB of UTF-16
+// in the worst case — enough to matter next to the events. Cap the bytes too.
+const CONSOLE_BYTE_BUDGET = 2 * 1024 * 1024;
+let _consoleBytes = 0;
 /** Rough in-memory footprint of one event. JS strings are UTF-16, hence the x2. */
 function approxBytes(ev: any): number {
   try { return JSON.stringify(ev).length * 2; } catch { return 4096; }
@@ -54,7 +65,11 @@ function hookConsole(): void {
         if (_recording && watcherJs()) {
           const msg = args.map((a) => { try { return typeof a === 'string' ? a : JSON.stringify(a); } catch { return String(a); } }).join(' ').slice(0, 2000);
           _console.push({ t: Date.now(), level, msg });
-          if (_console.length > 5000) _console.shift();
+          _consoleBytes += msg.length * 2 + 32;
+          while (_console.length > 5000 || (_consoleBytes > CONSOLE_BYTE_BUDGET && _console.length > 1)) {
+            const gone = _console.shift();
+            _consoleBytes -= (gone?.msg?.length || 0) * 2 + 32;
+          }
         }
       } catch { /* ignore */ }
       _orig[level](...args);
@@ -107,6 +122,7 @@ export async function startWatcher(): Promise<void> {
   _chunks = [[]];
   _chunkBytes = [0];
   _console = [];
+  _consoleBytes = 0;
   _startedAt = Date.now();
   
   _listener = ((ev: any, isCheckout: boolean) => {
@@ -183,6 +199,30 @@ async function buildBundle(): Promise<string | null> {
   const meta = { bmmReplay: 1, app: 'BetterModsManager', createdAt: new Date().toISOString(), masked: !watcherFull(), durationMs: Date.now() - _startedAt };
   // Work on a copy so a size-driven trim never mutates the live rolling buffer.
   let chunks = _chunks.map((c) => c);
+  // Proactive bound: drop oldest chunks until the estimated payload fits the serialise budget,
+  // so stringify is never asked to build the pathological string in the first place. Chunks are
+  // self-contained (each starts with a full snapshot), so the newest ones stay playable.
+  {
+    let bytes = _chunkBytes.reduce((a, c) => a + (c || 0), 0);
+    let i = 0;
+    while (bytes > SERIALISE_BYTE_BUDGET && i < chunks.length - 1) {
+      bytes -= _chunkBytes[i] || 0; i++;
+    }
+    if (i > 0) chunks = chunks.slice(i);
+    // Retention can legitimately collapse to ONE oversized chunk (it head-trims rather than
+    // drop the only segment it has), and then the loop above has nothing left to shed. Trim
+    // that chunk's head in the COPY — `chunks` holds references to the live arrays, so this
+    // must slice, never shift, or it would eat the rolling buffer.
+    if (bytes > SERIALISE_BYTE_BUDGET && chunks.length === 1) {
+      let only = chunks[0];
+      while (only.length > 2 && bytes > SERIALISE_BYTE_BUDGET) {
+        const drop = Math.max(1, Math.ceil(only.length * 0.15));
+        for (let k = 0; k < drop && k < only.length; k++) bytes -= approxBytes(only[k]);
+        only = only.slice(drop);
+      }
+      chunks = [only];
+    }
+  }
   for (;;) {
     const events = chunks.flat();
     if (events.length < 2) return null;

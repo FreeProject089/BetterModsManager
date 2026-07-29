@@ -2537,8 +2537,21 @@ pub fn flush_mem_caches(state: State<AppState>) {
     }
 }
 
+/// Overlapping-file list for ONE pair, capped. The frontend renders a DOM row per entry, so an
+/// uncapped list is three costs at once: the JSON payload, the HTML string built from it, and
+/// the nodes themselves. Two mods can legitimately share tens of thousands of paths, which is
+/// how this ends as a webview out-of-memory rather than a long list. `total` lets the UI say
+/// how many were found even when it only received the first slice.
+#[derive(serde::Serialize)]
+pub struct ConflictFileTree {
+    pub files: Vec<String>,
+    pub total: usize,
+    pub truncated: bool,
+}
+const CONFLICT_TREE_MAX: usize = 2000;
+
 #[tauri::command]
-pub fn get_conflict_file_tree(state: State<AppState>, mod_id: String, other_mod_id: String) -> Result<Vec<String>, String> {
+pub fn get_conflict_file_tree(state: State<AppState>, mod_id: String, other_mod_id: String) -> Result<ConflictFileTree, String> {
     let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
     let m1 = data.mods.iter().find(|m| m.id == mod_id).ok_or("Mod 1 introuvable")?;
     let m2 = data.mods.iter().find(|m| m.id == other_mod_id).ok_or("Mod 2 introuvable")?;
@@ -2550,12 +2563,16 @@ pub fn get_conflict_file_tree(state: State<AppState>, mod_id: String, other_mod_
         .collect();
 
     let mut overlap = Vec::new();
+    let mut total = 0usize;
     for f in files1 {
         if files2.contains(&f) {
-            overlap.push(f.to_string_lossy().to_string());
+            total += 1;
+            if overlap.len() < CONFLICT_TREE_MAX {
+                overlap.push(f.to_string_lossy().to_string());
+            }
         }
     }
-    Ok(overlap)
+    Ok(ConflictFileTree { truncated: total > overlap.len(), total, files: overlap })
 }
 
 #[tauri::command]
