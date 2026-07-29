@@ -266,15 +266,24 @@ function buildPanel(): void {
         <div class="bte-footer">
             <span class="bte-dirty" id="bte-dirty"></span>
             <div class="bte-footer-actions">
-                <button class="btn btn-ghost btn-sm" id="bte-import-file" data-tooltip="${t('themes.import')||'Import .bmmtheme / .json'}">${t('themes.import')||'⬆ Import .bmmtheme / .json'}</button>
-                <button class="btn btn-ghost btn-sm" id="bte-discard">${t('themes.discard')||'Discard'}</button>
-                <button class="btn btn-ghost btn-sm" id="bte-save-as" data-tooltip="${t('themes.saveAsHint')||'Save as a new theme'}">${t('themes.saveAs')||'Save as…'}</button>
-                <button class="btn btn-secondary btn-sm" id="bte-save">${t('themes.saveTheme')||'Save'}</button>
-                <button class="btn btn-ghost btn-sm" id="bte-share" data-tooltip="${t('themes.share')||'Copy share link'}">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-                    ${t('themes.share')||'Share'}
-                </button>
-                <button class="btn btn-accent btn-sm" id="bte-export" data-tooltip="${t('themes.export')||'Export'} .bmmtheme">${t('themes.export')||'Export'}</button>
+                <!-- Grouped by intent, with the primary action last (where the eye lands).
+                     Export used to carry btn-accent while Save was only btn-secondary, so the
+                     loudest button in a theme EDITOR was the one that writes a file to disk,
+                     not the one that keeps your work. -->
+                <span class="bte-fgroup">
+                    <button class="btn btn-ghost btn-sm" id="bte-import-file" data-tooltip="${t('themes.import')||'Import .bmmtheme / .json'}">${t('themes.import')||'⬆ Import .bmmtheme / .json'}</button>
+                    <button class="btn btn-ghost btn-sm" id="bte-share" data-tooltip="${t('themes.share')||'Copy share link'}">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+                        ${t('themes.share')||'Share'}
+                    </button>
+                    <button class="btn btn-ghost btn-sm" id="bte-export" data-tooltip="${t('themes.export')||'Export'} .bmmtheme">${t('themes.export')||'Export'}</button>
+                </span>
+                <span class="bte-fsep" aria-hidden="true"></span>
+                <span class="bte-fgroup">
+                    <button class="btn btn-ghost btn-sm bte-danger" id="bte-discard">${t('themes.discard')||'Discard'}</button>
+                    <button class="btn btn-ghost btn-sm" id="bte-save-as" data-tooltip="${t('themes.saveAsHint')||'Save as a new theme'}">${t('themes.saveAs')||'Save as…'}</button>
+                    <button class="btn btn-accent btn-sm" id="bte-save">${t('themes.saveTheme')||'Save'}</button>
+                </span>
             </div>
         </div>`;
 

@@ -137,6 +137,19 @@
     display: inline-flex; align-items: center; justify-content: center; line-height: 1; gap: 4px;
 }
 .bte-footer .btn svg { margin: 0 !important; }
+/* Two intent groups (transfer | edit) separated by a hairline, so six controls read as
+   "a few things I can do" instead of one undifferentiated wall of buttons. Each group wraps
+   as a unit, which keeps a button from being orphaned on its own row on a narrow panel. */
+.bte-fgroup { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.bte-fsep {
+    width: 1px; align-self: stretch; margin: 2px 2px;
+    background: var(--bmm-s10); flex: 0 0 auto;
+}
+/* Discard throws work away — it should say so on hover, without shouting at rest. */
+.bte-footer .bte-danger:hover {
+    color: var(--bmm-danger);
+    background: rgba(var(--bmm-danger-r,239),var(--bmm-danger-g,68),var(--bmm-danger-b,68),0.12);
+}
 
 /* ── Simple tab — friendly UI ─────────────────────────────────────────────── */
 .bte-intro {
