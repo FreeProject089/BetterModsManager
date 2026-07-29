@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 // CI gate: no NEW hard-coded text colours.
 //
-// Themes only swap the --bmm-* tokens, so any literal `color: #fff / white /
-// black / rgb(255…)` is stuck — it stays white when the user picks a light theme
-// (the "white text on a light background" bug) and vice-versa. Text colours must
-// go through a token: --bmm-text-primary/secondary/muted, or --bmm-text-on-accent
-// for text that sits on a coloured accent/badge fill.
+// Themes only swap the --bmm-* tokens, so ANY literal `color:` (or SVG fill/stroke) is
+// stuck. The obvious case is `color: #fff` staying white under a light theme, but a
+// chromatic literal like `color: #94a3b8` is just as broken: it ignores every theme, in
+// both directions. Text colours must go through a token: --bmm-text-primary/secondary/
+// muted, or --bmm-text-on-accent for text that sits on a coloured accent/badge fill.
 //
 // The codebase already has a backlog of these, so this gate is *baselined*: it
 // only fails on offenders that aren't in scripts/hardcoded-colors-baseline.json.
@@ -24,12 +24,23 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
 const BASELINE = join(__dirname, 'hardcoded-colors-baseline.json');
 
-// A literal text colour: the `color` property (not background-/border-/-color)
-// set to a white/black-family literal instead of a var().
-const OFFENDER = /(?<![a-z-])color\s*:\s*(#fff(?:fff)?\b|#000(?:000)?\b|\bwhite\b|\bblack\b|rgba?\(\s*255\s*,\s*255\s*,\s*255|rgba?\(\s*0\s*,\s*0\s*,\s*0)/i;
+// A literal text colour: the `color` property (not background-/border-/-color), or an SVG
+// `fill`/`stroke`, set to ANY literal instead of a var().
+//
+// This used to match only the white/black family. That hid the bigger half of the problem:
+// a chromatic literal (`color:#94a3b8`, `color:#ef4444`) is just as un-themable, because a
+// hard-coded colour inside a stylesheet is never rewritten on a dark->dark theme change —
+// the runtime rescue layers only touch inline styles, a fixed hex table, and light themes.
+// Widening it took the known count from 125 to the real figure; everything already in the
+// codebase is baselined, so this only gates NEW ones.
+const LITERAL = String.raw`#[0-9a-f]{3,8}\b|\brgba?\(|\bhsla?\(|\b(?:white|black|red|blue|green|yellow|orange|purple|pink|gray|grey|cyan|magenta|silver|gold|navy|teal|lime|maroon|olive|aqua|fuchsia)\b`;
+const OFFENDER = new RegExp(String.raw`(?<![a-z-])(?:color|fill|stroke)\s*:\s*(?:${LITERAL})`, 'i');
 
-// Directories to skip entirely.
-const SKIP_DIRS = new Set(['node_modules', 'js', 'Lang', 'target', '.git', 'dist', '.vite']);
+// Directories to skip entirely. `docs/diagrams` is exempt on purpose: those files are
+// Mermaid source, and a `style X fill:…,color:…` directive is parsed by Mermaid, not by
+// CSS — a var() there does not resolve. Their palette is data-viz, not app chrome, and the
+// diagram container already themes what it can via --bmm-diagram-*.
+const SKIP_DIRS = new Set(['node_modules', 'js', 'Lang', 'target', '.git', 'dist', '.vite', 'diagrams']);
 // Files exempt from the rule.
 const EXEMPT = new Set(['tokens.css', 'debug.css']);
 // Extensions to scan.
@@ -83,7 +94,7 @@ const baseline = existsSync(BASELINE)
 const offenders = [...found.entries()].filter(([k]) => !baseline.has(k));
 
 if (offenders.length) {
-  console.error(`✗ ${offenders.length} NEW hard-coded text colour(s) — use a --bmm-text-* token`);
+  console.error(`✗ ${offenders.length} NEW hard-coded text colour(s) — use a --bmm-* token`);
   console.error(`  (--bmm-text-primary/secondary/muted, or --bmm-text-on-accent on a coloured fill)\n`);
   for (const [, o] of offenders) {
     console.error(`  ${relative(ROOT, o.file).replace(/\\/g, '/')}:${o.line}  ${o.text}`);
