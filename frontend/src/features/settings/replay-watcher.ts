@@ -26,6 +26,19 @@ const watcherJs = () => { try { return localStorage.getItem(JS) !== '0'; } catch
 let _recording = false;
 let _listener: ReplaySubscriber | null = null;
 let _chunks: any[][] = [];
+// Retained bytes per chunk, kept in step with _chunks. The count cap below is not enough on
+// its own: a single rrweb event is not a fixed size. A FullSnapshot serialises the whole DOM,
+// and in "full" mode assets are inlined as base64 data URLs, so one event can weigh megabytes.
+// A session could therefore sit far under the event cap while holding hundreds of MB — which
+// is what eventually took the webview out while idling.
+let _chunkBytes: number[] = [];
+// ~48 MB of retained rrweb events. Well clear of anything a normal session produces, and far
+// enough below the webview's ceiling to leave room for the rest of the app.
+const RETAIN_BYTE_BUDGET = 48 * 1024 * 1024;
+/** Rough in-memory footprint of one event. JS strings are UTF-16, hence the x2. */
+function approxBytes(ev: any): number {
+  try { return JSON.stringify(ev).length * 2; } catch { return 4096; }
+}
 let _console: { t: number; level: string; msg: string }[] = [];
 let _startedAt = 0;
 let _consoleHooked = false;
@@ -92,20 +105,39 @@ export async function startWatcher(): Promise<void> {
   _recording = true;
   hookConsole();
   _chunks = [[]];
+  _chunkBytes = [0];
   _console = [];
   _startedAt = Date.now();
   
   _listener = ((ev: any, isCheckout: boolean) => {
     if (isCheckout && _chunks[_chunks.length - 1].length > 0) {
-      _chunks.push([]);
+      _chunks.push([]); _chunkBytes.push(0);
     }
     _chunks[_chunks.length - 1].push(ev);
-    if (_chunks.length > 3) _chunks.shift(); // keep max ~6 minutes
-    // Hard cap on retained events regardless of chunk boundaries: a very active session — or a
-    // burst of DOM churn — can bloat a single chunk between the 2-min checkouts and grow memory
-    // without bound. Drop whole (self-contained) oldest chunks until back under budget.
-    let total = 0; for (const c of _chunks) total += c.length;
-    while (total > 24000 && _chunks.length > 1) { total -= (_chunks.shift() as any[]).length; }
+    _chunkBytes[_chunkBytes.length - 1] += approxBytes(ev);
+    if (_chunks.length > 3) { _chunks.shift(); _chunkBytes.shift(); } // keep max ~6 minutes
+    // Hard cap on what we retain, by BOTH measures. Event count alone let an asset-heavy or
+    // snapshot-heavy session grow unbounded in bytes while staying under the count; bytes
+    // alone would let a huge number of tiny events through. Drop whole (self-contained)
+    // oldest chunks until back under both budgets.
+    let total = 0, bytes = 0;
+    for (let i = 0; i < _chunks.length; i++) { total += _chunks[i].length; bytes += _chunkBytes[i] || 0; }
+    while ((total > 24000 || bytes > RETAIN_BYTE_BUDGET) && _chunks.length > 1) {
+      total -= (_chunks.shift() as any[]).length;
+      bytes -= _chunkBytes.shift() || 0;
+    }
+    // Last resort: chunks are only created at rrweb checkouts (~2 min apart), so a single
+    // asset-heavy chunk can blow the budget on its own — and the loop above rightly refuses
+    // to drop the only chunk we have. Trim that chunk from the FRONT instead. It costs the
+    // head of that segment (so it replays from partway in) but it is the difference between
+    // a degraded recording and the webview being killed, which loses the recording anyway.
+    if (bytes > RETAIN_BYTE_BUDGET && _chunks.length === 1) {
+      const only = _chunks[0];
+      while (only.length > 1 && bytes > RETAIN_BYTE_BUDGET) {
+        bytes -= approxBytes(only.shift());
+      }
+      _chunkBytes[0] = bytes;
+    }
   }) as ReplaySubscriber;
   _listener.requiresMasking = !watcherFull();
 
