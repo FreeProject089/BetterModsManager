@@ -166,7 +166,7 @@ function ensureStyles() {
   .anim-row .sel{font-size:11px;opacity:.6;}
   .anim-btn{border:1px solid #2a2f3a;background:#0d1117;color:#e6edf3;border-radius:8px;padding:5px 9px;cursor:pointer;font:inherit;}
   .anim-btn:hover{background:#1c2333;border-color:#3b82f6;}
-  .anim-primary{background:#3b82f6;border-color:#3b82f6;color:#fff;}
+  .anim-primary{background:var(--bmm-accent,#3b82f6);border-color:var(--bmm-accent,#3b82f6);color:var(--bmm-text-on-accent);}
   .anim-primary:hover{background:#2563eb;}
   .anim-mini{padding:4px 7px;font-size:12px;}
   .anim-form{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:8px;padding-top:10px;border-top:1px solid #2a2f3a;}

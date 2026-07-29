@@ -423,7 +423,7 @@ function ensureStyles() {
   .rstudio-btn{border:1px solid #2a2f3a;background:#0d1117;color:#e6edf3;border-radius:9px;
     padding:6px 10px;cursor:pointer;font:inherit;transition:background .12s,border-color .12s;}
   .rstudio-btn:hover{background:#1c2333;border-color:#3b82f6;}
-  .rstudio-primary{background:#3b82f6;border-color:#3b82f6;color:#fff;}
+  .rstudio-primary{background:var(--bmm-accent,#3b82f6);border-color:var(--bmm-accent,#3b82f6);color:var(--bmm-text-on-accent);}
   .rstudio-primary:hover{background:#2563eb;}
   .rstudio-x{padding:6px 9px;opacity:.7;}
   .rstudio-sel{background:#0d1117;color:#e6edf3;border:1px solid #2a2f3a;border-radius:9px;padding:6px 8px;font:inherit;}

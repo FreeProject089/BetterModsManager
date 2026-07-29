@@ -15494,3 +15494,40 @@ h1 {
     scroll-behavior: auto !important;
   }
 }
+
+/* Stack modal → BMM Docs. The component list answers "what do we use"; this points at the
+   page that answers "how does it fit together". All colours are tokens so a custom theme
+   recolours it with the rest of the modal. */
+.stack-docs-link {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 22px;
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--bg-card);
+    color: var(--text-secondary);
+    font-size: 0.82rem;
+}
+.stack-docs-link button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    border: 1px solid var(--border-accent);
+    border-radius: 8px;
+    background: var(--accent-dim);
+    color: var(--accent);
+    font-family: var(--font-sans);
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+}
+.stack-docs-link button:hover {
+    background: var(--accent);
+    color: var(--bg-primary);
+}

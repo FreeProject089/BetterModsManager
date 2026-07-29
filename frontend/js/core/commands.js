@@ -467,7 +467,7 @@ function ensurePaletteStyles() {
   .cp-input::placeholder{color:var(--bmm-text-muted,#7c8698);}
   .cp-modes{display:inline-flex;gap:2px;padding:3px;border-radius:8px;background:var(--bmm-bg-base,#0f1420);border:1px solid var(--bmm-border,#2a3242);}
   .cp-mode{cursor:pointer;font-family:inherit;font-size:11px;font-weight:600;padding:3px 8px;border-radius:6px;border:0;background:transparent;color:var(--bmm-text-secondary,#a3adba);}
-  .cp-mode.on{background:var(--bmm-accent,#3b82f6);color:#fff;}
+  .cp-mode.on{background:var(--bmm-accent,#3b82f6);color:var(--bmm-text-on-accent);}
   .cp-list{overflow:auto;padding:8px;}
   .cp-item{display:flex;align-items:center;gap:12px;width:100%;text-align:left;cursor:pointer;font-family:inherit;
     padding:10px 12px;border-radius:10px;border:0;background:transparent;color:var(--bmm-text-primary,#e6edf3);}

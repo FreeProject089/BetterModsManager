@@ -1357,14 +1357,16 @@ window.openStackModal = () => {
     const crate = (c) => `https://crates.io/crates/${c}`;
     const npm = (p) => `https://www.npmjs.com/package/${p}`;
     const backend = [
-        { name: "Tauri", v: "1.0", key: "tauri", url: crate("tauri") },
+        { name: "Tauri", v: "2", key: "tauri", url: crate("tauri") },
+        { name: "Tauri Plugins", v: "2", key: "tauri-plugins", url: crate("tauri-plugin-fs") },
+        { name: "rmcp (MCP)", v: "1.4", key: "rmcp", url: crate("rmcp") },
         { name: "Serde", v: "1.0", key: "serde", url: crate("serde") },
         { name: "Tokio", v: "1.0", key: "tokio", url: crate("tokio") },
-        { name: "Reqwest", v: "0.11", key: "reqwest", url: crate("reqwest") },
+        { name: "Reqwest", v: "0.12", key: "reqwest", url: crate("reqwest") },
         { name: "Walkdir", v: "2.0", key: "walkdir", url: crate("walkdir") },
         { name: "Zip", v: "0.6", key: "zip", url: crate("zip") },
         { name: "SHA2", v: "0.10", key: "sha2", url: crate("sha2") },
-        { name: "BLAKE3", v: "1.5", key: "blake3", url: crate("blake3") },
+        { name: "BLAKE3", v: "1", key: "blake3", url: crate("blake3") },
         { name: "Discord RP", v: "0.2", key: "discord-rich-presence", url: crate("discord-rich-presence") },
         { name: "Warp", v: "0.3", key: "warp", url: crate("warp") },
         { name: "Rayon", v: "1.8", key: "rayon", url: crate("rayon") },
@@ -1393,14 +1395,29 @@ window.openStackModal = () => {
         { name: "Ed25519 Dalek", v: "2.0", key: "ed25519-dalek", url: crate("ed25519-dalek") },
         { name: "IGD", v: "0.12", key: "igd", url: crate("igd") },
         { name: "Local IP Address", v: "0.6", key: "local-ip-address", url: crate("local-ip-address") },
-        { name: "Lazy Static", v: "1.4", key: "lazy-static", url: crate("lazy_static") }
+        { name: "Lazy Static", v: "1.4", key: "lazy-static", url: crate("lazy_static") },
+        { name: "mimalloc", v: "0.1", key: "mimalloc", url: crate("mimalloc") },
+        { name: "Open", v: "5", key: "open", url: crate("open") },
+        { name: "fs_extra", v: "1", key: "fs-extra", url: crate("fs_extra") },
+        { name: "Tracing Subscriber", v: "0.3", key: "tracing-subscriber", url: crate("tracing-subscriber") },
+        { name: "Tokio Util", v: "0.7", key: "tokio-util", url: crate("tokio-util") },
+        { name: "Bytes", v: "1", key: "bytes", url: crate("bytes") },
+        { name: "Percent Encoding", v: "2.3", key: "percent-encoding", url: crate("percent-encoding") },
+        { name: "Schemars", v: "0.8", key: "schemars", url: crate("schemars") },
+        { name: "Colored", v: "2", key: "colored", url: crate("colored") },
+        { name: "Backtrace", v: "0.3", key: "backtrace", url: crate("backtrace") },
+        { name: "Windows", v: "0.52", key: "windows", url: crate("windows") }
     ];
     const frontend = [
         { name: "TypeScript", v: "5.7", key: "typescript", url: npm("typescript") },
         { name: "TanStack Query", v: "5.0", key: "tanstack-query", url: npm("@tanstack/query-core") },
         { name: "Cheerio", v: "1.2", key: "cheerio", url: npm("cheerio") },
-        { name: "Tauri API", v: "1.0", key: "tauri-api", url: npm("@tauri-apps/api") },
-        { name: "Tauri CLI", v: "1.0", key: "tauri-cli", url: npm("@tauri-apps/cli") },
+        { name: "DOMPurify", v: "3.4", key: "dompurify", url: npm("dompurify") },
+        { name: "rrweb", v: "2.0", key: "rrweb", url: npm("rrweb") },
+        { name: "Puppeteer Core", v: "25", key: "puppeteer-core", url: npm("puppeteer-core") },
+        { name: "Prisma Client", v: "5.22", key: "prisma", url: npm("@prisma/client") },
+        { name: "Tauri API", v: "2", key: "tauri-api", url: npm("@tauri-apps/api") },
+        { name: "Tauri CLI", v: "2", key: "tauri-cli", url: npm("@tauri-apps/cli") },
         { name: "Concurrently", v: "9.2", key: "concurrently", url: npm("concurrently") }
     ];
     content.innerHTML = `
@@ -1427,6 +1444,12 @@ window.openStackModal = () => {
                     <div class="stack-item-desc" data-i18n="credits.stackPkg.${item.key}">${t(`credits.stackPkg.${item.key}`)}</div>
                 </div>
             `).join('')}
+        </div>
+        <div class="stack-docs-link">
+            <span data-i18n="credits.stackDocsBlurb">${t('credits.stackDocsBlurb')}</span>
+            <button type="button" onclick="window.openExternal('https://freeproject089.github.io/BMM-Docs/how-it-works/architecture/')">
+                <span data-i18n="credits.stackDocsCta">${t('credits.stackDocsCta')}</span> ↗
+            </button>
         </div>
     `;
     modal.classList.add('open');

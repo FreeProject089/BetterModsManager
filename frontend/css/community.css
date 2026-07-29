@@ -426,7 +426,7 @@
 .bmm-replay-embed:focus-visible { outline: 2px solid var(--accent, #3b82f6); outline-offset: 2px; }
 .bmm-replay-embed-icon {
   flex: 0 0 auto; display: grid; place-items: center; width: 40px; height: 40px;
-  border-radius: 999px; background: var(--accent, #3b82f6); color: #fff; font-size: 14px;
+  border-radius: 999px; background: var(--accent, #3b82f6); color: var(--bmm-text-on-accent); font-size: 14px;
 }
 .bmm-replay-embed-text { display: flex; flex-direction: column; min-width: 0; }
 .bmm-replay-embed-title { font-weight: 600; }

@@ -38,7 +38,7 @@ function promptRepoPassword() {
         cancel.style.cssText = 'padding:8px 14px;border-radius:8px;border:1px solid var(--border,rgba(255,255,255,0.15));background:transparent;color:var(--text-secondary,#ccc);cursor:pointer;font-size:13px;';
         const ok = document.createElement('button');
         ok.textContent = t('common.confirm') || 'Confirm';
-        ok.style.cssText = 'padding:8px 14px;border-radius:8px;border:none;background:var(--accent,#5b8def);color:#fff;cursor:pointer;font-size:13px;font-weight:600;';
+        ok.style.cssText = 'padding:8px 14px;border-radius:8px;border:none;background:var(--accent,#5b8def);color:var(--bmm-text-on-accent);cursor:pointer;font-size:13px;font-weight:600;';
         const done = (val) => { try {
             overlay.remove();
         }
