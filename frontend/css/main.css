@@ -525,7 +525,9 @@ body.is-maximized .titlebar-spacer {
     background: var(--bg-card);
     border: 1px solid var(--border);
     border-radius: 8px;
-    color: var(--text-primary);
+    /* Match the sidebar nav buttons (.nav-item) rather than hard white, so a theme that
+       recolours nav text recolours the language switcher with it. */
+    color: var(--text-secondary);
     font-size: 13px;
     font-weight: 500;
     font-family: var(--font-sans);
@@ -590,7 +592,8 @@ body.is-maximized .titlebar-spacer {
     border-radius: 6px;
     border: none;
     background: transparent;
-    color: var(--text-primary);
+    /* Same token as .nav-item / .nav-lang-btn — the drop-up must not be hard white. */
+    color: var(--text-secondary);
     font-size: 13px;
     font-family: var(--font-sans);
     cursor: pointer;
@@ -599,6 +602,7 @@ body.is-maximized .titlebar-spacer {
 
 .nav-lang-option:hover {
     background: var(--bg-hover);
+    color: var(--accent);   /* same hover treatment as .nav-item */
 }
 
 .nav-lang-option.active {
