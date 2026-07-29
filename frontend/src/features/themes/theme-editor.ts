@@ -1104,7 +1104,7 @@ function syncAccentRgb(k: string, v: string): void {
 // Ready-made HTML templates so users don't have to write HTML from scratch.
 const CE_TEMPLATES: { label: string; icon: string; html: string }[] = [
     { label: 'Button', icon: gi('<rect x="2" y="7" width="20" height="10" rx="5"/>'),
-      html: `<button class="btn btn-sm btn-primary" onclick="window.__bmmDeeplink('bmm://restart')">My button</button>` },
+      html: `<button class="btn btn-sm btn-primary" data-bmm-deeplink="bmm://restart">My button</button>` },
     { label: 'Banner', icon: gi('<path d="M3 11 21 5v14L3 13v-2z"/>'),
       html: `<div style="padding:10px 14px;border-radius:10px;background:var(--bmm-accent-dim);color:var(--bmm-text-primary);font-weight:600;">My custom banner</div>` },
     { label: 'Badge', icon: gi('<path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/>'),
@@ -1114,7 +1114,7 @@ const CE_TEMPLATES: { label: string; icon: string; html: string }[] = [
     { label: 'Image', icon: gi('<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/>'),
       html: `<img src="https://placehold.co/120x60" alt="" style="border-radius:10px;max-width:100%;">` },
     { label: 'Link', icon: gi('<path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/>'),
-      html: `<a href="#" onclick="window.__bmmDeeplink('bmm://repo/sync?url=URL');return false;" style="color:var(--bmm-accent);font-weight:600;">My link →</a>` },
+      html: `<a href="#" data-bmm-deeplink="bmm://repo/sync?url=URL" style="color:var(--bmm-accent);font-weight:600;">My link →</a>` },
 ];
 
 function buildElementsTab(): string {
@@ -1188,7 +1188,7 @@ function buildElementsTab(): string {
                     `<button class="bte-tpl-chip" data-tpl="${escAttr(tpl.html)}"><span>${tpl.icon}</span>${escHtml(tpl.label)}</button>`).join('')}
             </div>
             <textarea id="bte-ce-html" class="bte-adv-textarea" style="min-height:84px;margin-top:8px;" placeholder="${escAttr(t('themes.ceHtmlPh')||'Pick a template above, or write your own HTML here…')}">${escHtml(editing?.html||'')}</textarea>
-            <p class="bte-adv-tip" style="margin:4px 0 0;">${t('themes.ceDeeplinkTip')||'For BMM actions, use'} <code>onclick="window.__bmmDeeplink('bmm://…')"</code></p>
+            <p class="bte-adv-tip" style="margin:4px 0 0;">${t('themes.ceDeeplinkTip')||'For BMM actions, use'} <code>data-bmm-deeplink="bmm://…"</code></p>
 
             <div class="bte-deeplink-quick">
                 <div class="bte-ce-lbl" style="margin-bottom:4px;">${t('themes.ceActions')||'Insert an action'}</div>
@@ -1201,7 +1201,7 @@ function buildElementsTab(): string {
                     ['Launch app','bmm://app/launch?id=APP_ID'],
                     ['Restart BMM','bmm://restart'],
                 ].map(([lbl, dl]) =>
-                    `<button class="bte-dl-chip" data-snippet='<button class="btn btn-xs btn-accent" onclick="window.__bmmDeeplink(&apos;${dl}&apos;)">${lbl}</button>'>${escHtml(lbl as string)}</button>`
+                    `<button class="bte-dl-chip" data-snippet='<button class="btn btn-xs btn-accent" data-bmm-deeplink="${dl}">${lbl}</button>'>${escHtml(lbl as string)}</button>`
                 ).join('')}
             </div>
 

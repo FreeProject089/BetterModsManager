@@ -652,9 +652,30 @@ function applyHtmlSwaps(theme: BmmTheme): void {
 }
 
 // ── Custom elements — survive re-renders via MutationObserver ─────────────────
+// A custom element's HTML goes through sanitizeHtml, which strips EVERY on* attribute — as
+// it must, since theme HTML is untrusted. That silently broke the editor's own deeplink
+// buttons: it handed you `onclick="window.__bmmDeeplink(…)"` snippets that were removed on
+// the way in, so the button applied fine and then did nothing at all. Declare the intent in
+// a data attribute instead (data-* survives sanitising) and run it from one delegated
+// listener here, which also means no inline script ever executes.
+let _ceDeeplinkBound = false;
+function bindCustomElementDeeplinks(): void {
+    if (_ceDeeplinkBound) return;
+    _ceDeeplinkBound = true;
+    document.addEventListener('click', (e) => {
+        const el = (e.target as HTMLElement)?.closest?.('[data-bmm-deeplink]') as HTMLElement | null;
+        if (!el) return;
+        const url = el.getAttribute('data-bmm-deeplink') || '';
+        if (!/^bmm:\/\//i.test(url)) return;   // only ever our own scheme
+        e.preventDefault();
+        try { (window as any).__bmmDeeplink?.(url); } catch { /* ignore */ }
+    });
+}
+
 function applyCustomElements(theme: BmmTheme): void {
     if (_customElementObserver) { _customElementObserver.disconnect(); _customElementObserver = null; }
     if (!theme.custom_elements?.length) return;
+    bindCustomElementDeeplinks();
 
     const injectAll = () => {
         const currentPage = document.body.getAttribute(DATA_PAGE_ATTR) || '';
