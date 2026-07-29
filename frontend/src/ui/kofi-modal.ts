@@ -76,12 +76,17 @@ export function showKofiReminder(): void {
     document.getElementById('app-window-outer')?.appendChild(overlay) || document.body.appendChild(overlay);
     requestAnimationFrame(() => overlay.classList.add('open'));
 
+    // Escape must dismiss it: the card declares role="dialog" aria-modal="true", so without
+    // a key handler a keyboard user was stuck behind an overlay they couldn't close.
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
     const close = () => {
+        document.removeEventListener('keydown', onKey, true);
         overlay.classList.remove('open');
         overlay.classList.add('closing');
         overlay.addEventListener('transitionend', () => overlay.remove(), { once: true });
         setTimeout(() => overlay.remove(), 400);
     };
+    document.addEventListener('keydown', onKey, true);
     // "Maybe later" / X → close, will show again next launch.
     overlay.querySelector('#kofi-close')?.addEventListener('click', close);
     overlay.querySelector('#kofi-later')?.addEventListener('click', close);
@@ -93,6 +98,8 @@ export function showKofiReminder(): void {
     // Both the main button and the amount chips open Ko-fi, then close the reminder.
     overlay.querySelectorAll('#kofi-go, [data-kofi-go]').forEach((el) => el.addEventListener('click', () => setTimeout(close, 150)));
     overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+    // Focus lands inside the dialog so the first Tab stays in it rather than walking the app.
+    (overlay.querySelector('#kofi-close') as HTMLElement | null)?.focus();
 }
 
 function injectStyles(): void {
@@ -101,56 +108,59 @@ function injectStyles(): void {
     s.id = 'kofi-modal-styles';
     s.textContent = `
     .kofi-overlay{position:fixed;inset:0;z-index:10050;display:flex;align-items:center;justify-content:center;
-      background:rgba(10,8,12,0.55);backdrop-filter:blur(6px);opacity:0;transition:opacity .3s ease}
+      --kofi-brand:#ff6b4a;--kofi-brand-2:#ff5e5b;--kofi-on-brand:#fff;
+      background:rgba(var(--bmm-surface-r),var(--bmm-surface-g),var(--bmm-surface-b),0.55);
+      backdrop-filter:blur(6px);opacity:0;transition:opacity .3s ease}
     .kofi-overlay.open{opacity:1}
     .kofi-overlay.closing{opacity:0}
     .kofi-card{position:relative;width:min(420px,92vw);padding:34px 30px 26px;border-radius:22px;text-align:center;overflow:hidden;
-      background:linear-gradient(160deg,#2a1d24 0%, var(--bg-elevated,#181420) 60%);
+      background:linear-gradient(160deg, color-mix(in srgb, var(--kofi-brand) 12%, var(--bmm-bg-elevated)) 0%, var(--bmm-bg-elevated) 60%);
       border:1px solid rgba(255,107,74,0.35);
       box-shadow:0 24px 70px rgba(255,94,91,0.18),0 8px 30px rgba(0,0,0,0.5);
       transform:translateY(18px) scale(.96);opacity:0;transition:transform .35s cubic-bezier(.2,.9,.3,1.2),opacity .3s ease}
     .kofi-overlay.open .kofi-card{transform:translateY(0) scale(1);opacity:1}
     .kofi-glow{position:absolute;top:-40%;left:50%;width:280px;height:280px;transform:translateX(-50%);pointer-events:none;
       background:radial-gradient(circle,rgba(255,107,74,0.35),transparent 70%);filter:blur(10px)}
+    @media (prefers-reduced-motion: reduce){.kofi-heart{animation:none}.kofi-card{transition:opacity .2s ease}}
     .kofi-close{position:absolute;top:14px;right:14px;width:30px;height:30px;border-radius:9px;border:none;cursor:pointer;
-      display:flex;align-items:center;justify-content:center;color:var(--text-muted,#9aa);background:rgba(255,255,255,0.06);transition:.15s}
-    .kofi-close:hover{background:rgba(255,255,255,0.14);color:#fff}
+      display:flex;align-items:center;justify-content:center;color:var(--bmm-text-muted);background:var(--bmm-s05);transition:.15s}
+    .kofi-close:hover{background:var(--bmm-s10);color:var(--bmm-text-primary)}
     .kofi-mascot{position:relative;width:96px;height:96px;margin:4px auto 14px}
     .kofi-mascot img{width:96px;height:96px;object-fit:contain;filter:drop-shadow(0 6px 14px rgba(0,0,0,.4))}
     .kofi-heart{position:absolute;right:-6px;bottom:-2px;width:36px;height:36px;border-radius:50%;
       display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#ff6b4a,#ff5e5b);
       box-shadow:0 4px 12px rgba(255,94,91,0.5);animation:kofi-beat 1.4s ease-in-out infinite}
     @keyframes kofi-beat{0%,100%{transform:scale(1)}50%{transform:scale(1.15)}}
-    .kofi-title{margin:0 0 8px;font-size:19px;font-weight:800;color:var(--text-primary,#fff)}
-    .kofi-text{margin:0 0 22px;font-size:13.5px;line-height:1.6;color:var(--text-secondary,#c8c8d4)}
+    .kofi-title{margin:0 0 8px;font-size:19px;font-weight:800;color:var(--bmm-text-primary)}
+    .kofi-text{margin:0 0 22px;font-size:13.5px;line-height:1.6;color:var(--bmm-text-secondary)}
     .kofi-actions{display:flex;flex-direction:column;gap:10px}
     /* Anchored amount chips: the middle "popular" tier sits larger + highlighted so it
        becomes the mental reference point (contrast/anchoring). All open Ko-fi. */
     .kofi-tiers{display:flex;align-items:flex-end;justify-content:center;gap:10px;margin-bottom:2px}
     .kofi-tier{position:relative;display:flex;flex-direction:column;align-items:center;gap:3px;text-decoration:none;cursor:pointer;
-      padding:10px 12px;min-width:64px;border-radius:13px;color:var(--text-secondary,#c8c8d4);
-      border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.04);transition:.16s}
-    .kofi-tier:hover{transform:translateY(-2px);border-color:rgba(255,107,74,0.5);color:#fff}
+      padding:10px 12px;min-width:64px;border-radius:13px;color:var(--bmm-text-secondary);
+      border:1px solid var(--bmm-s10);background:var(--bmm-s05);transition:.16s}
+    .kofi-tier:hover{transform:translateY(-2px);border-color:rgba(255,107,74,0.5);color:var(--bmm-text-primary)}
     .kofi-tier-amt{font-size:13px;line-height:1;letter-spacing:-1px}
-    .kofi-tier-lbl{font-size:15px;font-weight:800;color:var(--text-primary,#fff)}
+    .kofi-tier-lbl{font-size:15px;font-weight:800;color:var(--bmm-text-primary)}
     .kofi-tier--pop{padding:14px 14px 12px;border-color:rgba(255,107,74,0.55);
       background:linear-gradient(160deg,rgba(255,107,74,0.16),rgba(255,94,91,0.06));box-shadow:0 6px 18px rgba(255,94,91,0.2)}
     .kofi-tier--pop .kofi-tier-amt{font-size:15px}
     .kofi-tier--pop .kofi-tier-lbl{font-size:18px}
     .kofi-pop{position:absolute;top:-9px;left:50%;transform:translateX(-50%);white-space:nowrap;
-      font-size:9px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;padding:2px 7px;border-radius:999px;color:#fff;
+      font-size:9px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;padding:2px 7px;border-radius:999px;color:var(--kofi-on-brand);
       background:linear-gradient(135deg,#ff6b4a,#ff5e5b);box-shadow:0 3px 8px rgba(255,94,91,0.45)}
-    .kofi-tier-hint{font-size:11px;color:var(--text-muted,#8a8a96);margin:-2px 0 6px}
+    .kofi-tier-hint{font-size:11px;color:var(--bmm-text-muted);margin:-2px 0 6px}
     .kofi-secondary-row{display:flex;align-items:center;justify-content:center;gap:14px;margin-top:2px}
     .kofi-btn-optout{opacity:0.7;font-size:11.5px}
     .kofi-btn-optout:hover{opacity:1;text-decoration:underline}
     .kofi-btn-primary{display:flex;align-items:center;justify-content:center;gap:9px;text-decoration:none;
-      padding:12px 18px;border-radius:13px;font-size:14px;font-weight:800;color:#fff;cursor:pointer;
+      padding:12px 18px;border-radius:13px;font-size:14px;font-weight:800;color:var(--kofi-on-brand);cursor:pointer;
       background:linear-gradient(135deg,#ff6b4a,#ff5e5b);box-shadow:0 8px 22px rgba(255,94,91,0.4);transition:.18s}
     .kofi-btn-primary:hover{transform:translateY(-2px);box-shadow:0 12px 28px rgba(255,94,91,0.55)}
     .kofi-btn-ghost{padding:9px;border:none;background:transparent;cursor:pointer;font-size:12.5px;
-      color:var(--text-muted,#8a8a96);font-weight:600;transition:.15s}
-    .kofi-btn-ghost:hover{color:var(--text-secondary,#c8c8d4)}
+      color:var(--bmm-text-muted);font-weight:600;transition:.15s}
+    .kofi-btn-ghost:hover{color:var(--bmm-text-secondary)}
     `;
     document.head.appendChild(s);
 }
