@@ -314,13 +314,41 @@ function buildPanel(): void {
     );
 }
 
+/** Key a collapsible group by its (stable) heading text — the markup has no id. */
+function groupKey(g: Element): string {
+    return (g.querySelector('.bte-group-title')?.textContent || '').trim();
+}
+
 function renderTab(tab: string): void {
     const body = document.getElementById('bte-body');
     if (!body) return;
+
+    // Every edit re-renders the whole tab with innerHTML — that is how this panel works, and
+    // it is fine, EXCEPT that it silently threw away the user's place: tweak one colour and
+    // you were bounced back to the top of the list with every group you had opened closed
+    // again. In a panel whose entire job is adjusting dozens of values in a row, that made it
+    // feel broken. Snapshot the view state and put it back after the rebuild.
+    const scroll = body.scrollTop;
+    const open = new Set<string>();
+    body.querySelectorAll('.bte-group.open').forEach((g) => { const k = groupKey(g); if (k) open.add(k); });
+    const act = document.activeElement as HTMLElement | null;
+    const actId = act && body.contains(act) ? act.id : '';
+
     if (tab === 'simple')    { body.innerHTML = buildSimpleTab();   wireSimple(); }
     else if (tab === 'elements') { body.innerHTML = buildElementsTab(); wireElements(); }
     else if (tab === 'advanced') { body.innerHTML = buildAdvTab();    wireAdv(); }
     else if (tab === 'installed'){ body.innerHTML = buildInstalledTab(); wireInstalled(); }
+
+    if (open.size) {
+        body.querySelectorAll('.bte-group').forEach((g) => {
+            if (open.has(groupKey(g))) g.classList.add('open');
+        });
+    }
+    body.scrollTop = scroll;
+    if (actId) {
+        const again = body.querySelector<HTMLElement>(`#${(window as any).CSS?.escape ? CSS.escape(actId) : actId}`);
+        try { again?.focus({ preventScroll: true }); } catch { /* not focusable any more */ }
+    }
     updateDirty();
 }
 

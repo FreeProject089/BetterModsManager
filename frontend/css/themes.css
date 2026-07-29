@@ -21,8 +21,11 @@
     flex-direction: column;
     overflow: hidden;
     resize: both;
-    min-width: 380px;
-    min-height: 340px;
+    /* Kept in step with MIN_W / MIN_H in theme-editor.ts, which writes them inline and
+       therefore wins — these used to say 380/340 while the JS clamped to 420/360, so the
+       stylesheet was documenting a size the panel could never actually reach. */
+    min-width: 420px;
+    min-height: 360px;
     font-family: var(--bmm-font-sans, 'Inter', system-ui, sans-serif);
     font-size: 13px;
     color: var(--bmm-text-primary);
