@@ -51,10 +51,13 @@ const TOKENS: Token[] = [
     // Background
     { key:'--bmm-bg-base',       label:'App background',    type:'color', group:'Background', desc:'The outermost background colour behind everything.', mdn:'background-color' },
     { key:'--bmm-bg-elevated',   label:'Cards & panels',    type:'color', group:'Background', desc:'Background of cards, panels, modals and dropdowns.', mdn:'background-color' },
+    { key:'--bmm-bg-overlay',    label:'Glass surface',     type:'color', group:'Background', desc:'The translucent surface used by glass cards and modals.', mdn:'background-color' },
+    { key:'--bmm-bg-hover',      label:'Hover surface',     type:'color', group:'Background', desc:'Background of anything under the cursor (rows, nav items, buttons).', mdn:'background-color' },
+    { key:'--bmm-bg-active',     label:'Active surface',    type:'color', group:'Background', desc:'Background of the selected / pressed state.', mdn:'background-color' },
     { key:'--bmm-bg-sidebar',    label:'Sidebar',           type:'color', group:'Background', desc:'Background of the left navigation sidebar.', mdn:'background-color' },
     { key:'--bmm-bg-titlebar',   label:'Title bar',         type:'color', group:'Background', desc:'Top window bar colour (where the logo & window buttons are).', mdn:'background-color' },
     { key:'--bmm-titlebar-bg',   label:'Title bar (exact)', type:'color', group:'Background', desc:'Exact title-bar background (supports rgba for transparency).', mdn:'background' },
-    { key:'--bmm-loader-bg',     label:'Boot screen',       type:'color', group:'Background', desc:'Background of the startup loading screen.', mdn:'background-color' },
+    { key:'--bmm-loader-bg',     label:'Boot / exit screen',type:'color', group:'Background', desc:'Background of the startup & close screen.', mdn:'background-color' },
     { key:'--bmm-app-bg-image',  label:'Wallpaper',         type:'image', group:'Background', desc:'A full-app background image (wallpaper). Pick or paste a URL.', mdn:'background-image' },
     { key:'--bmm-app-bg-blur',   label:'Wallpaper blur',    type:'size',  group:'Background', desc:'Blur applied to the wallpaper, e.g. 8px.', mdn:'filter' },
     { key:'--bmm-app-bg-opacity',label:'Wallpaper opacity', type:'size',  group:'Background', desc:'Wallpaper opacity from 0 (hidden) to 1 (full).', mdn:'opacity' },
@@ -66,15 +69,19 @@ const TOKENS: Token[] = [
     { key:'--bmm-warning',       label:'Warning',           type:'color', group:'Accent', desc:'Colour for warnings and caution states.', mdn:'color' },
     { key:'--bmm-danger',        label:'Danger',            type:'color', group:'Accent', desc:'Colour for errors, delete actions and conflicts.', mdn:'color' },
     { key:'--bmm-purple',        label:'Purple',            type:'color', group:'Accent', desc:'Tertiary accent (deeplinks, plugin tags).', mdn:'color' },
+    { key:'--bmm-info',          label:'Info',              type:'color', group:'Accent', desc:'Informational badges and callouts.', mdn:'color' },
+    { key:'--bmm-amber',         label:'Amber',             type:'color', group:'Accent', desc:'Softer caution tone, used by some badges and charts.', mdn:'color' },
 
     // Borders
     { key:'--bmm-border',        label:'Border',            type:'color', group:'Borders', desc:'Default subtle border around cards & inputs.', mdn:'border-color' },
+    { key:'--bmm-border-hover',  label:'Border hover',      type:'color', group:'Borders', desc:'Border colour when the cursor is over a card or input.', mdn:'border-color' },
     { key:'--bmm-border-accent', label:'Border accent',     type:'color', group:'Borders', desc:'Border colour for focused / active elements.', mdn:'border-color' },
 
     // Text
     { key:'--bmm-text-primary',  label:'Text primary',      type:'color', group:'Text', desc:'Main text colour — titles and important text.', mdn:'color' },
     { key:'--bmm-text-secondary',label:'Text secondary',    type:'color', group:'Text', desc:'Secondary text — descriptions and labels.', mdn:'color' },
     { key:'--bmm-text-muted',    label:'Text muted',        type:'color', group:'Text', desc:'Dimmed text — hints, placeholders, metadata.', mdn:'color' },
+    { key:'--bmm-text-on-accent',label:'Text on accent',    type:'color', group:'Text', desc:'Text sitting on an accent-coloured fill (primary buttons, badges).', mdn:'color' },
 
     // Typography
     { key:'--bmm-font-sans',     label:'UI font',           type:'font',  group:'Typography', desc:'The font used everywhere in the interface.', mdn:'font-family' },
@@ -98,17 +105,27 @@ const TOKENS: Token[] = [
     { key:'--bmm-shadow-card',     label:'Card shadow',      type:'size',  group:'Effects', desc:'Drop shadow under cards.', mdn:'box-shadow' },
     { key:'--bmm-shadow-modal',    label:'Modal shadow',     type:'size',  group:'Effects', desc:'Drop shadow under modals.', mdn:'box-shadow' },
 
-    // Buttons (granular — change a button kind without touching the global accent)
+    // Buttons. Only --bmm-btn-primary-bg is actually consumed by the stylesheets; the six
+    // other btn-* tokens used to sit here and changed nothing at all when edited, which made
+    // the whole editor feel broken. Primary button TEXT is --bmm-text-on-accent (Text group).
     { key:'--bmm-btn-primary-bg',     label:'Primary button bg',    type:'color', group:'Buttons', desc:'Background of primary (main action) buttons. Defaults to the accent.', mdn:'background-color' },
-    { key:'--bmm-btn-primary-text',   label:'Primary button text',  type:'color', group:'Buttons', desc:'Text colour of primary buttons.', mdn:'color' },
-    { key:'--bmm-btn-secondary-bg',   label:'Secondary button bg',  type:'color', group:'Buttons', desc:'Background of secondary buttons.', mdn:'background-color' },
-    { key:'--bmm-btn-secondary-text', label:'Secondary button text',type:'color', group:'Buttons', desc:'Text colour of secondary buttons.', mdn:'color' },
-    { key:'--bmm-btn-ghost-text',     label:'Ghost button text',    type:'color', group:'Buttons', desc:'Text colour of borderless ghost buttons.', mdn:'color' },
-    { key:'--bmm-btn-danger-bg',      label:'Danger button bg',     type:'color', group:'Buttons', desc:'Background of destructive (delete) buttons.', mdn:'background-color' },
-    { key:'--bmm-btn-danger-text',    label:'Danger button text',   type:'color', group:'Buttons', desc:'Text colour of destructive buttons.', mdn:'color' },
 
-    // Intro / Outro (boot loader + close animation)
-    { key:'--bmm-loader-bg',     label:'Boot/exit background', type:'color', group:'Intro & Outro', desc:'Background of the startup & close screen.', mdn:'background-color' },
+    // Surfaces — the switch that makes a theme light or dark everywhere at once.
+    { key:'--bmm-surface-r',     label:'Surface tint R',    type:'size',  group:'Surfaces', desc:'Red channel (0-255) of the translucent surface tint. Set all three to 0 for a light theme.', mdn:'background-color' },
+    { key:'--bmm-surface-g',     label:'Surface tint G',    type:'size',  group:'Surfaces', desc:'Green channel (0-255) of the translucent surface tint.', mdn:'background-color' },
+    { key:'--bmm-surface-b',     label:'Surface tint B',    type:'size',  group:'Surfaces', desc:'Blue channel (0-255) of the translucent surface tint.', mdn:'background-color' },
+    { key:'--bmm-glass-bg',      label:'Glass background',  type:'color', group:'Surfaces', desc:'Background of frosted-glass panels.', mdn:'background-color' },
+    { key:'--bmm-glass-border',  label:'Glass border',      type:'color', group:'Surfaces', desc:'Border of frosted-glass panels.', mdn:'border-color' },
+    { key:'--bmm-color-scheme',  label:'Native controls',   type:'size',  group:'Surfaces', desc:'"light" or "dark" — drives native scrollbars and select popups.', mdn:'color-scheme' },
+
+    // Toasts
+    { key:'--bmm-toast-bg',      label:'Toast background',  type:'color', group:'Toasts', desc:'Background of the notification toasts.', mdn:'background-color' },
+    { key:'--bmm-toast-border',  label:'Toast border',      type:'color', group:'Toasts', desc:'Border colour of toasts.', mdn:'border-color' },
+    { key:'--bmm-toast-text',    label:'Toast text',        type:'color', group:'Toasts', desc:'Text colour inside toasts.', mdn:'color' },
+
+    // Intro / Outro (boot loader + close animation). The boot background lives in the
+    // Background group as "Boot / exit screen" — it was duplicated here, so two rows edited
+    // the same variable and both showed a "customised" badge.
     { key:'--bmm-loader-img',    label:'Boot mascot image',    type:'image', group:'Intro & Outro', desc:'Image shown spinning while BMM starts (url or pick a file).', mdn:'background-image' },
     { key:'--bmm-intro-duration',label:'Intro/exit speed',     type:'size',  group:'Intro & Outro', desc:'Boot/exit fade duration, e.g. 0.65s. Lower = faster.', mdn:'transition' },
     { key:'--bmm-anim-speed',    label:'Animation speed',      type:'size',  group:'Intro & Outro', desc:'Global animation multiplier. 1 = normal, 0 = instant (disable all).', mdn:'animation' },
@@ -124,9 +141,10 @@ const TOKENS: Token[] = [
     { key:'--bmm-chart-disk-read',  label:'Disk read line',    type:'color', group:'Charts', desc:'Colour of the disk-read line on the I/O graph.', mdn:'color' },
     { key:'--bmm-chart-disk-write', label:'Disk write line',   type:'color', group:'Charts', desc:'Colour of the disk-write line on the I/O graph.', mdn:'color' },
 
-    // DevTools
-    { key:'--bmm-devtools-bg',     label:'DevTools background', type:'color', group:'DevTools', desc:'Background of the BMM DevTools panel.', mdn:'background-color' },
-    { key:'--bmm-devtools-accent', label:'DevTools accent',    type:'color', group:'DevTools', desc:'Accent colour of the DevTools panel.', mdn:'color' },
+    // NOTE: there is deliberately no DevTools group. --bmm-devtools-bg / -accent have zero
+    // var() references anywhere — the DevTools panel is intentionally always dark (debug.css
+    // is even exempt from the colour lint), so those rows only ever pretended to do something.
+    { key:'--bmm-radius-chip',   label:'Chip roundness',    type:'size',  group:'Shape', desc:'Corner radius of small chips and pills.', mdn:'border-radius' },
 ];
 
 // Curated font presets for the Typography dropdowns
@@ -315,6 +333,9 @@ const PAGE_OPTIONS = [
     {id:'repo',label:'Server Repo'},{id:'plugins',label:'Plugins & API'},
     {id:'apps',label:'App Catalog'},{id:'docs',label:'Help & Other'},
     {id:'settings',label:'Settings'},{id:'credits',label:'Credits'},
+    // Were missing: both are real views in index.html (#view-community, #view-modlist), so a
+    // per-page override simply could not be scoped to them.
+    {id:'community',label:'BetterCommunity'},{id:'modlist',label:'.MM Lists'},
 ];
 
 // Comprehensive, categorised list of unique elements you can recolour/edit
@@ -417,7 +438,7 @@ const TARGET_GROUPS: { cat: string; items: { label: string; sel: string }[] }[] 
         { label: 'Section titles',     sel: '#view-settings .card-title' },
     ]},
     { cat: 'Modals', items: [
-        { label: 'All modals',         sel: '.modal-overlay .modal, .modal-card' },
+        { label: 'All modals',         sel: '.modal-overlay .modal' },
         { label: 'Modal headers',      sel: '.modal-header, .modal-title' },
         { label: 'Modal close btn',    sel: '.modal-close' },
         { label: 'Tutorial hub',       sel: '.tut-hub-container' },
@@ -439,10 +460,10 @@ const TARGET_GROUPS: { cat: string; items: { label: string; sel: string }[] }[] 
         { label: 'Scheduler chips',    sel: '.sched-chip' },
         { label: 'Card-order bar',     sel: '.cardorder-bar' },
         { label: 'Docs browser',       sel: '.ptb-modal-card' },
-        { label: 'Theme catalog',      sel: '.tc-modal-card' },
+        { label: 'Theme catalog',      sel: '.btc-modal, .btc-card' },
         { label: 'TOS / Privacy',      sel: '#modal-tos .modal, #modal-privacy .modal' },
         { label: 'Settings cards',     sel: '#view-settings .glass-card' },
-        { label: 'Storage manager',    sel: '#storage-manager-overlay .modal, #storage-manager-modal' },
+        { label: 'Storage manager',    sel: '#modal-storage .modal' },
         { label: 'Benchmark',          sel: '#modal-advanced-perf-overlay .modal' },
         { label: 'Benchmark cards',    sel: '#modal-advanced-perf-overlay .glass-card' },
         { label: 'Benchmark tabs',     sel: '#perf-tabs .perf-tab' },
@@ -454,6 +475,38 @@ const TARGET_GROUPS: { cat: string; items: { label: string; sel: string }[] }[] 
         { label: 'Translation sandbox',sel: '#modal-i18n-sandbox .modal' },
         { label: 'Add-mod modal',      sel: '#modal-add-mod .modal' },
         { label: 'Export data modal',  sel: '.exp-opt-list' },
+        // The rest of the real modals in index.html. They all exist and are themable —
+        // they were simply never listed, so the only way to restyle them was to hunt them
+        // down with the eyedropper while they happened to be open.
+        { label: 'Profiles (new/edit)',sel: '#modal-new-profile .modal, #modal-edit-profile .modal' },
+        { label: 'Delete confirmations', sel: '#modal-delete-mod .modal, #modal-delete-profile .modal' },
+        { label: 'Generic confirm',    sel: '#modal-confirm-generic .modal' },
+        { label: 'Conflicts',          sel: '#modal-conflict-warning .modal, #modal-global-conflicts .modal, #modal-conflict-tree .modal, #modal-conflict-file-selector .modal' },
+        { label: 'Activation warning', sel: '#modal-activation-warning .modal' },
+        { label: 'Duplicate folder',   sel: '#modal-duplicate-folder-warning .modal' },
+        { label: 'Integrity',          sel: '#modal-integrity .modal' },
+        { label: 'Mod tags',           sel: '#modal-mod-tags .modal' },
+        { label: 'Archive explorer',   sel: '#modal-archive-explorer .modal' },
+        { label: 'History',            sel: '#modal-history .modal, #modal-history-detail .modal' },
+        { label: 'Repo browser',       sel: '#modal-repo-browser .modal' },
+        { label: 'Repo hub',           sel: '#modal-repo-hub .modal' },
+        { label: 'Repo update',        sel: '#modal-repo-update .modal' },
+        { label: 'Repo history',       sel: '#modal-repo-history .modal' },
+        { label: 'Repo sync summary',  sel: '#modal-repo-sync-summary .modal' },
+        { label: 'Repo verify detail', sel: '#modal-repo-verify-detail .modal' },
+        { label: 'Mapper dialogs',     sel: '#modal-mapper-input .modal, #modal-mapper-confirm .modal' },
+        { label: 'Launch packs',       sel: '#modal-launchpack .modal, #modal-launchpack-delete .modal' },
+        { label: 'App picker',         sel: '#modal-app-picker .modal' },
+        { label: 'Monitoring',         sel: '#modal-monitoring .modal' },
+        { label: 'Bans / whitelist',   sel: '#modal-bans .modal, #modal-whitelist .modal' },
+        { label: 'Crash report',       sel: '#modal-crash-report .modal' },
+        { label: 'BetaHub feedback',   sel: '#modal-betahub-feedback .modal, #modal-betahub-bugreport .modal' },
+        { label: 'Diagram viewer',     sel: '#modal-docs-diagram .modal' },
+        { label: 'Licence',            sel: '#modal-license .modal' },
+        { label: 'Credits — contributor', sel: '#modal-contributor-detail .modal' },
+        { label: 'Credits — tech stack',  sel: '#modal-stack .modal' },
+        { label: 'Theme editor',       sel: '#bmm-theme-editor' },
+        { label: 'Theme editor popup', sel: '#bte-elov, .bte-confirm-box' },
     ]},
 ];
 // Every per-page category also gets generic Buttons / Button text / Icons /
