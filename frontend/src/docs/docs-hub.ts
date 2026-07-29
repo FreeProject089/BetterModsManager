@@ -502,6 +502,56 @@ Il peut piloter les [Launch Packs](doc:launch-packs), tes limites de [stockage](
         },
       },
       {
+        id: 'actions-reference', view: 'plugins', docsPath: 'reference/actions/',
+        title: { en: 'Action reference', fr: 'Référence des actions' },
+        summary: { en: 'Everything the scheduler and the script generator can do.', fr: 'Tout ce que le planificateur et le générateur de scripts savent faire.' },
+        keywords: 'action list catalogue scheduler script generator deeplink endpoint liste catalogue planificateur générateur',
+        body: {
+          en: `BMM has **two action catalogues**. They overlap in capability but are separate systems — pick by *who runs it*.
+
+:::columns
+:::column
+**Scheduled-task actions**
+Steps inside a workflow BMM runs by itself on a trigger. Grouped as: mods & profiles, repo & sharing, apps & launch, appearance, benchmarks & storage, privacy & recorder, system & flow, logic & maths. Only these have **real nested blocks** (IF / LOOP / WAIT UNTIL) and the storage actions.
+:::
+:::column
+**Script generator actions**
+Blocks that emit a script you run *outside* BMM. Adds the full CRUD and read endpoints, process control, raw code, and textual control flow (\`If…\` / \`Else\` / \`End block\`) since a script is flat text.
+:::
+:::
+
+:::tip[Things worth knowing]
+- Scheduled **enable** actions bypass the SHA check — a background run can't stop to ask you.
+- *Allow custom commands* is per-task and off by default; it gates only *Run custom command*, not *Open URL* or raw deeplinks.
+- A telemetry/recorder **“Full”** switch means *unmasked* — names and paths stop being \`••••\`.
+- On repo sync, *delete extra* removes local files the remote doesn't have.
+:::
+
+The full list — every action, its parameters and the deeplink/endpoint it emits — is on BMM Docs. See also [Scheduling & automation](doc:scheduler) and [Plugins & API](doc:plugins).`,
+          fr: `BMM a **deux catalogues d’actions**. Leurs capacités se recoupent mais ce sont deux systèmes distincts — choisis selon *qui l’exécute*.
+
+:::columns
+:::column
+**Actions de tâche planifiée**
+Des étapes d’un workflow que BMM exécute seul sur un déclencheur. Groupes : mods & profils, dépôt & partage, apps & lancement, apparence, benchmarks & stockage, confidentialité & enregistreur, système & flux, logique & maths. Seules elles ont de **vrais blocs imbriqués** (SI / BOUCLE / ATTENDRE) et les actions de stockage.
+:::
+:::column
+**Actions du générateur de scripts**
+Des blocs qui produisent un script lancé *hors* de BMM. S’y ajoutent le CRUD complet et les endpoints de lecture, le contrôle de processus, le code brut, et un contrôle de flux textuel (\`Si…\` / \`Sinon\` / \`Fin de bloc\`) puisqu’un script est du texte plat.
+:::
+:::
+
+:::tip[Bon à savoir]
+- Les actions planifiées d’**activation** contournent le contrôle SHA — une exécution de fond ne peut pas s’arrêter pour te demander.
+- *Autoriser les commandes personnalisées* est par tâche et désactivé par défaut ; ça ne verrouille que *Lancer une commande personnalisée*, pas *Ouvrir une URL* ni les deeplinks bruts.
+- Un interrupteur **« Complet »** de télémétrie/enregistreur signifie *démasqué* — noms et chemins ne sont plus \`••••\`.
+- À la synchro d’un dépôt, *supprimer les extras* efface les fichiers locaux absents du distant.
+:::
+
+La liste complète — chaque action, ses paramètres et le deeplink/endpoint émis — est sur BMM Docs. Voir aussi [Planification & automatisation](doc:scheduler) et [Plugins & API](doc:plugins).`,
+        },
+      },
+      {
         id: 'benchmarks', view: 'settings', diagram: 'blake3-hashing',
         title: { en: 'Benchmarks & performance', fr: 'Benchmarks et performances' },
         summary: { en: 'Measure how fast BMM scans, hashes and deploys on your machine.', fr: 'Mesurez la vitesse de scan, de hachage et de déploiement sur votre machine.' },
