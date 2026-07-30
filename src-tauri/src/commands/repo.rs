@@ -2169,19 +2169,30 @@ pub async fn sync_server_repo(
                 if !res.status().is_success() {
                     return Err(format!("HTTP {} for {}", res.status(), arch.relative_path));
                 }
-                let bytes = res.bytes().await.map_err(|e| e.to_string())?;
+                // Stream the archive to disk. `res.bytes()` held the ENTIRE archive in memory
+                // before writing it out, and an archived mod is routinely the largest single
+                // thing a sync transfers — so a big repo could exhaust memory here even though
+                // the per-file path below already streams.
+                let staged_zip = target_mod_dir.join(".bmm_dl.zip");
+                {
+                    let mut res = res;
+                    let mut out = fs::File::create(&staged_zip).map_err(|e| e.to_string())?;
+                    while let Some(chunk) = res.chunk().await.map_err(|e| e.to_string())? {
+                        std::io::Write::write_all(&mut out, &chunk).map_err(|e| e.to_string())?;
+                    }
+                    std::io::Write::flush(&mut out).map_err(|e| e.to_string())?;
+                }
 
                 if args.unzip_archives {
-                    let tmp_zip = target_mod_dir.join(".bmm_dl.zip");
-                    fs::write(&tmp_zip, &bytes).map_err(|e| e.to_string())?;
-                    crate::archive::extract_to(&tmp_zip, &target_mod_dir).map_err(|e| e.to_string())?;
-                    let _ = fs::remove_file(&tmp_zip);
+                    crate::archive::extract_to(&staged_zip, &target_mod_dir).map_err(|e| e.to_string())?;
+                    let _ = fs::remove_file(&staged_zip);
                 } else {
-                    // Keep it zipped: store the archive itself (an archived mod) and
-                    // drop the empty staging folder.
-                    let _ = fs::remove_dir_all(&target_mod_dir);
+                    // Keep it zipped: store the archive itself (an archived mod) and drop the
+                    // empty staging folder. Move the staged file out FIRST — the staging dir is
+                    // about to be deleted with it inside.
                     let archive_dest = mods_path.join(format!("{}.zip", mod_subfolder_name));
-                    fs::write(&archive_dest, &bytes).map_err(|e| e.to_string())?;
+                    fs::rename(&staged_zip, &archive_dest).map_err(|e| e.to_string())?;
+                    let _ = fs::remove_dir_all(&target_mod_dir);
                 }
                 prof_summary.files_downloaded += 1;
                 successfully_synced_mods.push(repo_mod);

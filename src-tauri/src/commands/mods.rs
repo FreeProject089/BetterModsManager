@@ -1735,40 +1735,82 @@ pub async fn download_mod(
     tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
         std::fs::create_dir_all(&target_dir_for_thread).map_err(|e| e.to_string())?;
 
-        let response = reqwest::blocking::get(&url)
+        let mut response = reqwest::blocking::get(&url)
             .map_err(|e| format!("Download failed: {}", e))?;
 
         if !response.status().is_success() {
             return Err(format!("HTTP error: {}", response.status()));
         }
 
-        let bytes = response.bytes().map_err(|e| format!("Read failed: {}", e))?;
-        let is_zip = bytes.len() >= 4 && bytes[0] == 0x50 && bytes[1] == 0x4B;
+        // STREAM to disk. This used to be `response.bytes()`, which held the WHOLE download in
+        // memory — with no size cap and no Content-Length check — and then kept that buffer alive
+        // while extracting the zip from a Cursor over it, so peak RSS was the archive size plus
+        // the extraction overhead. A multi-GB mod (and this is reachable straight from a
+        // `bmm://install` link) could exhaust memory before a single byte reached the disk.
+        // The repo-sync path already streams with .chunk(); this one now matches it.
+        let tmp_path = target_dir_for_thread.join(".bmm-download.part");
+        {
+            let mut out = std::fs::File::create(&tmp_path)
+                .map_err(|e| format!("Cannot open the download file: {}", e))?;
+            std::io::copy(&mut response, &mut out).map_err(|e| format!("Read failed: {}", e))?;
+            std::io::Write::flush(&mut out).map_err(|e| e.to_string())?;
+        }
+        // Sniff the magic from the file rather than from a RAM buffer.
+        let is_zip = {
+            let mut head = [0u8; 4];
+            let mut f = std::fs::File::open(&tmp_path).map_err(|e| e.to_string())?;
+            match std::io::Read::read(&mut f, &mut head) {
+                Ok(n) => n >= 4 && head[0] == 0x50 && head[1] == 0x4B,
+                Err(_) => false,
+            }
+        };
+
+        // Anything that leaves early from here on must not leave the .part file behind.
+        let cleanup = |p: &std::path::Path| { let _ = std::fs::remove_file(p); };
 
         if is_zip {
-            let cursor = std::io::Cursor::new(&bytes);
-            let mut archive = zip::ZipArchive::new(cursor)
-                .map_err(|e| format!("Zip error: {}", e))?;
-
-            for i in 0..archive.len() {
-                let mut file = archive.by_index(i).map_err(|e| e.to_string())?;
-                // CWE-22 Zip Slip: use enclosed_name() (None ⇒ entry escapes → skip).
-                let safe = match file.enclosed_name() { Some(p) => p.to_path_buf(), None => continue };
-                let outpath = target_dir_for_thread.join(&safe);
-                if file.name().ends_with('/') {
-                    std::fs::create_dir_all(&outpath).ok();
-                } else {
-                    if let Some(parent) = outpath.parent() {
-                        std::fs::create_dir_all(parent).ok();
+            // Extraction runs in its own closure so the .part file is removed on EVERY exit —
+            // a mid-loop error used to be able to leave it sitting in the mod folder, where the
+            // scanner would then pick it up as an unrecognised file.
+            let extract = || -> Result<(), String> {
+                let file = std::fs::File::open(&tmp_path).map_err(|e| e.to_string())?;
+                let mut archive = zip::ZipArchive::new(std::io::BufReader::new(file))
+                    .map_err(|e| format!("Zip error: {}", e))?;
+                for i in 0..archive.len() {
+                    let mut file = archive.by_index(i).map_err(|e| e.to_string())?;
+                    // CWE-22 Zip Slip: use enclosed_name() (None ⇒ entry escapes → skip).
+                    let safe = match file.enclosed_name() { Some(p) => p.to_path_buf(), None => continue };
+                    let outpath = target_dir_for_thread.join(&safe);
+                    if file.name().ends_with('/') {
+                        std::fs::create_dir_all(&outpath).ok();
+                    } else {
+                        if let Some(parent) = outpath.parent() {
+                            std::fs::create_dir_all(parent).ok();
+                        }
+                        let mut outfile = std::fs::File::create(&outpath).map_err(|e| e.to_string())?;
+                        std::io::copy(&mut file, &mut outfile).map_err(|e| e.to_string())?;
                     }
-                    let mut outfile = std::fs::File::create(&outpath).map_err(|e| e.to_string())?;
-                    std::io::copy(&mut file, &mut outfile).map_err(|e| e.to_string())?;
                 }
-            }
+                Ok(())
+            };
+            let extracted = extract();
+            cleanup(&tmp_path);
+            extracted?;
         } else {
+            // Not an archive: keep the streamed file, just give it its real name. A rename beats
+            // read-then-write — it never puts the payload back in memory.
             let filename = url.split('/').next_back().unwrap_or("mod_file");
-            let filepath = target_dir_for_thread.join(filename);
-            std::fs::write(&filepath, &bytes).map_err(|e| e.to_string())?;
+            // CWE-22: the name comes from a URL, so it must not climb out of the mod folder.
+            let safe = std::path::Path::new(filename)
+                .file_name()
+                .map(|s| s.to_string_lossy().to_string())
+                .filter(|s| !s.is_empty())
+                .unwrap_or_else(|| "mod_file".to_string());
+            let filepath = target_dir_for_thread.join(safe);
+            if let Err(e) = std::fs::rename(&tmp_path, &filepath) {
+                cleanup(&tmp_path);
+                return Err(format!("Cannot store the download: {}", e));
+            }
         }
         Ok(())
     }).await.map_err(|e| e.to_string())??;

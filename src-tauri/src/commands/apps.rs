@@ -603,7 +603,42 @@ pub async fn install_app(
         return Err(format!("Download returned HTTP {}", resp.status()));
     }
 
-    let bytes = resp.bytes().await.map_err(|e| format!("Read failed: {}", e))?;
+    // STREAM to a .part file while hashing, instead of `resp.bytes()`. Holding a whole
+    // installer in memory made peak RSS the size of the download, and the buffer stayed alive
+    // until it was written — an app catalog can point at a payload of any size.
+    let tmp_download = target_dir.join(".bmm-app-download.part");
+    let actual = {
+        use sha2::{Digest, Sha256};
+        let mut resp = resp;
+        let mut hasher = Sha256::new();
+        let mut out = std::fs::File::create(&tmp_download)
+            .map_err(|e| format!("Cannot open the download file: {}", e))?;
+        loop {
+            match resp.chunk().await {
+                Ok(Some(chunk)) => {
+                    hasher.update(&chunk);
+                    if let Err(e) = std::io::Write::write_all(&mut out, &chunk) {
+                        let _ = std::fs::remove_file(&tmp_download);
+                        return Err(format!("Write failed: {}", e));
+                    }
+                }
+                Ok(None) => break,
+                Err(e) => {
+                    let _ = std::fs::remove_file(&tmp_download);
+                    return Err(format!("Read failed: {}", e));
+                }
+            }
+        }
+        if let Err(e) = std::io::Write::flush(&mut out) {
+            let _ = std::fs::remove_file(&tmp_download);
+            return Err(format!("Write failed: {}", e));
+        }
+        hex::encode(hasher.finalize())
+    };
+    // Rejecting below deletes the .part, so an unverified payload is never left behind and —
+    // the property that actually matters — is never executed. It reaches the disk under a
+    // .part name only, and is renamed to its real filename after this gate.
+    let reject = |e: String| -> String { let _ = std::fs::remove_file(&tmp_download); e };
 
     // CWE-494: verify integrity of the downloaded payload before it is ever
     // written/executed. If the catalog declares a sha256 and it does NOT match,
@@ -612,16 +647,12 @@ pub async fn install_app(
     // reminder, not a hard ban. If the catalog omits a checksum we only warn in
     // the log.
     {
-        use sha2::{Digest, Sha256};
-        let mut hasher = Sha256::new();
-        hasher.update(&bytes);
-        let actual = hex::encode(hasher.finalize());
         match sha256.as_ref().map(|s| s.trim().trim_start_matches("sha256:").to_ascii_lowercase()) {
             Some(expected) if !expected.is_empty() => {
                 if expected != actual {
                     if !allow_bad_checksum.unwrap_or(false) {
                         // Marker parsed by the frontend: SHA_MISMATCH:<expected>:<actual>
-                        return Err(format!("SHA_MISMATCH:{}:{}", expected, actual));
+                        return Err(reject(format!("SHA_MISMATCH:{}:{}", expected, actual)));
                     }
                     log_line(format!(
                         "[APPS] WARNING: sha256 MISMATCH for {} (expected {}, got {}) — user chose to install anyway",
@@ -636,7 +667,7 @@ pub async fn install_app(
                 // silently installing unverified code.
                 if !allow_bad_checksum.unwrap_or(false) {
                     // Marker parsed by the frontend: NO_CHECKSUM:<actual sha256>
-                    return Err(format!("NO_CHECKSUM:{}", actual));
+                    return Err(reject(format!("NO_CHECKSUM:{}", actual)));
                 }
                 log_line(format!(
                     "[APPS] WARNING: no sha256 in catalog for {} — integrity not verified, user chose to install anyway (sha256 of payload: {})",
@@ -673,9 +704,11 @@ pub async fn install_app(
     let file_name = sanitize_download_name(&raw_name, &ext);
     let file_path = storage_dir.join(&file_name);
     if file_path.parent() != Some(storage_dir.as_path()) {
-        return Err("Refused: unsafe download path".to_string());
+        return Err(reject("Refused: unsafe download path".to_string()));
     }
-    std::fs::write(&file_path, &bytes).map_err(|e| format!("Write failed: {}", e))?;
+    // A rename — the payload is already on disk and never goes back into memory.
+    std::fs::rename(&tmp_download, &file_path)
+        .map_err(|e| reject(format!("Write failed: {}", e)))?;
 
     let executables;
     let mut detected_exe: Option<String> = None;

@@ -519,12 +519,20 @@ pub async fn repair_modpack_mod(
                 return Err(AppError::Internal(format!("Error during download: {}", res.status())));
             }
             
-            let bytes = res.bytes().await.map_err(|e| e.to_string())?;
-            
-            // Extraction en mémoire ou via temp file
+            // Stream straight to the temp file. This used to buffer the whole modpack in memory
+            // with res.bytes() and then write that buffer out — the file was always the
+            // destination, so the RAM copy bought nothing and cost the size of the download.
+            // (The other download in this file already streams with .chunk().)
             let temp_dir = std::env::temp_dir();
             let temp_zip = temp_dir.join(format!("{}.zip", uuid::Uuid::new_v4()));
-            std::fs::write(&temp_zip, &bytes).map_err(|e| e.to_string())?;
+            {
+                let mut res = res;
+                let mut out = std::fs::File::create(&temp_zip).map_err(|e| e.to_string())?;
+                while let Some(chunk) = res.chunk().await.map_err(|e| e.to_string())? {
+                    std::io::Write::write_all(&mut out, &chunk).map_err(|e| e.to_string())?;
+                }
+                std::io::Write::flush(&mut out).map_err(|e| e.to_string())?;
+            }
             
             let file = std::fs::File::open(&temp_zip).map_err(|e| e.to_string())?;
             let mut archive = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;

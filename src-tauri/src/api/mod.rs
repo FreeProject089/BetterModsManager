@@ -3297,7 +3297,11 @@ fn zip_directory(src_dir: &std::path::Path, dst_zip: &std::path::Path) -> Result
             }
         } else {
             writer.start_file(&rel_str, options).map_err(|e| e.to_string())?;
-            writer.write_all(&std::fs::read(path).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+            // Copy through a reader instead of `fs::read` — that pulled each ENTIRE file into
+            // memory before handing it to the zip writer, so exporting a folder holding a
+            // multi-GB mod spiked RSS by the size of its largest file.
+            let mut f = std::io::BufReader::new(std::fs::File::open(path).map_err(|e| e.to_string())?);
+            std::io::copy(&mut f, &mut writer).map_err(|e| e.to_string())?;
         }
     }
     writer.finish().map_err(|e| e.to_string())?;
