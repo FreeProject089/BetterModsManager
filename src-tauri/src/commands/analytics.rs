@@ -14,7 +14,8 @@
 // user already has; no name/email is ever collected.
 
 use tauri::Manager;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::io::Write;
 use tauri::{AppHandle, State};
 use serde_json::{json, Value};
 use crate::state::AppState;
@@ -583,6 +584,169 @@ pub async fn analytics_request_data(
 pub fn analytics_export(app_handle: AppHandle) -> Result<String, String> {
     let q = read_queue(&app_handle);
     serde_json::to_string_pretty(&q).map_err(|e| e.to_string())
+}
+
+// ─── REPLAY SPOOL ────────────────────────────────────────────────────────────
+//
+// The session recorder used to hold the whole rrweb event stream in the webview and
+// re-serialise it in full every 45s, which is what put Tauri out of memory on a long
+// idle session. It now streams events here as they happen and this module assembles
+// the .bmmreplay at flush time — so the frontend's peak is one small batch, and the
+// full document only ever exists as bytes moving through a file handle.
+//
+// Layout:  <appdata>/Spool/<id>/seg-000001.ndjson …   one JSON event per line.
+// A segment == one rrweb "checkout" chunk, and each starts with a full snapshot, so a
+// segment is self-contained: dropping the oldest whole segment always leaves something
+// playable. That is what makes the rolling window a file delete instead of an array copy.
+
+fn spool_root(app: &AppHandle) -> PathBuf {
+    app.path().app_data_dir().ok().unwrap_or_default().join("Spool")
+}
+/// Resolve a spool id to its directory, refusing anything that isn't a plain name —
+/// the id crosses the IPC boundary, so `..` must not be able to walk out (CWE-22).
+fn spool_dir(app: &AppHandle, id: &str) -> Result<PathBuf, String> {
+    if id.is_empty() || id.len() > 64 || !id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+        return Err("Invalid spool id".into());
+    }
+    Ok(spool_root(app).join(id))
+}
+fn segment_files(dir: &Path) -> Vec<PathBuf> {
+    let mut v: Vec<PathBuf> = std::fs::read_dir(dir)
+        .map(|rd| rd.flatten()
+            .map(|e| e.path())
+            .filter(|p| p.extension().map(|x| x == "ndjson").unwrap_or(false))
+            .collect())
+        .unwrap_or_default();
+    v.sort();     // zero-padded names ⇒ lexicographic order is chronological
+    v
+}
+
+/// Open a spool for a new recording session. Also clears any spool left behind by a
+/// previous run that never got to finalise (a hard crash), so they can't accumulate.
+#[tauri::command]
+pub fn replay_spool_begin(app_handle: AppHandle) -> Result<String, String> {
+    let root = spool_root(&app_handle);
+    if let Ok(rd) = std::fs::read_dir(&root) {
+        for e in rd.flatten() { let _ = std::fs::remove_dir_all(e.path()); }
+    }
+    let id = uuid::Uuid::new_v4().to_string();
+    let dir = spool_dir(&app_handle, &id)?;
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    Ok(id)
+}
+
+/// Append a batch of already-serialised events to segment `seq`. `lines` is the batch
+/// joined by \n — the frontend serialises one event at a time, so nothing large is ever
+/// held on that side. Returns the spool's total size so the caller can decide to trim.
+#[tauri::command]
+pub fn replay_spool_append(app_handle: AppHandle, id: String, seq: u32, lines: String) -> Result<u64, String> {
+    let dir = spool_dir(&app_handle, &id)?;
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let path = dir.join(format!("seg-{:06}.ndjson", seq));
+    let mut f = std::fs::OpenOptions::new().create(true).append(true).open(&path).map_err(|e| e.to_string())?;
+    f.write_all(lines.as_bytes()).map_err(|e| e.to_string())?;
+    if !lines.ends_with('\n') { f.write_all(b"\n").map_err(|e| e.to_string())?; }
+    Ok(segment_files(&dir).iter().filter_map(|p| std::fs::metadata(p).ok()).map(|m| m.len()).sum())
+}
+
+/// Rolling window: delete oldest whole segments until the spool fits `max_bytes`.
+/// Never deletes the last one — a spool with no segments would mean no recording at all.
+#[tauri::command]
+pub fn replay_spool_trim(app_handle: AppHandle, id: String, max_bytes: u64) -> Result<u64, String> {
+    let dir = spool_dir(&app_handle, &id)?;
+    let mut files = segment_files(&dir);
+    let size = |p: &PathBuf| std::fs::metadata(p).map(|m| m.len()).unwrap_or(0);
+    let mut total: u64 = files.iter().map(size).sum();
+    while total > max_bytes && files.len() > 1 {
+        let oldest = files.remove(0);
+        total = total.saturating_sub(size(&oldest));
+        let _ = std::fs::remove_file(&oldest);
+    }
+    Ok(total)
+}
+
+/// Assemble the spool into a real .bmmreplay, STREAMING: the events array is copied
+/// line by line straight from the segments, so peak memory is one event — never the
+/// whole session. `meta_json` / `console_json` are small JSON fragments from the caller.
+/// `mode` = "crash" (the single rolling buffer a crash report attaches) or "list" (a
+/// saved replay). `dest_path` overrides both, for "export to a file the user picked".
+/// Returns the written path.
+#[tauri::command]
+pub fn replay_spool_finalize(
+    app_handle: AppHandle,
+    id: String,
+    meta_json: String,
+    console_json: String,
+    rust_log: String,
+    mode: String,
+    dest_path: Option<String>,
+) -> Result<String, String> {
+    let dir = spool_dir(&app_handle, &id)?;
+    let files = segment_files(&dir);
+    if files.is_empty() { return Err("empty spool".into()); }
+
+    let app_dir = app_handle.path().app_data_dir().ok().unwrap_or_default();
+    let out_path = if let Some(p) = dest_path.filter(|s| !s.trim().is_empty()) {
+        PathBuf::from(p)      // the user picked it in the save dialog
+    } else if mode == "list" {
+        let d = app_dir.join("Replays");
+        let _ = std::fs::create_dir_all(&d);
+        d.join(format!("bmm-session-{}.bmmreplay", chrono::Utc::now().timestamp_millis()))
+    } else {
+        let _ = std::fs::create_dir_all(&app_dir);
+        app_dir.join("last_crash_session.bmmreplay")
+    };
+    // Write to a temp file and rename, so a crash mid-write can never leave a truncated
+    // .bmmreplay where a complete one used to be.
+    let tmp_path = out_path.with_extension("bmmreplay.part");
+    {
+        let mut out = std::io::BufWriter::new(std::fs::File::create(&tmp_path).map_err(|e| e.to_string())?);
+        // meta_json arrives as a complete object; splice it open and continue the object.
+        let meta = meta_json.trim();
+        let meta_inner = meta.strip_prefix('{').and_then(|s| s.strip_suffix('}')).unwrap_or("");
+        out.write_all(b"{").map_err(|e| e.to_string())?;
+        if !meta_inner.trim().is_empty() {
+            out.write_all(meta_inner.as_bytes()).map_err(|e| e.to_string())?;
+            out.write_all(b",").map_err(|e| e.to_string())?;
+        }
+        out.write_all(b"\"events\":[").map_err(|e| e.to_string())?;
+        let mut first = true;
+        let mut skipped = 0usize;
+        for seg in &files {
+            let f = match std::fs::File::open(seg) { Ok(f) => f, Err(_) => continue };
+            for line in std::io::BufRead::lines(std::io::BufReader::new(f)) {
+                let line = match line { Ok(l) => l, Err(_) => continue };
+                let l = line.trim();
+                if l.is_empty() { continue; }
+                // A hard kill can leave the final line half-written. Copying it would
+                // produce invalid JSON, so drop anything that isn't a complete object.
+                if !l.starts_with('{') || !l.ends_with('}') { skipped += 1; continue; }
+                if !first { out.write_all(b",").map_err(|e| e.to_string())?; }
+                out.write_all(l.as_bytes()).map_err(|e| e.to_string())?;
+                first = false;
+            }
+        }
+        if skipped > 0 {
+            log_line(format!("[REPLAY] spool {}: skipped {} incomplete event line(s)", id, skipped));
+        }
+        out.write_all(b"],\"console\":").map_err(|e| e.to_string())?;
+        out.write_all(if console_json.trim().is_empty() { "[]" } else { console_json.trim() }.as_bytes()).map_err(|e| e.to_string())?;
+        out.write_all(b",\"rustLog\":").map_err(|e| e.to_string())?;
+        let log = serde_json::to_string(&rust_log).unwrap_or_else(|_| "\"\"".into());
+        out.write_all(log.as_bytes()).map_err(|e| e.to_string())?;
+        out.write_all(b"}").map_err(|e| e.to_string())?;
+        out.flush().map_err(|e| e.to_string())?;
+    }
+    std::fs::rename(&tmp_path, &out_path).map_err(|e| e.to_string())?;
+    Ok(out_path.to_string_lossy().to_string())
+}
+
+/// Drop a spool's contents (end of session, or the user turned the recorder off).
+#[tauri::command]
+pub fn replay_spool_clear(app_handle: AppHandle, id: String) -> Result<(), String> {
+    let dir = spool_dir(&app_handle, &id)?;
+    let _ = std::fs::remove_dir_all(&dir);
+    Ok(())
 }
 
 /// Auto-saves a local replay bundle to the `Replays` folder without prompting.

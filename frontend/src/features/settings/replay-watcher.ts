@@ -25,31 +25,37 @@ const watcherJs = () => { try { return localStorage.getItem(JS) !== '0'; } catch
 
 let _recording = false;
 let _listener: ReplaySubscriber | null = null;
-let _chunks: any[][] = [];
-// Retained bytes per chunk, kept in step with _chunks. The count cap below is not enough on
-// its own: a single rrweb event is not a fixed size. A FullSnapshot serialises the whole DOM,
-// and in "full" mode assets are inlined as base64 data URLs, so one event can weigh megabytes.
-// A session could therefore sit far under the event cap while holding hundreds of MB — which
-// is what eventually took the webview out while idling.
-let _chunkBytes: number[] = [];
-// ~48 MB of retained rrweb events. Well clear of anything a normal session produces, and far
-// enough below the webview's ceiling to leave room for the rest of the app.
-const RETAIN_BYTE_BUDGET = 48 * 1024 * 1024;
-// What we allow ONE bundle to serialise to. Lower than the retention budget on purpose:
-// JSON.stringify holds the source objects AND the resulting string at the same time, so the
-// peak is roughly double. buildBundle() already catches the failure and sheds chunks, but a
-// catch is only reliable for RangeError (the string-length limit) — a genuine V8 heap
-// exhaustion can abort the process instead of throwing, and this runs on a 45s timer. So bound
-// it BEFORE stringifying, using the per-chunk byte counts we already keep.
-const SERIALISE_BYTE_BUDGET = 20 * 1024 * 1024;
+
+// ── The session is SPOOLED TO DISK, not held in memory ─────────────────────────
+// It used to keep the whole rrweb stream in a rolling in-memory buffer and re-serialise
+// all of it every 45s. Two things made that fatal: a single event is not a fixed size (a
+// FullSnapshot serialises the entire DOM, and in "full" mode assets are inlined as base64
+// data URLs, so one event can weigh megabytes), and JSON.stringify holds the source objects
+// AND the resulting string at once, so the flush peak was roughly double the buffer. On a
+// long idle session that took the webview out.
+//
+// Now each event is serialised on its own and appended to a spool file in the Rust core, and
+// the .bmmreplay is assembled there by streaming the segments through a file handle. The
+// frontend's peak is one small batch; the full document never exists in the webview at all.
+// The rolling window still exists — it is just a file delete now (see replay_spool_trim).
+let _spoolId: string | null = null;
+let _seq = 0;                    // current segment; a new one starts at each rrweb checkout
+let _batch: string[] = [];       // serialised events waiting to be appended
+let _batchBytes = 0;
+let _spoolBytes = 0;             // total on disk, as reported by the last append
+let _batchTimer: number | null = null;
+// One IPC call per event would be far too chatty, so events are grouped — but only up to a
+// small ceiling, which is the entire point: this is the largest thing the frontend ever holds.
+const BATCH_BYTE_BUDGET = 512 * 1024;
+const BATCH_MAX_EVENTS = 200;
+const BATCH_FLUSH_MS = 3000;     // so a hard crash loses at most a few seconds
+// The on-DISK rolling window. Much larger than the old memory budget could ever be, because
+// it costs disk rather than the webview's heap.
+const SPOOL_BYTE_BUDGET = 512 * 1024 * 1024;
 // Console lines are capped by count (5000) but each can be 2000 chars, i.e. ~20 MB of UTF-16
 // in the worst case — enough to matter next to the events. Cap the bytes too.
 const CONSOLE_BYTE_BUDGET = 2 * 1024 * 1024;
 let _consoleBytes = 0;
-/** Rough in-memory footprint of one event. JS strings are UTF-16, hence the x2. */
-function approxBytes(ev: any): number {
-  try { return JSON.stringify(ev).length * 2; } catch { return 4096; }
-}
 let _console: { t: number; level: string; msg: string }[] = [];
 let _startedAt = 0;
 let _consoleHooked = false;
@@ -114,48 +120,58 @@ export function initWatcherUI(): void {
   }
 }
 
+/** Hand the pending batch to the spool. Never throws — losing a batch must not take the
+ *  recorder (or the app) down, and the next one will still land. */
+async function flushBatch(): Promise<void> {
+  if (!_spoolId || _batch.length === 0) return;
+  const lines = _batch.join('\n');
+  _batch = [];
+  _batchBytes = 0;
+  try {
+    _spoolBytes = await invoke('replay_spool_append', { id: _spoolId, seq: _seq, lines }) as number;
+    if (_spoolBytes > SPOOL_BYTE_BUDGET) {
+      // Rolling window, on disk: drop whole oldest segments. Each starts with a full
+      // snapshot, so what remains is always playable.
+      _spoolBytes = await invoke('replay_spool_trim', { id: _spoolId, maxBytes: SPOOL_BYTE_BUDGET }) as number;
+    }
+  } catch { /* keep recording */ }
+}
+
 /** Start local recording (idempotent). */
 export async function startWatcher(): Promise<void> {
   if (_recording) return;
   _recording = true;
   hookConsole();
-  _chunks = [[]];
-  _chunkBytes = [0];
   _console = [];
   _consoleBytes = 0;
   _startedAt = Date.now();
-  
+  _seq = 0;
+  _batch = [];
+  _batchBytes = 0;
+  _spoolBytes = 0;
+  try { _spoolId = await invoke('replay_spool_begin') as string; } catch { _spoolId = null; }
+
   _listener = ((ev: any, isCheckout: boolean) => {
-    if (isCheckout && _chunks[_chunks.length - 1].length > 0) {
-      _chunks.push([]); _chunkBytes.push(0);
+    if (!_spoolId) return;
+    // A checkout starts a new self-contained segment. Flush what belongs to the PREVIOUS one
+    // first, or its tail would land in the new segment's file. flushBatch() reads _seq and
+    // empties _batch synchronously before it awaits, so bumping _seq right after is safe:
+    // the in-flight append still carries the old number, and the next event starts the new one.
+    if (isCheckout && _batch.length > 0) {
+      void flushBatch();
+      _seq++;
     }
-    _chunks[_chunks.length - 1].push(ev);
-    _chunkBytes[_chunkBytes.length - 1] += approxBytes(ev);
-    if (_chunks.length > 3) { _chunks.shift(); _chunkBytes.shift(); } // keep max ~6 minutes
-    // Hard cap on what we retain, by BOTH measures. Event count alone let an asset-heavy or
-    // snapshot-heavy session grow unbounded in bytes while staying under the count; bytes
-    // alone would let a huge number of tiny events through. Drop whole (self-contained)
-    // oldest chunks until back under both budgets.
-    let total = 0, bytes = 0;
-    for (let i = 0; i < _chunks.length; i++) { total += _chunks[i].length; bytes += _chunkBytes[i] || 0; }
-    while ((total > 24000 || bytes > RETAIN_BYTE_BUDGET) && _chunks.length > 1) {
-      total -= (_chunks.shift() as any[]).length;
-      bytes -= _chunkBytes.shift() || 0;
-    }
-    // Last resort: chunks are only created at rrweb checkouts (~2 min apart), so a single
-    // asset-heavy chunk can blow the budget on its own — and the loop above rightly refuses
-    // to drop the only chunk we have. Trim that chunk from the FRONT instead. It costs the
-    // head of that segment (so it replays from partway in) but it is the difference between
-    // a degraded recording and the webview being killed, which loses the recording anyway.
-    if (bytes > RETAIN_BYTE_BUDGET && _chunks.length === 1) {
-      const only = _chunks[0];
-      while (only.length > 1 && bytes > RETAIN_BYTE_BUDGET) {
-        bytes -= approxBytes(only.shift());
-      }
-      _chunkBytes[0] = bytes;
-    }
+    let line: string;
+    // Serialise ONE event. This is the only stringify left on this path, and it is bounded
+    // by the size of a single event rather than by the session.
+    try { line = JSON.stringify(ev); } catch { return; }
+    if (line.includes('\n')) line = line.replace(/\n/g, ' ');  // the spool is line-delimited
+    _batch.push(line);
+    _batchBytes += line.length;
+    if (_batchBytes >= BATCH_BYTE_BUDGET || _batch.length >= BATCH_MAX_EVENTS) void flushBatch();
   }) as ReplaySubscriber;
   _listener.requiresMasking = !watcherFull();
+  if (_batchTimer === null) _batchTimer = window.setInterval(() => { void flushBatch(); }, BATCH_FLUSH_MS);
 
   await subscribeReplay(_listener);
   registerCloseListeners();
@@ -187,60 +203,31 @@ function registerCloseListeners(): void {
   } catch {}
 }
 
-/** Build the current session bundle (rrweb events + console + Rust log).
- *  In full mode, inlined mod-thumbnail data-URLs can push the buffer past V8's max string
- *  length (~512 MB) → `JSON.stringify` threw `RangeError: Invalid string length` and the whole
- *  flush failed. Each chunk starts with a checkout full-snapshot, so it's self-contained: if the
- *  serialise overflows we drop the OLDEST chunk and retry, keeping the most recent, playable
- *  segment instead of losing everything. */
-async function buildBundle(): Promise<string | null> {
-  if (_chunks.flat().length < 2) return null;
+/** Assemble the spooled session into a .bmmreplay. The events never come back through the
+ *  webview: only the small metadata/console fragments are passed down, and the core streams
+ *  the event array straight from the spool segments into the output file.
+ *  `destPath` writes to a file the user picked instead of the managed folders. */
+async function writeBundle(mode: 'crash' | 'list', destPath?: string): Promise<string | null> {
+  if (!_spoolId) return null;
+  await flushBatch();                       // whatever is still pending belongs in this bundle
   const rustLog = watcherRust() ? (await invoke('read_session_log_tail', { maxBytes: 262144 }).catch(() => '') as string) : '';
-  const meta = { bmmReplay: 1, app: 'BetterModsManager', createdAt: new Date().toISOString(), masked: !watcherFull(), durationMs: Date.now() - _startedAt };
-  // Work on a copy so a size-driven trim never mutates the live rolling buffer.
-  let chunks = _chunks.map((c) => c);
-  // Proactive bound: drop oldest chunks until the estimated payload fits the serialise budget,
-  // so stringify is never asked to build the pathological string in the first place. Chunks are
-  // self-contained (each starts with a full snapshot), so the newest ones stay playable.
-  {
-    let bytes = _chunkBytes.reduce((a, c) => a + (c || 0), 0);
-    let i = 0;
-    while (bytes > SERIALISE_BYTE_BUDGET && i < chunks.length - 1) {
-      bytes -= _chunkBytes[i] || 0; i++;
-    }
-    if (i > 0) chunks = chunks.slice(i);
-    // Retention can legitimately collapse to ONE oversized chunk (it head-trims rather than
-    // drop the only segment it has), and then the loop above has nothing left to shed. Trim
-    // that chunk's head in the COPY — `chunks` holds references to the live arrays, so this
-    // must slice, never shift, or it would eat the rolling buffer.
-    if (bytes > SERIALISE_BYTE_BUDGET && chunks.length === 1) {
-      let only = chunks[0];
-      while (only.length > 2 && bytes > SERIALISE_BYTE_BUDGET) {
-        const drop = Math.max(1, Math.ceil(only.length * 0.15));
-        for (let k = 0; k < drop && k < only.length; k++) bytes -= approxBytes(only[k]);
-        only = only.slice(drop);
-      }
-      chunks = [only];
-    }
-  }
-  for (;;) {
-    const events = chunks.flat();
-    if (events.length < 2) return null;
-    try {
-      return JSON.stringify({ ...meta, events, console: watcherJs() ? _console : [], rustLog });
-    } catch (e) {
-      // Overflow (RangeError) or out-of-memory: shed the oldest self-contained chunk and retry.
-      if (chunks.length > 1) { chunks = chunks.slice(1); continue; }
-      // A single chunk is still too big — drop the front half of its events as a last resort.
-      if (events.length > 4) { chunks = [events.slice(Math.floor(events.length / 2))]; continue; }
-      console.warn('buildBundle: session too large to serialise, skipping', e);
-      return null;
-    }
+  const metaJson = JSON.stringify({
+    bmmReplay: 1, app: 'BetterModsManager', createdAt: new Date().toISOString(),
+    masked: !watcherFull(), durationMs: Date.now() - _startedAt,
+  });
+  const consoleJson = JSON.stringify(watcherJs() ? _console : []);
+  try {
+    return await invoke('replay_spool_finalize', {
+      id: _spoolId, metaJson, consoleJson, rustLog, mode, destPath: destPath || null,
+    }) as string;
+  } catch (e) {
+    // "empty spool" is the normal answer before anything has been recorded.
+    return null;
   }
 }
 
 /**
- * Flush the in-memory recording.
+ * Write the spooled recording out.
  *  - 'crash': overwrite the single rolling crash buffer (NOT a saved replay). Done
  *    always, so a crash report can attach the session. Never shown in the list.
  *  - 'list':  save a real replay to the persistent list. Only when the user enabled
@@ -249,12 +236,9 @@ async function buildBundle(): Promise<string | null> {
 async function flushSession(mode: 'crash' | 'list'): Promise<void> {
   if (!_recording) return;
   try {
-    const content = await buildBundle();
-    if (!content) return;
-    if (mode === 'crash') {
-      await invoke('save_crash_session', { content });
-    } else {
-      const path = await invoke('save_local_replay', { content }) as string;
+    const path = await writeBundle(mode);
+    if (!path) return;
+    if (mode === 'list') {
       addRecent(path);
       // Enforce the configurable retention (count + total size) after each save.
       const keep = Math.max(1, parseInt(localStorage.getItem('bmm_session_keep_count') || '30', 10) || 30);
@@ -270,6 +254,8 @@ export async function autoSaveSession(): Promise<void> { await flushSession('lis
 /** Stop local recording (keeps the buffer for export). */
 export function stopWatcher(): void {
   if (_autoSaveTimer !== null) { clearInterval(_autoSaveTimer); _autoSaveTimer = null; }
+  if (_batchTimer !== null) { clearInterval(_batchTimer); _batchTimer = null; }
+  void flushBatch();   // the spool keeps the session, so export still works after stopping
   if (_recording) {
     _recording = false;
     if (_listener) unsubscribeReplay(_listener);
@@ -286,25 +272,16 @@ export async function syncWatcher(): Promise<void> {
   await startWatcher();
 }
 
-/** Export the current recording (rrweb + console + Rust log) to a .bmmreplay file. */
+/** Export the current recording (rrweb + console + Rust log) to a .bmmreplay file.
+ *  Streams out of the spool straight into the chosen file — the bundle is never built in
+ *  the webview, so exporting a long session costs no more memory than a short one. */
 export async function exportSession(): Promise<void> {
-  const events = _chunks.flat();
-  if (events.length < 2) { toast(t('watcher.nothing') || 'Rien à exporter pour le moment', 'info'); return; }
-  const rustLog = watcherRust() ? (await invoke('read_session_log_tail', { maxBytes: 262144 }).catch(() => '') as string) : '';
-  const bundle = {
-    bmmReplay: 1,
-    app: 'BetterModsManager',
-    createdAt: new Date().toISOString(),
-    masked: !watcherFull(),
-    durationMs: Date.now() - _startedAt,
-    events,
-    console: watcherJs() ? _console : [],
-    rustLog,
-  };
+  if (!_spoolId) { toast(t('watcher.nothing') || 'Rien à exporter pour le moment', 'info'); return; }
   const path = await saveFile({ defaultPath: `bmm-session-${Date.now()}.bmmreplay`, filters: [{ name: 'BMM Replay', extensions: ['bmmreplay', 'json'] }] }).catch(() => null);
   if (!path) return;
   try {
-    await invoke('write_text_file', { path, content: JSON.stringify(bundle) });
+    const written = await writeBundle('list', path);
+    if (!written) { toast(t('watcher.nothing') || 'Rien à exporter pour le moment', 'info'); return; }
     toast(t('watcher.exported') || 'Session exportée', 'success');
   } catch (e) { toast((t('watcher.exportFail') || 'Export échoué') + ': ' + e, 'error'); }
 }

@@ -3281,7 +3281,6 @@ async fn do_api_repo_sync(
 
 /// Zip a directory recursively into a .zip file using the `zip` crate.
 fn zip_directory(src_dir: &std::path::Path, dst_zip: &std::path::Path) -> Result<(), String> {
-    use std::io::Write;
     let file = std::fs::File::create(dst_zip).map_err(|e| e.to_string())?;
     let mut writer = zip::ZipWriter::new(file);
     let options = zip::write::FileOptions::default()
