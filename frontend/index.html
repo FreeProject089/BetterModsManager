@@ -2618,26 +2618,44 @@
                     </div>
 
                     <div class="mapper-help-banner" id="mapper-help-banner">
-                        <span class="help-icon">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)"
-                                stroke-width="2.2" style="opacity:0.9">
+                        <span class="mhb-icon" aria-hidden="true">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
                                 <path
                                     d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A5 5 0 0 0 8 8c0 1.3.5 2.6 1.5 3.5.8.8 1.3 1.5 1.5 2.5" />
                                 <path d="M9 18h6" />
                                 <path d="M10 22h4" />
                             </svg>
                         </span>
-                        <div class="help-text" style="display: flex; align-items: center; gap: 20px;">
-                            <span data-i18n="mapper.mappingHint"><strong>Mapping :</strong> Sélectionnez à gauche, puis
-                                <strong>double-cliquez</strong> sur un dossier à droite.</span>
-                            <span style="color: var(--accent); font-size: 11px; font-weight: 600;"
-                                data-i18n="mapper.multiSelectHint">Maintenez Ctrl pour sélectionner plusieurs fichiers
-                                ou dossiers.</span>
-                            <div style="display: flex; gap: 15px;">
-                                <span class="legend-item"><span class="dot orange"></span> <span
-                                        data-i18n="mapper.root">Racine</span></span>
-                                <span class="legend-item"><span class="dot green"></span> <span
-                                        data-i18n="mapper.subfolder">Sous-dossier</span></span>
+                        <div class="mhb-body">
+                            <div class="mhb-head">
+                                <span class="mhb-title" data-i18n="mapper.helpTitle">How mapping works</span>
+                                <span class="mhb-badge" data-i18n="mapper.helpDraft">Nothing moves until you save</span>
+                            </div>
+                            <ol class="mhb-steps">
+                                <li>
+                                    <span class="mhb-num">1</span>
+                                    <span data-i18n="mapper.helpStep1">Select what you want to move in the mod tree on
+                                        the left.</span>
+                                </li>
+                                <li>
+                                    <span class="mhb-num">2</span>
+                                    <span data-i18n="mapper.helpStep2">Double-click the target folder in the game tree on
+                                        the right.</span>
+                                </li>
+                            </ol>
+                            <div class="mhb-foot">
+                                <span class="mhb-tip">
+                                    <kbd>Ctrl</kbd>
+                                    <span data-i18n="mapper.multiSelectHint">Hold Ctrl to select multiple files or
+                                        folders.</span>
+                                </span>
+                                <span class="mhb-legend">
+                                    <span class="legend-item"><span class="dot orange"></span><span
+                                            data-i18n="mapper.root">Root</span></span>
+                                    <span class="legend-item"><span class="dot green"></span><span
+                                            data-i18n="mapper.subfolder">Sub-folder</span></span>
+                                </span>
                             </div>
                         </div>
                         <button class="mapper-hint-close" id="btn-mapper-hint-close" data-i18n-tooltip="mapper.hideTips"

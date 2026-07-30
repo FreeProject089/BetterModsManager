@@ -9,17 +9,125 @@
     margin-top: 15px;
 }
 
+/* ── Mapper help banner ──────────────────────────────────────────────────────
+   Rebuilt as a proper card: an icon rail, a titled body with numbered steps, and
+   a footer for the modifier hint + the colour legend. Everything derives from the
+   theme tokens, so the accent tint follows a custom theme instead of being a
+   hard-coded blue. */
 .mapper-help-banner {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 10px 16px;
-    background: rgba(59, 130, 246, 0.05);
-    border: 1px solid rgba(59, 130, 246, 0.2);
-    border-radius: 12px;
-    margin-bottom: 5px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: start;
+    gap: 14px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+    border-radius: var(--bmm-radius-card, 14px);
+    border: 1px solid color-mix(in srgb, var(--bmm-accent) 26%, transparent);
+    background:
+        linear-gradient(150deg, color-mix(in srgb, var(--bmm-accent) 9%, transparent), transparent 62%),
+        var(--bmm-bg-elevated);
 }
 .mapper-help-banner[hidden] { display: none; }
+
+/* Icon rail — a tinted square so the banner reads as a callout, not a toolbar. */
+.mhb-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    flex: none;
+    border-radius: 11px;
+    color: var(--bmm-accent);
+    background: color-mix(in srgb, var(--bmm-accent) 14%, transparent);
+    border: 1px solid color-mix(in srgb, var(--bmm-accent) 22%, transparent);
+}
+
+.mhb-body { min-width: 0; display: flex; flex-direction: column; gap: 9px; }
+
+.mhb-head { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.mhb-title {
+    font-size: 13.5px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: var(--bmm-text-primary);
+}
+/* The draft-mode promise is the single most reassuring thing about this screen,
+   so it gets a badge rather than being buried in a sentence. */
+.mhb-badge {
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 999px;
+    color: var(--bmm-accent);
+    background: color-mix(in srgb, var(--bmm-accent) 13%, transparent);
+    border: 1px solid color-mix(in srgb, var(--bmm-accent) 24%, transparent);
+}
+
+.mhb-steps {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 22px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    counter-reset: none;
+}
+.mhb-steps li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    font-size: 12.5px;
+    line-height: 1.45;
+    color: var(--bmm-text-secondary);
+}
+.mhb-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 19px;
+    height: 19px;
+    flex: none;
+    border-radius: 50%;
+    font-size: 11px;
+    font-weight: 800;
+    color: var(--bmm-text-on-accent);
+    background: var(--bmm-accent);
+}
+
+.mhb-foot {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px 18px;
+    padding-top: 9px;
+    border-top: 1px solid var(--bmm-s08);
+}
+.mhb-tip {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 11.5px;
+    color: var(--bmm-text-muted);
+}
+.mhb-tip kbd {
+    font-family: var(--bmm-font-mono, ui-monospace, monospace);
+    font-size: 10.5px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 6px;
+    color: var(--bmm-text-secondary);
+    background: var(--bmm-s08);
+    border: 1px solid var(--bmm-s15);
+}
+.mhb-legend { display: inline-flex; align-items: center; gap: 14px; margin-left: auto; }
+
+@media (max-width: 900px) {
+    .mhb-legend { margin-left: 0; }
+}
 
 /* Dismiss (×) — pushed to the far right of the banner. */
 .mapper-hint-close {
@@ -47,15 +155,18 @@
     margin-bottom: 5px;
     padding: 5px 11px;
     border-radius: 999px;
-    border: 1px solid rgba(59, 130, 246, 0.25);
-    background: rgba(59, 130, 246, 0.05);
-    color: var(--accent);
+    border: 1px solid color-mix(in srgb, var(--bmm-accent) 26%, transparent);
+    background: color-mix(in srgb, var(--bmm-accent) 9%, transparent);
+    color: var(--bmm-accent);
     font-size: 11px;
     font-weight: 600;
     cursor: pointer;
     transition: background .12s, border-color .12s;
 }
-.mapper-hint-show:hover { background: rgba(59, 130, 246, 0.1); border-color: rgba(59, 130, 246, 0.4); }
+.mapper-hint-show:hover {
+    background: color-mix(in srgb, var(--bmm-accent) 16%, transparent);
+    border-color: color-mix(in srgb, var(--bmm-accent) 45%, transparent);
+}
 .mapper-hint-show[hidden] { display: none; }
 .mapper-hint-show svg { flex: none; }
 
@@ -132,6 +243,9 @@
     margin-right: 15px;
     font-size: 0.8rem;
 }
+
+/* Inside the help banner the legend row supplies its own gap. */
+.mhb-legend .legend-item { margin-right: 0; font-size: 11.5px; color: var(--bmm-text-muted); }
 
 .dot {
     width: 8px;

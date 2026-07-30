@@ -21,10 +21,26 @@ type Rect = { x: number; y: number; w: number; h: number };
 type RegionKey = { t: number; rect: Rect }; // t = ms from recording start (post-compression)
 type Preset = 'fullscreen' | 'main' | 'custom';
 
+// A studio recording buffers every event in memory until you export, so it needs a hard
+// ceiling — the shared telemetry watcher has one, and this path used to have none at all
+// (an afk recording grew until Tauri ran out of memory). Trimming the HEAD is not an option
+// here: the buffer opens with the full snapshot every later event is a delta against, so
+// dropping from the front produces a file that cannot be played. We therefore STOP at the
+// cap and say so, which keeps the recording valid and the choice with the user.
+const STUDIO_BYTE_BUDGET = 64 * 1024 * 1024;
+const STUDIO_WARN_AT = 0.75;
+function approxBytes(ev: any): number {
+  try { return JSON.stringify(ev).length * 2; } catch { return 4096; }
+}
+function fmtMB(bytes: number): string { return (bytes / (1024 * 1024)).toFixed(1) + ' MB'; }
+
 interface StudioState {
   recording: boolean;
   paused: boolean;
   events: any[];             // buffered rrweb events (raw timestamps)
+  bytes: number;             // running approximate size of `events`
+  warned: boolean;           // the 75%-of-budget warning has been shown
+  autoStopped: boolean;      // recording ended because the budget was hit, not by the user
   regions: { ts: number; rect: Rect }[]; // raw-timestamp region keyframes
   pauses: { start: number; end: number }[]; // raw-timestamp paused intervals
   startTs: number;
@@ -219,10 +235,20 @@ export async function studioStart() {
   if (!S || S.recording) return;
   S.recording = true; S.paused = false;
   S.events = []; S.regions = []; S.pauses = [];
+  S.bytes = 0; S.warned = false; S.autoStopped = false;
   S.startTs = Date.now();
   const l = ((ev: any) => {
     if (!S || !S.recording || S.paused) return;
     S.events.push(ev);
+    S.bytes += approxBytes(ev);
+    if (S.bytes >= STUDIO_BYTE_BUDGET) {
+      // At the ceiling: end the take rather than keep growing. What is already buffered is a
+      // complete, playable recording, so nothing is lost — it just stops here.
+      S.autoStopped = true;
+      void studioStop();
+    } else if (!S.warned && S.bytes >= STUDIO_BYTE_BUDGET * STUDIO_WARN_AT) {
+      S.warned = true;
+    }
   }) as unknown as ReplaySubscriber;
   l.requiresMasking = !isFullReplay();
   listener = l;
@@ -238,6 +264,7 @@ export async function studioStart() {
   pushRegion();                  // initial frame keyframe
   renderFrame();
   renderBar();
+  startMeter();
 }
 
 export function studioPause() {
@@ -256,13 +283,17 @@ export async function studioResume() {
 }
 
 export async function studioStop() {
-  if (!S) return;
+  if (!S || !S.recording) return;
   S.recording = false; S.paused = false;
+  stopMeter();
   if (listener) { await unsubscribeReplay(listener); listener = null; }
   await setExtraBlockSelectors([]);  // restore the shared recorder (e.g. telemetry) to base blocking
   markStudioRecordable(false);       // studios excluded again for any later (telemetry) recording
   renderFrame();
   renderBar();                   // switches the bar to the review/export state
+  if (S.autoStopped) {
+    setStatus(t('rstudio.autostop') || `Stopped at the ${fmtMB(STUDIO_BYTE_BUDGET)} memory budget — the take is complete and playable.`);
+  }
 }
 
 // Compress paused gaps out of a raw timestamp: subtract every fully-elapsed pause before it.
@@ -314,6 +345,33 @@ function setStatus(msg: string) {
   const s = bar?.querySelector('.rstudio-status') as HTMLElement | null;
   if (s) s.textContent = msg;
 }
+
+// The meter ticks on its own so the bar is never re-rendered mid-recording — a full
+// renderBar() would blow away the focus/caret in the trim input and the hidden-element row.
+let meterTimer: number | null = null;
+function updateMeter() {
+  if (!S || !bar) return;
+  const txt = bar.querySelector('.rstudio-meter-txt') as HTMLElement | null;
+  const fill = bar.querySelector('.rstudio-gauge > i') as HTMLElement | null;
+  if (!txt || !fill) return;
+  const elapsed = S.paused
+    ? (S.pauseStart - S.startTs - S.pauses.reduce((a, p) => a + (p.end - p.start), 0))
+    : (Date.now() - S.startTs - S.pauses.reduce((a, p) => a + (p.end - p.start), 0));
+  const pct = Math.min(100, (S.bytes / STUDIO_BYTE_BUDGET) * 100);
+  txt.textContent = `${(Math.max(0, elapsed) / 1000).toFixed(1)}s · ${fmtMB(S.bytes)}`;
+  fill.style.width = pct.toFixed(1) + '%';
+  const el = bar.querySelector('.rstudio-meter') as HTMLElement | null;
+  el?.classList.toggle('warn', pct >= STUDIO_WARN_AT * 100);
+  if (el) el.title = `${fmtMB(S.bytes)} / ${fmtMB(STUDIO_BYTE_BUDGET)} ${t('rstudio.budget') || 'memory budget'}`;
+}
+function startMeter() {
+  stopMeter();
+  meterTimer = window.setInterval(updateMeter, 500);
+  updateMeter();
+}
+function stopMeter() {
+  if (meterTimer != null) { clearInterval(meterTimer); meterTimer = null; }
+}
 function renderBar() {
   if (!S || !bar) return;
   const rec = S.recording, paused = S.paused;
@@ -328,18 +386,25 @@ function renderBar() {
   if (!rec && S.events.length >= 2) {
     // review / export state
     const dur = (S.events[S.events.length - 1].timestamp - S.events[0].timestamp) / 1000;
+    // Only an END trim is offered. A start trim would have to drop the opening full snapshot
+    // that every later event is a delta against, producing a file that cannot be played — so
+    // it is deliberately absent rather than quietly broken.
     controls =
-      `<span class="rstudio-status">${t('rstudio.done') || 'Recorded'} ${dur.toFixed(1)}s</span>` +
-      `<label class="rstudio-trim">${t('rstudio.trimend') || 'Keep first'} <input type="number" class="rstudio-trim-in" min="1" step="1" value="${Math.ceil(dur)}"> s</label>` +
+      `<span class="rstudio-status">${t('rstudio.done') || 'Recorded'} ${dur.toFixed(1)}s · ${fmtMB(S.bytes)}</span>` +
+      `<label class="rstudio-trim">${t('rstudio.trimend') || 'Keep first'} <input type="number" class="rstudio-trim-in" min="1" step="1" max="${Math.ceil(dur)}" value="${Math.ceil(dur)}"> s</label>` +
+      `<span class="rstudio-est"></span>` +
       btn('export', t('rstudio.export') || 'Export .bmmreplay', 'rstudio-primary') +
       btn('reset', t('rstudio.new') || 'New');
   } else if (!rec) {
     controls = presetSel + btn('start', '● ' + (t('rstudio.rec') || 'Record'), 'rstudio-primary') + `<span class="rstudio-status"></span>`;
   } else {
+    // A live meter (elapsed + buffered size + how much of the memory budget is used) so a long
+    // take never grows invisibly — this used to be a bare "Recording…" with no way to tell.
     controls =
       `<span class="rstudio-dot ${paused ? 'paused' : ''}"></span>` +
       (paused ? btn('resume', t('rstudio.resume') || 'Resume') : btn('pause', t('rstudio.pause') || 'Pause')) +
       btn('stop', '■ ' + (t('rstudio.stop') || 'Stop'), 'rstudio-primary') +
+      `<span class="rstudio-meter"><span class="rstudio-meter-txt"></span><span class="rstudio-gauge"><i></i></span></span>` +
       `<span class="rstudio-status">${paused ? (t('rstudio.paused') || 'Paused — move the frame') : (t('rstudio.recording') || 'Recording…')}</span>`;
   }
   // "Hidden elements" row — pick app elements to exclude from the recording (the studios
@@ -353,6 +418,25 @@ function renderBar() {
     ? `<div class="rstudio-hide"><span class="rstudio-hide-lbl">${t('rstudio.hidden') || 'Hidden'}:</span>${chips || `<span class="rstudio-hide-none">${t('rstudio.hidden.none') || 'nothing'}</span>`}<button class="rstudio-btn rstudio-mini ${S.picking ? 'rstudio-primary' : ''}" data-act="pick-hide">${S.picking ? (t('rstudio.pick.active') || 'Click one…') : '＋ ' + (t('rstudio.pick') || 'Hide element')}</button>${studioToggle}</div>`
     : '';
   bar.innerHTML = `<div class="rstudio-main"><div class="rstudio-title">${t('rstudio.title') || 'Replay Studio'}</div>${controls}<button class="rstudio-btn rstudio-x" data-act="close">✕</button></div>${hideRow}`;
+  const trimIn = bar.querySelector('.rstudio-trim-in') as HTMLInputElement | null;
+  if (trimIn) { trimIn.addEventListener('input', updateEstimate); updateEstimate(); }
+  if (rec) updateMeter();
+}
+
+/** How many events (and roughly how many bytes) survive the current end-trim. */
+function updateEstimate() {
+  if (!S || !bar) return;
+  const out = bar.querySelector('.rstudio-est') as HTMLElement | null;
+  const inp = bar.querySelector('.rstudio-trim-in') as HTMLInputElement | null;
+  if (!out || !inp || S.events.length < 2) return;
+  const keep = parseFloat(inp.value);
+  const first = S.events[0].timestamp;
+  let n = 0, bytes = 0;
+  for (const ev of S.events) {
+    if (Number.isFinite(keep) && (ev.timestamp - first) / 1000 > keep) break;
+    n++; bytes += approxBytes(ev);
+  }
+  out.textContent = `≈ ${fmtMB(bytes)} · ${n} ${t('rstudio.events') || 'events'}`;
 }
 
 function onBarClick(e: Event) {
@@ -372,7 +456,7 @@ function onBarClick(e: Event) {
       studioExport(Number.isFinite(keep) ? keep * 1000 : undefined);
       break;
     }
-    case 'reset': S.events = []; S.regions = []; S.pauses = []; renderBar(); break;
+    case 'reset': S.events = []; S.regions = []; S.pauses = []; S.bytes = 0; S.warned = false; S.autoStopped = false; renderBar(); break;
     case 'pick-hide': pickToHide(); break;
     case 'unhide': {
       const sel = el.getAttribute('data-sel');
@@ -430,6 +514,15 @@ function ensureStyles() {
   .rstudio-status{opacity:.8;font-weight:500;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .rstudio-trim{display:flex;align-items:center;gap:6px;font-weight:500;opacity:.9;}
   .rstudio-trim-in{width:56px;background:#0d1117;color:#e6edf3;border:1px solid #2a2f3a;border-radius:7px;padding:4px 6px;font:inherit;}
+  .rstudio-est{opacity:.65;font-size:11.5px;font-variant-numeric:tabular-nums;white-space:nowrap;}
+  /* Live meter: elapsed + buffered size, with a gauge against the memory budget. */
+  .rstudio-meter{display:flex;align-items:center;gap:7px;font-variant-numeric:tabular-nums;}
+  .rstudio-meter-txt{font-size:11.5px;opacity:.85;white-space:nowrap;min-width:96px;}
+  .rstudio-gauge{width:54px;height:5px;border-radius:999px;background:#2a2f3a;overflow:hidden;}
+  .rstudio-gauge > i{display:block;height:100%;width:0;border-radius:999px;background:#3b82f6;transition:width .3s linear;}
+  .rstudio-bar{--rs-warn:#f59e0b;}
+  .rstudio-meter.warn .rstudio-gauge > i{background:var(--rs-warn);}
+  .rstudio-meter.warn .rstudio-meter-txt{color:var(--rs-warn);opacity:1;}
   .rstudio-dot{width:10px;height:10px;border-radius:50%;background:#ef4444;box-shadow:0 0 0 0 rgba(239,68,68,.6);animation:rstudio-pulse 1.4s infinite;}
   .rstudio-dot.paused{background:#f59e0b;animation:none;}
   @keyframes rstudio-pulse{0%{box-shadow:0 0 0 0 rgba(239,68,68,.6)}70%{box-shadow:0 0 0 8px rgba(239,68,68,0)}100%{box-shadow:0 0 0 0 rgba(239,68,68,0)}}
@@ -446,7 +539,7 @@ function ensureStyles() {
 export function openReplayStudio() {
   ensureStyles();
   if (bar) { bar.style.display = 'flex'; return; }
-  S = { recording: false, paused: false, events: [], regions: [], pauses: [], startTs: 0, pauseStart: 0, preset: 'fullscreen', frame: presetRect('fullscreen'), hideSelectors: [], picking: false, showStudios: false };
+  S = { recording: false, paused: false, events: [], bytes: 0, warned: false, autoStopped: false, regions: [], pauses: [], startTs: 0, pauseStart: 0, preset: 'fullscreen', frame: presetRect('fullscreen'), hideSelectors: [], picking: false, showStudios: false };
   bar = document.createElement('div');
   bar.className = 'rstudio-bar bmm-no-record';
   bar.setAttribute('data-bmm-no-record', '1');

@@ -109,14 +109,16 @@ function injectStyles(): void {
     s.textContent = `
     .kofi-overlay{position:fixed;inset:0;z-index:10050;display:flex;align-items:center;justify-content:center;
       --kofi-brand:#ff6b4a;--kofi-brand-2:#ff5e5b;--kofi-on-brand:#fff;
-      background:rgba(var(--bmm-surface-r),var(--bmm-surface-g),var(--bmm-surface-b),0.55);
-      backdrop-filter:blur(6px);opacity:0;transition:opacity .3s ease}
+      /* A scrim must DIM what is behind it, so it stays dark in every theme. Deriving it from
+         --bmm-surface-* made it white on the light themes — the one modal in the app that did. */
+      background:rgba(0,0,0,0.7);
+      backdrop-filter:blur(8px);opacity:0;transition:opacity .3s ease}
     .kofi-overlay.open{opacity:1}
     .kofi-overlay.closing{opacity:0}
     .kofi-card{position:relative;width:min(420px,92vw);padding:34px 30px 26px;border-radius:22px;text-align:center;overflow:hidden;
       background:linear-gradient(160deg, color-mix(in srgb, var(--kofi-brand) 12%, var(--bmm-bg-elevated)) 0%, var(--bmm-bg-elevated) 60%);
       border:1px solid rgba(255,107,74,0.35);
-      box-shadow:0 24px 70px rgba(255,94,91,0.18),0 8px 30px rgba(0,0,0,0.5);
+      box-shadow:0 24px 70px rgba(255,94,91,0.18),0 18px 50px rgba(0,0,0,0.55),0 4px 14px rgba(0,0,0,0.4);
       transform:translateY(18px) scale(.96);opacity:0;transition:transform .35s cubic-bezier(.2,.9,.3,1.2),opacity .3s ease}
     .kofi-overlay.open .kofi-card{transform:translateY(0) scale(1);opacity:1}
     .kofi-glow{position:absolute;top:-40%;left:50%;width:280px;height:280px;transform:translateX(-50%);pointer-events:none;

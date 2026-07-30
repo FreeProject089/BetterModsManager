@@ -62,18 +62,51 @@ function newAnim(): Anim {
   return { id: 'a' + Date.now().toString(36), name: '', selector: '', preset: 'stagger', duration: 0.5, delay: 0, stagger: 0.06, ease: 'power2.out', auto: false };
 }
 
+// Names/selectors are user text that goes straight into innerHTML and into value="…"
+// attributes, so they have to be escaped — a name containing a quote used to break the form
+// markup, and the row list rendered whatever HTML you typed.
+function esc(s: string): string {
+  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+// An invalid selector throws inside querySelectorAll. Validate up front so the user gets
+// "that selector is not valid" instead of the misleading "GSAP unavailable" the rejected
+// promise used to produce.
+function isValidSelector(sel: string): boolean {
+  if (!sel) return false;
+  try { document.createDocumentFragment().querySelector(sel); return true; } catch { return false; }
+}
+
 // ── run / preview ──
 function runOn(g: any, a: Anim, els: Element[]) {
   if (!els.length) return;
   try { PRESETS[a.preset]?.(g, els, a); } catch { /* ignore a bad tween */ }
 }
 function preview(a: Anim, setStatus: (m: string) => void) {
+  const sel = a.selector || '*:not(html):not(body)';
+  if (!isValidSelector(sel)) { setStatus((t('anim.badselector') || 'Not a valid CSS selector:') + ` "${a.selector}"`); return; }
   ensureGsap().then((g) => {
-    const els = Array.from(document.querySelectorAll(a.selector || '*:not(html):not(body)'));
+    const els = Array.from(document.querySelectorAll(sel));
     if (!els.length) { setStatus((t('anim.nomatch') || 'No element matches') + ` "${a.selector}"`); return; }
     els.forEach((el) => { delete (el as HTMLElement).dataset.animDone; });
     runOn(g, a, els);
     setStatus((t('anim.played') || 'Played on') + ` ${els.length}`);
+  }).catch(() => setStatus(t('anim.nogsap') || 'GSAP unavailable'));
+}
+
+/** Kill anything still tweening and clear the inline styles GSAP left behind, so a preview
+ *  that ended mid-flight (or a `from` that never completed) can't leave the UI stuck at
+ *  opacity 0 — which is exactly how a bad tween used to make part of the app disappear. */
+function resetMotion(a: Anim | null, setStatus: (m: string) => void) {
+  const sel = a?.selector && isValidSelector(a.selector) ? a.selector : null;
+  ensureGsap().then((g) => {
+    const els = Array.from(document.querySelectorAll(sel || '[style]'));
+    try { g.killTweensOf(els); } catch { /* ignore */ }
+    els.forEach((el) => {
+      const s = (el as HTMLElement).style;
+      ['opacity', 'transform', 'translate', 'scale', 'rotate'].forEach((p) => s.removeProperty(p));
+      delete (el as HTMLElement).dataset.animDone;
+    });
+    setStatus((t('anim.reset') || 'Motion reset on') + ` ${els.length}`);
   }).catch(() => setStatus(t('anim.nogsap') || 'GSAP unavailable'));
 }
 
@@ -84,10 +117,15 @@ let debounce: number | null = null;
 function runAutos() {
   ensureGsap().then((g) => {
     for (const a of loadAnims().filter((x) => x.auto && x.selector)) {
-      const els = Array.from(document.querySelectorAll(a.selector)).filter((el) => !(el as HTMLElement).dataset.animDone);
-      if (!els.length) continue;
-      els.forEach((el) => { (el as HTMLElement).dataset.animDone = '1'; });
-      runOn(g, a, els);
+      // Per-animation guard: one saved animation with a broken selector used to throw here and
+      // abort the whole loop, silently killing every OTHER auto animation on the page.
+      try {
+        if (!isValidSelector(a.selector)) continue;
+        const els = Array.from(document.querySelectorAll(a.selector)).filter((el) => !(el as HTMLElement).dataset.animDone);
+        if (!els.length) continue;
+        els.forEach((el) => { (el as HTMLElement).dataset.animDone = '1'; });
+        runOn(g, a, els);
+      } catch { /* skip this one, keep the rest */ }
     }
   }).catch(() => { /* ignore */ });
 }
@@ -175,6 +213,13 @@ function ensureStyles() {
   .anim-form input,.anim-form select{background:#0d1117;color:#e6edf3;border:1px solid #2a2f3a;border-radius:7px;padding:5px 7px;font:inherit;}
   .anim-form .rowline{grid-column:1/-1;display:flex;gap:8px;align-items:center;justify-content:space-between;}
   .anim-status{font-size:11px;opacity:.75;margin-top:6px;min-height:14px;}
+  /* The studio overlays deliberately keep their own dark chrome (they must stay readable on
+     top of ANY theme, including the light ones, while a recording is running). */
+  .anim-panel{--anim-warn:#f59e0b;}
+  .anim-match{font-size:10.5px;opacity:.7;margin-top:3px;min-height:13px;}
+  .anim-match.bad{color:var(--anim-warn);opacity:1;}
+  .anim-row-bad{border-color:var(--anim-warn);}
+  .anim-row-bad .sel{color:var(--anim-warn);opacity:.95;}
   .anim-toggle{display:flex;align-items:center;gap:5px;font-size:11px;}
   `;
   document.head.appendChild(s);
@@ -188,32 +233,38 @@ function status(msg: string) {
 function render() {
   if (!panel) return;
   const list = loadAnims();
-  const rows = list.map((a) => `
-    <div class="anim-row" data-id="${a.id}">
+  const rows = list.map((a) => {
+    const bad = a.selector && !isValidSelector(a.selector);
+    return `
+    <div class="anim-row${bad ? ' anim-row-bad' : ''}" data-id="${esc(a.id)}">
       <div style="flex:1;min-width:0">
-        <div class="nm">${a.name || a.preset}${a.auto ? ' ⟳' : ''}</div>
-        <div class="sel">${a.selector || '—'} · ${a.preset}</div>
+        <div class="nm">${esc(a.name || a.preset)}${a.auto ? ' <span data-tooltip="Auto-runs when the target appears">⟳</span>' : ''}</div>
+        <div class="sel">${bad ? '⚠ ' : ''}${esc(a.selector || '—')} · ${esc(a.preset)}</div>
       </div>
-      <button class="anim-btn anim-mini" data-act="play" data-id="${a.id}">▶</button>
-      <button class="anim-btn anim-mini" data-act="edit" data-id="${a.id}">✎</button>
-      <button class="anim-btn anim-mini" data-act="del" data-id="${a.id}">✕</button>
-    </div>`).join('') || `<div style="opacity:.6;padding:8px 2px">${t('anim.none') || 'No animations yet — add one below.'}</div>`;
+      <button class="anim-btn anim-mini" data-act="play" data-id="${esc(a.id)}" data-tooltip="${t('anim.preview') || 'Preview'}">▶</button>
+      <button class="anim-btn anim-mini" data-act="edit" data-id="${esc(a.id)}" data-tooltip="${t('anim.edit') || 'Edit'}">✎</button>
+      <button class="anim-btn anim-mini" data-act="dup" data-id="${esc(a.id)}" data-tooltip="${t('anim.duplicate') || 'Duplicate'}">⧉</button>
+      <button class="anim-btn anim-mini" data-act="del" data-id="${esc(a.id)}" data-tooltip="${t('anim.delete') || 'Delete'}">✕</button>
+    </div>`;
+  }).join('') || `<div style="opacity:.6;padding:8px 2px">${t('anim.none') || 'No animations yet — add one below.'}</div>`;
 
   const e = editing;
   const form = e ? `
     <div class="anim-form">
-      <label class="wide">${t('anim.name') || 'Name'}<input data-f="name" value="${e.name}" placeholder="Library cards"></label>
+      <label class="wide">${t('anim.name') || 'Name'}<input data-f="name" value="${esc(e.name)}" placeholder="Library cards"></label>
       <label class="wide">${t('anim.selector') || 'Target selector'}
-        <span style="display:flex;gap:6px"><input data-f="selector" value="${e.selector}" placeholder=".mod-item" style="flex:1">
-        <button class="anim-btn anim-mini" data-act="pick">${t('anim.pick') || 'Pick'}</button></span></label>
+        <span style="display:flex;gap:6px"><input data-f="selector" value="${esc(e.selector)}" placeholder=".mod-item" style="flex:1">
+        <button class="anim-btn anim-mini" data-act="pick">${t('anim.pick') || 'Pick'}</button></span>
+        <span class="anim-match"></span></label>
       <label>${t('anim.preset') || 'Preset'}<select data-f="preset">${PRESET_KEYS.map((p) => `<option value="${p}" ${e.preset === p ? 'selected' : ''}>${p}</option>`).join('')}</select></label>
-      <label>${t('anim.ease') || 'Ease'}<input data-f="ease" value="${e.ease}"></label>
+      <label>${t('anim.ease') || 'Ease'}<input data-f="ease" value="${esc(e.ease)}"></label>
       <label>${t('anim.duration') || 'Duration (s)'}<input data-f="duration" type="number" step="0.05" value="${e.duration}"></label>
       <label>${t('anim.delay') || 'Delay (s)'}<input data-f="delay" type="number" step="0.05" value="${e.delay}"></label>
       <label>${t('anim.stagger') || 'Stagger (s)'}<input data-f="stagger" type="number" step="0.01" value="${e.stagger}"></label>
       <label class="anim-toggle" style="align-self:end"><input type="checkbox" data-f="auto" ${e.auto ? 'checked' : ''}> ${t('anim.auto') || 'Auto-run on appear'}</label>
       <div class="rowline">
-        <button class="anim-btn" data-act="preview-edit">${t('anim.preview') || 'Preview'}</button>
+        <span><button class="anim-btn" data-act="preview-edit">${t('anim.preview') || 'Preview'}</button>
+        <button class="anim-btn" data-act="reset-edit" data-tooltip="${t('anim.reset.tip') || 'Kill running tweens and clear the inline styles they left'}">${t('anim.reset.btn') || 'Reset'}</button></span>
         <span><button class="anim-btn" data-act="cancel">${t('common.cancel') || 'Cancel'}</button>
         <button class="anim-btn anim-primary" data-act="save">${t('anim.save') || 'Save'}</button></span>
       </div>
@@ -223,6 +274,27 @@ function render() {
     `<h3>${t('anim.title') || 'Animation Studio'} <button class="anim-btn anim-mini" data-act="close">✕</button></h3>` +
     rows + form +
     `<div class="anim-status"></div>`;
+
+  // Live feedback on the selector: how many elements it hits right now, or that it is invalid.
+  // Without it you only found out by pressing Preview and reading an error.
+  const selIn = panel.querySelector('[data-f="selector"]') as HTMLInputElement | null;
+  if (selIn) { selIn.addEventListener('input', updateMatchCount); updateMatchCount(); }
+}
+
+function updateMatchCount() {
+  const out = panel?.querySelector('.anim-match') as HTMLElement | null;
+  const inp = panel?.querySelector('[data-f="selector"]') as HTMLInputElement | null;
+  if (!out || !inp) return;
+  const sel = inp.value.trim();
+  if (!sel) { out.textContent = ''; out.className = 'anim-match'; return; }
+  if (!isValidSelector(sel)) {
+    out.textContent = '⚠ ' + (t('anim.badselector.short') || 'invalid selector');
+    out.className = 'anim-match bad';
+    return;
+  }
+  const n = document.querySelectorAll(sel).length;
+  out.textContent = `${n} ${t('anim.matches') || 'match(es)'}`;
+  out.className = 'anim-match' + (n === 0 ? ' bad' : '');
 }
 
 function readForm(): Anim | null {
@@ -254,8 +326,21 @@ function onClick(ev: Event) {
     case 'new': editing = newAnim(); render(); break;
     case 'edit': editing = list.find((a) => a.id === id) || null; render(); break;
     case 'del': saveAnims(list.filter((a) => a.id !== id)); installAutoAnimations(); render(); break;
+    case 'dup': {
+      const src = list.find((a) => a.id === id);
+      if (src) {
+        // A duplicate never inherits `auto` — otherwise copying an animation silently doubles
+        // the motion on every matching element the next time the page renders.
+        const copy: Anim = { ...src, id: 'a' + Date.now().toString(36), name: (src.name || src.preset) + ' copy', auto: false };
+        saveAnims([...list, copy]);
+        editing = copy;
+        render();
+      }
+      break;
+    }
     case 'play': { const a = list.find((x) => x.id === id); if (a) preview(a, status); break; }
     case 'preview-edit': { const a = readForm(); if (a) preview(a, status); break; }
+    case 'reset-edit': resetMotion(readForm(), status); break;
     case 'pick': pickElement((sel) => { const inp = panel?.querySelector('[data-f="selector"]') as HTMLInputElement | null; if (inp) inp.value = sel; status((t('anim.picked') || 'Picked') + ` ${sel}`); }); status(t('anim.picking') || 'Hover to highlight, click to pick — Esc to cancel'); break;
     case 'cancel': editing = null; render(); break;
     case 'save': {

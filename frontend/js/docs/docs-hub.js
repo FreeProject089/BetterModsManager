@@ -1656,15 +1656,28 @@ Automatise-le depuis le [Planificateur](doc:scheduler) : benchmarke un disque, a
                 },
             },
             {
-                id: 'privacy-telemetry', view: 'settings', diagram: 'telemetry-pipeline',
+                id: 'privacy-telemetry', view: 'settings', diagram: 'telemetry-pipeline', docsPath: 'features/privacy-telemetry/',
                 title: { en: 'Privacy & telemetry', fr: 'Confidentialité et télémétrie' },
                 summary: { en: 'Strictly opt-in analytics: what’s collected, what never is, and how to export or erase it.', fr: 'Télémétrie strictement opt-in : ce qui est collecté, ce qui ne l’est jamais, et comment l’exporter ou l’effacer.' },
-                keywords: 'privacy telemetry analytics gdpr consent data replay confidentialité données rgpd consentement',
+                keywords: 'privacy telemetry analytics gdpr consent data replay rrweb confidentialité données rgpd consentement enregistrement',
+                // A real recording, played by the app's own viewer, so "masked session replay" is
+                // something you can look at rather than a claim you have to take on trust. Streamed from
+                // the docs site on click — a replay is a ~25 MB JSON event stream, far too big to bundle.
+                media: {
+                    kind: 'replay',
+                    src: DOCS_SITE + 'assets/replays/bmm-demo.bmmreplay',
+                    caption: {
+                        en: 'A real masked session — names and paths are recorded as ••••. Loads on click (~25 MB, from the docs site).',
+                        fr: 'Une vraie session masquée — noms et chemins sont enregistrés en ••••. Se charge au clic (~25 Mo, depuis le site de doc).',
+                    },
+                },
                 body: {
                     en: '<p>Telemetry in BMM is <b>opt-in</b>: until you explicitly accept the consent dialog, <b>nothing is collected at all</b> — and declining also wipes anything previously buffered.</p>'
+                        + '<p>The player above is the same one the app uses for any <code>.bmmreplay</code>. It replays the <b>DOM</b>, not a video — text stays selectable text — and it shows the masking as it is actually stored: the unmasked values never enter the file, so there is nothing to leak afterwards.</p>'
                         + '<h4>If you opt in</h4><ul><li>What’s sent: pages visited, clicks (<b>labels only — never what you type</b>), performance samples, errors, and an anonymous hardware profile. No file paths, no mod contents, no name or e-mail; your identity is an anonymous id.</li><li><b>Session replay</b> (optional, on by default when telemetry is on) records the UI <b>masked</b>: mod names, profile names and paths appear as <code>••••</code>. Unmasking is a separate, explicit toggle.</li><li>Everything buffers to a <b>local file (10 MB cap)</b> first, and is only uploaded as gzip batches over <b>HTTPS</b> — if no endpoint is configured, data never leaves your machine.</li></ul>'
                         + '<h4>Your controls (Settings → Privacy)</h4><ul><li>Master toggle plus separate toggles for the 7-day benchmark/extra-hardware report and session replay.</li><li><b>Export</b> the raw buffer as JSON any time.</li><li>See every <b>sent packet</b> (event names and counts only) and request its <b>deletion</b> — honoured within 72 hours.</li></ul>',
                     fr: '<p>La télémétrie de BMM est <b>opt-in</b> : tant que vous n’acceptez pas explicitement la boîte de consentement, <b>rien n’est collecté du tout</b> — et refuser efface aussi tout ce qui aurait été mis en tampon.</p>'
+                        + '<p>Le lecteur ci-dessus est celui que l’app utilise pour n’importe quel <code>.bmmreplay</code>. Il rejoue le <b>DOM</b>, pas une vidéo — le texte reste du texte sélectionnable — et il montre le masquage tel qu’il est réellement stocké : les valeurs démasquées n’entrent jamais dans le fichier, il n’y a donc rien à fuiter ensuite.</p>'
                         + '<h4>Si vous acceptez</h4><ul><li>Ce qui part : pages visitées, clics (<b>libellés seulement — jamais ce que vous tapez</b>), échantillons de performance, erreurs, et un profil matériel anonyme. Pas de chemins de fichiers, pas de contenu de mods, ni nom ni e-mail ; votre identité est un id anonyme.</li><li>Le <b>replay de session</b> (optionnel, actif par défaut quand la télémétrie l’est) enregistre l’UI <b>masquée</b> : noms de mods, de profils et chemins s’affichent en <code>••••</code>. Le démasquage est un interrupteur séparé et explicite.</li><li>Tout s’accumule d’abord dans un <b>fichier local (plafond 10 Mo)</b>, envoyé uniquement en lots gzip via <b>HTTPS</b> — sans endpoint configuré, les données ne quittent jamais votre machine.</li></ul>'
                         + '<h4>Vos contrôles (Réglages → Confidentialité)</h4><ul><li>Interrupteur principal plus des interrupteurs séparés pour le rapport benchmark/matériel étendu (7 jours) et le replay de session.</li><li><b>Exportez</b> le tampon brut en JSON à tout moment.</li><li>Consultez chaque <b>paquet envoyé</b> (noms et comptes d’événements seulement) et demandez sa <b>suppression</b> — honorée sous 72 heures.</li></ul>',
                 },
