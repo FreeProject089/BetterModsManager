@@ -1912,7 +1912,8 @@ function chrome() {
       </div>
       <div class="dh-actions">
         <button class="dh-btn dh-btn-primary" data-act="tutorial">${svg('play', 16)} ${tr({ en: 'Interactive tutorial', fr: 'Tutoriel interactif' })}</button>
-        <a class="dh-btn" href="${DOCS_SITE}" target="_blank" rel="noreferrer">${svg('ext', 16)} ${tr({ en: 'Full docs', fr: 'Docs complètes' })}</a>
+        <button class="dh-btn" data-view2="pages">${svg('book', 16)} ${tr({ en: 'Full documentation', fr: 'Documentation complète' })}</button>
+        <a class="dh-btn" href="${DOCS_SITE}" target="_blank" rel="noreferrer">${svg('ext', 16)} ${tr({ en: 'On the website', fr: 'Sur le site' })}</a>
       </div>
     </div>
     <div class="dh-parts">
@@ -1944,6 +1945,16 @@ function crumbs() {
     parts.push(sep, `<button class="dh-crumb" data-view2="hub" data-part="${route.part}">${tr(partName)}</button>`);
     if (route.view === 'diagrams') {
         parts.push(sep, `<span class="dh-crumb on">${tr({ en: 'Diagrams', fr: 'Diagrammes' })}</span>`);
+        return parts.join('');
+    }
+    if (route.view === 'pages' || route.view === 'page') {
+        const all = tr({ en: 'Full documentation', fr: 'Documentation complète' });
+        if (route.view === 'pages') {
+            parts.push(sep, `<span class="dh-crumb on">${all}</span>`);
+            return parts.join('');
+        }
+        const meta = (_manifest || []).find((p) => p.path === route.page);
+        parts.push(sep, `<button class="dh-crumb" data-view2="pages">${all}</button>`, sep, `<span class="dh-crumb on">${meta ? tr(meta.title) : route.page}</span>`);
         return parts.join('');
     }
     const cat = route.catId ? CATEGORIES.find((c) => c.id === route.catId) : null;
@@ -2085,6 +2096,8 @@ function bodyHtml() {
     switch (route.view) {
         case 'search': return searchView(route.q || '');
         case 'diagrams': return diagramsView();
+        case 'pages': return pagesView();
+        case 'page': return pageReaderView(route.page || '');
         case 'cat': {
             const c = CATEGORIES.find((x) => x.id === route.catId);
             return c ? categoryView(c) : hubView();
@@ -2182,7 +2195,12 @@ function onClick(e) {
     }
     const v2 = hit('[data-view2]');
     if (v2) {
-        go({ view: v2.getAttribute('data-view2') === 'diagrams' ? 'diagrams' : 'hub', q: '' });
+        const want = v2.getAttribute('data-view2');
+        if (want === 'pages') {
+            void openPages();
+            return;
+        } // needs the manifest first
+        go({ view: want === 'diagrams' ? 'diagrams' : 'hub', q: '' });
         return;
     }
     const catBtn = hit('[data-cat]');
@@ -2204,12 +2222,95 @@ function onClick(e) {
         void showFullPage(full.getAttribute('data-fullpage') || '', full);
         return;
     }
-    // A link between two bundled pages (rewritten from the site's own relative .md links).
-    const dp = hit('[data-docpage]');
-    if (dp) {
-        void showFullPage(dp.getAttribute('data-docpage') || '', null);
+    const pg = hit('[data-page]');
+    if (pg) {
+        void openPage(pg.getAttribute('data-page') || '');
         return;
     }
+    // A link between two bundled pages (rewritten from the site's own relative .md links). Inside
+    // the standalone reader it navigates; inside an article it swaps that article's body.
+    const dp = hit('[data-docpage]');
+    if (dp) {
+        const target = dp.getAttribute('data-docpage') || '';
+        if (route.view === 'page')
+            void openPage(target);
+        else
+            void showFullPage(target, null);
+        return;
+    }
+}
+let _manifest = null;
+async function loadManifest() {
+    if (_manifest)
+        return _manifest;
+    try {
+        const res = await fetch('assets/docs/manifest.json');
+        _manifest = res.ok ? (await res.json()).pages : [];
+    }
+    catch {
+        _manifest = [];
+    }
+    return _manifest;
+}
+const SECTION_TITLE = {
+    'getting-started': { en: 'Getting started', fr: 'Prise en main' },
+    features: { en: 'Features', fr: 'Fonctionnalités' },
+    'how-it-works': { en: 'How it works', fr: 'Comment ça marche' },
+    reference: { en: 'Reference', fr: 'Référence' },
+    root: { en: 'Overview', fr: 'Vue d’ensemble' },
+};
+function pagesView() {
+    const pages = _manifest || [];
+    if (!pages.length) {
+        // Rendered before the manifest resolves; openPages() repaints once it has.
+        return `<p class="dh-lead">${tr({ en: 'Loading the documentation index…', fr: 'Chargement de l’index de la documentation…' })}</p>`;
+    }
+    const order = ['root', 'getting-started', 'features', 'how-it-works', 'reference'];
+    const groups = order.filter((s) => pages.some((p) => p.section === s));
+    return `
+    <h2>${tr({ en: 'The full documentation', fr: 'La documentation complète' })}</h2>
+    <p class="dh-lead">${tr({
+        en: 'The same pages as the website, rendered here. Nothing is fetched from the internet.',
+        fr: 'Les mêmes pages que le site, rendues ici. Rien n’est récupéré sur Internet.',
+    })}</p>
+    ${groups.map((s) => `
+      <h4>${tr(SECTION_TITLE[s] || { en: s, fr: s })}</h4>
+      <div class="dh-arts">
+        ${pages.filter((p) => p.section === s).map((p) => `
+          <button class="dh-art" data-page="${p.path}">
+            <div class="dh-art-t">${tr(p.title)}</div>
+            <div class="dh-art-s">${p.path}</div>
+            ${p.fr ? '' : `<div class="dh-art-tags"><span class="dh-tag dh-tag-med">EN</span></div>`}
+          </button>`).join('')}
+      </div>`).join('')}`;
+}
+/** A bundled page on its own — the body is filled in by openPage() once fetched. */
+function pageReaderView(path) {
+    const meta = (_manifest || []).find((p) => p.path === path);
+    return `
+    <article class="dh-article dh-wide" data-reader="${path}">
+      <h2>${meta ? tr(meta.title) : path}</h2>
+      <div class="dh-content"><p class="dh-lead">${tr({ en: 'Loading…', fr: 'Chargement…' })}</p></div>
+      <div class="dh-rels">
+        <button class="dh-rel" data-view2="pages">${svg('arrow', 15)} ${tr({ en: 'All pages', fr: 'Toutes les pages' })}</button>
+        <a class="dh-rel dh-rel-ext" href="${DOCS_SITE}${path}/" target="_blank" rel="noreferrer">${svg('ext', 15)} ${tr({ en: 'Open on the site', fr: 'Ouvrir sur le site' })}</a>
+      </div>
+    </article>`;
+}
+async function openPages() { await loadManifest(); go({ view: 'pages' }); paint(); }
+async function openPage(path) {
+    await loadManifest();
+    go({ view: 'page', page: path });
+    const md = await fetchDocPage(path);
+    const body = host?.querySelector('[data-reader] .dh-content');
+    if (!body)
+        return;
+    if (!md) {
+        body.innerHTML = `<p>${tr({ en: 'That page is not bundled in this build.', fr: 'Cette page n’est pas embarquée dans ce build.' })}</p>`;
+        return;
+    }
+    body.innerHTML = renderDocMarkdown(md);
+    await hydrateDocPage(body);
 }
 /** Swap the article body for the full bundled page (or back). */
 async function showFullPage(path, btn) {
