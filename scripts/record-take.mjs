@@ -27,7 +27,8 @@
 // has to show.
 
 import { readFileSync, existsSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
@@ -44,7 +45,13 @@ import { createInterface } from 'node:readline';
 // two mods deliberately share a file for the conflicts clip, and one is packed wrong for the
 // mapper clip.
 const FIXTURE_NAME = 'Recording demo';
-const FIXTURE_ROOT = join(tmpdir(), 'bmm-recording-fixture');
+// Prefer the checked-in example set in .Assets/DemoMods: it is richer (an archived mod, a
+// bmm.json id, two flavours of badly-packed), it survives a temp clean, and you can open the
+// files to see which mod won a conflict. It is git-ignored, so it is a local working set — the
+// temp fallback keeps the script usable on a machine that has not got one.
+const ASSET_FIXTURE = join(dirname(fileURLToPath(import.meta.url)), '..', '.Assets', 'DemoMods');
+const USE_ASSETS = existsSync(join(ASSET_FIXTURE, 'mods'));
+const FIXTURE_ROOT = USE_ASSETS ? ASSET_FIXTURE : join(tmpdir(), 'bmm-recording-fixture');
 const FIXTURE_MODS = {
   'HD Texture Pack':      ['Data/Textures/hero.dds', 'Data/Textures/normal.dds', 'Data/Textures/sky.dds'],
   'HD Texture Pack Lite': ['Data/Textures/hero.dds'],           // shares hero.dds on purpose
@@ -373,8 +380,12 @@ async function runAction(step) {
  *  Idempotent: run it as often as you like. */
 async function setupFixture() {
   const dirs = { game: join(FIXTURE_ROOT, 'game'), mods: join(FIXTURE_ROOT, 'mods'), backup: join(FIXTURE_ROOT, 'backup') };
-  console.log(`Fixture root: ${FIXTURE_ROOT}`);
+  console.log(`Fixture root: ${FIXTURE_ROOT}${USE_ASSETS ? '   (.Assets/DemoMods — see its README)' : '   (temp fallback)'}`);
   for (const d of Object.values(dirs)) mkdirSync(d, { recursive: true });
+  if (USE_ASSETS) {
+    // The example set is already there and is the better one; do not overwrite it.
+    console.log('  Using the checked-in example mods as-is.');
+  } else {
   // A game folder that already has one of the files, so enabling a mod visibly REPLACES
   // something and the original can be restored — which is what the conflicts clip shows.
   mkdirSync(join(dirs.game, 'Data', 'Textures'), { recursive: true });
@@ -388,7 +399,9 @@ async function setupFixture() {
     }
     console.log(`  - ${mod}  (${files.length} file(s))`);
   }
+  }
 
+  // The profile is created either way — only the files differ between the two sources.
   const existing = list(await api('GET', '/api/profiles')).find((p) => p.name === FIXTURE_NAME);
   if (existing) {
     console.log(`\nProfile "${FIXTURE_NAME}" already exists — folders refreshed, profile left alone.`);
@@ -416,6 +429,14 @@ async function teardownFixture() {
     console.log(`Removed profile "${FIXTURE_NAME}".`);
   } else {
     console.log(`No profile named "${FIXTURE_NAME}".`);
+  }
+  // Only ever delete the throwaway temp copy. When the fixture points at .Assets/DemoMods that
+  // folder is a CURATED working set the user maintains — tearing down a profile must not take it
+  // with it. (It did once, which is how this guard got here.)
+  if (USE_ASSETS) {
+    console.log(`Left ${FIXTURE_ROOT} alone — it is your example set, not a generated temp copy.`);
+    console.log('Delete it by hand if you really mean to.');
+    return;
   }
   try { rmSync(FIXTURE_ROOT, { recursive: true, force: true }); console.log(`Removed ${FIXTURE_ROOT}`); } catch { /* ignore */ }
 }
