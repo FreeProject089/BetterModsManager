@@ -118,11 +118,31 @@ Il active le bon profil, désactive les mods, déclenche le deeplink dont le cli
 l'enregistreur avec le bon masquage pour ce clip, puis **s'arrête et affiche ce que tu dois
 jouer**. Tu appuies sur Entrée quand c'est fait, il exporte et coupe l'enregistreur.
 
-> [!NOTE]
-> **Pourquoi il ne scripte pas aussi les clics.** rrweb enregistre de vrais événements pointeur et
-> clavier. Une action déclenchée par l'API n'en produit aucun : une prise entièrement scriptée se
-> rejoue avec l'interface qui change et aucun curseur nulle part — ça se lit comme un bug, pas
-> comme un tutoriel. Le harnais automatise ce qui peut l'être sans ce coût.
+### Quels clips peuvent tourner sans personne
+
+L'enregistreur de BMM pose **`mousemove: false`** — les positions du pointeur ne sont jamais
+capturées, par optimisation de taille. Donc **aucun replay BMM n'a de curseur mobile, même filmé à
+la main.** Ce qu'une prise humaine porte en plus est plus étroit qu'il n'y paraît : les **marqueurs
+de clic** (rrweb garde `mouseInteraction`), le scroll et la saisie. Les changements du DOM sont
+enregistrés dans les deux cas, quelle qu'en soit la cause.
+
+Ça découpe la liste proprement :
+
+| | |
+|---|---|
+| **Sans personne, ça marche** | Le contenu du clip est un *résultat* — une synchro qui transfère, un benchmark qui tourne, une tâche planifiée qui part, une liste de mods qui se remplit. Rien n'a été cliqué, donc aucun marqueur ne manque |
+| **Il faut un humain** | Un tutoriel en clics. Les marqueurs de clic sont l'affordance « c'est là que j'ai appuyé », et rien d'autre ne les fournit |
+
+Un scénario doté d'une liste `drive` se déroule de bout en bout :
+
+```bash
+node scripts/record-take.mjs activation-auto --auto
+```
+
+`--auto` sur un clip sans `drive` est refusé, et lancer un clip `drive` sans `--auto` aussi. Comme
+le pilotage active et désactive des mods — donc déploie et retire de vrais fichiers — combiner
+`--auto` avec `--profile` exige en plus `--allow-writes`. Sur le bac à sable de démo c'est le but ;
+sur ton propre profil, ça modifie ton dossier de jeu.
 
 Points pratiques :
 

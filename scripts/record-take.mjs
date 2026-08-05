@@ -2,14 +2,23 @@
 // record-take — puts BMM into a known state for a documentation recording, arms the session
 // recorder, waits while YOU perform the interaction, then exports the .bmmreplay.
 //
-// Why it stops and waits instead of scripting the clicks too: rrweb records real pointer and
-// input events. An action triggered through the API produces none, so a fully scripted take
-// plays back with the interface changing and no cursor anywhere — which reads as a glitch, not
-// a tutorial. So this automates the tedious half (arranging identical state before every take,
-// and resetting between them) and leaves the half that has to look human to a human.
+// Two modes, and which one a clip needs comes down to one detail of how BMM records.
+//
+// BMM's recorder sets `mousemove: false` — pointer POSITIONS are never captured, as a size
+// optimisation. So no BMM replay has a moving cursor, not even one filmed by hand. What a human
+// take does carry that an API-driven one cannot: click markers (rrweb keeps mouseInteraction),
+// scroll, and typing. DOM changes are captured either way, whatever caused them.
+//
+// So:
+//   • A clip whose content is a RESULT — a sync transferring, a benchmark running, a scheduled
+//     task firing, storage bars moving — records fine with no one at the keyboard. Give the
+//     scenario a `drive` list and it runs end to end.
+//   • A click-through tutorial still wants a human, because the click markers are the "here is
+//     where I pressed" affordance and nothing else supplies them.
 //
 //   node scripts/record-take.mjs --list
-//   node scripts/record-take.mjs themes
+//   node scripts/record-take.mjs themes                        # assisted: state, then you perform
+//   node scripts/record-take.mjs <scenario> --auto             # unattended, if it has a `drive`
 //   node scripts/record-take.mjs themes --dry-run              # print the plan, touch nothing
 //   node scripts/record-take.mjs themes --no-record            # just set the state up
 //   node scripts/record-take.mjs themes --profile "My profile" # record against your own data
@@ -107,6 +116,26 @@ const SCENARIOS = {
       'Names must be visibly masked — that is the whole point of this clip.',
     ],
   },
+
+  // ── unattended clips ──────────────────────────────────────────────────────
+  // `drive` runs WHILE recording, so --auto needs nobody. These work because what they show is
+  // a result, not a gesture: no click markers are missing because nothing was clicked.
+  'activation-auto': {
+    title: 'Enable / disable — what the mod list does (unattended)',
+    page: 'how-it-works/profiles-activation',
+    full: true,
+    setup: [{ profile: 'demo' }, { disableAll: true }, { wait: 1500 }],
+    // `enableFirst` rather than named mods: an unattended clip should not depend on what a
+    // particular library happens to contain, or it only ever runs on the machine it was written
+    // on. It takes them in list order, pausing between each so the list visibly fills in.
+    drive: [
+      { say: 'Enabling mods one at a time so the list fills in on camera' },
+      { enableFirst: 3, every: 2500 },
+      { wait: 2000 },
+      { say: 'Now clearing them, which is the half people never see' },
+      { disableAll: true, wait: 3000 },
+    ],
+  },
 };
 
 // ── plumbing ─────────────────────────────────────────────────────────────────
@@ -127,13 +156,40 @@ if (has('--list') || !name) {
   console.log('Scenarios:\n');
   for (const [k, s] of Object.entries(SCENARIOS)) {
     console.log(`  ${k.padEnd(18)} ${s.title}`);
-    console.log(`  ${''.padEnd(18)} -> ${s.page}   ${s.full ? 'unmasked' : 'MASKED'}`);
+    console.log(`  ${''.padEnd(18)} -> ${s.page}   ${s.full ? 'unmasked' : 'MASKED'}   ${s.drive ? '[--auto: unattended]' : '[you perform it]'}`);
   }
-  console.log('\n  node scripts/record-take.mjs <scenario> [--dry-run] [--no-record] [--profile "name"]');
+  console.log('\n  node scripts/record-take.mjs <scenario> [--auto] [--dry-run] [--no-record] [--profile "name"]');
   process.exit(name ? 1 : 0);
 }
 const scn = SCENARIOS[name];
 if (!scn) { console.error(`Unknown scenario "${name}". Try --list.`); process.exit(1); }
+
+const AUTO = has('--auto');
+if (!AUTO && !scn.perform) {
+  console.error(
+    `"${name}" is an unattended clip — it has a \`drive\` list and nothing for you to perform.\n` +
+    `  Run it with --auto.`
+  );
+  process.exit(1);
+}
+if (AUTO && !scn.drive) {
+  console.error(
+    `"${name}" has no \`drive\` list, so there is nothing to run unattended.\n` +
+    `  It is a click-through clip: BMM records click markers only for real presses, and those\n` +
+    `  are the "here is where I pressed" affordance. Run it without --auto and perform it.`
+  );
+  process.exit(1);
+}
+// A driven clip enables and disables mods, which deploys and removes real files. On the demo
+// sandbox that is the point; on one of your own profiles it edits your game folder, so it has
+// to be asked for.
+if (AUTO && PROFILE_OVERRIDE && !has('--allow-writes')) {
+  console.error(
+    `--auto with --profile would enable/disable mods in "${PROFILE_OVERRIDE}", which writes to\n` +
+    `  that profile's game folder. Add --allow-writes if that is what you want.`
+  );
+  process.exit(1);
+}
 
 // A scenario is unmasked because it records the demo sandbox, which holds nothing real. Point it
 // at one of your own profiles and that reasoning is gone, so the unmasking goes with it —
@@ -218,8 +274,17 @@ function fireDeeplink(url) {
   });
 }
 
+/** `wait` is a trailing pause, so `{ enable: 'x', wait: 2000 }` acts THEN waits. Handling wait
+ *  first would have made that step a no-op that only slept — the action key silently ignored. */
 async function runStep(step) {
-  if (step.wait) { console.log(`   - wait ${step.wait}ms`); if (!DRY) await sleep(step.wait); return; }
+  await runAction(step);
+  if (step.wait && !isPureWait(step)) { console.log(`   - wait ${step.wait}ms`); if (!DRY) await sleep(step.wait); }
+}
+const ACTION_KEYS = ['say', 'deeplink', 'profile', 'disableAll', 'enable', 'disable', 'modpack', 'enableFirst'];
+const isPureWait = (s) => s.wait != null && !ACTION_KEYS.some((k) => s[k] != null);
+
+async function runAction(step) {
+  if (isPureWait(step)) { console.log(`   - wait ${step.wait}ms`); if (!DRY) await sleep(step.wait); return; }
   if (step.say) { console.log(`   - ${step.say}`); return; }
   if (step.deeplink) { console.log(`   - deeplink ${step.deeplink}`); if (!DRY) await fireDeeplink(step.deeplink); return; }
 
@@ -253,6 +318,18 @@ async function runStep(step) {
     const mods = list(await api('GET', '/api/mods/active'));
     console.log(`   - disable ${mods.length} active mod(s)`);
     if (!DRY) for (const m of mods) await api('POST', '/api/mods/disable', { mod_id: m.id });
+    return;
+  }
+  if (step.enableFirst) {
+    const mods = list(await api('GET', '/api/mods')).slice(0, step.enableFirst);
+    console.log(`   - enable the first ${mods.length} mod(s), ${step.every || 0}ms apart`);
+    for (const m of mods) {
+      console.log(`     · "${m.name}"`);
+      if (!DRY) {
+        await api('POST', '/api/mods/enable', { mod_id: m.id });
+        if (step.every) await sleep(step.every);
+      }
+    }
     return;
   }
   if (step.enable || step.disable) {
@@ -304,18 +381,27 @@ const ask = (q) => new Promise((res) => {
     await sleep(1200);   // let the first full snapshot land before anything moves
   }
 
-  console.log('\n3. Your turn - perform this, then come back:');
-  scn.perform.forEach((p, i) => console.log(`   ${i + 1}. ${p}`));
-  console.log('\n   Move deliberately. A replay plays back at real speed, so hesitation reads as');
-  console.log('   confusion. End on a settled screen, not mid-animation.');
+  if (AUTO) {
+    console.log('\n3. Driving (unattended)');
+    for (const s of scn.drive) {
+      try { await runStep(s); } catch (e) { console.error(`   [x] ${e.message}`); process.exit(1); }
+      if (s.wait && !s.say) { /* a step may carry its own trailing pause */ }
+    }
+    if (DRY) { console.log('\n[DRY RUN] would export now.\n'); return; }
+  } else {
+    console.log('\n3. Your turn - perform this, then come back:');
+    scn.perform.forEach((p, i) => console.log(`   ${i + 1}. ${p}`));
+    console.log('\n   Move deliberately. A replay plays back at real speed, so hesitation reads as');
+    console.log('   confusion. End on a settled screen, not mid-animation.');
 
-  if (DRY) { console.log('\n[DRY RUN] would wait here, then export.\n'); return; }
+    if (DRY) { console.log('\n[DRY RUN] would wait here, then export.\n'); return; }
 
-  const a = await ask('\n   Press Enter to export, or type "x" to abort: ');
-  if (norm(a) === 'x') {
-    await api('POST', '/api/recorder', { on: false, full: false, rust: true, js: true });
-    console.log('   Aborted. Recorder off, nothing exported.\n');
-    return;
+    const a = await ask('\n   Press Enter to export, or type "x" to abort: ');
+    if (norm(a) === 'x') {
+      await api('POST', '/api/recorder', { on: false, full: false, rust: true, js: true });
+      console.log('   Aborted. Recorder off, nothing exported.\n');
+      return;
+    }
   }
 
   console.log('\n4. Export');

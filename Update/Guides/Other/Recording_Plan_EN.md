@@ -118,11 +118,31 @@ It activates the right profile, clears the mods, fires any deeplink the clip nee
 recorder on with the correct masking for that clip, then **stops and prints what you have to
 perform**. Press Enter when you are done and it exports and turns the recorder off.
 
-> [!NOTE]
-> **Why it does not script the clicks too.** rrweb records real pointer and input events. An action
-> triggered through the API produces none, so a fully scripted take plays back with the interface
-> changing and no cursor anywhere — it reads as a glitch, not a tutorial. The harness automates
-> what can be automated without that cost.
+### Which clips can run unattended
+
+BMM's recorder sets **`mousemove: false`** — pointer positions are never captured, as a size
+optimisation. So **no BMM replay has a moving cursor, not even one filmed by hand.** What a human
+take carries that an API-driven one cannot is narrower than it sounds: **click markers** (rrweb
+keeps `mouseInteraction`), scroll, and typing. DOM changes are recorded either way, whatever caused
+them.
+
+That splits the list cleanly:
+
+| | |
+|---|---|
+| **Unattended works** | The clip's content is a *result* — a sync transferring, a benchmark running, a scheduled task firing, a mod list filling in. Nothing was clicked, so no click marker is missing |
+| **Needs a human** | A click-through tutorial. The click markers are the "here is where I pressed" affordance, and nothing else supplies them |
+
+A scenario with a `drive` list runs end to end:
+
+```bash
+node scripts/record-take.mjs activation-auto --auto
+```
+
+`--auto` on a clip with no `drive` is refused, and so is running a `drive`-only clip without it.
+Because driving enables and disables mods — which deploys and removes real files — combining
+`--auto` with `--profile` needs `--allow-writes` as well. On the demo sandbox that is the point;
+on your own profile it edits your game folder.
 
 Practical notes:
 
