@@ -12,6 +12,28 @@ cd "BMM Docs"
 pip install -r requirements.txt
 ```
 
+> [!IMPORTANT]
+> **`mkdocs` n'est peut-être pas dans ton PATH — utilise `python -m mkdocs`.** Avec un Python du
+> **Microsoft Store** (le cas courant sous Windows), pip installe `mkdocs.exe` dans
+> `%LOCALAPPDATA%\Packages\PythonSoftwareFoundation.Python.3.12_*\LocalCache\local-packages\Python312\Scripts`,
+> qui **n'est pas** dans le PATH par défaut. `mkdocs serve` échoue alors sur *« le terme «mkdocs»
+> n'est pas reconnu »*. Toutes les commandes de ce guide marchent en `python -m mkdocs …` ; cette
+> forme ne demande aucune modification du PATH et c'est celle qu'utilise l'outillage du projet.
+>
+> Pour avoir la commande nue, ajoute ce dossier à ton PATH utilisateur une fois, puis rouvre le
+> terminal :
+>
+> ```powershell
+> [Environment]::SetEnvironmentVariable('PATH',
+>   [Environment]::GetEnvironmentVariable('PATH','User') + ';' +
+>   "$env:LOCALAPPDATA\Packages\PythonSoftwareFoundation.Python.3.12_qbz5n2kfra8p0\LocalCache\local-packages\Python312\Scripts",
+>   'User')
+> ```
+>
+> Attention : `python -c "import sysconfig; print(sysconfig.get_path('scripts'))"` te donne le
+> **mauvais** dossier pour le Python du Store — il pointe vers `WindowsApps`, en lecture seule et
+> sans `mkdocs.exe`.
+
 Versions épinglées :
 
 ```
@@ -27,8 +49,8 @@ Pillow==11.0.0
 ## 2. Le site (ce qu'utilisent les contributeurs)
 
 ```bash
-mkdocs serve                # http://127.0.0.1:8000 — le français sur /fr/
-mkdocs build --strict       # ce que la CI contrôle
+python -m mkdocs serve            # http://127.0.0.1:8000 — le français sur /fr/
+python -m mkdocs build --strict   # ce que la CI contrôle
 ```
 
 > [!IMPORTANT]
@@ -43,9 +65,22 @@ traduites retombent sur l'anglais.
 ## 3. Le PDF
 
 ```bash
-mkdocs build -f mkdocs.pdf.yml
+python -m mkdocs build -f mkdocs.pdf.yml
 # → site/pdf/bettermodsmanager.pdf
 ```
+
+> [!CAUTION]
+> **L'ordre compte si tu construis les deux.** `mkdocs build` **nettoie `site/` d'abord**, donc
+> une compilation du site après celle du PDF supprime le PDF. Lance toujours la passe PDF **en
+> dernier** :
+>
+> ```bash
+> python -m mkdocs build --strict            # le site + le contrôle strict des liens
+> python -m mkdocs build -f mkdocs.pdf.yml   # le PDF, dans le site déjà présent
+> ```
+>
+> `mkdocs.pdf.yml` fait un INHERIT de `mkdocs.yml` et sa liste de plugins est un sur-ensemble : la
+> seconde passe reproduit donc le même site et y ajoute le PDF.
 
 > [!AVERTISSEMENT]
 > **Ça exige des bibliothèques système GTK et c'est en pratique réservé à Linux/CI.** Le PDF est
@@ -85,7 +120,8 @@ docker run --rm -v "$PWD":/docs -w /docs python:3.12-slim bash -c "
   apt-get update && apt-get install -y --no-install-recommends \
     libcairo2 libpango-1.0-0 libpangocairo-1.0-0 libgdk-pixbuf-2.0-0 libffi-dev shared-mime-info &&
   pip install -r requirements.txt &&
-  mkdocs build -f mkdocs.pdf.yml"
+  python -m mkdocs build --strict &&
+  python -m mkdocs build -f mkdocs.pdf.yml"
 ```
 
 ---
@@ -108,29 +144,47 @@ le `.annotated.png` régénéré, sinon la CI échoue sur le `--check`.
 ## 5. CI
 
 `.github/workflows/docs.yml` compile sur push vers `master` / PR, et déploie sur GitHub Pages
-depuis `master`. Étapes : Python 3.12 → les libs apt ci-dessus → `pip install -r requirements.txt`
-→ `python tools/annotate.py --check` → build → upload de l'artéfact PDF → déploiement.
+depuis `master`. Étapes, dans l'ordre :
 
-> [!ATTENTION]
-> **Bug connu — la CI ne produit pas réellement le PDF.** L'étape de build lance
-> `mkdocs build --strict` avec une variable d'env `ENABLE_PDF: "1"`, mais `ENABLE_PDF` n'est
-> référencée **nulle part ailleurs dans le dépôt** — `mkdocs.yml` n'a ni hook `!ENV` ni entrée
-> `with-pdf`. Aucun PDF n'est donc rendu, et l'étape `upload-artifact`
-> (`if-no-files-found: error`) devrait échouer. L'étape correcte est :
->
-> ```yaml
-> run: |
->   mkdocs build --strict                 # site (et la barrière stricte sur les liens)
->   mkdocs build -f mkdocs.pdf.yml        # PDF → site/pdf/bettermodsmanager.pdf
-> ```
+1. `actions/checkout@v4` **avec `lfs: true`**
+2. une garde qui échoue si un `.bmmreplay` est encore un pointeur LFS
+3. Python 3.12
+4. les libs apt ci-dessus
+5. `pip install -r requirements.txt`
+6. `python tools/annotate.py --check`
+7. `mkdocs build --strict` — le site, et la barrière stricte sur les liens
+8. `mkdocs build -f mkdocs.pdf.yml` — le PDF, **en dernier**, parce qu'une compilation du site nettoie `site/`
+9. upload de l'artéfact PDF → déploiement Pages (master uniquement)
+
+### Deux bugs que ce workflow a eus
+
+Les deux sont corrigés ; ils sont consignés parce que dans les deux cas le symptôme était le
+**silence**, pas une erreur.
+
+> [!NOTE]
+> **Le PDF n'était jamais rendu.** L'étape de build lançait `mkdocs build --strict` avec une
+> variable d'env `ENABLE_PDF: "1"` que **rien dans le dépôt ne lit** — `mkdocs.yml` n'a ni hook
+> `!ENV` ni entrée `with-pdf`. Aucun PDF n'existait donc, et `upload-artifact` n'envoyait rien.
+> Corrigé par les deux passes explicites des étapes 7–8.
+
+> [!NOTE]
+> **Tous les replays intégrés au site publié étaient cassés.** Les `.bmmreplay` sont suivis par
+> LFS, mais le checkout n'avait pas `lfs: true` : la CI récupérait des fichiers pointeurs de 130
+> octets, mkdocs les copiait tels quels dans `site/`, et le lecteur essayait de parser
+> `version https://git-lfs.github.com/spec/v1…` comme un flux d'événements rrweb — n'affichant
+> rien, sans erreur. Ça marchait en local seulement parce qu'un clone de dev a les vrais fichiers.
+> Corrigé par `lfs: true` plus la garde de l'étape 2, pour qu'un pointeur ne puisse plus jamais
+> atteindre le site.
 
 ---
 
 ## 6. Checklist avant de pousser de la doc
 
-- [ ] `mkdocs build --strict` passe (aucun lien interne cassé).
+- [ ] `python -m mkdocs build --strict` passe (aucun lien interne cassé).
 - [ ] La nouvelle page a bien `page.md` **et** `page.fr.md`, et figure dans la `nav` — plus une
       entrée `nav_translations` pour son titre français.
 - [ ] `python tools/annotate.py --check` passe.
 - [ ] Si tu as ajouté un plugin à `mkdocs.yml`, répercute-le dans `mkdocs.pdf.yml`.
-- [ ] Nouveaux enregistrements `.bmmreplay` commités **via git-lfs** (voir *Intégrer replays & vidéo*).
+- [ ] Nouveaux enregistrements `.bmmreplay` commités **via git-lfs** (voir *Intégrer replays &
+      vidéo*), et `git lfs ls-files` les liste — un fichier commité avant que `.gitattributes` ne
+      le couvre entre comme blob normal et déjoue silencieusement le cas inverse de la garde CI.
