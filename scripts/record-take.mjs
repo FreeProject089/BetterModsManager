@@ -26,10 +26,31 @@
 // Requires BMM to be running. See Update/Guides/Other/Recording_Plan_*.md for what each clip
 // has to show.
 
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
+
+// ── the recording fixture ────────────────────────────────────────────────────
+// Clips are recorded against a profile made FOR recording, not against your library and not
+// against the tutorial's sandbox. The sandbox looked like the obvious choice and is not: it
+// exists only while a tutorial is running, so its overlay would be in every frame, and the
+// engine deletes it when the tutorial ends or at the next boot if a session crashed.
+//
+// This fixture is a normal profile pointing at throwaway folders in temp, holding a handful of
+// example mods. It survives restarts, contains nothing of yours — so clips can be recorded
+// UNMASKED and stay readable — and is designed so the documented clips are actually possible:
+// two mods deliberately share a file for the conflicts clip, and one is packed wrong for the
+// mapper clip.
+const FIXTURE_NAME = 'Recording demo';
+const FIXTURE_ROOT = join(tmpdir(), 'bmm-recording-fixture');
+const FIXTURE_MODS = {
+  'HD Texture Pack':      ['Data/Textures/hero.dds', 'Data/Textures/normal.dds', 'Data/Textures/sky.dds'],
+  'HD Texture Pack Lite': ['Data/Textures/hero.dds'],           // shares hero.dds on purpose
+  'Sound Overhaul':       ['Data/Sounds/ambient.ogg', 'Data/Sounds/ui-click.ogg'],
+  'Badly Packed Mod':     ['hero.dds', 'readme.txt'],           // no Data/ — for the mapper clip
+};
 
 // ── scenarios ────────────────────────────────────────────────────────────────
 // A step is one of:
@@ -48,7 +69,7 @@ const SCENARIOS = {
     page: 'features/themes',
     full: true,                       // unmasked: the demo profile has no real data
     setup: [
-      { profile: 'demo' },
+      { profile: FIXTURE_NAME },
       { deeplink: 'bmm://theme/apply?id=default' },
       { wait: 800 },
     ],
@@ -63,7 +84,7 @@ const SCENARIOS = {
     title: 'Command palette & shortcuts',
     page: 'features/command-palette',
     full: true,
-    setup: [{ profile: 'demo' }, { deeplink: 'bmm://docs/open' }, { wait: 600 }],
+    setup: [{ profile: FIXTURE_NAME }, { deeplink: 'bmm://docs/open' }, { wait: 600 }],
     perform: [
       'Press Ctrl+K, type a few letters, arrow down, Enter — land on a screen.',
       'Ctrl+K again, switch to semantic mode, search a word BMM does not use (e.g. "delete").',
@@ -75,7 +96,7 @@ const SCENARIOS = {
     title: 'Conflicts — who wins, and what comes back',
     page: 'how-it-works/conflicts',
     full: true,
-    setup: [{ profile: 'demo' }, { disableAll: true }, { wait: 500 }],
+    setup: [{ profile: FIXTURE_NAME }, { disableAll: true }, { wait: 500 }],
     perform: [
       'Enable mod A, then mod B — the two that share a file.',
       'Open the conflict view and show the overlapping file.',
@@ -87,7 +108,7 @@ const SCENARIOS = {
     title: 'Profiles — switching moves no files',
     page: 'features/profiles',
     full: true,
-    setup: [{ profile: 'demo' }, { disableAll: true }, { wait: 500 }],
+    setup: [{ profile: FIXTURE_NAME }, { disableAll: true }, { wait: 500 }],
     perform: [
       'Create a profile, showing the three folders.',
       'Enable a mod, then SWITCH profiles and show the game folder is unchanged.',
@@ -99,7 +120,7 @@ const SCENARIOS = {
     title: 'Storage & disk I/O',
     page: 'features/storage',
     full: true,
-    setup: [{ profile: 'demo' }, { deeplink: 'bmm://docs/open?article=storage-manager' }, { wait: 600 }],
+    setup: [{ profile: FIXTURE_NAME }, { deeplink: 'bmm://docs/open?article=storage-manager' }, { wait: 600 }],
     perform: [
       'Open the Storage Manager. Show Smart I/O and run Auto-Calibration once.',
       'Apply a per-disk MB/s cap, then show free space per profile.',
@@ -110,7 +131,7 @@ const SCENARIOS = {
     title: 'The masking demo (bmm-demo.bmmreplay)',
     page: 'features/privacy-telemetry',
     full: false,                      // MASKED on purpose — masking is what it demonstrates
-    setup: [{ profile: 'demo' }, { wait: 500 }],
+    setup: [{ profile: FIXTURE_NAME }, { wait: 500 }],
     perform: [
       'A short general tour: Library, a profile switch, a settings page.',
       'Names must be visibly masked — that is the whole point of this clip.',
@@ -124,7 +145,7 @@ const SCENARIOS = {
     title: 'Enable / disable — what the mod list does (unattended)',
     page: 'how-it-works/profiles-activation',
     full: true,
-    setup: [{ profile: 'demo' }, { disableAll: true }, { wait: 1500 }],
+    setup: [{ profile: FIXTURE_NAME }, { disableAll: true }, { wait: 1500 }],
     // `enableFirst` rather than named mods: an unattended clip should not depend on what a
     // particular library happens to contain, or it only ever runs on the machine it was written
     // on. It takes them in list order, pausing between each so the list visibly fills in.
@@ -152,7 +173,10 @@ const name = (() => {
   return args.find((a, i) => !a.startsWith('-') && !(pi >= 0 && i === pi + 1));
 })();
 
-if (has('--list') || !name) {
+// Handled at the bottom, once the token and BASE exist.
+const FIXTURE_CMD = has('--setup-fixture') ? 'setup' : (has('--teardown-fixture') ? 'teardown' : null);
+
+if (!FIXTURE_CMD && (has('--list') || !name)) {
   console.log('Scenarios:\n');
   for (const [k, s] of Object.entries(SCENARIOS)) {
     console.log(`  ${k.padEnd(18)} ${s.title}`);
@@ -161,18 +185,18 @@ if (has('--list') || !name) {
   console.log('\n  node scripts/record-take.mjs <scenario> [--auto] [--dry-run] [--no-record] [--profile "name"]');
   process.exit(name ? 1 : 0);
 }
-const scn = SCENARIOS[name];
-if (!scn) { console.error(`Unknown scenario "${name}". Try --list.`); process.exit(1); }
+const scn = FIXTURE_CMD ? null : SCENARIOS[name];
+if (!FIXTURE_CMD && !scn) { console.error(`Unknown scenario "${name}". Try --list.`); process.exit(1); }
 
 const AUTO = has('--auto');
-if (!AUTO && !scn.perform) {
+if (!FIXTURE_CMD && !AUTO && !scn.perform) {
   console.error(
     `"${name}" is an unattended clip — it has a \`drive\` list and nothing for you to perform.\n` +
     `  Run it with --auto.`
   );
   process.exit(1);
 }
-if (AUTO && !scn.drive) {
+if (!FIXTURE_CMD && AUTO && !scn.drive) {
   console.error(
     `"${name}" has no \`drive\` list, so there is nothing to run unattended.\n` +
     `  It is a click-through clip: BMM records click markers only for real presses, and those\n` +
@@ -183,7 +207,7 @@ if (AUTO && !scn.drive) {
 // A driven clip enables and disables mods, which deploys and removes real files. On the demo
 // sandbox that is the point; on one of your own profiles it edits your game folder, so it has
 // to be asked for.
-if (AUTO && PROFILE_OVERRIDE && !has('--allow-writes')) {
+if (!FIXTURE_CMD && AUTO && PROFILE_OVERRIDE && !has('--allow-writes')) {
   console.error(
     `--auto with --profile would enable/disable mods in "${PROFILE_OVERRIDE}", which writes to\n` +
     `  that profile's game folder. Add --allow-writes if that is what you want.`
@@ -195,8 +219,8 @@ if (AUTO && PROFILE_OVERRIDE && !has('--allow-writes')) {
 // at one of your own profiles and that reasoning is gone, so the unmasking goes with it —
 // otherwise an override would silently bake real mod names and folder paths into a clip headed
 // for a public site. --force-unmasked overrides the override, deliberately awkward to type.
-const FORCED_MASK = !!PROFILE_OVERRIDE && !!scn.full && !has('--force-unmasked');
-const FULL = FORCED_MASK ? false : !!scn.full;
+const FORCED_MASK = !!PROFILE_OVERRIDE && !!(scn && scn.full) && !has('--force-unmasked');
+const FULL = FORCED_MASK ? false : !!(scn && scn.full);
 
 const DATA = join(process.env.APPDATA || '', 'com.bettermm.desktop', 'data.json');
 // The token is read straight from data.json so it never has to be pasted anywhere — and it is
@@ -294,16 +318,13 @@ async function runAction(step) {
     try {
       p = resolve(list(await api('GET', '/api/profiles')), wanted, 'profile');
     } catch (e) {
-      // The demo sandbox is created by the tutorial through a Tauri command the HTTP API does not
-      // expose, so this script cannot conjure it — but it can say so precisely instead of leaving
-      // you staring at a list that simply does not contain what was asked for.
-      if (!PROFILE_OVERRIDE && norm(step.profile) === 'demo') {
+      if (!PROFILE_OVERRIDE && step.profile === FIXTURE_NAME) {
         throw new Error(
           `${e.message}\n` +
-          `     The demo profile is created by the tutorial, not by this script.\n` +
-          `     -> In BMM: Help & other > Interactive Tutorial Hub > start any tutorial.\n` +
-          `        It sets up an example profile with example mods and cleans it up afterwards.\n` +
-          `     Or record against one of your own profiles:\n` +
+          `     The recording fixture does not exist yet. Create it once:\n` +
+          `        node scripts/record-take.mjs --setup-fixture\n` +
+          `     Then scan it in BMM (Library > scan) so the example mods are picked up.\n` +
+          `     Or record against one of your own profiles instead:\n` +
           `        node scripts/record-take.mjs ${name} --profile "<profile name>"\n` +
           `        The clip is then forced MASKED, so your real names never ship with it.`
         );
@@ -348,6 +369,57 @@ async function runAction(step) {
   console.log('   - (unknown step, skipped)', JSON.stringify(step));
 }
 
+/** Create the throwaway folders, the example mods, and the BMM profile pointing at them.
+ *  Idempotent: run it as often as you like. */
+async function setupFixture() {
+  const dirs = { game: join(FIXTURE_ROOT, 'game'), mods: join(FIXTURE_ROOT, 'mods'), backup: join(FIXTURE_ROOT, 'backup') };
+  console.log(`Fixture root: ${FIXTURE_ROOT}`);
+  for (const d of Object.values(dirs)) mkdirSync(d, { recursive: true });
+  // A game folder that already has one of the files, so enabling a mod visibly REPLACES
+  // something and the original can be restored — which is what the conflicts clip shows.
+  mkdirSync(join(dirs.game, 'Data', 'Textures'), { recursive: true });
+  writeFileSync(join(dirs.game, 'Data', 'Textures', 'hero.dds'), 'original game texture\n');
+
+  for (const [mod, files] of Object.entries(FIXTURE_MODS)) {
+    for (const rel of files) {
+      const p = join(dirs.mods, mod, ...rel.split('/'));
+      mkdirSync(join(p, '..'), { recursive: true });
+      writeFileSync(p, `${mod} :: ${rel}\n`);
+    }
+    console.log(`  - ${mod}  (${files.length} file(s))`);
+  }
+
+  const existing = list(await api('GET', '/api/profiles')).find((p) => p.name === FIXTURE_NAME);
+  if (existing) {
+    console.log(`\nProfile "${FIXTURE_NAME}" already exists — folders refreshed, profile left alone.`);
+    return;
+  }
+  await api('POST', '/api/profiles', {
+    name: FIXTURE_NAME,
+    game_path: dirs.game,
+    mods_path: dirs.mods,
+    backup_path: dirs.backup,
+    game_name: 'Recording fixture',
+  });
+  console.log(`\nCreated profile "${FIXTURE_NAME}". It is NOT activated — a scenario does that.`);
+  console.log('Scan it once in BMM (Library > scan) so the example mods are picked up.');
+}
+
+/** Remove the profile and the temp folders. */
+async function teardownFixture() {
+  const p = list(await api('GET', '/api/profiles')).find((x) => x.name === FIXTURE_NAME);
+  if (p) {
+    // BMM refuses to delete the active profile, so step off it first.
+    const other = list(await api('GET', '/api/profiles')).find((x) => x.id !== p.id);
+    if (other) await api('POST', '/api/profiles/activate', { profile_id: other.id }).catch(() => {});
+    await api('DELETE', `/api/profiles/${p.id}`);
+    console.log(`Removed profile "${FIXTURE_NAME}".`);
+  } else {
+    console.log(`No profile named "${FIXTURE_NAME}".`);
+  }
+  try { rmSync(FIXTURE_ROOT, { recursive: true, force: true }); console.log(`Removed ${FIXTURE_ROOT}`); } catch { /* ignore */ }
+}
+
 const ask = (q) => new Promise((res) => {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   rl.question(q, (a) => { rl.close(); res(a); });
@@ -356,6 +428,10 @@ const ask = (q) => new Promise((res) => {
 // ── run ──────────────────────────────────────────────────────────────────────
 (async () => {
   const h = await health();
+  if (FIXTURE_CMD) {
+    if (FIXTURE_CMD === 'setup') await setupFixture(); else await teardownFixture();
+    return;
+  }
   console.log(`\n${scn.title}`);
   console.log(`  page   : ${scn.page}`);
   if (FORCED_MASK) {
@@ -366,6 +442,12 @@ const ask = (q) => new Promise((res) => {
     console.log(`  masking: ${FULL ? 'UNMASKED (demo profile - no real data)' : 'MASKED (this clip demonstrates masking)'}`);
   }
   console.log(`  BMM    : ${BASE}${h && h.service ? ` (${h.service})` : ''}${DRY ? '   [DRY RUN - nothing will change]' : ''}\n`);
+
+  if (DRY) {
+    console.log('  NOTE   : in a dry run the profile is not really activated, so any step that');
+    console.log('           resolves a mod list reads the CURRENTLY active profile. The names');
+    console.log('           below are therefore indicative, not what a real take would touch.\n');
+  }
 
   console.log('1. State');
   for (const s of scn.setup) {

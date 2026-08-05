@@ -8,17 +8,26 @@ Every clip the documentation needs, what it has to show, and where it lands. Two
 | **`.mp4`** | Anything rrweb cannot capture | Native dialogs, the installer, the game launching, the OS file picker, a UPnP router page — none of that is in BMM's DOM |
 
 > [!IMPORTANT]
-> **Record from the 🎓 demo profile, unmasked.** This is the opposite of the rule for a bug report,
-> and the reason matters: masking replaces every mod and profile name with `••••`, which is exactly
-> right when you are sending a recording to someone, and useless in a tutorial clip where the whole
-> point is seeing *which* mod you enabled. The demo profile contains no real data, so unmasking it
-> leaks nothing.
+> **Record from the recording fixture, unmasked.** This is the opposite of the rule for a bug
+> report, and the reason matters: masking replaces every mod and profile name with `••••`, which is
+> exactly right when you are sending a recording to someone, and useless in a tutorial clip where
+> the whole point is seeing *which* mod you enabled. The fixture contains nothing of yours, so
+> unmasking it leaks nothing.
 >
-> Two exceptions, which must stay **masked** because masking is what they are demonstrating:
-> `bmm-demo.bmmreplay` on the privacy page, and any clip about the *Full* switch.
+> `node scripts/record-take.mjs --setup-fixture` creates it: a normal profile called **Recording
+> demo**, pointing at throwaway folders in temp, holding four example mods. Two of them share a
+> file on purpose (so the conflicts clip is possible) and one is packed wrong (so the mapper clip
+> is). Scan it once in BMM afterwards. `--teardown-fixture` removes it.
 >
-> Masking is applied at capture — an unmasked recording cannot be masked afterwards, and a masked one
-> cannot be unmasked. Decide before you press record.
+> **Not the 🎓 tutorial sandbox** — that was the obvious choice and it does not work. It exists
+> only while a tutorial is running, so the tutorial overlay would be in every frame, and the engine
+> deletes it when the tutorial ends or at the next start.
+>
+> Two clips must stay **masked**, because masking is what they demonstrate: `bmm-demo.bmmreplay` on
+> the privacy page, and any clip about the *Full* switch.
+>
+> Masking is applied at capture — an unmasked recording cannot be masked afterwards, and a masked
+> one cannot be unmasked. Decide before you press record.
 
 ---
 
@@ -108,6 +117,7 @@ Arranging identical state before every take is the tedious half of this, and it 
 makes people not re-record. So it is scripted:
 
 ```bash
+node scripts/record-take.mjs --setup-fixture    # once — creates the profile clips record against
 node scripts/record-take.mjs --list
 node scripts/record-take.mjs conflicts            # set state → arm recorder → wait → export
 node scripts/record-take.mjs conflicts --dry-run  # print the plan, change nothing

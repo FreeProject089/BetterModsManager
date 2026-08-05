@@ -8,14 +8,24 @@ Chaque clip dont la doc a besoin, ce qu'il doit montrer, et où il atterrit. Deu
 | **`.mp4`** | Tout ce que rrweb ne peut pas capturer | Boîtes natives, installeur, lancement du jeu, sélecteur de fichiers de l'OS, page UPnP du routeur — rien de tout ça n'est dans le DOM de BMM |
 
 > [!IMPORTANT]
-> **Enregistre depuis le profil de démo 🎓, en démasqué.** C'est l'inverse de la règle pour un rapport
-> de bug, et la raison compte : le masquage remplace chaque nom de mod et de profil par `••••`, ce qui
-> est exactement ce qu'il faut quand tu envoies un enregistrement à quelqu'un, et inutile dans un clip
-> pédagogique où tout l'intérêt est de voir *quel* mod tu as activé. Le profil de démo ne contient
-> aucune donnée réelle : le démasquer ne fuite rien.
+> **Enregistre depuis le profil de tournage, en démasqué.** C'est l'inverse de la règle pour un
+> rapport de bug, et la raison compte : le masquage remplace chaque nom de mod et de profil par
+> `••••`, ce qui est exactement ce qu'il faut quand tu envoies un enregistrement à quelqu'un, et
+> inutile dans un clip pédagogique où tout l'intérêt est de voir *quel* mod tu as activé. Le profil
+> de tournage ne contient rien à toi : le démasquer ne fuite rien.
 >
-> Deux exceptions, qui doivent rester **masquées** parce que c'est le masquage qu'elles démontrent :
-> `bmm-demo.bmmreplay` sur la page confidentialité, et tout clip portant sur l'interrupteur *Complet*.
+> `node scripts/record-take.mjs --setup-fixture` le crée : un profil normal nommé **Recording
+> demo**, pointant sur des dossiers jetables dans temp, avec quatre mods d'exemple. Deux partagent
+> un fichier exprès (pour que le clip conflits soit possible) et un est mal empaqueté (pour le clip
+> mapper). Scanne-le une fois dans BMM ensuite. `--teardown-fixture` le retire.
+>
+> **Pas le bac à sable 🎓 du tutoriel** — c'était le choix évident et il ne marche pas. Il n'existe
+> que pendant qu'un tutoriel tourne, donc son overlay serait dans chaque image, et le moteur le
+> supprime à la fin du tutoriel ou au démarrage suivant.
+>
+> Deux clips doivent rester **masqués**, parce que c'est le masquage qu'ils démontrent :
+> `bmm-demo.bmmreplay` sur la page confidentialité, et tout clip portant sur l'interrupteur
+> *Complet*.
 >
 > Le masquage est appliqué à la capture — un enregistrement démasqué ne peut pas être masqué après
 > coup, et un masqué ne peut pas être démasqué. Décide avant d'appuyer sur enregistrer.
@@ -108,6 +118,7 @@ Mettre l'app dans un état identique avant chaque prise, c'est la moitié pénib
 c'est celle qui fait qu'on ne refait pas une prise ratée. Elle est donc scriptée :
 
 ```bash
+node scripts/record-take.mjs --setup-fixture    # une fois — crée le profil de tournage
 node scripts/record-take.mjs --list
 node scripts/record-take.mjs conflicts            # état → armer l'enregistreur → attendre → exporter
 node scripts/record-take.mjs conflicts --dry-run  # affiche le plan, ne change rien
