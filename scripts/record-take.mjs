@@ -10,8 +10,9 @@
 //
 //   node scripts/record-take.mjs --list
 //   node scripts/record-take.mjs themes
-//   node scripts/record-take.mjs themes --dry-run     # print the plan, touch nothing
-//   node scripts/record-take.mjs themes --no-record   # just set the state up
+//   node scripts/record-take.mjs themes --dry-run              # print the plan, touch nothing
+//   node scripts/record-take.mjs themes --no-record            # just set the state up
+//   node scripts/record-take.mjs themes --profile "My profile" # record against your own data
 //
 // Requires BMM to be running. See Update/Guides/Other/Recording_Plan_*.md for what each clip
 // has to show.
@@ -43,7 +44,7 @@ const SCENARIOS = {
       { wait: 800 },
     ],
     perform: [
-      'Open Settings → Appearance and apply two built-in themes, pausing on each.',
+      'Open Settings > Appearance and apply two built-in themes, pausing on each.',
       'Open the theme editor and change ONE colour token so the live re-render is visible.',
       'Close the editor. End on a settled screen.',
     ],
@@ -57,7 +58,7 @@ const SCENARIOS = {
     perform: [
       'Press Ctrl+K, type a few letters, arrow down, Enter — land on a screen.',
       'Ctrl+K again, switch to semantic mode, search a word BMM does not use (e.g. "delete").',
-      'Open Settings → Keyboard shortcuts and rebind one row.',
+      'Open Settings > Keyboard shortcuts and rebind one row.',
     ],
   },
 
@@ -69,7 +70,7 @@ const SCENARIOS = {
     perform: [
       'Enable mod A, then mod B — the two that share a file.',
       'Open the conflict view and show the overlapping file.',
-      'Disable B and show A’s file coming BACK. That restore is the point of the clip.',
+      "Disable B and show A's file coming BACK. That restore is the point of the clip.",
     ],
   },
 
@@ -103,7 +104,7 @@ const SCENARIOS = {
     setup: [{ profile: 'demo' }, { wait: 500 }],
     perform: [
       'A short general tour: Library, a profile switch, a settings page.',
-      'Names must be visibly ••••  — that is the whole point of this clip.',
+      'Names must be visibly masked — that is the whole point of this clip.',
     ],
   },
 };
@@ -111,33 +112,43 @@ const SCENARIOS = {
 // ── plumbing ─────────────────────────────────────────────────────────────────
 const args = process.argv.slice(2);
 const has = (f) => args.includes(f);
-const name = args.find((a) => !a.startsWith('-'));
+const flagValue = (f) => { const i = args.indexOf(f); return i >= 0 ? args[i + 1] : null; };
 const DRY = has('--dry-run');
 const NO_REC = has('--no-record');
+// Record against one of your own profiles instead of the demo sandbox. Such a clip is forced
+// MASKED below — your real mod names and folder paths would otherwise be baked into it.
+const PROFILE_OVERRIDE = flagValue('--profile');
+const name = (() => {
+  const pi = args.indexOf('--profile');
+  return args.find((a, i) => !a.startsWith('-') && !(pi >= 0 && i === pi + 1));
+})();
 
 if (has('--list') || !name) {
   console.log('Scenarios:\n');
   for (const [k, s] of Object.entries(SCENARIOS)) {
     console.log(`  ${k.padEnd(18)} ${s.title}`);
-    console.log(`  ${''.padEnd(18)} → ${s.page}   ${s.full ? 'unmasked' : 'MASKED'}`);
+    console.log(`  ${''.padEnd(18)} -> ${s.page}   ${s.full ? 'unmasked' : 'MASKED'}`);
   }
-  console.log('\n  node scripts/record-take.mjs <scenario> [--dry-run] [--no-record]');
+  console.log('\n  node scripts/record-take.mjs <scenario> [--dry-run] [--no-record] [--profile "name"]');
   process.exit(name ? 1 : 0);
 }
 const scn = SCENARIOS[name];
 if (!scn) { console.error(`Unknown scenario "${name}". Try --list.`); process.exit(1); }
 
+// A scenario is unmasked because it records the demo sandbox, which holds nothing real. Point it
+// at one of your own profiles and that reasoning is gone, so the unmasking goes with it —
+// otherwise an override would silently bake real mod names and folder paths into a clip headed
+// for a public site. --force-unmasked overrides the override, deliberately awkward to type.
+const FORCED_MASK = !!PROFILE_OVERRIDE && !!scn.full && !has('--force-unmasked');
+const FULL = FORCED_MASK ? false : !!scn.full;
+
 const DATA = join(process.env.APPDATA || '', 'com.bettermm.desktop', 'data.json');
-function readSettings() {
-  if (!existsSync(DATA)) throw new Error(`data.json not found at ${DATA}`);
-  const d = JSON.parse(readFileSync(DATA, 'utf8'));
-  return d.settings || {};
-}
 // The token is read straight from data.json so it never has to be pasted anywhere — and it is
 // never printed, not even in --dry-run.
 let TOKEN = '', PORT = 51274;
 try {
-  const s = readSettings();
+  if (!existsSync(DATA)) throw new Error(`data.json not found at ${DATA}`);
+  const s = JSON.parse(readFileSync(DATA, 'utf8')).settings || {};
   TOKEN = s.api_token || '';
   PORT = Number(s.api_port) || 51274;
 } catch (e) {
@@ -153,20 +164,19 @@ async function api(method, path, body) {
     body: body ? JSON.stringify(body) : undefined,
   });
   const text = await res.text();
-  if (!res.ok) throw new Error(`${method} ${path} → ${res.status} ${text.slice(0, 200)}`);
+  if (!res.ok) throw new Error(`${method} ${path} -> ${res.status} ${text.slice(0, 200)}`);
   try { return JSON.parse(text); } catch { return text; }
 }
 
 async function health() {
   try {
-    const h = await api('GET', '/api/health');
-    return h;
+    return await api('GET', '/api/health');
   } catch {
     console.error(
-      `\n✗ Nothing answered on ${BASE}.\n` +
-      `  • Is BMM running?\n` +
-      `  • If it is: the port may have been taken when it started — BMM does NOT fall back to\n` +
-      `    another port, it disables the API for the whole session and logs a line. Restart BMM.\n`
+      `\n[x] Nothing answered on ${BASE}.\n` +
+      `  - Is BMM running?\n` +
+      `  - If it is: the port may have been taken when it started. BMM does NOT fall back to\n` +
+      `    another port; it disables the API for the whole session and logs a line. Restart BMM.\n`
     );
     process.exit(1);
   }
@@ -175,21 +185,32 @@ async function health() {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const norm = (s) => String(s || '').toLowerCase().trim();
 
+/** Every list endpoint answers `{ ok, data: [...] }`. Two shapes are tolerated beyond that: the
+ *  array under a named key (that is how /api/mods/all reports, under "profiles"), and a bare
+ *  array. This wrapper exists because guessing the envelope is exactly the bug that bit this
+ *  script — and a stub built from the same guess happily confirmed the guess. */
+function list(payload, altKey) {
+  if (Array.isArray(payload)) return payload;
+  if (payload && Array.isArray(payload.data)) return payload.data;
+  if (altKey && payload && Array.isArray(payload[altKey])) return payload[altKey];
+  throw new Error(`unexpected response shape: ${JSON.stringify(payload).slice(0, 120)}`);
+}
+
 /** Resolve a human name to an id, refusing to guess when it is ambiguous. */
-function resolve(list, wanted, label) {
+function resolve(items, wanted, label) {
   const w = norm(wanted);
-  const exact = list.filter((x) => norm(x.name) === w || x.id === wanted);
-  const pick = exact.length ? exact : list.filter((x) => norm(x.name).includes(w));
+  const exact = items.filter((x) => norm(x.name) === w || x.id === wanted);
+  const pick = exact.length ? exact : items.filter((x) => norm(x.name).includes(w));
   if (pick.length === 1) return pick[0];
   if (!pick.length) {
-    throw new Error(`no ${label} matches "${wanted}". Available: ${list.map((x) => x.name).join(', ')}`);
+    throw new Error(`no ${label} matches "${wanted}". Available: ${items.map((x) => x.name).join(', ')}`);
   }
-  throw new Error(`"${wanted}" matches ${pick.length} ${label}s: ${pick.map((x) => x.name).join(', ')} — be more specific`);
+  throw new Error(`"${wanted}" matches ${pick.length} ${label}s: ${pick.map((x) => x.name).join(', ')} - be more specific`);
 }
 
 function fireDeeplink(url) {
-  // Deeplinks go through the OS, which is what makes them work identically to a user clicking
-  // one on a web page.
+  // Deeplinks go through the OS, which is what makes them behave exactly as they do when a user
+  // clicks one on a web page.
   return new Promise((res) => {
     const p = spawn('cmd', ['/c', 'start', '', url], { stdio: 'ignore', windowsHide: true });
     p.on('close', () => res());
@@ -198,40 +219,56 @@ function fireDeeplink(url) {
 }
 
 async function runStep(step) {
-  if (step.wait) { console.log(`   · wait ${step.wait}ms`); if (!DRY) await sleep(step.wait); return; }
-  if (step.say) { console.log(`   · ${step.say}`); return; }
-  if (step.deeplink) { console.log(`   · deeplink ${step.deeplink}`); if (!DRY) await fireDeeplink(step.deeplink); return; }
+  if (step.wait) { console.log(`   - wait ${step.wait}ms`); if (!DRY) await sleep(step.wait); return; }
+  if (step.say) { console.log(`   - ${step.say}`); return; }
+  if (step.deeplink) { console.log(`   - deeplink ${step.deeplink}`); if (!DRY) await fireDeeplink(step.deeplink); return; }
 
   if (step.profile) {
-    const profiles = await api('GET', '/api/profiles');
-    const p = resolve(profiles.profiles || profiles, step.profile, 'profile');
-    console.log(`   · activate profile "${p.name}"`);
+    const wanted = PROFILE_OVERRIDE || step.profile;
+    let p;
+    try {
+      p = resolve(list(await api('GET', '/api/profiles')), wanted, 'profile');
+    } catch (e) {
+      // The demo sandbox is created by the tutorial through a Tauri command the HTTP API does not
+      // expose, so this script cannot conjure it — but it can say so precisely instead of leaving
+      // you staring at a list that simply does not contain what was asked for.
+      if (!PROFILE_OVERRIDE && norm(step.profile) === 'demo') {
+        throw new Error(
+          `${e.message}\n` +
+          `     The demo profile is created by the tutorial, not by this script.\n` +
+          `     -> In BMM: Help & other > Interactive Tutorial Hub > start any tutorial.\n` +
+          `        It sets up an example profile with example mods and cleans it up afterwards.\n` +
+          `     Or record against one of your own profiles:\n` +
+          `        node scripts/record-take.mjs ${name} --profile "<profile name>"\n` +
+          `        The clip is then forced MASKED, so your real names never ship with it.`
+        );
+      }
+      throw e;
+    }
+    console.log(`   - activate profile "${p.name}"${PROFILE_OVERRIDE ? '  [override]' : ''}`);
     if (!DRY) await api('POST', '/api/profiles/activate', { profile_id: p.id });
     return;
   }
   if (step.disableAll) {
-    const active = await api('GET', '/api/mods/active');
-    const mods = active.mods || active;
-    console.log(`   · disable ${mods.length} active mod(s)`);
+    const mods = list(await api('GET', '/api/mods/active'));
+    console.log(`   - disable ${mods.length} active mod(s)`);
     if (!DRY) for (const m of mods) await api('POST', '/api/mods/disable', { mod_id: m.id });
     return;
   }
   if (step.enable || step.disable) {
-    const all = await api('GET', '/api/mods');
-    const m = resolve(all.mods || all, step.enable || step.disable, 'mod');
+    const m = resolve(list(await api('GET', '/api/mods')), step.enable || step.disable, 'mod');
     const on = !!step.enable;
-    console.log(`   · ${on ? 'enable' : 'disable'} "${m.name}"`);
+    console.log(`   - ${on ? 'enable' : 'disable'} "${m.name}"`);
     if (!DRY) await api('POST', on ? '/api/mods/enable' : '/api/mods/disable', { mod_id: m.id });
     return;
   }
   if (step.modpack) {
-    const packs = await api('GET', '/api/modpacks');
-    const mp = resolve(packs.modpacks || packs, step.modpack, 'modpack');
-    console.log(`   · modpack "${mp.name}" ${step.on ? 'on' : 'off'}`);
+    const mp = resolve(list(await api('GET', '/api/modpacks')), step.modpack, 'modpack');
+    console.log(`   - modpack "${mp.name}" ${step.on ? 'on' : 'off'}`);
     if (!DRY) await api('POST', step.on ? '/api/modpacks/enable' : '/api/modpacks/disable', { modpack_id: mp.id });
     return;
   }
-  console.log('   · (unknown step, skipped)', JSON.stringify(step));
+  console.log('   - (unknown step, skipped)', JSON.stringify(step));
 }
 
 const ask = (q) => new Promise((res) => {
@@ -244,24 +281,30 @@ const ask = (q) => new Promise((res) => {
   const h = await health();
   console.log(`\n${scn.title}`);
   console.log(`  page   : ${scn.page}`);
-  console.log(`  masking: ${scn.full ? 'UNMASKED (demo profile — no real data)' : 'MASKED (this clip demonstrates masking)'}`);
-  console.log(`  BMM    : ${BASE} ${h?.service ? `(${h.service})` : ''}${DRY ? '   [DRY RUN — nothing will change]' : ''}\n`);
+  if (FORCED_MASK) {
+    console.log('  masking: MASKED - forced, because --profile points at a real profile.');
+    console.log('           Names and paths record as bullets. Pass --force-unmasked only if you');
+    console.log('           have checked what is on screen and are happy to publish it.');
+  } else {
+    console.log(`  masking: ${FULL ? 'UNMASKED (demo profile - no real data)' : 'MASKED (this clip demonstrates masking)'}`);
+  }
+  console.log(`  BMM    : ${BASE}${h && h.service ? ` (${h.service})` : ''}${DRY ? '   [DRY RUN - nothing will change]' : ''}\n`);
 
   console.log('1. State');
   for (const s of scn.setup) {
-    try { await runStep(s); } catch (e) { console.error(`   ✗ ${e.message}`); process.exit(1); }
+    try { await runStep(s); } catch (e) { console.error(`   [x] ${e.message}`); process.exit(1); }
   }
 
   if (NO_REC) { console.log('\nState is set. --no-record, so the recorder was left alone.\n'); return; }
 
   console.log('\n2. Recorder');
-  console.log(`   · on, ${scn.full ? 'full (unmasked)' : 'masked'}`);
+  console.log(`   - on, ${FULL ? 'full (unmasked)' : 'masked'}`);
   if (!DRY) {
-    await api('POST', '/api/recorder', { on: true, full: !!scn.full, rust: true, js: true });
+    await api('POST', '/api/recorder', { on: true, full: FULL, rust: true, js: true });
     await sleep(1200);   // let the first full snapshot land before anything moves
   }
 
-  console.log('\n3. Your turn — perform this, then come back:');
+  console.log('\n3. Your turn - perform this, then come back:');
   scn.perform.forEach((p, i) => console.log(`   ${i + 1}. ${p}`));
   console.log('\n   Move deliberately. A replay plays back at real speed, so hesitation reads as');
   console.log('   confusion. End on a settled screen, not mid-animation.');
@@ -279,8 +322,8 @@ const ask = (q) => new Promise((res) => {
   await api('POST', '/api/replay/export');
   await sleep(800);
   await api('POST', '/api/recorder', { on: false, full: false, rust: true, js: true });
-  console.log('   · exported to the Replays folder, recorder off.');
-  console.log(`   · rename it to ${scn.page.split('/').pop()}.bmmreplay and drop it into`);
-  console.log('     "BMM Docs/docs/assets/replays/" — committed through git-lfs.');
-  console.log('   · check it plays on the docs site before committing.\n');
+  console.log('   - exported to the Replays folder, recorder off.');
+  console.log(`   - rename it to ${scn.page.split('/').pop()}.bmmreplay and drop it into`);
+  console.log('     "BMM Docs/docs/assets/replays/" - committed through git-lfs.');
+  console.log('   - check it plays on the docs site before committing.\n');
 })();
