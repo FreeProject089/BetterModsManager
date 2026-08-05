@@ -680,10 +680,31 @@ pub fn replay_spool_finalize(
     rust_log: String,
     mode: String,
     dest_path: Option<String>,
+    tail_bytes: Option<u64>,
 ) -> Result<String, String> {
     let dir = spool_dir(&app_handle, &id)?;
-    let files = segment_files(&dir);
+    let mut files = segment_files(&dir);
     if files.is_empty() { return Err("empty spool".into()); }
+
+    // `tail_bytes` keeps only the NEWEST whole segments that fit. The crash buffer uses it: it is
+    // rewritten every 45s, so assembling the entire rolling window meant writing tens (eventually
+    // hundreds) of MB to disk every 45 seconds, and attaching that to a crash report. A crash
+    // wants the recent past, not the whole session. Segments open with a full snapshot, so a tail
+    // cut on a segment boundary is still playable. Saving or exporting a replay passes None and
+    // gets everything.
+    if let Some(limit) = tail_bytes {
+        let size = |p: &PathBuf| std::fs::metadata(p).map(|m| m.len()).unwrap_or(0);
+        let mut kept: Vec<PathBuf> = Vec::new();
+        let mut total: u64 = 0;
+        for f in files.iter().rev() {
+            let s = size(f);
+            if !kept.is_empty() && total + s > limit { break; }
+            total += s;
+            kept.push(f.clone());
+        }
+        kept.reverse();
+        files = kept;
+    }
 
     let app_dir = app_handle.path().app_data_dir().ok().unwrap_or_default();
     let out_path = if let Some(p) = dest_path.filter(|s| !s.trim().is_empty()) {

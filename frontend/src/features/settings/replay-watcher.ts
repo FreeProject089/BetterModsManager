@@ -40,6 +40,7 @@ let _listener: ReplaySubscriber | null = null;
 // The rolling window still exists — it is just a file delete now (see replay_spool_trim).
 let _spoolId: string | null = null;
 let _seq = 0;                    // current segment; a new one starts at each rrweb checkout
+let _prevWasCheckout = false;    // a checkout flags TWO events (Meta + FullSnapshot); split once
 let _batch: string[] = [];       // serialised events waiting to be appended
 let _batchBytes = 0;
 let _spoolBytes = 0;             // total on disk, as reported by the last append
@@ -52,6 +53,10 @@ const BATCH_FLUSH_MS = 3000;     // so a hard crash loses at most a few seconds
 // The on-DISK rolling window. Much larger than the old memory budget could ever be, because
 // it costs disk rather than the webview's heap.
 const SPOOL_BYTE_BUDGET = 512 * 1024 * 1024;
+// What the 45s crash flush assembles: the newest whole segments fitting in this, not the whole
+// window. A crash report wants the minutes before the crash — and this file is rewritten every
+// 45 seconds, so its size is a disk-write cost paid over and over.
+const CRASH_TAIL_BYTES = 24 * 1024 * 1024;
 // Console lines are capped by count (5000) but each can be 2000 chars, i.e. ~20 MB of UTF-16
 // in the worst case — enough to matter next to the events. Cap the bytes too.
 const CONSOLE_BYTE_BUDGET = 2 * 1024 * 1024;
@@ -157,10 +162,16 @@ export async function startWatcher(): Promise<void> {
     // first, or its tail would land in the new segment's file. flushBatch() reads _seq and
     // empties _batch synchronously before it awaits, so bumping _seq right after is safe:
     // the in-flight append still carries the old number, and the next event starts the new one.
-    if (isCheckout && _batch.length > 0) {
+    //
+    // Only the FIRST event of a checkout may split. rrweb flags isCheckout on BOTH the Meta and
+    // the FullSnapshot that open a checkout, so splitting on each one cut between them: every
+    // other segment held a lone Meta event (~200 bytes) and the snapshot it belongs to started
+    // the next file without it. On disk that showed up as a run of 0 MB segments.
+    if (isCheckout && !_prevWasCheckout && _batch.length > 0) {
       void flushBatch();
       _seq++;
     }
+    _prevWasCheckout = isCheckout;
     let line: string;
     // Serialise ONE event. This is the only stringify left on this path, and it is bounded
     // by the size of a single event rather than by the session.
@@ -219,6 +230,11 @@ async function writeBundle(mode: 'crash' | 'list', destPath?: string): Promise<s
   try {
     return await invoke('replay_spool_finalize', {
       id: _spoolId, metaJson, consoleJson, rustLog, mode, destPath: destPath || null,
+      // The crash buffer is rewritten every 45s, so it takes a bounded TAIL rather than the whole
+      // rolling window — otherwise each flush wrote the entire session to disk again, and a crash
+      // report carried a file that grew towards the 512 MB window. Saving or exporting a replay
+      // is a one-off, so it takes everything.
+      tailBytes: mode === 'crash' ? CRASH_TAIL_BYTES : null,
     }) as string;
   } catch (e) {
     // "empty spool" is the normal answer before anything has been recorded.
