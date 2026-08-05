@@ -8,9 +8,17 @@ Every clip the documentation needs, what it has to show, and where it lands. Two
 | **`.mp4`** | Anything rrweb cannot capture | Native dialogs, the installer, the game launching, the OS file picker, a UPnP router page — none of that is in BMM's DOM |
 
 > [!IMPORTANT]
-> Record **masked** unless the clip is specifically about the *Full* switch. Masking is applied at
-> capture, so an unmasked recording cannot be masked afterwards — mod names, profile names and paths
-> are baked in. See *Embedding replays & video*.
+> **Record from the 🎓 demo profile, unmasked.** This is the opposite of the rule for a bug report,
+> and the reason matters: masking replaces every mod and profile name with `••••`, which is exactly
+> right when you are sending a recording to someone, and useless in a tutorial clip where the whole
+> point is seeing *which* mod you enabled. The demo profile contains no real data, so unmasking it
+> leaks nothing.
+>
+> Two exceptions, which must stay **masked** because masking is what they are demonstrating:
+> `bmm-demo.bmmreplay` on the privacy page, and any clip about the *Full* switch.
+>
+> Masking is applied at capture — an unmasked recording cannot be masked afterwards, and a masked one
+> cannot be unmasked. Decide before you press record.
 
 ---
 

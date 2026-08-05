@@ -8,9 +8,17 @@ Chaque clip dont la doc a besoin, ce qu'il doit montrer, et où il atterrit. Deu
 | **`.mp4`** | Tout ce que rrweb ne peut pas capturer | Boîtes natives, installeur, lancement du jeu, sélecteur de fichiers de l'OS, page UPnP du routeur — rien de tout ça n'est dans le DOM de BMM |
 
 > [!IMPORTANT]
-> Enregistre **masqué**, sauf si le clip porte précisément sur l'interrupteur *Complet*. Le masquage
-> est appliqué à la capture : un enregistrement démasqué ne peut pas être masqué après coup — les noms
-> de mods, de profils et les chemins sont dedans. Voir *Intégrer replays & vidéo*.
+> **Enregistre depuis le profil de démo 🎓, en démasqué.** C'est l'inverse de la règle pour un rapport
+> de bug, et la raison compte : le masquage remplace chaque nom de mod et de profil par `••••`, ce qui
+> est exactement ce qu'il faut quand tu envoies un enregistrement à quelqu'un, et inutile dans un clip
+> pédagogique où tout l'intérêt est de voir *quel* mod tu as activé. Le profil de démo ne contient
+> aucune donnée réelle : le démasquer ne fuite rien.
+>
+> Deux exceptions, qui doivent rester **masquées** parce que c'est le masquage qu'elles démontrent :
+> `bmm-demo.bmmreplay` sur la page confidentialité, et tout clip portant sur l'interrupteur *Complet*.
+>
+> Le masquage est appliqué à la capture — un enregistrement démasqué ne peut pas être masqué après
+> coup, et un masqué ne peut pas être démasqué. Décide avant d'appuyer sur enregistrer.
 
 ---
 
