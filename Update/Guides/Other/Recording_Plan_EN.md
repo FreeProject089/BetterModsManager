@@ -102,7 +102,42 @@ a replay of those moments shows a frozen BMM window and nothing else.
 
 ---
 
-## C. Checklist per clip
+## C. The harness — `scripts/record-take.mjs`
+
+Arranging identical state before every take is the tedious half of this, and it is the half that
+makes people not re-record. So it is scripted:
+
+```bash
+node scripts/record-take.mjs --list
+node scripts/record-take.mjs conflicts            # set state → arm recorder → wait → export
+node scripts/record-take.mjs conflicts --dry-run  # print the plan, change nothing
+node scripts/record-take.mjs themes --no-record   # just set the state up
+```
+
+It activates the right profile, clears the mods, fires any deeplink the clip needs, turns the
+recorder on with the correct masking for that clip, then **stops and prints what you have to
+perform**. Press Enter when you are done and it exports and turns the recorder off.
+
+> [!NOTE]
+> **Why it does not script the clicks too.** rrweb records real pointer and input events. An action
+> triggered through the API produces none, so a fully scripted take plays back with the interface
+> changing and no cursor anywhere — it reads as a glitch, not a tutorial. The harness automates
+> what can be automated without that cost.
+
+Practical notes:
+
+- **BMM must be running.** If nothing answers, the harness says so and reminds you that a taken
+  port disables the API for the whole session rather than moving to another one — restart BMM.
+- The API token is read straight out of `data.json`; you never paste it, and it is never printed.
+- Mod and profile names are fuzzy-matched, but an **ambiguous** name is an error listing the
+  candidates rather than a guess — `HD Texture Pack` resolves, `HD` does not.
+- Masking per scenario is already set the right way round (see the note at the top of this file);
+  `privacy-masked` is the one that records masked on purpose.
+
+Adding a clip is a block in the `SCENARIOS` map at the top of the file: the page it belongs to,
+whether it is masked, the setup steps, and the `perform` lines you want printed back at you.
+
+## D. Checklist per clip
 
 - [ ] Recorded **masked** (unless the clip is about unmasking).
 - [ ] Nothing personal on screen: real paths, account names, Discord handles, e-mail.

@@ -102,7 +102,43 @@ rrweb enregistre le DOM de BMM. Tout ce qui est dessiné par Windows ou par un a
 
 ---
 
-## C. Checklist par clip
+## C. Le harnais — `scripts/record-take.mjs`
+
+Mettre l'app dans un état identique avant chaque prise, c'est la moitié pénible du travail — et
+c'est celle qui fait qu'on ne refait pas une prise ratée. Elle est donc scriptée :
+
+```bash
+node scripts/record-take.mjs --list
+node scripts/record-take.mjs conflicts            # état → armer l'enregistreur → attendre → exporter
+node scripts/record-take.mjs conflicts --dry-run  # affiche le plan, ne change rien
+node scripts/record-take.mjs themes --no-record   # met juste l'état en place
+```
+
+Il active le bon profil, désactive les mods, déclenche le deeplink dont le clip a besoin, allume
+l'enregistreur avec le bon masquage pour ce clip, puis **s'arrête et affiche ce que tu dois
+jouer**. Tu appuies sur Entrée quand c'est fait, il exporte et coupe l'enregistreur.
+
+> [!NOTE]
+> **Pourquoi il ne scripte pas aussi les clics.** rrweb enregistre de vrais événements pointeur et
+> clavier. Une action déclenchée par l'API n'en produit aucun : une prise entièrement scriptée se
+> rejoue avec l'interface qui change et aucun curseur nulle part — ça se lit comme un bug, pas
+> comme un tutoriel. Le harnais automatise ce qui peut l'être sans ce coût.
+
+Points pratiques :
+
+- **BMM doit tourner.** Si rien ne répond, le harnais te le dit et te rappelle qu'un port occupé
+  désactive l'API pour toute la session au lieu d'en prendre un autre — redémarre BMM.
+- Le token d'API est lu directement dans `data.json` : tu ne le colles jamais, et il n'est jamais
+  affiché.
+- Les noms de mods et de profils sont matchés de façon floue, mais un nom **ambigu** est une erreur
+  qui liste les candidats plutôt qu'une devinette — `HD Texture Pack` se résout, `HD` non.
+- Le masquage par scénario est déjà réglé dans le bon sens (voir la note en haut de ce fichier) ;
+  `privacy-masked` est celui qui enregistre masqué exprès.
+
+Ajouter un clip = un bloc dans la map `SCENARIOS` en haut du fichier : la page concernée, s'il est
+masqué, les étapes de préparation, et les lignes `perform` que tu veux voir réaffichées.
+
+## D. Checklist par clip
 
 - [ ] Enregistré **masqué** (sauf si le clip porte sur le démasquage).
 - [ ] Rien de personnel à l'écran : vrais chemins, noms de comptes, pseudos Discord, e-mail.
