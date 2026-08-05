@@ -220,6 +220,44 @@
 /* A reference article is mostly tables — give it the room the prose pages don't need. */
 .dh-article.dh-wide { max-width: 1080px; }
 
+/* ── bundled BMM Docs pages (the site's own markdown, rendered in-app) ── */
+
+/* Mermaid from a doc page. The SVG scales to the column; the placeholder keeps the layout from
+   jumping while it renders, and stays if mermaid is unavailable. */
+.dh-mermaid {
+    margin: 0 0 18px;
+    padding: 14px;
+    border-radius: var(--bmm-radius-card, 12px);
+    border: 1px solid var(--bmm-border, #2a3242);
+    background: var(--bmm-bg-base, #0f1420);
+    overflow-x: auto;
+    text-align: center;
+}
+.dh-mermaid svg { max-width: 100%; height: auto; }
+.dh-mermaid-ph { padding: 22px 0; font-size: 12.5px; color: var(--bmm-text-muted, #7c8698); }
+.dh-mermaid.ok .dh-mermaid-ph { display: none; }
+
+/* mkdocs content tabs === "Label" */
+.dh-tabs { margin: 0 0 16px; border: 1px solid var(--bmm-border, #2a3242); border-radius: var(--bmm-radius-card, 12px); overflow: hidden; }
+.dh-tabs-bar { display: flex; flex-wrap: wrap; gap: 2px; padding: 6px 6px 0; background: var(--bmm-bg-base, #0f1420); }
+.dh-tab {
+    cursor: pointer; font: inherit; font-size: 12.5px; font-weight: 600;
+    padding: 7px 13px; border: 0; border-radius: 9px 9px 0 0;
+    color: var(--bmm-text-muted, #7c8698); background: transparent; transition: background .12s, color .12s;
+}
+.dh-tab:hover { color: var(--bmm-text-primary, #e6edf3); background: var(--bmm-s05); }
+.dh-tab.on { color: var(--bmm-text-primary, #e6edf3); background: var(--bmm-bg-elevated, #1a2130); }
+.dh-tabpane { display: none; padding: 14px 16px; }
+.dh-tabpane.on { display: block; }
+.dh-tabpane > :last-child { margin-bottom: 0; }
+
+/* The "Full page, here" toggle stays lit while the long version is showing. */
+.dh-rel-full.on {
+    color: var(--bmm-text-on-accent);
+    background: var(--bmm-accent, #3b82f6);
+    border-color: var(--bmm-accent, #3b82f6);
+}
+
 /* related-action buttons under an article */
 .dh-rels { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--bmm-border, #2a3242); }
 .dh-rel {

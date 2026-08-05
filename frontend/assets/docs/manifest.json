@@ -1,0 +1,320 @@
+{
+  "generated": "scripts/sync-docs.mjs",
+  "pages": [
+    {
+      "path": "features/apps",
+      "section": "features",
+      "title": {
+        "en": "App Catalog",
+        "fr": "App Catalog"
+      },
+      "fr": true
+    },
+    {
+      "path": "features/command-palette",
+      "section": "features",
+      "title": {
+        "en": "Command palette & shortcuts",
+        "fr": "Palette de commandes & raccourcis"
+      },
+      "fr": true
+    },
+    {
+      "path": "features/community",
+      "section": "features",
+      "title": {
+        "en": "BetterCommunity",
+        "fr": "BetterCommunity"
+      },
+      "fr": true
+    },
+    {
+      "path": "features/launch-packs",
+      "section": "features",
+      "title": {
+        "en": "Launch packs",
+        "fr": "Launch packs"
+      },
+      "fr": true
+    },
+    {
+      "path": "features/library",
+      "section": "features",
+      "title": {
+        "en": "Library",
+        "fr": "Bibliothèque"
+      },
+      "fr": true
+    },
+    {
+      "path": "features/mapper",
+      "section": "features",
+      "title": {
+        "en": "Mapper",
+        "fr": "Mapper"
+      },
+      "fr": true
+    },
+    {
+      "path": "features/modlist",
+      "section": "features",
+      "title": {
+        "en": ".MM Lists",
+        "fr": "Listes .MM"
+      },
+      "fr": true
+    },
+    {
+      "path": "features/modpacks",
+      "section": "features",
+      "title": {
+        "en": "Modpacks",
+        "fr": "Modpacks"
+      },
+      "fr": true
+    },
+    {
+      "path": "features/plugins",
+      "section": "features",
+      "title": {
+        "en": "Plugins & API",
+        "fr": "Plugins & API"
+      },
+      "fr": true
+    },
+    {
+      "path": "features/privacy-telemetry",
+      "section": "features",
+      "title": {
+        "en": "Privacy, telemetry & offline",
+        "fr": "Confidentialité, télémétrie & hors ligne"
+      },
+      "fr": true
+    },
+    {
+      "path": "features/profiles",
+      "section": "features",
+      "title": {
+        "en": "Profiles",
+        "fr": "Profils"
+      },
+      "fr": true
+    },
+    {
+      "path": "features/repo",
+      "section": "features",
+      "title": {
+        "en": "Server Repo",
+        "fr": "Dépôt Serveur"
+      },
+      "fr": true
+    },
+    {
+      "path": "features/scheduler",
+      "section": "features",
+      "title": {
+        "en": "Scheduling & automation",
+        "fr": "Planification & automatisation"
+      },
+      "fr": true
+    },
+    {
+      "path": "features/settings",
+      "section": "features",
+      "title": {
+        "en": "Settings",
+        "fr": "Paramètres"
+      },
+      "fr": true
+    },
+    {
+      "path": "features/storage",
+      "section": "features",
+      "title": {
+        "en": "Storage & disk I/O",
+        "fr": "Stockage & E/S disque"
+      },
+      "fr": true
+    },
+    {
+      "path": "features/themes",
+      "section": "features",
+      "title": {
+        "en": "Themes & Appearance",
+        "fr": "Thèmes & Apparence"
+      },
+      "fr": true
+    },
+    {
+      "path": "getting-started/first-launch",
+      "section": "getting-started",
+      "title": {
+        "en": "First launch",
+        "fr": "Premier lancement"
+      },
+      "fr": true
+    },
+    {
+      "path": "getting-started/install",
+      "section": "getting-started",
+      "title": {
+        "en": "Install BMM",
+        "fr": "Installer BMM"
+      },
+      "fr": true
+    },
+    {
+      "path": "how-it-works/architecture",
+      "section": "how-it-works",
+      "title": {
+        "en": "Architecture",
+        "fr": "Architecture"
+      },
+      "fr": true
+    },
+    {
+      "path": "how-it-works/conflicts",
+      "section": "how-it-works",
+      "title": {
+        "en": "Conflicts",
+        "fr": "Conflits"
+      },
+      "fr": true
+    },
+    {
+      "path": "how-it-works/extending",
+      "section": "how-it-works",
+      "title": {
+        "en": "Extending BMM",
+        "fr": "Étendre BMM"
+      },
+      "fr": true
+    },
+    {
+      "path": "how-it-works/index",
+      "section": "how-it-works",
+      "title": {
+        "en": "How it works",
+        "fr": "Comment ça marche"
+      },
+      "fr": true
+    },
+    {
+      "path": "how-it-works/integrity-hashing",
+      "section": "how-it-works",
+      "title": {
+        "en": "Integrity & hashing",
+        "fr": "Intégrité & hachage"
+      },
+      "fr": true
+    },
+    {
+      "path": "how-it-works/mapper",
+      "section": "how-it-works",
+      "title": {
+        "en": "The mapper",
+        "fr": "Le mappeur"
+      },
+      "fr": true
+    },
+    {
+      "path": "how-it-works/performance",
+      "section": "how-it-works",
+      "title": {
+        "en": "Performance",
+        "fr": "Performances"
+      },
+      "fr": true
+    },
+    {
+      "path": "how-it-works/profiles-activation",
+      "section": "how-it-works",
+      "title": {
+        "en": "Profiles & activation",
+        "fr": "Profils & activation"
+      },
+      "fr": true
+    },
+    {
+      "path": "how-it-works/scanning-cache",
+      "section": "how-it-works",
+      "title": {
+        "en": "Scanning & the cache",
+        "fr": "Scan & cache"
+      },
+      "fr": true
+    },
+    {
+      "path": "how-it-works/security",
+      "section": "how-it-works",
+      "title": {
+        "en": "Security model",
+        "fr": "Modèle de sécurité"
+      },
+      "fr": true
+    },
+    {
+      "path": "how-it-works/sync-repos",
+      "section": "how-it-works",
+      "title": {
+        "en": "Hosting & sync (server repos)",
+        "fr": "Hébergement & synchro (dépôts serveur)"
+      },
+      "fr": true
+    },
+    {
+      "path": "index",
+      "section": "root",
+      "title": {
+        "en": "BetterModsManager",
+        "fr": "BetterModsManager"
+      },
+      "fr": true
+    },
+    {
+      "path": "reference/actions",
+      "section": "reference",
+      "title": {
+        "en": "Action reference",
+        "fr": "Référence des actions"
+      },
+      "fr": true
+    },
+    {
+      "path": "reference/api",
+      "section": "reference",
+      "title": {
+        "en": "API & deeplink reference",
+        "fr": "Référence API & deeplinks"
+      },
+      "fr": true
+    },
+    {
+      "path": "reference/credits",
+      "section": "reference",
+      "title": {
+        "en": "Credits & the stack",
+        "fr": "Crédits & la stack"
+      },
+      "fr": true
+    },
+    {
+      "path": "reference/tips",
+      "section": "reference",
+      "title": {
+        "en": "Tips, controls & shortcuts",
+        "fr": "Astuces, contrôles & raccourcis"
+      },
+      "fr": true
+    },
+    {
+      "path": "reference/troubleshooting",
+      "section": "reference",
+      "title": {
+        "en": "Troubleshooting",
+        "fr": "Dépannage"
+      },
+      "fr": true
+    }
+  ]
+}

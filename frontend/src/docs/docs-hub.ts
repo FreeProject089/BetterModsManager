@@ -2041,7 +2041,10 @@ function articleView(cat: Category, a: Article): string {
     a.view ? `<button class="dh-rel dh-rel-open" data-nav="${a.view}">${svg('arrow', 15)} ${tr({ en: 'Open', fr: 'Ouvrir' })} ${navLabel(a.view)} ${tr({ en: 'in BMM', fr: 'dans BMM' })}</button>` : '',
     a.tutorial ? `<button class="dh-rel dh-rel-tut" data-tut="${a.tutorial.id}" data-tut-part="${a.tutorial.part || ''}" data-tut-step="${a.tutorial.step || ''}">${svg('play', 15)} ${tr({ en: 'Try it in the tutorial', fr: 'Essayer dans le tutoriel' })}</button>` : '',
     a.diagram ? `<button class="dh-rel dh-rel-dia" data-diagram="${a.diagram}">${svg('diagram', 15)} ${tr({ en: 'Open the diagram', fr: 'Ouvrir le diagramme' })}</button>` : '',
-    `<a class="dh-rel dh-rel-ext" href="${DOCS_SITE}${a.docsPath || ''}" target="_blank" rel="noreferrer">${svg('ext', 15)} ${tr({ en: 'Read full docs', fr: 'Lire la doc complète' })}</a>`,
+    // The full page is BUNDLED, so it opens in place rather than sending you to a browser. The
+    // external link stays for the site itself (search, PDF, sharing a URL).
+    a.docsPath ? `<button class="dh-rel dh-rel-full" data-fullpage="${a.docsPath}">${svg('book', 15)} ${tr({ en: 'Full page, here', fr: 'Page complète, ici' })}</button>` : '',
+    `<a class="dh-rel dh-rel-ext" href="${DOCS_SITE}${a.docsPath || ''}" target="_blank" rel="noreferrer">${svg('ext', 15)} ${tr({ en: 'Open on the site', fr: 'Ouvrir sur le site' })}</a>`,
   ].filter(Boolean).join('');
   return `
     <article class="dh-article${a.wide ? ' dh-wide' : ''}">
@@ -2184,6 +2187,97 @@ function onClick(e: Event) {
 
   const artBtn = hit('[data-art]');
   if (artBtn) { const f = findArticle(artBtn.getAttribute('data-art') || ''); if (f) go({ view: 'art', part: f.cat.part, catId: f.cat.id, artId: f.art.id }); return; }
+
+  const full = hit('[data-fullpage]');
+  if (full) { void showFullPage(full.getAttribute('data-fullpage') || '', full); return; }
+
+  // A link between two bundled pages (rewritten from the site's own relative .md links).
+  const dp = hit('[data-docpage]');
+  if (dp) { void showFullPage(dp.getAttribute('data-docpage') || '', null); return; }
+}
+
+/** Swap the article body for the full bundled page (or back). */
+async function showFullPage(path: string, btn: HTMLElement | null) {
+  const article = document.querySelector('.dh-article') as HTMLElement | null;
+  const body = article?.querySelector('.dh-content') as HTMLElement | null;
+  if (!article || !body) return;
+
+  if (btn && article.dataset.full === path) {          // toggle back to the short version
+    body.innerHTML = article.dataset.shortHtml || body.innerHTML;
+    delete article.dataset.full;
+    btn.classList.remove('on');
+    return;
+  }
+  if (!article.dataset.shortHtml) article.dataset.shortHtml = body.innerHTML;
+
+  body.innerHTML = `<p class="dh-lead">${tr({ en: 'Loading the full page…', fr: 'Chargement de la page complète…' })}</p>`;
+  const md = await fetchDocPage(path);
+  if (!md) {
+    // The bundle is generated from a sibling repo, so it can legitimately be absent.
+    body.innerHTML = article.dataset.shortHtml;
+    try {
+      const { toast } = await import('../ui/app.js');
+      toast(tr({ en: 'That page is not bundled in this build.', fr: 'Cette page n’est pas embarquée dans ce build.' }), 'info');
+    } catch { /* the short version is already back on screen */ }
+    return;
+  }
+  body.innerHTML = renderDocMarkdown(md);
+  article.dataset.full = path;
+  btn?.classList.add('on');
+  article.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  await hydrateDocPage(body);
+}
+
+// ── the bundled BMM Docs pages ───────────────────────────────────────────────
+// scripts/sync-docs.mjs copies the site's markdown into assets/docs/<lang>/. Rendering it here
+// means the app shows the SAME page the site does — the short in-app article stays as the quick
+// answer, and this is the full one, in BMM's theme and with its buttons.
+const _pageCache = new Map<string, string>();
+
+async function fetchDocPage(path: string): Promise<string | null> {
+  const lang = (getLang?.() === 'fr') ? 'fr' : 'en';
+  const clean = path.replace(/^\/+|\/+$/g, '');
+  for (const l of [lang, 'en']) {              // fall back to English when a page has no FR twin
+    const key = `${l}/${clean}`;
+    if (_pageCache.has(key)) return _pageCache.get(key)!;
+    try {
+      const res = await fetch(`assets/docs/${key}.md`);
+      if (!res.ok) continue;
+      const md = await res.text();
+      _pageCache.set(key, md);
+      return md;
+    } catch { /* try the next */ }
+  }
+  return null;
+}
+
+/** Render mermaid sources and wire content tabs inside a freshly injected page. */
+async function hydrateDocPage(host: HTMLElement) {
+  host.querySelectorAll('[data-tabs]').forEach((box) => {
+    box.addEventListener('click', (e) => {
+      const b = (e.target as HTMLElement).closest('.dh-tab') as HTMLElement | null;
+      if (!b) return;
+      const id = b.getAttribute('data-tab');
+      box.querySelectorAll('.dh-tab').forEach((x) => x.classList.toggle('on', x === b));
+      box.querySelectorAll('.dh-tabpane').forEach((x) => x.classList.toggle('on', x.getAttribute('data-pane') === id));
+    });
+  });
+
+  const blocks = [...host.querySelectorAll('.dh-mermaid')] as HTMLElement[];
+  if (!blocks.length) return;
+  const m = (window as any).mermaid;
+  if (!m?.render) return;                       // leave the placeholder rather than a broken box
+  for (let n = 0; n < blocks.length; n++) {
+    const src = blocks[n].getAttribute('data-mermaid') || '';
+    try {
+      const { svg } = await m.render(`dh-mmd-${Date.now()}-${n}`, src);
+      blocks[n].innerHTML = svg;
+      blocks[n].classList.add('ok');
+    } catch {
+      // A diagram the app's mermaid build cannot parse shows its source instead of nothing.
+      blocks[n].innerHTML = `<pre class="dh-code"><code>${src.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</code></pre>`;
+    }
+  }
 }
 
 async function playReplay(url: string) {
