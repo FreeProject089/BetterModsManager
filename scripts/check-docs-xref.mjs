@@ -96,6 +96,41 @@ if (orphans.length) {
   console.log('  ' + orphans.join(', '));
 }
 
+// 5 ── every diagram must survive md-lite's HTML attribute intact.
+// md-lite stashes a ```mermaid source in data-mermaid="…". When esc() did not escape the double
+// quote, the first quote in the source closed the attribute — and since mermaid labels are
+// normally written A["Label"], that silently truncated 54 of 56 bundled diagrams to a few
+// characters. They rendered as a placeholder with no error anywhere. Nothing else catches this:
+// the markdown is valid, the TypeScript compiles, and the failure only appears on screen.
+const before5 = failed;
+const MD_LITE = join(ROOT, 'frontend/js/docs/md-lite.js');
+const BUNDLE = join(ROOT, 'frontend/assets/docs');
+if (!existsSync(MD_LITE)) {
+  console.log('· frontend/js not compiled — skipping the diagram round-trip check');
+} else if (!existsSync(BUNDLE)) {
+  console.log('· docs bundle not built — skipping the diagram round-trip check');
+} else {
+  const { renderDocMarkdown } = await import('file://' + MD_LITE.replace(/\\/g, '/'));
+  const unesc = (s) => s.replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+    .replace(/&gt;/g, '>').replace(/&lt;/g, '<').replace(/&amp;/g, '&');
+  let checked = 0;
+  for (const f of walk(BUNDLE)) {
+    if (!f.endsWith('.md')) continue;
+    const md = readFileSync(f, 'utf8');
+    const want = [...md.matchAll(/^```mermaid[ \t]*\r?\n([\s\S]*?)^```/gm)].map((m) => m[1].trim());
+    if (!want.length) continue;
+    // Read each attribute the way a browser would: up to the next unescaped quote.
+    const got = [...renderDocMarkdown(md).matchAll(/data-mermaid="([^"]*)"/g)].map((m) => unesc(m[1]).trim());
+    const where = relative(ROOT, f);
+    if (got.length !== want.length) { fail(`${where}: ${want.length} diagram(s) in the source, ${got.length} in the HTML`); continue; }
+    for (let i = 0; i < want.length; i++) {
+      checked++;
+      if (got[i] !== want[i]) fail(`${where}: diagram ${i + 1} is truncated in data-mermaid (got ${got[i].length} of ${want[i].length} chars)`);
+    }
+  }
+  if (failed === before5) console.log(`✓ ${checked} diagram source(s) survive md-lite's HTML intact`);
+}
+
 if (failed) {
   console.error(`\n✗ ${failed} broken documentation cross-reference(s)`);
   process.exit(1);
