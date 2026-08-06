@@ -44,8 +44,15 @@ export interface BmmLinks {
     kofi_community:   string;
     ed_forum:         string;
     bettercommunity:  string;
+    // NOT exhaustive: links.json also carries the Discord Rich Presence entries
+    // (WebSiteRPC1/2, github_RPC1/2, BoutonRPC1/2). Those are read on the Rust side in
+    // commands/discord.rs straight from the file, never through this interface, so adding
+    // them here would only invite the two to drift.
 }
 
+// Every value below is the LAST RESORT — used only when neither BetterCommunity nor GitHub
+// nor the bundled assets/links.json answered. Keep each one equal to what assets/links.json
+// ships, or the fallback quietly behaves differently from the app it is standing in for.
 const DEFAULTS: BmmLinks = {
     plugin_catalog:   'https://raw.githubusercontent.com/BetterDCS/BetterModsManager_Plugins/main/catalog.json',
     plugin_github:    'https://github.com/BetterDCS/BetterModsManager_Plugins',
@@ -57,6 +64,10 @@ const DEFAULTS: BmmLinks = {
     // old localhost dev default only worked in test builds). For LOCAL testing, override
     // via a hosted links.json or an HTTPS tunnel (ngrok/cloudflared) ending in "/batch/".
     // Empty = buffer locally only.
+    // These two were the ONLY entries missing from assets/links.json, which meant the
+    // collector could not be moved and the ingest key could not be rotated without shipping
+    // a new BMM — the one thing the registry exists to avoid. They are in the file now, so
+    // these values are the fallback and no longer the only copy.
     analytics_endpoint: 'https://telemetry.bettercommunity.ch/batch/',   // production collector — MUST end with /batch/
     analytics_key:      'bmm_pk_3aab75ffc7b964990178682c918f117767ba2657',   // PUBLIC ingest key — safe to ship
     github_repo:      'https://github.com/FreeProject089/BetterModsManager',

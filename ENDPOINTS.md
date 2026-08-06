@@ -68,6 +68,12 @@ that feature fails.
 | `https://bettercommunity.ch/` | The site itself | Blog, account and community buttons lead nowhere |
 | `https://telemetry.bettercommunity.ch/batch/` | Accepts batched telemetry `POST`s | Nothing user-facing. Telemetry is opt-in and dropped on failure |
 
+The collector and its **public** ingest key (`analytics_key`, `bmm_pk_…`) are entries in
+`links.json` like everything else, so the endpoint can be moved and the key rotated from the admin
+panel without a release. They were missing from the file until now and lived only in the
+compiled-in fallback, which meant neither could change without shipping a new BMM. The private
+admin key never ships — it exists only on the telemetry server.
+
 Test mode is read once at startup from `app.cfg` (`BCTestMode` / `BCTestBase`), which lets these
 point at a local instance without touching the code.
 
