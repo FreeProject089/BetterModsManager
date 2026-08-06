@@ -7,7 +7,7 @@ BMM ships through **BetterInstaller**. NSIS and MSI are no longer built.
 ## The commands
 
 ```bash
-npm run ci                # the ten gates — run this before anything else
+npm run ci                # the eleven gates — run this before anything else
 npm run build             # the app itself (no installer)
 npm run build:installer   # the installer, from whatever npm run build produced
 npm run release           # both, in order
@@ -22,6 +22,57 @@ runtime live in `src-tauri/target/release/_up_/`, and those come from the *build
 bundler — you can confirm it by looking for `_up_` under `target/debug` after a `tauri dev`. The
 only thing the bundler adds is `resources/icon.ico`, which nothing resolves at runtime (the window
 icon is compiled into the executable).
+
+---
+
+## First time on this machine
+
+You need **Node**, **Rust** (for BMM and for the installer engine) and **PowerShell**.
+BetterInstaller must be checked out at `BetterInstaller/` inside this repo — it is a separate
+git repository, not a submodule, so clone it there if it is missing.
+
+Then:
+
+```bash
+npm install
+npm run release
+```
+
+That is genuinely all. `build-installer.ps1` bootstraps what it needs:
+
+- **the engine** — it runs `cargo build --release -p bpkg-cli -p installer` when
+  `BetterInstaller/target/release/bpkg.exe` is not there yet (a few minutes, once);
+- **the signing key** — if `BetterInstaller/examples/bmm/keys/private.key` does not exist it
+  generates a keypair and tells you so.
+
+!!! danger "If it generated a key, you have one more step"
+
+    A fresh keypair does **not** match the `public_key` already in `installer.toml`, and
+    `require_signature = true` means the installer refuses a package it cannot verify. The
+    package builds, the setup builds, and the **install fails on the user's machine**.
+
+    So after a keygen, copy the new key in:
+
+    ```bash
+    cat BetterInstaller/examples/bmm/keys/public.key
+    # paste it into [security].public_key in BetterInstaller/examples/bmm/installer.toml
+    ```
+
+    Then check it before shipping anything — this is the one command that catches the mistake:
+
+    ```bash
+    BetterInstaller/target/release/bpkg.exe verify \
+        --key BetterInstaller/examples/bmm/keys/public.key Release/bmm.bpkg
+    ```
+
+    A mismatch prints `Error: signature INVALID (does not match this key)`. A match prints
+    `OK — Ed25519 signature valid.`
+
+!!! warning "Back the private key up, off this machine"
+
+    `keys/` is gitignored, so the private key exists in exactly one place. Lose it and you cannot
+    sign an update that existing installs will accept — they verify against the public key baked
+    into the setup they were installed from. There is no recovery from the user's side.
 
 ---
 
@@ -42,11 +93,23 @@ Upload **all three** to the GitHub release: `BMM-Setup.exe`, `bmm.bpkg` and `upd
 `.bpkg` and `update.json` are what installed copies read to auto-update; without them the setup
 works but nobody gets an update.
 
-To check what you built before shipping it:
+What you get, in `Release/`:
+
+| File | Size (v1.0.0) | What it is for |
+|---|---|---|
+| `BMM-Setup.exe` | ~62 MB | What people download and run |
+| `bmm.bpkg` | ~88 MB uncompressed, 129 files | The signed package installed copies fetch to update |
+| `update.json` | small | The manifest that tells them a newer version exists |
+
+Check it before shipping:
 
 ```bash
+BetterInstaller/target/release/bpkg.exe info Release/bmm.bpkg
 BetterInstaller/target/release/bpkg.exe verify --key BetterInstaller/examples/bmm/keys/public.key Release/bmm.bpkg
 ```
+
+`info` prints the identity and version as the engine parsed them — the cheapest way to catch a
+wrong `app.id` before it ships, since that mismatch fails silently rather than loudly.
 
 ---
 
@@ -72,8 +135,7 @@ These drifted once already: BMM's identifier moved from `com.bettermm.app` to
 folder BMM never reads. Nothing errored. Language, accepted terms, telemetry consent and theme
 import were all silently discarded on any machine where BMM already had a `data.json`.
 
-`npm run ci` now checks it, along with the version and the main executable name. It is the tenth
-gate, and it skips cleanly if BetterInstaller is not checked out beside this repo.
+`npm run ci` now checks it, along with the version and the main executable name. That gate skips cleanly if BetterInstaller is not checked out beside this repo.
 
 ---
 
