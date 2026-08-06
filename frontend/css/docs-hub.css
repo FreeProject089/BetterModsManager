@@ -124,6 +124,55 @@
 .dh-tag-dia { color: var(--bmm-purple); background: color-mix(in srgb, var(--bmm-purple) 14%, transparent); }
 .dh-tag-med { color: var(--bmm-success); background: color-mix(in srgb, var(--bmm-success) 14%, transparent); }
 
+/* ── the bundled-pages index ("The full documentation") ──
+   Two things a reader needs before opening one of 36 pages: what it covers, and how big it is. */
+.dh-pg-stats {
+  display: flex; flex-wrap: wrap; gap: 8px 22px; align-items: center;
+  margin: 0 0 26px; padding: 12px 16px;
+  border-radius: var(--bmm-radius-card, 12px);
+  border: 1px solid var(--bmm-border, #2a3242); background: var(--bmm-bg-base, #0f1420);
+  font-size: 12.5px; color: var(--bmm-text-secondary, #a3adba);
+}
+.dh-pg-stats b { color: var(--bmm-text-primary, #e6edf3); font-size: 15px; font-weight: 700; margin-right: 3px; }
+.dh-pg-off { display: inline-flex; align-items: center; gap: 5px; color: var(--bmm-success); margin-left: auto; }
+.dh-pg-off svg { width: 13px; height: 13px; }
+
+.dh-pg-sec { margin: 0 0 30px; }
+.dh-pg-sec-h { display: grid; grid-template-columns: auto auto 1fr; align-items: baseline; gap: 10px; margin: 0 0 12px; }
+.dh-pg-sec-h h4 { margin: 0; font-size: 15px; }
+.dh-pg-sec-n {
+  font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 999px;
+  color: var(--bmm-text-secondary, #a3adba); background: var(--bmm-s08);
+}
+.dh-pg-sec-s { margin: 0; font-size: 12.5px; color: var(--bmm-text-muted, #7c8698); }
+
+.dh-pgs { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: var(--dh-gap); }
+.dh-pg {
+  display: flex; flex-direction: column; gap: 7px; text-align: left; cursor: pointer;
+  padding: 15px 17px 13px; border-radius: var(--bmm-radius-card, 14px);
+  background: var(--bmm-bg-elevated, #1a2130); border: 1px solid var(--bmm-border, #2a3242);
+  transition: border-color .16s, transform .16s; color: inherit; font-family: inherit;
+  /* A long unbroken title must not stretch the grid column — min-width:0 is what stops it. */
+  min-width: 0;
+}
+.dh-pg:hover { border-color: var(--bmm-border-accent, var(--bmm-accent, #3b82f6)); transform: translateY(-2px); }
+.dh-pg-t { font-size: 14.5px; font-weight: 700; line-height: 1.3; }
+.dh-pg-s {
+  font-size: 12.5px; line-height: 1.55; color: var(--bmm-text-secondary, #a3adba);
+  /* Three lines keeps every card the same height whatever the page's opening sentence is. */
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+.dh-pg-meta {
+  display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: auto; padding-top: 8px;
+  font-size: 11.5px; color: var(--bmm-text-muted, #7c8698);
+}
+.dh-pg-m { display: inline-flex; align-items: center; gap: 4px; }
+.dh-pg-m svg { width: 13px; height: 13px; }
+.dh-pg-en {
+  font-weight: 700; letter-spacing: .04em; padding: 0 6px; border-radius: 999px;
+  color: var(--bmm-warning); background: color-mix(in srgb, var(--bmm-warning) 14%, transparent);
+}
+
 /* ── article media (image / svg / replay) ── */
 .dh-media { margin: 0 0 22px; }
 .dh-media-img { max-width: 100%; height: auto; display: block; border-radius: var(--bmm-radius-card, 12px); border: 1px solid var(--bmm-border, #2a3242); }
@@ -228,16 +277,32 @@
 /* Mermaid from a doc page. The SVG scales to the column; the placeholder keeps the layout from
    jumping while it renders, and stays if mermaid is unavailable. */
 .dh-mermaid {
-    margin: 0 0 18px;
-    padding: 14px;
+    margin: 0 0 20px;
+    padding: 20px 16px;
     border-radius: var(--bmm-radius-card, 12px);
     border: 1px solid var(--bmm-border, #2a3242);
     background: var(--bmm-bg-base, #0f1420);
     overflow-x: auto;
     text-align: center;
 }
-.dh-mermaid svg { max-width: 100%; height: auto; }
-.dh-mermaid-ph { padding: 22px 0; font-size: 12.5px; color: var(--bmm-text-muted, #7c8698); }
+.dh-mermaid svg {
+    /* Natural size, and the box above scrolls when it does not fit. Constraining the SVG to the
+       column instead is what crushed wide flowcharts into an unreadable strip — a diagram you
+       can scroll beats one you cannot read. mermaid is configured with useMaxWidth:false to match. */
+    display: block; margin: 0 auto; max-width: none; height: auto;
+}
+/* Sub-pixel headroom: mermaid sizes a label box from a measurement that rounds differently to the
+   final paint, so a single line can miss its box by a fraction. Costs nothing, clips nothing. */
+.dh-mermaid svg foreignObject { overflow: visible; }
+/* mermaid emits its own <style> inside the SVG; these are the few places it still hardcodes a
+   colour our themeVariables do not reach. */
+.dh-mermaid svg .edgeLabel { color: var(--bmm-diagram-node-text, #f1f5f9); }
+.dh-mermaid svg .edgeLabel rect, .dh-mermaid svg .labelBkg { opacity: .92; }
+.dh-mermaid-ph {
+    padding: 26px 0; font-size: 12.5px; color: var(--bmm-text-muted, #7c8698);
+    /* Deliberately quiet: this is what shows while a diagram renders, so it must not flash. */
+    letter-spacing: .02em;
+}
 .dh-mermaid.ok .dh-mermaid-ph { display: none; }
 
 /* mkdocs content tabs === "Label" */

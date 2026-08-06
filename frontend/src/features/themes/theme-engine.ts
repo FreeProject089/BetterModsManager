@@ -740,6 +740,9 @@ export function applyTheme(theme: BmmTheme): void {
     // Flag light themes so CSS can fix hover/dropdown contrast that hardcodes light text.
     document.body.classList.toggle('bmm-theme-light', isLightTheme(theme));
     if (theme.id !== '__preview__') localStorage.setItem(ACTIVE_KEY, theme.id);
+    // Anything that BAKES a token value in at render time — mermaid writes its palette into the
+    // SVG it produces — cannot follow a theme through CSS alone and has to be told.
+    try { window.dispatchEvent(new CustomEvent('bmm:theme-applied', { detail: { id: theme.id } })); } catch {}
 }
 
 /** Apply image/video assets: replace the corner mascot, the boot loader mascot,

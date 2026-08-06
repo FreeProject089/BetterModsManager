@@ -66,6 +66,8 @@ const ICON: Record<string, string> = {
   puzzle: '<path d="M4 7h3a1 1 0 0 0 1-1V5a2 2 0 1 1 4 0v1a1 1 0 0 0 1 1h3a1 1 0 0 1 1 1v3a1 1 0 0 0 1 1h1a2 2 0 1 1 0 4h-1a1 1 0 0 0-1 1v3a1 1 0 0 1-1 1h-3a1 1 0 0 1-1-1v-1a2 2 0 1 0-4 0v1a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a2 2 0 1 0 0-4H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1z"/>',
   server: '<rect x="2" y="3" width="20" height="7" rx="2"/><rect x="2" y="14" width="20" height="7" rx="2"/><line x1="6" y1="6.5" x2="6.01" y2="6.5"/><line x1="6" y1="17.5" x2="6.01" y2="17.5"/>',
   shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 14"/>',
+  check: '<polyline points="20 6 9 17 4 12"/>',
 };
 const svg = (name: string, size = 20): string =>
   `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${ICON[name] || ''}</svg>`;
@@ -2289,7 +2291,12 @@ function anchorise(body: HTMLElement, hash?: string) {
 // The article wiring only reaches the pages an article happens to point at — 22 of 35 when this
 // was added. This view is driven by the manifest instead, so a page can never be shipped and
 // then be unreachable in the app.
-interface DocPageMeta { path: string; section: string; title: { en: string; fr: string }; fr: boolean }
+// Written by scripts/sync-docs.mjs. summary/words/diagrams are derived from the markdown itself,
+// so the index can say what a page is about instead of repeating its path back at the reader.
+interface DocPageMeta {
+  path: string; section: string; title: { en: string; fr: string }; fr: boolean;
+  summary?: { en: string; fr: string }; words?: number; diagrams?: number;
+}
 let _manifest: DocPageMeta[] | null = null;
 
 async function loadManifest(): Promise<DocPageMeta[]> {
@@ -2317,23 +2324,75 @@ function pagesView(): string {
   }
   const order = ['root', 'getting-started', 'features', 'how-it-works', 'reference'];
   const groups = order.filter((s) => pages.some((p) => p.section === s));
+  const lang = getLang?.() === 'fr' ? 'fr' : 'en';
+
+  const totalWords = pages.reduce((s, p) => s + (p.words || 0), 0);
+  const totalDia = pages.reduce((s, p) => s + (p.diagrams || 0), 0);
+  const mins = (w: number) => Math.max(1, Math.round(w / 220));   // ~220 words a minute
+
+  const card = (p: DocPageMeta) => {
+    // What a reader needs to choose a page: what it covers, how long it is, whether it is
+    // illustrated. The raw path told them none of that and is now a hover title instead.
+    const bits: string[] = [`<span class="dh-pg-m">${svg('clock', 13)} ${mins(p.words || 0)} min</span>`];
+    if (p.diagrams) bits.push(`<span class="dh-pg-m">${svg('diagram', 13)} ${p.diagrams}</span>`);
+    if (!p.fr && lang === 'fr') bits.push(`<span class="dh-pg-m dh-pg-en" title="${escapeHtml(tr({ en: 'Not translated yet — shown in English.', fr: 'Pas encore traduite — affichée en anglais.' }))}">EN</span>`);
+    return `
+      <button class="dh-pg" data-page="${escapeHtml(p.path)}" title="${escapeHtml(p.path)}">
+        <div class="dh-pg-t">${escapeHtml(tr(p.title))}</div>
+        ${p.summary ? `<div class="dh-pg-s">${escapeHtml(tr(p.summary))}</div>` : ''}
+        <div class="dh-pg-meta">${bits.join('')}</div>
+      </button>`;
+  };
+
   return `
     <h2>${tr({ en: 'The full documentation', fr: 'La documentation complète' })}</h2>
     <p class="dh-lead">${tr({
-      en: 'The same pages as the website, rendered here. Nothing is fetched from the internet.',
-      fr: 'Les mêmes pages que le site, rendues ici. Rien n’est récupéré sur Internet.',
+      en: 'The same pages as the website, rendered here in your theme. Nothing is fetched from the internet.',
+      fr: 'Les mêmes pages que le site, rendues ici dans ton thème. Rien n’est récupéré sur Internet.',
     })}</p>
-    ${groups.map((s) => `
-      <h4>${tr(SECTION_TITLE[s] || { en: s, fr: s })}</h4>
-      <div class="dh-arts">
-        ${pages.filter((p) => p.section === s).map((p) => `
-          <button class="dh-art" data-page="${p.path}">
-            <div class="dh-art-t">${tr(p.title)}</div>
-            <div class="dh-art-s">${p.path}</div>
-            ${p.fr ? '' : `<div class="dh-art-tags"><span class="dh-tag dh-tag-med">EN</span></div>`}
-          </button>`).join('')}
-      </div>`).join('')}`;
+    <div class="dh-pg-stats">
+      <span><b>${pages.length}</b> ${tr({ en: 'pages', fr: 'pages' })}</span>
+      <span><b>${totalDia}</b> ${tr({ en: 'diagrams', fr: 'diagrammes' })}</span>
+      <span><b>~${mins(totalWords)}</b> ${tr({ en: 'min to read it all', fr: 'min pour tout lire' })}</span>
+      <span class="dh-pg-off">${svg('check', 13)} ${tr({ en: 'available offline', fr: 'disponible hors ligne' })}</span>
+    </div>
+    ${groups.map((s) => {
+      const inSec = pages.filter((p) => p.section === s);
+      return `
+      <div class="dh-pg-sec">
+        <div class="dh-pg-sec-h">
+          <h4>${tr(SECTION_TITLE[s] || { en: s, fr: s })}</h4>
+          <span class="dh-pg-sec-n">${inSec.length}</span>
+          ${SECTION_BLURB[s] ? `<p class="dh-pg-sec-s">${tr(SECTION_BLURB[s])}</p>` : ''}
+        </div>
+        <div class="dh-pgs">${inSec.map(card).join('')}</div>
+      </div>`;
+    }).join('')}`;
 }
+
+/** What each section of the site is for — the titles alone ("Reference") do not say. */
+const SECTION_BLURB: Record<string, { en: string; fr: string }> = {
+  root: {
+    en: 'Start here if you have never opened BMM.',
+    fr: 'Commence ici si tu n’as jamais ouvert BMM.',
+  },
+  'getting-started': {
+    en: 'Installing BMM and getting through the first launch.',
+    fr: 'Installer BMM et passer le premier lancement.',
+  },
+  features: {
+    en: 'One page per screen — what it does and how to use it.',
+    fr: 'Une page par écran — ce qu’il fait et comment s’en servir.',
+  },
+  'how-it-works': {
+    en: 'What happens under the hood, and why it was built that way.',
+    fr: 'Ce qui se passe sous le capot, et pourquoi c’est construit ainsi.',
+  },
+  reference: {
+    en: 'Exhaustive lists to look things up in: actions, endpoints, deeplinks, keys.',
+    fr: 'Les listes exhaustives à consulter : actions, endpoints, deeplinks, touches.',
+  },
+};
 
 /** A bundled page on its own — the body is filled in by openPage() once fetched. */
 function pageReaderView(path: string): string {
@@ -2434,6 +2493,132 @@ async function fetchDocPage(path: string): Promise<string | null> {
   return null;
 }
 
+// ── diagram theming ──────────────────────────────────────────────────────────
+// mermaid derives most of its palette from the few colours it is handed, using real colour
+// maths. Handing it a token like --bmm-s08 — which resolves to rgba(255,255,255,0.08) — makes
+// every derived shade nonsense, which is what turned the sequence diagram's lifelines purple.
+// So each token is resolved and FLATTENED against the diagram card's background first.
+type RGBA = [number, number, number, number];
+function parseColor(c: string): RGBA | null {
+  const s = c.trim();
+  let m = /^#([0-9a-f]{3,8})$/i.exec(s);
+  if (m) {
+    let h = m[1];
+    if (h.length === 3 || h.length === 4) h = h.split('').map((x) => x + x).join('');
+    if (h.length !== 6 && h.length !== 8) return null;
+    const at = (i: number) => parseInt(h.slice(i, i + 2), 16);
+    return [at(0), at(2), at(4), h.length === 8 ? at(6) / 255 : 1];
+  }
+  m = /^rgba?\(([^)]+)\)$/i.exec(s);
+  if (m) {
+    const p = m[1].split(/[\s,/]+/).filter(Boolean).map(Number);
+    if (p.length >= 3 && p.slice(0, 3).every((x) => Number.isFinite(x))) {
+      return [p[0], p[1], p[2], p.length > 3 && Number.isFinite(p[3]) ? p[3] : 1];
+    }
+  }
+  return null;
+}
+const toHex = (r: number, g: number, b: number) =>
+  '#' + [r, g, b].map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('');
+/** Composite `c` over an opaque base — the only way a translucent token becomes a usable colour. */
+function over(c: RGBA, base: RGBA): RGBA {
+  const a = c[3];
+  return [c[0] * a + base[0] * (1 - a), c[1] * a + base[1] * (1 - a), c[2] * a + base[2] * (1 - a), 1];
+}
+const luma = (c: RGBA) => (0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]) / 255;
+
+/** The mermaid configuration for the CURRENT theme, built from the live design tokens. */
+function mermaidTheme() {
+  const css = getComputedStyle(document.documentElement);
+  const raw = (n: string, f: string) => (css.getPropertyValue(n) || '').trim() || f;
+  // The card the diagram sits on — everything translucent flattens against this.
+  const page = parseColor(raw('--bmm-bg-base', '#0a0e17')) || [10, 14, 23, 1];
+  const base: RGBA = page[3] >= 0.999 ? page : over(page, [0, 0, 0, 1]);
+  const col = (name: string, fallback: string) => {
+    const p = parseColor(raw(name, fallback)) || parseColor(fallback) || [128, 128, 128, 1];
+    const f = p[3] >= 0.999 ? p : over(p, base);
+    return toHex(f[0], f[1], f[2]);
+  };
+  /** A tint of `name` laid over the card — for fills that must read as a colour, not a block. */
+  const tint = (name: string, fallback: string, alpha: number) => {
+    const p = parseColor(raw(name, fallback)) || parseColor(fallback) || [128, 128, 128, 1];
+    const f = over([p[0], p[1], p[2], alpha], base);
+    return toHex(f[0], f[1], f[2]);
+  };
+
+  const bg = toHex(base[0], base[1], base[2]);
+  // These three are the tokens the theme editor already exposes for diagrams.
+  const node = col('--bmm-diagram-node', '#161b22');
+  const nodeBorder = col('--bmm-diagram-node-border', '#3b82f6');
+  const nodeText = col('--bmm-diagram-node-text', '#f1f5f9');
+  const line = col('--bmm-text-muted', '#7c8698');
+  const soft = col('--bmm-border-hover', '#2a3242');
+  // The subgraph box, barely raised off the card. --bmm-surface-* is the overlay TINT (white on
+  // dark themes, black on light ones), so this stays a lift in both directions.
+  const surface: RGBA = [
+    Number(raw('--bmm-surface-r', '255')) || 0,
+    Number(raw('--bmm-surface-g', '255')) || 0,
+    Number(raw('--bmm-surface-b', '255')) || 0, 1];
+  const clusterRGB = over([surface[0], surface[1], surface[2], 0.045], base);
+  const cluster = toHex(clusterRGB[0], clusterRGB[1], clusterRGB[2]);
+  const warn = col('--bmm-warning', '#f59e0b');
+  const noteBg = tint('--bmm-warning', '#f59e0b', 0.14);      // annotations read warm on any theme
+
+  return {
+    startOnLoad: false,
+    theme: 'base' as const,
+    securityLevel: 'loose' as const,
+    htmlLabels: true,
+    // With htmlLabels, a node label is real HTML inside a foreignObject — so it INHERITS the
+    // page's CSS. mermaid, though, measures it in a scratch element it appends to <body>, which
+    // does not inherit .dh-content's line-height: 1.7. It therefore sized every box for 13×1.31
+    // and then drew text at 13×1.7, and the second line of every two-line label was cut off.
+    // Baking the line-height into the SVG's own stylesheet makes both passes agree wherever the
+    // diagram ends up.
+    themeCSS: '.nodeLabel,.edgeLabel,.label,.actor,.messageText,.noteText,.loopText'
+      + '{line-height:1.35;} .nodeLabel p,.edgeLabel p{margin:0;}',
+    // Tell mermaid which way round the surface is, so anything it still derives itself lands on
+    // the readable side. Getting this wrong is how light themes ended up with white-on-white.
+    darkMode: luma(base) < 0.5,
+    // useMaxWidth:false — with it on, mermaid stretches/squashes the drawing to the column, and a
+    // wide left-to-right flowchart got crushed to a 57px-tall strip with unreadable labels. Off,
+    // it keeps its natural size and .dh-mermaid scrolls instead, exactly like the website does.
+    flowchart: { curve: 'basis', nodeSpacing: 46, rankSpacing: 46, useMaxWidth: false, padding: 12 },
+    sequence: { useMaxWidth: false, mirrorActors: true, boxMargin: 8, noteMargin: 10, messageAlign: 'center' },
+    themeVariables: {
+      background: bg,
+      fontFamily: (getComputedStyle(document.documentElement).getPropertyValue('--bmm-font-sans') || '').trim()
+        || 'Inter, system-ui, sans-serif',
+      fontSize: '13px',
+      // flowchart / graph
+      primaryColor: node, primaryTextColor: nodeText, primaryBorderColor: nodeBorder,
+      secondaryColor: cluster, secondaryTextColor: nodeText, secondaryBorderColor: soft,
+      tertiaryColor: bg, tertiaryTextColor: nodeText, tertiaryBorderColor: soft,
+      mainBkg: node, nodeBorder, nodeTextColor: nodeText,
+      lineColor: line, textColor: nodeText, titleColor: nodeText,
+      clusterBkg: cluster, clusterBorder: soft,
+      // Edge labels sit ON the connector and need a backing plate, or the line runs through the
+      // text. Unset, mermaid paints that plate white and it punches a bright hole through every
+      // dark theme. The cluster shade rather than the page shade: these labels almost always sit
+      // inside a subgraph, and the page colour read as a black box floating on top of one.
+      edgeLabelBackground: cluster, labelBackground: cluster, labelColor: nodeText,
+      // sequenceDiagram — none of this was set before, which is why the actors, the lifelines
+      // and the notes all came out in mermaid's own derived colours.
+      actorBkg: node, actorBorder: nodeBorder, actorTextColor: nodeText, actorLineColor: line,
+      signalColor: line, signalTextColor: nodeText,
+      labelBoxBkgColor: node, labelBoxBorderColor: nodeBorder, labelTextColor: nodeText,
+      loopTextColor: nodeText, activationBkgColor: cluster, activationBorderColor: nodeBorder,
+      noteBkgColor: noteBg, noteBorderColor: warn, noteTextColor: nodeText,
+      sequenceNumberColor: bg, altBackground: cluster,
+    },
+  };
+}
+
+// Each render pass gets a ticket. A pass whose ticket is stale — the reader navigated, or
+// switched language, while its diagrams were still rendering — drops its output instead of
+// writing SVG into a detached node.
+let _hydrateSeq = 0;
+
 /** Render mermaid sources and wire content tabs inside a freshly injected page. */
 async function hydrateDocPage(host: HTMLElement) {
   host.querySelectorAll('[data-tabs]').forEach((box) => {
@@ -2451,44 +2636,41 @@ async function hydrateDocPage(host: HTMLElement) {
   const m = (window as any).mermaid;
   if (!m?.render) return;                       // leave the placeholder rather than a broken box
 
+  const ticket = ++_hydrateSeq;
   // The interactive-diagram viewer initialises mermaid with a hard-coded dark palette, which is
   // unreadable on the light themes. Re-initialise from the live design tokens before rendering a
   // doc page, so a diagram inherits whatever theme is active.
-  const css = getComputedStyle(document.documentElement);
-  const tok = (n: string, f: string) => (css.getPropertyValue(n) || '').trim() || f;
-  try {
-    m.initialize({
-      startOnLoad: false,
-      theme: 'base',
-      securityLevel: 'loose',
-      htmlLabels: true,
-      flowchart: { curve: 'basis', nodeSpacing: 46, rankSpacing: 46, useMaxWidth: true },
-      themeVariables: {
-        primaryColor: tok('--bmm-s08', '#1e293b'),
-        primaryTextColor: tok('--bmm-text-primary', '#e6edf3'),
-        primaryBorderColor: tok('--bmm-accent', '#3b82f6'),
-        secondaryColor: tok('--bmm-s05', '#161b22'),
-        tertiaryColor: tok('--bmm-bg-base', '#0f1420'),
-        mainBkg: tok('--bmm-s08', '#1e293b'),
-        lineColor: tok('--bmm-text-muted', '#7c8698'),
-        textColor: tok('--bmm-text-primary', '#e6edf3'),
-        fontFamily: 'Inter, system-ui, sans-serif',
-        fontSize: '13px',
-      },
-    });
-  } catch { /* keep whatever configuration is already in place */ }
+  try { m.initialize(mermaidTheme()); } catch { /* keep whatever configuration is already in place */ }
 
   for (let n = 0; n < blocks.length; n++) {
-    const src = blocks[n].getAttribute('data-mermaid') || '';
+    const el = blocks[n];
+    const src = el.getAttribute('data-mermaid') || '';
     try {
-      const { svg } = await m.render(`dh-mmd-${Date.now()}-${n}`, src);
-      blocks[n].innerHTML = svg;
-      blocks[n].classList.add('ok');
+      const { svg } = await m.render(`dh-mmd-${ticket}-${n}`, src);
+      if (ticket !== _hydrateSeq || !el.isConnected) return;   // superseded — this page is gone
+      el.innerHTML = svg;
+      el.classList.add('ok');
     } catch {
+      if (ticket !== _hydrateSeq || !el.isConnected) return;
       // A diagram the app's mermaid build cannot parse shows its source instead of nothing.
-      blocks[n].innerHTML = `<pre class="dh-code"><code>${src.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</code></pre>`;
+      el.innerHTML = `<pre class="dh-code"><code>${src.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</code></pre>`;
+      el.classList.add('ok');
     }
   }
+}
+
+/** Re-render the diagrams on screen after a theme switch — their colours are baked into the SVG
+ *  at render time, so without this a new theme leaves every open diagram in the old palette. */
+function rethemeDiagrams() {
+  const body = host?.querySelector('.dh-content') as HTMLElement | null;
+  if (!body || !body.querySelector('.dh-mermaid')) return;
+  body.querySelectorAll('.dh-mermaid').forEach((el) => {
+    const src = el.getAttribute('data-mermaid');
+    if (!src) return;                            // a block that fell back to source: leave it
+    el.classList.remove('ok');
+    el.innerHTML = `<div class="dh-mermaid-ph">◇ diagram</div>`;
+  });
+  void hydrateDocPage(body);
 }
 
 async function playReplay(url: string) {
@@ -2536,6 +2718,14 @@ export function initDocsHub() {
   host.addEventListener('click', onClick);
   // Re-render on language switch — but KEEP the current route so you stay on the same page.
   document.addEventListener('langChanged', () => renderAll());
+  // A theme switch repaints the app through CSS, but a rendered diagram carries its colours
+  // inside its own SVG, so it has to be drawn again. Debounced: the theme editor re-applies a
+  // preview on every keystroke, and a full mermaid pass per keystroke would crawl.
+  let reTheme: number | null = null;
+  window.addEventListener('bmm:theme-applied', () => {
+    if (reTheme != null) window.clearTimeout(reTheme);
+    reTheme = window.setTimeout(() => { try { rethemeDiagrams(); } catch { /* keep the old drawing */ } }, 220);
+  });
 
   // (Ctrl/⌘+K now opens the app-wide command palette — see core/commands.ts — which includes a
   // "Search the documentation" command that focuses this search.)
