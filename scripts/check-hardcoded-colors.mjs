@@ -43,11 +43,19 @@ const OFFENDER = new RegExp(String.raw`(?<![a-z-])(?:color|fill|stroke)\s*:\s*(?
 const SKIP_DIRS = new Set(['node_modules', 'js', 'Lang', 'target', '.git', 'dist', '.vite', 'diagrams']);
 // Files exempt from the rule.
 const EXEMPT = new Set(['tokens.css', 'debug.css']);
+// The DevTools overlay is exempt as a whole, not just its stylesheet. debug.css was already
+// exempt for being "intentionally always-dark", but the same overlay is built from
+// features/debug/*.ts, and those were being gated — the same surface judged two ways.
+// The overlay must stay readable while you are DEBUGGING A THEME, which is exactly when
+// following that theme would make it unusable; and its code viewer uses editor syntax colours
+// (#9cdcfe / #ce9178), which are a language palette, not app chrome.
+const EXEMPT_DIRS = [join('frontend', 'src', 'features', 'debug')];
 // Extensions to scan.
 const EXTS = ['.css', '.ts', '.html'];
 
 /** Recursively collect scannable files under frontend/. */
 function walk(dir, out = []) {
+  if (EXEMPT_DIRS.some((d) => relative(ROOT, dir).replace(/\\/g, '/') === d.replace(/\\/g, '/'))) return out;
   for (const name of readdirSync(dir)) {
     if (SKIP_DIRS.has(name)) continue;
     const full = join(dir, name);

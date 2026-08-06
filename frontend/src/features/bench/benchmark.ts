@@ -204,7 +204,7 @@ export async function openAdvancedPerfModal() {
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
                 </div>
                 <div>
-                    <h2 style="margin:0; font-size: 1.25rem; font-weight: 800; color: #fff;">${t('bench.title') || 'Benchmark'}</h2>
+                    <h2 style="margin:0; font-size: 1.25rem; font-weight: 800; color: var(--bmm-text-primary);">${t('bench.title') || 'Benchmark'}</h2>
                     <p id="perf-subtitle" style="margin: 2px 0 0; font-size: 0.75rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">${t('bench.subtitle') || 'Live Diagnostics & Replay'}</p>
                 </div>
             </div>
@@ -214,7 +214,7 @@ export async function openAdvancedPerfModal() {
                     <button class="perf-tab" data-mode="bench">${t('bench.tabBench') || 'Benchmark'}</button>
                 </div>
                 <div id="perf-live-controls" style="display: flex; align-items: center; gap: 12px;">
-                <button class="btn btn-ghost btn-sm" id="btn-perf-rec" style="gap:8px; border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 8px; color: #ef4444;">
+                <button class="btn btn-ghost btn-sm" id="btn-perf-rec" style="gap:8px; border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 8px; color: var(--bmm-danger);">
                     <div id="rec-dot" style="width: 8px; height: 8px; border-radius: 50%; background: #ef4444; box-shadow: 0 0 8px #ef4444;"></div>
                     <span id="rec-text">${t('bench.stopRec') || 'Stop Recording'}</span>
                 </button>
@@ -251,29 +251,29 @@ export async function openAdvancedPerfModal() {
                 <div class="glass-card" style="padding: 24px; background: rgba(0,0,0,0.3); border-radius: 20px;">
                     <span class="label" style="display:block; font-size: 11px; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-bottom: 8px;">${t('bench.ramPeak') || 'RAM Usage (Peak)'}</span>
                     <div style="display: flex; align-items: baseline; gap: 8px;">
-                        <span id="perf-ram-val" style="font-size: 32px; font-weight: 900; color: #fff; font-family: var(--font-mono);">0 MB</span>
+                        <span id="perf-ram-val" style="font-size: 32px; font-weight: 900; color: var(--bmm-chart-ram); font-family: var(--font-mono);">0 MB</span>
                         <span id="perf-ram-peak" style="font-size: 14px; color: var(--text-muted); font-weight: 600;">peak: 0</span>
                     </div>
                 </div>
                 <div class="glass-card" style="padding: 24px; background: rgba(0,0,0,0.3); border-radius: 20px;">
                     <span class="label" style="display:block; font-size: 11px; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-bottom: 8px;">${t('bench.diskIo') || 'Disk I/O R/W'}</span>
-                    <span id="perf-disk-val" style="font-size: 24px; font-weight: 900; color: #fbbf24; font-family: var(--font-mono);">0 / 0 KB/s</span>
+                    <span id="perf-disk-val" style="font-size: 24px; font-weight: 900; color: var(--bmm-chart-disk-read); font-family: var(--font-mono);">0 / 0 KB/s</span>
                 </div>
                 <div class="glass-card" style="padding: 24px; background: rgba(0,0,0,0.3); border-radius: 20px;">
                     <span class="label" style="display:block; font-size: 11px; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-bottom: 8px;">${t('bench.uptime') || 'Process Uptime'}</span>
-                    <span id="perf-uptime-val" style="font-size: 24px; font-weight: 900; color: #10b981; font-family: var(--font-mono);">0s</span>
+                    <span id="perf-uptime-val" style="font-size: 24px; font-weight: 900; color: var(--bmm-success); font-family: var(--font-mono);">0s</span>
                 </div>
             </div>
 
             <!-- Charts -->
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
                 <div class="glass-card chart-container" style="padding: 24px; background: rgba(255,255,255,0.02); position: relative; border-radius: 20px;">
-                    <h3 style="margin: 0 0 20px; font-size: 13px; color: #fff; text-transform: uppercase; font-weight: 800; letter-spacing: 0.05em;">${t('bench.sysHist') || 'System Resources History'}</h3>
+                    <h3 style="margin: 0 0 20px; font-size: 13px; color: var(--bmm-text-primary); text-transform: uppercase; font-weight: 800; letter-spacing: 0.05em;">${t('bench.sysHist') || 'System Resources History'}</h3>
                     <canvas id="perf-chart-main" style="width: 100%; height: 320px; cursor: crosshair;"></canvas>
                 </div>
 
                 <div class="glass-card chart-container" style="padding: 24px; background: rgba(255,255,255,0.02); position: relative; border-radius: 20px;">
-                    <h3 style="margin: 0 0 20px; font-size: 13px; color: #fff; text-transform: uppercase; font-weight: 800; letter-spacing: 0.05em;">${t('bench.ioHist') || 'Disk Throughput History'}</h3>
+                    <h3 style="margin: 0 0 20px; font-size: 13px; color: var(--bmm-text-primary); text-transform: uppercase; font-weight: 800; letter-spacing: 0.05em;">${t('bench.ioHist') || 'Disk Throughput History'}</h3>
                     <canvas id="perf-chart-io" style="width: 100%; height: 320px; cursor: crosshair;"></canvas>
                 </div>
             </div>
@@ -309,14 +309,14 @@ export async function openAdvancedPerfModal() {
                             <span style="font-size: 10px; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">${t('bench.globalCpu') || 'Global CPU Load'}</span>
                             <span class="tasky-info" data-help="global_cpu" style="cursor: help; color: var(--accent); opacity: 0.6;">?</span>
                         </div>
-                        <span id="perf-global-cpu-val" style="font-size: 20px; font-weight: 900; color: #fff; font-family: var(--font-mono);">-- %</span>
+                        <span id="perf-global-cpu-val" style="font-size: 20px; font-weight: 900; color: var(--bmm-text-primary); font-family: var(--font-mono);">-- %</span>
                     </div>
                     <div class="glass-card" style="padding: 20px; background: rgba(59, 130, 246, 0.05); border-radius: 12px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                             <span style="font-size: 10px; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">${t('bench.virtual') || 'Virtual Memory'}</span>
                             <span class="tasky-info" data-help="virtual" style="cursor: help; color: var(--accent); opacity: 0.6;">?</span>
                         </div>
-                        <span id="perf-vram-val" style="font-size: 20px; font-weight: 900; color: #fff; font-family: var(--font-mono);">-- MB</span>
+                        <span id="perf-vram-val" style="font-size: 20px; font-weight: 900; color: var(--bmm-text-primary); font-family: var(--font-mono);">-- MB</span>
                     </div>
                 </div>
             </div>
@@ -362,7 +362,7 @@ export async function openAdvancedPerfModal() {
                     </button>
                 </div>
 
-                <div id="bench-realnote" style="display:none; font-size:12px; color:#fbbf24; background:rgba(251,191,36,0.08); border:1px solid rgba(251,191,36,0.2); border-radius:10px; padding:10px 14px;">
+                <div id="bench-realnote" style="display:none; font-size:12px; color:var(--bmm-warning); background:rgba(251,191,36,0.08); border:1px solid rgba(251,191,36,0.2); border-radius:10px; padding:10px 14px;">
                     ${t('bench.realNote') || '“My mods” uses the real mods of the selected profile(s) as test data — they are only read, never changed. Every operation (copy, activate, deactivate…) runs in a temporary workspace, so your game folder is never touched. Gives you numbers for your actual library instead of synthetic files.'}
                 </div>
 
@@ -392,7 +392,7 @@ export async function openAdvancedPerfModal() {
                 </div>
 
                 <div id="bench-intro" style="background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:16px; padding:28px 30px; color:var(--text-secondary); font-size:13px; line-height:1.7;">
-                    <h3 style="margin:0 0 12px; font-size:15px; color:#fff;">${t('bench.introTitle') || 'Full operation benchmark'}</h3>
+                    <h3 style="margin:0 0 12px; font-size:15px; color:var(--bmm-text-primary);">${t('bench.introTitle') || 'Full operation benchmark'}</h3>
                     ${t('bench.introBody') || 'Runs BMM’s real hot-path operations on a controlled dataset and reports how fast each one is, with throughput. It covers everything BMM does to your mods:'}
                     <ul style="margin:12px 0 0; padding-left:18px; columns:2; gap:24px;">
                         <li>${t('bench.opScan') || 'Scanning mod files'}</li>
@@ -558,9 +558,9 @@ export async function openAdvancedPerfModal() {
 
             globalTooltip.innerHTML = `
                 <div style="color:var(--accent); font-weight:900; margin-bottom:6px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 4px;">${new Date(point.timestamp * 1000).toLocaleTimeString()}</div>
-                <div style="color:#fff; margin: 4px 0;">CPU: <span style="color:var(--accent); font-weight:700">${point.cpu_usage.toFixed(1)}%</span></div>
-                <div style="color:#fff; margin: 4px 0;">RAM: <span style="color:#fff; font-weight:700">${formatUnit(point.ram_usage, 'MB')}</span></div>
-                ${point.network_latency ? `<div style="color:#3b82f6; margin: 4px 0;">Ping: <span style="font-weight:700">${point.network_latency}ms</span></div>` : ''}
+                <div style="color:var(--bmm-text-primary); margin: 4px 0;">CPU: <span style="color:var(--accent); font-weight:700">${point.cpu_usage.toFixed(1)}%</span></div>
+                <div style="color:var(--bmm-text-primary); margin: 4px 0;">RAM: <span style="color:var(--bmm-chart-ram); font-weight:700">${formatUnit(point.ram_usage, 'MB')}</span></div>
+                ${point.network_latency ? `<div style="color:var(--bmm-info); margin: 4px 0;">Ping: <span style="font-weight:700">${point.network_latency}ms</span></div>` : ''}
             `;
             renderCharts(content, benchmarkData, isLiveView ? null : seekIndex);
         };
@@ -1078,20 +1078,20 @@ function toggleMiniMonitor(active: boolean) {
             <div style="display:flex; justify-content:space-between; align-items:center; pointer-events: none;">
                 <div style="display: flex; align-items: center; gap: 8px;">
                     <div style="width: 12px; height: 12px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px var(--accent);"></div>
-                    <span style="font-size:11px; font-weight:900; letter-spacing:0.12em; color: #fff; text-transform: uppercase;">PERF MINI</span>
+                    <span style="font-size:11px; font-weight:900; letter-spacing:0.12em; color: var(--bmm-text-primary); text-transform: uppercase;">PERF MINI</span>
                 </div>
                 <div style="display: flex; gap: 4px; align-items: center; pointer-events: auto;">
-                    <button id="mini-startstop" style="background:none; border:1px solid rgba(239,68,68,0.3); color:#ef4444; cursor:pointer; font-size:10px; font-weight:700; padding:2px 6px; border-radius: 4px; text-transform:uppercase; transition:all 0.2s;">STOP</button>
-                    <button id="mini-back" style="background:none; border:none; color:rgba(255,255,255,0.4); cursor:pointer; font-size:12px; padding:6px; border-radius: 8px;">
+                    <button id="mini-startstop" style="background:none; border:1px solid rgba(239,68,68,0.3); color: var(--bmm-danger); cursor:pointer; font-size:10px; font-weight:700; padding:2px 6px; border-radius: 4px; text-transform:uppercase; transition:all 0.2s;">STOP</button>
+                    <button id="mini-back" style="background:none; border:none; color:var(--bmm-text-secondary); cursor:pointer; font-size:12px; padding:6px; border-radius: 8px;">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 3h6v6M10 14L21 3M9 21H3v-6M21 21L13 13"/></svg>
                     </button>
-                    <button id="mini-close" style="background:none; border:none; color:rgba(255,255,255,0.4); cursor:pointer; font-size:22px; padding:0 6px; border-radius: 8px;">&times;</button>
+                    <button id="mini-close" style="background:none; border:none; color:var(--bmm-text-secondary); cursor:pointer; font-size:22px; padding:0 6px; border-radius: 8px;">&times;</button>
                 </div>
             </div>
             <div style="display:flex; flex-direction:column; gap:12px; pointer-events: none;">
                 <!-- CPU Gauge -->
                 <div style="display:flex; align-items:center; gap:12px;">
-                    <span style="font-size:10px; font-weight:900; color:rgba(255,255,255,0.4); width:35px;">CPU</span>
+                    <span style="font-size:10px; font-weight:900; color:var(--bmm-text-secondary); width:35px;">CPU</span>
                     <div style="flex:1; height:6px; background:rgba(255,255,255,0.05); border-radius:3px; overflow:hidden;">
                         <div id="mini-cpu-bar" style="width:0%; height:100%; background:var(--accent); transition: width 0.3s ease;"></div>
                     </div>
@@ -1099,19 +1099,19 @@ function toggleMiniMonitor(active: boolean) {
                 </div>
                 <!-- RAM Gauge -->
                 <div style="display:flex; align-items:center; gap:12px;">
-                    <span style="font-size:10px; font-weight:900; color:rgba(255,255,255,0.4); width:35px;">RAM</span>
+                    <span style="font-size:10px; font-weight:900; color:var(--bmm-text-secondary); width:35px;">RAM</span>
                     <div style="flex:1; height:6px; background:rgba(255,255,255,0.05); border-radius:3px; overflow:hidden;">
                         <div id="mini-ram-bar" style="width:0%; height:100%; background:#fff; transition: width 0.3s ease;"></div>
                     </div>
-                    <span id="mini-ram" style="font-size:11px; font-weight:900; color:#fff; width:35px; text-align:right;">0M</span>
+                    <span id="mini-ram" style="font-size:11px; font-weight:900; color:var(--bmm-chart-ram); width:35px; text-align:right;">0M</span>
                 </div>
                 <!-- DISK Gauge -->
                 <div style="display:flex; align-items:center; gap:12px;">
-                    <span style="font-size:10px; font-weight:900; color:rgba(255,255,255,0.4); width:35px;">DISK</span>
+                    <span style="font-size:10px; font-weight:900; color:var(--bmm-text-secondary); width:35px;">DISK</span>
                     <div style="flex:1; height:6px; background:rgba(255,255,255,0.05); border-radius:3px; overflow:hidden;">
                         <div id="mini-disk-bar" style="width:0%; height:100%; background:#fbbf24; transition: width 0.3s ease;"></div>
                     </div>
-                    <span id="mini-disk" style="font-size:11px; font-weight:900; color:#fbbf24; width:35px; text-align:right;">0K</span>
+                    <span id="mini-disk" style="font-size:11px; font-weight:900; color:var(--bmm-chart-disk-read); width:35px; text-align:right;">0K</span>
                 </div>
             </div>
         `;
@@ -1343,7 +1343,7 @@ function benchCompareHtml(): string {
     const fmtTput = (v: any) => v == null ? '—' : (v >= 1000 ? `${(v / 1000).toFixed(2)} GB/s` : `${v.toFixed(0)} MB/s`);
     const fmtMs = (ms: number) => ms < 1 ? `${(ms * 1000).toFixed(0)}µs` : ms < 1000 ? `${ms.toFixed(1)}ms` : `${(ms / 1000).toFixed(2)}s`;
     const th = `<th style="text-align:left; padding:6px 8px; color:var(--text-muted); font-weight:600;">${t('bench.cmpOp') || 'Operation'}</th>` +
-        runs.map(r => `<th style="text-align:right; padding:6px 8px; color:#fff; font-weight:700; white-space:nowrap;">${esc(r.label)}</th>`).join('');
+        runs.map(r => `<th style="text-align:right; padding:6px 8px; color:var(--bmm-text-primary); font-weight:700; white-space:nowrap;">${esc(r.label)}</th>`).join('');
     const body = order.map(id => {
         const cells = runs.map(r => (r.report.results || []).find((o: any) => o.id === id));
         const hasTput = cells.some(c => c && c.throughput_mb_s != null);
@@ -1355,11 +1355,11 @@ function benchCompareHtml(): string {
             const best = i === bestIdx && runs.length > 1;
             return `<td style="text-align:right; padding:6px 8px; font-family:var(--font-mono); color:${best ? '#10b981' : '#cbd5e1'}; font-weight:${best ? '800' : '500'};">${txt}</td>`;
         }).join('');
-        return `<tr style="border-top:1px solid var(--border);"><td style="padding:6px 8px; color:#fff; font-weight:600;">${esc(labelById[id])}</td>${tds}</tr>`;
+        return `<tr style="border-top:1px solid var(--border);"><td style="padding:6px 8px; color:var(--bmm-text-primary); font-weight:600;">${esc(labelById[id])}</td>${tds}</tr>`;
     }).join('');
     return `<div style="background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:14px; padding:16px 18px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-            <h4 style="margin:0; font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--text-muted);">${(t('bench.cmpTitle') || 'Comparison').replace('{n}', String(runs.length))} <span style="color:#64748b; text-transform:none; font-weight:400;">· ${runs.length} ${t('bench.cmpRuns') || 'runs'}</span></h4>
+            <h4 style="margin:0; font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--text-muted);">${(t('bench.cmpTitle') || 'Comparison').replace('{n}', String(runs.length))} <span style="color:var(--bmm-text-muted); text-transform:none; font-weight:400;">· ${runs.length} ${t('bench.cmpRuns') || 'runs'}</span></h4>
             <button class="btn btn-ghost btn-sm" id="bench-clear-compare" style="font-weight:700;">${t('bench.cmpClear') || 'Clear comparison'}</button>
         </div>
         <div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse; font-size:12px;"><thead><tr>${th}</tr></thead><tbody>${body}</tbody></table></div>
@@ -1386,7 +1386,7 @@ function renderBenchResults(container: HTMLElement | null, report: any) {
         const note = opNote(op);
         return `<div style="background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:12px; padding:14px 16px;">
             <div style="display:flex; justify-content:space-between; align-items:baseline; gap:12px;">
-                <span style="font-weight:700; color:#fff; font-size:13px;">${opLabel(op)}</span>
+                <span style="font-weight:700; color:var(--bmm-text-primary); font-size:13px;">${opLabel(op)}</span>
                 <span style="font-family:var(--font-mono); font-weight:800; color:${col}; white-space:nowrap;">${fmtMs(op.ms)}${tp ? ` · ${tp}` : ''}${range}</span>
             </div>
             <div style="height:6px; background:rgba(255,255,255,0.05); border-radius:3px; margin:9px 0 7px; overflow:hidden;">
@@ -1399,17 +1399,17 @@ function renderBenchResults(container: HTMLElement | null, report: any) {
     const dsMb = ((env.dataset_bytes || 0) / 1048576).toFixed(1);
     const cardStyle = 'background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:14px; padding:16px 18px;';
     const chartTitle = (txt: string, sub: string) =>
-        `<h4 style="margin:0 0 10px; font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--text-muted);">${txt} <span style="color:#64748b; text-transform:none; font-weight:400;">· ${sub}</span></h4>`;
+        `<h4 style="margin:0 0 10px; font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--text-muted);">${txt} <span style="color:var(--bmm-text-muted); text-transform:none; font-weight:400;">· ${sub}</span></h4>`;
     const chartTput = benchSvgChart(ops, 'tput');
     container.innerHTML = `
         <div style="display:flex; flex-wrap:wrap; gap:14px; align-items:center; justify-content:space-between; padding:4px 2px;">
             <div style="display:flex; gap:18px; flex-wrap:wrap; font-size:12px; color:var(--text-muted);">
-                <span>${t('bench.colMode') || 'Mode'}: <b style="color:#fff;">${env.mode === 'real' ? (t('bench.real') || 'Real') : (t('bench.sandbox') || 'Sandbox')}</b></span>
-                <span>${t('bench.colDataset') || 'Dataset'}: <b style="color:#fff;">${env.dataset_files || 0} ${t('bench.files') || 'files'} · ${dsMb} MB</b></span>
-                <span>CPU: <b style="color:#fff;">${env.cores || '?'} ${t('bench.cores') || 'cores'}</b></span>
-                ${env.disk ? `<span>${t('bench.disk') || 'Disk'}: <b style="color:#fff;">${env.disk}</b></span>` : ''}
-                ${env.reps ? `<span>${t('bench.samples') || 'Samples'}: <b style="color:#fff;">${env.reps}× ${t('bench.eachOp') || 'each op'}</b></span>` : ''}
-                <span>${t('bench.colTotal') || 'Total'}: <b style="color:#fff;">${fmtMs(report.total_ms || 0)}</b></span>
+                <span>${t('bench.colMode') || 'Mode'}: <b style="color:var(--bmm-text-primary);">${env.mode === 'real' ? (t('bench.real') || 'Real') : (t('bench.sandbox') || 'Sandbox')}</b></span>
+                <span>${t('bench.colDataset') || 'Dataset'}: <b style="color:var(--bmm-text-primary);">${env.dataset_files || 0} ${t('bench.files') || 'files'} · ${dsMb} MB</b></span>
+                <span>CPU: <b style="color:var(--bmm-text-primary);">${env.cores || '?'} ${t('bench.cores') || 'cores'}</b></span>
+                ${env.disk ? `<span>${t('bench.disk') || 'Disk'}: <b style="color:var(--bmm-text-primary);">${env.disk}</b></span>` : ''}
+                ${env.reps ? `<span>${t('bench.samples') || 'Samples'}: <b style="color:var(--bmm-text-primary);">${env.reps}× ${t('bench.eachOp') || 'each op'}</b></span>` : ''}
+                <span>${t('bench.colTotal') || 'Total'}: <b style="color:var(--bmm-text-primary);">${fmtMs(report.total_ms || 0)}</b></span>
             </div>
             <div style="display:flex; gap:8px;">
                 <button class="btn btn-ghost btn-sm" id="bench-copy-json" style="font-weight:700;">${t('bench.copyJson') || 'Copy JSON'}</button>
@@ -1554,15 +1554,15 @@ function injectBenchStyle() {
         .perf-tab { background:transparent; border:none; color:var(--text-muted); font-size:12px; font-weight:700;
             padding:6px 14px; border-radius:8px; cursor:pointer; transition:all .15s; }
         .perf-tab:hover { color:var(--text-secondary); }
-        .perf-tab.active { background:var(--accent); color:#fff; box-shadow:0 2px 8px rgba(0,0,0,0.3); }
+        .perf-tab.active { background:var(--accent); color:var(--bmm-text-on-accent); box-shadow:0 2px 8px rgba(0,0,0,0.3); }
         .bench-seg { background:transparent; border:none; color:var(--text-muted); font-size:12px; font-weight:700;
             min-width:38px; padding:7px 14px; border-radius:7px; cursor:pointer; transition:all .15s; }
         .bench-seg:hover { color:var(--text-secondary); }
-        .bench-seg.active { background:rgba(255,255,255,0.10); color:#fff; }
+        .bench-seg.active { background:rgba(255,255,255,0.10); color:var(--bmm-text-on-accent); }
         .bench-chip { background:rgba(255,255,255,0.05); border:1px solid var(--border); color:var(--text-secondary);
             font-size:12px; font-weight:600; padding:6px 12px; border-radius:8px; cursor:pointer; transition:all .15s; }
-        .bench-chip:hover { border-color:var(--bmm-s15, rgba(255,255,255,0.15)); color:#fff; }
-        .bench-chip.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+        .bench-chip:hover { border-color:var(--bmm-s15, rgba(255,255,255,0.15)); color:var(--bmm-text-primary); }
+        .bench-chip.active { background:var(--accent); border-color:var(--accent); color:var(--bmm-text-on-accent); }
     `;
     document.head.appendChild(s);
 }

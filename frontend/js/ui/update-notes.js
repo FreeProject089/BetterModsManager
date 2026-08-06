@@ -435,7 +435,7 @@ if (typeof document !== 'undefined') {
             padding: 2px 6px;
             border-radius: 4px;
             font-size: 12px;
-            color: #e6edf3;
+            color: var(--bmm-text-primary);
         }
 
         .md-body pre { 
@@ -483,16 +483,16 @@ if (typeof document !== 'undefined') {
         .md-alert-note .md-alert-title { color: var(--accent); }
         
         .md-alert-tip { border-left-color: #10b981; background: rgba(16, 185, 129, 0.1) !important; }
-        .md-alert-tip .md-alert-title { color: #10b981; }
+        .md-alert-tip .md-alert-title { color: var(--bmm-success); }
         
         .md-alert-important { border-left-color: #a855f7; background: rgba(168, 85, 247, 0.1) !important; }
-        .md-alert-important .md-alert-title { color: #a855f7; }
+        .md-alert-important .md-alert-title { color: var(--bmm-purple); }
         
         .md-alert-warning { border-left-color: #f59e0b; background: rgba(245, 158, 11, 0.1) !important; }
-        .md-alert-warning .md-alert-title { color: #f59e0b; }
+        .md-alert-warning .md-alert-title { color: var(--bmm-warning); }
         
         .md-alert-caution { border-left-color: #ef4444; background: rgba(239, 68, 68, 0.1) !important; }
-        .md-alert-caution .md-alert-title { color: #ef4444; }
+        .md-alert-caution .md-alert-title { color: var(--bmm-danger); }
         
         .md-body hr { height: 1px; border: none; border-top: 1px solid var(--border); margin: 20px 0; }
         .md-body table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 12.5px; }
@@ -514,27 +514,27 @@ if (typeof document !== 'undefined') {
         }
         .md-badge-new {
             background: rgba(16, 185, 129, 0.15);
-            color: #10b981;
+            color: var(--bmm-success);
             border: 1px solid rgba(16, 185, 129, 0.3);
         }
         .md-badge-refine {
             background: rgba(59, 130, 246, 0.15);
-            color: #3b82f6;
+            color: var(--bmm-info);
             border: 1px solid rgba(59, 130, 246, 0.3);
         }
         .md-badge-improved {
             background: rgba(245, 158, 11, 0.15);
-            color: #f59e0b;
+            color: var(--bmm-warning);
             border: 1px solid rgba(245, 158, 11, 0.3);
         }
         .md-badge-fixed {
             background: rgba(239, 68, 68, 0.15);
-            color: #ef4444;
+            color: var(--bmm-danger);
             border: 1px solid rgba(239, 68, 68, 0.3);
         }
         .md-badge-visual {
             background: rgba(168, 85, 247, 0.15);
-            color: #a855f7;
+            color: var(--bmm-purple);
             border: 1px solid rgba(168, 85, 247, 0.3);
         }
         .md-badge-major {
@@ -802,7 +802,7 @@ function showUpdateAvailableModal(info) {
             <button id="close-update-modal" style="
                 position:absolute;top:12px;right:12px;z-index:2;
                 width:28px;height:28px;border-radius:8px;border:none;cursor:pointer;
-                background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.5);
+                background:rgba(255,255,255,0.06);color:var(--bmm-text-secondary);
                 display:flex;align-items:center;justify-content:center;
                 transition:background 0.15s,color 0.15s;
             " onmouseover="this.style.background='rgba(255,255,255,0.12)';this.style.color='#fff'"
@@ -829,10 +829,10 @@ function showUpdateAvailableModal(info) {
                         <svg width="9" height="9" viewBox="0 0 24 24" fill="${isPre ? '#f59e0b' : '#10b981'}"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
                         ${isPre ? (t('update.preReleaseTag') || 'PRE-RELEASE') : (t('update.newVersion') || 'NEW VERSION')}
                     </div>
-                    <div style="font-size:18px;font-weight:800;color:#fff;letter-spacing:-0.01em;line-height:1.2;">
+                    <div style="font-size:18px;font-weight:800;color:var(--bmm-text-primary);letter-spacing:-0.01em;line-height:1.2;">
                         ${t('settings.updateAvailableTitle') || 'Update Available!'}
                     </div>
-                    <div style="font-size:11px;color:rgba(255,255,255,0.45);margin-top:3px;">
+                    <div style="font-size:11px;color:var(--bmm-text-secondary);margin-top:3px;">
                         ${t('settings.newVersionReady') || 'A new version of Better Mod Manager is ready.'}
                     </div>
                 </div>
@@ -844,26 +844,26 @@ function showUpdateAvailableModal(info) {
                 <!-- Version diff -->
                 <div style="display:flex;align-items:center;gap:10px;">
                     <div style="flex:1;padding:10px 14px;border-radius:11px;background:rgba(239,68,68,0.07);border:1px solid rgba(239,68,68,0.18);text-align:center;">
-                        <div style="font-size:8px;font-weight:800;text-transform:uppercase;letter-spacing:0.1em;color:rgba(239,68,68,0.7);margin-bottom:4px;">${t('settings.currentVersion') || 'CURRENT'}</div>
-                        <div style="font-size:20px;font-weight:800;color:#ef4444;font-family:var(--font-mono,monospace);letter-spacing:-0.02em;">v${escHtml(info.current_version)}</div>
+                        <div style="font-size:8px;font-weight:800;text-transform:uppercase;letter-spacing:0.1em;color:color-mix(in srgb, var(--bmm-danger) 70%, transparent);margin-bottom:4px;">${t('settings.currentVersion') || 'CURRENT'}</div>
+                        <div style="font-size:20px;font-weight:800;color:var(--bmm-danger);font-family:var(--font-mono,monospace);letter-spacing:-0.02em;">v${escHtml(info.current_version)}</div>
                     </div>
-                    <div style="color:rgba(255,255,255,0.2);flex-shrink:0;">
+                    <div style="color:var(--bmm-text-muted);flex-shrink:0;">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
                     </div>
                     <div style="flex:1;padding:10px 14px;border-radius:11px;background:rgba(16,185,129,0.07);border:1px solid rgba(16,185,129,0.22);text-align:center;">
-                        <div style="font-size:8px;font-weight:800;text-transform:uppercase;letter-spacing:0.1em;color:rgba(16,185,129,0.7);margin-bottom:4px;">${t('settings.latestVersion') || 'LATEST'}</div>
-                        <div style="font-size:20px;font-weight:800;color:#10b981;font-family:var(--font-mono,monospace);letter-spacing:-0.02em;">v${escHtml(info.latest_version)}</div>
+                        <div style="font-size:8px;font-weight:800;text-transform:uppercase;letter-spacing:0.1em;color:color-mix(in srgb, var(--bmm-success) 70%, transparent);margin-bottom:4px;">${t('settings.latestVersion') || 'LATEST'}</div>
+                        <div style="font-size:20px;font-weight:800;color:var(--bmm-success);font-family:var(--font-mono,monospace);letter-spacing:-0.02em;">v${escHtml(info.latest_version)}</div>
                     </div>
                 </div>
 
                 <!-- Release notes -->
                 ${releaseNotes ? `
                 <div style="border-radius:12px;border:1px solid rgba(255,255,255,0.08);overflow:hidden;background:rgba(0,0,0,0.18);">
-                    <div style="display:flex;align-items:center;gap:7px;padding:9px 13px;background:rgba(255,255,255,0.03);border-bottom:1px solid rgba(255,255,255,0.06);font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:0.1em;color:rgba(255,255,255,0.45);">
+                    <div style="display:flex;align-items:center;gap:7px;padding:9px 13px;background:rgba(255,255,255,0.03);border-bottom:1px solid rgba(255,255,255,0.06);font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:0.1em;color:var(--bmm-text-secondary);">
                         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
                         ${t('settings.releaseNotes') || "WHAT'S NEW"}
                         <span style="flex:1;"></span>
-                        <span style="font-weight:700;color:#10b981;letter-spacing:0;">v${escHtml(info.latest_version)}</span>
+                        <span style="font-weight:700;color:var(--bmm-success);letter-spacing:0;">v${escHtml(info.latest_version)}</span>
                     </div>
                     <div class="upd-notes-scroll" style="max-height:230px;overflow-y:auto;padding:6px 16px 12px;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.15) transparent;">
                         ${releaseNotes}
@@ -890,7 +890,7 @@ function showUpdateAvailableModal(info) {
                         display:flex;align-items:center;justify-content:center;gap:9px;
                         padding:11px 16px;border-radius:11px;border:none;cursor:pointer;
                         background:linear-gradient(135deg,#10b981,#059669);
-                        color:#fff;font-size:13px;font-weight:700;
+                        color:var(--bmm-text-on-accent);font-size:13px;font-weight:700;
                         box-shadow:0 4px 16px rgba(16,185,129,0.3);
                         transition:opacity 0.15s,transform 0.15s;
                     " onmouseover="this.style.opacity='0.9';this.style.transform='translateY(-1px)'"
@@ -903,7 +903,7 @@ function showUpdateAvailableModal(info) {
                     <div style="display:flex;gap:8px;">
                         <button id="btn-update-later" style="
                             flex:1;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);cursor:pointer;
-                            background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.5);
+                            background:rgba(255,255,255,0.04);color:var(--bmm-text-secondary);
                             font-size:12px;font-weight:600;transition:background 0.15s,color 0.15s;
                         " onmouseover="this.style.background='rgba(255,255,255,0.08)';this.style.color='#fff'"
                            onmouseout="this.style.background='rgba(255,255,255,0.04)';this.style.color='rgba(255,255,255,0.5)'"
@@ -912,7 +912,7 @@ function showUpdateAvailableModal(info) {
                             flex:2;display:flex;align-items:center;justify-content:center;gap:8px;
                             padding:10px 14px;border-radius:10px;cursor:pointer;
                             border:1px solid rgba(59,130,246,0.3);
-                            background:rgba(59,130,246,0.1);color:rgba(255,255,255,0.75);
+                            background:rgba(59,130,246,0.1);color:var(--bmm-text-primary);
                             font-size:12px;font-weight:600;transition:background 0.15s,color 0.15s;
                         " onmouseover="this.style.background='rgba(59,130,246,0.2)';this.style.color='#fff'"
                            onmouseout="this.style.background='rgba(59,130,246,0.1)';this.style.color='rgba(255,255,255,0.75)'">
@@ -924,7 +924,7 @@ function showUpdateAvailableModal(info) {
 
                 <!-- GitHub link -->
                 <div style="text-align:center;">
-                    <a href="${escAttr(info.release_url)}" target="_blank" style="font-size:11px;color:rgba(59,130,246,0.6);text-decoration:none;transition:color 0.15s;"
+                    <a href="${escAttr(info.release_url)}" target="_blank" style="font-size:11px;color:color-mix(in srgb, var(--bmm-accent) 60%, transparent);text-decoration:none;transition:color 0.15s;"
                        onmouseover="this.style.color='#3b82f6'" onmouseout="this.style.color='rgba(59,130,246,0.6)'">
                         ${t('settings.viewOnGithub') || 'View release on GitHub'} ↗
                     </a>
@@ -1450,7 +1450,7 @@ async function openLangSelectModal() {
             <button id="lang-select-confirm" style="
                 width:100%; padding:12px; border-radius:12px; border:none; cursor:pointer;
                 background: linear-gradient(135deg, var(--accent), #6366f1);
-                color:#fff; font-size:14px; font-weight:700; letter-spacing:0.02em;
+                color:var(--bmm-text-on-accent); font-size:14px; font-weight:700; letter-spacing:0.02em;
                 box-shadow: 0 4px 16px rgba(59,130,246,0.4);
                 transition: all 0.2s; transform: translateY(0);
             "
