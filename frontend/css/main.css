@@ -5036,7 +5036,7 @@ select.input-field option {
 
 .tut-tip-box-text {
     font-size: 12px;
-    color: rgba(234, 179, 8, 0.85);
+    color: color-mix(in srgb, var(--bmm-warning) 85%, transparent);
     line-height: 1.5;
     margin: 0;
 }
@@ -5071,7 +5071,7 @@ select.input-field option {
 }
 
 .tut-path-box-value {
-    color: #a5f3fc;
+    color: color-mix(in srgb, var(--bmm-cyan) 35%, var(--bmm-text-primary));
     white-space: nowrap;
 }
 
@@ -7005,7 +7005,7 @@ select:focus {
 }
 
 .faq-category-header--cyan svg {
-    color: #22d3ee;
+    color: var(--bmm-cyan);
 }
 
 /* Danger / red variant (Critique) */
@@ -8543,8 +8543,8 @@ select:focus {
 
 .ptb-sidebar-item.active {
     background: rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.1);
-    color: #58a6ff;
-    border-left-color: #58a6ff;
+    color: var(--bmm-accent);
+    border-left-color: var(--bmm-accent);
     font-weight: 600;
 }
 
@@ -8575,7 +8575,7 @@ select:focus {
 .ptb-markdown-body {
     max-width: 800px;
     margin: 0 auto;
-    color: #e6edf3;
+    color: var(--bmm-text-primary);
     font-size: 15px;
     line-height: 1.6;
     font-family: var(--font-inter);
@@ -8587,7 +8587,7 @@ select:focus {
     margin-bottom: 24px;
     padding-bottom: 12px;
     border-bottom: 1px solid #30363d;
-    color: #ffffff;
+    color: var(--bmm-text-primary);
 }
 
 .ptb-markdown-body h2 {
@@ -8632,7 +8632,7 @@ select:focus {
 .ptb-markdown-body pre code {
     background: none;
     padding: 0;
-    color: #c9d1d9;
+    color: var(--bmm-text-secondary);
     font-size: 13px;
     display: block;
 }
@@ -9199,7 +9199,7 @@ select:focus {
 .mermaid-container .fill-heavy rect { fill-opacity: 0.2 !important; }
 
 .mermaid-container .stroke-cyan rect, .mermaid-container .stroke-cyan path { stroke: var(--cyan) !important; }
-.mermaid-container .stroke-purple rect, .mermaid-container .stroke-purple path { stroke: #bc74ff !important; }
+.mermaid-container .stroke-purple rect, .mermaid-container .stroke-purple path { stroke: var(--bmm-purple) !important; }
 .mermaid-container .stroke-red rect, .mermaid-container .stroke-red path { stroke: var(--danger) !important; }
 .mermaid-container .stroke-accent rect, .mermaid-container .stroke-accent path { stroke: var(--accent) !important; }
 
@@ -9452,9 +9452,9 @@ select:focus {
 [class*="label-info"],
 .edgeLabel.label-info span,
 .edgeLabel.label-info-parent span {
-    background-color: #3b82f6 !important;
+    background-color: var(--bmm-info) !important;
     color: #ffffff !important;
-    fill: #3b82f6 !important;
+    fill: var(--bmm-info) !important;
 }
 
 /* Warning - Orange */
@@ -9472,9 +9472,9 @@ select:focus {
 [class*="label-purple"],
 .edgeLabel.label-purple span,
 .edgeLabel.label-purple-parent span {
-    background-color: #8b5cf6 !important;
+    background-color: var(--bmm-purple) !important;
     color: #ffffff !important;
-    fill: #8b5cf6 !important;
+    fill: var(--bmm-purple) !important;
 }
 
 /* Hover Enhancement */
@@ -9533,8 +9533,8 @@ select:focus {
 
 .mermaid-container .storage-group rect:not([class*="edgeLabel"]),
 .mermaid-container [data-cluster-id="STORAGE"] rect:not([class*="edgeLabel"]) {
-    stroke: #3b82f6 !important;
-    fill: #3b82f6 !important;
+    stroke: var(--bmm-info) !important;
+    fill: var(--bmm-info) !important;
 }
 
 .mermaid-container .network-group rect:not([class*="edgeLabel"]),
@@ -13969,7 +13969,7 @@ body.bmm-theme-light .nav-item:hover .nav-label { color: var(--bmm-accent) !impo
 }
 .plug-type-string  { background: rgba(52,211,153,0.15); color: var(--success); }
 .plug-type-boolean { background: rgba(251,146,60,0.15); color: var(--accent); }
-.plug-type-number  { background: rgba(129,140,248,0.15); color: #818cf8; }
+.plug-type-number  { background: rgba(129,140,248,0.15); color: var(--bmm-purple); }
 
 /* Code tabs — scrollable lang row + copy btn */
 .plug-ep-code-tabs {
@@ -14297,7 +14297,7 @@ body.bmm-theme-light .nav-item:hover .nav-label { color: var(--bmm-accent) !impo
 /* Inline click-to-copy <code> chips (URLs, endpoints, scopes) */
 .plug-doc-code-copy { cursor: pointer; transition: background 0.14s ease, color 0.14s ease; }
 .plug-doc-code-copy:hover { background: rgba(96,165,250,0.18) !important; color: var(--cyan) !important; }
-.plug-doc-code-copy.just-copied { background: rgba(16,185,129,0.22) !important; color: #6ee7b7 !important; }
+.plug-doc-code-copy.just-copied { background: rgba(16,185,129,0.22) !important; color: color-mix(in srgb, var(--bmm-success) 55%, var(--bmm-text-primary)) !important; }
 /* Docs-tab code blocks get a standalone styled box */
 #docs-tab-plugins-api .plug-code-pre {
     font-family: var(--font-mono, monospace);

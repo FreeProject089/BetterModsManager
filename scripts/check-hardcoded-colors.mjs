@@ -33,7 +33,10 @@ const BASELINE = join(__dirname, 'hardcoded-colors-baseline.json');
 // the runtime rescue layers only touch inline styles, a fixed hex table, and light themes.
 // Widening it took the known count from 125 to the real figure; everything already in the
 // codebase is baselined, so this only gates NEW ones.
-const LITERAL = String.raw`#[0-9a-f]{3,8}\b|\brgba?\(|\bhsla?\(|\b(?:white|black|red|blue|green|yellow|orange|purple|pink|gray|grey|cyan|magenta|silver|gold|navy|teal|lime|maroon|olive|aqua|fuchsia)\b`;
+// `rgba(var(--bmm-accent-r),…,0.65)` is NOT a literal — the channels come from tokens and a theme
+// moves it. Flagging it sent the reader looking for a hard-coded colour that was not there, and
+// the only "fix" available would have been to make it less themable.
+const LITERAL = String.raw`#[0-9a-f]{3,8}\b|\brgba?\((?!\s*var\()|\bhsla?\((?!\s*var\()|\b(?:white|black|red|blue|green|yellow|orange|purple|pink|gray|grey|cyan|magenta|silver|gold|navy|teal|lime|maroon|olive|aqua|fuchsia)\b`;
 const OFFENDER = new RegExp(String.raw`(?<![a-z-])(?:color|fill|stroke)\s*:\s*(?:${LITERAL})`, 'i');
 
 // Directories to skip entirely. `docs/diagrams` is exempt on purpose: those files are
