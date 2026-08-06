@@ -9,6 +9,7 @@
 // - The palette does classic + semantic (synonym-expanded, Algolia-style) search over commands.
 
 import { getLang, t, getSynonyms } from './i18n.js';
+import { registerSearchProvider, searchAll, type SearchHit, type HitKind } from './search.js';
 
 type L = { en: string; fr: string };
 const tr = (s: L): string => (getLang() === 'fr' ? s.fr : s.en);
@@ -108,7 +109,7 @@ function onKeydown(e: KeyboardEvent) {
 let overlay: HTMLElement | null = null;
 let paletteOpen = false;
 let pMode: 'classic' | 'semantic' = 'classic';
-let pResults: Command[] = [];
+let pResults: SearchHit[] = [];
 let pActive = 0;
 
 function expand(q: string): string[] {
@@ -120,16 +121,37 @@ function expand(q: string): string[] {
     if (k.toLowerCase() === tok || (list || []).some((s) => s.toLowerCase() === tok)) { set.add(k.toLowerCase()); (list || []).forEach((s) => set.add(s.toLowerCase())); }
   return [...set];
 }
-function searchCommands(q: string): Command[] {
-  const terms = expand(q);
-  const scored = allCommands().map((c) => {
-    const hay = `${tr(c.title)} ${c.title.en} ${c.title.fr} ${c.keywords || ''} ${c.category}`.toLowerCase();
-    let s = 0; for (const term of terms) if (term && hay.includes(term)) s += 1;
-    return { c, s };
-  }).filter((x) => !q || x.s > 0);
-  scored.sort((a, b) => b.s - a.s);
-  return scored.map((x) => x.c);
-}
+// Commands are now just one SOURCE among several. The palette searches everything registered
+// (see core/search.ts): commands, installed mods, profiles, documentation pages…
+//
+// Semantic mode still widens the query through the synonym table, but it does so by handing
+// the expanded terms to the SAME scorer rather than by counting substring hits — so a synonym
+// match can surface a result without outranking the thing you literally typed.
+registerSearchProvider('commands', (q: string): SearchHit[] => {
+  const expanded = expand(q);
+  const extra = pMode === 'semantic' ? expanded.join(' ') : '';
+  return allCommands().map((c) => ({
+    id: c.id,
+    kind: 'command' as HitKind,
+    title: tr(c.title),
+    sub: tr(CAT_LABEL[c.category]),
+    // Both languages are searchable whichever one is displayed: people search in the language
+    // they think in, not the one the UI happens to be showing.
+    keywords: `${c.title.en} ${c.title.fr} ${c.keywords || ''} ${c.category} ${extra}`,
+    run: () => c.run(),
+  }));
+});
+// Titles now come from USER data — a mod name, a profile name — not only from our own
+// string table, so they are escaped before they reach innerHTML.
+const esc = (v: string): string => String(v)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+const KIND_LABEL: Record<HitKind, L> = {
+  command: { en: 'Command', fr: 'Commande' }, mod: { en: 'Mod', fr: 'Mod' },
+  profile: { en: 'Profile', fr: 'Profil' }, doc: { en: 'Doc', fr: 'Doc' },
+  theme: { en: 'Theme', fr: 'Thème' }, plugin: { en: 'Plugin', fr: 'Plugin' },
+  setting: { en: 'Setting', fr: 'Réglage' }, app: { en: 'App', fr: 'App' },
+};
 const CAT_LABEL: Record<Command['category'], L> = {
   nav: { en: 'Go to', fr: 'Aller à' }, mods: { en: 'Mods', fr: 'Mods' }, profiles: { en: 'Profiles', fr: 'Profils' },
   repo: { en: 'Server Repo', fr: 'Dépôt serveur' }, tools: { en: 'Tools', fr: 'Outils' },
@@ -139,22 +161,33 @@ function renderPalette() {
   const list = overlay?.querySelector('.cp-list') as HTMLElement | null;
   if (!list) return;
   if (!pResults.length) { list.innerHTML = `<div class="cp-empty">${tr({ en: 'No commands match.', fr: 'Aucune commande.' })}</div>`; return; }
-  list.innerHTML = pResults.map((c, i) => {
-    const ch = bindingOf(c.id);
+  list.innerHTML = pResults.map((h, i) => {
+    // A shortcut only exists for commands; for a mod or a page the same slot shows what KIND
+    // of thing it is, so a list mixing sources stays readable.
+    const ch = h.kind === 'command' ? bindingOf(h.id) : null;
     return `<button class="cp-item ${i === pActive ? 'on' : ''}" data-i="${i}">
-      <span class="cp-cat">${tr(CAT_LABEL[c.category])}</span>
-      <span class="cp-title">${tr(c.title)}</span>
+      <span class="cp-cat cp-kind-${h.kind}">${esc(h.kind === 'command' ? (h.sub || '') : tr(KIND_LABEL[h.kind] || KIND_LABEL.command))}</span>
+      <span class="cp-title">${esc(h.title)}</span>
+      ${h.kind !== 'command' && h.sub ? `<span class="cp-sub">${esc(h.sub)}</span>` : ''}
       ${ch ? `<kbd class="cp-kbd">${chordToStr(ch)}</kbd>` : ''}
     </button>`;
   }).join('');
   const act = list.querySelector('.cp-item.on') as HTMLElement | null;
   act?.scrollIntoView({ block: 'nearest' });
 }
-function updateResults(q: string) { pResults = searchCommands(q).slice(0, 40); pActive = 0; renderPalette(); }
+// Async now, because providers may be. A sequence number drops a stale response: type fast
+// and an older, slower query must not land after a newer one and replace its results.
+let _searchSeq = 0;
+async function updateResults(q: string) {
+  const ticket = ++_searchSeq;
+  const hits = await searchAll(q, 40);
+  if (ticket !== _searchSeq || !paletteOpen) return;
+  pResults = hits; pActive = 0; renderPalette();
+}
 function runActive() {
-  const c = pResults[pActive];
+  const h = pResults[pActive];
   closePalette();
-  if (c) { try { c.run(); } catch { /* ignore */ } }
+  if (h) { try { h.run(); } catch { /* ignore */ } }
 }
 export function openCommandPalette() {
   if (paletteOpen) return;
@@ -290,6 +323,51 @@ const callGlobal = (name: string) => () => { try { (window as any)[name]?.(); } 
 // Nav commands are built from the LIVE navbar so they always match what's actually there —
 // including custom pages, reordered/renamed items, and anything hidden/shown via navbar
 // customisation. Rebuilt on demand (Settings render + palette open). Bindings persist by id.
+// ── App-data providers ─────────────────────────────────────────────────────────────────
+//
+// Registered here, but every app module is reached through a DYNAMIC import inside the
+// provider. commands.ts is imported by much of the app, so a static import of a feature
+// module would close an import cycle; doing it lazily also means a source nobody searches
+// costs nothing to have registered.
+//
+// Each returns candidates unfiltered — ranking and cutoff are search.ts's job, and a provider
+// that pre-filters on its own would apply a second, different notion of "matches".
+
+registerSearchProvider('mods', async (q): Promise<SearchHit[]> => {
+  if (!q) return [];   // an empty query should list COMMANDS, not every mod you own
+  const { appState } = await import('./state.js');
+  const mods = (appState.state.allMods || []) as Array<{ id: string; name: string; version?: string; author?: string | null; tags?: string[] }>;
+  return mods.map((m) => ({
+    id: `mod:${m.id}`,
+    kind: 'mod' as HitKind,
+    title: m.name,
+    sub: [m.author || null, m.version ? `v${m.version}` : null].filter(Boolean).join(' · '),
+    keywords: (m.tags || []).join(' '),
+    run: () => {
+      // Route through the mods view's own search rather than inventing a second way to focus
+      // a mod — whatever that view does about filters and scrolling keeps working.
+      try {
+        document.dispatchEvent(new CustomEvent('bmm:search:open-mod', { detail: { id: m.id, name: m.name } }));
+      } catch { /* ignore */ }
+    },
+  }));
+});
+
+registerSearchProvider('profiles', async (q): Promise<SearchHit[]> => {
+  if (!q) return [];
+  try {
+    const mod = await import('../features/profiles/profiles.js') as { getProfiles?: () => Promise<any[]> };
+    const list = (await mod.getProfiles?.()) || [];
+    return list.map((p: any) => ({
+      id: `profile:${p.id}`,
+      kind: 'profile' as HitKind,
+      title: String(p.name || p.id),
+      sub: typeof p.mod_count === 'number' ? `${p.mod_count} mods` : '',
+      run: () => { try { document.dispatchEvent(new CustomEvent('bmm:search:open-profile', { detail: { id: p.id } })); } catch { /* ignore */ } },
+    }));
+  } catch { return []; }
+});
+
 export function refreshNavCommands() {
   for (const id of [..._cmds.keys()]) if (id.startsWith('nav.')) _cmds.delete(id);
   const seen = new Set<string>();
@@ -391,7 +469,18 @@ function ensurePaletteStyles() {
     padding:10px 12px;border-radius:10px;border:0;background:transparent;color:var(--bmm-text-primary,#e6edf3);}
   .cp-item.on,.cp-item:hover{background:var(--bmm-bg-hover,#222b3b);}
   .cp-cat{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--bmm-accent,#3b82f6);min-width:70px;}
-  .cp-title{flex:1;font-size:14px;font-weight:600;}
+  .cp-title{flex:1;font-size:14px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  /* Second line for non-command hits: a mod's author and version, a page's path. It must not
+     compete with the title, and it must not push the shortcut off the row — hence the cap and
+     the ellipsis rather than letting a long path grow the item. */
+  .cp-sub{font-size:11.5px;color:var(--bmm-text-muted,#7c8698);max-width:38%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:none;}
+  /* The kind chip takes the colour of what it is, so a mixed list is scannable by shape and
+     colour rather than by reading every row. Tokens only — a theme moves these. */
+  .cp-kind-mod{color:var(--bmm-success,#22c55e);}
+  .cp-kind-profile{color:var(--bmm-purple,#a855f7);}
+  .cp-kind-doc{color:var(--bmm-info,#3b82f6);}
+  .cp-kind-theme{color:var(--bmm-warning,#f59e0b);}
+  .cp-kind-plugin{color:var(--bmm-accent,#3b82f6);}
   .cp-kbd,.cp-foot kbd{font-family:var(--bmm-font-mono,ui-monospace,monospace);font-size:11px;font-weight:600;padding:2px 7px;border-radius:6px;
     border:1px solid var(--bmm-border,#2a3242);background:var(--bmm-bg-base,#0f1420);color:var(--bmm-text-secondary,#a3adba);}
   .cp-empty{padding:26px;text-align:center;color:var(--bmm-text-muted,#7c8698);font-size:14px;}

@@ -1036,6 +1036,32 @@ async function main() {
             openNewProfileModal();
         });
     }
+    // The command palette can now return things, not just commands — a mod you own, a profile
+    // you made. Picking one has to land you somewhere useful, and these listeners are what
+    // makes that true.
+    //
+    // Deliberately driven through the EXISTING controls (the nav item's click, the mod search
+    // box's input event) rather than by reaching into the views' internals: whatever those
+    // already do about filters, re-rendering and scroll position keeps working, and there is
+    // no second way to "focus a mod" to keep in step with the first.
+    document.addEventListener('bmm:search:open-mod', (e) => {
+        const name = e.detail?.name;
+        document.querySelector('.nav-item[data-view="mods"]')?.click();
+        if (!name)
+            return;
+        // After the view switch, so the input exists and the list re-renders with the filter.
+        setTimeout(() => {
+            const box = document.getElementById('mod-search');
+            if (!box)
+                return;
+            box.value = name;
+            box.dispatchEvent(new Event('input', { bubbles: true }));
+            box.focus();
+        }, 60);
+    });
+    document.addEventListener('bmm:search:open-profile', () => {
+        document.querySelector('.nav-item[data-view="profiles"]')?.click();
+    });
     // Global helper for navigation
     window.showProfiles = () => {
         document.querySelector('.nav-item[data-view="profiles"]')?.click();
