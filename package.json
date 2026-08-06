@@ -6,7 +6,7 @@
     "scripts": {
         "tauri": "tauri",
         "dev": "concurrently \"npm run watch\" \"npx tauri dev --no-dev-server\"",
-        "build": "node scripts/security-guard.mjs && tsc --project frontend && npx tauri build && node scripts/gen-update-manifest.mjs",
+        "build": "node scripts/security-guard.mjs && node scripts/sync-docs.mjs && node scripts/check-encoding.mjs && tsc --project frontend && npx tauri build && node scripts/gen-update-manifest.mjs",
         "security-guard": "node scripts/security-guard.mjs",
         "check:i18n": "node scripts/check-i18n-parity.mjs",
         "check:colors": "node scripts/check-hardcoded-colors.mjs",

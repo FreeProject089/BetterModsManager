@@ -1721,7 +1721,7 @@ Automatise-le depuis le [Planificateur](doc:scheduler) : benchmarke un disque, a
     blurb: { en: 'Common questions and quick fixes.', fr: 'Questions fréquentes et solutions rapides.' },
     articles: [
       {
-        id: 'faq-pat', view: 'settings', docsPath: '',
+        id: 'faq-pat', view: 'settings', docsPath: 'reference/github-pat/',
         title: { en: 'GitHub rate limits & Personal Access Token (PAT)', fr: 'Limites GitHub et jeton d’accès personnel (PAT)' },
         summary: { en: 'Why some GitHub actions hit a limit, and how a PAT raises it.', fr: 'Pourquoi certaines actions GitHub atteignent une limite, et comment un PAT l’augmente.' },
         keywords: 'pat github token rate limit api 403 jeton limite',

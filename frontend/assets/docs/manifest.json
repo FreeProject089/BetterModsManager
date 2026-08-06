@@ -299,6 +299,15 @@
       "fr": true
     },
     {
+      "path": "reference/github-pat",
+      "section": "reference",
+      "title": {
+        "en": "GitHub rate limits & the Personal Access Token",
+        "fr": "Limites GitHub et le jeton d'accès personnel"
+      },
+      "fr": true
+    },
+    {
       "path": "reference/tips",
       "section": "reference",
       "title": {
