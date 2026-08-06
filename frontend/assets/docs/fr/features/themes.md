@@ -16,9 +16,7 @@ importe en un clic.
 | **2** | **Éditeur** | Trois onglets — voir plus bas. |
 | **3** | **Catalogue** | Thèmes officiels, partenaires et communautaires. |
 
-<div class="bmm-replay"
-     data-src="../assets/replays/themes.bmmreplay"
-     data-title="Restyler BMM avec l'éditeur de thèmes (clip placeholder)"></div>
+<div class="bmm-replay" data-page="features/themes" data-title="Restyler BMM avec l'éditeur de thèmes (clip placeholder)"></div>
 
 *Enregistrement placeholder — un clip ciblé de cet écran le remplacera.*
 

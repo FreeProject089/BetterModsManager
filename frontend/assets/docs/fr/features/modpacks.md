@@ -14,9 +14,7 @@ active ou désactive le pack.
 | **2** | **Exporter** | Produit un fichier à transmettre. |
 | **3** | **Importer** | Lit le pack de quelqu'un d'autre. |
 
-<div class="bmm-replay"
-     data-src="../assets/replays/modpacks.bmmreplay"
-     data-title="Construire et appliquer un modpack (clip placeholder)"></div>
+<div class="bmm-replay" data-page="features/modpacks" data-title="Construire et appliquer un modpack (clip placeholder)"></div>
 
 *Enregistrement placeholder — un clip ciblé de cet écran le remplacera.*
 

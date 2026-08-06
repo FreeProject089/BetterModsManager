@@ -15,9 +15,7 @@ click.
 | **2** | **Editor** | Three tabs — see below. |
 | **3** | **Catalogue** | Official, partner & community themes. |
 
-<div class="bmm-replay"
-     data-src="../assets/replays/themes.bmmreplay"
-     data-title="Restyling BMM with the theme editor (placeholder clip)"></div>
+<div class="bmm-replay" data-page="features/themes" data-title="Restyling BMM with the theme editor (placeholder clip)"></div>
 
 *Placeholder recording — a focused clip of this screen will replace it.*
 

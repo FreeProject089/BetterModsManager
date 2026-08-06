@@ -15,9 +15,7 @@ regardes ailleurs.
 | **2** | **Règles** | *Si* ça tourne, et ce que ça fait. |
 | **3** | **Nouvelle tâche** | Une tâche, un travail. |
 
-<div class="bmm-replay"
-     data-src="../assets/replays/scheduler.bmmreplay"
-     data-title="Construire une automatisation (clip placeholder)"></div>
+<div class="bmm-replay" data-page="features/scheduler" data-title="Construire une automatisation (clip placeholder)"></div>
 
 *Enregistrement placeholder — un clip ciblé de cet écran le remplacera.*
 

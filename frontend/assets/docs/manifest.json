@@ -1,258 +1,63 @@
 {
   "generated": "scripts/sync-docs.mjs",
+  "order": [
+    "index",
+    "getting-started/install",
+    "getting-started/first-launch",
+    "features/library",
+    "features/modlist",
+    "features/profiles",
+    "features/modpacks",
+    "features/repo",
+    "features/plugins",
+    "features/scheduler",
+    "features/apps",
+    "features/mapper",
+    "features/community",
+    "features/settings",
+    "features/command-palette",
+    "features/launch-packs",
+    "features/storage",
+    "features/privacy-telemetry",
+    "features/themes",
+    "how-it-works/index",
+    "how-it-works/architecture",
+    "how-it-works/profiles-activation",
+    "how-it-works/scanning-cache",
+    "how-it-works/integrity-hashing",
+    "how-it-works/conflicts",
+    "how-it-works/mapper",
+    "how-it-works/sync-repos",
+    "how-it-works/performance",
+    "how-it-works/extending",
+    "how-it-works/security",
+    "reference/api",
+    "reference/actions",
+    "reference/tips",
+    "reference/troubleshooting",
+    "reference/github-pat",
+    "reference/credits"
+  ],
+  "sections": {
+    "root": "Getting started",
+    "getting-started": "Getting started",
+    "features": "Features",
+    "how-it-works": "How it works",
+    "reference": "Reference"
+  },
   "pages": [
     {
-      "path": "features/apps",
-      "section": "features",
+      "path": "index",
+      "section": "root",
       "title": {
-        "en": "App Catalog",
-        "fr": "App Catalog"
+        "en": "BetterModsManager",
+        "fr": "BetterModsManager"
       },
       "summary": {
-        "en": "Browse & install apps in one click.",
-        "fr": "Parcours et installe des apps en un clic."
+        "en": "BMM installs, organises and shares your mods — across games, without ever touching the original files more than it has to.",
+        "fr": "BMM installe, organise et partage tes mods — sur plusieurs jeux, sans jamais toucher aux fichiers d'origine plus qu'il ne le faut."
       },
-      "words": 675,
-      "diagrams": 0,
-      "fr": true
-    },
-    {
-      "path": "features/command-palette",
-      "section": "features",
-      "title": {
-        "en": "Command palette & shortcuts",
-        "fr": "Palette de commandes & raccourcis"
-      },
-      "summary": {
-        "en": "Press Ctrl+K (Cmd+K on macOS) anywhere in BMM to open the command palette — a single search box laid over every page and every action. Type a few letters,",
-        "fr": "Appuie sur Ctrl+K (Cmd+K sur macOS) n'importe où dans BMM pour ouvrir la palette de commandes — une seule barre de recherche par-dessus toutes les pages et"
-      },
-      "words": 467,
-      "diagrams": 1,
-      "fr": true
-    },
-    {
-      "path": "features/community",
-      "section": "features",
-      "title": {
-        "en": "BetterCommunity",
-        "fr": "BetterCommunity"
-      },
-      "summary": {
-        "en": "News & posts from the BetterCommunity blogs, read without leaving BMM.",
-        "fr": "Actus et articles des blogs BetterCommunity, lus sans quitter BMM."
-      },
-      "words": 633,
-      "diagrams": 0,
-      "fr": true
-    },
-    {
-      "path": "features/launch-packs",
-      "section": "features",
-      "title": {
-        "en": "Launch packs",
-        "fr": "Launch packs"
-      },
-      "summary": {
-        "en": "A launch pack is a named group of applications started together in one click — your game plus the companion tools you always open with it (a voice app, a…",
-        "fr": "Un launch pack est un groupe nommé d'applications lancées ensemble en un clic — ton jeu plus les outils compagnons que tu ouvres toujours avec (une appli…"
-      },
-      "words": 365,
-      "diagrams": 1,
-      "fr": true
-    },
-    {
-      "path": "features/library",
-      "section": "features",
-      "title": {
-        "en": "Library",
-        "fr": "Bibliothèque"
-      },
-      "summary": {
-        "en": "The Library is where every mod you own lives — installed or not, from any source.",
-        "fr": "La Bibliothèque, c'est là que vit chacun de tes mods — installé ou non, quelle que soit sa provenance."
-      },
-      "words": 607,
-      "diagrams": 0,
-      "fr": true
-    },
-    {
-      "path": "features/mapper",
-      "section": "features",
-      "title": {
-        "en": "Mapper",
-        "fr": "Mapper"
-      },
-      "summary": {
-        "en": "Some mods are packaged wrong. The files are fine; the folders around them aren't. The Mapper fixes that without you unzipping anything by hand.",
-        "fr": "Certains mods sont mal empaquetés. Les fichiers sont bons ; les dossiers autour, non. Le Mapper corrige ça sans que tu dézippes quoi que ce soit à la main."
-      },
-      "words": 532,
-      "diagrams": 0,
-      "fr": true
-    },
-    {
-      "path": "features/modlist",
-      "section": "features",
-      "title": {
-        "en": ".MM Lists",
-        "fr": "Listes .MM"
-      },
-      "summary": {
-        "en": "A .MM file is your complete setup, written down — and unlike a modpack, it carries the download links, so the person receiving it doesn't need to own the mods…",
-        "fr": "Un fichier .MM, c'est ta configuration complète, écrite — et contrairement à un modpack, il embarque les liens de téléchargement : la personne qui le reçoit…"
-      },
-      "words": 364,
-      "diagrams": 0,
-      "fr": true
-    },
-    {
-      "path": "features/modpacks",
-      "section": "features",
-      "title": {
-        "en": "Modpacks",
-        "fr": "Modpacks"
-      },
-      "summary": {
-        "en": "A modpack is a named bundle of mods you can toggle in one click. Where a profile is \"my setup for this game\", a modpack is \"this group of mods, together\" —…",
-        "fr": "Un modpack est un lot de mods nommé, activable en un clic. Là où un profil répond à « ma configuration pour ce jeu », un modpack répond à « ce groupe de mods,…"
-      },
-      "words": 414,
-      "diagrams": 0,
-      "fr": true
-    },
-    {
-      "path": "features/plugins",
-      "section": "features",
-      "title": {
-        "en": "Plugins & API",
-        "fr": "Plugins & API"
-      },
-      "summary": {
-        "en": "Extend BMM with community plugins and automate actions.",
-        "fr": "Étends BMM avec des plugins communautaires et automatise des actions."
-      },
-      "words": 426,
-      "diagrams": 0,
-      "fr": true
-    },
-    {
-      "path": "features/privacy-telemetry",
-      "section": "features",
-      "title": {
-        "en": "Privacy, telemetry & offline",
-        "fr": "Confidentialité, télémétrie & hors ligne"
-      },
-      "summary": {
-        "en": "Until you explicitly accept the consent dialog, nothing is collected at all — the tracker is a no-op.",
-        "fr": "Tant que tu n'acceptes pas explicitement la boîte de consentement, rien n'est collecté du tout — le traqueur ne fait rien."
-      },
-      "words": 592,
-      "diagrams": 2,
-      "fr": true
-    },
-    {
-      "path": "features/profiles",
-      "section": "features",
-      "title": {
-        "en": "Profiles",
-        "fr": "Profils"
-      },
-      "summary": {
-        "en": "A profile is a saved answer to \"which mods are on, in what order, for this game\".",
-        "fr": "Un profil est une réponse enregistrée à « quels mods sont actifs, dans quel ordre, pour ce jeu »."
-      },
-      "words": 442,
-      "diagrams": 0,
-      "fr": true
-    },
-    {
-      "path": "features/repo",
-      "section": "features",
-      "title": {
-        "en": "Server Repo",
-        "fr": "Dépôt Serveur"
-      },
-      "summary": {
-        "en": "A Server Repo is a shared, versioned collection of mods. Two things flow through it: you sync mods from a repo into a profile, and BMM uses the repo to tell…",
-        "fr": "Un Dépôt Serveur est une collection de mods partagée et versionnée. Deux flux le traversent : tu synchronises des mods depuis un dépôt vers un profil, et BMM…"
-      },
-      "words": 695,
-      "diagrams": 1,
-      "fr": true
-    },
-    {
-      "path": "features/scheduler",
-      "section": "features",
-      "title": {
-        "en": "Scheduling & automation",
-        "fr": "Planification & automatisation"
-      },
-      "summary": {
-        "en": "Schedule BMM actions (one-time or recurring) — activate a mod, modpack, profile…",
-        "fr": "Planifie des actions BMM (ponctuelles ou récurrentes) — activer un mod, un modpack, un profil…"
-      },
-      "words": 756,
-      "diagrams": 0,
-      "fr": true
-    },
-    {
-      "path": "features/settings",
-      "section": "features",
-      "title": {
-        "en": "Settings",
-        "fr": "Paramètres"
-      },
-      "summary": {
-        "en": "Settings is a long page, but most of it you set once and forget. This tour starts with the handful that change how BMM feels, then walks the rest section by…",
-        "fr": "Les Paramètres forment une longue page, mais la plupart se règlent une fois pour toutes."
-      },
-      "words": 1195,
-      "diagrams": 0,
-      "fr": true
-    },
-    {
-      "path": "features/storage",
-      "section": "features",
-      "title": {
-        "en": "Storage & disk I/O",
-        "fr": "Stockage & E/S disque"
-      },
-      "summary": {
-        "en": "Speed limits per disk, space alerts, and how BMM copies files without freezing your PC.",
-        "fr": "Limites de vitesse par disque, alertes d'espace, et comment BMM copie les fichiers sans figer ton PC."
-      },
-      "words": 613,
-      "diagrams": 0,
-      "fr": true
-    },
-    {
-      "path": "features/themes",
-      "section": "features",
-      "title": {
-        "en": "Themes & Appearance",
-        "fr": "Thèmes & Apparence"
-      },
-      "summary": {
-        "en": "Customise every colour, font and element of BMM. Share themes in one click.",
-        "fr": "Personnalise chaque couleur, police et élément de BMM. Partage tes thèmes en un clic."
-      },
-      "words": 460,
-      "diagrams": 0,
-      "fr": true
-    },
-    {
-      "path": "getting-started/first-launch",
-      "section": "getting-started",
-      "title": {
-        "en": "First launch",
-        "fr": "Premier lancement"
-      },
-      "summary": {
-        "en": "Three steps. Do them in order — the second one is the one people skip, and it's the one that matters.",
-        "fr": "Trois étapes. Dans l'ordre — la deuxième est celle qu'on saute, et c'est celle qui compte."
-      },
-      "words": 355,
+      "words": 593,
       "diagrams": 0,
       "fr": true
     },
@@ -272,48 +77,258 @@
       "fr": true
     },
     {
-      "path": "how-it-works/architecture",
-      "section": "how-it-works",
+      "path": "getting-started/first-launch",
+      "section": "getting-started",
       "title": {
-        "en": "Architecture",
-        "fr": "Architecture"
+        "en": "First launch",
+        "fr": "Premier lancement"
       },
       "summary": {
-        "en": "BMM is a native desktop app that happens to have a web UI — not a browser pretending to be an app.",
-        "fr": "BMM est une application native de bureau qui a une interface web — pas un navigateur qui se fait passer pour une app."
+        "en": "Three steps. Do them in order — the second one is the one people skip, and it's the one that matters.",
+        "fr": "Trois étapes. Dans l'ordre — la deuxième est celle qu'on saute, et c'est celle qui compte."
       },
-      "words": 2495,
+      "words": 355,
+      "diagrams": 0,
+      "fr": true
+    },
+    {
+      "path": "features/library",
+      "section": "features",
+      "title": {
+        "en": "Library",
+        "fr": "Bibliothèque"
+      },
+      "summary": {
+        "en": "The Library is where every mod you own lives — installed or not, from any source.",
+        "fr": "La Bibliothèque, c'est là que vit chacun de tes mods — installé ou non, quelle que soit sa provenance."
+      },
+      "words": 605,
+      "diagrams": 0,
+      "fr": true
+    },
+    {
+      "path": "features/modlist",
+      "section": "features",
+      "title": {
+        "en": ".MM Lists",
+        "fr": "Listes .MM"
+      },
+      "summary": {
+        "en": "A .MM file is your complete setup, written down — and unlike a modpack, it carries the download links, so the person receiving it doesn't need to own the mods…",
+        "fr": "Un fichier .MM, c'est ta configuration complète, écrite — et contrairement à un modpack, il embarque les liens de téléchargement : la personne qui le reçoit…"
+      },
+      "words": 362,
+      "diagrams": 0,
+      "fr": true
+    },
+    {
+      "path": "features/profiles",
+      "section": "features",
+      "title": {
+        "en": "Profiles",
+        "fr": "Profils"
+      },
+      "summary": {
+        "en": "A profile is a saved answer to \"which mods are on, in what order, for this game\".",
+        "fr": "Un profil est une réponse enregistrée à « quels mods sont actifs, dans quel ordre, pour ce jeu »."
+      },
+      "words": 440,
+      "diagrams": 0,
+      "fr": true
+    },
+    {
+      "path": "features/modpacks",
+      "section": "features",
+      "title": {
+        "en": "Modpacks",
+        "fr": "Modpacks"
+      },
+      "summary": {
+        "en": "A modpack is a named bundle of mods you can toggle in one click. Where a profile is \"my setup for this game\", a modpack is \"this group of mods, together\" —…",
+        "fr": "Un modpack est un lot de mods nommé, activable en un clic. Là où un profil répond à « ma configuration pour ce jeu », un modpack répond à « ce groupe de mods,…"
+      },
+      "words": 412,
+      "diagrams": 0,
+      "fr": true
+    },
+    {
+      "path": "features/repo",
+      "section": "features",
+      "title": {
+        "en": "Server Repo",
+        "fr": "Dépôt Serveur"
+      },
+      "summary": {
+        "en": "A Server Repo is a shared, versioned collection of mods. Two things flow through it: you sync mods from a repo into a profile, and BMM uses the repo to tell…",
+        "fr": "Un Dépôt Serveur est une collection de mods partagée et versionnée. Deux flux le traversent : tu synchronises des mods depuis un dépôt vers un profil, et BMM…"
+      },
+      "words": 693,
       "diagrams": 1,
       "fr": true
     },
     {
-      "path": "how-it-works/conflicts",
-      "section": "how-it-works",
+      "path": "features/plugins",
+      "section": "features",
       "title": {
-        "en": "Conflicts",
-        "fr": "Conflits"
+        "en": "Plugins & API",
+        "fr": "Plugins & API"
       },
       "summary": {
-        "en": "Two mods are in conflict when they ship the same file. Some managers let one silently overwrite the other.",
-        "fr": "Deux mods sont en conflit quand ils livrent le même fichier. Certains gestionnaires laissent l'un écraser l'autre en silence."
+        "en": "Extend BMM with community plugins and automate actions.",
+        "fr": "Étends BMM avec des plugins communautaires et automatise des actions."
       },
-      "words": 726,
-      "diagrams": 4,
+      "words": 424,
+      "diagrams": 0,
       "fr": true
     },
     {
-      "path": "how-it-works/extending",
-      "section": "how-it-works",
+      "path": "features/scheduler",
+      "section": "features",
       "title": {
-        "en": "Extending BMM",
-        "fr": "Étendre BMM"
+        "en": "Scheduling & automation",
+        "fr": "Planification & automatisation"
       },
       "summary": {
-        "en": "Everything the UI can do, it does by asking the core through one channel.",
-        "fr": "Tout ce que l'interface sait faire, elle le fait en demandant au cœur via un unique canal."
+        "en": "Schedule BMM actions (one-time or recurring) — activate a mod, modpack, profile…",
+        "fr": "Planifie des actions BMM (ponctuelles ou récurrentes) — activer un mod, un modpack, un profil…"
       },
-      "words": 299,
-      "diagrams": 3,
+      "words": 754,
+      "diagrams": 0,
+      "fr": true
+    },
+    {
+      "path": "features/apps",
+      "section": "features",
+      "title": {
+        "en": "App Catalog",
+        "fr": "App Catalog"
+      },
+      "summary": {
+        "en": "Browse & install apps in one click.",
+        "fr": "Parcours et installe des apps en un clic."
+      },
+      "words": 673,
+      "diagrams": 0,
+      "fr": true
+    },
+    {
+      "path": "features/mapper",
+      "section": "features",
+      "title": {
+        "en": "Mapper",
+        "fr": "Mapper"
+      },
+      "summary": {
+        "en": "Some mods are packaged wrong. The files are fine; the folders around them aren't. The Mapper fixes that without you unzipping anything by hand.",
+        "fr": "Certains mods sont mal empaquetés. Les fichiers sont bons ; les dossiers autour, non. Le Mapper corrige ça sans que tu dézippes quoi que ce soit à la main."
+      },
+      "words": 530,
+      "diagrams": 0,
+      "fr": true
+    },
+    {
+      "path": "features/community",
+      "section": "features",
+      "title": {
+        "en": "BetterCommunity",
+        "fr": "BetterCommunity"
+      },
+      "summary": {
+        "en": "News & posts from the BetterCommunity blogs, read without leaving BMM.",
+        "fr": "Actus et articles des blogs BetterCommunity, lus sans quitter BMM."
+      },
+      "words": 631,
+      "diagrams": 0,
+      "fr": true
+    },
+    {
+      "path": "features/settings",
+      "section": "features",
+      "title": {
+        "en": "Settings",
+        "fr": "Paramètres"
+      },
+      "summary": {
+        "en": "Settings is a long page, but most of it you set once and forget. This tour starts with the handful that change how BMM feels, then walks the rest section by…",
+        "fr": "Les Paramètres forment une longue page, mais la plupart se règlent une fois pour toutes."
+      },
+      "words": 1193,
+      "diagrams": 0,
+      "fr": true
+    },
+    {
+      "path": "features/command-palette",
+      "section": "features",
+      "title": {
+        "en": "Command palette & shortcuts",
+        "fr": "Palette de commandes & raccourcis"
+      },
+      "summary": {
+        "en": "Press Ctrl+K (Cmd+K on macOS) anywhere in BMM to open the command palette — a single search box laid over every page and every action. Type a few letters,",
+        "fr": "Appuie sur Ctrl+K (Cmd+K sur macOS) n'importe où dans BMM pour ouvrir la palette de commandes — une seule barre de recherche par-dessus toutes les pages et"
+      },
+      "words": 467,
+      "diagrams": 1,
+      "fr": true
+    },
+    {
+      "path": "features/launch-packs",
+      "section": "features",
+      "title": {
+        "en": "Launch packs",
+        "fr": "Launch packs"
+      },
+      "summary": {
+        "en": "A launch pack is a named group of applications started together in one click — your game plus the companion tools you always open with it (a voice app, a…",
+        "fr": "Un launch pack est un groupe nommé d'applications lancées ensemble en un clic — ton jeu plus les outils compagnons que tu ouvres toujours avec (une appli…"
+      },
+      "words": 365,
+      "diagrams": 1,
+      "fr": true
+    },
+    {
+      "path": "features/storage",
+      "section": "features",
+      "title": {
+        "en": "Storage & disk I/O",
+        "fr": "Stockage & E/S disque"
+      },
+      "summary": {
+        "en": "Speed limits per disk, space alerts, and how BMM copies files without freezing your PC.",
+        "fr": "Limites de vitesse par disque, alertes d'espace, et comment BMM copie les fichiers sans figer ton PC."
+      },
+      "words": 611,
+      "diagrams": 0,
+      "fr": true
+    },
+    {
+      "path": "features/privacy-telemetry",
+      "section": "features",
+      "title": {
+        "en": "Privacy, telemetry & offline",
+        "fr": "Confidentialité, télémétrie & hors ligne"
+      },
+      "summary": {
+        "en": "Until you explicitly accept the consent dialog, nothing is collected at all — the tracker is a no-op.",
+        "fr": "Tant que tu n'acceptes pas explicitement la boîte de consentement, rien n'est collecté du tout — le traqueur ne fait rien."
+      },
+      "words": 590,
+      "diagrams": 2,
+      "fr": true
+    },
+    {
+      "path": "features/themes",
+      "section": "features",
+      "title": {
+        "en": "Themes & Appearance",
+        "fr": "Thèmes & Apparence"
+      },
+      "summary": {
+        "en": "Customise every colour, font and element of BMM. Share themes in one click.",
+        "fr": "Personnalise chaque couleur, police et élément de BMM. Partage tes thèmes en un clic."
+      },
+      "words": 458,
+      "diagrams": 0,
       "fr": true
     },
     {
@@ -332,48 +347,18 @@
       "fr": true
     },
     {
-      "path": "how-it-works/integrity-hashing",
+      "path": "how-it-works/architecture",
       "section": "how-it-works",
       "title": {
-        "en": "Integrity & hashing",
-        "fr": "Intégrité & hachage"
+        "en": "Architecture",
+        "fr": "Architecture"
       },
       "summary": {
-        "en": "A mod is only useful if it's the right bytes. A truncated download, a flaky drive, or a tampered file should never reach your game silently.",
-        "fr": "Un mod n'est utile que s'il contient les bons octets. Un téléchargement tronqué, un disque capricieux ou un fichier altéré ne doivent jamais atteindre ton jeu…"
+        "en": "BMM is a native desktop app that happens to have a web UI — not a browser pretending to be an app.",
+        "fr": "BMM est une application native de bureau qui a une interface web — pas un navigateur qui se fait passer pour une app."
       },
-      "words": 716,
-      "diagrams": 2,
-      "fr": true
-    },
-    {
-      "path": "how-it-works/mapper",
-      "section": "how-it-works",
-      "title": {
-        "en": "The mapper",
-        "fr": "Le mappeur"
-      },
-      "summary": {
-        "en": "BMM deploys a mod by mirroring its folder tree into the game. That only works if the mod has the right tree.",
-        "fr": "BMM déploie un mod en recopiant son arborescence dans le jeu. Cela ne marche que si le mod possède la bonne arborescence."
-      },
-      "words": 774,
+      "words": 2495,
       "diagrams": 1,
-      "fr": true
-    },
-    {
-      "path": "how-it-works/performance",
-      "section": "how-it-works",
-      "title": {
-        "en": "Performance",
-        "fr": "Performances"
-      },
-      "summary": {
-        "en": "Modding means moving a lot of bytes. BMM's job is to do that fast and keep your machine usable while it happens — and when those two fight, responsiveness wins.",
-        "fr": "Modder, c'est déplacer beaucoup d'octets. Le rôle de BMM est de le faire vite et de garder ta machine utilisable pendant ce temps — et quand ces deux…"
-      },
-      "words": 992,
-      "diagrams": 2,
       "fr": true
     },
     {
@@ -407,18 +392,48 @@
       "fr": true
     },
     {
-      "path": "how-it-works/security",
+      "path": "how-it-works/integrity-hashing",
       "section": "how-it-works",
       "title": {
-        "en": "Security model",
-        "fr": "Modèle de sécurité"
+        "en": "Integrity & hashing",
+        "fr": "Intégrité & hachage"
       },
       "summary": {
-        "en": "BMM runs on your machine, with your files, and can reach the network. That earns it a clear set of trust boundaries.",
-        "fr": "BMM tourne sur ta machine, avec tes fichiers, et peut atteindre le réseau. Cela impose des frontières de confiance nettes."
+        "en": "A mod is only useful if it's the right bytes. A truncated download, a flaky drive, or a tampered file should never reach your game silently.",
+        "fr": "Un mod n'est utile que s'il contient les bons octets. Un téléchargement tronqué, un disque capricieux ou un fichier altéré ne doivent jamais atteindre ton jeu…"
       },
-      "words": 968,
-      "diagrams": 3,
+      "words": 716,
+      "diagrams": 2,
+      "fr": true
+    },
+    {
+      "path": "how-it-works/conflicts",
+      "section": "how-it-works",
+      "title": {
+        "en": "Conflicts",
+        "fr": "Conflits"
+      },
+      "summary": {
+        "en": "Two mods are in conflict when they ship the same file. Some managers let one silently overwrite the other.",
+        "fr": "Deux mods sont en conflit quand ils livrent le même fichier. Certains gestionnaires laissent l'un écraser l'autre en silence."
+      },
+      "words": 726,
+      "diagrams": 4,
+      "fr": true
+    },
+    {
+      "path": "how-it-works/mapper",
+      "section": "how-it-works",
+      "title": {
+        "en": "The mapper",
+        "fr": "Le mappeur"
+      },
+      "summary": {
+        "en": "BMM deploys a mod by mirroring its folder tree into the game. That only works if the mod has the right tree.",
+        "fr": "BMM déploie un mod en recopiant son arborescence dans le jeu. Cela ne marche que si le mod possède la bonne arborescence."
+      },
+      "words": 774,
+      "diagrams": 1,
       "fr": true
     },
     {
@@ -437,17 +452,62 @@
       "fr": true
     },
     {
-      "path": "index",
-      "section": "root",
+      "path": "how-it-works/performance",
+      "section": "how-it-works",
       "title": {
-        "en": "BetterModsManager",
-        "fr": "BetterModsManager"
+        "en": "Performance",
+        "fr": "Performances"
       },
       "summary": {
-        "en": "BMM installs, organises and shares your mods — across games, without ever touching the original files more than it has to.",
-        "fr": "BMM installe, organise et partage tes mods — sur plusieurs jeux, sans jamais toucher aux fichiers d'origine plus qu'il ne le faut."
+        "en": "Modding means moving a lot of bytes. BMM's job is to do that fast and keep your machine usable while it happens — and when those two fight, responsiveness wins.",
+        "fr": "Modder, c'est déplacer beaucoup d'octets. Le rôle de BMM est de le faire vite et de garder ta machine utilisable pendant ce temps — et quand ces deux…"
       },
-      "words": 593,
+      "words": 992,
+      "diagrams": 2,
+      "fr": true
+    },
+    {
+      "path": "how-it-works/extending",
+      "section": "how-it-works",
+      "title": {
+        "en": "Extending BMM",
+        "fr": "Étendre BMM"
+      },
+      "summary": {
+        "en": "Everything the UI can do, it does by asking the core through one channel.",
+        "fr": "Tout ce que l'interface sait faire, elle le fait en demandant au cœur via un unique canal."
+      },
+      "words": 299,
+      "diagrams": 3,
+      "fr": true
+    },
+    {
+      "path": "how-it-works/security",
+      "section": "how-it-works",
+      "title": {
+        "en": "Security model",
+        "fr": "Modèle de sécurité"
+      },
+      "summary": {
+        "en": "BMM runs on your machine, with your files, and can reach the network. That earns it a clear set of trust boundaries.",
+        "fr": "BMM tourne sur ta machine, avec tes fichiers, et peut atteindre le réseau. Cela impose des frontières de confiance nettes."
+      },
+      "words": 968,
+      "diagrams": 3,
+      "fr": true
+    },
+    {
+      "path": "reference/api",
+      "section": "reference",
+      "title": {
+        "en": "API & deeplink reference",
+        "fr": "Référence API & deeplinks"
+      },
+      "summary": {
+        "en": "BMM exposes two ways to drive it from outside: deeplinks (bmm://…, no token, fired at the running window) and a local HTTP API (token, 127.0.0.1 only).",
+        "fr": "BMM expose deux façons de le piloter depuis l'extérieur : les deeplinks (bmm://…, sans token, envoyés à la fenêtre en cours) et une API HTTP locale (token,…"
+      },
+      "words": 1175,
       "diagrams": 0,
       "fr": true
     },
@@ -467,32 +527,32 @@
       "fr": true
     },
     {
-      "path": "reference/api",
+      "path": "reference/tips",
       "section": "reference",
       "title": {
-        "en": "API & deeplink reference",
-        "fr": "Référence API & deeplinks"
+        "en": "Tips, controls & shortcuts",
+        "fr": "Astuces, contrôles & raccourcis"
       },
       "summary": {
-        "en": "BMM exposes two ways to drive it from outside: deeplinks (bmm://…, no token, fired at the running window) and a local HTTP API (token, 127.0.0.1 only).",
-        "fr": "BMM expose deux façons de le piloter depuis l'extérieur : les deeplinks (bmm://…, sans token, envoyés à la fenêtre en cours) et une API HTTP locale (token,…"
+        "en": "The features have their own pages. This one is about the interactions — the clicks, keys and small conveniences that aren't obvious until someone points at them.",
+        "fr": "Les fonctionnalités ont leur propre page. Celle-ci parle des interactions — les clics, touches et petites commodités qu'on ne devine pas tant que quelqu'un ne…"
       },
-      "words": 1175,
+      "words": 480,
       "diagrams": 0,
       "fr": true
     },
     {
-      "path": "reference/credits",
+      "path": "reference/troubleshooting",
       "section": "reference",
       "title": {
-        "en": "Credits & the stack",
-        "fr": "Crédits & la stack"
+        "en": "Troubleshooting",
+        "fr": "Dépannage"
       },
       "summary": {
-        "en": "BMM is built by the Better project and its contributors. The in-app Credits screen is the authoritative list of people — it's generated from the project's own…",
-        "fr": "BMM est construit par le projet Better et ses contributeurs. L'écran Crédits dans l'app fait référence pour la liste des personnes — il est généré depuis les…"
+        "en": "Start here before reinstalling anything. Roughly ordered from \"most likely\" to \"something is actually wrong\".",
+        "fr": "Commence ici avant de réinstaller quoi que ce soit. À peu près trié du « plus probable » au « là il y a vraiment un problème »."
       },
-      "words": 244,
+      "words": 1285,
       "diagrams": 0,
       "fr": true
     },
@@ -512,32 +572,17 @@
       "fr": true
     },
     {
-      "path": "reference/tips",
+      "path": "reference/credits",
       "section": "reference",
       "title": {
-        "en": "Tips, controls & shortcuts",
-        "fr": "Astuces, contrôles & raccourcis"
+        "en": "Credits & the stack",
+        "fr": "Crédits & la stack"
       },
       "summary": {
-        "en": "The features have their own pages. This one is about the interactions — the clicks, keys and small conveniences that aren't obvious until someone points at them.",
-        "fr": "Les fonctionnalités ont leur propre page. Celle-ci parle des interactions — les clics, touches et petites commodités qu'on ne devine pas tant que quelqu'un ne…"
+        "en": "BMM is built by the Better project and its contributors. The in-app Credits screen is the authoritative list of people — it's generated from the project's own…",
+        "fr": "BMM est construit par le projet Better et ses contributeurs. L'écran Crédits dans l'app fait référence pour la liste des personnes — il est généré depuis les…"
       },
-      "words": 482,
-      "diagrams": 0,
-      "fr": true
-    },
-    {
-      "path": "reference/troubleshooting",
-      "section": "reference",
-      "title": {
-        "en": "Troubleshooting",
-        "fr": "Dépannage"
-      },
-      "summary": {
-        "en": "Start here before reinstalling anything. Roughly ordered from \"most likely\" to \"something is actually wrong\".",
-        "fr": "Commence ici avant de réinstaller quoi que ce soit. À peu près trié du « plus probable » au « là il y a vraiment un problème »."
-      },
-      "words": 1285,
+      "words": 244,
       "diagrams": 0,
       "fr": true
     }

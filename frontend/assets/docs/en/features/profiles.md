@@ -17,9 +17,7 @@ Its real job is stated on the empty screen:
 | **2** | **Game folder** | Where this profile deploys. See the warning below. |
 | **3** | **New profile** | One per *setup*, not one per game — you can have several. |
 
-<div class="bmm-replay"
-     data-src="../assets/replays/profiles.bmmreplay"
-     data-title="Creating and switching profiles (placeholder clip)"></div>
+<div class="bmm-replay" data-page="features/profiles" data-title="Creating and switching profiles (placeholder clip)"></div>
 
 *Placeholder recording — a focused clip of this screen will replace it.*
 

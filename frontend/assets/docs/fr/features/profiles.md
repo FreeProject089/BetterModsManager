@@ -18,9 +18,7 @@ Son vrai rôle est écrit sur l'écran vide :
 | **2** | **Dossier du jeu** | Là où ce profil se déploie. Voir l'avertissement ci-dessous. |
 | **3** | **Nouveau profil** | Un par *configuration*, pas un par jeu — tu peux en avoir plusieurs. |
 
-<div class="bmm-replay"
-     data-src="../assets/replays/profiles.bmmreplay"
-     data-title="Créer et changer de profils (clip placeholder)"></div>
+<div class="bmm-replay" data-page="features/profiles" data-title="Créer et changer de profils (clip placeholder)"></div>
 
 *Enregistrement placeholder — un clip ciblé de cet écran le remplacera.*
 

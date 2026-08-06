@@ -2155,6 +2155,10 @@ function paint() {
       void showFullPage(path, btn, undefined, true);
     }
   }
+  // The standalone page reader paints a "Loading…" shell and openPage() fills it. paint() had no
+  // such step, so anything that repainted WITHOUT going through openPage — switching language is
+  // the one a reader hits — left the page saying "Loading…" with nothing on the way to replace it.
+  if (route.view === 'page' && route.page) void fillPage(route.page);
 }
 function renderAll() {
   if (!host) return;
@@ -2253,6 +2257,10 @@ function onClick(e: Event) {
 
   const full = hit('[data-fullpage]');
   if (full) { void showFullPage(full.getAttribute('data-fullpage') || '', full); return; }
+
+  // A recording / clip card.
+  const clip = hit('.dh-clip');
+  if (clip) { void playClip(clip); return; }
 
   const pg = hit('[data-page]');
   if (pg) { void openPage(pg.getAttribute('data-page') || ''); return; }
@@ -2396,32 +2404,114 @@ const SECTION_BLURB: Record<string, { en: string; fr: string }> = {
 
 /** A bundled page on its own — the body is filled in by openPage() once fetched. */
 function pageReaderView(path: string): string {
-  const meta = (_manifest || []).find((p) => p.path === path);
+  const pages = _manifest || [];
+  const at = pages.findIndex((p) => p.path === path);
+  const meta = at >= 0 ? pages[at] : undefined;
+  const prev = at > 0 ? pages[at - 1] : null;
+  const next = at >= 0 && at < pages.length - 1 ? pages[at + 1] : null;
+
+  // Previous/Next follow mkdocs.yml's nav, which sync-docs put into the manifest — the same
+  // order the website walks, so leaving the app mid-read and picking it up on the site works.
+  const step = (p: DocPageMeta | null, dir: 'prev' | 'next') => p ? `
+    <button class="dh-step dh-step-${dir}" data-page="${escapeHtml(p.path)}">
+      <span class="dh-step-dir">${dir === 'prev'
+        ? `${svg('back', 14)} ${tr({ en: 'Previous', fr: 'Précédent' })}`
+        : `${tr({ en: 'Next', fr: 'Suivant' })} ${svg('arrow', 14)}`}</span>
+      <span class="dh-step-t">${escapeHtml(tr(p.title))}</span>
+    </button>` : '<span></span>';
+
   return `
-    <article class="dh-article dh-wide" data-reader="${path}">
-      <h2>${meta ? tr(meta.title) : path}</h2>
-      <div class="dh-content"><p class="dh-lead">${tr({ en: 'Loading…', fr: 'Chargement…' })}</p></div>
-      <div class="dh-rels">
-        <button class="dh-rel" data-view2="pages">${svg('arrow', 15)} ${tr({ en: 'All pages', fr: 'Toutes les pages' })}</button>
-        <button class="dh-rel dh-rel-ext" data-ext="${DOCS_SITE}${path}/">${svg('ext', 15)} ${tr({ en: 'Open on the site', fr: 'Ouvrir sur le site' })}</button>
-      </div>
-    </article>`;
+    <div class="dh-reader" data-reader="${escapeHtml(path)}">
+      <article class="dh-article dh-wide">
+        <h2>${meta ? escapeHtml(tr(meta.title)) : escapeHtml(path)}</h2>
+        <div class="dh-content"><p class="dh-lead">${tr({ en: 'Loading…', fr: 'Chargement…' })}</p></div>
+        <nav class="dh-steps">${step(prev, 'prev')}${step(next, 'next')}</nav>
+        <div class="dh-rels">
+          <button class="dh-rel" data-view2="pages">${svg('arrow', 15)} ${tr({ en: 'All pages', fr: 'Toutes les pages' })}</button>
+          <button class="dh-rel dh-rel-ext" data-ext="${DOCS_SITE}${escapeHtml(path)}/">${svg('ext', 15)} ${tr({ en: 'Open on the site', fr: 'Ouvrir sur le site' })}</button>
+        </div>
+      </article>
+      <aside class="dh-aside">
+        <div class="dh-aside-box">
+          <div class="dh-aside-h">${tr({ en: 'On this page', fr: 'Sur cette page' })}</div>
+          <div class="dh-toc" data-toc></div>
+        </div>
+        <div class="dh-aside-box">
+          <div class="dh-aside-h">${tr({ en: 'Documentation', fr: 'Documentation' })}</div>
+          <div class="dh-nav">${navList(path)}</div>
+        </div>
+      </aside>
+    </div>`;
+}
+
+/** The whole documentation, grouped and in the site's order — the app's equivalent of the site's
+ *  sidebar. Only shown when the window is wide enough to carry it (see .dh-reader in the CSS). */
+function navList(current: string): string {
+  const pages = _manifest || [];
+  const out: string[] = [];
+  let section = ' ';
+  for (const p of pages) {
+    if (p.section !== section) {
+      section = p.section;
+      out.push(`<div class="dh-nav-sec">${escapeHtml(tr(SECTION_TITLE[section] || { en: section, fr: section }))}</div>`);
+    }
+    out.push(`<button class="dh-nav-i${p.path === current ? ' on' : ''}" data-page="${escapeHtml(p.path)}">${escapeHtml(tr(p.title))}</button>`);
+  }
+  return out.join('');
+}
+
+/** Build the "on this page" list from the headings that were just rendered. */
+function buildToc(reader: HTMLElement) {
+  const box = reader.querySelector('[data-toc]') as HTMLElement | null;
+  const body = reader.querySelector('.dh-content') as HTMLElement | null;
+  if (!box || !body) return;
+  const heads = [...body.querySelectorAll('h3, h4')] as HTMLElement[];
+  // A table of contents with one entry is a label, not a contents list.
+  if (heads.length < 2) { box.closest('.dh-aside-box')?.setAttribute('hidden', ''); return; }
+  box.closest('.dh-aside-box')?.removeAttribute('hidden');
+  box.innerHTML = heads.map((h) => {
+    if (!h.id) h.id = slugify(h.textContent || '');
+    return `<button class="dh-toc-i dh-toc-${h.tagName.toLowerCase()}" data-anchor="${escapeHtml(h.id)}">${escapeHtml(h.textContent || '')}</button>`;
+  }).join('');
 }
 
 async function openPages() { await loadManifest(); go({ view: 'pages' }); paint(); }
 
 async function openPage(path: string, hash?: string) {
   await loadManifest();
-  go({ view: 'page', page: path });
-  const md = await fetchDocPage(path);
+  _pendingHash = hash;
+  go({ view: 'page', page: path });          // paint() → fillPage(), including on a repaint
+}
+
+// The anchor an incoming link asked for, handed to the next fillPage.
+let _pendingHash: string | undefined;
+// One fill at a time: a repaint mid-fetch must not let the older response land last.
+let _fillSeq = 0;
+let _filled = '';                            // path+lang currently in the reader
+
+/** Fetch a bundled page and put it in the reader shell that paint() just drew. */
+async function fillPage(path: string) {
+  const lang = getLang?.() === 'fr' ? 'fr' : 'en';
+  const key = `${lang}/${path}`;
   const body = host?.querySelector('[data-reader] .dh-content') as HTMLElement | null;
   if (!body) return;
+  // Already showing this exact page in this language, and the shell was not re-drawn: nothing
+  // to do. Without this, every paint would re-fetch and re-render the page under the reader.
+  if (_filled === key && !body.querySelector('.dh-lead')) return;
+
+  const ticket = ++_fillSeq;
+  const hash = _pendingHash; _pendingHash = undefined;
+  const md = await fetchDocPage(path);
+  if (ticket !== _fillSeq || !body.isConnected) return;
   if (!md) {
     body.innerHTML = `<p>${tr({ en: 'That page is not bundled in this build.', fr: 'Cette page n’est pas embarquée dans ce build.' })}</p>`;
     return;
   }
-  body.innerHTML = renderDocMarkdown(md);
+  body.innerHTML = renderDocMarkdown(stripTitle(md));
+  _filled = key;
   anchorise(body, hash);
+  const reader = body.closest('.dh-reader') as HTMLElement | null;
+  if (reader) buildToc(reader);
   await hydrateDocPage(body);
 }
 
@@ -2459,7 +2549,7 @@ async function showFullPage(path: string, btn: HTMLElement | null, hash?: string
     } catch { /* the short version is already back on screen */ }
     return;
   }
-  body.innerHTML = renderDocMarkdown(md);
+  body.innerHTML = renderDocMarkdown(stripTitle(md));
   article.dataset.full = path;
   btn?.classList.add('on');
   setLabel(btn, 'short');
@@ -2475,6 +2565,13 @@ async function showFullPage(path: string, btn: HTMLElement | null, hash?: string
 // means the app shows the SAME page the site does — the short in-app article stays as the quick
 // answer, and this is the full one, in BMM's theme and with its buttons.
 const _pageCache = new Map<string, string>();
+
+/** Drop the page's own H1.
+ *  Both surfaces that render a bundled page — the article and the standalone reader — already
+ *  put the title in their own heading, so keeping the markdown's `# Title` printed it twice. */
+function stripTitle(md: string): string {
+  return md.replace(/^\s*#\s+.*(\r?\n)+/, '');
+}
 
 async function fetchDocPage(path: string): Promise<string | null> {
   const lang = (getLang?.() === 'fr') ? 'fr' : 'en';
@@ -2657,6 +2754,20 @@ async function hydrateDocPage(host: HTMLElement) {
     });
   });
 
+  // Recording / clip cards. md-lite cannot speak the reader's language, so the one-line
+  // explanation under the title is filled in here.
+  host.querySelectorAll('.dh-clip').forEach((el) => {
+    const sub = el.querySelector('[data-clip-sub]');
+    if (!sub) return;
+    const off = el.classList.contains('dh-clip-off');
+    const kind = el.getAttribute('data-kind');
+    sub.textContent = off
+      ? tr({ en: 'Not included in this build — watch it on the website.', fr: 'Pas embarqué dans ce build — à voir sur le site.' })
+      : kind === 'video'
+        ? tr({ en: 'Play the clip', fr: 'Lire le clip' })
+        : tr({ en: 'Play the recorded session', fr: 'Rejouer la session enregistrée' });
+  });
+
   const blocks = [...host.querySelectorAll('.dh-mermaid')] as HTMLElement[];
   if (!blocks.length) return;
   const m = (window as any).mermaid;
@@ -2698,6 +2809,30 @@ function rethemeDiagrams() {
     el.innerHTML = `<div class="dh-mermaid-ph">◇ diagram</div>`;
   });
   void hydrateDocPage(body);
+}
+
+/** Play a recording or a clip embedded in a bundled page.
+ *
+ *  Three cases, and the card says which one it is BEFORE you click it: a .bmmreplay goes to the
+ *  rrweb viewer, an .mp4/.webm plays inline in place of the card, and an asset that was too big
+ *  to bundle opens its page on the website instead of pretending to be playable. */
+async function playClip(card: HTMLElement) {
+  const src = card.getAttribute('data-clip');
+  if (!src) {                                   // not bundled — the website has it
+    const page = card.getAttribute('data-clip-page') || '';
+    (window as any).openExternal?.(`${DOCS_SITE}${page}${page ? '/' : ''}`);
+    return;
+  }
+  if (card.getAttribute('data-kind') === 'video') {
+    const v = document.createElement('video');
+    v.className = 'dh-clip-video';
+    v.src = src; v.controls = true; v.autoplay = true; v.playsInline = true;
+    // A clip that cannot load must not leave an empty black box where the card used to be.
+    v.addEventListener('error', () => { v.replaceWith(card); }, { once: true });
+    card.replaceWith(v);
+    return;
+  }
+  await playReplay(src);
 }
 
 async function playReplay(url: string) {

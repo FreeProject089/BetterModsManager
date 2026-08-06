@@ -14,9 +14,7 @@ contient.
 | **2** | **Filtres** | Restreint par jeu, catégorie ou état d'installation. |
 | **3** | **Installer** | Ajoute le mod sélectionné au profil sur lequel tu es. |
 
-<div class="bmm-replay"
-     data-src="../assets/replays/library.bmmreplay"
-     data-title="La Bibliothèque en action (clip placeholder)"></div>
+<div class="bmm-replay" data-page="features/library" data-title="La Bibliothèque en action (clip placeholder)"></div>
 
 *Enregistrement placeholder — un clip ciblé de cet écran le remplacera.*
 
@@ -41,8 +39,8 @@ contient.
     chose a réellement besoin des fichiers — une grosse bibliothèque ne te coûte donc pas
     d'espace disque que tu n'utilises pas.
 
-## Les conflits {#conflicts}
-
+<a id="conflicts"></a>
+## Les conflits
 Deux mods qui livrent le **même fichier** sont en conflit. Ce n'est un bug ni de l'un ni de
 l'autre — c'est ce qui arrive quand deux personnes modifient la même chose — et le travail de
 BMM est de te le faire savoir *avant* que tu valides, pas après que le jeu a cassé.

@@ -7,9 +7,7 @@ Ouvre-le depuis **Réglages → Stockage → Ouvrir le Gestionnaire de Stockage*
 questions : combien d'espace il reste, à quelle vitesse va chaque disque, et jusqu'où BMM a le droit
 de solliciter tes disques.
 
-<div class="bmm-replay"
-     data-src="../assets/replays/bmm-demo.bmmreplay"
-     data-title="Le Gestionnaire de Stockage (clip provisoire)"></div>
+<div class="bmm-replay" data-page="features/storage" data-title="Le Gestionnaire de Stockage (clip provisoire)"></div>
 
 *Enregistrement provisoire — un clip ciblé de cet écran le remplacera.*
 

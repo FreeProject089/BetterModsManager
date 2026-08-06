@@ -14,9 +14,7 @@ you're not looking.
 | **2** | **Rules** | *Whether* it runs, and what it does. |
 | **3** | **New task** | One task, one job. |
 
-<div class="bmm-replay"
-     data-src="../assets/replays/scheduler.bmmreplay"
-     data-title="Building an automation (placeholder clip)"></div>
+<div class="bmm-replay" data-page="features/scheduler" data-title="Building an automation (placeholder clip)"></div>
 
 *Placeholder recording — a focused clip of this screen will replace it.*
 

@@ -114,29 +114,100 @@ function forApp(md, route) {
     // Material's attribute lists ({ .md-button }, { #id }) have no meaning here and would
     // otherwise render as literal text next to the link.
     .replace(/\)\{[^}\n]*\}/g, ')')
+    // …and the same list on a HEADING, which mkdocs uses to pin an anchor: `## Conflicts
+    // {#conflicts}`. It was printing the braces into the title. The app derives heading ids by
+    // slugifying the text, so an explicit id would be dropped anyway — but keep it, as an
+    // <a id> the anchor links can still land on.
+    .replace(/^(#{1,6} .*?)\s*\{#([\w-]+)\}\s*$/gm, (_m, head, id) => `<a id="${id}"></a>\n${head}`)
     // Images live under docs/assets/ on the site; they are copied next to the markdown here.
     .replace(/\]\((?!https?:|data:)([^)]*?\/)?assets\/([^)]+)\)/g, (_m, _p, rest) => `](assets/docs/media/${rest})`)
+    // The site's recording embed is raw HTML. md-lite escapes stray HTML, so before this the
+    // reader saw the <div …> printed as text. Rewrite it to a form the app understands: the
+    // local path only when the file was really bundled, plus the page it lives on so the app
+    // can offer the website when it was not.
+    .replace(/<div\s+class="bmm-replay"[\s\S]*?><\/div>/g, (block) => {
+      const at = (name) => (block.match(new RegExp(`data-${name}="([^"]*)"`)) || [, ''])[1];
+      const rel = 'media/' + at('src').replace(/^(\.\.\/)*assets\//, '');
+      const title = at('title');
+      const local = bundled.has(rel) ? ` data-src="assets/docs/${rel}"` : '';
+      return `<div class="bmm-replay"${local} data-page="${route}"`
+        + (title ? ` data-title="${title.replace(/"/g, '&quot;')}"` : '') + '></div>';
+    })
     // Site-relative .md links become app doc routes, resolved against this page's folder.
     .replace(/\]\((?!https?:|bmm:|#)([^)]+?)\.md(#[^)]*)?\)/g,
       (_m, p, hash) => `](doc-page:${resolveRoute(dir, p)}${hash || ''})`)
     .trim() + '\n';
 }
 
+/** The site's reading order, from mkdocs.yml's nav.
+ *  Alphabetical order is not reading order — "architecture" before "index", "apps" before
+ *  "library" — so a Previous/Next built from the file list would send readers sideways. The nav
+ *  block is the one place that order is actually decided, so take it from there.
+ *  Also yields the section LABELS the site shows, so the app can name them the same way. */
+function siteOrder() {
+  const yml = join(ROOT, 'BMM Docs/mkdocs.yml');
+  if (!existsSync(yml)) return { order: [], sections: {} };
+  const lines = readFileSync(yml, 'utf8').split(/\r?\n/);
+  const start = lines.findIndex((l) => /^nav:\s*$/.test(l));
+  if (start < 0) return { order: [], sections: {} };
+  const order = [];
+  const sections = {};
+  let label = '';
+  for (let i = start + 1; i < lines.length; i++) {
+    const l = lines[i];
+    if (l.trim() && !/^\s/.test(l)) break;                 // back to column 0 → nav is over
+    const sec = /^\s{2}-\s+(.+?):\s*$/.exec(l);
+    if (sec) { label = sec[1].trim(); continue; }
+    const page = /^\s+-\s+(\S+\.md)\s*$/.exec(l);
+    if (!page) continue;
+    // Keep index.md as "index" — that is the path collect() produces, and normalising it away
+    // made both index pages look absent from the nav.
+    const route = page[1].replace(/\.md$/, '');
+    order.push(route);
+    const key = route.includes('/') ? route.split('/')[0] : 'root';
+    if (label && !sections[key]) sections[key] = label;
+  }
+  return { order, sections };
+}
+
 const pages = collect();
-const manifest = { generated: 'scripts/sync-docs.mjs', pages: [] };
+const { order: navOrder, sections: navSections } = siteOrder();
+const manifest = { generated: 'scripts/sync-docs.mjs', order: navOrder, sections: navSections, pages: [] };
 const files = [];
 
 // The screenshots the pages embed. Small (~0.1 MB for 21 files) and worth bundling: without
 // them every page that illustrates a screen renders a broken image.
+//
+// Recordings (.bmmreplay) and clips (.mp4/.webm) are bundled TOO, but under a budget. They are
+// the kind of asset that grows without anyone noticing — the current placeholder replays are
+// 26 MB each, and eleven of them would put 286 MB into the installer for eleven copies of the
+// same clip. Anything over the budget is skipped and named in the log, and the app links to the
+// website for it instead of shipping a player that cannot play anything.
+const MEDIA_MAX_MB = 8;         // per file
+const MEDIA_BUDGET_MB = 48;     // for all recordings and clips together
 const media = [];
+const skippedMedia = [];
+let heavyMB = 0;
 (function walkMedia(dir, rel = '') {
   if (!existsSync(dir)) return;
-  for (const n of readdirSync(dir)) {
+  for (const n of readdirSync(dir).sort()) {
     const p = join(dir, n);
     if (statSync(p).isDirectory()) { walkMedia(p, rel ? `${rel}/${n}` : n); continue; }
-    if (/\.(png|jpe?g|gif|svg|webp)$/i.test(n)) media.push({ rel: `media/${rel ? rel + '/' : ''}${n}`, src: p });
+    const relPath = `media/${rel ? rel + '/' : ''}${n}`;
+    if (/\.(png|jpe?g|gif|svg|webp)$/i.test(n)) { media.push({ rel: relPath, src: p }); continue; }
+    if (!/\.(bmmreplay|mp4|webm)$/i.test(n)) continue;
+    const mb = statSync(p).size / 1048576;
+    if (mb > MEDIA_MAX_MB || heavyMB + mb > MEDIA_BUDGET_MB) {
+      skippedMedia.push({ rel: relPath, mb: mb.toFixed(1) });
+      continue;
+    }
+    heavyMB += mb;
+    media.push({ rel: relPath, src: p });
   }
 })(join(SRC, 'assets'));
+/** Was this asset actually bundled? The markdown rewrite needs to know, so the app never points
+ *  a player at a file that is not there. */
+const bundled = new Set(media.map((m) => m.rel));
 
 for (const p of pages) {
   if (!p.en) continue;                       // an FR page with no English source is a mistake
@@ -155,6 +226,13 @@ for (const p of pages) {
     fr: !!fr,
   });
 }
+// Put the pages in the site's reading order. A page the nav does not list still ships — it just
+// lands at the end, and is named, because "in the docs but not in the nav" is usually an oversight.
+const rank = new Map(navOrder.map((p, i) => [p, i]));
+manifest.pages.sort((a, b) => (rank.get(a.path) ?? 1e6) - (rank.get(b.path) ?? 1e6) || a.path.localeCompare(b.path));
+const unlisted = manifest.pages.filter((p) => !rank.has(p.path)).map((p) => p.path);
+if (unlisted.length) console.log(`· ${unlisted.length} page(s) not in mkdocs.yml's nav, placed last: ${unlisted.join(', ')}`);
+
 const manifestText = JSON.stringify(manifest, null, 2) + '\n';
 
 if (CHECK) {
@@ -189,4 +267,10 @@ for (const m of media) {
   writeFileSync(p, readFileSync(m.src));
 }
 writeFileSync(join(OUT, 'manifest.json'), manifestText);
-console.log(`✓ synced ${manifest.pages.length} pages (${files.length} files, ${media.length} images) into frontend/assets/docs/`);
+console.log(`✓ synced ${manifest.pages.length} pages (${files.length} files, ${media.length} assets) into frontend/assets/docs/`);
+// Never let a budget drop something silently: a skipped recording is a play button that sends the
+// reader to the website, and whoever added the file deserves to know why.
+if (skippedMedia.length) {
+  console.log(`· ${skippedMedia.length} recording/clip(s) over the ${MEDIA_MAX_MB} MB budget — not bundled, the app will link to the site:`);
+  for (const s of skippedMedia) console.log(`    ${s.rel}  (${s.mb} MB)`);
+}

@@ -24,9 +24,7 @@ version.
     propre token, et ne fait que ce que tu lui as accordé. Relis ces autorisations dans
     **Plugins → Permissions**.
 
-<div class="bmm-replay"
-     data-src="../assets/replays/plugins.bmmreplay"
-     data-title="Accorder et utiliser un plugin (clip placeholder)"></div>
+<div class="bmm-replay" data-page="features/plugins" data-title="Accorder et utiliser un plugin (clip placeholder)"></div>
 
 *Enregistrement placeholder — un clip ciblé de cet écran le remplacera.*
 
@@ -58,8 +56,8 @@ qu'il ne fait qu'activer des mods mérite un second regard.
     [Paramètres](doc-page:features/settings)) gouvernent *tous* ces appelants d'un coup, pas seulement les
     plugins installés.
 
-## Le mode strict {#strict-mode}
-
+<a id="strict-mode"></a>
+## Le mode strict
 Certains plugins appliquent une liste de mods. Le mode *strict* décide du sort de tout le
 reste :
 

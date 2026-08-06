@@ -41,9 +41,7 @@ Plutôt que de le décrire, en voici un. C'est un vrai `.bmmreplay` rejoué dans
 même lecteur rrweb que celui de l'app — le DOM est rejoué, ce n'est donc **pas une vidéo** : le texte
 reste du texte, et tu vois le masquage à l'œuvre.
 
-<div class="bmm-replay"
-     data-src="../assets/replays/bmm-demo.bmmreplay"
-     data-title="Une session BMM masquée, rejouée dans le navigateur"></div>
+<div class="bmm-replay" data-page="features/privacy-telemetry" data-title="Une session BMM masquée, rejouée dans le navigateur"></div>
 
 !!! note "Il se charge à la demande"
 

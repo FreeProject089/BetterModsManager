@@ -124,6 +124,67 @@
 .dh-tag-dia { color: var(--bmm-purple); background: color-mix(in srgb, var(--bmm-purple) 14%, transparent); }
 .dh-tag-med { color: var(--bmm-success); background: color-mix(in srgb, var(--bmm-success) 14%, transparent); }
 
+/* ── the page reader: article + a sidebar, when there is room for one ──
+   Below 1150px the aside is dropped rather than squeezed: a 180px-wide contents list is worse
+   than none, and the Previous/Next inside the article still carries the reading order. */
+.dh-reader { display: block; }
+.dh-reader > .dh-article { min-width: 0; }
+@media (min-width: 1150px) {
+    .dh-reader { display: grid; grid-template-columns: minmax(0, 1fr) 232px; gap: 26px; align-items: start; }
+}
+.dh-aside { display: none; }
+@media (min-width: 1150px) {
+    .dh-aside {
+        display: flex; flex-direction: column; gap: 16px;
+        position: sticky; top: 8px; max-height: calc(100vh - 40px); overflow-y: auto;
+        scrollbar-width: thin;
+    }
+}
+.dh-aside-box { border-left: 1px solid var(--bmm-border, #2a3242); padding-left: 14px; }
+.dh-aside-box[hidden] { display: none; }
+.dh-aside-h {
+    font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em;
+    color: var(--bmm-text-muted, #7c8698); margin-bottom: 8px;
+}
+.dh-toc, .dh-nav { display: flex; flex-direction: column; gap: 1px; }
+.dh-toc-i, .dh-nav-i {
+    text-align: left; cursor: pointer; font-family: inherit; font-size: 12.5px; line-height: 1.45;
+    padding: 4px 6px; border: 0; border-radius: 6px; background: none;
+    color: var(--bmm-text-secondary, #a3adba);
+    /* A long heading wraps instead of stretching the column. */
+    overflow-wrap: anywhere;
+}
+.dh-toc-i:hover, .dh-nav-i:hover { background: var(--bmm-bg-hover); color: var(--bmm-text-primary, #e6edf3); }
+.dh-toc-h4 { padding-left: 16px; font-size: 12px; color: var(--bmm-text-muted, #7c8698); }
+.dh-nav-sec {
+    margin: 10px 0 4px; font-size: 10.5px; font-weight: 800; text-transform: uppercase;
+    letter-spacing: .07em; color: var(--bmm-text-muted, #7c8698);
+}
+.dh-nav-sec:first-child { margin-top: 0; }
+.dh-nav-i.on {
+    color: var(--bmm-accent, #3b82f6); font-weight: 700;
+    background: color-mix(in srgb, var(--bmm-accent, #3b82f6) 10%, transparent);
+}
+
+/* Previous / next, in the site's own reading order. */
+.dh-steps { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 26px 0 18px; }
+.dh-step {
+    display: flex; flex-direction: column; gap: 3px; cursor: pointer; font-family: inherit;
+    padding: 11px 14px; border-radius: var(--bmm-radius-card, 12px);
+    border: 1px solid var(--bmm-border, #2a3242); background: var(--bmm-bg-elevated, #1a2130);
+    color: inherit; min-width: 0; transition: border-color .16s;
+}
+.dh-step:hover { border-color: var(--bmm-border-accent, var(--bmm-accent, #3b82f6)); }
+.dh-step-prev { text-align: left; }
+.dh-step-next { text-align: right; }
+.dh-step-dir {
+    display: flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .05em; color: var(--bmm-text-muted, #7c8698);
+}
+.dh-step-next .dh-step-dir { justify-content: flex-end; }
+.dh-step-dir svg { width: 14px; height: 14px; }
+.dh-step-t { font-size: 13.5px; font-weight: 600; overflow-wrap: anywhere; }
+
 /* ── the bundled-pages index ("The full documentation") ──
    Two things a reader needs before opening one of 36 pages: what it covers, and how big it is. */
 .dh-pg-stats {
@@ -227,25 +288,80 @@
 .dh-content pre.dh-code { margin: 4px 0 14px; padding: 14px 16px; border-radius: 10px; overflow-x: auto; background: var(--bmm-bg-base, #0f1420); border: 1px solid var(--bmm-border, #2a3242); }
 .dh-content pre.dh-code code { border: 0; background: none; padding: 0; font-size: 13px; line-height: 1.6; }
 
-/* GitBook-style directive blocks (md-lite, kin to BCWEB's doc-callout) */
-.doc-callout { display: flex; flex-direction: column; gap: 6px; margin: 0 0 16px; padding: 12px 14px; border-radius: 12px; border: 1px solid; }
-.doc-callout-title { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 13.5px; }
-.doc-callout-ico { font-size: 14px; line-height: 1; }
-.doc-callout-body { font-size: 13.5px; line-height: 1.6; }
-.doc-callout-body p:last-child { margin-bottom: 0; }
+/* GitBook-style directive blocks (md-lite, kin to BCWEB's doc-callout).
+   Shaped like the admonitions on the BMM Docs site: a tinted title bar with a badged icon, the
+   body on the page surface below it, and the severity colour as the outline around both. The
+   flat single-tint box it replaced made a warning and a note read as the same weight. */
+.doc-callout {
+    margin: 0 0 18px;
+    border-radius: var(--bmm-radius-card, 12px);
+    border: 1px solid;
+    background: var(--bmm-bg-base, #0f1420);
+    overflow: hidden;
+}
+.doc-callout-title {
+    display: flex; align-items: center; gap: 9px;
+    padding: 9px 14px;
+    font-weight: 700; font-size: 13px;
+    border-bottom: 1px solid;
+    border-color: inherit;               /* the same severity colour as the outer border */
+}
+/* The glyph wears the severity colour on a soft tint of itself — the way the site does it, and
+   it sidesteps a real trap: a filled badge needs an ink that works on EVERY severity, and white
+   on amber is 2.15:1. currentColor is the title's colour, so this needs no second token. */
+.doc-callout-ico {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 19px; height: 19px; flex: none;
+    border-radius: 50%; font-size: 11px; line-height: 1;
+    background: color-mix(in srgb, currentColor 18%, transparent);
+}
+.doc-callout-body { padding: 12px 14px; font-size: 13.5px; line-height: 1.65; }
+.doc-callout-body > p:first-child { margin-top: 0; }
+.doc-callout-body > p:last-child { margin-bottom: 0; }
+.doc-callout-body > ul:last-child, .doc-callout-body > ol:last-child { margin-bottom: 0; }
 /* The severity language comes from the semantic tokens, not from literals, so a theme can
    restyle warnings and errors everywhere at once — and --bmm-info stays a fixed blue even when
    a theme recolours --bmm-accent, which is the point of having both. */
-.doc-callout-info { background: color-mix(in srgb, var(--bmm-info) 9%, transparent); border-color: color-mix(in srgb, var(--bmm-info) 32%, transparent); }
-.doc-callout-info .doc-callout-title { color: var(--bmm-info); }
-.doc-callout-tip { background: color-mix(in srgb, var(--bmm-purple) 9%, transparent); border-color: color-mix(in srgb, var(--bmm-purple) 32%, transparent); }
-.doc-callout-tip .doc-callout-title { color: var(--bmm-purple); }
-.doc-callout-success { background: color-mix(in srgb, var(--bmm-success) 9%, transparent); border-color: color-mix(in srgb, var(--bmm-success) 32%, transparent); }
-.doc-callout-success .doc-callout-title { color: var(--bmm-success); }
-.doc-callout-warning { background: color-mix(in srgb, var(--bmm-warning) 10%, transparent); border-color: color-mix(in srgb, var(--bmm-warning) 34%, transparent); }
-.doc-callout-warning .doc-callout-title { color: var(--bmm-warning); }
-.doc-callout-danger { background: color-mix(in srgb, var(--bmm-danger) 10%, transparent); border-color: color-mix(in srgb, var(--bmm-danger) 34%, transparent); }
-.doc-callout-danger .doc-callout-title { color: var(--bmm-danger); }
+/* One rule per severity, all three surfaces driven from the same token: the outline, the tinted
+   title bar and the icon badge. --bmm-info stays a fixed blue even when a theme recolours
+   --bmm-accent, which is the point of having both. */
+.doc-callout-info    { border-color: color-mix(in srgb, var(--bmm-info) 38%, transparent); }
+.doc-callout-info    > .doc-callout-title { color: var(--bmm-info);    background: color-mix(in srgb, var(--bmm-info) 13%, transparent); }
+.doc-callout-tip     { border-color: color-mix(in srgb, var(--bmm-purple) 38%, transparent); }
+.doc-callout-tip     > .doc-callout-title { color: var(--bmm-purple);  background: color-mix(in srgb, var(--bmm-purple) 13%, transparent); }
+.doc-callout-success { border-color: color-mix(in srgb, var(--bmm-success) 38%, transparent); }
+.doc-callout-success > .doc-callout-title { color: var(--bmm-success); background: color-mix(in srgb, var(--bmm-success) 13%, transparent); }
+.doc-callout-warning { border-color: color-mix(in srgb, var(--bmm-warning) 40%, transparent); }
+.doc-callout-warning > .doc-callout-title { color: var(--bmm-warning); background: color-mix(in srgb, var(--bmm-warning) 14%, transparent); }
+.doc-callout-danger  { border-color: color-mix(in srgb, var(--bmm-danger) 40%, transparent); }
+.doc-callout-danger  > .doc-callout-title { color: var(--bmm-danger);  background: color-mix(in srgb, var(--bmm-danger) 14%, transparent); }
+
+/* ── recording / clip embed (the site's <div class="bmm-replay">) ── */
+.dh-clip {
+    display: flex; align-items: center; gap: 13px; width: 100%; text-align: left;
+    margin: 0 0 18px; padding: 13px 16px; cursor: pointer; font-family: inherit; color: inherit;
+    border-radius: var(--bmm-radius-card, 12px);
+    border: 1px solid var(--bmm-border, #2a3242);
+    background: var(--bmm-bg-elevated, #1a2130);
+    transition: border-color .16s, transform .16s;
+}
+.dh-clip:hover { border-color: var(--bmm-border-accent, var(--bmm-accent, #3b82f6)); transform: translateY(-1px); }
+.dh-clip-play {
+    display: inline-flex; align-items: center; justify-content: center; flex: none;
+    width: 32px; height: 32px; border-radius: 50%; font-size: 12px;
+    background: var(--bmm-accent, #3b82f6); color: var(--bmm-text-on-accent, #fff);
+}
+.dh-clip-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.dh-clip-title { font-size: 13.5px; font-weight: 700; }
+.dh-clip-sub { font-size: 12px; color: var(--bmm-text-muted, #7c8698); }
+/* Not bundled: still a real control — it opens the page on the site — but it must not look like
+   something that is about to play here. */
+.dh-clip-off .dh-clip-play { background: var(--bmm-s10); color: var(--bmm-text-secondary, #a3adba); }
+.dh-clip-video {
+    display: block; width: 100%; margin: 0 0 18px;
+    border-radius: var(--bmm-radius-card, 12px); border: 1px solid var(--bmm-border, #2a3242);
+    background: #000;
+}
 
 .doc-steps { counter-reset: dhstep; margin: 0 0 16px; display: flex; flex-direction: column; gap: 12px; }
 .doc-step { position: relative; padding-left: 40px; }
