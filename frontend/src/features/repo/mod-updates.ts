@@ -222,7 +222,7 @@ function openUpdatesModal(updates: any[], errors: any[] = [], reDownloadSources:
                     <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">
                         <span style="opacity:0.8;">${escHtml(m.current_version)}</span>
                         <span style="margin:0 5px;">→</span>
-                        <span style="color:#2ecc71;font-weight:700;">${escHtml(m.new_version)}</span>
+                        <span style="color:var(--bmm-success);font-weight:700;">${escHtml(m.new_version)}</span>
                     </div>
                     ${m.changelog ? `<div style="font-size:11px;color:var(--text-secondary);margin-top:6px;white-space:pre-wrap;line-height:1.45;background:var(--bmm-s04,rgba(255,255,255,0.04));padding:6px 8px;border-radius:5px;">${escHtml(m.changelog)}</div>` : ''}
                 </div>
@@ -249,7 +249,7 @@ function openUpdatesModal(updates: any[], errors: any[] = [], reDownloadSources:
                 <div style="min-width:0;">
                     <div style="display:flex;align-items:center;gap:7px;">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2.4" style="flex-shrink:0;"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
-                        <span style="font-weight:700;font-size:12.5px;color:#f59e0b;">${t('repo.directMaybe') || 'BMM may have detected an update'}</span>
+                        <span style="font-weight:700;font-size:12.5px;color:var(--bmm-warning);">${t('repo.directMaybe') || 'BMM may have detected an update'}</span>
                     </div>
                     <div style="font-weight:600;font-size:13px;color:var(--text-primary);margin-top:5px;">${escHtml(m.name)}</div>
                     ${m.detail ? `<div style="font-size:11.5px;color:var(--text-secondary);margin-top:4px;">${t('repo.directDetected') || 'Detected'}: <span style="color:var(--text-primary);font-weight:600;">${escHtml(m.detail)}</span></div>` : ''}
@@ -264,7 +264,7 @@ function openUpdatesModal(updates: any[], errors: any[] = [], reDownloadSources:
 
     const errorBlock = errors.length ? `
         <div style="background:rgba(231,76,60,0.08);border:1px solid rgba(231,76,60,0.25);border-radius:10px;padding:10px 12px;margin-bottom:12px;">
-            <div style="font-size:11px;font-weight:700;color:#e74c3c;margin-bottom:6px;">${t('repo.updatesRepoErrorsTitle') || 'Some repos could not be reached'}</div>
+            <div style="font-size:11px;font-weight:700;color:var(--bmm-danger);margin-bottom:6px;">${t('repo.updatesRepoErrorsTitle') || 'Some repos could not be reached'}</div>
             ${errors.map(e => `<div style="font-size:11px;color:var(--text-secondary);word-break:break-all;margin:2px 0;">• ${escHtml(e.repo_url)} <span style="color:var(--text-muted);">— ${escHtml(String(e.error || '').slice(0, 120))}</span></div>`).join('')}
         </div>` : '';
 
@@ -286,7 +286,7 @@ function openUpdatesModal(updates: any[], errors: any[] = [], reDownloadSources:
                         <path d="M3 22v-6h6" /><path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
                     </svg>
                     <span style="font-size:15px;font-weight:700;color:var(--text-primary);">${updates.length === 0 && reDownloadSources.length > 0 ? (t('repo.directReDownloadTitle') || 'Direct download') : (t('repo.updatesTitle') || 'Mod updates available')}</span>
-                    ${updates.length > 0 ? `<span style="font-size:11px;font-weight:700;color:#2ecc71;background:rgba(46,204,113,0.14);padding:2px 8px;border-radius:100px;">${updates.length}</span>` : ''}
+                    ${updates.length > 0 ? `<span style="font-size:11px;font-weight:700;color:var(--bmm-success);background:rgba(46,204,113,0.14);padding:2px 8px;border-radius:100px;">${updates.length}</span>` : ''}
                 </div>
                 <button id="mod-updates-close" style="display:flex;align-items:center;justify-content:center;width:26px;height:26px;padding:0;background:transparent;border:none;border-radius:6px;cursor:pointer;color:var(--text-secondary);">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -463,7 +463,7 @@ export function openModUpdateConfig(modId: string): void {
                 value="${escAttr(s.repo_url || '')}" style="flex:2;font-size:11px;padding:5px 7px;" />
             <input type="text" class="muc-src-rid form-input" placeholder="${escAttr(t('repo.cfgModIdPh') || 'repo_mod_id (optional)')}"
                 value="${escAttr(s.repo_mod_id || '')}" style="flex:1;font-size:11px;padding:5px 7px;${kind === 'direct' ? 'display:none;' : ''}" />
-            <button class="muc-src-del" data-tooltip="${escAttr(t('common.remove') || 'Remove')}" style="flex-shrink:0;width:26px;height:26px;border:none;border-radius:5px;background:rgba(231,76,60,0.15);color:#e74c3c;cursor:pointer;font-weight:700;">✕</button>
+            <button class="muc-src-del" data-tooltip="${escAttr(t('common.remove') || 'Remove')}" style="flex-shrink:0;width:26px;height:26px;border:none;border-radius:5px;background:rgba(231,76,60,0.15);color:var(--bmm-danger);cursor:pointer;font-weight:700;">✕</button>
         </div>`;
     };
 

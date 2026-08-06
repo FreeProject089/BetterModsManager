@@ -436,9 +436,9 @@ export function renderImportedModlist(modlist) {
         const hashedFiles = fileEntries.filter(f => f.sha256).length;
         const hashBadge = fileEntries.length === 0 ? '' :
             hashedFiles === fileEntries.length
-                ? `<span style="font-size:9px;font-weight:700;color:#10b981;background:rgba(16,185,129,0.12);padding:2px 6px;border-radius:4px;border:1px solid rgba(16,185,129,0.25);flex-shrink:0;white-space:nowrap" data-tooltip="${t('mm.hashVerifiedAll')} (${hashedFiles} ${t('mm.hashFiles')})">SHA-256 ✓</span>`
+                ? `<span style="font-size:9px;font-weight:700;color:var(--bmm-success);background:rgba(16,185,129,0.12);padding:2px 6px;border-radius:4px;border:1px solid rgba(16,185,129,0.25);flex-shrink:0;white-space:nowrap" data-tooltip="${t('mm.hashVerifiedAll')} (${hashedFiles} ${t('mm.hashFiles')})">SHA-256 ✓</span>`
                 : hashedFiles > 0
-                    ? `<span style="font-size:9px;font-weight:700;color:#f59e0b;background:rgba(245,158,11,0.1);padding:2px 6px;border-radius:4px;border:1px solid rgba(245,158,11,0.25);flex-shrink:0;white-space:nowrap" data-tooltip="${t('mm.hashPartial')}">${hashedFiles}/${fileEntries.length} SHA</span>`
+                    ? `<span style="font-size:9px;font-weight:700;color:var(--bmm-warning);background:rgba(245,158,11,0.1);padding:2px 6px;border-radius:4px;border:1px solid rgba(245,158,11,0.25);flex-shrink:0;white-space:nowrap" data-tooltip="${t('mm.hashPartial')}">${hashedFiles}/${fileEntries.length} SHA</span>`
                     : `<span style="font-size:9px;color:var(--text-muted);background:rgba(255,255,255,0.04);padding:2px 6px;border-radius:4px;border:1px solid var(--border);flex-shrink:0;white-space:nowrap" data-tooltip="${t('mm.hashNone')}">${t('mm.noHashes')}</span>`;
 
         return `
@@ -450,7 +450,7 @@ export function renderImportedModlist(modlist) {
                 <span style="font-weight:700; font-size:14px; color:var(--text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:200px">${escHtml(m.name)}</span>
                 <span style="font-family:var(--font-mono); font-size:10px; color:var(--cyan); background:rgba(6,182,212,0.1); padding:1px 6px; border-radius:4px; border:1px solid rgba(6,182,212,0.2); white-space:nowrap">v${escHtml(m.version || '?')}</span>
                 <span style="font-size:10px; color:var(--text-muted); font-family:var(--font-mono); white-space:nowrap">${formatBytes(modSize)}</span>
-                ${isAlreadyPresent ? `<span style="font-size:9px; font-weight:800; color:#10b981; background:rgba(16,185,129,0.15); padding:2px 6px; border-radius:4px; border:1px solid rgba(16,185,129,0.3); white-space:nowrap">${t('mm.modPresent')}</span>` : `<span style="font-size:9px; font-weight:800; color:var(--accent); background:var(--accent-dim); padding:2px 6px; border-radius:4px; border:1px solid var(--border-accent); white-space:nowrap">${t('mm.modNew')}</span>`}
+                ${isAlreadyPresent ? `<span style="font-size:9px; font-weight:800; color:var(--bmm-success); background:rgba(16,185,129,0.15); padding:2px 6px; border-radius:4px; border:1px solid rgba(16,185,129,0.3); white-space:nowrap">${t('mm.modPresent')}</span>` : `<span style="font-size:9px; font-weight:800; color:var(--accent); background:var(--accent-dim); padding:2px 6px; border-radius:4px; border:1px solid var(--border-accent); white-space:nowrap">${t('mm.modNew')}</span>`}
                 ${hashBadge}
             </div>
             <div style="display:flex; align-items:center; gap:8px; flex-shrink:0">
@@ -462,7 +462,7 @@ export function renderImportedModlist(modlist) {
 
           ${m.install_notes ? `
             <div style="background:rgba(245,158,11,0.08); border:1px dashed rgba(245,158,11,0.3); border-radius:8px; padding:10px; margin-top:4px">
-                <div style="font-size:10px; font-weight:800; color:#fbbf24; text-transform:uppercase; margin-bottom:4px; display:flex; align-items:center; gap:6px">
+                <div style="font-size:10px; font-weight:800; color:var(--bmm-warning); text-transform:uppercase; margin-bottom:4px; display:flex; align-items:center; gap:6px">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
                     Installation Notes
                 </div>
@@ -504,7 +504,7 @@ export function renderImportedModlist(modlist) {
                         ${!f.is_directory ? `<span style="opacity:0.4; font-size:9px; flex-shrink:0">${formatBytes(f.size)}</span>` : ''}
                         ${f.sha256 ? `
                             <span
-                                style="font-size:9px; color:rgba(16,185,129,0.7); flex-shrink:0; cursor:pointer; padding:1px 4px; border-radius:3px; border:1px solid rgba(16,185,129,0.2); background:rgba(16,185,129,0.05); transition:background 0.15s"
+                                style="font-size:9px; color:color-mix(in srgb, var(--bmm-success) 70%, transparent); flex-shrink:0; cursor:pointer; padding:1px 4px; border-radius:3px; border:1px solid rgba(16,185,129,0.2); background:rgba(16,185,129,0.05); transition:background 0.15s"
                                 data-tooltip="${escAttr(f.sha256)}"
                                 onclick="navigator.clipboard.writeText('${escAttr(f.sha256)}').then(()=>{this.style.background='rgba(16,185,129,0.2)';setTimeout(()=>this.style.background='rgba(16,185,129,0.05)',800)})"
                                 onmouseenter="this.style.background='rgba(16,185,129,0.12)'"

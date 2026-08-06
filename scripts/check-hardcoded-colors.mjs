@@ -56,6 +56,14 @@ const EXEMPT_DIRS = [join('frontend', 'src', 'features', 'debug')];
 // Extensions to scan.
 const EXTS = ['.css', '.ts', '.html'];
 
+/** A literal inside an ATTRIBUTE SELECTOR is the pattern being fixed, not a colour being painted.
+ *
+ *  The light-theme rescue layer in theme-engine.ts is built entirely out of these:
+ *      [style*="color: #94a3b8"] { color: var(--bmm-text-secondary) !important; }
+ *  Reporting that line asks for exactly the wrong change — "fixing" the literal would stop the
+ *  selector matching the inline styles it exists to override, and quietly disable the rescue. */
+const inAttributeSelector = (line) => /\[[a-z-]+[*^$~|]?=\s*["'][^"']*$/i.test(line.slice(0, line.search(OFFENDER)));
+
 /** Recursively collect scannable files under frontend/. */
 function walk(dir, out = []) {
   if (EXEMPT_DIRS.some((d) => relative(ROOT, dir).replace(/\\/g, '/') === d.replace(/\\/g, '/'))) return out;
@@ -80,7 +88,7 @@ function collect() {
   for (const file of walk(join(ROOT, 'frontend'))) {
     const lines = readFileSync(file, 'utf8').split('\n');
     lines.forEach((line, i) => {
-      if (OFFENDER.test(line)) {
+      if (OFFENDER.test(line) && !inAttributeSelector(line)) {
         const k = keyFor(file, line);
         if (!found.has(k)) found.set(k, { file, line: i + 1, text: line.trim() });
       }

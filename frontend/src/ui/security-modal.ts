@@ -84,7 +84,7 @@ function showSecurityModal(): Promise<void> {
                     align-items: center;
                     justify-content: center;
                     margin: 0 auto 24px;
-                    color: #60a5fa;
+                    color: color-mix(in srgb, var(--bmm-accent) 70%, var(--bmm-text-primary));
                     border: 1px solid rgba(59, 130, 246, 0.2);
                     box-shadow: 0 0 40px rgba(59, 130, 246, 0.15);
                 }
@@ -143,7 +143,7 @@ function showSecurityModal(): Promise<void> {
                 }
                 .security-premium-card.active .card-icon-box {
                     background: rgba(59, 130, 246, 0.2);
-                    color: #3b82f6;
+                    color: var(--bmm-accent);
                     border-color: rgba(59, 130, 246, 0.3);
                     transform: scale(1.05);
                 }
@@ -211,7 +211,7 @@ function showSecurityModal(): Promise<void> {
                 }
                 .badge-recommend {
                     background: rgba(16, 185, 129, 0.15);
-                    color: #10b981;
+                    color: var(--bmm-success);
                     padding: 3px 10px;
                     border-radius: 8px;
                     font-size: 10px;
@@ -228,7 +228,7 @@ function showSecurityModal(): Promise<void> {
                     <div class="security-icon-main">
                         <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
                     </div>
-                    <h1 style="font-size: 28px; font-weight: 850; color: white; margin-bottom: 10px; letter-spacing: -0.03em;">${t('security.modal.title')}</h1>
+                    <h1 style="font-size: 28px; font-weight: 850; color: var(--bmm-text-primary); margin-bottom: 10px; letter-spacing: -0.03em;">${t('security.modal.title')}</h1>
                     <p style="font-size: 14px; color: var(--text-secondary); line-height: 1.6; max-width: 400px; margin: 0 auto;">${t('security.modal.desc')}</p>
                 </div>
 
@@ -239,7 +239,7 @@ function showSecurityModal(): Promise<void> {
                             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
                         </div>
                         <div class="card-info">
-                            <h3 style="font-size: 17px; font-weight: 750; color: white; margin-bottom: 4px;">
+                            <h3 style="font-size: 17px; font-weight: 750; color: var(--bmm-text-primary); margin-bottom: 4px;">
                                 ${t('security.modal.full')}
                                 <span class="badge-recommend">${t('common.recommended')}</span>
                             </h3>
@@ -254,7 +254,7 @@ function showSecurityModal(): Promise<void> {
                             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
                         </div>
                         <div class="card-info">
-                            <h3 style="font-size: 17px; font-weight: 750; color: white; margin-bottom: 4px;">${t('security.modal.limited')}</h3>
+                            <h3 style="font-size: 17px; font-weight: 750; color: var(--bmm-text-primary); margin-bottom: 4px;">${t('security.modal.limited')}</h3>
                             <p style="font-size: 12px; color: var(--text-muted); line-height: 1.45;">${t('security.modal.limitedDesc')}</p>
                         </div>
                         <div class="card-radio-outer"><div class="card-radio-inner"></div></div>

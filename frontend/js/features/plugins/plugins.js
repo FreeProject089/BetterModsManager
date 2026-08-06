@@ -1295,7 +1295,7 @@ async function openSmartQuickTest(m, p, rawBody) {
             ? _allMods.map(mod => `<label style="display:flex;align-items:center;gap:8px;padding:3px 8px;border-radius:6px;cursor:pointer;" onmouseenter="this.style.background='rgba(255,255,255,0.05)'" onmouseleave="this.style.background='transparent'">
                 <input type="checkbox" class="plug-qt-upd-mod-check" value="${escHtml(mod.id)}" style="accent-color:var(--accent);width:13px;height:13px;">
                 <span style="font-size:11px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" data-tooltip="${escHtml(mod.name || mod.id)}">${escHtml(mod.name || mod.id)}</span>
-                ${mod.active ? `<span style="font-size:9px;padding:1px 4px;border-radius:3px;background:rgba(34,197,94,0.15);color:#4ade80;font-weight:700;">ON</span>` : ''}
+                ${mod.active ? `<span style="font-size:9px;padding:1px 4px;border-radius:3px;background:rgba(34,197,94,0.15);color:color-mix(in srgb, var(--bmm-success) 60%, var(--bmm-text-primary));font-weight:700;">ON</span>` : ''}
               </label>`).join('')
             : `<p style="font-size:12px;color:var(--text-muted);padding:8px;">Aucun mod.</p>`;
         formHtml = `
@@ -1406,7 +1406,7 @@ async function openSmartQuickTest(m, p, rawBody) {
             ? _allMods.map(mod => `<label style="display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:6px;cursor:pointer;" onmouseenter="this.style.background='rgba(255,255,255,0.05)'" onmouseleave="this.style.background='transparent'">
                 <input type="checkbox" class="plug-qt-mod-check" value="${escHtml(mod.id)}" style="accent-color:var(--accent);width:13px;height:13px;">
                 <span style="font-size:12px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" data-tooltip="${escHtml(mod.name || mod.id)}">${escHtml(mod.name || mod.id)}</span>
-                ${mod.active ? `<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:rgba(34,197,94,0.15);color:#4ade80;font-weight:700;">ON</span>` : ''}
+                ${mod.active ? `<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:rgba(34,197,94,0.15);color:color-mix(in srgb, var(--bmm-success) 60%, var(--bmm-text-primary));font-weight:700;">ON</span>` : ''}
               </label>`).join('')
             : `<p style="font-size:12px;color:var(--text-muted);padding:8px;">Aucun mod.</p>`;
         formHtml = `
@@ -1915,14 +1915,14 @@ async function openSmartQuickTest(m, p, rawBody) {
         const pathCapable = ['/api/language/import', '/api/modpacks/import'].includes(p);
         const pathField = pathCapable ? `
             <div>
-              <label class=”plug-form-label” style=”margin-bottom:4px;”>${t('plugins.qtImportPath') || 'File path'} <span style=”color:var(--text-muted);font-size:10px;”>(${t('plugins.qtImportPathHint') || 'leave empty to open file picker'})</span></label>
-              <div style=”display:flex;gap:7px;”>
-                <input id=”plug-qt-import-path” class=”input” placeholder=”${p === '/api/language/import' ? 'C:/.../fr.json' : 'C:/.../pack.bmp'}” style=”flex:1;font-family:var(--font-mono);font-size:12px;”>
-                <button type=”button” id=”plug-qt-import-browse” class=”btn btn-sm btn-secondary”>${t('plugins.qtBrowse') || 'Browse'}</button>
+              <label class="plug-form-label" style="margin-bottom:4px;">${t('plugins.qtImportPath') || 'File path'} <span style="color:var(--text-muted);font-size:10px;">(${t('plugins.qtImportPathHint') || 'leave empty to open file picker'})</span></label>
+              <div style="display:flex;gap:7px;">
+                <input id="plug-qt-import-path" class="input" placeholder="${p === '/api/language/import' ? 'C:/.../fr.json' : 'C:/.../pack.bmp'}" style="flex:1;font-family:var(--font-mono);font-size:12px;">
+                <button type="button" id="plug-qt-import-browse" class="btn btn-sm btn-secondary">${t('plugins.qtBrowse') || 'Browse'}</button>
               </div>
             </div>` : '';
-        formHtml = `<div style=”display:flex;flex-direction:column;gap:10px;”>
-            <div style=”padding:10px 12px;background:rgba(6,182,212,0.08);border:1px solid rgba(6,182,212,0.2);border-radius:8px;font-size:12px;color:var(--cyan);line-height:1.6;”>
+        formHtml = `<div style="display:flex;flex-direction:column;gap:10px;">
+            <div style="padding:10px 12px;background:rgba(6,182,212,0.08);border:1px solid rgba(6,182,212,0.2);border-radius:8px;font-size:12px;color:var(--cyan);line-height:1.6;">
                 <b>${t('plugins.qtUIDrivenLabel') || 'UI-driven'}</b> — ${uiDrivenNote}
             </div>
             ${pathField}
@@ -1938,35 +1938,35 @@ async function openSmartQuickTest(m, p, rawBody) {
                 return r.ok ? r.json() : null;
             })();
             if (cat?.apps?.length) {
-                catAppOpts = cat.apps.map((a) => `<option value=”${escHtml(a.id)}”>${escHtml(a.title || a.id)} (${escHtml(a.id)})</option>`).join('');
+                catAppOpts = cat.apps.map((a) => `<option value="${escHtml(a.id)}">${escHtml(a.title || a.id)} (${escHtml(a.id)})</option>`).join('');
             }
         }
         catch { }
-        const req = `<span style=”color:var(--danger)”>*</span>`;
+        const req = `<span style="color:var(--danger)">*</span>`;
         const hintTxt = t('plugins.qtCatUpdHint') || 'Only filled fields are updated — leave blank to keep existing value.';
-        formHtml = `<div style=”display:flex;flex-direction:column;gap:10px;”>
+        formHtml = `<div style="display:flex;flex-direction:column;gap:10px;">
             ${catAppOpts
-            ? `<div><label class=”plug-form-label” style=”margin-bottom:4px;”>${t('plugins.qtCatPickApp') || 'Pick app from catalog'}</label>
-                   <select id=”plug-qt-catupd-sel” class=”select select-sm” style=”width:100%;”><option value=””>— ${t('plugins.qtCatPickHint') || 'pick to pre-fill'} —</option>${catAppOpts}</select></div>`
+            ? `<div><label class="plug-form-label" style="margin-bottom:4px;">${t('plugins.qtCatPickApp') || 'Pick app from catalog'}</label>
+                   <select id="plug-qt-catupd-sel" class="select select-sm" style="width:100%;"><option value="">— ${t('plugins.qtCatPickHint') || 'pick to pre-fill'} —</option>${catAppOpts}</select></div>`
             : ''}
-            <div><label class=”plug-form-label” style=”margin-bottom:4px;”>App id ${req}</label>
-              <input id=”plug-qt-catupd-id” class=”input” placeholder=”my-app” style=”font-family:var(--font-mono);font-size:12px;”></div>
-            <div style=”padding:8px 11px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:8px;font-size:10px;color:var(--amber);”>${hintTxt}</div>
-            <details style=”border:1px solid rgba(255,255,255,0.07);border-radius:8px;” open>
-              <summary style=”padding:8px 12px;cursor:pointer;font-size:12px;color:var(--text-secondary);font-weight:600;”>${t('plugins.qtFieldsToUpdate') || 'Fields to update'}</summary>
-              <div style=”padding:0 12px 12px;display:flex;flex-direction:column;gap:8px;”>
+            <div><label class="plug-form-label" style="margin-bottom:4px;">App id ${req}</label>
+              <input id="plug-qt-catupd-id" class="input" placeholder="my-app" style="font-family:var(--font-mono);font-size:12px;"></div>
+            <div style="padding:8px 11px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:8px;font-size:10px;color:var(--amber);">${hintTxt}</div>
+            <details style="border:1px solid rgba(255,255,255,0.07);border-radius:8px;" open>
+              <summary style="padding:8px 12px;cursor:pointer;font-size:12px;color:var(--text-secondary);font-weight:600;">${t('plugins.qtFieldsToUpdate') || 'Fields to update'}</summary>
+              <div style="padding:0 12px 12px;display:flex;flex-direction:column;gap:8px;">
                 ${txtInput('plug-qt-catupd-title', 'title', '', true)}
-                <div><label class=”plug-form-label” style=”margin-bottom:4px;”>description</label>
-                  <textarea id=”plug-qt-catupd-desc” class=”input” rows=”2” style=”resize:vertical;font-size:12px;width:100%;”></textarea></div>
-                <div style=”display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;”>
-                  <div><label class=”plug-form-label” style=”margin-bottom:4px;”>category</label>
-                    <select id=”plug-qt-catupd-cat” class=”select select-sm” style=”width:100%;”><option value=””>— keep —</option><option value=”utility”>utility</option><option value=”game”>game</option><option value=”other”>other</option></select></div>
-                  <div><label class=”plug-form-label” style=”margin-bottom:4px;”>price</label>
-                    <select id=”plug-qt-catupd-price” class=”select select-sm” style=”width:100%;”><option value=””>— keep —</option><option value=”free”>free</option><option value=”freemium”>freemium</option><option value=”paid”>paid</option></select></div>
-                  <div><label class=”plug-form-label” style=”margin-bottom:4px;”>file_type</label>
-                    <select id=”plug-qt-catupd-ftype” class=”select select-sm” style=”width:100%;”><option value=””>— keep —</option><option>exe</option><option>zip</option><option>msi</option><option>script</option></select></div>
+                <div><label class="plug-form-label" style="margin-bottom:4px;">description</label>
+                  <textarea id="plug-qt-catupd-desc" class="input" rows="2" style="resize:vertical;font-size:12px;width:100%;"></textarea></div>
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+                  <div><label class="plug-form-label" style="margin-bottom:4px;">category</label>
+                    <select id="plug-qt-catupd-cat" class="select select-sm" style="width:100%;"><option value="">— keep —</option><option value="utility">utility</option><option value="game">game</option><option value="other">other</option></select></div>
+                  <div><label class="plug-form-label" style="margin-bottom:4px;">price</label>
+                    <select id="plug-qt-catupd-price" class="select select-sm" style="width:100%;"><option value="">— keep —</option><option value="free">free</option><option value="freemium">freemium</option><option value="paid">paid</option></select></div>
+                  <div><label class="plug-form-label" style="margin-bottom:4px;">file_type</label>
+                    <select id="plug-qt-catupd-ftype" class="select select-sm" style="width:100%;"><option value="">— keep —</option><option>exe</option><option>zip</option><option>msi</option><option>script</option></select></div>
                 </div>
-                <div style=”display:grid;grid-template-columns:1fr 1fr;gap:8px;”>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
                   ${txtInput('plug-qt-catupd-ver', 'version', '', true)}
                   ${txtInput('plug-qt-catupd-tags', 'tags (comma, max 3)', '', true)}
                 </div>
@@ -1977,22 +1977,22 @@ async function openSmartQuickTest(m, p, rawBody) {
               </div>
             </details>
             <div>
-              <label class=”plug-form-label” style=”margin-bottom:4px;”>${t('plugins.qtJsonPreview') || 'JSON preview'}</label>
-              <pre id=”plug-qt-catupd-preview” style=”background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:8px;padding:10px;font-size:10px;color:var(--accent);max-height:180px;overflow:auto;white-space:pre-wrap;word-break:break-all;margin:0;”>{}</pre>
+              <label class="plug-form-label" style="margin-bottom:4px;">${t('plugins.qtJsonPreview') || 'JSON preview'}</label>
+              <pre id="plug-qt-catupd-preview" style="background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:8px;padding:10px;font-size:10px;color:var(--accent);max-height:180px;overflow:auto;white-space:pre-wrap;word-break:break-all;margin:0;">{}</pre>
             </div>
         </div>`;
     }
     else if (p === '/api/catalog/apps/:id' && m === 'DELETE') {
-        formHtml = `<div style=”display:flex;flex-direction:column;gap:10px;”>
+        formHtml = `<div style="display:flex;flex-direction:column;gap:10px;">
             ${txtInput('plug-qt-catdel-id', t('plugins.qtCatAppId') || 'App id to remove from catalog', '', false)}
-            <div style=”padding:9px 12px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:8px;font-size:11px;color:#f87171;line-height:1.5;”>
+            <div style="padding:9px 12px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:8px;font-size:11px;color:color-mix(in srgb, var(--bmm-danger) 75%, var(--bmm-text-primary));line-height:1.5;">
               ${t('plugins.qtCatDelWarn') || 'This removes the app from the local catalog only. Installed files are not touched.'}
             </div>
         </div>`;
     }
     else if (m === 'GET' || (m === 'DELETE' && !rawBody)) {
         // Parameterless GET / DELETE: no body form — just Send + Copy cURL in the footer.
-        formHtml = `<p style=”font-size:13px;color:var(--text-secondary);margin:0;”>${t('plugins.qtNoBody') || `${escHtml(m)} request — no parameters required. Use “Send” to run it, or “cURL” to copy the command.`}</p>`;
+        formHtml = `<p style="font-size:13px;color:var(--text-secondary);margin:0;">${t('plugins.qtNoBody') || `${escHtml(m)} request — no parameters required. Use “Send” to run it, or “cURL” to copy the command.`}</p>`;
     }
     else {
         const pretty = (() => { try {
@@ -4944,14 +4944,14 @@ function buildEndpointRow(ep) {
     const dlEquiv = ENDPOINT_TO_DL[`${ep.method} ${ep.path}`];
     const dlBadge = dlEquiv
         ? `<span class="plug-ep-dl-badge" data-tooltip="Équivalent bmm:// : ${dlEquiv}"
-               style="font-size:9px;padding:1px 6px;border-radius:4px;background:rgba(139,92,246,0.12);color:#a78bfa;border:1px solid rgba(139,92,246,0.2);white-space:nowrap;font-weight:700;cursor:default;user-select:none;">bmm://</span>`
+               style="font-size:9px;padding:1px 6px;border-radius:4px;background:rgba(139,92,246,0.12);color:color-mix(in srgb, var(--bmm-purple) 70%, var(--bmm-text-primary));border:1px solid rgba(139,92,246,0.2);white-space:nowrap;font-weight:700;cursor:default;user-select:none;">bmm://</span>`
         : '';
     const dlInfoHtml = dlEquiv
         ? `<div class="plug-ep-dl-info" style="display:flex;align-items:center;gap:8px;padding:8px 12px;margin-top:6px;background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.18);border-radius:8px;">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2" style="flex-shrink:0"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
                 <span style="font-size:11px;color:var(--text-secondary);white-space:nowrap;flex-shrink:0;">Équivalent deeplink :</span>
-                <code class="plug-ep-copy-btn" data-copy="${escHtml(dlEquiv)}" data-tooltip="${t('plugins.copyDeeplink') || 'Click to copy'}" style="flex:1;font-size:11px;color:#a78bfa;background:rgba(139,92,246,0.12);padding:2px 8px;border-radius:4px;cursor:pointer;user-select:all;white-space:normal;word-break:break-all;min-width:0;" tabindex="0">${escHtml(dlEquiv)}</code>
-                <button class="btn btn-xs plug-ep-copy-btn" data-copy="${escHtml(dlEquiv)}" data-tooltip="${t('common.copy') || 'Copy'}" style="flex-shrink:0;padding:3px 7px;background:rgba(139,92,246,0.15);color:#a78bfa;border:1px solid rgba(139,92,246,0.25);border-radius:5px;">${IC.copy}</button>
+                <code class="plug-ep-copy-btn" data-copy="${escHtml(dlEquiv)}" data-tooltip="${t('plugins.copyDeeplink') || 'Click to copy'}" style="flex:1;font-size:11px;color:color-mix(in srgb, var(--bmm-purple) 70%, var(--bmm-text-primary));background:rgba(139,92,246,0.12);padding:2px 8px;border-radius:4px;cursor:pointer;user-select:all;white-space:normal;word-break:break-all;min-width:0;" tabindex="0">${escHtml(dlEquiv)}</code>
+                <button class="btn btn-xs plug-ep-copy-btn" data-copy="${escHtml(dlEquiv)}" data-tooltip="${t('common.copy') || 'Copy'}" style="flex-shrink:0;padding:3px 7px;background:rgba(139,92,246,0.15);color:color-mix(in srgb, var(--bmm-purple) 70%, var(--bmm-text-primary));border:1px solid rgba(139,92,246,0.25);border-radius:5px;">${IC.copy}</button>
            </div>`
         : '';
     return `
@@ -8853,7 +8853,7 @@ async function renderPerms(container) {
 
             <div class="plug-perm-global-card" style="margin-bottom:8px;">
                 <div class="plug-perm-global-inner">
-                    <div class="plug-perm-global-icon" style="color:#a78bfa;">${IC.zap}</div>
+                    <div class="plug-perm-global-icon" style="color:color-mix(in srgb, var(--bmm-purple) 70%, var(--bmm-text-primary));">${IC.zap}</div>
                     <div class="plug-perm-global-text">
                         <strong>${t('plugins.deepLinkPermTitle') || 'Autoriser les Deep Links bmm://'}</strong>
                         <span class="plug-perm-global-sub">${t('plugins.deepLinkPermDesc') || 'Permet aux scripts et applications externes de déclencher des actions via bmm:// sans confirmation.'}</span>
