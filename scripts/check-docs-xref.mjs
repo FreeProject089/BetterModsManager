@@ -131,6 +131,28 @@ if (!existsSync(MD_LITE)) {
   if (failed === before5) console.log(`✓ ${checked} diagram source(s) survive md-lite's HTML intact`);
 }
 
+// 6 ── nothing that is invisible on the SITE may be visible in the app.
+// md-lite escapes HTML it does not recognise, which turns anything stray into body text. That has
+// now bitten three times: the recording embed printed as a tag, mkdocs heading anchors printed
+// their braces, and the authors' own `<!-- TODO(content): … -->` notes printed as a paragraph.
+// The reader should never see markup, and never see a note written for the writers.
+const before6 = failed;
+if (existsSync(MD_LITE) && existsSync(BUNDLE)) {
+  const { renderDocMarkdown } = await import('file://' + MD_LITE.replace(/\\/g, '/'));
+  let checked = 0;
+  for (const f of walk(BUNDLE)) {
+    if (!f.endsWith('.md')) continue;
+    checked++;
+    const html = renderDocMarkdown(readFileSync(f, 'utf8'));
+    const where = relative(ROOT, f);
+    // The escaped form is what a reader actually saw.
+    if (/&lt;!--/.test(html)) fail(`${where}: an HTML comment is rendered as visible text`);
+    if (/&lt;(?:div|span|a|img|br|p)[\s&]/i.test(html)) fail(`${where}: raw HTML is rendered as visible text`);
+    if (/\{#[\w-]+\}/.test(html)) fail(`${where}: a mkdocs heading anchor prints its own braces`);
+  }
+  if (failed === before6) console.log(`✓ ${checked} page(s) render no stray markup`);
+}
+
 if (failed) {
   console.error(`\n✗ ${failed} broken documentation cross-reference(s)`);
   process.exit(1);
