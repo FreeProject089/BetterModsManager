@@ -55,18 +55,78 @@ fn is_devtools_open(window: tauri::WebviewWindow) -> bool {
     window.is_devtools_open()
 }
 
+/// Claim the `bmm://` URL scheme for THIS executable.
+///
+/// This used to overwrite the registration unconditionally on every start, which meant the last
+/// BMM to run owned the protocol — including a build run once out of %TEMP% to test an installer.
+/// When that folder was later cleaned up, the registry kept pointing at an executable that no
+/// longer existed, so every `bmm://` link in the browser did nothing at all, silently, with no
+/// way for the real install to take the scheme back.
+///
+/// Two rules fix that:
+///   · a copy running from a temporary directory never claims the scheme — it has no stable home
+///     and cannot honour the registration past the next cleanup;
+///   · a registration whose target has gone missing is always taken over, so the case above heals
+///     itself the next time a real install starts.
 fn register_bmm_protocol() -> Result<(), Box<dyn std::error::Error>> {
+    let exe_path = std::env::current_exe()?;
+
+    // Is this copy running from a throwaway location?
+    let in_temp = std::env::temp_dir()
+        .canonicalize()
+        .ok()
+        .and_then(|tmp| {
+            exe_path
+                .canonicalize()
+                .ok()
+                .map(|exe| exe.starts_with(&tmp))
+        })
+        .unwrap_or(false);
+
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
     let path = "Software\\Classes\\bmm";
+
+    // What is registered right now, and does it still exist?
+    let current: Option<String> = hkcu
+        .open_subkey(format!("{path}\\shell\\open\\command"))
+        .ok()
+        .and_then(|k| k.get_value::<String, _>("").ok());
+    let current_target_missing = match &current {
+        // The value is `"<exe>" "%1"`; the path is what sits between the first pair of quotes.
+        Some(cmd) => cmd
+            .split('"')
+            .nth(1)
+            .map(|p| !std::path::Path::new(p).exists())
+            .unwrap_or(true),
+        None => true,
+    };
+
+    if in_temp && !current_target_missing {
+        commands::crash::log_line(
+            "[DEEPLINK] running from a temp directory — leaving the bmm:// registration alone",
+        );
+        return Ok(());
+    }
+
+    let exe_str = exe_path.to_string_lossy();
+    let command = format!("\"{}\" \"%1\"", exe_str);
+    if current.as_deref() == Some(command.as_str()) {
+        return Ok(()); // already ours, nothing to write
+    }
+
     let (key, _) = hkcu.create_subkey(path)?;
     key.set_value("", &"URL:bmm Protocol")?;
     key.set_value("URL Protocol", &"")?;
-
     let (shell_key, _) = key.create_subkey("shell\\open\\command")?;
-    let exe_path = std::env::current_exe()?;
-    let exe_str = exe_path.to_string_lossy();
-    let command = format!("\"{}\" \"%1\"", exe_str);
     shell_key.set_value("", &command)?;
+    commands::crash::log_line(&format!(
+        "[DEEPLINK] bmm:// now opens {exe_str}{}",
+        if current_target_missing {
+            " (previous target was missing)"
+        } else {
+            ""
+        }
+    ));
 
     Ok(())
 }
