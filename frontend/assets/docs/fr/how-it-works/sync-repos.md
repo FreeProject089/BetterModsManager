@@ -76,7 +76,7 @@ Trois comportements à anticiper :
 - **Une seule synchro à la fois.** Une seconde demande est refusée (`409`), pas mise en file.
 - **Annuler s'arrête à la prochaine frontière de mod**, pas au milieu d'un fichier : tu ne te
   retrouves jamais avec un mod à moitié écrit.
-- ***Supprimer les extras* est destructif par conception.** Ça aligne exactement la copie locale sur
+- **« Supprimer les extras » est destructif par conception.** Ça aligne exactement la copie locale sur
   le distant, donc tout ce qui est en trop chez toi est retiré. Laisse-le coupé sauf si la convergence
   est précisément le but.
 

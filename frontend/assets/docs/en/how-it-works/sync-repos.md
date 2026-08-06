@@ -72,7 +72,7 @@ Three behaviours worth planning around:
 - **One sync at a time.** A second request is refused (`409`) rather than queued.
 - **Cancelling stops at the next mod boundary**, not mid-file, so you are never left with a
   half-written mod.
-- ***Delete extra* is destructive by design.** It makes the local copy match the remote exactly, which
+- **"Delete extra" is destructive by design.** It makes the local copy match the remote exactly, which
   means anything extra on your side is removed. Leave it off unless convergence is the point.
 
 You can also cap the sync's **download rate**, which is the same per-disk pacing idea as

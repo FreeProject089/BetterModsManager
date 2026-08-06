@@ -48,6 +48,46 @@ function collect() {
 /** The first H1 is the page title; the nav shows it. */
 const titleOf = (text, fallback) => (text.match(/^#\s+(.+)$/m) || [, fallback])[1].trim();
 
+/** The page's opening sentence, as a plain-text blurb.
+ *  The index used to show each page's raw path under its title, which told a reader nothing they
+ *  could not already see. The first paragraph is what the page is actually about. */
+function summaryOf(text) {
+  const lines = text.split(/\r?\n/);
+  let i = lines.findIndex((l) => /^#\s+/.test(l));
+  if (i < 0) i = -1;
+  let para = '';
+  for (let n = i + 1; n < lines.length; n++) {
+    const l = lines[n].trim();
+    if (!l) { if (para) break; continue; }
+    // Skip anything that is not prose: admonitions, fences, tables, images, headings, HTML.
+    if (/^(#{1,6}\s|!!!|\?\?\?|```|\||===|<|!\[|---)/.test(l)) { if (para) break; continue; }
+    // Most pages open with a "> one-line tagline" blockquote; that IS the summary, minus its marker.
+    para += (para ? ' ' : '') + l.replace(/^>\s?/, '');
+    if (para.length > 200) break;
+  }
+  para = para
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')      // keep the link text, drop the target
+    .replace(/<[^>]+>/g, '')                      // inline HTML (<kbd>…) would render as literal text
+    .replace(/[*_`]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (para.length <= 160) return para;
+  // Cut on a sentence if one ends nearby, otherwise on a word.
+  const dot = para.slice(0, 170).lastIndexOf('. ');
+  return dot > 70 ? para.slice(0, dot + 1) : para.slice(0, para.lastIndexOf(' ', 158)) + '…';
+}
+
+/** Roughly how long the page is, and whether it carries diagrams — the two things a reader wants
+ *  to know before opening one of 36 pages. Prose only: fences and tables are not read word by word. */
+function statsOf(text) {
+  const prose = text.replace(/^```[\s\S]*?^```/gm, '').replace(/^\|.*$/gm, '');
+  return {
+    words: (prose.match(/[\p{L}\p{N}'’-]+/gu) || []).length,
+    diagrams: (text.match(/^```mermaid/gm) || []).length,
+  };
+}
+
 /** Resolve a link written relative to `fromDir` into an absolute doc route.
  *  "library" inside features/modlist is features/library — leaving it relative made every
  *  same-folder link resolve to a page that does not exist. */
@@ -104,10 +144,14 @@ for (const p of pages) {
   const fr = p.fr ? forApp(readFileSync(p.fr, 'utf8'), p.path) : null;
   files.push({ rel: `en/${p.path}.md`, body: en });
   if (fr) files.push({ rel: `fr/${p.path}.md`, body: fr });
+  const st = statsOf(en);
   manifest.pages.push({
     path: p.path,
     section: p.path.includes('/') ? p.path.split('/')[0] : 'root',
     title: { en: titleOf(en, p.path), fr: fr ? titleOf(fr, p.path) : titleOf(en, p.path) },
+    summary: { en: summaryOf(en), fr: fr ? summaryOf(fr) : summaryOf(en) },
+    words: st.words,
+    diagrams: st.diagrams,
     fr: !!fr,
   });
 }
