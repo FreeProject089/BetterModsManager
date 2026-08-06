@@ -933,6 +933,8 @@ function showUpdateAvailableModal(info) {
         </div>
     `;
     (document.getElementById('app-window-outer') || document.body).appendChild(modal);
+    // Release notes are the surface most likely to carry a command someone will copy.
+    void import('./code-highlight.js').then((m) => m.highlightIn(modal)).catch(() => { });
     // Incremental update button
     const incrementalBtn = modal.querySelector('#btn-incremental-update');
     if (incrementalBtn && info.manifest_url) {

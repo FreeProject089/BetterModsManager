@@ -432,6 +432,9 @@ async function openPost(slug: string): Promise<void> {
   // Any link inside the article body (download/open buttons, doc-block links, inline
   // links) must open in the user's real browser — not navigate the webview (which left
   // you stuck on the download URL). Delegated so it also covers dynamically-built blocks.
+  // Blog posts carry code as often as prose; highlight what marked labelled.
+  void import('../../ui/code-highlight.js').then((m) => m.highlightIn(_view)).catch(() => {});
+
   _view.querySelector('.community-article-body')?.addEventListener('click', (e) => {
     const a = (e.target as HTMLElement)?.closest?.('a[href]') as HTMLAnchorElement | null;
     if (!a) return;

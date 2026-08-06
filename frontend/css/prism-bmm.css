@@ -1,0 +1,81 @@
+/* Prism, wearing BMM's tokens.
+   Prism's shipped themes are a fixed palette — they would be the one part of a code block a
+   theme could not reach, and the colours lint would be right to say so. This maps every token
+   type onto the semantic set instead, so highlighting follows the active theme the way the rest
+   of the app does.
+
+   Distinguishability is the constraint, not prettiness: a reader has to tell a string from a
+   keyword at a glance, so the six hues used here are deliberately spread across the set rather
+   than being shades of the accent. */
+
+.dh-code code[class*="language-"],
+.md-body pre code[class*="language-"],
+pre[class*="language-"] code {
+    color: var(--bmm-text-primary, #e6edf3);
+    font-family: var(--bmm-font-mono, ui-monospace, monospace);
+    /* Prism sets its own white-space; keep the app's wrapping decision instead. */
+    white-space: pre;
+    tab-size: 4;
+}
+
+/* Quiet: structure you read past. */
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata {
+    color: var(--bmm-text-muted, #7c8698);
+    font-style: italic;
+}
+.token.punctuation { color: var(--bmm-text-secondary, #a3adba); }
+
+/* Values. */
+.token.string,
+.token.char,
+.token.attr-value,
+.token.inserted {
+    color: var(--bmm-success);
+}
+.token.number,
+.token.boolean,
+.token.constant,
+.token.symbol {
+    color: var(--bmm-cyan);
+}
+
+/* Names and structure. */
+.token.property,
+.token.tag,
+.token.selector,
+.token.attr-name {
+    color: var(--bmm-info);
+}
+.token.function,
+.token.class-name {
+    color: var(--bmm-purple);
+}
+
+/* Language, and things that change meaning. */
+.token.keyword,
+.token.atrule,
+.token.rule,
+.token.important {
+    color: var(--bmm-warning);
+}
+.token.operator,
+.token.entity,
+.token.url,
+.token.variable {
+    color: color-mix(in srgb, var(--bmm-accent) 75%, var(--bmm-text-primary));
+}
+.token.regex { color: var(--bmm-cyan); }
+
+/* A removed line in a diff is the one place danger belongs. */
+.token.deleted { color: var(--bmm-danger); }
+
+.token.bold      { font-weight: 700; }
+.token.italic    { font-style: italic; }
+.token.important { font-weight: 700; }
+.token.namespace { opacity: .75; }
+
+/* Prism marks what it could not parse; leaving it unstyled is correct — it should look like
+   ordinary code text, not like a highlighted token. */

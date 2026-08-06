@@ -2754,6 +2754,10 @@ async function hydrateDocPage(host: HTMLElement) {
     });
   });
 
+  // Syntax highlighting — the shared helper, same as every other markdown surface.
+  try { const { highlightIn } = await import('../ui/code-highlight.js'); highlightIn(host); }
+  catch { /* code stays readable unhighlighted */ }
+
   // Recording / clip cards. md-lite cannot speak the reader's language, so the one-line
   // explanation under the title is filled in here.
   host.querySelectorAll('.dh-clip').forEach((el) => {

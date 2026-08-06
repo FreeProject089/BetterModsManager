@@ -1309,6 +1309,8 @@ function openDetailModal(appId: string) {
                     const raw = await resp.text();
                     content.innerHTML = `<div class="adm-md">${renderMarkdown(raw.slice(0, 12000))}</div>`;
                     content.dataset.loaded = '1';
+                    // A README is mostly install commands; highlighting them is the point.
+                    try { const { highlightIn } = await import('../../ui/code-highlight.js'); highlightIn(content); } catch { /* plain text is fine */ }
                 } catch {
                     content.innerHTML = `<p class="adm-md-error">${t('apps.mdFailed')||'Could not load README'}</p>`;
                 }
