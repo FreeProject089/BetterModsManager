@@ -43,18 +43,21 @@ that feature fails.
     and keeps the newest version. BMM does not use it: `manifest_urls = []` in `installer.toml`,
     so there is exactly one source.
 
-    Worse, the **package download has no fallback at any level**. `download_and_apply` takes the
-    single URL from the manifest and fetches it; there is no mirror logic in that path at all.
+    The **package download** now supports mirrors too — `update.json` takes a `urls` array and
+    bpkg-core tries each in turn. That is safe by construction rather than by trust: the Ed25519
+    signature is verified before the install directory is touched, so a mirror can serve a bad
+    file and never get it applied.
 
-    Adding a mirror for the *manifest* is configuration only, and BCWEB would be the natural
-    second source — **but nothing serves it today**. The URL below is a proposal, not a live
-    endpoint; BCWEB would have to publish that file first, kept in step with the GitHub one.
+    So closing this is one line of configuration — the build script turns each manifest mirror
+    into its sibling `.bpkg` URL automatically:
 
     ```toml
-    manifest_urls = ["https://bettercommunity.ch/api/assets/bmm/update.json"]   # does not exist yet
+    manifest_urls = ["https://bettercommunity.ch/api/assets/bmm/update.json"]
     ```
 
-    Adding one for the *package* needs a change in `bpkg-core`.
+    **Nothing serves that URL today.** BCWEB would have to publish `update.json` and `bmm.bpkg`
+    and keep them in step with the GitHub release. Until it does, GitHub remains the only
+    source — the mechanism is ready, the second host is not.
 
 ---
 
