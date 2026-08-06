@@ -2512,6 +2512,14 @@ async function fillPage(path: string) {
   anchorise(body, hash);
   const reader = body.closest('.dh-reader') as HTMLElement | null;
   if (reader) buildToc(reader);
+  // Switching pages kept the previous scroll position, so a jump from halfway down one page
+  // landed halfway down the next — most visibly with next/previous, where you scroll to the
+  // bottom to press the button and then arrive mid-page.
+  //
+  // Skipped when an anchor was requested: anchorise() has just scrolled to it, and this would
+  // immediately undo that. Instant rather than smooth — a page change is not a jump within a
+  // page, and animating it looks like the content moved on its own.
+  if (!hash && reader) reader.scrollIntoView({ block: 'start', behavior: 'auto' });
   await hydrateDocPage(body);
 }
 

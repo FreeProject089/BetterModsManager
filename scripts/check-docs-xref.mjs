@@ -149,6 +149,13 @@ if (existsSync(MD_LITE) && existsSync(BUNDLE)) {
     if (/&lt;!--/.test(html)) fail(`${where}: an HTML comment is rendered as visible text`);
     if (/&lt;(?:div|span|a|img|br|p)[\s&]/i.test(html)) fail(`${where}: raw HTML is rendered as visible text`);
     if (/\{#[\w-]+\}/.test(html)) fail(`${where}: a mkdocs heading anchor prints its own braces`);
+    // An admonition the renderer did not recognise falls through as a paragraph, so the
+    // reader sees the literal `!!! note "…"`. This gate passed while exactly that was on
+    // screen — a title containing escaped quotes matched nothing — because it only looked
+    // for HTML-ish leftovers. The marker is only ever markup: it has no business in output.
+    if (/(?:^|>|\n)\s*(?:!!!|\?\?\?\+?)\s+[a-z-]+/im.test(html)) {
+      fail(`${where}: an admonition is rendered as literal "!!! …" text`);
+    }
   }
   if (failed === before6) console.log(`✓ ${checked} page(s) render no stray markup`);
 }
