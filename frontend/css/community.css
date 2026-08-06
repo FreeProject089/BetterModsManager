@@ -246,9 +246,9 @@
   border: 1px solid var(--bmm-border);
 }
 .community-badge--bmm { color: #7c9cff; border-color: rgba(124, 156, 255, .4); background: rgba(124, 156, 255, .12); }
-.community-badge--bsm { color: #c084fc; border-color: rgba(192, 132, 252, .4); background: rgba(192, 132, 252, .12); }
-.community-badge--installer { color: #34d399; border-color: rgba(52, 211, 153, .4); background: rgba(52, 211, 153, .12); }
-.community-badge--community { color: #fbbf24; border-color: rgba(251, 191, 36, .4); background: rgba(251, 191, 36, .12); }
+.community-badge--bsm { color: var(--bmm-purple); border-color: rgba(192, 132, 252, .4); background: rgba(192, 132, 252, .12); }
+.community-badge--installer { color: var(--bmm-success); border-color: rgba(52, 211, 153, .4); background: rgba(52, 211, 153, .12); }
+.community-badge--community { color: var(--bmm-warning); border-color: rgba(251, 191, 36, .4); background: rgba(251, 191, 36, .12); }
 
 /* Empty / loading / error */
 .community-empty {
@@ -375,16 +375,16 @@
 
 /* GitHub-style line diff (red deletions / green additions / plain context). */
 .cdiff-stat { font-family: var(--bmm-font-mono, ui-monospace, monospace); font-size: 12px; margin-bottom: 8px; }
-.cdiff-stat .cdiff-added { color: #2ecfa0; font-weight: 700; }
-.cdiff-stat .cdiff-removed { color: #ff6b6b; font-weight: 700; }
+.cdiff-stat .cdiff-added { color: var(--bmm-success); font-weight: 700; }
+.cdiff-stat .cdiff-removed { color: var(--bmm-danger); font-weight: 700; }
 .cdiff-stat .cdiff-vs { color: var(--bmm-text-muted); }
 .cdiff { font-family: var(--bmm-font-mono, ui-monospace, monospace); font-size: 12.5px; line-height: 1.55; border: 1px solid var(--bmm-border); border-radius: 10px; overflow: hidden; }
 .cdiff-row { display: flex; }
 .cdiff-row.cdiff-add { background: rgba(46, 207, 160, .1); }
 .cdiff-row.cdiff-del { background: rgba(255, 107, 107, .1); }
 .cdiff-gutter { flex: 0 0 22px; text-align: center; user-select: none; color: var(--bmm-text-muted); }
-.cdiff-add .cdiff-gutter { color: #2ecfa0; }
-.cdiff-del .cdiff-gutter { color: #ff6b6b; }
+.cdiff-add .cdiff-gutter { color: var(--bmm-success); }
+.cdiff-del .cdiff-gutter { color: var(--bmm-danger); }
 .cdiff-text { flex: 1; padding-right: 8px; white-space: pre-wrap; word-break: break-word; color: var(--bmm-text-primary); }
 
 /* "edited" becomes a clickable link to the comment's edit history. */
@@ -407,7 +407,7 @@
 .community-comment-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .community-comment-name { font-weight: 600; font-size: 13px; color: var(--bmm-text-primary); }
 .community-comment-time { font-size: 11px; color: var(--bmm-text-muted); }
-.community-comment-resolved { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #2ecfa0; margin-left: auto; }
+.community-comment-resolved { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--bmm-success); margin-left: auto; }
 .community-comment-anchor { display: inline-block; margin-top: 6px; font-size: 11px; padding: 2px 8px; border-radius: 99px; background: var(--bmm-bg-hover); color: var(--bmm-accent); }
 .community-comment-body { margin-top: 8px; font-size: 14px; }
 .community-comment-body > :first-child { margin-top: 0; }
