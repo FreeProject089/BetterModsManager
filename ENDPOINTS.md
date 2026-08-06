@@ -1,0 +1,144 @@
+# Every URL BMM talks to
+
+What each one must serve, what breaks when it does not, and whether anything catches the fall.
+
+Compiled from the code, not from memory: `frontend/assets/links.json`,
+`frontend/src/core/links-config.ts`, `src-tauri/src/commands/autoupdate.rs`,
+`BetterInstaller/examples/bmm/installer.toml`, and a sweep of hard-coded URLs across
+`frontend/src` and `src-tauri/src`.
+
+---
+
+## The registry itself
+
+Almost every outward link is data, not code. `links.json` is the registry, and BMM resolves it
+through three sources in order:
+
+| # | Source | Purpose |
+|---|---|---|
+| 1 | `https://bettercommunity.ch/api/assets/links.json` | **Authoritative.** Edited from Admin → Downloads & assets; a change reaches every installed copy without a release |
+| 2 | `https://raw.githubusercontent.com/FreeProject089/BetterModsManager/refs/heads/Tdev/frontend/assets/links.json` | Used when BCWEB is unreachable |
+| 3 | `assets/links.json`, bundled in the app | Offline |
+
+The first source that answers wins; BMM logs which one it used (`[BMM] links.json source: …`).
+
+**This is the only fallback chain in the app.** Everything below inherits it *for the URL*, but
+not for the content at that URL — if `links.json` resolves and the target it points at is down,
+that feature fails.
+
+---
+
+## Must exist for the app to update
+
+| URL | Must serve | If it is down |
+|---|---|---|
+| `https://api.github.com/repos/FreeProject089/BetterModsManager/releases` | The GitHub releases list | No update check at all — see the warning below |
+| Release asset `update.json` | BetterInstaller's update manifest — version, package URL, optional deltas | Copies installed by BetterInstaller never see an update |
+| Release asset `bmm.bpkg` | The signed package `update.json` points at | The update is offered and then fails to download |
+| Release asset `update-manifest.json` | BMM's own incremental manifest, for installs that did not come from BetterInstaller | Dev/portable copies stop updating |
+
+!!! danger "GitHub is a single point of failure for updates, and nothing catches it"
+
+    BetterInstaller *supports* mirrors — `check_remote_multi` tries every source, skips dead ones
+    and keeps the newest version. BMM does not use it: `manifest_urls = []` in `installer.toml`,
+    so there is exactly one source.
+
+    Worse, the **package download has no fallback at any level**. `download_and_apply` takes the
+    single URL from the manifest and fetches it; there is no mirror logic in that path at all.
+
+    Adding a mirror for the *manifest* is configuration only, and BCWEB would be the natural
+    second source — **but nothing serves it today**. The URL below is a proposal, not a live
+    endpoint; BCWEB would have to publish that file first, kept in step with the GitHub one.
+
+    ```toml
+    manifest_urls = ["https://bettercommunity.ch/api/assets/bmm/update.json"]   # does not exist yet
+    ```
+
+    Adding one for the *package* needs a change in `bpkg-core`.
+
+---
+
+## BetterCommunity
+
+| URL | Must serve | If it is down |
+|---|---|---|
+| `https://bettercommunity.ch/api/assets/links.json` | The registry above | Falls back to GitHub, then to the bundled copy |
+| `https://bettercommunity.ch/api/repos.json` | The public server-repo directory | The Server Repo browser is empty; joining a repo by direct URL still works |
+| `https://bettercommunity.ch/api/assets/contributors.json` | The credits list | The Credits screen shows the bundled copy |
+| `https://bettercommunity.ch/` | The site itself | Blog, account and community buttons lead nowhere |
+| `https://telemetry.bettercommunity.ch/batch/` | Accepts batched telemetry `POST`s | Nothing user-facing. Telemetry is opt-in and dropped on failure |
+
+Test mode is read once at startup from `app.cfg` (`BCTestMode` / `BCTestBase`), which lets these
+point at a local instance without touching the code.
+
+---
+
+## Catalogs — where content is discovered
+
+| URL | Must serve |
+|---|---|
+| `https://raw.githubusercontent.com/BetterDCS/BetterModsManager_Plugins/main/catalog.json` | The plugin catalog |
+| `https://raw.githubusercontent.com/BetterDCS/BMM_App_Catalogue/main/catalog.json` | The app catalog |
+| `https://raw.githubusercontent.com/BetterDCS/BMM_Themes/main/catalog.json` | The theme catalog |
+
+Each is a plain JSON file in a public repo. A missing one leaves that catalog empty; it does not
+affect anything already installed. Community catalogs added by the user are extra sources on top,
+not replacements.
+
+---
+
+## Documentation
+
+| URL | Must serve |
+|---|---|
+| `https://freeproject089.github.io/BMM-Docs/` | The published docs site |
+
+**Not required to read the documentation.** Every page is bundled in the app under
+`assets/docs/<lang>/`, and the in-app reader never fetches anything. The site is used for two
+things: the *Open on the site* buttons, and playing a recording that was too large to bundle —
+BMM fetches those bytes and plays them in its own player rather than opening a browser.
+
+---
+
+## Connectivity probes
+
+| URL | Used for |
+|---|---|
+| `https://www.gstatic.com/generate_204` | Is there internet? |
+| `https://cloudflare.com/cdn-cgi/trace` | Second opinion, if the first fails |
+| `https://api.ipify.org` | The public IP, shown when hosting a server repo |
+
+The first two are deliberately two different companies — one being blocked should not make BMM
+believe the whole network is down.
+
+---
+
+## Third-party, opened in a browser
+
+Never fetched, only opened: `discord.com/invite/CTaaEF9R75`, `reddit.com/r/BetterModManager`,
+`ko-fi.com/I2I31ZIPPG`, `ko-fi.com/bettercommunity`, `forum.dcs.world/topic/385941-…`,
+`github.com/FreeProject089/BetterModsManager`, `app.betahub.io` (bug reports).
+
+Downloaded on demand, only if the user asks for the feature:
+`nodejs.org/dist/…` (the Node runtime a plugin script may need) and
+`raw.githubusercontent.com/miniupnp/…/upnpc.exe` (UPnP port mapping when hosting a repo).
+
+---
+
+## Discord Rich Presence
+
+`links.json` also carries the two RPC buttons: `WebSiteRPC1` / `WebSiteRPC2` and
+`github_RPC1` / `github_RPC2`, with `BoutonRPC1` / `BoutonRPC2` deciding which of each pair is
+shown. Button 1's URL gets `?creator=<id>` appended at runtime. These are labels on a Discord
+profile — nothing is fetched.
+
+---
+
+## Changing any of this
+
+Prefer editing `links.json` on BetterCommunity: it reaches installed copies immediately, with no
+release. Keep the GitHub copy in step, since it is what answers when BCWEB does not.
+
+The URLs that are **not** in `links.json` and need a release to change: the updater manifest
+(`installer.toml`), the docs site (`DOCS_SITE` in `docs-hub.ts`), the connectivity probes
+(`offline.ts`), and the telemetry endpoint.
