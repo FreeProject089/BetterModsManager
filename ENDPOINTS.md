@@ -146,5 +146,8 @@ Prefer editing `links.json` on BetterCommunity: it reaches installed copies imme
 release. Keep the GitHub copy in step, since it is what answers when BCWEB does not.
 
 The URLs that are **not** in `links.json` and need a release to change: the updater manifest
-(`installer.toml`), the docs site (`DOCS_SITE` in `docs-hub.ts`), the connectivity probes
-(`offline.ts`), and the telemetry endpoint.
+(`installer.toml`), the docs site (`DOCS_SITE` in `docs-hub.ts`), and the connectivity probes
+(`offline.ts`).
+
+The telemetry endpoint used to be on that list. It is not any more — it moved into the registry,
+along with its public ingest key.
