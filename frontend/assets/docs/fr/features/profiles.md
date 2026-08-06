@@ -18,7 +18,7 @@ Son vrai rôle est écrit sur l'écran vide :
 | **2** | **Dossier du jeu** | Là où ce profil se déploie. Voir l'avertissement ci-dessous. |
 | **3** | **Nouveau profil** | Un par *configuration*, pas un par jeu — tu peux en avoir plusieurs. |
 
-<div class="bmm-replay" data-page="features/profiles" data-title="Créer et changer de profils (clip placeholder)"></div>
+<div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/profiles.bmmreplay" data-page="features/profiles" data-title="Créer et changer de profils (clip placeholder)"></div>
 
 *Enregistrement placeholder — un clip ciblé de cet écran le remplacera.*
 
@@ -68,5 +68,51 @@ Dès sa création, BMM te dit ce qui vient de changer :
 
 C'est le contrat. À partir de là, [ajoute un mod](doc-page:features/library) et active-le.
 
-<!-- TODO(contenu) : l'export/import de profil et le journal de déploiement attendent leur
-     capture + spec avant d'être documentés honnêtement. -->
+## Emmener un profil ailleurs
+
+Il n'y a pas de bouton « exporter ce profil », et c'est voulu : un profil est un *choix*
+(quels mods, dans quel ordre, pointés vers quel dossier), pas un paquet. Trois choses portent
+ce choix, et laquelle tu veux dépend de qui est en face :
+
+| Tu veux | Utilise | Ce qui voyage |
+|---|---|---|
+| Donner la même config à quelqu'un qui a déjà les mods | Une [liste `.MM`](doc-page:features/modlist) | Les noms, versions et l'ordre — un fichier texte, quelques Ko |
+| Donner la même config, mods compris | Un [modpack](doc-page:features/modpacks) | La liste *et* les fichiers |
+| Garder la même config pour un groupe, et la tenir à jour | Un [dépôt serveur](doc-page:features/repo) | Tout, plus chaque changement ultérieur |
+| Déplacer tout ton BMM sur une autre machine | **Paramètres → Exporter les données** | Profils, mods scannés, tags, réglages, plugins — ce que tu coches |
+
+**Paramètres → Exporter les données** est celui qu'on rate. Il écrit un seul fichier, et chaque
+partie a son interrupteur : profils, mods, tags, réglages, plugins. L'import relit le même
+fichier. C'est une *sauvegarde*, pas un partage : il embarque tes chemins, qui ne
+correspondront pas sur une autre machine.
+
+!!! tip "Tu viens d'un autre gestionnaire"
+    BMM importe directement les profils d'**OpenModManager** et d'**OVGME**, tu n'as donc pas à
+    les refaire à la main. Il lit leurs fichiers de profil et crée les profils BMM équivalents.
+
+## Le journal d'activité
+
+Chaque profil tient son propre relevé de ce qui a été fait à ses mods. Il s'ouvre depuis la
+Bibliothèque.
+
+| Il enregistre | Il n'enregistre pas |
+|---|---|
+| L'activation d'un mod, et si des dépendances ont suivi | Ce que tu as fait sur un *autre* profil |
+| Sa désactivation | La lecture, la recherche, le lancement du jeu |
+| Sa suppression | Le détail fichier par fichier de ce qui a été écrit |
+| Sa modification, avec ce qui a changé | |
+
+Chaque entrée est un mod, une action, un horodatage. Il répond bien à une seule question :
+*quand ce profil a-t-il changé pour la dernière fois, et en quoi ?* — celle que tu poses
+vraiment quand un jeu qui marchait hier ne marche plus aujourd'hui.
+
+Deux choses à savoir, parce qu'aucune des deux n'est évidente :
+
+- **Le journal vit à côté des sauvegardes du profil**, dans son dossier de backup. Si celui-ci
+  est sur un disque externe et que le disque est débranché, le journal est indisponible jusqu'à
+  son retour — la même règle que les sauvegardes elles-mêmes.
+- **Les vieilles entrées sont purgées à l'ouverture** du journal, pas par une tâche de fond. La
+  durée de rétention est un réglage ; ce qui la dépasse disparaît à la prochaine lecture, donc
+  un profil que tu n'ouvres jamais garde son historique jusqu'à ce que tu le regardes.
+
+Tu peux vider le journal d'un profil, et ça ne vide que celui-là.

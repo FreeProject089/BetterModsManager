@@ -15,7 +15,7 @@ version you have, and launches them — without you managing downloads by hand.
 | **2** | **Install** | One click. |
 | **3** | **Sources** | Where the catalog comes from. |
 
-<div class="bmm-replay" data-page="features/apps" data-title="Installing an app from the catalog (placeholder clip)"></div>
+<div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/apps.bmmreplay" data-page="features/apps" data-title="Installing an app from the catalog (placeholder clip)"></div>
 
 *Placeholder recording — a focused clip of this screen will replace it.*
 

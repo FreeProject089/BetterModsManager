@@ -18,6 +18,9 @@ import { fileURLToPath } from 'node:url';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const SRC = join(ROOT, 'BMM Docs', 'docs');
 const OUT = join(ROOT, 'frontend', 'assets', 'docs');
+// Where the published site serves its assets. An asset too big to bundle is still playable:
+// the app fetches it from here and runs its own player. Must match docs-hub's DOCS_SITE.
+const SITE = 'https://freeproject089.github.io/BMM-Docs/';
 const CHECK = process.argv.includes('--check');
 
 if (!existsSync(SRC)) {
@@ -127,10 +130,14 @@ function forApp(md, route) {
     // can offer the website when it was not.
     .replace(/<div\s+class="bmm-replay"[\s\S]*?><\/div>/g, (block) => {
       const at = (name) => (block.match(new RegExp(`data-${name}="([^"]*)"`)) || [, ''])[1];
-      const rel = 'media/' + at('src').replace(/^(\.\.\/)*assets\//, '');
+      const siteRel = at('src').replace(/^(\.\.\/)*/, '');       // assets/replays/x.bmmreplay
+      const rel = 'media/' + siteRel.replace(/^assets\//, '');
       const title = at('title');
+      // data-src is the bundled copy and only exists when there IS one. data-remote is the same
+      // asset on the website, so a clip too big to ship still PLAYS — the app fetches the bytes
+      // and runs its own player, rather than sending the reader to a browser.
       const local = bundled.has(rel) ? ` data-src="assets/docs/${rel}"` : '';
-      return `<div class="bmm-replay"${local} data-page="${route}"`
+      return `<div class="bmm-replay"${local} data-remote="${SITE}${siteRel}" data-page="${route}"`
         + (title ? ` data-title="${title.replace(/"/g, '&quot;')}"` : '') + '></div>';
     })
     // Site-relative .md links become app doc routes, resolved against this page's folder.

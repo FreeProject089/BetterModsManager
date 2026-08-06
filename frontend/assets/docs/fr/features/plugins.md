@@ -24,7 +24,7 @@ version.
     propre token, et ne fait que ce que tu lui as accordé. Relis ces autorisations dans
     **Plugins → Permissions**.
 
-<div class="bmm-replay" data-page="features/plugins" data-title="Accorder et utiliser un plugin (clip placeholder)"></div>
+<div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/plugins.bmmreplay" data-page="features/plugins" data-title="Accorder et utiliser un plugin (clip placeholder)"></div>
 
 *Enregistrement placeholder — un clip ciblé de cet écran le remplacera.*
 
@@ -79,5 +79,44 @@ planificateur du système). Les règles sont évaluées de haut en bas et *la pr
 correspond gagne* — ordonne-les donc de la plus spécifique à la plus générale, exactement
 comme un pare-feu.
 
-<!-- TODO(contenu) : la référence de l'API, la liste des endpoints et les commandes
-     personnalisées méritent leurs propres pages — c'est 960+ chaînes de surface. -->
+## Ce qu'est un plugin, sur le disque
+
+Un plugin est un dossier avec un manifeste. Rien n'est compilé, rien n'est installé dans BMM —
+tu peux en lire un dans un éditeur de texte, et la personne à qui tu l'envoies aussi.
+
+| Champ | À quoi il sert |
+|---|---|
+| `id`, `name`, `version`, `author` | L'identité. C'est sur `id` que BMM dédoublonne |
+| `description`, `website`, `tags`, `game` | Ce qu'affiche le catalogue |
+| `permissions` | Les capacités demandées. C'est l'intégralité de ce qu'il a le droit de faire |
+| `modlist` | Les mods qu'il veut présents, avec leurs versions |
+| `scripts` | Les scripts externes qu'il embarque, en chemins relatifs à son dossier |
+| `has_scripts` | Déclare qu'il contient des scripts, pour que l'activation te prévienne |
+| `folders` | Les dossiers embarqués sous `bundle/` |
+| `apply_mode` | `modlist`, `script` ou `both` — ce que l'appliquer fait réellement |
+
+`apply_mode` est le champ à lire avant d'accorder ta confiance. Un plugin `modlist` demande
+seulement à BMM d'activer un ensemble de mods ; un plugin `script` exécute un programme sur ta
+machine. L'exécution de scripts est derrière sa propre permission, et activer un plugin qui en
+déclare te demande d'abord — mais le manifeste te dit de quel type il s'agit *avant* même de
+l'installer.
+
+!!! note "Il n'existe pas de commandes définies par un plugin"
+    Un plugin ne peut pas ajouter sa propre entrée dans la palette de commandes ni inventer une
+    nouvelle action. Toute sa surface est la liste ci-dessus : un ensemble de mods, des scripts
+    optionnels, et les permissions qu'on lui a accordées. Tout le reste, il le fait via l'API,
+    comme n'importe quel autre client.
+
+## La référence complète
+
+Tout ce qu'un plugin — ou un script, ou un assistant IA, ou `curl` — peut appeler est réuni au
+même endroit, généré à partir du code :
+
+- **[Référence API & deeplinks](doc-page:reference/api)** — chaque endpoint HTTP et chaque lien
+  `bmm://`, avec la forme des réponses, ceux qui exigent un token et ceux qui demandent avant
+  d'agir.
+- **[Référence des actions](doc-page:reference/actions)** — chaque action que BMM peut exécuter
+  pour toi, y compris celles que le planificateur sait lancer.
+
+Les deux valent un coup d'œil même si tu n'écris jamais de plugin : c'est l'inventaire le plus
+clair de ce qu'on peut faire faire à BMM.

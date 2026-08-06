@@ -140,31 +140,59 @@
         scrollbar-width: thin;
     }
 }
-.dh-aside-box { border-left: 1px solid var(--bmm-border, #2a3242); padding-left: 14px; }
 .dh-aside-box[hidden] { display: none; }
 .dh-aside-h {
-    font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em;
-    color: var(--bmm-text-muted, #7c8698); margin-bottom: 8px;
+    font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .1em;
+    color: var(--bmm-text-muted, #7c8698); margin-bottom: 9px; padding-left: 11px;
 }
-.dh-toc, .dh-nav { display: flex; flex-direction: column; gap: 1px; }
+/* Both lists hang off a guide line, the way the website's sidebar does — it is what makes a
+   column of links read as a group instead of as loose text. */
+.dh-toc, .dh-nav {
+    display: flex; flex-direction: column; gap: 1px;
+    border-left: 1px solid var(--bmm-border, #2a3242);
+}
 .dh-toc-i, .dh-nav-i {
+    position: relative;
     text-align: left; cursor: pointer; font-family: inherit; font-size: 12.5px; line-height: 1.45;
-    padding: 4px 6px; border: 0; border-radius: 6px; background: none;
+    padding: 5px 8px 5px 11px; border: 0; background: none;
+    border-radius: 0 6px 6px 0;
     color: var(--bmm-text-secondary, #a3adba);
     /* A long heading wraps instead of stretching the column. */
     overflow-wrap: anywhere;
+    transition: background-color .13s, color .13s, box-shadow .13s;
 }
-.dh-toc-i:hover, .dh-nav-i:hover { background: var(--bmm-bg-hover); color: var(--bmm-text-primary, #e6edf3); }
-.dh-toc-h4 { padding-left: 16px; font-size: 12px; color: var(--bmm-text-muted, #7c8698); }
+.dh-toc-i:hover, .dh-nav-i:hover {
+    background: var(--bmm-bg-hover);
+    color: var(--bmm-text-primary, #e6edf3);
+    box-shadow: inset 2px 0 0 var(--bmm-border-hover, #3a4556);
+}
+.dh-toc-h4 { padding-left: 24px; font-size: 12px; color: var(--bmm-text-muted, #7c8698); }
 .dh-nav-sec {
-    margin: 10px 0 4px; font-size: 10.5px; font-weight: 800; text-transform: uppercase;
-    letter-spacing: .07em; color: var(--bmm-text-muted, #7c8698);
+    margin: 12px 0 3px; padding-left: 11px;
+    font-size: 10px; font-weight: 800; text-transform: uppercase;
+    letter-spacing: .09em; color: var(--bmm-text-muted, #7c8698);
 }
 .dh-nav-sec:first-child { margin-top: 0; }
-.dh-nav-i.on {
+/* Current page: a rail ON the guide line. Bolder text alone is hard to spot in a 36-row list. */
+.dh-nav-i.on, .dh-toc-i.on {
     color: var(--bmm-accent, #3b82f6); font-weight: 700;
-    background: color-mix(in srgb, var(--bmm-accent, #3b82f6) 10%, transparent);
+    background: color-mix(in srgb, var(--bmm-accent, #3b82f6) 11%, transparent);
+    box-shadow: inset 2px 0 0 var(--bmm-accent, #3b82f6);
 }
+
+/* The aside scrolls on its own once it is taller than the window. Style the bar, or it is the
+   one piece of chrome on this screen the theme never reaches. */
+.dh-aside { scrollbar-width: thin; scrollbar-color: var(--bmm-border-hover, #3a4556) transparent; }
+.dh-aside::-webkit-scrollbar { width: 8px; }
+.dh-aside::-webkit-scrollbar-track { background: transparent; }
+.dh-aside::-webkit-scrollbar-thumb {
+    background: var(--bmm-s10);
+    border-radius: 999px;
+    /* Inset from the edge so the bar reads as part of the panel, not stuck to the window. */
+    border: 2px solid transparent;
+    background-clip: content-box;
+}
+.dh-aside::-webkit-scrollbar-thumb:hover { background: var(--bmm-s20); background-clip: content-box; }
 
 /* Previous / next, in the site's own reading order. */
 .dh-steps { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 26px 0 18px; }

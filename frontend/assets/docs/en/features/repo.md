@@ -16,7 +16,7 @@ hand stays at the version you installed, forever, silently.
 | **2** | **Browse** | Official and partner repos. |
 | **3** | **Add** | Point BMM at a repo URL. |
 
-<div class="bmm-replay" data-page="features/repo" data-title="Syncing from and hosting a repo (placeholder clip)"></div>
+<div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/repo.bmmreplay" data-page="features/repo" data-title="Syncing from and hosting a repo (placeholder clip)"></div>
 
 *Placeholder recording — a focused clip of this screen will replace it.*
 

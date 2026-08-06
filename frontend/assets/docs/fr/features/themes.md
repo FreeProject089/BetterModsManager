@@ -16,7 +16,7 @@ importe en un clic.
 | **2** | **Éditeur** | Trois onglets — voir plus bas. |
 | **3** | **Catalogue** | Thèmes officiels, partenaires et communautaires. |
 
-<div class="bmm-replay" data-page="features/themes" data-title="Restyler BMM avec l'éditeur de thèmes (clip placeholder)"></div>
+<div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/themes.bmmreplay" data-page="features/themes" data-title="Restyler BMM avec l'éditeur de thèmes (clip placeholder)"></div>
 
 *Enregistrement placeholder — un clip ciblé de cet écran le remplacera.*
 
@@ -78,5 +78,54 @@ comme l'[App Catalog](doc-page:features/apps) :
 Héberge-le et tu as un canal — quiconque ajoute ta source voit tes thèmes, et leurs mises à
 jour.
 
-<!-- TODO(contenu) : le sélecteur d'emplacement de « + Éléments » et les réglages
-     flou/opacité du fond d'écran méritent chacun leur capture. -->
+## Le fond d'écran, et pourquoi il a trois réglages
+
+Un thème peut poser un fond plein écran — image ou vidéo — depuis **Assets** dans l'éditeur. Il
+vient avec deux réglages que tu voudras, tous deux dans le groupe **Arrière-plan** :
+
+| Réglage | Token | À quoi il sert |
+|---|---|---|
+| Fond d'écran | `--bmm-app-bg-image` | L'image elle-même, choisie ou collée en URL |
+| Flou du fond | `--bmm-app-bg-blur` | Un flou en pixels, ex. `8px` |
+| Opacité du fond | `--bmm-app-bg-opacity` | De `0` (invisible) à `1` (plein) |
+
+Le flou et l'opacité ne sont pas de la déco. Un fond détaillé entre en concurrence avec le
+texte posé dessus, et BMM est un écran qu'on **lit** : noms de mods, chemins de fichiers,
+numéros de version. Le flou enlève le détail, l'opacité enlève le contraste. Une photo à pleine
+force rend une liste de mods pénible à parcourir ; la même à `8px` et `0.35` se lit comme une
+couleur, et le texte reste lisible.
+
+Retirer le fond depuis Assets efface aussi le token, donc la suppression ne laisse pas un
+arrière-plan à moitié posé.
+
+## + Éléments : mettre tes propres choses dans BMM
+
+L'onglet **+ Éléments** ajoute ton propre HTML — un bouton, une bannière, un badge, un widget —
+n'importe où dans l'app. C'est un formulaire en trois étapes, et la première est celle qui
+compte.
+
+**1. Où le mettre ?** Soit tu appuies sur *Clique un endroit dans BMM* et tu désignes l'élément
+à la pipette, soit tu écris un sélecteur CSS toi-même. La pipette est la façon honnête de faire :
+tu obtiens le sélecteur qui correspond vraiment à ce que tu as cliqué, au lieu de deviner des
+noms de classes.
+
+Ensuite deux choix décident exactement où il atterrit :
+
+| Placement | Résultat |
+|---|---|
+| À l'intérieur, à la fin | Ajouté comme dernier enfant de la cible |
+| À l'intérieur, au début | Inséré comme premier enfant |
+| Juste avant | Un frère, immédiatement avant la cible |
+| Juste après | Un frère, immédiatement après |
+
+**Afficher sur** en délimite la portée : toutes les pages, ou exactement un écran de BMM —
+Bibliothèque, Profils, Modpacks, Mapper, Dépôt Serveur, Plugins & API, App Catalog, Aide &
+autre, Paramètres, Crédits, BetterCommunity, Listes `.MM`. Une bannière qui n'a de sens que sur
+la Bibliothèque n'a pas à te suivre dans les Paramètres.
+
+**2 et 3** sont le contenu : partir d'un modèle ou écrire le HTML, puis le styler.
+
+Tes éléments sont listés au-dessus du formulaire, chacun avec son sélecteur, son placement et sa
+portée, pour qu'un thème qui en contient une douzaine reste lisible. Ils voyagent avec le
+thème — qui l'installe les reçoit aussi, ce qui mérite d'être gardé en tête avant d'y mettre
+quelque chose de personnel.

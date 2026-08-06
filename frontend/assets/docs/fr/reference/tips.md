@@ -4,7 +4,7 @@ Les fonctionnalités ont leur propre page. Celle-ci parle des *interactions* —
 touches et petites commodités qu'on ne devine pas tant que quelqu'un ne les montre pas.
 Parcours-la une fois ; elle se rentabilise vite.
 
-<div class="bmm-replay" data-page="reference/tips" data-title="Une session BMM enregistrée"></div>
+<div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/bmm-demo.bmmreplay" data-page="reference/tips" data-title="Une session BMM enregistrée"></div>
 
 *Clique sur **Lecture** ci-dessus pour voir une vraie session BMM, reconstruite dans ton
 navigateur — pas une vidéo, l'interface réelle rejouée. (Enregistrement placeholder ; des

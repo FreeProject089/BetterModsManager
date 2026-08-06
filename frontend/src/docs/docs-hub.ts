@@ -2759,13 +2759,12 @@ async function hydrateDocPage(host: HTMLElement) {
   host.querySelectorAll('.dh-clip').forEach((el) => {
     const sub = el.querySelector('[data-clip-sub]');
     if (!sub) return;
-    const off = el.classList.contains('dh-clip-off');
     const kind = el.getAttribute('data-kind');
-    sub.textContent = off
-      ? tr({ en: 'Not included in this build — watch it on the website.', fr: 'Pas embarqué dans ce build — à voir sur le site.' })
-      : kind === 'video'
-        ? tr({ en: 'Play the clip', fr: 'Lire le clip' })
-        : tr({ en: 'Play the recorded session', fr: 'Rejouer la session enregistrée' });
+    // Deliberately says nothing about WHERE the file is. Whether it ships with the app or is
+    // fetched on demand changes nothing the reader can act on.
+    sub.textContent = kind === 'video'
+      ? tr({ en: 'Play the clip', fr: 'Lire le clip' })
+      : tr({ en: 'Play the recorded session', fr: 'Rejouer la session enregistrée' });
   });
 
   const blocks = [...host.querySelectorAll('.dh-mermaid')] as HTMLElement[];
@@ -2811,28 +2810,63 @@ function rethemeDiagrams() {
   void hydrateDocPage(body);
 }
 
-/** Play a recording or a clip embedded in a bundled page.
+/** Play a recording or a clip embedded in a bundled page — IN the app, always.
  *
- *  Three cases, and the card says which one it is BEFORE you click it: a .bmmreplay goes to the
- *  rrweb viewer, an .mp4/.webm plays inline in place of the card, and an asset that was too big
- *  to bundle opens its page on the website instead of pretending to be playable. */
+ *  A clip too large to bundle used to turn its card into a link that threw the reader out to a
+ *  browser. It does not any more: the bytes come off the website, the player is BMM's own. The
+ *  reader sees a play button either way, because from where they sit there is no difference.
+ *
+ *  Sources are tried in order — the bundled copy first, since it works offline and instantly —
+ *  and only if BOTH fail does the card say so, still as a button you can press again. */
 async function playClip(card: HTMLElement) {
-  const src = card.getAttribute('data-clip');
-  if (!src) {                                   // not bundled — the website has it
-    const page = card.getAttribute('data-clip-page') || '';
-    (window as any).openExternal?.(`${DOCS_SITE}${page}${page ? '/' : ''}`);
+  const sources = [card.getAttribute('data-clip'), card.getAttribute('data-clip-remote')]
+    .filter((s): s is string => !!s);
+  if (!sources.length) return;
+  const kind = card.getAttribute('data-kind');
+  const say = (msg: L) => {
+    const sub = card.querySelector('[data-clip-sub]');
+    if (sub) sub.textContent = tr(msg);
+    card.classList.remove('dh-clip-busy');
+  };
+
+  card.classList.add('dh-clip-busy');
+  say({ en: 'Loading…', fr: 'Chargement…' });
+
+  if (kind === 'video') {
+    for (const src of sources) {
+      const ok = await new Promise<boolean>((resolve) => {
+        const v = document.createElement('video');
+        v.preload = 'metadata'; v.src = src;
+        v.addEventListener('loadedmetadata', () => resolve(true), { once: true });
+        v.addEventListener('error', () => resolve(false), { once: true });
+      });
+      if (!ok) continue;
+      const v = document.createElement('video');
+      v.className = 'dh-clip-video';
+      v.src = src; v.controls = true; v.autoplay = true; v.playsInline = true;
+      card.replaceWith(v);
+      return;
+    }
+    say({ en: 'This clip could not be loaded — press to try again.', fr: 'Ce clip n’a pas pu être chargé — appuie pour réessayer.' });
     return;
   }
-  if (card.getAttribute('data-kind') === 'video') {
-    const v = document.createElement('video');
-    v.className = 'dh-clip-video';
-    v.src = src; v.controls = true; v.autoplay = true; v.playsInline = true;
-    // A clip that cannot load must not leave an empty black box where the card used to be.
-    v.addEventListener('error', () => { v.replaceWith(card); }, { once: true });
-    card.replaceWith(v);
-    return;
+
+  for (const src of sources) {
+    // Probe before handing it over: playReplayFromUrl toasts on failure, and a toast per source
+    // would blame the reader twice for one missing file.
+    try {
+      const res = await fetch(src);
+      if (!res.ok) continue;
+      const bundle = await res.json();
+      const events = Array.isArray(bundle) ? bundle : bundle?.events;
+      if (!Array.isArray(events) || events.length < 2) continue;
+      card.classList.remove('dh-clip-busy');
+      say({ en: 'Play the recorded session', fr: 'Rejouer la session enregistrée' });
+      await playReplay(src);
+      return;
+    } catch { /* try the next source */ }
   }
-  await playReplay(src);
+  say({ en: 'This recording could not be loaded — press to try again.', fr: 'Cet enregistrement n’a pas pu être chargé — appuie pour réessayer.' });
 }
 
 async function playReplay(url: string) {

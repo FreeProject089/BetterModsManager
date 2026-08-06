@@ -12,10 +12,40 @@ It is also the front door to a larger platform. BetterCommunity is the web servi
 [Server Repos](doc-page:features/repo) and the community catalogs the [App Catalog](doc-page:features/apps) reads; this
 screen shows its blog, not the whole of it.
 
-<!-- TODO(content): capture + annotate the BetterCommunity screen (feed, filter chips,
-     search) as ../assets/screens/community.annotated.png, like the other feature pages. -->
+<!-- TODO(capture): an annotated screenshot of this screen, as
+     ../assets/screens/community.annotated.png, like the other feature pages. The text below
+     describes the same thing; the capture is a nice-to-have, not a blocker. -->
 
-<div class="bmm-replay" data-page="features/community" data-title="Reading the community blog (placeholder clip)"></div>
+## What is on the screen
+
+Four things, top to bottom:
+
+| | |
+|---|---|
+| **Filter chips** | One per blog space — **BMM**, **BSM**, **Installer**, **Community** — plus **All**, which is where the page starts. Nothing is hidden by default |
+| **Search** | Filters the posts already loaded, matching the title, the excerpt, *and* the author's name. It narrows what is on screen; it does not query the server |
+| **The featured post** | The newest post, given a wide card of its own |
+| **The grid** | Everything else, newest first |
+
+The featured card only appears when you are browsing unfiltered and not searching. That is
+deliberate: a hero card says "this is the latest news", and it would be a lie if it were merely
+the first row that happened to match your search.
+
+There is also a **language switch for the posts**, separate from BMM's own. Blog content exists
+in English and French; if BMM is set to a third language the posts fall back to English, and
+you can still flip them by hand.
+
+## When there is nothing to show
+
+Three different empty states, because three different things can be true:
+
+- **Nothing in this section yet, but posts exist elsewhere** — you get a *Show all posts*
+  button rather than a dead end.
+- **Nothing at all yet** — a plain message.
+- **Could not load** — a *Retry* button. The feed comes from the network, so this is the state
+  you will see offline, and it says so instead of pretending the blog is empty.
+
+<div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/community.bmmreplay" data-page="features/community" data-title="Reading the community blog (placeholder clip)"></div>
 
 *Placeholder recording — a focused clip of this screen will replace it.*
 

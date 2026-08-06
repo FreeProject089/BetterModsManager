@@ -40,7 +40,7 @@ Rather than describe it, here is one. This is a real `.bmmreplay` played back in
 same rrweb player the app uses — the DOM is replayed, so it is **not a video**: text stays text, and
 you can see the masking in action.
 
-<div class="bmm-replay" data-page="features/privacy-telemetry" data-title="A masked BMM session, replayed in the browser"></div>
+<div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/bmm-demo.bmmreplay" data-page="features/privacy-telemetry" data-title="A masked BMM session, replayed in the browser"></div>
 
 !!! note "It loads on demand"
 
