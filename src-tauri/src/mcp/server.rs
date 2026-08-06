@@ -1,7 +1,7 @@
 use rmcp::{ServerHandler, model::*, service::RequestContext, RoleServer};
 use serde_json::json;
 
-use crate::mcp::tools::{profiles, mods, diagnostics, launch_packs};
+use crate::mcp::tools::{profiles, mods, diagnostics, launch_packs, search};
 use crate::mcp::state_bridge;
 
 #[derive(Clone)]
@@ -87,6 +87,13 @@ impl BmmMcpServer {
                 });
                 ok_json(&result)
             }
+            Err(e) => err_result(&e),
+        }
+    }
+
+    fn tool_search(&self, query: &str, limit: usize) -> Result<CallToolResult, rmcp::ErrorData> {
+        match search::search_all(query, limit) {
+            Ok(res) => ok_json(&serde_json::to_value(&res).unwrap_or_default()),
             Err(e) => err_result(&e),
         }
     }
@@ -427,6 +434,18 @@ impl ServerHandler for BmmMcpServer {
                 std::sync::Arc::new(serde_json::from_value(json!({
                     "type": "object",
                     "properties": { "query": { "type": "string" } },
+                    "required": ["query"]
+                })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_search",
+                "Search EVERYTHING BMM knows about in one call: installed mods, profiles, and the bundled documentation pages. Use this when you do not know which kind of thing you are looking for, or to find the id to pass to a more specific tool — each hit carries a `next` field naming it. Ranking is a match quality within one response, not a rating; it is a simpler matcher than the app's own Ctrl+K palette, which stays the reference. `sources` lists which sources actually answered: a source missing there was unavailable (the docs manifest is a bundled resource and is not always locatable), which is not the same as having no matches.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": {
+                        "query": { "type": "string", "description": "What to look for. Every word must match, so extra words narrow the results." },
+                        "limit": { "type": "integer", "description": "Maximum hits (1-100, default 20)." }
+                    },
                     "required": ["query"]
                 })).unwrap()),
             ),
@@ -878,6 +897,11 @@ impl ServerHandler for BmmMcpServer {
         "bmm_search_mods" => {
             let q = args.get("query").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing query", None))?;
             self.tool_search_mods(q)
+        }
+        "bmm_search" => {
+            let q = args.get("query").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing query", None))?;
+            let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(20) as usize;
+            self.tool_search(q, limit)
         }
         "bmm_set_mod_enabled" => {
             let id = args.get("mod_id").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing mod_id", None))?;
