@@ -2590,7 +2590,7 @@ function mermaidTheme() {
         // useMaxWidth:false — with it on, mermaid stretches/squashes the drawing to the column, and a
         // wide left-to-right flowchart got crushed to a 57px-tall strip with unreadable labels. Off,
         // it keeps its natural size and .dh-mermaid scrolls instead, exactly like the website does.
-        flowchart: { curve: 'basis', nodeSpacing: 46, rankSpacing: 46, useMaxWidth: false, padding: 12 },
+        flowchart: { curve: 'basis', nodeSpacing: 46, rankSpacing: 46, useMaxWidth: false, padding: 12, subGraphTitleMargin: { top: 6, bottom: 10 } },
         sequence: { useMaxWidth: false, mirrorActors: true, boxMargin: 8, noteMargin: 10, messageAlign: 'center' },
         themeVariables: {
             background: bg,
@@ -2619,6 +2619,38 @@ function mermaidTheme() {
             sequenceNumberColor: bg, altBackground: cluster,
         },
     };
+}
+/** Resize a rendered diagram to the box it ACTUALLY draws into.
+ *
+ *  mermaid computes its viewBox from the layout it planned, but the layout is planned from label
+ *  sizes it measures in a scratch element — and the app's own stylesheets reach into that. Measured
+ *  with every stylesheet index.html loads: 54 of the 56 bundled diagrams drew outside their own
+ *  viewBox, by up to 169px, and an SVG clips at its viewBox. That is the cut-off arrows and the
+ *  half-drawn decision diamonds.
+ *
+ *  Rather than chase which rule causes it — the answer would only hold until the next stylesheet
+ *  changes — take the drawing's real bounds and make the box fit them. This is measured after
+ *  layout, so it is correct whatever the ambient CSS turns out to do. */
+function fitDiagram(host) {
+    const svg = host.querySelector('svg');
+    if (!svg)
+        return;
+    let bb;
+    try {
+        bb = svg.getBBox();
+    }
+    catch {
+        return;
+    } // not laid out yet — leave it alone
+    if (!(bb.width > 0) || !(bb.height > 0))
+        return;
+    // Room for stroke widths and arrow heads, which getBBox does not fully account for.
+    const pad = 10;
+    const x = bb.x - pad, y = bb.y - pad, w = bb.width + pad * 2, h = bb.height + pad * 2;
+    svg.setAttribute('viewBox', `${x} ${y} ${w} ${h}`);
+    svg.setAttribute('width', String(Math.ceil(w)));
+    svg.setAttribute('height', String(Math.ceil(h)));
+    svg.style.maxWidth = 'none';
 }
 // Each render pass gets a ticket. A pass whose ticket is stale — the reader navigated, or
 // switched language, while its diagrams were still rendering — drops its output instead of
@@ -2659,6 +2691,7 @@ async function hydrateDocPage(host) {
                 return; // superseded — this page is gone
             el.innerHTML = svg;
             el.classList.add('ok');
+            fitDiagram(el);
         }
         catch {
             if (ticket !== _hydrateSeq || !el.isConnected)
