@@ -497,7 +497,7 @@ async function _openEditor(container, pack) {
 
     const skipInfo = document.createElement('div');
     skipInfo.innerHTML = `
-        <div style="font-size:13px; font-weight:700; color:#ff8800;">${t('modpack.skipIntegrity') || "Ignorer la vérification d'intégrité"}</div>
+        <div style="font-size:13px; font-weight:700; color:var(--bmm-warning);">${t('modpack.skipIntegrity') || "Ignorer la vérification d'intégrité"}</div>
         <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">${t('modpack.skipIntegrityDesc') || "Disables file verification on launch (faster, but does not repair broken mods)."}</div>
     `;
 
@@ -1084,7 +1084,7 @@ async function _showRepairModal(container, pack, report, onComplete) {
         const sourceLabel = hasLink
             ? (fallbackType === "sr" ? "ServerRepo" : t('modpack.repair.directLink') || "Lien Direct")
             : isCorrupted
-                ? `<span style="color:#fbbf24; font-weight:800;">${t('modpack.repair.localRecovery') || 'Récupération Locale'}</span>`
+                ? `<span style="color:var(--bmm-warning); font-weight:800;">${t('modpack.repair.localRecovery') || 'Récupération Locale'}</span>`
                 : `<span style="color:var(--danger); font-weight:800;">${t('modpack.repair.linkMissing') || 'Lien Manquant'}</span>`;
 
         modsHtml += `
@@ -1103,7 +1103,7 @@ async function _showRepairModal(container, pack, report, onComplete) {
 
     content.innerHTML = `
         <div style="display:flex; align-items:center; gap:14px; margin-bottom:24px;">
-            <div style="width:48px; height:48px; border-radius:14px; background:linear-gradient(135deg, rgba(255,136,0,0.2) 0%, rgba(255,85,0,0.05) 100%); color:#ff8800; display:flex; align-items:center; justify-content:center; border:1px solid rgba(255,136,0,0.2);">
+            <div style="width:48px; height:48px; border-radius:14px; background:linear-gradient(135deg, rgba(255,136,0,0.2) 0%, rgba(255,85,0,0.05) 100%); color:var(--bmm-warning); display:flex; align-items:center; justify-content:center; border:1px solid rgba(255,136,0,0.2);">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
             </div>
             <div style="display:flex; flex-direction:column; gap:4px;">
@@ -1119,7 +1119,7 @@ async function _showRepairModal(container, pack, report, onComplete) {
         <div id="repair-progress-container" style="display:none; flex-direction:column; gap:8px; margin-bottom:24px; padding:16px; background:rgba(0,0,0,0.2); border-radius:12px; border:1px solid var(--bmm-s03);">
             <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--text-muted); font-weight:700; text-transform:uppercase; letter-spacing:0.5px;">
                 <span id="repair-status-text">${t('modpack.repair.preparing') || 'Préparation...'}</span>
-                <span id="repair-status-pct" style="color:#ff8800;">0%</span>
+                <span id="repair-status-pct" style="color:var(--bmm-warning);">0%</span>
             </div>
             <div style="width:100%; height:6px; background:rgba(0,0,0,0.4); border-radius:10px; overflow:hidden;">
                 <div id="repair-progress-bar" style="height:100%; background:linear-gradient(90deg, #ff8800, #ff5500); width:0%; transition:width 0.3s ease; box-shadow:0 0 10px rgba(255,136,0,0.5);"></div>

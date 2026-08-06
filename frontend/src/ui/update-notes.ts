@@ -462,7 +462,7 @@ if (typeof document !== 'undefined') {
             padding: 0 !important;
             border: none !important;
             font-size: 12px;
-            color: #e6edf3;
+            color: var(--bmm-text-primary);
         }
         
         .md-body blockquote {

@@ -54,7 +54,7 @@ html, body {
     align-items: flex-end;
     justify-content: flex-end;
     padding: 2px;
-    color: rgba(255, 255, 255, 0.2);
+    color: var(--bmm-text-muted);
     transition: color 0.2s;
     background: transparent !important; /* Ensure it stays transparent */
 }

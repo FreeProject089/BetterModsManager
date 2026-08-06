@@ -1678,8 +1678,8 @@ function openCropOverlay(sourcePath, profile) {
     overlay.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,0.9);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;gap:16px;';
 
     overlay.innerHTML = `
-        <div style="font-size:16px;font-weight:700;color:white;margin-bottom:8px">${t('prof.bgCropTitle')}</div>
-        <div style="font-size:12px;color:rgba(255,255,255,0.6);margin-bottom:4px">${t('prof.bgCropDesc')}</div>
+        <div style="font-size:16px;font-weight:700;color:var(--bmm-text-primary);margin-bottom:8px">${t('prof.bgCropTitle')}</div>
+        <div style="font-size:12px;color:var(--bmm-text-secondary);margin-bottom:4px">${t('prof.bgCropDesc')}</div>
         <div style="width:100%;max-width:800px;height:500px;background:#111;border-radius:12px;overflow:hidden;border:1px solid var(--bmm-s10)">
             <img id="cropper-image" style="display:block;max-width:100%;">
         </div>

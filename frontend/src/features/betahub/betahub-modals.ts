@@ -1283,7 +1283,7 @@ function renderReportHistory(): void {
                         <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
                     </svg>
                 </a>
-                <button class="bh-history-link bh-history-del" data-id="${item.id}" data-type="${item.type}" style="padding:6px; background:rgba(239,68,68,0.05); border-radius:6px; color:#ef4444; transition:all 0.2s; display:flex; align-items:center; justify-content:center; border:1px solid rgba(239,68,68,0.1); cursor:pointer">
+                <button class="bh-history-link bh-history-del" data-id="${item.id}" data-type="${item.type}" style="padding:6px; background:rgba(239,68,68,0.05); border-radius:6px; color:var(--bmm-danger); transition:all 0.2s; display:flex; align-items:center; justify-content:center; border:1px solid rgba(239,68,68,0.1); cursor:pointer">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
                         <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/>
                     </svg>

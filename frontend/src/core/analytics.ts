@@ -921,10 +921,10 @@ async function renderSentPackets(): Promise<void> {
         let control: string;
         if (isDone) {
             const txt = `${t('analytics.deleted2') || 'Deleted'}${srv.decided_at ? ' · ' + new Date(srv.decided_at).toLocaleDateString() : ''}`;
-            control = `<span class="apv-pkt-status" style="background:rgba(52,211,153,.15);color:#34d399;padding:3px 8px;border-radius:12px;font-weight:600;font-size:10.5px">${escHtml(txt)}</span>`;
+            control = `<span class="apv-pkt-status" style="background:rgba(52,211,153,.15);color:color-mix(in srgb, var(--bmm-success) 65%, var(--bmm-text-primary));padding:3px 8px;border-radius:12px;font-weight:600;font-size:10.5px">${escHtml(txt)}</span>`;
         } else if (isPending) {
             const txt = t('analytics.deletePending') || 'Pending review (≤72h)';
-            control = `<span class="apv-pkt-status" style="background:rgba(245,158,11,.15);color:#f59e0b;padding:3px 8px;border-radius:12px;font-weight:600;font-size:10.5px">${escHtml(txt)}</span>`;
+            control = `<span class="apv-pkt-status" style="background:rgba(245,158,11,.15);color:var(--bmm-warning);padding:3px 8px;border-radius:12px;font-weight:600;font-size:10.5px">${escHtml(txt)}</span>`;
         } else {
             // not requested, or rejected → offer the request button again
             const note = isRejected ? `<span class="apv-pkt-rejected" style="color:var(--danger,#ef4444);font-size:11px;margin-right:6px;font-weight:600">${t('analytics.deleteRejected') || 'Request rejected'}</span>` : '';

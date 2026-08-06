@@ -595,7 +595,7 @@ window.openHistoryDetail = (cacheKey) => {
         if (footer) {
             const isModified = item.action === 'Modified';
             footer.innerHTML = `
-                ${isModified ? `<button class="btn btn-primary" onclick="window.revertHistoryAction('${cacheKey}')" style="background:var(--accent); border:none; padding:10px 25px; border-radius:12px; font-weight:700; font-size:12px; color:white; cursor:pointer; box-shadow:0 4px 15px rgba(59,130,246,0.3); display:flex; align-items:center; gap:8px">
+                ${isModified ? `<button class="btn btn-primary" onclick="window.revertHistoryAction('${cacheKey}')" style="background:var(--accent); border:none; padding:10px 25px; border-radius:12px; font-weight:700; font-size:12px; color:var(--bmm-text-on-accent); cursor:pointer; box-shadow:0 4px 15px rgba(59,130,246,0.3); display:flex; align-items:center; gap:8px">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 10h10a8 8 0 0 1 8 8v2M3 10l6-6m-6 6l6 6"/></svg>
                         ${t('history.revert') || 'REVERT'}
                     </button>` : ''}

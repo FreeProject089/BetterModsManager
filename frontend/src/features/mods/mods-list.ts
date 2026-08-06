@@ -581,7 +581,7 @@ export function ensureModCancelContextMenu(): void {
 
     const mkItem = (label: string, icon: string, action: () => void) => {
       const el = document.createElement('div');
-      el.style.cssText = `padding:9px 14px;cursor:pointer;border-radius:7px;color:#f87171;display:flex;align-items:center;gap:9px;transition:background .12s;`;
+      el.style.cssText = `padding:9px 14px;cursor:pointer;border-radius:7px;color:color-mix(in srgb, var(--bmm-danger) 75%, var(--bmm-text-primary));display:flex;align-items:center;gap:9px;transition:background .12s;`;
       el.innerHTML = `${icon} <span style="flex:1;">${label}</span>`;
       el.addEventListener('mouseenter', () => { el.style.background = 'rgba(239,68,68,.12)'; });
       el.addEventListener('mouseleave', () => { el.style.background = 'transparent'; });
@@ -599,7 +599,7 @@ export function ensureModCancelContextMenu(): void {
     const ICSpin  = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>`;
 
     const header = document.createElement('div');
-    header.style.cssText = 'padding:5px 14px 8px;font-size:10px;color:#7f8aa0;text-transform:uppercase;letter-spacing:.8px;border-bottom:1px solid rgba(255,255,255,.06);margin-bottom:4px;display:flex;align-items:center;gap:6px;';
+    header.style.cssText = 'padding:5px 14px 8px;font-size:10px;color:var(--bmm-text-muted);text-transform:uppercase;letter-spacing:.8px;border-bottom:1px solid rgba(255,255,255,.06);margin-bottom:4px;display:flex;align-items:center;gap:6px;';
     header.innerHTML = `${ICSpin} ${totalOps} ${t('lib.opsRunning') || 'operation(s) running'}`;
     menu.appendChild(header);
 

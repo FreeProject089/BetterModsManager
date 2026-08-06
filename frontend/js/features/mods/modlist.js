@@ -473,9 +473,9 @@ export function renderImportedModlist(modlist) {
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
                 ${t('mm.fileTree').replace('{count}', fileCount)}
                 ${allHashed
-                ? `<span style="margin-left:4px;font-size:9px;font-weight:800;padding:1px 6px;border-radius:4px;background:rgba(16,185,129,0.15);color:#10b981;border:1px solid rgba(16,185,129,0.3);font-family:var(--font-sans);letter-spacing:0.03em" data-tooltip="${t('mm.hashVerifiedAll')}">SHA-256 ✓</span>`
+                ? `<span style="margin-left:4px;font-size:9px;font-weight:800;padding:1px 6px;border-radius:4px;background:rgba(16,185,129,0.15);color:var(--bmm-success);border:1px solid rgba(16,185,129,0.3);font-family:var(--font-sans);letter-spacing:0.03em" data-tooltip="${t('mm.hashVerifiedAll')}">SHA-256 ✓</span>`
                 : hashedCount > 0
-                    ? `<span style="margin-left:4px;font-size:9px;font-weight:800;padding:1px 6px;border-radius:4px;background:rgba(245,158,11,0.12);color:#f59e0b;border:1px solid rgba(245,158,11,0.3);font-family:var(--font-sans)" data-tooltip="${t('mm.hashPartial')}">${hashedCount}/${fileCount2} SHA-256</span>`
+                    ? `<span style="margin-left:4px;font-size:9px;font-weight:800;padding:1px 6px;border-radius:4px;background:rgba(245,158,11,0.12);color:var(--bmm-warning);border:1px solid rgba(245,158,11,0.3);font-family:var(--font-sans)" data-tooltip="${t('mm.hashPartial')}">${hashedCount}/${fileCount2} SHA-256</span>`
                     : `<span style="margin-left:4px;font-size:9px;padding:1px 6px;border-radius:4px;background:rgba(255,255,255,0.04);color:var(--text-muted);border:1px solid var(--border);font-family:var(--font-sans)" data-tooltip="${t('mm.hashNone')}">${t('mm.noHashes')}</span>`}
               </summary>
               <div style="max-height:180px; overflow-y:auto; margin-top:8px; padding:8px; background:rgba(0,0,0,0.2); border-radius:6px; font-size:10.5px; font-family:var(--font-mono); color:var(--text-muted); border:1px solid rgba(255,255,255,0.03)">

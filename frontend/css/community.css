@@ -123,7 +123,7 @@
   justify-content: center;
 }
 .community-hero-tags { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.community-hero-latest { display: inline-flex; align-items: center; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; padding: 3px 10px; border-radius: 999px; color: #fff; background: var(--bmm-accent); }
+.community-hero-latest { display: inline-flex; align-items: center; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; padding: 3px 10px; border-radius: 999px; color: var(--bmm-text-on-accent); background: var(--bmm-accent); }
 .community-hero-title { font-size: 27px; font-weight: 800; line-height: 1.18; margin: 0; color: var(--bmm-text-primary); }
 .community-hero-excerpt {
   font-size: 14px; line-height: 1.6; color: var(--bmm-text-muted); margin: 0;
@@ -208,7 +208,7 @@
 .community-file-actions { display: flex; gap: 8px; flex-shrink: 0; }
 /* Scoped under .community-file so these win over the global `.md-body a { color: accent }`
    rule (otherwise the filled Download button was accent text on an accent bg = invisible). */
-.community-file .community-file-btn { padding: 7px 15px; border-radius: 8px; font-size: 13px; font-weight: 600; background: var(--bmm-accent); color: #fff; text-decoration: none; white-space: nowrap; }
+.community-file .community-file-btn { padding: 7px 15px; border-radius: 8px; font-size: 13px; font-weight: 600; background: var(--bmm-accent); color: var(--bmm-text-on-accent); text-decoration: none; white-space: nowrap; }
 .community-file .community-file-btn:hover { filter: brightness(1.08); text-decoration: none; }
 .community-file .community-file-btn-ghost { background: transparent; color: var(--bmm-text-secondary); border: 1px solid var(--bmm-border); }
 .community-file .community-file-btn-ghost:hover { border-color: var(--bmm-border-accent); color: var(--bmm-text-primary); filter: none; }
@@ -245,7 +245,7 @@
   color: var(--bmm-text-secondary);
   border: 1px solid var(--bmm-border);
 }
-.community-badge--bmm { color: #7c9cff; border-color: rgba(124, 156, 255, .4); background: rgba(124, 156, 255, .12); }
+.community-badge--bmm { color: color-mix(in srgb, var(--bmm-accent) 70%, var(--bmm-text-primary)); border-color: rgba(124, 156, 255, .4); background: rgba(124, 156, 255, .12); }
 .community-badge--bsm { color: var(--bmm-purple); border-color: rgba(192, 132, 252, .4); background: rgba(192, 132, 252, .12); }
 .community-badge--installer { color: var(--bmm-success); border-color: rgba(52, 211, 153, .4); background: rgba(52, 211, 153, .12); }
 .community-badge--community { color: var(--bmm-warning); border-color: rgba(251, 191, 36, .4); background: rgba(251, 191, 36, .12); }

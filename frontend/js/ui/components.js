@@ -56,7 +56,7 @@ export function getModCardHTML(mod, ctx) {
         if (info) {
             const tip = (info.current_version && info.new_version)
                 ? `${info.current_version} → ${info.new_version}` : (t('mod.updateAvailable') || 'Update available');
-            updateHtml = `<div class="tag-mod-update" onclick="window.bmmShowModUpdates && window.bmmShowModUpdates(); event.stopPropagation();" onmouseenter="window.showTaskyHelp('${escAttr(escJs(tip))}', 'package', true)" onmouseleave="window.hideTaskyHelp()" style="display:inline-flex;align-items:center;gap:3px;cursor:pointer;background:rgba(46,204,113,0.16);color:#2ecc71;border:1px solid rgba(46,204,113,0.32);padding:1px 6px;border-radius:4px;font-size:9px;font-weight:700;"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>${t('mod.updateTag') || 'Update'}</div>`;
+            updateHtml = `<div class="tag-mod-update" onclick="window.bmmShowModUpdates && window.bmmShowModUpdates(); event.stopPropagation();" onmouseenter="window.showTaskyHelp('${escAttr(escJs(tip))}', 'package', true)" onmouseleave="window.hideTaskyHelp()" style="display:inline-flex;align-items:center;gap:3px;cursor:pointer;background:rgba(46,204,113,0.16);color:var(--bmm-success);border:1px solid rgba(46,204,113,0.32);padding:1px 6px;border-radius:4px;font-size:9px;font-weight:700;"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>${t('mod.updateTag') || 'Update'}</div>`;
         }
     }
     catch { }
@@ -379,7 +379,7 @@ export function getModDetailHTML(mod, ctx) {
           </div>
           <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">
             ${hasContentId ? `
-            <button class="btn btn-sm btn-icon btn-copy-content-id" data-content-id="${escHtml(mod.content_id)}"  style="background:rgba(139,92,246,0.12);color:#a78bfa;border:1px solid rgba(139,92,246,0.25);width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background 0.15s;">
+            <button class="btn btn-sm btn-icon btn-copy-content-id" data-content-id="${escHtml(mod.content_id)}"  style="background:rgba(139,92,246,0.12);color:color-mix(in srgb, var(--bmm-purple) 70%, var(--bmm-text-primary));border:1px solid rgba(139,92,246,0.25);width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background 0.15s;">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                 <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
                 <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>

@@ -168,7 +168,7 @@
     background: var(--bmm-s08); color: var(--bmm-text-muted); text-decoration: none;
     margin-left: 4px; vertical-align: middle; transition: all 0.12s ease;
 }
-.bte-mdn:hover { background: var(--bmm-accent); color: #fff; }
+.bte-mdn:hover { background: var(--bmm-accent); color: var(--bmm-text-on-accent); }
 .bte-font-sel {
     height: 28px; border-radius: 7px; border: 1px solid var(--bmm-s09);
     background: rgba(0,0,0,0.3); color: var(--bmm-text-primary); font-size: 11px; padding: 0 6px;
@@ -280,7 +280,7 @@
 .bte-group-badge {
     font-size: 10px; font-weight: 800; min-width: 17px; height: 17px; padding: 0 4px;
     display: inline-flex; align-items: center; justify-content: center;
-    background: var(--bmm-accent); color: #fff; border-radius: 9px;
+    background: var(--bmm-accent); color: var(--bmm-text-on-accent); border-radius: 9px;
 }
 .bte-group-chevron { color: var(--bmm-text-muted); transition: transform 0.18s ease; flex-shrink: 0; }
 .bte-group.open .bte-group-chevron { transform: rotate(180deg); }
@@ -486,13 +486,13 @@
 .bte-step { display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 600;
     color: var(--bmm-text-primary); margin: 4px 0 8px; }
 .bte-step-n { width: 20px; height: 20px; flex-shrink: 0; display: inline-flex; align-items: center;
-    justify-content: center; border-radius: 50%; background: var(--bmm-accent); color: #fff;
+    justify-content: center; border-radius: 50%; background: var(--bmm-accent); color: var(--bmm-text-on-accent);
     font-size: 11px; font-weight: 800; }
 
 /* "Click a spot" picker button */
 .bte-ce-pickbtn { width: 100%; justify-content: center; gap: 8px; }
 .bte-ce-pickbtn svg { flex-shrink: 0; }
-body.bte-picking .bte-ce-pickbtn { background: var(--bmm-accent); color: #fff; }
+body.bte-picking .bte-ce-pickbtn { background: var(--bmm-accent); color: var(--bmm-text-on-accent); }
 
 /* Template chips */
 .bte-ce-templates { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -576,7 +576,7 @@ body.bte-picking .bte-ce-pickbtn { background: var(--bmm-accent); color: #fff; }
     color: var(--bmm-text-secondary); font-size: 11.5px; font-weight: 600; cursor: pointer;
     transition: all 0.12s ease; }
 .bte-elov-state:hover { color: var(--bmm-text-primary); }
-.bte-elov-state.active { background: var(--bmm-accent); color: #fff; }
+.bte-elov-state.active { background: var(--bmm-accent); color: var(--bmm-text-on-accent); }
 .bte-elov-statehint { margin: 0 0 8px; font-size: 10px; color: var(--bmm-text-muted); line-height: 1.4; }
 .bte-elov-imgrow { display: flex; gap: 6px; margin: 4px 0 8px; }
 .bte-elov-imgrow .bte-elov-img { flex: 1; }

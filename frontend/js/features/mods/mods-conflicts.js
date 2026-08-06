@@ -157,7 +157,7 @@ export async function openGlobalConflictModal(preselectModId = null) {
                 const hasIntra = filteredReports.some(r => r.category === 'Intra');
                 const hasInter = filteredReports.some(r => r.category === 'Inter');
                 const typeBadges = [
-                    hasIntra ? `<span style="font-size:9px;font-weight:800;padding:1px 6px;border-radius:10px;background:rgba(139,92,246,0.15);color:#a78bfa;border:1px solid rgba(139,92,246,0.3)">INTRA</span>` : '',
+                    hasIntra ? `<span style="font-size:9px;font-weight:800;padding:1px 6px;border-radius:10px;background:rgba(139,92,246,0.15);color:color-mix(in srgb, var(--bmm-purple) 70%, var(--bmm-text-primary));border:1px solid rgba(139,92,246,0.3)">INTRA</span>` : '',
                     hasInter ? `<span style="font-size:9px;font-weight:800;padding:1px 6px;border-radius:10px;background:rgba(59,130,246,0.15);color:var(--accent);border:1px solid rgba(59,130,246,0.3)">INTER</span>` : '',
                 ].filter(Boolean).join('');
                 const groups = {};

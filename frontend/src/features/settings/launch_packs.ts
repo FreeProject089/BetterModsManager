@@ -187,7 +187,7 @@ export async function renderLaunchPacks() {
                 const deleteConfirmBtn = document.getElementById('lp-btn-delete-confirm');
 
                 if (deleteModal && deleteText && deleteConfirmBtn) {
-                    deleteText.innerHTML = t('settings.launchPackDeleteConfirmText', { name: `<span style="color: #ef4444; font-weight: 800; background: rgba(239, 68, 68, 0.1); padding: 2px 6px; border-radius: 4px;">${escHtml(pack.name)}</span>` });
+                    deleteText.innerHTML = t('settings.launchPackDeleteConfirmText', { name: `<span style="color: var(--bmm-danger); font-weight: 800; background: rgba(239, 68, 68, 0.1); padding: 2px 6px; border-radius: 4px;">${escHtml(pack.name)}</span>` });
                     deleteModal.classList.add('open');
 
                     // Clean previous listeners

@@ -1108,7 +1108,7 @@ const CE_TEMPLATES: { label: string; icon: string; html: string }[] = [
     { label: 'Banner', icon: gi('<path d="M3 11 21 5v14L3 13v-2z"/>'),
       html: `<div style="padding:10px 14px;border-radius:10px;background:var(--bmm-accent-dim);color:var(--bmm-text-primary);font-weight:600;">My custom banner</div>` },
     { label: 'Badge', icon: gi('<path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/>'),
-      html: `<span style="padding:3px 9px;border-radius:999px;background:var(--bmm-accent);color:#fff;font-size:11px;font-weight:700;">NEW</span>` },
+      html: `<span style="padding:3px 9px;border-radius:999px;background:var(--bmm-accent);color:var(--bmm-text-on-accent);font-size:11px;font-weight:700;">NEW</span>` },
     { label: 'Note', icon: gi('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>'),
       html: `<p style="margin:8px 0;color:var(--bmm-text-secondary);font-size:13px;">My note text…</p>` },
     { label: 'Image', icon: gi('<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/>'),

@@ -273,7 +273,7 @@
 
 .btn-move-central:hover {
     background: var(--accent);
-    color: white;
+    color: var(--bmm-text-on-accent);
     transform: scale(1.1) rotate(5deg);
     box-shadow: 0 0 20px rgba(59, 130, 246, 0.4);
 }
@@ -409,7 +409,7 @@
 .pending-badge {
     font-size: 0.7rem;
     background: var(--accent);
-    color: white;
+    color: var(--bmm-text-on-accent);
     padding: 2px 8px;
     border-radius: 10px;
     margin-left: 8px;

@@ -826,7 +826,7 @@
 }
 
 .bh-gauge-label {
-    fill: #ffffff;
+    fill: var(--bmm-text-primary);
     font-size: 5px;
     font-weight: 800;
     text-transform: uppercase;
@@ -958,8 +958,8 @@
 }
 
 /* ── Theme Overlays (Applied to form) ── */
-.bh-theme-feedback .bh-gauge-fill { stroke: #f59e0b; }
-.bh-theme-bug .bh-gauge-fill { stroke: #6366f1; }
+.bh-theme-feedback .bh-gauge-fill { stroke: var(--bmm-warning); }
+.bh-theme-bug .bh-gauge-fill { stroke: var(--bmm-purple); }
 
 .bh-theme-feedback .bh-strength-label { color: var(--accent); }
 .bh-theme-bug .bh-strength-label { color: var(--bmm-purple); }

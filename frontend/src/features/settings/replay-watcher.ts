@@ -395,7 +395,7 @@ export function openReplayList(): void {
   overlay.innerHTML = `
     <div style="width:min(580px,92vw);max-height:80vh;background:#13151a;border:1px solid var(--border,#2a2d34);border-radius:16px;box-shadow:0 20px 40px rgba(0,0,0,0.4);display:flex;flex-direction:column;overflow:hidden">
       <div style="display:flex;align-items:center;gap:16px;padding:20px 24px;border-bottom:1px solid rgba(255,255,255,0.06)">
-        <strong style="font-size:16px;font-weight:700;color:#fff">${t('watcher.listTitle') || 'Imported replays'}</strong><span style="flex:1"></span>
+        <strong style="font-size:16px;font-weight:700;color:var(--bmm-text-primary)">${t('watcher.listTitle') || 'Imported replays'}</strong><span style="flex:1"></span>
         <button id="rw-list-pick" style="background:#e2e8f0;color:#0f1115;border:none;border-radius:20px;padding:6px 16px;font-size:13px;font-weight:600;cursor:pointer;transition:transform 0.1s" onmousedown="this.style.transform='scale(0.96)'" onmouseup="this.style.transform='none'">${t('watcher.import') || 'Import & replay'}</button>
         <button id="rw-list-close" style="background:none;border:none;color:var(--text-muted,#8a8f98);font-size:14px;font-weight:600;cursor:pointer;padding:6px 8px;transition:color 0.2s" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='var(--text-muted,#8a8f98)'">${t('common.close') || 'Close'}</button>
       </div>
@@ -471,7 +471,7 @@ async function playBundle(bundle: any): Promise<void> {
   // Building the Replayer over a big event stream is a heavy synchronous DOM
   // rebuild that freezes the UI. Show a loading hint and let the modal paint
   // (double rAF) BEFORE the build, so the user sees feedback instead of a freeze.
-  host.innerHTML = `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#8a8f98;font-size:13px;gap:10px"><span style="width:16px;height:16px;border:2px solid #5b8cff;border-top-color:transparent;border-radius:50%;display:inline-block;animation:rwspin .8s linear infinite"></span>${t('watcher.loading') || 'Chargement du replay…'}</div><style>@keyframes rwspin{to{transform:rotate(360deg)}}</style>`;
+  host.innerHTML = `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--bmm-text-muted);font-size:13px;gap:10px"><span style="width:16px;height:16px;border:2px solid #5b8cff;border-top-color:transparent;border-radius:50%;display:inline-block;animation:rwspin .8s linear infinite"></span>${t('watcher.loading') || 'Chargement du replay…'}</div><style>@keyframes rwspin{to{transform:rotate(360deg)}}</style>`;
   await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
   host.innerHTML = '';
   const rep = new rrweb.Replayer(bundle.events, { root: host, speed: 1, skipInactive: true, showWarning: false, mouseTail: { strokeStyle: '#5b8cff' } });

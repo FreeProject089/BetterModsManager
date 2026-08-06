@@ -7,11 +7,31 @@
 // both directions. Text colours must go through a token: --bmm-text-primary/secondary/
 // muted, or --bmm-text-on-accent for text that sits on a coloured accent/badge fill.
 //
-// The codebase already has a backlog of these, so this gate is *baselined*: it
-// only fails on offenders that aren't in scripts/hardcoded-colors-baseline.json.
-// Fix one and it drops out of the baseline automatically; add a new one and the
-// build fails. Regenerate the baseline (only when intentionally accepting the
-// current set) with:  node scripts/check-hardcoded-colors.mjs --update
+// This gate is *baselined*: it only fails on offenders that aren't in
+// scripts/hardcoded-colors-baseline.json. Fix one and it drops out automatically;
+// add a new one and the build fails. Regenerate the baseline (only when
+// intentionally accepting the current set) with:
+//     node scripts/check-hardcoded-colors.mjs --update
+//
+// THE BASELINE IS NO LONGER A BACKLOG. It started at 301 and every convertible one
+// has been converted. What remains is an allowlist, and each entry is there for a
+// reason worth knowing before you "fix" it:
+//
+//   · Standalone documents — the benchmark HTML report, loader-preview.html, the
+//     tutorial games in their iframes. They link no BMM stylesheet, so a var()
+//     resolves to nothing and the page renders with no colours at all.
+//   · Brand colours — Ko-fi orange, Discord blurple, the BetterCommunity yellow.
+//     A theme that recolours someone else's logo is wrong, not configurable.
+//   · Ink on a saturated fill — white on red, black on amber, black on green.
+//     --bmm-text-on-accent is the ink for the ACCENT fill and defaults to white; a
+//     light-accent theme may set it dark, which fails on a saturated red. These are
+//     contrast requirements, not choices. (--bmm-text-on-accent IS used wherever the
+//     fill really is var(--bmm-accent) — that is the case it exists for.)
+//   · Palettes that must stay distinguishable — the highlight.js syntax colours, the
+//     "major" badge's orange (warning is already worn by the badge beside it).
+//   · The light-theme <option> rescue, which needs a guaranteed pair on a forced white.
+//
+// If you are adding a colour, none of the above applies to you: use a token.
 //
 // tokens.css is exempt (it DEFINES the literals) and debug.css is exempt (the
 // DevTools overlay is intentionally always-dark).
@@ -64,6 +84,15 @@ const EXTS = ['.css', '.ts', '.html'];
  *  selector matching the inline styles it exists to override, and quietly disable the rescue. */
 const inAttributeSelector = (line) => /\[[a-z-]+[*^$~|]?=\s*["'][^"']*$/i.test(line.slice(0, line.search(OFFENDER)));
 
+/** A colour inside a placeholder or a tooltip is TEXT SHOWN TO THE USER, not paint.
+ *  navbar-customize offers `placeholder="body { color: white }"` as an example of the CSS you
+ *  can type into a custom page. Reporting it invites someone to "fix" the example. */
+const inUserFacingText = (line) => {
+  const before = line.slice(0, line.search(OFFENDER));
+  const attr = /\b(placeholder|title|aria-label|data-tooltip)\s*=\s*["'][^"']*$/i;
+  return attr.test(before);
+};
+
 /** Recursively collect scannable files under frontend/. */
 function walk(dir, out = []) {
   if (EXEMPT_DIRS.some((d) => relative(ROOT, dir).replace(/\\/g, '/') === d.replace(/\\/g, '/'))) return out;
@@ -88,7 +117,7 @@ function collect() {
   for (const file of walk(join(ROOT, 'frontend'))) {
     const lines = readFileSync(file, 'utf8').split('\n');
     lines.forEach((line, i) => {
-      if (OFFENDER.test(line) && !inAttributeSelector(line)) {
+      if (OFFENDER.test(line) && !inAttributeSelector(line) && !inUserFacingText(line)) {
         const k = keyFor(file, line);
         if (!found.has(k)) found.set(k, { file, line: i + 1, text: line.trim() });
       }

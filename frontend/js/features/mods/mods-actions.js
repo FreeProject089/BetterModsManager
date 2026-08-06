@@ -385,7 +385,7 @@ export async function setupDependencyInput(inputId, listId, suggestionsId, initi
             chip.style.background = crossProfile ? 'rgba(168,85,247,0.15)' : 'rgba(255,255,255,0.1)';
             chip.style.border = crossProfile ? '1px solid rgba(168,85,247,0.35)' : '1px solid rgba(255,255,255,0.08)';
             chip.innerHTML = `
-        ${crossProfile ? `<span style="font-size:9px;color:#a855f7;font-weight:700;">${escHtml(profileName || '?')} ›</span>` : ''}
+        ${crossProfile ? `<span style="font-size:9px;color:var(--bmm-purple);font-weight:700;">${escHtml(profileName || '?')} ›</span>` : ''}
         <span>${escHtml(name)}</span>
         <button style="background:none;border:none;color:var(--danger);cursor:pointer;padding:0 0 0 4px;font-size:14px;line-height:1;">&times;</button>`;
             chip.querySelector('button').onclick = () => {
@@ -442,12 +442,12 @@ export async function setupDependencyInput(inputId, listId, suggestionsId, initi
         </div>`).join('');
         }
         if (crossProfileMatches.length) {
-            html += `<div style="padding:4px 12px 2px;font-size:9px;font-weight:800;color:#a855f7;text-transform:uppercase;letter-spacing:.8px;">${t('mod.otherProfiles') || 'Other profiles'}</div>`;
+            html += `<div style="padding:4px 12px 2px;font-size:9px;font-weight:800;color:var(--bmm-purple);text-transform:uppercase;letter-spacing:.8px;">${t('mod.otherProfiles') || 'Other profiles'}</div>`;
             html += crossProfileMatches.slice(0, 8).map(m => `
         <div class="suggestion-item" data-dep-ref="${m.depRef}" style="padding:8px 14px;cursor:pointer;font-size:12px;border-bottom:1px solid rgba(255,255,255,0.04);">
           <div style="display:flex;align-items:center;gap:6px;">
             <span style="font-weight:600;color:var(--text-primary);">${escHtml(m.name)}</span>
-            <span style="font-size:9px;background:rgba(168,85,247,0.15);color:#a855f7;padding:1px 6px;border-radius:4px;font-weight:700;">${escHtml(m.profileName)}</span>
+            <span style="font-size:9px;background:rgba(168,85,247,0.15);color:var(--bmm-purple);padding:1px 6px;border-radius:4px;font-weight:700;">${escHtml(m.profileName)}</span>
             ${!m.enabled ? `<span style="font-size:9px;color:var(--text-muted);">(${t('mod.statusInactive') || 'inactive'})</span>` : ''}
           </div>
           <div style="font-size:10px;color:var(--text-muted);">${escHtml(m.depRef)}</div>

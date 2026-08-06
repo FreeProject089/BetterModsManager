@@ -8594,7 +8594,7 @@ select:focus {
     font-size: 24px;
     font-weight: 700;
     margin: 40px 0 20px;
-    color: #ffffff;
+    color: var(--bmm-text-primary);
 }
 
 .ptb-markdown-body blockquote {
