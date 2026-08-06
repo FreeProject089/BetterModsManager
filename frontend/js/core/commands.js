@@ -439,6 +439,23 @@ registerSearchProvider('mods', async (q) => {
         },
     }));
 });
+// Documentation pages. Silent on an empty query, like the other data providers: with no
+// query every hit scores the same, so returning 36 pages would interleave them with the
+// commands and bury the list the palette opens on. Discovering the docs hub is the nav
+// item's job; the palette's is to find a page you are already looking for.
+//
+// The manifest is fetched once and cached by docs-hub, so this costs one request per session.
+registerSearchProvider('docs', async (q) => {
+    if (!q)
+        return [];
+    try {
+        const mod = await import('../docs/docs-hub.js');
+        return (await mod.docsSearchHits?.()) || [];
+    }
+    catch {
+        return [];
+    }
+});
 registerSearchProvider('profiles', async (q) => {
     if (!q)
         return [];

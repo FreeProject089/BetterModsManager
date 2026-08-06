@@ -2491,6 +2491,28 @@ function buildToc(reader) {
     }).join('');
 }
 async function openPages() { await loadManifest(); go({ view: 'pages' }); paint(); }
+/** Every bundled documentation page, as search hits for the Ctrl+K palette.
+ *
+ *  Lives here rather than in the search module because the manifest and openPage() are this
+ *  file's to own — a provider elsewhere would need both, and would be a second place that has
+ *  to know how a doc route is built.
+ *
+ *  Titles and summaries are matched in BOTH languages whichever one is displayed: people
+ *  search in the language they think in. Only titles and summaries, not page bodies — the
+ *  bodies are fetched one at a time and pulling all 36 to answer a keystroke is not a trade
+ *  worth making. */
+export async function docsSearchHits() {
+    const pages = await loadManifest();
+    const fr = getLang?.() === 'fr';
+    return pages.map((p) => ({
+        id: `doc:${p.path}`,
+        kind: 'doc',
+        title: (fr ? p.title.fr : p.title.en) || p.title.en || p.path,
+        sub: p.section || p.path,
+        keywords: `${p.title.en} ${p.title.fr} ${p.summary?.en || ''} ${p.summary?.fr || ''} ${p.path}`,
+        run: () => { void openPage(p.path); },
+    }));
+}
 async function openPage(path, hash) {
     await loadManifest();
     _pendingHash = hash;
