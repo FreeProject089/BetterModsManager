@@ -353,6 +353,78 @@ registerSearchProvider('mods', async (q): Promise<SearchHit[]> => {
   }));
 });
 
+registerSearchProvider('themes', async (q): Promise<SearchHit[]> => {
+  if (!q) return [];
+  try {
+    const m = await import('../features/themes/theme-engine.js') as {
+      BUILTIN_THEMES?: Array<{ id: string; name?: string; author?: string }>;
+      getInstalledThemes?: () => Array<{ id: string; name?: string; author?: string }>;
+      activateTheme?: (id: string) => Promise<void>;
+    };
+    const seen = new Set<string>();
+    const all = [...(m.BUILTIN_THEMES || []), ...(m.getInstalledThemes?.() || [])]
+      .filter((th) => th && th.id && !seen.has(th.id) && seen.add(th.id));
+    return all.map((th) => ({
+      id: `theme:${th.id}`,
+      kind: 'theme' as HitKind,
+      title: th.name || th.id,
+      sub: th.author || '',
+      // Applying it IS the action — for a theme, "take me to it" and "use it" are the same
+      // intent, and a list of themes you then have to find again would be busywork.
+      run: () => { void m.activateTheme?.(th.id); },
+    }));
+  } catch { return []; }
+});
+
+registerSearchProvider('plugins', async (q): Promise<SearchHit[]> => {
+  if (!q) return [];
+  try {
+    const { invoke } = await import('./api.js');
+    // `get_installed_plugins`, NOT `list_plugins` — the latter is a plugin-ACTION name mapped
+    // to GET /api/plugins, not a Tauri command. Calling it would have thrown into the catch
+    // below and left this provider silently returning nothing for ever.
+    const list = (await invoke('get_installed_plugins', {}, { quiet: true })) as Array<Record<string, any>> | null;
+    return (list || []).map((p) => {
+      const man = (p.manifest || {}) as Record<string, any>;
+      return {
+      id: `plugin:${man.id ?? man.name}`,
+      kind: 'plugin' as HitKind,
+      title: String(man.name ?? man.id ?? ''),
+      sub: [man.version ? `v${man.version}` : null, man.author || null, p.enabled === false ? 'disabled' : null].filter(Boolean).join(' · '),
+      keywords: String(man.description ?? ''),
+      run: () => { (document.querySelector('.nav-item[data-view="plugins"]') as HTMLElement | null)?.click(); },
+      };
+    });
+  } catch { return []; }
+});
+
+// Settings cards, read from the DOM the same way the nav commands are — the settings view is
+// authored in index.html, so scraping it is what keeps this list from going stale the moment
+// a card is added or renamed. A hardcoded copy would be a second source of truth.
+registerSearchProvider('settings', (q): SearchHit[] => {
+  if (!q) return [];
+  const cards = document.querySelectorAll('#view-settings .settings-sections > .glass-card');
+  const hits: SearchHit[] = [];
+  cards.forEach((card, i) => {
+    const h = card.querySelector('.card-title');
+    // textContent picks up the inline <svg> too; the icon contributes no text, but trimming
+    // guards against whitespace-only titles on a card that has no heading yet.
+    const title = (h?.textContent || '').replace(/\s+/g, ' ').trim();
+    if (!title) return;
+    hits.push({
+      id: `setting:${i}`,
+      kind: 'setting' as HitKind,
+      title,
+      sub: tr({ en: 'Settings', fr: 'Paramètres' }),
+      run: () => {
+        (document.querySelector('.nav-item[data-view="settings"]') as HTMLElement | null)?.click();
+        setTimeout(() => card.scrollIntoView({ block: 'center', behavior: 'smooth' }), 60);
+      },
+    });
+  });
+  return hits;
+});
+
 // Documentation pages. Silent on an empty query, like the other data providers: with no
 // query every hit scores the same, so returning 36 pages would interleave them with the
 // commands and bury the list the palette opens on. Discovering the docs hub is the nav
