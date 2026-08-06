@@ -50,7 +50,7 @@ flowchart LR
 
 !!! info "See it in the app"
     Help &amp; other → Developer → **MCP server &amp; local API**, **Custom pages**,
-    **One-click install**. Reference: [API](doc-page:../reference/api).
+    **One-click install**. Reference: [API](doc-page:reference/api).
 
 ## Translations (i18n)
 

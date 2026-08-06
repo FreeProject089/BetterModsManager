@@ -99,7 +99,7 @@ So a plugin cannot escalate by forging or omitting that header. Supporting detai
 - The token is re-read on **every** request, so rotating one takes effect immediately.
 - The server binds **`127.0.0.1` only**, never `0.0.0.0`.
 - In a release build CORS is an allow-list (CWE-942); `tauri dev` allows any origin.
-- There is **no rate limiting** — do not expose the port. See the [API reference](doc-page:../reference/api).
+- There is **no rate limiting** — do not expose the port. See the [API reference](doc-page:reference/api).
 
 !!! danger "One endpoint is equivalent to admin"
 
@@ -174,7 +174,7 @@ Worth separating, because "everything is hash-verified" is too strong:
 | Modpack apply | **Yes**, unless that modpack has *skip integrity check* |
 | Enabling a mod from the scheduler | **No** — the check is bypassed, because a background run can't stop to ask you |
 
-See [Integrity & hashing](doc-page:integrity-hashing) for the full picture.
+See [Integrity & hashing](doc-page:how-it-works/integrity-hashing) for the full picture.
 
 ---
 
@@ -187,7 +187,7 @@ See [Integrity & hashing](doc-page:integrity-hashing) for the full picture.
   into a shared log or chat.
 - **Telemetry and replays** — opt-in, local-first, and masked by default. A *Full* switch means
   **unmasked**: mod names, profile names and paths stop being `••••`. See
-  [Privacy & telemetry](doc-page:../features/privacy-telemetry).
+  [Privacy & telemetry](doc-page:features/privacy-telemetry).
 
 ---
 

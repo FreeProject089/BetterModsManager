@@ -1913,7 +1913,7 @@ function chrome() {
       <div class="dh-actions">
         <button class="dh-btn dh-btn-primary" data-act="tutorial">${svg('play', 16)} ${tr({ en: 'Interactive tutorial', fr: 'Tutoriel interactif' })}</button>
         <button class="dh-btn" data-view2="pages">${svg('book', 16)} ${tr({ en: 'Full documentation', fr: 'Documentation complète' })}</button>
-        <a class="dh-btn" href="${DOCS_SITE}" target="_blank" rel="noreferrer">${svg('ext', 16)} ${tr({ en: 'On the website', fr: 'Sur le site' })}</a>
+        <button class="dh-btn" data-ext="${DOCS_SITE}">${svg('ext', 16)} ${tr({ en: 'On the website', fr: 'Sur le site' })}</button>
       </div>
     </div>
     <div class="dh-parts">
@@ -2025,7 +2025,7 @@ function articleView(cat, a) {
         // The full page is BUNDLED, so it opens in place rather than sending you to a browser. The
         // external link stays for the site itself (search, PDF, sharing a URL).
         a.docsPath ? `<button class="dh-rel dh-rel-full" data-fullpage="${a.docsPath}">${svg('book', 15)} ${tr({ en: 'Full page, here', fr: 'Page complète, ici' })}</button>` : '',
-        `<a class="dh-rel dh-rel-ext" href="${DOCS_SITE}${a.docsPath || ''}" target="_blank" rel="noreferrer">${svg('ext', 15)} ${tr({ en: 'Open on the site', fr: 'Ouvrir sur le site' })}</a>`,
+        `<button class="dh-rel dh-rel-ext" data-ext="${DOCS_SITE}${a.docsPath || ''}">${svg('ext', 15)} ${tr({ en: 'Open on the site', fr: 'Ouvrir sur le site' })}</button>`,
     ].filter(Boolean).join('');
     return `
     <article class="dh-article${a.wide ? ' dh-wide' : ''}">
@@ -2217,6 +2217,39 @@ function onClick(e) {
             go({ view: 'art', part: f.cat.part, catId: f.cat.id, artId: f.art.id });
         return;
     }
+    // Outward links from rendered markdown. None of these is an <a href>: in the Tauri webview a
+    // web href is blocked by the CSP (and window.open is a no-op), and a relative one would
+    // navigate the app away from itself.
+    const ext = hit('[data-ext]');
+    if (ext) {
+        window.openExternal?.(ext.getAttribute('data-ext') || '');
+        return;
+    }
+    const dl = hit('[data-deeplink]');
+    if (dl) {
+        // Handle it in-process rather than handing it back to the OS, which would ask Windows to
+        // launch BMM again just to reach the window we are already in.
+        const url = dl.getAttribute('data-deeplink') || '';
+        const art = /[?&]article=([a-z0-9-]+)/i.exec(url);
+        if (art) {
+            const f = findArticle(art[1]);
+            if (f) {
+                go({ view: 'art', part: f.cat.part, catId: f.cat.id, artId: f.art.id });
+                return;
+            }
+        }
+        import('../core/deep_link_manager.js').then((m) => m.handleDeepLink?.(url)).catch(() => { });
+        return;
+    }
+    const anc = hit('[data-anchor]');
+    if (anc) {
+        const id = anc.getAttribute('data-anchor') || '';
+        const target = host?.querySelector(`#${CSS.escape(id)}`)
+            || [...(host?.querySelectorAll('.dh-content h3, .dh-content h4, .dh-content h5') || [])]
+                .find((h) => slugify(h.textContent || '') === id);
+        target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return;
+    }
     const full = hit('[data-fullpage]');
     if (full) {
         void showFullPage(full.getAttribute('data-fullpage') || '', full);
@@ -2231,13 +2264,33 @@ function onClick(e) {
     // the standalone reader it navigates; inside an article it swaps that article's body.
     const dp = hit('[data-docpage]');
     if (dp) {
-        const target = dp.getAttribute('data-docpage') || '';
+        // The site's links carry anchors ("library#conflicts"); the path is what identifies the file.
+        const [target, hash] = (dp.getAttribute('data-docpage') || '').split('#');
         if (route.view === 'page')
-            void openPage(target);
+            void openPage(target, hash);
         else
-            void showFullPage(target, null);
+            void showFullPage(target, null, hash);
         return;
     }
+}
+/** mkdocs' heading slug, so an in-page anchor from the site resolves against what we rendered. */
+function slugify(s) {
+    return s.toLowerCase().trim()
+        .normalize('NFD').replace(/[̀-ͯ]/g, '')
+        .replace(/[^\w\s-]/g, '')
+        .replace(/\s+/g, '-');
+}
+/** Give rendered headings ids, and scroll to one. */
+function anchorise(body, hash) {
+    body.querySelectorAll('h3, h4, h5').forEach((h) => {
+        if (!h.id)
+            h.id = slugify(h.textContent || '');
+    });
+    if (!hash)
+        return;
+    const el = body.querySelector(`#${CSS.escape(hash)}`);
+    if (el)
+        setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
 }
 let _manifest = null;
 async function loadManifest() {
@@ -2293,12 +2346,12 @@ function pageReaderView(path) {
       <div class="dh-content"><p class="dh-lead">${tr({ en: 'Loading…', fr: 'Chargement…' })}</p></div>
       <div class="dh-rels">
         <button class="dh-rel" data-view2="pages">${svg('arrow', 15)} ${tr({ en: 'All pages', fr: 'Toutes les pages' })}</button>
-        <a class="dh-rel dh-rel-ext" href="${DOCS_SITE}${path}/" target="_blank" rel="noreferrer">${svg('ext', 15)} ${tr({ en: 'Open on the site', fr: 'Ouvrir sur le site' })}</a>
+        <button class="dh-rel dh-rel-ext" data-ext="${DOCS_SITE}${path}/">${svg('ext', 15)} ${tr({ en: 'Open on the site', fr: 'Ouvrir sur le site' })}</button>
       </div>
     </article>`;
 }
 async function openPages() { await loadManifest(); go({ view: 'pages' }); paint(); }
-async function openPage(path) {
+async function openPage(path, hash) {
     await loadManifest();
     go({ view: 'page', page: path });
     const md = await fetchDocPage(path);
@@ -2310,10 +2363,11 @@ async function openPage(path) {
         return;
     }
     body.innerHTML = renderDocMarkdown(md);
+    anchorise(body, hash);
     await hydrateDocPage(body);
 }
 /** Swap the article body for the full bundled page (or back). */
-async function showFullPage(path, btn) {
+async function showFullPage(path, btn, hash) {
     const article = document.querySelector('.dh-article');
     const body = article?.querySelector('.dh-content');
     if (!article || !body)
@@ -2342,6 +2396,7 @@ async function showFullPage(path, btn) {
     article.dataset.full = path;
     btn?.classList.add('on');
     article.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    anchorise(body, hash);
     await hydrateDocPage(body);
 }
 // ── the bundled BMM Docs pages ───────────────────────────────────────────────
@@ -2386,6 +2441,33 @@ async function hydrateDocPage(host) {
     const m = window.mermaid;
     if (!m?.render)
         return; // leave the placeholder rather than a broken box
+    // The interactive-diagram viewer initialises mermaid with a hard-coded dark palette, which is
+    // unreadable on the light themes. Re-initialise from the live design tokens before rendering a
+    // doc page, so a diagram inherits whatever theme is active.
+    const css = getComputedStyle(document.documentElement);
+    const tok = (n, f) => (css.getPropertyValue(n) || '').trim() || f;
+    try {
+        m.initialize({
+            startOnLoad: false,
+            theme: 'base',
+            securityLevel: 'loose',
+            htmlLabels: true,
+            flowchart: { curve: 'basis', nodeSpacing: 46, rankSpacing: 46, useMaxWidth: true },
+            themeVariables: {
+                primaryColor: tok('--bmm-s08', '#1e293b'),
+                primaryTextColor: tok('--bmm-text-primary', '#e6edf3'),
+                primaryBorderColor: tok('--bmm-accent', '#3b82f6'),
+                secondaryColor: tok('--bmm-s05', '#161b22'),
+                tertiaryColor: tok('--bmm-bg-base', '#0f1420'),
+                mainBkg: tok('--bmm-s08', '#1e293b'),
+                lineColor: tok('--bmm-text-muted', '#7c8698'),
+                textColor: tok('--bmm-text-primary', '#e6edf3'),
+                fontFamily: 'Inter, system-ui, sans-serif',
+                fontSize: '13px',
+            },
+        });
+    }
+    catch { /* keep whatever configuration is already in place */ }
     for (let n = 0; n < blocks.length; n++) {
         const src = blocks[n].getAttribute('data-mermaid') || '';
         try {

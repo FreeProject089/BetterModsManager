@@ -2,11 +2,11 @@
 
 
 Un modpack est un **lot de mods nommé, activable en un clic**. Là où un
-[profil](doc-page:profiles) répond à « ma configuration pour ce jeu », un modpack répond à « ce
+[profil](doc-page:features/profiles) répond à « ma configuration pour ce jeu », un modpack répond à « ce
 groupe de mods, ensemble » — et l'écran de BMM appelle l'action *Quick Apply* : un clic
 active ou désactive le pack.
 
-![L'écran Modpacks](../assets/screens/modpacks.annotated.png)
+![L'écran Modpacks](assets/docs/media/screens/modpacks.annotated.png)
 
 | | | |
 |---|---|---|

@@ -8,7 +8,7 @@ clairs) et un éditeur capable de refaire toute l'allure de l'app — puis de l'
 fichier que quelqu'un
 importe en un clic.
 
-![L'éditeur de thèmes](../assets/screens/themes.annotated.png)
+![L'éditeur de thèmes](assets/docs/media/screens/themes.annotated.png)
 
 | | | |
 |---|---|---|
@@ -44,7 +44,7 @@ Prends celui qui correspond à jusqu'où tu veux aller. Tu peux t'arrêter au pr
     > un emplacement, un type…
 
     C'est celui auquel on ne s'attend pas : tu ne restyles pas les éléments de BMM, tu
-    **ajoutes les tiens**. Un bouton qui lance un [deeplink](doc-page:../reference/api), une
+    **ajoutes les tiens**. Un bouton qui lance un [deeplink](doc-page:reference/api), une
     bannière avec les règles de ton serveur, un badge sur une carte de profil.
 
 === "CSS"
@@ -58,7 +58,7 @@ Prends celui qui correspond à jusqu'où tu veux aller. Tu peux t'arrêter au pr
     élément dans BMM** — l'éditeur y saute directement. C'est la réponse la plus rapide à
     « comment je recolorie *ce* bouton ». Tu construis un thème clair ? Mets le **mode** du
     thème sur *clair* et BMM applique des correctifs de contraste automatiques pour que le texte
-    reste lisible. (Plus de contrôles dans [Astuces & contrôles](doc-page:../reference/tips).)
+    reste lisible. (Plus de contrôles dans [Astuces & contrôles](doc-page:reference/tips).)
 
 ## Les assets
 
@@ -73,7 +73,7 @@ thème et les images voyagent avec — pas de lien mort, pas de « ça marche ch
 ## Le partage
 
 Un thème s'exporte et s'importe en fichier. Au-delà, un **catalogue de thèmes** fonctionne
-comme l'[App Catalog](doc-page:apps) :
+comme l'[App Catalog](doc-page:features/apps) :
 
 > Choisis les thèmes à inclure, puis exporte le catalogue ou ajoute-le comme source.
 

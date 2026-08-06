@@ -6,7 +6,7 @@
 If BMM doesn't do the thing you need, this is where the thing gets added — without waiting
 for a release.
 
-![The Plugins screen](../assets/screens/plugins.annotated.png)
+![The Plugins screen](assets/docs/media/screens/plugins.annotated.png)
 
 | | | |
 |---|---|---|
@@ -20,7 +20,7 @@ for a release.
     **not officially reviewed**. Install from people you have some reason to trust, the same
     way you'd treat any other executable.
 
-    They are, however, **bounded**: a plugin acts through the [API](doc-page:../reference/api) with
+    They are, however, **bounded**: a plugin acts through the [API](doc-page:reference/api) with
     its own token, and only does what you've granted it. Review those grants in
     **Plugins → Permissions**.
 
@@ -54,7 +54,7 @@ is toggle mods is worth a second look.
 
     The same local API answers your own scripts, a `.bat` file, PowerShell, or a `bmm://`
     deeplink on a web page — anything on your PC. The **global** switches in
-    **Plugins → Permissions** (and the sandbox mode in [Settings](doc-page:settings)) govern *all*
+    **Plugins → Permissions** (and the sandbox mode in [Settings](doc-page:features/settings)) govern *all*
     of those callers at once, not just installed plugins.
 
 ## Strict mode

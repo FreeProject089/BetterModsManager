@@ -20,7 +20,7 @@ worth knowing up front:
 - A mod belongs to a profile **by path prefix**, not by a stored id — a mod is "in" a profile when its
   folder sits under that profile's mods folder. Move a mod folder elsewhere and it leaves the profile.
 - Because the paths are absolute, a drive letter that changes (`E:\Mods` → `F:\Mods`) has to be fixed
-  by hand. See [Scanning & the cache](doc-page:scanning-cache) for what happens while the drive is away.
+  by hand. See [Scanning & the cache](doc-page:how-it-works/scanning-cache) for what happens while the drive is away.
 
 ---
 
@@ -71,7 +71,7 @@ flowchart TB
 There is a related detail in the backup logic: when deciding whether a file it is about to overwrite
 is a *genuine game file*, BMM looks at the mods enabled in **every profile sharing that game folder** —
 not just the active one. Otherwise switching profiles could make it mistake another profile's mod file
-for an original and back it up as one. See [Conflicts](doc-page:conflicts) for the full backup rule.
+for an original and back it up as one. See [Conflicts](doc-page:how-it-works/conflicts) for the full backup rule.
 
 **So: to keep genuinely separate loadouts, give each profile its own mods folder.** Sharing folders is
 supported, but it is one setup with several views, not two setups.
@@ -128,7 +128,7 @@ from two half-finished ones interleaved.
 
 Because `active_mods` is an **ordered** list and deployment walks it in order, the mod you enable last
 wins any shared file. That is the entire conflict-resolution model — there is no priority tree. See
-[Conflicts](doc-page:conflicts).
+[Conflicts](doc-page:how-it-works/conflicts).
 
 !!! info "See it in the app"
     Help & other → Developer → **Profile system**, and the **Profiles** tutorial.

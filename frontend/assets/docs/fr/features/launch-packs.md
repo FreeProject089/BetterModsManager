@@ -55,7 +55,7 @@ utile dans une installation plus large :
 | Le planificateur | l'action *Exécuter un launch pack* — un pack peut donc partir sur un déclencheur, pas seulement sur un clic |
 | Le générateur de scripts | la même action, émise en deeplink ou en appel HTTP |
 
-Voir la [Référence des actions](doc-page:../reference/actions) et la [Référence API](doc-page:../reference/api).
+Voir la [Référence des actions](doc-page:reference/actions) et la [Référence API](doc-page:reference/api).
 
 ## Pourquoi rien ne clignote
 
@@ -71,4 +71,4 @@ inattendue signifiante.
     dossier du pack — *« pour que le raccourci ne puisse jamais être écrit hors du dossier du pack
     (ex. le dossier Démarrage auto-exécuté → persistance) »*. Cette garde existe précisément parce
     qu'un raccourci planté dans le dossier Démarrage de Windows est un mécanisme de persistance, pas
-    juste un fichier égaré. Voir [Sécurité](doc-page:../how-it-works/security).
+    juste un fichier égaré. Voir [Sécurité](doc-page:how-it-works/security).

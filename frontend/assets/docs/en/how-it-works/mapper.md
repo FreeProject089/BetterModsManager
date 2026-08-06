@@ -44,7 +44,7 @@ That has consequences worth planning around:
 - **The mod's `content_id` changes.** That identifier is a fingerprint of sorted (relative path, size)
   pairs, so moving files changes it — unless the mod ships a `bmm.json` with an explicit `id`, which
   takes priority. If you care about a mod keeping the same cross-machine identity through a
-  restructure, give it a `bmm.json` id. See [Integrity & hashing](doc-page:integrity-hashing).
+  restructure, give it a `bmm.json` id. See [Integrity & hashing](doc-page:how-it-works/integrity-hashing).
 - **Its integrity baseline no longer matches.** The next check will report the moved files as
   `missing` + `added`. Re-establish the baseline after mapping.
 
@@ -109,11 +109,11 @@ changes — so switching back and forth between mods is cheap.
 
 ## Before you start: the diagnostic
 
-The user-facing [Mapper](doc-page:../features/mapper) page covers the **Structure Diagnostic**, which
+The user-facing [Mapper](doc-page:features/mapper) page covers the **Structure Diagnostic**, which
 compares the mod's tree against the game's and tells you what the final deployed path *would* be. Run
 it first. It answers the question that actually matters — "will the game find this?" — before you move
 anything, and it is faster than reasoning about the trees by eye.
 
 !!! info "See it in the app"
     Help & other → Developer → **Mod mapper**; the **Mapper** tutorial. And the user guide's
-    [Mapper](doc-page:../features/mapper) page for the hands-on walkthrough.
+    [Mapper](doc-page:features/mapper) page for the hands-on walkthrough.

@@ -58,7 +58,7 @@ There are **three separate thread pools**, each capped for its own reason:
 | Pool | Size | Why |
 |---|---|---|
 | Global rayon | capped, 512 KB stacks | *"Prevent Rayon from hogging 100% CPU and lagging the OS"* — BMM's parallel work never recurses deep, saving ~7 MB of committed RSS per thread |
-| Hashing | ≤ 4 (about half your cores) | BLAKE3 is fast enough to eat every core — see [Integrity & hashing](doc-page:integrity-hashing) |
+| Hashing | ≤ 4 (about half your cores) | BLAKE3 is fast enough to eat every core — see [Integrity & hashing](doc-page:how-it-works/integrity-hashing) |
 | Smart I/O | 1–2 | the copy path above |
 
 The allocator is swapped too: **mimalloc** instead of Windows' default HeapAlloc, for a *"30–60%
@@ -146,7 +146,7 @@ shape — peak memory equal to whatever the payload happened to be, with no cap 
 | App catalog install | Hashes incrementally while streaming, then renames after the SHA-256 gate |
 | Modpack import | Streams to the temp zip it was always going to write anyway |
 | Zip export | Copies each entry through a reader instead of reading whole files into memory |
-| Session recording | Spooled to disk as it happens; the `.bmmreplay` is assembled by streaming (see [Privacy & telemetry](doc-page:../features/privacy-telemetry)) |
+| Session recording | Spooled to disk as it happens; the `.bmmreplay` is assembled by streaming (see [Privacy & telemetry](doc-page:features/privacy-telemetry)) |
 
 The rule to keep: if the destination is a file, write to the file. A buffer in between buys nothing
 and turns a large input into an out-of-memory crash.
@@ -169,9 +169,9 @@ things BMM actually does — **scan** a folder, **hash** content (BLAKE3), **cop
 *"re-hashes every file and compares it against the stored baseline"*, which is the check that
 detects a tampered or corrupt mod.
 
-Results stay local. You can also drive a benchmark from the [scheduler](doc-page:../features/scheduler)
+Results stay local. You can also drive a benchmark from the [scheduler](doc-page:features/scheduler)
 and branch on the result — measure a disk, and if it comes back under 50 MB/s, apply a cap or warn
-yourself. See the [Action reference](doc-page:../reference/actions).
+yourself. See the [Action reference](doc-page:reference/actions).
 
 !!! info "See it in the app"
     Help & other → Developer → **Disk I/O limiter**, **Engine & threads**, **BLAKE3 hashing**,

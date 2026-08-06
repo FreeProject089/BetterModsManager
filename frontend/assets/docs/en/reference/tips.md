@@ -29,7 +29,7 @@ your fingers already know.
 
 ## Mouse in the Library
 
-The [Library](doc-page:../features/library) is where you'll spend most of your time, and it rewards
+The [Library](doc-page:features/library) is where you'll spend most of your time, and it rewards
 knowing a few gestures:
 
 | Do this | To… |
@@ -60,14 +60,14 @@ day a mod misbehaves and you want to know *why*.
 ## Selecting many mods at once
 
 Single-click selects one mod at a time in the Library. When you genuinely need a batch — say,
-building a [modpack](doc-page:../features/modpacks) — use the **selection modal**: it lists your mods
+building a [modpack](doc-page:features/modpacks) — use the **selection modal**: it lists your mods
 with checkboxes and a **select-all**, so you tick a set and confirm in one go. Importing a
-[`.MM` list](doc-page:../features/modlist) works the same way: you can install the whole list or tick
+[`.MM` list](doc-page:features/modlist) works the same way: you can install the whole list or tick
 just the parts you want with **Install selection**.
 
 ## The theme editor's pick tool
 
-In the [Theme Editor](doc-page:../features/themes), you don't have to hunt for the right CSS
+In the [Theme Editor](doc-page:features/themes), you don't have to hunt for the right CSS
 variable. Click the **eyedropper**, then click **any element in BMM** — the editor jumps
 straight to that element so you can restyle exactly what you pointed at. It's the fastest way
 to answer "how do I change *that* button".
@@ -78,13 +78,13 @@ to answer "how do I change *that* button".
 
     **Settings → Data → Export** writes your whole setup to one file in a click. Do it before a
     big import, before trying someone's modpack, and always before the factory reset. It's the
-    cheapest insurance in the app — and there's a [Data & Backup](doc-page:../features/settings)
+    cheapest insurance in the app — and there's a [Data & Backup](doc-page:features/settings)
     tutorial that walks it.
 
 !!! tip "Let imports build their own profile"
 
     When you import a `.MM` list or a repo, tick **auto-profile**. BMM builds a dedicated
-    [profile](doc-page:../features/profiles) for it instead of mixing it into your current setup —
+    [profile](doc-page:features/profiles) for it instead of mixing it into your current setup —
     which is almost always what you want when trying someone else's configuration.
 
 !!! tip "One game folder per profile"

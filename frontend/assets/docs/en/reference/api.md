@@ -397,6 +397,6 @@ Recorded because the in-app registry and the server do not agree on every detail
 
 ## See also
 
-- [Action reference](doc-page:actions) — every scheduler and script-generator action
-- [Plugins & API](doc-page:../features/plugins) — the in-app browser, tokens and quick-test
-- [Architecture](doc-page:../how-it-works/architecture) — where this API sits in the app
+- [Action reference](doc-page:reference/actions) — every scheduler and script-generator action
+- [Plugins & API](doc-page:features/plugins) — the in-app browser, tokens and quick-test
+- [Architecture](doc-page:how-it-works/architecture) — where this API sits in the app

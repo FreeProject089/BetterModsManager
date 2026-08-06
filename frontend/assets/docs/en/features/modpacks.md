@@ -2,11 +2,11 @@
 
 
 A modpack is a **named bundle of mods you can toggle in one click**. Where a
-[profile](doc-page:profiles) is "my setup for this game", a modpack is "this group of mods,
+[profile](doc-page:features/profiles) is "my setup for this game", a modpack is "this group of mods,
 together" — and BMM's own screen calls the action *Quick Apply*: click to toggle a modpack
 on or off.
 
-![The Modpacks screen](../assets/screens/modpacks.annotated.png)
+![The Modpacks screen](assets/docs/media/screens/modpacks.annotated.png)
 
 | | | |
 |---|---|---|

@@ -404,6 +404,6 @@ Consignées parce que le registre in-app et le serveur ne s'accordent pas sur to
 
 ## Voir aussi
 
-- [Référence des actions](doc-page:actions) — toutes les actions du planificateur et du générateur de scripts
-- [Plugins & API](doc-page:../features/plugins) — le navigateur in-app, les tokens et le test rapide
-- [Architecture](doc-page:../how-it-works/architecture) — où se situe cette API dans l'app
+- [Référence des actions](doc-page:reference/actions) — toutes les actions du planificateur et du générateur de scripts
+- [Plugins & API](doc-page:features/plugins) — le navigateur in-app, les tokens et le test rapide
+- [Architecture](doc-page:how-it-works/architecture) — où se situe cette API dans l'app

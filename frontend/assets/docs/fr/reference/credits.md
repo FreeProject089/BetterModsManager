@@ -4,7 +4,7 @@ BMM est construit par le projet Better* et ses contributeurs. L'écran **Crédit
 référence pour la liste des personnes — il est généré depuis les données du projet, donc il reste juste
 là où cette page dériverait.
 
-- **Site & communauté :** [BetterCommunity](doc-page:../features/community)
+- **Site & communauté :** [BetterCommunity](doc-page:features/community)
 - **Sources & versions :** [github.com/FreeProject089](https://github.com/FreeProject089)
 - **Cette doc :** [BMM-Docs](https://github.com/FreeProject089/BMM-Docs) — corrections bienvenues.
 
@@ -13,7 +13,7 @@ là où cette page dériverait.
 ## Sur quoi BMM est construit
 
 Chaque dépendance ci-dessous fait un travail précis, et plusieurs ont été choisies plutôt qu'une
-alternative évidente pour une raison consignée dans [Architecture](doc-page:../how-it-works/architecture).
+alternative évidente pour une raison consignée dans [Architecture](doc-page:how-it-works/architecture).
 
 ### La coquille
 
@@ -67,7 +67,7 @@ alternative évidente pour une raison consignée dans [Architecture](doc-page:..
 
 Du TypeScript compilé 1:1 vers `frontend/js/`, **sans bundler et sans framework**. La seule dépendance
 runtime notable est **rrweb** pour le replay de session. Voir
-[Architecture](doc-page:../how-it-works/architecture) pour ce que ce choix apporte et ce qu'il n'apporte pas.
+[Architecture](doc-page:how-it-works/architecture) pour ce que ce choix apporte et ce qu'il n'apporte pas.
 
 ---
 
@@ -76,7 +76,7 @@ runtime notable est **rrweb** pour le replay de session. Voir
 Ce site, c'est **MkDocs** avec le thème **Material**, bilingue via le plugin i18n (`page.md` +
 `page.fr.md`), avec les diagrammes Mermaid rendus nativement et un petit hook Python qui réécrit les
 directives `:::` façon BCWEB en admonitions Material. Voir
-[Contribuer à la doc](doc-page:../how-it-works/extending).
+[Contribuer à la doc](doc-page:how-it-works/extending).
 
 ---
 

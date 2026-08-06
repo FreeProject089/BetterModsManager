@@ -14,7 +14,7 @@ vraiment un problème ».
 ### Le jeu se comporte comme si le mod n'était pas là
 
 Presque toujours l'empaquetage, pas BMM. L'archive a un dossier de trop, donc le jeu cherche `Data/` et
-trouve `MonMod-v3/Data/`. Ouvre le [Mapper](doc-page:../features/mapper), lance le **Diagnostic de
+trouve `MonMod-v3/Data/`. Ouvre le [Mapper](doc-page:features/mapper), lance le **Diagnostic de
 structure**, et vérifie le chemin final *avant* d'appliquer.
 
 ### Un mod que j'ai désactivé est toujours actif
@@ -23,7 +23,7 @@ Deux profils pointent sur le même dossier de jeu. BMM prévient à la configura
 majeure d'erreur humaine*. Note que les profils partageant **à la fois** le dossier de jeu et le dossier
 mods gardent leurs listes actives synchronisées, mais pas ceux qui ne partagent que le dossier de *jeu* :
 chacun déploie au même endroit et aucun ne sait ce que l'autre a laissé. Donne à chaque profil son propre
-dossier mods. Voir [Profils & activation](doc-page:../how-it-works/profiles-activation).
+dossier mods. Voir [Profils & activation](doc-page:how-it-works/profiles-activation).
 
 ### J'ai changé de profil et rien n'a changé
 
@@ -33,17 +33,17 @@ fréquente dans BMM.
 
 ### Deux mods se battent — l'un écrase l'autre
 
-C'est un [conflit](doc-page:../features/library#conflicts), et c'est attendu : ils livrent le même fichier. BMM
+C'est un [conflit](doc-page:features/library#conflicts), et c'est attendu : ils livrent le même fichier. BMM
 te montre exactement quels fichiers se recouvrent. Il n'y a pas de sélecteur par fichier ni de liste de
 priorités — **le dernier mod activé gagne**, donc active en dernier celui qui doit gagner. Voir
-[Conflits](doc-page:../how-it-works/conflicts).
+[Conflits](doc-page:how-it-works/conflicts).
 
 ### Un mod affiche une icône d'avertissement dans la Bibliothèque
 
 Son dernier contrôle d'intégrité a échoué, et BMM s'en souvient d'un redémarrage à l'autre. Relance le
 contrôle pour voir quels fichiers sont `missing`, `modified` ou `added`. Note que le *premier* contrôle
 d'un mod n'échoue jamais — il établit la baseline — donc un échec signifie que quelque chose a changé
-depuis. Voir [Intégrité & hachage](doc-page:../how-it-works/integrity-hashing).
+depuis. Voir [Intégrité & hachage](doc-page:how-it-works/integrity-hashing).
 
 ### J'ai annulé une activation — mon dossier de jeu est à moitié moddé ?
 
@@ -93,7 +93,7 @@ Déplacer le dossier mods hors de `C:` est le plus gros gain disponible.
 
 Par conception. Le débit maximal est échangé contre une fenêtre réactive : pools de threads plafonnés,
 budget de yield sur la boucle de copie, et un worker en priorité I/O de fond. Voir
-[Performances](doc-page:../how-it-works/performance), et lance le benchmark intégré pour voir les vrais chiffres
+[Performances](doc-page:how-it-works/performance), et lance le benchmark intégré pour voir les vrais chiffres
 sur ton matériel.
 
 ### BMM consomme beaucoup de mémoire au bout d'un moment
@@ -118,7 +118,7 @@ Si la source du mod est un **téléchargement direct**, BMM est honnête :
 
 > Un téléchargement direct n'a pas de version, BMM ne peut donc pas savoir s'il est plus récent.
 
-Il n'y a rien à comparer. Relie le mod à un [dépôt](doc-page:../features/repo) qui publie des versions, ou
+Il n'y a rien à comparer. Relie le mod à un [dépôt](doc-page:features/repo) qui publie des versions, ou
 utilise le re-téléchargement direct.
 
 ### Une synchro de dépôt dit qu'un fichier a échoué
@@ -138,7 +138,7 @@ mod, pas au milieu d'un fichier.
 Vérifie `GET http://127.0.0.1:51274/api/health` d'abord. Si rien ne répond, la cause la plus probable est
 que **le port était déjà pris au démarrage de BMM** — typiquement une instance zombie après un
 redémarrage in-app. BMM ne **bascule pas** sur un autre port : l'API est désactivée pour toute la session
-et une ligne part dans le journal de crash. Redémarre BMM. Voir la [référence API](doc-page:api).
+et une ligne part dans le journal de crash. Redémarre BMM. Voir la [référence API](doc-page:reference/api).
 
 ### Un plugin reçoit 403 sur quelque chose qu'il devrait pouvoir faire
 
@@ -171,4 +171,4 @@ Dans l'ordre :
 
 !!! info "Toujours bloqué ?"
     Le hub **Aide & autres** dans l'app a les mêmes articles plus 44 diagrammes, et
-    [BetterCommunity](doc-page:../features/community) est l'endroit pour demander.
+    [BetterCommunity](doc-page:features/community) est l'endroit pour demander.

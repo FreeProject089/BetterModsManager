@@ -41,7 +41,7 @@ becomes a re-scan, never a false cache hit.
     cached file list stays valid (correctly, the list didn't change) but nothing prompts a re-hash.
     That is exactly why the file list and the hashes are separate caches with separate triggers: the
     list is cheap and refreshed opportunistically, and the **hashes** are what an
-    [integrity check](doc-page:integrity-hashing) recomputes when you want the truth.
+    [integrity check](doc-page:how-it-works/integrity-hashing) recomputes when you want the truth.
 
 ---
 
@@ -52,7 +52,7 @@ throttled queue that hashes *"one mod at a time, on the capped hash pool, with a
 each"*. Three caps stack up here:
 
 - **one mod at a time** — never a burst of concurrent hashing jobs,
-- the **≤4-thread hash pool** (see [Integrity & hashing](doc-page:integrity-hashing)),
+- the **≤4-thread hash pool** (see [Integrity & hashing](doc-page:how-it-works/integrity-hashing)),
 - a **pause between mods**, so a long queue can't monopolise the disk.
 
 The result is that a large import finishes its *visible* work immediately and settles its hashes in
@@ -95,7 +95,7 @@ edited by hand.
 ## What a scan never does
 
 A scan is strictly **read-only**. It builds knowledge; it never modifies, moves, or deletes a mod.
-Unrecognised files are listed for you to name or [map](doc-page:mapper), not touched. Nothing in the
+Unrecognised files are listed for you to name or [map](doc-page:how-it-works/mapper), not touched. Nothing in the
 scanning path writes to your game folder — that only happens when you enable something.
 
 !!! info "See it in the app"

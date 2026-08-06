@@ -104,7 +104,7 @@ Un plugin ne peut donc pas s'élever en forgeant ou en omettant cet en-tête. D�
 - Le serveur écoute sur **`127.0.0.1` uniquement**, jamais `0.0.0.0`.
 - En build release, CORS est une liste blanche (CWE-942) ; `tauri dev` autorise toutes les origines.
 - Il n'y a **aucune limitation de débit** — n'expose pas ce port. Voir la
-  [référence API](doc-page:../reference/api).
+  [référence API](doc-page:reference/api).
 
 !!! danger "Un endpoint équivaut aux droits admin"
 
@@ -183,7 +183,7 @@ d'installation.
 | Application d'un modpack | **Oui**, sauf si ce modpack a *ignorer le contrôle d'intégrité* |
 | Activation d'un mod depuis le planificateur | **Non** — le contrôle est contourné, une exécution de fond ne pouvant pas s'arrêter pour demander |
 
-Voir [Intégrité & hachage](doc-page:integrity-hashing) pour le tableau complet.
+Voir [Intégrité & hachage](doc-page:how-it-works/integrity-hashing) pour le tableau complet.
 
 ---
 
@@ -197,7 +197,7 @@ Voir [Intégrité & hachage](doc-page:integrity-hashing) pour le tableau complet
   ligne générée dans un journal partagé ou un chat.
 - **Télémétrie et replays** — opt-in, locaux d'abord, masqués par défaut. Un interrupteur *Complet*
   signifie **démasqué** : noms de mods, noms de profils et chemins ne sont plus `••••`. Voir
-  [Confidentialité & télémétrie](doc-page:../features/privacy-telemetry).
+  [Confidentialité & télémétrie](doc-page:features/privacy-telemetry).
 
 ---
 

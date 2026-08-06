@@ -9,7 +9,7 @@ Its real job is stated on the empty screen:
 > A profile is your safety net: enable, disable and reorder mods freely, and a game update
 > never wipes your setup again.
 
-![The Profiles screen](../assets/screens/profiles.annotated.png)
+![The Profiles screen](assets/docs/media/screens/profiles.annotated.png)
 
 | | | |
 |---|---|---|
@@ -26,7 +26,7 @@ Its real job is stated on the empty screen:
 ## Why several profiles per game
 
 Because each profile is just a cheap record, and its mods already live in the
-[Library](doc-page:library) — so keeping a few around costs almost nothing. Give each its **own mods
+[Library](doc-page:features/library) — so keeping a few around costs almost nothing. Give each its **own mods
 folder** (see the warning below) and they become genuinely separate loadouts. A typical split:
 
 - **Vanilla-ish** — a couple of fixes, for when you want the real game.
@@ -34,7 +34,7 @@ folder** (see the warning below) and they become genuinely separate loadouts. A 
 - **Testing** — where a new mod goes first, so a bad one never touches the other two.
 
 Switching profiles doesn't re-download anything: the mods already live in the
-[Library](doc-page:library).
+[Library](doc-page:features/library).
 
 ## The one mistake that hurts: sharing a folder
 
@@ -64,7 +64,7 @@ The moment it's created, BMM tells you what just changed:
 > Your first profile is ready! Everything you enable from now on is saved right here — safe
 > from game updates and reinstalls.
 
-That's the contract. From there, [add a mod](doc-page:library) and turn it on.
+That's the contract. From there, [add a mod](doc-page:features/library) and turn it on.
 
 <!-- TODO(content): profile export/import and the per-profile deploy log need their own
      capture + spec before they can be documented honestly. -->

@@ -13,7 +13,7 @@ réellement devant toi.
 
 - **Aller à n'importe quel écran** — Bibliothèque, Profils, Modpacks, Dépôt Serveur, Listes .MM,
   App Catalog, Plugins, BetterCommunity, Help & other, Paramètres — **y compris tes propres
-  [pages de navbar personnalisées](doc-page:plugins)**. Une page épinglée hier est cherchable aujourd'hui ;
+  [pages de navbar personnalisées](doc-page:features/plugins)**. Une page épinglée hier est cherchable aujourd'hui ;
   rien à déclarer à la main.
 - **Lancer une action** sans chercher son bouton :
     - *Mods* — ajouter un mod, scanner le dossier, vérifier l'intégrité, afficher l'historique, tout activer/désactiver, vérifier les mises à jour.

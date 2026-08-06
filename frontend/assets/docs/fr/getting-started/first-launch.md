@@ -4,7 +4,7 @@ Trois étapes. Dans l'ordre — la deuxième est celle qu'on saute, et c'est cel
 
 ## 1. Créer un profil
 
-BMM s'ouvre sur un écran [Profils](doc-page:../features/profiles) vide et annonce :
+BMM s'ouvre sur un écran [Profils](doc-page:features/profiles) vide et annonce :
 
 > Aucun profil actif — crée ton premier profil pour qu'une mise à jour ou une réinstallation
 > n'efface plus jamais ta configuration.
@@ -22,7 +22,7 @@ devient une cible d'écriture pour BMM, pas quelque chose que tu maintiens à la
 ## 3. Ajouter un mod et l'activer
 
 Glisse un `.zip` ou un dossier de mod n'importe où sur la fenêtre. Il atterrit dans la
-[Bibliothèque](doc-page:../features/library). Puis active-le — un simple clic sur l'interrupteur de
+[Bibliothèque](doc-page:features/library). Puis active-le — un simple clic sur l'interrupteur de
 la carte, ou un **double-clic n'importe où sur la carte**, c'est ça qui le met dans le jeu,
 pour *ce* profil.
 
@@ -32,7 +32,7 @@ dépendances, ses tags, et une vérification d'intégrité. Rien de tout ça n'e
 premier jour — mais c'est là quand tu en as besoin.
 
 Si le jeu fait comme si le mod n'existait pas, c'est presque toujours l'empaquetage, pas BMM :
-voir le [Mapper](doc-page:../features/mapper).
+voir le [Mapper](doc-page:features/mapper).
 
 ## Tu viens d'un autre gestionnaire ?
 

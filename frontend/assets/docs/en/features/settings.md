@@ -19,7 +19,7 @@ mystery.
 Not a light/dark toggle — a theme editor. You can replace BMM's built-in images (logo,
 wallpaper, even the Tasky mascot), and *add your own buttons, banners, badges or widgets
 anywhere in BMM*. Themes export as a file and import as one, and a catalog of themes works
-like the [App Catalog](doc-page:apps). See [Themes](doc-page:themes) for the whole engine.
+like the [App Catalog](doc-page:features/apps). See [Themes](doc-page:features/themes) for the whole engine.
 
 Start from one of the built-in presets and tweak. The editor's own advice: hover a label for
 help, click **?** for the MDN docs on that CSS property.
@@ -39,7 +39,7 @@ seconds". Limits are per-disk, so a fast NVMe and a slow external drive get thei
 
 Check for a new BMM version, opt into **pre-releases**, or turn **auto-update** off.
 Pre-releases get fixes first and bugs first — the toggle is there so it's your call, not a
-surprise. A separate control checks your *mods* for updates (see [Server Repo](doc-page:repo)),
+surprise. A separate control checks your *mods* for updates (see [Server Repo](doc-page:features/repo)),
 distinct from updating the app itself.
 
 ### Data
@@ -80,7 +80,7 @@ FR; a key missing everywhere shows its raw id. `en`, `fr` and the template can't
 > All your important credentials in one place. Click the eye icon to reveal a value.
 
 Your **creator ID**, the local **API token**, the API **URL and port**, and the app version.
-The [local API](doc-page:../reference/api) binds to `127.0.0.1` on port **51274** by default; you can
+The [local API](doc-page:reference/api) binds to `127.0.0.1` on port **51274** by default; you can
 change the port here (it takes effect after a restart). This is also where you reveal or reset
 the API token that plugins and scripts authenticate with.
 
@@ -94,7 +94,7 @@ page spells out exactly what each toggle sends.
 
 Choose how much freedom plugins get: **full access** or a **limited/sandboxed** mode. This is
 the global backstop for the per-plugin permissions you grant in
-[Plugins & API](doc-page:plugins) — tighten it if you run plugins you don't fully trust.
+[Plugins & API](doc-page:features/plugins) — tighten it if you run plugins you don't fully trust.
 
 ### Discord Rich Presence
 
@@ -104,12 +104,12 @@ Show what you're doing in BMM on your Discord profile, or turn it off. Purely co
 
 A Launch Pack is a **named list of executables that start together**. Give it a name, add the
 `.exe` paths (a game, a voice-attack tool, a map app…), pick an icon, and one click — or one
-[deeplink](doc-page:../reference/api), or a [scheduled task](doc-page:scheduler) — fires all of them.
+[deeplink](doc-page:reference/api), or a [scheduled task](doc-page:features/scheduler) — fires all of them.
 
 !!! tip "Build your 'sit down to play' routine"
 
     The point isn't launching apps; it's launching *your setup* in the right order without
-    hunting for five shortcuts. Make one pack per game. Pair it with the [Scheduler](doc-page:scheduler)
+    hunting for five shortcuts. Make one pack per game. Pair it with the [Scheduler](doc-page:features/scheduler)
     (a Launch Pack is a schedulable action) and "6pm: enable my multiplayer modpack, then start
     everything" becomes a single automation.
 
@@ -117,7 +117,7 @@ A Launch Pack is a **named list of executables that start together**. Give it a 
 
 Save tasks — apply a modpack, run a launch pack, export your data — and trigger them on a
 schedule or on demand. It goes well beyond a timer: conditions, loops, and "wait until" steps
-let you build real workflows. See [Scheduler](doc-page:scheduler) for the full picture.
+let you build real workflows. See [Scheduler](doc-page:features/scheduler) for the full picture.
 
 ### Storage Manager & benchmark
 
@@ -125,7 +125,7 @@ Two related tools live here, both about how BMM moves files.
 
 **Smart I/O limits** (above) pace mod activation so it doesn't hog your disk. The **Storage
 Manager** is where you set the per-disk ceilings, and **SHA recalculation** rebuilds the
-per-file hashes the [integrity](doc-page:library) check compares against — run it if you've edited a
+per-file hashes the [integrity](doc-page:features/library) check compares against — run it if you've edited a
 mod's files outside BMM and want its hashes to match reality again.
 
 The **benchmark** is the tool worth understanding. It doesn't run a generic disk speed test —
@@ -143,7 +143,7 @@ I/O limits: it measures the exact work mod activation does, on your exact hardwa
 
 ### Tags
 
-Manage your custom mod tags — the labels you filter the [Library](doc-page:library) by. Rename or
+Manage your custom mod tags — the labels you filter the [Library](doc-page:features/library) by. Rename or
 remove them here in one place.
 
 ### Sound & keyboard shortcuts

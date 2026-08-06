@@ -6,8 +6,8 @@ in capability but are separate systems:
 
 | | Where | What it drives |
 |---|---|---|
-| **Scheduled-task actions** | [Scheduler](doc-page:../features/scheduler) — Settings → Scheduler | Steps inside a workflow that BMM runs on a trigger |
-| **Script generator actions** | [Plugins & API](doc-page:../features/plugins) — script generator | Blocks that emit a runnable script (`bmm://` deeplinks and/or HTTP calls) |
+| **Scheduled-task actions** | [Scheduler](doc-page:features/scheduler) — Settings → Scheduler | Steps inside a workflow that BMM runs on a trigger |
+| **Script generator actions** | [Plugins & API](doc-page:features/plugins) — script generator | Blocks that emit a runnable script (`bmm://` deeplinks and/or HTTP calls) |
 
 !!! tip "Which one do I want?"
 
@@ -25,10 +25,10 @@ Grouped exactly as the action dropdown groups them.
 
 | Action | What it does | You provide |
 |---|---|---|
-| Activate profile | Switches the active [profile](doc-page:../features/profiles) | profile |
+| Activate profile | Switches the active [profile](doc-page:features/profiles) | profile |
 | Enable mod | Enables one mod | mod |
 | Disable mod | Disables one mod | mod |
-| Enable modpack | Enables every mod in a [modpack](doc-page:../features/modpacks) | modpack |
+| Enable modpack | Enables every mod in a [modpack](doc-page:features/modpacks) | modpack |
 | Disable modpack | Disables every mod in a modpack | modpack |
 | Create modpack | Creates an empty modpack | name, profile |
 | Add a mod (from URL) | Downloads and installs a mod | URL, name |
@@ -49,13 +49,13 @@ Grouped exactly as the action dropdown groups them.
 
     *Enable mod*, *Enable modpack* and *Enable all mods* run with the SHA check bypassed —
     a scheduled run can't stop to ask you about a missing hash. Enable by hand if you want the
-    prompt. See [Integrity & hashing](doc-page:../how-it-works/integrity-hashing).
+    prompt. See [Integrity & hashing](doc-page:how-it-works/integrity-hashing).
 
 ### Repo & sharing
 
 | Action | What it does | You provide |
 |---|---|---|
-| Connect repo | Adds a remote [repo](doc-page:../features/repo) | repo.json URL, name |
+| Connect repo | Adds a remote [repo](doc-page:features/repo) | repo.json URL, name |
 | Sync repo | Downloads and integrates a remote profile | repo URL, remote profile |
 | Generate repo | Opens repo generation | — |
 | Update repo | Updates a repo folder | repo folder |
@@ -69,13 +69,13 @@ Grouped exactly as the action dropdown groups them.
 | Open / launch a file or program | **Runs any file**, including `.exe` | path |
 | Open a folder | Opens a folder in the explorer | path |
 | Install app | Downloads and installs an app | app id, URL, title |
-| Run launch pack | Runs a [Launch Pack](doc-page:../features/launch-packs) | launch pack |
+| Run launch pack | Runs a [Launch Pack](doc-page:features/launch-packs) | launch pack |
 
 ### Appearance
 
 | Action | What it does | You provide |
 |---|---|---|
-| Set theme | Applies a [theme](doc-page:../features/themes) | theme |
+| Set theme | Applies a [theme](doc-page:features/themes) | theme |
 
 ### Benchmarks & storage
 
@@ -85,7 +85,7 @@ Grouped exactly as the action dropdown groups them.
 | Benchmark a disk | Measures a disk's read/write speed | `disk.read_mbps`, `disk.write_mbps`, `disk.suggested_limit` |
 | Apply disk speed limit | Sets a per-disk MB/s cap — leave empty to use the suggested value from a preceding benchmark, `0` = unlimited | — |
 | Performance Auto-Calibration | Turns auto-calibration on/off | — |
-| Smart I/O | Turns [Smart I/O](doc-page:../features/storage) on/off | — |
+| Smart I/O | Turns [Smart I/O](doc-page:features/storage) on/off | — |
 | Toggle a setting (advanced) | Flips **any** boolean setting by key | — |
 | Check free disk space | Reads free space | `disk.free_gb`, `disk.total_gb`, `disk.free_percent` |
 
@@ -96,7 +96,7 @@ Those captured values are what the `value` condition compares against — that's
 
 | Action | What it does |
 |---|---|
-| Telemetry consent | Turns [telemetry](doc-page:../features/privacy-telemetry) on/off |
+| Telemetry consent | Turns [telemetry](doc-page:features/privacy-telemetry) on/off |
 | Telemetry options | Replay / **Full (unmasked)** / benchmark reporting |
 | Session recorder | Record on/off, **Full (unmasked)**, Rust log, JS log |
 | Export replay | Exports the current recording |
@@ -297,6 +297,6 @@ either a **deeplink** (`bmm://…`), an **HTTP call** to BMM's local API, or a *
 
 ## See also
 
-- [Scheduling & automation](doc-page:../features/scheduler) — triggers, workflows, `.BMMPA` sharing
-- [Plugins & API](doc-page:../features/plugins) — the deeplink and endpoint reference, API tokens
-- [API reference](doc-page:api) — the HTTP endpoints in full
+- [Scheduling & automation](doc-page:features/scheduler) — triggers, workflows, `.BMMPA` sharing
+- [Plugins & API](doc-page:features/plugins) — the deeplink and endpoint reference, API tokens
+- [API reference](doc-page:reference/api) — the HTTP endpoints in full

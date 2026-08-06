@@ -34,7 +34,7 @@ BLAKE3's headline feature is that it can spread one big file across every core. 
 
 So hashing a library is parallel **across files**, not within one. That is slower on a single huge
 file and much kinder to the machine — the same tradeoff as everywhere else in
-[Performance](doc-page:performance).
+[Performance](doc-page:how-it-works/performance).
 
 ---
 
@@ -140,7 +140,7 @@ files can share a name and a size and still differ by the one byte that matters.
 
 The benchmark suite has a dedicated workload for exactly this — *"Integrity verification
 (BLAKE3)"*, which *"re-hashes every file and compares it against the stored baseline — the integrity
-check BMM runs to detect a tampered or corrupt mod"*. See [Performance](doc-page:performance).
+check BMM runs to detect a tampered or corrupt mod"*. See [Performance](doc-page:how-it-works/performance).
 
 !!! info "See it in the app"
     Help & other → Developer → **BLAKE3 hashing** and **Integrity engine**.

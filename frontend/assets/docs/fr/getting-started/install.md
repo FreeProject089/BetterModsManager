@@ -9,7 +9,7 @@ BMM est une application **Windows**. L'installation tient en trois étapes :
 3. Lance BMM.
 
 C'est tout : aucun compte à créer, rien à configurer au préalable. La première configuration se fait
-*dans* l'app — voir [Premier lancement](doc-page:first-launch).
+*dans* l'app — voir [Premier lancement](doc-page:getting-started/first-launch).
 
 !!! tip "Choisis un emplacement d'installation que tu contrôles"
 
@@ -30,7 +30,7 @@ C'est tout : aucun compte à créer, rien à configurer au préalable. La premi�
 
 BMM est une app native autour du webview de l'OS, pas un navigateur embarqué : le téléchargement et
 l'empreinte mémoire sont donc une fraction de ceux d'un gestionnaire basé sur Electron. Voir
-[Architecture](doc-page:../how-it-works/architecture).
+[Architecture](doc-page:how-it-works/architecture).
 
 ---
 
@@ -74,7 +74,7 @@ Désinstaller retire l'application. Ça ne touche **pas** :
 Ce second point compte : parce que BMM déploie de vraies copies et non des liens, un mod activé au
 moment de la désinstallation **reste activé** dans le jeu. Si tu veux un dossier de jeu propre,
 désactive tes mods *avant* de désinstaller — BMM restaurera chaque fichier d'origine depuis
-`_original/` au passage. Voir [Conflits](doc-page:../how-it-works/conflicts).
+`_original/` au passage. Voir [Conflits](doc-page:how-it-works/conflicts).
 
 Ton dossier `%APPDATA%` est aussi laissé en place, donc une réinstallation ultérieure reprend
 exactement où tu t'étais arrêté. Supprime-le à la main si tu veux vraiment repartir de zéro — et
@@ -101,7 +101,7 @@ qu'il lit finira par ne plus être d'accord avec eux.
 Une mise à jour est vérifiée avant de pouvoir toucher ton installation : quand le canal de mise à jour
 fournit une clé d'éditeur, le paquet **doit** porter une signature Ed25519 valide pour cette clé ou il
 est refusé *avant* que le dossier d'installation soit touché. L'installeur prend ensuite un instantané
-et rollback si l'installation elle-même échoue. Voir [Sécurité](doc-page:../how-it-works/security).
+et rollback si l'installation elle-même échoue. Voir [Sécurité](doc-page:how-it-works/security).
 
 !!! note "Limité par GitHub ?"
 
@@ -114,5 +114,5 @@ et rollback si l'installation elle-même échoue. Voir [Sécurité](doc-page:../
 
 ## Ensuite
 
-- [Premier lancement](doc-page:first-launch) — créer ton premier profil et ajouter un mod.
-- [Dépannage](doc-page:../reference/troubleshooting) — si quelque chose cloche déjà.
+- [Premier lancement](doc-page:getting-started/first-launch) — créer ton premier profil et ajouter un mod.
+- [Dépannage](doc-page:reference/troubleshooting) — si quelque chose cloche déjà.

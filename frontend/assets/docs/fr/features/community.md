@@ -9,8 +9,8 @@ ni de navigateur pour lire — BMM récupère les articles à chaque ouverture d
 que tu vois est à jour sans redémarrer.
 
 C'est aussi la porte d'entrée d'une plateforme plus large. BetterCommunity est le service web
-derrière les [Dépôts Serveur](doc-page:repo) et les catalogues communautaires que lit l'[App
-Catalog](doc-page:apps) ; cet écran en montre le blog, pas la totalité.
+derrière les [Dépôts Serveur](doc-page:features/repo) et les catalogues communautaires que lit l'[App
+Catalog](doc-page:features/apps) ; cet écran en montre le blog, pas la totalité.
 
 <!-- TODO(content): capturer + annoter l'écran BetterCommunity (fil, puces de filtre,
      recherche) en ../assets/screens/community.annotated.png, comme les autres pages. -->
@@ -91,8 +91,8 @@ vois l'avant et l'après, pas seulement le texte final.
 
 Le blog est la partie visible de BetterCommunity. La même plateforme :
 
-- héberge les **catalogues communautaires** auxquels l'[App Catalog](doc-page:apps) peut s'abonner ;
-- soutient les **[Dépôts Serveur](doc-page:repo)** partageables d'où tu synchronises les mods ;
+- héberge les **catalogues communautaires** auxquels l'[App Catalog](doc-page:features/apps) peut s'abonner ;
+- soutient les **[Dépôts Serveur](doc-page:features/repo)** partageables d'où tu synchronises les mods ;
 - est là où les projets publient les notes de version que tu vois aussi sous **Quoi de neuf**
   dans BMM.
 

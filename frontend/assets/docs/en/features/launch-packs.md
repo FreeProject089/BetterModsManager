@@ -53,7 +53,7 @@ setup:
 | The scheduler | the *Run launch pack* action — so a pack can fire on a trigger, not just a click |
 | The script generator | the same action, emitted as a deeplink or an HTTP call |
 
-See the [Action reference](doc-page:../reference/actions) and the [API reference](doc-page:../reference/api).
+See the [Action reference](doc-page:reference/actions) and the [API reference](doc-page:reference/api).
 
 ## Why nothing flashes
 
@@ -68,4 +68,4 @@ ones silent is what makes an unexpected window meaningful.
     — *"so the shortcut can never be written outside the pack dir (e.g. the Startup auto-run folder →
     persistence)"*. That guard exists specifically because a shortcut planted in Windows' Startup
     folder is a persistence mechanism, not just a stray file. See
-    [Security](doc-page:../how-it-works/security).
+    [Security](doc-page:how-it-works/security).

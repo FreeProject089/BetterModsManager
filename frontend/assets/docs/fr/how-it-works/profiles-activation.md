@@ -22,7 +22,7 @@ connaître d'emblée :
   profil quand son dossier se trouve sous le dossier mods de ce profil. Déplace le dossier du mod
   ailleurs et il quitte le profil.
 - Parce que les chemins sont absolus, une lettre de lecteur qui change (`E:\Mods` → `F:\Mods`) doit être
-  corrigée à la main. Voir [Scan & cache](doc-page:scanning-cache) pour ce qui se passe pendant que le disque
+  corrigée à la main. Voir [Scan & cache](doc-page:how-it-works/scanning-cache) pour ce qui se passe pendant que le disque
   est absent.
 
 ---
@@ -74,7 +74,7 @@ flowchart TB
 Il y a un détail lié dans la logique de sauvegarde : pour décider si un fichier qu'il va écraser est un
 *véritable fichier de jeu*, BMM regarde les mods activés dans **tous les profils partageant ce dossier
 de jeu** — pas seulement l'actif. Sinon, changer de profil pourrait lui faire prendre le fichier de mod
-d'un autre profil pour un original et le sauvegarder comme tel. Voir [Conflits](doc-page:conflicts) pour la
+d'un autre profil pour un original et le sauvegarder comme tel. Voir [Conflits](doc-page:how-it-works/conflicts) pour la
 règle de sauvegarde complète.
 
 **Donc : pour garder des loadouts vraiment séparés, donne à chaque profil son propre dossier mods.**
@@ -134,7 +134,7 @@ d'une seule opération interrompue, jamais de deux inachevées entrelacées.
 
 Parce que `active_mods` est une liste **ordonnée** et que le déploiement la parcourt dans l'ordre, le mod
 activé en dernier gagne tout fichier partagé. C'est tout le modèle de résolution de conflits — il n'y a
-pas d'arbre de priorités. Voir [Conflits](doc-page:conflicts).
+pas d'arbre de priorités. Voir [Conflits](doc-page:how-it-works/conflicts).
 
 !!! info "À voir dans l'app"
     Aide & autres → Développeur → **Système de profils**, et le tutoriel **Profils**.

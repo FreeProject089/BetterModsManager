@@ -5,7 +5,7 @@ The **Library** is where every mod you own lives — installed or not, from any 
 only ever learn one screen in BMM, make it this one: everything else (profiles, modpacks,
 lists) is a different way of arranging what the Library holds.
 
-![The Library screen](../assets/screens/library.annotated.png)
+![The Library screen](assets/docs/media/screens/library.annotated.png)
 
 | | | |
 |---|---|---|
@@ -28,7 +28,7 @@ lists) is a different way of arranging what the Library holds.
 
 === "From a repo"
 
-    See [Server Repo](doc-page:repo). A repo is a shared source; once added, its mods appear here
+    See [Server Repo](doc-page:features/repo). A repo is a shared source; once added, its mods appear here
     alongside your local ones and are marked with the repo's name.
 
 !!! tip "Archived mods stay archived"
@@ -73,7 +73,7 @@ a mod that others build on, you get to choose whether they go too.
 ## What "installed" means here
 
 A mod in the Library is *available*; a mod is *installed* only relative to a
-[profile](doc-page:profiles). That distinction is the thing newcomers trip on: uninstalling from a
+[profile](doc-page:features/profiles). That distinction is the thing newcomers trip on: uninstalling from a
 profile doesn't delete the mod, it just stops that profile from using it. The mod stays in
 the Library, ready for another profile.
 
@@ -88,6 +88,6 @@ The Library rewards a few gestures:
 - **Drag & drop** a `.zip` or folder onto the window to add it.
 
 There's no multi-select in the list itself — you pick one mod at a time. When you need a
-batch (building a [modpack](doc-page:modpacks), or importing a [`.MM` list](doc-page:modlist)), the
+batch (building a [modpack](doc-page:features/modpacks), or importing a [`.MM` list](doc-page:features/modlist)), the
 selection modal gives you checkboxes and a select-all. Full detail in
-[Tips & controls](doc-page:../reference/tips).
+[Tips & controls](doc-page:reference/tips).

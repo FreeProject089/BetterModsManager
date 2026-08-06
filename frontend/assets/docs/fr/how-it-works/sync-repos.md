@@ -81,7 +81,7 @@ Trois comportements à anticiper :
   est précisément le but.
 
 Tu peux aussi plafonner le **débit de téléchargement** de la synchro — la même idée de cadencement que
-[Smart I/O](doc-page:performance), appliquée au réseau.
+[Smart I/O](doc-page:how-it-works/performance), appliquée au réseau.
 
 ---
 
@@ -125,4 +125,4 @@ rapporte sa progression.
 
 !!! info "À voir dans l'app"
     Aide &amp; autre → Développeur → **Mode serveur** et **Flux d'hébergement**. Guide utilisateur :
-    [Dépôt Serveur](doc-page:../features/repo).
+    [Dépôt Serveur](doc-page:features/repo).

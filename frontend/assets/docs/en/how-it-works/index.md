@@ -45,16 +45,16 @@ nothing you do to the game can cost you a mod.
 
 | Page | The question it answers |
 |---|---|
-| [Architecture](doc-page:architecture) | What is BMM actually made of, and why so small? |
-| [Profiles & activation](doc-page:profiles-activation) | Why is switching profiles instant and safe? |
-| [Scanning & the cache](doc-page:scanning-cache) | How does BMM know what changed without re-reading everything? |
-| [Integrity & hashing](doc-page:integrity-hashing) | How is a corrupted file caught before your game sees it? |
-| [Conflict resolution](doc-page:conflicts) | How does BMM know two mods fight — before you commit? |
-| [The mapper](doc-page:mapper) | How is a mis-structured archive reshaped, repeatably? |
-| [Sync & server repos](doc-page:sync-repos) | How does a whole group stay on the exact same setup? |
-| [Performance](doc-page:performance) | Why does a huge deploy stay responsive? |
-| [Extending BMM](doc-page:extending) | How do plugins, the API and MCP drive BMM? |
-| [Security model](doc-page:security) | What are the trust boundaries, and what's signed? |
+| [Architecture](doc-page:how-it-works/architecture) | What is BMM actually made of, and why so small? |
+| [Profiles & activation](doc-page:how-it-works/profiles-activation) | Why is switching profiles instant and safe? |
+| [Scanning & the cache](doc-page:how-it-works/scanning-cache) | How does BMM know what changed without re-reading everything? |
+| [Integrity & hashing](doc-page:how-it-works/integrity-hashing) | How is a corrupted file caught before your game sees it? |
+| [Conflict resolution](doc-page:how-it-works/conflicts) | How does BMM know two mods fight — before you commit? |
+| [The mapper](doc-page:how-it-works/mapper) | How is a mis-structured archive reshaped, repeatably? |
+| [Sync & server repos](doc-page:how-it-works/sync-repos) | How does a whole group stay on the exact same setup? |
+| [Performance](doc-page:how-it-works/performance) | Why does a huge deploy stay responsive? |
+| [Extending BMM](doc-page:how-it-works/extending) | How do plugins, the API and MCP drive BMM? |
+| [Security model](doc-page:how-it-works/security) | What are the trust boundaries, and what's signed? |
 
 !!! tip "In the app"
     Every one of these systems has an **interactive diagram** inside BMM, under

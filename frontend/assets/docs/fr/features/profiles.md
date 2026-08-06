@@ -10,7 +10,7 @@ Son vrai rôle est écrit sur l'écran vide :
 > Un profil est ton filet de sécurité : active, désactive et réordonne tes mods librement,
 > une mise à jour du jeu n'effacera plus jamais ta configuration.
 
-![L'écran Profils](../assets/screens/profiles.annotated.png)
+![L'écran Profils](assets/docs/media/screens/profiles.annotated.png)
 
 | | | |
 |---|---|---|
@@ -36,7 +36,7 @@ l'avertissement plus bas) et ils deviennent de vrais loadouts séparés. Un déc
   les deux autres.
 
 Changer de profil ne retélécharge rien : les mods vivent déjà dans la
-[Bibliothèque](doc-page:library).
+[Bibliothèque](doc-page:features/library).
 
 ## L'erreur qui fait mal : partager un dossier
 
@@ -68,7 +68,7 @@ Dès sa création, BMM te dit ce qui vient de changer :
 > Ton premier profil est prêt ! Tout ce que tu actives désormais est enregistré ici — à
 > l'abri des mises à jour et des réinstallations.
 
-C'est le contrat. À partir de là, [ajoute un mod](doc-page:library) et active-le.
+C'est le contrat. À partir de là, [ajoute un mod](doc-page:features/library) et active-le.
 
 <!-- TODO(contenu) : l'export/import de profil et le journal de déploiement attendent leur
      capture + spec avant d'être documentés honnêtement. -->

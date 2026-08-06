@@ -14,7 +14,7 @@ wrong".
 ### The game acts like the mod isn't there
 
 Almost always packaging, not BMM. The archive has one folder too many, so the game looks for `Data/`
-and finds `MyMod-v3/Data/`. Open the [Mapper](doc-page:../features/mapper), run the **Structure
+and finds `MyMod-v3/Data/`. Open the [Mapper](doc-page:features/mapper), run the **Structure
 Diagnostic**, and check the final path *before* applying.
 
 ### A mod I disabled is still active
@@ -23,7 +23,7 @@ Two profiles pointing at the same game folder. BMM warns about this when you set
 source of human error*. Note that profiles sharing **both** the game and mods folders keep their active
 lists in sync, but profiles sharing only the *game* folder do not: each deploys into the same place and
 neither knows what the other left behind. Give each profile its own mods folder. See
-[Profiles & activation](doc-page:../how-it-works/profiles-activation).
+[Profiles & activation](doc-page:how-it-works/profiles-activation).
 
 ### I switched profiles and nothing changed
 
@@ -33,17 +33,17 @@ in BMM.
 
 ### Two mods fight — one overwrites the other
 
-That's a [conflict](doc-page:../features/library#conflicts), and it's expected: they ship the same file. BMM
+That's a [conflict](doc-page:features/library#conflicts), and it's expected: they ship the same file. BMM
 shows exactly which files overlap. There is no per-file picker and no priority list — **the last mod
 you enable wins**, so enable the one that should win last. See
-[Conflicts](doc-page:../how-it-works/conflicts).
+[Conflicts](doc-page:how-it-works/conflicts).
 
 ### A mod shows a warning icon in the Library
 
 Its last integrity check failed, and BMM remembers that across restarts. Re-run the check to see which
 files are `missing`, `modified` or `added`. Note that the *first* check on a mod never fails — it
 establishes the baseline — so a failure means something changed since then. See
-[Integrity & hashing](doc-page:../how-it-works/integrity-hashing).
+[Integrity & hashing](doc-page:how-it-works/integrity-hashing).
 
 ### I cancelled an activation — is my game folder half-modded?
 
@@ -91,7 +91,7 @@ folder off `C:` is the biggest single win available.
 
 By design. Peak throughput is traded for a responsive window: capped thread pools, a yield budget on
 the copy loop, and a worker running at background IO priority. See
-[Performance](doc-page:../how-it-works/performance), and run the built-in benchmark to see the real numbers
+[Performance](doc-page:how-it-works/performance), and run the built-in benchmark to see the real numbers
 on your hardware.
 
 ### BMM uses a lot of memory after a while
@@ -114,7 +114,7 @@ If the mod's source is a **direct download**, BMM is being honest:
 
 > A direct download has no version, so BMM cannot tell if it is newer.
 
-There's nothing to compare. Link the mod to a [repo](doc-page:../features/repo) that publishes versions, or
+There's nothing to compare. Link the mod to a [repo](doc-page:features/repo) that publishes versions, or
 use the direct re-download.
 
 ### A repo sync says a file failed
@@ -134,7 +134,7 @@ than mid-file.
 Check `GET http://127.0.0.1:51274/api/health` first. If nothing answers, the most likely cause is that
 **the port was already taken when BMM started** — typically a zombie instance after an in-app restart.
 BMM does **not** fall back to another port: the API is disabled for that whole session and a line goes
-to the crash log. Restart BMM. See the [API reference](doc-page:api).
+to the crash log. Restart BMM. See the [API reference](doc-page:reference/api).
 
 ### A plugin gets 403 on something it should be able to do
 
@@ -165,4 +165,4 @@ In order:
 
 !!! info "Still stuck?"
     The in-app **Help & other** hub has the same articles plus 44 diagrams, and
-    [BetterCommunity](doc-page:../features/community) is where to ask.
+    [BetterCommunity](doc-page:features/community) is where to ask.

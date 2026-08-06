@@ -53,7 +53,7 @@ flowchart LR
 
 !!! info "À voir dans l'app"
     Aide &amp; autre → Développeur → **Serveur MCP et API locale**, **Pages personnalisées**,
-    **Installation en un clic**. Référence : [API](doc-page:../reference/api).
+    **Installation en un clic**. Référence : [API](doc-page:reference/api).
 
 ## Traductions (i18n)
 

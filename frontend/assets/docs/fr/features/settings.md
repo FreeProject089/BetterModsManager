@@ -19,8 +19,8 @@ par section pour que rien ne reste un mystère.
 Ce n'est pas un interrupteur clair/sombre — c'est un éditeur de thèmes. Tu peux remplacer les
 images intégrées de BMM (logo, fond d'écran, même la mascotte Tasky), et *ajouter tes propres
 boutons, bannières, badges ou widgets n'importe où dans BMM*. Un thème s'exporte et s'importe
-en fichier, et un catalogue de thèmes fonctionne comme l'[App Catalog](doc-page:apps). Vois
-[Thèmes](doc-page:themes) pour tout le moteur.
+en fichier, et un catalogue de thèmes fonctionne comme l'[App Catalog](doc-page:features/apps). Vois
+[Thèmes](doc-page:features/themes) pour tout le moteur.
 
 Pars d'un des préréglages intégrés et ajuste. Le conseil de l'éditeur lui-même : survole un
 libellé pour l'aide, clique sur **?** pour la doc MDN de la propriété CSS.
@@ -42,7 +42,7 @@ ont chacun leur plafond.
 Vérifie une nouvelle version de BMM, opte pour les **pré-versions**, ou coupe la **mise à jour
 automatique**. Les pré-versions reçoivent les correctifs en premier et les bugs en premier —
 l'interrupteur existe pour que ce soit ton choix, pas une surprise. Un contrôle distinct
-vérifie tes *mods* (voir [Dépôt Serveur](doc-page:repo)), à ne pas confondre avec la mise
+vérifie tes *mods* (voir [Dépôt Serveur](doc-page:features/repo)), à ne pas confondre avec la mise
 à jour de l'app elle-même.
 
 ### Données
@@ -86,7 +86,7 @@ modèle ne peuvent pas être supprimés.
 > valeur.
 
 Ton **creator ID**, le **token API** local, l'**URL et le port** de l'API, et la version de
-l'app. L'[API locale](doc-page:../reference/api) se lie à `127.0.0.1` sur le port **51274** par
+l'app. L'[API locale](doc-page:reference/api) se lie à `127.0.0.1` sur le port **51274** par
 défaut ; tu peux changer le port ici (effet après redémarrage). C'est aussi là que tu révèles
 ou réinitialises le token API avec lequel les plugins et scripts s'authentifient.
 
@@ -100,7 +100,7 @@ la page détaille exactement ce que chaque interrupteur envoie.
 
 Choisis la liberté accordée aux plugins : **accès complet** ou mode **limité/en bac à sable**.
 C'est le garde-fou global des permissions par plugin que tu accordes dans
-[Plugins & API](doc-page:plugins) — resserre-le si tu exécutes des plugins que tu ne connais pas.
+[Plugins & API](doc-page:features/plugins) — resserre-le si tu exécutes des plugins que tu ne connais pas.
 
 ### Discord Rich Presence
 
@@ -110,13 +110,13 @@ Affiche ce que tu fais dans BMM sur ton profil Discord, ou coupe-le. Purement co
 
 Un Launch Pack est une **liste nommée d'exécutables qui démarrent ensemble**. Donne-lui un nom,
 ajoute les chemins `.exe` (un jeu, un outil de reconnaissance vocale, une app de carte…),
-choisis une icône, et un clic — ou un [deeplink](doc-page:../reference/api), ou une [tâche
-planifiée](doc-page:scheduler) — les lance tous.
+choisis une icône, et un clic — ou un [deeplink](doc-page:reference/api), ou une [tâche
+planifiée](doc-page:features/scheduler) — les lance tous.
 
 !!! tip "Construis ta routine « je m'installe pour jouer »"
 
     Le but n'est pas de lancer des apps ; c'est de lancer *ta config* dans le bon ordre sans
-    chercher cinq raccourcis. Fais un pack par jeu. Couple-le au [Planificateur](doc-page:scheduler)
+    chercher cinq raccourcis. Fais un pack par jeu. Couple-le au [Planificateur](doc-page:features/scheduler)
     (un Launch Pack est une action planifiable) et « 18h : active mon modpack multi, puis lance
     tout » devient une seule automatisation.
 
@@ -125,7 +125,7 @@ planifiée](doc-page:scheduler) — les lance tous.
 Enregistre des tâches — appliquer un modpack, lancer un launch pack, exporter tes données — et
 déclenche-les sur planning ou à la demande. Ça va bien au-delà d'une minuterie : conditions,
 boucles et étapes « attendre que » permettent de vrais workflows. Voir
-[Planificateur](doc-page:scheduler) pour le tableau complet.
+[Planificateur](doc-page:features/scheduler) pour le tableau complet.
 
 ### Storage Manager & benchmark
 
@@ -133,7 +133,7 @@ Deux outils liés vivent ici, tous deux sur la façon dont BMM déplace les fich
 
 Les **limites Smart I/O** (ci-dessus) rythment l'activation des mods pour ne pas monopoliser ton
 disque. Le **Storage Manager** est là où tu fixes les plafonds par disque, et le **recalcul
-SHA** reconstruit les hachages par fichier que compare la vérification d'[intégrité](doc-page:library)
+SHA** reconstruit les hachages par fichier que compare la vérification d'[intégrité](doc-page:features/library)
 — lance-le si tu as édité les fichiers d'un mod hors de BMM et veux que ses hachages collent à
 nouveau à la réalité.
 
@@ -154,7 +154,7 @@ que fait l'activation, sur ton matériel exact.
 ### Tags
 
 Gère tes tags de mods personnalisés — les libellés par lesquels tu filtres la
-[Bibliothèque](doc-page:library). Renomme-les ou supprime-les ici, au même endroit.
+[Bibliothèque](doc-page:features/library). Renomme-les ou supprime-les ici, au même endroit.
 
 ### Son & raccourcis clavier
 

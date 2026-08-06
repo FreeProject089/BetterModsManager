@@ -6,7 +6,7 @@ sa provenance. Si tu ne devais apprendre qu'un seul écran de BMM, prends celui-
 reste (profils, modpacks, listes) n'est qu'une façon différente d'organiser ce qu'elle
 contient.
 
-![L'écran Bibliothèque](../assets/screens/library.annotated.png)
+![L'écran Bibliothèque](assets/docs/media/screens/library.annotated.png)
 
 | | | |
 |---|---|---|
@@ -29,7 +29,7 @@ contient.
 
 === "Depuis un dépôt"
 
-    Voir [Dépôt Serveur](doc-page:repo). Un dépôt est une source partagée ; une fois ajouté,
+    Voir [Dépôt Serveur](doc-page:features/repo). Un dépôt est une source partagée ; une fois ajouté,
     ses mods apparaissent ici à côté des tiens, marqués du nom du dépôt.
     <!-- On lie vers `repo.md`, pas `repo.fr.md` : avec docs_structure: suffix, l'i18n
          résout le lien vers la version FR si elle existe, et retombe sur l'EN sinon. -->
@@ -79,7 +79,7 @@ silence — si tu coupes un mod sur lequel d'autres s'appuient, tu choisis s'ils
 ## Ce que « installé » veut dire ici
 
 Un mod dans la Bibliothèque est *disponible* ; un mod n'est *installé* que par rapport à un
-[profil](doc-page:profiles). C'est la distinction sur laquelle butent les débutants :
+[profil](doc-page:features/profiles). C'est la distinction sur laquelle butent les débutants :
 désinstaller depuis un profil ne supprime pas le mod, ça arrête juste ce profil de
 l'utiliser. Le mod reste en Bibliothèque, prêt pour un autre profil.
 
@@ -95,6 +95,6 @@ La Bibliothèque récompense quelques gestes :
 - **Glisser-déposer** un `.zip` ou un dossier sur la fenêtre pour l'ajouter.
 
 Il n'y a pas de multi-sélection dans la liste elle-même — tu prends un mod à la fois. Quand tu
-as besoin d'un lot (construire un [modpack](doc-page:modpacks), ou importer une [liste
-`.MM`](doc-page:modlist)), le modal de sélection te donne des cases à cocher et un tout-sélectionner.
-Détail complet dans [Astuces & contrôles](doc-page:../reference/tips).
+as besoin d'un lot (construire un [modpack](doc-page:features/modpacks), ou importer une [liste
+`.MM`](doc-page:features/modlist)), le modal de sélection te donne des cases à cocher et un tout-sélectionner.
+Détail complet dans [Astuces & contrôles](doc-page:reference/tips).

@@ -6,7 +6,7 @@ Mapper corrige ça sans que tu dézippes quoi que ce soit à la main.
 
 > Réorganise la structure de ton mod pour correspondre au répertoire du jeu.
 
-![Le Mod Mapper](../assets/screens/mapper.annotated.png)
+![Le Mod Mapper](assets/docs/media/screens/mapper.annotated.png)
 
 | | | |
 |---|---|---|
@@ -37,7 +37,7 @@ C'est la chose à comprendre avant de toucher à quoi que ce soit : **le Mapper 
 pas le jeu.** Quand tu remappes un élément, BMM le déplace *à l'intérieur du dossier du mod*
 pour que la structure du mod reflète l'endroit attendu par le jeu. Le répertoire du jeu est
 seulement *lu* ici — affiché à droite pour te donner une cible. Rien n'est écrit dans le jeu
-tant que tu ne [synchronises](doc-page:library) pas le profil ensuite, exactement comme d'habitude.
+tant que tu ne [synchronises](doc-page:features/library) pas le profil ensuite, exactement comme d'habitude.
 
 C'est pour ça que le Mapper est sûr pour expérimenter : le pire des cas est un mod mal formé,
 que tu peux reformer à nouveau — jamais un dossier de jeu rempli de fichiers perdus.

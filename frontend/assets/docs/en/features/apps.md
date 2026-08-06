@@ -7,7 +7,7 @@ The tools *around* modding — the ones you'd otherwise hunt down on five differ
 App Catalog lists companion apps and utilities, installs them for you, keeps track of the
 version you have, and launches them — without you managing downloads by hand.
 
-![The App Catalog](../assets/screens/apps.annotated.png)
+![The App Catalog](assets/docs/media/screens/apps.annotated.png)
 
 | | | |
 |---|---|---|

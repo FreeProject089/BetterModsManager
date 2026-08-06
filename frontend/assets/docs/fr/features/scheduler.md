@@ -4,10 +4,10 @@
 > Planifie des actions BMM (ponctuelles ou récurrentes) — activer un mod, un modpack, un
 > profil…
 
-Accessible depuis [Plugins & API](doc-page:plugins). C'est la partie de BMM qui agit pendant que tu
+Accessible depuis [Plugins & API](doc-page:features/plugins). C'est la partie de BMM qui agit pendant que tu
 regardes ailleurs.
 
-![Le planificateur](../assets/screens/scheduler.annotated.png)
+![Le planificateur](assets/docs/media/screens/scheduler.annotated.png)
 
 | | | |
 |---|---|---|
@@ -53,9 +53,9 @@ une minuterie et devient utile. Les conditions :
 | Condition | Vraie quand |
 |---|---|
 | `Toujours` | Sans condition (par défaut). |
-| `Profil actif` | Un [profil](doc-page:profiles) donné est le courant. |
+| `Profil actif` | Un [profil](doc-page:features/profiles) donné est le courant. |
 | `Mod activé` / `Mod désactivé` | L'état d'un mod donné. |
-| `Modpack actif` / `Modpack inactif` | Tous les mods d'un [modpack](doc-page:modpacks) sont on / off. |
+| `Modpack actif` / `Modpack inactif` | Tous les mods d'un [modpack](doc-page:features/modpacks) sont on / off. |
 | `Tous les mods du profil actif sont on` | Rien n'est éteint dans le profil. |
 | `App en cours` / `App non lancée` | Un processus (par nom) tourne ou non — le jeu, par exemple. |
 | `En ligne` | La machine a une connexion internet. |
@@ -83,15 +83,15 @@ Il y a ~60 actions réparties en huit groupes :
 |---|---|
 | **Mods & profils** | Activer un profil · activer/désactiver un mod · activer/désactiver un modpack · créer un modpack · ajouter un mod depuis une URL · exporter/importer une liste · tout activer/désactiver · scanner le dossier · vérifier les MàJ de mods |
 | **Dépôt & partage** | Connecter · synchroniser · générer · mettre à jour · héberger un dépôt |
-| **Apps & lancement** | Lancer une app · installer une app · ouvrir un fichier/dossier · **lancer un [Launch Pack](doc-page:launch-packs)** |
+| **Apps & lancement** | Lancer une app · installer une app · ouvrir un fichier/dossier · **lancer un [Launch Pack](doc-page:features/launch-packs)** |
 | **Apparence** | Appliquer un thème |
-| **Benchmarks & stockage** | Benchmark d'app · **benchmarker un disque** · **appliquer une limite de vitesse** · basculer **Smart I/O** / **Auto-calibration** · **vérifier l'espace libre** (voir [Stockage](doc-page:storage)) |
+| **Benchmarks & stockage** | Benchmark d'app · **benchmarker un disque** · **appliquer une limite de vitesse** · basculer **Smart I/O** / **Auto-calibration** · **vérifier l'espace libre** (voir [Stockage](doc-page:features/storage)) |
 | **Confidentialité & enregistreur** | Consentement télémétrie · enregistreur de session · exporter/importer un replay |
 | **Système & flux** | Afficher une notification · Discord RPC · exporter une sauvegarde · définir une variable · **lancer une autre tâche planifiée** · redémarrer BMM · ouvrir une URL · **lancer une commande personnalisée** · exécuter un deeplink `bmm://` brut |
 | **Logique & maths** | Calcul mathématique dans une variable · ternaire · table de décision · garde d'arrêt de tâche |
 
 Beaucoup d'actions s'exécutent en émettant un deeplink `bmm://` canonique via le gestionnaire de
-l'app — la même plomberie qu'expose la page [Plugins & API](doc-page:plugins), d'où le fait que les deux
+l'app — la même plomberie qu'expose la page [Plugins & API](doc-page:features/plugins), d'où le fait que les deux
 systèmes peuvent se piloter mutuellement.
 
 ## Tourner quand BMM est fermé

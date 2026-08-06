@@ -9,7 +9,7 @@ an account or a browser to read it — BMM fetches the posts each time you open 
 what you see is current without a restart.
 
 It is also the front door to a larger platform. BetterCommunity is the web service behind
-[Server Repos](doc-page:repo) and the community catalogs the [App Catalog](doc-page:apps) reads; this
+[Server Repos](doc-page:features/repo) and the community catalogs the [App Catalog](doc-page:features/apps) reads; this
 screen shows its blog, not the whole of it.
 
 <!-- TODO(content): capture + annotate the BetterCommunity screen (feed, filter chips,
@@ -88,8 +88,8 @@ not just the latest text.
 
 The blog is the visible tip of BetterCommunity. The same platform:
 
-- hosts **community catalogs** the [App Catalog](doc-page:apps) can subscribe to;
-- backs the shareable **[Server Repos](doc-page:repo)** you sync mods from;
+- hosts **community catalogs** the [App Catalog](doc-page:features/apps) can subscribe to;
+- backs the shareable **[Server Repos](doc-page:features/repo)** you sync mods from;
 - is where projects publish the release notes you also see under **What's New** in BMM.
 
 So a post here announcing "new repo available" or "catalog updated" points at features you

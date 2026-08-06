@@ -4,7 +4,7 @@ BMM is built by the Better* project and its contributors. The in-app **Credits**
 authoritative list of people — it's generated from the project's own data, so it stays right when this
 page would drift.
 
-- **Website & community:** [BetterCommunity](doc-page:../features/community)
+- **Website & community:** [BetterCommunity](doc-page:features/community)
 - **Source & releases:** [github.com/FreeProject089](https://github.com/FreeProject089)
 - **These docs:** [BMM-Docs](https://github.com/FreeProject089/BMM-Docs) — corrections welcome.
 
@@ -13,7 +13,7 @@ page would drift.
 ## What BMM is built on
 
 Every dependency below is doing a specific job, and several were chosen over an obvious alternative
-for a reason recorded in [Architecture](doc-page:../how-it-works/architecture).
+for a reason recorded in [Architecture](doc-page:how-it-works/architecture).
 
 ### The shell
 
@@ -67,7 +67,7 @@ for a reason recorded in [Architecture](doc-page:../how-it-works/architecture).
 
 TypeScript compiled 1:1 to `frontend/js/`, with **no bundler and no framework**. The only runtime
 dependency of consequence is **rrweb** for session replay. See
-[Architecture](doc-page:../how-it-works/architecture) for what that choice does and doesn't buy.
+[Architecture](doc-page:how-it-works/architecture) for what that choice does and doesn't buy.
 
 ---
 
@@ -76,7 +76,7 @@ dependency of consequence is **rrweb** for session replay. See
 This site is **MkDocs** with the **Material** theme, bilingual through the i18n plugin (`page.md` +
 `page.fr.md`), with Mermaid diagrams rendered natively and a small Python hook that rewrites the
 BCWEB-style `:::` directives into Material admonitions. See
-[Contributing to the docs](doc-page:../how-it-works/extending).
+[Contributing to the docs](doc-page:how-it-works/extending).
 
 ---
 

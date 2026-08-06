@@ -352,17 +352,17 @@ appelant** — l'épinglage a lieu quand une clé d'éditeur est fournie.
 
 | Sous-système | En une ligne |
 |---|---|
-| Profils & activation | Un profil, c'est trois dossiers plus une liste ordonnée `active_mods` ; l'ordre d'activation *est* cet ordre. Voir [Profils & activation](doc-page:profiles-activation) |
-| Détection de conflits | Deux maps en mémoire — mod→fichiers et l'inverse fichier→mods — donnant un accès O(1), invalidées par mtime. Voir [Conflits](doc-page:conflicts) |
-| Mapper | Restructure la disposition interne d'un mod pour coller à l'arborescence du jeu. Voir [Mapper](doc-page:mapper) |
-| Dépôt serveur | Publier un `repo.json` signé, synchro delta reprenable par chunks, l'héberger, ou générer un serveur autonome. Voir [Synchro & dépôts](doc-page:sync-repos) |
-| Plugins & API | Tokens par plugin + une map de permissions, une API HTTP locale, et le schéma `bmm://`. Voir [API & deeplinks](doc-page:../reference/api) |
-| Planificateur | Le moteur vit dans le **frontend** ; Rust ne fait que persister et exécuter les commandes externes opt-in. Voir [Référence des actions](doc-page:../reference/actions) |
+| Profils & activation | Un profil, c'est trois dossiers plus une liste ordonnée `active_mods` ; l'ordre d'activation *est* cet ordre. Voir [Profils & activation](doc-page:how-it-works/profiles-activation) |
+| Détection de conflits | Deux maps en mémoire — mod→fichiers et l'inverse fichier→mods — donnant un accès O(1), invalidées par mtime. Voir [Conflits](doc-page:how-it-works/conflicts) |
+| Mapper | Restructure la disposition interne d'un mod pour coller à l'arborescence du jeu. Voir [Mapper](doc-page:how-it-works/mapper) |
+| Dépôt serveur | Publier un `repo.json` signé, synchro delta reprenable par chunks, l'héberger, ou générer un serveur autonome. Voir [Synchro & dépôts](doc-page:how-it-works/sync-repos) |
+| Plugins & API | Tokens par plugin + une map de permissions, une API HTTP locale, et le schéma `bmm://`. Voir [API & deeplinks](doc-page:reference/api) |
+| Planificateur | Le moteur vit dans le **frontend** ; Rust ne fait que persister et exécuter les commandes externes opt-in. Voir [Référence des actions](doc-page:reference/actions) |
 | Thèmes | Tokens de design `--bmm-*` ; le moteur injecte les styles à l'exécution et ne modifie jamais les fichiers source. Les thèmes intégrés sont des fichiers, pas du code |
 | i18n | Un JSON plat clé→chaîne par langue, lu à travers Rust pour que les langues intégrées et importées se résolvent identiquement |
 | Télémétrie & replay | Opt-in, file locale d'abord ; rrweb capture le vrai DOM, masqué par défaut. L'enregistreur de session **écrit ses événements sur le disque** au fil de l'eau et le cœur assemble le `.bmmreplay` en streaming : l'app ne détient jamais une session |
 | Rapports de crash | Buffer circulaire + journal temps réel, hook de panique, et un marqueur de sortie propre pour distinguer un crash d'une fermeture |
-| Benchmarks | Échantillonnage live plus une suite par opération (scan / hash / copie / extraction). Voir [Performance](doc-page:performance) |
+| Benchmarks | Échantillonnage live plus une suite par opération (scan / hash / copie / extraction). Voir [Performance](doc-page:how-it-works/performance) |
 | Catalogue d'apps & launch packs | Flux d'apps communautaires avec téléchargements assainis ; des lots nommés lancés en une action |
 
 ---
@@ -397,8 +397,8 @@ appelant** — l'épinglage a lieu quand une clé d'éditeur est fournie.
 
 ## Voir aussi
 
-- [Référence API & deeplinks](doc-page:../reference/api) · [Référence des actions](doc-page:../reference/actions)
-- [Performance](doc-page:performance) · [Intégrité & hachage](doc-page:integrity-hashing) · [Sécurité](doc-page:security)
+- [Référence API & deeplinks](doc-page:reference/api) · [Référence des actions](doc-page:reference/actions)
+- [Performance](doc-page:how-it-works/performance) · [Intégrité & hachage](doc-page:how-it-works/integrity-hashing) · [Sécurité](doc-page:how-it-works/security)
 
 !!! info "À voir dans l'app"
     Aide & autres → Développeur → **La stack technique**, **Moteur & threads**, **Architecture

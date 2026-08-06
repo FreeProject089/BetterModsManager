@@ -62,7 +62,7 @@ Il y a **trois pools de threads distincts**, chacun plafonné pour sa propre rai
 | Pool | Taille | Pourquoi |
 |---|---|---|
 | Rayon global | plafonné, piles de 512 Ko | *« Empêcher Rayon de monopoliser 100% du CPU et de faire ramer l'OS »* — le travail parallèle de BMM ne récurse jamais profondément, ce qui économise ~7 Mo de RSS engagé par thread |
-| Hachage | ≤ 4 (environ la moitié des cœurs) | BLAKE3 est assez rapide pour manger tous les cœurs — voir [Intégrité & hachage](doc-page:integrity-hashing) |
+| Hachage | ≤ 4 (environ la moitié des cœurs) | BLAKE3 est assez rapide pour manger tous les cœurs — voir [Intégrité & hachage](doc-page:how-it-works/integrity-hashing) |
 | Smart I/O | 1–2 | le chemin de copie ci-dessus |
 
 L'allocateur est aussi remplacé : **mimalloc** à la place du HeapAlloc par défaut de Windows, pour un
@@ -152,7 +152,7 @@ toutes la même forme — un pic mémoire égal à la taille du payload, sans pl
 | Installation depuis le catalogue d'apps | Hache au fil du streaming, puis renomme après le contrôle SHA-256 |
 | Import de modpack | Streame vers le zip temporaire qu'il allait de toute façon écrire |
 | Export zip | Copie chaque entrée via un reader au lieu de lire les fichiers entiers en mémoire |
-| Enregistrement de session | Spoolé sur disque au fil de l'eau ; le `.bmmreplay` est assemblé en streaming (voir [Confidentialité & télémétrie](doc-page:../features/privacy-telemetry)) |
+| Enregistrement de session | Spoolé sur disque au fil de l'eau ; le `.bmmreplay` est assemblé en streaming (voir [Confidentialité & télémétrie](doc-page:features/privacy-telemetry)) |
 
 La règle à retenir : si la destination est un fichier, écris dans le fichier. Un tampon intermédiaire
 n'apporte rien et transforme une grosse entrée en plantage mémoire.
@@ -176,9 +176,9 @@ d'intégrité (BLAKE3) »* qui *« re-hache chaque fichier et le compare à la b
 le contrôle qui détecte un mod altéré ou corrompu.
 
 Les résultats restent locaux. Tu peux aussi lancer un benchmark depuis le
-[planificateur](doc-page:../features/scheduler) et brancher sur le résultat — mesure un disque, et s'il
+[planificateur](doc-page:features/scheduler) et brancher sur le résultat — mesure un disque, et s'il
 revient sous 50 Mo/s, applique un plafond ou préviens-toi. Voir la
-[Référence des actions](doc-page:../reference/actions).
+[Référence des actions](doc-page:reference/actions).
 
 !!! info "À voir dans l'app"
     Aide & autres → Développeur → **Limiteur d'I/O disque**, **Moteur & threads**, **Hachage

@@ -29,7 +29,7 @@ Les lettres sont **personnalisables** dans **Paramètres → Raccourcis clavier*
 
 ## La souris dans la Bibliothèque
 
-La [Bibliothèque](doc-page:../features/library) est là où tu passeras le plus de temps, et elle
+La [Bibliothèque](doc-page:features/library) est là où tu passeras le plus de temps, et elle
 récompense quelques gestes :
 
 | Fais ça | Pour… |
@@ -60,15 +60,15 @@ chose — le panneau est là pour le jour où un mod déraille et où tu veux sa
 ## Sélectionner plusieurs mods d'un coup
 
 Le clic simple sélectionne un mod à la fois dans la Bibliothèque. Quand tu as vraiment besoin
-d'un lot — par exemple pour construire un [modpack](doc-page:../features/modpacks) — utilise le
+d'un lot — par exemple pour construire un [modpack](doc-page:features/modpacks) — utilise le
 **modal de sélection** : il liste tes mods avec des cases à cocher et un **tout sélectionner**,
-tu coches un ensemble et tu valides d'un coup. Importer une [liste `.MM`](doc-page:../features/modlist)
+tu coches un ensemble et tu valides d'un coup. Importer une [liste `.MM`](doc-page:features/modlist)
 marche pareil : tu peux installer toute la liste ou cocher seulement les parties voulues avec
 **Installer la sélection**.
 
 ## Le pick tool de l'éditeur de thèmes
 
-Dans l'[Éditeur de thèmes](doc-page:../features/themes), pas besoin de chercher la bonne variable
+Dans l'[Éditeur de thèmes](doc-page:features/themes), pas besoin de chercher la bonne variable
 CSS. Clique la **pipette**, puis clique **n'importe quel élément dans BMM** — l'éditeur saute
 directement à cet élément pour que tu restyles exactement ce que tu as pointé. C'est le plus
 rapide pour répondre à « comment je change *ce* bouton ».
@@ -80,12 +80,12 @@ rapide pour répondre à « comment je change *ce* bouton ».
     **Paramètres → Données → Exporter** écrit toute ta config dans un fichier en un clic.
     Fais-le avant un gros import, avant d'essayer le modpack de quelqu'un, et toujours avant la
     réinitialisation d'usine. C'est l'assurance la moins chère de l'app — et un tutoriel
-    [Données & Sauvegarde](doc-page:../features/settings) t'accompagne.
+    [Données & Sauvegarde](doc-page:features/settings) t'accompagne.
 
 !!! tip "Laisse les imports créer leur propre profil"
 
     Quand tu importes une liste `.MM` ou un dépôt, coche **profil auto**. BMM lui construit un
-    [profil](doc-page:../features/profiles) dédié au lieu de le mélanger à ta config actuelle — ce
+    [profil](doc-page:features/profiles) dédié au lieu de le mélanger à ta config actuelle — ce
     qui est presque toujours ce qu'on veut en essayant la configuration de quelqu'un d'autre.
 
 !!! tip "Un dossier de jeu par profil"

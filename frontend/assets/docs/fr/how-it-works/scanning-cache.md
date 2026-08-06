@@ -41,7 +41,7 @@ la mtime stockée** plutôt que de faire confiance à un zéro — *« Contrôle
     fichiers en cache reste donc valide (à juste titre, la liste n'a pas changé) mais rien ne déclenche
     un re-hachage. C'est exactement pour ça que la liste de fichiers et les hashs sont deux caches
     séparés avec des déclencheurs séparés : la liste est bon marché et rafraîchie à l'occasion, et les
-    **hashs** sont ce qu'un [contrôle d'intégrité](doc-page:integrity-hashing) recalcule quand tu veux la
+    **hashs** sont ce qu'un [contrôle d'intégrité](doc-page:how-it-works/integrity-hashing) recalcule quand tu veux la
     vérité.
 
 ---
@@ -53,7 +53,7 @@ maintenant reporté dans une file bridée qui hache *« un mod à la fois, sur l
 avec une pause entre chacun »*. Trois plafonds s'empilent ici :
 
 - **un mod à la fois** — jamais une rafale de jobs de hachage concurrents,
-- le **pool de hash à ≤4 threads** (voir [Intégrité & hachage](doc-page:integrity-hashing)),
+- le **pool de hash à ≤4 threads** (voir [Intégrité & hachage](doc-page:how-it-works/integrity-hashing)),
 - une **pause entre les mods**, pour qu'une longue file ne monopolise pas le disque.
 
 Résultat : un gros import termine son travail *visible* immédiatement et pose ses hashs en arrière-plan,
@@ -100,7 +100,7 @@ une **lettre de lecteur qui change** — les profils stockent des chemins absolu
 
 Un scan est strictement **en lecture seule**. Il construit de la connaissance ; il ne modifie, ne
 déplace et ne supprime jamais un mod. Les fichiers non reconnus sont listés pour que tu les nommes ou
-les [mappes](doc-page:mapper), pas touchés. Rien dans le chemin de scan n'écrit dans ton dossier de jeu —
+les [mappes](doc-page:how-it-works/mapper), pas touchés. Rien dans le chemin de scan n'écrit dans ton dossier de jeu —
 ça n'arrive que quand tu actives quelque chose.
 
 !!! info "À voir dans l'app"

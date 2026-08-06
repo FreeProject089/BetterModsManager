@@ -8,7 +8,7 @@ hand stays at the version you installed, forever, silently.
 
 > Browse Server Repositories — official and partner server repositories.
 
-![The Server Repo screen](../assets/screens/repo.annotated.png)
+![The Server Repo screen](assets/docs/media/screens/repo.annotated.png)
 
 | | | |
 |---|---|---|
@@ -25,7 +25,7 @@ hand stays at the version you installed, forever, silently.
 ## Connecting to a repo
 
 Browse the official and partner list, or paste a repo URL directly. Once connected, the
-repo's mods appear in your [Library](doc-page:library) alongside your local ones, marked with the
+repo's mods appear in your [Library](doc-page:features/library) alongside your local ones, marked with the
 repo's name.
 
 ## Syncing mods from a repo
@@ -46,7 +46,7 @@ connecting:
 
 One mod can point at several repos. That's deliberate: if a source disappears, the mod is
 still tracked by the other. There's also a **global update repositories** setting in
-[Settings](doc-page:settings) — list a repo there and *every* installed mod is checked against it.
+[Settings](doc-page:features/settings) — list a repo there and *every* installed mod is checked against it.
 
 ### Direct downloads have no version
 

@@ -9,7 +9,7 @@ silence.
 
 > Parcourir les dépôts serveur — dépôts officiels et partenaires.
 
-![L'écran Dépôt Serveur](../assets/screens/repo.annotated.png)
+![L'écran Dépôt Serveur](assets/docs/media/screens/repo.annotated.png)
 
 | | | |
 |---|---|---|
@@ -26,7 +26,7 @@ silence.
 ## Se connecter à un dépôt
 
 Parcours la liste officielle et partenaire, ou colle une URL de dépôt directement. Une fois
-connecté, les mods du dépôt apparaissent dans ta [Bibliothèque](doc-page:library) à côté des tiens,
+connecté, les mods du dépôt apparaissent dans ta [Bibliothèque](doc-page:features/library) à côté des tiens,
 marqués du nom du dépôt.
 
 ## Synchroniser les mods d'un dépôt
@@ -47,7 +47,7 @@ est une étape distincte de se connecter :
 
 Un mod peut viser plusieurs dépôts. C'est voulu : si une source disparaît, le mod reste suivi
 par l'autre. Il existe aussi un réglage de **dépôts de mise à jour globaux** dans les
-[Paramètres](doc-page:settings) — mets-y un dépôt et *chaque* mod installé est vérifié contre lui.
+[Paramètres](doc-page:features/settings) — mets-y un dépôt et *chaque* mod installé est vérifié contre lui.
 
 ### Un téléchargement direct n'a pas de version
 

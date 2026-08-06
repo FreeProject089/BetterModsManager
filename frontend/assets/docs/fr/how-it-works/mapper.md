@@ -46,7 +46,7 @@ la forme doit être correcte *dans le dossier du mod*, et c'est exactement à ç
 - **Le `content_id` du mod change.** Cet identifiant est une empreinte des paires (chemin relatif,
   taille) triées : déplacer des fichiers le change — sauf si le mod embarque un `bmm.json` avec un `id`
   explicite, qui a priorité. Si tu veux qu'un mod garde la même identité inter-machines à travers une
-  restructuration, donne-lui un id dans `bmm.json`. Voir [Intégrité & hachage](doc-page:integrity-hashing).
+  restructuration, donne-lui un id dans `bmm.json`. Voir [Intégrité & hachage](doc-page:how-it-works/integrity-hashing).
 - **Sa baseline d'intégrité ne correspond plus.** Le prochain contrôle signalera les fichiers déplacés
   en `missing` + `added`. Rétablis la baseline après le mappage.
 
@@ -114,11 +114,11 @@ mod change réellement — passer d'un mod à l'autre est donc bon marché.
 
 ## Avant de commencer : le diagnostic
 
-La page utilisateur [Mapper](doc-page:../features/mapper) couvre le **Diagnostic de structure**, qui compare
+La page utilisateur [Mapper](doc-page:features/mapper) couvre le **Diagnostic de structure**, qui compare
 l'arbre du mod à celui du jeu et te dit quel serait le chemin final déployé. Lance-le d'abord. Il répond
 à la question qui compte vraiment — « est-ce que le jeu va trouver ça ? » — avant que tu déplaces quoi
 que ce soit, et c'est plus rapide que de raisonner sur les arbres à l'œil.
 
 !!! info "À voir dans l'app"
     Aide & autres → Développeur → **Mappeur de mods** ; le tutoriel **Mapper**. Et la page
-    [Mapper](doc-page:../features/mapper) du guide utilisateur pour la démonstration pas à pas.
+    [Mapper](doc-page:features/mapper) du guide utilisateur pour la démonstration pas à pas.

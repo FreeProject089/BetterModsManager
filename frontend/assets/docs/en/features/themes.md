@@ -7,7 +7,7 @@ Not a light/dark switch. BMM ships **twelve** built-in themes (dark and light) a
 that can rebuild the app's entire look — then export it as a file someone else imports in one
 click.
 
-![The Theme Editor](../assets/screens/themes.annotated.png)
+![The Theme Editor](assets/docs/media/screens/themes.annotated.png)
 
 | | | |
 |---|---|---|
@@ -41,7 +41,7 @@ Pick the one that matches how far you want to go. You can stop at the first.
     > type…
 
     This is the one people don't expect: you're not restyling BMM's elements, you're **adding
-    your own**. A button that runs a [deeplink](doc-page:../reference/api), a banner with your
+    your own**. A button that runs a [deeplink](doc-page:reference/api), a banner with your
     server's rules, a badge on a profile card.
 
 === "CSS"
@@ -55,7 +55,7 @@ Pick the one that matches how far you want to go. You can stop at the first.
     BMM** — the editor jumps straight to it. It's the fastest answer to "how do I recolour
     *that* button". Building a light theme? Set the theme's **mode** to *light* and BMM applies
     automatic contrast patches so text stays readable. (More controls in
-    [Tips & controls](doc-page:../reference/tips).)
+    [Tips & controls](doc-page:reference/tips).)
 
 ## Assets
 
@@ -70,7 +70,7 @@ the images travel with it — no broken links, no "works on my machine".
 ## Sharing
 
 A theme exports as a file and imports as one. Beyond that, a **theme catalogue** works like
-the [App Catalog](doc-page:apps):
+the [App Catalog](doc-page:features/apps):
 
 > Pick the themes to include, then export the catalog or add it as a source.
 

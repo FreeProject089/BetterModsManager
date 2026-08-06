@@ -1,7 +1,5 @@
 # Conflicts
 
-[↗ Open this in the BMM app](bmm://docs/open?article=conflicts){ .md-button .md-button--primary }
-
 Two mods are in **conflict** when they ship the same file. Some managers let one silently overwrite
 the other. BMM detects the overlap *before* it writes anything and warns you — but the resolution
 itself is deliberately simple, and the interesting engineering is in making detection free and
@@ -136,7 +134,7 @@ Two safety details in that cleanup:
 | Mod B's version of a shared file | Enable B **after** A |
 | To see what actually overlaps | Open the conflict view — the file list is exact, and free to compute |
 | To undo everything | Disable in any order; each file falls back to the next mod that has it, then to the game's original |
-| Per-file cherry-picking | Not supported — use the [Mapper](doc-page:mapper) to change what a mod ships, or edit the mod folder |
+| Per-file cherry-picking | Not supported — use the [Mapper](doc-page:how-it-works/mapper) to change what a mod ships, or edit the mod folder |
 
 !!! info "See it in the app"
     Help & other → Developer → **Conflict management**; the **Conflicts** tutorial.

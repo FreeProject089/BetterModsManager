@@ -6,7 +6,7 @@
 Si BMM ne fait pas ce dont tu as besoin, c'est ici que ça s'ajoute — sans attendre une
 version.
 
-![L'écran Plugins](../assets/screens/plugins.annotated.png)
+![L'écran Plugins](assets/docs/media/screens/plugins.annotated.png)
 
 | | | |
 |---|---|---|
@@ -20,7 +20,7 @@ version.
     sont **pas officiellement relus**. Installe depuis des gens en qui tu as une raison
     d'avoir confiance, comme pour n'importe quel autre exécutable.
 
-    Ils sont toutefois **bornés** : un plugin agit via l'[API](doc-page:../reference/api) avec son
+    Ils sont toutefois **bornés** : un plugin agit via l'[API](doc-page:reference/api) avec son
     propre token, et ne fait que ce que tu lui as accordé. Relis ces autorisations dans
     **Plugins → Permissions**.
 
@@ -55,7 +55,7 @@ qu'il ne fait qu'activer des mods mérite un second regard.
     La même API locale répond à tes propres scripts, un fichier `.bat`, PowerShell, ou un
     deeplink `bmm://` sur une page web — n'importe quoi sur ton PC. Les interrupteurs
     **globaux** dans **Plugins → Permissions** (et le mode bac à sable dans
-    [Paramètres](doc-page:settings)) gouvernent *tous* ces appelants d'un coup, pas seulement les
+    [Paramètres](doc-page:features/settings)) gouvernent *tous* ces appelants d'un coup, pas seulement les
     plugins installés.
 
 ## Le mode strict {#strict-mode}

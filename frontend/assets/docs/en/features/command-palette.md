@@ -10,7 +10,7 @@ move with <kbd>↑</kbd> / <kbd>↓</kbd>, and press <kbd>Enter</kbd> to run.
 The palette is built from the live app, so it always matches what's actually in front of you.
 
 - **Go to any screen** — Library, Profiles, Modpacks, Server Repo, .MM Lists, App Catalog, Plugins,
-  BetterCommunity, Help & other, Settings — **including your own [custom navbar pages](doc-page:plugins)**.
+  BetterCommunity, Help & other, Settings — **including your own [custom navbar pages](doc-page:features/plugins)**.
   A page you pinned yesterday is searchable today; nothing to register by hand.
 - **Run an action** without hunting for its button:
     - *Mods* — add a mod, scan the folder, verify integrity, show history, enable/disable all, check for updates.

@@ -1,7 +1,5 @@
 # Conflits
 
-[↗ Ouvrir dans l'app BMM](bmm://docs/open?article=conflicts){ .md-button .md-button--primary }
-
 Deux mods sont en **conflit** quand ils livrent le même fichier. Certains gestionnaires laissent l'un
 écraser l'autre en silence. BMM détecte le recouvrement *avant* d'écrire quoi que ce soit et te
 prévient — mais la résolution elle-même est délibérément simple, et l'ingénierie intéressante est
@@ -145,7 +143,7 @@ Deux détails de sûreté dans ce nettoyage :
 | La version du fichier partagé de Mod B | Active B **après** A |
 | Voir ce qui se recouvre réellement | Ouvre la vue des conflits — la liste est exacte, et gratuite à calculer |
 | Tout annuler | Désactive dans n'importe quel ordre ; chaque fichier retombe sur le mod suivant qui l'a, puis sur l'original du jeu |
-| Choisir fichier par fichier | Non supporté — utilise le [Mapper](doc-page:mapper) pour changer ce qu'un mod livre, ou édite le dossier du mod |
+| Choisir fichier par fichier | Non supporté — utilise le [Mapper](doc-page:how-it-works/mapper) pour changer ce qu'un mod livre, ou édite le dossier du mod |
 
 !!! info "À voir dans l'app"
     Aide & autres → Développeur → **Gestion des conflits** ; le tutoriel **Conflits**.

@@ -37,7 +37,7 @@ chaud **refuse délibérément** :
 
 Donc hacher une bibliothèque est parallèle **entre fichiers**, pas à l'intérieur d'un seul. C'est plus
 lent sur un unique fichier énorme et bien plus doux pour la machine — le même arbitrage que partout
-ailleurs dans [Performances](doc-page:performance).
+ailleurs dans [Performances](doc-page:how-it-works/performance).
 
 ---
 
@@ -146,7 +146,7 @@ questions différentes : identité contre intégrité.
 
 La suite de benchmarks a une charge dédiée à exactement ça — *« Vérification d'intégrité (BLAKE3) »*,
 qui *« re-hache chaque fichier et le compare à la baseline stockée — le contrôle d'intégrité que BMM
-exécute pour détecter un mod altéré ou corrompu »*. Voir [Performances](doc-page:performance).
+exécute pour détecter un mod altéré ou corrompu »*. Voir [Performances](doc-page:how-it-works/performance).
 
 !!! info "À voir dans l'app"
     Aide & autres → Développeur → **Hachage BLAKE3** et **Moteur d'intégrité**.

@@ -1,7 +1,7 @@
 # .MM Lists
 
 A `.MM` file is your **complete setup, written down** — and unlike a
-[modpack](doc-page:modpacks), it carries the download links, so the person receiving it doesn't
+[modpack](doc-page:features/modpacks), it carries the download links, so the person receiving it doesn't
 need to own the mods first.
 
 BMM's own definition:
@@ -12,7 +12,7 @@ BMM's own definition:
 That's the difference in one line. A modpack says *which mods*; a `.MM` list says *which
 mods, where to get them, in what order, and what to do when they clash*.
 
-![The .MM Lists screen](../assets/screens/modlist.annotated.png)
+![The .MM Lists screen](assets/docs/media/screens/modlist.annotated.png)
 
 | | | |
 |---|---|---|
@@ -32,7 +32,7 @@ mods, where to get them, in what order, and what to do when they clash*.
 
 *Exactly* is the operative word, and it's why the order and the conflict rules travel with
 the list. Two people with the same mods and a different activation order do **not** have the
-same game — see [conflicts](doc-page:library#conflicts).
+same game — see [conflicts](doc-page:features/library#conflicts).
 
 ### Include hashes?
 
@@ -47,7 +47,7 @@ else's). Skip them for a quick hand-off to a friend on a fast connection.
 
 BMM retrieves the archives and extracts them (*Installation in progress…*), then respects
 the order the list carries. Tick **auto-profile** and it builds a dedicated
-[profile](doc-page:profiles) for the list rather than mixing it into your current one — which is
+[profile](doc-page:features/profiles) for the list rather than mixing it into your current one — which is
 almost always what you want when trying someone else's setup.
 
 ## What actually travels in a `.MM`
@@ -58,7 +58,7 @@ carries everything needed to reproduce it:
 | Per mod | What it's for |
 |---|---|
 | **Download links** | One or more URLs — tagged `github`, `google_drive`, `direct`, `mega`, or `other` — so the recipient can fetch the mod without owning it first. |
-| **File tree** | The mod's file layout (paths and sizes), and optional per-file **hashes**. This is what powers verification and what BMM compares to find [conflicts](doc-page:library#conflicts). |
+| **File tree** | The mod's file layout (paths and sizes), and optional per-file **hashes**. This is what powers verification and what BMM compares to find [conflicts](doc-page:features/library#conflicts). |
 | **Install notes** | Any placement or special-setup instructions the author attached. |
 | **Order** | The mod's place in the list. |
 
@@ -66,5 +66,5 @@ carries everything needed to reproduce it:
 
     A `.MM` doesn't carry a separate rulebook for clashes. What it carries is the **order**,
     and the order *is* the resolution: when two mods ship the same file, the one activated
-    later wins (see [conflicts](doc-page:library#conflicts)). Reproducing someone's setup
+    later wins (see [conflicts](doc-page:features/library#conflicts)). Reproducing someone's setup
     "exactly" means reproducing their order — which is exactly what importing a `.MM` does.

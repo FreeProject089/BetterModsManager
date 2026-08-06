@@ -331,17 +331,17 @@ is **opt-in per caller**: pinning happens when a publisher key is supplied.
 
 | Subsystem | In one line |
 |---|---|
-| Profiles & activation | A profile is three folders plus an ordered `active_mods` list; activation order *is* that order. See [Profiles & activation](doc-page:profiles-activation) |
-| Conflict detection | Two in-memory maps — mod→files and the inverted file→mods — giving O(1) lookup, mtime-invalidated. See [Conflicts](doc-page:conflicts) |
-| Mapper | Restructure a mod's internal layout to match the game tree. See [Mapper](doc-page:mapper) |
-| Server repo | Publish a signed `repo.json`, chunked resumable delta sync, host it, or generate a standalone server. See [Sync & repos](doc-page:sync-repos) |
-| Plugins & API | Per-plugin tokens + a permission map, a local HTTP API, and the `bmm://` scheme. See [API & deeplinks](doc-page:../reference/api) |
-| Scheduler | The engine lives in the **frontend**; Rust only persists it and runs opt-in external commands. See [Action reference](doc-page:../reference/actions) |
+| Profiles & activation | A profile is three folders plus an ordered `active_mods` list; activation order *is* that order. See [Profiles & activation](doc-page:how-it-works/profiles-activation) |
+| Conflict detection | Two in-memory maps — mod→files and the inverted file→mods — giving O(1) lookup, mtime-invalidated. See [Conflicts](doc-page:how-it-works/conflicts) |
+| Mapper | Restructure a mod's internal layout to match the game tree. See [Mapper](doc-page:how-it-works/mapper) |
+| Server repo | Publish a signed `repo.json`, chunked resumable delta sync, host it, or generate a standalone server. See [Sync & repos](doc-page:how-it-works/sync-repos) |
+| Plugins & API | Per-plugin tokens + a permission map, a local HTTP API, and the `bmm://` scheme. See [API & deeplinks](doc-page:reference/api) |
+| Scheduler | The engine lives in the **frontend**; Rust only persists it and runs opt-in external commands. See [Action reference](doc-page:reference/actions) |
 | Themes | `--bmm-*` design tokens; the engine injects styles at runtime and never edits source files. Built-ins are files, not code |
 | i18n | Flat key→string JSON per language, read through Rust so bundled and imported languages resolve identically |
 | Telemetry & replay | Opt-in, local-first queue; rrweb captures the real DOM, masked by default. The session recorder **spools events to disk** as they happen and the core assembles the `.bmmreplay` by streaming, so the app never holds a session |
 | Crash reporting | Circular buffer + realtime log, panic hook, and a clean-exit marker so a crash is distinguishable from a close |
-| Benchmarks | Live sampling plus a per-operation suite (scan / hash / copy / extract). See [Performance](doc-page:performance) |
+| Benchmarks | Live sampling plus a per-operation suite (scan / hash / copy / extract). See [Performance](doc-page:how-it-works/performance) |
 | App catalog & launch packs | Community app feeds with sanitised downloads; named bundles launched as one action |
 
 ---
@@ -375,8 +375,8 @@ is **opt-in per caller**: pinning happens when a publisher key is supplied.
 
 ## See also
 
-- [API & deeplink reference](doc-page:../reference/api) · [Action reference](doc-page:../reference/actions)
-- [Performance](doc-page:performance) · [Integrity & hashing](doc-page:integrity-hashing) · [Security](doc-page:security)
+- [API & deeplink reference](doc-page:reference/api) · [Action reference](doc-page:reference/actions)
+- [Performance](doc-page:how-it-works/performance) · [Integrity & hashing](doc-page:how-it-works/integrity-hashing) · [Security](doc-page:how-it-works/security)
 
 !!! info "See it in the app"
     Help & other → Developer → **The tech stack**, **Engine & threads**, **Lightweight

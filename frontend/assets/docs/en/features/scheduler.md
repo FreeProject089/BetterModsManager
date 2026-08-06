@@ -3,10 +3,10 @@
 
 > Schedule BMM actions (one-time or recurring) — activate a mod, modpack, profile…
 
-Reachable from [Plugins & API](doc-page:plugins). This is the part of BMM that does things while
+Reachable from [Plugins & API](doc-page:features/plugins). This is the part of BMM that does things while
 you're not looking.
 
-![The scheduler](../assets/screens/scheduler.annotated.png)
+![The scheduler](assets/docs/media/screens/scheduler.annotated.png)
 
 | | | |
 |---|---|---|
@@ -52,9 +52,9 @@ timer and starts being useful. Conditions:
 | Condition | True when |
 |---|---|
 | `Always` | Unconditionally. |
-| `Profile is active` | A given [profile](doc-page:profiles) is the current one. |
+| `Profile is active` | A given [profile](doc-page:features/profiles) is the current one. |
 | `Mod is enabled` / `Mod is disabled` | A given mod's state. |
-| `Modpack is active` | A [modpack](doc-page:modpacks) is applied. |
+| `Modpack is active` | A [modpack](doc-page:features/modpacks) is applied. |
 | `All active-profile mods are on` | Nothing in the profile is off. |
 | `App is running` | A process is up — e.g. the game itself. |
 | `Day of week` | Monday…Sunday. |
@@ -79,15 +79,15 @@ There are ~60 actions across eight groups:
 |---|---|
 | **Mods & profiles** | Activate a profile · enable/disable a mod · enable/disable a modpack · create a modpack · add a mod from a URL · export/import a mod list · enable/disable all · scan the folder · check mod updates |
 | **Repo & sharing** | Connect · sync · generate · update · host a repo |
-| **Apps & launch** | Launch an app · install an app · open a file/folder · **run a [Launch Pack](doc-page:launch-packs)** |
+| **Apps & launch** | Launch an app · install an app · open a file/folder · **run a [Launch Pack](doc-page:features/launch-packs)** |
 | **Appearance** | Set a theme |
-| **Benchmarks & storage** | Run an app benchmark · **benchmark a disk** · **apply a disk speed limit** · toggle **Smart I/O** / **Auto-Calibration** · **check free disk space** (see [Storage](doc-page:storage)) |
+| **Benchmarks & storage** | Run an app benchmark · **benchmark a disk** · **apply a disk speed limit** · toggle **Smart I/O** / **Auto-Calibration** · **check free disk space** (see [Storage](doc-page:features/storage)) |
 | **Privacy & recorder** | Telemetry consent · session recorder · export/import a replay |
 | **System & flow** | Show a notification · Discord RPC · export a data backup · set a variable · **run another scheduled task** · restart BMM · open a URL · **run a custom command** · run a raw `bmm://` deeplink |
 | **Logic & math** | Compute maths into a variable · ternary · decision table · a stop-task guard |
 
 Many actions run by firing a canonical `bmm://` deeplink through the app's own handler — the same
-plumbing the [Plugins & API](doc-page:plugins) page exposes, which is why the two systems can drive each
+plumbing the [Plugins & API](doc-page:features/plugins) page exposes, which is why the two systems can drive each
 other.
 
 ## Running when BMM is closed

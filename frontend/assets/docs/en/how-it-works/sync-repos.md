@@ -76,7 +76,7 @@ Three behaviours worth planning around:
   means anything extra on your side is removed. Leave it off unless convergence is the point.
 
 You can also cap the sync's **download rate**, which is the same per-disk pacing idea as
-[Smart I/O](doc-page:performance) applied to the network.
+[Smart I/O](doc-page:how-it-works/performance) applied to the network.
 
 ---
 
@@ -122,4 +122,4 @@ goes.
 
 !!! info "See it in the app"
     Help &amp; other → Developer → **Server mode** and **Hosting flow**. User guide:
-    [Server Repo](doc-page:../features/repo).
+    [Server Repo](doc-page:features/repo).

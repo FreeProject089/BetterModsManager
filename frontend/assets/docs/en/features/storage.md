@@ -36,7 +36,7 @@ Each disk on your system gets a card:
 | **Kind badge** | SSD / HDD / Unknown, plus **Cloud** or **Network** when detected (Drive, OneDrive, Dropbox, MEGA, iCloud, NAS). |
 | **USED bar** | Used vs. total, coloured blue → amber (>70%) → red (>90%). |
 | **PROFILES bar** | Total size of the profile mods living on this disk vs. free space — coloured by your alert thresholds. |
-| **Profile pills** | Which [profiles](doc-page:profiles) use the disk, and how (game folder / mod folder / backup). |
+| **Profile pills** | Which [profiles](doc-page:features/profiles) use the disk, and how (game folder / mod folder / backup). |
 
 !!! note "Cloud/Network badges are heuristic"
 
@@ -80,7 +80,7 @@ BMM keeps *warning > critical* automatically. These also feed activation-time sp
 A mod stored as an archive (`.zip`, `.7z`, `.rar`, `.tar[.gz]`) **stays compressed** in your mods
 folder — that's the space win. BMM extracts it to a temporary cache only when the files are
 actually needed, and every feature (hashing, integrity, conflicts, the mapper) treats it exactly
-like an unpacked mod. See [the Library](doc-page:library) for the archived-mod workflow.
+like an unpacked mod. See [the Library](doc-page:features/library) for the archived-mod workflow.
 
 !!! note "Where the cache lives"
 
@@ -93,10 +93,10 @@ like an unpacked mod. See [the Library](doc-page:library) for the archived-mod w
 
 The speed limits and Smart I/O govern *copying*. Integrity **hashing** (SHA / BLAKE3) is a separate
 system with its own settings (lazy hashing, the loading animation). Big activations often skip
-re-hashing on purpose — see [Integrity & hashing](doc-page:../how-it-works/integrity-hashing).
+re-hashing on purpose — see [Integrity & hashing](doc-page:how-it-works/integrity-hashing).
 
 ## Automate it
 
-The [Scheduler](doc-page:scheduler) can *benchmark a disk*, *apply a disk speed limit*, *check free disk
+The [Scheduler](doc-page:features/scheduler) can *benchmark a disk*, *apply a disk speed limit*, *check free disk
 space*, and toggle *Smart I/O* / *Auto-Calibration* as workflow actions — and branch on the measured
 result (e.g. *if `disk.write_mbps` < 50, show a warning*).

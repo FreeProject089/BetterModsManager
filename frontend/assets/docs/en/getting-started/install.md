@@ -9,7 +9,7 @@ BMM is a **Windows** application. Installing it takes three steps:
 3. Launch BMM.
 
 That's it: no account to create, nothing to configure beforehand. You do your first setup *inside*
-the app — see [First launch](doc-page:first-launch).
+the app — see [First launch](doc-page:getting-started/first-launch).
 
 !!! tip "Pick an install location you control"
 
@@ -30,7 +30,7 @@ the app — see [First launch](doc-page:first-launch).
 
 BMM ships as a native app around the OS webview, not a bundled browser, so the download and the
 memory footprint are both a fraction of an Electron-based manager. See
-[Architecture](doc-page:../how-it-works/architecture).
+[Architecture](doc-page:how-it-works/architecture).
 
 ---
 
@@ -73,7 +73,7 @@ Uninstalling removes the application. It does **not** touch:
 That second point matters: because BMM deploys real copies rather than links, a mod that was enabled
 when you uninstalled **stays enabled** in the game. If you want a clean game folder, disable your
 mods *before* uninstalling — BMM will restore each original file from `_original/` as it goes. See
-[Conflicts](doc-page:../how-it-works/conflicts).
+[Conflicts](doc-page:how-it-works/conflicts).
 
 Your `%APPDATA%` folder is also left in place, so reinstalling later picks up exactly where you left
 off. Delete it by hand if you really want a blank slate — and **export first**, from Settings → Data.
@@ -98,7 +98,7 @@ disagree with them.
 An update is verified before it can touch your install: when the update channel supplies a publisher
 key, the package **must** carry a valid Ed25519 signature for that key or it is refused *before* the
 install directory is touched. The installer then snapshots and rolls back if the install itself
-fails. See [Security](doc-page:../how-it-works/security).
+fails. See [Security](doc-page:how-it-works/security).
 
 !!! note "Rate-limited on GitHub?"
 
@@ -111,5 +111,5 @@ fails. See [Security](doc-page:../how-it-works/security).
 
 ## Next
 
-- [First launch](doc-page:first-launch) — create your first profile and add a mod.
-- [Troubleshooting](doc-page:../reference/troubleshooting) — if something is already odd.
+- [First launch](doc-page:getting-started/first-launch) — create your first profile and add a mod.
+- [Troubleshooting](doc-page:reference/troubleshooting) — if something is already odd.

@@ -6,8 +6,8 @@ leurs capacités se recoupent mais ce sont deux systèmes distincts :
 
 | | Où | Ce que ça pilote |
 |---|---|---|
-| **Actions de tâche planifiée** | [Planificateur](doc-page:../features/scheduler) — Réglages → Planificateur | Des étapes d'un workflow que BMM exécute sur un déclencheur |
-| **Actions du générateur de scripts** | [Plugins & API](doc-page:../features/plugins) — générateur de scripts | Des blocs qui produisent un script exécutable (deeplinks `bmm://` et/ou appels HTTP) |
+| **Actions de tâche planifiée** | [Planificateur](doc-page:features/scheduler) — Réglages → Planificateur | Des étapes d'un workflow que BMM exécute sur un déclencheur |
+| **Actions du générateur de scripts** | [Plugins & API](doc-page:features/plugins) — générateur de scripts | Des blocs qui produisent un script exécutable (deeplinks `bmm://` et/ou appels HTTP) |
 
 !!! tip "Lequel me faut-il ?"
 
@@ -25,10 +25,10 @@ Regroupées exactement comme dans la liste déroulante des actions.
 
 | Action | Ce que ça fait | Ce que tu fournis |
 |---|---|---|
-| Activer un profil | Change le [profil](doc-page:../features/profiles) actif | profil |
+| Activer un profil | Change le [profil](doc-page:features/profiles) actif | profil |
 | Activer un mod | Active un mod | mod |
 | Désactiver un mod | Désactive un mod | mod |
-| Activer un modpack | Active tous les mods d'un [modpack](doc-page:../features/modpacks) | modpack |
+| Activer un modpack | Active tous les mods d'un [modpack](doc-page:features/modpacks) | modpack |
 | Désactiver un modpack | Désactive tous les mods d'un modpack | modpack |
 | Créer un modpack | Crée un modpack vide | nom, profil |
 | Ajouter un mod (depuis URL) | Télécharge et installe un mod | URL, nom |
@@ -50,13 +50,13 @@ Regroupées exactement comme dans la liste déroulante des actions.
     *Activer un mod*, *Activer un modpack* et *Activer tous les mods* s'exécutent avec la
     vérification SHA contournée — une exécution planifiée ne peut pas s'arrêter pour te demander
     quoi faire d'un hash manquant. Active à la main si tu veux l'invite. Voir
-    [Intégrité & hachage](doc-page:../how-it-works/integrity-hashing).
+    [Intégrité & hachage](doc-page:how-it-works/integrity-hashing).
 
 ### Dépôt & partage
 
 | Action | Ce que ça fait | Ce que tu fournis |
 |---|---|---|
-| Connecter un repo | Ajoute un [dépôt](doc-page:../features/repo) distant | URL repo.json, nom |
+| Connecter un repo | Ajoute un [dépôt](doc-page:features/repo) distant | URL repo.json, nom |
 | Synchroniser un repo | Télécharge et intègre un profil distant | URL du repo, profil distant |
 | Générer un repo | Ouvre la génération de dépôt | — |
 | Mettre à jour un repo | Met à jour un dossier de dépôt | dossier du dépôt |
@@ -70,13 +70,13 @@ Regroupées exactement comme dans la liste déroulante des actions.
 | Ouvrir / lancer un fichier ou programme | **Exécute n'importe quel fichier**, y compris un `.exe` | chemin |
 | Ouvrir un dossier | Ouvre un dossier dans l'explorateur | chemin |
 | Installer une app | Télécharge et installe une app | id, URL, titre |
-| Lancer un launch pack | Exécute un [Launch Pack](doc-page:../features/launch-packs) | launch pack |
+| Lancer un launch pack | Exécute un [Launch Pack](doc-page:features/launch-packs) | launch pack |
 
 ### Apparence
 
 | Action | Ce que ça fait | Ce que tu fournis |
 |---|---|---|
-| Appliquer un thème | Applique un [thème](doc-page:../features/themes) | thème |
+| Appliquer un thème | Applique un [thème](doc-page:features/themes) | thème |
 
 ### Benchmarks & stockage
 
@@ -86,7 +86,7 @@ Regroupées exactement comme dans la liste déroulante des actions.
 | Benchmarker un disque | Mesure la vitesse lecture/écriture d'un disque | `disk.read_mbps`, `disk.write_mbps`, `disk.suggested_limit` |
 | Appliquer la limite de vitesse disque | Fixe un plafond Mo/s par disque — laisse vide pour reprendre la valeur suggérée par un benchmark précédent, `0` = illimité | — |
 | Auto-calibration des performances | Active/désactive l'auto-calibration | — |
-| Smart I/O | Active/désactive [Smart I/O](doc-page:../features/storage) | — |
+| Smart I/O | Active/désactive [Smart I/O](doc-page:features/storage) | — |
 | Activer/désactiver un réglage (avancé) | Bascule **n'importe quel** réglage booléen par sa clé | — |
 | Vérifier l'espace disque libre | Lit l'espace libre | `disk.free_gb`, `disk.total_gb`, `disk.free_percent` |
 
@@ -97,7 +97,7 @@ Ces valeurs captées sont ce que compare la condition `value` — c'est ainsi qu
 
 | Action | Ce que ça fait |
 |---|---|
-| Consentement télémétrie | Active/désactive la [télémétrie](doc-page:../features/privacy-telemetry) |
+| Consentement télémétrie | Active/désactive la [télémétrie](doc-page:features/privacy-telemetry) |
 | Options télémétrie | Replay / **Complet (démasqué)** / rapport de benchmark |
 | Enregistreur de session | Enregistrement on/off, **Complet (démasqué)**, log Rust, log JS |
 | Exporter le replay | Exporte l'enregistrement courant |
@@ -300,6 +300,6 @@ opération **native** (une pause, une boucle, un affichage) qui n'a besoin d'auc
 
 ## Voir aussi
 
-- [Planification & automatisation](doc-page:../features/scheduler) — déclencheurs, workflows, partage `.BMMPA`
-- [Plugins & API](doc-page:../features/plugins) — la référence des deeplinks et endpoints, les jetons d'API
-- [Référence API](doc-page:api) — les endpoints HTTP en détail
+- [Planification & automatisation](doc-page:features/scheduler) — déclencheurs, workflows, partage `.BMMPA`
+- [Plugins & API](doc-page:features/plugins) — la référence des deeplinks et endpoints, les jetons d'API
+- [Référence API](doc-page:reference/api) — les endpoints HTTP en détail

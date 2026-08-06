@@ -41,16 +41,16 @@ peut l'effacer sans rien perdre. Vous réactivez un profil ; vous ne re-téléch
 
 | Page | La question à laquelle elle répond |
 |---|---|
-| [Architecture](doc-page:architecture) | De quoi BMM est-il fait, et pourquoi si léger ? |
-| [Profils & activation](doc-page:profiles-activation) | Pourquoi changer de profil est-il instantané et sûr ? |
-| [Scan & cache](doc-page:scanning-cache) | Comment BMM sait-il ce qui a changé sans tout relire ? |
-| [Intégrité & hachage](doc-page:integrity-hashing) | Comment un fichier corrompu est-il attrapé avant le jeu ? |
-| [Résolution de conflits](doc-page:conflicts) | Comment BMM sait-il que deux mods s'affrontent, avant de valider ? |
-| [Le mappeur](doc-page:mapper) | Comment une archive mal structurée est-elle remise en forme, de façon répétable ? |
-| [Synchro & dépôts serveur](doc-page:sync-repos) | Comment tout un groupe reste-t-il sur la même configuration ? |
-| [Performances](doc-page:performance) | Pourquoi un gros déploiement reste-t-il réactif ? |
-| [Étendre BMM](doc-page:extending) | Comment plugins, API et MCP pilotent-ils BMM ? |
-| [Modèle de sécurité](doc-page:security) | Quelles sont les frontières de confiance, et qu'est-ce qui est signé ? |
+| [Architecture](doc-page:how-it-works/architecture) | De quoi BMM est-il fait, et pourquoi si léger ? |
+| [Profils & activation](doc-page:how-it-works/profiles-activation) | Pourquoi changer de profil est-il instantané et sûr ? |
+| [Scan & cache](doc-page:how-it-works/scanning-cache) | Comment BMM sait-il ce qui a changé sans tout relire ? |
+| [Intégrité & hachage](doc-page:how-it-works/integrity-hashing) | Comment un fichier corrompu est-il attrapé avant le jeu ? |
+| [Résolution de conflits](doc-page:how-it-works/conflicts) | Comment BMM sait-il que deux mods s'affrontent, avant de valider ? |
+| [Le mappeur](doc-page:how-it-works/mapper) | Comment une archive mal structurée est-elle remise en forme, de façon répétable ? |
+| [Synchro & dépôts serveur](doc-page:how-it-works/sync-repos) | Comment tout un groupe reste-t-il sur la même configuration ? |
+| [Performances](doc-page:how-it-works/performance) | Pourquoi un gros déploiement reste-t-il réactif ? |
+| [Étendre BMM](doc-page:how-it-works/extending) | Comment plugins, API et MCP pilotent-ils BMM ? |
+| [Modèle de sécurité](doc-page:how-it-works/security) | Quelles sont les frontières de confiance, et qu'est-ce qui est signé ? |
 
 !!! tip "Dans l'application"
     Chacun de ces systèmes possède un **diagramme interactif** dans BMM, sous

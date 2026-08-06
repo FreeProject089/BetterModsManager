@@ -92,5 +92,3 @@ one-click install buttons on BetterCommunity use.
 
 The complete list of what a deeplink can do — 49 of them, plus every HTTP endpoint — is in the
 [API & deeplink reference](doc-page:reference/api).
-
-<a class="md-button" href="bmm://docs/open">Open Help &amp; other in BMM</a>

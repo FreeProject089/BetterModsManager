@@ -251,6 +251,50 @@
 .dh-tabpane.on { display: block; }
 .dh-tabpane > :last-child { margin-bottom: 0; }
 
+/* Links inside rendered markdown. None of them is an <a href> — they are buttons the app
+   handles — so they have to be given back the look and feel of a link. */
+.dh-link,
+.dh-xref {
+    display: inline; padding: 0; border: 0; background: none; cursor: pointer;
+    font: inherit; text-align: left;
+    color: var(--bmm-accent, #3b82f6);
+    text-decoration: underline;
+    text-decoration-color: color-mix(in srgb, var(--bmm-accent) 40%, transparent);
+    text-underline-offset: 2px;
+}
+.dh-link:hover,
+.dh-xref:hover { text-decoration-color: currentColor; }
+.dh-link-ext::after { content: ' ↗'; font-size: .85em; opacity: .7; }
+/* A relative link whose target was not bundled: readable, obviously not clickable. */
+.dh-link-dead { border-bottom: 1px dotted var(--bmm-s20); cursor: help; }
+
+/* Screenshots embedded by the docs. */
+.dh-md-img {
+    display: block; max-width: 100%; height: auto; margin: 6px 0 18px;
+    border-radius: var(--bmm-radius-card, 12px);
+    border: 1px solid var(--bmm-border, #2a3242);
+    background: var(--bmm-bg-base, #0f1420);
+}
+
+/* A full doc page is long-form reading, so it gets more room to breathe than an article blurb. */
+.dh-content h3 {
+    font-size: 19px; font-weight: 800; letter-spacing: -0.02em;
+    margin: 30px 0 10px; padding-bottom: 8px;
+    border-bottom: 1px solid var(--bmm-s08);
+    color: var(--bmm-text-primary, #e6edf3);
+}
+.dh-content h4 { margin-top: 24px; }
+.dh-content h5 { font-size: 13.5px; font-weight: 700; margin: 18px 0 6px; color: var(--bmm-text-secondary, #b7c0cc); }
+.dh-content > p:first-child { margin-top: 0; }
+.dh-content hr { height: 1px; margin: 26px 0; border: 0; background: var(--bmm-s08); }
+.dh-content blockquote {
+    margin: 0 0 14px; padding: 2px 0 2px 14px;
+    border-left: 3px solid var(--bmm-s15);
+    color: var(--bmm-text-muted, #7c8698); font-style: italic;
+}
+.dh-content ol { margin: 0 0 14px; padding-left: 22px; }
+.dh-content ol li { padding-left: 4px; margin-bottom: 8px; color: var(--bmm-text-secondary, #b7c0cc); }
+
 /* The "Full page, here" toggle stays lit while the long version is showing. */
 .dh-rel-full.on {
     color: var(--bmm-text-on-accent);
