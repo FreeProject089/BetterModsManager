@@ -80,7 +80,7 @@ const CATEGORIES: Category[] = [
     blurb: { en: 'Install, first launch, and your first profile.', fr: 'Installation, premier lancement et premier profil.' },
     articles: [
       {
-        id: 'what-is-bmm', tutorial: { id: 'basics' }, docsPath: '',
+        id: 'what-is-bmm', tutorial: { id: 'basics' }, docsPath: 'index/',
         title: { en: 'What is BetterModsManager?', fr: 'Qu’est-ce que BetterModsManager ?' },
         summary: { en: 'A fast, safe mod manager built around profiles, integrity checks and one-click sharing.', fr: 'Un gestionnaire de mods rapide et sûr, bâti autour des profils, des vérifications d’intégrité et du partage en un clic.' },
         keywords: 'bmm overview intro presentation aperçu',
@@ -322,7 +322,7 @@ ce qu'il remplace, ou les retire). Vos mods téléchargés ne sont jamais modifi
     blurb: { en: 'Host a repo, subscribe & sync, catalogs and BetterCommunity.', fr: 'Héberger un dépôt, s’abonner & synchro, catalogues et BetterCommunity.' },
     articles: [
       {
-        id: 'server-host', view: 'repo', diagram: 'hosting-flow', docsPath: '',
+        id: 'server-host', view: 'repo', diagram: 'hosting-flow', docsPath: 'features/repo/',
         title: { en: 'Host your own repository', fr: 'Héberger votre propre dépôt' },
         summary: { en: 'Turn a profile into a hosted source others can subscribe to.', fr: 'Transformez un profil en source hébergée à laquelle d’autres peuvent s’abonner.' },
         keywords: 'server repo host publish self-host manifest hosting dépôt héberger squadron',
@@ -340,7 +340,7 @@ ce qu'il remplace, ou les retire). Vos mods téléchargés ne sont jamais modifi
         },
       },
       {
-        id: 'server-sync', view: 'repo', diagram: 'server-mode', docsPath: '',
+        id: 'server-sync', view: 'repo', diagram: 'server-mode', docsPath: 'how-it-works/sync-repos/',
         title: { en: 'Subscribe & keep in sync', fr: 'S’abonner et rester synchronisé' },
         summary: { en: 'Point BMM at a repo link — get the exact same mods, and only fetch what changes.', fr: 'Pointez BMM sur un lien de dépôt — mêmes mods exacts, et seul ce qui change est téléchargé.' },
         keywords: 'subscribe sync update repo download manifest s’abonner synchro mise à jour',
@@ -401,7 +401,7 @@ ce qu'il remplace, ou les retire). Vos mods téléchargés ne sont jamais modifi
         },
       },
       {
-        id: 'plugins', view: 'plugins', diagram: 'mcp-server', docsPath: '',
+        id: 'plugins', view: 'plugins', diagram: 'mcp-server', docsPath: 'features/plugins/',
         title: { en: 'Plugins & the API', fr: 'Plugins et API' },
         summary: { en: 'Add features BMM doesn’t ship — and automate it from scripts or an AI assistant.', fr: 'Ajoutez des fonctions que BMM ne fournit pas — et automatisez-le depuis des scripts ou une IA.' },
         keywords: 'plugin api mcp automation script install extend plugins étendre',
@@ -2052,8 +2052,13 @@ function articleView(cat: Category, a: Article): string {
     a.diagram ? `<button class="dh-rel dh-rel-dia" data-diagram="${a.diagram}">${svg('diagram', 15)} ${tr({ en: 'Open the diagram', fr: 'Ouvrir le diagramme' })}</button>` : '',
     // The full page is BUNDLED, so it opens in place rather than sending you to a browser. The
     // external link stays for the site itself (search, PDF, sharing a URL).
-    a.docsPath ? `<button class="dh-rel dh-rel-full" data-fullpage="${a.docsPath}">${svg('book', 15)} ${tr({ en: 'Full page, here', fr: 'Page complète, ici' })}</button>` : '',
-    `<button class="dh-rel dh-rel-ext" data-ext="${DOCS_SITE}${a.docsPath || ''}">${svg('ext', 15)} ${tr({ en: 'Open on the site', fr: 'Ouvrir sur le site' })}</button>`,
+    // Label reads as "what pressing this gives you". The full page is the default, so it starts
+    // offering the short version; showFullPage() flips it back.
+    a.docsPath ? `<button class="dh-rel dh-rel-full" data-fullpage="${a.docsPath}"
+      data-lbl-short="${tr({ en: 'Short version', fr: 'Version courte' })}"
+      data-lbl-full="${tr({ en: 'Full page', fr: 'Page complète' })}">${svg('book', 15)} <span class="dh-rel-lbl">${tr({ en: 'Full page', fr: 'Page complète' })}</span></button>` : '',
+    // mkdocs serves index.md at the site root, so "index/" is not a URL there.
+    `<button class="dh-rel dh-rel-ext" data-ext="${DOCS_SITE}${a.docsPath === 'index/' ? '' : (a.docsPath || '')}">${svg('ext', 15)} ${tr({ en: 'Open on the site', fr: 'Ouvrir sur le site' })}</button>`,
   ].filter(Boolean).join('');
   return `
     <article class="dh-article${a.wide ? ' dh-wide' : ''}">
@@ -2135,6 +2140,19 @@ function paint() {
   // keep the search input in sync (e.g. after a lang re-render)
   const input = host?.querySelector('.dh-search') as HTMLInputElement | null;
   if (input && route.view === 'search' && input.value !== (route.q || '')) input.value = route.q || '';
+
+  // An article that HAS a documentation page shows that page, not a second text written beside
+  // it. The hand-written blurb stays reachable as the short version, and the article's own
+  // buttons — open the screen, run the tutorial, open the diagram — are what BMM adds on top.
+  // Two texts maintained in parallel is exactly how they came to disagree.
+  if (route.view === 'art') {
+    const f = route.artId ? findArticle(route.artId) : null;
+    const path = f?.art.docsPath?.replace(/^\/+|\/+$/g, '');
+    if (path && (_manifest || []).some((p) => p.path === path)) {
+      const btn = host?.querySelector('[data-fullpage]') as HTMLElement | null;
+      void showFullPage(path, btn, undefined, true);
+    }
+  }
 }
 function renderAll() {
   if (!host) return;
@@ -2349,24 +2367,33 @@ async function openPage(path: string, hash?: string) {
 }
 
 /** Swap the article body for the full bundled page (or back). */
-async function showFullPage(path: string, btn: HTMLElement | null, hash?: string) {
+async function showFullPage(path: string, btn: HTMLElement | null, hash?: string, auto = false) {
   const article = document.querySelector('.dh-article') as HTMLElement | null;
   const body = article?.querySelector('.dh-content') as HTMLElement | null;
   if (!article || !body) return;
+
+  const setLabel = (b: HTMLElement | null, which: 'short' | 'full') => {
+    const lbl = b?.querySelector('.dh-rel-lbl');
+    if (lbl) lbl.textContent = b!.getAttribute(`data-lbl-${which}`) || lbl.textContent;
+  };
 
   if (btn && article.dataset.full === path) {          // toggle back to the short version
     body.innerHTML = article.dataset.shortHtml || body.innerHTML;
     delete article.dataset.full;
     btn.classList.remove('on');
+    setLabel(btn, 'full');
     return;
   }
   if (!article.dataset.shortHtml) article.dataset.shortHtml = body.innerHTML;
 
-  body.innerHTML = `<p class="dh-lead">${tr({ en: 'Loading the full page…', fr: 'Chargement de la page complète…' })}</p>`;
+  // On an explicit press, say something is happening. On the automatic open, leave the short
+  // version on screen until the page is ready — blanking it would flash on every article.
+  if (!auto) body.innerHTML = `<p class="dh-lead">${tr({ en: 'Loading the full page…', fr: 'Chargement de la page complète…' })}</p>`;
   const md = await fetchDocPage(path);
   if (!md) {
     // The bundle is generated from a sibling repo, so it can legitimately be absent.
     body.innerHTML = article.dataset.shortHtml;
+    if (auto) return;                      // nothing was promised, so say nothing
     try {
       const { toast } = await import('../ui/app.js');
       toast(tr({ en: 'That page is not bundled in this build.', fr: 'Cette page n’est pas embarquée dans ce build.' }), 'info');
@@ -2376,7 +2403,10 @@ async function showFullPage(path: string, btn: HTMLElement | null, hash?: string
   body.innerHTML = renderDocMarkdown(md);
   article.dataset.full = path;
   btn?.classList.add('on');
-  article.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  setLabel(btn, 'short');
+  // Only scroll when the reader asked for it. paint() calls this on every article open, and
+  // yanking the view on arrival would be disorienting.
+  if (!auto) article.scrollIntoView({ block: 'start', behavior: 'smooth' });
   anchorise(body, hash);
   await hydrateDocPage(body);
 }
@@ -2499,6 +2529,10 @@ export function initDocsHub() {
   host = document.getElementById('view-docs');
   if (!host) return;
   renderAll();
+  // Load the page index up front: paint() consults it to decide whether an article has a
+  // documentation page to show, and that decision is synchronous. Repaint once it lands so the
+  // very first article opened is not the only one that misses out.
+  void loadManifest().then(() => { if (route.view === 'art') paint(); });
   host.addEventListener('click', onClick);
   // Re-render on language switch — but KEEP the current route so you stay on the same page.
   document.addEventListener('langChanged', () => renderAll());

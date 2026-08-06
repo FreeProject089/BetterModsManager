@@ -70,19 +70,29 @@ for (const f of walk(DOCS)) {
 }
 if (failed === before3) console.log(`✓ ${deepCount} bmm://docs/open link(s) resolve`);
 
-// 4 ── informational: which articles have no page of their own
+// 4 ── informational: which articles still carry hand-written text instead of a doc page.
+// An article with a docsPath renders the bundled page; one without keeps a body maintained
+// separately from the site, which is how the two came to disagree in the first place.
+const routes = new Set();
+try {
+  const mf = join(ROOT, 'frontend/assets/docs/manifest.json');
+  if (existsSync(mf)) for (const p of JSON.parse(readFileSync(mf, 'utf8')).pages) routes.add(p.path);
+} catch { /* the bundle may simply not be built yet */ }
+
 const blocks = hub.split(/\n\s*\{\s*\n?\s*id:/).slice(1);
 const orphans = [];
 for (const b of blocks) {
   const id = (b.match(/^\s*'([a-z0-9-]+)'/) || [])[1];
   if (!id) continue;
-  // Categories carry `part:` and have no "Read full docs" button, so they need no docsPath.
+  // Categories carry `part:` and have no article view, so they need no docsPath.
   const head = b.slice(0, 400);
   if (/\bpart:\s*'/.test(head)) continue;
-  if (!/docsPath:/.test(head)) orphans.push(id);
+  const dp = (head.match(/docsPath:\s*'([^']*)'/) || [])[1];
+  const clean = dp ? dp.replace(/^\/+|\/+$/g, '') : '';
+  if (!clean || (routes.size && !routes.has(clean))) orphans.push(id);
 }
 if (orphans.length) {
-  console.log(`· ${orphans.length} article(s) have no docsPath and fall back to the docs homepage:`);
+  console.log(`· ${orphans.length} article(s) still show hand-written text (no bundled page behind them):`);
   console.log('  ' + orphans.join(', '));
 }
 
