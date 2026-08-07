@@ -450,6 +450,7 @@ async function playBundle(bundle: any): Promise<void> {
         <strong style="font-size:13px">${t('watcher.viewerTitle') || 'Lecture de session'}</strong>
         <span style="font-size:11px;color:var(--text-muted,#8a8f98)">${meta}</span>
         <span style="flex:1"></span>
+        <button id="rw-video" class="btn btn-sm">${t('watcher.tovideo') || 'Exporter en vidéo'}</button>
         <button id="rw-close" class="btn btn-sm btn-ghost">${t('common.close') || 'Fermer'}</button>
       </div>
       <div style="flex:1;display:flex;min-height:0">
@@ -564,8 +565,71 @@ async function playBundle(bundle: any): Promise<void> {
   let playing = true;
   const playBtn = overlay.querySelector('#rw-play') as HTMLButtonElement;
   playBtn.onclick = () => { playing = !playing; if (playing) { rep.play(rep.getCurrentTime()); playBtn.textContent = '⏸'; } else { rep.pause(); playBtn.textContent = '▶'; } };
-  const close = () => { try { cancelAnimationFrame(raf); window.removeEventListener('resize', onResize); rep.pause(); (rep as any).destroy?.(); } catch { /* ignore */ } overlay.remove(); };
+  const close = () => {
+    // Closing mid-export must end the capture, or the screen keeps being recorded after the
+    // window that started it is gone — with nothing left on screen to stop it.
+    void import('../debug/video-capture.js').then((cap) => { if (cap.isCapturing()) return cap.stopCapture(); }).catch(() => {});
+    try { cancelAnimationFrame(raf); window.removeEventListener('resize', onResize); rep.pause(); (rep as any).destroy?.(); } catch { /* ignore */ }
+    overlay.remove();
+  };
   (overlay.querySelector('#rw-close') as HTMLElement).onclick = close;
+
+  // ── Export the replay as a video ──────────────────────────────────────────────────
+  //
+  // This plays the recording and captures the result, rather than converting the file.
+  // rrweb ships `rrvideo` for exactly this, and it works the same way underneath — open the
+  // replay in a browser, play it, record the frames — but it does so with Puppeteer (its own
+  // ~150 MB Chromium) plus ffmpeg. BMM already IS a Chromium, and already has the player you
+  // are looking at, so pulling in that toolchain would ship two more browsers to do what this
+  // window can do now.
+  //
+  // A .bmmreplay is a DOM mutation log, not pictures, so SOMETHING has to render it either
+  // way. The only question is which renderer, and the one on screen is already correct —
+  // right fonts, right theme, right region cropping.
+  const videoBtn = overlay.querySelector('#rw-video') as HTMLButtonElement;
+  let exporting = false;
+  videoBtn.onclick = async () => {
+    if (exporting) return;
+    const cap = await import('../debug/video-capture.js');
+    const support = cap.captureSupport();
+    if (!support.ok) {
+      toast(support.reason === 'no-encoder'
+        ? (t('watcher.vnoenc') || 'Ce build n’a pas d’encodeur vidéo (MediaRecorder).')
+        : (t('watcher.vnodisp') || 'Ce build ne peut pas capturer l’écran (getDisplayMedia).'), 'error');
+      return;
+    }
+    try {
+      await cap.startCapture({ fps: 30 });
+    } catch (e: any) {
+      const why = String(e?.message || e);
+      toast(why === 'cancelled' ? (t('watcher.vcancel') || 'Capture annulée.') : (t('watcher.vfail') || 'Impossible de démarrer la capture.'), why === 'cancelled' ? 'info' : 'error');
+      return;
+    }
+    exporting = true;
+    videoBtn.disabled = true;
+    videoBtn.textContent = t('watcher.vrec') || '● Enregistrement…';
+
+    // Restart from the beginning so the clip is the WHOLE replay, wherever the scrubber
+    // happened to be. Then stop on the recording's own duration rather than on a Replayer
+    // event: `finish` does not fire when the last event is a mutation with nothing after it,
+    // and a clip that never stops is worse than one that ends a beat late.
+    rep.play(0);
+    playing = true;
+    playBtn.textContent = '⏸';
+    const tail = 400;   // let the final frame land before cutting
+    window.setTimeout(async () => {
+      try {
+        const r = await cap.stopCapture();
+        if (!r?.path) toast(t('watcher.vempty') || 'La capture n’a produit aucune image.', 'error');
+        else toast(`${t('watcher.vsaved') || 'Vidéo enregistrée'} — ${r.path.split(/[\/]/).pop()}`, 'success');
+      } catch {
+        toast(t('watcher.vsavefail') || 'L’enregistrement de la vidéo a échoué.', 'error');
+      }
+      exporting = false;
+      videoBtn.disabled = false;
+      videoBtn.textContent = t('watcher.tovideo') || 'Exporter en vidéo';
+    }, total + tail);
+  };
   overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
 }
 
