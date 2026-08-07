@@ -397,6 +397,7 @@ Recorded because the in-app registry and the server do not agree on every detail
 
 ## See also
 
+- [MCP server reference](doc-page:reference/mcp) — the 51 tools an AI client can call, and which ones need BMM open
 - [Action reference](doc-page:reference/actions) — every scheduler and script-generator action
 - [Plugins & API](doc-page:features/plugins) — the in-app browser, tokens and quick-test
 - [Architecture](doc-page:how-it-works/architecture) — where this API sits in the app

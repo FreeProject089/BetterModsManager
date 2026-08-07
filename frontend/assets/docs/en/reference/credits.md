@@ -80,11 +80,39 @@ BCWEB-style `:::` directives into Material admonitions. See
 
 ---
 
-## Licences
+## Licence
 
-Each dependency keeps its own licence. BMM's own licence is in the
-[repository](https://github.com/FreeProject089); the in-app Credits screen links the third-party
-notices.
+BMM is **free software**, released under the **GNU General Public License, version 3**
+(GPL-3.0). The full text is [`LICENSE.md`](https://github.com/FreeProject089) in the
+repository.
+
+| | |
+|---|---|
+| **Licence** | GNU GPL v3.0 — [gnu.org/licenses/gpl-3.0](https://www.gnu.org/licenses/gpl-3.0.html) |
+| **Author** | FreeProject089 |
+| **Source** | [github.com/FreeProject089](https://github.com/FreeProject089) |
+| **These docs** | [BMM-Docs](https://github.com/FreeProject089/BMM-Docs) |
+
+### What the GPL means for you
+
+Not legal advice — the licence text is what binds — but the short version, because most people
+never read it:
+
+- **Use it for anything**, including commercially, with no fee and no permission needed.
+- **Read and change the source.** That is the point of the licence, not a loophole in it.
+- **Share it**, modified or not — but whoever you share it with gets the same four freedoms
+  you got, which is what "copyleft" means.
+- **Publish your changes under the GPL too**, if you distribute a modified BMM, and say what
+  you changed. Keeping a private fork to yourself is fine; shipping one without its source is
+  not.
+- **No warranty.** BMM writes to your game folders. It keeps your mods out of harm's way by
+  design, but the licence disclaims liability and you should still have backups.
+
+### Third-party components
+
+Every dependency listed above keeps its own licence — mostly MIT and Apache-2.0, which are
+GPL-compatible. The in-app **Credits** screen links the full third-party notices, generated
+from the project's dependency data rather than maintained by hand.
 
 !!! info "See it in the app"
     Credits → **View the tech stack**, which opens the same list generated from the project's data.

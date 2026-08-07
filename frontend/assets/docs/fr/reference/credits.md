@@ -80,11 +80,40 @@ directives `:::` façon BCWEB en admonitions Material. Voir
 
 ---
 
-## Licences
+## Licence
 
-Chaque dépendance garde sa propre licence. La licence de BMM lui-même est dans le
-[dépôt](https://github.com/FreeProject089) ; l'écran Crédits dans l'app renvoie aux mentions
-tierces.
+BMM est un **logiciel libre**, publié sous la **Licence publique générale GNU, version 3**
+(GPL-3.0). Le texte complet est dans [`LICENSE.md`](https://github.com/FreeProject089), à la
+racine du dépôt.
+
+| | |
+|---|---|
+| **Licence** | GNU GPL v3.0 — [gnu.org/licenses/gpl-3.0](https://www.gnu.org/licenses/gpl-3.0.html) |
+| **Auteur** | FreeProject089 |
+| **Sources** | [github.com/FreeProject089](https://github.com/FreeProject089) |
+| **Cette doc** | [BMM-Docs](https://github.com/FreeProject089/BMM-Docs) |
+
+### Ce que la GPL change pour toi
+
+Ce n'est pas un avis juridique — c'est le texte de la licence qui fait foi — mais voici
+l'essentiel, parce que presque personne ne le lit :
+
+- **Utilise-le pour ce que tu veux**, y compris commercialement, sans payer ni demander.
+- **Lis et modifie le code.** C'est l'objet même de la licence, pas une faille dedans.
+- **Redistribue-le**, modifié ou non — mais celui à qui tu le donnes reçoit les quatre mêmes
+  libertés que toi. C'est ça, le *copyleft*.
+- **Publie tes modifications sous GPL aussi** si tu distribues un BMM modifié, et indique ce
+  que tu as changé. Garder un fork privé pour toi, aucun souci ; en diffuser un sans ses
+  sources, non.
+- **Aucune garantie.** BMM écrit dans tes dossiers de jeu. Il est conçu pour tenir tes mods à
+  l'écart du danger, mais la licence exclut toute responsabilité — garde quand même des
+  sauvegardes.
+
+### Composants tiers
+
+Chaque dépendance listée plus haut garde sa propre licence — surtout MIT et Apache-2.0,
+compatibles GPL. L'écran **Crédits** de l'app renvoie aux mentions tierces complètes, générées
+depuis les données de dépendances du projet plutôt que tenues à la main.
 
 !!! info "À voir dans l'app"
     Crédits → **Voir la stack technique**, qui ouvre la même liste générée depuis les données du projet.

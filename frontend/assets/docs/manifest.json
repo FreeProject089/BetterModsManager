@@ -33,6 +33,7 @@
     "how-it-works/security",
     "reference/api",
     "reference/actions",
+    "reference/mcp",
     "reference/tips",
     "reference/troubleshooting",
     "reference/github-pat",
@@ -507,7 +508,7 @@
         "en": "BMM exposes two ways to drive it from outside: deeplinks (bmm://…, no token, fired at the running window) and a local HTTP API (token, 127.0.0.1 only).",
         "fr": "BMM expose deux façons de le piloter depuis l'extérieur : les deeplinks (bmm://…, sans token, envoyés à la fenêtre en cours) et une API HTTP locale (token,…"
       },
-      "words": 1175,
+      "words": 1196,
       "diagrams": 0,
       "fr": true
     },
@@ -523,6 +524,21 @@
         "fr": "Toutes les actions que BMM peut exécuter pour toi, au même endroit. Il y a deux catalogues — leurs capacités se recoupent mais ce sont deux systèmes distincts :"
       },
       "words": 599,
+      "diagrams": 0,
+      "fr": true
+    },
+    {
+      "path": "reference/mcp",
+      "section": "reference",
+      "title": {
+        "en": "MCP server reference",
+        "fr": "Référence du serveur MCP"
+      },
+      "summary": {
+        "en": "BMM ships an MCP server: the same capabilities the app has, exposed as Model Context Protocol tools so an AI assistant can drive BMM directly — list your…",
+        "fr": "BMM embarque un serveur MCP : les mêmes capacités que l'application, exposées comme des outils Model Context Protocol pour qu'une IA puisse piloter BMM…"
+      },
+      "words": 613,
       "diagrams": 0,
       "fr": true
     },
@@ -582,7 +598,7 @@
         "en": "BMM is built by the Better project and its contributors. The in-app Credits screen is the authoritative list of people — it's generated from the project's own…",
         "fr": "BMM est construit par le projet Better et ses contributeurs. L'écran Crédits dans l'app fait référence pour la liste des personnes — il est généré depuis les…"
       },
-      "words": 244,
+      "words": 430,
       "diagrams": 0,
       "fr": true
     }
