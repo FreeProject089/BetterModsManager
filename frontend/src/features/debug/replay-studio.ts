@@ -16,6 +16,7 @@
 import { invoke } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
 import { loadRrweb, subscribeReplay, unsubscribeReplay, isFullReplay, setExtraBlockSelectors, type ReplaySubscriber } from '../../core/replay-recorder.js';
+import { captureSupport, startCapture, stopCapture, isCapturing } from './video-capture.js';
 
 type Rect = { x: number; y: number; w: number; h: number };
 type RegionKey = { t: number; rect: Rect }; // t = ms from recording start (post-compression)
@@ -329,6 +330,44 @@ function buildBundle(trimEndMs?: number): string | null {
   });
 }
 
+// ── Video ────────────────────────────────────────────────────────────────────────────
+//
+// Independent of the .bmmreplay recorder: you can run either, or both at once, because they
+// capture different things (a mutation log vs. pixels) and neither interferes with the other.
+//
+// Converting an existing .bmmreplay is the same operation rather than a second code path —
+// open it in the viewer, press Record video, let it play. A DOM cannot be photographed from
+// inside the page (captureStream is for <canvas> and media elements), and rasterising it
+// ourselves would redraw an approximation with the wrong fonts and no shadows, which for a
+// tool meant to show what the app really looked like is worse than not offering it.
+async function videoStart() {
+  try {
+    const { ext } = await startCapture({ onStopped: () => renderBar() });
+    setStatus((t('rstudio.vstarted') || 'Recording video') + ` (.${ext}) — ` + (t('rstudio.vstophint') || 'press Stop video when done'));
+  } catch (e: any) {
+    const why = String(e?.message || e);
+    setStatus(
+      why === 'cancelled' ? (t('rstudio.vcancel') || 'Screen picker cancelled.')
+      : why === 'no-encoder' ? (t('rstudio.vnoenc') || 'This runtime has no video encoder (MediaRecorder).')
+      : why === 'no-display-media' ? (t('rstudio.vnodisp') || 'This runtime cannot capture the screen (getDisplayMedia).')
+      : (t('rstudio.vfail') || 'Could not start the video capture.'));
+  }
+  renderBar();
+}
+
+async function videoStop() {
+  setStatus(t('rstudio.vsaving') || 'Saving the clip…');
+  try {
+    const r = await stopCapture();
+    if (!r) setStatus(t('rstudio.vnone') || 'No video was being recorded.');
+    else if (!r.path) setStatus(t('rstudio.vempty') || 'The capture produced no frames — nothing saved.');
+    else setStatus(`${t('rstudio.vsaved') || 'Clip saved'} — ${r.path.split(/[\/]/).pop()} · ${fmtMB(r.bytes)} · ${(r.ms / 1000).toFixed(1)}s`);
+  } catch {
+    setStatus(t('rstudio.vsavefail') || 'Saving the clip failed.');
+  }
+  renderBar();
+}
+
 async function studioExport(trimEndMs?: number) {
   const content = buildBundle(trimEndMs);
   if (!content) { setStatus(t('rstudio.empty') || 'Nothing recorded yet.'); return; }
@@ -396,7 +435,19 @@ function renderBar() {
       btn('export', t('rstudio.export') || 'Export .bmmreplay', 'rstudio-primary') +
       btn('reset', t('rstudio.new') || 'New');
   } else if (!rec) {
-    controls = presetSel + btn('start', '● ' + (t('rstudio.rec') || 'Record'), 'rstudio-primary') + `<span class="rstudio-status"></span>`;
+    // Video sits beside the .bmmreplay recorder rather than replacing it: they answer
+    // different needs — a .bmmreplay is inspectable and tiny, an mp4 is what you paste
+    // into a message. The label names the container this runtime will ACTUALLY produce,
+    // so "record mp4" never turns into a webm at save time.
+    const vid = captureSupport();
+    const vidBtn = isCapturing()
+      ? btn('vstop', '■ ' + (t('rstudio.vstop') || 'Stop video'), 'rstudio-primary')
+      : vid.ok
+        ? btn('vstart', '● ' + (t('rstudio.vrec') || 'Record video') + ` (.${vid.ext})`)
+        : `<span class="rstudio-hide-none" data-tooltip="${vid.reason === 'no-encoder'
+            ? (t('rstudio.vnoenc') || 'This runtime has no video encoder (MediaRecorder).')
+            : (t('rstudio.vnodisp') || 'This runtime cannot capture the screen (getDisplayMedia).')}">${t('rstudio.vunavail') || 'video n/a'}</span>`;
+    controls = presetSel + btn('start', '● ' + (t('rstudio.rec') || 'Record'), 'rstudio-primary') + vidBtn + `<span class="rstudio-status"></span>`;
   } else {
     // A live meter (elapsed + buffered size + how much of the memory budget is used) so a long
     // take never grows invisibly — this used to be a bare "Recording…" with no way to tell.
@@ -463,6 +514,8 @@ function onBarClick(e: Event) {
       if (sel) { S.hideSelectors = S.hideSelectors.filter((x) => x !== sel); applyHideSelectors(); renderBar(); }
       break;
     }
+    case 'vstart': void videoStart(); break;
+    case 'vstop': void videoStop(); break;
     case 'close': closeReplayStudio(); break;
   }
 }

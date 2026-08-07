@@ -485,6 +485,7 @@ fn main() {
             commands::analytics::analytics_clear_sent_log,
             commands::analytics::replay_asset_data_url,
             commands::analytics::save_local_replay,
+            commands::analytics::save_local_video,
             commands::analytics::replay_spool_begin,
             commands::analytics::replay_spool_append,
             commands::analytics::replay_spool_trim,

@@ -786,6 +786,36 @@ pub fn save_local_replay(app_handle: AppHandle, content: String) -> Result<Strin
     Ok(path.to_string_lossy().to_string())
 }
 
+/// Save a Replay Studio video clip next to the `.bmmreplay` files.
+///
+/// Base64 rather than a byte array: Tauri's IPC serialises a `Vec<u8>` as a JSON array of
+/// numbers, which costs roughly six characters per byte — a 20 MB clip becomes a ~120 MB
+/// JSON string to parse. Base64 is ~1.33x instead.
+///
+/// The extension is an allowlist, not a parameter: the frontend picks whichever container
+/// `MediaRecorder` actually produced, and letting an arbitrary string through would let a
+/// compromised webview write `..\..\something.exe` by way of the file name.
+#[tauri::command]
+pub fn save_local_video(app_handle: AppHandle, b64: String, ext: String) -> Result<String, String> {
+    let ext = match ext.as_str() {
+        "mp4" | "webm" => ext,
+        other => return Err(format!("refused: unsupported video extension {:?}", other)),
+    };
+    use base64::{Engine as _, engine::general_purpose};
+    let bytes = general_purpose::STANDARD
+        .decode(b64.as_bytes())
+        .map_err(|e| format!("bad base64: {}", e))?;
+    if bytes.is_empty() {
+        return Err("refused: empty clip".into());
+    }
+    let dir = app_handle.path().app_data_dir().map_err(|e| e.to_string())?.join("Replays");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let path = dir.join(format!("bmm-clip-{}.{}", chrono::Utc::now().timestamp_millis(), ext));
+    std::fs::write(&path, &bytes).map_err(|e| e.to_string())?;
+    log_line(format!("[ANALYTICS] Saved studio clip to {:?} ({} bytes)", path, bytes.len()));
+    Ok(path.to_string_lossy().to_string())
+}
+
 /// Delete a specific replay file. Confined to the app's own `Replays` folder — the
 /// frontend only ever deletes files it listed from there, so an unvalidated path (e.g.
 /// from a compromised webview) can't remove arbitrary files off disk (CWE-22 hardening).
