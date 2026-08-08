@@ -10,7 +10,12 @@ BMM opens on an empty [Profiles](doc-page:features/profiles) screen and says:
 > No active profile — create your first profile so a game update or a reinstall never wipes
 > your setup again.
 
-Give it a name and point it at your game folder. One folder per profile.
+The form asks for a name and **three folders**, all required: the **game folder** (where
+BMM deploys), a **mods folder** (where this profile's mods are stored), and a **backup
+folder** (originals and the activity log). Optionally a game name, a colour and an icon.
+
+Use a separate mods folder per profile — BMM warns you if two profiles share one, because
+that is how you end up debugging a mod you thought was off.
 
 ## 2. Understand what just happened
 
@@ -22,8 +27,9 @@ becomes something BMM *writes to*, not something you maintain by hand.
 
 ## 3. Add a mod and turn it on
 
-Drag a `.zip` or a mod folder anywhere onto the window. It lands in the
-[Library](doc-page:features/library). Then enable it — a single click on the card's toggle, or a
+With the [Library](doc-page:features/library) open, drag a `.zip` or a mod folder onto the
+window: the **Add Mod** dialog opens pre-filled, and confirming files the mod into this
+profile. Then enable it — a single click on the card's toggle, or a
 **double-click anywhere on the card**, is what puts it in the game, for *this* profile.
 
 Select a card (single click) and the **detail panel** opens: version, author, description, its

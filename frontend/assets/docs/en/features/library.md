@@ -21,13 +21,16 @@ lists) is a different way of arranging what the Library holds.
 
 === "From a file"
 
-    Drag a `.zip` or a mod folder anywhere onto the window. BMM reads it, works out which
-    game it belongs to, and files it — no dialog.
+    With the Library screen open, drag a `.zip` (or `.rar`, `.7z`, `.tar`…) or a mod folder
+    onto the window. The **Add Mod** dialog opens pre-filled — the path set, the name taken
+    from the file name — so all that's left is to confirm. The mod is added to the **active
+    profile's** mods folder.
 
 === "From a repo"
 
-    See [Server Repo](doc-page:features/repo). A repo is a shared source; once added, its mods appear here
-    alongside your local ones and are marked with the repo's name.
+    See [Server Repo](doc-page:features/repo). A repo is a shared source: connect it, **sync**, and the
+    synced mods land in a profile (a dedicated one, or one you pick) and appear here
+    alongside your local ones.
 
 !!! tip "Archived mods stay archived"
 

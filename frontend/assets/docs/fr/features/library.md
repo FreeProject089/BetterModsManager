@@ -22,13 +22,16 @@ contient.
 
 === "Depuis un fichier"
 
-    Glisse un `.zip` ou un dossier de mod n'importe où sur la fenêtre. BMM le lit, déduit à
-    quel jeu il appartient et le range — sans boîte de dialogue.
+    L'écran Bibliothèque ouvert, glisse un `.zip` (ou `.rar`, `.7z`, `.tar`…) ou un dossier
+    de mod sur la fenêtre. La boîte **Ajouter un mod** s'ouvre pré-remplie — le chemin posé,
+    le nom repris du fichier — il ne reste qu'à confirmer. Le mod est ajouté au dossier mods
+    du **profil actif**.
 
 === "Depuis un dépôt"
 
-    Voir [Dépôt Serveur](doc-page:features/repo). Un dépôt est une source partagée ; une fois ajouté,
-    ses mods apparaissent ici à côté des tiens, marqués du nom du dépôt.
+    Voir [Dépôt Serveur](doc-page:features/repo). Un dépôt est une source partagée : connecte-le,
+    **synchronise**, et les mods synchronisés atterrissent dans un profil (dédié, ou un que
+    tu choisis) puis apparaissent ici à côté des tiens.
     <!-- On lie vers `repo.md`, pas `repo.fr.md` : avec docs_structure: suffix, l'i18n
          résout le lien vers la version FR si elle existe, et retombe sur l'EN sinon. -->
 

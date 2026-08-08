@@ -9,7 +9,13 @@ BMM s'ouvre sur un écran [Profils](doc-page:features/profiles) vide et annonce 
 > Aucun profil actif — crée ton premier profil pour qu'une mise à jour ou une réinstallation
 > n'efface plus jamais ta configuration.
 
-Donne-lui un nom et pointe-le vers ton dossier de jeu. Un dossier par profil.
+Le formulaire demande un nom et **trois dossiers**, tous obligatoires : le **dossier du
+jeu** (là où BMM déploie), un **dossier mods** (où les mods de ce profil sont stockés) et un
+**dossier backup** (les originaux et le journal d'activité). En option : un nom de jeu, une
+couleur, une icône.
+
+Un dossier mods distinct par profil — BMM te prévient si deux profils en partagent un, parce
+que c'est comme ça qu'on finit par déboguer un mod qu'on croyait désactivé.
 
 ## 2. Comprendre ce qui vient de se passer
 
@@ -21,8 +27,9 @@ devient une cible d'écriture pour BMM, pas quelque chose que tu maintiens à la
 
 ## 3. Ajouter un mod et l'activer
 
-Glisse un `.zip` ou un dossier de mod n'importe où sur la fenêtre. Il atterrit dans la
-[Bibliothèque](doc-page:features/library). Puis active-le — un simple clic sur l'interrupteur de
+La [Bibliothèque](doc-page:features/library) ouverte, glisse un `.zip` ou un dossier de mod
+sur la fenêtre : la boîte **Ajouter un mod** s'ouvre pré-remplie, et confirmer range le mod
+dans ce profil. Puis active-le — un simple clic sur l'interrupteur de
 la carte, ou un **double-clic n'importe où sur la carte**, c'est ça qui le met dans le jeu,
 pour *ce* profil.
 
