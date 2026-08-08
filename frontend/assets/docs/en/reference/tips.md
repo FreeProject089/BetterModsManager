@@ -7,8 +7,7 @@ itself.
 <div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/bmm-demo.bmmreplay" data-page="reference/tips" data-title="A recorded BMM session"></div>
 
 *Click **Play** above to watch a real BMM session, reconstructed in your browser — not a
-video, the actual interface replayed. (Placeholder recording; more, focused clips are on the
-way.)*
+video, the actual interface replayed.*
 
 ## Keyboard shortcuts
 

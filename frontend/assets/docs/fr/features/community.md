@@ -45,9 +45,8 @@ Trois états vides différents, parce que trois choses différentes peuvent êtr
 - **Chargement impossible** — un bouton *Réessayer*. Le fil vient du réseau, c'est donc l'état
   que tu verras hors ligne, et il le dit au lieu de faire croire que le blog est vide.
 
-<div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/community.bmmreplay" data-page="features/community" data-title="Lire le blog communautaire (clip placeholder)"></div>
+<div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/community.bmmreplay" data-page="features/community" data-title="Lire le blog communautaire"></div>
 
-*Enregistrement placeholder — un clip ciblé de cet écran le remplacera.*
 
 ## Le fil
 

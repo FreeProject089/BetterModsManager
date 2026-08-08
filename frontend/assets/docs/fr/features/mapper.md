@@ -14,9 +14,8 @@ Mapper corrige ça sans que tu dézippes quoi que ce soit à la main.
 | **2** | **Cible** | Où ces fichiers doivent atterrir pour que le jeu les voie. |
 | **3** | **Diagnostic** | Montre l'emplacement final *avant* de valider. |
 
-<div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/mapper.bmmreplay" data-page="features/mapper" data-title="Remapper un mod mal empaqueté (clip placeholder)"></div>
+<div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/mapper.bmmreplay" data-page="features/mapper" data-title="Recartographier un mod mal packagé"></div>
 
-*Enregistrement placeholder — un clip ciblé de cet écran le remplacera.*
 
 ## Quand en as-tu besoin
 

@@ -113,14 +113,20 @@ if (!existsSync(MD_LITE)) {
   const { renderDocMarkdown } = await import('file://' + MD_LITE.replace(/\\/g, '/'));
   const unesc = (s) => s.replace(/&quot;/g, '"').replace(/&#39;/g, "'")
     .replace(/&gt;/g, '>').replace(/&lt;/g, '<').replace(/&amp;/g, '&');
+  // This gate asks whether md-lite's HTML escaping loses any of the diagram — not what the
+  // file's line endings are. md-lite normalises CRLF to LF, so comparing raw bytes made the
+  // check fail on every Windows working copy (core.autocrlf hands out CRLF) while staying
+  // green in CI, which runs on Linux. It reported the CR count as "truncated": 425 vs 413
+  // chars on repo.md, exactly its 12 lines.
+  const lf = (s) => s.replace(/\r\n/g, '\n');
   let checked = 0;
   for (const f of walk(BUNDLE)) {
     if (!f.endsWith('.md')) continue;
     const md = readFileSync(f, 'utf8');
-    const want = [...md.matchAll(/^```mermaid[ \t]*\r?\n([\s\S]*?)^```/gm)].map((m) => m[1].trim());
+    const want = [...md.matchAll(/^```mermaid[ \t]*\r?\n([\s\S]*?)^```/gm)].map((m) => lf(m[1]).trim());
     if (!want.length) continue;
     // Read each attribute the way a browser would: up to the next unescaped quote.
-    const got = [...renderDocMarkdown(md).matchAll(/data-mermaid="([^"]*)"/g)].map((m) => unesc(m[1]).trim());
+    const got = [...renderDocMarkdown(md).matchAll(/data-mermaid="([^"]*)"/g)].map((m) => lf(unesc(m[1])).trim());
     const where = relative(ROOT, f);
     if (got.length !== want.length) { fail(`${where}: ${want.length} diagram(s) in the source, ${got.length} in the HTML`); continue; }
     for (let i = 0; i < want.length; i++) {

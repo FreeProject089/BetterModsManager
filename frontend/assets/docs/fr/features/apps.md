@@ -15,9 +15,8 @@ la version que tu as, et les lance — sans que tu gères les téléchargements 
 | **2** | **Installer** | Un clic. |
 | **3** | **Sources** | D'où vient le catalogue. |
 
-<div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/apps.bmmreplay" data-page="features/apps" data-title="Installer une app depuis le catalogue (clip placeholder)"></div>
+<div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/apps.bmmreplay" data-page="features/apps" data-title="Installer une application depuis le catalogue"></div>
 
-*Enregistrement placeholder — un clip ciblé de cet écran le remplacera.*
 
 ## Lire une carte
 

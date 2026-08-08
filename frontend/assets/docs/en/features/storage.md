@@ -6,9 +6,7 @@
 Open it from **Settings → Storage → Open the Storage Manager**. It answers three questions: how
 much room is left, how fast each disk is, and how hard BMM is allowed to push your drives.
 
-<div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/bmm-demo.bmmreplay" data-page="features/storage" data-title="The Storage Manager (placeholder clip)"></div>
 
-*Placeholder recording — a focused clip of this screen will replace it.*
 
 ## The two settings that matter most
 

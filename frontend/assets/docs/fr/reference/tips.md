@@ -7,8 +7,7 @@ Parcours-la une fois ; elle se rentabilise vite.
 <div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/bmm-demo.bmmreplay" data-page="reference/tips" data-title="Une session BMM enregistrée"></div>
 
 *Clique sur **Lecture** ci-dessus pour voir une vraie session BMM, reconstruite dans ton
-navigateur — pas une vidéo, l'interface réelle rejouée. (Enregistrement placeholder ; des
-clips plus courts et ciblés arrivent.)*
+navigateur — pas une vidéo, l'interface réelle rejouée.*
 
 ## Raccourcis clavier
 

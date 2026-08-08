@@ -24,9 +24,8 @@ for a release.
     its own token, and only does what you've granted it. Review those grants in
     **Plugins → Permissions**.
 
-<div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/plugins.bmmreplay" data-page="features/plugins" data-title="Granting and using a plugin (placeholder clip)"></div>
+<div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/plugins.bmmreplay" data-page="features/plugins" data-title="Granting a permission and using a plugin"></div>
 
-*Placeholder recording — a focused clip of this screen will replace it.*
 
 ## What you can grant a plugin
 

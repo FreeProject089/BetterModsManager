@@ -14,9 +14,8 @@ fixes that without you unzipping anything by hand.
 | **2** | **Target** | Where those files must land for the game to see them. |
 | **3** | **Diagnostic** | Shows the final location *before* you commit. |
 
-<div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/mapper.bmmreplay" data-page="features/mapper" data-title="Remapping a badly-packaged mod (placeholder clip)"></div>
+<div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/mapper.bmmreplay" data-page="features/mapper" data-title="Remapping a badly-packaged mod"></div>
 
-*Placeholder recording — a focused clip of this screen will replace it.*
 
 ## When you need it
 

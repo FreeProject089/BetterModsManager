@@ -20,9 +20,8 @@ où les prendre, dans quel ordre, et quoi faire quand ils se marchent dessus*.
 | **2** | **Importer** | En lit un, puis télécharge et installe. |
 | **3** | **Profil auto** | Génère un profil dédié pour la liste importée. |
 
-<div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/modlist.bmmreplay" data-page="features/modlist" data-title="Exporter et importer une liste .MM (clip placeholder)"></div>
+<div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/modlist.bmmreplay" data-page="features/modlist" data-title="Exporter et importer une liste .MM"></div>
 
-*Enregistrement placeholder — un clip ciblé de cet écran le remplacera.*
 
 ## Le partage
 

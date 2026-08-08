@@ -14,9 +14,8 @@ you're not looking.
 | **2** | **Rules** | *Whether* it runs, and what it does. |
 | **3** | **New task** | One task, one job. |
 
-<div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/scheduler.bmmreplay" data-page="features/scheduler" data-title="Building an automation (placeholder clip)"></div>
+<div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/scheduler.bmmreplay" data-page="features/scheduler" data-title="Building a scheduled task"></div>
 
-*Placeholder recording — a focused clip of this screen will replace it.*
 
 ## A task has three parts
 

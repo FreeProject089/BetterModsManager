@@ -14,9 +14,8 @@ on or off.
 | **2** | **Export** | Produces a file you can hand to someone. |
 | **3** | **Import** | Reads someone else's pack. |
 
-<div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/modpacks.bmmreplay" data-page="features/modpacks" data-title="Building and applying a modpack (placeholder clip)"></div>
+<div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/modpacks.bmmreplay" data-page="features/modpacks" data-title="Building and applying a modpack"></div>
 
-*Placeholder recording — a focused clip of this screen will replace it.*
 
 ## Modpack or profile?
 

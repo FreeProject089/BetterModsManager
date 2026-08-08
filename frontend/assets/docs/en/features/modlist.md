@@ -20,9 +20,8 @@ mods, where to get them, in what order, and what to do when they clash*.
 | **2** | **Import** | Reads one, then fetches and installs. |
 | **3** | **Auto-profile** | Generates a dedicated profile for the imported list. |
 
-<div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/modlist.bmmreplay" data-page="features/modlist" data-title="Exporting and importing a .MM list (placeholder clip)"></div>
+<div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/modlist.bmmreplay" data-page="features/modlist" data-title="Exporting and importing a .MM list"></div>
 
-*Placeholder recording — a focused clip of this screen will replace it.*
 
 ## Sharing
 

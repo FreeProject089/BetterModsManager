@@ -103,7 +103,7 @@
         "en": "The Library is where every mod you own lives — installed or not, from any source.",
         "fr": "La Bibliothèque, c'est là que vit chacun de tes mods — installé ou non, quelle que soit sa provenance."
       },
-      "words": 649,
+      "words": 638,
       "diagrams": 0,
       "fr": true
     },
@@ -118,7 +118,7 @@
         "en": "A .MM file is your complete setup, written down — and unlike a modpack, it carries the download links, so the person receiving it doesn't need to own the mods…",
         "fr": "Un fichier .MM, c'est ta configuration complète, écrite — et contrairement à un modpack, il embarque les liens de téléchargement : la personne qui le reçoit…"
       },
-      "words": 372,
+      "words": 359,
       "diagrams": 0,
       "fr": true
     },
@@ -133,7 +133,7 @@
         "en": "A profile is a saved answer to \"which mods are on, in what order, for this game\".",
         "fr": "Un profil est une réponse enregistrée à « quels mods sont actifs, dans quel ordre, pour ce jeu »."
       },
-      "words": 727,
+      "words": 717,
       "diagrams": 0,
       "fr": true
     },
@@ -148,7 +148,7 @@
         "en": "A modpack is a named bundle of mods you can toggle in one click. Where a profile is \"my setup for this game\", a modpack is \"this group of mods, together\" —…",
         "fr": "Un modpack est un lot de mods nommé, activable en un clic. Là où un profil répond à « ma configuration pour ce jeu », un modpack répond à « ce groupe de mods,…"
       },
-      "words": 422,
+      "words": 409,
       "diagrams": 0,
       "fr": true
     },
@@ -163,7 +163,7 @@
         "en": "A Server Repo is a shared, versioned collection of mods. Two things flow through it: you sync mods from a repo into a profile, and BMM uses the repo to tell…",
         "fr": "Un Dépôt Serveur est une collection de mods partagée et versionnée. Deux flux le traversent : tu synchronises des mods depuis un dépôt vers un profil, et BMM…"
       },
-      "words": 703,
+      "words": 690,
       "diagrams": 1,
       "fr": true
     },
@@ -178,7 +178,7 @@
         "en": "Extend BMM with community plugins and automate actions.",
         "fr": "Étends BMM avec des plugins communautaires et automatise des actions."
       },
-      "words": 665,
+      "words": 654,
       "diagrams": 0,
       "fr": true
     },
@@ -193,7 +193,7 @@
         "en": "Schedule BMM actions (one-time or recurring) — activate a mod, modpack, profile…",
         "fr": "Planifie des actions BMM (ponctuelles ou récurrentes) — activer un mod, un modpack, un profil…"
       },
-      "words": 764,
+      "words": 752,
       "diagrams": 0,
       "fr": true
     },
@@ -208,7 +208,7 @@
         "en": "Browse & install apps in one click.",
         "fr": "Parcours et installe des apps en un clic."
       },
-      "words": 683,
+      "words": 670,
       "diagrams": 0,
       "fr": true
     },
@@ -223,7 +223,7 @@
         "en": "Some mods are packaged wrong. The files are fine; the folders around them aren't. The Mapper fixes that without you unzipping anything by hand.",
         "fr": "Certains mods sont mal empaquetés. Les fichiers sont bons ; les dossiers autour, non. Le Mapper corrige ça sans que tu dézippes quoi que ce soit à la main."
       },
-      "words": 540,
+      "words": 527,
       "diagrams": 0,
       "fr": true
     },
@@ -238,7 +238,7 @@
         "en": "News & posts from the BetterCommunity blogs, read without leaving BMM.",
         "fr": "Actus et articles des blogs BetterCommunity, lus sans quitter BMM."
       },
-      "words": 829,
+      "words": 816,
       "diagrams": 0,
       "fr": true
     },
@@ -253,7 +253,7 @@
         "en": "Settings is a long page, but most of it you set once and forget. This tour starts with the handful that change how BMM feels, then walks the rest section by…",
         "fr": "Les Paramètres forment une longue page, mais la plupart se règlent une fois pour toutes."
       },
-      "words": 1203,
+      "words": 1190,
       "diagrams": 0,
       "fr": true
     },
@@ -298,7 +298,7 @@
         "en": "Speed limits per disk, space alerts, and how BMM copies files without freezing your PC.",
         "fr": "Limites de vitesse par disque, alertes d'espace, et comment BMM copie les fichiers sans figer ton PC."
       },
-      "words": 621,
+      "words": 587,
       "diagrams": 0,
       "fr": true
     },
@@ -328,7 +328,7 @@
         "en": "Customise every colour, font and element of BMM. Share themes in one click.",
         "fr": "Personnalise chaque couleur, police et élément de BMM. Partage tes thèmes en un clic."
       },
-      "words": 787,
+      "words": 774,
       "diagrams": 0,
       "fr": true
     },
@@ -553,7 +553,7 @@
         "en": "The features have their own pages. This one is about the interactions — the clicks, keys and small conveniences that aren't obvious until someone points at them.",
         "fr": "Les fonctionnalités ont leur propre page. Celle-ci parle des interactions — les clics, touches et petites commodités qu'on ne devine pas tant que quelqu'un ne…"
       },
-      "words": 490,
+      "words": 481,
       "diagrams": 0,
       "fr": true
     },

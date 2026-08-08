@@ -17,9 +17,8 @@ Its real job is stated on the empty screen:
 | **2** | **Game folder** | Where this profile deploys. See the warning below. |
 | **3** | **New profile** | One per *setup*, not one per game — you can have several. |
 
-<div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/profiles.bmmreplay" data-page="features/profiles" data-title="Creating and switching profiles (placeholder clip)"></div>
+<div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/profiles.bmmreplay" data-page="features/profiles" data-title="Creating a profile and switching to it"></div>
 
-*Placeholder recording — a focused clip of this screen will replace it.*
 
 ## Why several profiles per game
 

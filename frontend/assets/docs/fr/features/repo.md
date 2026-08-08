@@ -17,9 +17,8 @@ silence.
 | **2** | **Parcourir** | Dépôts officiels et partenaires. |
 | **3** | **Ajouter** | Pointe BMM vers l'URL d'un dépôt. |
 
-<div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/repo.bmmreplay" data-page="features/repo" data-title="Synchroniser et héberger un dépôt (clip placeholder)"></div>
+<div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/repo.bmmreplay" data-page="features/repo" data-title="Se connecter à un dépôt et synchroniser"></div>
 
-*Enregistrement placeholder — un clip ciblé de cet écran le remplacera.*
 
 ## Se connecter à un dépôt
 

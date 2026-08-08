@@ -14,9 +14,8 @@ contient.
 | **2** | **Filtres** | Restreint par jeu, catégorie ou état d'installation. |
 | **3** | **Installer** | Ajoute le mod sélectionné au profil sur lequel tu es. |
 
-<div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/library.bmmreplay" data-page="features/library" data-title="La Bibliothèque en action (clip placeholder)"></div>
+<div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/library.bmmreplay" data-page="features/library" data-title="Ajouter un mod et l'activer"></div>
 
-*Enregistrement placeholder — un clip ciblé de cet écran le remplacera.*
 
 ## Ajouter ton premier mod
 

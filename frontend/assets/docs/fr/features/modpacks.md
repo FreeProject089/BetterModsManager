@@ -14,9 +14,8 @@ active ou désactive le pack.
 | **2** | **Exporter** | Produit un fichier à transmettre. |
 | **3** | **Importer** | Lit le pack de quelqu'un d'autre. |
 
-<div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/modpacks.bmmreplay" data-page="features/modpacks" data-title="Construire et appliquer un modpack (clip placeholder)"></div>
+<div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/modpacks.bmmreplay" data-page="features/modpacks" data-title="Créer et appliquer un modpack"></div>
 
-*Enregistrement placeholder — un clip ciblé de cet écran le remplacera.*
 
 ## Modpack ou profil ?
 
