@@ -48,7 +48,7 @@ Ce qu'il fait au-delà de copier des fichiers :
 |---|---|
 | **Vérifie la signature** | Le paquet porte une signature Ed25519 et l'installeur refuse d'installer celui qui ne correspond pas à sa clé publique embarquée — avant d'écrire quoi que ce soit |
 | **Enregistre `bmm://`** | Pour que les deeplinks de BetterCommunity et de cette doc atteignent l'app |
-| **Propose une installation portable** | Dans un dossier de ton choix plutôt que `Program Files`, sans entrée de registre |
+| **Installe pour l'utilisateur** | Dans `%LOCALAPPDATA%\Programs\Better Mods Manager` par défaut — aucune demande d'admin. **Parcourir…** permet un autre dossier |
 | **Sert aussi de mise à jour** | Relance-le sur un BMM installé et il devient un écran de maintenance : mettre à jour, réparer, désinstaller |
 
 ### Les morceaux optionnels

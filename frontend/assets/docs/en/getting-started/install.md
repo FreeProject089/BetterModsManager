@@ -48,7 +48,7 @@ What it does beyond copying files:
 |---|---|
 | **Checks the signature** | The package carries an Ed25519 signature and the installer refuses to install one that does not match its embedded public key — before anything is written |
 | **Registers `bmm://`** | So deeplinks from BetterCommunity and from these docs reach the app |
-| **Offers a portable install** | Install to a folder you choose instead of `Program Files`, with no registry entry |
+| **Installs per-user** | Into `%LOCALAPPDATA%\Programs\Better Mods Manager` by default — no admin prompt. **Browse…** picks another folder |
 | **Doubles as the updater** | Run it again on an installed BMM and it becomes a maintenance screen: update, repair, uninstall |
 
 ### The optional pieces
