@@ -29,10 +29,13 @@ version.
 
 ## Ce que tu peux accorder à un plugin
 
-Chaque autorisation est une capacité d'**écriture** — le pouvoir de *modifier* quelque chose.
-Il n'y a pas de permission de « lecture » à distribuer pour tes mods ou profils, parce que la
-lecture n'est de toute façon pas contrôlée (l'API n'écoute que sur ta propre machine). Une
-autorisation donne à un plugin le droit d'agir, pas de regarder.
+Dix autorisations, dont la plupart sont des capacités d'**écriture** — le pouvoir de
+*modifier* quelque chose.
+
+Il n'existe pas de `mods.read` ni de `profiles.read` à distribuer, parce que ces points de
+lecture ne sont pas contrôlés du tout : l'API n'écoute que sur `127.0.0.1`, donc un plugin qui
+détient déjà votre jeton peut lire vos mods et vos profils. Les lectures qui, elles, exigent
+une autorisation sont les trois ci-dessous — `app.read`, `catalog.read`, `plugins.read`.
 
 | Autorisation | Permet au plugin de |
 |---|---|

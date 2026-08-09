@@ -29,10 +29,12 @@ for a release.
 
 ## What you can grant a plugin
 
-Every grant is a **write** capability — the power to *change* something. There's no "read"
-permission to hand out for your mods or profiles, because reading isn't gated in the first
-place (the API only listens on your own machine). A grant buys a plugin the ability to act,
-not to look.
+Ten grants, and most of them are **write** capabilities — the power to *change* something.
+
+There is no `mods.read` or `profiles.read` to hand out, because those read endpoints are not
+permission-gated at all: the API listens on `127.0.0.1` only, so a plugin that already has
+your token can read your mods and profiles. Reads that *do* need a grant are the three below
+— `app.read`, `catalog.read`, `plugins.read`.
 
 | Grant | Lets the plugin |
 |---|---|
