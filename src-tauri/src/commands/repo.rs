@@ -2646,6 +2646,26 @@ mod tests {
     }
 }
 
+/// Where a client should look for mod files, given where the manifest lands relative to the
+/// scanned folder.
+///
+/// Returns None for the historical case — the folder is literally named `mods` and the
+/// manifest sits beside it — so manifests that already relied on the implicit
+/// `mods/{id}/{path}` keep serialising without the field.
+fn default_layout_for(mods_dir: &Path, output_path: &Path) -> Option<String> {
+    let out_dir = output_path.parent()?;
+    // Only a folder directly beneath the manifest can be addressed relatively; anything else
+    // (a sibling tree, an absolute path elsewhere) needs files_base_url and an explicit
+    // layout, and guessing here would produce a confidently wrong URL.
+    let rel = mods_dir.strip_prefix(out_dir).ok()?;
+    let rel = rel.to_string_lossy().replace('\\', "/");
+    let rel = rel.trim_matches('/');
+    if rel.is_empty() || rel == "mods" {
+        return None;
+    }
+    Some(format!("{}/{{id}}/{{path}}", rel))
+}
+
 #[derive(Debug, Clone, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GenerateManifestArgs {
@@ -2907,10 +2927,19 @@ pub(crate) fn generate_repo_manifest_sync(
         .map(|u| u.trim().trim_end_matches('/').to_string())
         .filter(|u| !u.is_empty())
         .or_else(|| previous.as_ref().and_then(|r| r.files_base_url.clone()));
+    // The layout must describe where the mods actually sit RELATIVE TO the manifest, or the
+    // pair is not portable: pick a folder called `test/` and the old default (`mods/{id}/…`)
+    // wrote a manifest pointing at a directory that does not exist, so copying `repo.json`
+    // and `test/` together produced a repo where every file 404s.
+    //
+    // Derived from the two paths rather than assumed, so "manifest beside the folder" and
+    // "manifest inside it" both come out right. An explicit value always wins.
+    let derived_layout = default_layout_for(&mods_dir, &output_path);
     repo.files_layout = args.files_layout.as_ref()
         .map(|l| l.trim().to_string())
         .filter(|l| !l.is_empty())
-        .or_else(|| previous.as_ref().and_then(|r| r.files_layout.clone()));
+        .or_else(|| previous.as_ref().and_then(|r| r.files_layout.clone()))
+        .or(derived_layout);
 
     let profile_id = previous.as_ref()
         .and_then(|r| r.profiles.first().map(|p| p.id.clone()))
@@ -3305,6 +3334,47 @@ mod manifest_tests {
         assert_eq!(first.seed, second.seed);
         assert_eq!(first.created_at, second.created_at);
         assert_eq!(first.profiles[0].id, second.profiles[0].id);
+    }
+
+    #[test]
+    fn the_manifest_describes_the_folder_it_actually_scanned() {
+        // Pick a folder named `test`, and the manifest must point at `test/…`. The old
+        // default was a hardcoded `mods/{id}/{path}`, so `repo.json` + the folder copied
+        // together produced a repo where every single file 404s — valid JSON, dead repo.
+        let root = scratch("portable");
+        fs::create_dir_all(root.join("test/alpha")).unwrap();
+        fs::write(root.join("test/alpha/a.pak"), b"a").unwrap();
+
+        let mut a = args(&root);
+        a.mods_dir = root.join("test").to_string_lossy().to_string();
+        a.files_base_url = None;
+        run(a, vec![]).unwrap();
+
+        let repo: ServerRepo =
+            serde_json::from_str(&fs::read_to_string(root.join("repo.json")).unwrap()).unwrap();
+        assert_eq!(repo.files_layout.as_deref(), Some("test/{id}/{path}"));
+
+        // Resolved against wherever repo.json is served from, the URL hits the real file.
+        let m = &repo.profiles[0].mods[0];
+        assert_eq!(
+            super::mod_file_url(
+                "https://host/r/",
+                repo.files_base_url.as_deref(),
+                repo.files_layout.as_deref(),
+                &m.id,
+                &m.files[0].relative_path,
+            ),
+            "https://host/r/test/alpha/a.pak",
+        );
+    }
+
+    #[test]
+    fn a_folder_named_mods_keeps_the_historical_implicit_layout() {
+        // Manifests published before files_layout existed mean mods/{id}/{path}; emitting it
+        // explicitly here would be harmless but noisy, and absent must stay the same thing.
+        let root = scratch("classic");
+        run(args(&root), vec![]).unwrap();
+        assert_eq!(read(&root).files_layout, None);
     }
 
     #[test]
