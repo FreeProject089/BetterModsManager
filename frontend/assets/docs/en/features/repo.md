@@ -43,7 +43,14 @@ connecting:
 
 One mod can point at several repos. That's deliberate: if a source disappears, the mod is
 still tracked by the other. There's also a **global update repositories** setting in
-[Settings](doc-page:features/settings) — list a repo there and *every* installed mod is checked against it.
+[Settings](doc-page:features/settings) — list a repo there and it is added to the update check for every mod
+that already carries a repo mod id.
+
+!!! warning "A global repo only reaches mods that are already linked"
+
+    The app states the rule: a global repo is matched *by the mod's `repo_mod_id`*. A mod you
+    added by hand from a `.zip` has no such id, so a global repo will never find it — link
+    that mod to a repo once, and the globals apply from then on.
 
 ### Direct downloads have no version
 

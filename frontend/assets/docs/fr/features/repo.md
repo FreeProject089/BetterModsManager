@@ -44,7 +44,14 @@ est une étape distincte de se connecter :
 
 Un mod peut viser plusieurs dépôts. C'est voulu : si une source disparaît, le mod reste suivi
 par l'autre. Il existe aussi un réglage de **dépôts de mise à jour globaux** dans les
-[Paramètres](doc-page:features/settings) — mets-y un dépôt et *chaque* mod installé est vérifié contre lui.
+[Paramètres](doc-page:features/settings) — mettez-y un dépôt et il s'ajoute à la vérification de chaque mod
+qui porte **déjà** un identifiant de mod de dépôt.
+
+!!! warning "Un dépôt global n'atteint que les mods déjà reliés"
+
+    L'application énonce la règle : un dépôt global est apparié *par le `repo_mod_id` du mod*.
+    Un mod que vous avez ajouté à la main depuis un `.zip` n'en a pas, donc aucun dépôt global
+    ne le trouvera — reliez ce mod à un dépôt une fois, et les globaux s'appliquent ensuite.
 
 ### Un téléchargement direct n'a pas de version
 
