@@ -35,7 +35,8 @@ exists exactly for the pack that doesn't belong to a single setup.
 Two settings on the create/export dialog change how a pack behaves — both worth a deliberate
 choice:
 
-**Dependency Mode** — what happens to the dependencies of the mods you picked:
+**Dependency Mode** — what happens to the dependencies of the mods you picked. The dialog
+opens on **Manual**, so nothing is pulled in unless you say so:
 
 | Mode | Includes |
 |---|---|

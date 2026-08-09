@@ -35,7 +35,8 @@ existe précisément pour le pack qui n'appartient pas à une seule configuratio
 Deux réglages du dialogue de création/export changent le comportement d'un pack — chacun
 mérite un choix délibéré :
 
-**Mode de dépendances** — ce qu'il advient des dépendances des mods choisis :
+**Mode de dépendances** — ce qu'il advient des dépendances des mods choisis. La boîte de
+dialogue s'ouvre sur **Manuel**, donc rien n'est entraîné sans votre accord :
 
 | Mode | Inclut |
 |---|---|
