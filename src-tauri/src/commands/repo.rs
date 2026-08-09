@@ -87,9 +87,14 @@ fn format_bytes(bytes: u64) -> String {
 /// Both bases are normalised here rather than at their call sites: `base_url` already ends
 /// with a slash, a hand-typed `files_base_url` may or may not, and getting that wrong yields
 /// `host//mods/…` or `hostmods/…` — neither of which fails loudly, they just 404 per file.
+///
+/// `files_layout` covers the rest of the same problem: hosting that already serves the mods
+/// under a directory of its own choosing. It is a template over `{id}` and `{path}`, and the
+/// default — `mods/{id}/{path}` — is what every manifest written before it existed means.
 pub(crate) fn mod_file_url(
     base_url: &str,
     files_base_url: Option<&str>,
+    files_layout: Option<&str>,
     mod_id: &str,
     relative_path: &str,
 ) -> String {
@@ -98,7 +103,18 @@ pub(crate) fn mod_file_url(
         .filter(|b| !b.is_empty())
         .map(|b| format!("{}/", b.trim_end_matches('/')))
         .unwrap_or_else(|| base_url.to_string());
-    format!("{}mods/{}/{}", base, mod_id, relative_path.replace('\\', "/"))
+    let path = relative_path.replace('\\', "/");
+    let layout = files_layout
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .unwrap_or("mods/{id}/{path}");
+    // A leading slash in the template would read as "root of the host" once joined, silently
+    // dropping any path already in the base URL.
+    let tail = layout
+        .trim_start_matches('/')
+        .replace("{id}", mod_id)
+        .replace("{path}", &path);
+    format!("{}{}", base, tail)
 }
 
 pub(crate) fn compute_file_hash_and_chunks(path: &Path, need_chunks: bool) -> Result<(String, Option<Vec<RepoChunk>>), String> {
@@ -2263,6 +2279,7 @@ pub async fn sync_server_repo(
                     let file_url = mod_file_url(
                         &base_url,
                         repo.files_base_url.as_deref(),
+                        repo.files_layout.as_deref(),
                         &repo_mod.id,
                         &file.relative_path,
                     );
@@ -2607,6 +2624,246 @@ mod tests {
     }
 }
 
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GenerateManifestArgs {
+    /// Directory whose subdirectories are the mods.
+    pub mods_dir: String,
+    /// Where to write the manifest. Defaults to `repo.json` beside `mods_dir` rather than
+    /// inside it, so a later scan never picks the manifest up as one of the mod files.
+    pub output_path: Option<String>,
+    pub name: Option<String>,
+    pub author: Option<String>,
+    pub game_name: Option<String>,
+    /// Absolute URL of the directory the layout below is relative to.
+    pub files_base_url: Option<String>,
+    /// `{id}` / `{path}` template; default `mods/{id}/{path}`.
+    pub files_layout: Option<String>,
+    /// Keep the previous manifest's identity, so re-generating is a new revision of the same
+    /// repo rather than a different one. On by default — see the command docs.
+    #[serde(default = "default_true")]
+    pub reuse_existing: bool,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GenerateManifestReport {
+    pub output_path: String,
+    pub mods: usize,
+    pub files: usize,
+    pub total_bytes: u64,
+    /// Mod ids present now that the previous manifest did not have.
+    pub added: Vec<String>,
+    /// Mod ids the previous manifest had that are no longer on disk, now dropped. Reported
+    /// because a mistyped path is otherwise indistinguishable from a deliberate removal —
+    /// both write a perfectly valid manifest, one of them describing an empty server.
+    pub removed: Vec<String>,
+    /// Mod ids whose file content changed.
+    pub changed: Vec<String>,
+}
+
+/// Generate a `repo.json` for a directory of mods that is already hosted somewhere.
+///
+/// The other two paths both assume BMM is the origin: `export_server_repo` copies every mod
+/// into an output folder, and the `/api/repo/gen` lightweight mode still needs the mods
+/// imported into a BMM profile first. Neither helps someone who already runs a mod server and
+/// only wants a manifest describing it. This reads a folder and writes one file — nothing is
+/// copied, nothing is imported, and the directory it describes is never modified.
+///
+/// One subdirectory of `mods_dir` is one mod, and its **folder name is the mod id**, so the
+/// URLs in the manifest line up with the folder exactly as it already sits on the server.
+///
+/// Re-running it over the same folder is also how a repo is updated: the previous manifest's
+/// seed, id and creation date are carried forward so clients see a new revision of the repo
+/// they already track rather than an unrelated one, and the report says which mods were
+/// added, changed or dropped.
+#[tauri::command]
+pub async fn generate_repo_manifest(
+    args: GenerateManifestArgs,
+) -> Result<GenerateManifestReport, String> {
+    tauri::async_runtime::spawn_blocking(move || generate_repo_manifest_sync(args))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+pub(crate) fn generate_repo_manifest_sync(
+    args: GenerateManifestArgs,
+) -> Result<GenerateManifestReport, String> {
+    use crate::models::repo::RepoProfile;
+    use std::collections::HashMap;
+    use walkdir::WalkDir;
+
+    let mods_dir = PathBuf::from(&args.mods_dir);
+    if !mods_dir.is_dir() {
+        return Err(format!("Not a directory: {}", mods_dir.display()));
+    }
+
+    let output_path = match args.output_path.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        Some(p) => PathBuf::from(p),
+        None => mods_dir.parent().unwrap_or(&mods_dir).join("repo.json"),
+    };
+
+    // Read the previous manifest before overwriting it — both to carry identity forward and
+    // to be able to report what actually changed.
+    let previous: Option<ServerRepo> = if args.reuse_existing {
+        fs::read_to_string(&output_path).ok().and_then(|s| serde_json::from_str(&s).ok())
+    } else {
+        None
+    };
+    let previous_mods: HashMap<String, String> = previous.as_ref().map(|r| {
+        r.profiles.iter().flat_map(|p| p.mods.iter())
+            .map(|m| (m.id.clone(), mod_content_hash(m)))
+            .collect()
+    }).unwrap_or_default();
+
+    let mut entries: Vec<_> = fs::read_dir(&mods_dir).map_err(|e| e.to_string())?
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().is_dir())
+        .collect();
+    entries.sort_by_key(|e| e.file_name());
+
+    let mut repo_mods = Vec::new();
+    let mut total_files = 0usize;
+    let mut total_bytes = 0u64;
+
+    for entry in entries {
+        let dir = entry.path();
+        let id = entry.file_name().to_string_lossy().to_string();
+
+        let mut files = Vec::new();
+        for f in WalkDir::new(&dir).into_iter().filter_map(|e| e.ok()) {
+            let p = f.path();
+            if !p.is_file() { continue; }
+            let rel = match p.strip_prefix(&dir) {
+                Ok(r) => r.to_string_lossy().replace('\\', "/"),
+                Err(_) => continue,
+            };
+            let size = f.metadata().map(|m| m.len()).unwrap_or(0);
+            // Chunk hashes only earn their size on files big enough to resume or patch.
+            let (hash, chunks) = compute_file_hash_and_chunks(&p, size as usize > CHUNK_SIZE)?;
+            total_bytes += size;
+            files.push(RepoFile { relative_path: rel, size, sha256_hash: hash, chunks });
+        }
+        if files.is_empty() { continue; }
+        files.sort_by(|a, b| a.relative_path.cmp(&b.relative_path));
+        total_files += files.len();
+
+        repo_mods.push(RepoMod {
+            id: id.clone(),
+            name: id,
+            version: "1.0.0".to_string(),
+            author: args.author.clone(),
+            description: None,
+            tags: Vec::new(),
+            files,
+            archive: None,
+            download_links: Vec::new(),
+            dependencies: Vec::new(),
+            changelog: None,
+            update_url: None,
+            direct_url: None,
+            update_sources: Vec::new(),
+        });
+    }
+
+    if repo_mods.is_empty() {
+        return Err(format!(
+            "No mods found in {} — expected one subdirectory per mod",
+            mods_dir.display()
+        ));
+    }
+
+    let now: HashMap<String, String> = repo_mods.iter()
+        .map(|m| (m.id.clone(), mod_content_hash(m)))
+        .collect();
+    let mut added: Vec<String> =
+        now.keys().filter(|k| !previous_mods.contains_key(*k)).cloned().collect();
+    let mut removed: Vec<String> =
+        previous_mods.keys().filter(|k| !now.contains_key(*k)).cloned().collect();
+    let mut changed: Vec<String> = now.iter()
+        .filter(|(k, v)| previous_mods.get(*k).map(|p| p != *v).unwrap_or(false))
+        .map(|(k, _)| k.clone())
+        .collect();
+    added.sort();
+    removed.sort();
+    changed.sort();
+
+    let game_name = args.game_name.clone()
+        .or_else(|| previous.as_ref().map(|r| r.game_name.clone()))
+        .unwrap_or_default();
+    let name = args.name.clone()
+        .or_else(|| previous.as_ref().map(|r| r.name.clone()))
+        .unwrap_or_else(|| "BMM Repo".to_string());
+
+    let mut repo = ServerRepo::new(name, game_name);
+    if let Some(prev) = &previous {
+        // Same repo, new revision: keep the identity clients already track.
+        repo.seed = prev.seed.clone();
+        repo.created_at = prev.created_at.clone();
+        repo.description = prev.description.clone();
+        repo.author_id = prev.author_id.clone();
+        repo.require_login = prev.require_login;
+        repo.upload_limit = prev.upload_limit;
+    }
+    if repo.seed.is_none() {
+        repo.seed = Some(uuid::Uuid::new_v4().to_string());
+    }
+    repo.author = args.author.clone()
+        .or_else(|| previous.as_ref().and_then(|r| r.author.clone()));
+    repo.files_base_url = args.files_base_url.as_ref()
+        .map(|u| u.trim().trim_end_matches('/').to_string())
+        .filter(|u| !u.is_empty())
+        .or_else(|| previous.as_ref().and_then(|r| r.files_base_url.clone()));
+    repo.files_layout = args.files_layout.as_ref()
+        .map(|l| l.trim().to_string())
+        .filter(|l| !l.is_empty())
+        .or_else(|| previous.as_ref().and_then(|r| r.files_layout.clone()));
+
+    let profile_id = previous.as_ref()
+        .and_then(|r| r.profiles.first().map(|p| p.id.clone()))
+        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+    repo.profiles = vec![RepoProfile {
+        id: profile_id,
+        name: repo.name.clone(),
+        game_name: repo.game_name.clone(),
+        mods: repo_mods,
+        icon: None,
+        color: None,
+        icon_image: None,
+    }];
+
+    if let Some(parent) = output_path.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    let json = serde_json::to_string_pretty(&repo).map_err(|e| e.to_string())?;
+    fs::write(&output_path, json).map_err(|e| e.to_string())?;
+
+    Ok(GenerateManifestReport {
+        output_path: output_path.to_string_lossy().to_string(),
+        mods: repo.profiles[0].mods.len(),
+        files: total_files,
+        total_bytes,
+        added,
+        removed,
+        changed,
+    })
+}
+
+/// Content identity of a mod: every file path and hash, order-independent.
+/// Only used to report what changed between two generations.
+fn mod_content_hash(m: &crate::models::repo::RepoMod) -> String {
+    let mut parts: Vec<String> = m.files.iter()
+        .map(|f| format!("{}:{}", f.relative_path, f.sha256_hash))
+        .collect();
+    parts.sort();
+    let mut h = Sha256::new();
+    for p in parts {
+        h.update(p.as_bytes());
+        h.update(b"\n");
+    }
+    format!("{:x}", h.finalize())
+}
+
 #[cfg(test)]
 mod url_tests {
     use super::mod_file_url;
@@ -2623,7 +2880,7 @@ mod url_tests {
             "  https://cdn.example/bmm///  ",
         ] {
             assert_eq!(
-                mod_file_url("https://repo.example/", Some(base), "cool-mod", "tex/a.dds"),
+                mod_file_url("https://repo.example/", Some(base), None, "cool-mod", "tex/a.dds"),
                 "https://cdn.example/bmm/mods/cool-mod/tex/a.dds",
                 "base {base:?} did not normalise",
             );
@@ -2636,7 +2893,7 @@ mod url_tests {
         // resolve against the directory holding repo.json exactly as it always did.
         for empty in [None, Some(""), Some("   ")] {
             assert_eq!(
-                mod_file_url("https://repo.example/r/", empty, "cool-mod", "tex/a.dds"),
+                mod_file_url("https://repo.example/r/", empty, None, "cool-mod", "tex/a.dds"),
                 "https://repo.example/r/mods/cool-mod/tex/a.dds",
                 "empty base {empty:?} should fall back",
             );
@@ -2646,8 +2903,159 @@ mod url_tests {
     #[test]
     fn windows_separators_become_url_separators() {
         assert_eq!(
-            mod_file_url("https://r.example/", None, "m", r"tex\sub\a.dds"),
+            mod_file_url("https://r.example/", None, None, "m", r"tex\sub\a.dds"),
             "https://r.example/mods/m/tex/sub/a.dds"
         );
+    }
+
+    #[test]
+    fn a_layout_template_adapts_to_hosting_that_already_has_its_own_shape() {
+        // The point of the field: the server does not move, the manifest describes it.
+        assert_eq!(
+            mod_file_url("https://h/", None, Some("addons/{id}/{path}"), "m", "a/b.dds"),
+            "https://h/addons/m/a/b.dds"
+        );
+        // Mods served straight off the root, with no directory at all above them.
+        assert_eq!(
+            mod_file_url("https://h/", None, Some("{id}/{path}"), "m", "a/b.dds"),
+            "https://h/m/a/b.dds"
+        );
+        // A leading slash would otherwise discard the path already in the base URL.
+        assert_eq!(
+            mod_file_url("https://h/sub/", None, Some("/{id}/{path}"), "m", "b.dds"),
+            "https://h/sub/m/b.dds"
+        );
+        // Empty or absent means the historical layout, for every manifest already published.
+        for none in [None, Some(""), Some("  ")] {
+            assert_eq!(
+                mod_file_url("https://h/", None, none, "m", "b.dds"),
+                "https://h/mods/m/b.dds",
+                "layout {none:?} should fall back",
+            );
+        }
+    }
+}
+
+#[cfg(test)]
+mod manifest_tests {
+    use super::{generate_repo_manifest_sync, GenerateManifestArgs};
+    use crate::models::repo::ServerRepo;
+    use std::fs;
+    use std::path::PathBuf;
+
+    fn scratch(name: &str) -> PathBuf {
+        let d = std::env::temp_dir().join(format!("bmm_manifest_{}", name));
+        let _ = fs::remove_dir_all(&d);
+        fs::create_dir_all(d.join("mods/cool-mod/textures")).unwrap();
+        fs::create_dir_all(d.join("mods/other-mod")).unwrap();
+        fs::write(d.join("mods/cool-mod/textures/a.dds"), b"aaa").unwrap();
+        fs::write(d.join("mods/cool-mod/readme.txt"), b"hi").unwrap();
+        fs::write(d.join("mods/other-mod/b.pak"), b"bbb").unwrap();
+        d
+    }
+
+    fn args(root: &PathBuf) -> GenerateManifestArgs {
+        GenerateManifestArgs {
+            mods_dir: root.join("mods").to_string_lossy().to_string(),
+            output_path: None,
+            name: Some("Test Repo".into()),
+            author: Some("me".into()),
+            game_name: Some("Game".into()),
+            files_base_url: Some("https://host/files/".into()),
+            files_layout: None,
+            reuse_existing: true,
+        }
+    }
+
+    fn read(root: &PathBuf) -> ServerRepo {
+        serde_json::from_str(&fs::read_to_string(root.join("repo.json")).unwrap()).unwrap()
+    }
+
+    #[test]
+    fn it_writes_a_manifest_without_touching_the_mods() {
+        let root = scratch("plain");
+        let before: Vec<_> = walkdir::WalkDir::new(root.join("mods")).into_iter()
+            .filter_map(|e| e.ok()).map(|e| e.path().to_path_buf()).collect();
+
+        let report = generate_repo_manifest_sync(args(&root)).unwrap();
+
+        assert_eq!(report.mods, 2);
+        assert_eq!(report.files, 3);
+        assert_eq!(report.total_bytes, 8);
+        // The manifest lands NEXT TO the mods dir, never inside it — otherwise the next run
+        // would index repo.json as one of the mod's own files.
+        assert_eq!(report.output_path, root.join("repo.json").to_string_lossy());
+
+        let after: Vec<_> = walkdir::WalkDir::new(root.join("mods")).into_iter()
+            .filter_map(|e| e.ok()).map(|e| e.path().to_path_buf()).collect();
+        assert_eq!(before, after, "generation must not add, move or copy anything");
+
+        let repo = read(&root);
+        assert_eq!(repo.files_base_url.as_deref(), Some("https://host/files"));
+        let ids: Vec<_> = repo.profiles[0].mods.iter().map(|m| m.id.as_str()).collect();
+        // Folder name IS the id — that is what makes the URLs line up with the live server.
+        assert_eq!(ids, vec!["cool-mod", "other-mod"]);
+    }
+
+    #[test]
+    fn the_generated_urls_point_at_the_files_as_they_already_sit() {
+        let root = scratch("urls");
+        let mut a = args(&root);
+        a.files_layout = Some("addons/{id}/{path}".into());
+        generate_repo_manifest_sync(a).unwrap();
+
+        let repo = read(&root);
+        let m = repo.profiles[0].mods.iter().find(|m| m.id == "cool-mod").unwrap();
+        let f = m.files.iter().find(|f| f.relative_path == "textures/a.dds").unwrap();
+        assert_eq!(
+            super::mod_file_url(
+                "https://ignored/",
+                repo.files_base_url.as_deref(),
+                repo.files_layout.as_deref(),
+                &m.id,
+                &f.relative_path,
+            ),
+            "https://host/files/addons/cool-mod/textures/a.dds",
+        );
+    }
+
+    #[test]
+    fn regenerating_is_an_update_of_the_same_repo_and_reports_the_diff() {
+        let root = scratch("update");
+        generate_repo_manifest_sync(args(&root)).unwrap();
+        let first = read(&root);
+
+        // One mod edited, one added, one deleted from disk.
+        fs::write(root.join("mods/cool-mod/readme.txt"), b"changed").unwrap();
+        fs::create_dir_all(root.join("mods/new-mod")).unwrap();
+        fs::write(root.join("mods/new-mod/c.pak"), b"c").unwrap();
+        fs::remove_dir_all(root.join("mods/other-mod")).unwrap();
+
+        let report = generate_repo_manifest_sync(args(&root)).unwrap();
+        assert_eq!(report.added, vec!["new-mod"]);
+        assert_eq!(report.changed, vec!["cool-mod"]);
+        // Silence here would let a mistyped path look exactly like a deliberate removal.
+        assert_eq!(report.removed, vec!["other-mod"]);
+
+        let second = read(&root);
+        // Clients track a repo by its seed: a new one would read as an unrelated repo and
+        // strand everyone already subscribed.
+        assert_eq!(first.seed, second.seed);
+        assert_eq!(first.created_at, second.created_at);
+        assert_eq!(first.profiles[0].id, second.profiles[0].id);
+    }
+
+    #[test]
+    fn an_empty_or_wrong_folder_is_an_error_rather_than_an_empty_repo() {
+        let root = scratch("empty");
+        let empty = root.join("nothing");
+        fs::create_dir_all(&empty).unwrap();
+        let mut a = args(&root);
+        a.mods_dir = empty.to_string_lossy().to_string();
+        assert!(generate_repo_manifest_sync(a).is_err());
+
+        let mut a = args(&root);
+        a.mods_dir = root.join("does-not-exist").to_string_lossy().to_string();
+        assert!(generate_repo_manifest_sync(a).is_err());
     }
 }

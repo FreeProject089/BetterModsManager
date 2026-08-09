@@ -575,6 +575,7 @@ fn main() {
             commands::disk::check_disk_space,
             commands::disk::get_folder_size,
             commands::repo::export_server_repo,
+            commands::repo::generate_repo_manifest,
             commands::repo::update_server_repo,
             commands::repo::read_local_repo,
             commands::repo::check_mod_updates,

@@ -28,6 +28,15 @@ pub struct ServerRepo {
     // keeps resolving exactly as it did.
     #[serde(default, alias = "filesBaseUrl", skip_serializing_if = "Option::is_none")]
     pub files_base_url: Option<String>,
+    // How a file's URL is built beneath the base, for hosting that already has its own
+    // layout. `{id}` is the mod id, `{path}` the file's relative path; the default is
+    // `mods/{id}/{path}`.
+    //
+    // Without this, adopting BMM meant moving your files to match BMM. A server already
+    // serving `https://host/addons/<mod>/…` only needs `addons/{id}/{path}` here, and
+    // nothing on it moves. Absent from older manifests, which keep the default.
+    #[serde(default, alias = "filesLayout", skip_serializing_if = "Option::is_none")]
+    pub files_layout: Option<String>,
     pub profiles: Vec<RepoProfile>,
     pub modpacks: Option<Vec<RepoModpackShare>>,
 }
@@ -121,6 +130,7 @@ impl ServerRepo {
             name,
             description: None,
             files_base_url: None,
+            files_layout: None,
             author: None,
             author_id: None,
             signature: None,
