@@ -30,7 +30,7 @@ Regroupées exactement comme dans la liste déroulante des actions.
 | Désactiver un mod | Désactive un mod | mod |
 | Activer un modpack | Active tous les mods d'un [modpack](doc-page:features/modpacks) | modpack |
 | Désactiver un modpack | Désactive tous les mods d'un modpack | modpack |
-| Créer un modpack | Crée un modpack vide | nom, profil |
+| Créer un modpack | Capture les mods **actuellement actifs** du profil dans un nouveau modpack — pas un modpack vide | nom, profil |
 | Ajouter un mod (depuis URL) | Télécharge et installe un mod | URL, nom |
 | Exporter une liste de mods (.mmlist) | Écrit une liste de mods | — |
 | Importer une liste de mods (.mmlist) | Relit une liste de mods | — |

@@ -30,7 +30,7 @@ Grouped exactly as the action dropdown groups them.
 | Disable mod | Disables one mod | mod |
 | Enable modpack | Enables every mod in a [modpack](doc-page:features/modpacks) | modpack |
 | Disable modpack | Disables every mod in a modpack | modpack |
-| Create modpack | Creates an empty modpack | name, profile |
+| Create modpack | Snapshots the profile's **currently active** mods into a new modpack — not an empty one | name, profile |
 | Add a mod (from URL) | Downloads and installs a mod | URL, name |
 | Export a mod list (.mmlist) | Writes a mod list | — |
 | Import a mod list (.mmlist) | Reads a mod list back | — |
