@@ -2338,13 +2338,13 @@ pub async fn start_api_server(
         .and(require_token(t2)).and(with_app_handle(h2))
         .map(|h: tauri::AppHandle| api_exec_reply(&h, "data/import", serde_json::json!({})));
 
-    // POST /api/modlists/export — export a .mmlist mod list
+    // POST /api/modlists/export — export a .mm mod list (the save dialog writes modlist.mm)
     let t3 = token.clone(); let h3 = app_handle.clone();
     let io_modlist_export = warp::path!("api" / "modlists" / "export").and(warp::post())
         .and(require_token(t3)).and(with_app_handle(h3))
         .map(|h: tauri::AppHandle| api_exec_reply(&h, "modlist/export", serde_json::json!({})));
 
-    // POST /api/modlists/import — import a .mmlist mod list
+    // POST /api/modlists/import — import a .mm mod list
     let t4 = token.clone(); let h4 = app_handle.clone();
     let io_modlist_import = warp::path!("api" / "modlists" / "import").and(warp::post())
         .and(require_token(t4)).and(with_app_handle(h4))

@@ -1,7 +1,7 @@
 # GitHub rate limits & the Personal Access Token
 
 BMM reads a fair amount from GitHub: release feeds for update checks, catalog files, and the mod
-downloads a `.mmlist` points at. GitHub rate-limits requests that arrive without credentials, so a
+downloads a `.mm` points at. GitHub rate-limits requests that arrive without credentials, so a
 big import can run into a wall that has nothing to do with BMM.
 
 A **Personal Access Token** raises that ceiling. It is optional, and most people never need one.
@@ -16,7 +16,7 @@ A **Personal Access Token** raises that ceiling. It is optional, and most people
 | **With a token** | 5 000 requests per hour, counted per account |
 
 Sixty an hour is plenty for normal use. You hit it when a single action makes many requests in a
-row — importing a `.mmlist` with dozens of GitHub-hosted mods is the usual one. The symptom is a
+row — importing a `.mm` with dozens of GitHub-hosted mods is the usual one. The symptom is a
 run of downloads that suddenly start failing with a **403**, often after a burst that worked.
 
 !!! note "Per IP, not per machine"

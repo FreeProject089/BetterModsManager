@@ -32,8 +32,8 @@ Regroupées exactement comme dans la liste déroulante des actions.
 | Désactiver un modpack | Désactive tous les mods d'un modpack | modpack |
 | Créer un modpack | Capture les mods **actuellement actifs** du profil dans un nouveau modpack — pas un modpack vide | nom, profil |
 | Ajouter un mod (depuis URL) | Télécharge et installe un mod | URL, nom |
-| Exporter une liste de mods (.mmlist) | Écrit une liste de mods | — |
-| Importer une liste de mods (.mmlist) | Relit une liste de mods | — |
+| Exporter une liste de mods (.mm) | Écrit une liste de mods | — |
+| Importer une liste de mods (.mm) | Relit une liste de mods | — |
 | Activer tous les mods | Active tout dans le profil | — |
 | Désactiver tous les mods | Désactive tout dans le profil | — |
 | Scanner le dossier mods | Re-scanne à la recherche de nouveaux mods | — |

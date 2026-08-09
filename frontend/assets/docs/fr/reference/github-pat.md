@@ -1,7 +1,7 @@
 # Limites GitHub et le jeton d'accès personnel
 
 BMM lit pas mal de choses sur GitHub : les flux de releases pour les contrôles de mise à jour, des
-fichiers de catalogue, et les téléchargements de mods vers lesquels pointe une `.mmlist`. GitHub
+fichiers de catalogue, et les téléchargements de mods vers lesquels pointe une `.mm`. GitHub
 limite le débit des requêtes qui arrivent sans identifiants — un gros import peut donc heurter un mur
 qui n'a rien à voir avec BMM.
 
@@ -18,7 +18,7 @@ ont jamais besoin.
 | **Avec un jeton** | 5 000 requêtes par heure, comptées par compte |
 
 Soixante par heure suffisent largement en usage normal. Tu heurtes la limite quand une seule action
-enchaîne beaucoup de requêtes — importer une `.mmlist` avec des dizaines de mods hébergés sur GitHub
+enchaîne beaucoup de requêtes — importer une `.mm` avec des dizaines de mods hébergés sur GitHub
 est le cas typique. Le symptôme : une série de téléchargements qui se met soudain à échouer en
 **403**, souvent après une rafale qui, elle, avait marché.
 

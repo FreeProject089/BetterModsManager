@@ -355,7 +355,7 @@ is `data/export-auto`.
 |---|---|---|---|---|
 | `POST` | `/api/data/export` · `/api/data/import` | token | — | |
 | `POST` | `/api/data/export-auto` | token | `dir`*, `name`, `increment` · **unattended**, no dialog | ✓ |
-| `POST` | `/api/modlists/export` · `/api/modlists/import` | token | — · `.mmlist`, metadata only, no mod files | |
+| `POST` | `/api/modlists/export` · `/api/modlists/import` | token | — · `.mm`, metadata only, no mod files | |
 | `POST` | `/api/modpacks/import` | token | `path` | |
 | `POST` | `/api/modpacks/export` | token | `id`*, `destDir` | |
 | `POST` | `/api/plugins/import` | token | — | |

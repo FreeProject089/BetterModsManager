@@ -362,7 +362,7 @@ exception est `data/export-auto`.
 |---|---|---|---|---|
 | `POST` | `/api/data/export` · `/api/data/import` | token | — | |
 | `POST` | `/api/data/export-auto` | token | `dir`*, `name`, `increment` · **sans intervention**, aucune boîte de dialogue | ✓ |
-| `POST` | `/api/modlists/export` · `/api/modlists/import` | token | — · `.mmlist`, métadonnées seules, aucun fichier de mod | |
+| `POST` | `/api/modlists/export` · `/api/modlists/import` | token | — · `.mm`, métadonnées seules, aucun fichier de mod | |
 | `POST` | `/api/modpacks/import` | token | `path` | |
 | `POST` | `/api/modpacks/export` | token | `id`*, `destDir` | |
 | `POST` | `/api/plugins/import` | token | — | |
