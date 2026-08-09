@@ -26,12 +26,17 @@ répertoire exporté et c'est fini. BMM peut aussi s'en charger, via son **mini-
 ou un serveur autonome généré (Node, ou un script `.bat`/`.sh`) sur une machine dédiée. Dans tous
 les cas en HTTP — **le HTTPS est fortement recommandé**.
 
-!!! tip "Si vous hébergez déjà les fichiers et préférez ne pas les téléverser deux fois"
+!!! warning "Impossible de publier un dépôt par-dessus des fichiers déjà hébergés"
 
-    La génération de dépôt de l'API locale accepte un drapeau `lightweight`, qui hache les mods
-    **sur place** et n'écrit que le manifeste. C'est aujourd'hui une option d'API plutôt qu'une
-    case dans la boîte d'export, et elle suppose que votre arborescence corresponde à ce que le
-    manifeste décrit — à tester sur une copie avant d'y envoyer vos utilisateurs.
+    La génération de l'API locale accepte un drapeau `lightweight` qui hache les mods sur place
+    au lieu de les copier, et il est tentant d'y lire « un manifeste pour mon hébergement
+    existant ». Ce n'en est pas un. Il n'écrit aucun dossier `mods/`, n'enregistre aucun hachage
+    par blocs (`chunks: None`, donc pas de mises à jour différentielles), et rien dans le
+    manifeste ne permet de faire pointer les fichiers ailleurs. Ce que vous obtenez est un
+    **index de ce que contiendrait un export**, pas quelque chose depuis quoi un client peut se
+    synchroniser. Si vous hébergez déjà vos mods et ne voulez pas les téléverser à nouveau,
+    utilisez plutôt les [liens de téléchargement direct](doc-page:features/repo) — au prix de la
+    détection des mises à jour, un téléchargement direct ne portant aucune version.
 
 ```mermaid
 flowchart LR

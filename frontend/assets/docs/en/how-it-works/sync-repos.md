@@ -25,12 +25,16 @@ are done. BMM can also run it for you, from the **built-in mini-server** or a ge
 standalone server (Node, or a `.bat`/`.sh` script) on a dedicated machine. Either way, over
 HTTP — **HTTPS is strongly recommended**.
 
-!!! tip "If you already host the files and would rather not upload them twice"
+!!! warning "There is no way to publish a repo over files you already host"
 
-    The local API's repo generation takes a `lightweight` flag, which hashes the mods **in
-    place** and writes only the manifest. It is an API option today rather than a checkbox in
-    the export dialog, and it assumes your existing layout matches what the manifest describes
-    — worth testing on a copy before pointing your users at it.
+    The local API's generation takes a `lightweight` flag that hashes the mods in place instead
+    of copying them, and it is tempting to read that as "manifest for my existing hosting". It
+    is not. It writes no `mods/` directory, records no chunk hashes (`chunks: None`, so no
+    differential updates), and nothing in the manifest can point the files at another location.
+    What you get is an **index of what an export would contain**, not something a client can
+    sync from. If you already host your mods and do not want to upload them again, use
+    [direct download links](doc-page:features/repo) instead — at the cost of update detection,
+    since a direct download carries no version.
 
 ```mermaid
 flowchart LR
