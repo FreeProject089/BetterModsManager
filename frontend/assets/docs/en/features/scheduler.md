@@ -1,10 +1,22 @@
 # Scheduling & automation
 
 
-> Schedule BMM actions (one-time or recurring) — activate a mod, modpack, profile…
+> Schedule BMM actions (one-time or recurring) — activate a mod, modpack, profile… with
+> conditions (if/else) and custom commands. Tasks run while BMM is open.
 
-Reachable from [Plugins & API](doc-page:features/plugins). This is the part of BMM that does things while
-you're not looking.
+Reachable from [Plugins & API](doc-page:features/plugins). This is the part of BMM that does things without
+you driving it.
+
+!!! warning "By default, BMM has to be running"
+
+    The scheduler is a timer **inside the app**: it checks for due tasks every 20 seconds
+    while the window is alive. Nothing fires while BMM is closed — a one-off whose time
+    passes meanwhile runs the next time you open it, not at the moment you asked for.
+
+    On Windows you can lift that. BMM registers a **Windows Scheduled Task** that launches
+    `BMM.exe "bmm://schedule/run?id=…"` at the right time; BMM handles the `bmm://` scheme,
+    so Windows starts it and the deep-link router runs that one task. The app opens — this
+    wakes BMM up rather than running behind its back.
 
 ![The scheduler](assets/docs/media/screens/scheduler.annotated.png)
 

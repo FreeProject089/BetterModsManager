@@ -1,11 +1,24 @@
 # Planification & automatisation
 
 
-> Planifie des actions BMM (ponctuelles ou récurrentes) — activer un mod, un modpack, un
-> profil…
+> Planifiez des actions BMM (ponctuelles ou récurrentes) — activer un mod, un modpack, un
+> profil… avec conditions (si/sinon) et commandes personnalisées. Les tâches s’exécutent tant
+> que BMM est ouvert.
 
-Accessible depuis [Plugins & API](doc-page:features/plugins). C'est la partie de BMM qui agit pendant que tu
-regardes ailleurs.
+Accessible depuis [Plugins & API](doc-page:features/plugins). C'est la partie de BMM qui agit sans que vous
+la pilotiez.
+
+!!! warning "Par défaut, BMM doit tourner"
+
+    Le planificateur est une minuterie **dans l'application** : elle vérifie les tâches dues
+    toutes les 20 secondes tant que la fenêtre est ouverte. Rien ne se déclenche quand BMM est
+    fermé — une tâche ponctuelle dont l'heure passe entre-temps s'exécute au prochain
+    lancement, pas au moment demandé.
+
+    Sous Windows, vous pouvez lever cette limite. BMM enregistre une **tâche planifiée
+    Windows** qui lance `BMM.exe "bmm://schedule/run?id=…"` à l'heure voulue ; BMM gère le
+    schéma `bmm://`, donc Windows le démarre et le routeur de deeplinks exécute cette tâche.
+    L'application s'ouvre — c'est un réveil de BMM, pas une exécution dans son dos.
 
 ![Le planificateur](assets/docs/media/screens/scheduler.annotated.png)
 
