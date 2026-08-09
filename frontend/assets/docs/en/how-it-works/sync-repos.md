@@ -6,20 +6,36 @@ There are two halves — hosting it, and syncing from it.
 
 ## Hosting
 
-BMM turns the chosen profile into a servable repository:
+BMM turns the chosen profile into a servable repository. That word is literal: the export
+**builds a directory**, it does not annotate one you already have.
 
+- A **copy of every mod file**, written into the output folder under `mods/<id>/…`. The hashes
+  are computed on those copies. This is the part people setting up hosting are usually
+  surprised by — you point the export at a profile and get a complete repository out, which you
+  then publish. It is not a manifest you drop next to files you already host.
 - A **manifest** (`repo.json`) listing every file with its **SHA-256** hash, plus **4&nbsp;MB chunk
   hashes** (also SHA-256) so updates can be differential.
 - A cryptographic **signature**: the manifest is signed with an **ed25519** key derived from the
   host's identity, and the public key is the repo's `author_id`. A subscriber can verify the
   signature to confirm the repo really came from that author.
 
-You serve it either from BMM's **built-in mini-server** or a generated standalone server (Node, or a
-`.bat`/`.sh` script) on a dedicated machine, over HTTP — **HTTPS is strongly recommended**.
+Serving it needs no software of BMM's at all: a client fetches `<your-url>/repo.json` and then
+the files beneath it, so **any static web host works** — upload the exported directory and you
+are done. BMM can also run it for you, from the **built-in mini-server** or a generated
+standalone server (Node, or a `.bat`/`.sh` script) on a dedicated machine. Either way, over
+HTTP — **HTTPS is strongly recommended**.
+
+!!! tip "If you already host the files and would rather not upload them twice"
+
+    The local API's repo generation takes a `lightweight` flag, which hashes the mods **in
+    place** and writes only the manifest. It is an API option today rather than a checkbox in
+    the export dialog, and it assumes your existing layout matches what the manifest describes
+    — worth testing on a copy before pointing your users at it.
 
 ```mermaid
 flowchart LR
-    PROF["Profile"] --> GEN["Build repo.json<br/>(files + SHA-256 + chunk hashes)"]
+    PROF["Profile"] --> COPY["Copy the mod files<br/>into the output dir"]
+    COPY --> GEN["Build repo.json<br/>(files + SHA-256 + chunk hashes)"]
     GEN --> SIGN["Sign (ed25519 author_id)"]
     SIGN --> SERVE["Serve over HTTP(S)<br/>(mini-server or standalone)"]
     SERVE --> LINK["Share the link"]

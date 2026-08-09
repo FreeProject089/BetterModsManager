@@ -6,21 +6,37 @@ propriétaire met à jour. Deux moitiés : l'héberger, et s'y synchroniser.
 
 ## Hébergement
 
-BMM transforme le profil choisi en un dépôt servable :
+BMM transforme le profil choisi en un dépôt servable. Le mot est littéral : l'export
+**construit un répertoire**, il n'annote pas celui que vous avez déjà.
 
+- Une **copie de chaque fichier de mod**, écrite dans le dossier de sortie sous `mods/<id>/…`.
+  Les hachages sont calculés sur ces copies. C'est le point qui surprend en général au moment de
+  mettre en place l'hébergement : vous pointez l'export sur un profil et vous obtenez un dépôt
+  complet, que vous publiez ensuite. Ce n'est pas un manifeste à déposer à côté de fichiers déjà
+  hébergés.
 - Un **manifeste** (`repo.json`) listant chaque fichier avec son hachage **SHA-256**, plus des
   **hachages de blocs de 4&nbsp;Mo** (SHA-256 aussi) pour des mises à jour différentielles.
 - Une **signature** cryptographique : le manifeste est signé avec une clé **ed25519** dérivée de
   l'identité de l'hôte, et la clé publique est l'`author_id` du dépôt. Un abonné peut vérifier la
   signature pour confirmer que le dépôt vient bien de cet auteur.
 
-Vous le servez soit depuis le **mini-serveur intégré** de BMM, soit via un serveur autonome généré
-(Node, ou un script `.bat`/`.sh`) sur une machine dédiée, en HTTP — **le HTTPS est fortement
-recommandé**.
+Le servir ne demande aucun logiciel de BMM : un client va chercher `<votre-url>/repo.json` puis
+les fichiers en dessous, donc **n'importe quel hébergeur statique convient** — vous déposez le
+répertoire exporté et c'est fini. BMM peut aussi s'en charger, via son **mini-serveur intégré**
+ou un serveur autonome généré (Node, ou un script `.bat`/`.sh`) sur une machine dédiée. Dans tous
+les cas en HTTP — **le HTTPS est fortement recommandé**.
+
+!!! tip "Si vous hébergez déjà les fichiers et préférez ne pas les téléverser deux fois"
+
+    La génération de dépôt de l'API locale accepte un drapeau `lightweight`, qui hache les mods
+    **sur place** et n'écrit que le manifeste. C'est aujourd'hui une option d'API plutôt qu'une
+    case dans la boîte d'export, et elle suppose que votre arborescence corresponde à ce que le
+    manifeste décrit — à tester sur une copie avant d'y envoyer vos utilisateurs.
 
 ```mermaid
 flowchart LR
-    PROF["Profil"] --> GEN["Construire repo.json<br/>(fichiers + SHA-256 + hachages de blocs)"]
+    PROF["Profil"] --> COPY["Copier les fichiers de mods<br/>dans le dossier de sortie"]
+    COPY --> GEN["Construire repo.json<br/>(fichiers + SHA-256 + hachages de blocs)"]
     GEN --> SIGN["Signer (author_id ed25519)"]
     SIGN --> SERVE["Servir en HTTP(S)<br/>(mini-serveur ou autonome)"]
     SERVE --> LINK["Partager le lien"]
