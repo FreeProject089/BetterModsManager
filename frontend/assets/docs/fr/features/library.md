@@ -10,7 +10,7 @@ contient.
 
 | | | |
 |---|---|---|
-| **1** | **Recherche** | Filtre à la frappe, sur les noms, les auteurs et les tags. |
+| **1** | **Recherche** | Filtre à la frappe, sur les noms de mods et les noms de tags. |
 | **2** | **Filtres** | Restreint par jeu, catégorie ou état d'installation. |
 | **3** | **Installer** | Ajoute le mod sélectionné au profil sur lequel tu es. |
 

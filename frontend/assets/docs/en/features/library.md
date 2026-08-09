@@ -9,7 +9,7 @@ lists) is a different way of arranging what the Library holds.
 
 | | | |
 |---|---|---|
-| **1** | **Search** | Filters as you type, across names, authors and tags. |
+| **1** | **Search** | Filters as you type, across mod names and tag names. |
 | **2** | **Filters** | Narrow by game, category, or install state. |
 | **3** | **Install** | Adds the selected mod to the profile you're currently on. |
 
