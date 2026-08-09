@@ -24,8 +24,8 @@ La plupart des gestionnaires de mods mettent les mods *dans le jeu*. BMM les gar
 
 Cette séparation est tout l'intérêt. Comme BMM le dit lui-même sur son écran de profil vide :
 
-> Un profil est ton filet de sécurité : active, désactive et réordonne tes mods librement,
-> une mise à jour du jeu n'effacera plus jamais ta configuration.
+> Un profil, c'est votre filet de sécurité : activez, désactivez et réordonnez vos mods
+> librement, et une mise à jour ou réinstallation du jeu n'efface plus jamais votre setup.
 
 Parce que les mods vivent dans la Bibliothèque, une mise à jour, une réinstallation ou un
 mod foireux ne peuvent pas les emporter. Tu reconstruis en rallumant un profil, pas en

@@ -23,7 +23,7 @@ Most mod managers put mods *in the game*. BMM keeps them apart:
 That split is the whole point. As BMM puts it on its own empty-profile screen:
 
 > A profile is your safety net: enable, disable and reorder mods freely, and a game update
-> never wipes your setup again.
+> or reinstall never wipes your setup again.
 
 Because the mods live in the Library, a game update, a reinstall, or a bad mod can't take
 them with it. You rebuild by switching a profile back on, not by re-downloading anything.
