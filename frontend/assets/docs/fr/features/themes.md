@@ -72,7 +72,8 @@ thème et les images voyagent avec — pas de lien mort, pas de « ça marche ch
 Un thème s'exporte et s'importe en fichier. Au-delà, un **catalogue de thèmes** fonctionne
 comme l'[App Catalog](doc-page:features/apps) :
 
-> Choisis les thèmes à inclure, puis exporte le catalogue ou ajoute-le comme source.
+> Choisis les thèmes à inclure, puis exporte le catalogue ou ajoute-le comme source. Héberge-
+> le sur BetterCommunity pour le partager.
 
 Héberge-le et tu as un canal — quiconque ajoute ta source voit tes thèmes, et leurs mises à
 jour.

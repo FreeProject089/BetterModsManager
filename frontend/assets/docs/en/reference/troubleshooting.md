@@ -112,7 +112,8 @@ it stops itself at 64 MB rather than growing.
 
 If the mod's source is a **direct download**, BMM is being honest:
 
-> A direct download has no version, so BMM cannot tell if it is newer.
+> No update detected. A direct download has no version, so BMM cannot tell if it is newer than
+> what you have — but you can re-download it anytime.
 
 There's nothing to compare. Link the mod to a [repo](doc-page:features/repo) that publishes versions, or
 use the direct re-download.

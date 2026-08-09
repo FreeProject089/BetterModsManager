@@ -69,7 +69,8 @@ the images travel with it — no broken links, no "works on my machine".
 A theme exports as a file and imports as one. Beyond that, a **theme catalogue** works like
 the [App Catalog](doc-page:features/apps):
 
-> Pick the themes to include, then export the catalog or add it as a source.
+> Pick the themes to include, then export the catalog or add it as a source. Host it on
+> BetterCommunity to share it.
 
 Host it and you've got a channel — anyone adding your source sees your themes, and updates
 to them.

@@ -116,7 +116,9 @@ grossir.
 
 Si la source du mod est un **téléchargement direct**, BMM est honnête :
 
-> Un téléchargement direct n'a pas de version, BMM ne peut donc pas savoir s'il est plus récent.
+> Aucune mise à jour détectée. Un téléchargement direct n'a pas de version, donc BMM ne peut
+> pas savoir s'il est plus récent que ce que vous avez — mais vous pouvez le re-télécharger à
+> tout moment.
 
 Il n'y a rien à comparer. Relie le mod à un [dépôt](doc-page:features/repo) qui publie des versions, ou
 utilise le re-téléchargement direct.
