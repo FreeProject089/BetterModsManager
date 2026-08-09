@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "tauri": "tauri",
-    "dev": "npm run compile && concurrently \"npm run watch\" \"npx tauri dev --no-dev-server\"",
+    "dev": "concurrently \"npm run watch\" \"npx tauri dev --no-dev-server\"",
     "build": "node scripts/security-guard.mjs && node scripts/sync-docs.mjs && node scripts/check-encoding.mjs && tsc --project frontend && npx tauri build --no-bundle && node scripts/gen-update-manifest.mjs",
     "security-guard": "node scripts/security-guard.mjs",
     "check:i18n": "node scripts/check-i18n-parity.mjs",

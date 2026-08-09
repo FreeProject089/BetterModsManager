@@ -4,8 +4,8 @@
     "version": "1.0.0",
     "identifier": "com.bettermm.desktop",
     "build": {
-        "beforeDevCommand": "",
-        "beforeBuildCommand": "",
+        "beforeDevCommand": "npm run compile",
+        "beforeBuildCommand": "npm run compile",
         "frontendDist": "../frontend"
     },
     "app": {
