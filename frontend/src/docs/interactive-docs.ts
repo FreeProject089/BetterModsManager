@@ -17,6 +17,7 @@ import { cacheManagement } from './diagrams/cache-management.js';
 import { modArchitecture } from './diagrams/mod-architecture.js';
 import { diskIoLimiter } from './diagrams/disk-io-limiter.js';
 import { hostingFlow } from './diagrams/hosting-flow.js';
+import { lightweightArchitecture } from './diagrams/lightweight-architecture.js';
 import { oneClickInstall } from './diagrams/one-click-install.js';
 import { discordRpc } from './diagrams/discord-rpc.js';
 import { engineThreads } from './diagrams/engine-threads.js';
@@ -61,6 +62,7 @@ export const diagrams = {
     'mod-architecture': modArchitecture,
     'disk-io-limiter': diskIoLimiter,
     'hosting-flow': hostingFlow,
+    'lightweight-architecture': lightweightArchitecture,
     'one-click-install': oneClickInstall,
     'discord-rpc': discordRpc,
     'engine-threads': engineThreads,
@@ -164,7 +166,10 @@ export function initInteractiveDocs() {
 export async function openDiagram(id, highlightNodeId = null) {
     const diagram = diagrams[id];
     if (!diagram) {
+        // Console-only used to mean a diagram button that silently did nothing — which is
+        // how `lightweight-architecture` sat broken: the click "worked", and nothing opened.
         console.error(`[Docs] Diagram "${id}" not found.`);
+        (window as any).showToast?.(t('docs.diagram.missing') || `Diagram "${id}" not found`, 'error');
         return;
     }
 

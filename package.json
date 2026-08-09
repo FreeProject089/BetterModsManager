@@ -14,7 +14,7 @@
     "check:docs": "node scripts/check-docs-xref.mjs",
     "check:encoding": "node scripts/check-encoding.mjs",
     "sync-docs": "node scripts/sync-docs.mjs",
-    "ci": "node scripts/security-guard.mjs && node scripts/check-i18n-parity.mjs && node scripts/check-hardcoded-colors.mjs && node scripts/check-encoding.mjs && node scripts/check-markup.mjs && tsc --project frontend && node scripts/check-imports.mjs && npm test && node scripts/check-kit.mjs && node scripts/check-docs-xref.mjs && node scripts/check-installer-config.mjs && node scripts/check-links.mjs && node scripts/sync-docs.mjs --check",
+    "ci": "node scripts/security-guard.mjs && node scripts/check-i18n-parity.mjs && node scripts/check-hardcoded-colors.mjs && node scripts/check-encoding.mjs && node scripts/check-markup.mjs && tsc --project frontend && node scripts/check-imports.mjs && node scripts/check-diagrams.mjs && npm test && node scripts/check-kit.mjs && node scripts/check-docs-xref.mjs && node scripts/check-installer-config.mjs && node scripts/check-links.mjs && node scripts/sync-docs.mjs --check",
     "gen-manifest": "node scripts/gen-update-manifest.mjs",
     "typecheck": "tsc --project frontend --noEmit",
     "watch": "tsc --project frontend --watch",
@@ -26,7 +26,8 @@
     "check:installer": "node scripts/check-installer-config.mjs",
     "check:links": "node scripts/check-links.mjs",
     "test": "node --test tests/*.test.mjs",
-    "check:imports": "node scripts/check-imports.mjs"
+    "check:imports": "node scripts/check-imports.mjs",
+    "check:diagrams": "node scripts/check-diagrams.mjs"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2",
