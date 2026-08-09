@@ -38,8 +38,10 @@ Chaque disque du système a une carte :
 
 !!! note "Les badges Cloud/Réseau sont heuristiques"
 
-    La détection se fait par nom de disque (un volume nommé « OneDrive », « google »…), donc un
-    disque au nom bizarre peut être mal étiqueté. C'est un indice, pas une garantie.
+    La détection compare le **nom du disque ou son point de montage** à des chaînes de
+    fournisseurs connus (« OneDrive », « google »…), donc un disque au nom inhabituel peut être
+    mal étiqueté — et un disque qui se trouve simplement sous un dossier synchronisé peut être
+    étiqueté correctement sans être lui-même un disque cloud. C'est un indice, pas une garantie.
 
 ## Ce que tu peux faire
 

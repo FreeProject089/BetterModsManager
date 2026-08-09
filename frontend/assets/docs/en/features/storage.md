@@ -36,8 +36,10 @@ Each disk on your system gets a card:
 
 !!! note "Cloud/Network badges are heuristic"
 
-    Detection is by drive name (a volume labelled "OneDrive", "google"…), so an oddly-named drive
-    can be mislabelled. It's a hint, not a guarantee.
+    Detection matches the drive's **name or its mount path** against known provider strings
+    ("OneDrive", "google"…), so an oddly-named drive can be mislabelled — and one that merely
+    lives under a synced folder can be labelled correctly without being a cloud drive itself.
+    It's a hint, not a guarantee.
 
 ## What you can do
 
