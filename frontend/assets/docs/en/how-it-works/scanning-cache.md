@@ -15,6 +15,12 @@ They are easy to confuse, so:
 | **File list** (`cached_files`) | the mod **folder's** mtime | the folder's mtime changing | yes, in `data.json` |
 | **File hashes** (`file_hashes`) | the file's path | an explicit integrity check or re-hash | yes, in `data.json` |
 | **Conflict index** | the file list | rebuilt whenever it could be stale | **no** — memory only |
+| **Conflict badges** (`bmm_conflict_cache`) | the index above | rebuilt with the index | yes, in `localStorage` |
+
+The last row is the one that surprises people: the conflict *index* is rebuilt from scratch
+every session, but the little Intra/Inter badges on the cards are kept in `localStorage`, so
+they are on screen before the rescan finishes. If a badge ever looks wrong, it is that copy
+you are seeing, and the next rebuild replaces it.
 
 The file-list cache is the one that makes startup fast. The check is deliberately cheap: read the
 mod folder's modification time, and if it equals what was stored, reuse the stored list verbatim

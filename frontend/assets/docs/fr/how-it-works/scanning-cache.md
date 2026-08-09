@@ -15,6 +15,12 @@ Faciles à confondre, donc :
 | **Liste de fichiers** (`cached_files`) | la mtime du **dossier** du mod | la mtime du dossier qui change | oui, dans `data.json` |
 | **Hashs de fichiers** (`file_hashes`) | le chemin du fichier | un contrôle d'intégrité explicite ou un re-hachage | oui, dans `data.json` |
 | **Index de conflits** | la liste de fichiers | reconstruit dès qu'il pourrait être périmé | **non** — mémoire seulement |
+| **Badges de conflit** (`bmm_conflict_cache`) | l'index ci-dessus | reconstruits avec l'index | oui, dans `localStorage` |
+
+La dernière ligne est celle qui surprend : l'*index* de conflits est reconstruit de zéro à
+chaque session, mais les petits badges Intra/Inter des cartes sont conservés dans le
+`localStorage`, pour être à l'écran avant la fin du rescan. Si un badge semble faux, c'est
+cette copie que vous voyez, et la reconstruction suivante la remplace.
 
 Le cache de liste de fichiers est celui qui rend le démarrage rapide. Le contrôle est délibérément
 bon marché : lire la date de modification du dossier du mod, et si elle égale celle stockée, réutiliser
