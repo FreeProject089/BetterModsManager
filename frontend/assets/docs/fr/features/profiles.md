@@ -7,8 +7,8 @@ lui-même *ton point de départ*.
 
 Son vrai rôle est écrit sur l'écran vide :
 
-> Un profil est ton filet de sécurité : active, désactive et réordonne tes mods librement,
-> une mise à jour du jeu n'effacera plus jamais ta configuration.
+> Un profil, c'est votre filet de sécurité : activez, désactivez et réordonnez vos mods
+> librement, et une mise à jour ou réinstallation du jeu n'efface plus jamais votre setup.
 
 ![L'écran Profils](assets/docs/media/screens/profiles.annotated.png)
 

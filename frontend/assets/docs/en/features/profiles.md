@@ -6,8 +6,8 @@ screen everything else leans on — BMM's own onboarding calls it *your starting
 
 Its real job is stated on the empty screen:
 
-> A profile is your safety net: enable, disable and reorder mods freely, and a game update
-> never wipes your setup again.
+> A profile is your safety net: enable, disable and reorder mods freely, and a game update or
+> reinstall never wipes your setup again.
 
 ![The Profiles screen](assets/docs/media/screens/profiles.annotated.png)
 

@@ -6,8 +6,9 @@ Trois étapes. Dans l'ordre — la deuxième est celle qu'on saute, et c'est cel
 
 BMM s'ouvre sur un écran [Profils](doc-page:features/profiles) vide et annonce :
 
-> Aucun profil actif — crée ton premier profil pour qu'une mise à jour ou une réinstallation
-> n'efface plus jamais ta configuration.
+> Aucun profil actif — créez votre premier profil pour qu'une mise à jour ou une
+> réinstallation du jeu n'efface plus jamais votre setup — ou importez vos configs OvGME
+> existantes en un clic.
 
 Le formulaire demande un nom et **trois dossiers**, tous obligatoires : le **dossier du
 jeu** (là où BMM déploie), un **dossier mods** (où les mods de ce profil sont stockés) et un

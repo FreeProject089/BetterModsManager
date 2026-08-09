@@ -8,7 +8,7 @@ matters.
 BMM opens on an empty [Profiles](doc-page:features/profiles) screen and says:
 
 > No active profile — create your first profile so a game update or a reinstall never wipes
-> your setup again.
+> your setup again — or import your existing OvGME configs in one click.
 
 The form asks for a name and **three folders**, all required: the **game folder** (where
 BMM deploys), a **mods folder** (where this profile's mods are stored), and a **backup
