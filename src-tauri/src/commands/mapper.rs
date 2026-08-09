@@ -110,6 +110,40 @@ fn sort_nodes(nodes: &mut [FileTreeNode]) {
     });
 }
 
+/// Move `src` to `dst`, merging when both are directories.
+///
+/// The naive version of this was `remove_dir_all(&dst)` followed by a rename, which turned a
+/// name collision into silent recursive deletion: dropping `Data/` onto a mod that already had
+/// a `Data/` destroyed everything already in it, with no backup — mod folders have none, the
+/// `_original/` backup only covers the game directory. The docs promise the worst case here is
+/// "a mis-shaped mod, which you can reshape again", and that was not true.
+///
+/// This mirrors Explorer's drag semantics instead: directories merge, and only the individual
+/// files you actually landed on are replaced.
+fn move_into(src: &Path, dst: &Path) -> Result<(), AppError> {
+    if !(src.is_dir() && dst.is_dir()) {
+        // File onto file (or onto a directory, and vice versa) — replacing the single target is
+        // what the drag asked for. `rename` won't overwrite a directory, so clear it first.
+        if dst.exists() {
+            if dst.is_dir() {
+                fs::remove_dir_all(dst).map_err(|e| e.to_string())?;
+            } else {
+                fs::remove_file(dst).map_err(|e| e.to_string())?;
+            }
+        }
+        fs::rename(src, dst).map_err(|e| e.to_string())?;
+        return Ok(());
+    }
+
+    for entry in fs::read_dir(src).map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        move_into(&entry.path(), &dst.join(entry.file_name()))?;
+    }
+    // Everything moved out; the husk goes. Anything left means a child failed, so keep it.
+    let _ = fs::remove_dir(src);
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn restructure_mod_item(
     state: State<'_, AppState>,
@@ -150,16 +184,7 @@ pub async fn restructure_mod_item(
         fs::create_dir_all(&dst_dir).map_err(|e| e.to_string())?;
     }
     
-    // Handle overwrite
-    if dst_path.exists() {
-        if dst_path.is_dir() {
-            fs::remove_dir_all(&dst_path).map_err(|e| e.to_string())?;
-        } else {
-            fs::remove_file(&dst_path).map_err(|e| e.to_string())?;
-        }
-    }
-    
-    fs::rename(&src_path, &dst_path).map_err(|e| e.to_string())?;
+    move_into(&src_path, &dst_path)?;
     
     // Cleanup old empty parent directories (up to mod_folder)
     let mut current = src_path.parent();
@@ -329,4 +354,49 @@ pub async fn open_game_item_in_explorer(
     }
     
     Ok(())
+}
+
+#[cfg(test)]
+mod move_into_tests {
+    use super::move_into;
+    use std::fs;
+
+    fn tmp(name: &str) -> std::path::PathBuf {
+        let d = std::env::temp_dir().join(format!("bmm_mapper_{}", name));
+        let _ = fs::remove_dir_all(&d);
+        fs::create_dir_all(&d).unwrap();
+        d
+    }
+
+    #[test]
+    fn merging_a_directory_keeps_what_was_already_there() {
+        let root = tmp("merge");
+        let src = root.join("src/Data");
+        let dst = root.join("dst/Data");
+        fs::create_dir_all(src.join("textures")).unwrap();
+        fs::create_dir_all(dst.join("sounds")).unwrap();
+        fs::write(src.join("textures/new.dds"), b"new").unwrap();
+        fs::write(dst.join("sounds/keep.wav"), b"keep").unwrap();
+
+        move_into(&src, &dst).unwrap();
+
+        // The regression this guards: `keep.wav` used to be deleted by remove_dir_all.
+        assert_eq!(fs::read(dst.join("sounds/keep.wav")).unwrap(), b"keep");
+        assert_eq!(fs::read(dst.join("textures/new.dds")).unwrap(), b"new");
+        assert!(!src.exists(), "the emptied source folder should be gone");
+    }
+
+    #[test]
+    fn a_file_landing_on_a_file_still_replaces_it() {
+        let root = tmp("file");
+        let src = root.join("a.txt");
+        let dst = root.join("b.txt");
+        fs::write(&src, b"new").unwrap();
+        fs::write(&dst, b"old").unwrap();
+
+        move_into(&src, &dst).unwrap();
+
+        assert_eq!(fs::read(&dst).unwrap(), b"new");
+        assert!(!src.exists());
+    }
 }
