@@ -1997,6 +1997,31 @@ pub struct SyncChoice {
     pub selected_mod_ids: Option<Vec<String>>,
 }
 
+/// Add `repo_url` to `sources` as a repo-kind update source, unless it is already there.
+///
+/// Idempotent by URL: re-syncing the same repo must not stack a duplicate entry every time,
+/// which would turn one update check into N identical HTTP requests per mod.
+pub(crate) fn push_repo_source(
+    sources: &mut Vec<crate::models::mod_entry::UpdateSource>,
+    repo_url: &str,
+    repo_mod_id: &str,
+) {
+    let url = normalize_repo_url(repo_url.trim());
+    if url.is_empty() {
+        return;
+    }
+    if sources.iter().any(|s| !s.is_direct() && normalize_repo_url(s.repo_url.trim()) == url) {
+        return;
+    }
+    sources.push(crate::models::mod_entry::UpdateSource {
+        repo_url: url,
+        repo_mod_id: if repo_mod_id.is_empty() { None } else { Some(repo_mod_id.to_string()) },
+        kind: "repo".to_string(),
+        // No baseline: the receiver captures its own on the first check, exactly as it does
+        // for the author's inherited sources.
+        sig: None,
+    });
+}
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SyncArgs {
@@ -2009,6 +2034,15 @@ pub struct SyncArgs {
     pub mods_dir: String,
     pub backup_dir: String,
     pub choices: Vec<SyncChoice>,
+    /// Also record the repo you are syncing from as a visible update source on every mod
+    /// it installs.
+    ///
+    /// Syncing already sets `source_repo`, and the update checker already follows it — but
+    /// that field is internal, so a mod pulled from a repo shows an EMPTY update-source list
+    /// and looks unconfigured. This adds the repo as a real entry alongside the author's own
+    /// sources (it never replaces them), so what you see matches what actually happens.
+    #[serde(default)]
+    pub add_repo_as_update_source: bool,
     pub overwrite_all: bool,
     pub delete_extra: bool,
     pub download_limit: u32,
@@ -2033,6 +2067,8 @@ pub async fn sync_server_repo(
     let mods_dir = args.mods_dir;
     let backup_dir = args.backup_dir;
     let choices = args.choices;
+
+    let add_repo_source = args.add_repo_as_update_source;
 
     // Read once: this is sent with every file request, and a per-file disk read for an
     // unchanging value would be thousands of them on a large sync.
@@ -2527,6 +2563,9 @@ pub async fn sync_server_repo(
                 new_mod.direct_url = repo_mod.direct_url.clone();
                 new_mod.update_sources = repo_mod.update_sources.iter()
                     .map(|s| crate::models::mod_entry::UpdateSource { sig: None, ..s.clone() }).collect();
+                if add_repo_source {
+                    push_repo_source(&mut new_mod.update_sources, &src_repo, &repo_mod.id);
+                }
 
                 let mut tag_ids = Vec::new();
                 for repo_tag in repo_mod.tags {
@@ -2561,6 +2600,13 @@ pub async fn sync_server_repo(
                         if existing.direct_url.is_some() { existing.direct_sig = None; }
                     }
                     if existing.update_sources.is_empty() { existing.update_sources = new_mod.update_sources; }
+                    // Appended even when the user already has sources — that is the whole
+                    // point of the option, and push_repo_source() is idempotent so
+                    // re-syncing never stacks duplicates.
+                    if add_repo_source {
+                        let rid = existing.repo_mod_id.clone().unwrap_or_default();
+                        push_repo_source(&mut existing.update_sources, &src_repo, &rid);
+                    }
                 }
             }
         }
@@ -3410,5 +3456,53 @@ mod manifest_tests {
         let mut a = args(&root);
         a.mods_dir = root.join("does-not-exist").to_string_lossy().to_string();
         assert!(run(a, vec![]).is_err());
+    }
+}
+
+#[cfg(test)]
+mod update_source_tests {
+    use super::push_repo_source;
+    use crate::models::mod_entry::UpdateSource;
+
+    fn src(url: &str, kind: &str) -> UpdateSource {
+        UpdateSource { repo_url: url.into(), repo_mod_id: None, kind: kind.into(), sig: None }
+    }
+
+    #[test]
+    fn the_repo_is_added_alongside_the_authors_own_sources() {
+        // The option must ADD, never replace: the author's sources are how a mod keeps
+        // updating if the repo it was mirrored through disappears.
+        let mut v = vec![src("https://author.example/repo.json", "repo"), src("https://cdn/x.zip", "direct")];
+        push_repo_source(&mut v, "https://myserver.tld/repo/", "cool-mod");
+        assert_eq!(v.len(), 3);
+        assert_eq!(v[2].kind, "repo");
+        assert_eq!(v[2].repo_mod_id.as_deref(), Some("cool-mod"));
+        assert!(v[0].repo_url.contains("author.example"));
+    }
+
+    #[test]
+    fn re_syncing_the_same_repo_does_not_stack_duplicates() {
+        // Without this, every sync appends another copy and one update check becomes N
+        // identical HTTP requests per mod, growing forever.
+        let mut v = Vec::new();
+        for _ in 0..5 {
+            push_repo_source(&mut v, "https://myserver.tld/repo/", "cool-mod");
+        }
+        assert_eq!(v.len(), 1);
+    }
+
+    #[test]
+    fn a_url_that_only_differs_cosmetically_is_the_same_source() {
+        let mut v = Vec::new();
+        push_repo_source(&mut v, "https://myserver.tld/repo/repo.json", "m");
+        push_repo_source(&mut v, "https://MyServer.tld/repo/", "m");
+        assert_eq!(v.len(), 1, "normalised URLs must not produce a second entry");
+    }
+
+    #[test]
+    fn an_empty_url_adds_nothing() {
+        let mut v = Vec::new();
+        push_repo_source(&mut v, "   ", "m");
+        assert!(v.is_empty());
     }
 }

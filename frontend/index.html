@@ -2520,6 +2520,19 @@
 
                                             <label class="checkbox-container"
                                                 style="font-size:12px; color:var(--text-secondary); margin-bottom:10px;">
+                                                <input type="checkbox" id="repo-sync-add-repo-source" checked />
+                                                <span class="checkmark"></span>
+                                                <span data-i18n="repo.syncAddRepoSource">Follow this repo for updates on the mods it installs</span>
+                                                <span class="help-icon"
+                                                    onmouseenter="window.showTaskyHelp('repo.syncAddRepoSourceHelp', 'info')"
+                                                    onmouseleave="window.hideTaskyHelp()"
+                                                    style="margin-left:6px; cursor:help; opacity:0.6;">
+                                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                                                </span>
+                                            </label>
+
+                                            <label class="checkbox-container"
+                                                style="font-size:12px; color:var(--text-secondary); margin-bottom:10px;">
                                                 <input type="checkbox" id="repo-sync-keep-zipped" />
                                                 <span class="checkmark"></span>
                                                 <span data-i18n="repo.syncKeepZipped">Keep zipped mods as .zip (don't extract)</span>

@@ -673,12 +673,18 @@ export function initRepoSync(elements) {
                 const downloadLimit = parseInt(inputSyncDownloadLimit ? inputSyncDownloadLimit.value : "0") || 0;
                 // Zipped mods: keep them as .zip archives, or extract them. Default = extract.
                 const keepZipped = (document.getElementById('repo-sync-keep-zipped') as HTMLInputElement | null)?.checked || false;
+                // Defaults ON, and the element may not exist in older markup — so read it as
+                // "not explicitly unticked" rather than "ticked", or a missing checkbox would
+                // silently turn the option off.
+                const addRepoSourceEl = document.getElementById('repo-sync-add-repo-source') as HTMLInputElement | null;
+                const addRepoSource = addRepoSourceEl ? addRepoSourceEl.checked : true;
 
                 const summary = await invoke('sync_server_repo', {
                     args: {
                         url, creatorId: finalCreatorId, gameDir, modsDir, backupDir, choices,
                         overwriteAll: syncMode === 'all', deleteExtra: cleanExtra, downloadLimit,
-                        unzipArchives: !keepZipped, password: lastRepoPassword
+                        unzipArchives: !keepZipped, password: lastRepoPassword,
+                        addRepoAsUpdateSource: addRepoSource
                     }
                 });
 

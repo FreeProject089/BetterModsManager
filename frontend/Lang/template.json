@@ -5042,5 +5042,7 @@
   "repo.manifestModpacks": "MODPACKS TO INCLUDE",
   "repo.manifestNoModpacks": "No modpacks yet",
   "repo.manifestPacksSkipped": "Modpacks left out (their mods are not all published)",
-  "repo.manifestUnsigned": "Written unsigned — the signing key was unavailable"
+  "repo.manifestUnsigned": "Written unsigned — the signing key was unavailable",
+  "repo.syncAddRepoSource": "Follow this repo for updates on the mods it installs",
+  "repo.syncAddRepoSourceHelp": "Adds this repo to each installed mod's update sources, next to the ones its author configured. It is never removed or replaced, and re-syncing does not add it twice."
 }

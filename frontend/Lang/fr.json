@@ -6682,5 +6682,7 @@
   "repo.manifestModpacks": "MODPACKS À INCLURE",
   "repo.manifestNoModpacks": "Aucun modpack pour l'instant",
   "repo.manifestPacksSkipped": "Modpacks écartés (leurs mods ne sont pas tous publiés)",
-  "repo.manifestUnsigned": "Écrit sans signature — la clé de signature était indisponible"
+  "repo.manifestUnsigned": "Écrit sans signature — la clé de signature était indisponible",
+  "repo.syncAddRepoSource": "Suivre ce repo pour les mises à jour des mods qu'il installe",
+  "repo.syncAddRepoSourceHelp": "Ajoute ce repo aux sources de mise à jour de chaque mod installé, à côté de celles configurées par son auteur. Rien n'est retiré ni remplacé, et resynchroniser ne l'ajoute pas deux fois."
 }
