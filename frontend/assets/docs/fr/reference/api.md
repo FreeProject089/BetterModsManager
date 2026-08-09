@@ -98,6 +98,23 @@ Start-Process "bmm://mod/enable?id=my-mod-folder"
 `*` marque un paramètre obligatoire. Chacun affiche un toast à la réception, et un coupe-circuit
 global (`bmm_deeplink_allow_global = blocked`) les refuse tous.
 
+!!! warning "Trois d'entre eux s'arrêtent et demandent — ce qui compte surtout si vous scriptez"
+
+    Les deeplinks d'action ci-dessous (`mod/enable`, `profile/activate`, …) agissent
+    immédiatement. Trois font exception et ouvrent d'abord une confirmation :
+
+    | Deeplink | Pourquoi |
+    |---|---|
+    | `bmm://api` avec une méthode autre que `GET` | C'est un passe-plat générique vers l'API locale. Selon les mots du code : *« n'importe quel site ou application peut déclencher un lien `bmm://`, donc un simple clic ne doit pas pouvoir muter l'état de l'app en silence via un passe-plat générique. »* |
+    | `bmm://repo/connect` | Ajouter une source est une décision de confiance |
+    | `bmm://language/import` | Il écrit un fichier dans `Lang/` |
+
+    À lire dans les deux sens. C'est ce qui empêche une page web de reconfigurer BMM en douce —
+    et c'est aussi pourquoi un script **sans surveillance** ne doit pas faire passer une écriture
+    par `bmm://api` : il restera bloqué sur une boîte de dialogue que personne n'ouvrira. Pour
+    l'automatisation, utilisez les deeplinks d'action ci-dessus, ou l'API HTTP avec un jeton, qui
+    ne demande rien.
+
 ### Mods, profils, modpacks
 
 | Deeplink | Params | Effet |
