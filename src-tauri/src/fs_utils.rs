@@ -453,6 +453,16 @@ fn normalize_path(path: PathBuf) -> PathBuf {
 
 /// Unapply a mod: for each file, find if another active mod provides it.
 /// If not, restore from _original.
+///
+/// `other_active_mods` must be in **activation order**, the same order deployment walks.
+/// Deployment is last-wins — a later mod overwrites an earlier one on any shared path — so
+/// the file actually visible in the game comes from the LAST mod in this list that has it,
+/// and that is the one to fall back to.
+///
+/// This used to scan forward and take the first match, which restored the oldest mod's copy:
+/// a version that had been overwritten and that the player had never seen. Stack three mods
+/// on one file, disable the top one, and the game silently dropped two layers instead of one.
+/// The loop below claimed "starting from most recent" while doing the opposite.
 pub fn unapply_mod_stacked(
     game_path: &Path,
     profile_backup_root: &Path,
@@ -473,8 +483,9 @@ pub fn unapply_mod_stacked(
             let dst_path = game_path.join(&rel);
 
             let mut restored = false;
-            // 1. Try to find another mod that provides this file (starting from most recent)
-            for (_, mod_folder) in other_active_mods {
+            // 1. Fall back to the last-enabled mod that still provides this file, mirroring
+            //    the last-wins deployment rule.
+            for (_, mod_folder) in other_active_mods.iter().rev() {
                 let mod_src = mod_folder.join(&rel);
                 if mod_src.metadata().map(|m| m.is_file()).unwrap_or(false) {
                     copy_file_force_smart(&mod_src, &dst_path, game_path_limit, smart_io)?;
@@ -613,4 +624,87 @@ pub fn get_lang_dir(app_handle: &tauri::AppHandle) -> std::path::PathBuf {
     }
 
     path.join("Lang")
+}
+
+#[cfg(test)]
+mod unapply_stacked_tests {
+    use super::unapply_mod_stacked;
+    use std::fs;
+    use std::path::PathBuf;
+
+    fn scratch(name: &str) -> PathBuf {
+        let d = std::env::temp_dir().join(format!("bmm_unapply_{}", name));
+        let _ = fs::remove_dir_all(&d);
+        fs::create_dir_all(&d).unwrap();
+        d
+    }
+
+    /// Three mods enabled in order, all shipping `Data/tex.dds`. Deployment is last-wins, so
+    /// the game holds C's copy. Disabling C must reveal B — the layer directly underneath —
+    /// not A, which nobody has seen since B was enabled.
+    #[test]
+    fn disabling_the_top_mod_reveals_the_one_directly_underneath() {
+        let root = scratch("layers");
+        let game = root.join("game");
+        let backup = root.join("backup");
+        fs::create_dir_all(game.join("Data")).unwrap();
+        fs::create_dir_all(backup.join("_original/Data")).unwrap();
+        fs::write(backup.join("_original/Data/tex.dds"), b"vanilla").unwrap();
+
+        let mut actives = Vec::new();
+        for (id, body) in [("a", b"AAA"), ("b", b"BBB")] {
+            let dir = root.join(id);
+            fs::create_dir_all(dir.join("Data")).unwrap();
+            fs::write(dir.join("Data/tex.dds"), body).unwrap();
+            actives.push((id.to_string(), dir));
+        }
+        // C is the one being disabled; its copy is what the game currently holds.
+        fs::write(game.join("Data/tex.dds"), b"CCC").unwrap();
+
+        unapply_mod_stacked(
+            &game, &backup,
+            vec!["Data/tex.dds".to_string()],
+            &actives,          // activation order: a, then b
+            None, false,
+        ).unwrap();
+
+        assert_eq!(
+            fs::read(game.join("Data/tex.dds")).unwrap(), b"BBB",
+            "must fall back to the LAST still-enabled mod, not the first",
+        );
+    }
+
+    #[test]
+    fn with_no_other_mod_the_vanilla_file_comes_back_and_the_backup_is_freed() {
+        let root = scratch("vanilla");
+        let game = root.join("game");
+        let backup = root.join("backup");
+        fs::create_dir_all(game.join("Data")).unwrap();
+        fs::create_dir_all(backup.join("_original/Data")).unwrap();
+        fs::write(backup.join("_original/Data/tex.dds"), b"vanilla").unwrap();
+        fs::write(game.join("Data/tex.dds"), b"modded").unwrap();
+
+        unapply_mod_stacked(
+            &game, &backup, vec!["Data/tex.dds".to_string()], &[], None, false,
+        ).unwrap();
+
+        assert_eq!(fs::read(game.join("Data/tex.dds")).unwrap(), b"vanilla");
+        assert!(!backup.join("_original/Data/tex.dds").exists(), "backup should be reclaimed");
+    }
+
+    #[test]
+    fn a_file_the_game_never_had_is_deleted() {
+        let root = scratch("added");
+        let game = root.join("game");
+        let backup = root.join("backup");
+        fs::create_dir_all(game.join("Data")).unwrap();
+        fs::create_dir_all(backup.join("_original")).unwrap();
+        fs::write(game.join("Data/new.pak"), b"added").unwrap();
+
+        unapply_mod_stacked(
+            &game, &backup, vec!["Data/new.pak".to_string()], &[], None, false,
+        ).unwrap();
+
+        assert!(!game.join("Data/new.pak").exists());
+    }
 }
