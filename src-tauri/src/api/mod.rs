@@ -1873,6 +1873,8 @@ pub async fn start_api_server(
                     data.settings.connected_server_repos.push(crate::state::ConnectedServerRepo {
                         url: url.clone(),
                         name: repo_name.clone(),
+                        auto_sync: false,
+                        auto_sync_mode: None,
                     });
                 }
             }

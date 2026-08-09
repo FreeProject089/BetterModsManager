@@ -11,6 +11,20 @@ pub struct ConnectedServerRepo {
     pub url:  String,
     #[serde(default)]
     pub name: String,
+    /// Check this repo automatically when BMM starts.
+    ///
+    /// Off by default and per repo, never global: syncing writes into a game folder, so
+    /// "check everything on launch" is not a setting anyone should acquire by upgrading.
+    #[serde(default)]
+    pub auto_sync: bool,
+    /// Which of the two sync modes to use — "missing" (default) installs what is absent,
+    /// "all" also overwrites files that differ locally.
+    ///
+    /// Stored per repo because the answer differs per repo: a curated server you follow
+    /// wants "all", a repo you cherry-pick from does not, and a single global mode would
+    /// quietly overwrite local edits on the second kind.
+    #[serde(default)]
+    pub auto_sync_mode: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

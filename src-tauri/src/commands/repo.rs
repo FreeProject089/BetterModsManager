@@ -3506,3 +3506,115 @@ mod update_source_tests {
         assert!(v.is_empty());
     }
 }
+
+// ---------------------------------------------------------------------------
+// Auto-sync on launch
+// ---------------------------------------------------------------------------
+
+/// Which of the two sync modes a repo is configured to use, normalised.
+///
+/// Anything unrecognised — including a mode written by a future version — falls back to
+/// "missing". That mode only ADDS files, so a value this build cannot interpret can never
+/// be read as permission to overwrite the user's local edits.
+pub(crate) fn normalize_sync_mode(raw: Option<&str>) -> String {
+    match raw.map(str::trim).unwrap_or("") {
+        "all" => "all".to_string(),
+        _ => "missing".to_string(),
+    }
+}
+
+#[derive(serde::Serialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AutoSyncRepo {
+    pub url: String,
+    pub name: String,
+    pub mode: String,
+}
+
+/// The repos to check when BMM starts.
+#[tauri::command]
+pub fn get_auto_sync_repos(state: State<'_, AppState>) -> Result<Vec<AutoSyncRepo>, String> {
+    let data = state.data.lock().map_err(|_| "Failed to lock AppState".to_string())?;
+    Ok(collect_auto_sync(&data.settings.connected_server_repos))
+}
+
+pub(crate) fn collect_auto_sync(repos: &[crate::state::ConnectedServerRepo]) -> Vec<AutoSyncRepo> {
+    repos.iter()
+        .filter(|r| r.auto_sync)
+        // A repo with no URL cannot be fetched; including it would surface as a failed
+        // auto-sync the user cannot act on, for a repo they cannot see is broken.
+        .filter(|r| !r.url.trim().is_empty())
+        .map(|r| AutoSyncRepo {
+            url: r.url.trim().to_string(),
+            name: r.name.clone(),
+            mode: normalize_sync_mode(r.auto_sync_mode.as_deref()),
+        })
+        .collect()
+}
+
+/// Turn auto-sync on or off for one repo, and set the mode it should use.
+#[tauri::command]
+pub fn set_repo_auto_sync(
+    state: State<'_, AppState>,
+    url: String,
+    enabled: bool,
+    mode: Option<String>,
+) -> Result<(), String> {
+    let target = normalize_repo_url(url.trim());
+    let mut data = state.data.lock().map_err(|_| "Failed to lock AppState".to_string())?;
+    let repo = data.settings.connected_server_repos.iter_mut()
+        // Matched on the normalised URL: the list stores what the user typed, and a repo
+        // saved with a trailing slash would otherwise be a different repo from the same one
+        // without — leaving the toggle looking like it did nothing.
+        .find(|r| normalize_repo_url(r.url.trim()) == target)
+        .ok_or_else(|| "Repo not found".to_string())?;
+    repo.auto_sync = enabled;
+    repo.auto_sync_mode = Some(normalize_sync_mode(mode.as_deref()));
+    drop(data);
+    state.save().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod auto_sync_tests {
+    use super::{collect_auto_sync, normalize_sync_mode};
+    use crate::state::ConnectedServerRepo;
+
+    fn repo(url: &str, auto: bool, mode: Option<&str>) -> ConnectedServerRepo {
+        ConnectedServerRepo {
+            url: url.into(),
+            name: "R".into(),
+            auto_sync: auto,
+            auto_sync_mode: mode.map(str::to_string),
+        }
+    }
+
+    #[test]
+    fn only_repos_that_opted_in_are_checked_at_launch() {
+        let list = vec![
+            repo("https://a.tld/repo/", true, Some("all")),
+            repo("https://b.tld/repo/", false, Some("all")),
+            repo("https://c.tld/repo/", true, None),
+        ];
+        let got = collect_auto_sync(&list);
+        assert_eq!(got.len(), 2);
+        assert_eq!(got[0].mode, "all");
+        assert_eq!(got[1].mode, "missing", "no mode stored must mean the additive one");
+    }
+
+    #[test]
+    fn an_unreadable_mode_never_becomes_overwrite() {
+        // The failure that matters: a typo, or a mode written by a newer build, resolving to
+        // "all" would overwrite local edits on every launch without anyone asking for it.
+        for raw in [None, Some(""), Some("  "), Some("ALL"), Some("everything"), Some("missing")] {
+            assert_eq!(normalize_sync_mode(raw), "missing", "mode {raw:?} must be additive");
+        }
+        assert_eq!(normalize_sync_mode(Some("all")), "all");
+    }
+
+    #[test]
+    fn a_repo_with_no_url_is_skipped_rather_than_failing_at_launch() {
+        let list = vec![repo("   ", true, Some("all"))];
+        assert!(collect_auto_sync(&list).is_empty());
+    }
+}

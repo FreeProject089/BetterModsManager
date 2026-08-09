@@ -576,6 +576,8 @@ fn main() {
             commands::disk::get_folder_size,
             commands::repo::export_server_repo,
             commands::repo::generate_repo_manifest,
+            commands::repo::get_auto_sync_repos,
+            commands::repo::set_repo_auto_sync,
             commands::identity::set_bcweb_identity_key,
             commands::identity::get_bcweb_identity_key,
             commands::identity::set_my_attestation,
