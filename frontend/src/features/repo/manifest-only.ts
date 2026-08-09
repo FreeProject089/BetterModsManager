@@ -25,6 +25,9 @@ interface ManifestReport {
     added: string[];
     removed: string[];
     changed: string[];
+    modpacks: number;
+    modpacksSkipped: string[];
+    signed: boolean;
 }
 
 interface Profile {
@@ -33,8 +36,14 @@ interface Profile {
     mods_path: string;
 }
 
+interface Modpack {
+    id: string;
+    name: string;
+}
+
 let mode: Mode = 'folder';
 let profiles: Profile[] = [];
+let modpacks: Modpack[] = [];
 
 const $ = (id: string) => document.getElementById(id);
 
@@ -49,6 +58,36 @@ function setMode(next: Mode) {
     if (folderBlock) folderBlock.style.display = next === 'folder' ? '' : 'none';
     if (profileBlock) profileBlock.style.display = next === 'profile' ? '' : 'none';
     if (next === 'profile') void loadProfiles();
+}
+
+async function loadModpacks() {
+    const list = $('manifest-modpack-list');
+    if (!list) return;
+    try {
+        modpacks = (await invoke('load_modpacks')) as Modpack[];
+    } catch {
+        modpacks = [];
+    }
+    if (!modpacks.length) {
+        list.textContent = t('repo.manifestNoModpacks') || 'No modpacks yet';
+        list.setAttribute('style', list.getAttribute('style') + ';font-size:11px;color:var(--text-muted);');
+        return;
+    }
+    list.innerHTML = modpacks.map((m) => `
+        <label style="display:flex; align-items:center; gap:8px; padding:4px; cursor:pointer; font-size:11px; color:var(--text);">
+            <input type="checkbox" class="manifest-modpack-cb" value="${m.id}" style="margin:0;">
+            <span></span>
+        </label>`).join('');
+    // Pack names are user data — assigned as text, never interpolated into markup.
+    list.querySelectorAll('label').forEach((label, i) => {
+        const span = label.querySelector('span');
+        if (span) span.textContent = modpacks[i].name;
+    });
+}
+
+function selectedModpackIds(): string[] {
+    return Array.from(document.querySelectorAll<HTMLInputElement>('.manifest-modpack-cb:checked'))
+        .map((cb) => cb.value);
 }
 
 async function loadProfiles() {
@@ -131,7 +170,8 @@ function renderReport(r: ManifestReport) {
     box.innerHTML = `
         <div style="color:var(--success); font-weight:700; margin-bottom:4px;">repo.json</div>
         <div style="color:var(--text-muted); word-break:break-all; margin-bottom:6px;"></div>
-        <div>${r.mods} mods · ${r.files} files · ${formatBytes(r.totalBytes)}</div>
+        <div>${r.mods} mods · ${r.files} files · ${formatBytes(r.totalBytes)}${r.modpacks ? ` · ${r.modpacks} modpacks` : ''}</div>
+        ${r.signed ? '' : `<div style="color:var(--warning)">${t('repo.manifestUnsigned') || 'Written unsigned — signing key unavailable'}</div>`}
         ${line(t('repo.manifestAdded') || 'Added', r.added, 'var(--success)')}
         ${line(t('repo.manifestChanged') || 'Changed', r.changed, 'var(--warning)')}
         ${line(t('repo.manifestRemoved') || 'Removed', r.removed, 'var(--danger)')}`;
@@ -140,6 +180,11 @@ function renderReport(r: ManifestReport) {
 
     // Removals are the one outcome worth interrupting for: a mistyped path produces a
     // perfectly valid manifest that publishes an empty server, and it looks like success.
+    // A skipped modpack is silent otherwise, and a repo missing the pack people were told
+    // to install looks like the repo is broken rather than like a selection problem.
+    if (r.modpacksSkipped.length) {
+        toast(`${t('repo.manifestPacksSkipped') || 'Modpacks left out (mods not published)'}: ${r.modpacksSkipped.join(', ')}`, 'warning');
+    }
     if (r.removed.length) {
         toast(`${r.removed.length} ${t('repo.manifestRemovedWarn') || 'mods are no longer in the folder and were dropped from the manifest'}`, 'warning');
     }
@@ -158,6 +203,7 @@ async function generate() {
                 onlyDirs: selection.onlyDirs,
                 filesBaseUrl: ($('manifest-files-base-url') as HTMLInputElement | null)?.value?.trim() || null,
                 filesLayout: ($('manifest-files-layout') as HTMLInputElement | null)?.value?.trim() || null,
+                modpackIds: selectedModpackIds(),
                 reuseExisting: true,
             },
         })) as ManifestReport;
@@ -182,4 +228,5 @@ export function initManifestOnly() {
     });
     $('btn-generate-manifest')?.addEventListener('click', () => void generate());
     setMode('folder');
+    void loadModpacks();
 }

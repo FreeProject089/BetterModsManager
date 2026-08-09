@@ -6678,5 +6678,9 @@
   "repo.manifestRemovedWarn": "mods ne sont plus dans le dossier et ont été retirés du manifeste",
   "repo.manifestDone": "repo.json généré",
   "common.browse": "PARCOURIR",
-  "docs.diagram.missing": "Ce diagramme est manquant — signale-le s'il te plaît"
+  "docs.diagram.missing": "Ce diagramme est manquant — signale-le s'il te plaît",
+  "repo.manifestModpacks": "MODPACKS À INCLURE",
+  "repo.manifestNoModpacks": "Aucun modpack pour l'instant",
+  "repo.manifestPacksSkipped": "Modpacks écartés (leurs mods ne sont pas tous publiés)",
+  "repo.manifestUnsigned": "Écrit sans signature — la clé de signature était indisponible"
 }

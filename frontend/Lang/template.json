@@ -5038,5 +5038,9 @@
   "repo.manifestRemovedWarn": "mods are no longer in the folder and were dropped from the manifest",
   "repo.manifestDone": "repo.json generated",
   "common.browse": "BROWSE",
-  "docs.diagram.missing": "That diagram is missing — please report it"
+  "docs.diagram.missing": "That diagram is missing — please report it",
+  "repo.manifestModpacks": "MODPACKS TO INCLUDE",
+  "repo.manifestNoModpacks": "No modpacks yet",
+  "repo.manifestPacksSkipped": "Modpacks left out (their mods are not all published)",
+  "repo.manifestUnsigned": "Written unsigned — the signing key was unavailable"
 }

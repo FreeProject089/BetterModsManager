@@ -1,6 +1,7 @@
 use tauri::Emitter;
 use crate::fs_utils;
 use crate::models::repo::{RepoChunk, RepoFile, RepoMod, ServerRepo};
+use std::collections::HashMap;
 use crate::state::AppState;
 use sha2::{Digest, Sha256};
 use std::fs;
@@ -2673,6 +2674,18 @@ pub struct GenerateManifestArgs {
     /// a private mod ends up on a public server.
     #[serde(default)]
     pub only_dirs: Option<Vec<String>>,
+    /// Local modpack ids to ship with the manifest.
+    ///
+    /// A modpack references its mods by BMM's internal mod id, but a manifest generated from
+    /// a folder identifies mods by folder name. The command remaps the references before they
+    /// reach the scanner; a modpack whose mods are not all published is reported rather than
+    /// shipped half-empty, because a modpack that silently installs 9 of its 12 mods is worse
+    /// than one that is missing.
+    #[serde(default)]
+    pub modpack_ids: Option<Vec<String>>,
+    /// "public" | "whitelist_repo" | "whitelist_custom" — defaults to public.
+    #[serde(default)]
+    pub modpack_share_mode: Option<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -2690,6 +2703,13 @@ pub struct GenerateManifestReport {
     pub removed: Vec<String>,
     /// Mod ids whose file content changed.
     pub changed: Vec<String>,
+    /// Modpacks shipped with the manifest.
+    pub modpacks: usize,
+    /// Modpacks left OUT because some of their mods are not in this manifest, as
+    /// "name (n missing)". Silence here would ship a pack that half-installs.
+    pub modpacks_skipped: Vec<String>,
+    /// True when the manifest carries a fresh signature.
+    pub signed: bool,
 }
 
 /// Generate a `repo.json` for a directory of mods that is already hosted somewhere.
@@ -2709,18 +2729,52 @@ pub struct GenerateManifestReport {
 /// added, changed or dropped.
 #[tauri::command]
 pub async fn generate_repo_manifest(
+    handle: AppHandle,
+    state: State<'_, AppState>,
     args: GenerateManifestArgs,
 ) -> Result<GenerateManifestReport, String> {
-    tauri::async_runtime::spawn_blocking(move || generate_repo_manifest_sync(args))
-        .await
-        .map_err(|e| e.to_string())?
+    // Resolved here rather than in the scanner: this is the only layer that can see both
+    // AppData (which knows a mod's BMM id and where its folder is) and the manifest's
+    // folder-name ids.
+    let (packs, folder_of) = {
+        let data = state.data.lock().map_err(|_| "Failed to lock AppState".to_string())?;
+        let folder_of: HashMap<String, String> = data.mods.iter()
+            .filter_map(|m| {
+                let name = m.mod_folder_path.file_name()?.to_string_lossy().to_string();
+                Some((m.id.clone(), name))
+            })
+            .collect();
+        let wanted = args.modpack_ids.clone().unwrap_or_default();
+        let packs: Vec<crate::models::modpack::LocalModpack> = data.modpacks.iter()
+            .filter(|mp| wanted.iter().any(|w| w == &mp.id))
+            .cloned()
+            .collect();
+        (packs, folder_of)
+    };
+
+    let share_mode = args.modpack_share_mode.clone().unwrap_or_else(|| "public".to_string());
+    let handle2 = handle.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        generate_repo_manifest_sync(
+            args,
+            packs,
+            folder_of,
+            share_mode,
+            |bytes| super::security::sign_message(&handle2, bytes),
+        )
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 pub(crate) fn generate_repo_manifest_sync(
     args: GenerateManifestArgs,
+    modpacks: Vec<crate::models::modpack::LocalModpack>,
+    folder_of: HashMap<String, String>,
+    share_mode: String,
+    sign: impl Fn(&[u8]) -> Result<(String, String), String>,
 ) -> Result<GenerateManifestReport, String> {
     use crate::models::repo::RepoProfile;
-    use std::collections::HashMap;
     use walkdir::WalkDir;
 
     let mods_dir = PathBuf::from(&args.mods_dir);
@@ -2841,7 +2895,6 @@ pub(crate) fn generate_repo_manifest_sync(
         repo.seed = prev.seed.clone();
         repo.created_at = prev.created_at.clone();
         repo.description = prev.description.clone();
-        repo.author_id = prev.author_id.clone();
         repo.require_login = prev.require_login;
         repo.upload_limit = prev.upload_limit;
     }
@@ -2872,6 +2925,62 @@ pub(crate) fn generate_repo_manifest_sync(
         icon_image: None,
     }];
 
+    // ---- Modpacks -------------------------------------------------------------------
+    //
+    // A modpack names its mods by BMM's internal mod id; this manifest names them by folder.
+    // Remap, then require that EVERY mod in the pack survived — a pack that quietly installs
+    // 9 of its 12 mods produces a broken game and a bug report that points nowhere.
+    let published: std::collections::HashSet<String> =
+        repo.profiles[0].mods.iter().map(|m| m.id.clone()).collect();
+    let mut shipped = Vec::new();
+    let mut modpacks_skipped = Vec::new();
+    for mut pack in modpacks {
+        let mut missing = 0usize;
+        for r in pack.mods.iter_mut() {
+            match folder_of.get(&r.mod_id) {
+                Some(folder) if published.contains(folder) => r.mod_id = folder.clone(),
+                // Also accept a pack that already names folders (a pack built from a repo).
+                _ if published.contains(&r.mod_id) => {}
+                _ => missing += 1,
+            }
+        }
+        if missing > 0 {
+            modpacks_skipped.push(format!("{} ({} missing)", pack.name, missing));
+            continue;
+        }
+        shipped.push(crate::models::repo::RepoModpackShare {
+            modpack: pack,
+            share_mode: share_mode.clone(),
+            custom_whitelist: None,
+        });
+    }
+    repo.modpacks = if shipped.is_empty() { None } else { Some(shipped) };
+    let modpacks_count = repo.modpacks.as_ref().map_or(0, |m| m.len());
+
+    // ---- Signature ------------------------------------------------------------------
+    //
+    // Re-signed on every generation, including updates. Carrying the previous author_id
+    // forward without a matching signature — or keeping a signature computed over the old
+    // content — makes the repo read as tampered with to anyone who verifies it.
+    //
+    // Both fields must be None while signing: verify_repo_signature() takes them out before
+    // hashing, so a payload that still contained them would never verify.
+    repo.author_id = None;
+    repo.signature = None;
+    let signed = match sign(serde_json::to_string(&repo).map_err(|e| e.to_string())?.as_bytes()) {
+        Ok((author_id, signature)) => {
+            repo.author_id = Some(author_id);
+            repo.signature = Some(signature);
+            true
+        }
+        // An unsigned manifest still works; it just cannot be attributed. Refusing to write
+        // one would make a keyring problem look like "generation is broken".
+        Err(e) => {
+            tracing::warn!("Manifest written unsigned: {}", e);
+            false
+        }
+    };
+
     if let Some(parent) = output_path.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
@@ -2881,6 +2990,9 @@ pub(crate) fn generate_repo_manifest_sync(
     Ok(GenerateManifestReport {
         output_path: output_path.to_string_lossy().to_string(),
         mods: repo.profiles[0].mods.len(),
+        modpacks: modpacks_count,
+        modpacks_skipped,
+        signed,
         files: total_files,
         total_bytes,
         added,
@@ -3005,11 +3117,120 @@ mod manifest_tests {
             files_layout: None,
             reuse_existing: true,
             only_dirs: None,
+            modpack_ids: None,
+            modpack_share_mode: None,
         }
     }
 
     fn read(root: &PathBuf) -> ServerRepo {
         serde_json::from_str(&fs::read_to_string(root.join("repo.json")).unwrap()).unwrap()
+    }
+
+    /// A real ed25519 signer, fixed key — the production one needs an AppHandle, and a
+    /// stub that returned a constant would let a change to WHAT gets signed pass unnoticed.
+    fn signer(bytes: &[u8]) -> Result<(String, String), String> {
+        use ed25519_dalek::{Signer, SigningKey, VerifyingKey};
+        let sk = SigningKey::from_bytes(&[3u8; 32]);
+        let vk: VerifyingKey = (&sk).into();
+        Ok((hex::encode(vk.to_bytes()), hex::encode(sk.sign(bytes).to_bytes())))
+    }
+
+    fn run(
+        a: GenerateManifestArgs,
+        packs: Vec<crate::models::modpack::LocalModpack>,
+    ) -> Result<super::GenerateManifestReport, String> {
+        let folder_of = packs.iter()
+            .flat_map(|p| p.mods.iter())
+            .map(|m| (m.mod_id.clone(), m.mod_name.clone()))
+            .collect();
+        generate_repo_manifest_sync(a, packs, folder_of, "public".to_string(), signer)
+    }
+
+    fn pack(name: &str, refs: &[(&str, &str)]) -> crate::models::modpack::LocalModpack {
+        crate::models::modpack::LocalModpack {
+            id: format!("pack-{name}"),
+            name: name.to_string(),
+            description: None,
+            created_at: String::new(),
+            updated_at: String::new(),
+            multi_profile: false,
+            dependency_mode: crate::models::modpack::DependencyMode::None,
+            skip_integrity_check: false,
+            sr_link: None,
+            game_name: None,
+            mods: refs.iter().map(|(bmm_id, folder)| crate::models::modpack::ModpackModRef {
+                mod_id: bmm_id.to_string(),
+                mod_name: folder.to_string(),
+                mod_version: "1".into(),
+                profile_id: None,
+                profile_name: None,
+                sha256: String::new(),
+                file_manifest: Vec::new(),
+                include_dependencies: false,
+                download_link: None,
+                fallback_link: None,
+                fallback_type: None,
+            }).collect(),
+        }
+    }
+
+    #[test]
+    fn the_manifest_is_signed_and_the_signature_actually_verifies() {
+        let root = scratch("signed");
+        let report = run(args(&root), vec![]).unwrap();
+        assert!(report.signed);
+        let repo = read(&root);
+        assert!(repo.signature.is_some() && repo.author_id.is_some());
+        assert!(
+            crate::commands::security::verify_repo_signature(repo),
+            "the written manifest must verify against its own signature",
+        );
+    }
+
+    #[test]
+    fn an_update_is_re_signed_over_the_new_content() {
+        let root = scratch("resign");
+        run(args(&root), vec![]).unwrap();
+        let first = read(&root);
+
+        fs::write(root.join("mods/cool-mod/readme.txt"), b"changed").unwrap();
+        run(args(&root), vec![]).unwrap();
+        let second = read(&root);
+
+        // Different content must mean a different signature. Carrying the old one forward
+        // reads as tampering to every client that verifies.
+        assert_ne!(first.signature, second.signature);
+        assert!(crate::commands::security::verify_repo_signature(second));
+    }
+
+    #[test]
+    fn a_modpack_ships_with_its_mod_ids_remapped_to_folder_names() {
+        let root = scratch("packs");
+        // The pack names mods by BMM id; the manifest names them by folder.
+        let p = pack("Starter", &[("bmm-id-1", "cool-mod"), ("bmm-id-2", "other-mod")]);
+        let report = run(args(&root), vec![p]).unwrap();
+
+        assert_eq!(report.modpacks, 1);
+        assert!(report.modpacks_skipped.is_empty());
+        let repo = read(&root);
+        let shipped = repo.modpacks.unwrap();
+        let ids: Vec<_> = shipped[0].modpack.mods.iter().map(|m| m.mod_id.clone()).collect();
+        // Without the remap these would still be bmm-id-*, matching nothing in the manifest.
+        assert_eq!(ids, vec!["cool-mod", "other-mod"]);
+        assert_eq!(shipped[0].share_mode, "public");
+    }
+
+    #[test]
+    fn a_modpack_whose_mods_are_not_all_published_is_skipped_not_shipped_broken() {
+        let root = scratch("packs-partial");
+        let mut a = args(&root);
+        a.only_dirs = Some(vec!["cool-mod".into()]);      // other-mod is NOT published
+        let p = pack("Starter", &[("bmm-id-1", "cool-mod"), ("bmm-id-2", "other-mod")]);
+        let report = run(a, vec![p]).unwrap();
+
+        assert_eq!(report.modpacks, 0);
+        assert_eq!(report.modpacks_skipped, vec!["Starter (1 missing)"]);
+        assert!(read(&root).modpacks.is_none());
     }
 
     #[test]
@@ -3018,7 +3239,7 @@ mod manifest_tests {
         let before: Vec<_> = walkdir::WalkDir::new(root.join("mods")).into_iter()
             .filter_map(|e| e.ok()).map(|e| e.path().to_path_buf()).collect();
 
-        let report = generate_repo_manifest_sync(args(&root)).unwrap();
+        let report = run(args(&root), vec![]).unwrap();
 
         assert_eq!(report.mods, 2);
         assert_eq!(report.files, 3);
@@ -3043,7 +3264,7 @@ mod manifest_tests {
         let root = scratch("urls");
         let mut a = args(&root);
         a.files_layout = Some("addons/{id}/{path}".into());
-        generate_repo_manifest_sync(a).unwrap();
+        run(a, vec![]).unwrap();
 
         let repo = read(&root);
         let m = repo.profiles[0].mods.iter().find(|m| m.id == "cool-mod").unwrap();
@@ -3063,7 +3284,7 @@ mod manifest_tests {
     #[test]
     fn regenerating_is_an_update_of_the_same_repo_and_reports_the_diff() {
         let root = scratch("update");
-        generate_repo_manifest_sync(args(&root)).unwrap();
+        run(args(&root), vec![]).unwrap();
         let first = read(&root);
 
         // One mod edited, one added, one deleted from disk.
@@ -3072,7 +3293,7 @@ mod manifest_tests {
         fs::write(root.join("mods/new-mod/c.pak"), b"c").unwrap();
         fs::remove_dir_all(root.join("mods/other-mod")).unwrap();
 
-        let report = generate_repo_manifest_sync(args(&root)).unwrap();
+        let report = run(args(&root), vec![]).unwrap();
         assert_eq!(report.added, vec!["new-mod"]);
         assert_eq!(report.changed, vec!["cool-mod"]);
         // Silence here would let a mistyped path look exactly like a deliberate removal.
@@ -3091,7 +3312,7 @@ mod manifest_tests {
         let root = scratch("subset");
         let mut a = args(&root);
         a.only_dirs = Some(vec!["cool-mod".into()]);
-        let report = generate_repo_manifest_sync(a).unwrap();
+        let report = run(a, vec![]).unwrap();
         assert_eq!(report.mods, 1);
         let ids: Vec<_> = read(&root).profiles[0].mods.iter().map(|m| m.id.clone()).collect();
         assert_eq!(ids, vec!["cool-mod"]);
@@ -3104,7 +3325,7 @@ mod manifest_tests {
         let root = scratch("empty-sel");
         let mut a = args(&root);
         a.only_dirs = Some(vec![]);
-        assert!(generate_repo_manifest_sync(a).is_err());
+        assert!(run(a, vec![]).is_err());
     }
 
     #[test]
@@ -3114,10 +3335,10 @@ mod manifest_tests {
         fs::create_dir_all(&empty).unwrap();
         let mut a = args(&root);
         a.mods_dir = empty.to_string_lossy().to_string();
-        assert!(generate_repo_manifest_sync(a).is_err());
+        assert!(run(a, vec![]).is_err());
 
         let mut a = args(&root);
         a.mods_dir = root.join("does-not-exist").to_string_lossy().to_string();
-        assert!(generate_repo_manifest_sync(a).is_err());
+        assert!(run(a, vec![]).is_err());
     }
 }
