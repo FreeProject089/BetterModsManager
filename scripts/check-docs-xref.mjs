@@ -166,6 +166,30 @@ if (existsSync(MD_LITE) && existsSync(BUNDLE)) {
   if (failed === before6) console.log(`✓ ${checked} page(s) render no stray markup`);
 }
 
+// A number written in prose cannot update itself. The docs told readers the in-app hub
+// carried "44 diagrams" while the registry held 40 — nothing was broken, the sentence had
+// simply outlived the code, and no gate could see it. This is the smallest thing that
+// notices: count the registry, count the claim, refuse to let them disagree.
+{
+  const before7 = failed;
+  const reg = readFileSync(join(ROOT, 'frontend/src/docs/interactive-docs.ts'), 'utf8');
+  const body = reg.match(/export const diagrams = \{([\s\S]*?)\n\};/);
+  if (!body) {
+    fail('interactive-docs.ts: the `diagrams` registry is no longer a plain object literal — this check needs updating');
+  } else {
+    const actual = (body[1].match(/^\s+'[a-z0-9-]+':/gm) || []).length;
+    for (const rel of ['reference/troubleshooting.md', 'reference/troubleshooting.fr.md']) {
+      const f = join(ROOT, 'BMM Docs', 'docs', rel);
+      if (!existsSync(f)) continue;
+      const m = readFileSync(f, 'utf8').match(/(\d+)\s+diagram(?:me)?s/i);
+      if (m && Number(m[1]) !== actual) {
+        fail(`${rel}: claims ${m[1]} diagrams, the registry has ${actual}`);
+      }
+    }
+    if (failed === before7) console.log(`✓ diagram count claim matches the registry (${actual})`);
+  }
+}
+
 if (failed) {
   console.error(`\n✗ ${failed} broken documentation cross-reference(s)`);
   process.exit(1);
