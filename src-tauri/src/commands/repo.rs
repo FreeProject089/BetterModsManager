@@ -2664,6 +2664,15 @@ pub struct GenerateManifestArgs {
     /// repo rather than a different one. On by default — see the command docs.
     #[serde(default = "default_true")]
     pub reuse_existing: bool,
+    /// Restrict the manifest to these subdirectory names. This is how "publish only these
+    /// profiles / this modpack" works without a second code path: the caller resolves its
+    /// selection to folder names, and the scan skips everything else.
+    ///
+    /// None indexes the whole directory. An empty list is NOT the same thing — it means "the
+    /// selection resolved to nothing", and silently publishing everything in that case is how
+    /// a private mod ends up on a public server.
+    #[serde(default)]
+    pub only_dirs: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -2737,9 +2746,19 @@ pub(crate) fn generate_repo_manifest_sync(
             .collect()
     }).unwrap_or_default();
 
+    let only: Option<std::collections::HashSet<String>> = args.only_dirs.as_ref()
+        .map(|v| v.iter().map(|s| s.trim().to_lowercase()).collect());
+    if only.as_ref().map(|o| o.is_empty()).unwrap_or(false) {
+        return Err("The selection is empty — nothing would be published".to_string());
+    }
+
     let mut entries: Vec<_> = fs::read_dir(&mods_dir).map_err(|e| e.to_string())?
         .filter_map(|e| e.ok())
         .filter(|e| e.path().is_dir())
+        .filter(|e| match &only {
+            Some(set) => set.contains(&e.file_name().to_string_lossy().to_lowercase()),
+            None => true,
+        })
         .collect();
     entries.sort_by_key(|e| e.file_name());
 
@@ -2985,6 +3004,7 @@ mod manifest_tests {
             files_base_url: Some("https://host/files/".into()),
             files_layout: None,
             reuse_existing: true,
+            only_dirs: None,
         }
     }
 
@@ -3064,6 +3084,27 @@ mod manifest_tests {
         assert_eq!(first.seed, second.seed);
         assert_eq!(first.created_at, second.created_at);
         assert_eq!(first.profiles[0].id, second.profiles[0].id);
+    }
+
+    #[test]
+    fn a_selection_publishes_only_what_was_selected() {
+        let root = scratch("subset");
+        let mut a = args(&root);
+        a.only_dirs = Some(vec!["cool-mod".into()]);
+        let report = generate_repo_manifest_sync(a).unwrap();
+        assert_eq!(report.mods, 1);
+        let ids: Vec<_> = read(&root).profiles[0].mods.iter().map(|m| m.id.clone()).collect();
+        assert_eq!(ids, vec!["cool-mod"]);
+    }
+
+    #[test]
+    fn an_empty_selection_refuses_rather_than_publishing_everything() {
+        // The failure mode this guards: a profile that resolves to no folders quietly
+        // becoming "publish the entire mods directory", private mods included.
+        let root = scratch("empty-sel");
+        let mut a = args(&root);
+        a.only_dirs = Some(vec![]);
+        assert!(generate_repo_manifest_sync(a).is_err());
     }
 
     #[test]

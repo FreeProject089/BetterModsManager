@@ -12,6 +12,7 @@ import { initRepoMonitoring } from './repo-monitoring.js';
 import { initRepoSync, showSyncSummary, setRepoPassword } from './repo-sync.js';
 import { initModUpdates } from './mod-updates.js';
 import { initRepoAdmin } from './repo-admin.js';
+import { initManifestOnly } from './manifest-only.js';
 import { initModpackCreator } from '../mods/modpack-creator.js';
 
 // Normalise a repo URL so map lookups match regardless of trailing slash / repo.json
@@ -349,6 +350,7 @@ export function initRepo() {
     initRepoMonitoring(elements);
     initRepoSync(elements);
     initRepoAdmin(elements);
+    initManifestOnly();
     initModUpdates();
 
     // ── Sync / Hosting tab switcher ──────────────────────────────────────

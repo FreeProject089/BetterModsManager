@@ -2087,6 +2087,85 @@
                             </div><!-- /repo-card--green -->
 
                             <!-- Card: Mini-Server Standalone -->
+                                                        <!-- Manifest-only generation: describe mods that are ALREADY
+                                 hosted, instead of exporting a copy of them. -->
+                            <div class="repo-card repo-card--optional">
+                                <div class="repo-card-header">
+                                    <h3>
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2">
+                                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                            <path d="M14 2v6h6" />
+                                        </svg>
+                                        <span data-i18n="repo.manifestOnlyTitle">Manifeste seul (repo.json)</span>
+                                    </h3>
+                                    <div class="badge-server-tag">OPTIONAL</div>
+                                </div>
+                                <div class="repo-card-body">
+                                    <p style="font-size:11px; color:var(--text-muted); margin:0 0 12px; line-height:1.5;"
+                                        data-i18n="repo.manifestOnlyIntro">Genere uniquement repo.json pour des mods que tu heberges deja. Rien n&apos;est copie, rien n&apos;est uploade, le dossier n&apos;est pas modifie.</p>
+
+                                    <div style="display:flex; gap:6px; margin-bottom:12px;">
+                                        <button class="btn btn-sm" id="btn-manifest-mode-folder" data-manifest-mode="folder"
+                                            style="flex:1; height:28px; font-size:11px; font-weight:700; justify-content:center;">
+                                            <span data-i18n="repo.manifestModeFolder">DEPUIS UN DOSSIER</span>
+                                        </button>
+                                        <button class="btn btn-sm" id="btn-manifest-mode-profile" data-manifest-mode="profile"
+                                            style="flex:1; height:28px; font-size:11px; font-weight:700; justify-content:center;">
+                                            <span data-i18n="repo.manifestModeProfile">DEPUIS DES PROFILS</span>
+                                        </button>
+                                    </div>
+
+                                    <div id="manifest-folder-block" style="margin-bottom:10px;">
+                                        <span style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:700;"
+                                            data-i18n="repo.manifestModsDir">DOSSIER DES MODS</span>
+                                        <div style="display:flex; gap:6px; margin-top:5px;">
+                                            <input type="text" id="manifest-mods-dir" class="form-input" readonly
+                                                placeholder="mods"
+                                                style="flex:1; height:28px; font-size:11px; padding:0 8px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:4px; color:var(--text);">
+                                            <button class="btn btn-sm" id="btn-manifest-browse"
+                                                style="height:28px; padding:0 10px; font-size:11px; font-weight:700;"
+                                                data-i18n="common.browse">PARCOURIR</button>
+                                        </div>
+                                    </div>
+
+                                    <div id="manifest-profile-block" style="display:none; margin-bottom:10px;">
+                                        <span style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:700;"
+                                            data-i18n="repo.manifestProfiles">PROFILS A PUBLIER</span>
+                                        <div id="manifest-profile-list"
+                                            style="margin-top:5px; max-height:130px; overflow-y:auto; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.08); border-radius:6px; padding:6px;"></div>
+                                    </div>
+
+                                    <div style="margin-bottom:10px;">
+                                        <span style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:700;"
+                                            data-i18n="repo.manifestFilesBaseUrl">URL PUBLIQUE DES FICHIERS</span>
+                                        <input type="text" id="manifest-files-base-url" class="form-input"
+                                            placeholder="https://mon-serveur.tld/fichiers"
+                                            style="width:100%; height:28px; font-size:11px; padding:0 8px; margin-top:5px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:4px; color:var(--text);">
+                                    </div>
+
+                                    <div style="margin-bottom:12px;">
+                                        <span style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:700;"
+                                            data-i18n="repo.manifestLayout">DISPOSITION DES FICHIERS</span>
+                                        <input type="text" id="manifest-files-layout" class="form-input"
+                                            placeholder="mods/{id}/{path}"
+                                            style="width:100%; height:28px; font-size:11px; padding:0 8px; margin-top:5px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:4px; color:var(--text);">
+                                        <p style="font-size:10px; color:var(--text-muted); margin:5px 0 0; line-height:1.4;"
+                                            data-i18n="repo.manifestLayoutHint">Laisse vide pour mods/{id}/{path}.</p>
+                                    </div>
+
+                                    <div id="manifest-result"
+                                        style="display:none; font-size:11px; line-height:1.6; background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.08); border-radius:6px; padding:8px; margin-bottom:10px;"></div>
+
+                                    <div style="display:flex; gap:10px; align-items:center;">
+                                        <button class="btn btn-primary" id="btn-generate-manifest"
+                                            style="flex:1; height:38px; justify-content:center; font-size:12px; font-weight:700; border-radius:8px;">
+                                            <span data-i18n="repo.manifestGenerate">GENERER repo.json</span>
+                                        </button>
+                                    </div>
+                                </div><!-- /repo-card-body (manifest-only) -->
+                            </div><!-- /repo-card--optional (manifest-only) -->
+
                             <div class="repo-card repo-card--optional">
                                 <div class="repo-card-header">
                                     <h3>
