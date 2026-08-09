@@ -1668,9 +1668,9 @@
                                                 <label class="form-label" style="font-size:10px;"
                                                     data-i18n="admin.password">Admin Password</label>
                                                 <div style="position:relative; display:flex; align-items:center;">
-                                                    <input type="password" id="repo-export-server-pass"
+                                                    <form style="display:contents" autocomplete="off" onsubmit="return false"><input type="password" id="repo-export-server-pass"
                                                         class="form-input" value="admin"
-                                                        style="font-size:12px; padding:5px; padding-right:30px; background:rgba(0,0,0,0.3); width:100%; border:1px solid rgba(255,255,255,0.05); border-radius:4px;" />
+                                                        style="font-size:12px; padding:5px; padding-right:30px; background:rgba(0,0,0,0.3); width:100%; border:1px solid rgba(255,255,255,0.05); border-radius:4px;" /></form>
                                                     <button type="button" id="toggle-repo-export-pass"
                                                         style="position:absolute; right:8px; background:none; border:none; color:var(--text-secondary); cursor:pointer; padding:0; display:flex; align-items:center; z-index:5;">
                                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
@@ -1687,9 +1687,9 @@
                                                 <label class="form-label" style="font-size:10px;"
                                                     data-i18n="repo.miniServerDownloadPassword">Download Password</label>
                                                 <div style="position:relative; display:flex; align-items:center;">
-                                                    <input type="password" id="repo-export-server-download-pass"
+                                                    <form style="display:contents" autocomplete="off" onsubmit="return false"><input type="password" id="repo-export-server-download-pass"
                                                         class="form-input" value="" placeholder="none"
-                                                        style="font-size:12px; padding:5px; padding-right:30px; background:rgba(0,0,0,0.3); width:100%; border:1px solid rgba(255,255,255,0.05); border-radius:4px;" />
+                                                        style="font-size:12px; padding:5px; padding-right:30px; background:rgba(0,0,0,0.3); width:100%; border:1px solid rgba(255,255,255,0.05); border-radius:4px;" /></form>
                                                     <button type="button"
                                                         onclick="const p=document.getElementById('repo-export-server-download-pass'); p.type = p.type==='password'?'text':'password';"
                                                         style="position:absolute; right:8px; background:none; border:none; color:var(--text-secondary); cursor:pointer; padding:0; display:flex; align-items:center; z-index:5;">
@@ -2181,9 +2181,9 @@
                                                             <circle cx="12" cy="12" r="3" />
                                                         </svg>
                                                     </button>
-                                                    <input type="password" id="repo-mini-server-password"
+                                                    <form style="display:contents" autocomplete="off" onsubmit="return false"><input type="password" id="repo-mini-server-password"
                                                         class="form-input" value="admin"
-                                                        style="width:80px; height:24px; font-size:11px; padding:0 8px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:4px; color:var(--warning); font-weight:700;">
+                                                        style="width:80px; height:24px; font-size:11px; padding:0 8px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:4px; color:var(--warning); font-weight:700;"></form>
                                                 </div>
                                             </div>
                                             <div
@@ -2204,9 +2204,9 @@
                                                             <circle cx="12" cy="12" r="3" />
                                                         </svg>
                                                     </button>
-                                                    <input type="password" id="repo-mini-server-download-password"
+                                                    <form style="display:contents" autocomplete="off" onsubmit="return false"><input type="password" id="repo-mini-server-download-password"
                                                         class="form-input" value="" placeholder="none"
-                                                        style="width:80px; height:24px; font-size:11px; padding:0 8px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:4px; color:var(--warning); font-weight:700;">
+                                                        style="width:80px; height:24px; font-size:11px; padding:0 8px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:4px; color:var(--warning); font-weight:700;"></form>
                                                 </div>
                                             </div>
                                             <div
@@ -3750,10 +3750,10 @@
 
                             <div style="display:flex;gap:8px;align-items:center">
                                 <div style="position:relative;flex:1">
-                                    <input type="password" id="setting-github-pat"
+                                    <form style="display:contents" autocomplete="off" onsubmit="return false"><input type="password" id="setting-github-pat"
                                         data-i18n-placeholder="settings.githubPatPlaceholder"
                                         placeholder="ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-                                        style="width:100%;padding:9px 40px 9px 12px;border-radius:8px;background:rgba(0,0,0,0.25);color:var(--bmm-text-primary);border:1px solid var(--border);font-family:var(--font-mono);font-size:12px;box-sizing:border-box;transition:border 0.2s" />
+                                        style="width:100%;padding:9px 40px 9px 12px;border-radius:8px;background:rgba(0,0,0,0.25);color:var(--bmm-text-primary);border:1px solid var(--border);font-family:var(--font-mono);font-size:12px;box-sizing:border-box;transition:border 0.2s" /></form>
                                     <button id="btn-toggle-pat-visibility"
                                         onmouseenter="window.showTaskyHelp('repo.togglePatTip', 'help')"
                                         onmouseleave="window.hideTaskyHelp()" aria-label="Toggle PAT visibility"

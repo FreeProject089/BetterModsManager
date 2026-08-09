@@ -1626,7 +1626,7 @@ async function openSmartQuickTest(m, p, rawBody) {
                     </div>
                     <div style="flex:1;min-width:120px;">
                         <label class="plug-form-label" style="font-size:10px;margin-bottom:2px;">Mot de passe admin</label>
-                        <input type="password" id="plug-qt-s-admin-pw" class="input input-sm" placeholder="(optionnel)" style="font-size:12px;">
+                        <form style="display:contents" autocomplete="off" onsubmit="return false"><input type="password" id="plug-qt-s-admin-pw" class="input input-sm" placeholder="(optionnel)" style="font-size:12px;"></form>
                     </div>
                 </div>
             </div>`;
@@ -3895,7 +3895,7 @@ function renderScripts(container) {
                     <span class="plug-api-hint">${IC.info} ${t('plugins.apiHint')} <code id="plug-api-base-url" class="plug-api-url-copy" data-tooltip="${t('plugins.copyApiUrl')}">${apiBase()}/api/</code></span>
                 </div>
                 <div class="plug-token-row">
-                    <input type="password" id="plug-token-display" class="input plug-token-input" readonly value="${escHtml(_apiToken)}">
+                    <form style="display:contents" autocomplete="off" onsubmit="return false"><input type="password" id="plug-token-display" class="input plug-token-input" readonly value="${escHtml(_apiToken)}"></form>
                     <button class="btn btn-xs btn-ghost" id="plug-token-eye" data-tooltip="${t('plugins.showToken')}">${IC.eye}</button>
                     <button class="btn btn-sm btn-ghost" id="plug-copy-token">${IC.copy} ${t('common.copy')}</button>
                     <button class="btn btn-sm btn-danger" id="plug-reset-token">${IC.refresh} ${t('plugins.resetToken')}</button>

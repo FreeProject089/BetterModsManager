@@ -979,8 +979,22 @@ function showUpdateAvailableModal(info) {
                 const manifest = await invoke('fetch_update_manifest', { url: info.manifest_url });
                 progressLabel.textContent = t('update.applyingUpdate') || 'Applying update...';
 
-                // Listen to progress events
-                const { listen } = await import('../../node_modules/@tauri-apps/api/event.js').catch(() => (window as any).__TAURI__?.event);
+                // Listen to progress events.
+                //
+                // Read `listen` off the global rather than importing it. The import used to
+                // be `../../node_modules/@tauri-apps/api/event.js`, which could never resolve:
+                // from frontend/js/ui/ that points at frontend/node_modules (there isn't one),
+                // and the real node_modules sits outside `frontendDist` so the webview cannot
+                // reach it at all. The `.catch` below meant it still worked — but the browser
+                // logs the failed module fetch first, which is the console error people kept
+                // reporting: "Expected a JavaScript-or-Wasm module script but the server
+                // responded with a MIME type of text/html". That text/html is index.html, served
+                // because the path 404s.
+                //
+                // `withGlobalTauri: true` in tauri.conf.json means the global is always there.
+                const listen = (window as any).__TAURI__?.event?.listen as
+                    | ((e: string, cb: (evt: any) => void) => Promise<() => void>)
+                    | undefined;
                 let unlisten: (() => void) | null = null;
                 if (listen) {
                     unlisten = await listen('update-progress', (evt: any) => {
