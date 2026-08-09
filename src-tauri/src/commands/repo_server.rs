@@ -279,12 +279,17 @@ pub async fn start_repo_server(
         .and(warp::header::optional::<String>("x-creator-id"))
         .map(|k1: Option<String>, k2: Option<String>| k1.or(k2));
 
+    // A BetterCommunity-signed attestation of who the caller is. Optional: a repo that does
+    // not require an account never looks at it.
+    let identity_filter = warp::header::optional::<String>("x-creator-identity");
+
     let handle_clone = handle.clone();
     let file_route = warp::get()
         .and(warp::path::tail())
         .and(warp::addr::remote())
         .and(key_filter)
-        .and_then(move |tail: warp::path::Tail, addr: Option<std::net::SocketAddr>, key: Option<String>| {
+        .and(identity_filter)
+        .and_then(move |tail: warp::path::Tail, addr: Option<std::net::SocketAddr>, key: Option<String>, attestation: Option<String>| {
             let handle = handle_clone.clone();
             let active_downloads = active_downloads.clone();
             let session_download_started = session_download_started.clone();
@@ -320,13 +325,42 @@ pub async fn start_repo_server(
                     return Err(warp::reject::custom(BanError));
                 }
 
+                // 1b. Resolve the caller's BetterCommunity account, if they proved one.
+                //
+                // Only consulted when the repo requires an account: elsewhere there is no
+                // signed identity to be had, and matching account entries against an
+                // unauthenticated header is exactly the weakness this replaces.
+                //
+                // A verification failure yields None, never a partial identity — a forged
+                // or expired attestation must be worth no more than sending none at all.
+                let identity = if require_login {
+                    attestation.as_deref().and_then(|token| {
+                        let issuer = crate::commands::identity::issuer_public_key(&handle);
+                        let now = std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .map(|d| d.as_secs() as i64)
+                            .unwrap_or(0);
+                        match crate::commands::identity::verify_attestation(token, &issuer, now) {
+                            Ok(id) => Some(id),
+                            Err(e) => {
+                                println!("[Server] Identity rejected from {}: {:?}", ip, e);
+                                None
+                            }
+                        }
+                    })
+                } else {
+                    None
+                };
+
                 // 2. Ban Check
-                if ban_manager::is_banned(&ip, key.as_deref()) {
+                if ban_manager::is_banned_with_identity(&ip, key.as_deref(), identity.as_ref()) {
                     return Err(warp::reject::custom(BanError));
                 }
 
                 // 3. Whitelist Check (Server owner can restrict access)
-                if whitelist_manager::is_whitelist_enabled() && !whitelist_manager::is_whitelisted(&ip, key.as_deref()) {
+                if whitelist_manager::is_whitelist_enabled()
+                    && !whitelist_manager::is_whitelisted_with_identity(&ip, key.as_deref(), identity.as_ref())
+                {
                     println!("[Server] Access Denied: User {} ({:?}) not on whitelist", ip, key);
                     return Err(warp::reject::custom(WhitelistError));
                 }
@@ -651,7 +685,7 @@ pub async fn start_repo_server(
     let cors = warp::cors()
         .allow_any_origin()
         .allow_methods(vec!["GET", "OPTIONS"])
-        .allow_headers(vec!["*", "x-creator-key", "x-creator-id", "range", "content-type", "accept"]);
+        .allow_headers(vec!["*", "x-creator-key", "x-creator-id", "x-creator-identity", "range", "content-type", "accept"]);
     
     // file_route handles all files including repo.json with connection notifications
     let routes = file_route.with(cors);

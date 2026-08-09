@@ -15,6 +15,11 @@ pub struct Whitelist {
     pub enabled: bool,
     pub ips: HashSet<String>,
     pub keys: HashSet<String>,
+    /// BetterCommunity account entries — a bcid, a linked Creator ID, or a linked Discord id.
+    /// Matched against a signed attestation, so unlike `keys` these cannot be claimed by
+    /// simply setting a header. Only consulted when the repo requires an account.
+    #[serde(default)]
+    pub accounts: HashSet<String>,
 }
 
 lazy_static! {
@@ -121,12 +126,28 @@ pub fn is_whitelist_enabled() -> bool {
 }
 
 pub fn is_whitelisted(ip: &str, key: Option<&str>) -> bool {
+    is_whitelisted_with_identity(ip, key, None)
+}
+
+/// `identity` is the *verified* BetterCommunity account behind the request, or None when the
+/// caller presented nothing (or presented something that failed verification — a forged
+/// attestation must never be more useful than no attestation).
+pub fn is_whitelisted_with_identity(
+    ip: &str,
+    key: Option<&str>,
+    identity: Option<&crate::commands::identity::AccountIdentity>,
+) -> bool {
     let lock = WHITELIST.lock().unwrap_or_else(|p| p.into_inner());
     if lock.ips.contains(ip) {
         return true;
     }
     if let Some(k) = key {
         if lock.keys.contains(k) {
+            return true;
+        }
+    }
+    if let Some(id) = identity {
+        if id.matches_any(&lock.accounts) {
             return true;
         }
     }

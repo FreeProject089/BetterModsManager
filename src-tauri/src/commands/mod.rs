@@ -22,6 +22,7 @@ pub mod security;
 pub mod omm;
 pub mod debug;
 pub mod window;
+pub mod identity;
 pub mod whitelist_manager;
 pub mod discord;
 pub mod modpack;

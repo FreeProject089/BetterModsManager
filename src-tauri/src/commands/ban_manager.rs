@@ -14,6 +14,11 @@ impl warp::reject::Reject for BanError {}
 pub struct BanList {
     pub banned_ips: HashSet<String>,
     pub banned_keys: HashSet<String>,
+    /// BetterCommunity account entries — a bcid, a linked Creator ID, or a linked Discord id.
+    /// Banning the account rather than the header is the point: a `banned_keys` entry is
+    /// evaded by dropping the header, whereas this follows every id the account holds.
+    #[serde(default)]
+    pub banned_accounts: HashSet<String>,
 }
 
 lazy_static! {
@@ -118,12 +123,26 @@ pub fn get_ban_list() -> Result<BanList, String> {
 }
 
 pub fn is_banned(ip: &str, key: Option<&str>) -> bool {
+    is_banned_with_identity(ip, key, None)
+}
+
+/// `identity` is the *verified* BetterCommunity account behind the request, or None.
+pub fn is_banned_with_identity(
+    ip: &str,
+    key: Option<&str>,
+    identity: Option<&crate::commands::identity::AccountIdentity>,
+) -> bool {
     let lock = BAN_LIST.lock().unwrap_or_else(|p| p.into_inner());
     if lock.banned_ips.contains(ip) {
         return true;
     }
     if let Some(k) = key {
         if lock.banned_keys.contains(k) {
+            return true;
+        }
+    }
+    if let Some(id) = identity {
+        if id.matches_any(&lock.banned_accounts) {
             return true;
         }
     }

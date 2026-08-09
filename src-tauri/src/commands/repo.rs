@@ -2033,6 +2033,13 @@ pub async fn sync_server_repo(
     let backup_dir = args.backup_dir;
     let choices = args.choices;
 
+    // Read once: this is sent with every file request, and a per-file disk read for an
+    // unchanging value would be thousands of them on a large sync.
+    let attestation: Option<String> = {
+        use tauri::Manager;
+        crate::commands::identity::my_attestation(window.app_handle())
+    };
+
     // Normalised repo URL (strip /repo.json + trailing slashes, lowercase) recorded
     // on each synced mod as its `source_repo`, so the update checker can match it
     // back to this repo later. Mirrors the frontend's normRepoUrl().
@@ -2193,6 +2200,13 @@ pub async fn sync_server_repo(
                     let mut headers = reqwest::header::HeaderMap::new();
                     if let Some(ref cid) = args.creator_id {
                         if let Ok(hv) = reqwest::header::HeaderValue::from_str(cid) { headers.insert("X-Creator-ID", hv); }
+                        // Proves which BetterCommunity account is behind that id, for repos
+                        // whose owner gates on accounts rather than on the raw header.
+                        if let Some(tok) = attestation.as_deref() {
+                            if let Ok(hv) = reqwest::header::HeaderValue::from_str(tok) {
+                                headers.insert("X-Creator-Identity", hv);
+                            }
+                        }
                     }
                     if let Some(ref pw) = args.password { if !pw.is_empty() {
                         if let Ok(hv) = reqwest::header::HeaderValue::from_str(pw) { headers.insert("X-Repo-Password", hv); }
@@ -2288,6 +2302,13 @@ pub async fn sync_server_repo(
                         let mut headers = reqwest::header::HeaderMap::new();
                         if let Some(ref cid) = args.creator_id {
                             if let Ok(hv) = reqwest::header::HeaderValue::from_str(cid) { headers.insert("X-Creator-ID", hv); }
+                        // Proves which BetterCommunity account is behind that id, for repos
+                        // whose owner gates on accounts rather than on the raw header.
+                        if let Some(tok) = attestation.as_deref() {
+                            if let Ok(hv) = reqwest::header::HeaderValue::from_str(tok) {
+                                headers.insert("X-Creator-Identity", hv);
+                            }
+                        }
                         }
                         if let Some(ref pw) = args.password { if !pw.is_empty() {
                             if let Ok(hv) = reqwest::header::HeaderValue::from_str(pw) { headers.insert("X-Repo-Password", hv); }
