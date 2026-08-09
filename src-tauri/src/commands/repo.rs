@@ -52,7 +52,7 @@ pub struct MiniServerExportOptions {
     pub server_type: Option<String>,
 }
 
-const CHUNK_SIZE: usize = 4 * 1024 * 1024; // 4MB
+pub(crate) const CHUNK_SIZE: usize = 4 * 1024 * 1024; // 4MB
 use std::time::Instant;
 use std::sync::Mutex as StdMutex;
 lazy_static::lazy_static! {
@@ -76,7 +76,32 @@ fn format_bytes(bytes: u64) -> String {
     }
 }
 
-fn compute_file_hash_and_chunks(path: &Path, need_chunks: bool) -> Result<(String, Option<Vec<RepoChunk>>), String> {
+/// Where a client fetches one mod file from.
+///
+/// `files_base_url` lets a manifest published in one place point at mods hosted in another —
+/// the case where someone already serves their files and does not want to upload them a
+/// second time just to have a repo. When it is absent, which is every manifest generated
+/// before the field existed, the files sit next to `repo.json` and this resolves exactly as
+/// it always did.
+///
+/// Both bases are normalised here rather than at their call sites: `base_url` already ends
+/// with a slash, a hand-typed `files_base_url` may or may not, and getting that wrong yields
+/// `host//mods/…` or `hostmods/…` — neither of which fails loudly, they just 404 per file.
+pub(crate) fn mod_file_url(
+    base_url: &str,
+    files_base_url: Option<&str>,
+    mod_id: &str,
+    relative_path: &str,
+) -> String {
+    let base = files_base_url
+        .map(str::trim)
+        .filter(|b| !b.is_empty())
+        .map(|b| format!("{}/", b.trim_end_matches('/')))
+        .unwrap_or_else(|| base_url.to_string());
+    format!("{}mods/{}/{}", base, mod_id, relative_path.replace('\\', "/"))
+}
+
+pub(crate) fn compute_file_hash_and_chunks(path: &Path, need_chunks: bool) -> Result<(String, Option<Vec<RepoChunk>>), String> {
     let file = fs::File::open(path).map_err(|e| e.to_string())?;
     let mut reader = std::io::BufReader::with_capacity(128 * 1024, file);
     let mut global_hasher = Sha256::new();
@@ -2235,7 +2260,12 @@ pub async fn sync_server_repo(
                         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
                     }
 
-                    let file_url = format!("{}mods/{}/{}", base_url, repo_mod.id, file.relative_path.replace("\\", "/"));
+                    let file_url = mod_file_url(
+                        &base_url,
+                        repo.files_base_url.as_deref(),
+                        &repo_mod.id,
+                        &file.relative_path,
+                    );
                     let mut client_builder = reqwest::Client::builder();
                     {
                         let mut headers = reqwest::header::HeaderMap::new();
@@ -2574,5 +2604,50 @@ mod tests {
         assert!(!large_hash.is_empty());
         assert!(chunks.is_some());
         assert_eq!(chunks.unwrap().len(), 2);
+    }
+}
+
+#[cfg(test)]
+mod url_tests {
+    use super::mod_file_url;
+
+    // The base coming from the repo URL already ends with a slash; a hand-typed
+    // files_base_url may or may not. Both wrong outcomes 404 per file rather than failing
+    // loudly, so they are asserted rather than assumed.
+    #[test]
+    fn a_manifest_can_point_at_files_hosted_somewhere_else() {
+        // The base names the directory that CONTAINS `mods/`, not `mods/` itself.
+        for base in [
+            "https://cdn.example/bmm",
+            "https://cdn.example/bmm/",
+            "  https://cdn.example/bmm///  ",
+        ] {
+            assert_eq!(
+                mod_file_url("https://repo.example/", Some(base), "cool-mod", "tex/a.dds"),
+                "https://cdn.example/bmm/mods/cool-mod/tex/a.dds",
+                "base {base:?} did not normalise",
+            );
+        }
+    }
+
+    #[test]
+    fn without_the_field_nothing_changes() {
+        // Every manifest generated before files_base_url existed has None here, and must
+        // resolve against the directory holding repo.json exactly as it always did.
+        for empty in [None, Some(""), Some("   ")] {
+            assert_eq!(
+                mod_file_url("https://repo.example/r/", empty, "cool-mod", "tex/a.dds"),
+                "https://repo.example/r/mods/cool-mod/tex/a.dds",
+                "empty base {empty:?} should fall back",
+            );
+        }
+    }
+
+    #[test]
+    fn windows_separators_become_url_separators() {
+        assert_eq!(
+            mod_file_url("https://r.example/", None, "m", r"tex\sub\a.dds"),
+            "https://r.example/mods/m/tex/sub/a.dds"
+        );
     }
 }

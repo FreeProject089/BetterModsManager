@@ -251,9 +251,15 @@ struct RepoGenBody {
     server_version: Option<u8>,
     #[serde(default)]
     server_type: Option<String>,
-    /// Only generate repo.json manifest without copying mod files
+    /// Only generate repo.json manifest without copying mod files. Pair it with
+    /// `files_base_url` to publish a manifest for mods you already host.
     #[serde(default)]
     lightweight: bool,
+    /// Where the mod files live, when that is not "next to repo.json". Written into the
+    /// manifest as `files_base_url`; clients resolve `<this>/mods/<id>/<path>`. Leave unset
+    /// and everything behaves as before.
+    #[serde(default)]
+    files_base_url: Option<String>,
     /// Compress output directory into a .zip archive after gen
     #[serde(default)]
     zip_output: bool,
@@ -3366,6 +3372,11 @@ async fn do_api_repo_gen(
     );
     repo.author = Some(body.author_name.clone());
     repo.seed = Some(seed);
+    // Trimmed and normalised here rather than at read time, so every client sees the same
+    // string and an accidental trailing slash cannot produce `//mods/…`.
+    repo.files_base_url = body.files_base_url.as_ref()
+        .map(|u| u.trim().trim_end_matches('/').to_string())
+        .filter(|u| !u.is_empty());
 
     // In lightweight mode we skip copying files so no mods/ dir needed
     let repo_mods_dir = output_path.join("mods");
@@ -3485,11 +3496,20 @@ async fn do_api_repo_gen(
                     let size_src = std::fs::metadata(&src).map(|m| m.len()).unwrap_or(0);
 
                     if body.lightweight {
-                        // Lightweight: hash source file in place, don't copy
-                        if let Ok(sha) = api_sha256_file(&src) {
+                        // Lightweight: hash the source file in place, never copy it.
+                        //
+                        // Chunk hashes are computed here exactly as the full export does.
+                        // Without them a client can only re-fetch a changed file whole, which
+                        // is what made this mode unusable for publishing rather than merely
+                        // cheaper — a manifest is only worth hosting if a small change costs
+                        // a small download.
+                        let need_chunks = size_src > crate::commands::repo::CHUNK_SIZE as u64;
+                        if let Ok((sha, chunks)) =
+                            crate::commands::repo::compute_file_hash_and_chunks(&src, need_chunks)
+                        {
                             repo_mod.files.push(RepoFile {
                                 relative_path: rel_path.to_string_lossy().to_string().replace('\\', "/"),
-                                size: size_src, sha256_hash: sha, chunks: None,
+                                size: size_src, sha256_hash: sha, chunks,
                             });
                         }
                     } else {

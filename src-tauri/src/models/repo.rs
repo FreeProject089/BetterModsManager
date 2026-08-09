@@ -17,6 +17,17 @@ pub struct ServerRepo {
     // signed in to BetterCommunity in BMM to download. Accepts camelCase in JSON.
     #[serde(default, alias = "requireLogin")]
     pub require_login: Option<bool>,
+    // Where the MOD FILES live, when that is not "next to repo.json".
+    //
+    // By default a client resolves a file as `<dir containing repo.json>/mods/<id>/<path>`,
+    // which assumes the export uploaded the mods alongside the manifest. Set this and the
+    // manifest can be published anywhere while the files stay on hosting you already run —
+    // the layout beneath it is still `mods/<id>/<path>`.
+    //
+    // Optional and absent from older manifests, so a repo generated before this existed
+    // keeps resolving exactly as it did.
+    #[serde(default, alias = "filesBaseUrl", skip_serializing_if = "Option::is_none")]
+    pub files_base_url: Option<String>,
     pub profiles: Vec<RepoProfile>,
     pub modpacks: Option<Vec<RepoModpackShare>>,
 }
@@ -109,6 +120,7 @@ impl ServerRepo {
         Self {
             name,
             description: None,
+            files_base_url: None,
             author: None,
             author_id: None,
             signature: None,
