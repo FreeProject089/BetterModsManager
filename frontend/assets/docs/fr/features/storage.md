@@ -21,7 +21,8 @@ l'app (et le reste de la machine) peut saccader jusqu'à la fin.
 
 :::tip[Auto-calibration des performances]
 Activée par défaut. BMM benchmarke les disques que tes profils utilisent vraiment et te fixe une
-limite de vitesse par disque raisonnable, au démarrage et quand ça change. Laisse-la activée sauf si
+limite de vitesse par disque raisonnable — quelques secondes après le démarrage, et de nouveau
+quand vous la réactivez. Laissez-la activée sauf si
 tu veux régler les limites à la main.
 :::
 

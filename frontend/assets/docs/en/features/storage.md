@@ -19,8 +19,8 @@ feel choppy until it's done.
 
 :::tip[Auto Performance Calibration]
 On by default. BMM benchmarks the disks your profiles actually use and sets a sensible per-disk
-speed limit for you, at boot and when things change. Leave it on unless you want to set limits by
-hand.
+speed limit for you — a couple of seconds after startup, and again when you switch it back on.
+Leave it on unless you want to set limits by hand.
 :::
 
 ## Per-disk cards

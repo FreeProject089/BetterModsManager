@@ -28,9 +28,13 @@ The setting to know if BMM ever makes your PC feel sluggish while activating mod
 > Limit the read/write speed on your disks during mod activation to prevent system lag.
 > (0 = unlimited)
 
-**Auto-Calibration** benchmarks your drives and suggests an I/O limit per disk. Run it once;
-it's the difference between "mods activate in the background" and "my machine froze for thirty
-seconds". Limits are per-disk, so a fast NVMe and a slow external drive get their own ceilings.
+**Auto-Calibration** benchmarks your drives and sets an I/O limit for each. It is **on by
+default and runs itself** — a couple of seconds after BMM starts, and again the moment you
+switch it back on. There is no button to press.
+
+It only measures the disks your profiles actually use, and sets a per-disk limit, so a fast
+NVMe and a slow external drive get their own ceilings. It's the difference between "mods
+activate in the background" and "my machine froze for thirty seconds".
 
 ### Updates
 

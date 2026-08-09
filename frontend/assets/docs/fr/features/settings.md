@@ -29,10 +29,13 @@ Le réglage à connaître si BMM rend ton PC poussif pendant l'activation des mo
 > Limite la vitesse de lecture/écriture sur tes disques pendant l'activation des mods pour
 > éviter les ralentissements. (0 = illimité)
 
-L'**auto-calibration** teste tes disques et suggère une limite d'E/S pour chacun. Lance-la une
-fois ; c'est la différence entre « les mods s'activent en arrière-plan » et « ma machine a
-gelé trente secondes ». Les limites sont par disque : un NVMe rapide et un disque externe lent
-ont chacun leur plafond.
+L'**auto-calibration** teste vos disques et fixe une limite d'E/S pour chacun. Elle est
+**active par défaut et se lance seule** — quelques secondes après le démarrage de BMM, et de
+nouveau dès que vous la réactivez. Il n'y a aucun bouton à presser.
+
+Elle ne mesure que les disques réellement utilisés par vos profils, et pose une limite par
+disque : un NVMe rapide et un disque externe lent ont chacun leur plafond. C'est la différence
+entre « les mods s'activent en arrière-plan » et « ma machine a gelé trente secondes ».
 
 ### Mises à jour
 
