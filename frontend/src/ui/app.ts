@@ -819,6 +819,9 @@ async function main() {
     await initTitlebar();
     initModlist();
     initRepo();
+    // After the UI is up, never before: this makes network calls, and a slow or unreachable
+    // repo must not delay the window appearing.
+    void import('../features/repo/auto-sync.js').then((m) => m.runAutoSyncCheck());
     initInteractiveDocs();   // diagram modal engine + Tasky tooltips (still used app-wide)
     initDocsHub();           // the rebuilt Help & documentation hub (owns #view-docs)
     initCommands();          // command registry + Ctrl+K palette + global shortcut dispatcher

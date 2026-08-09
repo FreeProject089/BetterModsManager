@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { invoke } from '../../core/api.js';
+import { registerRepoSyncOpener } from './auto-sync.js';
 import { toast, updateLibraryProfileSelector } from '../../ui/app.js';
 import { t } from '../../core/i18n.js';
 import { renderProfiles } from '../profiles/profiles.js';
@@ -162,6 +163,27 @@ function _openRepoVerifyDetail(repo: any, isVerified: boolean, reason?: string):
 }
 
 export function initRepoSync(elements) {
+    // Lets the launch-time check hand this screen a repo: the toast says "N mods to
+    // update", and the form behind it is already filled in for that repo and mode.
+    registerRepoSyncOpener((url: string, mode: string) => {
+        const input = document.getElementById('repo-sync-url') as HTMLInputElement | null;
+        if (input) input.value = url;
+        const modeSel = document.getElementById('repo-sync-mode') as HTMLSelectElement | null;
+        if (modeSel) modeSel.value = mode === 'all' ? 'all' : 'missing';
+        const auto = document.getElementById('repo-sync-auto-check') as HTMLInputElement | null;
+        if (auto) auto.checked = true;
+    });
+
+    // Persisted on change rather than on sync: a user who ticks this and never syncs still
+    // meant it, and losing the setting would look like the checkbox does nothing.
+    document.getElementById('repo-sync-auto-check')?.addEventListener('change', (e) => {
+        const on = (e.target as HTMLInputElement).checked;
+        const url = (document.getElementById('repo-sync-url') as HTMLInputElement | null)?.value?.trim();
+        if (!url) return;
+        const mode = (document.getElementById('repo-sync-mode') as HTMLSelectElement | null)?.value || 'missing';
+        invoke('set_repo_auto_sync', { url, enabled: on, mode }).catch((err) => toast(String(err), 'error'));
+    });
+
     const {
         inputSyncUrl,
         inputSyncGamePath,
