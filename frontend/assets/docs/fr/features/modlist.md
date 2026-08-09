@@ -6,11 +6,11 @@ n'a pas besoin de posséder les mods au préalable.
 
 La définition de BMM lui-même :
 
-> Un fichier JSON contenant ta liste complète de mods, les liens de téléchargement, l'ordre
-> d'installation et les règles de conflit.
+> Un fichier JSON contenant votre liste complète de mods, liens de téléchargement, ordre
+> d'installation et configuration.
 
 Toute la différence est là. Un modpack dit *quels mods* ; une liste `.MM` dit *quels mods,
-où les prendre, dans quel ordre, et quoi faire quand ils se marchent dessus*.
+où les prendre, et dans quel ordre*.
 
 ![L'écran Listes .MM](assets/docs/media/screens/modlist.annotated.png)
 
@@ -28,9 +28,16 @@ où les prendre, dans quel ordre, et quoi faire quand ils se marchent dessus*.
 > Envoie ton fichier `.MM` à d'autres utilisateurs pour reproduire exactement ta
 > configuration.
 
-*Exactement* est le mot qui compte, et c'est pourquoi l'ordre et les règles de conflit
-voyagent avec la liste. Deux personnes avec les mêmes mods et un ordre d'activation
-différent n'ont **pas** le même jeu — voir [les conflits](doc-page:features/library#conflicts).
+*Exactement* est le mot qui compte, et c'est pourquoi l'ordre voyage avec la liste : les
+mods forment un tableau JSON, et un `.MM` reproduit cette séquence de l'autre côté. Deux
+personnes avec les mêmes mods dans un ordre d'activation différent n'ont **pas** le même
+jeu — voir [les conflits](doc-page:features/library#conflicts).
+
+!!! note "Ce qu'un `.MM` ne transporte pas"
+    Les *règles* de conflit ne font pas partie du format. Un `.MM` enregistre l'arborescence
+    de fichiers et les notes d'installation de chaque mod, si bien que le BMM qui le reçoit
+    détecte les mêmes recouvrements que vous — mais les décisions que vous avez prises à leur
+    sujet restent sur votre machine.
 
 ### Inclure les hashes ?
 

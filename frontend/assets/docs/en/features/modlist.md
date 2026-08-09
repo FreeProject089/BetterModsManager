@@ -7,10 +7,10 @@ need to own the mods first.
 BMM's own definition:
 
 > A JSON file containing your complete list of mods, download links, installation order and
-> conflict rules.
+> configuration.
 
 That's the difference in one line. A modpack says *which mods*; a `.MM` list says *which
-mods, where to get them, in what order, and what to do when they clash*.
+mods, where to get them, and in what order*.
 
 ![The .MM Lists screen](assets/docs/media/screens/modlist.annotated.png)
 
@@ -27,9 +27,15 @@ mods, where to get them, in what order, and what to do when they clash*.
 
 > Send your `.MM` file to other users to exactly reproduce your configuration.
 
-*Exactly* is the operative word, and it's why the order and the conflict rules travel with
-the list. Two people with the same mods and a different activation order do **not** have the
-same game — see [conflicts](doc-page:features/library#conflicts).
+*Exactly* is the operative word, and it's why the order travels with the list: the mods are
+a JSON array, and a `.MM` reproduces that sequence on the other side. Two people with the
+same mods in a different activation order do **not** have the same game — see
+[conflicts](doc-page:features/library#conflicts).
+
+!!! note "What a `.MM` does not carry"
+    Conflict *rules* are not part of the format. A `.MM` records each mod's file tree and
+    install notes, so the receiving BMM detects the same overlaps you had — but the
+    decisions you made about them stay on your machine.
 
 ### Include hashes?
 
