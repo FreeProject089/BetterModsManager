@@ -11,8 +11,17 @@ be precise about **which** hash, because it runs two of them on purpose.
 
 | Algorithm | Used for | Why |
 |---|---|---|
-| **BLAKE3** | local file hashes, the modpack hash-match index | *"a tree hash that parallelises WITHIN a single large file (mmap + rayon), unlike SHA-256"* |
+| **BLAKE3** | local file hashes, the modpack hash-match index | far faster than SHA-256 per byte, and mmap-backed so hashing does not stream the file through userspace |
 | **SHA-256** | legacy baselines, the repo wire format, the `content_id` fingerprint | compatibility — changing it would break things that already exist |
+
+!!! note "Parallel across files, deliberately not within one"
+
+    BLAKE3 *can* parallelise inside a single file (`update_mmap_rayon`), and BMM deliberately
+    does not use it — `compute_file_hash` calls the sequential `update_mmap`, because
+    *"per-file work stays on a single pool thread so a big file can't grab every core.
+    Parallelism comes from the bounded pool processing several files at once."* That is the
+    same bounded-pool idea as [Smart I/O](doc-page:features/storage): keep the machine usable
+    while a long job runs, rather than winning a single-file benchmark.
 
 Digests are **self-describing**: a local BLAKE3 hash is stored tagged as `b3:…`, and *"untagged
 digests are treated as legacy SHA-256 so old baselines/modpacks still verify (dual-read)"*. That is

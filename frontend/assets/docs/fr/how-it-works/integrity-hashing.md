@@ -12,8 +12,18 @@ exprès.
 
 | Algorithme | Sert à | Pourquoi |
 |---|---|---|
-| **BLAKE3** | les hashs de fichiers locaux, l'index de correspondance des modpacks | *« un hash en arbre qui parallélise À L'INTÉRIEUR d'un seul gros fichier (mmap + rayon), contrairement à SHA-256 »* |
+| **BLAKE3** | les hashs de fichiers locaux, l'index de correspondance des modpacks | bien plus rapide que SHA-256 par octet, et adossé à mmap pour ne pas faire transiter le fichier par l'espace utilisateur |
 | **SHA-256** | les baselines legacy, le format de transport des dépôts, l'empreinte `content_id` | compatibilité — le changer casserait des choses qui existent déjà |
+
+!!! note "Parallèle entre fichiers, délibérément pas à l'intérieur d'un seul"
+
+    BLAKE3 *sait* paralléliser à l'intérieur d'un fichier (`update_mmap_rayon`), et BMM ne
+    l'utilise volontairement pas : `compute_file_hash` appelle le `update_mmap` séquentiel,
+    parce que *« le travail par fichier reste sur un seul thread du pool, pour qu'un gros
+    fichier ne puisse pas accaparer tous les cœurs. Le parallélisme vient du pool borné qui
+    traite plusieurs fichiers à la fois. »* C'est la même idée de pool borné que
+    [Smart I/O](doc-page:features/storage) : garder la machine utilisable pendant un long
+    traitement, plutôt que gagner un benchmark sur un fichier unique.
 
 Les empreintes sont **auto-descriptives** : un hash BLAKE3 local est stocké préfixé `b3:…`, et *« les
 empreintes non préfixées sont traitées comme du SHA-256 legacy pour que les anciens
