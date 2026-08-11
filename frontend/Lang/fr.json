@@ -6623,8 +6623,8 @@
   "crashmgr.pruned": "Nettoyés",
   "navedit.uploadIcon": "Importer une icône…",
   "navedit.iconTooBig": "L’icône doit faire moins de 256 Ko",
-  "navedit.exportFile": ".bmmnav",
-  "navedit.importFileNav": "Importer .bmmnav",
+  "navedit.exportFile": "Exporter un fichier .bmmnav",
+  "navedit.importFileNav": "Importer un fichier .bmmnav",
   "navedit.bundleExported": "Navigation exportée (.bmmnav)",
   "navedit.bundleImported": "Navigation importée",
   "navedit.badBundle": "Fichier .bmmnav invalide",
@@ -6889,5 +6889,12 @@
   "dev.diagExported": "Diagnostic exporté",
   "nav.plugins.desc": "Étends BMM : installe des plugins communautaires, pilote-le par scripts via l'API locale, et gère ce que chaque plugin a le droit de faire.",
   "nav.community.desc": "Les nouvelles et articles des blogs BetterCommunity, et ton lien de compte pour les dépôts et catalogues.",
-  "themes.fileMenu": "Fichier"
+  "themes.fileMenu": "Fichier",
+  "navedit.shareMenu": "Partager / Importer",
+  "navedit.shareLink": "Copier le lien de partage",
+  "navedit.shareLinkHint": "Disposition & boutons seulement — sans pages ni icônes importées",
+  "navedit.importCode": "Coller un lien / code",
+  "navedit.importCodeHint": "Applique une disposition partagée via un lien bmm://",
+  "navedit.exportFileHint": "Tout : disposition, pages perso, permissions, icônes",
+  "navedit.importFileHint": "Restaure un export complet, pages incluses"
 }

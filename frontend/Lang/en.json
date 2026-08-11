@@ -6625,8 +6625,8 @@
   "crashmgr.pruned": "Pruned",
   "navedit.uploadIcon": "Upload icon…",
   "navedit.iconTooBig": "Icon must be under 256 KB",
-  "navedit.exportFile": ".bmmnav",
-  "navedit.importFileNav": "Import .bmmnav",
+  "navedit.exportFile": "Export .bmmnav file",
+  "navedit.importFileNav": "Import .bmmnav file",
   "navedit.bundleExported": "Navigation exported (.bmmnav)",
   "navedit.bundleImported": "Navigation imported",
   "navedit.badBundle": "Not a valid .bmmnav file",
@@ -6891,5 +6891,12 @@
   "dev.diagExported": "Diagnostic exported",
   "nav.plugins.desc": "Extend BMM: install community plugins, drive it from scripts via the local API, and manage what each plugin is allowed to do.",
   "nav.community.desc": "News and posts from the BetterCommunity blogs, and your account link for repos and catalogs.",
-  "themes.fileMenu": "File"
+  "themes.fileMenu": "File",
+  "navedit.shareMenu": "Share / Import",
+  "navedit.shareLink": "Copy share link",
+  "navedit.shareLinkHint": "Layout & buttons only — no pages or uploaded icons",
+  "navedit.importCode": "Paste a link / code",
+  "navedit.importCodeHint": "Apply a layout someone shared as a bmm:// link",
+  "navedit.exportFileHint": "Everything: layout, custom pages, permissions, icons",
+  "navedit.importFileHint": "Restores a full export, pages included"
 }

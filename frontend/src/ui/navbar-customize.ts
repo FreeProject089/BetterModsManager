@@ -262,8 +262,11 @@ function activateCustom(item: CustomNavItem): void {
             const host = document.querySelector('.content-area') || document.querySelector('main') || document.body;
             pview = document.createElement('section');
             pview.id = pvid; pview.className = 'view custom-url-view custom-page-view';
+            // allow-modals: alert()/confirm() in a quick test page failed silently
+            // without it. Dialogs only — the isolation story (no allow-same-origin,
+            // opaque origin, CSP connect-src 'none') is unchanged.
             pview.innerHTML = `<iframe class="custom-url-frame custom-page-frame" referrerpolicy="no-referrer"
-                sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"
+                sandbox="allow-scripts allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox"
                 data-page-id="${escAttr(item.target)}"
                 data-src="${escAttr(pageBundleUrl(item.target))}" src="about:blank"></iframe>`;
             host.appendChild(pview);
@@ -474,11 +477,11 @@ export function openNavbarEditor(): void {
                     <label class="nbe-flbl">${t('navedit.pageName') || 'Page name'}</label>
                     <input class="input" id="nbe-page-name" placeholder="${t('navedit.pageName') || 'Page name'}">
                     <label class="nbe-flbl">HTML</label>
-                    <textarea class="input nbe-code" id="nbe-page-html" rows="3" placeholder="<h1>Hello</h1>"></textarea>
+                    <textarea class="input nbe-code" id="nbe-page-html" rows="8" placeholder="<h1>Hello</h1>"></textarea>
                     <label class="nbe-flbl">CSS</label>
-                    <textarea class="input nbe-code" id="nbe-page-css" rows="3" placeholder="body { color: white }"></textarea>
+                    <textarea class="input nbe-code" id="nbe-page-css" rows="6" placeholder="body { color: white }"></textarea>
                     <label class="nbe-flbl">JS ${`<span class="nbe-jsnote">${t('navedit.jsNote') || '(use addEventListener — inline onclick is blocked; bmm.* available)'}</span>`}</label>
-                    <textarea class="input nbe-code" id="nbe-page-js" rows="3" placeholder="document.querySelector('button')?.addEventListener('click', () =&gt; bmm.notify('hi'))"></textarea>
+                    <textarea class="input nbe-code" id="nbe-page-js" rows="8" placeholder="document.querySelector('button')?.addEventListener('click', () =&gt; bmm.notify('hi'))"></textarea>
                     <button class="btn btn-secondary" id="nbe-page-create">${t('navedit.createPage') || 'Create page'}</button>
                 </div>
             </details>
@@ -487,12 +490,22 @@ export function openNavbarEditor(): void {
                 <button class="btn btn-xs btn-accent" id="nbe-import-apply">${t('common.apply') || 'Apply'}</button>
             </div>
             </div><!-- /nbe-scroll -->
+            <!-- Share/import used to be four sibling ghost buttons ("Share", "Import",
+                 ".bmmnav", "Import .bmmnav") — nothing said WHICH share carries what, and
+                 the field feedback was exactly that confusion. One menu, and every entry
+                 explains itself with a hint line: link = layout only, file = everything.
+                 Same ids inside, so every handler below survives unchanged. -->
             <div class="nbe-actions">
                 <button class="btn btn-ghost nbe-act" id="nbe-reset"><span class="nbe-act-ic">${svgWrap('<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>')}</span><span class="nbe-act-tx">${t('navedit.reset') || 'Reset'}</span></button>
-                <button class="btn btn-ghost nbe-act" id="nbe-share"><span class="nbe-act-ic">${svgWrap('<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/>')}</span><span class="nbe-act-tx">${t('cardorder.share') || 'Share'}</span></button>
-                <button class="btn btn-ghost nbe-act" id="nbe-import"><span class="nbe-act-ic">${svgWrap('<path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/>')}</span><span class="nbe-act-tx">${t('cardorder.import') || 'Import'}</span></button>
-                <button class="btn btn-ghost nbe-act" id="nbe-export-file"><span class="nbe-act-ic">${svgWrap('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M12 18v-6"/><path d="M9 15l3 3 3-3"/>')}</span><span class="nbe-act-tx">${t('navedit.exportFile') || '.bmmnav'}</span></button>
-                <button class="btn btn-ghost nbe-act" id="nbe-import-file"><span class="nbe-act-ic">${svgWrap('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M12 12v6"/><path d="M9 15l3-3 3 3"/>')}</span><span class="nbe-act-tx">${t('navedit.importFileNav') || 'Import .bmmnav'}</span></button>
+                <span class="nbe-share-menu-wrap">
+                    <button class="btn btn-ghost nbe-act" id="nbe-share-menu-btn"><span class="nbe-act-ic">${svgWrap('<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/>')}</span><span class="nbe-act-tx">${t('navedit.shareMenu') || 'Share / Import'} ▾</span></button>
+                    <span class="nbe-share-menu" id="nbe-share-menu" hidden>
+                        <button class="nbe-menu-item" id="nbe-share"><span class="nbe-mi-title">${t('navedit.shareLink') || 'Copy share link'}</span><span class="nbe-mi-hint">${t('navedit.shareLinkHint') || 'Layout & buttons only — no pages or uploaded icons'}</span></button>
+                        <button class="nbe-menu-item" id="nbe-import"><span class="nbe-mi-title">${t('navedit.importCode') || 'Paste a link / code'}</span><span class="nbe-mi-hint">${t('navedit.importCodeHint') || 'Apply a layout someone shared as a bmm:// link'}</span></button>
+                        <button class="nbe-menu-item" id="nbe-export-file"><span class="nbe-mi-title">${t('navedit.exportFile') || 'Export .bmmnav file'}</span><span class="nbe-mi-hint">${t('navedit.exportFileHint') || 'Everything: layout, custom pages, permissions, icons'}</span></button>
+                        <button class="nbe-menu-item" id="nbe-import-file"><span class="nbe-mi-title">${t('navedit.importFileNav') || 'Import .bmmnav file'}</span><span class="nbe-mi-hint">${t('navedit.importFileHint') || 'Restores a full export, pages included'}</span></button>
+                    </span>
+                </span>
                 <button class="btn btn-primary nbe-act" id="nbe-done"><span class="nbe-act-ic">${svgWrap('<path d="M20 6L9 17l-5-5"/>')}</span><span class="nbe-act-tx">${t('common.done') || 'Done'}</span></button>
             </div>
         </div>`;
@@ -744,6 +757,31 @@ export function openNavbarEditor(): void {
     // Pointer-based reorder (reliable in WebView2).
     list.querySelectorAll('.nbe-grip').forEach(grip =>
         grip.addEventListener('mousedown', (e) => startRowDrag(e as MouseEvent, grip.closest('.nbe-row') as HTMLElement, list, commit)));
+
+    // The Share/Import menu: opens upward (the actions bar is the modal's bottom edge),
+    // closes on any choice or outside click.
+    {
+        const btn = overlay.querySelector('#nbe-share-menu-btn') as HTMLElement | null;
+        const menu = overlay.querySelector('#nbe-share-menu') as HTMLElement | null;
+        if (btn && menu) {
+            btn.addEventListener('click', (e) => { e.stopPropagation(); menu.hidden = !menu.hidden; });
+            menu.addEventListener('click', () => { menu.hidden = true; });
+            overlay.addEventListener('click', () => { menu.hidden = true; });
+        }
+    }
+
+    // The page code editors are real editors, not form fields: Tab inserts a tab
+    // instead of leaving the textarea. Escape still exits for keyboard users.
+    overlay.querySelectorAll('.nbe-code').forEach(ta =>
+        ta.addEventListener('keydown', (e) => {
+            const ev = e as KeyboardEvent;
+            if (ev.key !== 'Tab') return;
+            ev.preventDefault();
+            const el = ta as HTMLTextAreaElement;
+            const s = el.selectionStart, epos = el.selectionEnd;
+            el.value = el.value.slice(0, s) + '\t' + el.value.slice(epos);
+            el.selectionStart = el.selectionEnd = s + 1;
+        }));
 
     overlay.querySelector('#nbe-close')?.addEventListener('click', () => overlay.remove());
     overlay.querySelector('#nbe-done')?.addEventListener('click', () => overlay.remove());

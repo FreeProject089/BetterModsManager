@@ -5565,7 +5565,8 @@ body.tut-docked.tut-min .app-shell {
 .nav-customize-btn { opacity: 0.6; }
 .nav-customize-btn:hover { opacity: 1; }
 .nbe-modal {
-    width: min(460px, 92vw); max-height: 84vh; display: flex; flex-direction: column;
+    /* 460px made the custom-page editors a peephole; the modal is a workspace now. */
+    width: min(720px, 94vw); max-height: 90vh; display: flex; flex-direction: column;
     padding: 20px 22px; background: var(--bmm-bg-elevated); border: 1px solid var(--border);
     border-radius: 16px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.7), 0 0 0 1px var(--bmm-s05);
     animation: modalIn 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -5739,7 +5740,38 @@ body.tut-docked.tut-min .app-shell {
 .crashmgr-fileview-head [data-fileclose] { margin-left: auto; flex-shrink: 0; }
 .crashmgr-fileview-body { max-height: 340px; }
 
-.nbe-code { font-family: var(--font-mono, monospace); font-size: 12px; resize: vertical; min-height: 56px; }
+.nbe-code { font-family: var(--font-mono, monospace); font-size: 12px; resize: vertical; min-height: 56px; tab-size: 4; }
+
+/* The Share/Import menu in the editor's actions bar — opens UPWARD (the bar is the
+   modal's bottom edge). Opaque surface: a translucent menu renders its labels over
+   whatever the modal shows behind it. */
+.nbe-share-menu-wrap { position: relative; display: inline-flex; flex: 1 1 auto; min-width: 0; }
+.nbe-share-menu-wrap > .nbe-act { flex: 1 1 auto; }
+.nbe-share-menu {
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 280px;
+    padding: 6px;
+    background: var(--bmm-bg-overlay);
+    border: 1px solid var(--bmm-border-hover, var(--bmm-border));
+    border-radius: 10px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+    z-index: 20;
+}
+.nbe-share-menu[hidden] { display: none; }
+.nbe-menu-item {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+    width: 100%; padding: 7px 10px; text-align: left;
+    background: transparent; border: 0; border-radius: 7px;
+    color: var(--text); cursor: pointer;
+}
+.nbe-menu-item:hover { background: var(--bmm-bg-hover); }
+.nbe-mi-title { font-size: 13px; font-weight: 600; }
+.nbe-mi-hint { font-size: 11px; color: var(--text-muted); }
 .nbe-pages > summary { color: var(--accent); }
 .nbe-page-block { border: 1px solid var(--border); border-radius: 8px; background: rgba(255,255,255,0.025); padding: 8px; margin-bottom: 8px; }
 .nbe-page-row { display: flex; align-items: center; gap: 10px; }
