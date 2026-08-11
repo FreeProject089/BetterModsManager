@@ -124,3 +124,54 @@ testables hors ligne. À couvrir en premier.
 
 Tant que ce n'est pas tranché, l'étape 1 peut être écrite : elle ne dépend d'aucune des
 trois réponses.
+
+---
+
+# État au 11 août 2026
+
+## Décision prise : pas de dépendance FTP
+
+Le plan ci-dessus proposait FTP/SFTP pour **lister** le serveur et **y renvoyer** le
+manifeste. À l'implémentation, ces deux moitiés se sont révélées très inégales.
+
+Le listing est la moitié qui compte — c'est elle qui transforme « retélécharger tout le
+repo » en « hasher le mod qui a changé ». Et nginx la publie déjà avec `autoindex on`, sur
+le même http(s) que les téléchargements. Donc **aucune dépendance, aucun mot de passe
+stocké, aucun FTP en clair**.
+
+Le renvoi du `repo.json` est un petit fichier, uploadé avec le client FTP dont l'auteur se
+sert déjà pour les mods. Ajouter `ssh2`/`suppaftp` et stocker un mot de passe serveur pour
+automatiser *ça* était disproportionné.
+
+`repo_credentials.rs` garde la forme d'un transport si on veut l'automatisation plus tard.
+
+## Fait et testé (69/69)
+
+| Couche | Fichier | Tests |
+|---|---|---|
+| Listing HTTP + crawl borné | `commands/repo_autoindex.rs` | 7 |
+| Plan de rafraîchissement | `commands/repo_remote.rs` | 8 |
+| Identifiants (session seule) | `commands/repo_credentials.rs` | 5 |
+| `RepoFile.mtime` | `models/repo.rs` | via les précédents |
+
+Commande exposée : `plan_remote_repo_refresh(baseUrl, manifestPath, forceFull)` — **lecture
+seule**, dit ce qui serait hashé, réutilisé, retiré, et combien d'octets à télécharger.
+
+## Reste à faire
+
+**L'exécution** — `refresh_repo_from_server()` : télécharger les fichiers du plan, les
+hasher via `compute_file_hash_and_chunks`, fusionner avec les entrées reprises, regrouper
+par premier segment de chemin, resigner, écrire.
+
+Points à ne pas rater en l'écrivant :
+
+- Une entrée reprise doit garder ses **chunk hashes**, pas seulement son sha256 — les
+  perdre désactiverait la reprise par plages pour des fichiers que personne n'a touchés.
+- Le `mtime` écrit doit être **celui du listing**, pas `now()` : le rafraîchissement suivant
+  compare à ce que le serveur rapporte, et notre horloge ferait paraître tout modifié.
+- Les **métadonnées du mod** (nom, tags, changelog, update sources) viennent du manifeste
+  précédent. Un rafraîchissement porte sur le contenu des fichiers ; réinitialiser le nom
+  d'un mod à son nom de dossier annulerait une curation que personne n'a demandé d'annuler.
+- Resigner avec `author_id`/`signature` remis à `None` d'abord, comme partout ailleurs.
+
+**L'UI** — une carte dans l'onglet Host, à côté de « Manifeste seul ».
