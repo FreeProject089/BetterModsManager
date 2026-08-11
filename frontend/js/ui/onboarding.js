@@ -133,15 +133,24 @@ function _closeAndOpenHub() {
     if (appShell)
         appShell.style.pointerEvents = '';
     const overlay = document.getElementById('onboarding-overlay');
+    // First launch (and therefore also right after a factory reset, which clears
+    // localStorage and reboots into a first launch): offer the look BEFORE the lessons.
+    // The style modal opens first and the hub follows when it closes — Skip is just
+    // closing it. Sequenced by callback so neither overlay fights the other.
+    const styleThenHub = () => {
+        void import('./style-modal.js')
+            .then((m) => m.openStyleModal(() => openTutorialHub()))
+            .catch(() => openTutorialHub()); // the hub must never be lost to a load failure
+    };
     if (overlay) {
         overlay.classList.add('closing');
         overlay.addEventListener('animationend', () => {
             overlay.remove();
-            openTutorialHub();
+            styleThenHub();
         }, { once: true });
     }
     else {
-        openTutorialHub();
+        styleThenHub();
     }
 }
 //# sourceMappingURL=onboarding.js.map

@@ -112,7 +112,16 @@ export function toast(message, type = 'info', duration = 3000, icon = '') {
         el.classList.add('removing');
         el.addEventListener('animationend', () => el.remove(), { once: true });
     };
-    setTimeout(remove, duration);
+    // `duration: 0` = stays until the caller dismisses it. A "working…" toast on a
+    // fixed timer either vanishes while the work is still running or, worse, lingers
+    // next to the finished result — which is how the integrity check ended up showing
+    // "checking…" beside its own completed report.
+    const timer = duration > 0 ? setTimeout(remove, duration) : null;
+    return () => {
+        if (timer)
+            clearTimeout(timer);
+        remove();
+    };
 }
 // ── Tasky Sync Loading ──────────────────────────────────────
 export function startTaskyLoader(reverse = false) {
@@ -796,6 +805,9 @@ async function main() {
     await initTitlebar();
     initModlist();
     initRepo();
+    // After the UI is up, never before: this makes network calls, and a slow or unreachable
+    // repo must not delay the window appearing.
+    void import('../features/repo/auto-sync.js').then((m) => m.runAutoSyncCheck());
     initInteractiveDocs(); // diagram modal engine + Tasky tooltips (still used app-wide)
     initDocsHub(); // the rebuilt Help & documentation hub (owns #view-docs)
     initCommands(); // command registry + Ctrl+K palette + global shortcut dispatcher
@@ -919,6 +931,12 @@ async function main() {
         await waitForModalClosed('modal-privacy');
     }
     // 2. Crash report UI wiring and check
+    // The getting-started checklist measures real state now (see gs-checklist.ts).
+    try {
+        const { initSetupChecklist } = await import('./gs-checklist.js');
+        initSetupChecklist();
+    }
+    catch { /* decorative if it fails */ }
     initCrashReportUI();
     await checkPreviousCrash();
     await waitForModalClosed('modal-crash-report');
