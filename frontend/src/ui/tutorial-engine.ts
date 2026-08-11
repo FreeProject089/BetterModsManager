@@ -1207,11 +1207,23 @@ function _setDockReserved(on: boolean): void {
 /** "Phantom" demo: float a ghost cursor from the coach card to the current
  *  spotlight target and play a click pulse — shows WHERE/how to interact without
  *  actually clicking anything (safe). */
-function _showMe(): void {
+function _showMe(navigated: boolean = false): void {
     // Visit EVERY highlighted target in order (so multi-field steps demonstrate
     // each field, not just the "next" button).
     const hls = Array.from(document.querySelectorAll('.tut-highlight')) as HTMLElement[];
-    if (!hls.length) return;
+    if (!hls.length) {
+        // No highlight usually means the user wandered to another view — the targets
+        // exist on the step's page, not this one. The button silently doing nothing here
+        // is what made it read as broken: it worked, but only if you were already where
+        // it assumed. Go to the step's page first, give the view a beat to render, then
+        // demonstrate. `navigated` stops a second hop if the page really has no targets.
+        const step = _currentStep();
+        if (!navigated && step?.nav) {
+            _navigate(step.nav);
+            setTimeout(() => { _refreshNavHint(); _renderStep(); setTimeout(() => _showMe(true), 350); }, 250);
+        }
+        return;
+    }
     const color = _tutorial?.color ?? 'var(--accent)';
 
     document.getElementById('tut-ghost-cursor')?.remove();
