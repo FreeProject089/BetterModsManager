@@ -1,0 +1,90 @@
+/* Server repo → Sync: weight and grouping.
+ *
+ * Loaded after main.css, so this overrides without touching the markup — the same
+ * approach tutorial.css takes, and for the same reason: every id here is read by the
+ * tutorial engine and by repo-sync.ts, so restructuring the HTML would break things no
+ * stylesheet can see.
+ *
+ * Everything below is targeted by ID, not by position. A structural selector would break
+ * the first time a row gains a button.
+ *
+ * What was wrong, from reading the markup rather than the screen:
+ *
+ *   · Four buttons sat in one row under the URL field at equal weight — Fetch, plus
+ *     Browse, History and Check updates. Only one of them acts on what you just typed;
+ *     the other three go somewhere else entirely. Nothing said which to press. (The same
+ *     flaw the tutorial hub had, and tutorial.css already documents.)
+ *   · Start sync — the thing the whole panel exists for — was one button among several,
+ *     styled like the rest.
+ *   · The three folder pickers repeated the same shape three times with no shared rhythm.
+ */
+
+/* ── The one button that acts on the URL you just typed ─────────────────────── */
+#btn-fetch-repo-info {
+    font-weight: 700;
+    padding-inline: 18px;
+}
+/* The other three are destinations, not actions on this form. Quieter, and pushed away
+   from the primary so the eye does not read four equal choices. */
+#btn-browse-repos,
+#btn-repo-history,
+#btn-check-mod-updates {
+    font-weight: 500;
+    color: var(--bmm-text-secondary);
+}
+#btn-browse-repos { margin-inline-start: auto; }
+#btn-browse-repos:hover,
+#btn-repo-history:hover,
+#btn-check-mod-updates:hover { color: var(--bmm-text-primary); }
+
+/* ── The folder pickers get one rhythm instead of three ─────────────────────── */
+#btn-pick-sync-game,
+#btn-pick-sync-mods,
+#btn-pick-sync-backup {
+    flex: none;
+    min-width: 108px;
+    justify-content: center;
+}
+
+/* ── The panel's purpose ────────────────────────────────────────────────────── */
+#btn-start-repo-sync {
+    width: 100%;
+    padding-block: 12px;
+    font-size: 14px;
+    font-weight: 800;
+    margin-top: 4px;
+}
+/* Run controls read as a pair, and as secondary to the thing they interrupt. */
+#btn-pause-sync,
+#btn-cancel-sync {
+    flex: 1 1 0;
+    font-weight: 600;
+}
+#btn-cancel-sync { color: var(--bmm-danger); }
+
+/* A link, not a button competing with Start. */
+#btn-docs-resumable {
+    background: none;
+    border: none;
+    padding: 6px 2px;
+    font-size: 11px;
+    color: var(--bmm-text-muted);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+#btn-docs-resumable:hover { color: var(--bmm-accent); }
+
+/* ── Breathing room between the three stacked cards ─────────────────────────── */
+#repo-sync-info-card { margin-block: 14px; }
+#repo-sync-paths-section { margin-block-start: 14px; }
+
+/* The discovery verdict sits under its button; it is a result, not a peer of the card. */
+#discover-result {
+    margin-top: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--bmm-border);
+    border-radius: 8px;
+    background: var(--bmm-bg-base);
+    font-size: 11px;
+    line-height: 1.55;
+}
