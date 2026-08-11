@@ -1220,7 +1220,7 @@ function renderCharts(container: HTMLElement, data: BenchmarkPoint[], highlightI
 
     drawChart(mainCanvas, data, [
         { key: 'cpu_usage', color: cv('--bmm-chart-cpu', '#3b82f6'), label: 'CPU', fmt: v => `${v.toFixed(1)}%` },
-        { key: 'ram_usage', color: cv('--bmm-chart-ram', '#e2e8f0'), label: 'RAM', fmt: v => formatUnit(v, 'MB') }
+        { key: 'ram_usage', color: cv('--bmm-chart-ram', '#94a3b8'), label: 'RAM', fmt: v => formatUnit(v, 'MB') }
     ], highlightIndex);
 
     drawChart(ioCanvas, data, [

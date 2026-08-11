@@ -70,7 +70,12 @@
 
     /* ── Benchmark / performance chart series ─────────────────────────────── */
     --bmm-chart-cpu:        #3b82f6;
-    --bmm-chart-ram:        #ffffff;
+    /* RAM is the chart's neutral series: it follows the theme's INK, not a fixed white.
+       Fixed #ffffff was invisible on every light theme — the 32px live value and the
+       whole RAM line, gone — and no built-in theme overrides chart tokens (0/12), so
+       nothing ever corrected it. On dark themes this resolves to near-white: unchanged.
+       Same family as debug.css's --text-primary pin and the inline washes. */
+    --bmm-chart-ram:        var(--bmm-text-primary);
     --bmm-chart-disk-read:  #fbbf24;
     --bmm-chart-disk-write: #f87171;
 
