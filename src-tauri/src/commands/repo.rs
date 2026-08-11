@@ -1984,6 +1984,15 @@ pub async fn fetch_repo_info(url: String, creator_id: Option<String>, password: 
                 _ => "repo.errForbidden".to_string(),
             });
         }
+        // 404 & co: no repo.json AT THAT PATH. This is the normal case for a server that
+        // just serves a folder of mods — the user pastes .../mods/ and the manifest probe
+        // misses. The first version only fell back when a 200 body failed to PARSE, so
+        // the commonest shape of the very server this feature was built for died right
+        // here with errInvalidRepo. Reported from the field with the exact URL.
+        let base = target_url.trim_end_matches("repo.json").trim_end_matches('/').to_string();
+        if let Ok(repo) = discovered_repo(&base, &client).await {
+            return Ok(repo);
+        }
         return Err("repo.errInvalidRepo".to_string());
     }
 
@@ -3927,5 +3936,45 @@ mod listing_fallback_tests {
         assert_eq!(mods[0].id, "m");
         assert_eq!(mods[0].files[0].relative_path, "sub/f.bin");
         assert_eq!(mods[0].files[0].size, 42);
+    }
+}
+
+#[cfg(test)]
+mod live_fallback_tests {
+    //! Runs ONLY when the .Assets test server is up (`python serve_test_repo.py`,
+    //! port 8777). Skips silently otherwise: CI has no server, and a test that fails
+    //! for environmental reasons teaches people to ignore red.
+
+    use super::fetch_repo_info;
+
+    fn server_up() -> bool {
+        std::net::TcpStream::connect_timeout(
+            &"127.0.0.1:8777".parse().unwrap(),
+            std::time::Duration::from_millis(300),
+        )
+        .is_ok()
+    }
+
+    /// The exact reproduction from the field: the URL the user pasted, verbatim.
+    /// `/mods/` has no repo.json, so the manifest probe 404s — and the old code
+    /// surfaced repo.errInvalidRepo instead of reading the directory index.
+    #[tokio::test]
+    async fn a_bare_mods_folder_url_fetches_as_a_discovered_repo() {
+        if !server_up() { eprintln!("skipped: test server not running"); return; }
+
+        let repo = fetch_repo_info("http://127.0.0.1:8777/mods/".into(), None, None)
+            .await
+            .expect("the fallback must synthesise a repo from the listing");
+
+        assert_eq!(repo.profiles.len(), 1);
+        assert_eq!(repo.profiles[0].id, "discovered");
+        assert!(!repo.profiles[0].mods.is_empty(), "the listing has mods in it");
+        // Nothing vouches for these files: no author, no signature, empty hashes.
+        assert!(repo.signature.is_none() && repo.author_id.is_none());
+        for m in &repo.profiles[0].mods {
+            for f in &m.files {
+                assert!(f.sha256_hash.is_empty(), "{} got a hash from nowhere", f.relative_path);
+            }
+        }
     }
 }
