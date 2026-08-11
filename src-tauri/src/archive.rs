@@ -292,3 +292,54 @@ pub fn mod_read_root(mod_folder: &Path) -> PathBuf {
         mod_folder.to_path_buf()
     }
 }
+
+#[cfg(test)]
+mod path_safety_tests {
+    use super::is_unsafe_rel_path;
+
+    /// This guard is what stands between a hostile mod archive and an arbitrary file write.
+    ///
+    /// RUSTSEC-2026-0245 (CVSS 8.3, CWE-23/CWE-36) is a path traversal in
+    /// `sevenz_rust::decompress_impl` with **no fixed upstream version**. BMM does not rely on
+    /// the crate: extract_to() enumerates the archive index and refuses the whole file if any
+    /// entry would escape, before decompression runs. The same guard covers `.rar`.
+    ///
+    /// So these cases are not style checks — each one is a way out of the destination
+    /// directory, and the mitigation has no test above it otherwise.
+    #[test]
+    fn an_entry_that_could_escape_the_destination_is_refused() {
+        for bad in [
+            "../evil.dll",
+            "a/../../evil.dll",
+            "a/b/../../../evil.dll",
+            r"..\evil.dll",
+            r"a\..\..\evil.dll",
+            "/etc/passwd",
+            r"\Windows\System32\evil.dll",
+            r"\server\share\evil.dll",   // UNC — caught by the leading separator
+            "C:/Windows/evil.dll",
+            r"C:\Windows\evil.dll",
+            "z:/anything",
+            "",
+            "   ",
+        ] {
+            assert!(is_unsafe_rel_path(bad), "{bad:?} must be refused");
+        }
+    }
+
+    #[test]
+    fn ordinary_mod_paths_still_extract() {
+        // A guard that refuses real archives is a guard people turn off.
+        for ok in [
+            "readme.txt",
+            "Data/textures/a.dds",
+            r"Data\textures\a.dds",
+            "mod..name/file.pak",        // dots inside a segment are not traversal
+            "a/..b/c.pak",
+            "folder.with.dots/x.pak",
+            "UPPER/Mixed_Case-1.2.pak",
+        ] {
+            assert!(!is_unsafe_rel_path(ok), "{ok:?} must be allowed");
+        }
+    }
+}
