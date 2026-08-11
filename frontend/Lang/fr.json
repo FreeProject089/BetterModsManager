@@ -6872,5 +6872,6 @@
   "repo.confirmClearWhitelist": "Vider toute la liste blanche ? Tout le monde pourra de nouveau télécharger.",
   "settings.devToolsLocked": "DevTools verrouillés. Déverrouille-les dans les Paramètres.",
   "settings.debugUnlocked": "Mode debug déverrouillé",
-  "settings.debugHidden": "Section debug masquée"
+  "settings.debugHidden": "Section debug masquée",
+  "privacy.accept": "J'ai lu la politique"
 }

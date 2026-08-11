@@ -1066,14 +1066,24 @@ export function showConsentModal(): Promise<void> {
             });
         }
 
-        overlay.querySelector('#analytics-accept')?.addEventListener('click', async () => {
-            if (benchToggle) localStorage.setItem(BENCH_ALLOW_KEY, benchToggle.checked ? '1' : '0');
-            if (replayToggle) localStorage.setItem(REPLAY_KEY, replayToggle.checked ? '1' : '0');
-            if (replayFullToggle) localStorage.setItem(REPLAY_FULL_KEY, replayFullToggle.checked ? '1' : '0');
-            await setConsent(true);
-            refreshPrivacyUI();
-            close();
-        });
-        overlay.querySelector('#analytics-decline')?.addEventListener('click', async () => { await setConsent(false); refreshPrivacyUI(); close(); });
+        // The modal closes on the CLICK, not on the work. Accept used to await
+        // setConsent(true) → startCollection() → analytics_system_profile with the
+        // extra hardware report — WMI queries (motherboard serial, BIOS, disks) that
+        // take seconds on Windows. The button looked dead, so people hammered it.
+        // The user's decision is the click; recording and acting on it can follow.
+        let decided = false;
+        const decide = (enabled: boolean) => {
+            if (decided) return;      // a second click must not re-run anything
+            decided = true;
+            if (enabled) {
+                if (benchToggle) localStorage.setItem(BENCH_ALLOW_KEY, benchToggle.checked ? '1' : '0');
+                if (replayToggle) localStorage.setItem(REPLAY_KEY, replayToggle.checked ? '1' : '0');
+                if (replayFullToggle) localStorage.setItem(REPLAY_FULL_KEY, replayFullToggle.checked ? '1' : '0');
+            }
+            close();                  // instant feedback — the overlay is gone
+            void setConsent(enabled).then(() => refreshPrivacyUI()).catch(() => {});
+        };
+        overlay.querySelector('#analytics-accept')?.addEventListener('click', () => decide(true));
+        overlay.querySelector('#analytics-decline')?.addEventListener('click', () => decide(false));
     });
 }

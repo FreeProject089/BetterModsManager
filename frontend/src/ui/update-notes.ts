@@ -1336,6 +1336,29 @@ export async function openPrivacyModal() {
     const closeBtn = document.getElementById('btn-privacy-close');
     if (closeBtn) closeBtn.onclick = () => modal.classList.remove('open');
     modal.onclick = (e) => { if (e.target === modal) modal.classList.remove('open'); };
+
+    // An explicit accept, but only while the policy has not been accepted yet. Field
+    // feedback: the modal offered nothing but the X, so a first-run user could only
+    // DISMISS the policy — never agree to it — and reopening it later still behaved as
+    // if they had never seen it. Once accepted, the footer never reappears: reading the
+    // policy again is not a request to re-consent.
+    const body = modal.querySelector('.legal-body') as HTMLElement | null;
+    modal.querySelector('#privacy-accept-row')?.remove();
+    if (body && localStorage.getItem(PRIVACY_SEEN_KEY) !== 'true') {
+        const row = document.createElement('div');
+        row.id = 'privacy-accept-row';
+        row.style.cssText = 'display:flex;justify-content:flex-end;padding:12px 0 0;border-top:1px solid var(--border);margin-top:14px';
+        const btn = document.createElement('button');
+        btn.className = 'btn btn-primary';
+        btn.textContent = t('privacy.accept') || 'I have read the policy';
+        btn.addEventListener('click', () => {
+            try { localStorage.setItem(PRIVACY_SEEN_KEY, 'true'); } catch { /* best effort */ }
+            row.remove();
+            modal.classList.remove('open');
+        });
+        row.append(btn);
+        body.append(row);
+    }
 }
 
 // Global expose for onclick
