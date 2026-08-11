@@ -88,3 +88,91 @@
     font-size: 11px;
     line-height: 1.55;
 }
+
+/* ═══ Server repo → Host ═══════════════════════════════════════════════════════
+ *
+ * 26 buttons doing five separate jobs, every one of them at the same weight. Read from
+ * the markup, the jobs are: export a repo, generate a manifest only, refresh one from a
+ * server, serve it, and build a mini-server. Each has exactly ONE button that does the
+ * thing and several that help you get there — pick a folder, browse, preview — plus
+ * side-trips into management that are not part of the job at all.
+ *
+ * Same treatment as Sync above, same constraint: by ID, never by position, and no markup
+ * touched. Every id below verified present in index.html.
+ */
+
+/* ── The five that actually do something ───────────────────────────────────── */
+#btn-start-repo-export,
+#btn-generate-manifest,
+#btn-remote-refresh,
+#btn-toggle-repo-server,
+#btn-generate-mini-server {
+    font-weight: 800;
+    padding-block: 10px;
+    padding-inline: 20px;
+}
+
+/* ── The ones that only get you ready ──────────────────────────────────────── */
+#btn-pick-repo-export,
+#btn-manifest-browse,
+#btn-remote-browse,
+#btn-pick-repo-host,
+#btn-pick-mini-server-repo,
+#btn-pick-mini-folder {
+    flex: none;
+    min-width: 108px;
+    justify-content: center;
+    font-weight: 500;
+}
+
+/* Preview before you commit. Deliberately not as loud as the refresh it precedes, but
+   not a link either — skipping it is how you find out what changed by doing it. */
+#btn-remote-plan { font-weight: 600; }
+
+/* ── Interrupt and side-trip ───────────────────────────────────────────────── */
+#btn-cancel-repo-export { color: var(--bmm-danger); font-weight: 600; }
+
+/* Management, not part of hosting. They sit next to Start/Stop and read like steps of it. */
+#btn-open-monitoring,
+#btn-open-whitelist,
+#btn-open-bans,
+#btn-open-repo-update,
+#btn-open-repo-hub,
+#btn-refresh-repo-profiles {
+    font-weight: 500;
+    color: var(--bmm-text-secondary);
+}
+#btn-open-monitoring:hover,
+#btn-open-whitelist:hover,
+#btn-open-bans:hover,
+#btn-open-repo-update:hover,
+#btn-open-repo-hub:hover,
+#btn-refresh-repo-profiles:hover { color: var(--bmm-text-primary); }
+
+/* ── Copy buttons are utilities, not choices ───────────────────────────────── */
+#btn-copy-my-creator-id,
+#btn-copy-repo-url,
+#btn-copy-repo-public-url,
+#btn-copy-repo-tunnel-url,
+#toggle-repo-export-pass {
+    flex: none;
+    padding: 5px 10px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--bmm-text-muted);
+}
+#btn-copy-my-creator-id:hover,
+#btn-copy-repo-url:hover,
+#btn-copy-repo-public-url:hover,
+#btn-copy-repo-tunnel-url:hover,
+#toggle-repo-export-pass:hover { color: var(--bmm-accent); }
+
+/* ── The folder/profile choice is one control, not two buttons ─────────────── */
+#btn-manifest-mode-folder,
+#btn-manifest-mode-profile {
+    flex: 1 1 0;
+    font-weight: 600;
+    border-radius: 0;
+}
+#btn-manifest-mode-folder { border-start-start-radius: 7px; border-end-start-radius: 7px; }
+#btn-manifest-mode-profile { border-start-end-radius: 7px; border-end-end-radius: 7px; margin-inline-start: -1px; }
