@@ -213,15 +213,11 @@ body.tut-dock-left  .tut-engine-panel { right: auto; left: 0;  border-right: 1px
 
 /* The app makes room on that side instead of underneath. !important mirrors the bottom
    dock's rule: these fight the same inline/layout padding it does. */
-body.tut-docked.tut-dock-right #app-shell,
-body.tut-docked.tut-dock-right .app-body,
-body.tut-docked.tut-dock-right .main-content {
+body.tut-docked.tut-dock-right .app-shell {
     padding-bottom: 0 !important;
     padding-right: var(--tut-dock-w, 360px) !important;
 }
-body.tut-docked.tut-dock-left #app-shell,
-body.tut-docked.tut-dock-left .app-body,
-body.tut-docked.tut-dock-left .main-content {
+body.tut-docked.tut-dock-left .app-shell {
     padding-bottom: 0 !important;
     padding-left: var(--tut-dock-w, 360px) !important;
 }
@@ -241,12 +237,8 @@ body.tut-dock-left  .tut-engine-panel.minimized {
     max-height: 46px;
     min-height: 46px;
 }
-body.tut-docked.tut-min.tut-dock-right #app-shell,
-body.tut-docked.tut-min.tut-dock-right .app-body,
-body.tut-docked.tut-min.tut-dock-right .main-content,
-body.tut-docked.tut-min.tut-dock-left #app-shell,
-body.tut-docked.tut-min.tut-dock-left .app-body,
-body.tut-docked.tut-min.tut-dock-left .main-content {
+body.tut-docked.tut-min.tut-dock-right .app-shell,
+body.tut-docked.tut-min.tut-dock-left .app-shell {
     padding-left: 0 !important;
     padding-right: 0 !important;
     padding-bottom: 46px !important;
@@ -262,12 +254,8 @@ body.tut-docked.tut-min.tut-dock-left .main-content {
         max-height: var(--tut-dock-h, 200px);
         border-radius: 16px 16px 0 0;
     }
-    body.tut-docked.tut-dock-right #app-shell,
-    body.tut-docked.tut-dock-right .app-body,
-    body.tut-docked.tut-dock-right .main-content,
-    body.tut-docked.tut-dock-left #app-shell,
-    body.tut-docked.tut-dock-left .app-body,
-    body.tut-docked.tut-dock-left .main-content {
+    body.tut-docked.tut-dock-right .app-shell,
+    body.tut-docked.tut-dock-left .app-shell {
         padding-left: 0 !important;
         padding-right: 0 !important;
         padding-bottom: var(--tut-dock-h, 200px) !important;

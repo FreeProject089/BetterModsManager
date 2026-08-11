@@ -4555,10 +4555,13 @@ select.input-field option {
 }
 
 /* The app makes room. Set on <body> while a lesson runs, cleared when it ends, so the
-   layout returns to exactly what it was rather than to a hardcoded default. */
-body.tut-docked #app-shell,
-body.tut-docked .app-body,
-body.tut-docked .main-content {
+   layout returns to exactly what it was rather than to a hardcoded default.
+
+   `.app-shell` — a CLASS. This rule used to read `#app-shell, .app-body, .main-content`:
+   an id that is actually a class, and two selectors that exist nowhere in the app. It
+   therefore matched NOTHING, and the dock overlaid the content it claimed to make room
+   for, for as long as it has existed. Found by check-css-targets.mjs, not by looking. */
+body.tut-docked .app-shell {
     padding-bottom: var(--tut-dock-h, 200px) !important;
 }
 /* The spotlight ring must not be readable UNDER the dock — a highlighted control scrolled
@@ -4571,9 +4574,7 @@ body.tut-docked .tut-spotlight-target {
     max-height: 46px;
     min-height: 46px;
 }
-body.tut-docked.tut-min #app-shell,
-body.tut-docked.tut-min .app-body,
-body.tut-docked.tut-min .main-content {
+body.tut-docked.tut-min .app-shell {
     padding-bottom: 46px !important;
 }
 
