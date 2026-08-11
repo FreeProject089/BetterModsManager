@@ -25,6 +25,7 @@
 //! silently keep a stale hash.
 
 use crate::commands::repo_remote::RemoteEntry;
+use std::collections::HashMap;
 
 /// One row of a listing.
 #[derive(Debug, Clone, PartialEq)]
@@ -396,5 +397,248 @@ pub async fn plan_remote_repo_refresh(
         }),
         warnings: plan.warnings,
         download_bytes,
+    })
+}
+
+// ---------------------------------------------------------------------------
+// The refresh itself
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoteRefreshReport {
+    pub manifest_path: String,
+    pub mods: usize,
+    pub files: usize,
+    pub hashed: usize,
+    pub reused: usize,
+    pub removed: Vec<String>,
+    pub downloaded_bytes: u64,
+    pub signed: bool,
+    pub warnings: Vec<String>,
+}
+
+/// Bring a manifest back in line with what the server is actually serving.
+///
+/// One call: list the server, work out what changed, download only that, and write a freshly
+/// signed `repo.json` next to wherever the old one lived. The author then uploads that one
+/// file with the client they already use for the mods themselves — BMM never needs write
+/// access to the server.
+///
+/// The existing local paths (`export_server_repo`, `generate_repo_manifest`) are untouched.
+/// This is a third route, for the case where the mods are only on the server.
+#[tauri::command]
+pub async fn refresh_repo_from_server(
+    handle: tauri::AppHandle,
+    window: tauri::Window,
+    base_url: String,
+    manifest_path: String,
+    force_full: bool,
+) -> Result<RemoteRefreshReport, String> {
+    use crate::commands::repo_remote::plan_refresh;
+    use crate::models::repo::{RepoFile, RepoMod, RepoProfile, ServerRepo};
+    use tauri::Emitter;
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(300))
+        .build()
+        .map_err(|e| e.to_string())?;
+    let base = base_url.trim().trim_end_matches('/').to_string();
+
+    let _ = window.emit("bmm://repo-export-progress", serde_json::json!({
+        "step": "Reading the server listing", "progress": 2.0, "current_file": "",
+    }));
+    let listing = crawl(&base, &client).await?;
+
+    let previous: Option<ServerRepo> = std::fs::read_to_string(&manifest_path)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok());
+    let mine = crate::commands::security::get_creator_id(handle.clone()).ok();
+    let plan = plan_refresh(
+        &listing,
+        previous.as_ref(),
+        mine.as_deref(),
+        force_full,
+        |r| crate::commands::security::verify_repo_signature(r.clone()),
+    );
+
+    // Every file the old manifest recorded, so a carried-forward entry keeps its CHUNK
+    // hashes as well as its sha256. Dropping those would silently disable ranged resume for
+    // files nobody even touched.
+    let mut recorded: HashMap<String, RepoFile> = HashMap::new();
+    if let Some(prev) = &previous {
+        for p in &prev.profiles {
+            for m in &p.mods {
+                for f in &m.files {
+                    let key = format!("{}/{}", m.id, f.relative_path.replace('\\', "/"));
+                    recorded.insert(key, f.clone());
+                }
+            }
+        }
+    }
+    let mtimes: HashMap<&str, Option<i64>> =
+        listing.iter().map(|e| (e.rel_path.as_str(), e.mtime)).collect();
+
+    let mut files: HashMap<String, RepoFile> = HashMap::new();
+    for path in &plan.carry_forward {
+        if let Some(f) = recorded.get(path) {
+            files.insert(path.clone(), f.clone());
+        }
+    }
+
+    let tmp_dir = std::env::temp_dir().join("bmm_remote_refresh");
+    std::fs::create_dir_all(&tmp_dir).map_err(|e| e.to_string())?;
+    let mut downloaded_bytes = 0u64;
+    let mut warnings = plan.warnings.clone();
+    let total = plan.fetch.len().max(1);
+
+    for (i, path) in plan.fetch.iter().enumerate() {
+        let _ = window.emit("bmm://repo-export-progress", serde_json::json!({
+            "step": format!("Hashing {} ({}/{})", path, i + 1, plan.fetch.len()),
+            "progress": 5.0 + (i as f32 / total as f32) * 90.0,
+            "current_file": path,
+        }));
+
+        let encoded: Vec<String> = path.split('/').map(encode_segment).collect();
+        let url = format!("{}/{}", base, encoded.join("/"));
+        let resp = client.get(&url).send().await.map_err(|e| format!("{path}: {e}"))?;
+        if !resp.status().is_success() {
+            return Err(format!("{path}: HTTP {}", resp.status()));
+        }
+        let bytes = resp.bytes().await.map_err(|e| format!("{path}: {e}"))?;
+        downloaded_bytes += bytes.len() as u64;
+
+        // Staged to a file so the existing, tested chunking path is reused verbatim rather
+        // than reimplemented against an in-memory buffer.
+        let tmp = tmp_dir.join("staging.bin");
+        std::fs::write(&tmp, &bytes).map_err(|e| e.to_string())?;
+        let need_chunks = bytes.len() > crate::commands::repo::CHUNK_SIZE;
+        let (hash, chunks) =
+            crate::commands::repo::compute_file_hash_and_chunks(&tmp, need_chunks)?;
+        let _ = std::fs::remove_file(&tmp);
+
+        // Same size, different bytes. Legitimate edits almost always move the size, so this
+        // is the shape of tampering and it is free to notice here.
+        if let Some(old) = recorded.get(path) {
+            if super::repo_remote::suspicious_same_size_change(
+                old.size, &old.sha256_hash, bytes.len() as u64, &hash,
+            ) {
+                warnings.push(format!("{path}: content changed but size did not"));
+            }
+        }
+
+        let rel = path.splitn(2, '/').nth(1).unwrap_or(path).to_string();
+        files.insert(path.clone(), RepoFile {
+            relative_path: rel,
+            size: bytes.len() as u64,
+            sha256_hash: hash,
+            chunks,
+            // The SERVER's timestamp, not ours. The next refresh compares against what the
+            // listing reports, so stamping our own clock would make every file look changed
+            // from then on.
+            mtime: mtimes.get(path.as_str()).copied().flatten(),
+        });
+    }
+    let _ = std::fs::remove_dir_all(&tmp_dir);
+
+    // Regroup by first path segment — the same rule the local generator uses, so a repo
+    // refreshed this way is indistinguishable from one generated on disk.
+    let mut by_mod: std::collections::BTreeMap<String, Vec<RepoFile>> = Default::default();
+    for (path, f) in files {
+        if let Some(id) = path.split('/').next() {
+            if !id.is_empty() {
+                by_mod.entry(id.to_string()).or_default().push(f);
+            }
+        }
+    }
+    let prev_mods: HashMap<String, RepoMod> = previous
+        .as_ref()
+        .map(|p| p.profiles.iter().flat_map(|pr| pr.mods.iter())
+            .map(|m| (m.id.clone(), m.clone())).collect())
+        .unwrap_or_default();
+
+    let mut repo_mods = Vec::new();
+    for (id, mut list) in by_mod {
+        list.sort_by(|a, b| a.relative_path.cmp(&b.relative_path));
+        // Curated metadata (name, tags, changelog, update sources) comes from the previous
+        // manifest. A refresh is about file contents; resetting a mod's name to its folder
+        // name would undo work nobody asked to undo.
+        let mut m = prev_mods.get(&id).cloned().unwrap_or_else(|| RepoMod {
+            id: id.clone(),
+            name: id.clone(),
+            version: "1.0.0".to_string(),
+            author: None,
+            description: None,
+            tags: Vec::new(),
+            files: Vec::new(),
+            archive: None,
+            download_links: Vec::new(),
+            dependencies: Vec::new(),
+            changelog: None,
+            update_url: None,
+            direct_url: None,
+            update_sources: Vec::new(),
+        });
+        m.files = list;
+        repo_mods.push(m);
+    }
+    if repo_mods.is_empty() {
+        return Err("Nothing to publish — the listing produced no files".to_string());
+    }
+
+    let mut repo = previous.clone()
+        .unwrap_or_else(|| ServerRepo::new("BMM Repo".to_string(), String::new()));
+    if repo.seed.is_none() {
+        repo.seed = Some(uuid::Uuid::new_v4().to_string());
+    }
+    let profile_id = previous.as_ref()
+        .and_then(|p| p.profiles.first().map(|pr| pr.id.clone()))
+        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+    let files_count: usize = repo_mods.iter().map(|m| m.files.len()).sum();
+    let mods_count = repo_mods.len();
+    repo.profiles = vec![RepoProfile {
+        id: profile_id,
+        name: repo.name.clone(),
+        game_name: repo.game_name.clone(),
+        mods: repo_mods,
+        icon: None,
+        color: None,
+        icon_image: None,
+    }];
+
+    // Cleared before signing: verify_repo_signature() takes both fields out before hashing,
+    // so a payload that still carried them would never verify.
+    repo.author_id = None;
+    repo.signature = None;
+    let payload = serde_json::to_string(&repo).map_err(|e| e.to_string())?;
+    let signed = match crate::commands::security::sign_message(&handle, payload.as_bytes()) {
+        Ok((a, s)) => {
+            repo.author_id = Some(a);
+            repo.signature = Some(s);
+            true
+        }
+        Err(e) => {
+            tracing::warn!("Manifest written unsigned: {}", e);
+            false
+        }
+    };
+
+    let json = serde_json::to_string_pretty(&repo).map_err(|e| e.to_string())?;
+    std::fs::write(&manifest_path, json).map_err(|e| e.to_string())?;
+
+    let _ = window.emit("bmm://repo-export-progress", serde_json::json!({
+        "step": "repo.exportDone", "progress": 100.0, "current_file": "",
+    }));
+
+    Ok(RemoteRefreshReport {
+        manifest_path,
+        mods: mods_count,
+        files: files_count,
+        hashed: plan.fetch.len(),
+        reused: plan.carry_forward.len(),
+        removed: plan.removed,
+        downloaded_bytes,
+        signed,
+        warnings,
     })
 }

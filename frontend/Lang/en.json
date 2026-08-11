@@ -6711,5 +6711,21 @@
   "dev.session.consent": "Consent",
   "dev.session.queued": "Events stored",
   "dev.session.payload": "Payload size",
-  "dev.session.exact": "Exactly what would be sent"
+  "dev.session.exact": "Exactly what would be sent",
+  "repo.remoteTitle": "Update from the server",
+  "repo.remoteIntro": "Mods only on the server? BMM reads its listing and updates repo.json without pulling the repo back. Needs directory listing (autoindex) enabled.",
+  "repo.remoteBaseUrl": "URL OF THE MODS FOLDER",
+  "repo.remoteManifest": "YOUR LOCAL repo.json",
+  "repo.remoteForce": "Re-check everything (re-hash every file)",
+  "repo.remotePlan": "CHECK (CHANGES NOTHING)",
+  "repo.remoteRefresh": "UPDATE",
+  "repo.remoteNeedUrl": "Enter the URL of the mods folder",
+  "repo.remoteNeedManifest": "Choose your local repo.json",
+  "repo.remoteDone": "repo.json updated — upload it to your server",
+  "repo.remotePlanned": "Nothing changed yet — this is what an update would do",
+  "repo.remoteHashed": "To hash",
+  "repo.remoteReused": "Reused",
+  "repo.remoteRemoved": "Gone from the server",
+  "repo.remoteDownload": "To download",
+  "repo.remoteFull": "Everything will be re-hashed"
 }

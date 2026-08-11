@@ -13,6 +13,7 @@ import { initRepoSync, showSyncSummary, setRepoPassword } from './repo-sync.js';
 import { initModUpdates } from './mod-updates.js';
 import { initRepoAdmin } from './repo-admin.js';
 import { initManifestOnly } from './manifest-only.js';
+import { initRemoteRefresh } from './remote-refresh.js';
 import { initModpackCreator } from '../mods/modpack-creator.js';
 
 // Normalise a repo URL so map lookups match regardless of trailing slash / repo.json
@@ -351,6 +352,7 @@ export function initRepo() {
     initRepoSync(elements);
     initRepoAdmin(elements);
     initManifestOnly();
+    initRemoteRefresh();
     initModUpdates();
 
     // ── Sync / Hosting tab switcher ──────────────────────────────────────
