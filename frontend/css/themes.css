@@ -622,3 +622,25 @@ body.bte-picking #bte-elov, body.bte-picking #bte-elov * { cursor: auto !importa
     outline-offset: 1px !important;
     background: rgba(var(--bmm-accent-r,59),var(--bmm-accent-g,130),var(--bmm-accent-b,246),0.1) !important;
 }
+
+/* The editor footer's File menu — opens UPWARD (the footer sits at the modal bottom).
+   Opaque surface (--bmm-bg-overlay, never a translucent token): a see-through menu
+   renders its labels over whatever the editor shows behind it. */
+.bte-file-menu-wrap { position: relative; }
+.bte-file-menu {
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 190px;
+    padding: 6px;
+    background: var(--bmm-bg-overlay);
+    border: 1px solid var(--bmm-border-hover, var(--bmm-border));
+    border-radius: 10px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+    z-index: 20;
+}
+.bte-file-menu[hidden] { display: none; }
+.bte-file-menu .btn { justify-content: flex-start; width: 100%; }

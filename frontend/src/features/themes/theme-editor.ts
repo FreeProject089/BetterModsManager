@@ -270,13 +270,17 @@ function buildPanel(): void {
                      Export used to carry btn-accent while Save was only btn-secondary, so the
                      loudest button in a theme EDITOR was the one that writes a file to disk,
                      not the one that keeps your work. -->
-                <span class="bte-fgroup">
-                    <button class="btn btn-ghost btn-sm" id="bte-import-file" data-tooltip="${t('themes.import')||'Import .bmmtheme / .json'}">${t('themes.import')||'⬆ Import .bmmtheme / .json'}</button>
-                    <button class="btn btn-ghost btn-sm" id="bte-share" data-tooltip="${t('themes.share')||'Copy share link'}">
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-                        ${t('themes.share')||'Share'}
-                    </button>
-                    <button class="btn btn-ghost btn-sm" id="bte-export" data-tooltip="${t('themes.export')||'Export'} .bmmtheme">${t('themes.export')||'Export'}</button>
+                <!-- The three file operations live in ONE menu. Side by side they made a
+                     six-button footer that wrapped into two cramped rows in a narrow modal
+                     (field screenshot) — and none of the three is frequent enough to earn
+                     permanent surface. Same ids inside, so every handler survives. -->
+                <span class="bte-file-menu-wrap">
+                    <button class="btn btn-ghost btn-sm" id="bte-file-menu-btn">${t('themes.fileMenu')||'File'} ▾</button>
+                    <span class="bte-file-menu" id="bte-file-menu" hidden>
+                        <button class="btn btn-ghost btn-sm" id="bte-import-file">${t('themes.import')||'Import .bmmtheme / .json'}</button>
+                        <button class="btn btn-ghost btn-sm" id="bte-share">${t('themes.share')||'Share'}</button>
+                        <button class="btn btn-ghost btn-sm" id="bte-export">${t('themes.export')||'Export'} .bmmtheme</button>
+                    </span>
                 </span>
                 <span class="bte-fsep" aria-hidden="true"></span>
                 <span class="bte-fgroup">
@@ -294,6 +298,18 @@ function buildPanel(): void {
     if (!_ro) { _ro = new ResizeObserver(() => saveGeom()); _ro.observe(_panel!); }
 
     _panel.querySelector('#bte-close')!.addEventListener('click', closeEditor);
+
+    // The File menu: opens upward (the footer is at the modal's bottom), closes on any
+    // choice or outside click.
+    {
+        const btn = _panel.querySelector('#bte-file-menu-btn') as HTMLElement | null;
+        const menu = _panel.querySelector('#bte-file-menu') as HTMLElement | null;
+        if (btn && menu) {
+            btn.addEventListener('click', (e) => { e.stopPropagation(); menu.hidden = !menu.hidden; });
+            menu.addEventListener('click', () => { menu.hidden = true; });
+            document.addEventListener('click', () => { menu.hidden = true; });
+        }
+    }
     _panel.querySelector('#bte-pick-token')!.addEventListener('click', () => togglePickToken());
     _panel.querySelector('#bte-reset')!.addEventListener('click', confirmReset);
     _panel.querySelector('#bte-save')!.addEventListener('click', saveTheme);
@@ -751,11 +767,21 @@ const GROUP_INFO: Record<string, { icon: string; desc: string }> = {
     'Charts':         { icon: gi('<path d="M3 3v18h18"/><path d="m7 14 4-4 3 3 5-6"/>'), desc: 'Line colours of the performance / benchmark graphs.' },
     'Diagrams':       { icon: gi('<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><path d="M7 10v4h7"/>'), desc: 'Node colours of the interactive flowcharts (Help & other).' },
     'DevTools':       { icon: gi('<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2-2z"/>'), desc: 'The developer tools overlay (F12).' },
+    // These two existed as GROUPS but never got an entry here, so their section headers
+    // rendered blank — no icon, no explanation (field screenshot). Every group used by a
+    // token above MUST have a row in this table; the guard in buildSimpleTab asserts it.
+    'Surfaces':       { icon: gi('<rect x="2" y="4" width="20" height="7" rx="2"/><rect x="2" y="14" width="20" height="7" rx="2"/>'), desc: 'The translucent tint every panel is built from — the light/dark switch of a theme.' },
+    'Toasts':         { icon: gi('<rect x="3" y="14" width="18" height="7" rx="2"/><path d="M7 17.5h7"/>'), desc: 'The small notification popups — background, text and border.' },
 };
 
 const MDN_BASE = 'https://developer.mozilla.org/en-US/docs/Web/CSS/';
 
 function buildSimpleTab(): string {
+    // A token's group with no GROUP_INFO entry renders a blank header — exactly how
+    // Surfaces and Toasts shipped iconless. Console-error it so it cannot be quiet.
+    for (const f of TOKENS) {
+        if (!GROUP_INFO[f.group]) console.error(`[theme-editor] group "${f.group}" has no GROUP_INFO entry — blank header`);
+    }
     const groups: Record<string, Token[]> = {};
     for (const tok of TOKENS) (groups[tok.group] ||= []).push(tok);
     const vars = _draft.vars || {};

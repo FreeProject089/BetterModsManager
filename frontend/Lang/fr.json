@@ -6888,5 +6888,6 @@
   "dev.btn.exportDiag": "EXPORT DIAG",
   "dev.diagExported": "Diagnostic exporté",
   "nav.plugins.desc": "Étends BMM : installe des plugins communautaires, pilote-le par scripts via l'API locale, et gère ce que chaque plugin a le droit de faire.",
-  "nav.community.desc": "Les nouvelles et articles des blogs BetterCommunity, et ton lien de compte pour les dépôts et catalogues."
+  "nav.community.desc": "Les nouvelles et articles des blogs BetterCommunity, et ton lien de compte pour les dépôts et catalogues.",
+  "themes.fileMenu": "Fichier"
 }
