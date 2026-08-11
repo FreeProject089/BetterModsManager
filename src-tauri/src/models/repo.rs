@@ -116,6 +116,16 @@ pub struct RepoFile {
     pub size: u64,
     pub sha256_hash: String,
     pub chunks: Option<Vec<RepoChunk>>,
+    /// Unix seconds, as reported by the filesystem when the hash was computed.
+    ///
+    /// Only used to decide whether a REMOTE file still matches the hash recorded here, so a
+    /// refresh can skip re-downloading what has not changed. It is never used to validate a
+    /// download — that is always the hash.
+    ///
+    /// Absent from every manifest written before this field existed, and absence means
+    /// "unknown", which the refresh planner treats as "must re-hash". Never as "unchanged".
+    #[serde(default, alias = "mtime", skip_serializing_if = "Option::is_none")]
+    pub mtime: Option<i64>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

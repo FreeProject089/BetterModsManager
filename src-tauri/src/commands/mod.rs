@@ -23,6 +23,7 @@ pub mod omm;
 pub mod debug;
 pub mod window;
 pub mod identity;
+pub mod repo_remote;
 pub mod whitelist_manager;
 pub mod discord;
 pub mod modpack;

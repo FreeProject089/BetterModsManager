@@ -390,6 +390,7 @@ pub async fn export_server_repo(
                     size,
                     sha256_hash,
                     chunks: None,
+                    mtime: None,
                 });
                 // The per-file folder isn't used in this mode.
                 let _ = fs::remove_dir_all(&target_mod_dir);
@@ -456,6 +457,7 @@ pub async fn export_server_repo(
                     size,
                     sha256_hash,
                     chunks,
+                    mtime: None,
                 })
             }).collect();
 
@@ -797,6 +799,7 @@ pub async fn update_server_repo(
                 repo_files.push(RepoFile {
                     relative_path: rel_path.to_string_lossy().to_string().replace("\\", "/"),
                     size, sha256_hash, chunks,
+                    mtime: None,
                 });
             }
 
@@ -2898,11 +2901,18 @@ pub(crate) fn generate_repo_manifest_sync(
                 Ok(r) => r.to_string_lossy().replace('\\', "/"),
                 Err(_) => continue,
             };
-            let size = f.metadata().map(|m| m.len()).unwrap_or(0);
+            let meta = f.metadata().ok();
+            let size = meta.as_ref().map(|m| m.len()).unwrap_or(0);
+            // Recorded so a later refresh against a REMOTE listing can tell this file apart
+            // from a changed one without downloading it. Never used to validate a download.
+            let mtime = meta.as_ref()
+                .and_then(|m| m.modified().ok())
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                .map(|d| d.as_secs() as i64);
             // Chunk hashes only earn their size on files big enough to resume or patch.
             let (hash, chunks) = compute_file_hash_and_chunks(&p, size as usize > CHUNK_SIZE)?;
             total_bytes += size;
-            files.push(RepoFile { relative_path: rel, size, sha256_hash: hash, chunks });
+            files.push(RepoFile { relative_path: rel, size, sha256_hash: hash, chunks, mtime });
         }
         if files.is_empty() { continue; }
         files.sort_by(|a, b| a.relative_path.cmp(&b.relative_path));

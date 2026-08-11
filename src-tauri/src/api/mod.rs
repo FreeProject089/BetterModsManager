@@ -3543,6 +3543,7 @@ async fn do_api_repo_gen(
                         repo_mod.archive = Some(RepoFile {
                             relative_path: format!("mods/{}.zip", mod_entry.id),
                             size, sha256_hash: sha, chunks: None,
+                            mtime: None,
                         });
                     }
                     let _ = std::fs::remove_dir_all(&target_mod_dir);
@@ -3571,6 +3572,7 @@ async fn do_api_repo_gen(
                             repo_mod.files.push(RepoFile {
                                 relative_path: rel_path.to_string_lossy().to_string().replace('\\', "/"),
                                 size: size_src, sha256_hash: sha, chunks,
+                                mtime: None,
                             });
                         }
                     } else {
@@ -3583,6 +3585,7 @@ async fn do_api_repo_gen(
                             repo_mod.files.push(RepoFile {
                                 relative_path: rel_path.to_string_lossy().to_string().replace('\\', "/"),
                                 size: size_dst, sha256_hash: sha, chunks: None,
+                    mtime: None,
                             });
                         }
                     }
