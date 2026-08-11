@@ -5085,5 +5085,9 @@
   "repo.remoteReused": "Reused",
   "repo.remoteRemoved": "Gone from the server",
   "repo.remoteDownload": "To download",
-  "repo.remoteFull": "Everything will be re-hashed"
+  "repo.remoteFull": "Everything will be re-hashed",
+  "repo.remoteName": "REPO NAME",
+  "repo.remoteGame": "GAME",
+  "repo.remoteNameHint": "Used only if no repo.json exists yet — otherwise the manifest's own are kept.",
+  "repo.remoteCreated": "repo.json created — upload it to your server"
 }

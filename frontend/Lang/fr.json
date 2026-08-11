@@ -6725,5 +6725,9 @@
   "repo.remoteReused": "Repris",
   "repo.remoteRemoved": "Disparus du serveur",
   "repo.remoteDownload": "À télécharger",
-  "repo.remoteFull": "Tout sera re-hashé"
+  "repo.remoteFull": "Tout sera re-hashé",
+  "repo.remoteName": "NOM DU REPO",
+  "repo.remoteGame": "JEU",
+  "repo.remoteNameHint": "Utilisés seulement si aucun repo.json n'existe encore — sinon ceux du manifeste sont conservés.",
+  "repo.remoteCreated": "repo.json créé — envoie-le sur ton serveur"
 }

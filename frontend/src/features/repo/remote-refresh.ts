@@ -25,6 +25,7 @@ interface PlanReport {
 }
 
 interface RefreshReport {
+    created: boolean;
     manifestPath: string;
     mods: number;
     files: number;
@@ -38,7 +39,7 @@ interface RefreshReport {
 
 const $ = (id: string) => document.getElementById(id);
 
-function inputs(): { baseUrl: string; manifestPath: string; forceFull: boolean } | null {
+function inputs(): Record<string, unknown> | null {
     const baseUrl = ($('remote-base-url') as HTMLInputElement | null)?.value?.trim() || '';
     const manifestPath = ($('remote-manifest-path') as HTMLInputElement | null)?.value?.trim() || '';
     if (!baseUrl) {
@@ -53,6 +54,10 @@ function inputs(): { baseUrl: string; manifestPath: string; forceFull: boolean }
         baseUrl,
         manifestPath,
         forceFull: ($('remote-force-full') as HTMLInputElement | null)?.checked || false,
+        // Only consulted when no manifest exists yet; the backend ignores them otherwise so
+        // a stray value here can never rename a repo people already subscribe to.
+        name: ($('remote-repo-name') as HTMLInputElement | null)?.value?.trim() || null,
+        gameName: ($('remote-game-name') as HTMLInputElement | null)?.value?.trim() || null,
     };
 }
 
@@ -111,7 +116,10 @@ async function run(which: 'plan' | 'refresh') {
                 [t('repo.remoteDownload') || 'Downloaded', formatBytes(r.downloadedBytes)],
                 ...(r.signed ? [] : [['⚠', t('repo.manifestUnsigned') || 'Written unsigned', 'var(--warning)'] as [string, string, string]]),
                 ...r.warnings.map((w) => ['⚠', w, 'var(--warning)'] as [string, string, string]),
-            ], t('repo.remoteDone') || 'repo.json updated — upload it to your server', 'var(--success)');
+            ], r.created
+                ? (t('repo.remoteCreated') || 'repo.json created — upload it to your server')
+                : (t('repo.remoteDone') || 'repo.json updated — upload it to your server'),
+                'var(--success)');
 
             // Removals are the one outcome worth interrupting for: a mistyped URL produces a
             // perfectly valid manifest describing an empty server, and it looks like success.

@@ -416,6 +416,8 @@ pub struct RemoteRefreshReport {
     pub downloaded_bytes: u64,
     pub signed: bool,
     pub warnings: Vec<String>,
+    /// True when there was no manifest and this run created one.
+    pub created: bool,
 }
 
 /// Bring a manifest back in line with what the server is actually serving.
@@ -434,6 +436,8 @@ pub async fn refresh_repo_from_server(
     base_url: String,
     manifest_path: String,
     force_full: bool,
+    name: Option<String>,
+    game_name: Option<String>,
 ) -> Result<RemoteRefreshReport, String> {
     use crate::commands::repo_remote::plan_refresh;
     use crate::models::repo::{RepoFile, RepoMod, RepoProfile, ServerRepo};
@@ -586,8 +590,21 @@ pub async fn refresh_repo_from_server(
         return Err("Nothing to publish — the listing produced no files".to_string());
     }
 
+    // No previous manifest means this run CREATES the repo — there is no requirement to have
+    // one already. The name and game then have to come from the caller: a repo published as
+    // "BMM Repo" with an empty game is not something anyone can subscribe to sensibly, and
+    // there would be no way to fix it afterwards without hand-editing the JSON.
+    let is_new = previous.is_none();
     let mut repo = previous.clone()
         .unwrap_or_else(|| ServerRepo::new("BMM Repo".to_string(), String::new()));
+    if is_new {
+        if let Some(n) = name.as_deref().map(str::trim).filter(|v| !v.is_empty()) {
+            repo.name = n.to_string();
+        }
+        if let Some(g) = game_name.as_deref().map(str::trim).filter(|v| !v.is_empty()) {
+            repo.game_name = g.to_string();
+        }
+    }
     if repo.seed.is_none() {
         repo.seed = Some(uuid::Uuid::new_v4().to_string());
     }
@@ -640,5 +657,6 @@ pub async fn refresh_repo_from_server(
         downloaded_bytes,
         signed,
         warnings,
+        created: is_new,
     })
 }
