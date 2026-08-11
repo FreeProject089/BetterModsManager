@@ -6886,5 +6886,7 @@
   "community.serverDown": "BetterCommunity is not reachable right now — the server may be down or updating. Everything else in BMM keeps working.",
   "dev.session.rate": "Rate (last minute)",
   "dev.session.byType": "By event type",
-  "dev.session.starNote": "★ = the type of the largest single event"
+  "dev.session.starNote": "★ = the type of the largest single event",
+  "dev.btn.exportDiag": "EXPORT DIAG",
+  "dev.diagExported": "Diagnostic exported"
 }

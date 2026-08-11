@@ -6884,5 +6884,7 @@
   "community.serverDown": "BetterCommunity est injoignable pour le moment — le serveur est peut-être arrêté ou en mise à jour. Tout le reste de BMM continue de fonctionner.",
   "dev.session.rate": "Rythme (dernière minute)",
   "dev.session.byType": "Par type d’événement",
-  "dev.session.starNote": "★ = le type du plus gros événement"
+  "dev.session.starNote": "★ = le type du plus gros événement",
+  "dev.btn.exportDiag": "EXPORT DIAG",
+  "dev.diagExported": "Diagnostic exporté"
 }

@@ -632,6 +632,7 @@ fn main() {
             // were removed with the Sources tab — see debug-ui.ts.
             commands::debug::get_debug_stats,
             commands::debug::get_rust_logs,
+            commands::debug::export_diagnostics,
             commands::window::start_resizing,
             commands::window::open_external_url,
             commands::ban_manager::ban_user,

@@ -199,6 +199,7 @@ class DebugUI {
                                         <div style="font-size:11px; color:var(--text-muted)" data-i18n="dev.msg.rustDesc">Attach a native debugger or view backend logs.</div>
                                     </div>
                                     <div style="display:flex; gap:8px">
+                                        <button class="debug-btn debug-btn-ghost" id="rust-export-diag" style="font-size:10px; padding:4px 12px; border:1px solid rgba(255,255,255,0.1)" data-i18n="dev.btn.exportDiag">EXPORT DIAG</button>
                                         <button class="debug-btn debug-btn-ghost" id="rust-copy-lldb" style="font-size:10px; padding:4px 12px; border:1px solid rgba(255,255,255,0.1)" data-i18n="dev.btn.copyCmd">COPY CMD</button>
                                         <button class="debug-btn debug-btn-primary" id="rust-refresh-logs" style="font-size:10px; padding:4px 12px" data-i18n="dev.btn.refreshLogs">REFRESH LOGS</button>
                                     </div>
@@ -606,6 +607,19 @@ class DebugUI {
         });
 
         // Debugger Rust
+        // The production tool: one JSON with build/version/uptime/memory + the same log
+        // lines this tab shows, written to app-data/diagnostics and revealed. What a bug
+        // report needs, without asking the user to screenshot devtools and hunt files.
+        this._get('rust-export-diag')?.addEventListener('click', async () => {
+            try {
+                const path = await window.__TAURI__.core.invoke('export_diagnostics');
+                window.showToast?.((window.t?.('dev.diagExported') || 'Diagnostic exported') + ' — ' + path, 'success');
+                window.__TAURI__.core.invoke('open_folder', { path: String(path).replace(/[\/][^\/]+$/, '') }).catch(() => {});
+            } catch (e) {
+                window.showToast?.((window.t?.('common.error') || 'Error') + ': ' + e, 'error');
+            }
+        });
+
         this._get('rust-copy-lldb')?.addEventListener('click', () => {
             const isWindows = navigator.userAgent.includes('Windows');
             const cmd = isWindows ? 'rust-gdb target/debug/better-mods-manager.exe' : 'rust-lldb target/debug/better-mods-manager';
