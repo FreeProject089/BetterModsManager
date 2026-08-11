@@ -6763,5 +6763,6 @@
   "repo.showHide": "Show",
   "tut.dockSide": "Dock: bottom / right / left",
   "repo.syncPassToggle": "This repo has a download password",
-  "repo.syncPassPlaceholder": "Download password"
+  "repo.syncPassPlaceholder": "Download password",
+  "repo.discoveredDesc": "No repo.json on this server — this list was read from its folder index. Nothing vouches for these files: they will install as unverified."
 }

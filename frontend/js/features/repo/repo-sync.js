@@ -311,7 +311,16 @@ export function initRepoSync(elements) {
                 syncInfoCard.style.display = 'block';
                 syncNameDisplay.textContent = repo.name;
                 syncAuthorDisplay.textContent = (t('repo.authorShort') || "Auteur :") + " " + (repo.author || "Inconnu");
-                syncDescDisplay.textContent = repo.description || "";
+                // A manifest synthesised from the server's directory listing (no repo.json
+                // found — fetch_repo_info built one from what it saw). The card must SAY so,
+                // not just carry the generic Unverified badge: the badge also covers "signed
+                // but the signature failed", and those two situations call for different
+                // levels of trust. Recognised by the marker profile id the fallback writes.
+                const discovered = repo.profiles?.length === 1 && repo.profiles[0]?.id === 'discovered';
+                syncDescDisplay.textContent = discovered
+                    ? (t('repo.discoveredDesc') || 'No repo.json on this server — this list was read from its folder index. Nothing vouches for these files: they will install as unverified.')
+                    : (repo.description || "");
+                syncDescDisplay.style.color = discovered ? 'var(--warning)' : '';
                 syncGameBadge.textContent = repo.game_name;
                 if (isVerified) {
                     syncBadge.textContent = t('repo.verified');

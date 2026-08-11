@@ -6761,5 +6761,6 @@
   "repo.showHide": "Afficher",
   "tut.dockSide": "Ancrage : bas / droite / gauche",
   "repo.syncPassToggle": "Ce dépôt a un mot de passe de téléchargement",
-  "repo.syncPassPlaceholder": "Mot de passe de téléchargement"
+  "repo.syncPassPlaceholder": "Mot de passe de téléchargement",
+  "repo.discoveredDesc": "Pas de repo.json sur ce serveur — cette liste vient de son index de dossiers. Rien ne cautionne ces fichiers : ils s'installeront comme non vérifiés."
 }
