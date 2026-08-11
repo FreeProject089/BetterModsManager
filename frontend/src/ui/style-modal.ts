@@ -18,6 +18,10 @@ import {
 
 const OVERLAY_ID = 'bmm-style-modal';
 
+// One-shot close callback, so a caller can sequence "style first, then the hub" without
+// this module knowing anything about tutorials.
+let _onClose: (() => void) | null = null;
+
 const el = (tag: string, cls?: string, text?: string): HTMLElement => {
     const n = document.createElement(tag);
     if (cls) n.className = cls;
@@ -66,6 +70,8 @@ function tile(theme: BmmTheme, active: boolean, onPick: () => void): HTMLElement
 export function closeStyleModal(): void {
     const o = document.getElementById(OVERLAY_ID);
     if (!o) return;
+    const cb = _onClose; _onClose = null;
+    if (cb) { try { cb(); } catch { /* a follow-up failing must not keep the modal */ } }
     o.classList.add('closing');
     o.addEventListener('animationend', () => o.remove(), { once: true });
     setTimeout(() => document.getElementById(OVERLAY_ID)?.remove(), 350);
@@ -80,8 +86,9 @@ function goToSettings(anchorId?: string): void {
     }, 250);
 }
 
-export function openStyleModal(): void {
+export function openStyleModal(onClose?: () => void): void {
     if (document.getElementById(OVERLAY_ID)) return;
+    _onClose = onClose ?? null;
 
     const overlay = el('div', 'style-modal-overlay');
     overlay.id = OVERLAY_ID;
@@ -110,8 +117,12 @@ export function openStyleModal(): void {
             else applyTheme(theme);
             await invoke('set_active_theme', { themeId: theme.id }).catch(() => {});
             // Re-render so the ring moves to the picked tile — cheaper than tracking it.
+            // The close callback is carried across, not fired: picking a theme is not
+            // closing the modal, and a sequenced follow-up (the tutorial hub) must wait
+            // for the real close.
+            const carry = _onClose; _onClose = null;
             closeStyleModal();
-            openStyleModal();
+            openStyleModal(carry ?? undefined);
         }));
     }
     box.append(grid);
