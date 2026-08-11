@@ -26,8 +26,30 @@ let events = 0;
 let lastEventAt: number | null = null;
 let bytes = 0;
 let biggest = 0;
+let biggestType = -1;
 let observing = false;
 let timer: number | null = null;
+
+// Per-type tallies. rrweb's event.type is a small int; FullSnapshot (2) is what
+// actually costs memory, IncrementalSnapshot (3) is what tells you the page is alive.
+// Counting per type is O(1) and answers the question the totals cannot: WHAT is the
+// buffer made of.
+const TYPE_NAMES: Record<number, string> = {
+    0: 'DomContentLoaded', 1: 'Load', 2: 'FullSnapshot',
+    3: 'Incremental', 4: 'Meta', 5: 'Custom', 6: 'Plugin',
+};
+const byType = new Map<number, { n: number; bytes: number }>();
+
+// Arrival rate over the last minute: six 10-second buckets, rotated in place. Fixed
+// memory, no timestamps retained — the same rule as everything else in this pane.
+const RATE_BUCKETS = 6;
+const rate = new Array<number>(RATE_BUCKETS).fill(0);
+let rateSlot = -1;
+function bumpRate(now: number): void {
+    const slot = Math.floor(now / 10_000) % RATE_BUCKETS;
+    if (slot !== rateSlot) { rateSlot = slot; rate[slot] = 0; }
+    rate[slot]++;
+}
 
 // Each event is measured once, on arrival, and discarded. Running totals only: O(1) state,
 // no periodic work, no retention. The largest single event is tracked because that is the
@@ -36,10 +58,15 @@ let timer: number | null = null;
 const onEvent = (ev: any) => {
     events++;
     lastEventAt = Date.now();
+    bumpRate(lastEventAt);
     try {
         const n = JSON.stringify(ev).length;
         bytes += n;
-        if (n > biggest) biggest = n;
+        const ty = typeof ev?.type === 'number' ? ev.type : -1;
+        if (n > biggest) { biggest = n; biggestType = ty; }
+        const b = byType.get(ty) ?? { n: 0, bytes: 0 };
+        b.n++; b.bytes += n;
+        byType.set(ty, b);
     } catch {
         // A circular or exotic payload is not worth crashing the debugger over.
     }
@@ -103,6 +130,32 @@ function renderStats(host: HTMLElement) {
     // Masking is the difference between a shareable recording and a leak, so it is shown
     // rather than assumed from the fact that a rule exists somewhere.
     host.append(row(t('dev.session.masked') || 'Extra blocked selectors', String(getExtraBlockSelectors().length)));
+
+    // Arrival rate: how alive the page is right now. The current 10s bucket is partial,
+    // so the whole ring is summed as "per minute" — approximate, honest, O(1).
+    const perMin = rate.reduce((a, b) => a + b, 0);
+    host.append(row(t('dev.session.rate') || 'Rate (last minute)', `${perMin} ev/min`,
+        perMin > 600 ? 'color:var(--warning,#f59e0b)' : ''));
+
+    // What the buffer is MADE of. Totals say how big; this says why. FullSnapshots are
+    // the memory driver — many of them means checkouts are firing (or something is
+    // forcing them), and that is the first thing to look at when captured MB climbs.
+    if (byType.size) {
+        host.append(heading(t('dev.session.byType') || 'By event type'));
+        const rows = [...byType.entries()].sort((a, b) => b[1].bytes - a[1].bytes);
+        for (const [ty, b] of rows) {
+            const name = TYPE_NAMES[ty] ?? `type ${ty}`;
+            host.append(row(
+                ty === biggestType ? `${name} ★` : name,
+                `${b.n} · ${fmtBytes(b.bytes)}`,
+                ty === 2 && b.bytes > bytes / 2 ? 'color:var(--warning,#f59e0b)' : '',
+            ));
+        }
+        const star = document.createElement('div');
+        star.style.cssText = 'font-size:10px;color:var(--text-muted,#7c8698);margin-top:4px';
+        star.textContent = t('dev.session.starNote') || '★ = the type of the largest single event';
+        host.append(star);
+    }
 }
 
 /** The expensive half: reads and formats the whole telemetry store. On demand only. */
@@ -188,7 +241,9 @@ export function unmountSessionPane() {
 
 /** Drop the counters. */
 export function resetSessionPane() {
-    events = 0; bytes = 0; biggest = 0; lastEventAt = null;
+    events = 0; bytes = 0; biggest = 0; biggestType = -1; lastEventAt = null;
+    byType.clear();
+    rate.fill(0); rateSlot = -1;
 }
 
 /** Called on teardown. */

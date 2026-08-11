@@ -6883,5 +6883,8 @@
   "settings.tipsVisible": "Show tips",
   "settings.tipsVisibleDesc": "The explanation boxes across pages and settings. Hiding them never hides warnings.",
   "community.offline": "You are offline. The blog will load once the connection is back.",
-  "community.serverDown": "BetterCommunity is not reachable right now — the server may be down or updating. Everything else in BMM keeps working."
+  "community.serverDown": "BetterCommunity is not reachable right now — the server may be down or updating. Everything else in BMM keeps working.",
+  "dev.session.rate": "Rate (last minute)",
+  "dev.session.byType": "By event type",
+  "dev.session.starNote": "★ = the type of the largest single event"
 }

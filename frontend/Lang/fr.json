@@ -6881,5 +6881,8 @@
   "settings.tipsVisible": "Afficher les astuces",
   "settings.tipsVisibleDesc": "Les encadrés d'explication dans les pages et réglages. Les masquer ne masque jamais les avertissements.",
   "community.offline": "Tu es hors ligne. Le blog se chargera dès que la connexion revient.",
-  "community.serverDown": "BetterCommunity est injoignable pour le moment — le serveur est peut-être arrêté ou en mise à jour. Tout le reste de BMM continue de fonctionner."
+  "community.serverDown": "BetterCommunity est injoignable pour le moment — le serveur est peut-être arrêté ou en mise à jour. Tout le reste de BMM continue de fonctionner.",
+  "dev.session.rate": "Rythme (dernière minute)",
+  "dev.session.byType": "Par type d’événement",
+  "dev.session.starNote": "★ = le type du plus gros événement"
 }
