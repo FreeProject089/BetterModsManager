@@ -6741,5 +6741,8 @@
   "repo.discoverVerified": "Mods vérifiés",
   "repo.discoverUnverified": "Mods non vérifiés",
   "repo.discoverWhy": "Non vérifié signifie que BMM ne peut pas distinguer un bon téléchargement d'un fichier corrompu ou substitué. À n'installer que depuis un serveur de confiance.",
-  "repo.discoverEmpty": "Le listing du serveur n'a produit aucun mod"
+  "repo.discoverEmpty": "Le listing du serveur n'a produit aucun mod",
+  "repo.groupPublish": "1 — Produire le repo.json (choisis une voie)",
+  "repo.groupServe": "2 — Servir les fichiers",
+  "repo.badgeAlt": "ALTERNATIVE"
 }

@@ -5101,5 +5101,8 @@
   "repo.discoverVerified": "Verified mods",
   "repo.discoverUnverified": "Unverified mods",
   "repo.discoverWhy": "Unverified means BMM cannot tell a good download from a corrupted or substituted one. Install these only from a server you trust.",
-  "repo.discoverEmpty": "The server listing produced no mods"
+  "repo.discoverEmpty": "The server listing produced no mods",
+  "repo.groupPublish": "1 — Produce the repo.json (pick one route)",
+  "repo.groupServe": "2 — Serve the files",
+  "repo.badgeAlt": "ALTERNATIVE"
 }
