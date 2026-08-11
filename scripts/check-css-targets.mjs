@@ -47,11 +47,6 @@ function exists(id) {
 // exists under another name is worse than leaving it. Shrink this list, never grow it.
 const KNOWN_DEAD = new Set([
   'docker-doc-card', 'modal-benchmark', 'playback-controls', 'playback-time-display',
-  // theme-editor live-preview targets whose elements are gone. Same defect as
-  // .tut-hub-container: the preview silently does nothing for these labels. Left listed
-  // rather than repointed because finding the CURRENT selector for each needs the editor
-  // open, and a wrong guess previews the wrong element — which is worse than none.
-  '.card-title', '.form-label', '.progress-bar', '.tasky-speech-bubble',
 ]);
 
 const dead = [];
@@ -70,45 +65,19 @@ for (const file of files) {
   }
 }
 
-// ── Selector TABLES in code ──────────────────────────────────────────────────
+// Selector TABLES in code: attempted and REMOVED.
 //
-// The two failures that prompted this guard were not in CSS at all: the theme editor's
-// live-preview list targeted `.tut-hub-container` and the themeable-image list targeted
-// `.tut-hub-mascot`, both of which the hub rebuild deleted. A CSS-only check would not
-// have caught either — so the two tables are read directly.
+// The two failures that prompted this whole guard were in TypeScript, not CSS — the theme
+// editor's live-preview list and the themeable-image list. Reading those tables is the
+// right idea and it did find one real dead entry (.bh-pow-mascot, removed).
 //
-// Only these two, and only their literal single-selector entries. A general sweep of every
-// querySelector() in the codebase would be noise: most are built, scoped to a subtree, or
-// legitimately optional. These two are DECLARATIONS — a list whose whole purpose is to
-// name things that exist.
-const TABLES = [
-  ['theme-editor.ts', 'frontend/src/features/themes/theme-editor.ts', /[\s{]sel:\s*'([^',]+)'/g],
-  ['theme-engine.ts', 'frontend/src/features/themes/theme-engine.ts', /MASCOT_SELECTORS[^\]]*\]/g],
-];
-
-for (const [label, rel, re] of TABLES) {
-  // Comments stripped first. A note explaining why a selector was REMOVED quotes it, and
-  // the extraction would read the prose and re-report it — which is exactly what happened
-  // the first time, and what check-token-collisions.mjs hit before it.
-  const src = readFileSync(join(ROOT, rel), 'utf8')
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/^[ 	]*\/\/.*$/gm, '');
-  const found = label === 'theme-engine.ts'
-    ? [...(src.match(re)?.[0] ?? '').matchAll(/'([^']+)'/g)].map((m) => m[1])
-    : [...src.matchAll(re)].map((m) => m[1]);
-  for (const sel of found) {
-    // Compound and descendant selectors describe a shape, not one named element; only a
-    // bare #id or .class is a claim this check can settle.
-    const m = /^([#.])([a-zA-Z][a-zA-Z0-9_-]*)$/.exec(sel.trim());
-    if (!m) continue;
-    const [, kind, name] = m;
-    const present = kind === '#'
-      ? html.includes(`id="${name}"`) || exists(name)
-      : new RegExp(`class="[^"]*\b${name}\b`).test(html) || exists(name);
-    if (KNOWN_DEAD.has(sel.trim())) continue;
-    if (!present) dead.push([label, sel]);
-  }
-}
+// But the class check it needed reported `.card-title` dead while index.html carries that
+// class 28 times, and I could not make it right within this session. Four live selectors
+// were briefly recorded here as known-dead, which is worse than not checking at all: a
+// guard that is wrong about working code teaches you to ignore it.
+//
+// Left out rather than left broken. The id check below is verified — it is what found
+// `#app-shell`, a rule that had never matched anything.
 
 const uniq = [...new Map(dead.map(([f, i]) => [`${f}#${i}`, [f, i]])).values()];
 if (uniq.length) {
@@ -117,4 +86,4 @@ if (uniq.length) {
   console.error('\n  These style nothing and read as if they do. Remove them, or fix the id.');
   process.exit(1);
 }
-console.log(`✓ every CSS id selector and declared selector resolves (${files.length} stylesheets + 2 tables)`);
+console.log(`✓ every CSS id selector resolves (${files.length} stylesheets)`);
