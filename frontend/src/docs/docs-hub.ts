@@ -14,6 +14,7 @@
 import { getLang, t, getSynonyms } from '../core/i18n.js';
 import { diagrams } from './interactive-docs.js';
 import { renderDocMarkdown } from './md-lite.js';
+import { ensureMermaid } from '../ui/lazy-vendor.js';
 
 // The published mkdocs documentation site (see BMM Docs/mkdocs.yml site_url).
 const DOCS_SITE = 'https://freeproject089.github.io/BMM-Docs/';
@@ -2816,7 +2817,8 @@ async function hydrateDocPage(host: HTMLElement) {
 
   const blocks = [...host.querySelectorAll('.dh-mermaid')] as HTMLElement[];
   if (!blocks.length) return;
-  const m = (window as any).mermaid;
+  // Fetched on demand: mermaid is 3.3 MB and most pages of the hub have no diagram at all.
+  const m = await ensureMermaid().catch(() => null);
   if (!m?.render) return;                       // leave the placeholder rather than a broken box
 
   const ticket = ++_hydrateSeq;

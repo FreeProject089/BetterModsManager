@@ -13,6 +13,7 @@
 import { getLang, t, getSynonyms } from '../core/i18n.js';
 import { diagrams } from './interactive-docs.js';
 import { renderDocMarkdown } from './md-lite.js';
+import { ensureMermaid } from '../ui/lazy-vendor.js';
 // The published mkdocs documentation site (see BMM Docs/mkdocs.yml site_url).
 const DOCS_SITE = 'https://freeproject089.github.io/BMM-Docs/';
 const tr = (s) => (getLang() === 'fr' ? s.fr : s.en);
@@ -304,12 +305,12 @@ ce qu'il remplace, ou les retire). Vos mods téléchargés ne sont jamais modifi
                 body: {
                     en: '<p>Hosting turns a profile into a <b>source of truth</b> others subscribe to — a squadron, a community, or just keeping your own machines identical.</p>'
                         + '<h4>What BMM builds</h4><ul><li>A <b>manifest</b> (<code>repo.json</code>) listing every file with its <b>SHA-256</b> hash (plus 4&nbsp;MB chunk hashes, for efficient updates).</li><li>A cryptographic <b>signature</b> tied to your identity (an author id + ed25519 signature), so subscribers can confirm a repo really came from you.</li></ul>'
-                        + '<h4>Serving it</h4><p>Open <b>Server Repo</b> and pick the profile to share. Then either run BMM’s <b>built-in mini-server</b>, or generate a small standalone server (Node, or a <code>.bat</code>/<code>.sh</code> script) to run on a dedicated machine. Serve it over HTTP — <b>HTTPS is strongly recommended</b>. Hand out the resulting link.</p>'
+                        + '<h4>Three ways to produce it</h4><p>They are alternatives, in <b>Server Repo → Host</b>: <b>Full export</b> copies every mod into a folder you upload; <b>Manifest only</b> writes just <code>repo.json</code> for a folder already on this machine, copying nothing; <b>Update from the server</b> reads your server’s directory listing and writes the manifest without pulling the repo back. A layout template (<code>{id}</code>/<code>{path}</code>) lets an existing server keep its own folder shape. Re-running any of them keeps the repo’s identity, re-signs it, and reports what was added, changed and removed.</p><h4>Serving it</h4><p>Open <b>Server Repo</b> and pick what to share. Then either run BMM’s <b>built-in mini-server</b>, or generate a small standalone server (Node, or a <code>.bat</code>/<code>.sh</code> script) to run on a dedicated machine. Serve it over HTTP — <b>HTTPS is strongly recommended</b>. Hand out the resulting link.</p>'
                         + '<h4>Who can download it</h4><p>A self-hosted repo is <b>public by default</b>. You can restrict it two ways: a <b>whitelist / ban list</b>, matched automatically against a subscriber’s linked account or device identity; and an optional <b>download password</b> — set it when generating the server, and subscribers are asked for it the first time they connect (BMM remembers it for later syncs). Leave it blank for an open repo. Keep this separate from the <b>admin password</b>, which protects only <b>your</b> server’s admin panel (pushing new versions) and is not a subscriber gate.</p>'
                         + '<h4>BetterCommunity is different</h4><p>The BetterCommunity hub adds things a repo you host yourself does <b>not</b> have: a <code>BCR-XXXX-XXXX</code> repo fingerprint, account-based (email / password) access, and managed hosting. Don’t confuse the two.</p>',
                     fr: '<p>Héberger transforme un profil en <b>source de vérité</b> à laquelle d’autres s’abonnent — une escadrille, une communauté, ou juste garder vos propres machines identiques.</p>'
                         + '<h4>Ce que BMM construit</h4><ul><li>Un <b>manifeste</b> (<code>repo.json</code>) listant chaque fichier avec son hachage <b>SHA-256</b> (plus des hachages de blocs de 4&nbsp;Mo, pour des mises à jour efficaces).</li><li>Une <b>signature</b> cryptographique liée à votre identité (un author id + signature ed25519), pour que les abonnés confirment qu’un dépôt vient bien de vous.</li></ul>'
-                        + '<h4>Le servir</h4><p>Ouvrez <b>Dépôt Serveur</b> et choisissez le profil à partager. Puis lancez le <b>mini-serveur intégré</b> de BMM, ou générez un petit serveur autonome (Node, ou un script <code>.bat</code>/<code>.sh</code>) à exécuter sur une machine dédiée. Servez-le en HTTP — <b>le HTTPS est fortement recommandé</b>. Distribuez le lien obtenu.</p>'
+                        + '<h4>Trois façons de le produire</h4><p>Ce sont des alternatives, dans <b>Dépôt Serveur → Host</b> : l’<b>export complet</b> copie chaque mod dans un dossier à uploader ; le <b>manifeste seul</b> écrit uniquement <code>repo.json</code> pour un dossier déjà présent sur cette machine, sans rien copier ; <b>mettre à jour depuis le serveur</b> lit l’index de votre serveur et écrit le manifeste sans rapatrier le dépôt. Un gabarit de disposition (<code>{id}</code>/<code>{path}</code>) laisse un serveur existant garder sa propre arborescence. Relancer l’une d’elles conserve l’identité du dépôt, le resigne, et rapporte ce qui a été ajouté, modifié et retiré.</p><h4>Le servir</h4><p>Ouvrez <b>Dépôt Serveur</b> et choisissez ce que vous partagez. Puis lancez le <b>mini-serveur intégré</b> de BMM, ou générez un petit serveur autonome (Node, ou un script <code>.bat</code>/<code>.sh</code>) à exécuter sur une machine dédiée. Servez-le en HTTP — <b>le HTTPS est fortement recommandé</b>. Distribuez le lien obtenu.</p>'
                         + '<h4>Qui peut le télécharger</h4><p>Un dépôt auto-hébergé est <b>public par défaut</b>. Vous pouvez le restreindre de deux façons : une <b>liste blanche / liste de bannis</b>, comparée automatiquement au compte lié ou à l’identité d’appareil d’un abonné ; et un <b>mot de passe de téléchargement</b> optionnel — définissez-le à la génération du serveur, et les abonnés se le voient demander à la première connexion (BMM le retient pour les synchros suivantes). Laissez-le vide pour un dépôt ouvert. À ne pas confondre avec le <b>mot de passe admin</b>, qui protège seulement le panneau d’admin de <b>votre</b> serveur (pousser de nouvelles versions) et n’est pas une barrière pour les abonnés.</p>'
                         + '<h4>BetterCommunity, c’est autre chose</h4><p>Le hub BetterCommunity ajoute des choses qu’un dépôt auto-hébergé n’a <b>pas</b> : une empreinte <code>BCR-XXXX-XXXX</code>, un accès par compte (e-mail / mot de passe), et de l’hébergement géré. Ne confondez pas les deux.</p>',
                 },
@@ -1608,7 +1609,7 @@ Voir aussi [Référence des actions](doc:actions-reference) et [Plugins & API](d
                 },
             },
             {
-                id: 'storage-manager', view: 'settings', docsPath: 'features/storage/',
+                id: 'storage-manager', view: 'settings', docsPath: 'features/storage/', diagram: 'cache-management',
                 title: { en: 'Storage & disk I/O', fr: 'Stockage & E/S disque' },
                 summary: { en: 'Per-disk speed limits, space alerts, and Smart I/O.', fr: 'Limites de vitesse par disque, alertes d’espace, et Smart I/O.' },
                 keywords: 'storage disk io space cache ssd hdd throttle smart limit stockage disque espace',
@@ -2562,7 +2563,14 @@ async function fillPage(path) {
     await hydrateDocPage(body);
 }
 /** Swap the article body for the full bundled page (or back). */
-async function showFullPage(path, btn, hash, auto = false) {
+async function showFullPage(rawPath, btn, hash, auto = false) {
+    // Normalised HERE rather than at each call site, because they disagreed: the automatic
+    // open passes `docsPath` with its slashes stripped, while the button passes the raw
+    // data-fullpage attribute. The identity check below then failed on the first press, so
+    // pressing "short version" re-fetched the full page instead of toggling — it only looked
+    // like the view jumped to the top, and the SECOND press worked because the first had
+    // finally stored the button's spelling of the path.
+    const path = rawPath.replace(/^\/+|\/+$/g, '');
     const article = document.querySelector('.dh-article');
     const body = article?.querySelector('.dh-content');
     if (!article || !body)
@@ -2572,7 +2580,10 @@ async function showFullPage(path, btn, hash, auto = false) {
         if (lbl)
             lbl.textContent = b.getAttribute(`data-lbl-${which}`) || lbl.textContent;
     };
-    if (btn && article.dataset.full === path) { // toggle back to the short version
+    // An explicit press of the toggle always returns to the short version when a full page is
+    // on screen. Keyed on "a full page is shown" rather than on which one: the button says
+    // "short version", and it must mean it even if the paths ever drift apart again.
+    if (btn && !auto && article.dataset.full) { // toggle back to the short version
         body.innerHTML = article.dataset.shortHtml || body.innerHTML;
         delete article.dataset.full;
         btn.classList.remove('on');
@@ -2822,7 +2833,8 @@ async function hydrateDocPage(host) {
     const blocks = [...host.querySelectorAll('.dh-mermaid')];
     if (!blocks.length)
         return;
-    const m = window.mermaid;
+    // Fetched on demand: mermaid is 3.3 MB and most pages of the hub have no diagram at all.
+    const m = await ensureMermaid().catch(() => null);
     if (!m?.render)
         return; // leave the placeholder rather than a broken box
     const ticket = ++_hydrateSeq;

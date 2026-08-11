@@ -5870,7 +5870,6 @@
 
         <script src="js/lib/marked.min.js"></script>
         <script src="js/lib/purify.min.js"></script>
-        <script src="assets/cropper/cropper.min.js"></script>
         <!-- Conflict Warning Modal -->
         <div class="modal-overlay" id="modal-conflict-warning">
             <div class="modal glass" style="max-width: 500px;">
@@ -6617,8 +6616,9 @@
 
 
         <script src="assets/vendor/prism.min.js" data-manual></script>
-        <script src="assets/vendor/mermaid.min.js"></script>
-        <script src="assets/vendor/svg-pan-zoom.min.js"></script>
+        <!-- mermaid (3.3 MB) and svg-pan-zoom are NOT loaded here. Only the diagram viewer
+             and the docs hub use them, and they used to be parsed at every launch before the
+             window could paint. src/ui/lazy-vendor.ts fetches them on the first diagram. -->
         <!-- Modal: Conflict Warning with Tree -->
         <div class="modal-overlay" id="modal-conflict-tree">
             <div class="modal glass"

@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { t } from '../core/i18n.js';
+import { ensureMermaid, ensureSvgPanZoom } from '../ui/lazy-vendor.js';
 import { resumableDownloads } from './diagrams/resumable-downloads.js';
 import { modSync } from './diagrams/mod-sync.js';
 import { profileSystem } from './diagrams/profile-system.js';
@@ -17,6 +18,7 @@ import { cacheManagement } from './diagrams/cache-management.js';
 import { modArchitecture } from './diagrams/mod-architecture.js';
 import { diskIoLimiter } from './diagrams/disk-io-limiter.js';
 import { hostingFlow } from './diagrams/hosting-flow.js';
+import { lightweightArchitecture } from './diagrams/lightweight-architecture.js';
 import { oneClickInstall } from './diagrams/one-click-install.js';
 import { discordRpc } from './diagrams/discord-rpc.js';
 import { engineThreads } from './diagrams/engine-threads.js';
@@ -59,6 +61,7 @@ export const diagrams = {
     'mod-architecture': modArchitecture,
     'disk-io-limiter': diskIoLimiter,
     'hosting-flow': hostingFlow,
+    'lightweight-architecture': lightweightArchitecture,
     'one-click-install': oneClickInstall,
     'discord-rpc': discordRpc,
     'engine-threads': engineThreads,
@@ -92,29 +95,10 @@ let isDragging = false;
  */
 export function initInteractiveDocs() {
     console.log('[Docs] Initializing sub-system...');
-    // Mermaid Config
-    mermaid.initialize({
-        startOnLoad: false,
-        theme: 'base',
-        useMaxWidth: false,
-        htmlLabels: true, // Enable HTML labels for icons
-        securityLevel: 'loose', // Required for HTML labels
-        flowchart: {
-            clusterPadding: 65, // Increased space to allow labels at the top without overlap
-            nodeSpacing: 50,
-            rankSpacing: 50,
-            curve: 'basis'
-        },
-        themeVariables: {
-            primaryColor: '#3b82f6',
-            primaryTextColor: '#f1f5f9',
-            primaryBorderColor: '#3b82f6',
-            lineColor: '#475569',
-            fontFamily: 'Inter, sans-serif',
-            fontSize: '14px',
-            mainBkg: '#1e293b'
-        }
-    });
+    // Mermaid is NOT loaded here. It is 3.3 MB and only a diagram needs it, so it is
+    // fetched by ensureMermaid() when one is actually opened — along with the palette
+    // that used to be configured on this line. This function runs at every launch;
+    // most launches never open a diagram.
     // Global listeners
     document.getElementById('btn-close-docs-diagram')?.addEventListener('click', closeDiagram);
     document.getElementById('btn-docs-reset-zoom')?.addEventListener('click', resetZoom);
@@ -150,7 +134,10 @@ export function initInteractiveDocs() {
 export async function openDiagram(id, highlightNodeId = null) {
     const diagram = diagrams[id];
     if (!diagram) {
+        // Console-only used to mean a diagram button that silently did nothing — which is
+        // how `lightweight-architecture` sat broken: the click "worked", and nothing opened.
         console.error(`[Docs] Diagram "${id}" not found.`);
+        window.showToast?.(t('docs.diagram.missing') || `Diagram "${id}" not found`, 'error');
         return;
     }
     const modal = document.getElementById('modal-docs-diagram');
@@ -174,6 +161,11 @@ export async function openDiagram(id, highlightNodeId = null) {
     // Render Mermaid
     try {
         container.innerHTML = '';
+        // First diagram of the session pays for the engine; the rest are instant. The modal
+        // is already open and showing its title, so the wait reads as the diagram drawing.
+        const mermaid = await ensureMermaid();
+        if (!mermaid?.render)
+            throw new Error('mermaid unavailable');
         const { render } = mermaid;
         // Pre-translate definitions (handles {{key}} placeholders)
         const translatedDefinition = diagram.definition.replace(/\{\{([a-zA-Z0-9._-]+)\}\}/g, (match, key) => t(key));
@@ -194,7 +186,7 @@ export async function openDiagram(id, highlightNodeId = null) {
                 .replace(/#94a3b8/gi, 'var(--bmm-text-secondary)');
         });
         // Initialize Pan & Zoom
-        initPanZoom();
+        await initPanZoom();
         // Fix Cluster Labels Layout (Mermaid Centering override)
         // We use multiple calls to catch various render cycles
         fixClusterLabels();
@@ -754,9 +746,14 @@ function updateTaskyMascot(file) {
 /**
  * Initialize svg-pan-zoom on the rendered SVG
  */
-function initPanZoom() {
+async function initPanZoom() {
     const svgElement = document.querySelector('#mermaid-diagram-container svg');
     if (!svgElement)
+        return;
+    // Loaded next to mermaid rather than at boot. A diagram that cannot be dragged is
+    // still a readable diagram, so a failure here leaves the SVG alone.
+    const svgPanZoom = await ensureSvgPanZoom().catch(() => null);
+    if (!svgPanZoom)
         return;
     // Remove fixed attributes and styles set by Mermaid to allow pan-zoom control
     svgElement.removeAttribute('width');
