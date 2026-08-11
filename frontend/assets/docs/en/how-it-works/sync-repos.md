@@ -79,6 +79,35 @@ version differs from the one installed. Applying the update re-runs the sync abo
 the changed files (down to the changed chunks) and removing mods the host has dropped. That's why a
 small update to a huge collection costs a few MB.
 
+### A server with no manifest
+
+A host that simply serves a folder of mods has no `repo.json`, and until recently that made it
+unusable even though every file was right there. BMM can now read the server's own directory
+listing instead, and looks for a manifest to check it against in two places: beside the mods
+folder, then one level up — where a generated repo puts it. The search stops there rather than
+climbing, since a manifest further up belongs to a different repo.
+
+What it finds decides what you get:
+
+| Found | Result |
+|---|---|
+| A manifest whose signature verifies | Files it covers keep the guarantee they always had. |
+| A manifest whose signature does **not** verify | Treated as absent. It vouches for nothing, so its hashes are no better than the files vouching for themselves. |
+| No manifest | Everything is offered **unverified**. |
+
+Unverified mods can be installed, and are marked. **One** uncovered file makes the whole mod
+unverified — installing writes that file too, so partial coverage is not partial safety.
+
+The mark is stored on the mod, not worked out later. It is only knowable at install time: a
+later scan sees ordinary files on disk and would quietly promote them to the standing of mods
+whose bytes were actually checked. Re-syncing from a repo that has since gained hashes clears
+it, which is the same rule read the other way.
+
+!!! warning "What unverified costs"
+    A hash is what tells a good download from a corrupted, truncated or substituted one.
+    Without one there is nothing to compare against, and all three look identical. Install
+    unverified mods only from a host you trust.
+
 ### What a sync actually guarantees
 
 | Stage | Check |

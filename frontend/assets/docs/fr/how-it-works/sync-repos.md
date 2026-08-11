@@ -84,6 +84,38 @@ synchro ci-dessus — en ne transférant que les fichiers modifiés (jusqu'aux b
 retirant les mods que l'hôte a supprimés. D'où le coût de quelques Mo pour une petite mise à jour
 d'une énorme collection.
 
+### Un serveur sans manifeste
+
+Un hôte qui sert simplement un dossier de mods n'a pas de `repo.json`, et jusqu'ici ça le
+rendait inutilisable alors que chaque fichier était pourtant là. BMM peut désormais lire
+l'index de répertoire du serveur, et cherche un manifeste pour le confronter à deux endroits :
+à côté du dossier des mods, puis un niveau au-dessus — là où un dépôt généré le place. La
+recherche s'arrête là plutôt que de remonter : un manifeste plus haut appartient à un autre
+dépôt.
+
+Ce qu'il trouve décide de ce que tu obtiens :
+
+| Trouvé | Résultat |
+|---|---|
+| Un manifeste dont la signature vérifie | Les fichiers qu'il couvre gardent la garantie habituelle. |
+| Un manifeste dont la signature **ne** vérifie **pas** | Traité comme absent. Il ne cautionne rien, donc ses hachages ne valent pas mieux que des fichiers se portant garants d'eux-mêmes. |
+| Aucun manifeste | Tout est proposé **non vérifié**. |
+
+Les mods non vérifiés sont installables, et marqués. **Un seul** fichier non couvert rend le
+mod entier non vérifié — l'installation écrit aussi ce fichier, donc une couverture partielle
+n'est pas une sécurité partielle.
+
+La marque est stockée sur le mod, pas recalculée après coup. Elle n'est connaissable qu'à
+l'installation : un scan ultérieur voit des fichiers ordinaires sur le disque et les
+promouvrait silencieusement au rang des mods dont les octets ont réellement été vérifiés.
+Resynchroniser depuis un dépôt qui a depuis gagné des hachages l'efface — la même règle lue
+dans l'autre sens.
+
+!!! warning "Ce que coûte le non-vérifié"
+    Un hachage est ce qui distingue un bon téléchargement d'un fichier corrompu, tronqué ou
+    substitué. Sans lui il n'y a rien à comparer, et les trois se ressemblent exactement.
+    N'installe des mods non vérifiés que depuis un hôte de confiance.
+
 ### Ce qu'une synchro garantit réellement
 
 | Étape | Contrôle |

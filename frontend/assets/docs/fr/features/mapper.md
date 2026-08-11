@@ -39,6 +39,12 @@ tant que tu ne [synchronises](doc-page:features/library) pas le profil ensuite, 
 C'est pour ça que le Mapper est sûr pour expérimenter : le pire des cas est un mod mal formé,
 que tu peux reformer à nouveau — jamais un dossier de jeu rempli de fichiers perdus.
 
+Une chose à savoir sur les collisions, parce que le Mapper ne s'arrête pas pour demander.
+Déplace un dossier là où un dossier du même nom existe déjà et les deux sont **fusionnés**,
+comme le fait l'explorateur Windows — ce qui s'y trouvait déjà reste. Déplace un *fichier* sur
+un fichier du même nom et il le remplace, ce qui est précisément ce que le dépôt demandait. Un
+glisser malheureux peut donc te coûter un fichier, jamais une arborescence entière.
+
 ## Les deux arbres
 
 L'écran est divisé. À gauche, l'**arbre de fichiers du mod** — chaque dossier et fichier que

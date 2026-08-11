@@ -56,6 +56,10 @@ want, and it's bound; the row's buttons also **reset to default** or **clear** i
 
 !!! note "Use a modifier"
 
-    Combos that include <kbd>Ctrl</kbd>, <kbd>Shift</kbd> or <kbd>Alt</kbd> are recommended — a plain
-    letter would fire while you're typing in a field. BMM only dispatches a modifier-less shortcut
-    when no text field is focused.
+    Combos that include <kbd>Ctrl</kbd> or <kbd>Alt</kbd> are recommended — a plain letter would
+    fire while you're typing in a field. While a text field is focused BMM dispatches **only**
+    chords carrying Ctrl or Alt; everything else waits until you leave the field.
+
+    <kbd>Shift</kbd> does not count here. <kbd>Shift</kbd>+<kbd>S</kbd> is treated like a bare
+    letter, so it will not fire while you are typing — useful if that is what you wanted, and a
+    surprise if you expected it to work everywhere.

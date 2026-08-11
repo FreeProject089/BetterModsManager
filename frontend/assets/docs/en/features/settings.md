@@ -151,6 +151,22 @@ remove them here in one place.
 
 Toggle UI sounds, and review the keyboard shortcuts BMM responds to.
 
+### Session recorder (local)
+
+Records what happens on screen — your actions plus the JS and Rust logs — so a problem can be
+replayed and analysed instead of described. **Nothing is sent anywhere:** the recording stays
+on this machine and you export it yourself if you want to share it. Distinct from the
+telemetry above, which is opt-in and goes to a server; this one produces a file and stops
+there.
+
+Sensitive fields are masked as they are captured, so the unmasked values never enter the
+recording — see [Privacy & telemetry](doc-page:features/privacy-telemetry).
+
+### Scanning & mod updates
+
+How aggressively BMM rescans your mods folder and checks the repos your mods came from. Worth
+a look if you have a very large library and want startup to do less work.
+
 ### GitHub token
 
 An optional personal access token, used when BMM talks to GitHub (release checks, raw

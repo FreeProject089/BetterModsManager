@@ -4,6 +4,7 @@
     "index",
     "getting-started/install",
     "getting-started/first-launch",
+    "getting-started/migrating",
     "features/library",
     "features/modlist",
     "features/profiles",
@@ -58,7 +59,7 @@
         "en": "BMM installs, organises and shares your mods — across games, without ever touching the original files more than it has to.",
         "fr": "BMM installe, organise et partage tes mods — sur plusieurs jeux, sans jamais toucher aux fichiers d'origine plus qu'il ne le faut."
       },
-      "words": 593,
+      "words": 595,
       "diagrams": 0,
       "fr": true
     },
@@ -88,7 +89,22 @@
         "en": "Three steps. Do them in order — the second one is the one people skip, and it's the one that matters.",
         "fr": "Trois étapes. Dans l'ordre — la deuxième est celle qu'on saute, et c'est celle qui compte."
       },
-      "words": 425,
+      "words": 434,
+      "diagrams": 0,
+      "fr": true
+    },
+    {
+      "path": "getting-started/migrating",
+      "section": "getting-started",
+      "title": {
+        "en": "Migrating from OvGME or OMM",
+        "fr": "Migrer depuis OvGME ou OMM"
+      },
+      "summary": {
+        "en": "Written because the four questions below are the ones people actually ask before switching, and they were not answered anywhere.",
+        "fr": "Écrite parce que les quatre questions ci-dessous sont celles qu'on pose réellement avant de changer d'outil, et qu'elles n'étaient traitées nulle part."
+      },
+      "words": 703,
       "diagrams": 0,
       "fr": true
     },
@@ -118,7 +134,7 @@
         "en": "A .MM file is your complete setup, written down — and unlike a modpack, it carries the download links, so the person receiving it doesn't need to own the mods…",
         "fr": "Un fichier .MM, c'est ta configuration complète, écrite — et contrairement à un modpack, il embarque les liens de téléchargement : la personne qui le reçoit…"
       },
-      "words": 359,
+      "words": 410,
       "diagrams": 0,
       "fr": true
     },
@@ -133,7 +149,7 @@
         "en": "A profile is a saved answer to \"which mods are on, in what order, for this game\".",
         "fr": "Un profil est une réponse enregistrée à « quels mods sont actifs, dans quel ordre, pour ce jeu »."
       },
-      "words": 717,
+      "words": 719,
       "diagrams": 0,
       "fr": true
     },
@@ -148,7 +164,7 @@
         "en": "A modpack is a named bundle of mods you can toggle in one click. Where a profile is \"my setup for this game\", a modpack is \"this group of mods, together\" —…",
         "fr": "Un modpack est un lot de mods nommé, activable en un clic. Là où un profil répond à « ma configuration pour ce jeu », un modpack répond à « ce groupe de mods,…"
       },
-      "words": 409,
+      "words": 423,
       "diagrams": 0,
       "fr": true
     },
@@ -163,7 +179,7 @@
         "en": "A Server Repo is a shared, versioned collection of mods. Two things flow through it: you sync mods from a repo into a profile, and BMM uses the repo to tell…",
         "fr": "Un Dépôt Serveur est une collection de mods partagée et versionnée. Deux flux le traversent : tu synchronises des mods depuis un dépôt vers un profil, et BMM…"
       },
-      "words": 690,
+      "words": 1124,
       "diagrams": 1,
       "fr": true
     },
@@ -178,7 +194,7 @@
         "en": "Extend BMM with community plugins and automate actions.",
         "fr": "Étends BMM avec des plugins communautaires et automatise des actions."
       },
-      "words": 654,
+      "words": 676,
       "diagrams": 0,
       "fr": true
     },
@@ -190,10 +206,10 @@
         "fr": "Planification & automatisation"
       },
       "summary": {
-        "en": "Schedule BMM actions (one-time or recurring) — activate a mod, modpack, profile…",
-        "fr": "Planifie des actions BMM (ponctuelles ou récurrentes) — activer un mod, un modpack, un profil…"
+        "en": "Schedule BMM actions (one-time or recurring) — activate a mod, modpack, profile… with conditions (if/else) and custom commands. Tasks run while BMM is open.",
+        "fr": "Planifiez des actions BMM (ponctuelles ou récurrentes) — activer un mod, un modpack, un profil… avec conditions (si/sinon) et commandes personnalisées."
       },
-      "words": 752,
+      "words": 874,
       "diagrams": 0,
       "fr": true
     },
@@ -208,7 +224,7 @@
         "en": "Browse & install apps in one click.",
         "fr": "Parcours et installe des apps en un clic."
       },
-      "words": 670,
+      "words": 740,
       "diagrams": 0,
       "fr": true
     },
@@ -223,7 +239,7 @@
         "en": "Some mods are packaged wrong. The files are fine; the folders around them aren't. The Mapper fixes that without you unzipping anything by hand.",
         "fr": "Certains mods sont mal empaquetés. Les fichiers sont bons ; les dossiers autour, non. Le Mapper corrige ça sans que tu dézippes quoi que ce soit à la main."
       },
-      "words": 527,
+      "words": 607,
       "diagrams": 0,
       "fr": true
     },
@@ -253,7 +269,7 @@
         "en": "Settings is a long page, but most of it you set once and forget. This tour starts with the handful that change how BMM feels, then walks the rest section by…",
         "fr": "Les Paramètres forment une longue page, mais la plupart se règlent une fois pour toutes."
       },
-      "words": 1190,
+      "words": 1354,
       "diagrams": 0,
       "fr": true
     },
@@ -268,7 +284,7 @@
         "en": "Press Ctrl+K (Cmd+K on macOS) anywhere in BMM to open the command palette — a single search box laid over every page and every action. Type a few letters,",
         "fr": "Appuie sur Ctrl+K (Cmd+K sur macOS) n'importe où dans BMM pour ouvrir la palette de commandes — une seule barre de recherche par-dessus toutes les pages et"
       },
-      "words": 467,
+      "words": 519,
       "diagrams": 1,
       "fr": true
     },
@@ -298,7 +314,7 @@
         "en": "Speed limits per disk, space alerts, and how BMM copies files without freezing your PC.",
         "fr": "Limites de vitesse par disque, alertes d'espace, et comment BMM copie les fichiers sans figer ton PC."
       },
-      "words": 587,
+      "words": 619,
       "diagrams": 0,
       "fr": true
     },
@@ -328,7 +344,7 @@
         "en": "Customise every colour, font and element of BMM. Share themes in one click.",
         "fr": "Personnalise chaque couleur, police et élément de BMM. Partage tes thèmes en un clic."
       },
-      "words": 774,
+      "words": 781,
       "diagrams": 0,
       "fr": true
     },
@@ -388,7 +404,7 @@
         "en": "The first time BMM sees your mods folder it builds an index: for every mod, its file list, and for every file a content hash.",
         "fr": "La première fois que BMM voit ton dossier de mods, il construit un index : pour chaque mod, sa liste de fichiers, et pour chaque fichier un hash de contenu."
       },
-      "words": 698,
+      "words": 757,
       "diagrams": 1,
       "fr": true
     },
@@ -403,7 +419,7 @@
         "en": "A mod is only useful if it's the right bytes. A truncated download, a flaky drive, or a tampered file should never reach your game silently.",
         "fr": "Un mod n'est utile que s'il contient les bons octets. Un téléchargement tronqué, un disque capricieux ou un fichier altéré ne doivent jamais atteindre ton jeu…"
       },
-      "words": 716,
+      "words": 805,
       "diagrams": 2,
       "fr": true
     },
@@ -448,7 +464,7 @@
         "en": "A server repo turns one person's profile into a hosted source of truth: everyone who subscribes converges on the exact same mods, versions and order — and…",
         "fr": "Un dépôt serveur transforme le profil d'une personne en source de vérité hébergée : tous les abonnés convergent vers exactement les mêmes mods, versions et…"
       },
-      "words": 620,
+      "words": 1092,
       "diagrams": 2,
       "fr": true
     },
@@ -508,7 +524,7 @@
         "en": "BMM exposes two ways to drive it from outside: deeplinks (bmm://…, no token, fired at the running window) and a local HTTP API (token, 127.0.0.1 only).",
         "fr": "BMM expose deux façons de le piloter depuis l'extérieur : les deeplinks (bmm://…, sans token, envoyés à la fenêtre en cours) et une API HTTP locale (token,…"
       },
-      "words": 1196,
+      "words": 1362,
       "diagrams": 0,
       "fr": true
     },
@@ -553,7 +569,7 @@
         "en": "The features have their own pages. This one is about the interactions — the clicks, keys and small conveniences that aren't obvious until someone points at them.",
         "fr": "Les fonctionnalités ont leur propre page. Celle-ci parle des interactions — les clics, touches et petites commodités qu'on ne devine pas tant que quelqu'un ne…"
       },
-      "words": 481,
+      "words": 506,
       "diagrams": 0,
       "fr": true
     },
@@ -568,7 +584,7 @@
         "en": "Start here before reinstalling anything. Roughly ordered from \"most likely\" to \"something is actually wrong\".",
         "fr": "Commence ici avant de réinstaller quoi que ce soit. À peu près trié du « plus probable » au « là il y a vraiment un problème »."
       },
-      "words": 1285,
+      "words": 1298,
       "diagrams": 0,
       "fr": true
     },
@@ -580,7 +596,7 @@
         "fr": "Limites GitHub et le jeton d'accès personnel"
       },
       "summary": {
-        "en": "BMM reads a fair amount from GitHub: release feeds for update checks, catalog files, and the mod downloads a .mmlist points at.",
+        "en": "BMM reads a fair amount from GitHub: release feeds for update checks, catalog files, and the mod downloads a .mm points at.",
         "fr": "BMM lit pas mal de choses sur GitHub : les flux de releases pour les contrôles de mise à jour, des fichiers de catalogue, et les téléchargements de mods vers…"
       },
       "words": 584,

@@ -86,6 +86,16 @@ For apps you installed **outside** BMM, the catalog can detect the existing exec
 switch the card to "installed" instead of proposing a duplicate download — so a tool you
 already have doesn't show up asking to be fetched again.
 
+## Favorites & history
+
+Two tabs that are easy to miss because nothing points at them.
+
+**Favorites** is the star on any card — it collects the apps you keep coming back to, drawn
+from the catalogue, so the list survives uninstalling and reinstalling.
+
+**History** is every install, update and removal this machine has done, newest first. Useful
+for the question "what did I change just before this broke", which is otherwise unanswerable.
+
 ## Adding a source
 
 > Add raw JSON URLs of community catalogs.

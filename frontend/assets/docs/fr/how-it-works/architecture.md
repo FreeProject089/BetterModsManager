@@ -18,7 +18,7 @@ flowchart TB
         BRIDGE["pont api.ts<br/>(invoke)"]
     end
     subgraph CORE["Cœur — Rust (natif)"]
-        CMDS["~330 commandes<br/>(scan, déploiement, hash…)"]
+        CMDS["~345 commandes<br/>(scan, déploiement, hash…)"]
         WORK["Sous-processus worker<br/>(I/O lourdes)"]
         HTTP["API locale + sidecar MCP"]
     end

@@ -18,7 +18,7 @@ flowchart TB
         BRIDGE["api.ts bridge<br/>(invoke)"]
     end
     subgraph CORE["Core — Rust (native)"]
-        CMDS["~330 commands<br/>(scan, deploy, hash…)"]
+        CMDS["~345 commands<br/>(scan, deploy, hash…)"]
         WORK["Worker subprocess<br/>(heavy I/O)"]
         HTTP["Local API + MCP sidecar"]
     end

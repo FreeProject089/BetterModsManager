@@ -160,6 +160,22 @@ Gère tes tags de mods personnalisés — les libellés par lesquels tu filtres 
 
 Active/coupe les sons de l'interface, et consulte les raccourcis clavier auxquels BMM répond.
 
+### Enregistreur de session (local)
+
+Enregistre ce qui se passe à l'écran — tes actions plus les logs JS et Rust — pour qu'un
+problème puisse être rejoué et analysé plutôt que décrit. **Rien n'est envoyé nulle part :**
+l'enregistrement reste sur cette machine et c'est toi qui l'exportes si tu veux le partager.
+À distinguer de la télémétrie ci-dessus, qui est opt-in et part vers un serveur ; celui-ci
+produit un fichier et s'arrête là.
+
+Les champs sensibles sont masqués à la capture, donc les valeurs en clair n'entrent jamais
+dans l'enregistrement — voir [Confidentialité et télémétrie](doc-page:features/privacy-telemetry).
+
+### Analyse et mises à jour des mods
+
+À quel point BMM rescanne ton dossier de mods et interroge les dépôts d'où ils viennent. À
+regarder si ta bibliothèque est très grosse et que tu veux alléger le démarrage.
+
 ### Token GitHub
 
 Un token d'accès personnel optionnel, utilisé quand BMM parle à GitHub (vérifs de release,

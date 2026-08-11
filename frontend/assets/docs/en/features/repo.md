@@ -64,12 +64,48 @@ to a repo that publishes versions.
 
 ## Hosting your own repo
 
-You can turn your own mods into a repo other people sync from. It happens in two steps:
+You can turn your own mods into a repo other people sync from. The Host tab is split in two:
+**producing the `repo.json`**, then **serving the files**.
 
-**Generate.** BMM builds a repo from the profiles you choose — a `mods/` folder plus a
-`repo.json` manifest that lists every mod, its version, per-file SHA-256 hashes, and an author
-changelog. The manifest is **cryptographically signed with your creator key**, so anyone
-syncing it can confirm it really came from you and hasn't been tampered with.
+### Three ways to produce the manifest
+
+They are alternatives — pick the one that matches where your mods already are.
+
+| Route | What it does | Use it when |
+|---|---|---|
+| **Full export** | Copies every mod into an output folder alongside the manifest. | Starting from scratch; the mods are on this machine. |
+| **Manifest only** | Writes just `repo.json` for a folder BMM can read here. **Nothing is copied.** | The mods are already where you want them. |
+| **Update from the server** | Reads your server's directory listing and writes the manifest without pulling the repo back. | The mods live only on the server. |
+
+Whichever you use, the manifest lists every mod, its version, per-file SHA-256 hashes (plus
+4 MB block hashes on large files) and any changelog, and is **signed with your creator key** —
+so anyone syncing can confirm it came from you and was not tampered with. Every generation
+re-signs, including updates.
+
+**Your server does not have to move.** The manifest carries a layout template — `{id}` and
+`{path}`, default `mods/{id}/{path}` — so files already served under, say, `addons/<mod>/`
+are described rather than relocated. In *Manifest only* the layout is derived from where the
+manifest lands relative to the folder, so `repo.json` and the folder stay portable together.
+
+### Updating
+
+Run the same generation again. The repo keeps its identity — same seed and id — so
+subscribers see an update rather than an unrelated repo, and you are told what was **added**,
+**changed** and **removed**. That last one matters: a mistyped path writes a perfectly valid
+manifest describing an empty server.
+
+There are no version numbers to bump; changes are detected by hash.
+
+*Update from the server* goes further: it compares the listing's sizes and timestamps against
+your last manifest and downloads only what actually changed, reusing the recorded hash for
+everything else. It reports **what the manifest is missing** separately from what merely
+changed — an incomplete repo and a stale one are different problems. It writes `repo.json`
+locally; you upload that one file with the client you already use, so BMM never needs write
+access to your server.
+
+!!! note "Requires directory listing"
+    *Update from the server* reads your server's own index, so `autoindex on` (nginx) or the
+    equivalent must be enabled. Without it BMM cannot see what the server holds.
 
 **Host.** Serve the generated repo over BMM's built-in HTTP server so others can reach it.
 Optional switches make it public without port-forwarding gymnastics:
@@ -81,8 +117,16 @@ Optional switches make it public without port-forwarding gymnastics:
 | **Upload limit** | Caps outbound speed so hosting doesn't starve your own connection. |
 | **Download password** | Optional. Subscribers must enter it on first connect (sent as `X-Repo-Password`); blank = open repo. Distinct from the admin password. |
 
-Repo owners also get **access control** — whitelists and bans by IP or creator key — so a
-private repo stays private.
+Repo owners also get **access control** — allow lists and bans by IP, by creator key, or by
+**BetterCommunity account** — so a private repo stays private.
+
+Account entries are worth preferring. `X-Creator-ID` is supplied by the caller, so a ban on
+it is evaded by dropping the header and an allow list is passed by claiming an id that is on
+it. An account entry is checked against a short-lived attestation signed by BetterCommunity
+and verified offline, and it matches every identifier that account holds — its bcid, its
+linked creator ids and its linked Discord ids — so banning the account follows the person
+rather than one of their handles. Account entries apply only when the repo requires an
+account, since that is the only case where a signed identity exists.
 
 ## Admin panel & monitoring
 

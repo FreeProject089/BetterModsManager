@@ -91,6 +91,17 @@ Pour les apps que tu as installées **hors** de BMM, le catalogue peut détecter
 existant et basculer la carte en « installé » au lieu de proposer un téléchargement en double
 — pour qu'un outil que tu as déjà ne réapparaisse pas en demandant à être récupéré.
 
+## Favoris & historique
+
+Deux onglets faciles à rater parce que rien n'y renvoie.
+
+**Favoris**, c'est l'étoile sur une carte — il rassemble les apps sur lesquelles tu reviens,
+prises dans le catalogue, donc la liste survit à une désinstallation puis réinstallation.
+
+**Historique**, c'est chaque installation, mise à jour et suppression faite sur cette machine,
+la plus récente en premier. Utile pour la question « qu'est-ce que j'ai changé juste avant que
+ça casse », sans réponse autrement.
+
 ## Ajouter une source
 
 > Ajoute les URL JSON brutes de catalogues communautaires.

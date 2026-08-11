@@ -39,6 +39,12 @@ the game until you later [sync](doc-page:features/library) the profile, exactly 
 That's why the Mapper is safe to experiment in: the worst case is a mis-shaped mod, which you
 can reshape again — never a game folder full of stray files.
 
+One thing to know about collisions, since the Mapper won't stop to ask. Move a folder onto a
+place where a folder of the same name already exists and the two are **merged**, the way
+Windows Explorer merges them — what was already in there stays. Move a *file* onto a file of
+the same name and it replaces it, which is what dropping it there asked for. So a mistaken drag
+can cost you one file, never a whole tree.
+
 ## The two trees
 
 The screen is split. On the left is the **mod's file tree** — every folder and file the mod

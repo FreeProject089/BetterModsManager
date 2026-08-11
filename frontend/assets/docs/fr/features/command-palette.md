@@ -62,6 +62,10 @@ d'**effacer**.
 
 !!! note "Utilise un modificateur"
 
-    Les combinaisons avec <kbd>Ctrl</kbd>, <kbd>Shift</kbd> ou <kbd>Alt</kbd> sont recommandées — une
-    simple lettre se déclencherait pendant que tu tapes dans un champ. BMM ne déclenche un raccourci
-    sans modificateur que si aucun champ de texte n'est actif.
+    Les combinaisons avec <kbd>Ctrl</kbd> ou <kbd>Alt</kbd> sont recommandées — une simple lettre
+    se déclencherait pendant que tu tapes dans un champ. Quand un champ de texte est actif, BMM ne
+    déclenche **que** les accords portant Ctrl ou Alt ; le reste attend que tu quittes le champ.
+
+    <kbd>Shift</kbd> ne compte pas ici. <kbd>Shift</kbd>+<kbd>S</kbd> est traité comme une lettre
+    seule : il ne se déclenchera pas pendant la saisie — pratique si c'est ce que tu voulais, et
+    surprenant si tu l'attendais partout.

@@ -66,14 +66,50 @@ de mises à jour, lie le mod à un dépôt qui publie des versions.
 
 ## Héberger ton propre dépôt
 
-Tu peux transformer tes propres mods en un dépôt d'où d'autres synchronisent. Ça se fait en
-deux étapes :
+Tu peux transformer tes propres mods en un dépôt d'où d'autres synchronisent. L'onglet Host
+est séparé en deux : **produire le `repo.json`**, puis **servir les fichiers**.
 
-**Générer.** BMM construit un dépôt à partir des profils que tu choisis — un dossier `mods/`
-plus un manifeste `repo.json` qui liste chaque mod, sa version, les hachages SHA-256 par
-fichier, et un changelog d'auteur. Le manifeste est **signé cryptographiquement avec ta clé de
-créateur**, pour que quiconque le synchronise puisse confirmer qu'il vient bien de toi et n'a
-pas été altéré.
+### Trois façons de produire le manifeste
+
+Ce sont des alternatives — choisis celle qui correspond à l'endroit où tes mods se trouvent
+déjà.
+
+| Voie | Ce qu'elle fait | Quand l'utiliser |
+|---|---|---|
+| **Export complet** | Copie chaque mod dans un dossier de sortie, à côté du manifeste. | Tu pars de zéro ; les mods sont sur cette machine. |
+| **Manifeste seul** | Écrit seulement `repo.json` pour un dossier que BMM peut lire ici. **Rien n'est copié.** | Les mods sont déjà là où tu les veux. |
+| **Mettre à jour depuis le serveur** | Lit l'index de ton serveur et écrit le manifeste sans rapatrier le dépôt. | Les mods n'existent que sur le serveur. |
+
+Quelle que soit la voie, le manifeste liste chaque mod, sa version, les hachages SHA-256 par
+fichier (plus des hachages de blocs de 4 Mo sur les gros fichiers) et le changelog éventuel,
+et il est **signé avec ta clé de créateur** — pour que quiconque le synchronise confirme qu'il
+vient de toi et n'a pas été altéré. Chaque génération resigne, y compris les mises à jour.
+
+**Ton serveur n'a pas à bouger.** Le manifeste porte un gabarit de disposition — `{id}` et
+`{path}`, par défaut `mods/{id}/{path}` — donc des fichiers déjà servis sous, par exemple,
+`addons/<mod>/` sont décrits plutôt que déplacés. En *Manifeste seul*, la disposition est
+déduite de la position du manifeste par rapport au dossier, si bien que `repo.json` et le
+dossier restent portables ensemble.
+
+### Mettre à jour
+
+Relance la même génération. Le dépôt garde son identité — même seed, même id — donc les
+abonnés voient une mise à jour et non un dépôt inconnu, et on te dit ce qui a été **ajouté**,
+**modifié** et **retiré**. Ce dernier compte : un chemin mal tapé écrit un manifeste
+parfaitement valide décrivant un serveur vide.
+
+Il n'y a aucun numéro de version à incrémenter ; les changements sont détectés par hachage.
+
+*Mettre à jour depuis le serveur* va plus loin : elle compare les tailles et dates du listing
+à ton dernier manifeste et ne télécharge que ce qui a réellement changé, réutilisant le
+hachage enregistré pour le reste. Elle sépare **ce qui manque au manifeste** de ce qui a
+simplement changé — un dépôt incomplet et un dépôt périmé sont deux problèmes différents.
+Elle écrit `repo.json` en local ; tu envoies ce seul fichier avec le client dont tu te sers
+déjà, donc BMM n'a jamais besoin d'un accès en écriture à ton serveur.
+
+!!! note "Nécessite l'index de répertoire"
+    *Mettre à jour depuis le serveur* lit l'index de ton serveur : `autoindex on` (nginx) ou
+    l'équivalent doit être activé. Sans lui, BMM ne peut pas voir ce que le serveur contient.
 
 **Héberger.** Sers le dépôt généré via le serveur HTTP intégré de BMM pour que d'autres y
 accèdent. Des options facultatives le rendent public sans gymnastique de port-forwarding :
@@ -85,8 +121,17 @@ accèdent. Des options facultatives le rendent public sans gymnastique de port-f
 | **Limite d'upload** | Plafonne la vitesse sortante pour que l'hébergement n'affame pas ta connexion. |
 | **Mot de passe de téléchargement** | Optionnel. Les abonnés doivent le saisir à la première connexion (envoyé en `X-Repo-Password`) ; vide = dépôt ouvert. Distinct du mot de passe admin. |
 
-Les propriétaires disposent aussi d'un **contrôle d'accès** — listes blanches et bans par IP
-ou clé de créateur — pour qu'un dépôt privé reste privé.
+Les propriétaires disposent aussi d'un **contrôle d'accès** — listes d'autorisation et bans
+par IP, par clé de créateur, ou par **compte BetterCommunity** — pour qu'un dépôt privé reste
+privé.
+
+Les entrées par compte sont à préférer. `X-Creator-ID` est fourni par l'appelant : un ban
+dessus se contourne en retirant l'en-tête, et une liste d'autorisation se franchit en
+réclamant un id qui y figure. Une entrée par compte est vérifiée contre une attestation
+courte signée par BetterCommunity et validée hors ligne, et elle correspond à **tous** les
+identifiants de ce compte — son bcid, ses clés de créateur et ses comptes Discord liés — donc
+bannir le compte suit la personne plutôt qu'un seul de ses pseudonymes. Ces entrées ne
+s'appliquent que si le dépôt exige un compte, seul cas où une identité signée existe.
 
 ## Panneau d'admin & monitoring
 
