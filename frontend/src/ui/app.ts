@@ -121,7 +121,15 @@ export function toast(message, type = 'info', duration = 3000, icon = '') {
         el.addEventListener('animationend', () => el.remove(), { once: true });
     };
 
-    setTimeout(remove, duration);
+    // `duration: 0` = stays until the caller dismisses it. A "working…" toast on a
+    // fixed timer either vanishes while the work is still running or, worse, lingers
+    // next to the finished result — which is how the integrity check ended up showing
+    // "checking…" beside its own completed report.
+    const timer = duration > 0 ? setTimeout(remove, duration) : null;
+    return () => {
+        if (timer) clearTimeout(timer);
+        remove();
+    };
 }
 
 // ── Tasky Sync Loading ──────────────────────────────────────

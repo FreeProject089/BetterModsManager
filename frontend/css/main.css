@@ -6400,24 +6400,8 @@ select:focus {
 .btn-xs { padding: 3px 8px !important; font-size: 11px !important; gap: 4px !important; border-radius: 6px !important; }
 
 /* ── Tooltip ── */
-/* [data-tooltip] is rendered by the shared fixed tooltip (src/ui/tooltips.ts) —
-   never clipped by overflow ancestors or window edges, unlike the old ::after. */
-#bmm-fixed-tooltip {
-    position: fixed;
-    z-index: 2147483646;            /* above modals & the tutorial overlay */
-    background: var(--bmm-tasky-bubble-bg, rgba(10,10,20,0.95));
-    color: var(--bmm-tasky-bubble-text, var(--text-primary));
-    font-size: 11px;
-    padding: 4px 8px;
-    border-radius: 6px;
-    max-width: 320px;
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity 0.12s;
-    border: 1px solid var(--bmm-tasky-bubble-border, var(--border));
-    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-}
-#bmm-fixed-tooltip.visible { opacity: 1; }
+/* [data-tooltip] now feeds the Tasky bubble (src/ui/tooltips.ts); the app has one
+   tooltip, so the second box this used to render is gone. */
 
 .profile-select option {
     background: var(--bg-secondary) !important;
@@ -14329,9 +14313,7 @@ body.bmm-theme-light .nav-item:hover .nav-label { color: var(--bmm-accent) !impo
 }
 .plug-doc-tip svg { flex-shrink: 0; color: var(--cyan); margin-top: 1px; }
 
-/* ── Suppress CSS data-tooltip inside view-plugins (Tasky replaces it) ───── */
-#view-plugins [data-tooltip]::after,
-#view-plugins [data-tooltip]::before { display: none !important; }
+
 
 /* ── cURL / PS1 syntax highlight ─────────────────────────────────────────── */
 .hlc-kw      { color: var(--cyan); font-weight: 600; }

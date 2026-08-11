@@ -1,45 +1,37 @@
 // @ts-nocheck
-// ── Fixed-position tooltips for [data-tooltip] ─────────────────────────────────
-// The old pure-CSS ::after tooltips were clipped by overflow:hidden ancestors and
-// could render off-screen near window edges (and below high-z modals). This
-// renders ONE shared tooltip at <body> level with position:fixed, clamped to the
-// viewport, flipping below the target when there is no room above.
+// ── [data-tooltip] → the Tasky bubble ──────────────────────────────────────────
+//
+// There used to be two tooltip systems on screen at once: this module rendered its
+// own fixed box for [data-tooltip], while showTaskyHelp() rendered the mascot
+// bubble. Elements carrying both — the Mapper's "Show tips" button, for one — showed
+// two tooltips saying the same thing, stacked.
+//
+// The conflict was already known and patched in one place: main.css suppressed the
+// CSS tooltip inside #view-plugins "because Tasky replaces it", and show() below
+// carried the matching hardcoded opt-out. That is a per-view fix for an app-wide
+// problem, and every new view had to remember it.
+//
+// So [data-tooltip] now feeds the Tasky bubble instead of a second box. Nothing in
+// the markup changes — the ~60 existing data-tooltip attributes keep working, they
+// just render as the one tooltip the app actually has.
 
-let _tip: HTMLElement | null = null;
+import { showTaskyHelp, hideTaskyHelp } from '../docs/interactive-docs.js';
+
 let _currentTarget: HTMLElement | null = null;
-
-function ensureTip(): HTMLElement {
-    if (_tip && document.body.contains(_tip)) return _tip;
-    _tip = document.createElement('div');
-    _tip.id = 'bmm-fixed-tooltip';
-    document.body.appendChild(_tip);
-    return _tip;
-}
 
 function show(target: HTMLElement): void {
     const text = target.getAttribute('data-tooltip');
-    if (!text) return;
-    // Plugins page uses Tasky tooltips instead (matches the old CSS opt-out).
-    if (target.closest('#view-plugins')) return;
+    if (!text || !text.trim()) return;
     _currentTarget = target;
-    const tip = ensureTip();
-    tip.textContent = text;
-    tip.classList.add('visible');
-
-    const r = target.getBoundingClientRect();
-    // Measure after content set
-    const tw = tip.offsetWidth, th = tip.offsetHeight;
-    let x = r.left + r.width / 2 - tw / 2;
-    x = Math.max(6, Math.min(x, window.innerWidth - tw - 6));   // clamp horizontally
-    let y = r.top - th - 7;                                      // prefer above
-    if (y < 6) y = r.bottom + 7;                                 // flip below if no room
-    tip.style.left = x + 'px';
-    tip.style.top = y + 'px';
+    // isLiteral: the attribute holds finished text, not an i18n key. i18n.ts already
+    // resolves data-i18n-tooltip into data-tooltip, so translation happens upstream.
+    showTaskyHelp(text, 'info', true);
 }
 
 function hide(): void {
+    if (!_currentTarget) return;
     _currentTarget = null;
-    _tip?.classList.remove('visible');
+    hideTaskyHelp();
 }
 
 export function initTooltips(): void {
@@ -52,7 +44,7 @@ export function initTooltips(): void {
         const t = (e.target as HTMLElement)?.closest?.('[data-tooltip]');
         if (t && t === _currentTarget && !(e.relatedTarget as HTMLElement)?.closest?.('[data-tooltip]')) hide();
     }, true);
-    // Safety: hide on scroll/click so it never lingers in a stale position.
+    // Safety: hide on scroll/click so it never lingers over stale content.
     window.addEventListener('scroll', hide, true);
     document.addEventListener('mousedown', hide, true);
 }

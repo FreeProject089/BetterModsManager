@@ -521,9 +521,12 @@ export async function scanModsFolder() {
 }
 
 export async function verifyIntegrity() {
+  // Held open for the whole check, then dismissed as the report appears — the modal IS
+  // the completion signal, so a second "done" toast would just repeat it.
+  const dismiss = toast(t('integrity.checking'), 'info', 0);
   try {
-    toast(t('integrity.checking'), 'info');
     const alteredFiles = await invoke('verify_integrity');
+    dismiss();
     const modal = document.getElementById('modal-integrity');
     const content = document.getElementById('integrity-report-content');
     if (!modal || !content) return;
@@ -540,5 +543,8 @@ export async function verifyIntegrity() {
     }
     modal.classList.add('open');
     dispatchBmmAction(BMM_ACTIONS.INTEGRITY_CHECK);
-  } catch (err) { toast(t('common.error') + ' : ' + err, 'error'); }
+  } catch (err) {
+    dismiss();
+    toast(t('common.error') + ' : ' + err, 'error');
+  }
 }
