@@ -6881,5 +6881,7 @@
   "i18n.testOn": "Sandbox is LIVE app-wide — everything now speaks your draft",
   "i18n.testOff": "Back to the real translations",
   "settings.tipsVisible": "Show tips",
-  "settings.tipsVisibleDesc": "The explanation boxes across pages and settings. Hiding them never hides warnings."
+  "settings.tipsVisibleDesc": "The explanation boxes across pages and settings. Hiding them never hides warnings.",
+  "community.offline": "You are offline. The blog will load once the connection is back.",
+  "community.serverDown": "BetterCommunity is not reachable right now — the server may be down or updating. Everything else in BMM keeps working."
 }

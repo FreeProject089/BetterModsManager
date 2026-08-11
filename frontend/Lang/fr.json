@@ -6879,5 +6879,7 @@
   "i18n.testOn": "Le bac à sable est ACTIF partout — toute l’app parle ton brouillon",
   "i18n.testOff": "Retour aux vraies traductions",
   "settings.tipsVisible": "Afficher les astuces",
-  "settings.tipsVisibleDesc": "Les encadrés d'explication dans les pages et réglages. Les masquer ne masque jamais les avertissements."
+  "settings.tipsVisibleDesc": "Les encadrés d'explication dans les pages et réglages. Les masquer ne masque jamais les avertissements.",
+  "community.offline": "Tu es hors ligne. Le blog se chargera dès que la connexion revient.",
+  "community.serverDown": "BetterCommunity est injoignable pour le moment — le serveur est peut-être arrêté ou en mise à jour. Tout le reste de BMM continue de fonctionner."
 }
