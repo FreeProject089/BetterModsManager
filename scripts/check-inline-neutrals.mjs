@@ -18,16 +18,34 @@ import { fileURLToPath } from 'node:url';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const html = readFileSync(join(ROOT, 'frontend/index.html'), 'utf8');
 
-// A budget rather than zero: the rest of the file has hundreds of these and rewriting it
-// wholesale is a separate job. This stops the number GROWING, and every panel cleaned up
-// lowers it. Drop the number when you clean one.
-const BUDGET = 150;
+// Two shapes are correct and are not counted:
+//
+//  · box-shadow / text-shadow. A shadow is black in every theme — that is what a shadow
+//    is. Tokenising it would be wrong, not thorough.
+//  · a literal used as a var() FALLBACK, `var(--bmm-border, rgba(...))`. It only applies
+//    when the token is missing, which is exactly what a fallback is for.
+//
+// What remains after those is a small tail of odd alphas (0.01, 0.1, 0.12) that the
+// surface ladder has no step for. The budget covers them so the check passes today while
+// still failing the moment someone adds a new wash.
+const BUDGET = 8;
 
 const NEUTRAL = /rgba\(\s*(?:255\s*,\s*255\s*,\s*255|0\s*,\s*0\s*,\s*0)\s*,\s*[\d.]+\s*\)/g;
+// Written deliberately, not generated. A previous version of this line ended in a
+// literal backspace (0x08) where a word boundary was meant — a VALID regex requiring a
+// control character after the property name, so nothing was ever exempt and the count
+// was silently wrong. The same accident has happened once before in scripts/, and it is
+// invisible in every editor. Matching the colon instead removes the need for \b at all.
+const EXEMPT_PROP = /^\s*(?:box-shadow|text-shadow|filter|backdrop-filter)\s*:/i;
 
 const offenders = [];
 for (const m of html.matchAll(/style="([^"]*)"/g)) {
-  for (const hit of m[1].matchAll(NEUTRAL)) offenders.push(hit[0]);
+  for (const decl of m[1].split(';')) {
+    if (EXEMPT_PROP.test(decl)) continue;
+    // Strip var() fallbacks before looking: `var(--tok, rgba(...))` is guarded already.
+    const bare = decl.replace(/var\(\s*--[a-zA-Z0-9-]+\s*,[^)]*\)/g, '');
+    for (const hit of bare.matchAll(NEUTRAL)) offenders.push(hit[0]);
+  }
 }
 
 if (offenders.length > BUDGET) {

@@ -131,7 +131,7 @@
             </div>
 
             <!-- Bottom progress (full-width) -->
-            <div style="position:fixed;bottom:0;left:0;width:100%;height:2px;background:rgba(255,255,255,0.05);">
+            <div style="position:fixed;bottom:0;left:0;width:100%;height:2px;background:var(--bmm-s05);">
                 <div id="ld-prog"
                     style="height:100%;width:0%;background:linear-gradient(90deg,#00c2ff 0%,#3b82f6 55%,#fbbf24 100%);opacity:0;border-radius:0 1px 1px 0;">
                 </div>
@@ -953,13 +953,13 @@
 
                             <!-- Goal-gradient: the journey starts at 25% (language already done),
                                  not 0% — so the next steps feel "almost there", not "from scratch". -->
-                            <div class="gs-checklist" style="max-width:420px;margin:34px auto 0;text-align:left;padding:18px 20px;border-radius:16px;border:1px solid var(--bmm-border,rgba(255,255,255,0.1));background:var(--bmm-bg-elevated,rgba(255,255,255,0.03))">
+                            <div class="gs-checklist" style="max-width:420px;margin:34px auto 0;text-align:left;padding:18px 20px;border-radius:16px;border:1px solid var(--bmm-border,var(--bmm-s10));background:var(--bmm-bg-elevated,var(--bmm-s03))">
                                 <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:4px">
                                     <span style="font-size:14px;font-weight:800;color:var(--text-primary,#fff)" data-i18n="gs.title">You're already 25% set up</span>
                                     <span style="font-size:12px;font-weight:700;color:var(--bmm-accent,#f97316);font-variant-numeric:tabular-nums">1 / 4</span>
                                 </div>
                                 <div style="font-size:12px;color:var(--text-muted,#8a8a96);margin-bottom:12px" data-i18n="gs.sub">3 quick steps to a mod setup that survives anything</div>
-                                <div style="height:6px;border-radius:999px;background:var(--bmm-bg,rgba(0,0,0,0.25));overflow:hidden;margin-bottom:14px">
+                                <div style="height:6px;border-radius:999px;background:var(--bmm-bg,var(--bmm-bg-base));overflow:hidden;margin-bottom:14px">
                                     <div style="height:100%;width:25%;border-radius:999px;background:linear-gradient(90deg,#f97316,#fbbf24)"></div>
                                 </div>
                                 <div style="display:flex;flex-direction:column;gap:9px;font-size:13px">
@@ -1323,7 +1323,7 @@
                         <!-- SHA-256 toggle. margin-top separates it from the description
                              field above, which otherwise sat flush against this card. -->
                         <div
-                            style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(255,255,255,0.03);border-radius:8px;border:1px solid var(--border);margin-top:14px;margin-bottom:12px">
+                            style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--bmm-s03);border-radius:8px;border:1px solid var(--border);margin-top:14px;margin-bottom:12px">
                             <label class="switch" style="flex-shrink:0">
                                 <input type="checkbox" id="mm-include-hashes" checked>
                                 <span class="slider round"></span>
@@ -1363,7 +1363,7 @@
                         </div>
                         <!-- Export progress — shown while Rust processes mod folders -->
                         <div id="export-progress-overlay"
-                            style="display:none;margin-top:16px;padding:14px;background:rgba(0,0,0,0.25);border-radius:10px;border:1px solid rgba(var(--accent-rgb,59,130,246),0.15)">
+                            style="display:none;margin-top:16px;padding:14px;background:var(--bmm-bg-base);border-radius:10px;border:1px solid rgba(var(--accent-rgb,59,130,246),0.15)">
                             <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)"
                                     stroke-width="2.5" style="animation:spin 1s linear infinite;flex-shrink:0">
@@ -1377,7 +1377,7 @@
                                     style="margin-left:auto;font-size:10px;padding:2px 10px;border-radius:6px;"
                                     data-i18n="common.cancel">Annuler</button>
                             </div>
-                            <div style="height:4px;background:rgba(255,255,255,0.06);border-radius:2px;overflow:hidden">
+                            <div style="height:4px;background:var(--bmm-s06);border-radius:2px;overflow:hidden">
                                 <div id="export-progress-bar"
                                     style="height:100%;background:var(--accent);width:0%;transition:width 0.25s ease;box-shadow:0 0 8px var(--accent)">
                                 </div>
@@ -1390,7 +1390,7 @@
 
                     <!-- Imported modlist preview -->
                     <div class="glass-card" id="imported-preview"
-                        style="display:none;border:1px solid rgba(255,255,255,0.07);">
+                        style="display:none;border:1px solid var(--bmm-s07);">
                         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
                             <div style="display:flex;align-items:center;gap:10px;">
                                 <div
@@ -3338,7 +3338,7 @@
                             </div>
 
                             <div
-                                style="display:flex;gap:10px;padding:12px;background:rgba(255,255,255,0.02);border-radius:10px;border:1px solid var(--border)">
+                                style="display:flex;gap:10px;padding:12px;background:var(--bmm-s02);border-radius:10px;border:1px solid var(--border)">
                                 <div style="flex:1">
                                     <div style="font-size:12px;font-weight:700;color:var(--text-primary)"
                                         data-i18n="settings.langContribute">Contribuer à la
@@ -3542,7 +3542,7 @@
                             </div>
 
                             <div
-                                style="display:flex;align-items:center;gap:10px;padding:12px;background:rgba(255,255,255,0.02);border-radius:10px;border:1px solid var(--border)">
+                                style="display:flex;align-items:center;gap:10px;padding:12px;background:var(--bmm-s02);border-radius:10px;border:1px solid var(--border)">
                                 <div style="flex:1">
                                     <div style="font-size:12px;font-weight:700;color:var(--text-primary)"
                                         data-i18n="settings.autoUpdateToggle">Check for updates automatically</div>
@@ -3619,7 +3619,7 @@
                             <div style="display:flex;flex-direction:column;gap:14px;margin-top:4px">
                                 <!-- Toggle Tasky visible -->
                                 <div
-                                    style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:10px">
+                                    style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--bmm-s03);border:1px solid var(--border);border-radius:10px">
                                     <div>
                                         <div style="font-size:13px;font-weight:600;color:var(--text-primary)"
                                             data-i18n="settings.taskyVisible">Afficher Tasky</div>
@@ -3635,7 +3635,7 @@
                                 </div>
                                 <!-- Toggle Tasky animation -->
                                 <div
-                                    style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:10px">
+                                    style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--bmm-s03);border:1px solid var(--border);border-radius:10px">
                                     <div>
                                         <div style="font-size:13px;font-weight:600;color:var(--text-primary)"
                                             data-i18n="settings.taskyAnimation">Animation de Tasky</div>
@@ -3651,7 +3651,7 @@
                                 </div>
                                 <!-- Toggle Tasky tooltip -->
                                 <div
-                                    style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:10px">
+                                    style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--bmm-s03);border:1px solid var(--border);border-radius:10px">
                                     <div>
                                         <div style="font-size:13px;font-weight:600;color:var(--text-primary)"
                                             data-i18n="settings.taskyTooltip">Bulles d'aide (Tooltips)</div>
@@ -3667,7 +3667,7 @@
                                 </div>
                                 <!-- Tasky tooltip opacity -->
                                 <div
-                                    style="padding:10px 14px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:10px">
+                                    style="padding:10px 14px;background:var(--bmm-s03);border:1px solid var(--border);border-radius:10px">
                                     <div
                                         style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
                                         <div style="font-size:13px;font-weight:600;color:var(--text-primary)"
@@ -3683,7 +3683,7 @@
                                         style="width:100%;accent-color:var(--accent);cursor:pointer" />
                                 </div>
                                 <!-- Sound effects toggle (moved from Sound & Animations card) -->
-                                <div style="display:flex;align-items:center;gap:10px;padding:12px;background:rgba(255,255,255,0.02);border-radius:10px;border:1px solid var(--border)">
+                                <div style="display:flex;align-items:center;gap:10px;padding:12px;background:var(--bmm-s02);border-radius:10px;border:1px solid var(--border)">
                                     <div style="flex:1">
                                         <div style="font-size:12px;font-weight:700;color:var(--text-primary)" data-i18n="settings.soundEnabled">Enable sound effects</div>
                                         <div style="font-size:10px;color:var(--text-muted)" data-i18n="settings.soundEnabledDesc">Play sounds on app launch and close</div>
@@ -3694,7 +3694,7 @@
                                     </label>
                                 </div>
                                 <!-- Toolbar density (Mod Library toolbar layout) -->
-                                <div style="display:flex;align-items:center;gap:10px;padding:12px;background:rgba(255,255,255,0.02);border-radius:10px;border:1px solid var(--border)">
+                                <div style="display:flex;align-items:center;gap:10px;padding:12px;background:var(--bmm-s02);border-radius:10px;border:1px solid var(--border)">
                                     <div style="flex:1">
                                         <div style="font-size:12px;font-weight:700;color:var(--text-primary)" data-i18n="settings.toolbarDensity">Library toolbar layout</div>
                                         <div style="font-size:10px;color:var(--text-muted)" data-i18n="settings.toolbarDensityDesc">How the Mod Library toolbar adapts. Auto = pick the best for the window size.</div>
@@ -3708,7 +3708,7 @@
                                     </select>
                                 </div>
                                 <!-- Toolbar transparency (Mod Library action bar background) -->
-                                <div style="display:flex;align-items:center;gap:10px;padding:12px;background:rgba(255,255,255,0.02);border-radius:10px;border:1px solid var(--border)">
+                                <div style="display:flex;align-items:center;gap:10px;padding:12px;background:var(--bmm-s02);border-radius:10px;border:1px solid var(--border)">
                                     <div style="flex:1">
                                         <div style="font-size:12px;font-weight:700;color:var(--text-primary)" data-i18n="settings.toolbarTransparent">Transparent action bar</div>
                                         <div style="font-size:10px;color:var(--text-muted)" data-i18n="settings.toolbarTransparentDesc">Let the Mod Library action bar &amp; filter bar float with a translucent blur. Off = solid background.</div>
@@ -3719,7 +3719,7 @@
                                     </label>
                                 </div>
                                 <!-- Volume slider -->
-                                <div style="display:flex;align-items:center;gap:12px;padding:10px 12px;background:rgba(255,255,255,0.02);border-radius:10px;border:1px solid var(--border)">
+                                <div style="display:flex;align-items:center;gap:12px;padding:10px 12px;background:var(--bmm-s02);border-radius:10px;border:1px solid var(--border)">
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text-muted);flex-shrink:0;"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
                                     <div style="flex:1">
                                         <div style="font-size:11px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;" data-i18n="settings.soundVolume">Volume</div>
@@ -3740,7 +3740,7 @@
                             <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px">
                                 <input type="text" id="setting-tag-name" placeholder="Nom du tag"
                                     data-i18n-placeholder="settings.tagNamePlaceholder"
-                                    style="flex:1;padding:8px;border-radius:6px;background:rgba(0,0,0,0.2);color:var(--bmm-text-primary);border:1px solid var(--border)">
+                                    style="flex:1;padding:8px;border-radius:6px;background:var(--bmm-bg-base);color:var(--bmm-text-primary);border:1px solid var(--border)">
                                 <input type="color" id="setting-tag-color" value="#3b82f6"
                                     style="width:36px;height:36px;padding:0;border:none;border-radius:6px;cursor:pointer;background:transparent">
                                 <button class="btn btn-primary btn-sm" id="btn-create-tag"><span
@@ -3787,7 +3787,7 @@
 
                             <!-- Strict mode toggle -->
                             <div
-                                style="display:flex;align-items:center;gap:10px;padding:12px;background:rgba(255,255,255,0.02);border-radius:10px;border:1px solid var(--border);margin-bottom:12px">
+                                style="display:flex;align-items:center;gap:10px;padding:12px;background:var(--bmm-s02);border-radius:10px;border:1px solid var(--border);margin-bottom:12px">
                                 <div style="flex:1">
                                     <div style="font-size:12px;font-weight:700;color:var(--text-primary)"
                                         data-i18n="settings.shaStrictMode">Strict Integrity Enforcement</div>
@@ -3803,7 +3803,7 @@
 
                             <!-- Enable Lazy SHA toggle -->
                             <div
-                                style="display:flex;align-items:center;gap:10px;padding:12px;background:rgba(255,255,255,0.02);border-radius:10px;border:1px solid var(--border);margin-bottom:12px">
+                                style="display:flex;align-items:center;gap:10px;padding:12px;background:var(--bmm-s02);border-radius:10px;border:1px solid var(--border);margin-bottom:12px">
                                 <div style="flex:1">
                                     <div style="font-size:12px;font-weight:700;color:var(--text-primary)"
                                         data-i18n="settings.shaEnableLazy">Enable Background Hashing</div>
@@ -3854,7 +3854,7 @@
 
                             <!-- Mod auto-scan interval -->
                             <div
-                                style="display:flex;align-items:center;gap:10px;padding:12px;background:rgba(255,255,255,0.02);border-radius:10px;border:1px solid var(--border);margin-top:8px">
+                                style="display:flex;align-items:center;gap:10px;padding:12px;background:var(--bmm-s02);border-radius:10px;border:1px solid var(--border);margin-top:8px">
                                 <div style="flex:1">
                                     <div style="font-size:12px;font-weight:700;color:var(--text-primary)"
                                         data-i18n="settings.scanInterval">Auto-scan interval</div>
@@ -3873,7 +3873,7 @@
 
                             <!-- Mod update check interval -->
                             <div
-                                style="display:flex;align-items:center;gap:10px;padding:12px;background:rgba(255,255,255,0.02);border-radius:10px;border:1px solid var(--border);margin-top:12px">
+                                style="display:flex;align-items:center;gap:10px;padding:12px;background:var(--bmm-s02);border-radius:10px;border:1px solid var(--border);margin-top:12px">
                                 <div style="flex:1">
                                     <div style="font-size:12px;font-weight:700;color:var(--text-primary)"
                                         data-i18n="settings.updateCheckInterval">Mod update check interval</div>
@@ -3888,7 +3888,7 @@
 
                             <!-- Global update repos -->
                             <div
-                                style="padding:12px;background:rgba(255,255,255,0.02);border-radius:10px;border:1px solid var(--border);margin-top:12px">
+                                style="padding:12px;background:var(--bmm-s02);border-radius:10px;border:1px solid var(--border);margin-top:12px">
                                 <div style="font-size:12px;font-weight:700;color:var(--text-primary)"
                                     data-i18n="settings.globalUpdateRepos">Global update repositories</div>
                                 <div style="font-size:10px;color:var(--text-muted);margin-bottom:8px"
@@ -3896,7 +3896,7 @@
                                     also checked against these repos (matched by its repo_mod_id).</div>
                                 <textarea id="global-update-repos" rows="3"
                                     placeholder="https://example.com/repo.json"
-                                    style="width:100%;font-size:11px;font-family:var(--font-mono);padding:6px 8px;border-radius:6px;border:1px solid var(--border);background:rgba(0,0,0,0.2);color:var(--text-secondary);resize:vertical"></textarea>
+                                    style="width:100%;font-size:11px;font-family:var(--font-mono);padding:6px 8px;border-radius:6px;border:1px solid var(--border);background:var(--bmm-bg-base);color:var(--text-secondary);resize:vertical"></textarea>
                             </div>
                         </div>
                         <!-- ── Discord RPC Toggle ── -->
@@ -3923,7 +3923,7 @@
                             </div>
 
                             <div
-                                style="display:flex;align-items:center;gap:10px;padding:12px;background:rgba(255,255,255,0.02);border-radius:10px;border:1px solid var(--border)">
+                                style="display:flex;align-items:center;gap:10px;padding:12px;background:var(--bmm-s02);border-radius:10px;border:1px solid var(--border)">
                                 <div style="flex:1">
                                     <div style="font-size:12px;font-weight:700;color:var(--text-primary)"
                                         data-i18n="settings.discordRpcToggle">Enable Rich Presence</div>
@@ -3980,7 +3980,7 @@
                                     <form style="display:contents" autocomplete="off" onsubmit="return false"><input type="password" id="setting-github-pat"
                                         data-i18n-placeholder="settings.githubPatPlaceholder"
                                         placeholder="ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-                                        style="width:100%;padding:9px 40px 9px 12px;border-radius:8px;background:rgba(0,0,0,0.25);color:var(--bmm-text-primary);border:1px solid var(--border);font-family:var(--font-mono);font-size:12px;box-sizing:border-box;transition:border 0.2s" /></form>
+                                        style="width:100%;padding:9px 40px 9px 12px;border-radius:8px;background:var(--bmm-bg-base);color:var(--bmm-text-primary);border:1px solid var(--border);font-family:var(--font-mono);font-size:12px;box-sizing:border-box;transition:border 0.2s" /></form>
                                     <button id="btn-toggle-pat-visibility"
                                         onmouseenter="window.showTaskyHelp('repo.togglePatTip', 'help')"
                                         onmouseleave="window.hideTaskyHelp()" aria-label="Toggle PAT visibility"
@@ -4296,9 +4296,9 @@
                             </div>
                             <div class="setting-row" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:10px 0;font-size:12px;color:var(--text-muted)">
                                 <span data-i18n="crashmgr.keepLast">Keep last</span>
-                                <input type="number" id="watcher-keep" min="1" style="width:64px;padding:3px 6px;font-size:12px;background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:6px;color:var(--text-primary)">
+                                <input type="number" id="watcher-keep" min="1" style="width:64px;padding:3px 6px;font-size:12px;background:var(--bmm-bg-base);border:1px solid var(--border);border-radius:6px;color:var(--text-primary)">
                                 <span data-i18n="crashmgr.maxSize">Max total</span>
-                                <input type="number" id="watcher-maxmb" min="0" style="width:64px;padding:3px 6px;font-size:12px;background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:6px;color:var(--text-primary)"><span>MB</span>
+                                <input type="number" id="watcher-maxmb" min="0" style="width:64px;padding:3px 6px;font-size:12px;background:var(--bmm-bg-base);border:1px solid var(--border);border-radius:6px;color:var(--text-primary)"><span>MB</span>
                                 <button class="btn btn-xs btn-ghost" id="watcher-applylimits" data-i18n="common.apply">Apply</button>
                             </div>
                             <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px">
@@ -4325,11 +4325,11 @@
 
                             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px;">
                                 <div class="security-card" id="settings-sec-full"
-                                    style="cursor:pointer; padding:20px; border-radius:16px; border:1px solid rgba(255,255,255,0.06); background:rgba(255,255,255,0.02); transition:all 0.3s cubic-bezier(0.4, 0, 0.2, 1); position:relative; overflow:hidden;">
+                                    style="cursor:pointer; padding:20px; border-radius:16px; border:1px solid var(--bmm-s06); background:var(--bmm-s02); transition:all 0.3s cubic-bezier(0.4, 0, 0.2, 1); position:relative; overflow:hidden;">
                                     <div
                                         style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
                                         <div id="settings-sec-full-icon"
-                                            style="width:36px; height:36px; border-radius:10px; background:rgba(255,255,255,0.05); display:flex; align-items:center; justify-content:center; color:var(--text-muted); border:1px solid rgba(255,255,255,0.1); transition:all 0.3s;">
+                                            style="width:36px; height:36px; border-radius:10px; background:var(--bmm-s05); display:flex; align-items:center; justify-content:center; color:var(--text-muted); border:1px solid var(--bmm-s10); transition:all 0.3s;">
                                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
                                                 stroke="currentColor" stroke-width="2">
                                                 <path
@@ -4354,11 +4354,11 @@
                                 </div>
 
                                 <div class="security-card" id="settings-sec-limited"
-                                    style="cursor:pointer; padding:20px; border-radius:16px; border:1px solid rgba(255,255,255,0.06); background:rgba(255,255,255,0.02); transition:all 0.3s cubic-bezier(0.4, 0, 0.2, 1); position:relative; overflow:hidden;">
+                                    style="cursor:pointer; padding:20px; border-radius:16px; border:1px solid var(--bmm-s06); background:var(--bmm-s02); transition:all 0.3s cubic-bezier(0.4, 0, 0.2, 1); position:relative; overflow:hidden;">
                                     <div
                                         style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
                                         <div id="settings-sec-limited-icon"
-                                            style="width:36px; height:36px; border-radius:10px; background:rgba(255,255,255,0.05); display:flex; align-items:center; justify-content:center; color:var(--text-muted); border:1px solid rgba(255,255,255,0.1); transition:all 0.3s;">
+                                            style="width:36px; height:36px; border-radius:10px; background:var(--bmm-s05); display:flex; align-items:center; justify-content:center; color:var(--text-muted); border:1px solid var(--bmm-s10); transition:all 0.3s;">
                                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
                                                 stroke="currentColor" stroke-width="2">
                                                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
@@ -4821,7 +4821,7 @@
                             onmouseenter="window.showTaskyHelp('crash.openFileTip', 'info')"
                             onmouseleave="window.hideTaskyHelp()">
                             <div class="bh-crash-icon-box"
-                                style="width:32px;height:32px;background:rgba(255,255,255,0.05);color:var(--text-secondary)">
+                                style="width:32px;height:32px;background:var(--bmm-s05);color:var(--text-secondary)">
                                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                     stroke-width="2">
                                     <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
@@ -4838,7 +4838,7 @@
                         </div>
 
                         <div
-                            style="display:flex;align-items:center;gap:10px;margin-top:24px;padding:12px;background:rgba(255,255,255,0.02);border-radius:10px;border:1px solid rgba(255,255,255,0.05)">
+                            style="display:flex;align-items:center;gap:10px;margin-top:24px;padding:12px;background:var(--bmm-s02);border-radius:10px;border:1px solid var(--bmm-s05)">
                             <img src="./assets/Tasky.png" style="width:24px;height:24px;opacity:0.8" alt="Tasky">
                             <p style="font-size:12px;color:var(--text-muted);margin:0" data-i18n="crash.helpText">
                                 Sharing this report on our Discord is the fastest way to get help.</p>
@@ -5433,7 +5433,7 @@
                 </div>
                 <div class="modal-body" style="max-height: 500px; overflow-y: auto;">
                     <div
-                        style="display:flex; gap:15px; margin-bottom: 15px; align-items:center; flex-wrap:wrap; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 8px; border: 1px solid var(--border)">
+                        style="display:flex; gap:15px; margin-bottom: 15px; align-items:center; flex-wrap:wrap; background: var(--bmm-bg-base); padding: 10px; border-radius: 8px; border: 1px solid var(--border)">
                         <div style="display:flex; align-items:center; gap:8px;">
                             <span style="font-size:12px; color:var(--text-muted); white-space:nowrap"
                                 data-i18n="history.filter">Filter:</span>
@@ -5984,7 +5984,7 @@
                     </p>
 
                     <label class="checkbox-container"
-                        style="margin-top:20px; padding:12px; border-radius:10px; background:rgba(255,255,255,0.02); display:flex; align-items:center; gap:12px; cursor:pointer; transition:all 0.2s; user-select:none"
+                        style="margin-top:20px; padding:12px; border-radius:10px; background:var(--bmm-s02); display:flex; align-items:center; gap:12px; cursor:pointer; transition:all 0.2s; user-select:none"
                         onmouseover="this.style.background='rgba(255,255,255,0.05)'"
                         onmouseout="this.style.background='rgba(255,255,255,0.02)'">
                         <input type="checkbox" id="duplicate-folder-ignore-forever"
@@ -6031,7 +6031,7 @@
                     </div>
 
                     <div
-                        style="display:flex; align-items:center; gap:10px; background:rgba(0,0,0,0.2); padding:12px; border-radius:10px; border:1px solid var(--border); margin-top:16px">
+                        style="display:flex; align-items:center; gap:10px; background:var(--bmm-bg-base); padding:12px; border-radius:10px; border:1px solid var(--border); margin-top:16px">
                         <input type="checkbox" id="check-delete-confirm"
                             style="width:18px; height:18px; cursor:pointer" />
                         <label for="check-delete-confirm"
@@ -6094,7 +6094,7 @@
                 </div>
                 <div style="padding: 0 20px 10px 20px;">
                     <input type="text" id="archive-explorer-search" placeholder="Rechercher un fichier..."
-                        style="width:100%; padding:8px 12px; background:rgba(0,0,0,0.2); border:1px solid var(--border); border-radius:6px; color:var(--bmm-text-primary); font-size:13px">
+                        style="width:100%; padding:8px 12px; background:var(--bmm-bg-base); border:1px solid var(--border); border-radius:6px; color:var(--bmm-text-primary); font-size:13px">
                 </div>
                 <div class="modal-content" id="archive-explorer-content"
                     style="max-height: 60vh; overflow-y: auto; padding-top:0">
@@ -6225,7 +6225,7 @@
                     <!-- Summary content injected by JS -->
                 </div>
                 <div class="modal-footer"
-                    style="padding:15px 20px; background:rgba(255,255,255,0.02); display:flex; justify-content:flex-end; gap:10px; border-top:1px solid var(--border);">
+                    style="padding:15px 20px; background:var(--bmm-s02); display:flex; justify-content:flex-end; gap:10px; border-top:1px solid var(--border);">
                     <button class="btn btn-primary" data-close="modal-repo-sync-summary" style="padding:0 24px;"
                         data-i18n="common.ok">OK</button>
                 </div>
@@ -6255,7 +6255,7 @@
                         </div>
                     </div>
                     <div style="display:flex;align-items:center;gap:8px;">
-                        <button id="btn-refresh-repo-browser" data-tooltip="Refresh list" aria-label="Refresh list" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;cursor:pointer;color:var(--text-muted);transition:all 0.15s;" onmouseover="this.style.color='var(--text-primary)'" onmouseout="this.style.color='var(--text-muted)'">
+                        <button id="btn-refresh-repo-browser" data-tooltip="Refresh list" aria-label="Refresh list" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;background:var(--bmm-s05);border:1px solid var(--bmm-s10);border-radius:8px;cursor:pointer;color:var(--text-muted);transition:all 0.15s;" onmouseover="this.style.color='var(--text-primary)'" onmouseout="this.style.color='var(--text-muted)'">
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.36"/></svg>
                         </button>
                         <button class="modal-close" data-close="modal-repo-browser">
@@ -6336,7 +6336,7 @@
                     <div id="repo-browser-content" style="display:none;">
                         <!-- Filter bar -->
                         <div
-                            style="background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:10px 14px;margin-bottom:12px;backdrop-filter:blur(10px);">
+                            style="background:rgba(255,255,255,0.025);border:1px solid var(--bmm-s06);border-radius:12px;padding:10px 14px;margin-bottom:12px;backdrop-filter:blur(10px);">
                             <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
                                 <div style="position:relative;flex:1;min-width:180px;">
                                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
@@ -6346,12 +6346,12 @@
                                         <line x1="21" y1="21" x2="16.65" y2="16.65" />
                                     </svg>
                                     <input type="text" id="repo-browser-search" placeholder="Search repositories..."
-                                        style="width:100%;padding:7px 10px 7px 30px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:8px;color:var(--text-primary);font-size:12px;outline:none;transition:border-color 0.15s;box-sizing:border-box;"
+                                        style="width:100%;padding:7px 10px 7px 30px;background:var(--bmm-s04);border:1px solid var(--bmm-s08);border-radius:8px;color:var(--text-primary);font-size:12px;outline:none;transition:border-color 0.15s;box-sizing:border-box;"
                                         onfocus="this.style.borderColor='rgba(99,102,241,0.4)'"
                                         onblur="this.style.borderColor='rgba(255,255,255,0.08)'">
                                 </div>
                                 <select id="repo-browser-region-filter"
-                                    style="padding:7px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:8px;color:var(--text-secondary);font-size:12px;outline:none;cursor:pointer;transition:border-color 0.15s;"
+                                    style="padding:7px 10px;background:var(--bmm-s04);border:1px solid var(--bmm-s08);border-radius:8px;color:var(--text-secondary);font-size:12px;outline:none;cursor:pointer;transition:border-color 0.15s;"
                                     onfocus="this.style.borderColor='rgba(99,102,241,0.4)'"
                                     onblur="this.style.borderColor='rgba(255,255,255,0.08)'">
                                     <option value="all">All Regions</option>
@@ -6363,7 +6363,7 @@
                                     <option value="Oceania">Oceania</option>
                                 </select>
                                 <select id="repo-browser-whitelist-filter"
-                                    style="padding:7px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:8px;color:var(--text-secondary);font-size:12px;outline:none;cursor:pointer;transition:border-color 0.15s;"
+                                    style="padding:7px 10px;background:var(--bmm-s04);border:1px solid var(--bmm-s08);border-radius:8px;color:var(--text-secondary);font-size:12px;outline:none;cursor:pointer;transition:border-color 0.15s;"
                                     onfocus="this.style.borderColor='rgba(99,102,241,0.4)'"
                                     onblur="this.style.borderColor='rgba(255,255,255,0.08)'">
                                     <option value="all">All servers</option>
@@ -6408,9 +6408,9 @@
                     </div>
                 </div>
                 <div class="modal-footer"
-                    style="padding:16px 24px; background:rgba(255,255,255,0.03); display:flex; justify-content:flex-end; align-items:center; gap:12px; border-top:1px solid rgba(255,255,255,0.08);">
+                    style="padding:16px 24px; background:var(--bmm-s03); display:flex; justify-content:flex-end; align-items:center; gap:12px; border-top:1px solid var(--bmm-s08);">
                     <button class="btn btn-ghost" data-close="modal-repo-browser"
-                        style="padding:8px 20px; font-size:13px; border:1px solid rgba(255,255,255,0.1);"
+                        style="padding:8px 20px; font-size:13px; border:1px solid var(--bmm-s10);"
                         data-i18n="common.cancel">Close</button>
                 </div>
             </div>
@@ -6459,11 +6459,11 @@
                     <div style="margin-top:16px;">
                         <label class="form-label" style="font-size:12px;font-weight:700;" data-i18n="repo.hub.mode">Hub mode</label>
                         <div style="display:flex;gap:10px;margin-top:8px;flex-wrap:wrap;">
-                            <label class="repo-hub-mode-opt" style="flex:1;min-width:200px;display:flex;gap:9px;align-items:flex-start;background:rgba(255,255,255,0.03);border:1px solid var(--cyan);border-radius:10px;padding:12px;cursor:pointer;">
+                            <label class="repo-hub-mode-opt" style="flex:1;min-width:200px;display:flex;gap:9px;align-items:flex-start;background:var(--bmm-s03);border:1px solid var(--cyan);border-radius:10px;padding:12px;cursor:pointer;">
                                 <input type="radio" name="repo-hub-mode" value="serve" checked style="margin-top:2px;">
                                 <span><b style="font-size:12px;" data-i18n="repo.hub.modeServe">Serve repos (Node)</b><br><span style="font-size:11px;color:var(--text-muted);" data-i18n="repo.hub.modeServeHint">One Node server hosts all repos + per-repo dashboards. Repos are online when the hub runs.</span></span>
                             </label>
-                            <label class="repo-hub-mode-opt" style="flex:1;min-width:200px;display:flex;gap:9px;align-items:flex-start;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:10px;padding:12px;cursor:pointer;">
+                            <label class="repo-hub-mode-opt" style="flex:1;min-width:200px;display:flex;gap:9px;align-items:flex-start;background:var(--bmm-s03);border:1px solid var(--border);border-radius:10px;padding:12px;cursor:pointer;">
                                 <input type="radio" name="repo-hub-mode" value="static" style="margin-top:2px;">
                                 <span><b style="font-size:12px;" data-i18n="repo.hub.modeStatic">Static directory</b><br><span style="font-size:11px;color:var(--text-muted);" data-i18n="repo.hub.modeStaticHint">Just a web page listing your repos (no Node). You host repos elsewhere and fill their URLs.</span></span>
                             </label>
@@ -6471,7 +6471,7 @@
                     </div>
                     <div id="repo-hub-result" style="display:none;margin-top:16px;padding:12px 14px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.25);border-radius:10px;font-size:12px;color:var(--green);line-height:1.6;"></div>
                 </div>
-                <div class="modal-footer" style="padding:14px 22px;background:rgba(255,255,255,0.03);display:flex;justify-content:flex-end;gap:10px;border-top:1px solid rgba(255,255,255,0.08);">
+                <div class="modal-footer" style="padding:14px 22px;background:var(--bmm-s03);display:flex;justify-content:flex-end;gap:10px;border-top:1px solid var(--bmm-s08);">
                     <button class="btn btn-ghost" data-close="modal-repo-hub" data-i18n="common.close">Close</button>
                     <button class="btn btn-primary" id="btn-generate-repo-hub" disabled data-i18n="repo.hub.generate">Generate hub server</button>
                 </div>
@@ -6515,12 +6515,12 @@
                             <span id="repo-update-status">...</span>
                             <span id="repo-update-percent" style="font-weight:600;color:var(--cyan);">0%</span>
                         </div>
-                        <div style="height:5px;background:rgba(255,255,255,0.08);border-radius:4px;overflow:hidden;">
+                        <div style="height:5px;background:var(--bmm-s08);border-radius:4px;overflow:hidden;">
                             <div id="repo-update-fill" style="height:100%;width:0%;background:linear-gradient(90deg,var(--cyan),#00f0ff);transition:width 0.25s ease;border-radius:4px;"></div>
                         </div>
                     </div>
                 </div>
-                <div class="modal-footer" style="padding:14px 22px;background:rgba(255,255,255,0.03);display:flex;justify-content:flex-end;gap:10px;border-top:1px solid rgba(255,255,255,0.08);">
+                <div class="modal-footer" style="padding:14px 22px;background:var(--bmm-s03);display:flex;justify-content:flex-end;gap:10px;border-top:1px solid var(--bmm-s08);">
                     <button class="btn btn-ghost" data-close="modal-repo-update" data-i18n="common.close">Close</button>
                     <button class="btn btn-outline-danger" id="btn-cancel-repo-update" style="display:none;color:var(--danger);border-color:rgba(239,68,68,0.3);" data-i18n="repo.update.cancel">Cancel update</button>
                     <button class="btn btn-primary" id="btn-apply-repo-update" disabled data-i18n="repo.update.apply">Apply changes</button>
@@ -6571,7 +6571,7 @@
                     </div>
                 </div>
                 <div class="modal-footer"
-                    style="padding:16px 24px; background:rgba(255,255,255,0.03); display:flex; justify-content:space-between; align-items:center; gap:12px; border-top:1px solid rgba(255,255,255,0.08);">
+                    style="padding:16px 24px; background:var(--bmm-s03); display:flex; justify-content:space-between; align-items:center; gap:12px; border-top:1px solid var(--bmm-s08);">
                     <div style="display:flex; gap:8px;">
                         <button class="btn btn-ghost" id="btn-clear-repo-history"
                             style="padding:8px 16px; font-size:12px; color:var(--bmm-warning); border:1px solid rgba(251,146,60,0.25);"
@@ -6581,7 +6581,7 @@
                             data-i18n="repo.clearAllHistory">Clear All</button>
                     </div>
                     <button class="btn btn-ghost" data-close="modal-repo-history"
-                        style="padding:8px 20px; font-size:13px; border:1px solid rgba(255,255,255,0.1);"
+                        style="padding:8px 20px; font-size:13px; border:1px solid var(--bmm-s10);"
                         data-i18n="common.cancel">Close</button>
                 </div>
             </div>
@@ -6669,11 +6669,11 @@
                     <div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;"
                         data-i18n="conflict.sharedFilesTitle">Shared / Overwritten Files</div>
                     <div id="conflict-tree-container"
-                        style="background:rgba(0,0,0,0.35);border-radius:10px;border:1px solid rgba(239,68,68,0.15);padding:10px 12px;max-height:280px;overflow-y:auto;font-family:var(--font-mono);font-size:11.5px;display:flex;flex-direction:column;gap:2px;">
+                        style="background:var(--bmm-bg-base);border-radius:10px;border:1px solid rgba(239,68,68,0.15);padding:10px 12px;max-height:280px;overflow-y:auto;font-family:var(--font-mono);font-size:11.5px;display:flex;flex-direction:column;gap:2px;">
                     </div>
                 </div>
                 <div
-                    style="padding:14px 24px;display:flex;justify-content:space-between;align-items:center;border-top:1px solid rgba(255,255,255,0.06);background:rgba(0,0,0,0.15);">
+                    style="padding:14px 24px;display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--bmm-s06);background:var(--bmm-bg-base);">
                     <span style="font-size:11px;color:var(--text-muted);display:flex;align-items:center;gap:6px;">
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2.5">
@@ -6733,7 +6733,7 @@
                     </div>
                     <!-- Activation order -->
                     <div id="activation-order-panel"
-                        style="margin-top:14px;display:none;background:rgba(0,0,0,0.2);border-radius:8px;padding:10px 12px;border:1px solid rgba(255,255,255,0.06);">
+                        style="margin-top:14px;display:none;background:var(--bmm-bg-base);border-radius:8px;padding:10px 12px;border:1px solid var(--bmm-s06);">
                         <div
                             style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;display:flex;align-items:center;gap:6px;">
                             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -6746,7 +6746,7 @@
                     </div>
                 </div>
                 <div
-                    style="padding:12px 22px;display:flex;justify-content:flex-end;gap:10px;border-top:1px solid rgba(255,255,255,0.06);background:rgba(0,0,0,0.12);">
+                    style="padding:12px 22px;display:flex;justify-content:flex-end;gap:10px;border-top:1px solid var(--bmm-s06);background:rgba(0,0,0,0.12);">
                     <button class="btn btn-ghost" id="btn-cancel-activation-warning"
                         data-i18n="common.close">Close</button>
                     <button class="btn btn-danger" id="btn-confirm-activation-anyway"
@@ -6823,7 +6823,7 @@
                     <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px" data-i18n="conflict.treeDesc">
                         Ces fichiers se trouvent dans les deux mods et créent un conflit direct.</p>
                     <div id="conflict-tree-container"
-                        style="max-height:400px;overflow-y:auto;background:rgba(0,0,0,0.2);border-radius:8px;padding:12px;border:1px solid var(--border);font-family:var(--font-mono);font-size:11px;color:var(--text-muted);display:flex;flex-direction:column;gap:2px;">
+                        style="max-height:400px;overflow-y:auto;background:var(--bmm-bg-base);border-radius:8px;padding:12px;border:1px solid var(--border);font-family:var(--font-mono);font-size:11px;color:var(--text-muted);display:flex;flex-direction:column;gap:2px;">
                     </div>
                 </div>
                 <div class="modal-footer" style="padding: 16px 24px; display: flex; justify-content: flex-end;">
@@ -6835,8 +6835,8 @@
 
         <!-- Conflict File Mod Selector Modal -->
         <div class="modal-overlay" id="modal-conflict-file-selector" style="z-index:10006;">
-            <div class="modal glass" style="max-width:500px;width:92%;border-radius:18px;overflow:hidden;border:1px solid rgba(255,255,255,0.1);">
-                <div style="padding:18px 20px 14px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:space-between;gap:12px;">
+            <div class="modal glass" style="max-width:500px;width:92%;border-radius:18px;overflow:hidden;border:1px solid var(--bmm-s10);">
+                <div style="padding:18px 20px 14px;border-bottom:1px solid var(--bmm-s06);display:flex;align-items:center;justify-content:space-between;gap:12px;">
                     <div style="display:flex;align-items:center;gap:10px;">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--accent)">
                             <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
@@ -6854,7 +6854,7 @@
                     <div style="font-size:11px;color:var(--text-muted);margin-bottom:12px;">Sélectionnez le(s) mod(s) dont vous voulez ouvrir ce fichier dans l'explorateur:</div>
                     <div id="conflict-file-selector-list" style="display:flex;flex-direction:column;gap:8px;"></div>
                 </div>
-                <div style="padding:14px 20px;border-top:1px solid rgba(255,255,255,0.06);display:flex;justify-content:flex-end;gap:8px;background:rgba(0,0,0,0.15);">
+                <div style="padding:14px 20px;border-top:1px solid var(--bmm-s06);display:flex;justify-content:flex-end;gap:8px;background:var(--bmm-bg-base);">
                     <button class="btn btn-secondary" id="btn-cancel-conflict-file-selector" style="padding:6px 16px;font-size:11px;">Annuler</button>
                     <button class="btn btn-primary" id="btn-open-conflict-files" style="padding:6px 16px;font-size:11px;">Ouvrir</button>
                 </div>
@@ -6873,8 +6873,8 @@
 
         <!-- Repo Verification Detail Modal -->
         <div class="modal-overlay" id="modal-repo-verify-detail" style="z-index:1150;">
-            <div class="modal glass" style="max-width:480px;width:92%;border-radius:18px;overflow:hidden;border:1px solid rgba(255,255,255,0.1);">
-                <div style="padding:18px 20px 14px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:space-between;gap:12px;">
+            <div class="modal glass" style="max-width:480px;width:92%;border-radius:18px;overflow:hidden;border:1px solid var(--bmm-s10);">
+                <div style="padding:18px 20px 14px;border-bottom:1px solid var(--bmm-s06);display:flex;align-items:center;justify-content:space-between;gap:12px;">
                     <div style="display:flex;align-items:center;gap:10px;">
                         <div id="repo-vd-status-icon" style="width:32px;height:32px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;"></div>
                         <div>
@@ -6925,7 +6925,7 @@
         <!-- Monitoring Modal -->
         <div class="modal-overlay" id="modal-monitoring" style="z-index: 1100;">
             <div class="modal glass"
-                style="max-width: 1000px; width: 95%; max-height:85vh; display:flex; flex-direction:column; border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; overflow: hidden;">
+                style="max-width: 1000px; width: 95%; max-height:85vh; display:flex; flex-direction:column; border: 1px solid var(--bmm-s10); border-radius: 16px; overflow: hidden;">
                 <div class="modal-header server-modal-header"
                     style="padding: 20px 24px; background: linear-gradient(135deg, rgba(6,182,212,0.08) 0%, rgba(6,182,212,0.02) 100%); border-bottom: 1px solid rgba(6,182,212,0.15);">
                     <div style="display:flex; align-items:center; gap:14px;">
@@ -6947,7 +6947,7 @@
                         </div>
                     </div>
                     <button class="modal-close" data-close="modal-monitoring"
-                        style="width:36px; height:36px; border-radius:10px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); transition:all 0.2s ease;">
+                        style="width:36px; height:36px; border-radius:10px; background:var(--bmm-s05); border:1px solid var(--bmm-s10); transition:all 0.2s ease;">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2.5">
                             <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -7025,7 +7025,7 @@
 
         <!-- Modal: Generic Premium Confirmation -->
         <div class="modal-overlay" id="modal-confirm-generic" style="z-index: 9999;">
-            <div class="modal glass" style="max-width: 400px; width: 90%; border: 1px solid rgba(255,255,255,0.1);">
+            <div class="modal glass" style="max-width: 400px; width: 90%; border: 1px solid var(--bmm-s10);">
                 <div class="modal-header" style="border-bottom: none; padding-bottom: 0;">
                     <div style="display:flex; align-items:center; gap:12px; width: 100%;">
                         <div id="confirm-icon-container"
@@ -7062,7 +7062,7 @@
         <!-- Ban List Modal -->
         <div id="modal-bans" class="modal-overlay" style="z-index: 1105;">
             <div class="modal glass"
-                style="max-width: 800px; width: 90%; max-height: 85vh; display:flex; flex-direction:column; border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; overflow: hidden;">
+                style="max-width: 800px; width: 90%; max-height: 85vh; display:flex; flex-direction:column; border: 1px solid var(--bmm-s10); border-radius: 16px; overflow: hidden;">
                 <div class="modal-header server-modal-header"
                     style="padding: 20px 24px; background: linear-gradient(135deg, rgba(239, 68, 68, 0.08) 0%, rgba(239, 68, 68, 0.02) 100%); border-bottom: 1px solid rgba(239, 68, 68, 0.15);">
                     <div style="display:flex; align-items:center; gap:14px;">
@@ -7099,7 +7099,7 @@
                             EXPORT
                         </button>
                         <button class="modal-close" data-close="modal-bans"
-                            style="width:36px; height:36px; border-radius:10px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); transition:all 0.2s ease;">
+                            style="width:36px; height:36px; border-radius:10px; background:var(--bmm-s05); border:1px solid var(--bmm-s10); transition:all 0.2s ease;">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="2.5">
                                 <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -7117,10 +7117,10 @@
                             data-i18n="repo.banManualTitle">AJOUTER UN BAN MANUEL</h3>
                         <div style="display:flex; gap:10px; flex-wrap:wrap;">
                             <input type="text" id="manual-ban-ip" class="form-input"
-                                style="flex:1; min-width:140px; font-size:13px; height:40px; background:rgba(0,0,0,0.3); border-radius: 12px; border-color: rgba(239, 68, 68, 0.2);"
+                                style="flex:1; min-width:140px; font-size:13px; height:40px; background:var(--bmm-bg-base); border-radius: 12px; border-color: rgba(239, 68, 68, 0.2);"
                                 placeholder="IP Address..." data-i18n-placeholder="repo.banManualIP" />
                             <input type="text" id="manual-ban-key" class="form-input"
-                                style="flex:1; min-width:140px; font-size:13px; height:40px; background:rgba(0,0,0,0.3); border-radius: 12px; border-color: rgba(239, 68, 68, 0.2);"
+                                style="flex:1; min-width:140px; font-size:13px; height:40px; background:var(--bmm-bg-base); border-radius: 12px; border-color: rgba(239, 68, 68, 0.2);"
                                 placeholder="Creator Key..." data-i18n-placeholder="repo.banManualKey" />
                             <button class="btn btn-danger btn-sm" id="btn-add-manual-ban"
                                 style="height:40px; padding: 0 24px; font-weight:800; font-size:12px; border-radius: 12px; box-shadow: 0 4px 16px rgba(239, 68, 68, 0.3);">
@@ -7135,7 +7135,7 @@
 
                     <!-- Search and Filters -->
                     <div class="modal-search-bar"
-                        style="margin: 16px 24px; padding:12px 16px; background:rgba(255,255,255,0.02); border-radius:12px; border:1px solid rgba(255,255,255,0.05); display:flex; align-items:center; gap:12px;">
+                        style="margin: 16px 24px; padding:12px 16px; background:var(--bmm-s02); border-radius:12px; border:1px solid var(--bmm-s05); display:flex; align-items:center; gap:12px;">
                         <div style="position:relative; flex:1; display: flex; align-items: center;">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)"
                                 stroke-width="2.5" style="position:absolute; left:0; pointer-events: none;">
@@ -7147,12 +7147,12 @@
                                 placeholder="Search ban..." data-i18n-placeholder="repo.banSearch" />
                         </div>
                         <select id="ban-filter-type" class="form-input"
-                            style="width:90px; height:32px; font-size:11px; padding:0 10px; border-radius:8px; cursor:pointer; background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.1); color: var(--text-secondary); font-weight: 700;">
+                            style="width:90px; height:32px; font-size:11px; padding:0 10px; border-radius:8px; cursor:pointer; background: var(--bmm-s05); border-color: var(--bmm-s10); color: var(--text-secondary); font-weight: 700;">
                             <option value="ALL" data-i18n="repo.banFilterAll">TOUT</option>
                             <option value="IP">IP</option>
                             <option value="KEY">KEY</option>
                         </select>
-                        <div style="width: 1px; height: 24px; background: rgba(255,255,255,0.1);"></div>
+                        <div style="width: 1px; height: 24px; background: var(--bmm-s10);"></div>
                         <button class="btn btn-outline-danger btn-xs" id="btn-unban-all"
                             style="height:32px; border-radius:8px; font-weight:800; font-size:10px; padding: 0 12px; border-color: rgba(239, 68, 68, 0.3);">
                             UNBAN ALL
@@ -7170,7 +7170,7 @@
         <!-- Whitelist Modal -->
         <div id="modal-whitelist" class="modal-overlay" style="z-index: 1106;">
             <div class="modal glass"
-                style="max-width: 800px; width: 90%; max-height: 85vh; display:flex; flex-direction:column; border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; overflow: hidden;">
+                style="max-width: 800px; width: 90%; max-height: 85vh; display:flex; flex-direction:column; border: 1px solid var(--bmm-s10); border-radius: 16px; overflow: hidden;">
                 <div class="modal-header server-modal-header"
                     style="padding: 20px 24px; background: linear-gradient(135deg, rgba(59, 130, 246, 0.08) 0%, rgba(59, 130, 246, 0.02) 100%); border-bottom: 1px solid rgba(59, 130, 246, 0.15);">
                     <div style="display:flex; align-items:center; gap:14px;">
@@ -7213,7 +7213,7 @@
                                 style="pointer-events:none;">
                         </button>
                         <button class="modal-close" data-close="modal-whitelist"
-                            style="width:36px; height:36px; border-radius:10px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); transition:all 0.2s ease;">
+                            style="width:36px; height:36px; border-radius:10px; background:var(--bmm-s05); border:1px solid var(--bmm-s10); transition:all 0.2s ease;">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="2.5">
                                 <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -7231,10 +7231,10 @@
                             data-i18n="repo.whitelistManualTitle">AJOUTER À LA WHITELIST</h3>
                         <div style="display:flex; gap:10px; flex-wrap:wrap;">
                             <input type="text" id="manual-whitelist-ip" class="form-input"
-                                style="flex:1; min-width:140px; font-size:13px; height:40px; background:rgba(0,0,0,0.3); border-radius: 12px; border-color: rgba(59, 130, 246, 0.2);"
+                                style="flex:1; min-width:140px; font-size:13px; height:40px; background:var(--bmm-bg-base); border-radius: 12px; border-color: rgba(59, 130, 246, 0.2);"
                                 placeholder="IP Address..." data-i18n-placeholder="repo.whitelistManualIP" />
                             <input type="text" id="manual-whitelist-key" class="form-input"
-                                style="flex:1; min-width:140px; font-size:13px; height:40px; background:rgba(0,0,0,0.3); border-radius: 12px; border-color: rgba(59, 130, 246, 0.2);"
+                                style="flex:1; min-width:140px; font-size:13px; height:40px; background:var(--bmm-bg-base); border-radius: 12px; border-color: rgba(59, 130, 246, 0.2);"
                                 placeholder="Creator Key..." data-i18n-placeholder="repo.whitelistManualKey" />
                             <button class="btn btn-primary btn-sm" id="btn-add-manual-whitelist"
                                 style="height:40px; padding: 0 24px; font-weight:800; font-size:12px; border-radius: 12px; box-shadow: 0 4px 16px rgba(59, 130, 246, 0.3);">
@@ -7250,7 +7250,7 @@
 
                     <!-- Search and Filters -->
                     <div class="modal-search-bar"
-                        style="margin: 16px 24px; padding:12px 16px; background:rgba(255,255,255,0.02); border-radius:12px; border:1px solid rgba(255,255,255,0.05); display:flex; align-items:center; gap:12px;">
+                        style="margin: 16px 24px; padding:12px 16px; background:var(--bmm-s02); border-radius:12px; border:1px solid var(--bmm-s05); display:flex; align-items:center; gap:12px;">
                         <div style="position:relative; flex:1; display: flex; align-items: center;">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)"
                                 stroke-width="2.5" style="position:absolute; left:0; pointer-events: none;">
@@ -7261,7 +7261,7 @@
                                 style="width:100%; height:32px; padding-left:28px; font-size:13px; border:none; background: transparent;"
                                 placeholder="Search whitelist..." data-i18n-placeholder="repo.whitelistSearch" />
                         </div>
-                        <div style="width: 1px; height: 24px; background: rgba(255,255,255,0.1);"></div>
+                        <div style="width: 1px; height: 24px; background: var(--bmm-s10);"></div>
                         <button class="btn btn-outline-danger btn-xs" id="btn-clear-whitelist"
                             style="height:32px; border-radius:8px; font-weight:800; font-size:10px; padding: 0 12px; border-color: rgba(239, 68, 68, 0.3);"
                             data-i18n="repo.whitelistClearBtn">
@@ -7280,9 +7280,9 @@
         <!-- Modal for Mapper Inputs -->
         <div id="modal-mapper-input" class="modal-generic-overlay">
             <div class="modal glass"
-                style="width: 440px; max-width: 90vw; border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; overflow: hidden;">
+                style="width: 440px; max-width: 90vw; border: 1px solid var(--bmm-s10); border-radius: 20px; overflow: hidden;">
                 <div class="modal-header"
-                    style="background: rgba(255,255,255,0.03); padding: 22px 28px; border-bottom: 1px solid rgba(255,255,255,0.08);">
+                    style="background: var(--bmm-s03); padding: 22px 28px; border-bottom: 1px solid var(--bmm-s08);">
                     <div style="display: flex; align-items: center; gap: 14px;">
                         <div
                             style="width: 40px; height: 40px; background: rgba(59, 130, 246, 0.1); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: var(--accent);">
@@ -7311,11 +7311,11 @@
                     <div class="input-wrapper" style="position: relative;">
                         <input type="text" id="mapper-input-field" class="form-input" placeholder="Nom..."
                             data-i18n-placeholder="mapper.namePlaceholder"
-                            style="width: 100%; height: 44px; font-size: 1rem; padding: 0 16px; background: rgba(0,0,0,0.25); border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); color: var(--bmm-text-primary);">
+                            style="width: 100%; height: 44px; font-size: 1rem; padding: 0 16px; background: var(--bmm-bg-base); border-radius: 12px; border: 1px solid var(--bmm-s10); color: var(--bmm-text-primary);">
                     </div>
                 </div>
                 <div class="modal-footer"
-                    style="padding: 18px 28px; background: rgba(0,0,0,0.15); display: flex; justify-content: flex-end; gap: 12px;">
+                    style="padding: 18px 28px; background: var(--bmm-bg-base); display: flex; justify-content: flex-end; gap: 12px;">
                     <button id="btn-mapper-input-cancel" class="btn btn-ghost" data-i18n="common.cancel"
                         style="font-weight: 600; color: var(--text-muted);">Annuler</button>
                     <button id="btn-mapper-input-confirm" class="btn btn-primary" data-i18n="common.confirm"
@@ -7327,7 +7327,7 @@
         <!-- ══ Steam-style App Picker for Launchpack ══ -->
         <div id="modal-app-picker" class="modal-generic-overlay" onclick="if(event.target===this)this.classList.remove('open')" style="z-index:10010;">
             <div class="modal glass" style="width:700px;max-width:95vw;max-height:88vh;display:flex;flex-direction:column;">
-                <div class="modal-header" style="padding:18px 24px 14px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:space-between;">
+                <div class="modal-header" style="padding:18px 24px 14px;border-bottom:1px solid var(--bmm-s06);display:flex;align-items:center;justify-content:space-between;">
                     <div>
                         <div style="font-size:15px;font-weight:800;color:var(--text-bright);" data-i18n="settings.appPicker.title">Ajouter une application</div>
                         <div style="font-size:11px;color:var(--text-muted);margin-top:2px;" data-i18n="settings.appPicker.subtitle">Sélectionnez un ou plusieurs programmes à ajouter au Launch Pack.</div>
@@ -7335,11 +7335,11 @@
                     <button class="modal-close" onclick="document.getElementById('modal-app-picker').classList.remove('open')" style="position:static;font-size:20px;line-height:1;">&times;</button>
                 </div>
                 <!-- Search -->
-                <div style="padding:10px 16px;border-bottom:1px solid rgba(255,255,255,0.05);">
+                <div style="padding:10px 16px;border-bottom:1px solid var(--bmm-s05);">
                     <input id="app-picker-search" type="text" class="form-input"
                         data-i18n-placeholder="settings.appPicker.search"
                         placeholder="Rechercher…"
-                        style="width:100%;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);font-size:13px;padding:6px 12px;border-radius:6px;">
+                        style="width:100%;background:var(--bmm-s04);border:1px solid var(--bmm-s08);font-size:13px;padding:6px 12px;border-radius:6px;">
                 </div>
                 <!-- List -->
                 <div style="flex:1;overflow-y:auto;padding:0;">
@@ -7360,7 +7360,7 @@
                     </table>
                 </div>
                 <!-- Footer -->
-                <div style="padding:12px 20px;border-top:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;gap:10px;background:rgba(0,0,0,0.15);">
+                <div style="padding:12px 20px;border-top:1px solid var(--bmm-s06);display:flex;align-items:center;gap:10px;background:var(--bmm-bg-base);">
                     <button class="btn btn-secondary btn-sm" id="app-picker-browse" style="font-size:11px;" data-i18n="settings.appPicker.browse">Parcourir…</button>
                     <span id="app-picker-sel-count" style="font-size:11px;color:var(--text-muted);flex:1;"></span>
                     <button class="btn btn-ghost btn-sm" onclick="document.getElementById('modal-app-picker').classList.remove('open')" style="font-size:11px;" data-i18n="settings.appPicker.cancel">Annuler</button>
@@ -7417,7 +7417,7 @@
                             data-i18n="settings.launchPackIcon">ICÔNE (PNG/JPG)</label>
                         <div style="display:flex; gap:12px; align-items:center;">
                             <div id="lp-icon-preview"
-                                style="width:48px; height:48px; background:rgba(255,255,255,0.03); border:1px dashed var(--border); border-radius:12px; display:flex; align-items:center; justify-content:center; overflow:hidden;">
+                                style="width:48px; height:48px; background:var(--bmm-s03); border:1px dashed var(--border); border-radius:12px; display:flex; align-items:center; justify-content:center; overflow:hidden;">
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)"
                                     stroke-width="2">
                                     <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
@@ -7431,7 +7431,7 @@
                     </div>
                 </div>
                 <div class="modal-footer"
-                    style="padding: 16px 28px; background: rgba(0,0,0,0.15); display: flex; justify-content: flex-end; gap: 12px;">
+                    style="padding: 16px 28px; background: var(--bmm-bg-base); display: flex; justify-content: flex-end; gap: 12px;">
                     <button class="btn btn-ghost btn-sm"
                         onclick="document.getElementById('modal-launchpack').classList.remove('open')"
                         data-i18n="common.cancel">Annuler</button>
@@ -7476,7 +7476,7 @@
                         <!-- Dynamically populated -->
                     </p>
                     <div
-                        style="margin-top: 20px; padding: 16px; background: rgba(255,255,255,0.03); border-radius: 12px; border: 1px solid rgba(255,255,255,0.05);">
+                        style="margin-top: 20px; padding: 16px; background: var(--bmm-s03); border-radius: 12px; border: 1px solid var(--bmm-s05);">
                         <div style="display: flex; gap: 12px; align-items: flex-start;">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)"
                                 stroke-width="2" style="margin-top: 2px;">
@@ -7493,7 +7493,7 @@
                     </div>
                 </div>
                 <div class="modal-footer"
-                    style="padding: 20px 28px; background: rgba(0,0,0,0.2); display: flex; justify-content: flex-end; gap: 14px;">
+                    style="padding: 20px 28px; background: var(--bmm-bg-base); display: flex; justify-content: flex-end; gap: 14px;">
                     <button class="btn btn-ghost"
                         onclick="document.getElementById('modal-launchpack-delete').classList.remove('open')"
                         data-i18n="common.cancel"
@@ -7565,9 +7565,9 @@
         <!-- Mapper Confirm Modal -->
         <div id="modal-mapper-confirm" class="modal-generic-overlay">
             <div class="modal glass"
-                style="width: 440px; max-width: 90vw; border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; overflow: hidden;">
+                style="width: 440px; max-width: 90vw; border: 1px solid var(--bmm-s10); border-radius: 20px; overflow: hidden;">
                 <div class="modal-header"
-                    style="background: rgba(255,255,255,0.03); padding: 22px 28px; border-bottom: 1px solid rgba(255,255,255,0.08);">
+                    style="background: var(--bmm-s03); padding: 22px 28px; border-bottom: 1px solid var(--bmm-s08);">
                     <div style="display: flex; align-items: center; gap: 14px;">
                         <div
                             style="width: 40px; height: 40px; background: rgba(239, 68, 68, 0.1); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: var(--danger);">
@@ -7597,7 +7597,7 @@
                         vraiment effectuer cette action ?</p>
                 </div>
                 <div class="modal-footer"
-                    style="padding: 18px 28px; background: rgba(0,0,0,0.15); display: flex; justify-content: flex-end; gap: 12px;">
+                    style="padding: 18px 28px; background: var(--bmm-bg-base); display: flex; justify-content: flex-end; gap: 12px;">
                     <button id="btn-mapper-confirm-cancel" class="btn btn-ghost" data-i18n="common.cancel"
                         style="font-weight: 600; color: var(--text-muted);">Annuler</button>
                     <button id="btn-mapper-confirm-ok" class="btn btn-danger" data-i18n="common.confirm"
@@ -7611,10 +7611,10 @@
         <div id="modal-contributor-detail" class="modal-generic-overlay"
             onclick="if(event.target === this) this.classList.remove('open')">
             <div class="modal glass"
-                style="width: 700px; max-width: 95vw; border-radius: 28px; border: 1px solid rgba(255,255,255,0.15); box-shadow: 0 30px 90px rgba(0, 0, 0, 0.7); position: relative;">
+                style="width: 700px; max-width: 95vw; border-radius: 28px; border: 1px solid var(--bmm-s15); box-shadow: 0 30px 90px rgba(0, 0, 0, 0.7); position: relative;">
                 <button class="modal-close"
                     onclick="document.getElementById('modal-contributor-detail').classList.remove('open')"
-                    style="position: absolute; top: 20px; right: 20px; width: 36px; height: 36px; border-radius: 12px; background: rgba(255,255,255,0.05); color: var(--bmm-text-secondary); display: flex; align-items: center; justify-content: center; transition: all 0.2s; border: none; cursor: pointer; z-index: 10;">
+                    style="position: absolute; top: 20px; right: 20px; width: 36px; height: 36px; border-radius: 12px; background: var(--bmm-s05); color: var(--bmm-text-secondary); display: flex; align-items: center; justify-content: center; transition: all 0.2s; border: none; cursor: pointer; z-index: 10;">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
                         stroke-linecap="round" stroke-linejoin="round">
                         <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -7630,9 +7630,9 @@
         <div id="modal-stack" class="modal-generic-overlay"
             onclick="if(event.target === this) this.classList.remove('open')">
             <div class="modal glass"
-                style="width: 600px; max-width: 95vw; border-radius: 24px; border: 1px solid rgba(255,255,255,0.15); box-shadow: 0 30px 90px rgba(0, 0, 0, 0.7); position: relative;">
+                style="width: 600px; max-width: 95vw; border-radius: 24px; border: 1px solid var(--bmm-s15); box-shadow: 0 30px 90px rgba(0, 0, 0, 0.7); position: relative;">
                 <button class="modal-close" onclick="document.getElementById('modal-stack').classList.remove('open')"
-                    style="position: absolute; top: 20px; right: 20px; width: 36px; height: 36px; border-radius: 12px; background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.4); display: flex; align-items: center; justify-content: center; transition: all 0.2s; border: none; cursor: pointer; z-index: 10;">
+                    style="position: absolute; top: 20px; right: 20px; width: 36px; height: 36px; border-radius: 12px; background: var(--bmm-s05); color: var(--bmm-text-muted); display: flex; align-items: center; justify-content: center; transition: all 0.2s; border: none; cursor: pointer; z-index: 10;">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
                         stroke-linecap="round" stroke-linejoin="round">
                         <line x1="18" y1="6" x2="6" y2="18"></line>
