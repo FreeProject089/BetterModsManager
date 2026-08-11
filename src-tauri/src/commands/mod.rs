@@ -23,6 +23,7 @@ pub mod omm;
 pub mod debug;
 pub mod window;
 pub mod identity;
+pub mod repo_discover;
 pub mod repo_autoindex;
 pub mod repo_credentials;
 pub mod repo_remote;
