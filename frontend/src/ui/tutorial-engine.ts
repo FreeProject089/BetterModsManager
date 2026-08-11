@@ -2,7 +2,8 @@
 /**
  * tutorial-engine.ts — Step-by-step tutorial runner for BMM.
  *
- * Bottom-center floating card. Supports drag-to-reposition and minimize-to-pill.
+ * Bottom DOCK: full-width bar the app reserves space for, so the lesson never covers
+ * the control it is pointing at. Minimises to a slim strip.
  * - Correct navigation via .nav-item[data-view] selectors
  * - Modal/followup element detection via polling
  * - Multiple element highlights (class-based, removed on action complete/skip)
@@ -188,7 +189,7 @@ export function closeTutorialEngine(): void {
             panel.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
             panel.style.opacity    = '0';
             panel.style.transform  = 'scale(0.96)';
-            setTimeout(() => { panel.remove(); _panelLeft = null; _panelTop = null; }, 220);
+            setTimeout(() => { _setDockReserved(false); panel.remove(); _panelLeft = null; _panelTop = null; }, 220);
         } else {
             panel.classList.add('closing');
             panel.addEventListener('animationend', () => panel.remove(), { once: true });
@@ -323,6 +324,16 @@ function _navigate(nav: string | undefined): void {
 // ── Drag ─────────────────────────────────────────────────────────────────────
 
 function _makeDraggable(handle: HTMLElement, panel: HTMLElement): void {
+    // No-op since the card became a bottom dock.
+    //
+    // The app now reserves the dock's height and reflows above it. Dragging the bar out of
+    // that band would leave a reserved strip of empty space with the guidance floating
+    // somewhere else — and put the card back over the controls the dock exists to keep
+    // clear. Kept as a stub rather than deleted so the call sites stay honest about what
+    // the header handle does now.
+    void handle; void panel;
+    if (true) return;
+    // eslint-disable-next-line no-unreachable
     handle.addEventListener('mousedown', (e: MouseEvent) => {
         if ((e.target as HTMLElement).closest('button,select,input')) return;
 
@@ -401,7 +412,7 @@ function _restore(): void {
 function _renderMinimizedPill(): void {
     const panel = document.getElementById('tut-engine-panel');
     if (!panel) return;
-    panel.classList.add('minimized');
+    panel.classList.add('minimized'); _setDockReserved(true);
     // Drop any inline width/height left by the resize grip, so the pill collapses
     // to its natural size instead of keeping the expanded panel dimensions.
     panel.style.width = '';
@@ -429,8 +440,8 @@ function _renderMinimizedPill(): void {
 
     const pill = panel.querySelector('.tut-min-pill') as HTMLElement | null;
     if (pill) _makeDraggable(pill, panel);
-    document.getElementById('btn-tut-restore')?.addEventListener('click', () => { panel.classList.remove('minimized'); _restore(); });
-    document.getElementById('btn-tut-close-min')?.addEventListener('click', () => { panel.classList.remove('minimized'); closeTutorialEngine(); });
+    document.getElementById('btn-tut-restore')?.addEventListener('click', () => { panel.classList.remove('minimized'); _setDockReserved(true); _restore(); });
+    document.getElementById('btn-tut-close-min')?.addEventListener('click', () => { panel.classList.remove('minimized'); _setDockReserved(true); closeTutorialEngine(); });
 }
 
 // ── Render ───────────────────────────────────────────────────────────────────
@@ -443,7 +454,7 @@ function _renderStep(): void {
     const step  = _currentStep();
     const panel = document.getElementById('tut-engine-panel')!;
 
-    panel.classList.remove('minimized');
+    panel.classList.remove('minimized'); _setDockReserved(true);
     _applyDragPosition(panel);
 
     /* ── Apply tutorial color CSS vars for avatar glow + top border ── */
@@ -763,7 +774,7 @@ function _skipTutorial(): void {
     const panel = document.getElementById('tut-engine-panel');
     if (panel) {
         panel.classList.add('closing');
-        panel.addEventListener('animationend', () => { panel.remove(); _panelLeft = null; _panelTop = null; }, { once: true });
+        panel.addEventListener('animationend', () => { _setDockReserved(false); panel.remove(); _panelLeft = null; _panelTop = null; }, { once: true });
     }
     // Intentionally skip _onClose so the hub does not reopen
 }
@@ -852,7 +863,7 @@ function _finishTutorial(): void {
     _cleanup();
     const panel = document.getElementById('tut-engine-panel')!;
     const tut   = _tutorial!;
-    panel.classList.remove('minimized');
+    panel.classList.remove('minimized'); _setDockReserved(true);
     _applyDragPosition(panel);
 
     panel.innerHTML = `
@@ -873,7 +884,7 @@ function _finishTutorial(): void {
         _cleanupDemo();
         panel.classList.add('closing');
         panel.addEventListener('animationend', () => {
-            panel.remove(); _panelLeft = null; _panelTop = null;
+            _setDockReserved(false); panel.remove(); _panelLeft = null; _panelTop = null;
             if (_onClose) _onClose();
         }, { once: true });
     });
@@ -1005,7 +1016,7 @@ function _drawHighlight(target: Element, idx: number = 0): void {
     if (r.width === 0 || r.height === 0) return;
 
     // Smart placement: keep the coach card off the highlighted target.
-    if (idx === 0) _autoPlacePanel(r);
+    if (idx === 0) { _autoPlacePanel(r); _setDockReserved(true); }
 
     const cs = window.getComputedStyle(target as HTMLElement);
     const baseRadius = parseFloat(cs.borderTopLeftRadius) || 8;
@@ -1061,14 +1072,30 @@ function _drawHighlight(target: Element, idx: number = 0): void {
 /** Anchor the coach card to whichever edge is FARTHER from the spotlight target,
  *  so the guidance never sits on top of what it's pointing at. No-op once the
  *  user has dragged the card themselves. */
-function _autoPlacePanel(targetRect: DOMRect): void {
-    if (_panelLeft !== null || _panelTop !== null) return; // user positioned it
+function _autoPlacePanel(_targetRect: DOMRect): void {
+    // Deliberately empty since the card became a bottom dock.
+    //
+    // It used to hop to whichever half the target was not in, which made the guidance move
+    // mid-lesson and could still land on the control the step was asking you to click. A
+    // dock reserves its own space, so there is nothing left to avoid.
+}
+
+/** Reserve the dock's height on <body> so the app reflows above it instead of being
+ *  covered — and give it back on teardown, otherwise every later view keeps a phantom
+ *  band of padding it cannot explain. */
+function _setDockReserved(on: boolean): void {
+    document.body.classList.toggle('tut-docked', on);
+    if (!on) {
+        document.body.classList.remove('tut-min');
+        document.body.style.removeProperty('--tut-dock-h');
+        return;
+    }
     const panel = document.getElementById('tut-engine-panel');
-    if (!panel || panel.classList.contains('minimized')) return;
-    const vh = window.innerHeight || document.documentElement.clientHeight;
-    const targetCenterY = targetRect.top + targetRect.height / 2;
-    // Target in the lower ~half → move the card to the top, else keep it bottom.
-    panel.classList.toggle('tut-anchor-top', targetCenterY > vh * 0.52);
+    // Measured rather than assumed: the card's height depends on the step's text, and a
+    // fixed number would clip long ones or leave a gap under short ones.
+    const h = panel ? Math.min(Math.max(panel.scrollHeight, 160), Math.round(window.innerHeight * 0.42)) : 200;
+    document.body.style.setProperty('--tut-dock-h', `${h}px`);
+    document.body.classList.toggle('tut-min', !!panel?.classList.contains('minimized'));
 }
 
 /** "Phantom" demo: float a ghost cursor from the coach card to the current

@@ -4519,16 +4519,24 @@ select.input-field option {
    TUTORIAL ENGINE — BOTTOM FLOATING CARD
 ═══════════════════════════════════ */
 
+/* Docked to the bottom edge, full width, and the app SHRINKS to make room (see
+   --tut-dock-h on <body> below) rather than being covered.
+
+   It used to float over the window and move itself to whichever half the highlighted
+   control was not in. That meant the guidance jumped around mid-lesson, and on a small
+   window it still landed on something — including, sometimes, the very control the step
+   was asking you to click. A dock cannot overlap anything, so neither problem exists. */
 .tut-engine-panel {
-    position: absolute;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: min(540px, calc(100% - 32px));
-    /* User-resizable (drag the bottom-right grip). */
-    resize: both;
-    min-width: 360px;
-    min-height: 240px;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    border-radius: 16px 16px 0 0;
+    /* No resize handle and no drag: with the layout reflowing around it, a user-moved card
+       would tear a hole in the very space that was reserved for it. */
+    resize: none;
+    min-height: var(--tut-dock-h, 200px);
     /* Topmost of the whole tutorial system — above the hub, asset panels AND every
        app modal, so the interactive step guide is never hidden. */
     z-index: 2000100;
@@ -4540,10 +4548,33 @@ select.input-field option {
     border-radius: 16px;
     box-shadow: 0 8px 20px rgba(0, 0, 0, 0.7), 0 0 0 1px var(--bmm-s05);
     overflow: hidden;
-    animation: tutCardUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    animation: tutDockUp 0.32s cubic-bezier(0.22, 1, 0.36, 1);
     display: flex;
     flex-direction: column;
-    max-height: min(560px, calc(100vh - 70px));
+    max-height: var(--tut-dock-h, 200px);
+}
+
+/* The app makes room. Set on <body> while a lesson runs, cleared when it ends, so the
+   layout returns to exactly what it was rather than to a hardcoded default. */
+body.tut-docked #app-shell,
+body.tut-docked .app-body,
+body.tut-docked .main-content {
+    padding-bottom: var(--tut-dock-h, 200px) !important;
+}
+/* The spotlight ring must not be readable UNDER the dock — a highlighted control scrolled
+   behind it would look highlighted and be unclickable. */
+body.tut-docked .tut-spotlight-target {
+    scroll-margin-bottom: calc(var(--tut-dock-h, 200px) + 24px);
+}
+/* Minimised: a slim strip, and the app takes its space back. */
+.tut-engine-panel.minimized {
+    max-height: 46px;
+    min-height: 46px;
+}
+body.tut-docked.tut-min #app-shell,
+body.tut-docked.tut-min .app-body,
+body.tut-docked.tut-min .main-content {
+    padding-bottom: 46px !important;
 }
 
 /* Coloured signature bar across the top of the coach card (tutorial's colour). */
@@ -4579,10 +4610,7 @@ select.input-field option {
 
 /* Smart placement: when the spotlight target sits in the lower half, the coach
    card flips to the top so it never covers what it points at. */
-.tut-engine-panel.tut-anchor-top {
-    top: 20px;
-    bottom: auto;
-}
+/* .tut-anchor-top removed with the floating card: a dock has one place to be. */
 
 /* Per-step fade-in (the body re-renders each step, so this replays every time). */
 @keyframes tutStepIn {
@@ -15494,4 +15522,13 @@ h1 {
 .stack-docs-link button:hover {
     background: var(--accent);
     color: var(--bg-primary);
+}
+
+
+/* Dock entry/exit. Separate from tutCardUp, which also translated horizontally to keep a
+   centred floating card centred — meaningless for a full-width dock, and it made the bar
+   visibly slide sideways on open. */
+@keyframes tutDockUp {
+    from { transform: translateY(100%); opacity: 0; }
+    to   { transform: translateY(0);    opacity: 1; }
 }
