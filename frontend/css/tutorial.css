@@ -273,3 +273,116 @@ body.tut-docked.tut-min.tut-dock-left .main-content {
         padding-bottom: var(--tut-dock-h, 200px) !important;
     }
 }
+
+/* ═══ The hub, rebuilt ══════════════════════════════════════════════════════
+   Loaded after main.css, so these override the old .tut-hub-* rules. The markup they
+   styled is gone (see tutorial-hub.ts) — what remains of it here is dead, and only the
+   overlay/backdrop/close rules are still shared.
+
+   Two panes: the lessons on the left, the selected one on the right. The old layout gave
+   every lesson a card carrying a percentage bar, an "n/m steps" label AND a row of part
+   chips with their own counts — three answers to one question. Here each level answers
+   once: the rail says how far through a lesson you are, the parts list says where inside
+   it, and neither repeats the other. */
+
+.tut-hub-shell {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
+    width: min(920px, calc(100vw - 64px));
+    height: min(560px, calc(100vh - 96px));
+    background: var(--bmm-bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
+}
+
+/* ── Left: the lessons ───────────────────────────────────────────────────── */
+.tut-hub-rail {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    background: var(--bmm-bg-base);
+    border-right: 1px solid var(--border);
+}
+.tut-hub-rail-head {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; padding: 16px 14px 12px;
+}
+.tut-hub-rail-title { font-size: 14px; font-weight: 800; color: var(--bmm-text-primary); }
+.tut-hub-list { flex: 1; overflow-y: auto; padding: 0 8px 12px; display: flex; flex-direction: column; gap: 2px; }
+
+.tut-hub-row {
+    display: flex; align-items: center; gap: 10px;
+    width: 100%; padding: 9px 10px;
+    background: none; border: 0; border-radius: 9px;
+    text-align: left; cursor: pointer;
+    color: var(--bmm-text-secondary);
+    transition: background 0.12s, color 0.12s;
+}
+.tut-hub-row:hover { background: var(--bmm-bg-hover); color: var(--bmm-text-primary); }
+/* Selection is a filled row, not a coloured border: at this size a 2px edge reads as an
+   accident rather than as "this one". */
+.tut-hub-row.on { background: var(--bmm-bg-overlay); color: var(--bmm-text-primary); }
+.tut-hub-row.on .tut-hub-row-icon { color: var(--tut-color); border-color: var(--tut-color); }
+
+.tut-hub-row-icon {
+    flex: none; display: grid; place-items: center;
+    width: 30px; height: 30px;
+    border: 1px solid var(--border); border-radius: 8px;
+    color: var(--bmm-text-muted);
+}
+.tut-hub-row.done .tut-hub-row-icon { color: var(--bmm-success, #22c55e); border-color: color-mix(in srgb, var(--bmm-success, #22c55e) 40%, transparent); }
+.tut-hub-row-mid { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.tut-hub-row-name { font-size: 12.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tut-hub-row-sub { font-size: 10.5px; color: var(--bmm-text-muted); font-variant-numeric: tabular-nums; }
+
+/* ── Right: the selected lesson ──────────────────────────────────────────── */
+.tut-hub-detail {
+    display: flex; flex-direction: column; min-width: 0;
+    padding: 22px 24px; overflow-y: auto;
+}
+.tut-hub-detail-title { font-size: 19px; font-weight: 800; color: var(--bmm-text-primary); margin: 0 0 6px; }
+.tut-hub-detail-desc {
+    /* The description is the content of this pane, so it is not the palest thing in it. */
+    font-size: 12.5px; line-height: 1.55; color: var(--bmm-text-secondary); margin: 0 0 16px; max-width: 62ch;
+}
+.tut-hub-actions { display: flex; gap: 8px; align-items: center; margin-bottom: 20px; }
+.tut-hub-cta {
+    display: inline-flex; align-items: center; gap: 7px;
+    background: var(--tut-color); border-color: var(--tut-color);
+    color: var(--bmm-btn-primary-text, #fff);
+}
+.tut-hub-cta:hover { filter: brightness(1.08); }
+
+.tut-hub-parts { display: flex; flex-direction: column; gap: 4px; }
+.tut-hub-part {
+    display: flex; align-items: center; gap: 10px;
+    width: 100%; padding: 9px 11px;
+    background: none; border: 1px solid transparent; border-radius: 9px;
+    color: var(--bmm-text-secondary); text-align: left; cursor: pointer;
+    transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+.tut-hub-part:hover { background: var(--bmm-bg-hover); color: var(--bmm-text-primary); }
+/* Where Resume would drop you. The one thing the screen is asked at a glance. */
+.tut-hub-part.here { border-color: var(--tut-color); background: var(--bmm-bg-overlay); color: var(--bmm-text-primary); }
+.tut-hub-part-dot {
+    flex: none; display: grid; place-items: center;
+    width: 18px; height: 18px; border-radius: 50%;
+    border: 1.5px solid var(--border); color: var(--bmm-success, #22c55e);
+}
+.tut-hub-part.doing .tut-hub-part-dot { border-color: var(--tut-color); background: color-mix(in srgb, var(--tut-color) 22%, transparent); }
+.tut-hub-part.done  .tut-hub-part-dot { border-color: color-mix(in srgb, var(--bmm-success, #22c55e) 45%, transparent); }
+.tut-hub-part-name { flex: 1; min-width: 0; font-size: 12.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tut-hub-part-count { flex: none; font-size: 10.5px; color: var(--bmm-text-muted); font-variant-numeric: tabular-nums; }
+
+.tut-hub-foot { margin-top: auto; padding-top: 18px; font-size: 10.5px; color: var(--bmm-text-muted); line-height: 1.5; }
+.tut-hub-empty { margin: auto; color: var(--bmm-text-muted); font-size: 12px; }
+
+/* One column when there is no room for two — the rail becomes a scrollable strip on top
+   rather than squeezing the detail pane to nothing. */
+@media (max-width: 780px) {
+    .tut-hub-shell { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); height: min(620px, calc(100vh - 48px)); }
+    .tut-hub-rail { border-right: 0; border-bottom: 1px solid var(--border); max-height: 190px; }
+}

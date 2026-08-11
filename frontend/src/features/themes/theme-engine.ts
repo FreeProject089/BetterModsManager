@@ -748,10 +748,14 @@ export function applyTheme(theme: BmmTheme): void {
 /** Apply image/video assets: replace the corner mascot, the boot loader mascot,
  *  and the app logo if the theme provides them (base64 data-URI or URL). */
 // Every Tasky image across BMM: corner mascot, boot loader, close/outro animation,
-// settings card icon, docs tooltip, tutorial hub, power mascots.
+// settings card icon, docs tooltip, power mascots.
+//
+// The tutorial hub is no longer in this list: its rebuild dropped the mascot header, so
+// `.tut-hub-mascot` matched nothing. A selector that matches nothing costs nothing and
+// says something false — a reader would conclude the hub still themes a mascot.
 const MASCOT_SELECTORS = [
     '#app-mascot', '#loader-img', '#ld-logo', '#vhs-tasky-img',
-    '#settings-tasky-icon', '#tasky-mascot-img', '.tut-hub-mascot', '.bh-pow-mascot',
+    '#settings-tasky-icon', '#tasky-mascot-img', '.bh-pow-mascot',
     '.tut-avatar img', '.tut-min-mascot', '.tut-finish-mascot',
 ];
 function applyAssets(theme: BmmTheme): void {

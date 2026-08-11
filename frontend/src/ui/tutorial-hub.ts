@@ -1,14 +1,18 @@
-﻿// @ts-nocheck
 /**
- * tutorial-hub.ts — Central tutorial hub overlay for BMM.
+ * tutorial-hub.ts — where you pick a lesson.
  *
- * Shows a list of all available tutorials with per-tutorial progress.
- * Users can start/resume/restart any tutorial from here.
- * Supports live language switching without reopening.
+ * Rebuilt. The version this replaces gave every tutorial a card carrying THREE progress
+ * indicators at once: a percentage bar, an "n/m steps" label, and a row of part chips each
+ * with its own n/m. Three answers to one question, none of which is the one you have when
+ * you open this screen — which is "where was I, and what is next".
  *
- * Entry points:
- *   openTutorialHub()  — Show the hub (called from onboarding or menu)
- *   closeTutorialHub() — Hide the hub
+ * So: a list of lessons on the left, and the selected lesson's parts on the right. One
+ * progress reading per level. The right pane is the only place a part can be started from,
+ * which also removes the old card's two-or-three competing buttons.
+ *
+ * Everything is built with DOM calls rather than innerHTML. Nothing here is user-authored
+ * today, but `tut.icon` is raw SVG from the data file and the titles come through t() —
+ * a screen that interpolates markup invites the day someone makes one of those dynamic.
  */
 
 import { t } from '../core/i18n.js';
@@ -17,234 +21,234 @@ import {
     getTutorialCompletion, isTutorialComplete, getLastPosition,
     getAllStepStatuses, resetTutorial,
 } from './tutorial-store.js';
-import { startTutorialEngine, closeTutorialEngine } from './tutorial-engine.js';
+import { startTutorialEngine } from './tutorial-engine.js';
 import type { TutorialDef } from './tutorial-types.js';
 
-// ── Module state ─────────────────────────────────────────────────────────────
+let _langListener: ((e: Event) => void) | null = null;
+let _selected: string | null = null;
 
-let _hubLangListener: ((e: Event) => void) | null = null;
+const el = (tag: string, cls?: string, text?: string): HTMLElement => {
+    const n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text != null) n.textContent = text;
+    return n;
+};
+
+/** An SVG string from the tutorial data, parsed rather than interpolated. */
+function svg(markup: string): Node {
+    const doc = new DOMParser().parseFromString(`<svg xmlns="http://www.w3.org/2000/svg">${markup}</svg>`, 'image/svg+xml');
+    const frag = document.createDocumentFragment();
+    // Take the children of the wrapper, so a full <svg> in the data still lands correctly.
+    for (const child of Array.from(doc.documentElement.childNodes)) frag.append(child);
+    return frag;
+}
+
+function icon(paths: string, size = 14): SVGElement {
+    const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    s.setAttribute('viewBox', '0 0 24 24');
+    s.setAttribute('width', String(size));
+    s.setAttribute('height', String(size));
+    s.setAttribute('fill', 'none');
+    s.setAttribute('stroke', 'currentColor');
+    s.setAttribute('stroke-width', '2.5');
+    s.setAttribute('stroke-linecap', 'round');
+    s.append(svg(paths));
+    return s;
+}
+
+const CHECK = '<polyline points="20 6 9 17 4 12"/>';
+const CLOSE = '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>';
+const PLAY  = '<polygon points="6 3 20 12 6 21 6 3" fill="currentColor" stroke="none"/>';
+
+interface PartState { done: number; total: number; complete: boolean; started: boolean }
+
+function partStates(tut: TutorialDef): PartState[] {
+    const all = getAllStepStatuses(tut.id);
+    return tut.parts.map((p) => {
+        const done = p.steps.filter((s) => all[`${p.id}:${s.id}`]?.state === 'complete').length;
+        return { done, total: p.steps.length, complete: done === p.steps.length && p.steps.length > 0, started: done > 0 };
+    });
+}
 
 // ── Public API ───────────────────────────────────────────────────────────────
 
 export function openTutorialHub(): void {
     let overlay = document.getElementById('tut-hub-overlay');
-    if (overlay) {
-        overlay.classList.remove('closing');
-        _renderHub(overlay);
-        return;
+    if (!overlay) {
+        overlay = el('div', 'tut-hub-overlay');
+        overlay.id = 'tut-hub-overlay';
+        (document.getElementById('app-window-outer') || document.body).append(overlay);
     }
-    overlay = document.createElement('div');
-    overlay.id = 'tut-hub-overlay';
-    overlay.className = 'tut-hub-overlay';
-    document.getElementById('app-window-outer')?.appendChild(overlay);
-    _renderHub(overlay);
+    overlay.classList.remove('closing');
+    // Open on the lesson you were last in, not on the first one in the file.
+    if (!_selected) _selected = TUTORIALS.find((x) => getLastPosition(x.id).partId)?.id ?? TUTORIALS[0]?.id ?? null;
+    render(overlay);
 
-    // Live language switching — re-render without closing
-    if (_hubLangListener) document.removeEventListener('langChanged', _hubLangListener);
-    _hubLangListener = () => {
-        const o = document.getElementById('tut-hub-overlay');
-        if (o) _renderHub(o);
-    };
-    document.addEventListener('langChanged', _hubLangListener);
+    if (_langListener) document.removeEventListener('langChanged', _langListener);
+    _langListener = () => { const o = document.getElementById('tut-hub-overlay'); if (o) render(o); };
+    document.addEventListener('langChanged', _langListener);
 }
 
 export function closeTutorialHub(): void {
-    if (_hubLangListener) {
-        document.removeEventListener('langChanged', _hubLangListener);
-        _hubLangListener = null;
-    }
+    if (_langListener) { document.removeEventListener('langChanged', _langListener); _langListener = null; }
     const overlay = document.getElementById('tut-hub-overlay');
-    if (overlay) {
-        overlay.classList.add('closing');
-        overlay.addEventListener('animationend', () => overlay.remove(), { once: true });
-        // Fallback: if the closing animation never fires (display change, reduced
-        // motion, etc.) force-remove so the hub can never stay stuck on screen.
-        setTimeout(() => { document.getElementById('tut-hub-overlay')?.remove(); }, 450);
+    if (!overlay) return;
+    overlay.classList.add('closing');
+    overlay.addEventListener('animationend', () => overlay.remove(), { once: true });
+    // Reduced motion, a display change, a backgrounded window: if animationend never
+    // fires the hub would sit on screen forever with nothing able to remove it.
+    setTimeout(() => document.getElementById('tut-hub-overlay')?.remove(), 450);
+}
+
+// ── Rendering ────────────────────────────────────────────────────────────────
+
+function render(overlay: HTMLElement): void {
+    overlay.textContent = '';
+
+    const backdrop = el('div', 'tut-hub-backdrop');
+    backdrop.addEventListener('click', closeTutorialHub);
+
+    const shell = el('div', 'tut-hub-shell');
+    shell.append(rail(), detail());
+    overlay.append(backdrop, shell);
+
+    // Escape closes, once, and only while the hub is up.
+    const onKey = (e: KeyboardEvent) => {
+        if (e.key !== 'Escape') return;
+        document.removeEventListener('keydown', onKey);
+        closeTutorialHub();
+    };
+    document.addEventListener('keydown', onKey);
+}
+
+/** Left: every lesson, one line each. */
+function rail(): HTMLElement {
+    const box = el('div', 'tut-hub-rail');
+
+    const head = el('div', 'tut-hub-rail-head');
+    head.append(el('div', 'tut-hub-rail-title', t('hub.title')));
+    const close = el('button', 'tut-hub-close');
+    close.setAttribute('type', 'button');
+    close.setAttribute('aria-label', t('hub.close') || 'Close');
+    close.append(icon(CLOSE, 13));
+    close.addEventListener('click', closeTutorialHub);
+    head.append(close);
+    box.append(head);
+
+    const list = el('div', 'tut-hub-list');
+    for (const tut of TUTORIALS) {
+        const keys = getAllStepKeys(tut);
+        const { done, total } = getTutorialCompletion(tut.id, keys);
+        const complete = isTutorialComplete(tut.id, keys);
+
+        const row = el('button', 'tut-hub-row');
+        row.setAttribute('type', 'button');
+        if (tut.id === _selected) row.classList.add('on');
+        if (complete) row.classList.add('done');
+        row.style.setProperty('--tut-color', tut.color);
+
+        const mark = el('span', 'tut-hub-row-icon');
+        mark.append(complete ? icon(CHECK, 13) : svg(tut.icon));
+        row.append(mark);
+
+        const mid = el('span', 'tut-hub-row-mid');
+        mid.append(el('span', 'tut-hub-row-name', t(tut.title_key)));
+        // ONE progress reading at this level: how far through, in steps. The bar is the
+        // same fact drawn twice, so it is gone.
+        mid.append(el('span', 'tut-hub-row-sub',
+            complete ? (t('hub.completed') || 'Completed') : `${done}/${total} ${t('hub.stepsLabel') || 'steps'}`));
+        row.append(mid);
+
+        row.addEventListener('click', () => {
+            _selected = tut.id;
+            const o = document.getElementById('tut-hub-overlay');
+            if (o) render(o);
+        });
+        list.append(row);
     }
+    box.append(list);
+    return box;
 }
 
-// ── Hub rendering ────────────────────────────────────────────────────────────
+/** Right: the selected lesson, its parts, and the one button that matters. */
+function detail(): HTMLElement {
+    const box = el('div', 'tut-hub-detail');
+    const tut = TUTORIALS.find((x) => x.id === _selected);
+    if (!tut) {
+        box.append(el('div', 'tut-hub-empty', t('hub.subtitle') || ''));
+        return box;
+    }
+    box.style.setProperty('--tut-color', tut.color);
 
-function _renderHub(overlay: HTMLElement): void {
-    const tutorialCards = TUTORIALS.map(tut => _renderTutorialCard(tut)).join('');
+    const keys = getAllStepKeys(tut);
+    const { done, total } = getTutorialCompletion(tut.id, keys);
+    const complete = isTutorialComplete(tut.id, keys);
+    const started = done > 0;
+    const pos = getLastPosition(tut.id);
 
-    overlay.innerHTML = `
-        <div class="tut-hub-backdrop" id="tut-hub-backdrop"></div>
-        <div class="tut-hub-container">
-            <div class="tut-hub-header">
-                <div class="tut-hub-mascot-row">
-                    <div class="tut-hub-mascot-wrap">
-                        <img src="assets/Tasky_Happy.png" alt="Tasky" class="tut-hub-mascot" />
-                        <div class="tut-hub-mascot-glow"></div>
-                    </div>
-                    <div>
-                        <h2 class="tut-hub-title">${t('hub.title')}</h2>
-                        <p class="tut-hub-subtitle">${t('hub.subtitle')}</p>
-                    </div>
-                </div>
-                <button class="tut-hub-close" id="btn-hub-close" data-tooltip="${t('hub.close')}">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                    </svg>
-                </button>
-            </div>
+    box.append(el('h2', 'tut-hub-detail-title', t(tut.title_key)));
+    box.append(el('p', 'tut-hub-detail-desc', t(tut.desc_key)));
 
-            <div class="tut-hub-list">
-                ${tutorialCards}
-            </div>
-
-            <div class="tut-hub-footer">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" opacity="0.4"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
-                <span class="tut-hub-footer-text">${t('hub.footer')}</span>
-            </div>
-        </div>
-    `;
-
-    document.getElementById('tut-hub-backdrop')?.addEventListener('click', closeTutorialHub);
-    document.getElementById('btn-hub-close')?.addEventListener('click', closeTutorialHub);
-
-    overlay.querySelectorAll('[data-tut-start]').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const tutId = (btn as HTMLElement).dataset.tutStart!;
-            _launchTutorial(tutId, false);
-        });
+    // The primary action, alone and unambiguous. The old card offered Start, Resume and
+    // Restart at near-equal weight, so nothing said which one to press.
+    const bar = el('div', 'tut-hub-actions');
+    const cta = el('button', 'btn btn-primary tut-hub-cta');
+    cta.setAttribute('type', 'button');
+    cta.append(icon(PLAY, 12));
+    cta.append(el('span', '', complete
+        ? (t('hub.restart') || 'Restart')
+        : started ? (t('hub.resume') || 'Resume') : (t('hub.start') || 'Start')));
+    cta.addEventListener('click', () => {
+        if (complete) resetTutorial(tut.id);
+        launch(tut, complete ? null : pos.partId, complete ? null : pos.stepId);
     });
-    overlay.querySelectorAll('[data-tut-restart]').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const tutId = (btn as HTMLElement).dataset.tutRestart!;
-            resetTutorial(tutId);
-            _renderHub(overlay);
+    bar.append(cta);
+
+    // Restart is secondary and only exists once there is progress to throw away.
+    if (started && !complete) {
+        const again = el('button', 'btn btn-ghost');
+        again.setAttribute('type', 'button');
+        again.textContent = t('hub.restart') || 'Restart';
+        again.addEventListener('click', () => {
+            resetTutorial(tut.id);
+            const o = document.getElementById('tut-hub-overlay');
+            if (o) render(o);
         });
+        bar.append(again);
+    }
+    box.append(bar);
+
+    // The parts, as a list you can enter at any point. This is the only place a part is
+    // startable from — the rail says where you are, this says where you can go.
+    const states = partStates(tut);
+    const list = el('div', 'tut-hub-parts');
+    tut.parts.forEach((p, i) => {
+        const st = states[i];
+        const row = el('button', 'tut-hub-part');
+        row.setAttribute('type', 'button');
+        if (st.complete) row.classList.add('done');
+        else if (st.started) row.classList.add('doing');
+        // Where you would land if you pressed Resume — the answer to "where was I".
+        if (p.id === pos.partId && !complete) row.classList.add('here');
+
+        const dot = el('span', 'tut-hub-part-dot');
+        if (st.complete) dot.append(icon(CHECK, 10));
+        row.append(dot);
+
+        row.append(el('span', 'tut-hub-part-name', t(p.title_key)));
+        row.append(el('span', 'tut-hub-part-count', `${st.done}/${st.total}`));
+
+        row.addEventListener('click', () => launch(tut, p.id, p.steps[0]?.id ?? null));
+        list.append(row);
     });
-    overlay.querySelectorAll('[data-tut-resume]').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const tutId = (btn as HTMLElement).dataset.tutResume!;
-            _launchTutorial(tutId, true);
-        });
-    });
-    // Click a part chip → jump straight into that part.
-    overlay.querySelectorAll('.tut-hub-part-chip-btn').forEach(chip => {
-        chip.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const el = chip as HTMLElement;
-            _launchTutorialAt(el.dataset.tut!, el.dataset.part!, el.dataset.step || null);
-        });
-    });
+    box.append(list);
+
+    const foot = el('div', 'tut-hub-foot', t('hub.footer') || '');
+    box.append(foot);
+    return box;
 }
 
-/** Start a tutorial at a specific part/step (clicking a part chip in the hub). */
-function _launchTutorialAt(tutId: string, partId: string, stepId: string | null): void {
-    const tut = TUTORIALS.find(t => t.id === tutId);
-    if (!tut) return;
+function launch(tut: TutorialDef, partId: string | null, stepId: string | null): void {
     closeTutorialHub();
-    startTutorialEngine(tut, partId, stepId, openTutorialHub);
-}
-
-function _renderTutorialCard(tut: TutorialDef): string {
-    const stepKeys = getAllStepKeys(tut);
-    const { done, total } = getTutorialCompletion(tut.id, stepKeys);
-    const complete = isTutorialComplete(tut.id, stepKeys);
-    const hasProgress = done > 0;
-    const pct = total > 0 ? Math.round((done / total) * 100) : 0;
-    const allStatuses = getAllStepStatuses(tut.id);
-
-    // Parts chips — always visible, show completion state
-    const partChips = tut.parts.map(p => {
-        const partDone = p.steps.filter(s => allStatuses[`${p.id}:${s.id}`]?.state === 'complete').length;
-        const partTotal = p.steps.length;
-        const partComplete = partDone === partTotal;
-        const partInProgress = partDone > 0 && !partComplete;
-
-        let chipClass = 'tut-hub-part-chip';
-        if (partComplete) chipClass += ' done';
-        else if (partInProgress) chipClass += ' in-progress';
-
-        const icon = partComplete
-            ? `<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5"><polyline points="20 6 9 17 4 12"/></svg>`
-            : partInProgress
-                ? `<span class="tut-hub-part-dot" style="background:${tut.color}"></span>`
-                : `<span class="tut-hub-part-dot"></span>`;
-
-        const firstStep = p.steps[0]?.id ?? '';
-        return `<button type="button" class="${chipClass} tut-hub-part-chip-btn" data-tut="${tut.id}" data-part="${p.id}" data-step="${firstStep}" data-tooltip="${t('hub.startHere') || 'Start from here'}" style="${partInProgress ? `--part-color:${tut.color}` : ''}">
-            ${icon}
-            <span>${t(p.title_key)}</span>
-            <span class="tut-hub-part-count">${partDone}/${partTotal}</span>
-        </button>`;
-    }).join('');
-
-    // Action button
-    let actionBtn = '';
-    if (complete) {
-        actionBtn = `
-            <div class="tut-card-complete-badge">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
-                ${t('hub.completed')}
-            </div>
-            <button class="btn btn-ghost tut-card-restart" data-tut-restart="${tut.id}">${t('hub.restart')}</button>
-        `;
-    } else if (hasProgress) {
-        actionBtn = `
-            <button class="btn btn-ghost tut-card-restart" data-tut-restart="${tut.id}">${t('hub.restart')}</button>
-            <button class="btn btn-primary tut-card-cta" data-tut-resume="${tut.id}" style="background:${tut.color};border-color:${tut.color};box-shadow:0 4px 18px -4px ${tut.color}55">${t('hub.resume')} →</button>
-        `;
-    } else {
-        actionBtn = `
-            <button class="btn btn-primary tut-card-cta" data-tut-start="${tut.id}" style="background:${tut.color};border-color:${tut.color};box-shadow:0 4px 18px -4px ${tut.color}55">${t('hub.start')} →</button>
-        `;
-    }
-
-    // Progress label
-    const progressLabel = complete
-        ? `<span style="color:var(--success);font-weight:700">${t('hub.completed')} ✓</span>`
-        : `${done}/${total} ${t('hub.stepsLabel')}`;
-
-    return `
-        <div class="tut-card ${complete ? 'is-complete' : hasProgress ? 'has-progress' : ''}" style="--tut-color:${tut.color}">
-            <div class="tut-card-main">
-                <div class="tut-card-header-row">
-                    <div class="tut-card-icon-wrap" style="color:${tut.color};background:${tut.color}18;border-color:${tut.color}30">
-                        ${tut.icon}
-                    </div>
-                    <div class="tut-card-info">
-                        <h3 class="tut-card-title">${t(tut.title_key)}</h3>
-                        <p class="tut-card-desc">${t(tut.desc_key)}</p>
-                    </div>
-                    <div class="tut-card-badges-col">
-                        <span class="tut-card-parts-badge">${tut.parts.length} ${t('hub.parts')}</span>
-                    </div>
-                </div>
-
-                <div class="tut-card-progress-row">
-                    <div class="tut-card-progress-bar">
-                        <div class="tut-card-progress-fill" style="width:${pct}%;background:${tut.color}"></div>
-                    </div>
-                    <span class="tut-card-progress-label">${progressLabel}</span>
-                </div>
-
-                <div class="tut-hub-parts-row">${partChips}</div>
-            </div>
-            <div class="tut-card-actions">
-                ${actionBtn}
-            </div>
-        </div>
-    `;
-}
-
-function _launchTutorial(tutId: string, resume: boolean): void {
-    const tut = TUTORIALS.find(t => t.id === tutId);
-    if (!tut) return;
-
-    closeTutorialHub();
-
-    let partId: string | null = null;
-    let stepId: string | null = null;
-    if (resume) {
-        const pos = getLastPosition(tutId);
-        partId = pos.partId;
-        stepId = pos.stepId;
-    }
-
     startTutorialEngine(tut, partId, stepId, openTutorialHub);
 }
