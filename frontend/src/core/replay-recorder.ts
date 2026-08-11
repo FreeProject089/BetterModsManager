@@ -169,6 +169,32 @@ export interface ReplaySubscriber {
 
 const _listeners = new Set<ReplaySubscriber>();
 
+// Observers, which are NOT consumers.
+//
+// A listener in `_listeners` is a reason to record: adding one starts rrweb, and its
+// `requiresMasking` votes on the fidelity. An observer only wants to watch whatever is
+// already happening. The DevTools Session pane is the case — it reports on the recorder,
+// and asking "what is being captured?" must not be what causes something to be captured.
+//
+// Getting this wrong is not subtle in hindsight: the pane subscribed as a real listener,
+// its callback had no `requiresMasking`, so the fidelity vote read `undefined` → falsy →
+// FULL replay. Opening the tab silently started an unmasked full-DOM recording of the
+// whole app, and the pane then measured every snapshot it had caused.
+const _observers = new Set<(ev: any, isCheckout: boolean) => void>();
+
+/** Watch the recorder without being a reason for it to run. Never starts or restarts it. */
+export function observeReplay(cb: (ev: any, isCheckout: boolean) => void): void {
+  _observers.add(cb);
+}
+
+export function unobserveReplay(cb: (ev: any, isCheckout: boolean) => void): void {
+  _observers.delete(cb);
+}
+
+/** Is anything actually recording right now? An observer needs to be able to say
+ *  "nothing is being captured" rather than show zeros that look like a stall. */
+export function isRecording(): boolean { return _stop !== null; }
+
 /** Add a listener. The shared rrweb instance starts automatically. If masking requirements change, it restarts. */
 export async function subscribeReplay(cb: ReplaySubscriber): Promise<void> {
   _listeners.add(cb);
@@ -225,6 +251,8 @@ async function syncSharedRecorder() {
       _queue = _queue.then(async () => {
         await inlineAssets(ev);   // app images always; asset:// only in full mode
         for (const l of _listeners) l(ev, !!isCheckout);
+        // Observers last, and never allowed to break the consumers.
+        for (const o of _observers) { try { o(ev, !!isCheckout); } catch {} }
       }).catch(() => {});
     },
     // Privacy defaults — only relaxed when ALL consumers opt into full mode.

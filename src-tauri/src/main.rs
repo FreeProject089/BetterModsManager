@@ -722,6 +722,7 @@ fn main() {
             // ── Themes ──────────────────────────────────────────────────────
             commands::themes::list_installed_themes,
             commands::themes::list_builtin_themes,
+            commands::themes::theme_presets_dir,
             commands::themes::list_builtin_themes_all,
             commands::themes::get_hidden_builtins,
             commands::themes::set_builtin_hidden,

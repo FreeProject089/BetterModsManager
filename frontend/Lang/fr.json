@@ -6746,5 +6746,13 @@
   "repo.groupServe": "2 — Servir les fichiers",
   "repo.badgeAlt": "ALTERNATIVE",
   "mods.unverified": "non vérifié",
-  "mods.unverifiedTip": "Installé depuis un repo sans checksums — BMM n'a pas pu vérifier ces fichiers."
+  "mods.unverifiedTip": "Installé depuis un repo sans checksums — BMM n'a pas pu vérifier ces fichiers.",
+  "themes.dropinTitle": "Drop-in presets",
+  "themes.dropinOpen": "Open folder",
+  "themes.dropinRescan": "Rescan",
+  "themes.dropinFound": "{n} preset(s) found",
+  "themes.dropinNone": "No new presets in that folder",
+  "dev.session.state": "Recorder",
+  "dev.session.reload": "Reload payload",
+  "dev.session.truncated": "Showing the beginning only — use Export to read all of it."
 }

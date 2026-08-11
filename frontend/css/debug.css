@@ -10,9 +10,15 @@
     --debug-success: #10b981;
     --debug-warn: #f59e0b;
     --debug-error: #ef4444;
-    --text-primary: #f8fafc;
-    --text-secondary: #94a3b8;
-    --text-muted: #64748b;
+    /* PREFIXED, and it matters. These three used to be declared here as --text-primary /
+       --text-secondary / --text-muted, on :root, in a file that loads AFTER tokens.css.
+       Same specificity, later wins — so the app-wide aliases (tokens.css:222,
+       `--text-primary: var(--bmm-text-primary)`) were permanently overridden to this
+       near-white, in every theme, whether or not DevTools was ever opened.
+       On a light theme that is white text on a white surface. */
+    --debug-text-primary: #f8fafc;
+    --debug-text-secondary: #94a3b8;
+    --debug-text-muted: #64748b;
 }
 
 #bmm-debug-overlay {
@@ -113,7 +119,7 @@
 .debug-btn {
     background: rgba(255, 255, 255, 0.08);
     border: 1px solid rgba(255, 255, 255, 0.1);
-    color: var(--text-primary);
+    color: var(--debug-text-primary);
     padding: 6px 12px;
     border-radius: 6px;
     font-size: 11px;
@@ -167,7 +173,7 @@
     font-size: 10px;
     font-weight: 700;
     letter-spacing: 0.04em;
-    color: var(--text-muted);
+    color: var(--debug-text-muted);
     cursor: pointer;
     border-bottom: 2px solid transparent;
     transition: all 0.18s;
@@ -213,7 +219,7 @@
     gap: 8px;
 }
 
-.log-entry.INFO { color: var(--text-secondary); border-left: 2px solid transparent; }
+.log-entry.INFO { color: var(--debug-text-secondary); border-left: 2px solid transparent; }
 .log-entry.WARN { background: rgba(245, 158, 11, 0.08); color: var(--warning); border-left: 2px solid #fbbf24; }
 .log-entry.ERROR { background: rgba(239, 68, 68, 0.08); color: var(--danger); border-left: 2px solid #ef4444; }
 .log-entry:hover { background: rgba(255,255,255,0.03); }
@@ -238,7 +244,7 @@
 .ipc-cmd.action { color: var(--debug-success); }
 .ipc-cmd.rpc { color: var(--debug-accent); }
 
-.ipc-time { color: var(--text-muted); font-size: 10px; text-align: right; font-family: 'JetBrains Mono'; }
+.ipc-time { color: var(--debug-text-muted); font-size: 10px; text-align: right; font-family: 'JetBrains Mono'; }
 .ipc-status { 
     font-size: 9px; 
     text-transform: uppercase; 
@@ -254,14 +260,14 @@
 }
 .ipc-status.success { color: var(--debug-success); }
 .ipc-status.error { color: var(--debug-error); }
-.ipc-status.pending { color: var(--text-muted); animation: pulse 1s infinite; }
-.ipc-status.info { color: var(--text-muted); }
+.ipc-status.pending { color: var(--debug-text-muted); animation: pulse 1s infinite; }
+.ipc-status.info { color: var(--debug-text-muted); }
 
 /* Timeline enhanced entries */
 .timeline-entry { cursor: default; transition: background 0.1s; flex-wrap: wrap; }
 .timeline-entry:hover { background: rgba(255,255,255,0.03); }
 .timeline-entry .ipc-time { display: flex; align-items: center; gap: 4px; justify-content: flex-end; }
-.timeline-expand-btn { font-size: 10px; line-height: 1; color: var(--text-muted); opacity: 0.6; transition: opacity 0.15s; }
+.timeline-expand-btn { font-size: 10px; line-height: 1; color: var(--debug-text-muted); opacity: 0.6; transition: opacity 0.15s; }
 .timeline-expand-btn:hover { opacity: 1; }
 .timeline-detail { font-size: 10px !important; line-height: 1.45 !important; }
 
@@ -280,10 +286,10 @@
     display: flex;
     gap: 20px;
     font-size: 10px;
-    color: var(--text-muted);
+    color: var(--debug-text-muted);
 }
 
-.metric-item b { color: var(--text-primary); }
+.metric-item b { color: var(--debug-text-primary); }
 
 @keyframes pulse {
     0% { opacity: 0.5; }
@@ -362,7 +368,7 @@
 
 .crash-subtitle {
     font-size: 14px;
-    color: var(--text-muted);
+    color: var(--debug-text-muted);
     margin-bottom: 32px;
     letter-spacing: 0.1em;
     font-weight: 600;
@@ -499,7 +505,7 @@
 .debug-modal-text {
     font-size: 14px;
     line-height: 1.6;
-    color: var(--text-secondary);
+    color: var(--debug-text-secondary);
     margin-bottom: 24px;
 }
 
@@ -539,7 +545,7 @@
     margin: 0 8px;
     font-size: 11px;
     font-weight: 600;
-    color: var(--text-muted);
+    color: var(--debug-text-muted);
     cursor: pointer;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -590,7 +596,7 @@
 }
 .debug-toggle-desc {
     font-size: 11px;
-    color: var(--text-muted);
+    color: var(--debug-text-muted);
     line-height: 1.4;
 }
 

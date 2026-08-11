@@ -331,6 +331,54 @@ function renderCatalog(): void {
         await loadBuiltinThemes(); // refresh the BUILTIN_THEMES used by every selector
         renderCatalog();
     };
+    // ── Drop-in presets: say where the folder is, and rescan without a restart ──
+    //
+    // The scan only ran at boot, and the folder's path is different on every OS (it moved
+    // once already, when the bundle id changed). "Put your themes in the presets folder"
+    // is not actionable advice without the path and a way to pick them up now.
+    (async () => {
+        let dir = '';
+        try { dir = await invoke('theme_presets_dir') as string; } catch { return; }
+        const bar = document.createElement('div');
+        bar.className = 'btc-dropin';
+        bar.style.cssText = 'display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 14px;padding:10px 12px;border:1px solid var(--bmm-border);border-radius:10px;background:var(--bmm-bg-elevated)';
+
+        const label = document.createElement('div');
+        label.style.cssText = 'flex:1;min-width:200px;font-size:12px;color:var(--bmm-text-secondary)';
+        const strong = document.createElement('strong');
+        strong.style.cssText = 'display:block;color:var(--bmm-text-primary);font-size:13px;margin-bottom:2px';
+        strong.textContent = t('themes.dropinTitle') || 'Drop-in presets';
+        const path = document.createElement('code');
+        path.style.cssText = 'font-size:11px;word-break:break-all;opacity:.85';
+        // textContent: a path is user data and this is not a place to interpolate markup.
+        path.textContent = dir;
+        label.append(strong, path);
+
+        const open = document.createElement('button');
+        open.className = 'btn btn-sm';
+        open.textContent = t('themes.dropinOpen') || 'Open folder';
+        open.addEventListener('click', () => { void invoke('open_folder', { path: dir }); });
+
+        const rescan = document.createElement('button');
+        rescan.className = 'btn btn-sm btn-primary';
+        rescan.textContent = t('themes.dropinRescan') || 'Rescan';
+        rescan.addEventListener('click', async () => {
+            const before = _builtins.length;
+            await refreshBuiltins();
+            const added = _builtins.length - before;
+            toast(added > 0
+                ? (t('themes.dropinFound') || 'Presets found').replace('{n}', String(added))
+                : (t('themes.dropinNone') || 'No new presets in that folder'),
+                added > 0 ? 'success' : 'info');
+        });
+
+        bar.append(label, open, rescan);
+        // Rescan calls renderCatalog(), which re-runs this block — so the previous bar
+        // has to go, or every rescan would leave another copy stacked above the list.
+        listEl.parentElement?.querySelectorAll('.btc-dropin').forEach((el) => el.remove());
+        listEl.parentElement?.insertBefore(bar, listEl);
+    })();
+
     listEl.querySelectorAll('.btc-uninstall').forEach(btn => {
         btn.addEventListener('click', async () => {
             await invoke('set_builtin_hidden', { themeId: (btn as HTMLElement).dataset.id!, hidden: true });

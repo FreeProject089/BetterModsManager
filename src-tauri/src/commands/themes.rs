@@ -125,6 +125,19 @@ fn hidden_builtins_path(app: &tauri::AppHandle) -> Option<PathBuf> {
     app.path().app_data_dir().ok().map(|d| d.join("hidden_builtins.json"))
 }
 
+/// Where drop-in theme presets go. Created if missing, so the answer is always a folder
+/// that exists and can be opened.
+///
+/// This exists because "put your themes in the presets folder" is useless advice without a
+/// path: app_data_dir is a different place on every OS, and it moved once already when the
+/// bundle id changed. Handing the UI the real path removes the guessing.
+#[tauri::command]
+pub fn theme_presets_dir(app_handle: tauri::AppHandle) -> Result<String, String> {
+    let d = app_handle.path().app_data_dir().map_err(|e| e.to_string())?.join("theme-presets");
+    std::fs::create_dir_all(&d).map_err(|e| e.to_string())?;
+    Ok(d.to_string_lossy().to_string())
+}
+
 #[tauri::command]
 pub fn get_hidden_builtins(app_handle: tauri::AppHandle) -> Vec<String> {
     hidden_builtins_path(&app_handle)
