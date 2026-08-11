@@ -176,3 +176,24 @@
 }
 #btn-manifest-mode-folder { border-start-start-radius: 7px; border-end-start-radius: 7px; }
 #btn-manifest-mode-profile { border-start-end-radius: 7px; border-end-end-radius: 7px; margin-inline-start: -1px; }
+
+/* ── Sync options: the checkbox pile becomes a grid ──────────────────────────
+   (Screenshot feedback: "améliore les margins, des éléments dynamiques et non
+   dynamiques".) Four toggles stacked full-width with ad-hoc inline margins read as a
+   pile; on a wide card they waste half the width and the rhythm drifts with each one
+   added. A self-filling grid gives every toggle the same cell: two columns when the card
+   is wide, one when it is not, and adding a fifth toggle later lands in rhythm instead
+   of on a new hand-tuned margin. */
+#repo-sync-options {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    column-gap: 16px;
+    row-gap: 9px;
+    align-items: center;
+}
+/* The section title and the mode/limit row keep the full width — they are not toggles. */
+#repo-sync-options > .form-label,
+#repo-sync-options > div { grid-column: 1 / -1; }
+/* !important: each label carries an inline margin-bottom that would otherwise stack on
+   top of the grid's row-gap, giving double spacing only where the old markup had it. */
+#repo-sync-options > .checkbox-container { margin: 0 !important; }

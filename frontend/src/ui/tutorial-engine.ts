@@ -72,6 +72,11 @@ let _demoCreated = false;
 let _demoPrevActive: string | null = null;
 // Tutorials whose steps demonstrate mod/profile features and benefit from a
 // concrete example when the user has no real data yet.
+//
+// 'quick' is absent ON PURPOSE, not by omission: the five-minute tour asks for no
+// actions and touches no data, so it needs no sandbox — and creating the 🎓 profile
+// would make a two-minute look-around mutate the profile list, which is exactly the
+// impression a tour must not give. Do not "fix" this by adding it.
 const DEMO_TUTORIALS = new Set(['basics', 'advanced', 'other']);
 
 // Persisted marker so a crash mid-tutorial never strands the example profile:
