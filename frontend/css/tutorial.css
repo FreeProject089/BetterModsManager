@@ -374,3 +374,27 @@ body.tut-docked.tut-min.tut-dock-left .app-shell {
     .tut-hub-shell { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); height: min(620px, calc(100vh - 48px)); }
     .tut-hub-rail { border-right: 0; border-bottom: 1px solid var(--border); max-height: 190px; }
 }
+
+/* ── The minimised pill floats ────────────────────────────────────────────────
+   While minimised the lesson reserves nothing: the app takes its space back and the pill
+   sits above it, draggable anywhere (the engine gates dragging on .minimized). These
+   rules must beat the side-dock column rules, which they do by class count and by coming
+   later in this file. */
+.tut-engine-panel.minimized.pill-float {
+    position: fixed;
+    top: auto;
+    left: auto;
+    right: 24px;
+    bottom: 24px;          /* default corner until first dragged */
+    width: auto;
+    max-width: min(360px, calc(100vw - 48px));
+    height: auto;
+    max-height: none;
+    min-height: 0;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+    cursor: grab;
+    z-index: 2000100;
+}
+.tut-engine-panel.minimized.pill-float.dragging { cursor: grabbing; }

@@ -199,7 +199,11 @@ export function closeTutorialEngine(reopenHub: boolean = false): void {
             setTimeout(() => { _setDockReserved(false); panel.remove(); _panelLeft = null; _panelTop = null; }, 220);
         } else {
             panel.classList.add('closing');
-            panel.addEventListener('animationend', () => panel.remove(), { once: true });
+            // Was missing: this is the NORMAL docked close, and it never released the
+            // reservation — the app stayed squeezed against a dock that no longer
+            // existed. (The other branch always released; it is the rarer one.)
+            panel.addEventListener('animationend', () => { _setDockReserved(false); panel.remove(); }, { once: true });
+            setTimeout(() => _setDockReserved(false), 400);
         }
     }
     if (reopenHub && _onClose) _onClose();
@@ -331,17 +335,12 @@ function _navigate(nav: string | undefined): void {
 // ── Drag ─────────────────────────────────────────────────────────────────────
 
 function _makeDraggable(handle: HTMLElement, panel: HTMLElement): void {
-    // No-op since the card became a bottom dock.
-    //
-    // The app now reserves the dock's height and reflows above it. Dragging the bar out of
-    // that band would leave a reserved strip of empty space with the guidance floating
-    // somewhere else — and put the card back over the controls the dock exists to keep
-    // clear. Kept as a stub rather than deleted so the call sites stay honest about what
-    // the header handle does now.
-    void handle; void panel;
-    if (true) return;
-    // eslint-disable-next-line no-unreachable
+    // Only the MINIMISED pill drags. The expanded card is a dock the app reflows around:
+    // dragging it would leave a reserved band of empty space with the guidance floating
+    // somewhere else. The pill reserves nothing — it floats over the app precisely so it
+    // can be put wherever it is least in the way, which only its owner knows.
     handle.addEventListener('mousedown', (e: MouseEvent) => {
+        if (!panel.classList.contains('minimized')) return;
         if ((e.target as HTMLElement).closest('button,select,input')) return;
 
         const parent = panel.parentElement;
@@ -419,12 +418,13 @@ function _restore(): void {
 function _renderMinimizedPill(): void {
     const panel = document.getElementById('tut-engine-panel');
     if (!panel) return;
-    panel.classList.add('minimized'); _setDockReserved(true);
-    // Drop any inline width/height left by the resize grip, so the pill collapses
-    // to its natural size instead of keeping the expanded panel dimensions.
+    panel.classList.add('minimized', 'pill-float');
+    // The pill reserves nothing — the app takes its space back while you work, and the
+    // pill floats above it, draggable anywhere.
+    _setDockReserved(false);
     panel.style.width = '';
     panel.style.height = '';
-    _applyDragPosition(panel);
+    _applyDragPosition(panel); // back where you last dragged it, if you did
 
     const tut  = _tutorial!;
     const step = _currentStep();
@@ -447,8 +447,8 @@ function _renderMinimizedPill(): void {
 
     const pill = panel.querySelector('.tut-min-pill') as HTMLElement | null;
     if (pill) _makeDraggable(pill, panel);
-    document.getElementById('btn-tut-restore')?.addEventListener('click', () => { panel.classList.remove('minimized'); _setDockReserved(true); _restore(); });
-    document.getElementById('btn-tut-close-min')?.addEventListener('click', () => { panel.classList.remove('minimized'); _setDockReserved(true); closeTutorialEngine(); });
+    document.getElementById('btn-tut-restore')?.addEventListener('click', () => _restore());
+    document.getElementById('btn-tut-close-min')?.addEventListener('click', () => closeTutorialEngine());
 }
 
 // ── Render ───────────────────────────────────────────────────────────────────
@@ -461,8 +461,10 @@ function _renderStep(): void {
     const step  = _currentStep();
     const panel = document.getElementById('tut-engine-panel')!;
 
-    panel.classList.remove('minimized'); _setDockReserved(true);
-    _applyDragPosition(panel);
+    panel.classList.remove('minimized', 'pill-float'); _setDockReserved(true);
+    // The dock's CSS owns the expanded position; left/top the pill drag left behind would
+    // pin the full card to wherever the pill was dropped.
+    panel.style.left = ''; panel.style.top = ''; panel.style.bottom = ''; panel.style.transform = '';
 
     /* ── Apply tutorial color CSS vars for avatar glow + top border ── */
     const colorMatch = tut.color.match(/#([0-9a-fA-F]{6})/);
@@ -877,8 +879,10 @@ function _finishTutorial(): void {
     _cleanup();
     const panel = document.getElementById('tut-engine-panel')!;
     const tut   = _tutorial!;
-    panel.classList.remove('minimized'); _setDockReserved(true);
-    _applyDragPosition(panel);
+    panel.classList.remove('minimized', 'pill-float'); _setDockReserved(true);
+    // The dock's CSS owns the expanded position; left/top the pill drag left behind would
+    // pin the full card to wherever the pill was dropped.
+    panel.style.left = ''; panel.style.top = ''; panel.style.bottom = ''; panel.style.transform = '';
 
     panel.innerHTML = `
         <div class="tut-finish-screen">
