@@ -354,6 +354,10 @@ mod crawl_tests {
 pub struct RemotePlanReport {
     pub summary: String,
     pub to_hash: Vec<String>,
+    /// On the server, absent from the manifest — the repo is incomplete, not merely stale.
+    pub added: Vec<String>,
+    /// In both, but the bytes moved.
+    pub changed: Vec<String>,
     pub reused: usize,
     pub removed: Vec<String>,
     /// Present when nothing could be reused, naming why.
@@ -408,6 +412,8 @@ pub async fn plan_remote_repo_refresh(
     Ok(RemotePlanReport {
         summary: plan.summary(),
         reused: plan.carry_forward.len(),
+        added: plan.added,
+        changed: plan.changed,
         to_hash: plan.fetch,
         removed: plan.removed,
         full_rehash: plan.full_rehash.map(|r| match r {
@@ -432,6 +438,8 @@ pub struct RemoteRefreshReport {
     pub mods: usize,
     pub files: usize,
     pub hashed: usize,
+    pub added: usize,
+    pub changed: usize,
     pub reused: usize,
     pub removed: Vec<String>,
     pub downloaded_bytes: u64,
@@ -673,6 +681,8 @@ pub async fn refresh_repo_from_server(
         mods: mods_count,
         files: files_count,
         hashed: plan.fetch.len(),
+        added: plan.added.len(),
+        changed: plan.changed.len(),
         reused: plan.carry_forward.len(),
         removed: plan.removed,
         downloaded_bytes,

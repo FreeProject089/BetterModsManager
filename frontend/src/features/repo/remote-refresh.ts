@@ -17,6 +17,8 @@ import { formatBytes } from '../../core/utils.js';
 interface PlanReport {
     summary: string;
     toHash: string[];
+    added: string[];
+    changed: string[];
     reused: number;
     removed: string[];
     fullRehash: string | null;
@@ -30,6 +32,8 @@ interface RefreshReport {
     mods: number;
     files: number;
     hashed: number;
+    added: number;
+    changed: number;
     reused: number;
     removed: string[];
     downloadedBytes: number;
@@ -98,8 +102,12 @@ async function run(which: 'plan' | 'refresh') {
         if (which === 'plan') {
             const r = (await invoke('plan_remote_repo_refresh', args)) as PlanReport;
             show([
-                [t('repo.remoteHashed') || 'To hash', preview(r.toHash), 'var(--warning)'],
-                [t('repo.remoteReused') || 'Reused', String(r.reused), 'var(--success)'],
+                // "Missing" first: a repo that never covered part of the server is a
+                // different problem from one that is merely out of date, and it is the one
+                // people do not realise they have.
+                [t('repo.remoteMissing') || 'Missing from the manifest', preview(r.added), 'var(--accent)'],
+                [t('repo.remoteChanged') || 'Changed on the server', preview(r.changed), 'var(--warning)'],
+                [t('repo.remoteReused') || 'Already covered', String(r.reused), 'var(--success)'],
                 [t('repo.remoteRemoved') || 'Gone from the server', preview(r.removed), 'var(--danger)'],
                 [t('repo.remoteDownload') || 'To download', formatBytes(r.downloadBytes)],
                 [t('repo.remoteFull') || 'Everything will be re-hashed', r.fullRehash || ''],
@@ -110,8 +118,9 @@ async function run(which: 'plan' | 'refresh') {
             show([
                 ['', r.manifestPath, 'var(--text-muted)'],
                 ['', `${r.mods} mods · ${r.files} files`],
-                [t('repo.remoteHashed') || 'Hashed', String(r.hashed), 'var(--warning)'],
-                [t('repo.remoteReused') || 'Reused', String(r.reused), 'var(--success)'],
+                [t('repo.remoteMissing') || 'Newly published', String(r.added), 'var(--accent)'],
+                [t('repo.remoteChanged') || 'Updated', String(r.changed), 'var(--warning)'],
+                [t('repo.remoteReused') || 'Already covered', String(r.reused), 'var(--success)'],
                 [t('repo.remoteRemoved') || 'Gone from the server', preview(r.removed), 'var(--danger)'],
                 [t('repo.remoteDownload') || 'Downloaded', formatBytes(r.downloadedBytes)],
                 ...(r.signed ? [] : [['⚠', t('repo.manifestUnsigned') || 'Written unsigned', 'var(--warning)'] as [string, string, string]]),

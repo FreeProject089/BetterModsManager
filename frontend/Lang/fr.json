@@ -6722,7 +6722,7 @@
   "repo.remoteDone": "repo.json mis à jour — envoie-le sur ton serveur",
   "repo.remotePlanned": "Rien n'a changé — voici ce que ferait une mise à jour",
   "repo.remoteHashed": "À hasher",
-  "repo.remoteReused": "Repris",
+  "repo.remoteReused": "Déjà couverts",
   "repo.remoteRemoved": "Disparus du serveur",
   "repo.remoteDownload": "À télécharger",
   "repo.remoteFull": "Tout sera re-hashé",
@@ -6730,5 +6730,7 @@
   "repo.remoteGame": "JEU",
   "repo.remoteNameHint": "Utilisés seulement si aucun repo.json n'existe encore — sinon ceux du manifeste sont conservés.",
   "repo.remoteCreated": "repo.json créé — envoie-le sur ton serveur",
-  "dev.session.biggest": "Plus gros événement"
+  "dev.session.biggest": "Plus gros événement",
+  "repo.remoteMissing": "Absents du manifeste",
+  "repo.remoteChanged": "Modifiés sur le serveur"
 }

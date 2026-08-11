@@ -59,8 +59,17 @@ pub enum FullRehash {
 pub struct RefreshPlan {
     /// Paths that keep their recorded hash — unchanged size AND mtime.
     pub carry_forward: Vec<String>,
-    /// Paths to download and hash.
+    /// Paths to download and hash. Union of `added` and `changed`, kept because every caller
+    /// that acts on the plan wants the flat list.
     pub fetch: Vec<String>,
+    /// On the server, never in the manifest — what the repo is MISSING.
+    ///
+    /// Split out from `changed` because they answer different questions. "3 files differ" on
+    /// a repo you maintain is routine; "40 files were never published" means the manifest
+    /// does not describe your server, and folding the two into one number hides that.
+    pub added: Vec<String>,
+    /// In the manifest and on the server, but the bytes moved.
+    pub changed: Vec<String>,
     /// In the manifest, absent from the server.
     pub removed: Vec<String>,
     /// Set when nothing could be carried forward, with the reason.
@@ -74,8 +83,9 @@ impl RefreshPlan {
     /// One line for the report. Always shown, including when nothing was reused.
     pub fn summary(&self) -> String {
         format!(
-            "{} to hash, {} reused, {} gone",
-            self.fetch.len(),
+            "{} new, {} changed, {} reused, {} gone",
+            self.added.len(),
+            self.changed.len(),
             self.carry_forward.len(),
             self.removed.len()
         )
@@ -133,6 +143,9 @@ pub fn plan_refresh(
         plan.full_rehash = Some(r);
         plan.fetch = listing.iter().map(|e| e.rel_path.clone()).collect();
         plan.fetch.sort();
+        // Nothing trusted to compare against, so every file is unpublished as far as this
+        // run can tell. Calling any of it "changed" would assert a history we cannot read.
+        plan.added = plan.fetch.clone();
         // `removed` stays empty on purpose: with nothing trusted to compare against, a
         // "removed" list would be guesswork, and a false one reads as data loss.
         return plan;
@@ -145,18 +158,24 @@ pub fn plan_refresh(
         let path = entry.rel_path.replace('\\', "/");
         seen.push(path.clone());
         match known.get(&path) {
-            None => plan.fetch.push(path),
+            None => {
+                plan.fetch.push(path.clone());
+                plan.added.push(path);
+            }
             Some((size, mtime)) => {
                 if *size != entry.size {
-                    plan.fetch.push(path);
+                    plan.fetch.push(path.clone());
+                    plan.changed.push(path);
                 } else if mtime.is_none() || entry.mtime.is_none() {
                     // No timestamp on one side. Same size alone is far too weak to call a
                     // file unchanged, so this re-hashes — which is also the migration path
                     // for manifests written before mtime was recorded.
                     plan.warnings.push(format!("{}: no timestamp, re-hashed", path));
-                    plan.fetch.push(path);
+                    plan.fetch.push(path.clone());
+                    plan.changed.push(path);
                 } else if mtime != &entry.mtime {
-                    plan.fetch.push(path);
+                    plan.fetch.push(path.clone());
+                    plan.changed.push(path);
                 } else {
                     plan.carry_forward.push(path);
                 }
@@ -168,6 +187,8 @@ pub fn plan_refresh(
     plan.removed = known.keys().filter(|k| !present.contains(k)).cloned().collect();
 
     plan.fetch.sort();
+    plan.added.sort();
+    plan.changed.sort();
     plan.carry_forward.sort();
     plan.removed.sort();
     plan.warnings.sort();
@@ -260,6 +281,35 @@ mod tests {
         assert_eq!(plan.carry_forward, vec!["cool-mod/a.pak"]);
         assert_eq!(plan.fetch, vec!["cool-mod/b.pak", "cool-mod/new.pak"]);
         assert_eq!(plan.removed, vec!["cool-mod/gone.pak"]);
+        // The split that tells "the manifest is out of date" from "the manifest never
+        // covered this part of the server".
+        assert_eq!(plan.added, vec!["cool-mod/new.pak"]);
+        assert_eq!(plan.changed, vec!["cool-mod/b.pak"]);
+    }
+
+    #[test]
+    fn an_untrusted_manifest_reports_everything_as_new_not_as_changed() {
+        // With nothing to compare against, calling a file "changed" would assert a history
+        // this run cannot read. Unpublished is the honest reading.
+        let listing = [entry("cool-mod/a.pak", 10, Some(100))];
+        let plan = plan_refresh(&listing, None, Some("me"), false, OK);
+        assert_eq!(plan.added, vec!["cool-mod/a.pak"]);
+        assert!(plan.changed.is_empty());
+    }
+
+    #[test]
+    fn a_manifest_covering_only_part_of_the_server_shows_the_gap() {
+        // The case worth surfacing: the repo is not out of date, it is INCOMPLETE.
+        let prev = repo(true, "me", vec![file("a.pak", 10, Some(100))]);
+        let listing = [
+            entry("cool-mod/a.pak", 10, Some(100)),
+            entry("cool-mod/b.pak", 20, Some(200)),
+            entry("other-mod/c.pak", 30, Some(300)),
+        ];
+        let plan = plan_refresh(&listing, Some(&prev), Some("me"), false, OK);
+        assert_eq!(plan.added, vec!["cool-mod/b.pak", "other-mod/c.pak"]);
+        assert!(plan.changed.is_empty(), "nothing was edited — it was never published");
+        assert_eq!(plan.carry_forward, vec!["cool-mod/a.pak"]);
     }
 
     #[test]
@@ -341,6 +391,6 @@ mod tests {
         let plan = plan_refresh(
             &[entry("cool-mod/a.pak", 10, Some(100)), entry("cool-mod/b.pak", 21, Some(200))],
             Some(&prev), Some("me"), false, OK);
-        assert_eq!(plan.summary(), "1 to hash, 1 reused, 0 gone");
+        assert_eq!(plan.summary(), "0 new, 1 changed, 1 reused, 0 gone");
     }
 }
