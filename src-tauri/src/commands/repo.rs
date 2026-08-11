@@ -1987,8 +1987,133 @@ pub async fn fetch_repo_info(url: String, creator_id: Option<String>, password: 
         return Err("repo.errInvalidRepo".to_string());
     }
 
-    let repo: ServerRepo = res.json().await.map_err(|_| "repo.errInvalidRepo".to_string())?;
+    // A server that just serves a folder of mods has no repo.json. Until now that was a
+    // dead end even though every file was right there — so fall back to reading the
+    // directory listing and synthesising a manifest from it.
+    //
+    // Done HERE rather than behind a separate button, so everything downstream — the info
+    // card, profile selection, the sync itself, the unverified marking — works unchanged.
+    // Every file it invents carries an EMPTY hash, which the sync path already reads as
+    // "install it, and mark the mod unverified".
+    let body = res.text().await.map_err(|_| "repo.errInvalidRepo".to_string())?;
+    let base = target_url.trim_end_matches("repo.json").trim_end_matches('/').to_string();
+    let mut repo: ServerRepo = match serde_json::from_str(&body) {
+        Ok(r) => r,
+        Err(_) => return discovered_repo(&base, &client).await,
+    };
+
+    // A manifest that exists but does not list everything the server holds. The extra mods
+    // are real and installable; they simply have nothing vouching for them, so they join
+    // the list marked exactly like a manifest-less server's would be.
+    //
+    // Best-effort: a host with directory listing disabled just yields nothing here, and the
+    // manifest is served as it always was.
+    if let Ok(extra) = uncovered_mods(&repo, &base, &client).await {
+        if !extra.is_empty() {
+            if let Some(p) = repo.profiles.first_mut() {
+                p.mods.extend(extra);
+            }
+        }
+    }
     Ok(repo)
+}
+
+/// Every mod in the server listing that the manifest does not already cover.
+async fn uncovered_mods(
+    repo: &ServerRepo,
+    base: &str,
+    client: &reqwest::Client,
+) -> Result<Vec<crate::models::repo::RepoMod>, String> {
+    let known: std::collections::HashSet<String> = repo.profiles.iter()
+        .flat_map(|p| p.mods.iter())
+        .map(|m| m.id.to_lowercase())
+        .collect();
+    let listing = crate::commands::repo_autoindex::crawl(base, client).await?;
+    Ok(mods_from_listing(&listing).into_iter()
+        .filter(|m| !known.contains(&m.id.to_lowercase()))
+        .collect())
+}
+
+/// Build a whole unverified manifest from a directory listing.
+async fn discovered_repo(base: &str, client: &reqwest::Client) -> Result<ServerRepo, String> {
+    let listing = crate::commands::repo_autoindex::crawl(base, client)
+        .await
+        .map_err(|_| "repo.errInvalidRepo".to_string())?;
+    let mods = mods_from_listing(&listing);
+    if mods.is_empty() {
+        // No manifest AND no readable listing is indistinguishable, from here, from a URL
+        // that is simply not a repo — so it reports the same thing it always did.
+        return Err("repo.errInvalidRepo".to_string());
+    }
+    let name = base.rsplit('/').find(|s| !s.is_empty()).unwrap_or("repo").to_string();
+    Ok(ServerRepo {
+        name,
+        version: "0".to_string(),
+        // No signature and no author: there is nothing to sign, and claiming an author
+        // would be the manifest asserting something nobody said.
+        author: None,
+        author_id: None,
+        signature: None,
+        description: None,
+        game_name: String::new(),
+        created_at: chrono::Utc::now().to_rfc3339(),
+        seed: None,
+        upload_limit: None,
+        require_login: None,
+        files_base_url: None,
+        files_layout: None,
+        modpacks: None,
+        profiles: vec![crate::models::repo::RepoProfile {
+            id: "discovered".to_string(),
+            name: "Server".to_string(),
+            game_name: String::new(),
+            mods,
+            icon: None,
+            color: None,
+            icon_image: None,
+        }],
+    })
+}
+
+/// Group a flat listing into mods, every file carrying an empty hash.
+///
+/// Empty is the point: it is what the sync path reads as "no integrity check available",
+/// which installs the file and marks the mod unverified. A fabricated hash would be worse
+/// than none — it would pass a check that never happened.
+fn mods_from_listing(listing: &[crate::commands::repo_remote::RemoteEntry]) -> Vec<crate::models::repo::RepoMod> {
+    let mut by_mod: std::collections::BTreeMap<String, Vec<RepoFile>> = Default::default();
+    for e in listing {
+        let path = e.rel_path.replace('\\', "/");
+        let mut parts = path.splitn(2, '/');
+        let (Some(id), Some(rel)) = (parts.next().filter(|s| !s.is_empty()), parts.next()) else { continue };
+        if rel.is_empty() { continue; }
+        by_mod.entry(id.to_string()).or_default().push(RepoFile {
+            relative_path: rel.to_string(),
+            size: e.size,
+            sha256_hash: String::new(),
+            chunks: None,
+            mtime: e.mtime,
+        });
+    }
+    by_mod.into_iter().map(|(id, mut files)| {
+        files.sort_by(|a, b| a.relative_path.cmp(&b.relative_path));
+        crate::models::repo::RepoMod {
+            id: id.clone(),
+            name: id,
+            version: "0".to_string(),
+            author: None,
+            description: None,
+            tags: Vec::new(),
+            files,
+            archive: None,
+            download_links: Vec::new(),
+            dependencies: Vec::new(),
+            changelog: None,
+            update_url: None,
+            direct_url: None,
+            update_sources: Vec::new(),
+        }
+    }).collect()
 }
 
 #[derive(serde::Deserialize, Clone)]
@@ -3745,5 +3870,62 @@ mod auto_sync_tests {
     fn a_repo_with_no_url_is_skipped_rather_than_failing_at_launch() {
         let list = vec![repo("   ", true, Some("all"))];
         assert!(collect_auto_sync(&list).is_empty());
+    }
+}
+
+#[cfg(test)]
+mod listing_fallback_tests {
+    use super::mods_from_listing;
+    use crate::commands::repo_remote::RemoteEntry;
+
+    fn e(p: &str, size: u64) -> RemoteEntry {
+        RemoteEntry { rel_path: p.to_string(), size, mtime: Some(1_700_000_000) }
+    }
+
+    #[test]
+    fn groups_by_top_folder_and_leaves_every_hash_empty() {
+        let mods = mods_from_listing(&[
+            e("cool-mod/textures/a.dds", 30),
+            e("cool-mod/readme.txt", 2),
+            e("other/b.pak", 10),
+        ]);
+        assert_eq!(mods.len(), 2);
+        assert_eq!(mods[0].id, "cool-mod");
+        // Sorted within the mod, like a generated manifest.
+        assert_eq!(mods[0].files[0].relative_path, "readme.txt");
+        assert_eq!(mods[0].files[1].relative_path, "textures/a.dds");
+
+        // The whole point. An empty hash is what the sync path reads as "no integrity
+        // check available" — it installs the file and marks the mod unverified. A
+        // fabricated hash would be worse than none: it would pass a check that never
+        // happened.
+        for m in &mods {
+            for f in &m.files {
+                assert!(f.sha256_hash.is_empty(), "{} was given a hash it cannot have", f.relative_path);
+                assert!(f.chunks.is_none());
+            }
+        }
+    }
+
+    /// A file sitting at the root of the listing belongs to no mod. Taking it would
+    /// invent a mod named after the file.
+    #[test]
+    fn ignores_files_outside_a_mod_folder() {
+        let mods = mods_from_listing(&[
+            e("README.md", 1),
+            e("repo.json", 1),
+            e("real-mod/x.pak", 5),
+        ]);
+        assert_eq!(mods.len(), 1);
+        assert_eq!(mods[0].id, "real-mod");
+    }
+
+    #[test]
+    fn size_survives_and_a_backslash_listing_is_normalised() {
+        let mods = mods_from_listing(&[e(r"m\sub\f.bin", 42)]);
+        assert_eq!(mods.len(), 1);
+        assert_eq!(mods[0].id, "m");
+        assert_eq!(mods[0].files[0].relative_path, "sub/f.bin");
+        assert_eq!(mods[0].files[0].size, 42);
     }
 }

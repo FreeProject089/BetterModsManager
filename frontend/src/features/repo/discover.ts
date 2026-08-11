@@ -69,6 +69,17 @@ async function discover() {
         box.textContent = '';
         box.style.display = '';
 
+        // A close button, because this panel is an answer to a question you asked once.
+        // It used to need a page refresh to go away, so a "no manifest found" verdict sat
+        // there long after you had dealt with it and read like a live warning.
+        const close = document.createElement('button');
+        close.className = 'btn btn-ghost btn-sm';
+        close.style.cssText = 'float:right;margin:-2px 0 0 8px;padding:2px 8px;line-height:1';
+        close.textContent = '×';
+        close.title = t('common.close') || 'Close';
+        close.addEventListener('click', () => { box.textContent = ''; box.style.display = 'none'; });
+        box.append(close);
+
         if (!r.mods.length) {
             box.append(line(t('repo.discoverEmpty') || 'The server listing produced no mods',
                 'color:var(--text-muted)'));
