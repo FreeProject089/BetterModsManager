@@ -23,13 +23,9 @@ const en = JSON.parse(readFileSync(join(ROOT, 'frontend/Lang/en.json'), 'utf8'))
 
 // Known-missing baseline: calls with no fallback text to harvest, so writing their
 // wording is authoring work, not promotion. Shrink this list, never grow it.
-const KNOWN_MISSING = new Set([
-  'catalog.addSourceDesc',
-  'betahub.errorRateLimit', 'betahub.errorHourlyLimit', 'betahub.themeFeedback',
-  'betahub.noReports', 'betahub.themeBug',
-  'rstudio.autostop', 'history.error', 'repo.confirmClearWhitelist',
-  'settings.devToolsLocked', 'settings.debugUnlocked', 'settings.debugHidden',
-]);
+// Baseline emptied Aug 11 2026 — every literal key now exists. Keep it empty: a key
+// added here is a string a user will see raw.
+const KNOWN_MISSING = new Set([]);
 
 function walk(d, out = []) {
   for (const n of readdirSync(d)) {

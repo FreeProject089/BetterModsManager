@@ -6862,5 +6862,17 @@
   "settings.updateUnavailable": "Unavailable",
   "mod.conflictsFound": "{n} conflict(s) found",
   "prof.createError": "Could not create the profile: {err}",
-  "prof.importError": "{type} import failed: {err}"
+  "prof.importError": "{type} import failed: {err}",
+  "catalog.addSourceDesc": "Add this catalog as a source in BMM?",
+  "betahub.errorRateLimit": "Rate limit — try again in",
+  "betahub.errorHourlyLimit": "Hourly report limit reached — try again later.",
+  "betahub.themeFeedback": "Theme feedback",
+  "betahub.noReports": "No reports yet.",
+  "betahub.themeBug": "Theme bug",
+  "rstudio.autostop": "Stopped at the memory budget — the take is complete and playable.",
+  "history.error": "Could not load the history",
+  "repo.confirmClearWhitelist": "Remove every whitelist entry? Anyone will be able to download again.",
+  "settings.devToolsLocked": "DevTools locked. Unlock in Settings.",
+  "settings.debugUnlocked": "Debug mode unlocked",
+  "settings.debugHidden": "Debug section hidden"
 }

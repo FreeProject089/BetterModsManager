@@ -6860,5 +6860,17 @@
   "settings.updateUnavailable": "Unavailable",
   "mod.conflictsFound": "{n} conflit(s) détecté(s)",
   "prof.createError": "Impossible de créer le profil : {err}",
-  "prof.importError": "Échec de l'import {type} : {err}"
+  "prof.importError": "Échec de l'import {type} : {err}",
+  "catalog.addSourceDesc": "Ajouter ce catalogue comme source dans BMM ?",
+  "betahub.errorRateLimit": "Limite atteinte — réessaie dans",
+  "betahub.errorHourlyLimit": "Limite horaire de rapports atteinte — réessaie plus tard.",
+  "betahub.themeFeedback": "Retour sur un thème",
+  "betahub.noReports": "Aucun rapport pour l'instant.",
+  "betahub.themeBug": "Bug de thème",
+  "rstudio.autostop": "Arrêt au budget mémoire — la prise est complète et lisible.",
+  "history.error": "Impossible de charger l'historique",
+  "repo.confirmClearWhitelist": "Vider toute la liste blanche ? Tout le monde pourra de nouveau télécharger.",
+  "settings.devToolsLocked": "DevTools verrouillés. Déverrouille-les dans les Paramètres.",
+  "settings.debugUnlocked": "Mode debug déverrouillé",
+  "settings.debugHidden": "Section debug masquée"
 }
