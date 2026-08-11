@@ -6877,5 +6877,7 @@
   "tut.fieldGo": "Montre-moi ce champ",
   "i18n.testLive": "Tester dans l'app",
   "i18n.testOn": "Le bac à sable est ACTIF partout — toute l’app parle ton brouillon",
-  "i18n.testOff": "Retour aux vraies traductions"
+  "i18n.testOff": "Retour aux vraies traductions",
+  "settings.tipsVisible": "Afficher les astuces",
+  "settings.tipsVisibleDesc": "Les encadrés d'explication dans les pages et réglages. Les masquer ne masque jamais les avertissements."
 }

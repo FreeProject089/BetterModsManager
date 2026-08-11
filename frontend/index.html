@@ -2865,7 +2865,7 @@
                         </div>
                     </div>
 
-                    <div class="mapper-help-banner" id="mapper-help-banner">
+                    <div class="mapper-help-banner bmm-tip" id="mapper-help-banner">
                         <span class="mhb-icon" aria-hidden="true">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
@@ -3549,20 +3549,8 @@
                                 <span data-i18n="settings.autoUpdateTitle">Auto Update</span>
                             </h3>
 
-                            <div
-                                style="display:flex;gap:12px;align-items:flex-start;padding:12px 14px;background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.15);border-radius:10px;margin-bottom:16px">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--success)"
-                                    stroke-width="2" style="flex-shrink:0;margin-top:1px">
-                                    <circle cx="12" cy="12" r="10" />
-                                    <line x1="12" y1="8" x2="12" y2="12" />
-                                    <line x1="12" y1="16" x2="12.01" y2="16" />
-                                </svg>
-                                <p style="font-size:12px;line-height:1.6;color:var(--text-secondary);margin:0"
-                                    data-i18n="settings.autoUpdateDesc">
-                                    When enabled, BMM will automatically check for new versions each time the app starts
-                                    and when it's closed. You will be notified if a new version is available.
-                                </p>
-                            </div>
+                            <div class="kit-callout kit-callout-success bmm-tip" style="margin-bottom:16px"><span class="kit-callout-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span><div class="kit-callout-body"><span data-i18n="settings.autoUpdateDesc">When enabled, BMM will automatically check for new versions each time the app starts
+                                    and when it's closed. You will be notified if a new version is available.</span></div></div>
 
                             <div
                                 style="display:flex;align-items:center;gap:10px;padding:12px;background:var(--bmm-s02);border-radius:10px;border:1px solid var(--border)">
@@ -3688,6 +3676,23 @@
                                         <span class="toggle-slider"></span>
                                     </label>
                                 </div>
+
+                                <!-- Toggle in-app tips (the unified kit-callout boxes) -->
+                                <div
+                                    style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--bmm-s03);border:1px solid var(--border);border-radius:10px">
+                                    <div>
+                                        <div style="font-size:13px;font-weight:600;color:var(--text-primary)"
+                                            data-i18n="settings.tipsVisible">Afficher les astuces</div>
+                                        <div style="font-size:11px;color:var(--text-muted);margin-top:2px"
+                                            data-i18n="settings.tipsVisibleDesc">Les encadrés d'explication dans les
+                                            pages et réglages. Les masquer ne masque jamais les avertissements.</div>
+                                    </div>
+                                    <label class="toggle-switch" style="flex-shrink:0">
+                                        <input type="checkbox" id="toggle-bmm-tips" checked
+                                            onchange="window.applyTaskySettings()" />
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
                                 <!-- Tasky tooltip opacity -->
                                 <div
                                     style="padding:10px 14px;background:var(--bmm-s03);border:1px solid var(--border);border-radius:10px">
@@ -3799,14 +3804,8 @@
                                 <span data-i18n="settings.shaTitle">Hashes / SHA & Integrity</span>
                             </h3>
 
-                            <div
-                                style="display:flex;gap:12px;align-items:flex-start;padding:12px 14px;background:rgba(139, 92, 246, 0.08);border:1px solid rgba(139, 92, 246, 0.2);border-radius:10px;margin-bottom:16px">
-                                <p style="font-size:12px;line-height:1.6;color:var(--text-secondary);margin:0"
-                                    data-i18n="settings.shaDesc">
-                                    Manage file integrity verification. Hashing ensures your mod files are not corrupted
-                                    or tampered with.
-                                </p>
-                            </div>
+                            <div class="kit-callout kit-callout-accent bmm-tip" style="margin-bottom:16px"><span class="kit-callout-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span><div class="kit-callout-body"><span data-i18n="settings.shaDesc">Manage file integrity verification. Hashing ensures your mod files are not corrupted
+                                    or tampered with.</span></div></div>
 
                             <!-- Strict mode toggle -->
                             <div
@@ -3937,13 +3936,7 @@
                                 <span data-i18n="settings.discordRpcTitle">Discord Rich Presence</span>
                             </h3>
 
-                            <div
-                                style="display:flex;gap:12px;align-items:flex-start;padding:12px 14px;background:rgba(114,137,218,0.08);border:1px solid rgba(114,137,218,0.2);border-radius:10px;margin-bottom:16px">
-                                <p style="font-size:12px;line-height:1.6;color:var(--text-secondary);margin:0"
-                                    data-i18n="settings.discordRpcDesc">
-                                    Affiche votre activité BMM sur Discord (profil actif et nombre de mods activés).
-                                </p>
-                            </div>
+                            <div class="kit-callout kit-callout-info bmm-tip" style="margin-bottom:16px"><span class="kit-callout-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span><div class="kit-callout-body"><span data-i18n="settings.discordRpcDesc">Affiche votre activité BMM sur Discord (profil actif et nombre de mods activés).</span></div></div>
 
                             <div
                                 style="display:flex;align-items:center;gap:10px;padding:12px;background:var(--bmm-s02);border-radius:10px;border:1px solid var(--border)">
@@ -3981,22 +3974,12 @@
                             </h3>
 
                             <!-- Explanation Banner -->
-                            <div
-                                style="display:flex;gap:12px;align-items:flex-start;padding:12px 14px;background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:10px;margin-bottom:16px">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)"
-                                    stroke-width="2" style="flex-shrink:0;margin-top:1px">
-                                    <circle cx="12" cy="12" r="10" />
-                                    <line x1="12" y1="8" x2="12" y2="12" />
-                                    <line x1="12" y1="16" x2="12.01" y2="16" />
-                                </svg>
-                                <p style="font-size:12px;line-height:1.6;color:var(--text-secondary);margin:0"
-                                    data-i18n="settings.githubPatDesc">GitHub limits unauthenticated downloads to 60
+                            <div class="kit-callout kit-callout-info bmm-tip" style="margin-bottom:16px"><span class="kit-callout-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span><div class="kit-callout-body"><span data-i18n="settings.githubPatDesc">GitHub limits unauthenticated downloads to 60
                                     requests/hour. Adding your Personal Access Token (PAT) raises this limit to 5 000
                                     req/hour. This is completely optional — BMM works without it, but helps when
                                     downloading
                                     many GitHub-hosted mods at once. Your token is stored only locally in your browser
-                                    storage and never sent anywhere except GitHub.</p>
-                            </div>
+                                    storage and never sent anywhere except GitHub.</span></div></div>
 
                             <div style="display:flex;gap:8px;align-items:center">
                                 <div style="position:relative;flex:1">

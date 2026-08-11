@@ -163,3 +163,8 @@
 }
 .gs-step.done .gs-dot { background: var(--bmm-success); border-color: var(--bmm-success); }
 .gs-step.done > span:last-child { text-decoration: line-through; opacity: 0.65; }
+
+/* The Settings toggle that hides tips app-wide. One rule, one class — a page cannot
+   half-obey. Only .bmm-tip callouts hide; warning/danger callouts never carry that
+   class, so nothing load-bearing can be silenced from a comfort setting. */
+body.bmm-tips-hidden .bmm-tip { display: none; }

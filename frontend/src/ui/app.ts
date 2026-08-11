@@ -1112,6 +1112,16 @@ async function main() {
 }
 
 // ── Tasky mascot settings ────────────────────────────────
+// Restore the tips flag before first paint of the settings card.
+try {
+    const tipsSaved = localStorage.getItem('bmm_tips_visible');
+    if (tipsSaved === 'false') {
+        document.body.classList.add('bmm-tips-hidden');
+        const cb = document.getElementById('toggle-bmm-tips') as HTMLInputElement | null;
+        if (cb) cb.checked = false;
+    }
+} catch { /* default: visible */ }
+
 window.applyTaskySettings = function () {
     const visibleToggle = document.getElementById('toggle-tasky-visible') as HTMLInputElement;
     const animToggle = document.getElementById('toggle-tasky-animation') as HTMLInputElement;
@@ -1131,6 +1141,14 @@ window.applyTaskySettings = function () {
     localStorage.setItem('bmm_tasky_animated', String(isAnimated));
     localStorage.setItem('bmm_tasky_tooltip', String(tooltipEnabled));
     localStorage.setItem('bmm_tasky_opacity', String(opacity));
+
+    // In-app tips (the unified .bmm-tip callouts). A CLASS on <body>, so hiding is one
+    // rule and a page can never half-obey. Warnings are exempt by design: danger/warning
+    // callouts never carry .bmm-tip, so the toggle cannot silence anything load-bearing.
+    const tipsToggle = document.getElementById('toggle-bmm-tips') as HTMLInputElement | null;
+    const tipsOn = tipsToggle ? tipsToggle.checked : true;
+    localStorage.setItem('bmm_tips_visible', String(tipsOn));
+    document.body.classList.toggle('bmm-tips-hidden', !tipsOn);
 
     // Apply visibility - when hidden, show text logo in sidebar like fullscreen
     if (container) container.style.display = isVisible ? '' : 'none';

@@ -6879,5 +6879,7 @@
   "tut.fieldGo": "Show me this field",
   "i18n.testLive": "Test in app",
   "i18n.testOn": "Sandbox is LIVE app-wide — everything now speaks your draft",
-  "i18n.testOff": "Back to the real translations"
+  "i18n.testOff": "Back to the real translations",
+  "settings.tipsVisible": "Show tips",
+  "settings.tipsVisibleDesc": "The explanation boxes across pages and settings. Hiding them never hides warnings."
 }
