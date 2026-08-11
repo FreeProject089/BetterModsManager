@@ -2639,6 +2639,16 @@
                                         </div>
                                     </div>
 
+                                    <!-- Fallback when FETCH finds no repo.json: read the
+                                         server's listing and show what it offers anyway. -->
+                                    <div style="margin:0 0 10px;">
+                                        <button class="btn btn-ghost btn-sm" id="btn-discover-server"
+                                            style="font-size:11px; height:26px; padding:0 10px;"
+                                            data-i18n="repo.discoverBtn">Pas de repo.json ? Inspecter le serveur</button>
+                                        <div id="discover-result"
+                                            style="display:none; margin-top:8px; font-size:11px; line-height:1.6; background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.08); border-radius:6px; padding:8px;"></div>
+                                    </div>
+
                                     <div id="repo-sync-paths-existing-hint" style="display:none;margin-top:10px;padding:9px 12px;background:rgba(6,182,212,0.08);border:1px solid rgba(6,182,212,0.2);border-radius:8px;font-size:11px;color:var(--cyan);display:flex;align-items:center;gap:8px;">
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
                                         <span data-i18n="repo.syncUsesProfilePaths">Mods will be downloaded to the selected profile's own game / mods / backup folders.</span>

@@ -6732,5 +6732,14 @@
   "repo.remoteCreated": "repo.json créé — envoie-le sur ton serveur",
   "dev.session.biggest": "Plus gros événement",
   "repo.remoteMissing": "Absents du manifeste",
-  "repo.remoteChanged": "Modifiés sur le serveur"
+  "repo.remoteChanged": "Modifiés sur le serveur",
+  "repo.discoverBtn": "Pas de repo.json ? Inspecter le serveur",
+  "repo.discoverNeedUrl": "Indique d'abord l'URL du dossier des mods",
+  "repo.discoverNoManifest": "Aucun manifeste trouvé — tout ce qui suit est non vérifié",
+  "repo.discoverUntrusted": "Un manifeste existe mais sa signature ne vérifie pas — traité comme absent",
+  "repo.discoverManifest": "Manifeste",
+  "repo.discoverVerified": "Mods vérifiés",
+  "repo.discoverUnverified": "Mods non vérifiés",
+  "repo.discoverWhy": "Non vérifié signifie que BMM ne peut pas distinguer un bon téléchargement d'un fichier corrompu ou substitué. À n'installer que depuis un serveur de confiance.",
+  "repo.discoverEmpty": "Le listing du serveur n'a produit aucun mod"
 }

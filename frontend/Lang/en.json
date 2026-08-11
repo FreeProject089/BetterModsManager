@@ -6734,5 +6734,14 @@
   "repo.remoteCreated": "repo.json created — upload it to your server",
   "dev.session.biggest": "Largest single event",
   "repo.remoteMissing": "Missing from the manifest",
-  "repo.remoteChanged": "Changed on the server"
+  "repo.remoteChanged": "Changed on the server",
+  "repo.discoverBtn": "No repo.json? Inspect the server",
+  "repo.discoverNeedUrl": "Enter the URL of the mods folder first",
+  "repo.discoverNoManifest": "No manifest found — everything below is unverified",
+  "repo.discoverUntrusted": "A manifest was found but its signature does not verify — treated as absent",
+  "repo.discoverManifest": "Manifest",
+  "repo.discoverVerified": "Verified mods",
+  "repo.discoverUnverified": "Unverified mods",
+  "repo.discoverWhy": "Unverified means BMM cannot tell a good download from a corrupted or substituted one. Install these only from a server you trust.",
+  "repo.discoverEmpty": "The server listing produced no mods"
 }
