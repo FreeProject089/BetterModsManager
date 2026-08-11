@@ -113,8 +113,33 @@ for (const m of data.matchAll(/\bselector:\s*'([^']+)'/g)) {
   if (modal) gated.push(`${m[1]}  (inside ${modal})`);
 }
 
+// ── every `nav:` must reach a real nav item ───────────────────────────────────
+//
+// _navigate() does `querySelector('.nav-item[data-view=…]')?.click()`. On a typo the optional
+// chain swallows it: no error, no navigation, and the step then highlights its selector on
+// whatever view happened to be open. The engine's alias table is read out of the source
+// rather than copied here, so the two cannot drift apart.
+const views = new Set([...html.matchAll(/data-view="([a-z-]+)"/g)].map((m) => m[1]));
+const aliasBlock = sources.match(/VIEW_ALIAS[^=]*=\s*\{([^}]*)\}/);
+const alias = {};
+if (aliasBlock) {
+  for (const a of aliasBlock[1].matchAll(/(\w+)\s*:\s*'([^']+)'/g)) alias[a[1]] = a[2];
+}
+const badNav = [];
+for (const m of data.matchAll(/nav:\s*'([^']+)'/g)) {
+  const key = alias[m[1]] ?? m[1];
+  if (!views.has(key)) badNav.push(alias[m[1]] ? `${m[1]} (aliased to ${key})` : m[1]);
+}
+
 const uniq = (a) => [...new Set(a)].sort();
 let bad = false;
+
+if (uniq(badNav).length) {
+  bad = true;
+  console.error(`✗ ${uniq(badNav).length} step nav target(s) match no nav item:`);
+  for (const n of uniq(badNav)) console.error(`  ${n}`);
+  console.error('  _navigate() swallows these: the step simply does not move, silently.');
+}
 
 if (uniq(missingSel).length) {
   bad = true;
