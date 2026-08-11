@@ -158,7 +158,8 @@
     align-items: center;
     justify-content: center;
     border: 1.5px solid var(--bmm-border-hover, var(--bmm-border));
-    color: #fff;
+    /* Ink ON the success fill below — the token that light-accent themes override. */
+    color: var(--bmm-text-on-accent, #fff);
 }
 .gs-step.done .gs-dot { background: var(--bmm-success); border-color: var(--bmm-success); }
 .gs-step.done > span:last-child { text-decoration: line-through; opacity: 0.65; }
