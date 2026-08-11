@@ -1635,7 +1635,7 @@ Voir aussi [Référence des actions](doc:actions-reference) et [Plugins & API](d
         },
       },
       {
-        id: 'storage-manager', view: 'settings', docsPath: 'features/storage/',
+        id: 'storage-manager', view: 'settings', docsPath: 'features/storage/', diagram: 'cache-management',
         title: { en: 'Storage & disk I/O', fr: 'Stockage & E/S disque' },
         summary: { en: 'Per-disk speed limits, space alerts, and Smart I/O.', fr: 'Limites de vitesse par disque, alertes d’espace, et Smart I/O.' },
         keywords: 'storage disk io space cache ssd hdd throttle smart limit stockage disque espace',

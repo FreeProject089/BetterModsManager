@@ -24,6 +24,18 @@ const known = new Set([...block[1].matchAll(/'([a-z0-9-]+)'\s*:/g)].map((m) => m
 const used = [...html.matchAll(/openDiagram\(\s*['"]([a-z0-9-]+)['"]/g)].map((m) => m[1]);
 const missing = [...new Set(used)].filter((id) => !known.has(id));
 
+// The reverse question, as a warning: a diagram nobody links to is written, translated and
+// shipped, and unreachable. Nothing breaks, which is why it accumulates — five had built up
+// before anyone counted. Not a failure, because parking one deliberately is legitimate; but
+// it should be a decision, not a drift.
+const hub = readFileSync(join(ROOT, 'frontend/src/docs/docs-hub.ts'), 'utf8');
+const unreachable = [...known].filter((id) => !hub.includes(`'${id}'`) && !html.includes(id));
+if (unreachable.length) {
+  console.warn(`⚠ ${unreachable.length} diagram(s) nothing links to:`);
+  for (const id of unreachable.sort()) console.warn(`  ${id}`);
+  console.warn('  Attach them to a docs-hub article, or drop them.');
+}
+
 if (missing.length) {
   console.error(`✗ ${missing.length} diagram id(s) used in index.html are not registered:`);
   for (const id of missing) console.error(`  ${id}`);
