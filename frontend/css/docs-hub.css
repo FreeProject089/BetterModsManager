@@ -307,8 +307,10 @@
 .dh-content h4 { font-size: 15px; font-weight: 700; margin: 22px 0 8px; color: var(--bmm-text-primary, #e6edf3); }
 .dh-content p { margin: 0 0 12px; color: var(--bmm-text-secondary, #b7c0cc); }
 .dh-content ul { margin: 0 0 14px; padding-left: 4px; list-style: none; }
-.dh-content li { position: relative; padding-left: 22px; margin-bottom: 8px; color: var(--bmm-text-secondary, #b7c0cc); }
-.dh-content li::before { content: ""; position: absolute; left: 4px; top: 9px; width: 6px; height: 6px; border-radius: 50%; background: var(--bmm-accent, #3b82f6); }
+/* Scoped to ul: the dot used to be drawn on EVERY li, so an ordered list rendered its
+   number AND a bullet beside it. The list markup was fine; the selector was too wide. */
+.dh-content ul > li { position: relative; padding-left: 22px; margin-bottom: 8px; color: var(--bmm-text-secondary, #b7c0cc); }
+.dh-content ul > li::before { content: ""; position: absolute; left: 4px; top: 9px; width: 6px; height: 6px; border-radius: 50%; background: var(--bmm-accent, #3b82f6); }
 .dh-content b { color: var(--bmm-text-primary, #e6edf3); font-weight: 700; }
 .dh-content code { font-family: var(--bmm-font-mono, ui-monospace, monospace); font-size: .9em; padding: 1px 6px; border-radius: 6px; background: var(--bmm-bg-base, #0f1420); border: 1px solid var(--bmm-border, #2a3242); }
 .dh-content .dh-diagnote { font-size: 12.5px; color: var(--bmm-text-muted, #7c8698); font-style: italic; margin-top: 14px; }
