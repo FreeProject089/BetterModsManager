@@ -22,10 +22,13 @@
     padding: 14px 16px;
     margin-bottom: 10px;
     border-radius: var(--bmm-radius-card, 14px);
-    border: 1px solid color-mix(in srgb, var(--bmm-accent) 26%, transparent);
-    background:
-        linear-gradient(150deg, color-mix(in srgb, var(--bmm-accent) 9%, transparent), transparent 62%),
-        var(--bmm-bg-elevated);
+    /* The kit-callout shape (kit.css), stated locally because this banner predates the
+       kit and its markup is already shipped. The angled accent gradient it used to wear
+       is gone: every advisory box in BMM is now a flat surface with a tone-coloured
+       inset bar — the SHAPE says "read this", the colour says what kind. */
+    border: 1px solid var(--bmm-border);
+    border-inline-start: 3px solid var(--bmm-accent);
+    background: var(--bmm-bg-elevated);
 }
 .mapper-help-banner[hidden] { display: none; }
 

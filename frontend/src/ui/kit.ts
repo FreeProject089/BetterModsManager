@@ -86,6 +86,18 @@ export function badge(label: string, tone: Tone = 'neutral', opts?: { icon?: Tru
     );
 }
 
+/** The one tip/notice shape (see kit.css). Tone picks the colour, icon the subject —
+ *  the geometry never moves, so every advisory box in BMM reads as the same kind of
+ *  thing. Body accepts TrustedHtml for the occasional <kbd>. */
+export function callout(o: { body: TrustedHtml | string; tone?: Tone; title?: string; icon?: TrustedHtml }): TrustedHtml {
+    const tone = o.tone ?? 'neutral';
+    return trustedHtml(safeHtml`<div class="${trustedHtml('kit-callout kit-callout-' + tone)}">${
+        o.icon ? trustedHtml(safeHtml`<span class="kit-callout-icon">${o.icon}</span>`) : ''
+    }<div class="kit-callout-body">${
+        o.title ? trustedHtml(safeHtml`<span class="kit-callout-title">${o.title}</span>`) : ''
+    }${o.body}</div></div>`);
+}
+
 export interface CardOpts {
     body: TrustedHtml | string;
     title?: string;

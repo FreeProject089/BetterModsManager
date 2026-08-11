@@ -75,3 +75,56 @@
     flex-wrap: wrap;
 }
 .kit-meta-sep { opacity: 0.5; }
+
+/* ── Callout (kit.callout) ─────────────────────────────────────────────────────
+   THE tip/hint/notice shape, app-wide. One form for every advisory box: flat elevated
+   surface, a 3px tone-coloured inset bar, an icon in a tinted square, 12.5px body.
+   Tone changes the COLOUR and the icon changes the SUBJECT — the geometry never moves.
+
+   This exists because every screen had grown its own: the Mapper wore an angled accent
+   gradient, sync warnings were inline-styled paragraphs, the discovery panel invented a
+   third look. Different shapes imply different kinds of thing; these are all the same
+   kind of thing — a sentence the screen wants you to read before you act. */
+.kit-callout {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--bmm-radius-card, 12px);
+    border: 1px solid var(--bmm-border);
+    border-inline-start: 3px solid var(--bmm-text-muted);
+    background: var(--bmm-bg-elevated);
+    font-size: 12.5px;
+    line-height: 1.6;
+    color: var(--bmm-text-secondary);
+}
+.kit-callout-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    flex: none;
+    border-radius: 8px;
+    background: var(--bmm-s08);
+    color: var(--bmm-text-muted);
+}
+.kit-callout-icon svg { width: 15px; height: 15px; }
+.kit-callout-body { min-width: 0; }
+.kit-callout-title {
+    display: block;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--bmm-text-primary);
+    margin-bottom: 2px;
+}
+.kit-callout-info    { border-inline-start-color: var(--bmm-info); }
+.kit-callout-info    .kit-callout-icon { background: var(--bmm-info-dim); color: var(--bmm-info); }
+.kit-callout-success { border-inline-start-color: var(--bmm-success); }
+.kit-callout-success .kit-callout-icon { background: var(--bmm-success-dim); color: var(--bmm-success); }
+.kit-callout-warning { border-inline-start-color: var(--bmm-warning); }
+.kit-callout-warning .kit-callout-icon { background: var(--bmm-warning-dim); color: var(--bmm-warning); }
+.kit-callout-danger  { border-inline-start-color: var(--bmm-danger); }
+.kit-callout-danger  .kit-callout-icon { background: var(--bmm-danger-dim); color: var(--bmm-danger); }
+.kit-callout-accent  { border-inline-start-color: var(--bmm-accent); }
+.kit-callout-accent  .kit-callout-icon { background: var(--bmm-accent-dim); color: var(--bmm-accent); }
