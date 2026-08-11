@@ -177,7 +177,14 @@ export function startTutorialEngine(
     _registerKeyboard();
 }
 
-export function closeTutorialEngine(): void {
+/** End the lesson. `reopenHub` decides what the user sees next:
+ *
+ *  true  — the hub comes back. That is what "Back to Hub" means, and only that button.
+ *  false — everything goes away. This is what the X means: a user closing a tutorial is
+ *          saying "stop teaching me", and answering with ANOTHER overlay is the panel
+ *          refusing to be dismissed. The X used to do exactly that, because every close
+ *          path shared this function and it always fired the reopen callback. */
+export function closeTutorialEngine(reopenHub: boolean = false): void {
     _unregisterKeyboard();
     _unregisterLangListener();
     _cleanup();
@@ -195,7 +202,7 @@ export function closeTutorialEngine(): void {
             panel.addEventListener('animationend', () => panel.remove(), { once: true });
         }
     }
-    if (_onClose) _onClose();
+    if (reopenHub && _onClose) _onClose();
 }
 
 // ── Keyboard navigation ──────────────────────────────────────────────────────
@@ -645,7 +652,7 @@ function _renderStep(): void {
     if (topbar) _makeDraggable(topbar, panel);
 
     /* ── Button listeners ── */
-    document.getElementById('btn-tut-back-hub')?.addEventListener('click', () => { _cleanup(); closeTutorialEngine(); });
+    document.getElementById('btn-tut-back-hub')?.addEventListener('click', () => { _cleanup(); closeTutorialEngine(true); });
     document.getElementById('btn-tut-close')?.addEventListener('click', () => closeTutorialEngine());
     document.getElementById('btn-tut-minimize')?.addEventListener('click', () => _minimize());
     document.getElementById('btn-tut-side')?.addEventListener('click', () => _cycleDockSide());
@@ -774,6 +781,9 @@ function _skipTutorial(): void {
     _cleanup();
     _cleanupDemo();
     _unregisterLangListener();
+    // Was missing: the ←/→ handler stayed registered after skipping, still driving the
+    // dead lesson's state from anywhere in the app.
+    _unregisterKeyboard();
     _isMinimized = false;
     const panel = document.getElementById('tut-engine-panel');
     if (panel) {
