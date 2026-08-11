@@ -1521,7 +1521,7 @@
                                             </button>
                                         </div>
                                         <div id="repo-export-profiles-list"
-                                            style="max-height:130px;overflow-y:auto;background:rgba(0,0,0,0.25);border-radius:8px;padding:10px;border:1px solid rgba(255,255,255,0.08);display:flex;flex-direction:column;gap:7px;">
+                                            style="max-height:130px;overflow-y:auto;background:var(--bmm-bg-base);border-radius:8px;padding:10px;border:1px solid var(--bmm-s08);display:flex;flex-direction:column;gap:7px;">
                                             <div style="color:var(--text-muted);font-size:12px;text-align:center;"
                                                 data-i18n="repo.loadingProfiles">...</div>
                                         </div>
@@ -1531,7 +1531,7 @@
                                         <label class="form-label" data-i18n="modpack.shareTitle">Partager des Modpacks
                                             (Optionnel)</label>
                                         <div id="repo-export-modpacks-list"
-                                            style="max-height:130px;overflow-y:auto;background:rgba(0,0,0,0.25);border-radius:8px;padding:10px;border:1px solid rgba(255,255,255,0.08);display:flex;flex-direction:column;gap:7px;">
+                                            style="max-height:130px;overflow-y:auto;background:var(--bmm-bg-base);border-radius:8px;padding:10px;border:1px solid var(--bmm-s08);display:flex;flex-direction:column;gap:7px;">
                                             <div style="color:var(--text-muted);font-size:12px;text-align:center;"
                                                 data-i18n="modpack.loadingModpacks">Chargement des modpacks...</div>
                                         </div>
@@ -1576,12 +1576,12 @@
                                         <input type="text" class="form-input" id="repo-export-seed"
                                             placeholder="Laissér vide pour auto-générer"
                                             data-i18n-placeholder="repo.serverSeedPlaceholder"
-                                            style="font-size:11px; font-family:var(--font-mono); height:30px; background:rgba(0,0,0,0.15);" />
+                                            style="font-size:11px; font-family:var(--font-mono); height:30px; background:var(--bmm-bg-base);" />
                                     </div>
 
                                     <!-- Distribution Options (ZIP + Server) -->
                                     <div
-                                        style="margin-bottom: 16px; padding: 12px; background: rgba(0,0,0,0.2); border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
+                                        style="margin-bottom: 16px; padding: 12px; background: var(--bmm-bg-base); border-radius: 8px; border: 1px solid var(--bmm-s05);">
                                         <label class="checkbox-container"
                                             style="font-size: 13px; font-weight: 600; color: var(--accent);">
                                             <input type="checkbox" id="repo-export-zip-enable" />
@@ -1619,7 +1619,7 @@
                                         </label>
 
                                         <div id="repo-export-zip-options"
-                                            style="display:none; margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.05);">
+                                            style="display:none; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--bmm-s05);">
                                             <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
                                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
                                                     stroke="var(--accent)" stroke-width="2.5">
@@ -1635,14 +1635,14 @@
                                             <div style="display:flex; gap:10px; margin-bottom:10px;">
                                                 <div style="flex:1;">
                                                     <label class="form-label" style="font-size:11px;" data-i18n="repo.serverVersion">Version du serveur</label>
-                                                    <select class="form-input" id="repo-export-server-version" style="font-size:12px; padding:5px; background:rgba(0,0,0,0.3);">
+                                                    <select class="form-input" id="repo-export-server-version" style="font-size:12px; padding:5px; background:var(--bmm-bg-base);">
                                                         <option value="2" data-i18n="repo.serverVersionV2">Version V2 (Dashboard Luxe)</option>
                                                         <option value="1" data-i18n="repo.serverVersionHybrid">Version Hybride (Console Tasky)</option>
                                                     </select>
                                                 </div>
                                                 <div style="flex:1;">
                                                     <label class="form-label" style="font-size:11px;" data-i18n="repo.serverType">Type</label>
-                                                    <select class="form-input" id="repo-export-server-type" style="font-size:12px; padding:5px; background:rgba(0,0,0,0.3);">
+                                                    <select class="form-input" id="repo-export-server-type" style="font-size:12px; padding:5px; background:var(--bmm-bg-base);">
                                                         <option value="user" data-i18n="repo.typeUser">User (Simple)</option>
                                                         <option value="server" data-i18n="repo.typeServer">Server (Dédié Node.js)</option>
                                                     </select>
@@ -1655,14 +1655,14 @@
                                                         data-i18n="repo.port">Port</label>
                                                     <input type="number" id="repo-export-server-port" class="form-input"
                                                         value="8000"
-                                                        style="font-size:12px; padding:5px; background:rgba(0,0,0,0.3);" />
+                                                        style="font-size:12px; padding:5px; background:var(--bmm-bg-base);" />
                                                 </div>
                                                 <div style="flex:1;">
                                                     <label class="form-label" style="font-size:10px;"
                                                         data-i18n="repo.uploadLimit">Limit (Ko/s)</label>
                                                     <input type="number" id="repo-export-server-limit"
                                                         class="form-input" value="0"
-                                                        style="font-size:12px; padding:5px; background:rgba(0,0,0,0.3);" />
+                                                        style="font-size:12px; padding:5px; background:var(--bmm-bg-base);" />
                                                 </div>
                                             </div>
 
@@ -1672,7 +1672,7 @@
                                                 <div style="position:relative; display:flex; align-items:center;">
                                                     <form style="display:contents" autocomplete="off" onsubmit="return false"><input type="password" id="repo-export-server-pass"
                                                         class="form-input" value="admin"
-                                                        style="font-size:12px; padding:5px; padding-right:30px; background:rgba(0,0,0,0.3); width:100%; border:1px solid rgba(255,255,255,0.05); border-radius:4px;" /></form>
+                                                        style="font-size:12px; padding:5px; padding-right:30px; background:var(--bmm-bg-base); width:100%; border:1px solid var(--bmm-s05); border-radius:4px;" /></form>
                                                     <button type="button" id="toggle-repo-export-pass"
                                                         style="position:absolute; right:8px; background:none; border:none; color:var(--text-secondary); cursor:pointer; padding:0; display:flex; align-items:center; z-index:5;">
                                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
@@ -1691,7 +1691,7 @@
                                                 <div style="position:relative; display:flex; align-items:center;">
                                                     <form style="display:contents" autocomplete="off" onsubmit="return false"><input type="password" id="repo-export-server-download-pass"
                                                         class="form-input" value="" placeholder="none"
-                                                        style="font-size:12px; padding:5px; padding-right:30px; background:rgba(0,0,0,0.3); width:100%; border:1px solid rgba(255,255,255,0.05); border-radius:4px;" /></form>
+                                                        style="font-size:12px; padding:5px; padding-right:30px; background:var(--bmm-bg-base); width:100%; border:1px solid var(--bmm-s05); border-radius:4px;" /></form>
                                                     <button type="button"
                                                         onclick="const p=document.getElementById('repo-export-server-download-pass'); p.type = p.type==='password'?'text':'password';"
                                                         style="position:absolute; right:8px; background:none; border:none; color:var(--text-secondary); cursor:pointer; padding:0; display:flex; align-items:center; z-index:5;">
@@ -1719,7 +1719,7 @@
                                                     <span class="checkmark" style="height:14px; width:14px;"></span>
                                                     <span data-i18n="repo.enableUPnP">Enable UPnP Auto-Mapping</span>
                                                 </label>
-                                                <div style="border-top:1px solid rgba(255,255,255,0.1); margin:6px 0;">
+                                                <div style="border-top:1px solid var(--bmm-s10); margin:6px 0;">
                                                 </div>
                                                 <label class="checkbox-container" style="font-size: 11px;">
                                                     <input type="checkbox" id="repo-export-server-docker" />
@@ -1729,7 +1729,7 @@
                                                 <div id="repo-export-server-docker-options"
                                                     style="display:none; margin-top:6px; margin-left:20px;">
                                                     <select id="repo-export-server-docker-host" class="form-input"
-                                                        style="width:100%; height:24px; font-size:11px; padding:0 4px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:4px; color:var(--text); font-weight:700; cursor:pointer;">
+                                                        style="width:100%; height:24px; font-size:11px; padding:0 4px; background:var(--bmm-bg-base); border:1px solid var(--bmm-s10); border-radius:4px; color:var(--text); font-weight:700; cursor:pointer;">
                                                         <option value="linux">Linux Host</option>
                                                         <option value="windows">Windows Host</option>
                                                     </select>
@@ -1768,7 +1768,7 @@
                                                 style="font-weight:600;color:var(--cyan);">0%</span>
                                         </div>
                                         <div
-                                            style="height:5px;background:rgba(255,255,255,0.08);border-radius:4px;overflow:hidden;">
+                                            style="height:5px;background:var(--bmm-s08);border-radius:4px;overflow:hidden;">
                                             <div id="repo-export-progress-fill"
                                                 style="height:100%;width:0%;background:linear-gradient(90deg,var(--cyan),#00f0ff);transition:width 0.25s ease;box-shadow:0 0 8px var(--cyan);border-radius:4px;">
                                             </div>
@@ -1776,7 +1776,7 @@
                                     </div>
 
                                     <!-- Update existing repo (incremental) -->
-                                    <div style="margin-top:14px;padding-top:14px;border-top:1px solid rgba(255,255,255,0.06);">
+                                    <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--bmm-s06);">
                                         <button class="btn btn-secondary btn-sm" id="btn-open-repo-update" style="width:100%;justify-content:center;gap:7px;">
                                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.36"/></svg>
                                             <span data-i18n="repo.update.openBtn">Update an existing repo</span>
@@ -1827,7 +1827,7 @@
                                         <div style="display:flex; gap:6px; margin-top:5px;">
                                             <input type="text" id="manifest-mods-dir" class="form-input" readonly
                                                 placeholder="mods"
-                                                style="flex:1; height:28px; font-size:11px; padding:0 8px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:4px; color:var(--text);">
+                                                style="flex:1; height:28px; font-size:11px; padding:0 8px; background:var(--bmm-bg-base); border:1px solid var(--bmm-s10); border-radius:4px; color:var(--text);">
                                             <button class="btn btn-sm" id="btn-manifest-browse"
                                                 style="height:28px; padding:0 10px; font-size:11px; font-weight:700;"
                                                 data-i18n="common.browse">PARCOURIR</button>
@@ -1838,7 +1838,7 @@
                                         <span style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:700;"
                                             data-i18n="repo.manifestProfiles">PROFILS A PUBLIER</span>
                                         <div id="manifest-profile-list"
-                                            style="margin-top:5px; max-height:130px; overflow-y:auto; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.08); border-radius:6px; padding:6px;"></div>
+                                            style="margin-top:5px; max-height:130px; overflow-y:auto; background:var(--bmm-bg-base); border:1px solid var(--bmm-s08); border-radius:6px; padding:6px;"></div>
                                     </div>
 
                                     <!-- Modpacks apply to BOTH modes: a pack is a selection of
@@ -1847,7 +1847,7 @@
                                         <span style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:700;"
                                             data-i18n="repo.manifestModpacks">MODPACKS A INCLURE</span>
                                         <div id="manifest-modpack-list"
-                                            style="margin-top:5px; max-height:110px; overflow-y:auto; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.08); border-radius:6px; padding:6px;"></div>
+                                            style="margin-top:5px; max-height:110px; overflow-y:auto; background:var(--bmm-bg-base); border:1px solid var(--bmm-s08); border-radius:6px; padding:6px;"></div>
                                     </div>
 
                                     <div style="margin-bottom:10px;">
@@ -1855,7 +1855,7 @@
                                             data-i18n="repo.manifestFilesBaseUrl">URL PUBLIQUE DES FICHIERS</span>
                                         <input type="text" id="manifest-files-base-url" class="form-input"
                                             placeholder="https://mon-serveur.tld/fichiers"
-                                            style="width:100%; height:28px; font-size:11px; padding:0 8px; margin-top:5px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:4px; color:var(--text);">
+                                            style="width:100%; height:28px; font-size:11px; padding:0 8px; margin-top:5px; background:var(--bmm-bg-base); border:1px solid var(--bmm-s10); border-radius:4px; color:var(--text);">
                                     </div>
 
                                     <div style="margin-bottom:12px;">
@@ -1863,13 +1863,13 @@
                                             data-i18n="repo.manifestLayout">DISPOSITION DES FICHIERS</span>
                                         <input type="text" id="manifest-files-layout" class="form-input"
                                             placeholder="mods/{id}/{path}"
-                                            style="width:100%; height:28px; font-size:11px; padding:0 8px; margin-top:5px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:4px; color:var(--text);">
+                                            style="width:100%; height:28px; font-size:11px; padding:0 8px; margin-top:5px; background:var(--bmm-bg-base); border:1px solid var(--bmm-s10); border-radius:4px; color:var(--text);">
                                         <p style="font-size:10px; color:var(--text-muted); margin:5px 0 0; line-height:1.4;"
                                             data-i18n="repo.manifestLayoutHint">Laisse vide pour mods/{id}/{path}.</p>
                                     </div>
 
                                     <div id="manifest-result"
-                                        style="display:none; font-size:11px; line-height:1.6; background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.08); border-radius:6px; padding:8px; margin-bottom:10px;"></div>
+                                        style="display:none; font-size:11px; line-height:1.6; background:var(--bmm-bg-base); border:1px solid var(--bmm-s08); border-radius:6px; padding:8px; margin-bottom:10px;"></div>
 
                                     <div style="display:flex; gap:10px; align-items:center;">
                                         <button class="btn btn-primary" id="btn-generate-manifest"
@@ -1903,7 +1903,7 @@
                                             data-i18n="repo.remoteBaseUrl">URL DU DOSSIER DES MODS</span>
                                         <input type="text" id="remote-base-url" class="form-input"
                                             placeholder="https://mon-serveur.tld/mods"
-                                            style="width:100%; height:28px; font-size:11px; padding:0 8px; margin-top:5px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:4px; color:var(--text);">
+                                            style="width:100%; height:28px; font-size:11px; padding:0 8px; margin-top:5px; background:var(--bmm-bg-base); border:1px solid var(--bmm-s10); border-radius:4px; color:var(--text);">
                                     </div>
 
                                     <div style="margin-bottom:10px;">
@@ -1912,7 +1912,7 @@
                                         <div style="display:flex; gap:6px; margin-top:5px;">
                                             <input type="text" id="remote-manifest-path" class="form-input" readonly
                                                 placeholder="repo.json"
-                                                style="flex:1; height:28px; font-size:11px; padding:0 8px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:4px; color:var(--text);">
+                                                style="flex:1; height:28px; font-size:11px; padding:0 8px; background:var(--bmm-bg-base); border:1px solid var(--bmm-s10); border-radius:4px; color:var(--text);">
                                             <button class="btn btn-sm" id="btn-remote-browse"
                                                 style="height:28px; padding:0 10px; font-size:11px; font-weight:700;"
                                                 data-i18n="common.browse">PARCOURIR</button>
@@ -1924,13 +1924,13 @@
                                             <span style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:700;"
                                                 data-i18n="repo.remoteName">NOM DU REPO</span>
                                             <input type="text" id="remote-repo-name" class="form-input"
-                                                style="width:100%; height:28px; font-size:11px; padding:0 8px; margin-top:5px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:4px; color:var(--text);">
+                                                style="width:100%; height:28px; font-size:11px; padding:0 8px; margin-top:5px; background:var(--bmm-bg-base); border:1px solid var(--bmm-s10); border-radius:4px; color:var(--text);">
                                         </div>
                                         <div style="flex:1;">
                                             <span style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:700;"
                                                 data-i18n="repo.remoteGame">JEU</span>
                                             <input type="text" id="remote-game-name" class="form-input"
-                                                style="width:100%; height:28px; font-size:11px; padding:0 8px; margin-top:5px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:4px; color:var(--text);">
+                                                style="width:100%; height:28px; font-size:11px; padding:0 8px; margin-top:5px; background:var(--bmm-bg-base); border:1px solid var(--bmm-s10); border-radius:4px; color:var(--text);">
                                         </div>
                                     </div>
                                     <p style="font-size:10px; color:var(--text-muted); margin:-4px 0 12px; line-height:1.4;"
@@ -1944,7 +1944,7 @@
                                     </label>
 
                                     <div id="remote-result"
-                                        style="display:none; font-size:11px; line-height:1.6; background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.08); border-radius:6px; padding:8px; margin-bottom:10px;"></div>
+                                        style="display:none; font-size:11px; line-height:1.6; background:var(--bmm-bg-base); border:1px solid var(--bmm-s08); border-radius:6px; padding:8px; margin-bottom:10px;"></div>
 
                                     <div style="display:flex; gap:8px; align-items:center;">
                                         <button class="btn btn-sm" id="btn-remote-plan"
@@ -1992,7 +1992,7 @@
                                             style="font-size:11px; color:var(--text-muted); margin-bottom:4px;"
                                             data-i18n="repo.hostHistoryLabel">Historique</label>
                                         <select class="form-input" id="repo-host-history-select"
-                                            style="font-size:12px; padding:6px; background:rgba(255,255,255,0.05);">
+                                            style="font-size:12px; padding:6px; background:var(--bmm-s05);">
                                             <option value="" data-i18n="repo.hostHistoryDefault">-- Choisir un ancien
                                                 dépôt
                                                 --
@@ -2000,7 +2000,7 @@
                                         </select>
                                     </div>
                                     <div id="repo-host-metadata-preview"
-                                        style="display:none; margin-bottom:12px; padding:10px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.05); border-radius:8px; font-size:12px;">
+                                        style="display:none; margin-bottom:12px; padding:10px; background:var(--bmm-bg-base); border:1px solid var(--bmm-s05); border-radius:8px; font-size:12px;">
                                     </div>
 
                                     <div style="display:flex; gap:12px; margin-bottom:12px;">
@@ -2010,7 +2010,7 @@
                                                 data-i18n="repo.portLabel">Port du serveur</label>
                                             <input type="number" id="repo-server-port" class="form-input" value="8000"
                                                 min="1" max="65535"
-                                                style="font-size:12px; padding:6px; background:rgba(0,0,0,0.2); border:1px solid var(--border);" />
+                                                style="font-size:12px; padding:6px; background:var(--bmm-bg-base); border:1px solid var(--border);" />
                                         </div>
                                         <div style="flex:1;">
                                             <label class="form-label"
@@ -2018,7 +2018,7 @@
                                                 data-i18n="repo.uploadLimit">Limite Upload (Ko/s)</label>
                                             <input type="number" id="repo-server-upload-limit" class="form-input"
                                                 value="0" min="0" step="50" data-i18n-placeholder="repo.limitNone"
-                                                style="font-size:12px; padding:6px; background:rgba(0,0,0,0.2); border:1px solid var(--border);" />
+                                                style="font-size:12px; padding:6px; background:var(--bmm-bg-base); border:1px solid var(--border);" />
                                         </div>
                                     </div>
 
@@ -2034,7 +2034,7 @@
                                                 autocomplete="new-password"
                                                 data-i18n-placeholder="repo.hostDownloadPasswordPlaceholder"
                                                 placeholder="Leave empty for an open repo"
-                                                style="flex:1; font-size:12px; padding:6px; background:rgba(0,0,0,0.2); border:1px solid var(--border);" /></form>
+                                                style="flex:1; font-size:12px; padding:6px; background:var(--bmm-bg-base); border:1px solid var(--border);" /></form>
                                             <button type="button" class="btn btn-sm"
                                                 onclick="const p = document.getElementById('repo-server-download-password'); p.type = p.type === 'password' ? 'text' : 'password';"
                                                 data-i18n="repo.showHide">Show</button>
@@ -2061,7 +2061,7 @@
                                     </div>
 
                                     <div id="repo-server-stats-container"
-                                        style="display:none; flex-wrap:wrap; gap:12px; margin-bottom:12px; padding:10px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.05); border-radius:8px;">
+                                        style="display:none; flex-wrap:wrap; gap:12px; margin-bottom:12px; padding:10px; background:var(--bmm-bg-base); border:1px solid var(--bmm-s05); border-radius:8px;">
                                         <div style="flex:1; display:flex; flex-direction:column;">
                                             <span
                                                 style="font-size:10px; color:var(--text-muted); font-weight:700; text-transform:uppercase;">Téléchargements</span>
@@ -2102,7 +2102,7 @@
                                     <div id="repo-server-tools"
                                         style="display:none; margin-top:10px; display:flex; gap:8px;">
                                         <button class="btn btn-ghost btn-sm" id="btn-open-monitoring"
-                                            style="flex:1; font-size:10px; border:1px solid rgba(255,255,255,0.1);">
+                                            style="flex:1; font-size:10px; border:1px solid var(--bmm-s10);">
                                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
                                                 stroke="currentColor" stroke-width="2">
                                                 <path d="M21 12V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h7" />
@@ -2116,7 +2116,7 @@
                                             <span data-i18n="repo.monitoring">SURVEILLANCE</span>
                                         </button>
                                         <button class="btn btn-ghost btn-sm" id="btn-open-whitelist"
-                                            style="flex:1; font-size:10px; border:1px solid rgba(255,255,255,0.1); color:var(--accent);">
+                                            style="flex:1; font-size:10px; border:1px solid var(--bmm-s10); color:var(--accent);">
                                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
                                                 stroke="currentColor" stroke-width="2">
                                                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
@@ -2125,7 +2125,7 @@
                                             <span data-i18n="repo.whitelist">WHITELIST</span>
                                         </button>
                                         <button class="btn btn-ghost btn-sm" id="btn-open-bans"
-                                            style="flex:1; font-size:10px; border:1px solid rgba(255,255,255,0.1); color:var(--danger);">
+                                            style="flex:1; font-size:10px; border:1px solid var(--bmm-s10); color:var(--danger);">
                                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
                                                 stroke="currentColor" stroke-width="2">
                                                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" />
@@ -2137,7 +2137,7 @@
                                     </div>
 
                                     <div id="repo-server-loading-bar"
-                                        style="display:none;height:3px;background:rgba(255,255,255,0.1);border-radius:2px;overflow:hidden;margin-top:8px;">
+                                        style="display:none;height:3px;background:var(--bmm-s10);border-radius:2px;overflow:hidden;margin-top:8px;">
                                         <div
                                             style="height:100%;width:100%;background:var(--accent);animation:indeterminate 1.8s infinite ease-in-out;transform-origin:left;">
                                         </div>
@@ -2169,7 +2169,7 @@
                                         </div>
                                         <!-- Value row -->
                                         <div style="display:flex;gap:6px;align-items:center;">
-                                            <div style="flex:1;font-family:var(--font-mono);font-size:10px;color:color-mix(in srgb, var(--bmm-purple) 45%, var(--bmm-text-primary));background:rgba(0,0,0,0.35);padding:7px 11px;border-radius:7px;word-break:break-all;border:1px solid rgba(188,116,255,0.15);letter-spacing:0.04em;user-select:all;cursor:text;"
+                                            <div style="flex:1;font-family:var(--font-mono);font-size:10px;color:color-mix(in srgb, var(--bmm-purple) 45%, var(--bmm-text-primary));background:var(--bmm-bg-base);padding:7px 11px;border-radius:7px;word-break:break-all;border:1px solid rgba(188,116,255,0.15);letter-spacing:0.04em;user-select:all;cursor:text;"
                                                 id="repo-creator-id-value"
                                                 data-i18n-tooltip="repo.creatorIdTooltip" data-tooltip="Creator ID — cliquez pour sélectionner tout">
                                                 <span style="opacity:0.35;animation:pulse-text 1.5s infinite">…</span>
@@ -2205,7 +2205,7 @@
                                                 data-i18n="repo.hostShareUrl">URL de partage (Locale)</label>
                                             <div class="path-picker">
                                                 <input type="text" class="form-input" id="repo-server-url" readonly
-                                                    style="color:var(--cyan);background:rgba(0,0,0,0.3);font-family:var(--font-mono);font-size:12px;" />
+                                                    style="color:var(--cyan);background:var(--bmm-bg-base);font-family:var(--font-mono);font-size:12px;" />
                                                 <button class="btn btn-secondary btn-sm" id="btn-copy-repo-url"
                                                     onmouseenter="window.showTaskyHelp('common.copyTip', 'icon-copy')"
                                                     onmouseleave="window.hideTaskyHelp()" style="padding:0 10px;">
@@ -2234,7 +2234,7 @@
                                             <div class="path-picker">
                                                 <input type="text" class="form-input" id="repo-server-public-url"
                                                     readonly
-                                                    style="color:var(--accent);background:rgba(0,0,0,0.3);font-family:var(--font-mono);font-size:12px;" />
+                                                    style="color:var(--accent);background:var(--bmm-bg-base);font-family:var(--font-mono);font-size:12px;" />
                                                 <button class="btn btn-secondary btn-sm" id="btn-copy-repo-public-url"
                                                     onmouseenter="window.showTaskyHelp('common.copyTip', 'icon-copy')"
                                                     onmouseleave="window.hideTaskyHelp()" style="padding:0 10px;">
@@ -2260,7 +2260,7 @@
                                             <div class="path-picker">
                                                 <input type="text" class="form-input" id="repo-server-tunnel-url"
                                                     readonly
-                                                    style="color:var(--cyan);background:rgba(0,0,0,0.3);font-family:var(--font-mono);font-size:12px;" />
+                                                    style="color:var(--cyan);background:var(--bmm-bg-base);font-family:var(--font-mono);font-size:12px;" />
                                                 <button class="btn btn-secondary btn-sm" id="btn-copy-repo-tunnel-url"
                                                     onmouseenter="window.showTaskyHelp('common.copyTip', 'icon-copy')"
                                                     onmouseleave="window.hideTaskyHelp()" style="padding:0 10px;">
@@ -2335,7 +2335,7 @@
 
                                     <!-- Configuration Options Grid -->
                                     <div
-                                        style="display:grid; grid-template-columns: 1fr 1.2fr; gap:20px; margin-bottom:15px; padding:12px; background:rgba(255,255,255,0.03); border-radius:8px; border:1px solid rgba(255,255,255,0.05);">
+                                        style="display:grid; grid-template-columns: 1fr 1.2fr; gap:20px; margin-bottom:15px; padding:12px; background:var(--bmm-s03); border-radius:8px; border:1px solid var(--bmm-s05);">
                                         <!-- Left Column: Numeric Settings -->
                                         <div style="display:flex; flex-direction:column; gap:10px;">
                                             <div
@@ -2345,7 +2345,7 @@
                                                     data-i18n="repo.portLabel">PORT</span>
                                                 <input type="number" id="repo-mini-server-port" class="form-input"
                                                     value="8000" min="1" max="65535"
-                                                    style="width:80px; height:24px; font-size:11px; padding:0 8px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:4px; color:var(--cyan); font-weight:700;">
+                                                    style="width:80px; height:24px; font-size:11px; padding:0 8px; background:var(--bmm-bg-base); border:1px solid var(--bmm-s10); border-radius:4px; color:var(--cyan); font-weight:700;">
                                             </div>
                                             <div
                                                 style="display:flex; align-items:center; justify-content:space-between;">
@@ -2354,7 +2354,7 @@
                                                     data-i18n="repo.uploadLimit">LIMIT (KB/S)</span>
                                                 <input type="number" id="repo-mini-server-upload-limit"
                                                     class="form-input" value="0" min="0" step="50"
-                                                    style="width:80px; height:24px; font-size:11px; padding:0 8px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:4px; color:var(--accent); font-weight:700;">
+                                                    style="width:80px; height:24px; font-size:11px; padding:0 8px; background:var(--bmm-bg-base); border:1px solid var(--bmm-s10); border-radius:4px; color:var(--accent); font-weight:700;">
                                             </div>
                                             <div
                                                 style="display:flex; align-items:center; justify-content:space-between;">
@@ -2365,7 +2365,7 @@
                                                     <button
                                                         onclick="const p = document.getElementById('repo-mini-server-password'); p.type = p.type === 'password' ? 'text' : 'password';"
                                                         class="btn btn-sm"
-                                                        style="height:24px; width:24px; padding:0; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,0.05); border-radius:4px;">
+                                                        style="height:24px; width:24px; padding:0; display:flex; align-items:center; justify-content:center; background:var(--bmm-s05); border-radius:4px;">
                                                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
                                                             stroke="currentColor" stroke-width="2">
                                                             <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
@@ -2374,7 +2374,7 @@
                                                     </button>
                                                     <form style="display:contents" autocomplete="off" onsubmit="return false"><input type="password" id="repo-mini-server-password"
                                                         class="form-input" value="admin"
-                                                        style="width:80px; height:24px; font-size:11px; padding:0 8px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:4px; color:var(--warning); font-weight:700;"></form>
+                                                        style="width:80px; height:24px; font-size:11px; padding:0 8px; background:var(--bmm-bg-base); border:1px solid var(--bmm-s10); border-radius:4px; color:var(--warning); font-weight:700;"></form>
                                                 </div>
                                             </div>
                                             <div
@@ -2388,7 +2388,7 @@
                                                     <button
                                                         onclick="const p = document.getElementById('repo-mini-server-download-password'); p.type = p.type === 'password' ? 'text' : 'password';"
                                                         class="btn btn-sm"
-                                                        style="height:24px; width:24px; padding:0; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,0.05); border-radius:4px;">
+                                                        style="height:24px; width:24px; padding:0; display:flex; align-items:center; justify-content:center; background:var(--bmm-s05); border-radius:4px;">
                                                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
                                                             stroke="currentColor" stroke-width="2">
                                                             <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
@@ -2397,7 +2397,7 @@
                                                     </button>
                                                     <form style="display:contents" autocomplete="off" onsubmit="return false"><input type="password" id="repo-mini-server-download-password"
                                                         class="form-input" value="" placeholder="none"
-                                                        style="width:80px; height:24px; font-size:11px; padding:0 8px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:4px; color:var(--warning); font-weight:700;"></form>
+                                                        style="width:80px; height:24px; font-size:11px; padding:0 8px; background:var(--bmm-bg-base); border:1px solid var(--bmm-s10); border-radius:4px; color:var(--warning); font-weight:700;"></form>
                                                 </div>
                                             </div>
                                             <div
@@ -2406,7 +2406,7 @@
                                                     style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:700;"
                                                     data-i18n="repo.miniServerVersion">VERSION</span>
                                                 <select id="repo-mini-server-version" class="form-input"
-                                                    style="width:80px; height:24px; font-size:11px; padding:0 4px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:4px; color:var(--success); font-weight:700; cursor:pointer;">
+                                                    style="width:80px; height:24px; font-size:11px; padding:0 4px; background:var(--bmm-bg-base); border:1px solid var(--bmm-s10); border-radius:4px; color:var(--success); font-weight:700; cursor:pointer;">
                                                     <option value="1">v1 (Std)</option>
                                                     <option value="2" selected>v2 (Lux)</option>
                                                 </select>
@@ -2417,7 +2417,7 @@
                                                     style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:700;"
                                                     data-i18n="repo.miniServerType">TYPE</span>
                                                 <select id="repo-mini-server-type" class="form-input"
-                                                    style="width:80px; height:24px; font-size:11px; padding:0 4px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:4px; color:var(--accent); font-weight:700; cursor:pointer;">
+                                                    style="width:80px; height:24px; font-size:11px; padding:0 4px; background:var(--bmm-bg-base); border:1px solid var(--bmm-s10); border-radius:4px; color:var(--accent); font-weight:700; cursor:pointer;">
                                                     <option value="user" selected data-i18n="repo.typeUser">User</option>
                                                     <option value="server" data-i18n="repo.typeServer">Server</option>
                                                 </select>
@@ -2425,7 +2425,7 @@
                                         </div>
                                         <!-- Right Column: Toggles -->
                                         <div
-                                            style="display:flex; flex-direction:column; gap:8px; border-left:1px solid rgba(255,255,255,0.05); padding-left:15px;">
+                                            style="display:flex; flex-direction:column; gap:8px; border-left:1px solid var(--bmm-s05); padding-left:15px;">
                                             <label
                                                 style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:11px; color:var(--text-secondary);">
                                                 <input type="checkbox" id="repo-mini-server-autostart"
@@ -2445,7 +2445,7 @@
                                                     style="margin:0;">
                                                 <span data-i18n="repo.miniServerUseUPnP">UPnP (Port Forwarding)</span>
                                             </label>
-                                            <div style="border-top:1px solid rgba(255,255,255,0.1); margin:8px 0;">
+                                            <div style="border-top:1px solid var(--bmm-s10); margin:8px 0;">
                                             </div>
                                             <label
                                                 style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:11px; color:var(--text-secondary);">
@@ -2455,7 +2455,7 @@
                                             <div id="repo-mini-server-docker-options"
                                                 style="display:none; margin-top:8px;">
                                                 <select id="repo-mini-server-docker-host" class="form-input"
-                                                    style="width:100%; height:24px; font-size:11px; padding:0 4px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:4px; color:var(--text); font-weight:700; cursor:pointer;">
+                                                    style="width:100%; height:24px; font-size:11px; padding:0 4px; background:var(--bmm-bg-base); border:1px solid var(--bmm-s10); border-radius:4px; color:var(--text); font-weight:700; cursor:pointer;">
                                                     <option value="linux">Linux Host</option>
                                                     <option value="windows">Windows Host</option>
                                                 </select>
@@ -2474,7 +2474,7 @@
                                         </button>
                                         <button class="btn btn-ghost btn-sm"
                                             onclick="openDiagram('lightweight-architecture')"
-                                            style="width:40px; height:38px; padding:0; justify-content:center; color:var(--text-muted); border:1px solid rgba(255,255,255,0.08); border-radius:8px;"
+                                            style="width:40px; height:38px; padding:0; justify-content:center; color:var(--text-muted); border:1px solid var(--bmm-s08); border-radius:8px;"
                                             onmouseenter="window.showTaskyHelp('nav.docsViewDiagramTip', 'help')"
                                             onmouseleave="window.hideTaskyHelp()">
                                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
@@ -2549,7 +2549,7 @@
                                     </div>
 
                                     <div id="repo-sync-info-card"
-                                        style="display:none;margin-top:12px;background:rgba(255,255,255,0.03);border-radius:8px;padding:12px;border:1px solid rgba(255,255,255,0.06);">
+                                        style="display:none;margin-top:12px;background:var(--bmm-s03);border-radius:8px;padding:12px;border:1px solid var(--bmm-s06);">
                                         <div
                                             style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
                                             <span id="repo-sync-author-badge"
@@ -2576,7 +2576,7 @@
                                             id="repo-sync-desc-display"></div>
 
                                         <div id="repo-sync-profiles-selection"
-                                            style="margin-top:15px; display:flex; flex-direction:column; gap:10px; border-top:1px solid rgba(255,255,255,0.05); padding-top:12px;">
+                                            style="margin-top:15px; display:flex; flex-direction:column; gap:10px; border-top:1px solid var(--bmm-s05); padding-top:12px;">
                                             <!-- Selection logic will inject profiles here -->
                                         </div>
                                         <div id="repo-sync-total-size"
@@ -2584,7 +2584,7 @@
                                         </div>
 
                                         <div id="repo-sync-options"
-                                            style="margin-top:15px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.05);">
+                                            style="margin-top:15px; padding-top:12px; border-top:1px solid var(--bmm-s05);">
                                             <label class="form-label"
                                                 style="font-size:11px; margin-bottom:8px; display:block; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.05em; font-weight:700;"
                                                 data-i18n="repo.syncOptions">Options de Synchronisation</label>
@@ -2594,7 +2594,7 @@
                                                     <label class="form-label" style="font-size:11px; margin-bottom:4px;"
                                                         data-i18n="repo.syncMode">Mode de synchronisation</label>
                                                     <select class="form-input" id="repo-sync-mode"
-                                                        style="font-size:12px; padding:6px; background:rgba(255,255,255,0.05);">
+                                                        style="font-size:12px; padding:6px; background:var(--bmm-s05);">
                                                         <option value="missing" selected
                                                             data-i18n="repo.syncModeMissing">
                                                             Manquants ou Incorrects uniquement</option>
@@ -2609,7 +2609,7 @@
                                                     <input type="number" id="repo-sync-download-limit"
                                                         class="form-input" value="0" min="0" step="50"
                                                         data-i18n-placeholder="repo.limitNone"
-                                                        style="font-size:12px; padding:6px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1);" />
+                                                        style="font-size:12px; padding:6px; background:var(--bmm-s05); border:1px solid var(--bmm-s10);" />
                                                 </div>
                                             </div>
 
@@ -2669,7 +2669,7 @@
                                             style="font-size:11px; height:26px; padding:0 10px;"
                                             data-i18n="repo.discoverBtn">Pas de repo.json ? Inspecter le serveur</button>
                                         <div id="discover-result"
-                                            style="display:none; margin-top:8px; font-size:11px; line-height:1.6; background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.08); border-radius:6px; padding:8px;"></div>
+                                            style="display:none; margin-top:8px; font-size:11px; line-height:1.6; background:var(--bmm-bg-base); border:1px solid var(--bmm-s08); border-radius:6px; padding:8px;"></div>
                                     </div>
 
                                     <div id="repo-sync-paths-existing-hint" style="display:none;margin-top:10px;padding:9px 12px;background:rgba(6,182,212,0.08);border:1px solid rgba(6,182,212,0.2);border-radius:8px;font-size:11px;color:var(--cyan);display:flex;align-items:center;gap:8px;">
@@ -2679,7 +2679,7 @@
 
                                     <div id="repo-sync-paths-section">
                                         <hr
-                                            style="border:none;border-top:1px solid rgba(255,255,255,0.07);margin:14px 0;" />
+                                            style="border:none;border-top:1px solid var(--bmm-s07);margin:14px 0;" />
                                         <p style="font-size:11px;font-weight:700;color:var(--text-secondary);letter-spacing:0.06em;margin:8px 0 12px;text-transform:uppercase;"
                                             data-i18n="repo.syncFolders">...</p>
 
@@ -2752,16 +2752,16 @@
                                                 style="font-weight:600;color:var(--accent);">0%</span>
                                         </div>
                                         <div
-                                            style="height:5px;background:rgba(255,255,255,0.08);border-radius:4px;overflow:hidden;">
+                                            style="height:5px;background:var(--bmm-s08);border-radius:4px;overflow:hidden;">
                                             <div id="repo-sync-progress-fill"
                                                 style="height:100%;width:0%;background:var(--accent);transition:width 0.25s ease;box-shadow:0 0 10px rgba(59, 130, 246, 0.5);border-radius:4px;position:relative;overflow:hidden;">
                                                 <div
-                                                    style="position:absolute;top:0;left:0;right:0;bottom:0;background:linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);animation:sync-progress-shine 2s infinite;">
+                                                    style="position:absolute;top:0;left:0;right:0;bottom:0;background:linear-gradient(90deg, transparent, var(--bmm-s20), transparent);animation:sync-progress-shine 2s infinite;">
                                                 </div>
                                             </div>
                                         </div>
                                         <div id="repo-sync-details"
-                                            style="font-size:10px;color:var(--text-muted);margin-top:8px;font-family:var(--font-mono);line-height:1.8;max-height:80px;overflow-y:auto;background:rgba(0,0,0,0.2);border-radius:6px;padding:6px 8px;word-break:break-all;">
+                                            style="font-size:10px;color:var(--text-muted);margin-top:8px;font-family:var(--font-mono);line-height:1.8;max-height:80px;overflow-y:auto;background:var(--bmm-bg-base);border-radius:6px;padding:6px 8px;word-break:break-all;">
                                         </div>
                                         <div style="display:flex;gap:8px;margin-top:10px">
                                             <button class="btn btn-secondary btn-sm" id="btn-pause-sync"
