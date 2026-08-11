@@ -11,9 +11,11 @@
 // of those as dead, so the sources count as evidence too: a name that appears NOWHERE is a
 // real finding, one that appears in a template string is simply built at runtime.
 //
-// What this does NOT catch: a selector that exists but is not REACHABLE yet, because the
-// panel or modal holding it has to be opened first. That is the other half of the tutorial's
-// problems and it needs to know what each step leaves on screen — a judgement, not a lookup.
+// It also flags the OTHER half of the problem, as warnings rather than failures: a selector
+// that exists but sits inside a modal, so the step dims the screen and highlights something
+// nobody can reach until that modal is opened. Whether a given step is wrong depends on what
+// the previous one left on screen, which is a judgement — so these are listed for review,
+// not failed. A step declaring `modal_selector` is doing this on purpose and is skipped.
 
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -73,6 +75,44 @@ for (const m of data.matchAll(/\b(?:title|text|desc)_key:\s*'([^']+)'/g)) {
   if (!(m[1] in en)) missingKey.push(m[1]);
 }
 
+// ── reachability: selectors that live inside a modal ─────────────────────────
+//
+// Built from index.html by walking each `id="modal-…"` element to its matching close tag, so
+// nesting is respected — a naive "next </div>" would end the region at the first inner div
+// and miss almost everything inside it.
+function modalRegions() {
+  const out = [];
+  for (const m of html.matchAll(/<div[^>]*\bid="(modal-[^"]+)"/g)) {
+    let i = m.index, depth = 0;
+    for (const tag of html.slice(m.index).matchAll(/<div\b|<\/div>/g)) {
+      depth += tag[0] === '</div>' ? -1 : 1;
+      if (depth === 0) { out.push([m[1], m.index, m.index + tag.index]); break; }
+    }
+    void i;
+  }
+  return out;
+}
+const regions = modalRegions();
+
+function insideModal(name) {
+  const at = html.indexOf(`id="${name}"`);
+  if (at < 0) return null;
+  const hit = regions.find(([, a, b]) => at > a && at < b);
+  return hit ? hit[0] : null;
+}
+
+// Steps that declare modal_selector are deliberately about a modal — not a finding.
+const deliberate = new Set(
+  [...data.matchAll(/modal_selector:\s*'([^']+)'/g)].map((m) => m[1].replace(/^[#.]/, '')),
+);
+const gated = [];
+for (const m of data.matchAll(/\bselector:\s*'([^']+)'/g)) {
+  const name = m[1].trim().replace(/^[#.]/, '');
+  if (RUNTIME.test(m[1]) || deliberate.has(name)) continue;
+  const modal = insideModal(name);
+  if (modal) gated.push(`${m[1]}  (inside ${modal})`);
+}
+
 const uniq = (a) => [...new Set(a)].sort();
 let bad = false;
 
@@ -88,5 +128,11 @@ if (uniq(missingKey).length) {
   for (const k of uniq(missingKey)) console.error(`  ${k}`);
 }
 if (bad) process.exit(1);
+
+if (uniq(gated).length) {
+  console.warn(`\n⚠ ${uniq(gated).length} step selector(s) live inside a modal — check a prior step opens it:`);
+  for (const g of uniq(gated)) console.warn(`  ${g}`);
+  console.warn('  (warning only: whether this is wrong depends on the step before it)');
+}
 
 console.log('✓ every tutorial selector and i18n key resolves');
