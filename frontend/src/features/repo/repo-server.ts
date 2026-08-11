@@ -167,7 +167,12 @@ export function initRepoServer(elements) {
                     const reqLoginCb = document.getElementById('repo-host-require-login') as HTMLInputElement | null;
                     if (reqLoginCb) { try { await invoke('set_repo_require_login', { repoDir: path, require: !!reqLoginCb.checked }); } catch (_) {} }
 
-                    const result = await invoke('start_repo_server', { path, port, uploadLimit });
+                    // Empty = open repo. Sent on start, not stored in repo.json: a password
+                    // written into the manifest would ship to every subscriber inside the
+                    // very file it is meant to protect.
+                    const downloadPassword = (document.getElementById('repo-server-download-password') as HTMLInputElement | null)?.value || '';
+
+                    const result = await invoke('start_repo_server', { path, port, uploadLimit, downloadPassword });
                     isServerRunning = true;
 
                     // Subscribe to host-side notifications

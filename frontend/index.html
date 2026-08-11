@@ -2022,6 +2022,27 @@
                                         </div>
                                     </div>
 
+                                    <div style="margin-bottom:12px;">
+                                        <label class="form-label"
+                                            style="font-size:11px; margin-bottom:4px; display:block;"
+                                            data-i18n="repo.hostDownloadPassword">Download password (optional)</label>
+                                        <div style="display:flex; gap:6px;">
+                                            <!-- autocomplete off + a wrapping form: without it the browser
+                                                 offers to save this as a site login. -->
+                                            <form style="display:contents" autocomplete="off" onsubmit="return false"><input
+                                                type="password" id="repo-server-download-password" class="form-input"
+                                                autocomplete="new-password"
+                                                data-i18n-placeholder="repo.hostDownloadPasswordPlaceholder"
+                                                placeholder="Leave empty for an open repo"
+                                                style="flex:1; font-size:12px; padding:6px; background:rgba(0,0,0,0.2); border:1px solid var(--border);" /></form>
+                                            <button type="button" class="btn btn-sm"
+                                                onclick="const p = document.getElementById('repo-server-download-password'); p.type = p.type === 'password' ? 'text' : 'password';"
+                                                data-i18n="repo.showHide">Show</button>
+                                        </div>
+                                        <div style="font-size:10px; color:var(--text-muted); margin-top:4px;"
+                                             data-i18n="repo.hostDownloadPasswordHelp">Subscribers are asked for it before anything is served — the manifest included.</div>
+                                    </div>
+
                                     <label style="display:flex; align-items:center; gap:8px; margin-bottom:12px; font-size:12px; color:var(--text-muted); cursor:pointer;">
                                         <input type="checkbox" id="repo-host-require-login" />
                                         <span data-i18n="repo.requireLogin">Require a BetterCommunity account to download</span>

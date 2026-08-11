@@ -6754,5 +6754,9 @@
   "themes.dropinNone": "No new presets in that folder",
   "dev.session.state": "Recorder",
   "dev.session.reload": "Reload payload",
-  "dev.session.truncated": "Showing the beginning only — use Export to read all of it."
+  "dev.session.truncated": "Showing the beginning only — use Export to read all of it.",
+  "repo.hostDownloadPassword": "Mot de passe de téléchargement (facultatif)",
+  "repo.hostDownloadPasswordPlaceholder": "Vide = dépôt ouvert",
+  "repo.hostDownloadPasswordHelp": "Il est demandé aux abonnés avant que quoi que ce soit ne soit servi — le manifeste compris.",
+  "repo.showHide": "Afficher"
 }

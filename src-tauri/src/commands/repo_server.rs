@@ -217,6 +217,8 @@ pub async fn start_repo_server(
     path: String,
     port: u16,
     upload_limit: u32,
+    // Optional download password. Empty or absent = open repo, as before.
+    download_password: Option<String>,
 ) -> Result<StartServerResult, String> {
     // 1. Check if already running
     // 2. Validate path
@@ -283,14 +285,31 @@ pub async fn start_repo_server(
     // not require an account never looks at it.
     let identity_filter = warp::header::optional::<String>("x-creator-identity");
 
+    // Download password. Same contract as the generated mini-server, deliberately — the
+    // subscriber side already prompts for one and sends X-Repo-Password, so matching it
+    // means a password-protected built-in server needs no client change at all.
+    //
+    // ?password= is accepted too, because a browser cannot set a header and the owner will
+    // want to check their own repo from one.
+    let password_filter = warp::header::optional::<String>("x-repo-password")
+        .and(warp::query::<std::collections::HashMap<String, String>>())
+        .map(|h: Option<String>, q: std::collections::HashMap<String, String>| {
+            h.or_else(|| q.get("password").cloned())
+        });
+    let required_password: Option<String> = download_password
+        .map(|p| p.trim().to_string())
+        .filter(|p| !p.is_empty());
+
     let handle_clone = handle.clone();
     let file_route = warp::get()
         .and(warp::path::tail())
         .and(warp::addr::remote())
         .and(key_filter)
         .and(identity_filter)
-        .and_then(move |tail: warp::path::Tail, addr: Option<std::net::SocketAddr>, key: Option<String>, attestation: Option<String>| {
+        .and(password_filter)
+        .and_then(move |tail: warp::path::Tail, addr: Option<std::net::SocketAddr>, key: Option<String>, attestation: Option<String>, presented: Option<String>| {
             let handle = handle_clone.clone();
+            let required_password = required_password.clone();
             let active_downloads = active_downloads.clone();
             let session_download_started = session_download_started.clone();
             let session_download_completed = session_download_completed.clone();
@@ -310,6 +329,18 @@ pub async fn start_repo_server(
                 if rel_path.split(|c| c == '/' || c == '\\').any(|seg| seg == ".." || seg == "...") {
                     println!("[Server] Security Block: path traversal attempt '{}' from {}", rel_path, ip);
                     return Err(warp::reject::not_found());
+                }
+
+                // 0a. Download password, checked before ANY file is considered — including
+                // repo.json. Gating only /mods/ would leak the whole manifest (every mod
+                // name, every path, the file layout) to anyone who asked, which is most of
+                // what a protected repo is protecting.
+                if let Some(want) = required_password.as_ref() {
+                    let ok = presented.as_deref().map(|got| ct_eq(got, want)).unwrap_or(false);
+                    if !ok {
+                        println!("[Server] Access Denied: wrong or missing download password from {}", ip);
+                        return Err(warp::reject::custom(BanError));
+                    }
                 }
 
                 // 0b. Owner requires a BetterCommunity identity for EVERY file.
@@ -888,6 +919,24 @@ pub async fn stop_repo_server(state: tauri::State<'_, RepoServerState>) -> Resul
 }
 
 
+/// Compare a presented secret against the expected one without leaking, through timing,
+/// how much of it was right.
+///
+/// `==` on strings returns at the first differing byte, so an attacker on the LAN can
+/// recover a password one character at a time by measuring responses. Written out rather
+/// than pulled from `subtle`, which is only a transitive dependency here.
+///
+/// The length is folded into the accumulator instead of being an early return, so a wrong
+/// length costs the same as a wrong byte.
+fn ct_eq(a: &str, b: &str) -> bool {
+    let (a, b) = (a.as_bytes(), b.as_bytes());
+    let mut diff = (a.len() ^ b.len()) as u8;
+    for i in 0..a.len().max(b.len()) {
+        diff |= a.get(i).copied().unwrap_or(0) ^ b.get(i).copied().unwrap_or(0);
+    }
+    diff == 0
+}
+
 async fn handle_rejection(err: warp::Rejection) -> Result<impl warp::Reply, std::convert::Infallible> {
     if err.find::<BanError>().is_some() {
         Ok(warp::reply::with_status("Forbidden: Access Denied", warp::http::StatusCode::FORBIDDEN))
@@ -978,4 +1027,44 @@ pub fn get_active_downloads(state: tauri::State<'_, RepoServerState>) -> Result<
     }
 
     Ok(result)
+}
+
+#[cfg(test)]
+mod password_tests {
+    use super::ct_eq;
+
+    #[test]
+    fn matches_only_the_exact_secret() {
+        assert!(ct_eq("hunter2", "hunter2"));
+        assert!(ct_eq("", ""));
+
+        // Wrong in every way it can be wrong.
+        assert!(!ct_eq("hunter2", "hunter3"));   // last byte
+        assert!(!ct_eq("Hunter2", "hunter2"));   // case
+        assert!(!ct_eq("hunter", "hunter2"));    // short
+        assert!(!ct_eq("hunter22", "hunter2"));  // long
+        assert!(!ct_eq("", "hunter2"));          // absent
+        assert!(!ct_eq("hunter2", ""));          // an empty expectation never matches here;
+                                                 // "no password" is handled before the call
+    }
+
+    /// A prefix must not be treated as a match. This is the shape of the attack the
+    /// constant-time compare exists for: guess a byte, keep it if the server takes longer.
+    #[test]
+    fn a_correct_prefix_is_still_wrong() {
+        let secret = "correct-horse-battery-staple";
+        for n in 0..secret.len() {
+            assert!(!ct_eq(&secret[..n], secret), "prefix of length {n} was accepted");
+        }
+        assert!(ct_eq(secret, secret));
+    }
+
+    /// Bytes past the shorter string are folded in rather than skipped, so a wrong length
+    /// does not exit early. Not a timing measurement — that would be flaky in CI — but it
+    /// pins the property the implementation relies on: no early return anywhere.
+    #[test]
+    fn length_mismatch_does_not_short_circuit() {
+        assert!(!ct_eq("a", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
+        assert!(!ct_eq("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "a"));
+    }
 }
