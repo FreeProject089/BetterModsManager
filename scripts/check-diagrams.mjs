@@ -36,6 +36,33 @@ if (unreachable.length) {
   console.warn('  Attach them to a docs-hub article, or drop them.');
 }
 
+// ── Icon classes: every <i class='icon-…'> in a diagram must exist in the CSS ──
+//
+// The icons are mask-image classes; an undefined one renders as NOTHING — an empty
+// <i> beside the label, no error anywhere. Audited by hand once (66 used, 66 defined,
+// zero contradictions); this keeps that true when diagram 42 invents `icon-hasing`.
+import { readdirSync } from 'node:fs';
+const DIAG = join(ROOT, 'frontend/src/docs/diagrams');
+const usedIcons = new Map();
+for (const f of readdirSync(DIAG).filter((x) => x.endsWith('.ts'))) {
+  const src = readFileSync(join(DIAG, f), 'utf8');
+  for (const m of src.matchAll(/class='(icon-[a-z0-9-]+)'/g)) {
+    if (!usedIcons.has(m[1])) usedIcons.set(m[1], f);
+  }
+}
+let cssAll = '';
+for (const f of readdirSync(join(ROOT, 'frontend/css')).filter((x) => x.endsWith('.css'))) {
+  cssAll += readFileSync(join(ROOT, 'frontend/css', f), 'utf8');
+}
+const definedIcons = new Set([...cssAll.matchAll(/\.(icon-[a-z0-9-]+)/g)].map((m) => m[1]));
+const ghostIcons = [...usedIcons].filter(([i]) => !definedIcons.has(i));
+if (ghostIcons.length) {
+  console.error(`✗ ${ghostIcons.length} diagram icon class(es) have no CSS definition:`);
+  for (const [i, f] of ghostIcons.sort()) console.error(`  ${i}  (first in ${f})`);
+  console.error('  These render as an empty <i> beside the label — an invisible icon.');
+  process.exit(1);
+}
+
 if (missing.length) {
   console.error(`✗ ${missing.length} diagram id(s) used in index.html are not registered:`);
   for (const id of missing) console.error(`  ${id}`);
