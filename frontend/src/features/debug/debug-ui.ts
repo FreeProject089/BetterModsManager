@@ -389,7 +389,13 @@ class DebugUI {
             </div>
         `;
         this.modalOverlay = modalOverlay;
-        document.body.appendChild(modalOverlay); // Append to body for full-app centering
+        // Inside #app-window-outer, NOT body. The app window is an inset rounded card with
+        // a transparent margin around it (the Tasky corner); an overlay on <body> paints
+        // its dark blur over that margin and the rounded corners — the "shadow on the
+        // outer div" bug. The outer container carries contain:paint, so mounting inside
+        // clips the overlay to the app card exactly. position:fixed still centres, since
+        // contain makes the container the containing block.
+        (document.getElementById('app-window-outer') || document.body).appendChild(modalOverlay);
 
         // Load persisted position/size
         this.loadPosition();

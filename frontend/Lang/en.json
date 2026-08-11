@@ -6888,5 +6888,7 @@
   "dev.session.byType": "By event type",
   "dev.session.starNote": "★ = the type of the largest single event",
   "dev.btn.exportDiag": "EXPORT DIAG",
-  "dev.diagExported": "Diagnostic exported"
+  "dev.diagExported": "Diagnostic exported",
+  "nav.plugins.desc": "Extend BMM: install community plugins, drive it from scripts via the local API, and manage what each plugin is allowed to do.",
+  "nav.community.desc": "News and posts from the BetterCommunity blogs, and your account link for repos and catalogs."
 }

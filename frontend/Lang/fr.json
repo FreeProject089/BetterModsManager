@@ -1737,7 +1737,7 @@
   "repo.notifDownloadStarted": "Téléchargement démarré",
   "repo.notifDownloadStartedDetail": "{creator_id} télécharge {file}",
   "repo.outputDir": "Dossier de destination (Output)",
-  "repo.outputDirHint": "💡 Vous pouvez pointer directement vers un dossier qui contient déjà un repo.json pour le servir sans regénérer.",
+  "repo.outputDirHint": "Vous pouvez pointer directement vers un dossier qui contient déjà un repo.json pour le servir sans regénérer.",
   "repo.pauseSync": "Mettre en pause",
   "repo.port": "Port",
   "repo.portLabel": "Port du serveur",
@@ -6886,5 +6886,7 @@
   "dev.session.byType": "Par type d’événement",
   "dev.session.starNote": "★ = le type du plus gros événement",
   "dev.btn.exportDiag": "EXPORT DIAG",
-  "dev.diagExported": "Diagnostic exporté"
+  "dev.diagExported": "Diagnostic exporté",
+  "nav.plugins.desc": "Étends BMM : installe des plugins communautaires, pilote-le par scripts via l'API locale, et gère ce que chaque plugin a le droit de faire.",
+  "nav.community.desc": "Les nouvelles et articles des blogs BetterCommunity, et ton lien de compte pour les dépôts et catalogues."
 }
