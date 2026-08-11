@@ -10,9 +10,8 @@
 //    displays user data — mod names, paths, a repo URL with a share key. Interpolating any
 //    of that into markup would make the debugger itself an injection sink, on data whose
 //    whole point is that it came from somewhere else.
-//  * It measures the buffer by serialising it, not by guessing from the event count. rrweb
-//    events differ by orders of magnitude in size — a full snapshot dwarfs a thousand mouse
-//    moves — so a per-event average would be wrong in exactly the case you are debugging.
+//  * It retains no event data at all. See the note on onEvent below — the first version
+//    kept a rolling sample and re-serialised it on a timer, and froze the app.
 
 import { t } from '../../core/i18n.js';
 import { getConsent, exportData } from '../../core/analytics.js';
@@ -21,19 +20,31 @@ import { isFullReplay, subscribeReplay, unsubscribeReplay, getExtraBlockSelector
 let events = 0;
 let lastEventAt: number | null = null;
 let bytes = 0;
-let buffer: any[] = [];
+let biggest = 0;
 let subscribed = false;
 let timer: number | null = null;
 
-// Bounded so the debugger cannot itself become the memory leak it is meant to reveal.
-// The count keeps climbing; only the retained sample is capped.
-const SAMPLE_CAP = 400;
-
+// NOTHING is retained.
+//
+// The first version kept the last 400 events and re-serialised the whole lot every two
+// seconds to size it. rrweb full snapshots run to megabytes each, so that held tens of MB
+// and re-stringified them on the main thread on a timer — it froze the pane and then the
+// whole app, which is precisely the failure this tab exists to reveal.
+//
+// Each event is measured once, on arrival, and discarded. Running totals only: O(1) per
+// event, no periodic work, no retention. The largest single event is tracked because that
+// is the number that actually explains a memory spike — an average over a stream mixing
+// snapshots and mouse moves explains nothing.
 const onEvent: any = (ev: any) => {
     events++;
     lastEventAt = Date.now();
-    buffer.push(ev);
-    if (buffer.length > SAMPLE_CAP) buffer.splice(0, buffer.length - SAMPLE_CAP);
+    try {
+        const n = JSON.stringify(ev).length;
+        bytes += n;
+        if (n > biggest) biggest = n;
+    } catch {
+        // A circular or exotic payload is not worth crashing the debugger over.
+    }
 };
 
 function fmtBytes(n: number): string {
@@ -57,10 +68,6 @@ function row(label: string, value: string, tone = ''): HTMLElement {
 }
 
 async function render(pane: HTMLElement) {
-    // Serialised, not estimated: a full snapshot is orders of magnitude larger than a mouse
-    // move, so an average per event would mislead precisely when the buffer is misbehaving.
-    try { bytes = new Blob([JSON.stringify(buffer)]).size; } catch { bytes = 0; }
-
     let telemetry = '[]';
     try { telemetry = await exportData(); } catch { /* keeps the pane usable offline */ }
     let telemetryCount = 0;
@@ -83,8 +90,9 @@ async function render(pane: HTMLElement) {
     wrap.append(h(t('dev.session.recorder') || 'Session recorder'));
     wrap.append(row(t('dev.session.mode') || 'Mode', isFullReplay() ? 'full replay' : 'telemetry only'));
     wrap.append(row(t('dev.session.events') || 'Events seen', String(events)));
-    wrap.append(row(t('dev.session.sample') || 'Retained sample', `${buffer.length} / ${SAMPLE_CAP}`));
-    wrap.append(row(t('dev.session.buffer') || 'Sample size', fmtBytes(bytes)));
+    wrap.append(row(t('dev.session.buffer') || 'Total captured', fmtBytes(bytes)));
+    // The one number that explains a spike. An average would not.
+    wrap.append(row(t('dev.session.biggest') || 'Largest single event', fmtBytes(biggest)));
     wrap.append(row(
         t('dev.session.last') || 'Last event',
         idle === null ? '—' : `${idle}s ago`,
@@ -121,7 +129,7 @@ export async function mountSessionPane(pane: HTMLElement) {
     }
     await render(pane);
     if (timer) window.clearInterval(timer);
-    timer = window.setInterval(() => { void render(pane); }, 2000);
+    timer = window.setInterval(() => { void render(pane); }, 5000);
 }
 
 /** Stop refreshing when the pane is hidden. The subscription stays: the counters are only
@@ -132,7 +140,7 @@ export function unmountSessionPane() {
 
 /** Drop the retained sample and the counters. */
 export function resetSessionPane() {
-    events = 0; bytes = 0; buffer = []; lastEventAt = null;
+    events = 0; bytes = 0; biggest = 0; lastEventAt = null;
 }
 
 /** Called on teardown so a closed DevTools does not keep feeding the buffer. */

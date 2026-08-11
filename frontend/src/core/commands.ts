@@ -45,7 +45,12 @@ function chordEq(a: Chord | null, b: Chord | null): boolean {
 }
 function matches(e: KeyboardEvent, c: Chord | null): boolean {
   if (!c || !c.key) return false;
-  const k = (e.key.toLowerCase() === ' ' ? 'space' : e.key.toLowerCase());
+  // `e.key` is not always there. IME composition, some autofill paths and any synthetic
+  // event dispatched without it all reach here, and the crash landed on EVERY keystroke
+  // afterwards because the listener threw before any binding could run.
+  const raw = typeof e.key === 'string' ? e.key.toLowerCase() : '';
+  if (!raw) return false;
+  const k = raw === ' ' ? 'space' : raw;
   return (e.ctrlKey || e.metaKey) === !!c.ctrl && e.shiftKey === !!c.shift && e.altKey === !!c.alt && k === c.key;
 }
 

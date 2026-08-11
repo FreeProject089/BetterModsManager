@@ -6702,7 +6702,7 @@
   "dev.session.mode": "Mode",
   "dev.session.events": "Événements vus",
   "dev.session.sample": "Échantillon conservé",
-  "dev.session.buffer": "Taille de l'échantillon",
+  "dev.session.buffer": "Total capturé",
   "dev.session.last": "Dernier événement",
   "dev.session.masked": "Sélecteurs bloqués en plus",
   "dev.session.telemetry": "Télémétrie",
@@ -6729,5 +6729,6 @@
   "repo.remoteName": "NOM DU REPO",
   "repo.remoteGame": "JEU",
   "repo.remoteNameHint": "Utilisés seulement si aucun repo.json n'existe encore — sinon ceux du manifeste sont conservés.",
-  "repo.remoteCreated": "repo.json créé — envoie-le sur ton serveur"
+  "repo.remoteCreated": "repo.json créé — envoie-le sur ton serveur",
+  "dev.session.biggest": "Plus gros événement"
 }

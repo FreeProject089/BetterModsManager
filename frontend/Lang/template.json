@@ -5062,7 +5062,7 @@
   "dev.session.mode": "Mode",
   "dev.session.events": "Events seen",
   "dev.session.sample": "Retained sample",
-  "dev.session.buffer": "Sample size",
+  "dev.session.buffer": "Total captured",
   "dev.session.last": "Last event",
   "dev.session.masked": "Extra blocked selectors",
   "dev.session.telemetry": "Telemetry",
@@ -5089,5 +5089,6 @@
   "repo.remoteName": "REPO NAME",
   "repo.remoteGame": "GAME",
   "repo.remoteNameHint": "Used only if no repo.json exists yet — otherwise the manifest's own are kept.",
-  "repo.remoteCreated": "repo.json created — upload it to your server"
+  "repo.remoteCreated": "repo.json created — upload it to your server",
+  "dev.session.biggest": "Largest single event"
 }
