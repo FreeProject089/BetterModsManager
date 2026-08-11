@@ -568,6 +568,7 @@ async function playBundle(bundle: any): Promise<void> {
   const close = () => {
     // Closing mid-export must end the capture, or the screen keeps being recorded after the
     // window that started it is gone — with nothing left on screen to stop it.
+    if (exportTimer !== null) { window.clearTimeout(exportTimer); exportTimer = null; }
     void import('../debug/video-capture.js').then((cap) => { if (cap.isCapturing()) return cap.stopCapture(); }).catch(() => {});
     try { cancelAnimationFrame(raf); window.removeEventListener('resize', onResize); rep.pause(); (rep as any).destroy?.(); } catch { /* ignore */ }
     overlay.remove();
@@ -588,6 +589,10 @@ async function playBundle(bundle: any): Promise<void> {
   // right fonts, right theme, right region cropping.
   const videoBtn = overlay.querySelector('#rw-video') as HTMLButtonElement;
   let exporting = false;
+  // Held so close() can cancel it. Without that, closing mid-export leaves a timer that
+  // fires into a dead overlay, calls stopCapture() a second time (the first already saved
+  // the file), gets null back and reports "no frames" — an error on a successful export.
+  let exportTimer: number | null = null;
   videoBtn.onclick = async () => {
     if (exporting) return;
     const cap = await import('../debug/video-capture.js');
@@ -617,7 +622,8 @@ async function playBundle(bundle: any): Promise<void> {
     playing = true;
     playBtn.textContent = '⏸';
     const tail = 400;   // let the final frame land before cutting
-    window.setTimeout(async () => {
+    exportTimer = window.setTimeout(async () => {
+      exportTimer = null;
       try {
         const r = await cap.stopCapture();
         if (!r?.path) toast(t('watcher.vempty') || 'La capture n’a produit aucune image.', 'error');
