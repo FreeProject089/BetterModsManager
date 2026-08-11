@@ -1,6 +1,8 @@
 {
   "name": "better-mods-manager",
   "version": "1.0.0",
+  "license": "GPL-3.0-or-later",
+  "author": "FreeProject089",
   "private": true,
   "type": "module",
   "scripts": {

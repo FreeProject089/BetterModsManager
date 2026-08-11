@@ -3,6 +3,12 @@ name = "better-mods-manager"
 version = "1.0.0"
 edition = "2021"
 autobins = false
+# Declared here as well as in LICENSE.md and the docs: cargo, crates.io and any tool that
+# inspects the manifest read THIS field, and its absence reads as "unlicensed" — the exact
+# opposite of what a GPL project wants to communicate.
+license = "GPL-3.0-or-later"
+authors = ["FreeProject089"]
+repository = "https://github.com/FreeProject089"
 
 [[bin]]
 name = "better-mods-manager"
