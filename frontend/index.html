@@ -2548,6 +2548,27 @@
                                             </button>
                                         </div>
                                         <span id="mod-updates-hint" style="display:block;font-size:11px;color:var(--text-muted);margin-top:6px;"></span>
+
+                                        <!-- Download password, offered UP FRONT rather than only via the 401 prompt.
+                                             The prompt still exists for the surprise case; this is for the user who
+                                             already knows the repo is protected and does not want to fetch, fail,
+                                             then type. Collapsed by default: most repos are open, and a permanent
+                                             password field teaches people that one is expected. -->
+                                        <button type="button" id="btn-sync-pass-toggle"
+                                            style="display:inline-flex;align-items:center;gap:6px;margin-top:8px;padding:0;background:none;border:none;cursor:pointer;font-size:11px;color:var(--text-muted);">
+                                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+                                                <rect x="3" y="11" width="18" height="11" rx="2"></rect>
+                                                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                                            </svg>
+                                            <span data-i18n="repo.syncPassToggle">This repo has a download password</span>
+                                        </button>
+                                        <div id="repo-sync-pass-row" style="display:none;margin-top:6px;">
+                                            <form style="display:contents" autocomplete="off" onsubmit="return false"><input
+                                                type="password" class="form-input" id="repo-sync-password"
+                                                autocomplete="new-password"
+                                                data-i18n-placeholder="repo.syncPassPlaceholder"
+                                                style="height:32px;font-size:12px;" /></form>
+                                        </div>
                                     </div>
 
                                     <div id="repo-sync-info-card"

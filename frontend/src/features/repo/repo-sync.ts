@@ -61,6 +61,19 @@ function promptRepoPassword(): Promise<string | null> {
 // already carries it), so the auto-driven fetch doesn't have to prompt the user.
 export function setRepoPassword(pw: string | null): void { lastRepoPassword = pw && pw.length ? pw : null; }
 
+/** The collapsed "this repo has a password" row under the URL field. Wired here rather
+ *  than in app.ts so everything about repo passwords lives in one file. */
+function initSyncPasswordField(): void {
+    const toggle = document.getElementById('btn-sync-pass-toggle');
+    const row = document.getElementById('repo-sync-pass-row');
+    if (!toggle || !row) return;
+    toggle.addEventListener('click', () => {
+        const open = row.style.display !== 'none';
+        row.style.display = open ? 'none' : '';
+        if (!open) (document.getElementById('repo-sync-password') as HTMLInputElement | null)?.focus();
+    });
+}
+
 // fetch_repo_info, but transparently handling a password-protected repo: on the
 // `repo.errPasswordRequired` signal from the backend, ask the user once, remember it
 // for this session, and retry. Cancelling re-throws so the caller's normal error path runs.
@@ -163,6 +176,7 @@ function _openRepoVerifyDetail(repo: any, isVerified: boolean, reason?: string):
 }
 
 export function initRepoSync(elements) {
+    initSyncPasswordField();
     // Lets the launch-time check hand this screen a repo: the toast says "N mods to
     // update", and the form behind it is already filled in for that repo and mode.
     registerRepoSyncOpener((url: string, mode: string) => {
@@ -259,7 +273,14 @@ export function initRepoSync(elements) {
 
             try {
                 btnFetchInfo.disabled = true;
-                
+
+                // A password typed up front seeds the session store the 401 retry path
+                // already uses — same variable, so the prompt never re-asks for a value
+                // the user has already given. Empty field = leave whatever the session
+                // learned earlier (a prompt answer must survive a re-fetch).
+                const typedPw = (document.getElementById('repo-sync-password') as HTMLInputElement | null)?.value?.trim();
+                if (typedPw) setRepoPassword(typedPw);
+
                 let repo = await fetchRepoInfoWithPassword(url, null);
                 let saltedCreatorId = null;
                 if (repo.seed) {

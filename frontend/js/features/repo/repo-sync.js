@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { invoke } from '../../core/api.js';
+import { registerRepoSyncOpener } from './auto-sync.js';
 import { toast, updateLibraryProfileSelector } from '../../ui/app.js';
 import { t } from '../../core/i18n.js';
 import { renderProfiles } from '../profiles/profiles.js';
@@ -65,6 +66,20 @@ function promptRepoPassword() {
 // Pre-seed the session download password (e.g. from a deeplink / API-driven sync that
 // already carries it), so the auto-driven fetch doesn't have to prompt the user.
 export function setRepoPassword(pw) { lastRepoPassword = pw && pw.length ? pw : null; }
+/** The collapsed "this repo has a password" row under the URL field. Wired here rather
+ *  than in app.ts so everything about repo passwords lives in one file. */
+function initSyncPasswordField() {
+    const toggle = document.getElementById('btn-sync-pass-toggle');
+    const row = document.getElementById('repo-sync-pass-row');
+    if (!toggle || !row)
+        return;
+    toggle.addEventListener('click', () => {
+        const open = row.style.display !== 'none';
+        row.style.display = open ? 'none' : '';
+        if (!open)
+            document.getElementById('repo-sync-password')?.focus();
+    });
+}
 // fetch_repo_info, but transparently handling a password-protected repo: on the
 // `repo.errPasswordRequired` signal from the backend, ask the user once, remember it
 // for this session, and retry. Cancelling re-throws so the caller's normal error path runs.
@@ -174,6 +189,30 @@ function _openRepoVerifyDetail(repo, isVerified, reason) {
     modal.classList.add('open');
 }
 export function initRepoSync(elements) {
+    initSyncPasswordField();
+    // Lets the launch-time check hand this screen a repo: the toast says "N mods to
+    // update", and the form behind it is already filled in for that repo and mode.
+    registerRepoSyncOpener((url, mode) => {
+        const input = document.getElementById('repo-sync-url');
+        if (input)
+            input.value = url;
+        const modeSel = document.getElementById('repo-sync-mode');
+        if (modeSel)
+            modeSel.value = mode === 'all' ? 'all' : 'missing';
+        const auto = document.getElementById('repo-sync-auto-check');
+        if (auto)
+            auto.checked = true;
+    });
+    // Persisted on change rather than on sync: a user who ticks this and never syncs still
+    // meant it, and losing the setting would look like the checkbox does nothing.
+    document.getElementById('repo-sync-auto-check')?.addEventListener('change', (e) => {
+        const on = e.target.checked;
+        const url = document.getElementById('repo-sync-url')?.value?.trim();
+        if (!url)
+            return;
+        const mode = document.getElementById('repo-sync-mode')?.value || 'missing';
+        invoke('set_repo_auto_sync', { url, enabled: on, mode }).catch((err) => toast(String(err), 'error'));
+    });
     const { inputSyncUrl, inputSyncGamePath, inputSyncModsPath, inputSyncBackupPath, btnStartSync, syncProgressContainer, syncStatus, syncPercent, syncFill, syncDetails, btnPauseSync, btnCancelSync, pauseText, pausedBadge, inputSyncDownloadLimit, btnFetchInfo, syncInfoCard, syncBadge, syncGameBadge, syncNameDisplay, syncAuthorDisplay, syncDescDisplay, btnClearFetchedRepo, profilesSelectionEl, syncPathsSection, syncUrlCard } = elements;
     const updateSyncPathsVisibility = () => {
         const sec = document.getElementById('repo-sync-paths-section');
@@ -221,6 +260,13 @@ export function initRepoSync(elements) {
                 return toast(t('repo.errNoUrl'), 'warning');
             try {
                 btnFetchInfo.disabled = true;
+                // A password typed up front seeds the session store the 401 retry path
+                // already uses — same variable, so the prompt never re-asks for a value
+                // the user has already given. Empty field = leave whatever the session
+                // learned earlier (a prompt answer must survive a re-fetch).
+                const typedPw = document.getElementById('repo-sync-password')?.value?.trim();
+                if (typedPw)
+                    setRepoPassword(typedPw);
                 let repo = await fetchRepoInfoWithPassword(url, null);
                 let saltedCreatorId = null;
                 if (repo.seed) {
@@ -614,11 +660,17 @@ export function initRepoSync(elements) {
                 const downloadLimit = parseInt(inputSyncDownloadLimit ? inputSyncDownloadLimit.value : "0") || 0;
                 // Zipped mods: keep them as .zip archives, or extract them. Default = extract.
                 const keepZipped = document.getElementById('repo-sync-keep-zipped')?.checked || false;
+                // Defaults ON, and the element may not exist in older markup — so read it as
+                // "not explicitly unticked" rather than "ticked", or a missing checkbox would
+                // silently turn the option off.
+                const addRepoSourceEl = document.getElementById('repo-sync-add-repo-source');
+                const addRepoSource = addRepoSourceEl ? addRepoSourceEl.checked : true;
                 const summary = await invoke('sync_server_repo', {
                     args: {
                         url, creatorId: finalCreatorId, gameDir, modsDir, backupDir, choices,
                         overwriteAll: syncMode === 'all', deleteExtra: cleanExtra, downloadLimit,
-                        unzipArchives: !keepZipped, password: lastRepoPassword
+                        unzipArchives: !keepZipped, password: lastRepoPassword,
+                        addRepoAsUpdateSource: addRepoSource
                     }
                 });
                 // Import modpacks if selected

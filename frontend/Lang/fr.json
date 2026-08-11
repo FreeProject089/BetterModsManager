@@ -6759,5 +6759,7 @@
   "repo.hostDownloadPasswordPlaceholder": "Vide = dépôt ouvert",
   "repo.hostDownloadPasswordHelp": "Il est demandé aux abonnés avant que quoi que ce soit ne soit servi — le manifeste compris.",
   "repo.showHide": "Afficher",
-  "tut.dockSide": "Ancrage : bas / droite / gauche"
+  "tut.dockSide": "Ancrage : bas / droite / gauche",
+  "repo.syncPassToggle": "Ce dépôt a un mot de passe de téléchargement",
+  "repo.syncPassPlaceholder": "Mot de passe de téléchargement"
 }

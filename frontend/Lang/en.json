@@ -6761,5 +6761,7 @@
   "repo.hostDownloadPasswordPlaceholder": "Leave empty for an open repo",
   "repo.hostDownloadPasswordHelp": "Subscribers are asked for it before anything is served — the manifest included.",
   "repo.showHide": "Show",
-  "tut.dockSide": "Dock: bottom / right / left"
+  "tut.dockSide": "Dock: bottom / right / left",
+  "repo.syncPassToggle": "This repo has a download password",
+  "repo.syncPassPlaceholder": "Download password"
 }
