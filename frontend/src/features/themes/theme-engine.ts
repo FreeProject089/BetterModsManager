@@ -92,14 +92,23 @@ function getOrCreate(id: string): HTMLStyleElement {
  *  channel tokens so rgba(var(--bmm-<name>-r),…) tints follow the theme.   */
 function deriveChannels(vars: Record<string, string>): Record<string, string> {
     const out: Record<string, string> = {};
-    const names = ['accent', 'cyan', 'success', 'warning', 'danger', 'purple'];
-    for (const n of names) {
+    // Alpha per name = the canonical value from tokens.css, so a derived -dim is exactly
+    // what the default theme would have used at this colour. `info` was MISSING from this
+    // list, and -dim was never derived at all: a theme that recoloured --bmm-success left
+    // success-dim on the factory green — every badge/callout tint half-updated, and the
+    // author had no way to know short of hand-writing four extra tokens per colour.
+    const names: Array<[string, number]> = [
+        ['accent', 0.18], ['cyan', 0.18], ['success', 0.15],
+        ['warning', 0.15], ['danger', 0.15], ['purple', 0.18], ['info', 0.15],
+    ];
+    for (const [n, dimAlpha] of names) {
         const hex = vars[`--bmm-${n}`];
         if (hex && /^#[0-9a-fA-F]{6}$/.test(hex.trim())) {
             const { r, g, b } = rgb(hex.trim());
             if (vars[`--bmm-${n}-r`] === undefined) out[`--bmm-${n}-r`] = String(r);
             if (vars[`--bmm-${n}-g`] === undefined) out[`--bmm-${n}-g`] = String(g);
             if (vars[`--bmm-${n}-b`] === undefined) out[`--bmm-${n}-b`] = String(b);
+            if (vars[`--bmm-${n}-dim`] === undefined) out[`--bmm-${n}-dim`] = `rgba(${r}, ${g}, ${b}, ${dimAlpha})`;
         }
     }
     return out;
