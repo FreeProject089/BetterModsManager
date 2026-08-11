@@ -314,7 +314,47 @@ function _ensurePanel(): void {
         panel.id        = 'tut-engine-panel';
         panel.className = 'tut-engine-panel';
         document.getElementById('app-window-outer')?.appendChild(panel);
+        _plantResizeHandle(panel);
     }
+}
+
+/** The dock's inner edge resizes it. Field ask: "pouvoir l'agrandir en largeur".
+ *  Pure width change: every mousemove updates the CSS var AND the shell's inline
+ *  padding (the same two writers _setDockReserved uses, so they cannot disagree),
+ *  and the result persists — how wide you want the guidance is a property of your
+ *  screen, not of the lesson. */
+function _plantResizeHandle(panel: HTMLElement): void {
+    if (panel.querySelector('.tut-dock-resize')) return;
+    const grip = document.createElement('div');
+    grip.className = 'tut-dock-resize';
+    grip.addEventListener('mousedown', (e: MouseEvent) => {
+        if (panel.classList.contains('minimized')) return;
+        e.preventDefault();
+        grip.classList.add('dragging');
+        const side = _dockSide();
+        const move = (me: MouseEvent) => {
+            const w = Math.max(320, Math.min(
+                side === 'right' ? window.innerWidth - me.clientX : me.clientX,
+                Math.round(window.innerWidth * 0.6),
+            ));
+            document.body.style.setProperty('--tut-dock-w', `${w}px`);
+            const shell = document.querySelector('.app-shell') as HTMLElement | null;
+            if (shell) {
+                shell.style.paddingRight = side === 'right' ? `${w}px` : '';
+                shell.style.paddingLeft  = side === 'left'  ? `${w}px` : '';
+            }
+        };
+        const up = () => {
+            grip.classList.remove('dragging');
+            document.removeEventListener('mousemove', move);
+            document.removeEventListener('mouseup', up);
+            const w = parseInt(getComputedStyle(document.body).getPropertyValue('--tut-dock-w'), 10);
+            if (Number.isFinite(w)) { try { localStorage.setItem('bmm.tutorial.dockW', String(w)); } catch { /* pref only */ } }
+        };
+        document.addEventListener('mousemove', move);
+        document.addEventListener('mouseup', up);
+    });
+    panel.appendChild(grip);
 }
 
 function _applyDragPosition(panel: HTMLElement): void {
@@ -1225,7 +1265,14 @@ function _setDockReserved(on: boolean): void {
     // A column, so what is reserved is a WIDTH — and a width is a layout choice, not a
     // consequence of the step's text, which simply wraps. Clamped to a third of the window
     // so it cannot eat a narrow one. The old height path is gone with the bottom dock.
-    const w = Math.min(380, Math.round(window.innerWidth * 0.34));
+    // A stored width (the drag handle below) wins; otherwise the formula. Clamped both
+    // ways: a column under 320px cuts button labels, one past 60% of the window stops
+    // being a companion and becomes the app.
+    const stored = parseInt(localStorage.getItem('bmm.tutorial.dockW') || '', 10);
+    const w = Math.max(320, Math.min(
+        Number.isFinite(stored) && stored > 0 ? stored : Math.min(420, Math.round(window.innerWidth * 0.34)),
+        Math.round(window.innerWidth * 0.6),
+    ));
     document.body.style.setProperty('--tut-dock-w', `${w}px`);
     document.body.style.removeProperty('--tut-dock-h');
     // The reservation itself is written INLINE on .app-shell, not left to a stylesheet.
@@ -1241,6 +1288,10 @@ function _setDockReserved(on: boolean): void {
     }
     const panel = document.getElementById('tut-engine-panel');
     document.body.classList.toggle('tut-min', !!panel?.classList.contains('minimized'));
+    // Re-plant after every render: _renderStep and the pill both rebuild via innerHTML,
+    // which silently deletes the grip. This runs on every step, so one call here beats
+    // remembering it at three render sites (the function no-ops when the grip exists).
+    if (panel) _plantResizeHandle(panel);
 }
 
 /** "Phantom" demo: float a ghost cursor from the coach card to the current

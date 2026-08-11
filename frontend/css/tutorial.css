@@ -428,3 +428,65 @@ body.tut-docked.tut-min.tut-dock-left .app-shell {
     0%, 60% { outline-color: var(--bmm-accent); }
     100%    { outline-color: transparent; }
 }
+
+/* ═══ Side-panel layout pass (field screenshots 5–7) ═══════════════════════════
+   What the photos showed: "Suivant" cut at the panel edge, "Montre-moi" wrapped onto
+   two lines, the chips row clipping "Se conne…", a finished screen floating tiny in a
+   huge empty column. All of it is the footer and header still living on the OLD
+   bottom-dock assumptions (one wide row, buttons sized for 100vw). A 380px column needs
+   its own rules, not the strip's leftovers. */
+
+/* Header chips: the scroller yields before the window buttons ever clip. */
+body.tut-dock-side .tut-chips-scroller { flex: 1 1 0; min-width: 0; }
+body.tut-dock-side .tut-topbar-right { flex: none; }
+
+/* Footer: two clean rows on a grid. Row 1 = progress (full width). Row 2 = the
+   buttons, which may WRAP as whole buttons — never mid-label, never cut. */
+body.tut-dock-side .tut-card-footer { display: flex; flex-direction: column; gap: 8px; }
+body.tut-dock-side .tut-footer-top { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+body.tut-dock-side .tut-footer-progress { flex: 1 1 100%; display: flex; align-items: center; gap: 8px; }
+body.tut-dock-side .tut-footer-progress-bar { flex: 1 1 auto; }
+body.tut-dock-side .tut-footer-bottom,
+body.tut-dock-side .tut-card-footer > div:last-child {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+    justify-content: flex-end;
+}
+body.tut-dock-side .tut-prev-btn { margin-right: auto; }   /* back sits apart, left */
+body.tut-dock-side .tut-next-btn,
+body.tut-dock-side .tut-prev-btn,
+body.tut-dock-side .tut-showme-btn,
+body.tut-dock-side .tut-skip-all-btn {
+    white-space: nowrap;      /* a button label NEVER breaks across lines */
+    flex: none;
+}
+body.tut-dock-side .tut-next-btn { min-width: 96px; }
+
+/* The finish screen: image 6 showed a tiny card lost in an empty column. Centre the
+   whole state vertically and let it breathe. */
+body.tut-dock-side .tut-finish-screen,
+body.tut-dock-side .tut-finish {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    flex: 1 1 auto;
+    gap: 14px;
+    padding: 24px;
+}
+
+/* The resize handle the engine plants on the dock's inner edge. */
+.tut-dock-resize {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 7px;
+    cursor: ew-resize;
+    z-index: 5;
+}
+.tut-dock-resize:hover, .tut-dock-resize.dragging { background: var(--bmm-s08); }
+body.tut-dock-right .tut-dock-resize { left: 0; }
+body.tut-dock-left  .tut-dock-resize { right: 0; }
