@@ -50,7 +50,34 @@ fn list_builtin_themes_impl(app_handle: &tauri::AppHandle, include_hidden: bool)
     }
     files.sort(); // deterministic order (filename prefixed with NN-)
 
+    // Drop-in presets: any valid theme .json in `<app data>/theme-presets/` joins the list.
+    //
+    // The bundled folder ships inside the installer, so adding a preset there means editing
+    // the app — and on Windows it usually is not writable anyway. This gives a folder that
+    // is, so a community pack is "unzip here", and the theme editor offers it like any other
+    // starting point.
+    //
+    // Appended AFTER the bundled ones and sorted separately, so a drop-in cannot reorder the
+    // built-ins someone is used to seeing first.
+    let user_dir = app_handle.path().app_data_dir().ok().map(|d| d.join("theme-presets"));
+    if let Some(ud) = &user_dir {
+        let _ = std::fs::create_dir_all(ud); // so the folder exists to drop files into
+        let mut extra: Vec<PathBuf> = Vec::new();
+        if let Ok(entries) = std::fs::read_dir(ud) {
+            for e in entries.flatten() {
+                let p = e.path();
+                match p.extension().and_then(|s| s.to_str()) {
+                    Some("json") | Some("bmmtheme") => extra.push(p),
+                    _ => {}
+                }
+            }
+        }
+        extra.sort();
+        files.extend(extra);
+    }
+
     let mut out: Vec<serde_json::Value> = Vec::new();
+    let mut seen_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
     for p in files {
         let is_zip = p.extension().and_then(|s| s.to_str()) == Some("bmmtheme");
         let raw = if is_zip {
@@ -68,6 +95,13 @@ fn list_builtin_themes_impl(app_handle: &tauri::AppHandle, include_hidden: bool)
         };
         if let Ok(mut v) = serde_json::from_str::<serde_json::Value>(&raw) {
             let id = v["id"].as_str().unwrap_or("").to_string();
+            // First file wins. Bundled presets are scanned first, so a drop-in reusing a
+            // built-in id is ignored rather than shown twice — two entries with the same id
+            // would also make "hide this preset" ambiguous, since the hidden set is keyed
+            // on id.
+            if !id.is_empty() && !seen_ids.insert(id.clone()) {
+                continue;
+            }
             let is_hidden = hidden.contains(&id);
             if is_hidden && !include_hidden { continue; } // filtered out of normal listings
             if include_hidden {
