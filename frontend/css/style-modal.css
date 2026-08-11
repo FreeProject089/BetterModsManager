@@ -1,0 +1,79 @@
+/* The Style modal — theme tiles + doors into Settings. See src/ui/style-modal.ts.
+   Tokens throughout: this screen exists to change the theme, so it is the last place a
+   fixed wash could hide (it would look right on exactly one of the things it sells). */
+
+.style-modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 100050;
+    display: grid;
+    place-items: center;
+    background: rgba(0, 0, 0, 0.55);   /* scrim: intentionally black in every theme */
+    animation: styleFadeIn 0.18s ease;
+}
+.style-modal-overlay.closing { animation: styleFadeOut 0.2s ease forwards; }
+@keyframes styleFadeIn  { from { opacity: 0; } }
+@keyframes styleFadeOut { to   { opacity: 0; } }
+
+.style-modal {
+    width: min(680px, calc(100vw - 48px));
+    max-height: min(640px, calc(100vh - 64px));
+    overflow-y: auto;
+    background: var(--bmm-bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 22px 24px;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
+}
+.style-modal-title { margin: 0 0 4px; font-size: 18px; font-weight: 800; color: var(--bmm-text-primary); }
+.style-modal-sub   { margin: 0 0 16px; font-size: 12px; color: var(--bmm-text-secondary); line-height: 1.5; }
+
+.style-modal-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+    gap: 10px;
+    margin-bottom: 18px;
+}
+
+.style-tile {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 6px;
+    background: none;
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: border-color 0.12s, transform 0.12s;
+}
+.style-tile:hover { border-color: var(--bmm-border-hover, var(--border)); transform: translateY(-1px); }
+/* The chosen one wears its OWN accent, not the app's — the ring should look like the
+   theme it marks. */
+.style-tile.on { border-color: var(--tile-accent); }
+
+/* The miniature window. Painted entirely from the theme's four colours in TS. */
+.style-tile-win {
+    position: relative;
+    display: block;
+    height: 74px;
+    border-radius: 6px;
+    overflow: hidden;
+}
+.style-tile-bar  { position: absolute; inset: 0 0 auto 0; height: 12px; }
+.style-tile-side { position: absolute; left: 0; top: 12px; bottom: 0; width: 26px; }
+.style-tile-card { position: absolute; left: 32px; right: 6px; top: 18px; bottom: 6px; border-radius: 4px; }
+.style-tile-line { position: absolute; left: 6px; top: 7px; width: 60%; height: 4px; border-radius: 2px; opacity: 0.85; }
+.style-tile-line.short { top: 16px; width: 38%; opacity: 0.35; }
+.style-tile-btn  { position: absolute; left: 6px; bottom: 6px; width: 26px; height: 9px; border-radius: 3px; }
+
+.style-tile-name {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--bmm-text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.style-tile.on .style-tile-name { color: var(--bmm-text-primary); }
+
+.style-modal-doors { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }

@@ -488,6 +488,15 @@ function registerCore() {
   refreshNavCommands();
 
   // The four legacy actions — same defaults as before (Ctrl+letter), now rebindable + in the palette.
+  registerCommand({
+    id: 'style.open', category: 'settings',
+    title: { en: 'Style your BMM…', fr: 'Style de ton BMM…' },
+    keywords: 'theme look style appearance tasky apparence thème couleur skin',
+    // Imported lazily: the palette registers at boot, and the modal is a screen most
+    // launches never open — same rule that got mermaid out of the boot path.
+    run: () => { void import('../ui/style-modal.js').then((m) => m.openStyleModal()); },
+    defaultChord: null,
+  });
   registerCommand({ id: 'profiles.new', category: 'profiles', title: { en: 'New profile', fr: 'Nouveau profil' }, keywords: 'create profile add', run: clickAfterNav('profiles', 'btn-new-profile', 50), defaultChord: { ctrl: true, key: 'n' } });
   registerCommand({ id: 'mods.add', category: 'mods', title: { en: 'Add a mod', fr: 'Ajouter un mod' }, keywords: 'import add mod install', run: clickAfterNav('library', 'btn-add-mod', 50), defaultChord: { ctrl: true, key: 'm' } });
   registerCommand({ id: 'mods.export', category: 'mods', title: { en: 'Export mod list', fr: 'Exporter la liste' }, keywords: 'export modlist save', run: clickAfterNav('modlist', 'btn-export-mm', 100), defaultChord: { ctrl: true, key: 'e' } });

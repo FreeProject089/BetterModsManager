@@ -6762,5 +6762,9 @@
   "tut.dockSide": "Ancrage : bas / droite / gauche",
   "repo.syncPassToggle": "Ce dépôt a un mot de passe de téléchargement",
   "repo.syncPassPlaceholder": "Mot de passe de téléchargement",
-  "repo.discoveredDesc": "Pas de repo.json sur ce serveur — cette liste vient de son index de dossiers. Rien ne cautionne ces fichiers : ils s'installeront comme non vérifiés."
+  "repo.discoveredDesc": "Pas de repo.json sur ce serveur — cette liste vient de son index de dossiers. Rien ne cautionne ces fichiers : ils s'installeront comme non vérifiés.",
+  "style.title": "Style de ton BMM",
+  "style.sub": "Choisis un look — il s’applique tout de suite et reste. Tout ceci existe aussi dans les Paramètres.",
+  "style.tasky": "Réglages de Tasky",
+  "style.allSettings": "Tous les paramètres BMM"
 }
