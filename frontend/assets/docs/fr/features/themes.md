@@ -2,6 +2,8 @@
 
 
 > Personnalise chaque couleur, police et élément de BMM. Partage tes thèmes en un clic.
+> Tu construis le tien ? La référence token par token est
+> **[Créer son propre thème](doc-page:features/making-themes)**.
 
 Ce n'est pas un interrupteur clair/sombre. BMM livre **douze** thèmes intégrés (sombres et
 clairs) et un éditeur capable de refaire toute l'allure de l'app — puis de l'exporter en un

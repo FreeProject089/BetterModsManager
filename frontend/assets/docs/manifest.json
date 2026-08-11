@@ -21,6 +21,7 @@
     "features/storage",
     "features/privacy-telemetry",
     "features/themes",
+    "features/making-themes",
     "how-it-works/index",
     "how-it-works/architecture",
     "how-it-works/profiles-activation",
@@ -341,10 +342,25 @@
         "fr": "Thèmes & Apparence"
       },
       "summary": {
-        "en": "Customise every colour, font and element of BMM. Share themes in one click.",
+        "en": "Customise every colour, font and element of BMM. Share themes in one click. Building your own? The full token-by-token reference is Make your own theme.",
         "fr": "Personnalise chaque couleur, police et élément de BMM. Partage tes thèmes en un clic."
       },
-      "words": 781,
+      "words": 796,
+      "diagrams": 0,
+      "fr": true
+    },
+    {
+      "path": "features/making-themes",
+      "section": "features",
+      "title": {
+        "en": "Make your own theme",
+        "fr": "Créer son propre thème"
+      },
+      "summary": {
+        "en": "Every token the editor exposes, explained — plus the theme file format and a from-zero walkthrough.",
+        "fr": "Chaque token exposé par l'éditeur, expliqué — plus le format du fichier thème et un parcours depuis zéro."
+      },
+      "words": 934,
       "diagrams": 0,
       "fr": true
     },
