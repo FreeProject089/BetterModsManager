@@ -1042,7 +1042,10 @@ class DebugUI {
         entry.className = `log-entry ${item.level}`;
         entry.innerHTML = `<span style="opacity:0.5; font-size:9px">[${new Date().toLocaleTimeString()}]</span> <span>${this.escapeHtml(item.message)}</span>`;
         logs.appendChild(entry);
-        
+        // Same cap as the timeline, same reason: the hub trims its array at 500, the
+        // DOM never trimmed at all. Console appends, so the oldest is the FIRST child.
+        while (logs.children.length > 400) logs.removeChild(logs.firstChild!);
+
         // Auto-scroll if at bottom
         if (logs.scrollHeight - logs.scrollTop - logs.clientHeight < 50) {
             logs.scrollTop = logs.scrollHeight;
@@ -1308,6 +1311,12 @@ class DebugUI {
             entry.id = `timeline-${item.id}`;
             entry.className = 'ipc-entry timeline-entry';
             pane.prepend(entry);
+            // The DOM list must be capped like the hub arrays are. It never was: the
+            // hub keeps 500 items, but every IPC call prepended a node FOREVER — and
+            // BMM talks IPC constantly (the mini-monitor alone polls every couple of
+            // seconds), so an open DevTools grew by thousands of SVG-bearing nodes an
+            // hour. That growth is the "ça mange trop vite". Oldest fall off the end.
+            while (pane.children.length > 400) pane.removeChild(pane.lastChild!);
         }
 
         const isIPC = !!item.command;
@@ -2011,6 +2020,9 @@ class DebugUI {
         try { invoke('close_devtools'); } catch { /* ignore */ }
         if (this._updateInterval) { clearInterval(this._updateInterval); this._updateInterval = null; }
         if (this.a11yInterval)    { clearInterval(this.a11yInterval);    this.a11yInterval = null; }
+        // Was missing from this list: close DevTools with the hardcoded-text audit on and
+        // its 3s interval kept scanning a dead UI forever — one of the "ça mange" leaks.
+        if (this.hardcodedInterval) { clearInterval(this.hardcodedInterval); this.hardcodedInterval = null; }
         if (this.mutationObserver) { try { this.mutationObserver.disconnect(); } catch {} this.mutationObserver = null; }
         for (const el of [this.container, this.modalOverlay, this.crashOverlay, this.highlightEl, this.tooltipEl]) {
             try { el?.remove(); } catch { /* ignore */ }
