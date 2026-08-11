@@ -182,6 +182,27 @@ mod tests {
         assert_eq!(rows[2].size, Some(2147483648));
     }
 
+    /// Captured verbatim from `.Assets/test-repo/serve_test_repo.py`, the bench used to
+    /// exercise this feature. The other fixtures in this file are hand-written, so they
+    /// only prove the parser handles what I imagined nginx emits; this one proves it
+    /// handles what the test bench actually sends, padding and column widths included.
+    #[test]
+    fn the_test_benchs_own_output_parses() {
+        const REAL: &str = "<html><head><title>Index of /mods/cool-mod/</title></head><body>\n<h1>Index of /mods/cool-mod/</h1><hr><pre><a href=\"../\">../</a>\n<a href=\"Data/\">Data/</a>                                               11-Aug-2026 05:26                   -\n<a href=\"readme.txt\">readme.txt</a>                                          11-Aug-2026 05:26                   9\n</pre><hr></body></html>";
+
+        let rows = parse_autoindex(REAL);
+        assert_eq!(rows.len(), 2, "../ must not be a row");
+
+        assert_eq!(rows[0].name, "Data");
+        assert!(rows[0].is_dir);
+
+        let f = &rows[1];
+        assert_eq!(f.name, "readme.txt");
+        assert!(!f.is_dir);
+        assert_eq!(f.size, Some(9), "the byte count must survive the padding");
+        assert!(f.mtime.is_some(), "no timestamp means every refresh re-hashes everything");
+    }
+
     #[test]
     fn a_human_readable_size_is_refused_rather_than_approximated() {
         // "1.2K" rounded to 1228 would differ from the exact byte count in the manifest and
