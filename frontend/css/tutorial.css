@@ -186,3 +186,90 @@
     background: var(--bmm-accent, #3b82f6);
     border-color: var(--bmm-accent, #3b82f6);
 }
+
+/* ── Side dock ────────────────────────────────────────────────────────────────
+   The same panel, on a vertical edge instead of the bottom one. Which edge is a
+   preference about the user's screen: guidance next to a left-hand sidebar is in the
+   way, guidance opposite it is not, and only the person looking at it knows which.
+
+   Everything here is a full-height column reserving a WIDTH, where the bottom dock is a
+   full-width strip reserving a HEIGHT. The panel markup is identical in both — the
+   engine only toggles a class on <body>. */
+
+body.tut-dock-right .tut-engine-panel,
+body.tut-dock-left  .tut-engine-panel {
+    top: 0;
+    bottom: 0;
+    width: var(--tut-dock-w, 360px);
+    /* The bottom dock's height cap must not apply, or the column would be a short box
+       floating against one edge. */
+    max-height: none;
+    min-height: 0;
+    border-radius: 0;
+    animation: none;
+}
+body.tut-dock-right .tut-engine-panel { left: auto; right: 0; border-left: 1px solid var(--border); }
+body.tut-dock-left  .tut-engine-panel { right: auto; left: 0;  border-right: 1px solid var(--border); }
+
+/* The app makes room on that side instead of underneath. !important mirrors the bottom
+   dock's rule: these fight the same inline/layout padding it does. */
+body.tut-docked.tut-dock-right #app-shell,
+body.tut-docked.tut-dock-right .app-body,
+body.tut-docked.tut-dock-right .main-content {
+    padding-bottom: 0 !important;
+    padding-right: var(--tut-dock-w, 360px) !important;
+}
+body.tut-docked.tut-dock-left #app-shell,
+body.tut-docked.tut-dock-left .app-body,
+body.tut-docked.tut-dock-left .main-content {
+    padding-bottom: 0 !important;
+    padding-left: var(--tut-dock-w, 360px) !important;
+}
+
+/* A highlighted control must not sit under the column — it would look highlighted and be
+   unclickable, which is the bottom dock's scroll-margin problem turned sideways. */
+body.tut-docked.tut-dock-right .tut-spotlight-target { scroll-margin-right: calc(var(--tut-dock-w, 360px) + 24px); }
+body.tut-docked.tut-dock-left  .tut-spotlight-target { scroll-margin-left:  calc(var(--tut-dock-w, 360px) + 24px); }
+
+/* Minimised on a side edge: a strip at the bottom of the column rather than a short
+   column, because a 46px-tall column against the edge reads as a rendering fault. */
+body.tut-dock-right .tut-engine-panel.minimized,
+body.tut-dock-left  .tut-engine-panel.minimized {
+    top: auto;
+    bottom: 0;
+    height: 46px;
+    max-height: 46px;
+    min-height: 46px;
+}
+body.tut-docked.tut-min.tut-dock-right #app-shell,
+body.tut-docked.tut-min.tut-dock-right .app-body,
+body.tut-docked.tut-min.tut-dock-right .main-content,
+body.tut-docked.tut-min.tut-dock-left #app-shell,
+body.tut-docked.tut-min.tut-dock-left .app-body,
+body.tut-docked.tut-min.tut-dock-left .main-content {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    padding-bottom: 46px !important;
+}
+
+/* Narrow windows have no room for a column beside the app; fall back to the bottom dock
+   rather than leaving a sliver of content. */
+@media (max-width: 900px) {
+    body.tut-dock-right .tut-engine-panel,
+    body.tut-dock-left  .tut-engine-panel {
+        top: auto; bottom: 0; left: 0; right: 0;
+        width: 100%;
+        max-height: var(--tut-dock-h, 200px);
+        border-radius: 16px 16px 0 0;
+    }
+    body.tut-docked.tut-dock-right #app-shell,
+    body.tut-docked.tut-dock-right .app-body,
+    body.tut-docked.tut-dock-right .main-content,
+    body.tut-docked.tut-dock-left #app-shell,
+    body.tut-docked.tut-dock-left .app-body,
+    body.tut-docked.tut-dock-left .main-content {
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+        padding-bottom: var(--tut-dock-h, 200px) !important;
+    }
+}

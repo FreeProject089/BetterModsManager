@@ -565,6 +565,9 @@ function _renderStep(): void {
             </div>
 
             <div class="tut-topbar-right">
+                <button class="tut-min-btn" id="btn-tut-side" data-tooltip="${t('tut.dockSide') || 'Dock left / right / bottom'}">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+                </button>
                 <button class="tut-min-btn" id="btn-tut-minimize" data-tooltip="${t('common.minimize')}">
                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/></svg>
                 </button>
@@ -645,6 +648,7 @@ function _renderStep(): void {
     document.getElementById('btn-tut-back-hub')?.addEventListener('click', () => { _cleanup(); closeTutorialEngine(); });
     document.getElementById('btn-tut-close')?.addEventListener('click', () => closeTutorialEngine());
     document.getElementById('btn-tut-minimize')?.addEventListener('click', () => _minimize());
+    document.getElementById('btn-tut-side')?.addEventListener('click', () => _cycleDockSide());
     document.getElementById('btn-tut-prev')?.addEventListener('click', _prevStep);
     document.getElementById('btn-tut-next')?.addEventListener('click', _nextStep);
 
@@ -1016,7 +1020,13 @@ function _drawHighlight(target: Element, idx: number = 0): void {
     if (r.width === 0 || r.height === 0) return;
 
     // Smart placement: keep the coach card off the highlighted target.
-    if (idx === 0) { _autoPlacePanel(r); _setDockReserved(true); }
+    if (idx === 0) _autoPlacePanel(r);
+    // Re-measured on EVERY step, not just the first. The card's height is driven by the
+    // step's text, and the reservation used to be taken once — so a lesson whose later
+    // steps were wordier than its first kept step 0's height, and max-height clipped
+    // them. The comment inside _setDockReserved always said it was measured; it was,
+    // once.
+    _setDockReserved(true);
 
     const cs = window.getComputedStyle(target as HTMLElement);
     const baseRadius = parseFloat(cs.borderTopLeftRadius) || 8;
@@ -1083,16 +1093,55 @@ function _autoPlacePanel(_targetRect: DOMRect): void {
 /** Reserve the dock's height on <body> so the app reflows above it instead of being
  *  covered — and give it back on teardown, otherwise every later view keeps a phantom
  *  band of padding it cannot explain. */
+/** Which edge the dock occupies. Persisted: where you want the guidance is a preference
+ *  about your screen, not about the lesson, so it should survive one ending. */
+type DockSide = 'bottom' | 'right' | 'left';
+const DOCK_KEY = 'bmm.tutorial.dockSide';
+
+function _dockSide(): DockSide {
+    const v = localStorage.getItem(DOCK_KEY);
+    return v === 'right' || v === 'left' ? v : 'bottom';
+}
+
+function _applyDockSide(): void {
+    const side = _dockSide();
+    document.body.classList.toggle('tut-dock-right', side === 'right');
+    document.body.classList.toggle('tut-dock-left', side === 'left');
+}
+
+/** bottom → right → left → bottom. Three states on one button rather than a menu: the
+ *  choice is cheap to undo by clicking again, and a menu for three options is heavier
+ *  than the decision. */
+function _cycleDockSide(): void {
+    const next: DockSide = _dockSide() === 'bottom' ? 'right' : _dockSide() === 'right' ? 'left' : 'bottom';
+    localStorage.setItem(DOCK_KEY, next);
+    _applyDockSide();
+    // The reservation is a height on the bottom edge and a width on a side, so the
+    // measurement has to be retaken, not just re-labelled.
+    _setDockReserved(true);
+}
+
 function _setDockReserved(on: boolean): void {
     document.body.classList.toggle('tut-docked', on);
     if (!on) {
-        document.body.classList.remove('tut-min');
+        document.body.classList.remove('tut-min', 'tut-dock-right', 'tut-dock-left');
         document.body.style.removeProperty('--tut-dock-h');
+        document.body.style.removeProperty('--tut-dock-w');
         return;
     }
     const panel = document.getElementById('tut-engine-panel');
     // Measured rather than assumed: the card's height depends on the step's text, and a
     // fixed number would clip long ones or leave a gap under short ones.
+    _applyDockSide();
+    if (_dockSide() !== 'bottom') {
+        // A side dock is a fixed column: its width is a layout choice, not a consequence
+        // of the text, which simply wraps. Clamped so it cannot eat a narrow window.
+        const w = Math.min(380, Math.round(window.innerWidth * 0.34));
+        document.body.style.setProperty('--tut-dock-w', `${w}px`);
+        document.body.style.removeProperty('--tut-dock-h');
+        return;
+    }
+    document.body.style.removeProperty('--tut-dock-w');
     const h = panel ? Math.min(Math.max(panel.scrollHeight, 160), Math.round(window.innerHeight * 0.42)) : 200;
     document.body.style.setProperty('--tut-dock-h', `${h}px`);
     document.body.classList.toggle('tut-min', !!panel?.classList.contains('minimized'));
