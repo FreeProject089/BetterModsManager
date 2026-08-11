@@ -197,3 +197,27 @@
 /* !important: each label carries an inline margin-bottom that would otherwise stack on
    top of the grid's row-gap, giving double spacing only where the old markup had it. */
 #repo-sync-options > .checkbox-container { margin: 0 !important; }
+
+/* ── Host: two jobs, two columns ─────────────────────────────────────────────
+   The panel's own markup says it is two groups — Publish (generate/export a repo) and
+   Serve (host it) — and its section titles have carried `grid-column:1/-1` inline since
+   they were written: a grid was PLANNED here and never applied, and the panel stacked
+   into one enormous column instead. The groups are now wrapped (every id and class
+   inside untouched) and sit side by side when the window affords it.
+
+   Each group is its own flow, so a card growing — the server status expanding, an export
+   in progress — reflows only its column, and the two never hold rows hostage for each
+   other the way one shared grid would. */
+[data-repo-panel="host"] {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(460px, 1fr));
+    gap: 18px;
+    align-items: start;
+}
+.repo-host-group {
+    min-width: 0;                     /* long URLs must wrap, not blow the column out */
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+/* Inside a group, the old inline grid-column on the titles is inert (flex ignores it). */
