@@ -5047,5 +5047,14 @@
   "repo.syncAddRepoSourceHelp": "Adds this repo to each installed mod's update sources, next to the ones its author configured. It is never removed or replaced, and re-syncing does not add it twice.",
   "repo.syncAutoCheck": "Check this repo when BMM starts",
   "repo.syncAutoCheckHelp": "On startup BMM fetches this repo and tells you if mods are new or outdated, with the sync screen already filled in. It never syncs on its own — that writes into your game folder.",
-  "repo.autoSyncPending": "mods to update"
+  "repo.autoSyncPending": "mods to update",
+  "watcher.tovideo": "Export as video",
+  "watcher.vrec": "● Recording…",
+  "watcher.vempty": "The capture produced no frames.",
+  "watcher.vsaved": "Video saved",
+  "watcher.vsavefail": "Saving the video failed.",
+  "watcher.vnoenc": "This build has no video encoder (MediaRecorder).",
+  "watcher.vnodisp": "This build cannot capture the screen (getDisplayMedia).",
+  "watcher.vcancel": "Capture cancelled.",
+  "watcher.vfail": "Could not start the capture."
 }

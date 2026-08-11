@@ -2549,7 +2549,14 @@ async function fillPage(path: string) {
 }
 
 /** Swap the article body for the full bundled page (or back). */
-async function showFullPage(path: string, btn: HTMLElement | null, hash?: string, auto = false) {
+async function showFullPage(rawPath: string, btn: HTMLElement | null, hash?: string, auto = false) {
+  // Normalised HERE rather than at each call site, because they disagreed: the automatic
+  // open passes `docsPath` with its slashes stripped, while the button passes the raw
+  // data-fullpage attribute. The identity check below then failed on the first press, so
+  // pressing "short version" re-fetched the full page instead of toggling — it only looked
+  // like the view jumped to the top, and the SECOND press worked because the first had
+  // finally stored the button's spelling of the path.
+  const path = rawPath.replace(/^\/+|\/+$/g, '');
   const article = document.querySelector('.dh-article') as HTMLElement | null;
   const body = article?.querySelector('.dh-content') as HTMLElement | null;
   if (!article || !body) return;
@@ -2559,7 +2566,10 @@ async function showFullPage(path: string, btn: HTMLElement | null, hash?: string
     if (lbl) lbl.textContent = b!.getAttribute(`data-lbl-${which}`) || lbl.textContent;
   };
 
-  if (btn && article.dataset.full === path) {          // toggle back to the short version
+  // An explicit press of the toggle always returns to the short version when a full page is
+  // on screen. Keyed on "a full page is shown" rather than on which one: the button says
+  // "short version", and it must mean it even if the paths ever drift apart again.
+  if (btn && !auto && article.dataset.full) {          // toggle back to the short version
     body.innerHTML = article.dataset.shortHtml || body.innerHTML;
     delete article.dataset.full;
     btn.classList.remove('on');
