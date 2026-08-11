@@ -755,7 +755,10 @@ export function applyTheme(theme: BmmTheme): void {
 // says something false — a reader would conclude the hub still themes a mascot.
 const MASCOT_SELECTORS = [
     '#app-mascot', '#loader-img', '#ld-logo', '#vhs-tasky-img',
-    '#settings-tasky-icon', '#tasky-mascot-img', '.bh-pow-mascot',
+    // '.bh-pow-mascot' was here and matches nothing — the BetaHub proof-of-work mascot it
+    // named is gone. Third dead entry found in these two tables; a list that names things
+    // which do not exist reads as if it themes them.
+    '#settings-tasky-icon', '#tasky-mascot-img',
     '.tut-avatar img', '.tut-min-mascot', '.tut-finish-mascot',
 ];
 function applyAssets(theme: BmmTheme): void {

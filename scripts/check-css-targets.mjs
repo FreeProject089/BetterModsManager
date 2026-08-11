@@ -47,6 +47,11 @@ function exists(id) {
 // exists under another name is worse than leaving it. Shrink this list, never grow it.
 const KNOWN_DEAD = new Set([
   'docker-doc-card', 'modal-benchmark', 'playback-controls', 'playback-time-display',
+  // theme-editor live-preview targets whose elements are gone. Same defect as
+  // .tut-hub-container: the preview silently does nothing for these labels. Left listed
+  // rather than repointed because finding the CURRENT selector for each needs the editor
+  // open, and a wrong guess previews the wrong element — which is worse than none.
+  '.card-title', '.form-label', '.progress-bar', '.tasky-speech-bubble',
 ]);
 
 const dead = [];
@@ -65,11 +70,51 @@ for (const file of files) {
   }
 }
 
+// ── Selector TABLES in code ──────────────────────────────────────────────────
+//
+// The two failures that prompted this guard were not in CSS at all: the theme editor's
+// live-preview list targeted `.tut-hub-container` and the themeable-image list targeted
+// `.tut-hub-mascot`, both of which the hub rebuild deleted. A CSS-only check would not
+// have caught either — so the two tables are read directly.
+//
+// Only these two, and only their literal single-selector entries. A general sweep of every
+// querySelector() in the codebase would be noise: most are built, scoped to a subtree, or
+// legitimately optional. These two are DECLARATIONS — a list whose whole purpose is to
+// name things that exist.
+const TABLES = [
+  ['theme-editor.ts', 'frontend/src/features/themes/theme-editor.ts', /[\s{]sel:\s*'([^',]+)'/g],
+  ['theme-engine.ts', 'frontend/src/features/themes/theme-engine.ts', /MASCOT_SELECTORS[^\]]*\]/g],
+];
+
+for (const [label, rel, re] of TABLES) {
+  // Comments stripped first. A note explaining why a selector was REMOVED quotes it, and
+  // the extraction would read the prose and re-report it — which is exactly what happened
+  // the first time, and what check-token-collisions.mjs hit before it.
+  const src = readFileSync(join(ROOT, rel), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^[ 	]*\/\/.*$/gm, '');
+  const found = label === 'theme-engine.ts'
+    ? [...(src.match(re)?.[0] ?? '').matchAll(/'([^']+)'/g)].map((m) => m[1])
+    : [...src.matchAll(re)].map((m) => m[1]);
+  for (const sel of found) {
+    // Compound and descendant selectors describe a shape, not one named element; only a
+    // bare #id or .class is a claim this check can settle.
+    const m = /^([#.])([a-zA-Z][a-zA-Z0-9_-]*)$/.exec(sel.trim());
+    if (!m) continue;
+    const [, kind, name] = m;
+    const present = kind === '#'
+      ? html.includes(`id="${name}"`) || exists(name)
+      : new RegExp(`class="[^"]*\b${name}\b`).test(html) || exists(name);
+    if (KNOWN_DEAD.has(sel.trim())) continue;
+    if (!present) dead.push([label, sel]);
+  }
+}
+
 const uniq = [...new Map(dead.map(([f, i]) => [`${f}#${i}`, [f, i]])).values()];
 if (uniq.length) {
-  console.error(`✗ ${uniq.length} CSS id selector(s) match nothing in the app:`);
+  console.error(`✗ ${uniq.length} selector(s) match nothing in the app:`);
   for (const [f, i] of uniq.sort()) console.error(`  ${basename(f).padEnd(20)} #${i}`);
   console.error('\n  These style nothing and read as if they do. Remove them, or fix the id.');
   process.exit(1);
 }
-console.log(`✓ every CSS id selector resolves (${files.length} stylesheets)`);
+console.log(`✓ every CSS id selector and declared selector resolves (${files.length} stylesheets + 2 tables)`);
