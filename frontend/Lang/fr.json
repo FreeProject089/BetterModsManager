@@ -1532,7 +1532,7 @@
   "repo.connectBtn": "Connecter",
   "repo.creatorId": "Creator ID",
   "repo.creatorIdHint": "Lié à ce PC pour toujours — immuable",
-  "repo.creatorIdFinal": "→ Permanent, non-modifiable",
+  "repo.creatorIdFinal": "Ta clé de créateur — générée sur cette machine et stockée avec les données de BMM. Elle t'identifie auprès des dépôts ; un factory reset en frappe une nouvelle.",
   "repo.creatorIdCopyTip": "Copier mon Creator ID",
   "repo.creatorIdDesc": "Dérivé cryptographiquement depuis votre CPU, carte mère, disque et registre Windows. Identifie votre PC de façon unique — impossible à modifier.",
   "repo.downloadLimit": "Limite Download (Ko/s)",

@@ -1196,6 +1196,8 @@ function _setDockReserved(on: boolean): void {
         document.body.classList.remove('tut-min', 'tut-dock-right', 'tut-dock-left', 'tut-dock-side');
         document.body.style.removeProperty('--tut-dock-h');
         document.body.style.removeProperty('--tut-dock-w');
+        const shell = document.querySelector('.app-shell') as HTMLElement | null;
+        if (shell) { shell.style.paddingRight = ''; shell.style.paddingLeft = ''; }
         return;
     }
     _applyDockSide();
@@ -1205,6 +1207,17 @@ function _setDockReserved(on: boolean): void {
     const w = Math.min(380, Math.round(window.innerWidth * 0.34));
     document.body.style.setProperty('--tut-dock-w', `${w}px`);
     document.body.style.removeProperty('--tut-dock-h');
+    // The reservation itself is written INLINE on .app-shell, not left to a stylesheet.
+    // Field screenshot: the dock overlaid the library's action bar while the CSS rule
+    // for this exact padding looked correct — #app-window-outer carries `contain: paint`,
+    // which quietly reparents fixed descendants and has already fooled one layer of this
+    // system. An inline style depends on nothing: no specificity, no class propagation,
+    // no custom-property inheritance. The stylesheet rules remain as a second layer.
+    const shell = document.querySelector('.app-shell') as HTMLElement | null;
+    if (shell) {
+        shell.style.paddingRight = _dockSide() === 'right' ? `${w}px` : '';
+        shell.style.paddingLeft  = _dockSide() === 'left'  ? `${w}px` : '';
+    }
     const panel = document.getElementById('tut-engine-panel');
     document.body.classList.toggle('tut-min', !!panel?.classList.contains('minimized'));
 }
