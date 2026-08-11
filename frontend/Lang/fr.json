@@ -6796,5 +6796,7 @@
   "tut.basics.moddetails.f.author": "Auteur - le crédit, et la façon dont les dépôts regroupent le travail par créateur. Remplis-le avant de partager.",
   "tut.basics.moddetails.f.desc": "Description - affichée partout où le mod est listé. Une ligne sur ce qu'il change évite à ton futur toi une fouille de dossiers.",
   "tut.basics.moddetails.f.tags": "Tags - les étiquettes que le filtre de la bibliothèque cherche. Tague de façon cohérente et le filtrage reste utile.",
-  "tut.basics.moddetails.f.deps": "Dépendances - les mods dont celui-ci a besoin. BMM prévient avant de l'activer sans eux, ou d'en désactiver un qu'il requiert."
+  "tut.basics.moddetails.f.deps": "Dépendances - les mods dont celui-ci a besoin. BMM prévient avant de l'activer sans eux, ou d'en désactiver un qu'il requiert.",
+  "tut.advanced.repo.f.password": "Mot de passe de téléchargement - certains dépôts sont protégés. Ouvre cette ligne et tape-le avant Fetch, sinon BMM le demandera quand le serveur l'exigera.",
+  "tut.advanced.repo.f.inspect": "Inspecter le serveur - pour une URL sans repo.json. Lit l'index de dossiers du serveur et montre ce qu'il propose, en marquant ce qu'aucun manifeste ne cautionne."
 }

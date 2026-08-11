@@ -6798,5 +6798,7 @@
   "tut.basics.moddetails.f.author": "Author - credit, and how repos group work by creator. Fill it in before sharing.",
   "tut.basics.moddetails.f.desc": "Description - shown wherever the mod is listed. A line about what it changes saves future-you a folder dive.",
   "tut.basics.moddetails.f.tags": "Tags - the labels the library's tag filter searches. Tag consistently and filtering stays useful.",
-  "tut.basics.moddetails.f.deps": "Dependencies - mods this one needs. BMM warns before activating it without them, or deactivating one it needs."
+  "tut.basics.moddetails.f.deps": "Dependencies - mods this one needs. BMM warns before activating it without them, or deactivating one it needs.",
+  "tut.advanced.repo.f.password": "Download password - some repos are protected. Open this row and type it before Fetch, or BMM will simply ask when the server does.",
+  "tut.advanced.repo.f.inspect": "Inspect the server - for a URL with no repo.json. Reads the server's folder index and shows what it offers, marking what no manifest vouches for."
 }

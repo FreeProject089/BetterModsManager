@@ -569,6 +569,10 @@ const ADVANCED: TutorialDef = {
                     nav: 'repo',
                     fields: [
                         { sel: 'repo-sync-url',         key: 'tut.advanced.repo.f.url' },
+                        // Two arrivals the lesson has to keep up with: the up-front
+                        // password row and the no-manifest inspector.
+                        { sel: 'btn-sync-pass-toggle',  key: 'tut.advanced.repo.f.password' },
+                        { sel: 'btn-discover-server',   key: 'tut.advanced.repo.f.inspect' },
                         { sel: 'repo-sync-game-path',   key: 'tut.advanced.repo.f.gamedir' },
                         { sel: 'repo-sync-mods-path',   key: 'tut.advanced.repo.f.modsdir' },
                         { sel: 'repo-sync-backup-path', key: 'tut.advanced.repo.f.backupdir' },
