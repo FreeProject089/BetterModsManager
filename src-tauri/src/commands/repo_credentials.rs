@@ -58,6 +58,12 @@ pub struct RepoCredentials {
     pub host: String,
     pub port: Option<u16>,
     pub username: String,
+    // Never read yet, and the compiler is right to say so. set_repo_credentials stores it,
+    // list_repo_credentials reports that one exists, and nothing consumes it — the SFTP /
+    // FTPS upload path this was staged for is not wired up. Kept rather than deleted
+    // because deleting it would make the two commands that DO exist pointless, but this
+    // is a half-finished feature, not a field someone forgot to use.
+    #[allow(dead_code)]
     pub password: String,
     pub transport: Transport,
     /// Directory on the server holding the mods, e.g. `/var/www/files/mods`.
@@ -141,6 +147,9 @@ pub fn list_repo_credentials() -> Vec<CredentialInfo> {
     out
 }
 
+// The reader for the above. Its only caller would be the upload path, which does not
+// exist yet — see the note on `password`.
+#[allow(dead_code)]
 pub(crate) fn get(repo_key: &str) -> Option<RepoCredentials> {
     let map = CREDS.lock().unwrap_or_else(|p| p.into_inner());
     map.get(repo_key).cloned()
