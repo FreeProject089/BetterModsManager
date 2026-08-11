@@ -931,10 +931,12 @@ function rgb(hex: string): { r: string; g: string; b: string } {
     return m ? { r: String(parseInt(m[1], 16)), g: String(parseInt(m[2], 16)), b: String(parseInt(m[3], 16)) } : { r: '59', g: '130', b: '246' };
 }
 
-/** Built-in theme presets. NOT hardcoded — loaded from the bundled
- *  `builtin-themes/` resource folder (one .json per preset) by loadBuiltinThemes().
- *  Add/remove a file there to change the set; the quick presets and the Installed
- *  list pick it up automatically. */
+/** Built-in theme presets. NOT hardcoded — loaded by loadBuiltinThemes() from two places:
+ *  the bundled `builtin-themes/` resource folder, and `<app data>/theme-presets/`, where a
+ *  user can drop their own without editing the app. Both are merged here, so the quick
+ *  presets and the Installed list pick up either automatically.
+ *
+ *  Bundled entries come first and win an id collision — see list_builtin_themes_impl. */
 export let BUILTIN_THEMES: BmmTheme[] = [];
 
 /** Load built-in presets from disk. Awaited early at boot (before the active theme
