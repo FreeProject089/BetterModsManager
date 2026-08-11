@@ -16,8 +16,12 @@ const CHECK = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" strok
 type StepId = 'lang' | 'profile' | 'mod' | 'bc';
 
 async function stepStates(): Promise<Record<StepId, boolean>> {
-    // Language: the picker sets this on first run; being past it means it was picked.
-    const lang = (() => { try { return !!localStorage.getItem('bmm_lang'); } catch { return false; } })() || true;
+    // Language: true by construction. The first-run picker blocks the app until a
+    // language is chosen, so anyone SEEING this checklist has done it — which is also
+    // why the old painting's one hardcoded tick happened to be right. Written as the
+    // constant it is, not as a localStorage probe ||'d into one (this session already
+    // buried two checks behind expressions that could not be false).
+    const lang = true;
 
     let profile = false, mod = false;
     try {
