@@ -15532,3 +15532,20 @@ h1 {
     from { transform: translateY(100%); opacity: 0; }
     to   { transform: translateY(0);    opacity: 1; }
 }
+
+/* Installed from a repo that had no checksums. Warning-coloured rather than neutral: it is
+   a missing guarantee, not a label. */
+.mod-unverified-badge {
+    margin-left: 8px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: .4px;
+    text-transform: uppercase;
+    color: var(--warning);
+    background: color-mix(in srgb, var(--warning) 14%, transparent);
+    border: 1px solid color-mix(in srgb, var(--warning) 32%, transparent);
+    vertical-align: middle;
+    cursor: help;
+}

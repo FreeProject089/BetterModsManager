@@ -2072,6 +2072,8 @@ pub async fn sync_server_repo(
     let choices = args.choices;
 
     let add_repo_source = args.add_repo_as_update_source;
+    // Mods whose manifest carried no hashes, so the install could not be checked.
+    let mut unverified_mod_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
 
     // Read once: this is sent with every file request, and a per-file disk read for an
     // unchanging value would be thousands of them on a large sync.
@@ -2223,6 +2225,13 @@ pub async fn sync_server_repo(
             let target_mod_dir = mods_path.join(&mod_subfolder_name);
             server_mod_subfolders.insert(mod_subfolder_name.clone());
             
+            // Set by the file loop when the manifest carried no hash for a file. Per mod,
+            // not per file: installing writes every file, so one unchecked file leaves the
+            // whole mod without a guarantee.
+            //
+            // Recorded by id rather than kept in scope, because the mods are CREATED in a
+            // later loop that cannot see this one.
+            let mut mod_unverified = false;
             let is_new_mod = !target_mod_dir.exists();
             if is_new_mod {
                 prof_summary.mods_added += 1;
@@ -2310,7 +2319,10 @@ pub async fn sync_server_repo(
 
                 if local_path.exists() && !args.overwrite_all {
                     if let Ok((local_hash, _)) = compute_file_hash_and_chunks(&local_path, false) {
-                        if local_hash == file.sha256_hash {
+                        // `!is_empty` guards the unverified case: with no recorded hash there
+                        // is no way to tell an up-to-date file from a stale one, so it is
+                        // re-fetched rather than assumed good.
+                        if !file.sha256_hash.trim().is_empty() && local_hash == file.sha256_hash {
                             println!("[Sync] File {} is up to date (hash matches), skipping", file.relative_path);
                             needs_download = false;
                         } else {
@@ -2443,13 +2455,26 @@ pub async fn sync_server_repo(
                     prof_summary.bytes_downloaded += file.size;
                 }
 
-                let (downloaded_hash, _) = compute_file_hash_and_chunks(&local_path, false)?;
-                if downloaded_hash != file.sha256_hash {
-                    return Err("repo.errIntegrity".to_string());
+                // A blank hash is a manifest that never had one — the discovery path builds
+                // exactly that for a server with no repo.json. There is nothing to compare
+                // against, so refusing the file would make such a repo unusable while
+                // comparing against "" would fail every single file. The download is kept and
+                // the MOD is marked, so the missing guarantee survives past this moment
+                // instead of being forgotten the second the file lands.
+                if file.sha256_hash.trim().is_empty() {
+                    mod_unverified = true;
+                } else {
+                    let (downloaded_hash, _) = compute_file_hash_and_chunks(&local_path, false)?;
+                    if downloaded_hash != file.sha256_hash {
+                        return Err("repo.errIntegrity".to_string());
+                    }
                 }
 
                 local_valid_files.insert(file.relative_path.replace("\\", "/"));
             } // End of for (f_idx, file)
+            if mod_unverified {
+                unverified_mod_ids.insert(repo_mod.id.clone());
+            }
             if let Ok(all_local) = crate::fs_utils::list_mod_files(&target_mod_dir) {
                 for rel in all_local {
                     let rel_str = rel.to_string_lossy().to_string().replace("\\", "/");
@@ -2557,6 +2582,7 @@ pub async fn sync_server_repo(
                 new_mod.dependencies = repo_mod.dependencies.clone();
                 // Update-system origin tracking: remember which repo + stable mod id
                 // this came from, so check_mod_updates can detect newer versions.
+                new_mod.unverified = unverified_mod_ids.contains(&repo_mod.id);
                 new_mod.source_repo = Some(src_repo.clone());
                 new_mod.repo_mod_id = Some(repo_mod.id.clone());
                 // Inherit the author's configured update sources (a site repo, a
@@ -2593,6 +2619,9 @@ pub async fn sync_server_repo(
                     existing.tags = new_mod.tags;
                     existing.download_links = new_mod.download_links;
                     existing.dependencies = new_mod.dependencies;
+                    // Re-synced from a repo that now has hashes: the mod earns its
+                    // verification back. The reverse also holds, which is the point.
+                    existing.unverified = new_mod.unverified;
                     existing.source_repo = new_mod.source_repo;
                     existing.repo_mod_id = new_mod.repo_mod_id;
                     // Only fill update sources when the local mod has none — never

@@ -49,6 +49,13 @@ pub struct ModEntry {
     pub author: Option<String>,
     pub description: Option<String>,
     pub dependencies: Vec<String>,
+    /// Installed from a repo that had no hash for its files.
+    ///
+    /// Persisted rather than derived, because the fact is only knowable at install time: a
+    /// later scan sees ordinary files on disk and would quietly promote them to the same
+    /// standing as mods whose bytes were actually checked.
+    #[serde(default)]
+    pub unverified: bool,
     pub enabled: bool,
     #[serde(default)]
     pub conflicts: Vec<ConflictReport>,
@@ -194,6 +201,7 @@ impl ModEntry {
             author: None,
             description: None,
             dependencies: Vec::new(),
+            unverified: false,
             enabled: false,
             conflicts: Vec::new(),
             mod_folder_path,

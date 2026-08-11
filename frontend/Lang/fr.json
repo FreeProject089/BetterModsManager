@@ -6744,5 +6744,7 @@
   "repo.discoverEmpty": "Le listing du serveur n'a produit aucun mod",
   "repo.groupPublish": "1 — Produire le repo.json (choisis une voie)",
   "repo.groupServe": "2 — Servir les fichiers",
-  "repo.badgeAlt": "ALTERNATIVE"
+  "repo.badgeAlt": "ALTERNATIVE",
+  "mods.unverified": "non vérifié",
+  "mods.unverifiedTip": "Installé depuis un repo sans checksums — BMM n'a pas pu vérifier ces fichiers."
 }
