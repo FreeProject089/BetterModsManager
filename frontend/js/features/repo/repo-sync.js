@@ -155,7 +155,12 @@ function _openRepoVerifyDetail(repo, isVerified, reason) {
         el.textContent = val || '—'; };
     set('repo-vd-name', repo.name || '—');
     set('repo-vd-author', repo.author || t('common.unknown') || 'Inconnu');
-    set('repo-vd-game', repo.game_name || '—');
+    // t() first: an OvGME-imported profile stores its game as an i18n KEY (so every
+    // language renders its own text), and a repo generated from it carries that key in
+    // game_name. Line ~845 below always did this; these two sites forgot, and the sync
+    // card showed PROF.IMPORTSOURCEOVGME raw — photographed in the field. A real game
+    // name is not a known key, and t() returns unknown inputs unchanged.
+    set('repo-vd-game', (repo.game_name && (t(repo.game_name) || repo.game_name)) || '—');
     set('repo-vd-profiles', String(totalProfs));
     set('repo-vd-mods', String(totalMods));
     set('repo-vd-desc', repo.description || '—');
@@ -321,7 +326,7 @@ export function initRepoSync(elements) {
                     ? (t('repo.discoveredDesc') || 'No repo.json on this server — this list was read from its folder index. Nothing vouches for these files: they will install as unverified.')
                     : (repo.description || "");
                 syncDescDisplay.style.color = discovered ? 'var(--warning)' : '';
-                syncGameBadge.textContent = repo.game_name;
+                syncGameBadge.textContent = repo.game_name ? (t(repo.game_name) || repo.game_name) : '';
                 if (isVerified) {
                     syncBadge.textContent = t('repo.verified');
                     syncBadge.style.background = 'rgba(46, 204, 113, 0.2)';
