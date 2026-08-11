@@ -6696,5 +6696,18 @@
   "watcher.vnoenc": "Ce build n'a pas d'encodeur vidéo (MediaRecorder).",
   "watcher.vnodisp": "Ce build ne peut pas capturer l'écran (getDisplayMedia).",
   "watcher.vcancel": "Capture annulée.",
-  "watcher.vfail": "Impossible de démarrer la capture."
+  "watcher.vfail": "Impossible de démarrer la capture.",
+  "dev.tab.session": "Session",
+  "dev.session.recorder": "Enregistreur de session",
+  "dev.session.mode": "Mode",
+  "dev.session.events": "Événements vus",
+  "dev.session.sample": "Échantillon conservé",
+  "dev.session.buffer": "Taille de l'échantillon",
+  "dev.session.last": "Dernier événement",
+  "dev.session.masked": "Sélecteurs bloqués en plus",
+  "dev.session.telemetry": "Télémétrie",
+  "dev.session.consent": "Consentement",
+  "dev.session.queued": "Événements stockés",
+  "dev.session.payload": "Taille de la charge",
+  "dev.session.exact": "Exactement ce qui serait envoyé"
 }

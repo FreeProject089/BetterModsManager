@@ -155,6 +155,7 @@ class DebugUI {
                 <div class="debug-tab" data-tab="inspect-view" data-i18n="dev.tab.inspect">Inspect</div>
                 <div class="debug-tab" data-tab="state" data-i18n="dev.tab.state">State</div>
                 <div class="debug-tab" data-tab="playground" data-i18n="dev.tab.playground">Playground</div>
+                <div class="debug-tab" data-tab="session" data-i18n="dev.tab.session">Session</div>
             </div>
             <div class="debug-content">
                 <div class="debug-pane active" id="pane-console">
@@ -337,6 +338,9 @@ class DebugUI {
                     </div>
                 </div>
                 <div class="debug-pane" id="pane-state"></div>
+                <!-- Filled on demand by session-pane.ts: subscribing to the recorder costs
+                     nothing until someone actually looks. -->
+                <div class="debug-pane" id="pane-session"></div>
                 <div class="debug-pane" id="pane-playground">
                     <div style="padding:16px">
                         <div style="margin-bottom:12px; font-size:10px; color:var(--text-muted); display:flex; justify-content:space-between">
@@ -1068,6 +1072,16 @@ class DebugUI {
         this.savePosition();
         if (tabId === 'inspect-view' && !this.selectedEl) {
             this.clearSelection();
+        }
+        if (tabId === 'session') {
+            const pane = this.container.querySelector('#pane-session');
+            if (pane) {
+                void import('./session-pane.js').then((m) => m.mountSessionPane(pane));
+            }
+        } else {
+            // Stop the 2s refresh as soon as it is off screen; the subscription stays so the
+            // counters keep meaning something when you come back.
+            void import('./session-pane.js').then((m) => m.unmountSessionPane()).catch(() => {});
         }
         if (tabId === 'debugger') {
             const activeSub = this.container.querySelector('.debug-subtab.active');
