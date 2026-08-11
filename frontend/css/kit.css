@@ -128,3 +128,37 @@
 .kit-callout-danger  .kit-callout-icon { background: var(--bmm-danger-dim); color: var(--bmm-danger); }
 .kit-callout-accent  { border-inline-start-color: var(--bmm-accent); }
 .kit-callout-accent  .kit-callout-icon { background: var(--bmm-accent-dim); color: var(--bmm-accent); }
+
+/* ── Getting-started checklist (gs-checklist.ts) ───────────────────────────────
+   Steps are BUTTONS — each one a door to where the step happens — so they wear button
+   affordances: hover, cursor, and a done state that stays readable rather than fading
+   to decoration. */
+.gs-step {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    width: 100%;
+    padding: 6px 8px;
+    background: none;
+    border: 0;
+    border-radius: 8px;
+    font-size: 13px;
+    color: var(--bmm-text-secondary);
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s;
+}
+.gs-step:hover { background: var(--bmm-bg-hover); color: var(--bmm-text-primary); }
+.gs-dot {
+    flex: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1.5px solid var(--bmm-border-hover, var(--bmm-border));
+    color: #fff;
+}
+.gs-step.done .gs-dot { background: var(--bmm-success); border-color: var(--bmm-success); }
+.gs-step.done > span:last-child { text-decoration: line-through; opacity: 0.65; }

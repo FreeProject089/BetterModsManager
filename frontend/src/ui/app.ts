@@ -960,6 +960,8 @@ async function main() {
     }
 
     // 2. Crash report UI wiring and check
+    // The getting-started checklist measures real state now (see gs-checklist.ts).
+    try { const { initSetupChecklist } = await import('./gs-checklist.js'); initSetupChecklist(); } catch { /* decorative if it fails */ }
     initCrashReportUI();
     await checkPreviousCrash();
     await waitForModalClosed('modal-crash-report');

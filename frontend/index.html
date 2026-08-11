@@ -956,32 +956,23 @@
 
                             <!-- Goal-gradient: the journey starts at 25% (language already done),
                                  not 0% — so the next steps feel "almost there", not "from scratch". -->
-                            <div class="gs-checklist" style="max-width:420px;margin:34px auto 0;text-align:left;padding:18px 20px;border-radius:16px;border:1px solid var(--bmm-border,var(--bmm-s10));background:var(--bmm-bg-elevated,var(--bmm-s03))">
+                            <div class="gs-checklist" id="gs-checklist" style="max-width:420px;margin:34px auto 0;text-align:left;padding:18px 20px;border-radius:16px;border:1px solid var(--bmm-border,var(--bmm-s10));background:var(--bmm-bg-elevated,var(--bmm-s03))">
                                 <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:4px">
-                                    <span style="font-size:14px;font-weight:800;color:var(--text-primary,#fff)" data-i18n="gs.title">You're already 25% set up</span>
-                                    <span style="font-size:12px;font-weight:700;color:var(--bmm-accent,#f97316);font-variant-numeric:tabular-nums">1 / 4</span>
+                                    <span style="font-size:14px;font-weight:800;color:var(--text-primary)" id="gs-title" data-i18n="gs.title">You're already 25% set up</span>
+                                    <span style="font-size:12px;font-weight:700;color:var(--bmm-accent);font-variant-numeric:tabular-nums" id="gs-count">1 / 4</span>
                                 </div>
-                                <div style="font-size:12px;color:var(--text-muted,#8a8a96);margin-bottom:12px" data-i18n="gs.sub">3 quick steps to a mod setup that survives anything</div>
-                                <div style="height:6px;border-radius:999px;background:var(--bmm-bg,var(--bmm-bg-base));overflow:hidden;margin-bottom:14px">
-                                    <div style="height:100%;width:25%;border-radius:999px;background:linear-gradient(90deg,#f97316,#fbbf24)"></div>
+                                <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px" data-i18n="gs.sub">3 quick steps to a mod setup that survives anything</div>
+                                <div style="height:6px;border-radius:999px;background:var(--bmm-bg-base);overflow:hidden;margin-bottom:14px">
+                                    <div id="gs-bar" style="height:100%;width:25%;border-radius:999px;background:var(--bmm-accent);transition:width 0.4s ease"></div>
                                 </div>
-                                <div style="display:flex;flex-direction:column;gap:9px;font-size:13px">
-                                    <div style="display:flex;align-items:center;gap:9px;color:var(--text-secondary,#c8c8d4)">
-                                        <span style="flex:0 0 auto;width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--bmm-success,var(--bmm-success))"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
-                                        <span style="text-decoration:line-through;opacity:.7" data-i18n="gs.s1">Pick your language</span>
-                                    </div>
-                                    <div style="display:flex;align-items:center;gap:9px;color:var(--text-primary,#fff);font-weight:600">
-                                        <span style="flex:0 0 auto;width:18px;height:18px;border-radius:50%;border:2px solid var(--bmm-accent,#f97316)"></span>
-                                        <span data-i18n="gs.s2">Create your first profile</span>
-                                    </div>
-                                    <div style="display:flex;align-items:center;gap:9px;color:var(--text-muted,#8a8a96)">
-                                        <span style="flex:0 0 auto;width:18px;height:18px;border-radius:50%;border:2px solid var(--bmm-border,rgba(255,255,255,0.18))"></span>
-                                        <span data-i18n="gs.s3">Enable your first mod</span>
-                                    </div>
-                                    <div style="display:flex;align-items:center;gap:9px;color:var(--text-muted,#8a8a96)">
-                                        <span style="flex:0 0 auto;width:18px;height:18px;border-radius:50%;border:2px solid var(--bmm-border,rgba(255,255,255,0.18))"></span>
-                                        <span data-i18n="gs.s4">Link BetterCommunity (optional)</span>
-                                    </div>
+                                <!-- Each step is a BUTTON that takes you to where the step happens; gs-checklist.ts
+                                     computes the real state (this block used to be a painting: 25% and one tick,
+                                     hardcoded, whatever you had actually done). -->
+                                <div style="display:flex;flex-direction:column;gap:6px;font-size:13px">
+                                    <button type="button" class="gs-step" data-gs="lang"><span class="gs-dot"></span><span data-i18n="gs.s1">Pick your language</span></button>
+                                    <button type="button" class="gs-step" data-gs="profile"><span class="gs-dot"></span><span data-i18n="gs.s2">Create your first profile</span></button>
+                                    <button type="button" class="gs-step" data-gs="mod"><span class="gs-dot"></span><span data-i18n="gs.s3">Enable your first mod</span></button>
+                                    <button type="button" class="gs-step" data-gs="bc"><span class="gs-dot"></span><span data-i18n="gs.s4">Link BetterCommunity (optional)</span></button>
                                 </div>
                             </div>
 
