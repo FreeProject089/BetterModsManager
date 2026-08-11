@@ -230,3 +230,171 @@ mod tests {
         }
     }
 }
+
+// ---------------------------------------------------------------------------
+// Crawling
+// ---------------------------------------------------------------------------
+
+/// How deep a mod's own folder tree may go before the crawl gives up.
+///
+/// A bound rather than trust: an autoindex can link into itself (a symlink loop on the
+/// server, or a proxy that answers every path with the same page), and an unbounded crawl
+/// would spin until the app is killed. Mod trees are shallow; 8 is far past anything real.
+const MAX_DEPTH: usize = 8;
+
+/// Every file under `base_url`, walking one level of mod folders and their subtrees.
+///
+/// `base_url` is the directory that CONTAINS the mod folders — the same directory
+/// `files_layout` resolves against.
+pub async fn crawl(base_url: &str, client: &reqwest::Client) -> Result<Vec<RemoteEntry>, String> {
+    let root = format!("{}/", base_url.trim_end_matches('/'));
+    let top = fetch_rows(&root, client).await?;
+
+    let mut out = Vec::new();
+    for dir in top.iter().filter(|r| r.is_dir) {
+        let mod_url = format!("{}{}/", root, encode_segment(&dir.name));
+        walk_into(&mod_url, &dir.name, "", 0, client, &mut out).await?;
+    }
+    if out.is_empty() {
+        return Err(format!(
+            "No files found under {root} — is directory listing (autoindex) enabled?"
+        ));
+    }
+    Ok(out)
+}
+
+/// Recursion is written as an explicit stack: an `async fn` that awaits itself needs boxing,
+/// and the boxed future is easy to get subtly wrong for no gain at this depth.
+async fn walk_into(
+    url: &str,
+    mod_dir: &str,
+    prefix: &str,
+    depth: usize,
+    client: &reqwest::Client,
+    out: &mut Vec<RemoteEntry>,
+) -> Result<(), String> {
+    let mut stack = vec![(url.to_string(), prefix.to_string(), depth)];
+    while let Some((u, p, d)) = stack.pop() {
+        if d > MAX_DEPTH {
+            continue;
+        }
+        let rows = fetch_rows(&u, client).await?;
+        out.extend(rows_to_entries(mod_dir, &rows, &p));
+        for sub in rows.iter().filter(|r| r.is_dir) {
+            let child_prefix = if p.is_empty() {
+                sub.name.clone()
+            } else {
+                format!("{}/{}", p.trim_matches('/'), sub.name)
+            };
+            stack.push((format!("{}{}/", u, encode_segment(&sub.name)), child_prefix, d + 1));
+        }
+    }
+    Ok(())
+}
+
+/// Percent-encode one path segment. The listing gives decoded names, and a name with a
+/// space or a `#` would otherwise build a URL that fetches the wrong thing — or nothing.
+fn encode_segment(name: &str) -> String {
+    percent_encoding::utf8_percent_encode(name, percent_encoding::NON_ALPHANUMERIC)
+        .to_string()
+        // These are legal in a path segment and encoding them makes URLs needlessly ugly.
+        .replace("%2D", "-").replace("%5F", "_").replace("%2E", ".").replace("%7E", "~")
+}
+
+async fn fetch_rows(url: &str, client: &reqwest::Client) -> Result<Vec<IndexRow>, String> {
+    let resp = client.get(url).send().await.map_err(|e| format!("{url}: {e}"))?;
+    if !resp.status().is_success() {
+        return Err(format!("{url}: HTTP {}", resp.status()));
+    }
+    let body = resp.text().await.map_err(|e| format!("{url}: {e}"))?;
+    Ok(parse_autoindex(&body))
+}
+
+#[cfg(test)]
+mod crawl_tests {
+    use super::*;
+
+    #[test]
+    fn a_segment_is_encoded_for_the_url_but_stays_readable() {
+        assert_eq!(encode_segment("big file.pak"), "big%20file.pak");
+        assert_eq!(encode_segment("cool-mod_v2.1"), "cool-mod_v2.1");
+        // `#` would truncate the URL at a fragment and fetch the directory instead.
+        assert_eq!(encode_segment("a#b"), "a%23b");
+    }
+}
+
+// ---------------------------------------------------------------------------
+// The read-only command
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemotePlanReport {
+    pub summary: String,
+    pub to_hash: Vec<String>,
+    pub reused: usize,
+    pub removed: Vec<String>,
+    /// Present when nothing could be reused, naming why.
+    pub full_rehash: Option<String>,
+    pub warnings: Vec<String>,
+    /// Bytes that would have to be downloaded to complete the refresh.
+    pub download_bytes: u64,
+}
+
+/// Look at a server and report what refreshing its manifest would involve.
+///
+/// Reads only: it fetches listings, never files, and writes nothing. Separated from the
+/// refresh itself on purpose — the first thing an author wants to know is "how much will
+/// this cost and what did it notice", and answering that must not commit them to anything.
+#[tauri::command]
+pub async fn plan_remote_repo_refresh(
+    handle: tauri::AppHandle,
+    base_url: String,
+    manifest_path: String,
+    force_full: bool,
+) -> Result<RemotePlanReport, String> {
+    use crate::commands::repo_remote::{plan_refresh, FullRehash};
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|e| e.to_string())?;
+    let listing = crawl(base_url.trim(), &client).await?;
+
+    // Read from disk rather than over HTTP: this is the author's own copy, the one they
+    // signed. Fetching the server's would ask the server to vouch for itself.
+    let previous: Option<crate::models::repo::ServerRepo> = std::fs::read_to_string(&manifest_path)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok());
+
+    // Our own creator id. Without it every manifest reads as "not ours" and the planner
+    // re-hashes the whole repo every single time — the exact cost this feature exists to
+    // avoid, and it would have looked like the planner simply never reused anything.
+    let mine = crate::commands::security::get_creator_id(handle).ok();
+    let plan = plan_refresh(
+        &listing,
+        previous.as_ref(),
+        mine.as_deref(),
+        force_full,
+        |r| crate::commands::security::verify_repo_signature(r.clone()),
+    );
+
+    let sizes: std::collections::HashMap<&str, u64> =
+        listing.iter().map(|e| (e.rel_path.as_str(), e.size)).collect();
+    let download_bytes = plan.fetch.iter().filter_map(|p| sizes.get(p.as_str())).sum();
+
+    Ok(RemotePlanReport {
+        summary: plan.summary(),
+        reused: plan.carry_forward.len(),
+        to_hash: plan.fetch,
+        removed: plan.removed,
+        full_rehash: plan.full_rehash.map(|r| match r {
+            FullRehash::NoPreviousManifest => "no previous manifest".into(),
+            FullRehash::Unsigned => "the previous manifest is unsigned".into(),
+            FullRehash::NotOurs => "the previous manifest was not signed by this machine".into(),
+            FullRehash::Requested => "a full re-hash was requested".into(),
+        }),
+        warnings: plan.warnings,
+        download_bytes,
+    })
+}

@@ -577,6 +577,7 @@ fn main() {
             commands::repo::export_server_repo,
             commands::repo::generate_repo_manifest,
             commands::repo::get_auto_sync_repos,
+            commands::repo_autoindex::plan_remote_repo_refresh,
             commands::repo_credentials::set_repo_credentials,
             commands::repo_credentials::forget_repo_credentials,
             commands::repo_credentials::list_repo_credentials,
