@@ -45,7 +45,8 @@
     "--bmm-accent-g": "97",
     "--bmm-accent-b": "63",
     "--bmm-accent-glow": "0 0 18px rgba(200,97,63,0.28)",
-    "--bmm-text-on-accent": "#0f1115"
+    "--bmm-text-on-accent": "#0f1115",
+    "--bmm-btn-primary-text": "#12141a"
   },
   "global_css": "body{background:linear-gradient(180deg,#f4f1e8 0%, #efeadf 100%) !important;background-attachment:fixed}\n.glass-card,.modpack-card,.profile-card{transition:transform .16s ease, box-shadow .16s ease, border-color .16s ease}\n.glass-card:hover,.modpack-card:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(120,80,40,0.1);border-color:rgba(200,97,63,0.3)}\n.btn-primary{background:linear-gradient(180deg,#d27a4f 0%, #c8613f 100%);border:none;color:#fff;font-weight:600;border-radius:999px;box-shadow:0 2px 8px rgba(200,97,63,0.3)}\n.btn:not(.btn-primary),.pill,.tag{border-radius:999px}\nh1,h2,h3,.card-title{letter-spacing:-.015em}"
 }

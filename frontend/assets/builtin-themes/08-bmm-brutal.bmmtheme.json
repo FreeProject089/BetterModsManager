@@ -58,7 +58,8 @@
     "--bmm-accent-g": "89",
     "--bmm-accent-b": "12",
     "--bmm-accent-glow": "0 0 0 transparent",
-    "--bmm-text-on-accent": "#0f1115"
+    "--bmm-text-on-accent": "#0f1115",
+    "--bmm-btn-primary-text": "#12141a"
   },
   "global_css": ".glass-card,.modpack-card,.profile-card{box-shadow:4px 4px 0 var(--bmm-border);transition:transform .12s ease, box-shadow .12s ease}\n.glass-card:hover,.modpack-card:hover{transform:translate(-2px,-2px);box-shadow:6px 6px 0 var(--bmm-border)}\n.btn-primary{font-weight:800;box-shadow:3px 3px 0 var(--bmm-border)}\n.btn-primary:hover{transform:translate(-1px,-1px);box-shadow:4px 4px 0 var(--bmm-border)}\nh1,h2,h3,.card-title{font-weight:900;letter-spacing:-.01em}"
 }

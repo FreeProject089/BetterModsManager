@@ -45,6 +45,7 @@
     "--bmm-accent-g": "80",
     "--bmm-accent-b": "124",
     "--bmm-accent-glow": "0 0 20px rgba(219,80,124,0.30)",
-    "--bmm-text-on-accent": "#0f1115"
+    "--bmm-text-on-accent": "#0f1115",
+    "--bmm-btn-primary-text": "#12141a"
   }
 }
