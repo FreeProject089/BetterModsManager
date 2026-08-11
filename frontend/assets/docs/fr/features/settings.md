@@ -11,6 +11,11 @@ par section pour que rien ne reste un mystère.
 
 ### Thèmes & Apparence
 
+Les encadrés d'explication à travers l'app — les astuces colorées — peuvent être masqués
+partout d'un coup avec **Afficher les astuces** dans la carte Tasky, une fois que tu
+connais le chemin. Les avertissements sont exempts par conception : masquer les astuces ne
+masque jamais rien de porteur.
+
 > Personnalise chaque couleur, police et élément de BMM. Partage tes thèmes en un clic.
 
 Ce n'est pas un interrupteur clair/sombre — c'est un éditeur de thèmes. Tu peux remplacer les

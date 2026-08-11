@@ -179,7 +179,7 @@
         "en": "A Server Repo is a shared, versioned collection of mods. Two things flow through it: you sync mods from a repo into a profile, and BMM uses the repo to tell…",
         "fr": "Un Dépôt Serveur est une collection de mods partagée et versionnée. Deux flux le traversent : tu synchronises des mods depuis un dépôt vers un profil, et BMM…"
       },
-      "words": 1124,
+      "words": 1199,
       "diagrams": 1,
       "fr": true
     },
@@ -269,7 +269,7 @@
         "en": "Settings is a long page, but most of it you set once and forget. This tour starts with the handful that change how BMM feels, then walks the rest section by…",
         "fr": "Les Paramètres forment une longue page, mais la plupart se règlent une fois pour toutes."
       },
-      "words": 1354,
+      "words": 1392,
       "diagrams": 0,
       "fr": true
     },

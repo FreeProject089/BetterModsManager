@@ -28,6 +28,13 @@ marqués du nom du dépôt.
 
 ## Synchroniser les mods d'un dépôt
 
+Un dépôt protégé demande son **mot de passe de téléchargement** une fois — et si tu sais
+déjà que le dépôt est protégé, ouvre la ligne *« Ce dépôt a un mot de passe de
+téléchargement »* sous le champ URL et tape-le avant Fetch, au lieu de récupérer, échouer,
+puis taper. Un serveur **sans `repo.json`** fonctionne aussi : Fetch lit son index de
+dossiers à la place, et chaque mod trouvé s'installe marqué *non vérifié*, la carte le
+disant en toutes lettres.
+
 La synchro tire les mods du dépôt sur ta machine et dans un profil. BMM fait une
 **synchro delta** : il compare ce que le dépôt a avec ce que tu as déjà et ne télécharge **que
 les fichiers modifiés** — mettre à jour un dépôt de 5 Go après un petit patch coûte quelques

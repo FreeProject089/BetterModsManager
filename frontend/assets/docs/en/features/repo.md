@@ -27,6 +27,12 @@ repo's name.
 
 ## Syncing mods from a repo
 
+A protected repo asks for its **download password** once — and if you already know the
+repo is protected, open the *"This repo has a download password"* row under the URL field
+and type it before Fetch, instead of fetching, failing, and typing. A server with **no
+`repo.json` at all** still works: Fetch reads its folder index instead, and every mod it
+finds installs marked *unverified*, with the card saying so in as many words.
+
 Syncing pulls the repo's mods onto your machine and into a profile. BMM does a **delta-sync**:
 it compares what the repo has against what you already have and downloads **only the changed
 files**, so updating a 5 GB repo after a small patch costs a few megabytes, not five gigs. A

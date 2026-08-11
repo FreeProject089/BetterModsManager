@@ -11,6 +11,10 @@ mystery.
 
 ### Themes & Appearance
 
+The explanation boxes across the app — the coloured callout tips — can be hidden app-wide
+with **Show tips** in the Tasky card, once you know your way around. Warnings are exempt by
+design: hiding tips never hides anything load-bearing.
+
 > Customise every colour, font and element of BMM. Share themes in one click.
 
 Not a light/dark toggle — a theme editor. You can replace BMM's built-in images (logo,
