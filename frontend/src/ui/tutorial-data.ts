@@ -1067,7 +1067,50 @@ const OTHER: TutorialDef = {
 // ── Registry ─────────────────────────────────────────────────────────────────
 
 /** All available tutorials — add new ones here. */
-export const TUTORIALS: TutorialDef[] = [BASICS, ADVANCED, OTHER];
+// ── Tutorial: The five-minute tour ───────────────────────────────────────────
+//
+// The short one the long ones cannot replace. "Basics" teaches modding properly over 38
+// steps; this answers a different question — "what IS this app" — in ten, one stop per
+// big idea, never opening a modal and never asking for an action. Someone who finishes
+// it knows where everything lives; the long tutorials are for learning to use it.
+//
+// Every selector below is individually verified against index.html (and the guard keeps
+// that true). Stops stick to what is visible on each view's default tab, so no step
+// highlights something a previous action was supposed to reveal.
+
+const QUICK: TutorialDef = {
+    id: 'quick',
+    title_key: 'tut.quick.meta.title',
+    desc_key:  'tut.quick.meta.desc',
+    icon: ICON.rocket,
+    color: 'var(--bmm-success, #22c55e)',
+    parts: [
+        {
+            id: 'tour',
+            title_key: 'tut.quick.tour.title',
+            steps: [
+                { id: 's1', title_key: 'tut.quick.tour.s1.title', text_key: 'tut.quick.tour.s1.text', nav: 'library' },
+                { id: 's2', title_key: 'tut.quick.tour.s2.title', text_key: 'tut.quick.tour.s2.text', nav: 'library', selector: 'btn-add-mod' },
+                { id: 's3', title_key: 'tut.quick.tour.s3.title', text_key: 'tut.quick.tour.s3.text', nav: 'library', selector: 'btn-verify-integrity' },
+                { id: 's4', title_key: 'tut.quick.tour.s4.title', text_key: 'tut.quick.tour.s4.text', nav: 'profiles', selector: 'btn-new-profile' },
+                { id: 's5', title_key: 'tut.quick.tour.s5.title', text_key: 'tut.quick.tour.s5.text', nav: 'modpacks' },
+                { id: 's6', title_key: 'tut.quick.tour.s6.title', text_key: 'tut.quick.tour.s6.text', nav: 'mapper' },
+            ],
+        },
+        {
+            id: 'connect',
+            title_key: 'tut.quick.connect.title',
+            steps: [
+                { id: 's1', title_key: 'tut.quick.connect.s1.title', text_key: 'tut.quick.connect.s1.text', nav: 'repo', selector: 'repo-sync-url' },
+                { id: 's2', title_key: 'tut.quick.connect.s2.title', text_key: 'tut.quick.connect.s2.text', nav: 'repo', selector: 'btn-fetch-repo-info' },
+                { id: 's3', title_key: 'tut.quick.connect.s3.title', text_key: 'tut.quick.connect.s3.text', nav: 'settings' },
+                { id: 's4', title_key: 'tut.quick.connect.s4.title', text_key: 'tut.quick.connect.s4.text', nav: 'docs' },
+            ],
+        },
+    ],
+};
+
+export const TUTORIALS: TutorialDef[] = [QUICK, BASICS, ADVANCED, OTHER];
 
 /** Get all step keys for a tutorial (used for completion counting). */
 export function getAllStepKeys(tutorial: TutorialDef): string[] {
