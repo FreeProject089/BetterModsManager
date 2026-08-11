@@ -6792,5 +6792,11 @@
   "tut.quick.connect.s3.title": "Settings - and the look",
   "tut.quick.connect.s3.text": "Language, backups, Tasky the mascot, performance, themes - all here. Tip: press Ctrl+K anywhere and type what you want ('style', 'export', 'verify'...) - the command palette reaches almost everything faster than any menu.",
   "tut.quick.connect.s4.title": "When in doubt: Help & Other",
-  "tut.quick.connect.s4.text": "The full documentation lives in the app - how syncing verifies files, what the Mapper actually does, 41 interactive diagrams. That's the tour! The other tutorials in the hub go deeper on each stop, whenever you want them."
+  "tut.quick.connect.s4.text": "The full documentation lives in the app - how syncing verifies files, what the Mapper actually does, 41 interactive diagrams. That's the tour! The other tutorials in the hub go deeper on each stop, whenever you want them.",
+  "tut.basics.moddetails.f.name": "Name - what the mod is called everywhere in BMM. Fix it here when a download came in as 'final_v2_REAL'.",
+  "tut.basics.moddetails.f.version": "Version - used by update checks to tell 'newer' from 'same'. Keep it honest and updates stay meaningful.",
+  "tut.basics.moddetails.f.author": "Author - credit, and how repos group work by creator. Fill it in before sharing.",
+  "tut.basics.moddetails.f.desc": "Description - shown wherever the mod is listed. A line about what it changes saves future-you a folder dive.",
+  "tut.basics.moddetails.f.tags": "Tags - the labels the library's tag filter searches. Tag consistently and filtering stays useful.",
+  "tut.basics.moddetails.f.deps": "Dependencies - mods this one needs. BMM warns before activating it without them, or deactivating one it needs."
 }

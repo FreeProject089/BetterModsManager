@@ -222,8 +222,17 @@ const BASICS: TutorialDef = {
                     title_key: 'tut.basics.moddetails.s3.title',
                     text_key:  'tut.basics.moddetails.s3.text',
                     nav: 'library',
+                    // Every field the screen actually shows. This step used to explain
+                    // ONE (Save) while the panel displays seven — the "FIELDS ON THIS
+                    // SCREEN: 1" box under a form full of inputs was the visible symptom.
                     fields: [
-                        { sel: 'btn-save-detail', key: 'tut.basics.moddetails.f.edit' },
+                        { sel: 'detail-name',      key: 'tut.basics.moddetails.f.name' },
+                        { sel: 'detail-version',   key: 'tut.basics.moddetails.f.version' },
+                        { sel: 'detail-author',    key: 'tut.basics.moddetails.f.author' },
+                        { sel: 'detail-desc',      key: 'tut.basics.moddetails.f.desc' },
+                        { sel: 'detail-tag-select', key: 'tut.basics.moddetails.f.tags' },
+                        { sel: 'detail-dep-input', key: 'tut.basics.moddetails.f.deps' },
+                        { sel: 'btn-save-detail',  key: 'tut.basics.moddetails.f.edit' },
                     ],
                 },
                 {

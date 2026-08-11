@@ -74,6 +74,13 @@ for (const block of data.matchAll(/\bselectors:\s*\[([^\]]*)\]/g)) {
 for (const m of data.matchAll(/\b(?:title|text|desc)_key:\s*'([^']+)'/g)) {
   if (!(m[1] in en)) missingKey.push(m[1]);
 }
+// Field-explanation keys too ({ sel: …, key: 'tut.…' }). These were unchecked, and it
+// showed: a step could name six field keys, none translated, and this guard stayed green
+// while the "fields on this screen" box rendered raw key names. Anchored on the tut.
+// prefix so unrelated `key:` properties cannot false-positive.
+for (const m of data.matchAll(/\bkey:\s*'(tut\.[^']+)'/g)) {
+  if (!(m[1] in en)) missingKey.push(m[1]);
+}
 
 // ── reachability: selectors that live inside a modal ─────────────────────────
 //

@@ -6790,5 +6790,11 @@
   "tut.quick.connect.s3.title": "Les Paramètres - et le look",
   "tut.quick.connect.s3.text": "Langue, sauvegardes, la mascotte Tasky, performances, thèmes - tout est ici. Astuce : Ctrl+K n'importe où, tape ce que tu veux (« style », « export », « vérifier »...) - la palette atteint presque tout plus vite que n'importe quel menu.",
   "tut.quick.connect.s4.title": "En cas de doute : Help & Other",
-  "tut.quick.connect.s4.text": "La documentation complète vit dans l'app - comment la synchro vérifie les fichiers, ce que fait vraiment le Mapper, 41 diagrammes interactifs. C'est la fin du tour ! Les autres tutoriels du hub creusent chaque arrêt, quand tu veux."
+  "tut.quick.connect.s4.text": "La documentation complète vit dans l'app - comment la synchro vérifie les fichiers, ce que fait vraiment le Mapper, 41 diagrammes interactifs. C'est la fin du tour ! Les autres tutoriels du hub creusent chaque arrêt, quand tu veux.",
+  "tut.basics.moddetails.f.name": "Nom - comment le mod s'appelle partout dans BMM. Corrige-le ici quand un téléchargement est arrivé en « final_v2_VRAI ».",
+  "tut.basics.moddetails.f.version": "Version - ce que la vérification de mises à jour compare pour distinguer « plus récent » de « pareil ». Garde-la honnête et les mises à jour restent fiables.",
+  "tut.basics.moddetails.f.author": "Auteur - le crédit, et la façon dont les dépôts regroupent le travail par créateur. Remplis-le avant de partager.",
+  "tut.basics.moddetails.f.desc": "Description - affichée partout où le mod est listé. Une ligne sur ce qu'il change évite à ton futur toi une fouille de dossiers.",
+  "tut.basics.moddetails.f.tags": "Tags - les étiquettes que le filtre de la bibliothèque cherche. Tague de façon cohérente et le filtrage reste utile.",
+  "tut.basics.moddetails.f.deps": "Dépendances - les mods dont celui-ci a besoin. BMM prévient avant de l'activer sans eux, ou d'en désactiver un qu'il requiert."
 }
