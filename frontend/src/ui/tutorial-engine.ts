@@ -1095,25 +1095,31 @@ function _autoPlacePanel(_targetRect: DOMRect): void {
  *  band of padding it cannot explain. */
 /** Which edge the dock occupies. Persisted: where you want the guidance is a preference
  *  about your screen, not about the lesson, so it should survive one ending. */
-type DockSide = 'bottom' | 'right' | 'left';
+type DockSide = 'right' | 'left';
 const DOCK_KEY = 'bmm.tutorial.dockSide';
 
+/** Right by default, and there is no bottom any more.
+ *
+ * A full-width strip along the bottom edge cost the app a band of height on every screen
+ * and left the guidance far from whatever it was pointing at — it read as a broken layout
+ * rather than as a panel. A column beside the app is the shape that works: it takes width
+ * the window has to spare, and it sits next to the thing being explained. */
 function _dockSide(): DockSide {
-    const v = localStorage.getItem(DOCK_KEY);
-    return v === 'right' || v === 'left' ? v : 'bottom';
+    return localStorage.getItem(DOCK_KEY) === 'left' ? 'left' : 'right';
 }
 
 function _applyDockSide(): void {
     const side = _dockSide();
     document.body.classList.toggle('tut-dock-right', side === 'right');
     document.body.classList.toggle('tut-dock-left', side === 'left');
+    // Always one or the other now, so the bottom-dock rules never apply.
+    document.body.classList.add('tut-dock-side');
 }
 
-/** bottom → right → left → bottom. Three states on one button rather than a menu: the
- *  choice is cheap to undo by clicking again, and a menu for three options is heavier
- *  than the decision. */
+/** Right ⇄ left. One button, two states: which side of the window you want the guidance
+ *  on is a preference about your screen, and it is cheap to undo by clicking again. */
 function _cycleDockSide(): void {
-    const next: DockSide = _dockSide() === 'bottom' ? 'right' : _dockSide() === 'right' ? 'left' : 'bottom';
+    const next: DockSide = _dockSide() === 'right' ? 'left' : 'right';
     localStorage.setItem(DOCK_KEY, next);
     _applyDockSide();
     // The reservation is a height on the bottom edge and a width on a side, so the
@@ -1124,26 +1130,19 @@ function _cycleDockSide(): void {
 function _setDockReserved(on: boolean): void {
     document.body.classList.toggle('tut-docked', on);
     if (!on) {
-        document.body.classList.remove('tut-min', 'tut-dock-right', 'tut-dock-left');
+        document.body.classList.remove('tut-min', 'tut-dock-right', 'tut-dock-left', 'tut-dock-side');
         document.body.style.removeProperty('--tut-dock-h');
         document.body.style.removeProperty('--tut-dock-w');
         return;
     }
-    const panel = document.getElementById('tut-engine-panel');
-    // Measured rather than assumed: the card's height depends on the step's text, and a
-    // fixed number would clip long ones or leave a gap under short ones.
     _applyDockSide();
-    if (_dockSide() !== 'bottom') {
-        // A side dock is a fixed column: its width is a layout choice, not a consequence
-        // of the text, which simply wraps. Clamped so it cannot eat a narrow window.
-        const w = Math.min(380, Math.round(window.innerWidth * 0.34));
-        document.body.style.setProperty('--tut-dock-w', `${w}px`);
-        document.body.style.removeProperty('--tut-dock-h');
-        return;
-    }
-    document.body.style.removeProperty('--tut-dock-w');
-    const h = panel ? Math.min(Math.max(panel.scrollHeight, 160), Math.round(window.innerHeight * 0.42)) : 200;
-    document.body.style.setProperty('--tut-dock-h', `${h}px`);
+    // A column, so what is reserved is a WIDTH — and a width is a layout choice, not a
+    // consequence of the step's text, which simply wraps. Clamped to a third of the window
+    // so it cannot eat a narrow one. The old height path is gone with the bottom dock.
+    const w = Math.min(380, Math.round(window.innerWidth * 0.34));
+    document.body.style.setProperty('--tut-dock-w', `${w}px`);
+    document.body.style.removeProperty('--tut-dock-h');
+    const panel = document.getElementById('tut-engine-panel');
     document.body.classList.toggle('tut-min', !!panel?.classList.contains('minimized'));
 }
 
