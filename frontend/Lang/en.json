@@ -6876,5 +6876,8 @@
   "settings.debugUnlocked": "Debug mode unlocked",
   "settings.debugHidden": "Debug section hidden",
   "privacy.accept": "I have read the policy",
-  "tut.fieldGo": "Show me this field"
+  "tut.fieldGo": "Show me this field",
+  "i18n.testLive": "Test in app",
+  "i18n.testOn": "Sandbox is LIVE app-wide — everything now speaks your draft",
+  "i18n.testOff": "Back to the real translations"
 }

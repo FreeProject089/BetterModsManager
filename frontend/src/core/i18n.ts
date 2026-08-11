@@ -66,9 +66,27 @@ export async function initI18n(): Promise<void> {
     applyTranslations();
 }
 
+// ── Sandbox overlay ──────────────────────────────────────────────────────────
+//
+// A test layer the translation sandbox can slip over the live dictionary, so an edit
+// is seen EVERYWHERE — toasts, panels, TS-rendered markup — not only in static
+// data-i18n elements. Read before the dictionary, one property probe on the hot path
+// (t() runs hundreds of times per render; anything heavier would show). Never
+// persisted: closing the sandbox clears it, and the real Lang files never change.
+let _sandboxOverlay: Record<string, string> | null = null;
+
+export function setSandboxOverlay(map: Record<string, string> | null): void {
+    _sandboxOverlay = map && Object.keys(map).length ? map : null;
+    applyTranslations();   // repaint the static half so both halves agree
+}
+
 export function t(key: string, params: Record<string, string> = {}): string {
     const dict = translations[currentLang] || translations.fr || {};
     let str: string = dict[key] || (translations.fr && translations.fr[key]) || key;
+    if (_sandboxOverlay) {
+        const ov = _sandboxOverlay[key];
+        if (ov !== undefined) str = ov;
+    }
     // Single-pass {placeholder} substitution. t() runs hundreds of times per
     // render; the old code compiled a fresh RegExp per param on every call
     // (benchmarked ~6× slower — see benchmarks/js). One linear scan, no RegExp.

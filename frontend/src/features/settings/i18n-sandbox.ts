@@ -42,6 +42,14 @@ export function initI18nSandbox(): void {
         if (_pickMode) togglePickMode(false);
         if (_hlMode) toggleHighlight(false);
         if (_overlayMode) toggleOverlayMode(modal, false);
+        // The live-test overlay dies with the sandbox. A draft that kept speaking after
+        // its editor closed would be indistinguishable from the app's real text — the
+        // exact confusion a sandbox exists to prevent.
+        const live = document.getElementById('i18n-test-live') as HTMLInputElement | null;
+        if (live?.checked) {
+            live.checked = false;
+            void import('../../core/i18n.js').then((m) => m.setSandboxOverlay(null));
+        }
         modal.classList.remove('open');
         document.body.style.overflow = '';
     };
@@ -115,6 +123,21 @@ export function initI18nSandbox(): void {
         toast(t('i18n.resetDone') || 'Sandbox reset', 'success');
     });
     document.getElementById('i18n-export')?.addEventListener('click', exportSandbox);
+
+    // ── Test in app ─────────────────────────────────────────────────────────────
+    // The one thing "Preview live" could not do. That button rewrites visible
+    // data-i18n elements — but most of BMM's text goes through t() in TS-rendered
+    // markup, which a DOM rewrite can never reach. This toggle slips the sandbox over
+    // the dictionary INSIDE t() (core/i18n.ts), so every toast, panel and re-render
+    // speaks your draft until you switch it off or close the sandbox.
+    document.getElementById('i18n-test-live')?.addEventListener('change', async (e) => {
+        const on = (e.target as HTMLInputElement).checked;
+        const { setSandboxOverlay } = await import('../../core/i18n.js');
+        setSandboxOverlay(on ? { ..._sandbox } : null);
+        toast(on
+            ? (t('i18n.testOn') || 'Sandbox is LIVE app-wide — everything now speaks your draft')
+            : (t('i18n.testOff') || 'Back to the real translations'), on ? 'warning' : 'info', 2600);
+    });
 }
 
 /** Header progress: how complete the selected language is (translated / total). */
@@ -333,6 +356,10 @@ async function renderDetail(key: string): Promise<void> {
     ta?.addEventListener('input', () => {
         const v = ta.value;
         if (v === originalDisplay(key)) delete _sandbox[key]; else _sandbox[key] = v;
+        // Live test on → the app follows every keystroke's committed value.
+        if ((document.getElementById('i18n-test-live') as HTMLInputElement | null)?.checked) {
+            void import('../../core/i18n.js').then((m) => m.setSandboxOverlay({ ..._sandbox }));
+        }
         const hint = document.getElementById('i18n-autosave');
         if (hint) { hint.classList.add('flash'); setTimeout(() => hint.classList.remove('flash'), 400); }
         clearTimeout(deb);

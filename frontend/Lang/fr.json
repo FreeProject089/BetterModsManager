@@ -6874,5 +6874,8 @@
   "settings.debugUnlocked": "Mode debug déverrouillé",
   "settings.debugHidden": "Section debug masquée",
   "privacy.accept": "J'ai lu la politique",
-  "tut.fieldGo": "Montre-moi ce champ"
+  "tut.fieldGo": "Montre-moi ce champ",
+  "i18n.testLive": "Tester dans l'app",
+  "i18n.testOn": "Le bac à sable est ACTIF partout — toute l’app parle ton brouillon",
+  "i18n.testOff": "Retour aux vraies traductions"
 }
