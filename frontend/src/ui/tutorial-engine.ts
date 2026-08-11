@@ -175,6 +175,7 @@ export function startTutorialEngine(
     _renderStep();
     _registerLangListener();
     _registerKeyboard();
+    _registerNavHint();
 }
 
 /** End the lesson. `reopenHub` decides what the user sees next:
@@ -186,6 +187,7 @@ export function startTutorialEngine(
  *          path shared this function and it always fired the reopen callback. */
 export function closeTutorialEngine(reopenHub: boolean = false): void {
     _unregisterKeyboard();
+    _unregisterNavHint();
     _unregisterLangListener();
     _cleanup();
     _cleanupDemo();
@@ -330,6 +332,47 @@ function _navigate(nav: string | undefined): void {
     const viewKey = VIEW_ALIAS[nav] ?? nav;
     const btn = document.querySelector(`.nav-item[data-view="${viewKey}"]`) as HTMLElement | null;
     btn?.click();
+}
+
+// ── Live nav hint ────────────────────────────────────────────────────────────
+//
+// The "You're on / Go to" chip used to be computed once, when the step rendered. Wander
+// off to another view mid-step and it kept asserting you were on the right page — stale
+// precisely when a lost user needs it to say the way back. One delegated listener while a
+// lesson runs; any .nav-item click re-evaluates the chip after the active class flips.
+let _navHintListener: ((e: MouseEvent) => void) | null = null;
+
+function _registerNavHint(): void {
+    _unregisterNavHint();
+    _navHintListener = (e: MouseEvent) => {
+        if (!(e.target as HTMLElement)?.closest?.('.nav-item')) return;
+        setTimeout(_refreshNavHint, 0); // after the click has moved .active
+    };
+    document.addEventListener('click', _navHintListener);
+}
+
+function _unregisterNavHint(): void {
+    if (_navHintListener) { document.removeEventListener('click', _navHintListener); _navHintListener = null; }
+}
+
+function _refreshNavHint(): void {
+    const btn = document.getElementById('btn-tut-nav-hint') as HTMLElement | null;
+    if (!btn || !_tutorial) return;
+    const nav = btn.dataset.nav || '';
+    if (!nav || !NAV_LABELS[nav]) return;
+    const viewKey = _VIEW_ALIAS[nav] ?? nav;
+    const active = (document.querySelector('.nav-item.active') as HTMLElement | null)?.dataset.view;
+    const onPage = active === viewKey;
+    const check = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="opacity:0.85"><polyline points="20 6 9 17 4 12"/></svg>`;
+    const chev  = `<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-left:2px;opacity:0.5"><polyline points="9 18 15 12 9 6"/></svg>`;
+    btn.classList.toggle('on-page', onPage);
+    btn.style.cursor = onPage ? 'default' : 'pointer';
+    btn.setAttribute('data-tooltip', onPage ? (t('hub.alreadyHere') || 'You are already here') : t('hub.goTo') + ' ' + t(NAV_LABELS[nav]));
+    btn.innerHTML = `
+        ${onPage ? check : (NAV_ICONS[nav] || '')}
+        <span class="tut-nav-hint-label">${onPage ? (t('hub.youreOn') || "You're on") : t('hub.goTo')}</span>
+        <strong class="tut-nav-hint-page">${t(NAV_LABELS[nav])}</strong>
+        ${onPage ? '' : chev}`;
 }
 
 // ── Drag ─────────────────────────────────────────────────────────────────────
@@ -786,6 +829,7 @@ function _skipTutorial(): void {
     // Was missing: the ←/→ handler stayed registered after skipping, still driving the
     // dead lesson's state from anywhere in the app.
     _unregisterKeyboard();
+    _unregisterNavHint();
     _isMinimized = false;
     const panel = document.getElementById('tut-engine-panel');
     if (panel) {
