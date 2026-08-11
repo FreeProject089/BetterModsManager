@@ -273,7 +273,7 @@ pub fn compute_file_sha256(path: &Path) -> Result<String> {
 /// otherwise saturate every core (rayon defaults to all CPUs) and freeze the UI
 /// while importing/scanning many mods. We cap it to ~half the cores (max 4) so
 /// hashing always leaves headroom for the UI thread.
-fn hash_pool() -> &'static rayon::ThreadPool {
+pub(crate) fn hash_pool() -> &'static rayon::ThreadPool {
     use std::sync::OnceLock;
     static POOL: OnceLock<rayon::ThreadPool> = OnceLock::new();
     POOL.get_or_init(|| {

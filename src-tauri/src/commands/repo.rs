@@ -2922,7 +2922,9 @@ pub(crate) fn generate_repo_manifest_sync(
         let dir = entry.path();
         let id = entry.file_name().to_string_lossy().to_string();
 
-        let mut files = Vec::new();
+        // The walk is cheap and stays serial; the hashing is what costs, and every file
+        // is independent of every other, so it does not have to be done one at a time.
+        let mut todo: Vec<(String, std::path::PathBuf, u64, Option<i64>)> = Vec::new();
         for f in WalkDir::new(&dir).into_iter().filter_map(|e| e.ok()) {
             let p = f.path();
             if !p.is_file() { continue; }
@@ -2939,11 +2941,39 @@ pub(crate) fn generate_repo_manifest_sync(
                 .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
                 .map(|d| d.as_secs() as i64);
             // Chunk hashes only earn their size on files big enough to resume or patch.
-            let (hash, chunks) = compute_file_hash_and_chunks(&p, size as usize > CHUNK_SIZE)?;
-            total_bytes += size;
-            files.push(RepoFile { relative_path: rel, size, sha256_hash: hash, chunks, mtime });
+            todo.push((rel, p.to_path_buf(), size, mtime));
         }
-        if files.is_empty() { continue; }
+        if todo.is_empty() { continue; }
+
+        // On the bounded pool rather than rayon's global one: that pool is capped at half
+        // the cores precisely so hashing cannot saturate the machine and freeze the
+        // window, and building a manifest for a large collection is exactly the case it
+        // was capped for.
+        //
+        // par_iter().map().collect::<Vec<_>>() preserves INPUT order — rayon's indexed
+        // iterators are ordered, so parallelising here cannot shuffle anything. The sort
+        // below is not defending against that; it is defending against WalkDir, whose
+        // depth-first walk is not lexicographic: a mod holding both `data/` and
+        // `data.txt` is visited in the order the filesystem lists them, and '.' sorts
+        // before '/'. The manifest gets signed, so the file order has to come from the
+        // paths and not from how the directory happened to be enumerated.
+        let mut files: Vec<RepoFile> = crate::fs_utils::hash_pool().install(|| {
+            use rayon::prelude::*;
+            todo.par_iter()
+                .map(|(rel, path, size, mtime)| {
+                    // Chunk hashes only earn their size on files big enough to resume or patch.
+                    let (hash, chunks) = compute_file_hash_and_chunks(path, *size as usize > CHUNK_SIZE)?;
+                    Ok(RepoFile {
+                        relative_path: rel.clone(),
+                        size: *size,
+                        sha256_hash: hash,
+                        chunks,
+                        mtime: *mtime,
+                    })
+                })
+                .collect::<Result<Vec<_>, String>>()
+        })?;
+        total_bytes += files.iter().map(|f| f.size).sum::<u64>();
         files.sort_by(|a, b| a.relative_path.cmp(&b.relative_path));
         total_files += files.len();
 
@@ -3258,6 +3288,66 @@ mod manifest_tests {
             .map(|m| (m.mod_id.clone(), m.mod_name.clone()))
             .collect();
         generate_repo_manifest_sync(a, packs, folder_of, "public".to_string(), signer)
+    }
+
+    /// Hashing runs in parallel now, and rayon returns results in whatever order the
+    /// threads finish. The manifest is SIGNED, so any wobble in ordering would produce a
+    /// different payload — and therefore a different signature — from one run to the next,
+    /// for a folder nobody touched. Subscribers would see the repo change every time the
+    /// owner regenerated it.
+    ///
+    /// Enough files that a serial implementation could not accidentally pass: with one
+    /// file per mod, thread scheduling never gets a chance to reorder anything.
+    #[test]
+    fn generating_twice_over_the_same_folder_is_byte_identical() {
+        let root = scratch("determinism");
+        let many = root.join("mods/many-files");
+        fs::create_dir_all(&many).unwrap();
+        for i in 0..64 {
+            fs::write(many.join(format!("f{i:03}.bin")), format!("payload {i}").as_bytes()).unwrap();
+        }
+        // A directory and a file whose names share a prefix. WalkDir descends `data/`
+        // when it reaches it, so it yields `data/x.bin` BEFORE `data.txt`; sorted by
+        // path, `data.txt` comes first ('.' is 0x2E, '/' is 0x2F). Without this pair the
+        // walk order and the sorted order agree and the sort is unobservable — which is
+        // exactly how a test that cannot fail gets written.
+        fs::create_dir_all(many.join("data")).unwrap();
+        fs::write(many.join("data/x.bin"), b"nested").unwrap();
+        fs::write(many.join("data.txt"), b"sibling").unwrap();
+
+        run(args(&root), vec![]).unwrap();
+        let first = fs::read_to_string(root.join("repo.json")).unwrap();
+        run(args(&root), vec![]).unwrap();
+        let second = fs::read_to_string(root.join("repo.json")).unwrap();
+
+        // created_at moves between runs; everything the signature covers must not.
+        let a: ServerRepo = serde_json::from_str(&first).unwrap();
+        let b: ServerRepo = serde_json::from_str(&second).unwrap();
+        assert_eq!(a.signature, b.signature, "same folder, same bytes, different signature");
+
+        let files_of = |r: &ServerRepo| -> Vec<String> {
+            r.profiles.iter()
+                .flat_map(|p| p.mods.iter())
+                .flat_map(|m| m.files.iter())
+                .map(|f| format!("{}::{}", f.relative_path, f.sha256_hash))
+                .collect()
+        };
+        let fa = files_of(&a);
+        assert_eq!(fa.len(), 69, "3 from scratch() + 64 + the data/ pair");
+        assert_eq!(fa, files_of(&b), "file order or hashes drifted between runs");
+
+        // Sorted, not merely stable: two runs agreeing on a wrong order would still pass
+        // the check above. Sorting is PER MOD — the mods themselves keep folder order —
+        // so the whole flattened list is not sorted, and asserting that it is would be
+        // asserting something the format never promised.
+        for prof in &a.profiles {
+            for m in &prof.mods {
+                let paths: Vec<&String> = m.files.iter().map(|f| &f.relative_path).collect();
+                let mut sorted = paths.clone();
+                sorted.sort();
+                assert_eq!(paths, sorted, "files of mod {} are not in path order", m.id);
+            }
+        }
     }
 
     fn pack(name: &str, refs: &[(&str, &str)]) -> crate::models::modpack::LocalModpack {
