@@ -6875,5 +6875,6 @@
   "settings.devToolsLocked": "DevTools locked. Unlock in Settings.",
   "settings.debugUnlocked": "Debug mode unlocked",
   "settings.debugHidden": "Debug section hidden",
-  "privacy.accept": "I have read the policy"
+  "privacy.accept": "I have read the policy",
+  "tut.fieldGo": "Show me this field"
 }

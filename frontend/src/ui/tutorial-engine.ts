@@ -569,10 +569,10 @@ function _renderStep(): void {
         <div class="tut-field-guide">
             <div class="tut-field-guide-title">${t('tut.fieldGuide')}</div>
             ${_fieldList.map((f, i) => `
-                <div class="tut-field-row">
+                <button type="button" class="tut-field-row" data-field-sel="${f.sel}" data-field-key="${f.key}" data-tooltip="${t('tut.fieldGo') || 'Show me this field'}">
                     <span class="tut-field-num" style="background:${tut.color}">${i + 1}</span>
                     <span class="tut-field-desc">${t(f.key)}</span>
-                </div>`).join('')}
+                </button>`).join('')}
         </div>
     ` : '';
 
@@ -708,6 +708,27 @@ function _renderStep(): void {
     document.getElementById('btn-tut-side')?.addEventListener('click', () => _cycleDockSide());
     document.getElementById('btn-tut-prev')?.addEventListener('click', _prevStep);
     document.getElementById('btn-tut-next')?.addEventListener('click', _nextStep);
+
+    /* ── Field rows point at their element ──────────────────────────────────────
+       Field feedback: "si tu cliques, qu'il y ait une explication" — the numbered list
+       described fields it never touched. A row now walks you to its element (same
+       resolution as the rings, so they cannot disagree), pulses it, and has Tasky say
+       the explanation AT the element — the words and the thing they describe in the
+       same glance, instead of a legend on one side and anonymous rings on the other. */
+    panel.querySelectorAll<HTMLElement>('.tut-field-row').forEach((row) => {
+        row.addEventListener('click', () => {
+            const sel = row.dataset.fieldSel || '';
+            let target: Element | null = document.getElementById(sel) || document.querySelector(`[id="${sel}"]`);
+            if (!target) target = _preferDemo(Array.from(document.querySelectorAll(`.${sel}`)));
+            target = _resolveCustomSelect(target) ?? target;
+            if (!target) return;
+            (target as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center' });
+            target.classList.add('tut-field-flash');
+            setTimeout(() => target?.classList.remove('tut-field-flash'), 1600);
+            const key = row.dataset.fieldKey;
+            if (key) (window as any).showTaskyHelp?.(key, 'info', true);
+        });
+    });
 
     /* ── Clickable nav hint ── */
     document.getElementById('btn-tut-nav-hint')?.addEventListener('click', () => _navigate(step.nav));

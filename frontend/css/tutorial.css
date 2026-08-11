@@ -398,3 +398,33 @@ body.tut-docked.tut-min.tut-dock-left .app-shell {
     z-index: 2000100;
 }
 .tut-engine-panel.minimized.pill-float.dragging { cursor: grabbing; }
+
+/* ── Field rows are buttons now: they walk you to their element ─────────────── */
+.tut-field-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 4px 6px;
+    background: none;
+    border: 0;
+    border-radius: 7px;
+    text-align: left;
+    cursor: pointer;
+    color: inherit;
+    font: inherit;
+    transition: background 0.12s;
+}
+.tut-field-row:hover { background: var(--bmm-bg-hover); }
+
+/* The pulse a row plants on its element. Outline, not border: it must not shift layout
+   on the input it is pointing at. */
+.tut-field-flash {
+    outline: 2px solid var(--bmm-accent) !important;
+    outline-offset: 3px;
+    animation: tutFieldFlash 1.6s ease;
+}
+@keyframes tutFieldFlash {
+    0%, 60% { outline-color: var(--bmm-accent); }
+    100%    { outline-color: transparent; }
+}
