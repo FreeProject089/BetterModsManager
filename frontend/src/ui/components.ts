@@ -431,6 +431,12 @@ export function getModDetailHTML(mod, ctx) {
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:middle;margin-right:2px;margin-top:-2px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
           <span data-i18n="detail.linksInfo">${t('detail.linksInfo') || 'Pour les listes .MM, seuls les liens directs fonctionnent.'}</span>
         </div>
+        ${ctx.repoLink ? `
+        <div class="detail-repo-link">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="flex:none"><path d="M4 7V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2"/><rect x="3" y="7" width="18" height="6" rx="1"/><rect x="3" y="15" width="18" height="6" rx="1"/></svg>
+          <span class="detail-repo-link-label">${escHtml(t('detail.fromRepo') || 'From server repo')}</span>
+          <a href="#" class="detail-repo-link-url" data-open-url="${escAttr(ctx.repoLink)}" title="${escAttr(ctx.repoLink)}">${escHtml(ctx.repoLink)}</a>
+        </div>` : ''}
         <div id="detail-links-list" style="display:flex;flex-direction:column;gap:6px">
           ${ctx.links.map((dl, i) => `
             <div style="display:flex;align-items:center;gap:6px;background:rgba(0,0,0,0.2);padding:6px 8px;border-radius:8px">

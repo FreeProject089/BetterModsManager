@@ -7034,5 +7034,6 @@
   "sched.bmmFolderPh": "ex. sauvegardes/hebdo",
   "sched.bmmFolderHint": "Créé dans le dossier de données de BMM. Les sous-chemins sont autorisés ; le dossier ne peut pas sortir de là.",
   "tut.fieldHidden": "Ce champ n’est pas affiché pour l’instant.",
-  "tut.fieldHiddenIn": "Ce champ se trouve dans « {where} » — ouvre-la d’abord."
+  "tut.fieldHiddenIn": "Ce champ se trouve dans « {where} » — ouvre-la d’abord.",
+  "detail.fromRepo": "Depuis le dépôt serveur"
 }

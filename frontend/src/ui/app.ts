@@ -712,7 +712,7 @@ function patchHtmlLinks(): void {
 // Open an external URL in the system browser. `window.open(url,'_blank')` is a
 // no-op in the Tauri v2 webview, so route through the backend `open_external`
 // command (this is why the credits stack links stopped working after v2).
-function openExternal(url: string): void {
+export function openExternal(url: string): void {
     if (!url) return;
     invoke('open_external', { url }).catch((e) => {
         console.warn('[BMM] open_external failed:', e);

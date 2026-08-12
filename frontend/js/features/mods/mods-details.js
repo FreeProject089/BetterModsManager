@@ -2,7 +2,7 @@
 import { appState } from '../../core/state.js';
 import { renderTagChip } from '../../ui/icon-pack.js';
 import { invoke } from '../../core/api.js';
-import { toast } from '../../ui/app.js';
+import { toast, openExternal } from '../../ui/app.js';
 import { t } from '../../core/i18n.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { getModDetailHTML } from '../../ui/components.js';
@@ -156,7 +156,27 @@ export async function renderModDetail(modId) {
         return;
     card.appendChild(panel);
     setTimeout(() => panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50);
-    panel.innerHTML = getModDetailHTML(mod, { conflicts: [], links: mod.download_links || [] });
+    // A mod synced from a server repo already HAS a source, it just was not among
+    // its "Links" — that list only ever held the download URLs someone typed in by
+    // hand, so for every repo mod the one link that mattered was the one missing.
+    //
+    // Passed separately, and rendered OUTSIDE #detail-links-list on purpose: the save
+    // handler rebuilds download_links by reading the rows in that container, so a
+    // derived link placed among them would be written back as if the user had entered
+    // it — and would then survive re-syncing from a different repo.
+    panel.innerHTML = getModDetailHTML(mod, {
+        conflicts: [],
+        links: mod.download_links || [],
+        repoLink: mod.source_repo || mod.update_url || null,
+    });
+    // The derived repo link opens in the system browser. window.open is a no-op in the
+    // Tauri v2 webview, so it goes through the same open_external route every other
+    // link in the app uses — a second mechanism here is how one of them silently stops
+    // working after a migration and nobody notices for a release.
+    panel.querySelector('[data-open-url]')?.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        openExternal(ev.currentTarget.dataset.openUrl || '');
+    });
     // Update conflicts in background
     (async () => {
         try {

@@ -7036,5 +7036,6 @@
   "sched.bmmFolderPh": "e.g. backups/weekly",
   "sched.bmmFolderHint": "Created inside BMM’s own data folder. Sub-paths are allowed; the folder cannot be placed outside it.",
   "tut.fieldHidden": "That field is not on screen right now.",
-  "tut.fieldHiddenIn": "That field is in “{where}” — open it first."
+  "tut.fieldHiddenIn": "That field is in “{where}” — open it first.",
+  "detail.fromRepo": "From server repo"
 }

@@ -16349,3 +16349,29 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 #view-mapper .mapper-profile-wrap:has(.profile-icon-display:not(:empty)) .mapper-profile-ic {
     display: none;
 }
+
+/* Mod detail: the server-repo the mod was synced from. Sits ABOVE the editable link
+   rows and looks different from them on purpose — it is derived, not something you
+   typed, and it is not saved back with them. */
+.detail-repo-link {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 6px 8px;
+    margin-bottom: 6px;
+    border-radius: 6px;
+    background: var(--bmm-s05);
+    border: 1px solid var(--border);
+    font-size: 10.5px;
+    color: var(--text-secondary);
+}
+.detail-repo-link-label { font-weight: 600; flex: none; }
+.detail-repo-link-url {
+    color: var(--accent);
+    text-decoration: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+.detail-repo-link-url:hover { text-decoration: underline; }
