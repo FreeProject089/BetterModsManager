@@ -5,6 +5,7 @@
  */
 
 import { t } from '../core/i18n.js';
+import { isPackIcon, renderPackIcon } from './icon-pack.js';
 import { escHtml, escAttr, escJs, truncate } from '../core/utils.js';
 
 export function getLoadingOverlayHTML() {
@@ -27,7 +28,13 @@ export function getModCardHTML(mod, ctx) {
     const visibleTags = mod.tags.slice(0, 3).map(tid => {
       const tDef = ctx.userTags.find(t => t.id === tid);
       if (!tDef) return '';
-      return `<span style="background:${tDef.color}15;color:${tDef.color};border:1px solid ${tDef.color}30;padding:1px 5px;border-radius:4px;font-size:9px;font-weight:600">${escHtml(tDef.name)}</span>`;
+      const bg = (tDef as any).color2
+        ? `linear-gradient(90deg, ${tDef.color}22, ${(tDef as any).color2}22)`
+        : `${tDef.color}15`;
+      // Pack icons render '' until their JSON is in memory (preloaded on refresh);
+      // a miss just renders the name — the next re-render finds the glyph.
+      const ic = isPackIcon((tDef as any).icon) ? renderPackIcon((tDef as any).icon, 9) : '';
+      return `<span style="display:inline-flex;align-items:center;gap:3px;background:${bg};color:${tDef.color};border:1px solid ${tDef.color}30;padding:1px 5px;border-radius:4px;font-size:9px;font-weight:600">${ic}${escHtml(tDef.name)}</span>`;
     }).join('');
 
     const extraTagsCount = mod.tags.length > 3 ? `<button class="btn btn-ghost" onclick="window.showModTagsModal('${mod.id}'); event.stopPropagation();" style="color:var(--text-muted);font-size:9px;padding:0;height:auto;min-height:0;margin:0;background:rgba(255,255,255,0.05);border-radius:4px;padding:1px 4px;border:1px solid rgba(255,255,255,0.1)">+${mod.tags.length - 3}</button>` : '';

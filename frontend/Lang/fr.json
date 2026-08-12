@@ -6920,5 +6920,14 @@
   "sched.switchAddCase": "+ cas",
   "sched.switchCase": "CAS",
   "sched.switchDefault": "DÉFAUT",
-  "sched.loop.doWhile": "do... while (exécute une fois, puis vérifie)"
+  "sched.loop.doWhile": "do... while (exécute une fois, puis vérifie)",
+  "settings.tagIconTip": "Choisir une icône (Lucide, marques, ou ta propre image)",
+  "settings.tagGradient": "dégradé",
+  "settings.tagUpdated": "Tag mis à jour",
+  "iconpack.title": "Choisir une icône",
+  "iconpack.search": "Rechercher parmi 5000+ icônes…",
+  "iconpack.brands": "Marques",
+  "iconpack.upload": "Importer…",
+  "iconpack.more": "Afficher plus",
+  "iconpack.tooBig": "L'image doit faire moins de 128 Ko"
 }

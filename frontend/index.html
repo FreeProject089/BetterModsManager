@@ -3772,8 +3772,15 @@
                                 <input type="text" id="setting-tag-name" placeholder="Nom du tag"
                                     data-i18n-placeholder="settings.tagNamePlaceholder"
                                     style="flex:1;padding:8px;border-radius:6px;background:var(--bmm-bg-base);color:var(--bmm-text-primary);border:1px solid var(--border)">
+                                <button class="btn btn-secondary btn-sm" id="btn-tag-icon" data-i18n-tooltip="settings.tagIconTip"
+                                    style="width:36px;height:36px;padding:0;display:flex;align-items:center;justify-content:center"><span id="setting-tag-icon-preview" style="display:inline-flex;color:var(--text-secondary)">＋</span></button>
                                 <input type="color" id="setting-tag-color" value="#3b82f6"
                                     style="width:36px;height:36px;padding:0;border:none;border-radius:6px;cursor:pointer;background:transparent">
+                                <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text-muted);cursor:pointer">
+                                    <input type="checkbox" id="setting-tag-grad"><span data-i18n="settings.tagGradient">dégradé</span>
+                                </label>
+                                <input type="color" id="setting-tag-color2" value="#a855f7"
+                                    style="width:36px;height:36px;padding:0;border:none;border-radius:6px;cursor:pointer;background:transparent;display:none">
                                 <button class="btn btn-primary btn-sm" id="btn-create-tag"><span
                                         data-i18n="settings.tagCreate">Créer</span></button>
                             </div>

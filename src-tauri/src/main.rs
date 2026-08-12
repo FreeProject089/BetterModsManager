@@ -416,6 +416,7 @@ fn main() {
             commands::update::get_update_folder_structure,
             commands::tag::get_tags,
             commands::tag::create_tag,
+            commands::tag::update_tag,
             commands::tag::delete_tag,
             commands::history::get_activity_history,
             commands::history::clear_activity_history,

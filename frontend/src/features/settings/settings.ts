@@ -893,11 +893,44 @@ export async function renderSettingsTags() {
             list.innerHTML = `<span style="color:var(--text-muted);font-size:12px;font-style:italic">${t('settings.tagNoneYet')}</span>`;
             return;
         }
+        // Pack icons render synchronously once loaded — make sure they are.
+        const iconMod = await import('../../ui/icon-pack.js');
+        await Promise.all(tags.filter(tg => iconMod.isPackIcon(tg.icon)).map(tg => iconMod.ensurePackFor(tg.icon)));
         tags.forEach(tag => {
             const chip = document.createElement('div');
-            chip.style.cssText = `display:flex;align-items:center;gap:4px;background:${tag.color}20;color:${tag.color};border:1px solid ${tag.color}40;padding:4px 10px;border-radius:6px;font-size:12px;font-weight:600`;
-            chip.innerHTML = `<span>${escHtml(tag.name)}</span><button data-id="${tag.id}" class="btn-del-tag" onmouseenter="window.showTaskyHelp('settings.tagDeleteTip', 'trash')" onmouseleave="window.hideTaskyHelp()" style="background:none;border:none;color:inherit;cursor:pointer;padding:0;margin-left:6px;font-size:14px">&times;</button>`;
+            const bg = tag.color2
+                ? `linear-gradient(90deg, ${tag.color}26, ${tag.color2}26)`
+                : `${tag.color}20`;
+            chip.style.cssText = `display:flex;align-items:center;gap:5px;background:${bg};color:${tag.color};border:1px solid ${tag.color}40;padding:4px 10px;border-radius:6px;font-size:12px;font-weight:600`;
+            const iconHtml = iconMod.isPackIcon(tag.icon) ? iconMod.renderPackIcon(tag.icon, 12) : '';
+            chip.innerHTML = `${iconHtml ? `<span style="display:inline-flex">${iconHtml}</span>` : ''}<span>${escHtml(tag.name)}</span>`
+                + `<button data-id="${tag.id}" class="btn-edit-tag" title="${escHtml(t('common.edit') || 'Edit')}" style="background:none;border:none;color:inherit;cursor:pointer;padding:0;margin-left:6px;opacity:0.7">✎</button>`
+                + `<button data-id="${tag.id}" class="btn-del-tag" onmouseenter="window.showTaskyHelp('settings.tagDeleteTip', 'trash')" onmouseleave="window.hideTaskyHelp()" style="background:none;border:none;color:inherit;cursor:pointer;padding:0;margin-left:4px;font-size:14px">&times;</button>`;
             list.appendChild(chip);
+        });
+
+        // Edit: prefill the form, flip the create button to save (same handler).
+        list.querySelectorAll('.btn-edit-tag').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const tag = tags.find(tg => tg.id === (btn as HTMLElement).dataset.id);
+                if (!tag) return;
+                (document.getElementById('setting-tag-name') as HTMLInputElement).value = tag.name;
+                (document.getElementById('setting-tag-color') as HTMLInputElement).value = tag.color;
+                const grad = document.getElementById('setting-tag-grad') as HTMLInputElement | null;
+                const c2 = document.getElementById('setting-tag-color2') as HTMLInputElement | null;
+                if (grad && c2) {
+                    grad.checked = !!tag.color2;
+                    c2.style.display = tag.color2 ? '' : 'none';
+                    if (tag.color2) c2.value = tag.color2;
+                }
+                (window as any)._tagIconRef = tag.icon || '';
+                const prev = document.getElementById('setting-tag-icon-preview');
+                if (prev) prev.innerHTML = (iconMod.isPackIcon(tag.icon) && iconMod.renderPackIcon(tag.icon, 18)) || '＋';
+                (window as any)._tagEditId = tag.id;
+                const cbtn = document.getElementById('btn-create-tag');
+                const span = cbtn?.querySelector('span');
+                if (span) span.textContent = t('common.save') || 'Enregistrer';
+            });
         });
 
         list.querySelectorAll('.btn-del-tag').forEach(btn => {
@@ -1701,19 +1734,46 @@ export async function initSettings() {
     try { (await import('../../core/analytics.js')).initPrivacySettings(); } catch (e) {}
     initSecurityInfoCard().catch(() => {});
     
-    // Tags Settings
+    // Tags Settings — icon (lucide/simple-icons/upload), flat or gradient colour,
+    // create AND edit through the same form (the button flips to "save").
     const btnCreateTag = document.getElementById('btn-create-tag');
     if (btnCreateTag) {
+        const gradToggle = document.getElementById('setting-tag-grad') as HTMLInputElement | null;
+        const color2Input = document.getElementById('setting-tag-color2') as HTMLInputElement | null;
+        gradToggle?.addEventListener('change', () => {
+            if (color2Input) color2Input.style.display = gradToggle.checked ? '' : 'none';
+        });
+        document.getElementById('btn-tag-icon')?.addEventListener('click', async () => {
+            const { openIconPicker, renderPackIcon } = await import('../../ui/icon-pack.js');
+            const ref = await openIconPicker({ current: (window as any)._tagIconRef || '' });
+            if (ref === null) return;
+            (window as any)._tagIconRef = ref;
+            const prev = document.getElementById('setting-tag-icon-preview');
+            if (prev) prev.innerHTML = renderPackIcon(ref, 18) || '＋';
+        });
         btnCreateTag.addEventListener('click', async () => {
             const nameInput = document.getElementById('setting-tag-name');
             const colorInput = document.getElementById('setting-tag-color');
             const name = nameInput.value.trim();
             const color = colorInput.value;
             if (!name) return toast(t('settings.tagNameRequired'), 'error');
+            const icon = (window as any)._tagIconRef || '';
+            const color2 = gradToggle?.checked ? (color2Input?.value || null) : null;
+            const editingId = (window as any)._tagEditId || null;
             try {
-                await invoke('create_tag', { name, color, icon: '' });
+                if (editingId) {
+                    await invoke('update_tag', { tagId: editingId, name, color, icon, color2 });
+                    toast(t('settings.tagUpdated') || 'Tag updated', 'success');
+                } else {
+                    await invoke('create_tag', { name, color, icon, color2 });
+                    toast(t('settings.tagCreated'), 'success');
+                }
                 nameInput.value = '';
-                toast(t('settings.tagCreated'), 'success');
+                (window as any)._tagIconRef = '';
+                (window as any)._tagEditId = null;
+                const prev = document.getElementById('setting-tag-icon-preview');
+                if (prev) prev.textContent = '＋';
+                btnCreateTag.querySelector('span')!.textContent = t('settings.tagCreate') || 'Créer';
                 renderSettingsTags();
                 if (window._refreshModsFn) window._refreshModsFn();
             } catch (err) { toast(t('settings.tagCreateError', { err: String(err) }), 'error'); }

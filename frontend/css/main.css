@@ -15645,3 +15645,27 @@ body.i18nsb-docked #modal-i18n-sandbox .i18nsb-dock-resize { display: block; }
     opacity: 1;
 }
 #i18n-dock-toggle.active { color: var(--accent); }
+
+/* ── Icon pack picker ───────────────────────────────────────────────────────── */
+.ipk-modal { width: min(640px, 94vw); max-height: 80vh; display: flex; flex-direction: column; }
+.ipk-bar { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; }
+.ipk-tabs { display: flex; gap: 6px; }
+.ipk-tab {
+    padding: 5px 12px; border-radius: 8px; cursor: pointer;
+    background: transparent; border: 1px solid var(--border);
+    color: var(--text-secondary); font-size: 12px;
+}
+.ipk-tab.active { color: var(--accent); border-color: var(--accent); background: var(--bmm-s04); }
+.ipk-grid {
+    flex: 1; min-height: 0; overflow-y: auto;
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 6px;
+    padding: 4px 2px;
+}
+.ipk-cell {
+    display: flex; flex-direction: column; align-items: center; gap: 5px;
+    padding: 9px 4px 7px; border-radius: 9px; cursor: pointer;
+    background: var(--bmm-s02); border: 1px solid transparent; color: var(--text-secondary);
+}
+.ipk-cell:hover { border-color: var(--accent); color: var(--text-primary); background: var(--bmm-bg-hover); }
+.ipk-name { font-size: 9px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ipk-foot { display: flex; align-items: center; justify-content: space-between; padding-top: 8px; color: var(--text-muted); font-size: 11px; }

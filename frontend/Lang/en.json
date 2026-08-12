@@ -6922,5 +6922,14 @@
   "sched.switchAddCase": "+ case",
   "sched.switchCase": "CASE",
   "sched.switchDefault": "DEFAULT",
-  "sched.loop.doWhile": "do... while (runs once, then checks)"
+  "sched.loop.doWhile": "do... while (runs once, then checks)",
+  "settings.tagIconTip": "Choose an icon (Lucide, brands, or your own image)",
+  "settings.tagGradient": "gradient",
+  "settings.tagUpdated": "Tag updated",
+  "iconpack.title": "Choose an icon",
+  "iconpack.search": "Search 5000+ icons…",
+  "iconpack.brands": "Brands",
+  "iconpack.upload": "Upload…",
+  "iconpack.more": "Show more",
+  "iconpack.tooBig": "Image must be under 128 KB"
 }

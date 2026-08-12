@@ -15,6 +15,7 @@ pub fn create_tag(
     name: String,
     color: String,
     icon: String,
+    color2: Option<String>,
 ) -> Result<TagDef, AppError> {
     let mut data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
     let tag = TagDef {
@@ -22,6 +23,7 @@ pub fn create_tag(
         name,
         color,
         icon,
+        color2: color2.filter(|c| !c.is_empty()),
     };
     data.custom_tags.push(tag.clone());
     drop(data); // Drop the lock before saving to avoid deadlock
@@ -40,4 +42,27 @@ pub fn delete_tag(state: State<AppState>, tag_id: String) -> Result<(), AppError
     drop(data); // Drop the lock before saving to avoid deadlock
     let _ = state.save();
     Ok(())
+}
+
+
+#[tauri::command]
+pub fn update_tag(
+    state: State<AppState>,
+    tag_id: String,
+    name: String,
+    color: String,
+    icon: String,
+    color2: Option<String>,
+) -> Result<TagDef, AppError> {
+    let mut data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
+    let tag = data.custom_tags.iter_mut().find(|t| t.id == tag_id)
+        .ok_or_else(|| AppError::NotFound(format!("Tag {} not found", tag_id)))?;
+    tag.name = name;
+    tag.color = color;
+    tag.icon = icon;
+    tag.color2 = color2.filter(|c| !c.is_empty());
+    let out = tag.clone();
+    drop(data);
+    let _ = state.save();
+    Ok(out)
 }

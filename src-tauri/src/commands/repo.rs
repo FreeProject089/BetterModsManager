@@ -2738,6 +2738,7 @@ pub async fn sync_server_repo(
                             name: repo_tag.name.clone(),
                             color: repo_tag.color_bg.clone(),
                             icon: "fas fa-tag".to_string(),
+                            color2: None,
                         });
                     }
                     tag_ids.push(repo_tag.id);
