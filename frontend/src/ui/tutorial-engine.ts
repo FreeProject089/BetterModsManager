@@ -1073,9 +1073,39 @@ function _finishTutorial(): void {
     });
 }
 
+
+// ── Inline icons in step text ────────────────────────────────────────────────
+//
+// The tutorial used Unicode emoji for its tip / warning / done marks. Three problems
+// with that, in order of how much they matter: the glyph is whatever the platform's
+// font decides, so it does not match the app's own icon set and changes shape
+// between machines; it cannot take a colour from the theme, so a warning stays
+// yellow-on-anything including a light theme where it disappears; and an emoji in a
+// dictionary is a character a translator can silently drop or duplicate without it
+// looking wrong.
+//
+// So the strings carry a TOKEN and the engine draws the icon. Translators see
+// `:warn:`, which is obviously not prose and obviously must survive; the drawing is
+// one place, in the app's own stroke style, on currentColor.
+const TUT_ICONS: Record<string, string> = {
+    tip:   '<path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/>',
+    warn:  '<path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/>',
+    ok:    '<path d="M20 6L9 17l-5-5"/>',
+    heart: '<path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"/>',
+};
+
+/** Replace `:tip:` / `:warn:` / `:ok:` / `:heart:` with an inline icon. An unknown
+ *  token is left exactly as written rather than swallowed — a typo in a translation
+ *  should be visible, not silently erased. */
+export function expandTutIcons(text: string): string {
+    return String(text ?? '').replace(/:(tip|warn|ok|heart):/g, (_m, k: string) =>
+        `<svg class="tut-ico tut-ico-${k}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${TUT_ICONS[k]}</svg>`);
+}
+
 function _startTypewriter(text: string): void {
     const el = document.getElementById('tut-typewriter');
     if (!el) return;
+    text = expandTutIcons(text);
 
     // If the text contains HTML tags, use instant render with fade-in
     if (/<[a-z]/i.test(text)) {

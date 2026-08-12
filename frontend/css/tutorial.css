@@ -623,3 +623,18 @@ body.tut-docked:not(.tut-dock-side) .tut-dock-resize-v { display: block; }
     opacity: 1;
     width: 64px;
 }
+
+/* Inline step icons (:tip: :warn: :ok: :heart:). Sized and aligned to the text they
+   sit in, and coloured from the theme rather than baked into a glyph — the emoji
+   they replace stayed yellow on a light theme, where it vanished. */
+.tut-ico {
+    width: 1em;
+    height: 1em;
+    vertical-align: -0.13em;
+    margin-right: 0.28em;
+    flex: none;
+}
+.tut-ico-tip   { color: var(--accent); }
+.tut-ico-warn  { color: var(--warning); }
+.tut-ico-ok    { color: var(--success); }
+.tut-ico-heart { color: var(--danger); }
