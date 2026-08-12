@@ -799,6 +799,31 @@ function applyAssets(theme: BmmTheme): void {
     if (a.logo) document.documentElement.style.setProperty('--bmm-nav-logo-url', `url("${a.logo}")`);
     else document.documentElement.style.removeProperty('--bmm-nav-logo-url');
     document.body.classList.toggle('bmm-has-nav-logo', !!a.logo);
+
+    // App wallpaper. This branch simply did not exist: the editor stored the picked
+    // file under assets.wallpaper and nothing ever applied it, so "App wallpaper"
+    // did nothing at all — the same shape of bug as the sidebar logo above.
+    //
+    // A theme's `vars` win when they name the wallpaper explicitly (that is the
+    // user typing a URL into the Background group, a deliberate override); the
+    // asset is the fallback, which is what a shared theme carries.
+    const varWall = (theme.vars || {})['--bmm-app-bg-image'];
+    const wallpaper = a.wallpaper;
+    if (varWall && varWall !== 'none') {
+        document.documentElement.style.setProperty('--bmm-app-bg-image', varWall);
+    } else if (wallpaper) {
+        // Videos cannot ride a background-image; a poster-less <video> wallpaper is
+        // its own feature. An image asset works, and a video one is ignored rather
+        // than silently painting nothing.
+        const isVideo = /^data:video\//i.test(wallpaper) || /\.(mp4|webm|ogv)(\?|$)/i.test(wallpaper);
+        if (isVideo) {
+            document.documentElement.style.removeProperty('--bmm-app-bg-image');
+        } else {
+            document.documentElement.style.setProperty('--bmm-app-bg-image', `url("${wallpaper}")`);
+        }
+    } else {
+        document.documentElement.style.removeProperty('--bmm-app-bg-image');
+    }
 }
 
 /** Remove all theme overrides and revert to BMM default. */
@@ -823,6 +848,9 @@ export function resetTheme(): void {
     document.body.classList.remove('bmm-theme-light', 'bmm-no-anim');
     document.documentElement.style.removeProperty('--bmm-nav-logo-url');
     document.body.classList.remove('bmm-has-nav-logo');
+    // The wallpaper is applied the same way, so it must be cleared the same way —
+    // a reset that leaves the previous theme's background painted is not a reset.
+    document.documentElement.style.removeProperty('--bmm-app-bg-image');
     localStorage.removeItem(ACTIVE_KEY);
 }
 
