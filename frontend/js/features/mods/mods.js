@@ -329,6 +329,13 @@ export async function initMods() {
             }
         }
         S.userTags = await invoke('get_tags').catch(() => []);
+        // Tag icons come from the lazy icon packs; warm the ones in use so the
+        // synchronous card renderer finds them (a miss renders text-only once).
+        try {
+            const ip = await import('../../ui/icon-pack.js');
+            await Promise.all((S.userTags || []).filter((tg) => ip.isPackIcon(tg.icon)).map((tg) => ip.ensurePackFor(tg.icon)));
+        }
+        catch { /* icons are decoration */ }
         S.allMods = await invoke('get_mods');
         updateTagFilterUI();
         renderModList();
@@ -389,6 +396,13 @@ export async function refreshMods(autoScan = false, immediate = false) {
         }
         try {
             S.userTags = await invoke('get_tags').catch(() => []);
+            // Tag icons come from the lazy icon packs; warm the ones in use so the
+            // synchronous card renderer finds them (a miss renders text-only once).
+            try {
+                const ip = await import('../../ui/icon-pack.js');
+                await Promise.all((S.userTags || []).filter((tg) => ip.isPackIcon(tg.icon)).map((tg) => ip.ensurePackFor(tg.icon)));
+            }
+            catch { /* icons are decoration */ }
             S.allMods = await invoke('get_mods').catch(() => []);
             S.cachedActiveProfileId = await invoke('get_active_profile_id').catch(() => null);
         }

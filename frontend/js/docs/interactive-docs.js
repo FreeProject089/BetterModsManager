@@ -295,6 +295,12 @@ export function showTaskyHelp(key, iconClass = 'info', isLiteral = false) {
     // independent and must not silence tooltips.
     if (window.__taskyTooltipEnabled === false)
         return;
+    // An empty bubble is worse than none (field screenshot: a bare frame hovering
+    // beside a control). If the key resolves to nothing — or to itself, which is
+    // what an i18n miss returns — there is nothing to say, so say nothing.
+    const _resolved = isLiteral ? String(key ?? '') : t(String(key ?? ''));
+    if (!_resolved || !_resolved.trim() || (!isLiteral && _resolved === key))
+        return;
     // Don't show tooltips when dropdown is open
     if (window.__dropdownOpen === true)
         return;
