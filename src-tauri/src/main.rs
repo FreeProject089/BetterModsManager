@@ -641,6 +641,7 @@ fn main() {
             commands::debug::export_diagnostics,
             commands::debug::generate_diagnostic_report,
             commands::debug::capture_memory_snapshot,
+            commands::window::set_unread_badge,
             commands::window::start_resizing,
             commands::window::open_external_url,
             commands::ban_manager::ban_user,

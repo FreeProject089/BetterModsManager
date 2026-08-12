@@ -118,6 +118,24 @@ function _paintBadge(): void {
     // The count is on the button itself, not only in a decorative dot: a screen
     // reader gets "3 unread notifications", not "button".
     btn.setAttribute('aria-label', `${t('notif.title') || 'Notifications'}${n ? ` (${n})` : ''}`);
+    _paintTaskbar(n);
+}
+
+/** Mirror the count onto the taskbar icon.
+ *
+ *  Fire-and-forget, and only when it CHANGES. This runs from save(), which runs on
+ *  every toast; asking the OS to redraw an icon forty times during a modpack apply is
+ *  work for no visible difference. A failure is swallowed on purpose — the badge is
+ *  a nicety, and a platform that cannot draw it must not turn a notification into an
+ *  error. */
+let _lastBadge = -1;
+function _paintTaskbar(n: number): void {
+    const shown = Math.min(n, 99);
+    if (shown === _lastBadge) return;
+    _lastBadge = shown;
+    import('../core/api.js')
+        .then(m => m.invoke('set_unread_badge', { count: shown }))
+        .catch(() => { /* no badge on this platform */ });
 }
 
 // ── Relative time ────────────────────────────────────────────────────────────
@@ -304,6 +322,11 @@ export function toggleNotifCenter(): void {
 
     _panel = document.createElement('div');
     _panel.className = 'nc-panel';
+    // Stop the panel's own presses from ever reaching the document-level
+    // outside-click handler. The z-index is the real fix; this makes the failure
+    // mode impossible rather than unlikely, which matters for a handler whose job is
+    // to close things.
+    _panel.addEventListener('mousedown', e => e.stopPropagation());
     _panel.setAttribute('role', 'dialog');
     _panel.setAttribute('aria-label', t('notif.title') || 'Notifications');
     document.body.appendChild(_panel);

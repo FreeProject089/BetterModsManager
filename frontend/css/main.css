@@ -16141,7 +16141,15 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
        outside-click handler correctly concluded you had clicked outside and closed
        it. It read as "the panel closes the moment I touch it" and was really "the
        panel was never the thing you touched". */
-    z-index: 999990;
+    /* Above every layer this app has, not merely above most of them. 999990 still
+       sat under the top of the range (the tutorial spotlight is at 9999995), so
+       clicks went to whatever was above it — which is why the panel appeared to
+       close the moment you touched it and why the things behind it reacted instead.
+       pointer-events is stated rather than assumed, because a transparent layer
+       above with pointer-events:none would otherwise be indistinguishable from this
+       bug and the next person would chase the z-index again. */
+    z-index: 9999996;
+    pointer-events: auto;
     width: 340px;
     max-width: calc(100vw - 16px);
     max-height: min(460px, 70vh);
@@ -16346,8 +16354,29 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
    the selected profile actually has an icon. Keying on its existence alone would
    hide the placeholder for icon-less profiles and leave the slot blank — trading an
    overlap for a hole. */
+/* The real icon is `position: absolute`, so it does NOT occupy the placeholder's
+   flex slot. Hiding the placeholder outright therefore removed the box that reserved
+   the space, and the profile name slid left underneath the icon — one overlap traded
+   for another. Putting the real icon INTO the flex row instead is the fix: it takes
+   the slot the placeholder was holding, which is what "replaces it" should have
+   meant from the start. */
+#view-mapper .mapper-profile-wrap .profile-icon-display {
+    position: static;
+    flex: none;
+}
 #view-mapper .mapper-profile-wrap:has(.profile-icon-display:not(:empty)) .mapper-profile-ic {
     display: none;
+}
+
+/* `hidden` is only `display: none` from the browser's own stylesheet, so ANY class
+   rule that sets display beats it — and .repo-info-banner sets `display: flex`. The
+   dismissible-tip state was being applied correctly and the banner simply stayed on
+   screen, which reads as "the close button does nothing". */
+.repo-info-banner[hidden],
+.mapper-help-banner[hidden],
+.mapper-hint-show[hidden],
+.tut-dock-resize-v[hidden] {
+    display: none !important;
 }
 
 /* Mod detail: the server-repo the mod was synced from. Sits ABOVE the editable link
