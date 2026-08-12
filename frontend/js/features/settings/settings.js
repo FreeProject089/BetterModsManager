@@ -917,10 +917,34 @@ async function initLanguageSettings() {
     });
 }
 // ── Tags Settings ──
+// The form's transient state. Module-scoped, NOT on window: as globals these
+// outlived the form. Click the pencil on a tag, change your mind, type a NEW name
+// and press the button — it still meant "update", so the old tag was renamed and
+// no new tag was created. Nothing cleared the edit id but a successful save.
+// Every render of the panel now resets it, and there is a visible way out.
+let _tagIconRef = '';
+let _tagEditId = null;
+function _tagFormReset() {
+    _tagIconRef = '';
+    _tagEditId = null;
+    const nameInput = document.getElementById('setting-tag-name');
+    if (nameInput)
+        nameInput.value = '';
+    const prev = document.getElementById('setting-tag-icon-preview');
+    if (prev)
+        prev.textContent = '＋';
+    const span = document.getElementById('btn-create-tag')?.querySelector('span');
+    if (span)
+        span.textContent = t('settings.tagCreate') || 'Creer';
+    const cancel = document.getElementById('btn-cancel-tag-edit');
+    if (cancel)
+        cancel.style.display = 'none';
+}
 export async function renderSettingsTags() {
     const list = document.getElementById('settings-tags-list');
     if (!list)
         return;
+    _tagFormReset();
     try {
         const tags = await invoke('get_tags');
         list.innerHTML = '';
@@ -928,20 +952,17 @@ export async function renderSettingsTags() {
             list.innerHTML = `<span style="color:var(--text-muted);font-size:12px;font-style:italic">${t('settings.tagNoneYet')}</span>`;
             return;
         }
-        // Pack icons render synchronously once loaded — make sure they are.
+        // One renderer for every tag chip in the app (ui/icon-pack.ts) — five
+        // hand-rolled copies had already drifted apart.
         const iconMod = await import('../../ui/icon-pack.js');
-        await Promise.all(tags.filter(tg => iconMod.isPackIcon(tg.icon)).map(tg => iconMod.ensurePackFor(tg.icon)));
+        await iconMod.ensurePacksFor(tags.map((tg) => tg.icon));
         tags.forEach(tag => {
-            const chip = document.createElement('div');
-            const bg = tag.color2
-                ? `linear-gradient(90deg, ${tag.color}26, ${tag.color2}26)`
-                : `${tag.color}20`;
-            chip.style.cssText = `display:flex;align-items:center;gap:5px;background:${bg};color:${tag.color};border:1px solid ${tag.color}40;padding:4px 10px;border-radius:6px;font-size:12px;font-weight:600`;
-            const iconHtml = iconMod.isPackIcon(tag.icon) ? iconMod.renderPackIcon(tag.icon, 12) : '';
-            chip.innerHTML = `${iconHtml ? `<span style="display:inline-flex">${iconHtml}</span>` : ''}<span>${escHtml(tag.name)}</span>`
-                + `<button data-id="${tag.id}" class="btn-edit-tag" title="${escHtml(t('common.edit') || 'Edit')}" style="background:none;border:none;color:inherit;cursor:pointer;padding:0;margin-left:6px;opacity:0.7">✎</button>`
-                + `<button data-id="${tag.id}" class="btn-del-tag" onmouseenter="window.showTaskyHelp('settings.tagDeleteTip', 'trash')" onmouseleave="window.hideTaskyHelp()" style="background:none;border:none;color:inherit;cursor:pointer;padding:0;margin-left:4px;font-size:14px">&times;</button>`;
-            list.appendChild(chip);
+            const wrap = document.createElement('div');
+            wrap.style.cssText = 'display:flex;align-items:center;gap:4px';
+            wrap.innerHTML = iconMod.renderTagChip(tag, { fontSize: 12, pad: '4px 10px' })
+                + `<button data-id="${tag.id}" class="btn-edit-tag" title="${escHtml(t('common.edit') || 'Edit')}" style="background:none;border:none;color:${tag.color};cursor:pointer;padding:0;opacity:0.7">✎</button>`
+                + `<button data-id="${tag.id}" class="btn-del-tag" onmouseenter="window.showTaskyHelp('settings.tagDeleteTip', 'trash')" onmouseleave="window.hideTaskyHelp()" style="background:none;border:none;color:${tag.color};cursor:pointer;padding:0;font-size:14px">&times;</button>`;
+            list.appendChild(wrap);
         });
         // Edit: prefill the form, flip the create button to save (same handler).
         list.querySelectorAll('.btn-edit-tag').forEach(btn => {
@@ -959,15 +980,18 @@ export async function renderSettingsTags() {
                     if (tag.color2)
                         c2.value = tag.color2;
                 }
-                window._tagIconRef = tag.icon || '';
+                _tagIconRef = tag.icon || '';
                 const prev = document.getElementById('setting-tag-icon-preview');
                 if (prev)
                     prev.innerHTML = (iconMod.isPackIcon(tag.icon) && iconMod.renderPackIcon(tag.icon, 18)) || '＋';
-                window._tagEditId = tag.id;
+                _tagEditId = tag.id;
                 const cbtn = document.getElementById('btn-create-tag');
                 const span = cbtn?.querySelector('span');
                 if (span)
                     span.textContent = t('common.save') || 'Enregistrer';
+                const cancel = document.getElementById('btn-cancel-tag-edit');
+                if (cancel)
+                    cancel.style.display = '';
             });
         });
         list.querySelectorAll('.btn-del-tag').forEach(btn => {
@@ -1822,14 +1846,15 @@ export async function initSettings() {
         });
         document.getElementById('btn-tag-icon')?.addEventListener('click', async () => {
             const { openIconPicker, renderPackIcon } = await import('../../ui/icon-pack.js');
-            const ref = await openIconPicker({ current: window._tagIconRef || '' });
+            const ref = await openIconPicker({ current: _tagIconRef });
             if (ref === null)
                 return;
-            window._tagIconRef = ref;
+            _tagIconRef = ref;
             const prev = document.getElementById('setting-tag-icon-preview');
             if (prev)
                 prev.innerHTML = renderPackIcon(ref, 18) || '＋';
         });
+        document.getElementById('btn-cancel-tag-edit')?.addEventListener('click', () => _tagFormReset());
         btnCreateTag.addEventListener('click', async () => {
             const nameInput = document.getElementById('setting-tag-name');
             const colorInput = document.getElementById('setting-tag-color');
@@ -1837,9 +1862,9 @@ export async function initSettings() {
             const color = colorInput.value;
             if (!name)
                 return toast(t('settings.tagNameRequired'), 'error');
-            const icon = window._tagIconRef || '';
+            const icon = _tagIconRef;
             const color2 = gradToggle?.checked ? (color2Input?.value || null) : null;
-            const editingId = window._tagEditId || null;
+            const editingId = _tagEditId;
             try {
                 if (editingId) {
                     await invoke('update_tag', { tagId: editingId, name, color, icon, color2 });
@@ -1849,14 +1874,7 @@ export async function initSettings() {
                     await invoke('create_tag', { name, color, icon, color2 });
                     toast(t('settings.tagCreated'), 'success');
                 }
-                nameInput.value = '';
-                window._tagIconRef = '';
-                window._tagEditId = null;
-                const prev = document.getElementById('setting-tag-icon-preview');
-                if (prev)
-                    prev.textContent = '＋';
-                btnCreateTag.querySelector('span').textContent = t('settings.tagCreate') || 'Créer';
-                renderSettingsTags();
+                renderSettingsTags(); // also resets the form state
                 if (window._refreshModsFn)
                     window._refreshModsFn();
             }

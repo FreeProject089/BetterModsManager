@@ -5,6 +5,7 @@
 //   Elements → add custom HTML/CSS elements anywhere in BMM
 //   Advanced → full CSS per page
 //   Installed→ manage + import + export themes
+import { claimDockSpace, releaseDockSpace } from '../../ui/dock-space.js';
 
 import { t } from '../../core/i18n.js';
 import { toast } from '../../ui/app.js';
@@ -251,8 +252,9 @@ function _bteDockW(): number {
 }
 
 function _bteShellPad(w: number | null): void {
-    const shell = document.querySelector('.app-shell') as HTMLElement | null;
-    if (shell) shell.style.paddingRight = w ? `${w}px` : '';
+    // Shared owner: writing .app-shell padding directly meant the last dock to
+    // toggle clobbered the others' reservation (see ui/dock-space.ts).
+    if (w) claimDockSpace('theme-editor', w); else releaseDockSpace('theme-editor');
 }
 
 function _bteDocked(): boolean { return document.body.classList.contains('bte-docked'); }

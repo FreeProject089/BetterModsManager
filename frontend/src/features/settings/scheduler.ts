@@ -73,10 +73,36 @@ let _apps: any[] = [];
 let _disks: any[] = [];
 
 // ── Persistence ──────────────────────────────────────────────────────────────
+/** Fill in the arrays every block kind assumes it has.
+ *
+ *  Steps used to be built only by _makeStep(), which guarantees them. Now MCP and
+ *  the CLI can author a task (bmm_create_schedule), and they validate only the top
+ *  level — a switch without `default`, or a forEach without `steps`, saved and
+ *  listed fine but threw the moment the user opened it in the editor. Which is
+ *  exactly what the "created disabled, go inspect it" contract asks them to do. */
+function normalizeSteps(steps: any[]): Step[] {
+    if (!Array.isArray(steps)) return [];
+    for (const st of steps) {
+        if (!st || typeof st !== 'object') continue;
+        if (st.kind === 'if') { st.then = normalizeSteps(st.then); st.else = normalizeSteps(st.else); }
+        else if (st.kind === 'repeat' || st.kind === 'forEach') { st.steps = normalizeSteps(st.steps); }
+        else if (st.kind === 'switch') {
+            st.cases = Array.isArray(st.cases) ? st.cases : [];
+            for (const c of st.cases) {
+                if (!c.condition) c.condition = { type: 'always', params: {} };
+                c.steps = normalizeSteps(c.steps);
+            }
+            st.default = normalizeSteps(st.default);
+        }
+    }
+    return steps as Step[];
+}
+
 async function loadTasks(): Promise<void> {
     try {
         const raw = await invoke('get_schedules');
         _tasks = Array.isArray(raw) ? raw : [];
+        for (const t of _tasks) t.steps = normalizeSteps(t.steps);
     } catch { _tasks = []; }
 }
 async function saveTasks(): Promise<void> {
@@ -337,10 +363,17 @@ async function runSteps(steps: Step[], task: Task, ctx: Record<string, number>):
 async function forEachItems(source: string): Promise<any[]> {
     try {
         if (source === 'profiles') return (await invoke('get_profiles')) as any[] || [];
-        if (source === 'modpacks') return (await invoke('get_modpacks')) as any[] || [];
+        // The command names matter: `get_modpacks`/`get_builtin_themes` do not exist,
+        // and the rejection was swallowed by the catch below — the loop ran ZERO times
+        // and the task still reported success. The real ones are load_modpacks and
+        // list_builtin_themes / list_installed_themes (both, or "each theme" would
+        // silently skip everything the user actually installed).
+        if (source === 'modpacks') return (await invoke('load_modpacks')) as any[] || [];
         if (source === 'themes') {
             const parse = (v: any) => { try { return (Array.isArray(v) ? v : JSON.parse(v)) || []; } catch { return []; } };
-            return parse(await invoke('get_builtin_themes').catch(() => '[]'));
+            const builtin = parse(await invoke('list_builtin_themes').catch(() => '[]'));
+            const installed = parse(await invoke('list_installed_themes').catch(() => '[]'));
+            return [...builtin, ...installed];
         }
         const mods = (await invoke('get_mods')) as any[] || [];
         if (source === 'enabledMods') return mods.filter((m: any) => m.enabled);
@@ -363,7 +396,10 @@ function substituteItem(steps: Step[], item: any): Step[] {
         if (v && typeof v === 'object') { const o: any = {}; for (const k of Object.keys(v)) o[k] = rep(v[k]); return o; }
         return v;
     };
-    return rep(JSON.parse(JSON.stringify(steps)));
+    // rep() already rebuilds every array and object it walks (primitives are
+    // immutable), so it IS the deep copy — the JSON round-trip on top of it copied
+    // the whole subtree a second time, per item, per lap, for nothing.
+    return rep(steps || []);
 }
 
 // Polls a condition until it becomes true or the timeout elapses (then throws,

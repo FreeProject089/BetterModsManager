@@ -6,6 +6,7 @@
 // devtools, create new languages, and export a finished .json.
 
 import { invoke } from '../../core/api.js';
+import { claimDockSpace, releaseDockSpace } from '../../ui/dock-space.js';
 import { getAllTranslations, getLang, t } from '../../core/i18n.js';
 import { toast } from '../../ui/app.js';
 import { escHtml, escAttr } from '../../core/utils.js';
@@ -42,7 +43,7 @@ export function initI18nSandbox(): void {
         if (_pickMode) togglePickMode(false);
         if (_hlMode) toggleHighlight(false);
         if (_overlayMode) toggleOverlayMode(modal, false);
-        if (_dockMode) toggleDockMode(modal, false);
+        if (_dockMode) toggleDockMode(modal, false, false);   // keep the preference
         // The live-test overlay dies with the sandbox. A draft that kept speaking after
         // its editor closed would be indistinguishable from the app's real text — the
         // exact confusion a sandbox exists to prevent.
@@ -637,11 +638,12 @@ function _i18nDockW(): number {
 }
 
 function _i18nShellPad(w: number | null): void {
-    const shell = document.querySelector('.app-shell') as HTMLElement | null;
-    if (shell) shell.style.paddingRight = w ? `${w}px` : '';
+    // Shared owner — see ui/dock-space.ts (docking the theme editor AND the
+    // sandbox used to leave one of them covering the app).
+    if (w) claimDockSpace('i18n-sandbox', w); else releaseDockSpace('i18n-sandbox');
 }
 
-function toggleDockMode(modal: HTMLElement, force?: boolean): void {
+function toggleDockMode(modal: HTMLElement, force?: boolean, remember = true): void {
     const next = force !== undefined ? force : !_dockMode;
     if (next === _dockMode) return;
     const panel = modal.querySelector('.modal') as HTMLElement;
@@ -650,7 +652,10 @@ function toggleDockMode(modal: HTMLElement, force?: boolean): void {
     _dockMode = next;
     document.getElementById('i18n-dock-toggle')?.classList.toggle('active', next);
     document.body.classList.toggle('i18nsb-docked', next);
-    localStorage.setItem(I18N_DOCK_KEY, next ? 'right' : 'off');
+    // `remember` is false when closeModal is unwinding the styles: closing while
+    // docked used to WRITE 'off', so the preference the open handler restores was
+    // destroyed by the very act of closing and dock mode never actually persisted.
+    if (remember) localStorage.setItem(I18N_DOCK_KEY, next ? 'right' : 'off');
     if (next) {
         _savedDockStyle = panel.getAttribute('style') || '';
         panel.setAttribute('style', '');                          // CSS owns the dock
@@ -667,6 +672,10 @@ function toggleDockMode(modal: HTMLElement, force?: boolean): void {
         modal.style.background = '';
         modal.style.pointerEvents = '';
         modal.style.backdropFilter = '';
+        // Docking cleared the modal's scroll lock on purpose (the app must stay
+        // usable); coming back to the full-screen modal has to take it again, or
+        // the page scrolls behind the backdrop.
+        if (modal.classList.contains('open')) document.body.style.overflow = 'hidden';
         document.body.style.removeProperty('--i18nsb-w');
         _i18nShellPad(null);
     }

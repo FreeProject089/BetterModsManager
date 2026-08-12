@@ -540,7 +540,7 @@ async fn run_installer_and_detect(
     (exe, install_dir, uninstaller)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn detect_app_executables(dir_path: String) -> Result<Vec<ExeInfo>, String> {
     let dir = std::path::Path::new(&dir_path);
     Ok(detect_executables_in(dir))
@@ -1012,7 +1012,7 @@ pub fn get_apps_state(app_handle: AppHandle) -> Result<AppsState, String> {
 
 /// Lists every runnable executable/script found in an installed app's folder,
 /// sorted root-first. Used by the manual launcher picker (esp. for zip apps).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_app_executables(app_handle: AppHandle, app_id: String) -> Result<Vec<ExeInfo>, String> {
     let state = load_state(&app_handle);
     let info = state.installed.get(&app_id).ok_or("App not installed")?;

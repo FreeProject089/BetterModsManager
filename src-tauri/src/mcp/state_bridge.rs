@@ -1256,7 +1256,6 @@ pub fn save_schedule(mut task: serde_json::Value) -> anyhow::Result<serde_json::
     if !obj.contains_key("trigger") {
         obj.insert("trigger".into(), serde_json::json!({ "type": "manual" }));
     }
-    if !obj.contains_key("enabled") { obj.insert("enabled".into(), serde_json::json!(false)); }
     if !obj.contains_key("allowCustomCommands") { obj.insert("allowCustomCommands".into(), serde_json::json!(false)); }
     let id = match obj.get("id").and_then(|v| v.as_str()).filter(|s| !s.trim().is_empty()) {
         Some(id) => id.to_string(),
@@ -1272,9 +1271,23 @@ pub fn save_schedule(mut task: serde_json::Value) -> anyhow::Result<serde_json::
     } else { Vec::new() };
     let existing = tasks.iter().position(|t| t.get("id").and_then(|v| v.as_str()) == Some(id.as_str()));
     let updated = existing.is_some();
+    // "created disabled" is a rule about CREATION. Applying it to updates too meant
+    // an agent that tweaked one step of a running automation and omitted `enabled`
+    // silently switched the user's task OFF — nothing surfaced it until the trigger
+    // never fired. On update, an omitted field keeps whatever is stored.
     match existing {
-        Some(i) => tasks[i] = task,
-        None => tasks.push(task),
+        Some(i) => {
+            if let (Some(prev), Some(o)) = (tasks[i].get("enabled").cloned(), task.as_object_mut()) {
+                o.entry("enabled").or_insert(prev);
+            }
+            tasks[i] = task;
+        }
+        None => {
+            if let Some(o) = task.as_object_mut() {
+                o.entry("enabled").or_insert(serde_json::json!(false));
+            }
+            tasks.push(task);
+        }
     }
     std::fs::write(&path, serde_json::to_string_pretty(&tasks)?)?;
     Ok(serde_json::json!({ "id": id, "updated": updated, "count": tasks.len() }))

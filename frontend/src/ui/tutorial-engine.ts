@@ -760,21 +760,24 @@ function _renderStep(): void {
     panel.querySelectorAll<HTMLElement>('.tut-field-row').forEach((row) => {
         row.addEventListener('click', () => {
             const sel = row.dataset.fieldSel || '';
-            let target: Element | null = document.getElementById(sel) || document.querySelector(`[id="${sel}"]`);
-            if (!target) target = _preferDemo(Array.from(document.querySelectorAll(`.${sel}`)));
-            target = _resolveCustomSelect(target) ?? target;
+            // Same resolution as the rings (_resolveFieldEl) — a second copy is how
+            // a row flashes one element while the spotlight highlights another.
+            const target = _resolveFieldEl(sel);
             if (!target) return;
             (target as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center' });
             target.classList.add('tut-field-flash');
             setTimeout(() => target?.classList.remove('tut-field-flash'), 1600);
+            // NOT isLiteral: fieldKey is an i18n key ('tut.basics.profiles.f.name'),
+            // and the literal path prints its argument verbatim — the bubble showed
+            // the raw key instead of the sentence.
             const key = row.dataset.fieldKey;
-            if (key) (window as any).showTaskyHelp?.(key, 'info', true);
+            if (key) (window as any).showTaskyHelp?.(key, 'info');
             // In a running flow, clicking a row moves the flow there — the list is
             // a table of contents, not just a legend.
             if (_fieldFlow) {
                 const rows = Array.from(document.querySelectorAll('.tut-field-row'));
                 const idx = rows.indexOf(row);
-                if (idx >= 0) { _fieldFlow.i = idx; _fieldFlowRender(); }
+                if (idx >= 0) { _fieldFlowUnwire(); _fieldFlow.i = idx; _fieldFlowRender(); }
             }
         });
     });
@@ -1110,7 +1113,10 @@ let _fieldFlow: {
 } | null = null;
 
 function _resolveFieldEl(sel: string): HTMLElement | null {
-    let target: Element | null = document.getElementById(sel) || document.querySelector(`[id="${sel}"]`);
+    // No `[id="…"]` fallback: getElementById already returns the first element with
+    // that id, so when it is null the attribute selector cannot match either — and
+    // an unescaped id containing a quote would make it throw.
+    let target: Element | null = document.getElementById(sel);
     if (!target) target = _preferDemo(Array.from(document.querySelectorAll(`.${sel}`)));
     return (_resolveCustomSelect(target) ?? target) as HTMLElement | null;
 }
@@ -1150,14 +1156,31 @@ function _fieldFlowRender(): void {
     _fieldFlowWire(f);
 }
 
-function _fieldFlowAdvance(): void {
+/** Drop the current field's listeners and value-poll.
+ *
+ *  This MUST run before any re-wire. _fieldFlowWire overwrites flow.poll with a
+ *  fresh interval, so re-rendering without unwiring orphaned the previous one
+ *  beyond the reach of _stopFieldFlow — it polled a detached input for the rest
+ *  of the session — and left stale change/Enter handlers that advanced the flow
+ *  from a field the ring had already left. */
+function _fieldFlowUnwire(): void {
     if (!_fieldFlow) return;
     _fieldFlow.unsubs.forEach(u => { try { u(); } catch { /* detached */ } });
     _fieldFlow.unsubs = [];
     if (_fieldFlow.poll) { clearInterval(_fieldFlow.poll); _fieldFlow.poll = null; }
+}
+
+function _fieldFlowAdvance(): void {
+    if (!_fieldFlow) return;
+    _fieldFlowUnwire();
     _fieldFlow.i++;
     _fieldFlowRender();
 }
+
+// <input type=button|submit|reset|image> looks like an INPUT but behaves like a
+// button: it never fires change/input, so routing it to those listeners left the
+// flow waiting forever on a field the user had already clicked.
+const CLICKY_INPUTS = new Set(['button', 'submit', 'reset', 'image']);
 
 function _fieldFlowWire(f: { sel: string; key: string }): void {
     const flow = _fieldFlow;
@@ -1181,7 +1204,7 @@ function _fieldFlowWire(f: { sel: string; key: string }): void {
             if (input.value !== last && input.value.trim()) _fieldFlowAdvance();
             last = input.value;
         }, 400);
-    } else if (tag === 'SELECT' || (tag === 'INPUT')) {
+    } else if (tag === 'SELECT' || (tag === 'INPUT' && !CLICKY_INPUTS.has((el as HTMLInputElement).type))) {
         on(el, 'change', () => _fieldFlowAdvance());
         on(el, 'input', () => _fieldFlowAdvance());
     } else {
@@ -1305,7 +1328,11 @@ function _drawHighlight(target: Element, idx: number = 0): void {
     // (modal overlays live at 9000-10000); a ring on the page stays under them so a
     // dialog opening is never greyed by the spotlight (see the z-index note below).
     const inModal = !!(target as HTMLElement).closest?.('.modal-generic-overlay, .modal-overlay, .plug-overlay');
-    const hlZ = inModal ? 20000 : 8990;
+    // Above EVERY modal layer, not just the low ones: the app's dialogs run from
+    // mapper.css's 9000 up to the assets panel at 2000300, so a ring on an element
+    // inside a high panel at 20000 would vanish under it — the same invisible-
+    // highlight bug this layering was fixed to kill.
+    const hlZ = inModal ? 2000400 : 8990;
     // The primary target (idx 0) carries the spotlight dim: a huge soft box-shadow
     // darkens everything EXCEPT the cut-out, so the eye lands on the right spot.
     // Secondary targets get just the coloured ring (no extra dim, to avoid stacking).

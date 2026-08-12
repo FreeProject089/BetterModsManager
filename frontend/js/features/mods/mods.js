@@ -329,13 +329,13 @@ export async function initMods() {
             }
         }
         S.userTags = await invoke('get_tags').catch(() => []);
-        // Tag icons come from the lazy icon packs; warm the ones in use so the
-        // synchronous card renderer finds them (a miss renders text-only once).
-        try {
-            const ip = await import('../../ui/icon-pack.js');
-            await Promise.all((S.userTags || []).filter((tg) => ip.isPackIcon(tg.icon)).map((tg) => ip.ensurePackFor(tg.icon)));
-        }
-        catch { /* icons are decoration */ }
+        // Tag icons come from the lazy packs. Fire-and-forget: awaiting here put a pack
+        // fetch in front of get_mods on the app's hottest path (initMods at startup,
+        // refreshMods on every toggle), and the renderer already tolerates a miss — it
+        // draws the name and the next render finds the glyph.
+        void import('../../ui/icon-pack.js')
+            .then(ip => ip.ensurePacksFor((S.userTags || []).map((tg) => tg.icon)))
+            .catch(() => { });
         S.allMods = await invoke('get_mods');
         updateTagFilterUI();
         renderModList();
@@ -396,13 +396,13 @@ export async function refreshMods(autoScan = false, immediate = false) {
         }
         try {
             S.userTags = await invoke('get_tags').catch(() => []);
-            // Tag icons come from the lazy icon packs; warm the ones in use so the
-            // synchronous card renderer finds them (a miss renders text-only once).
-            try {
-                const ip = await import('../../ui/icon-pack.js');
-                await Promise.all((S.userTags || []).filter((tg) => ip.isPackIcon(tg.icon)).map((tg) => ip.ensurePackFor(tg.icon)));
-            }
-            catch { /* icons are decoration */ }
+            // Tag icons come from the lazy packs. Fire-and-forget: awaiting here put a pack
+            // fetch in front of get_mods on the app's hottest path (initMods at startup,
+            // refreshMods on every toggle), and the renderer already tolerates a miss — it
+            // draws the name and the next render finds the glyph.
+            void import('../../ui/icon-pack.js')
+                .then(ip => ip.ensurePacksFor((S.userTags || []).map((tg) => tg.icon)))
+                .catch(() => { });
             S.allMods = await invoke('get_mods').catch(() => []);
             S.cachedActiveProfileId = await invoke('get_active_profile_id').catch(() => null);
         }

@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { appState } from '../../core/state.js';
+import { renderTagChip } from '../../ui/icon-pack.js';
 import { t, applyTranslations } from '../../core/i18n.js';
 import { getModCardHTML, getLoadingOverlayHTML } from '../../ui/components.js';
 import { invoke, sendOsNotification } from '../../core/api.js';
@@ -728,7 +729,7 @@ export function updateCardState(card, mod) {
                 const tDef = userTags.find(t => t.id === tid);
                 if (!tDef)
                     return '';
-                return `<span style="background:${tDef.color}15;color:${tDef.color};border:1px solid ${tDef.color}30;padding:1px 5px;border-radius:4px;font-size:9px;font-weight:600">${escHtml(tDef.name)}</span>`;
+                return renderTagChip(tDef, { fontSize: 9, pad: '1px 5px' });
             }).join('');
             const extraTagsCount = mod.tags.length > 3 ? `<button class="btn btn-ghost" onclick="window.showModTagsModal('${mod.id}'); event.stopPropagation();" style="color:var(--text-muted);font-size:9px;padding:0;height:auto;min-height:0;margin:0;background:rgba(255,255,255,0.05);border-radius:4px;padding:1px 4px;border:1px solid rgba(255,255,255,0.1)">+${mod.tags.length - 3}</button>` : '';
             tagsContainer.innerHTML = visibleTags + extraTagsCount;
@@ -808,7 +809,7 @@ window.showModTagsModal = function (modId) {
         const tDef = S.userTags.find((t) => t.id === tid);
         if (!tDef)
             return '';
-        return `<span style="background:${tDef.color}15;color:${tDef.color};border:1px solid ${tDef.color}30;padding:4px 10px;border-radius:6px;font-size:12px;font-weight:600">${escHtml(tDef.name)}</span>`;
+        return renderTagChip(tDef, { fontSize: 12, pad: '4px 10px' });
     }).join('');
     const modal = document.getElementById('modal-mod-tags');
     if (modal)

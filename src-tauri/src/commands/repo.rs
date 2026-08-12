@@ -2737,7 +2737,10 @@ pub async fn sync_server_repo(
                             id: repo_tag.id.clone(),
                             name: repo_tag.name.clone(),
                             color: repo_tag.color_bg.clone(),
-                            icon: "fas fa-tag".to_string(),
+                            // An icon-pack ref, not a Font-Awesome class: nothing
+                            // renders `fas fa-*` any more, so repo-synced tags came
+                            // out icon-less while claiming to have one.
+                            icon: "lucide:tag".to_string(),
                             color2: None,
                         });
                     }

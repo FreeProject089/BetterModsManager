@@ -4,7 +4,7 @@
  * Extracts large template literals and DOM manipulations from main controllers.
  */
 import { t } from '../core/i18n.js';
-import { isPackIcon, renderPackIcon } from './icon-pack.js';
+import { renderTagChip } from './icon-pack.js';
 import { escHtml, escAttr, escJs, truncate } from '../core/utils.js';
 export function getLoadingOverlayHTML() {
     return `<div class="mod-loading-overlay"><div style="display:flex;flex-direction:column;align-items:center;gap:10px"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg></div></div>`;
@@ -25,13 +25,9 @@ export function getModCardHTML(mod, ctx) {
             const tDef = ctx.userTags.find(t => t.id === tid);
             if (!tDef)
                 return '';
-            const bg = tDef.color2
-                ? `linear-gradient(90deg, ${tDef.color}22, ${tDef.color2}22)`
-                : `${tDef.color}15`;
-            // Pack icons render '' until their JSON is in memory (preloaded on refresh);
+            // Pack icons render '' until their JSON is in memory (warmed on refresh);
             // a miss just renders the name — the next re-render finds the glyph.
-            const ic = isPackIcon(tDef.icon) ? renderPackIcon(tDef.icon, 9) : '';
-            return `<span style="display:inline-flex;align-items:center;gap:3px;background:${bg};color:${tDef.color};border:1px solid ${tDef.color}30;padding:1px 5px;border-radius:4px;font-size:9px;font-weight:600">${ic}${escHtml(tDef.name)}</span>`;
+            return renderTagChip(tDef, { fontSize: 9, pad: '1px 5px' });
         }).join('');
         const extraTagsCount = mod.tags.length > 3 ? `<button class="btn btn-ghost" onclick="window.showModTagsModal('${mod.id}'); event.stopPropagation();" style="color:var(--text-muted);font-size:9px;padding:0;height:auto;min-height:0;margin:0;background:rgba(255,255,255,0.05);border-radius:4px;padding:1px 4px;border:1px solid rgba(255,255,255,0.1)">+${mod.tags.length - 3}</button>` : '';
         tagsHtml = `<div class="mod-tags-container" style="display:inline-flex;gap:4px;align-items:center;margin-left:6px">${visibleTags}${extraTagsCount}</div>`;

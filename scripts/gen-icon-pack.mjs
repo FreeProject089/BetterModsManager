@@ -39,7 +39,26 @@ for (const [key, icon] of Object.entries(si)) {
     if (!icon || typeof icon !== 'object' || !icon.path || !icon.slug) continue;
     so[icon.slug] = { t: icon.title, h: icon.hex, p: icon.path };
 }
+// The full pack is 4.6 MB — far too much to pull in just to paint one 9px brand
+// glyph on a tag. It ships in TWO forms:
+//   simple-icons.json      the whole map, loaded ONLY when the picker's Brands
+//                          tab opens (a deliberate user action)
+//   si/<first-char>.json   ~36 shards, so rendering a stored 'si:github' ref
+//                          fetches ~150 KB instead of 4.6 MB
 fs.writeFileSync(path.join(OUT, 'simple-icons.json'), JSON.stringify(so));
+const shardDir = path.join(OUT, 'si');
+fs.rmSync(shardDir, { recursive: true, force: true });
+fs.mkdirSync(shardDir, { recursive: true });
+const shards = {};
+for (const [slug, icon] of Object.entries(so)) {
+    const k = /^[a-z]/.test(slug) ? slug[0] : '_';
+    (shards[k] ||= {})[slug] = icon;
+}
+for (const [k, map] of Object.entries(shards)) {
+    fs.writeFileSync(path.join(shardDir, `${k}.json`), JSON.stringify(map));
+}
+const shardKb = Object.keys(shards).map(k => fs.statSync(path.join(shardDir, `${k}.json`)).size);
+console.log(`simple-icons shards: ${Object.keys(shards).length} files, largest ${Math.round(Math.max(...shardKb) / 1024)} KB`);
 
 const kb = (f) => Math.round(fs.statSync(path.join(OUT, f)).size / 1024);
 console.log(`lucide.json: ${Object.keys(lu).length} icons, ${kb('lucide.json')} KB`);

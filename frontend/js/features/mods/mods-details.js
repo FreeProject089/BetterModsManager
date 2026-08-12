@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { appState } from '../../core/state.js';
+import { renderTagChip } from '../../ui/icon-pack.js';
 import { invoke } from '../../core/api.js';
 import { toast } from '../../ui/app.js';
 import { t } from '../../core/i18n.js';
@@ -251,8 +252,9 @@ export async function renderModDetail(modId) {
             if (!tDef)
                 return;
             const chip = document.createElement('div');
-            chip.style.cssText = `display:flex;align-items:center;gap:4px;background:${tDef.color}20;color:${tDef.color};border:1px solid ${tDef.color}40;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600`;
-            chip.innerHTML = `<span>${escHtml(tDef.name)}</span><button data-id="${tid}" onmouseenter="window.showTaskyHelp('mod.removeTagTip', 'trash')" onmouseleave="window.hideTaskyHelp()" style="background:none;border:none;color:inherit;cursor:pointer;padding:0;margin-left:4px">&times;</button>`;
+            chip.style.cssText = 'display:flex;align-items:center;gap:4px';
+            chip.innerHTML = renderTagChip(tDef, { fontSize: 11, pad: '2px 8px' })
+                + `<button data-id="${tid}" onmouseenter="window.showTaskyHelp('mod.removeTagTip', 'trash')" onmouseleave="window.hideTaskyHelp()" style="background:none;border:none;color:${tDef.color};cursor:pointer;padding:0">&times;</button>`;
             chip.querySelector('button').onclick = async () => {
                 const ok = await window.confirmCustom(t('common.delete') || 'Retirer le tag', (t('mod.removeTagConfirm') || 'Voulez-vous vraiment retirer le tag {name} ?').replace('{name}', `<strong>${escHtml(tDef.name)}</strong>`), 'danger');
                 if (ok) {
