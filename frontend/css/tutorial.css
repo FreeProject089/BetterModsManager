@@ -17,6 +17,11 @@
 .tut-engine-panel {
     /* Wider, because the constraint was the text and not the chrome. */
     width: min(620px, calc(100vw - 48px));
+    /* Above the spotlight dim (8990) — the coach must never be greyed by its own
+       spotlight (it was: the panel had NO z-index, so the dim painted over it too).
+       Below every modal layer (the lowest is mapper.css's .modal-generic-overlay at
+       9000): while a dialog is up, IT owns the screen. */
+    z-index: 8995;
 }
 
 /* ── Topbar: the chips can no longer reach the buttons ───────────────────── */

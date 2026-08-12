@@ -1162,6 +1162,11 @@ function _drawHighlight(target: Element, idx: number = 0): void {
     const hl = document.createElement('div');
     hl.className     = 'tut-highlight';
     hl.dataset.hlIdx = String(idx);
+    // A ring around something INSIDE an open dialog must paint above that dialog
+    // (modal overlays live at 9000-10000); a ring on the page stays under them so a
+    // dialog opening is never greyed by the spotlight (see the z-index note below).
+    const inModal = !!(target as HTMLElement).closest?.('.modal-generic-overlay, .modal-overlay, .plug-overlay');
+    const hlZ = inModal ? 20000 : 8990;
     // The primary target (idx 0) carries the spotlight dim: a huge soft box-shadow
     // darkens everything EXCEPT the cut-out, so the eye lands on the right spot.
     // Secondary targets get just the coloured ring (no extra dim, to avoid stacking).
@@ -1178,7 +1183,15 @@ function _drawHighlight(target: Element, idx: number = 0): void {
         border-radius:${baseRadius + pad}px;
         color:${tutColor};
         box-shadow:${dim};
-        z-index:99990;
+        /* Below EVERY modal layer and the tutorial panel, above the page. At 99990 this
+           dim painted OVER the modals: the Mapper's "name the new folder" dialog opened
+           invisibly under the grey, so the action could never complete and the step read
+           as "clicking does nothing" (field screenshot). The spotlight's job is to dim
+           the PAGE — a dialog opening is exactly what the user must see. The ceiling is
+           NOT main.css's 10000: mapper.css re-declares .modal-generic-overlay at 9000,
+           so the dim sits under that too. Rings on elements inside an open dialog get
+           20000 instead — above the dialog they belong to (hlZ above). */
+        z-index:${hlZ};
         pointer-events:none;
         transition:top 0.22s cubic-bezier(0.4,0,0.2,1), left 0.22s cubic-bezier(0.4,0,0.2,1), width 0.22s cubic-bezier(0.4,0,0.2,1), height 0.22s cubic-bezier(0.4,0,0.2,1), border-radius 0.22s ease;
     `;
