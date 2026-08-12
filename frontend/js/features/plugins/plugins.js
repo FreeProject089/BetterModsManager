@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { invoke, pickFile, saveFile, pickFolder, convertFileSrc, apiBase } from '../../core/api.js';
-import { toast, fetchProfileIconPaths, updateSelectProfileIcon } from '../../ui/app.js';
+import { toast, fetchProfileIconPaths, updateSelectProfileIcon, toastSaved } from '../../ui/app.js';
 import { t, getLang } from '../../core/i18n.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { dispatchBmmAction, BMM_ACTIONS } from '../../ui/tutorial-events.js';
@@ -760,7 +760,7 @@ function openPluginCatalogBuilder(onSourcesChanged) {
             return null;
         try {
             await invoke('write_text_file', { path, content: draftToCatalogJson(d) });
-            toast(t('plugins.catalogExported') || 'Catalog exported', 'success');
+            toastSaved(t('plugins.catalogExported') || 'Catalog exported');
             return path;
         }
         catch (e) {

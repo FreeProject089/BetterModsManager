@@ -15,7 +15,7 @@ import { escHtml, escAttr, formatBytes } from '../../core/utils.js';
 let lastImportedModlistJson = null;
 
 // Re-exporting toast from app.js for now or until moved to a better place
-import { toast } from '../../ui/app.js';
+import { toast, toastSaved } from '../../ui/app.js';
 
 
 export function initModlist() {
@@ -103,7 +103,7 @@ export function initModlist() {
             if (wasCancelled) {
                 toast(t('mm.exportCancelled') || 'Export annulé', 'info');
             } else {
-                toast(t('mm.exportSuccess'), 'success');
+                toastSaved(t('mm.exportSuccess'));
                 dispatchBmmAction(BMM_ACTIONS.MODLIST_EXPORTED, { name: listName });
                 exportCard.style.display = 'none';
             }

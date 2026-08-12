@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { invoke } from '../../core/api.js';
-import { toast } from '../../ui/app.js';
+import { toast, toastSaved } from '../../ui/app.js';
 import { t } from '../../core/i18n.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { showConfirm, copyToClipboard } from './repo.js';
@@ -127,7 +127,7 @@ export function initRepoAdmin(elements) {
             dlAnchorElem.setAttribute("href", dataStr);
             dlAnchorElem.setAttribute("download", "bmm_bans_export.json");
             dlAnchorElem.click();
-            toast(t('repo.exportSuccess') , 'success');
+            toastSaved(t('repo.exportSuccess'));
         });
     }
 
@@ -277,7 +277,7 @@ export function initRepoAdmin(elements) {
             dlAnchorElem.setAttribute("href", dataStr);
             dlAnchorElem.setAttribute("download", "bmm_whitelist_export.json");
             dlAnchorElem.click();
-            toast(t('repo.exportSuccess') , 'success');
+            toastSaved(t('repo.exportSuccess'));
         });
     }
 

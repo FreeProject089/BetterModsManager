@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { invoke, pickFolder } from '../../core/api.js';
 import { wireDismissibleTip } from '../../ui/dismissible-tip.js';
-import { toast } from '../../ui/app.js';
+import { toast, toastSaved } from '../../ui/app.js';
 import { escHtml, escAttr, formatBytes } from '../../core/utils.js';
 import { getLinks } from '../../core/links-config.js';
 import { t } from '../../core/i18n.js';
@@ -2011,7 +2011,7 @@ export function initRepo() {
                 });
                 saveHostHistory(outPath);
                 elements.exportStatus.textContent = t('repo.exportDone');
-                toast(t('repo.exportSuccess'), 'success');
+                toastSaved(t('repo.exportSuccess'));
             }
             catch (err) {
                 const errMsg = String(err);

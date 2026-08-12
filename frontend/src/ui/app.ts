@@ -89,7 +89,7 @@ async function waitForModalClosed(id: string): Promise<void> {
 }
 
 // ── Tauri bridge ──────────────────────────────────────────
-import { loadTauri, invoke, pickFolder, pickFile, saveFile, convertFileSrc, listenFileDrop, sendOsNotification } from '../core/api.js';
+import { loadTauri, invoke, pickFolder, pickFile, saveFile, convertFileSrc, listenFileDrop, sendOsNotification, lastSavePath } from '../core/api.js';
 import { recordNotification, initNotificationCenter } from './notification-center.js';
 // Imported from the tiny standalone module, NOT from debug-ui: the trap has to be
 // installed at boot to be worth anything, and pulling the whole DevTools surface
@@ -97,6 +97,37 @@ import { recordNotification, initNotificationCenter } from './notification-cente
 import { initWebviewErrorTrap } from '../features/debug/webview-env.js';
 
 export { invoke, pickFolder, pickFile, saveFile, listenFileDrop, sendOsNotification };
+
+/**
+ * "Exported" is only half an answer. The other half — WHERE — was missing from every
+ * export in the app, so the file existed somewhere the user then had to go and find.
+ * This appends the destination and, because knowing the path and getting to it are
+ * different problems, opens the containing folder on click.
+ *
+ * The path comes from the save dialog the export just used (core/api lastSavePath),
+ * so no call site has to thread its own variable through. When an export did not go
+ * through a dialog — an unattended backup to a configured folder — there is nothing
+ * to name and this degrades to the plain message rather than inventing one.
+ */
+export function toastSaved(message: string, path?: string | null): void {
+    const dest = path || lastSavePath();
+    if (!dest) { toast(message, 'success'); return; }
+    // The FOLDER, not the file: it is what you would open, and a full path in a toast
+    // is unreadable at this width anyway.
+    const folder = String(dest).replace(/[\\/][^\\/]+$/, '');
+    toast(`${message} → ${folder}`, 'success', 6000);
+    // Fire-and-forget: the toast has already told the truth, and a failure to open a
+    // file manager must not turn a successful export into an error.
+    setTimeout(() => {
+        const el = document.querySelector('#toast-container .toast:last-child') as HTMLElement | null;
+        if (!el) return;
+        el.style.cursor = 'pointer';
+        el.title = folder;
+        el.addEventListener('click', () => {
+            invoke('open_folder', { path: folder }).catch(() => { /* nothing to do */ });
+        });
+    }, 0);
+}
 
 // ── Toast ─────────────────────────────────────────────────
 export function toast(message, type = 'info', duration = 3000, icon = '') {

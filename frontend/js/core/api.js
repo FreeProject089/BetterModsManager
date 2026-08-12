@@ -196,13 +196,23 @@ export async function pickFile(options = []) {
         return null;
     }
 }
+/** The last path the user chose in a save dialog, or null.
+ *
+ *  Every export in the app picks its destination through saveFile() and then writes
+ *  to it, so the success toast fires a few lines after this was set — which is what
+ *  lets `toastSaved()` name the destination without each of a dozen call sites
+ *  threading its own local variable through. A cancelled dialog does not overwrite
+ *  it, so a later export cannot inherit an abandoned path. */
+let _lastSavePath = null;
+export function lastSavePath() { return _lastSavePath; }
 export async function saveFile(options = {}) {
     try {
-        if (_dialog?.save) {
-            return await _dialog.save(options);
-        }
-        const mod = await import('https://unpkg.com/@tauri-apps/api@1/dialog.js');
-        return await mod.save(options);
+        const picked = _dialog?.save
+            ? await _dialog.save(options)
+            : await (await import('https://unpkg.com/@tauri-apps/api@1/dialog.js')).save(options);
+        if (picked)
+            _lastSavePath = picked;
+        return picked;
     }
     catch {
         return null;

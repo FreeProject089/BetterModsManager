@@ -4,7 +4,7 @@
 
 import { invoke, saveFile, pickFile } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
-import { toast } from '../../ui/app.js';
+import { toast, toastSaved } from '../../ui/app.js';
 import { importReplayFromPath, playReplayJson } from './replay-watcher.js';
 
 interface CrashEntry { name: string; path: string; size: number; date: string; category: string; }
@@ -154,7 +154,7 @@ export async function openCrashManager(): Promise<void> {
         if (act === 'open') { invoke('open_file', { path }).catch(e => toast(String(e), 'error')); return; }
         if (act === 'export') {
             const dest = await saveFile({ defaultPath: row.dataset.n || 'crash-report.zip', filters: [{ name: 'Zip', extensions: ['zip'] }] }).catch(() => null);
-            if (dest) { try { await invoke('copy_file', { src: path, dest }); toast(t('crashmgr.exported') || 'Exported', 'success'); } catch (e) { toast(String(e), 'error'); } }
+            if (dest) { try { await invoke('copy_file', { src: path, dest }); toastSaved(t('crashmgr.exported') || 'Exported'); } catch (e) { toast(String(e), 'error'); } }
             return;
         }
         if (act === 'delete') {
@@ -250,7 +250,7 @@ export async function openCrashManager(): Promise<void> {
             }
             if (act === 'export') {
                 const dest = await saveFile({ defaultPath: el.dataset.n || 'session.bmmreplay', filters: [{ name: 'BMM Replay', extensions: ['bmmreplay'] }] }).catch(() => null);
-                if (dest) { try { await invoke('copy_file', { src: path, dest }); toast(t('crashmgr.exported') || 'Exported', 'success'); } catch (e) { toast(String(e), 'error'); } }
+                if (dest) { try { await invoke('copy_file', { src: path, dest }); toastSaved(t('crashmgr.exported') || 'Exported'); } catch (e) { toast(String(e), 'error'); } }
             }
         }));
     }
