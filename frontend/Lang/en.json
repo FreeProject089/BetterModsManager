@@ -6944,5 +6944,6 @@
   "themes.pickHintShift": "Shift + right-click: edit this element precisely",
   "themes.revealTip": "Click: show me what this paints",
   "themes.revealNone": "Nothing on screen uses this yet",
-  "themes.revealHits": "element(s) painted by this token"
+  "themes.revealHits": "element(s) painted by this token",
+  "iconpack.available": "available"
 }

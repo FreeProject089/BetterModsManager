@@ -134,20 +134,29 @@ export function openIconPicker(opts: { current?: string } = {}): Promise<string 
         overlay.className = 'modal-generic-overlay open';
         overlay.innerHTML = `
             <div class="modal ipk-modal">
-                <div class="modal-generic-header">
-                    <h3>${t('iconpack.title') || 'Choose an icon'}</h3>
-                    <button class="modal-close" id="ipk-close">✕</button>
-                </div>
-                <div class="ipk-bar">
-                    <input class="input" id="ipk-search" placeholder="${escAttr(t('iconpack.search') || 'Search 5000+ icons…')}" autocomplete="off">
+                <div class="ipk-head">
+                    <h3 class="ipk-title">${t('iconpack.title') || 'Choose an icon'}</h3>
                     <div class="ipk-tabs">
                         <button class="ipk-tab active" data-src="lucide">Lucide</button>
                         <button class="ipk-tab" data-src="si">${t('iconpack.brands') || 'Brands'}</button>
-                        <label class="ipk-tab" for="ipk-upload">${t('iconpack.upload') || 'Upload…'}<input type="file" id="ipk-upload" accept="image/png,image/jpeg,image/svg+xml,image/webp,image/gif" hidden></label>
+                        <label class="ipk-tab ipk-tab-upload" for="ipk-upload">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M5 20h14"/></svg>
+                            ${t('iconpack.upload') || 'Upload…'}
+                            <input type="file" id="ipk-upload" accept="image/png,image/jpeg,image/svg+xml,image/webp,image/gif" hidden></label>
                     </div>
+                    <button class="ipk-close" id="ipk-close" data-tooltip="${escAttr(t('common.close') || 'Close')}">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                </div>
+                <div class="ipk-searchwrap">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                    <input id="ipk-search" placeholder="${escAttr(t('iconpack.search') || 'Search 5000+ icons…')}" autocomplete="off" spellcheck="false">
                 </div>
                 <div class="ipk-grid" id="ipk-grid"></div>
-                <div class="ipk-foot"><span id="ipk-count"></span><button class="btn btn-ghost btn-sm" id="ipk-more" style="display:none">${t('iconpack.more') || 'Show more'}</button></div>
+                <div class="ipk-foot">
+                    <span class="ipk-count"><b id="ipk-count"></b> ${escHtml(t('iconpack.available') || 'available')}</span>
+                    <button class="btn btn-ghost btn-sm" id="ipk-more" style="display:none">${t('iconpack.more') || 'Show more'}</button>
+                </div>
             </div>`;
         (document.getElementById('app-window-outer') || document.body).appendChild(overlay);
 

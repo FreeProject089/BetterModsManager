@@ -15651,29 +15651,86 @@ body.i18nsb-docked #modal-i18n-sandbox .i18nsb-dock-resize { display: block; }
 }
 #i18n-dock-toggle.active { color: var(--accent); }
 
-/* ── Icon pack picker ───────────────────────────────────────────────────────── */
-.ipk-modal { width: min(640px, 94vw); max-height: 80vh; display: flex; flex-direction: column; }
-.ipk-bar { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; }
+/* -- Icon pack picker ---------------------------------------------------------
+   The first cut leaned on .modal-generic-header, whose close button dropped onto
+   its own line under the title, and packed 5000 icons into 84px cells with 9px
+   captions. One head row (title | sources | close), a real search field, and
+   cells big enough to recognise a glyph without reading its name. */
+.ipk-modal {
+    width: min(760px, 94vw);
+    max-height: 82vh;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 18px 20px 16px;
+}
+.ipk-head { display: flex; align-items: center; gap: 14px; }
+.ipk-title { margin: 0; font-size: 16px; font-weight: 700; white-space: nowrap; }
+.ipk-close {
+    margin-left: auto; flex-shrink: 0;
+    width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center;
+    background: transparent; border: 1px solid var(--border); border-radius: 8px;
+    color: var(--text-muted); cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+}
+.ipk-close:hover { color: var(--danger); border-color: var(--danger); }
 .ipk-tabs { display: flex; gap: 6px; }
 .ipk-tab {
-    padding: 5px 12px; border-radius: 8px; cursor: pointer;
-    background: transparent; border: 1px solid var(--border);
-    color: var(--text-secondary); font-size: 12px;
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 6px 13px; border-radius: 999px; cursor: pointer;
+    background: var(--bmm-s04); border: 1px solid transparent;
+    color: var(--text-secondary); font-size: 12px; font-weight: 600;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
 }
-.ipk-tab.active { color: var(--accent); border-color: var(--accent); background: var(--bmm-s04); }
+.ipk-tab:hover { color: var(--text-primary); }
+.ipk-tab.active { color: var(--accent); border-color: var(--accent); background: var(--bmm-s02); }
+.ipk-tab-upload { color: var(--text-muted); }
+
+.ipk-searchwrap {
+    display: flex; align-items: center; gap: 9px;
+    height: 38px; padding: 0 13px; border-radius: 10px;
+    background: var(--bmm-bg-base); border: 1px solid var(--border);
+    transition: border-color 0.15s;
+}
+.ipk-searchwrap:focus-within { border-color: var(--accent); }
+.ipk-searchwrap svg { color: var(--text-muted); flex-shrink: 0; }
+.ipk-searchwrap input {
+    flex: 1; min-width: 0; border: 0; background: transparent; outline: none;
+    color: var(--text-primary); font-size: 13px;
+}
+
 .ipk-grid {
     flex: 1; min-height: 0; overflow-y: auto;
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 6px;
-    padding: 4px 2px;
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+    gap: 8px; padding: 2px;
+    align-content: start;
 }
 .ipk-cell {
-    display: flex; flex-direction: column; align-items: center; gap: 5px;
-    padding: 9px 4px 7px; border-radius: 9px; cursor: pointer;
-    background: var(--bmm-s02); border: 1px solid transparent; color: var(--text-secondary);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px;
+    min-height: 76px; padding: 10px 6px 8px;
+    border-radius: 10px; cursor: pointer;
+    background: var(--bmm-s02); border: 1px solid transparent;
+    color: var(--text-secondary);
+    transition: color 0.12s, border-color 0.12s, background 0.12s;
 }
-.ipk-cell:hover { border-color: var(--accent); color: var(--text-primary); background: var(--bmm-bg-hover); }
-.ipk-name { font-size: 9px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ipk-foot { display: flex; align-items: center; justify-content: space-between; padding-top: 8px; color: var(--text-muted); font-size: 11px; }
+.ipk-cell:hover {
+    border-color: var(--accent); color: var(--text-primary);
+    background: var(--bmm-bg-hover);
+}
+.ipk-cell svg, .ipk-cell img { flex-shrink: 0; }
+.ipk-name {
+    font-size: 10px; line-height: 1.2; max-width: 100%;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    color: var(--text-muted);
+}
+.ipk-cell:hover .ipk-name { color: var(--text-secondary); }
+.ipk-loading { grid-column: 1 / -1; padding: 40px 0; text-align: center; color: var(--text-muted); font-size: 13px; }
+.ipk-foot {
+    display: flex; align-items: center; justify-content: space-between;
+    padding-top: 4px; color: var(--text-muted); font-size: 11px;
+}
+.ipk-count b { color: var(--text-secondary); }
+
 
 
 /* ── Translation sandbox: the de-genericization pass ─────────────────────────
