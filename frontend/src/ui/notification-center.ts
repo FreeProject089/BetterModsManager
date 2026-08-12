@@ -94,7 +94,10 @@ export function recordNotification(
 
 export function unreadCount(): number { return load().filter(e => !e.read).length; }
 
-export function markAllRead(): void { load().forEach(e => { e.read = true; }); save(); repaintPanel(); }
+/** Marks what is VISIBLE. With a filter active, clearing everything would be a
+ *  surprise: you searched down to three errors, and the button next to them would
+ *  have silently dismissed ninety entries you never saw. */
+export function markAllRead(): void { visibleEntries().forEach(e => { e.read = true; }); save(); repaintPanel(); }
 
 export function clearAll(): void { _cache = []; save(); repaintPanel(); }
 
@@ -163,9 +166,30 @@ function entryHTML(e: NotifEntry): string {
 }
 
 function panelHTML(): string {
-    const list = load();
+    const all = load();
+    const list = visibleEntries();
+    const TYPES: ('all' | NotifEntry['type'])[] = ['all', 'error', 'warning', 'success', 'info'];
+    const chipLabel = (k: string) => t('notif.f_' + k) || k;
+    const tools = all.length ? `
+        <div class="nc-tools">
+            <input type="search" class="input nc-search" id="nc-search" autocomplete="off"
+                placeholder="${escHtml(t('notif.search') || 'Search messages and sources…')}"
+                value="${escHtml(_q)}">
+            <div class="nc-chips" role="group" aria-label="${escHtml(t('notif.filter') || 'Filter')}">
+                ${TYPES.map(k => `<button type="button" class="nc-chip${_type === k ? ' on' : ''}" data-type="${k}"
+                    aria-pressed="${_type === k}">${escHtml(chipLabel(k))}</button>`).join('')}
+            </div>
+        </div>` : '';
+    // Two different empties mean two different things, and saying so saves the user
+    // wondering whether the app forgot: nothing has happened yet, versus nothing
+    // matches what you typed.
     const body = list.length
         ? `<ul class="nc-list">${list.map(entryHTML).join('')}</ul>`
+        : all.length
+        ? `<div class="nc-empty">
+               <p>${escHtml(t('notif.noMatch') || 'Nothing matches.')}</p>
+               <p class="nc-empty-sub">${escHtml(t('notif.noMatchSub') || 'Try a different word, or clear the filter.')}</p>
+           </div>`
         : `<div class="nc-empty">
                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
                <p>${escHtml(t('notif.empty') || 'Nothing yet.')}</p>
@@ -179,11 +203,28 @@ function panelHTML(): string {
                 <button class="nc-act nc-act-danger" id="nc-clear">${escHtml(t('notif.clearAll') || 'Clear')}</button>
             </div>
         </div>
+        ${tools}
         ${body}
         <div class="nc-foot">${escHtml(t('notif.sourcesNote') || 'Sources: this app. A linked BCWEB account will add its own here.')}</div>`;
 }
 
 let _panel: HTMLElement | null = null;
+
+// Filter state lives here, not in the DOM, because repaintPanel() rebuilds the whole
+// panel on every change — deleting one entry would otherwise clear the search you
+// were in the middle of using to find it.
+let _q = '';
+let _type: 'all' | NotifEntry['type'] = 'all';
+
+/** The entries currently visible. Search covers the message AND the source: "where
+ *  did this come from" is half of what you are looking for when you go back through
+ *  a list you did not read at the time. */
+function visibleEntries(): NotifEntry[] {
+    const q = _q.trim().toLowerCase();
+    return load().filter(e =>
+        (_type === 'all' || e.type === _type) &&
+        (!q || e.message.toLowerCase().includes(q) || e.source.toLowerCase().includes(q)));
+}
 
 export function repaintPanel(): void {
     if (!_panel) return;
@@ -193,6 +234,20 @@ export function repaintPanel(): void {
 
 function _wirePanel(): void {
     if (!_panel) return;
+    const search = _panel.querySelector('#nc-search') as HTMLInputElement | null;
+    if (search) {
+        search.addEventListener('input', () => {
+            _q = search.value;
+            repaintPanel();
+            // The repaint replaced the field, so focus and caret have to be put back
+            // or typing a second character silently goes nowhere.
+            const again = _panel?.querySelector('#nc-search') as HTMLInputElement | null;
+            if (again) { again.focus(); again.setSelectionRange(again.value.length, again.value.length); }
+        });
+    }
+    _panel.querySelectorAll<HTMLElement>('[data-type]').forEach(b => {
+        b.addEventListener('click', () => { _type = b.dataset.type as any; repaintPanel(); });
+    });
     _panel.querySelector('#nc-read-all')?.addEventListener('click', markAllRead);
     _panel.querySelector('#nc-clear')?.addEventListener('click', clearAll);
     _panel.querySelectorAll<HTMLElement>('[data-del]').forEach(b => {
@@ -218,6 +273,7 @@ const _esc = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation
 
 export function toggleNotifCenter(): void {
     if (_panel) { closePanel(); return; }
+    _q = ''; _type = 'all';   // a leftover filter reads as an empty history
     const btn = document.getElementById('btn-notif-center');
     if (!btn) return;
 

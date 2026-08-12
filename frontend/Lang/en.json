@@ -7012,5 +7012,14 @@
   "sched.scrIntoPh": "store the first output line in a variable, e.g. count",
   "sched.scrIntoHint": "Named here, the result becomes a variable later steps can test — otherwise a script can only pass or fail.",
   "sched.scrHint": "Tip: grant “Run scripts” in this task’s Permissions, or it won’t run.",
-  "sched.actRunScript": "Run a script"
+  "sched.actRunScript": "Run a script",
+  "notif.search": "Search messages and sources…",
+  "notif.filter": "Filter",
+  "notif.noMatch": "Nothing matches.",
+  "notif.noMatchSub": "Try a different word, or clear the filter.",
+  "notif.f_all": "All",
+  "notif.f_error": "Errors",
+  "notif.f_warning": "Warnings",
+  "notif.f_success": "Success",
+  "notif.f_info": "Info"
 }

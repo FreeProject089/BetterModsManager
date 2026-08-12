@@ -668,12 +668,22 @@ body.is-maximized .titlebar-spacer {
 }
 
 /* ── Check for Updates Button ── */
+/* One row: the update button takes the space that is left, the bell keeps its
+   square. min-width:0 is what lets the button actually shrink — without it a flex
+   item refuses to go below its content width and pushes the bell out of the row. */
+.footer-update-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+}
 .btn-check-updates {
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 8px;
-    width: 100%;
+    flex: 1 1 auto;
+    min-width: 0;
     padding: 8px 12px;
     background: rgba(16, 185, 129, 0.08);
     border: 1px solid rgba(16, 185, 129, 0.25);
@@ -687,6 +697,11 @@ body.is-maximized .titlebar-spacer {
     margin-top: 4px;
 }
 
+.btn-check-updates span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
 .btn-check-updates:hover {
     background: rgba(16, 185, 129, 0.15);
     border-color: rgba(16, 185, 129, 0.4);
@@ -16255,4 +16270,36 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
     overflow-wrap: normal;
     overflow-x: auto;
     resize: vertical;
+}
+
+/* Notification centre: search + type filter */
+.nc-tools {
+    flex: none;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+}
+.nc-search { width: 100%; box-sizing: border-box; font-size: 12px; padding: 5px 9px; }
+.nc-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.nc-chip {
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-secondary);
+    border-radius: 999px;
+    padding: 2px 9px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.nc-chip:hover { color: var(--accent); border-color: var(--accent); }
+/* The selected chip is filled, not merely tinted: which filter is active has to be
+   readable at a glance, and a colour-only difference is the first thing lost in a
+   custom theme or to a colour-vision deficiency. */
+.nc-chip.on {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--text-on-accent);
+    font-weight: 600;
 }

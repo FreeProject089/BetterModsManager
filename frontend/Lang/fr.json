@@ -7010,5 +7010,14 @@
   "sched.scrIntoPh": "stocker la première ligne de sortie dans une variable, ex. count",
   "sched.scrIntoHint": "Nommé ici, le résultat devient une variable testable par les étapes suivantes — sinon un script ne peut que réussir ou échouer.",
   "sched.scrHint": "Astuce : accordez « Exécuter des scripts » dans les permissions de la tâche, sinon elle ne s’exécutera pas.",
-  "sched.actRunScript": "Exécuter un script"
+  "sched.actRunScript": "Exécuter un script",
+  "notif.search": "Rechercher dans les messages et les sources…",
+  "notif.filter": "Filtrer",
+  "notif.noMatch": "Aucun résultat.",
+  "notif.noMatchSub": "Essayez un autre mot, ou retirez le filtre.",
+  "notif.f_all": "Tout",
+  "notif.f_error": "Erreurs",
+  "notif.f_warning": "Avertissements",
+  "notif.f_success": "Succès",
+  "notif.f_info": "Infos"
 }

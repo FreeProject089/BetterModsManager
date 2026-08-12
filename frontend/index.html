@@ -678,7 +678,11 @@
                             onclick="checkPtbMode(true)">v0.9.9</button>
                     </div>
 
-                    <!-- Check for Updates Button -->
+                    <!-- Check for Updates + the notification bell, on ONE row.
+                         The button was width:100%, so the bell had nowhere to go but
+                         the line below. They belong together: both answer "what has
+                         BMM got for me?" — one asks, one remembers. -->
+                    <div class="footer-update-row">
                     <button class="btn-check-updates" id="btn-check-updates"
                         onmouseenter="window.showTaskyHelp('settings.checkUpdatesTip', 'icon-refresh')"
                         onmouseleave="window.hideTaskyHelp()">
@@ -702,6 +706,7 @@
                             <path d="M13.7 21a2 2 0 0 1-3.4 0" />
                         </svg>
                     </button>
+                    </div>
                 </div>
             </aside>
 
