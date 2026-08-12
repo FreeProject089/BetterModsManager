@@ -347,30 +347,31 @@ async function runSteps(steps: Step[], task: Task, ctx: Record<string, number>):
             const ok = await evalCondition(step.condition, ctx);
             await runSteps(ok ? step.then : step.else, task, ctx);
         } else if (step.kind === 'repeat') {
+            // One loop for all four modes. They differ in exactly two decisions —
+            // is the condition checked BEFORE the body or after, and does a true
+            // condition mean "keep going" or "stop" — so writing them as three
+            // hand-rolled loops meant the same edit three times, and they had
+            // already drifted (a missing condition defaulted to `true` in one mode
+            // and `false` in another, undocumented).
             const max = Math.max(1, Math.min(step.maxIters || 100, 100000));
             const gap = Math.max(0, step.everySec || 0) * 1000;
-            if (step.mode === 'times') {
-                const times = Math.min(Math.max(0, step.times || 1), max);
-                for (let n = 0; n < times; n++) {
-                    if (!await runLoopBody(step.steps, task, ctx)) break;
-                    if (gap) await new Promise(r => setTimeout(r, gap));
-                }
-            } else if (step.mode === 'doWhile') {
-                // do-while: the body runs FIRST, then the condition decides another lap.
-                for (let n = 0; n < max; n++) {
-                    if (!await runLoopBody(step.steps, task, ctx)) break;
-                    const ok = step.condition ? await evalCondition(step.condition, ctx) : false;
-                    if (!ok) break;
-                    if (gap) await new Promise(r => setTimeout(r, gap));
-                }
-            } else {
-                // while → run while the condition is true; until → run until it is.
-                for (let n = 0; n < max; n++) {
-                    const ok = step.condition ? await evalCondition(step.condition, ctx) : true;
-                    if ((step.mode === 'while') ? !ok : ok) break;
-                    if (!await runLoopBody(step.steps, task, ctx)) break;
-                    if (gap) await new Promise(r => setTimeout(r, gap));
-                }
+            const times = step.mode === 'times'
+                ? Math.min(Math.max(0, step.times || 1), max)
+                : max;
+            // `times` has no condition; `doWhile` checks after the body; the rest before.
+            const checkBefore = step.mode === 'while' || step.mode === 'until';
+            const checkAfter = step.mode === 'doWhile';
+            // `until` runs while the condition is FALSE; every other mode while TRUE.
+            const keepGoing = async (): Promise<boolean> => {
+                if (!step.condition) return step.mode !== 'doWhile';   // preserved default
+                const ok = await evalCondition(step.condition, ctx);
+                return step.mode === 'until' ? !ok : ok;
+            };
+            for (let n = 0; n < times; n++) {
+                if (checkBefore && !await keepGoing()) break;
+                if (!await runLoopBody(step.steps, task, ctx)) break;
+                if (checkAfter && !await keepGoing()) break;
+                if (gap) await new Promise(r => setTimeout(r, gap));
             }
         } else if (step.kind === 'forEach') {
             const items = await forEachItems(step.source);
@@ -430,7 +431,14 @@ async function forEachItems(source: string): Promise<any[]> {
     } catch { return []; }
 }
 
-/** Deep-copy steps with every "{item.xxx}" in string params replaced by the item's value. */
+/** Deep-copy steps with every "{item.xxx}" in string params replaced by the item's
+ *  value — but NEVER inside a nested forEach's own body.
+ *
+ *  The outer loop used to rewrite the entire subtree, so an inner forEach found its
+ *  own {item.*} placeholders already replaced by the OUTER item before it ever ran:
+ *  "for each profile, for each mod, notify {item.name}" printed the profile's name
+ *  once per mod, silently. Each loop now substitutes only what belongs to it and
+ *  leaves an inner loop's body untouched for that loop to resolve itself. */
 function substituteItem(steps: Step[], item: any): Step[] {
     const src = item?.mod_entry ?? item ?? {};
     const rep = (v: any): any => {
@@ -447,7 +455,31 @@ function substituteItem(steps: Step[], item: any): Step[] {
     // rep() already rebuilds every array and object it walks (primitives are
     // immutable), so it IS the deep copy — the JSON round-trip on top of it copied
     // the whole subtree a second time, per item, per lap, for nothing.
-    return rep(steps || []);
+    // A nested forEach owns its body: copy the block, substitute everything EXCEPT
+    // `steps`, and hand that subtree back untouched. The inner loop resolves it
+    // against its own item when it runs.
+    const walk = (list: Step[]): Step[] => (list || []).map((st: any) => {
+        if (st && st.kind === 'forEach') {
+            const { steps: inner, ...rest } = st;
+            return { ...rep(rest), steps: JSON.parse(JSON.stringify(inner || [])) };
+        }
+        if (st && st.kind === 'if') return { ...rep({ ...st, then: [], else: [] }), then: walk(st.then), else: walk(st.else) };
+        if (st && (st.kind === 'repeat' || st.kind === 'try')) {
+            const copy: any = rep({ ...st, steps: [], onError: [] });
+            if (st.steps) copy.steps = walk(st.steps);
+            if (st.onError) copy.onError = walk(st.onError);
+            return copy;
+        }
+        if (st && st.kind === 'switch') {
+            return {
+                ...rep({ ...st, cases: [], default: [] }),
+                cases: (st.cases || []).map((c: any) => ({ ...rep({ ...c, steps: [] }), steps: walk(c.steps) })),
+                default: walk(st.default),
+            };
+        }
+        return rep(st);
+    });
+    return walk(steps || []);
 }
 
 // Polls a condition until it becomes true or the timeout elapses (then throws,

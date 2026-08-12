@@ -499,6 +499,29 @@ async fn run_mcp_server() -> anyhow::Result<()> {
     Ok(())
 }
 
+
+/// Read a JSON argument from a file, from stdin (`-`), or inline.
+///
+/// Both authoring commands took the same three ways in, and the block was pasted
+/// twice - so a fix to one path (the BOM below, a size cap) would have had to be
+/// found and repeated. `what` only names the file in the usage hint.
+fn read_json_arg(file: Option<String>, json: Option<String>, what: &str) -> anyhow::Result<String> {
+    let raw = match (file, json) {
+        (Some(f), _) if f == "-" => {
+            use std::io::Read;
+            let mut b = String::new();
+            std::io::stdin().read_to_string(&mut b)?;
+            b
+        }
+        (Some(f), _) => std::fs::read_to_string(&f)?,
+        (None, Some(j)) => j,
+        (None, None) => anyhow::bail!("provide --file <{}> (or - for stdin) or --json '<inline>'", what),
+    };
+    // PowerShell redirection writes a BOM, and serde_json rejects it with a
+    // confusing "expected value at line 1 column 1".
+    Ok(raw.trim_start_matches('﻿').to_string())
+}
+
 async fn run_cli_command(cmd: Commands) -> anyhow::Result<()> {
     match cmd {
         Commands::Serve => unreachable!(),
@@ -771,17 +794,7 @@ async fn run_cli_command(cmd: Commands) -> anyhow::Result<()> {
             }
         }
         Commands::CreateSchedule { file, json } => {
-            let raw = match (file, json) {
-                (Some(f), _) if f == "-" => {
-                    use std::io::Read;
-                    let mut b = String::new();
-                    std::io::stdin().read_to_string(&mut b)?;
-                    b
-                }
-                (Some(f), _) => std::fs::read_to_string(&f)?,
-                (None, Some(j)) => j,
-                (None, None) => anyhow::bail!("provide --file <task.json> (or - for stdin) or --json '<task>'"),
-            };
+            let raw = read_json_arg(file, json, "task.json")?;
             let task: serde_json::Value = serde_json::from_str(&raw)?;
             let res = state_bridge::save_schedule(task)?;
             println!("  {} schedule {} {}", "OK".green().bold(),
@@ -796,17 +809,7 @@ async fn run_cli_command(cmd: Commands) -> anyhow::Result<()> {
         }
 
         Commands::CreatePlugin { file, json } => {
-            let raw = match (file, json) {
-                (Some(f), _) if f == "-" => {
-                    use std::io::Read;
-                    let mut b = String::new();
-                    std::io::stdin().read_to_string(&mut b)?;
-                    b
-                }
-                (Some(f), _) => std::fs::read_to_string(&f)?,
-                (None, Some(j)) => j,
-                (None, None) => anyhow::bail!("provide --file <plugin.json> (or - for stdin) or --json '<manifest>'"),
-            };
+            let raw = read_json_arg(file, json, "plugin.json")?;
             let manifest: serde_json::Value = serde_json::from_str(&raw)?;
             let res = state_bridge::create_plugin_scaffold(manifest)?;
             println!("  {} plugin draft at {}", "OK".green().bold(),
