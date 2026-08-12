@@ -347,6 +347,7 @@ async function runTask(task: Task): Promise<void> {
     if (task.history.length > 20) task.history = task.history.slice(-20);
     await saveTasks();
     renderScheduleList();
+    await flushDirty();
 }
 
 /** Non-local control flow. Thrown, because a step can sit at any depth and the
@@ -542,6 +543,69 @@ async function waitForCondition(cond: Condition, timeoutSec: number, ctx: Record
 // Size preset → run_app_benchmark `scale` string.
 const BENCH_SCALE: Record<string, string> = { S: 'small', M: 'medium', L: 'large', XL: 'xlarge' };
 
+/** What a task changed that the OPEN screens are now wrong about.
+ *
+ *  The runner never refreshed anything. A scheduled task could enable forty mods,
+ *  switch the profile or pull a repo, and the library went on showing what it had
+ *  read before the task started — stale until you navigated away and back, with no
+ *  sign it was stale. The task itself reported success, so nothing looked broken.
+ *
+ *  Refreshing after every action would be the other mistake: a For-Each over forty
+ *  mods would re-read and re-render the library forty times, forty-nine fiftieths of
+ *  it thrown away. So actions only NOTE what they invalidated, and the flush happens
+ *  once, when the task is over.
+ *
+ *  Actions that change nothing on screen — notify, delay, a benchmark — note nothing
+ *  and cost nothing. That is the "only what needs an update gets one" rule, applied
+ *  per action rather than per task. */
+type DirtyArea = 'mods' | 'profiles';
+let _dirty = new Set<DirtyArea>();
+
+/** Which screens each action invalidates. An action absent from this map is one that
+ *  leaves the visible state alone; adding a new action means deciding, once, whether
+ *  it belongs here — which is easier to get right than remembering to call a
+ *  refresh at forty call sites. */
+const DIRTIES: Record<string, DirtyArea[]> = {
+    'mod.enable': ['mods'],
+    'mod.disable': ['mods'],
+    'mods.enableAll': ['mods'],
+    'mods.disableAll': ['mods'],
+    'mods.scan': ['mods'],
+    'modpack.enable': ['mods'],
+    'modpack.disable': ['mods'],
+    // A profile switch swaps what is deployed, so BOTH lists are wrong afterwards.
+    'profile.activate': ['profiles', 'mods'],
+    // Repo work rewrites mod files on disk; the library is reading the old ones.
+    'repo.sync': ['mods'],
+    'repo.connect': ['mods'],
+    'repo.update': ['mods'],
+    'mods.checkUpdates': ['mods'],
+    'mods.autoImportOmm': ['mods'],
+    'mod.add': ['mods'],
+    'modlist.import': ['mods'],
+    'modpack.create': ['mods'],
+    // theme.set repaints through the theme engine's own path, so it is deliberately
+    // absent rather than forgotten.
+};
+
+/** Re-read whatever the task invalidated, once, after it has finished.
+ *
+ *  Dynamically imported so the scheduler does not drag the mod and profile views
+ *  onto its own load path, and each failure is swallowed on its own: a refresh is a
+ *  courtesy after the work is already done, and a task that succeeded must not be
+ *  reported as failed because a screen would not redraw. */
+async function flushDirty(): Promise<void> {
+    const areas = _dirty;
+    _dirty = new Set();
+    if (!areas.size) return;
+    if (areas.has('mods')) {
+        try { (await import('../mods/mods.js')).refreshMods(false, true); } catch { /* view may not be loaded */ }
+    }
+    if (areas.has('profiles')) {
+        try { (await import('../profiles/profiles.js')).renderProfiles(); } catch { /* view may not be loaded */ }
+    }
+}
+
 /** Make a command's or script's output usable by the REST of the task.
  *
  *  Without this, running code was a dead end: it could change the world but could
@@ -562,6 +626,11 @@ function _captureOutput(p: Record<string, any>, out: any, ctx: Record<string, nu
 
 async function runAction(action: Action, task: Task, ctx: Record<string, number>): Promise<void> {
     const p = action.params || {};
+    // Noted BEFORE the action runs, not after: a step that throws half-way through
+    // has still changed something, and the screens are wrong either way. Try/On error
+    // can swallow that throw and let the task continue, so recording it only on
+    // success would lose exactly the case where a stale view is most confusing.
+    for (const area of DIRTIES[action.type] || []) _dirty.add(area);
     // Fire a bmm:// deeplink through the app's canonical handler (covers every
     // script-generator action that maps to a deeplink). Falls back to runDeepLink.
     const dl = (path: string, qp: Record<string, any> = {}) => {
