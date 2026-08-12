@@ -17,6 +17,115 @@ async function loadPages(): Promise<PageMeta[]> {
 }
 const PROTECTED = new Set(['settings']); // never hideable (you'd lose access to the editor)
 
+// ── Starter templates for custom pages ───────────────────────────────────────
+//
+// Three empty textareas are a poor invitation: the sandbox is deliberately strict
+// (opaque origin, no BMM DOM, no Tauri, permissions default-deny), so the only way
+// to learn what a page CAN do is to be shown working code. Each template is a
+// complete, runnable page that demonstrates one capability and names the permission
+// it needs — inline handlers are blocked, so they all use addEventListener.
+interface PageTemplate { label: string; labelKey: string; html: string; css: string; js: string; }
+
+const TPL_CSS_BASE = `body {
+  margin: 0;
+  padding: 28px;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: #0d1220;
+  color: #e6edf3;
+}
+h1 { margin: 0 0 6px; font-size: 20px; }
+p.sub { margin: 0 0 22px; color: #8b95a7; font-size: 13px; }
+button {
+  padding: 9px 16px; border-radius: 8px; cursor: pointer;
+  background: #1b2435; color: #e6edf3; border: 1px solid #2c3away;
+  font-size: 13px;
+}
+button:hover { border-color: #3b82f6; color: #fff; }
+.out {
+  margin-top: 18px; padding: 12px 14px; border-radius: 8px;
+  background: #131b2b; border: 1px solid #232d42;
+  font-family: ui-monospace, Consolas, monospace; font-size: 12px; white-space: pre-wrap;
+}`.replace('#2c3away', '#2c3a52');
+
+const PAGE_TEMPLATES: PageTemplate[] = [
+    {
+        label: 'Blank', labelKey: 'navedit.tplBlank',
+        html: '<h1>My page</h1>\n<p class="sub">Everything here runs sandboxed.</p>',
+        css: TPL_CSS_BASE,
+        js: '',
+    },
+    {
+        label: 'Notes (saved locally)', labelKey: 'navedit.tplNotes',
+        html: `<h1>Notes</h1>
+<p class="sub">Saved with the <b>storage</b> permission — nothing leaves this page.</p>
+<textarea id="note" rows="10" style="width:100%;box-sizing:border-box;padding:10px;border-radius:8px;background:#131b2b;color:#e6edf3;border:1px solid #232d42;font-family:inherit"></textarea>
+<div style="margin-top:12px;display:flex;gap:8px">
+  <button id="save">Save</button>
+  <button id="clear">Clear</button>
+</div>
+<div class="out" id="status">Ready.</div>`,
+        css: TPL_CSS_BASE,
+        js: `// Needs the "storage" permission (tick it on this page's card).
+const note = document.getElementById('note');
+const status = document.getElementById('status');
+
+bmm.storage.get('note').then(v => { note.value = v || ''; });
+
+document.getElementById('save').addEventListener('click', async () => {
+  await bmm.storage.set('note', note.value);
+  status.textContent = 'Saved at ' + new Date().toLocaleTimeString();
+});
+
+document.getElementById('clear').addEventListener('click', async () => {
+  note.value = '';
+  await bmm.storage.set('note', '');
+  status.textContent = 'Cleared.';
+});`,
+    },
+    {
+        label: 'Dashboard (app info)', labelKey: 'navedit.tplDashboard',
+        html: `<h1>Dashboard</h1>
+<p class="sub">Reads what BMM chooses to expose — with the <b>app info</b> permission.</p>
+<button id="refresh">Refresh</button>
+<div class="out" id="out">Press Refresh.</div>`,
+        css: TPL_CSS_BASE,
+        js: `// Needs the "app info" permission.
+const out = document.getElementById('out');
+
+async function refresh() {
+  try {
+    const info = await bmm.app.info();
+    out.textContent = JSON.stringify(info, null, 2);
+  } catch (e) {
+    out.textContent = 'Refused: ' + e + '\\n\\nTick "app info" on this page.';
+  }
+}
+
+document.getElementById('refresh').addEventListener('click', refresh);
+refresh();`,
+    },
+    {
+        label: 'Notifier', labelKey: 'navedit.tplNotifier',
+        html: `<h1>Notifier</h1>
+<p class="sub">Sends a BMM toast — needs the <b>notify</b> permission.</p>
+<input id="msg" placeholder="Your message" style="width:100%;box-sizing:border-box;padding:10px;border-radius:8px;background:#131b2b;color:#e6edf3;border:1px solid #232d42">
+<div style="margin-top:12px"><button id="send">Send</button></div>
+<div class="out" id="status">Ready.</div>`,
+        css: TPL_CSS_BASE,
+        js: `// Needs the "notify" permission.
+document.getElementById('send').addEventListener('click', async () => {
+  const msg = document.getElementById('msg').value.trim();
+  if (!msg) return;
+  try {
+    await bmm.notify(msg);
+    document.getElementById('status').textContent = 'Sent.';
+  } catch (e) {
+    document.getElementById('status').textContent = 'Refused: ' + e;
+  }
+});`,
+    },
+];
+
 interface CustomNavItem {
     id: string;                            // "custom:abc123"
     label: string;
@@ -476,6 +585,10 @@ export function openNavbarEditor(): void {
                     <div id="nbe-pages-list"></div>
                     <label class="nbe-flbl">${t('navedit.pageName') || 'Page name'}</label>
                     <input class="input" id="nbe-page-name" placeholder="${t('navedit.pageName') || 'Page name'}">
+                    <label class="nbe-flbl">${t('navedit.pageTemplate') || 'Start from'}</label>
+                    <select class="input" id="nbe-page-template">
+                        ${PAGE_TEMPLATES.map((tpl, i) => `<option value="${i}">${escAttr(t(tpl.labelKey) || tpl.label)}</option>`).join('')}
+                    </select>
                     <label class="nbe-flbl">HTML</label>
                     <textarea class="input nbe-code" id="nbe-page-html" rows="8" placeholder="<h1>Hello</h1>"></textarea>
                     <label class="nbe-flbl">CSS</label>
@@ -716,6 +829,24 @@ export function openNavbarEditor(): void {
                 } catch (err) { (window as any).toast?.(String(err), 'error'); }
             }));
     };
+    // Picking a template fills the three editors — but never silently over work in
+    // progress: an accidental change to the dropdown must not delete what you typed.
+    overlay.querySelector('#nbe-page-template')?.addEventListener('change', async (e) => {
+        const tpl = PAGE_TEMPLATES[parseInt((e.target as HTMLSelectElement).value, 10)] || PAGE_TEMPLATES[0];
+        const dirty = ['#nbe-page-html', '#nbe-page-css', '#nbe-page-js']
+            .some(sel => (overlay.querySelector(sel) as HTMLTextAreaElement)?.value.trim());
+        if (dirty) {
+            const ok = await (window as any).confirmCustom?.(
+                t('navedit.tplReplaceTitle') || 'Replace the current code?',
+                t('navedit.tplReplaceDesc') || 'The template overwrites the HTML, CSS and JS below.',
+                'warning');
+            if (!ok) return;
+        }
+        (overlay.querySelector('#nbe-page-html') as HTMLTextAreaElement).value = tpl.html;
+        (overlay.querySelector('#nbe-page-css') as HTMLTextAreaElement).value = tpl.css;
+        (overlay.querySelector('#nbe-page-js') as HTMLTextAreaElement).value = tpl.js;
+    });
+
     loadPages().then(() => { renderPagesList(); if (kindSel.value === 'page') renderTarget(); });
     overlay.querySelector('#nbe-page-create')?.addEventListener('click', async () => {
         const name = (overlay.querySelector('#nbe-page-name') as HTMLInputElement).value.trim();

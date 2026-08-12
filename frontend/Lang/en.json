@@ -6966,5 +6966,12 @@
   "sched.stopHint": "end the whole task, successfully",
   "credits.stackWhatIs": "What it is",
   "credits.stackWhyHere": "Why BMM uses it",
-  "credits.stackOpenPage": "Open its page"
+  "credits.stackOpenPage": "Open its page",
+  "navedit.pageTemplate": "Start from",
+  "navedit.tplBlank": "Blank page",
+  "navedit.tplNotes": "Notes (saved locally — storage)",
+  "navedit.tplDashboard": "Dashboard (app info)",
+  "navedit.tplNotifier": "Notifier (notify)",
+  "navedit.tplReplaceTitle": "Replace the current code?",
+  "navedit.tplReplaceDesc": "The template overwrites the HTML, CSS and JS below."
 }
