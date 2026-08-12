@@ -643,7 +643,7 @@ function _renderStep(): void {
         <div class="tut-field-guide">
             <div class="tut-field-guide-title">${t('tut.fieldGuide')}</div>
             ${_fieldList.map((f, i) => `
-                <button type="button" class="tut-field-row" data-field-sel="${f.sel}" data-field-key="${f.key}" data-tooltip="${t('tut.fieldGo') || 'Show me this field'}">
+                <button type="button" class="tut-field-row" data-field-sel="${f.sel}" data-field-key="${f.key}"${(f as any).open ? ` data-field-open="${escAttr((f as any).open)}"` : ''} data-tooltip="${t('tut.fieldGo') || 'Show me this field'}">
                     <span class="tut-field-num" style="background:${tut.color}">${i + 1}</span>
                     <span class="tut-field-desc">${t(f.key)}</span>
                 </button>`).join('')}
@@ -794,8 +794,38 @@ function _renderStep(): void {
             const sel = row.dataset.fieldSel || '';
             // Same resolution as the rings (_resolveFieldEl) — a second copy is how
             // a row flashes one element while the spotlight highlights another.
-            const target = _resolveFieldEl(sel);
+            let target = _resolveFieldEl(sel);
             if (!target) return;
+
+            // The field may live behind a control the user has not pressed yet. When
+            // the step data names that control (data-field-open), press it and
+            // re-resolve — "show me this field" should get you to the field, not to a
+            // description of where it would be.
+            if (!_isOnScreen(target)) {
+                const opener = row.dataset.fieldOpen
+                    ? document.querySelector(row.dataset.fieldOpen) as HTMLElement | null
+                    : null;
+                if (opener) {
+                    opener.click();
+                    target = _resolveFieldEl(sel) || target;
+                }
+            }
+
+            // Still not on screen: stop here. Highlighting an element with no box is
+            // exactly what produced the stray ring and the badge floating over the
+            // middle of the app — a wrong answer that looks like a broken app. Say
+            // where it is instead.
+            if (!_isOnScreen(target)) {
+                const host = _closedHost(target);
+                const where = host?.querySelector('.modal-title, h2, h3')?.textContent?.trim();
+                (window as any).showTaskyHelp?.(
+                    where
+                        ? (t('tut.fieldHiddenIn') || 'That field is in \u201c{where}\u201d \u2014 open it first.').replace('{where}', where)
+                        : (t('tut.fieldHidden') || 'That field is not on screen right now.'),
+                    'info', true);
+                return;
+            }
+
             (target as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center' });
             target.classList.add('tut-field-flash');
             setTimeout(() => target?.classList.remove('tut-field-flash'), 1600);
@@ -1185,12 +1215,47 @@ let _fieldFlow: {
     poll: ReturnType<typeof setInterval> | null;
 } | null = null;
 
+/** Is this element actually on screen right now?
+ *
+ *  A field that lives in a closed modal is still IN THE DOM — the modal is a
+ *  `.modal-overlay` that simply lacks `.active`. getElementById finds it happily, and
+ *  everything downstream then measured a zero-sized box: the spotlight ring drew
+ *  itself over nothing and the numbered badge floated in the middle of the screen
+ *  attached to no field. That is the reported bug, and it is a visibility question,
+ *  not a selector question. */
+function _isOnScreen(el: Element | null): boolean {
+    if (!el) return false;
+    const r = (el as HTMLElement).getBoundingClientRect();
+    if (r.width <= 0 || r.height <= 0) return false;
+    // offsetParent is null for display:none subtrees; position:fixed also reports
+    // null, hence the explicit exemption rather than a bare null check.
+    const cs = getComputedStyle(el as HTMLElement);
+    if (cs.visibility === 'hidden' || cs.display === 'none') return false;
+    if ((el as HTMLElement).offsetParent === null && cs.position !== 'fixed') return false;
+    return true;
+}
+
+/** The closed container a field is stuck inside, if any. Used to say WHERE rather
+ *  than to force it open: adding `.active` to an overlay would show a modal whose
+ *  content its real opener never initialised, which is a worse bug than this one. */
+function _closedHost(el: Element | null): HTMLElement | null {
+    const host = el?.closest('.modal-overlay') as HTMLElement | null;
+    return host && !host.classList.contains('active') ? host : null;
+}
+
 function _resolveFieldEl(sel: string): HTMLElement | null {
     // No `[id="…"]` fallback: getElementById already returns the first element with
     // that id, so when it is null the attribute selector cannot match either — and
     // an unescaped id containing a quote would make it throw.
     let target: Element | null = document.getElementById(sel);
-    if (!target) target = _preferDemo(Array.from(document.querySelectorAll(`.${sel}`)));
+    if (!target) {
+        const all = Array.from(document.querySelectorAll(`.${sel}`));
+        // Prefer a candidate that is actually rendered. Several screens reuse a
+        // class name, and picking the copy inside a closed modal over the one the
+        // user is looking at is how a ring ends up pointing at nothing.
+        const shown = all.filter(_isOnScreen);
+        target = _preferDemo(shown.length ? shown : all);
+    }
     return (_resolveCustomSelect(target) ?? target) as HTMLElement | null;
 }
 
@@ -1216,6 +1281,17 @@ function _fieldFlowRender(): void {
         // Every field visited. The step's own action event (profile-created…) still
         // decides completion; the box goes back to describing that final act.
         if (desc && _currentStepRef()?.action) desc.textContent = t(_currentStepRef()!.action!.desc_key);
+        return;
+    }
+    // Skip a field that has no box on screen rather than ringing it. This is the
+    // same fault as the clicked row: _highlightElement measures the element, and a
+    // field inside a container the user has not opened measures zero — which drew
+    // the ring and its numbered badge over the middle of the app, attached to
+    // nothing. Advancing past it keeps the flow honest; stopping on it would strand
+    // the user on a step they cannot complete.
+    if (!_isOnScreen(_resolveFieldEl(f.sel))) {
+        if (flow.i < flow.fields.length - 1) { flow.i++; _fieldFlowRender(); return; }
+        if (desc) desc.textContent = t('tut.fieldHidden') || 'That field is not on screen right now.';
         return;
     }
     _suppressDim = true;
