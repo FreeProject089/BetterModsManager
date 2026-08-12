@@ -7024,5 +7024,10 @@
   "dev.btn.memSnap": "MÉMOIRE",
   "dev.reportSaved": "Rapport de diagnostic enregistré",
   "dev.memSaved": "Instantané mémoire enregistré",
-  "notif.more": "Cliquer pour lire"
+  "notif.more": "Cliquer pour lire",
+  "sched.inc_paren": "Ajouter (1), (2)…",
+  "sched.inc_underscore": "Ajouter _1, _2…",
+  "sched.inc_timestamp": "Ajouter un horodatage",
+  "sched.inc_overwrite": "Écraser le fichier",
+  "sched.act.custom.script": "Exécuter un script"
 }
