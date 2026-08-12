@@ -474,7 +474,7 @@ ce qu'il remplace, ou les retire). Vos mods téléchargés ne sont jamais modifi
 Every N minutes/hours, daily/weekly/monthly at a time, once, on app start, or manual (you run it).
 :::
 :::step[Build the workflow]
-Add actions (~60 — activate a profile, enable a modpack, sync a repo, benchmark a disk, launch an app…), plus **IF/ELSE**, **LOOP** and **WAIT UNTIL** blocks, with per-run variables so a measured value can drive a later branch.
+Add actions (~60 — activate a profile, enable a modpack, sync a repo, benchmark a disk, launch an app…), plus the full control-flow set: **IF/ELSE**, **LOOP** (while / until / do-while / N times), **FOR EACH** (over every enabled mod, profile, modpack or theme, with \`{item.name}\` in the body), **SWITCH**, **WAIT UNTIL**, and **TRY / ON ERROR** with **BREAK**, **CONTINUE** and **STOP**. Per-run variables let a measured value drive a later branch.
 :::
 :::step[Let it run]
 While BMM is open a timer fires due tasks. Hit :kbd[▶] **Run now** any time, or **Test run** the unsaved draft.
@@ -493,7 +493,7 @@ It can drive [Launch Packs](doc:launch-packs), your [storage](doc:storage-manage
 Toutes les N minutes/heures, chaque jour/semaine/mois à une heure, une fois, au démarrage de l’app, ou manuel (tu le lances).
 :::
 :::step[Construis le workflow]
-Ajoute des actions (~60 — activer un profil, appliquer un modpack, synchroniser un dépôt, benchmarker un disque, lancer une app…), plus des blocs **SI/SINON**, **BOUCLE** et **ATTENDRE**, avec des variables par exécution pour qu’une valeur mesurée pilote une branche suivante.
+Ajoute des actions (~60 — activer un profil, appliquer un modpack, synchroniser un dépôt, benchmarker un disque, lancer une app…), plus des blocs **SI/SINON**, **BOUCLE** et **ATTENDRE**, avec des variables par exécution pour qu’une valeur mesurée pilote une branche suivante, plus tout le contrôle de flux : **SI/SINON**, **BOUCLE** (tant que / jusqu'à / do-while / N fois), **POUR CHAQUE** (sur chaque mod activé, profil, modpack ou thème, avec \`{item.name}\` dans le corps), **SWITCH**, **ATTENDRE**, et **ESSAYER / EN CAS D'ERREUR** avec **SORTIR**, **CONTINUER** et **ARRÊTER**.
 :::
 :::step[Laisse-le tourner]
 Tant que BMM est ouvert, une minuterie déclenche les tâches dues. Fais :kbd[▶] **Lancer maintenant** à tout moment, ou **Test** sur le brouillon non enregistré.
