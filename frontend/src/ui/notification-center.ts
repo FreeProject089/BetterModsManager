@@ -13,7 +13,7 @@
 // Sources are pluggable because the app is not the only thing with something to
 // tell you — see BCWEB below.
 
-import { t } from '../core/i18n.js';
+import { t, getLang } from '../core/i18n.js';
 import { escHtml } from '../core/utils.js';
 
 export interface NotifEntry {
@@ -29,10 +29,12 @@ export interface NotifEntry {
 
 const KEY = 'bmm.notifCenter';
 
-/** A hard cap, not a preference. The store is read and rewritten on every single
- *  toast, so an unbounded history would make the app slower the longer you used
- *  it — the classic log that quietly becomes the performance problem. 200 covers
- *  far more than a session; past that, an entry has outlived any use. */
+/** A hard cap, not a preference. Every toast walks this list — to collapse a repeat,
+ *  and to recount the unread badge — so an unbounded history would make the app
+ *  slower the longer you used it: the classic log that quietly becomes the
+ *  performance problem. 200 covers far more than a session; past that, an entry has
+ *  outlived any use. (Serialising it is debounced, see save(); walking it is not,
+ *  which is why the cap still matters.) */
 const MAX = 200;
 
 let _cache: NotifEntry[] | null = null;
@@ -46,9 +48,20 @@ function load(): NotifEntry[] {
     return _cache!;
 }
 
-function save(): void {
+// The badge repaints immediately — it is one attribute write and the user is looking
+// at it. Persistence is debounced, because save() runs on EVERY toast and a modpack
+// apply toasts per mod: serialising up to 200 entries forty times in a row, to write
+// a value that is only ever read at startup, is work nobody asked for. The comment
+// above MAX warned about exactly this and the code did it anyway.
+let _saveTimer: ReturnType<typeof setTimeout> | null = null;
+function persistNow(): void {
+    _saveTimer = null;
     try { localStorage.setItem(KEY, JSON.stringify(_cache || [])); } catch { /* history is not worth an error */ }
+}
+function save(): void {
     _paintBadge();
+    if (_saveTimer) clearTimeout(_saveTimer);
+    _saveTimer = setTimeout(persistNow, 400);
 }
 
 /**
@@ -107,14 +120,23 @@ function _paintBadge(): void {
 // ── Relative time ────────────────────────────────────────────────────────────
 
 function relTime(ts: number): string {
-    const s = Math.max(0, Math.round((Date.now() - ts) / 1000));
-    if (s < 60) return t('notif.justNow') || 'just now';
-    const m = Math.round(s / 60);
-    if (m < 60) return `${m} min`;
-    const h = Math.round(m / 60);
-    if (h < 24) return `${h} h`;
-    const d = Math.round(h / 24);
-    if (d < 7) return `${d} j`;
+    const secs = Math.max(0, Math.round((Date.now() - ts) / 1000));
+    if (secs < 60) return t('notif.justNow') || 'just now';
+
+    // Intl does this properly in every language BMM ships, and in the ones it does
+    // not. The hand-rolled version had `${d} j` — the French abbreviation for
+    // "jour", hardcoded, shown to English readers as a bare "3 j". Units are exactly
+    // the kind of string that looks too small to need translating and then is not
+    // translated; the platform already knows them all.
+    try {
+        const rtf = new Intl.RelativeTimeFormat(getLang() || undefined, { numeric: 'auto' });
+        const mins = Math.round(secs / 60);
+        if (mins < 60) return rtf.format(-mins, 'minute');
+        const hrs = Math.round(mins / 60);
+        if (hrs < 24) return rtf.format(-hrs, 'hour');
+        const days = Math.round(hrs / 24);
+        if (days < 7) return rtf.format(-days, 'day');
+    } catch { /* fall through to the absolute date */ }
     return new Date(ts).toLocaleDateString();
 }
 
@@ -228,4 +250,8 @@ export function toggleNotifCenter(): void {
 export function initNotificationCenter(): void {
     document.getElementById('btn-notif-center')?.addEventListener('click', toggleNotifCenter);
     _paintBadge();
+    // Flush a pending write before the window goes. Otherwise the notifications lost
+    // to the debounce are the last few of the session — precisely the ones the user
+    // had not read yet. `pagehide` fires where `beforeunload` is unreliable.
+    window.addEventListener('pagehide', () => { if (_saveTimer) { clearTimeout(_saveTimer); persistNow(); } });
 }
