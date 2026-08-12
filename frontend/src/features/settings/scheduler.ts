@@ -34,7 +34,12 @@ type Step = (
     | { kind: 'if'; condition: Condition; then: Step[]; else: Step[] }
     // Loop: run `steps` repeatedly — while/until a condition, or a fixed number of
     // times — with a hard max-iterations safety cap and an optional pause between.
-    | { kind: 'repeat'; mode: 'while' | 'until' | 'times'; condition?: Condition; times?: number; maxIters: number; everySec: number; steps: Step[] }
+    | { kind: 'repeat'; mode: 'while' | 'until' | 'times' | 'doWhile'; condition?: Condition; times?: number; maxIters: number; everySec: number; steps: Step[] }
+    // For-each: run `steps` once per item of a live collection. Inside the body,
+    // every string action param may reference the item as {item.id} / {item.name}.
+    | { kind: 'forEach'; source: 'mods' | 'enabledMods' | 'disabledMods' | 'profiles' | 'modpacks' | 'themes'; maxIters: number; everySec: number; steps: Step[] }
+    // Switch: evaluate cases in order, run the FIRST whose condition holds, else default.
+    | { kind: 'switch'; cases: { condition: Condition; steps: Step[] }[]; default: Step[] }
     // Editor-only flags shared by every kind: collapsed (folded in the editor) and
     // disabled (kept in the workflow but skipped at run time — like commenting out).
 ) & { collapsed?: boolean; disabled?: boolean };
@@ -291,6 +296,14 @@ async function runSteps(steps: Step[], task: Task, ctx: Record<string, number>):
                     await runSteps(step.steps, task, ctx);
                     if (gap) await new Promise(r => setTimeout(r, gap));
                 }
+            } else if (step.mode === 'doWhile') {
+                // do-while: the body runs FIRST, then the condition decides another lap.
+                for (let n = 0; n < max; n++) {
+                    await runSteps(step.steps, task, ctx);
+                    const ok = step.condition ? await evalCondition(step.condition, ctx) : false;
+                    if (!ok) break;
+                    if (gap) await new Promise(r => setTimeout(r, gap));
+                }
             } else {
                 // while → run while the condition is true; until → run until it is.
                 for (let n = 0; n < max; n++) {
@@ -300,8 +313,57 @@ async function runSteps(steps: Step[], task: Task, ctx: Record<string, number>):
                     if (gap) await new Promise(r => setTimeout(r, gap));
                 }
             }
+        } else if (step.kind === 'forEach') {
+            const items = await forEachItems(step.source);
+            const max = Math.max(1, Math.min(step.maxIters || 100, 100000));
+            const gap = Math.max(0, step.everySec || 0) * 1000;
+            for (const item of items.slice(0, max)) {
+                // The body runs on a per-item COPY with {item.*} placeholders resolved —
+                // actions stay ordinary actions, they just receive concrete values.
+                await runSteps(substituteItem(step.steps, item), task, ctx);
+                if (gap) await new Promise(r => setTimeout(r, gap));
+            }
+        } else if (step.kind === 'switch') {
+            let ran = false;
+            for (const c of step.cases || []) {
+                if (await evalCondition(c.condition, ctx)) { await runSteps(c.steps, task, ctx); ran = true; break; }
+            }
+            if (!ran) await runSteps(step.default || [], task, ctx);
         }
     }
+}
+
+/** The live collection a for-each iterates. Fetched at run time, never cached. */
+async function forEachItems(source: string): Promise<any[]> {
+    try {
+        if (source === 'profiles') return (await invoke('get_profiles')) as any[] || [];
+        if (source === 'modpacks') return (await invoke('get_modpacks')) as any[] || [];
+        if (source === 'themes') {
+            const parse = (v: any) => { try { return (Array.isArray(v) ? v : JSON.parse(v)) || []; } catch { return []; } };
+            return parse(await invoke('get_builtin_themes').catch(() => '[]'));
+        }
+        const mods = (await invoke('get_mods')) as any[] || [];
+        if (source === 'enabledMods') return mods.filter((m: any) => m.enabled);
+        if (source === 'disabledMods') return mods.filter((m: any) => !m.enabled);
+        return mods;
+    } catch { return []; }
+}
+
+/** Deep-copy steps with every "{item.xxx}" in string params replaced by the item's value. */
+function substituteItem(steps: Step[], item: any): Step[] {
+    const src = item?.mod_entry ?? item ?? {};
+    const rep = (v: any): any => {
+        if (typeof v === 'string') {
+            return v.replace(/\{item\.([a-zA-Z_][a-zA-Z0-9_]*)\}/g, (_m, k) => {
+                const val = src?.[k];
+                return val === undefined || val === null ? '' : String(val);
+            });
+        }
+        if (Array.isArray(v)) return v.map(rep);
+        if (v && typeof v === 'object') { const o: any = {}; for (const k of Object.keys(v)) o[k] = rep(v[k]); return o; }
+        return v;
+    };
+    return rep(JSON.parse(JSON.stringify(steps)));
 }
 
 // Polls a condition until it becomes true or the timeout elapses (then throws,
@@ -823,7 +885,12 @@ export function renderScheduleList(): void {
 
 function stepCount(steps: Step[]): number {
     let n = 0;
-    for (const s of steps || []) { n++; if (s.kind === 'if') n += stepCount(s.then) + stepCount(s.else); }
+    for (const s of steps || []) {
+        n++;
+        if (s.kind === 'if') n += stepCount(s.then) + stepCount(s.else);
+        else if (s.kind === 'repeat' || s.kind === 'forEach') n += stepCount(s.steps);
+        else if (s.kind === 'switch') n += stepCount(s.default) + (s.cases || []).reduce((acc, c) => acc + stepCount(c.steps), 0);
+    }
     return n;
 }
 function triggerLabel(tr: Trigger): string {
@@ -897,7 +964,8 @@ function _ensureHistoryKeys(): void {
 /** True when deleting the step would also discard inner steps (if/repeat). */
 function _stepHasContent(step: Step): boolean {
     if (step.kind === 'if') return ((step.then?.length || 0) + (step.else?.length || 0)) > 0;
-    if (step.kind === 'repeat') return (step.steps?.length || 0) > 0;
+    if (step.kind === 'repeat' || step.kind === 'forEach') return (step.steps?.length || 0) > 0;
+    if (step.kind === 'switch') return ((step.default?.length || 0) + (step.cases || []).reduce((a, c) => a + (c.steps?.length || 0), 0)) > 0;
     return false;
 }
 /** Delete a step — confirms first if it contains inner steps, snapshots for undo. */
@@ -1298,7 +1366,7 @@ function renderStepsEditor(host: HTMLElement, steps: Step[], depth = 0): void {
             renderAddRow(block.querySelector('.sched-else-add') as HTMLElement, step.else, depth + 1, host, steps, depth);
             _wireFold(block, step);
         } else if (step.kind === 'repeat') {
-            const modeSel = (['while', 'until', 'times'] as const).map(m =>
+            const modeSel = (['while', 'until', 'doWhile', 'times'] as const).map(m =>
                 `<option value="${m}"${step.mode === m ? ' selected' : ''}>${escHtml(t('sched.loop.' + m) || m)}</option>`).join('');
             block.innerHTML = `<div class="sched-step-head">${_foldBtn(step)}${_kindTile('repeat')}
                     <span class="sched-step-tag sched-repeat">${t('sched.repeat') || 'REPEAT'}</span>
@@ -1316,6 +1384,51 @@ function renderStepsEditor(host: HTMLElement, steps: Step[], depth = 0): void {
             block.querySelector('.sched-rep-every')?.addEventListener('input', (e) => { step.everySec = parseFloat((e.target as HTMLInputElement).value) || 0; });
             renderStepsEditor(block.querySelector('.sched-loop') as HTMLElement, step.steps, depth + 1);
             renderAddRow(block.querySelector('.sched-loop-add') as HTMLElement, step.steps, depth + 1, host, steps, depth);
+            _wireFold(block, step);
+        } else if (step.kind === 'forEach') {
+            const srcSel = (['enabledMods', 'disabledMods', 'mods', 'profiles', 'modpacks', 'themes'] as const).map(m =>
+                `<option value="${m}"${step.source === m ? ' selected' : ''}>${escHtml(t('sched.fe.' + m) || m)}</option>`).join('');
+            block.innerHTML = `<div class="sched-step-head">${_foldBtn(step)}${_kindTile('forEach')}
+                    <span class="sched-step-tag sched-repeat">${t('sched.forEach') || 'FOR EACH'}</span>
+                    <select class="input sched-fe-src" style="max-width:190px">${srcSel}</select>
+                    <span style="font-size:11px;color:var(--text-muted)">${t('sched.loopMax') || 'max'}</span><input type="number" class="input sched-fe-max" min="1" value="${step.maxIters || 100}" style="max-width:90px">
+                    <span style="font-size:11px;color:var(--text-muted)">${t('sched.loopEvery') || 'every'}</span><input type="number" class="input sched-fe-every" min="0" value="${step.everySec || 0}" style="max-width:80px"> ${t('sched.unitSec') || 's'}
+                    <span style="font-size:10px;color:var(--text-muted)">${t('sched.fe.hint') || '{item.id} / {item.name} in the body'}</span></div>
+                <div class="sched-branch"><div class="sched-branch-label">${t('sched.fe.body') || 'PER ITEM'}</div><div class="sched-fe-body"></div><div class="sched-fe-add"></div></div>`;
+            block.querySelector('.sched-fe-src')?.addEventListener('change', (e) => { step.source = (e.target as HTMLSelectElement).value as any; });
+            block.querySelector('.sched-fe-max')?.addEventListener('input', (e) => { step.maxIters = parseInt((e.target as HTMLInputElement).value) || 100; });
+            block.querySelector('.sched-fe-every')?.addEventListener('input', (e) => { step.everySec = parseFloat((e.target as HTMLInputElement).value) || 0; });
+            renderStepsEditor(block.querySelector('.sched-fe-body') as HTMLElement, step.steps, depth + 1);
+            renderAddRow(block.querySelector('.sched-fe-add') as HTMLElement, step.steps, depth + 1, host, steps, depth);
+            _wireFold(block, step);
+        } else if (step.kind === 'switch') {
+            block.innerHTML = `<div class="sched-step-head">${_foldBtn(step)}${_kindTile('switch')}
+                    <span class="sched-step-tag sched-if">${t('sched.switch') || 'SWITCH'}</span>
+                    <span style="font-size:11px;color:var(--text-muted)">${t('sched.switchHint') || 'first matching case runs'}</span>
+                    <button class="btn btn-xs sched-chip sched-sw-addcase" style="margin-left:auto">${t('sched.switchAddCase') || '+ case'}</button></div>
+                <div class="sched-sw-cases"></div>
+                <div class="sched-branch"><div class="sched-branch-label">${t('sched.switchDefault') || 'DEFAULT'}</div><div class="sched-sw-def"></div><div class="sched-sw-def-add"></div></div>`;
+            const casesHost = block.querySelector('.sched-sw-cases') as HTMLElement;
+            (step.cases || []).forEach((c, ci) => {
+                const cb = document.createElement('div');
+                cb.className = 'sched-branch';
+                cb.innerHTML = `<div class="sched-branch-label" style="display:flex;align-items:center;gap:8px">${t('sched.switchCase') || 'CASE'} ${ci + 1}
+                        <span class="sched-sw-cond" style="flex:1"></span>
+                        <button class="btn btn-xs sched-chip sched-sw-delcase">✕</button></div>
+                    <div class="sched-sw-case-steps"></div><div class="sched-sw-case-add"></div>`;
+                cb.querySelector('.sched-sw-cond')?.appendChild(conditionEditor(c.condition));
+                renderStepsEditor(cb.querySelector('.sched-sw-case-steps') as HTMLElement, c.steps, depth + 1);
+                renderAddRow(cb.querySelector('.sched-sw-case-add') as HTMLElement, c.steps, depth + 1, host, steps, depth);
+                cb.querySelector('.sched-sw-delcase')?.addEventListener('click', () => {
+                    _snapshot(); step.cases.splice(ci, 1); renderStepsEditor(host, steps, depth);
+                });
+                casesHost.appendChild(cb);
+            });
+            block.querySelector('.sched-sw-addcase')?.addEventListener('click', () => {
+                _snapshot(); step.cases.push({ condition: { type: 'always', params: {} }, steps: [] }); renderStepsEditor(host, steps, depth);
+            });
+            renderStepsEditor(block.querySelector('.sched-sw-def') as HTMLElement, step.default, depth + 1);
+            renderAddRow(block.querySelector('.sched-sw-def-add') as HTMLElement, step.default, depth + 1, host, steps, depth);
             _wireFold(block, step);
         }
 
@@ -1416,7 +1529,9 @@ function renderAddRow(host: HTMLElement, steps: Step[], depth = 0, rerenderHost?
         <button class="btn btn-xs sched-chip sched-add-if" data-add="if" data-tooltip="${escAttr(t('sched.legendIf') || '')}">${KIND_ICON.if} ${t('sched.addIf') || 'If/Else'}</button>
         <button class="btn btn-xs sched-chip sched-add-loop" data-add="repeat" data-tooltip="${escAttr(t('sched.legendLoop') || '')}">${KIND_ICON.repeat} ${t('sched.addLoop') || 'Loop'}</button>
         <button class="btn btn-xs sched-chip sched-add-wait" data-add="waitFor" data-tooltip="${escAttr(t('sched.legendWait') || '')}">${KIND_ICON.waitFor} ${t('sched.addWaitFor') || 'Wait until'}</button>
-        <button class="btn btn-xs sched-chip sched-add-delay" data-add="delay" data-tooltip="${escAttr(t('sched.legendDelay') || '')}">${KIND_ICON.delay} ${t('sched.addDelay') || 'Pause'}</button>`;
+        <button class="btn btn-xs sched-chip sched-add-delay" data-add="delay" data-tooltip="${escAttr(t('sched.legendDelay') || '')}">${KIND_ICON.delay} ${t('sched.addDelay') || 'Pause'}</button>
+        <button class="btn btn-xs sched-chip sched-add-foreach" data-add="forEach" data-tooltip="${escAttr(t('sched.legendForEach') || '')}">${KIND_ICON.forEach} ${t('sched.addForEach') || 'For each'}</button>
+        <button class="btn btn-xs sched-chip sched-add-switch" data-add="switch" data-tooltip="${escAttr(t('sched.legendSwitch') || '')}">${KIND_ICON.switch} ${t('sched.addSwitch') || 'Switch'}</button>`;
     const rerender = () => {
         // Preserve the modal's scroll position so adding a step deep in a big task
         // doesn't yank the view back to the top (a real annoyance with lots of content).
@@ -1437,6 +1552,8 @@ function renderAddRow(host: HTMLElement, steps: Step[], depth = 0, rerenderHost?
 function _makeStep(kind: string): Step {
     if (kind === 'if') return { kind: 'if', condition: { type: 'always', params: {} }, then: [], else: [] } as Step;
     if (kind === 'repeat') return { kind: 'repeat', mode: 'while', condition: { type: 'always', params: {} }, maxIters: 100, everySec: 1, steps: [] } as Step;
+    if (kind === 'forEach') return { kind: 'forEach', source: 'enabledMods', maxIters: 100, everySec: 0, steps: [] } as Step;
+    if (kind === 'switch') return { kind: 'switch', cases: [{ condition: { type: 'always', params: {} }, steps: [] }], default: [] } as Step;
     if (kind === 'waitFor') return { kind: 'waitFor', condition: { type: 'allModsActive', params: {} }, timeoutSec: 120 } as Step;
     if (kind === 'delay') return { kind: 'delay', seconds: 5 } as Step;
     return { kind: 'action', action: { type: 'profile.activate', params: {} } } as Step;
@@ -1478,6 +1595,8 @@ const KIND_ICON: Record<string, string> = {
     repeat:  '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2.1 21 6l-4 3.9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 21.9 3 18l4-3.9"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>',
     waitFor: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v5l3 2"/></svg>',
     delay:   '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="6.5" y="4.5" width="4" height="15" rx="1.2"/><rect x="13.5" y="4.5" width="4" height="15" rx="1.2"/></svg>',
+    forEach: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="7" height="5" rx="1"/><rect x="3" y="15" width="7" height="5" rx="1"/><path d="M14 6.5h7M14 17.5h7M14 12h7"/></svg>',
+    switch:  '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v5"/><path d="M12 8 5 13v8M12 8l7 5v8"/></svg>',
 };
 /** Kind-coloured icon tile that opens every step head (the visual anchor). */
 function _kindTile(kind: string): string {
@@ -1491,7 +1610,8 @@ const SCHED_CHEV = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" 
 function _foldBtn(step: any): string {
     let sum = '';
     if (step.kind === 'if') sum = `${(step.then?.length || 0) + (step.else?.length || 0)} ${t('sched.stepsInside') || 'inside'}`;
-    else if (step.kind === 'repeat') sum = `${step.steps?.length || 0} ${t('sched.stepsInside') || 'inside'}`;
+    else if (step.kind === 'repeat' || step.kind === 'forEach') sum = `${step.steps?.length || 0} ${t('sched.stepsInside') || 'inside'}`;
+    else if (step.kind === 'switch') sum = `${(step.cases?.length || 0)} cases`;
     else if (step.kind === 'delay') sum = `${step.seconds || 0}${t('sched.unitSec') || 's'}`;
     const sumHtml = sum ? `<span class="sched-fold-sum">${sum}</span>` : '';
     return `<button class="btn btn-xs btn-ghost sched-fold" data-tooltip="${escAttr(t('sched.foldTip') || 'Collapse / expand')}" aria-label="fold">${SCHED_CHEV}</button>${sumHtml}`;
