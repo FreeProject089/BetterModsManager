@@ -139,6 +139,11 @@ export function makeDock(opts: {
     cssVar: string;         // the var the panel's CSS reads
     min: number;            // this panel's own minimum
     def: number;            // width when nothing is remembered
+    gripClass?: string;     // override the grip's class (a panel with its own skin)
+    /** Which edge the panel is docked against. Right by default; the tutorial is
+     *  the one panel that can also dock LEFT, where the width grows with the
+     *  cursor's x instead of against it. */
+    side?: () => 'left' | 'right';
 }): DockController {
     const read = (): number => {
         const w = parseInt(localStorage.getItem(opts.storageKey) || '', 10);
@@ -154,25 +159,58 @@ export function makeDock(opts: {
         },
 
         plantGrip(panel: HTMLElement, isDocked: () => boolean): void {
-            if (panel.querySelector('.bmm-dock-resize')) return;
+            const cls = opts.gripClass || 'bmm-dock-resize';
+            if (panel.querySelector('.' + cls)) return;
             const grip = document.createElement('div');
-            grip.className = 'bmm-dock-resize';
+            grip.className = cls;
             grip.addEventListener('mousedown', (e: MouseEvent) => {
                 if (!isDocked()) return;
                 e.preventDefault();
                 grip.classList.add('dragging');
-                const move = (me: MouseEvent) => {
-                    const asked = Math.max(opts.min, window.innerWidth - me.clientX);
+
+                // Coalesce to one write per FRAME. A mouse reports at 125–1000Hz and
+                // the screen paints at 60 — writing the width on every mousemove
+                // invalidated style and forced a relayout several times per frame, and
+                // every one of those but the last was thrown away unpainted. That
+                // wasted work is exactly what the drag felt like: it juddered because
+                // it was doing 4× the layout it could ever show.
+                //
+                // rAF also puts the write where the browser wants it, so the panel's
+                // new width and the frame that shows it are the same frame.
+                let pendingX: number | null = null;
+                let frame = 0;
+                let lastGranted = 0;
+
+                const flush = () => {
+                    frame = 0;
+                    if (pendingX === null) return;
+                    const x = pendingX;
+                    pendingX = null;
+                    const asked = Math.max(
+                        opts.min,
+                        (opts.side?.() ?? 'right') === 'left' ? x : window.innerWidth - x,
+                    );
                     const granted = claimDockSpace(opts.id, asked);
-                    if (granted) document.body.style.setProperty(opts.cssVar, `${granted}px`);
+                    if (granted) {
+                        lastGranted = granted;
+                        document.body.style.setProperty(opts.cssVar, `${granted}px`);
+                    }
+                };
+
+                const move = (me: MouseEvent) => {
+                    pendingX = me.clientX;
+                    if (!frame) frame = requestAnimationFrame(flush);
                 };
                 const up = () => {
                     grip.classList.remove('dragging');
                     document.removeEventListener('mousemove', move);
                     document.removeEventListener('mouseup', up);
-                    const w = parseInt(getComputedStyle(document.body).getPropertyValue(opts.cssVar), 10);
-                    if (Number.isFinite(w)) {
-                        try { localStorage.setItem(opts.storageKey, String(w)); } catch { /* pref only */ }
+                    if (frame) { cancelAnimationFrame(frame); flush(); }
+                    // Persist what was GRANTED, tracked through the drag — reading it
+                    // back out of getComputedStyle forced one last synchronous style
+                    // resolve just to learn a number we already had.
+                    if (lastGranted) {
+                        try { localStorage.setItem(opts.storageKey, String(lastGranted)); } catch { /* pref only */ }
                     }
                 };
                 document.addEventListener('mousemove', move);

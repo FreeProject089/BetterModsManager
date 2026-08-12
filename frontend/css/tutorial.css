@@ -576,3 +576,50 @@ body.tut-dock-side .tut-chips-scroller {
     touch-action: pan-x;
     overscroll-behavior-x: contain;
 }
+
+/* ── The bottom strip's height handle ────────────────────────────────────────
+   Twin of .tut-dock-resize, turned through 90°: it lives on the strip's TOP edge,
+   which is the edge that moves when the strip gets taller. Hidden in side-dock
+   mode, where width is the axis that matters and the vertical grip would be a
+   second handle offering to do nothing. */
+.tut-dock-resize-v {
+    position: absolute;
+    left: 0; right: 0; top: 0;
+    height: 12px;
+    cursor: ns-resize;
+    z-index: 5;
+}
+/* Only the bottom dock has a height to drag: side mode owns width, and a floating
+   panel is moved and sized by other means entirely. */
+.tut-dock-resize-v { display: none; }
+body.tut-docked:not(.tut-dock-side) .tut-dock-resize-v { display: block; }
+.tut-dock-resize-v::before {
+    content: '';
+    position: absolute;
+    left: 0; right: 0; top: 50%;
+    height: 2px;
+    transform: translateY(-50%);
+    background: var(--border);
+    opacity: 0.5;
+    transition: background 0.15s, opacity 0.15s;
+}
+.tut-dock-resize-v::after {
+    content: '';
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 46px; height: 5px;
+    border-radius: 999px;
+    background: var(--text-muted);
+    opacity: 0.55;
+    transition: background 0.15s, opacity 0.15s, width 0.15s;
+}
+.tut-dock-resize-v:hover::before, .tut-dock-resize-v.dragging::before {
+    background: var(--accent);
+    opacity: 0.9;
+}
+.tut-dock-resize-v:hover::after, .tut-dock-resize-v.dragging::after {
+    background: var(--accent);
+    opacity: 1;
+    width: 64px;
+}

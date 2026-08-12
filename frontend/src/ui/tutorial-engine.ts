@@ -12,7 +12,7 @@
  */
 
 import { t } from '../core/i18n.js';
-import { claimDockSpace, releaseDockSpace } from './dock-space.js';
+import { claimDockSpace, releaseDockSpace, makeDock } from './dock-space.js';
 import { invoke } from '../core/api.js';
 import { onBmmAction } from './tutorial-events.js';
 import {
@@ -326,33 +326,64 @@ function _ensurePanel(): void {
  *  padding (the same two writers _setDockReserved uses, so they cannot disagree),
  *  and the result persists — how wide you want the guidance is a property of your
  *  screen, not of the lesson. */
+// The fourth copy of the dock mechanism — it outlived the round that collapsed the
+// other three, because it looked different enough to skip: it can dock LEFT, and it
+// wears its own grip skin. Neither is a reason to own a second drag loop. makeDock
+// now takes a `side` and a `gripClass`, so the tutorial keeps both and gives up the
+// duplicate — including the per-mousemove writes that made the drag judder.
+//
+// Also gone with it: the `shell.style.paddingLeft` write on the left-dock path, a
+// survivor of the era when a dock reserved layout space. Docks are overlays now;
+// that line was the last one still moving the app out of the way.
+const _tutDock = makeDock({
+    id: 'tutorial',
+    storageKey: 'bmm.tutorial.dockW',
+    cssVar: '--tut-dock-w',
+    min: 320,
+    def: 380,
+    gripClass: 'tut-dock-resize',
+    side: () => _dockSide() === 'left' ? 'left' : 'right',
+});
+
 function _plantResizeHandle(panel: HTMLElement): void {
-    if (panel.querySelector('.tut-dock-resize')) return;
+    _tutDock.plantGrip(panel, () => !panel.classList.contains('minimized'));
+    _plantHeightHandle(panel);
+}
+
+/** The bottom dock had no handle at all. The side grip is `ew-resize` and is only
+ *  positioned under .tut-dock-right/.tut-dock-left, so in the default bottom strip
+ *  there was nothing to drag — even though that mode has its own --tut-dock-h and
+ *  the strip is exactly where height matters, since it is what the lesson text has
+ *  to fit into. This is the vertical twin: same rAF coalescing, same reasoning. */
+function _plantHeightHandle(panel: HTMLElement): void {
+    if (panel.querySelector('.tut-dock-resize-v')) return;
     const grip = document.createElement('div');
-    grip.className = 'tut-dock-resize';
+    grip.className = 'tut-dock-resize-v';
     grip.addEventListener('mousedown', (e: MouseEvent) => {
         if (panel.classList.contains('minimized')) return;
+        if (document.body.classList.contains('tut-dock-side')) return;   // side mode owns width
         e.preventDefault();
         grip.classList.add('dragging');
-        const side = _dockSide();
-        const move = (me: MouseEvent) => {
-            const w = Math.max(320, Math.min(
-                side === 'right' ? window.innerWidth - me.clientX : me.clientX,
-                Math.round(window.innerWidth * 0.6),
-            ));
-            document.body.style.setProperty('--tut-dock-w', `${w}px`);
-            // Through the shared owner so the app's right edge is one number, not
-            // three panels each writing their own (ui/dock-space.ts).
-            if (side === 'right') claimDockSpace('tutorial', w);
-            const shell = document.querySelector('.app-shell') as HTMLElement | null;
-            if (shell && side === 'left') shell.style.paddingLeft = `${w}px`;
+        let pendingY: number | null = null;
+        let frame = 0;
+        let last = 0;
+        const flush = () => {
+            frame = 0;
+            if (pendingY === null) return;
+            // Grows upward from the bottom edge, and never taller than 70% of the
+            // window — past that the strip stops being a strip and the app it is
+            // meant to be teaching is no longer visible behind it.
+            last = Math.max(180, Math.min(window.innerHeight - pendingY, Math.round(window.innerHeight * 0.7)));
+            pendingY = null;
+            document.body.style.setProperty('--tut-dock-h', `${last}px`);
         };
+        const move = (me: MouseEvent) => { pendingY = me.clientY; if (!frame) frame = requestAnimationFrame(flush); };
         const up = () => {
             grip.classList.remove('dragging');
             document.removeEventListener('mousemove', move);
             document.removeEventListener('mouseup', up);
-            const w = parseInt(getComputedStyle(document.body).getPropertyValue('--tut-dock-w'), 10);
-            if (Number.isFinite(w)) { try { localStorage.setItem('bmm.tutorial.dockW', String(w)); } catch { /* pref only */ } }
+            if (frame) { cancelAnimationFrame(frame); flush(); }
+            if (last) { try { localStorage.setItem('bmm.tutorial.dockH', String(last)); } catch { /* pref only */ } }
         };
         document.addEventListener('mousemove', move);
         document.addEventListener('mouseup', up);
@@ -1447,6 +1478,16 @@ function _setDockReserved(on: boolean): void {
         const shell = document.querySelector('.app-shell') as HTMLElement | null;
         if (shell) { shell.style.paddingRight = ''; shell.style.paddingLeft = ''; }
         return;
+    }
+    // Restore the remembered strip height. Until the vertical grip existed nothing
+    // ever wrote --tut-dock-h, so the CSS lived on its 200px fallback forever; now
+    // that it can be dragged, it has to survive being closed and reopened — a panel
+    // that forgets its size every time is a panel you resize every time.
+    if (!document.body.classList.contains('tut-dock-side')) {
+        const h = parseInt(localStorage.getItem('bmm.tutorial.dockH') || '', 10);
+        if (Number.isFinite(h) && h > 0) {
+            document.body.style.setProperty('--tut-dock-h', `${Math.min(h, Math.round(window.innerHeight * 0.7))}px`);
+        }
     }
     _applyDockSide();
     // A column, so what is reserved is a WIDTH — and a width is a layout choice, not a
