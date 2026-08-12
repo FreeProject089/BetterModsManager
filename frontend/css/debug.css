@@ -627,17 +627,14 @@
     box-shadow: 0 1px 2px rgba(0,0,0,0.3);
 }
 
-.debug-switch.debug-switch-pink:checked {
-    background: #007aff; 
+/* ONE switch, one look. There used to be three variants: pink and blue had already
+   converged on the same colour, and 'warning' was orange with a 12px knob travel —
+   short of the track end, so checked read as half-on. The variant classes stay in
+   the markup (harmless), but every switch now renders identically. */
+.debug-switch:checked {
+    background: var(--debug-accent, #007aff);
 }
-.debug-switch.debug-switch-pink:checked::after {
-    transform: translateX(16px);
-}
-
-.debug-switch.debug-switch-blue:checked {
-    background: #007aff;
-}
-.debug-switch.debug-switch-blue:checked::after {
+.debug-switch:checked::after {
     transform: translateX(16px);
 }
 
@@ -843,5 +840,4 @@
     background-color: rgba(59, 130, 246, 0.1) !important;
 }
 
-.debug-switch-warning:checked { background-color: #f59e0b; }
-.debug-switch-warning:checked::after { transform: translateX(12px); }
+/* .debug-switch-warning folded into the single .debug-switch:checked rule above. */
