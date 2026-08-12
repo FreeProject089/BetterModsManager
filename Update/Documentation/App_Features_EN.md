@@ -794,3 +794,44 @@ The MCP server and the CLI no longer only read — they **create**: whole automa
 (control-flow blocks included) and plugin drafts. A created task lands disabled, to be
 inspected before it is armed; a plugin lands as a draft, to be installed through the app's
 normal permission-gated flow.
+
+## 62. Scripts in a scheduled task (v1.0.0+)
+
+A workflow step can now **run a script you write** — PowerShell, CMD, Bash or Python —
+instead of only launching a program with arguments. BMM saves the body to a temporary file
+and hands the interpreter that file, so nothing you type is ever placed on a command line:
+there is no quoting to get right, and a stray quote cannot change what runs. Inside a
+**FOR EACH**, `{item.name}` and `{item.id}` are substituted before the script starts.
+
+Under *Advanced* you can name a variable. The script's first output line becomes that
+variable's value, and later steps can branch on it — without it, a script could only report
+success or failure, which made "if the script says yes, then…" impossible to express.
+
+## 63. Task permissions, one grant per capability (v1.0.0+)
+
+A task used to carry a single switch called "allow custom commands". It told you a
+permission was being granted but not what it covered, and it did not cover deeplinks at
+all — even though a `bmm://` link reaches anything the app exposes.
+
+There are now three separate grants, each naming what it unlocks: **run external programs**,
+**run scripts**, and **fire deeplinks**. Each is off until you turn it on, and a step whose
+permission is missing fails with a message naming the one to grant, rather than running
+quietly. Tasks you built before the split keep everything they already had — except *run
+scripts*, which no existing task receives, because that capability did not exist when you
+agreed to the old checkbox.
+
+## 64. Notification centre (v1.0.0+)
+
+A bell sits beside **Check for Updates**. It keeps every message BMM has shown you, with the
+source it came from, when it arrived and its full text — a toast is a three-second window
+onto something that already happened, and until now missing it meant losing it. Entries can
+be marked read, removed one at a time or cleared, and repeated messages from a batch
+operation collapse into one line.
+
+## 65. Better bug reports (v1.0.0+)
+
+The diagnostics export now carries the **web view's environment** alongside the app's: your
+system's accessibility and colour preferences, the window size and pixel ratio, and any
+uncaught errors from the session. These silently change how the app behaves while being
+invisible in a screenshot — a spinner that refused to turn was traced to a Windows
+accessibility switch that nothing had ever reported.

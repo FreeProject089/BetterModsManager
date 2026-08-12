@@ -692,3 +692,48 @@ Le serveur MCP et le CLI ne se contentent plus de lire : ils **créent**. Automa
 complètes (blocs de contrôle inclus) et brouillons de plugins. Une tâche créée arrive
 désactivée, à inspecter avant d'être armée ; un plugin arrive en brouillon, à installer par
 le flux normal de l'app avec ses permissions.
+
+## 62. Des scripts dans une tâche planifiée (v1.0.0+)
+
+Une étape de workflow peut désormais **exécuter un script que vous écrivez** — PowerShell,
+CMD, Bash ou Python — et non plus seulement lancer un programme avec des arguments. BMM
+enregistre le corps dans un fichier temporaire et remet ce fichier à l'interpréteur : rien de
+ce que vous tapez n'est jamais placé sur une ligne de commande, il n'y a donc aucun
+échappement à réussir et un guillemet égaré ne peut pas changer ce qui s'exécute. Dans un
+**POUR CHAQUE**, `{item.name}` et `{item.id}` sont remplacés avant le démarrage du script.
+
+Dans *Avancé*, vous pouvez nommer une variable. La première ligne de sortie du script en
+devient la valeur, et les étapes suivantes peuvent s'y brancher — sans cela, un script ne
+pouvait que signaler une réussite ou un échec, ce qui rendait « si le script dit oui,
+alors… » impossible à exprimer.
+
+## 63. Permissions de tâche, une autorisation par capacité (v1.0.0+)
+
+Une tâche portait un unique interrupteur « autoriser les commandes personnalisées ». Il vous
+annonçait qu'une permission était accordée sans dire laquelle, et il ne couvrait pas du tout
+les deeplinks — alors qu'un lien `bmm://` atteint tout ce que l'app expose.
+
+Il y a maintenant trois autorisations distinctes, chacune nommant ce qu'elle débloque :
+**lancer des programmes externes**, **exécuter des scripts** et **déclencher des deeplinks**.
+Chacune est désactivée tant que vous ne l'activez pas, et une étape dont la permission
+manque échoue avec un message indiquant laquelle accorder, au lieu de s'exécuter en silence.
+Les tâches construites avant la séparation gardent tout ce qu'elles avaient — sauf *exécuter
+des scripts*, qu'aucune tâche existante ne reçoit : cette capacité n'existait pas quand vous
+avez coché l'ancienne case.
+
+## 64. Centre de notifications (v1.0.0+)
+
+Une cloche se trouve à côté de **Vérifier les mises à jour**. Elle conserve chaque message
+que BMM vous a affiché, avec sa source, son heure d'arrivée et son texte complet — un toast
+est une fenêtre de trois secondes sur un événement déjà passé, et le manquer signifiait
+jusqu'ici le perdre. Les entrées peuvent être marquées comme lues, supprimées une à une ou
+vidées, et les messages répétés d'une opération par lot se regroupent en une seule ligne.
+
+## 65. De meilleurs rapports de bug (v1.0.0+)
+
+L'export de diagnostics emporte désormais l'**environnement de la vue web** en plus de celui
+de l'app : les préférences d'accessibilité et de couleurs de votre système, la taille de la
+fenêtre et sa densité de pixels, ainsi que les erreurs non capturées de la session. Ces
+éléments modifient silencieusement le comportement de l'app tout en étant invisibles sur une
+capture d'écran — un spinner qui refusait de tourner a été remonté jusqu'à un interrupteur
+d'accessibilité de Windows que rien n'avait jamais rapporté.
