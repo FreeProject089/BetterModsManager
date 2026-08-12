@@ -13,11 +13,16 @@
 const _claims = new Map<string, number>();
 
 function _apply(): void {
+    const width = _claims.size ? Math.max(...Array.from(_claims.values())) : 0;
     const shell = document.querySelector('.app-shell') as HTMLElement | null;
-    if (!shell) return;
-    const width = _claims.size ? Math.max(...
-_claims.values()) : 0;
-    shell.style.paddingRight = width ? `${width}px` : '';
+    if (shell) shell.style.paddingRight = width ? `${width}px` : '';
+    // ONE state the whole app can lay out against. Rules used to key on
+    // `body.tut-docked` only, so the theme editor and the sandbox — same shape,
+    // same stolen width — left the mod library's action bar overflowing. A dock is
+    // a dock: it moves the app's right edge, whoever opened it.
+    document.body.classList.toggle('bmm-docked', width > 0);
+    if (width) document.body.style.setProperty('--bmm-dock-w', `${width}px`);
+    else document.body.style.removeProperty('--bmm-dock-w');
 }
 
 /** Reserve `width` px on the right edge under `id` (idempotent — call on resize). */

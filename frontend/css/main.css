@@ -9602,9 +9602,11 @@ select:focus {
 .mod-loading-overlay {
     position: absolute;
     inset: 0;
-    background: rgba(15, 23, 42, 0.55);
-    backdrop-filter: blur(2px);
-    -webkit-backdrop-filter: blur(2px);
+    /* No backdrop-filter: it re-blurs the card behind it on EVERY frame (on the
+       main thread), which is both the most expensive thing on screen during an
+       activation and what kept the spinner inside it from being promoted to its
+       own compositor layer. A flat scrim reads the same and costs nothing. */
+    background: rgba(15, 23, 42, 0.62);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -14741,9 +14743,17 @@ body.bmm-theme-light .nav-item:hover .nav-label { color: var(--bmm-accent) !impo
    folding them (field screenshot: "Tout activer" cut mid-word). The compact media query
    below cannot save it — media queries read the WINDOW's width, and the window has not
    changed size, only the app's usable band inside it has. */
-body.tut-docked .lib-actions-tab { flex-wrap: wrap; }
-body.tut-docked .lib-actions-tab .view-actions { flex-wrap: wrap; }
-body.tut-docked .filter-bar { flex-wrap: wrap; }
+/* `bmm-docked` is set by ui/dock-space.ts for ANY docked side panel (tutorial,
+   theme editor, translation sandbox). Keying on body.tut-docked alone meant the
+   other two stole the same width while the action bar still laid out as if it had
+   the whole window — the overflow in the field screenshots. */
+body.bmm-docked .lib-actions-tab { flex-wrap: wrap; }
+body.bmm-docked .lib-actions-tab .view-actions { flex-wrap: wrap; }
+body.bmm-docked .filter-bar { flex-wrap: wrap; }
+body.bmm-docked .view-header { flex-wrap: wrap; row-gap: 10px; }
+/* Nothing inside the docked band may out-size its column. */
+body.bmm-docked .lib-actions-tab > *,
+body.bmm-docked .filter-bar > * { min-width: 0; }
 
 /* Compact "second style" — kicks in on narrower windows before anything scrolls. */
 @media (max-width: 1340px) {
@@ -15710,3 +15720,57 @@ body.i18nsb-docked #modal-i18n-sandbox .i18nsb-dock-resize { display: block; }
     font-size: 11px; font-weight: 800;
     margin-top: 1px;
 }
+
+
+/* ── Spinners must survive a busy main thread ────────────────────────────────
+   Field report: "l'animation de loading s'affiche mais se joue pas" — the overlay
+   appeared and the spinner sat frozen, which reads as an app freeze even when the
+   work is progressing normally.
+
+   A `transform` animation only runs on the compositor if its element has its own
+   layer. Chromium promotes one when it commits the animation — but if the main
+   thread is already busy (hashing, IPC, a scan) when the spinner is inserted, that
+   commit lands late or not at all and the rotation stalls on the main thread with
+   everything else. `will-change: transform` asks for the layer up front, so the
+   compositor owns the rotation and a blocked main thread cannot stop it.
+
+   The attribute selectors are deliberate: most spinners in this codebase carry
+   `style="animation:spin …"` inline (60+ sites), and one rule beats touching them
+   all. New code should use .bmm-spin. */
+[style*="animation:spin"],
+[style*="animation: spin"],
+.community-spinner,
+.kit-spinner,
+.bmm-spin {
+    will-change: transform;
+}
+
+
+/* ── Tag form: the gradient toggle ───────────────────────────────────────────
+   It was a raw <input type=checkbox> next to BMM's styled fields, and switching
+   it display:none'd the second swatch — so the whole row jumped sideways on every
+   click. The swatch now only fades: it keeps its slot, so nothing moves. */
+.tag-grad-toggle {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    height: 36px;
+    padding: 0 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--bmm-bg-base);
+    color: var(--text-muted);
+    font-size: 11px;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+    transition: color 0.15s, border-color 0.15s;
+}
+.tag-grad-toggle input { accent-color: var(--accent); cursor: pointer; margin: 0; }
+.tag-grad-toggle:has(input:checked) { color: var(--accent); border-color: var(--accent); }
+#setting-tag-color2 {
+    width: 36px; height: 36px; padding: 0; border: none; border-radius: 6px;
+    cursor: pointer; background: transparent;
+    transition: opacity 0.15s;
+}
+#setting-tag-color2.tag-color2-hidden { opacity: 0; pointer-events: none; }

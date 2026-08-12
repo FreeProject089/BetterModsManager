@@ -976,7 +976,7 @@ export async function renderSettingsTags() {
                 const c2 = document.getElementById('setting-tag-color2');
                 if (grad && c2) {
                     grad.checked = !!tag.color2;
-                    c2.style.display = tag.color2 ? '' : 'none';
+                    c2.classList.toggle('tag-color2-hidden', !tag.color2);
                     if (tag.color2)
                         c2.value = tag.color2;
                 }
@@ -1840,9 +1840,11 @@ export async function initSettings() {
     if (btnCreateTag) {
         const gradToggle = document.getElementById('setting-tag-grad');
         const color2Input = document.getElementById('setting-tag-color2');
+        // Toggling only reveals the swatch — it never removes it from the flow, or
+        // the whole row jumped sideways on every click (field report: "le bouton
+        // pour activer le gradient change le style").
         gradToggle?.addEventListener('change', () => {
-            if (color2Input)
-                color2Input.style.display = gradToggle.checked ? '' : 'none';
+            color2Input?.classList.toggle('tag-color2-hidden', !gradToggle.checked);
         });
         document.getElementById('btn-tag-icon')?.addEventListener('click', async () => {
             const { openIconPicker, renderPackIcon } = await import('../../ui/icon-pack.js');

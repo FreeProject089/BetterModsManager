@@ -268,6 +268,9 @@
   border-top-color: var(--bmm-accent);
   border-radius: 50%;
   animation: community-spin .8s linear infinite;
+  /* Own compositor layer — see the spinner note in main.css. Without it the
+     rotation stalls whenever the main thread is busy fetching the feed. */
+  will-change: transform;
 }
 @keyframes community-spin { to { transform: rotate(360deg); } }
 

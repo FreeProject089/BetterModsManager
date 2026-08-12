@@ -12,6 +12,7 @@
  */
 
 import { t } from '../core/i18n.js';
+import { claimDockSpace, releaseDockSpace } from './dock-space.js';
 import { invoke } from '../core/api.js';
 import { onBmmAction } from './tutorial-events.js';
 import {
@@ -340,11 +341,11 @@ function _plantResizeHandle(panel: HTMLElement): void {
                 Math.round(window.innerWidth * 0.6),
             ));
             document.body.style.setProperty('--tut-dock-w', `${w}px`);
+            // Through the shared owner so the app's right edge is one number, not
+            // three panels each writing their own (ui/dock-space.ts).
+            if (side === 'right') claimDockSpace('tutorial', w);
             const shell = document.querySelector('.app-shell') as HTMLElement | null;
-            if (shell) {
-                shell.style.paddingRight = side === 'right' ? `${w}px` : '';
-                shell.style.paddingLeft  = side === 'left'  ? `${w}px` : '';
-            }
+            if (shell && side === 'left') shell.style.paddingLeft = `${w}px`;
         };
         const up = () => {
             grip.classList.remove('dragging');
@@ -1438,6 +1439,7 @@ function _setDockReserved(on: boolean): void {
         document.body.classList.remove('tut-min', 'tut-dock-right', 'tut-dock-left', 'tut-dock-side');
         document.body.style.removeProperty('--tut-dock-h');
         document.body.style.removeProperty('--tut-dock-w');
+        releaseDockSpace('tutorial');            // give the width back to the shared owner
         const shell = document.querySelector('.app-shell') as HTMLElement | null;
         if (shell) { shell.style.paddingRight = ''; shell.style.paddingLeft = ''; }
         return;
@@ -1467,6 +1469,9 @@ function _setDockReserved(on: boolean): void {
         shell.style.paddingRight = _dockSide() === 'right' ? `${w}px` : '';
         shell.style.paddingLeft  = _dockSide() === 'left'  ? `${w}px` : '';
     }
+    // Also announce it to the shared owner, which is what sets body.bmm-docked —
+    // the single flag every layout rule keys on (ui/dock-space.ts).
+    if (_dockSide() === 'right') claimDockSpace('tutorial', w); else releaseDockSpace('tutorial');
     const panel = document.getElementById('tut-engine-panel');
     document.body.classList.toggle('tut-min', !!panel?.classList.contains('minimized'));
     // Re-plant after every render: _renderStep and the pill both rebuild via innerHTML,
