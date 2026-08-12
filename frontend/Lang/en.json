@@ -6902,5 +6902,6 @@
   "dev.session.idleHint": "Nothing is recording, so every counter stays at zero — that is the pane working, not failing. Start a test capture below to watch the stream live.",
   "dev.session.startTest": "Start a test capture (masked)",
   "dev.session.stopTest": "Stop the test capture",
-  "themes.dockToggle": "Dock to the side / float"
+  "themes.dockToggle": "Dock to the side / float",
+  "i18n.dockMode": "Dock to the side (the app stays usable)"
 }

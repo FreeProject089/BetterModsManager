@@ -15600,3 +15600,48 @@ h1 {
     vertical-align: middle;
     cursor: help;
 }
+
+/* ── i18n sandbox dock mode ─────────────────────────────────────────────────
+   body.i18nsb-docked: the sandbox panel becomes a right-side column inside the
+   window; the overlay is click-through (set inline by toggleDockMode) so the app
+   stays usable while translating against it. Width via --i18nsb-w + grip. */
+body.i18nsb-docked #modal-i18n-sandbox .modal {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: auto;
+    width: var(--i18nsb-w, 460px);
+    max-width: none;
+    height: auto;
+    max-height: none;
+    margin: 0;
+    border-radius: 0;
+    transform: none;
+    pointer-events: auto;
+}
+.i18nsb-dock-resize {
+    display: none;
+    position: absolute;
+    top: 0; bottom: 0; left: 0;
+    width: 12px;
+    cursor: ew-resize;
+    z-index: 5;
+}
+body.i18nsb-docked #modal-i18n-sandbox .i18nsb-dock-resize { display: block; }
+.i18nsb-dock-resize::after {
+    content: '';
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 5px; height: 46px;
+    border-radius: 999px;
+    background: var(--text-muted);
+    opacity: 0.5;
+    transition: background 0.15s, opacity 0.15s;
+}
+.i18nsb-dock-resize:hover::after, .i18nsb-dock-resize.dragging::after {
+    background: var(--accent);
+    opacity: 1;
+}
+#i18n-dock-toggle.active { color: var(--accent); }

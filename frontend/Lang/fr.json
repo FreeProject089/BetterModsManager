@@ -6900,5 +6900,6 @@
   "dev.session.idleHint": "Rien n'enregistre, donc tous les compteurs restent à zéro — le panneau fonctionne, il n'a juste rien à mesurer. Lance une capture de test ci-dessous pour voir le flux en direct.",
   "dev.session.startTest": "Démarrer une capture de test (masquée)",
   "dev.session.stopTest": "Arrêter la capture de test",
-  "themes.dockToggle": "Ancrer sur le côté / flottant"
+  "themes.dockToggle": "Ancrer sur le côté / flottant",
+  "i18n.dockMode": "Ancrer sur le côté (l'app reste utilisable)"
 }

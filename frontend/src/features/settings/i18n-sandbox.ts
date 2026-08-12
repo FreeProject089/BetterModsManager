@@ -42,6 +42,7 @@ export function initI18nSandbox(): void {
         if (_pickMode) togglePickMode(false);
         if (_hlMode) toggleHighlight(false);
         if (_overlayMode) toggleOverlayMode(modal, false);
+        if (_dockMode) toggleDockMode(modal, false);
         // The live-test overlay dies with the sandbox. A draft that kept speaking after
         // its editor closed would be indistinguishable from the app's real text — the
         // exact confusion a sandbox exists to prevent.
@@ -60,6 +61,7 @@ export function initI18nSandbox(): void {
         document.body.style.overflow = 'hidden';
         switchTab('keys');
         renderList();
+        if (localStorage.getItem(I18N_DOCK_KEY) === 'right') toggleDockMode(modal, true);
     });
 
     modal.addEventListener('click', (e) => { if (e.target === modal && !_overlayMode) closeModal(); });
@@ -78,6 +80,7 @@ export function initI18nSandbox(): void {
     document.getElementById('i18n-pick-screen')?.addEventListener('click', () => togglePickMode());
     document.getElementById('i18n-highlight-hc')?.addEventListener('click', () => toggleHighlight());
     document.getElementById('i18n-overlay-toggle')?.addEventListener('click', () => toggleOverlayMode(modal));
+    document.getElementById('i18n-dock-toggle')?.addEventListener('click', () => toggleDockMode(modal));
     document.getElementById('i18n-new-lang')?.addEventListener('click', promptNewLanguage);
 
     // Filters — debounce the search so we don't rebuild the (large) key list on
@@ -619,7 +622,84 @@ function toggleHighlight(force?: boolean): void {
 let _overlayMode = false;
 let _savedPanelStyle = '';   // the panel's original inline style, restored on overlay exit
 const OVL_KEY = 'bmm_i18n_overlay_geom';
+// ── Dock mode: the sandbox as a side panel ───────────────────────────────────
+// Same shape as the theme editor's dock: body class + app shell padded aside +
+// draggable, persisted width. The backdrop goes click-through so the app stays
+// usable while translating against it — that is the point of docking it.
+let _dockMode = false;
+let _savedDockStyle: string | null = null;
+const I18N_DOCK_KEY = 'bmm.i18nsb.dock';
+const I18N_DOCKW_KEY = 'bmm.i18nsb.dockW';
+
+function _i18nDockW(): number {
+    const w = parseInt(localStorage.getItem(I18N_DOCKW_KEY) || '', 10);
+    return Number.isFinite(w) ? Math.max(380, Math.min(w, Math.round(innerWidth * 0.6))) : 460;
+}
+
+function _i18nShellPad(w: number | null): void {
+    const shell = document.querySelector('.app-shell') as HTMLElement | null;
+    if (shell) shell.style.paddingRight = w ? `${w}px` : '';
+}
+
+function toggleDockMode(modal: HTMLElement, force?: boolean): void {
+    const next = force !== undefined ? force : !_dockMode;
+    if (next === _dockMode) return;
+    const panel = modal.querySelector('.modal') as HTMLElement;
+    if (!panel) return;
+    if (next && _overlayMode) toggleOverlayMode(modal, false);   // one float mode at a time
+    _dockMode = next;
+    document.getElementById('i18n-dock-toggle')?.classList.toggle('active', next);
+    document.body.classList.toggle('i18nsb-docked', next);
+    localStorage.setItem(I18N_DOCK_KEY, next ? 'right' : 'off');
+    if (next) {
+        _savedDockStyle = panel.getAttribute('style') || '';
+        panel.setAttribute('style', '');                          // CSS owns the dock
+        modal.style.background = 'transparent';
+        modal.style.pointerEvents = 'none';
+        modal.style.backdropFilter = 'none';
+        document.body.style.overflow = '';
+        const w = _i18nDockW();
+        document.body.style.setProperty('--i18nsb-w', `${w}px`);
+        _i18nShellPad(w);
+        _i18nPlantDockResize(panel);
+    } else {
+        if (_savedDockStyle !== null) { panel.setAttribute('style', _savedDockStyle); _savedDockStyle = null; }
+        modal.style.background = '';
+        modal.style.pointerEvents = '';
+        modal.style.backdropFilter = '';
+        document.body.style.removeProperty('--i18nsb-w');
+        _i18nShellPad(null);
+    }
+}
+
+function _i18nPlantDockResize(panel: HTMLElement): void {
+    if (panel.querySelector('.i18nsb-dock-resize')) return;
+    const grip = document.createElement('div');
+    grip.className = 'i18nsb-dock-resize';
+    grip.addEventListener('mousedown', (e: MouseEvent) => {
+        if (!_dockMode) return;
+        e.preventDefault();
+        grip.classList.add('dragging');
+        const move = (me: MouseEvent) => {
+            const w = Math.max(380, Math.min(innerWidth - me.clientX, Math.round(innerWidth * 0.6)));
+            document.body.style.setProperty('--i18nsb-w', `${w}px`);
+            _i18nShellPad(w);
+        };
+        const up = () => {
+            grip.classList.remove('dragging');
+            document.removeEventListener('mousemove', move);
+            document.removeEventListener('mouseup', up);
+            const w = parseInt(getComputedStyle(document.body).getPropertyValue('--i18nsb-w'), 10);
+            if (Number.isFinite(w)) localStorage.setItem(I18N_DOCKW_KEY, String(w));
+        };
+        document.addEventListener('mousemove', move);
+        document.addEventListener('mouseup', up);
+    });
+    panel.appendChild(grip);
+}
+
 function toggleOverlayMode(modal: HTMLElement, force?: boolean): void {
+    if ((force === undefined || force) && _dockMode) toggleDockMode(modal, false);
     _overlayMode = force !== undefined ? force : !_overlayMode;
     const panel = modal.querySelector('.modal') as HTMLElement;
     document.getElementById('i18n-overlay-toggle')?.classList.toggle('active', _overlayMode);
