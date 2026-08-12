@@ -345,3 +345,67 @@ pub fn unregister_os_schedule(task_id: String) -> Result<(), String> {
     log_line(format!("[SCHED] Unregistered OS task {}", task_name));
     Ok(())
 }
+
+/// Creates a folder inside BMM's own app-data directory.
+///
+/// The scheduler can already run scripts, which can obviously create folders — but
+/// only for a task that has been granted the "run scripts" permission, which is a
+/// large thing to hand over for `mkdir`. This is the small, safe version: the one
+/// place a task can make a folder without being trusted with the machine.
+///
+/// `relative` is joined UNDER the app-data dir and confined there (CWE-22). The
+/// containment is checked on the CANONICALISED parent rather than by rejecting
+/// `..` textually: a blacklist of dangerous spellings is a game you lose, and on
+/// Windows there are several ways to write the same escape. The parent is
+/// canonicalised because the target itself does not exist yet — there is nothing to
+/// resolve until after it is made.
+#[tauri::command(async)]
+pub fn create_bmm_folder(app: tauri::AppHandle, relative: String) -> Result<String, String> {
+    use tauri::Manager;
+
+    let rel = relative.trim().trim_matches(|c| c == '/' || c == '\\');
+    if rel.is_empty() {
+        return Err("No folder name given".to_string());
+    }
+    // An absolute path is not a relative one, and silently reinterpreting it under
+    // app-data would create a folder somewhere the caller did not ask for.
+    let candidate = std::path::Path::new(rel);
+    if candidate.is_absolute() || rel.contains(':') {
+        return Err("Give a path relative to BMM's data folder, not an absolute one".to_string());
+    }
+
+    let base = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("No app-data directory: {}", e))?;
+    std::fs::create_dir_all(&base).map_err(|e| format!("Could not open BMM's data folder: {}", e))?;
+    let base_real = base
+        .canonicalize()
+        .map_err(|e| format!("Could not resolve BMM's data folder: {}", e))?;
+
+    let target = base_real.join(candidate);
+    // Create the parents first so there is something to canonicalise, then verify.
+    // Doing it in this order means a traversal attempt can create a directory before
+    // the check — so the check failing removes what it just made, below.
+    let parent = target
+        .parent()
+        .ok_or_else(|| "Invalid folder name".to_string())?
+        .to_path_buf();
+    std::fs::create_dir_all(&parent).map_err(|e| format!("Could not create the folder: {}", e))?;
+    let parent_real = parent
+        .canonicalize()
+        .map_err(|e| format!("Could not resolve the folder: {}", e))?;
+    if !parent_real.starts_with(&base_real) {
+        return Err("That path leaves BMM's data folder".to_string());
+    }
+
+    let final_path = parent_real.join(
+        target
+            .file_name()
+            .ok_or_else(|| "Invalid folder name".to_string())?,
+    );
+    std::fs::create_dir_all(&final_path).map_err(|e| format!("Could not create the folder: {}", e))?;
+
+    log_line(format!("[SCHED] Created folder {}", final_path.display()));
+    Ok(final_path.to_string_lossy().to_string())
+}

@@ -674,6 +674,16 @@ async function runAction(action: Action, task: Task, ctx: Record<string, number>
             _captureOutput(p, out, ctx);
             break;
         }
+        case 'folder.create': {
+            // No permission gate on purpose. A task can already make folders through
+            // custom.script, but only once it has been trusted with "run scripts" —
+            // which is the whole machine. This is confined to BMM's own app-data
+            // directory by the backend, so it grants nothing a task could not do to
+            // its own data anyway.
+            const made = await invoke('create_bmm_folder', { relative: p.path || '' });
+            _captureOutput(p, made, ctx);
+            break;
+        }
         case 'custom.script': {
             requirePerm(task, 'script', t('sched.permRunScript') || 'run scripts');
             // The body goes through the same {item.*} / {var} substitution as every
@@ -2021,6 +2031,7 @@ const ACTION_TYPES: { v: string; label: string; needs?: string; group: string }[
     { v: 'open.url', label: 'Open a URL / link', needs: 'url', group: 'system' },
     { v: 'custom.command', label: 'Run custom command', needs: 'command', group: 'system' },
     { v: 'custom.script', label: 'Run a script', needs: 'script', group: 'system' },
+    { v: 'folder.create', label: 'Create a folder (BMM data)', needs: 'bmmfolder', group: 'system' },
     { v: 'deeplink', label: 'Run bmm:// deeplink', needs: 'url', group: 'system' },
 ];
 
@@ -2112,6 +2123,9 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
             </details>
             <span class="sched-cmd-hint">${t('sched.cmdHint') || 'Tip: grant “Run external programs” in this task’s Permissions, or it won’t run.'}</span>
         </div>`;
+    else if (needs === 'bmmfolder') host.innerHTML = _field(needs,
+        `<input class="input sched-p-bmmdir" placeholder="${escAttr(t('sched.bmmFolderPh') || 'e.g. backups/weekly')}" value="${escAttr(params.path || '')}">`)
+        + `<span class="sched-cmd-hint">${t('sched.bmmFolderHint') || 'Created inside BMM’s own data folder. Sub-paths are allowed; the folder cannot be placed outside it.'}</span>`;
     else if (needs === 'script') {
         const eng = params.engine || 'powershell';
         const engines: [string, string][] = [
@@ -2269,6 +2283,7 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
     host.querySelector('.sched-p-prog')?.addEventListener('input', (e) => { params.program = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-p-args')?.addEventListener('input', (e) => { params.args = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-p-wd')?.addEventListener('input', (e) => { params.workingDir = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-bmmdir')?.addEventListener('input', (e) => { params.path = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-p-engine')?.addEventListener('change', (e) => { params.engine = (e.target as HTMLSelectElement).value; });
     host.querySelector('.sched-p-code')?.addEventListener('input', (e) => { params.code = (e.target as HTMLTextAreaElement).value; });
     host.querySelector('.sched-p-into')?.addEventListener('input', (e) => { params.into = (e.target as HTMLInputElement).value; });

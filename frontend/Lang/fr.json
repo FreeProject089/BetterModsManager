@@ -7029,5 +7029,8 @@
   "sched.inc_underscore": "Ajouter _1, _2…",
   "sched.inc_timestamp": "Ajouter un horodatage",
   "sched.inc_overwrite": "Écraser le fichier",
-  "sched.act.custom.script": "Exécuter un script"
+  "sched.act.custom.script": "Exécuter un script",
+  "sched.act.folder.create": "Créer un dossier (données BMM)",
+  "sched.bmmFolderPh": "ex. sauvegardes/hebdo",
+  "sched.bmmFolderHint": "Créé dans le dossier de données de BMM. Les sous-chemins sont autorisés ; le dossier ne peut pas sortir de là."
 }

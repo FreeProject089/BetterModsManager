@@ -7031,5 +7031,8 @@
   "sched.inc_underscore": "Add _1, _2…",
   "sched.inc_timestamp": "Add a timestamp",
   "sched.inc_overwrite": "Overwrite the file",
-  "sched.act.custom.script": "Run a script"
+  "sched.act.custom.script": "Run a script",
+  "sched.act.folder.create": "Create a folder (BMM data)",
+  "sched.bmmFolderPh": "e.g. backups/weekly",
+  "sched.bmmFolderHint": "Created inside BMM’s own data folder. Sub-paths are allowed; the folder cannot be placed outside it."
 }
