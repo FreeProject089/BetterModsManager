@@ -1369,13 +1369,17 @@ function _drawHighlight(target: Element, idx: number = 0): void {
 
     if (idx > 0 || _suppressDim) {
         const label = document.createElement('div');
+        // INSIDE the ring's top-left corner, not outside it. Hanging 9px out meant
+        // the badge sat on whatever neighbours the target (field screenshot: it
+        // printed over the search field's own edge) and, for a target near the
+        // window edge, got cut off by the layer's clip.
         label.style.cssText = `
-            position:absolute; top:-9px; left:-9px;
-            width:18px; height:18px; border-radius:50%;
+            position:absolute; top:2px; left:2px;
+            width:16px; height:16px; border-radius:50%;
             background:${tutColor}; color:#fff;
-            font-size:10px; font-weight:800;
+            font-size:9px; font-weight:800;
             display:flex; align-items:center; justify-content:center;
-            box-shadow:0 2px 6px ${tutColorHex}80;
+            box-shadow:0 1px 4px rgba(0,0,0,0.5);
         `;
         label.textContent = String(idx + 1);
         hl.appendChild(label);
