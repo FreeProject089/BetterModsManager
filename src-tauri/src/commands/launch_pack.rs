@@ -280,7 +280,7 @@ pub fn delete_launch_pack(state: State<AppState>, id: String) -> Result<(), AppE
 
 /// Scans Windows registry uninstall keys to list all installed applications with their exe paths.
 /// Mirrors what Steam's "Add Non-Steam Game" dialog does.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn scan_installed_apps() -> Result<Vec<InstalledApp>, AppError> {
     #[cfg(target_os = "windows")]
     {
@@ -485,7 +485,7 @@ pub async fn extract_exe_icon(exe_path: String) -> Result<String, AppError> {
 
 /// Scans a directory (non-recursively) for executable files (.exe, .bat, .cmd, .ps1, .lnk)
 /// Returns a list of absolute path strings.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn scan_dir_for_exe(path: String) -> Result<Vec<String>, AppError> {
     let dir = std::path::Path::new(&path);
     if !dir.is_dir() {

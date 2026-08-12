@@ -343,7 +343,7 @@ pub fn kill_current_mod_op() {
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_mods(state: State<AppState>) -> Result<Vec<EnrichedMod>, AppError> {
     // 1. Ensure cache is populated (Lazy but thread-safe)
     ensure_cache_populated(&state)?;
@@ -2470,7 +2470,7 @@ pub async fn list_mod_files_recursive(state: State<'_, AppState>, mod_id: String
 
 
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_mod_conflicts(state: State<AppState>, mod_id: String) -> Result<Vec<ConflictReport>, String> {
     ensure_cache_populated(&state)?;
     
@@ -2513,7 +2513,7 @@ pub fn get_mod_conflicts(state: State<AppState>, mod_id: String) -> Result<Vec<C
 /// on every refresh/import — the main source of UI lag. This computes them all
 /// behind one lock pass and returns a `mod_id -> conflicts` map (mods with no
 /// conflict are omitted to keep the payload small).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_all_mod_conflicts(state: State<AppState>) -> Result<std::collections::HashMap<String, Vec<ConflictReport>>, String> {
     ensure_cache_populated(&state)?;
 

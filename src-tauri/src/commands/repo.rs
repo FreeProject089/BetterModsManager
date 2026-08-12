@@ -908,7 +908,7 @@ pub struct HubRepoSummary {
 
 /// Scan a directory and return every immediate sub-folder that contains a
 /// repo.json (used by the hub dashboard preview in BMM).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn scan_repo_hub(hub_dir: String) -> Result<Vec<HubRepoSummary>, String> {
     let root = PathBuf::from(&hub_dir);
     if !root.is_dir() { return Err("repo.errOutputDirNotDir".to_string()); }

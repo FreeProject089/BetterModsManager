@@ -968,7 +968,7 @@ fn spawn_usage_tracker(
 /// Called once at BMM startup: for every installed app whose exe is already
 /// running, start a usage tracker immediately (covers the case where the user
 /// launched the app before/outside BMM).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn scan_and_track_running_apps(app_handle: AppHandle) {
     use sysinfo::{System, ProcessRefreshKind, UpdateKind};
 
