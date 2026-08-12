@@ -1468,11 +1468,11 @@ function _setDockReserved(on: boolean): void {
     // which quietly reparents fixed descendants and has already fooled one layer of this
     // system. An inline style depends on nothing: no specificity, no class propagation,
     // no custom-property inheritance. The stylesheet rules remain as a second layer.
+    // The dock no longer reserves layout space — see ui/dock-space.ts. Any padding
+    // a previous build left on the shell is cleared, or it would survive as a
+    // phantom band nobody can explain.
     const shell = document.querySelector('.app-shell') as HTMLElement | null;
-    if (shell) {
-        shell.style.paddingRight = _dockSide() === 'right' ? `${w}px` : '';
-        shell.style.paddingLeft  = _dockSide() === 'left'  ? `${w}px` : '';
-    }
+    if (shell) { shell.style.paddingRight = ''; shell.style.paddingLeft = ''; }
     // The shared owner has the last word on the width: it clamps against the band
     // the app needs and returns what it can actually spare (0 when the window is
     // too narrow). Honour it, or the coach ends up painting over the lesson.

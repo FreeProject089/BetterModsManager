@@ -14747,13 +14747,13 @@ body.bmm-theme-light .nav-item:hover .nav-label { color: var(--bmm-accent) !impo
    theme editor, translation sandbox). Keying on body.tut-docked alone meant the
    other two stole the same width while the action bar still laid out as if it had
    the whole window — the overflow in the field screenshots. */
-body.bmm-docked .lib-actions-tab { flex-wrap: wrap; }
-body.bmm-docked .lib-actions-tab .view-actions { flex-wrap: wrap; }
-body.bmm-docked .filter-bar { flex-wrap: wrap; }
-body.bmm-docked .view-header { flex-wrap: wrap; row-gap: 10px; }
-/* Nothing inside the docked band may out-size its column. */
-body.bmm-docked .lib-actions-tab > *,
-body.bmm-docked .filter-bar > * { min-width: 0; }
+/* Deliberately EMPTY of forced reflow.
+   These rules used to make the action bar and the filter bar wrap while a panel
+   was docked — compensation for the shell padding that no longer exists. A dock is
+   an overlay now: it must not move anything underneath it, and a bar that rewraps
+   the moment a panel opens is exactly the "ça casse la action bar" this became.
+   body.bmm-docked and --bmm-dock-w remain available for anything that WANTS to
+   adapt; nothing is forced. */
 
 /* Compact "second style" — kicks in on narrower windows before anything scrolls. */
 @media (max-width: 1340px) {
@@ -15900,12 +15900,7 @@ body.i18nsb-docked #modal-i18n-sandbox .i18n-sb-header-actions { flex-wrap: wrap
    width can out-grow — and an overflowing child runs straight under the panel.
    Bounding the content area to the reserved band makes that impossible: wide
    content scrolls inside its own box instead of sliding beneath the dock. */
-body.bmm-docked .content-area,
-body.bmm-docked .view {
-    max-width: 100%;
-    overflow-x: auto;
-}
-body.bmm-docked .view > * { max-width: 100%; }
+/* (The overflow backstop went with the padding it was protecting.) */
 
 /* ── Translation sandbox header, docked: room to breathe, no overlap ─────────
    At 460px the title, the two action tools, the opacity slider and three window

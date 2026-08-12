@@ -43,8 +43,18 @@ export function fitDockWidth(requested: number): number {
 
 function _apply(): void {
     const width = _claims.size ? Math.max(...Array.from(_claims.values()).map(c => c.got)) : 0;
-    const shell = document.querySelector('.app-shell') as HTMLElement | null;
-    if (shell) shell.style.paddingRight = width ? `${width}px` : '';
+    // NO padding on .app-shell any more.
+    //
+    // Reserving space by padding the shell reflowed the whole app every time a
+    // panel opened, and that reflow is what kept breaking things the panel had
+    // nothing to do with — the library's action bar, view headers, anything with a
+    // width of its own. The user's call, after seeing it happen three times: a side
+    // panel should "juste être présent par-dessus sans rien affecter".
+    //
+    // So a dock is now purely an overlay. It changes nothing about the layout under
+    // it; it simply sits on top. The class and the variable below still say a dock
+    // is open and how wide it is, so a surface that WANTS to adapt can opt in — but
+    // nothing is forced to move any more.
     // ONE state the whole app can lay out against. Rules used to key on
     // `body.tut-docked` only, so the theme editor and the sandbox — same shape,
     // same stolen width — left the mod library's action bar overflowing. A dock is

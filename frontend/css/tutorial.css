@@ -222,14 +222,11 @@ body.tut-dock-left  .tut-engine-panel { right: auto; left: 0;  border-right: 1px
 
 /* The app makes room on that side instead of underneath. !important mirrors the bottom
    dock's rule: these fight the same inline/layout padding it does. */
-body.tut-docked.tut-dock-right .app-shell {
-    padding-bottom: 0 !important;
-    padding-right: var(--tut-dock-w, 360px) !important;
-}
-body.tut-docked.tut-dock-left .app-shell {
-    padding-bottom: 0 !important;
-    padding-left: var(--tut-dock-w, 360px) !important;
-}
+/* The shell no longer makes room for the dock — see ui/dock-space.ts. The panel
+   overlays the app instead of reflowing it, because every reflow this reservation
+   caused broke something the panel had nothing to do with. */
+body.tut-docked.tut-dock-right .app-shell,
+body.tut-docked.tut-dock-left .app-shell { padding-bottom: 0 !important; }
 
 /* A highlighted control must not sit under the column — it would look highlighted and be
    unclickable, which is the bottom dock's scroll-margin problem turned sideways. */
