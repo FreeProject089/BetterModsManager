@@ -186,10 +186,13 @@
    of on a new hand-tuned margin. */
 #repo-sync-options {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-    column-gap: 16px;
-    row-gap: 9px;
-    align-items: center;
+    /* 240px min packed THREE ragged columns on a wide card (field screenshot) — a
+       two-line toggle centered against one-line neighbours reads as disorder. 300px
+       caps it at two tidy columns, and start-alignment keeps multi-line labels level. */
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    column-gap: 18px;
+    row-gap: 10px;
+    align-items: start;
 }
 /* The section title and the mode/limit row keep the full width — they are not toggles. */
 #repo-sync-options > .form-label,
@@ -221,3 +224,36 @@
     gap: 14px;
 }
 /* Inside a group, the old inline grid-column on the titles is inert (flex ignores it). */
+
+/* ── The checkbox rows themselves ────────────────────────────────────────────
+   .checkbox-container never had a base rule: the <label> was inline, so two toggles
+   in the same box flowed onto ONE crowded line (Generate card's ZIP options) and the
+   sync grid's cells hugged their text raggedly. One flex row fixes all 12 usages: box,
+   then text, then the help icon, aligned to the first text line. The .checkmark span
+   the markup carries was never styled anywhere — hidden, native checkboxes carry the
+   state (accent-color follows the theme). */
+.checkbox-container {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    cursor: pointer;
+    line-height: 1.45;
+}
+.checkbox-container input[type="checkbox"] {
+    margin: 2px 0 0;
+    flex-shrink: 0;
+    accent-color: var(--bmm-accent);
+    cursor: pointer;
+}
+.checkbox-container .checkmark { display: none; }
+
+/* ── Remote-update card (Mettre à jour depuis le serveur): breathing room ────
+   Everything inside was spaced 10px by inline styles — legible but airless, and the
+   action row sat flush against the checkbox above it. Inline margins can only be
+   out-spaced with !important, applied narrowly to this card's body. */
+#remote-base-url { margin-bottom: 2px; }
+#btn-remote-plan, #btn-remote-refresh { height: 36px !important; }
+#remote-force-full { margin-top: 2px; }
+
+/* The no-repo.json fallback block sat flush under the options grid. */
+#btn-discover-server { margin-top: 12px; }
