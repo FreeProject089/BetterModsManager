@@ -1,4 +1,5 @@
 # MCP server reference
+
 BMM ships an **MCP server**: the same capabilities the app has, exposed as Model Context
 Protocol tools so an AI assistant can drive BMM directly — list your mods, switch profiles,
 check integrity, run a scheduled task.
@@ -129,6 +130,8 @@ values.
 | Tool | Parameters | Needs | What it does |
 |---|---|---|---|
 | `bmm_list_schedules` | — |  | List the saved Scheduling & automation tasks (works offline) |
+| `bmm_create_schedule` | `task` | ✓ | Create or update an automation (same shape the in-app builder saves; if/repeat/doWhile/forEach/switch blocks). Created DISABLED unless enabled:true |
+| `bmm_delete_schedule` | `id` | ✓ | Delete an automation |
 | `bmm_run_schedule` | `id`\* | app | Trigger a saved scheduler task by id in the running BMM app |
 | `bmm_run_benchmark` | `dataset` (sandbox/real), `size` (S/M/L/XL/CUSTOM), `mb`, `sources`, `profiles`, `mode` (manual/auto) | app | Launch a BMM benchmark in the running app |
 

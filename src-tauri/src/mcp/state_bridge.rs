@@ -1220,6 +1220,59 @@ pub fn list_schedules() -> anyhow::Result<serde_json::Value> {
     Ok(serde_json::from_str(&txt)?)
 }
 
+/// Create or update a scheduler task (upsert by id into schedules.json).
+///
+/// The task is the SAME shape the in-app builder saves: { id?, name, enabled?,
+/// trigger, steps[], allowCustomCommands? }. Steps may nest action/delay/waitFor/
+/// if/repeat(while|until|doWhile|times)/forEach/switch. Safety: a task created
+/// without an explicit `enabled` lands DISABLED, so an agent can author freely
+/// and the user flips the switch after inspecting it — same contract as the
+/// in-app "Load example" button. The scheduler reloads the file when its view
+/// opens; a running BMM picks the task up there.
+pub fn save_schedule(mut task: serde_json::Value) -> anyhow::Result<serde_json::Value> {
+    let obj = task.as_object_mut().ok_or_else(|| anyhow::anyhow!("task must be a JSON object"))?;
+    let name = obj.get("name").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
+    if name.is_empty() { anyhow::bail!("task.name is required"); }
+    if !obj.get("steps").map(|v| v.is_array()).unwrap_or(false) { anyhow::bail!("task.steps must be an array"); }
+    if !obj.contains_key("trigger") {
+        obj.insert("trigger".into(), serde_json::json!({ "type": "manual" }));
+    }
+    if !obj.contains_key("enabled") { obj.insert("enabled".into(), serde_json::json!(false)); }
+    if !obj.contains_key("allowCustomCommands") { obj.insert("allowCustomCommands".into(), serde_json::json!(false)); }
+    let id = match obj.get("id").and_then(|v| v.as_str()).filter(|s| !s.trim().is_empty()) {
+        Some(id) => id.to_string(),
+        None => {
+            let id = format!("mcp-{:x}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_millis());
+            obj.insert("id".into(), serde_json::json!(id));
+            id
+        }
+    };
+    let path = get_bmm_data_dir().join("schedules.json");
+    let mut tasks: Vec<serde_json::Value> = if path.exists() {
+        serde_json::from_str(&std::fs::read_to_string(&path)?)?
+    } else { Vec::new() };
+    let existing = tasks.iter().position(|t| t.get("id").and_then(|v| v.as_str()) == Some(id.as_str()));
+    let updated = existing.is_some();
+    match existing {
+        Some(i) => tasks[i] = task,
+        None => tasks.push(task),
+    }
+    std::fs::write(&path, serde_json::to_string_pretty(&tasks)?)?;
+    Ok(serde_json::json!({ "id": id, "updated": updated, "count": tasks.len() }))
+}
+
+/// Delete a scheduler task by id.
+pub fn delete_schedule(id: &str) -> anyhow::Result<serde_json::Value> {
+    let path = get_bmm_data_dir().join("schedules.json");
+    if !path.exists() { anyhow::bail!("no schedules.json — nothing to delete"); }
+    let mut tasks: Vec<serde_json::Value> = serde_json::from_str(&std::fs::read_to_string(&path)?)?;
+    let before = tasks.len();
+    tasks.retain(|t| t.get("id").and_then(|v| v.as_str()) != Some(id));
+    if tasks.len() == before { anyhow::bail!("no task with id {}", id); }
+    std::fs::write(&path, serde_json::to_string_pretty(&tasks)?)?;
+    Ok(serde_json::json!({ "deleted": id, "remaining": tasks.len() }))
+}
+
 /// Read one installed theme's full definition (data/themes/<id>/theme.json).
 pub fn get_theme(theme_id: &str) -> anyhow::Result<serde_json::Value> {
     require_plain_name(theme_id)?; // CWE-22: the id is a folder name

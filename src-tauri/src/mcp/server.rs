@@ -322,6 +322,20 @@ impl BmmMcpServer {
         }
     }
 
+    fn tool_create_schedule(&self, task: serde_json::Value) -> Result<CallToolResult, rmcp::ErrorData> {
+        match state_bridge::save_schedule(task) {
+            Ok(v) => ok_json(&v),
+            Err(e) => err_result(&e.to_string()),
+        }
+    }
+
+    fn tool_delete_schedule(&self, id: &str) -> Result<CallToolResult, rmcp::ErrorData> {
+        match state_bridge::delete_schedule(id) {
+            Ok(v) => ok_json(&v),
+            Err(e) => err_result(&e.to_string()),
+        }
+    }
+
     fn tool_list_sessions(&self) -> Result<CallToolResult, rmcp::ErrorData> {
         let sessions: Vec<_> = state_bridge::list_crash_reports().into_iter()
             .filter(|r| r.category.contains("Session")).collect();
@@ -465,6 +479,27 @@ impl ServerHandler for BmmMcpServer {
                 "bmm_sync",
                 "Synchronize files for the active profile (apply mods).",
                 std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": {} })).unwrap()),
+            ),
+
+            Tool::new(
+                "bmm_create_schedule",
+                "Create or update a scheduler automation (upsert by id into schedules.json). `task` is the same shape the in-app builder saves: { id?, name, description?, enabled?, trigger, steps[], allowCustomCommands? }. trigger: {type:'manual'|'appStart'|'hourly'|'daily'|'weekly'|'once', ...}. steps[] nest freely: {kind:'action', action:{type, params}} | {kind:'delay', seconds} | {kind:'waitFor', condition, timeoutSec} | {kind:'if', condition, then[], else[]} | {kind:'repeat', mode:'while'|'until'|'doWhile'|'times', condition?, times?, maxIters, everySec, steps[]} | {kind:'forEach', source:'mods'|'enabledMods'|'disabledMods'|'profiles'|'modpacks'|'themes', maxIters, everySec, steps[]} (use {item.id}/{item.name} placeholders in the body's action params) | {kind:'switch', cases:[{condition, steps[]}], default[]}. Use bmm_list_actions / bmm_list_schedules to discover action types and existing tasks. SAFETY: without an explicit enabled:true the task is created DISABLED for the user to inspect and switch on.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": {
+                        "task": { "type": "object", "description": "The full task object (see tool description for the shape)." }
+                    },
+                    "required": ["task"]
+                })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_delete_schedule",
+                "Delete a scheduler automation by id (see bmm_list_schedules for ids).",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": { "id": { "type": "string" } },
+                    "required": ["id"]
+                })).unwrap()),
             ),
 
             Tool::new(
@@ -1069,6 +1104,15 @@ impl ServerHandler for BmmMcpServer {
 
                 // Scheduling & automation
                 "bmm_list_schedules" => self.tool_list_schedules(),
+                "bmm_create_schedule" => {
+                    let task = args.get("task").cloned().unwrap_or(serde_json::Value::Null);
+                    if !task.is_object() { return err_result("`task` must be a JSON object"); }
+                    self.tool_create_schedule(task)
+                }
+                "bmm_delete_schedule" => {
+                    let id = match args.get("id").and_then(|v| v.as_str()) { Some(i) => i, None => return err_result("`id` is required") };
+                    self.tool_delete_schedule(id)
+                }
                 "bmm_run_schedule" => {
                     let id = args.get("id").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing id", None))?;
                     self.tool_api_call("POST", "/api/schedule/run", Some(json!({ "id": id }))).await

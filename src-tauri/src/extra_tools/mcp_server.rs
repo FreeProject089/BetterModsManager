@@ -344,6 +344,24 @@ enum Commands {
         id: String,
     },
 
+    /// Create or update a scheduler task from a JSON file or inline JSON.
+    /// Shape = what the in-app builder saves; created DISABLED unless the JSON
+    /// says enabled:true, so it can be inspected before it ever fires.
+    CreateSchedule {
+        /// Path to a task .json file, or '-' to read stdin
+        #[arg(long, conflicts_with = "json")]
+        file: Option<String>,
+        /// Inline task JSON
+        #[arg(long)]
+        json: Option<String>,
+    },
+
+    /// Delete a scheduler task by id
+    DeleteSchedule {
+        /// Task id (see `schedules`)
+        id: String,
+    },
+
     /// Launch a benchmark (running app)
     Benchmark {
         /// Dataset: sandbox (generated) or real (my mods)
@@ -741,6 +759,31 @@ async fn run_cli_command(cmd: Commands) -> anyhow::Result<()> {
                 println!("  {} {}", tasks.len().to_string().cyan().bold(), "task(s)".dimmed());
             }
         }
+        Commands::CreateSchedule { file, json } => {
+            let raw = match (file, json) {
+                (Some(f), _) if f == "-" => {
+                    use std::io::Read;
+                    let mut b = String::new();
+                    std::io::stdin().read_to_string(&mut b)?;
+                    b
+                }
+                (Some(f), _) => std::fs::read_to_string(&f)?,
+                (None, Some(j)) => j,
+                (None, None) => anyhow::bail!("provide --file <task.json> (or - for stdin) or --json '<task>'"),
+            };
+            let task: serde_json::Value = serde_json::from_str(&raw)?;
+            let res = state_bridge::save_schedule(task)?;
+            println!("  {} schedule {} {}", "OK".green().bold(),
+                res.get("id").and_then(|v| v.as_str()).unwrap_or("?").cyan(),
+                if res.get("updated").and_then(|v| v.as_bool()).unwrap_or(false) { "updated" } else { "created (disabled - enable it in Settings)" }.dimmed());
+        }
+
+        Commands::DeleteSchedule { id } => {
+            let res = state_bridge::delete_schedule(&id)?;
+            println!("  {} deleted {} ({} remaining)", "OK".green().bold(), id.cyan(),
+                res.get("remaining").and_then(|v| v.as_u64()).unwrap_or(0));
+        }
+
         Commands::RunSchedule { id } => {
             let res = state_bridge::api_call("POST", "/api/schedule/run", Some(serde_json::json!({ "id": id }))).await?;
             println!("  {} schedule '{}' triggered {}", "✓".green().bold(), id.cyan(), format!("(HTTP {})", res.get("status").and_then(|v| v.as_u64()).unwrap_or(0)).dimmed());

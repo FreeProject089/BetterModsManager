@@ -1,4 +1,5 @@
 # Référence du serveur MCP
+
 BMM embarque un **serveur MCP** : les mêmes capacités que l'application, exposées comme des
 outils Model Context Protocol pour qu'une IA puisse piloter BMM directement — lister tes
 mods, changer de profil, vérifier l'intégrité, déclencher une tâche planifiée.
@@ -131,6 +132,8 @@ donne les valeurs acceptées.
 | Outil | Paramètres | Requiert | Ce que ça fait |
 |---|---|---|---|
 | `bmm_list_schedules` | — |  | Liste les tâches de Planification & automatisation enregistrées (fonctionne hors ligne) |
+| `bmm_create_schedule` | `task` | ✓ | Crée ou met à jour une automatisation (même forme que le builder in-app ; blocs if/repeat/doWhile/forEach/switch). Créée DÉSACTIVÉE sans enabled:true |
+| `bmm_delete_schedule` | `id` | ✓ | Supprime une automatisation |
 | `bmm_run_schedule` | `id`\* | app | Déclenche une tâche du planificateur par son id, dans l'app BMM ouverte |
 | `bmm_run_benchmark` | `dataset` (sandbox/real), `size` (S/M/L/XL/CUSTOM), `mb`, `sources`, `profiles`, `mode` (manual/auto) | app | Lance un benchmark BMM dans l'app ouverte |
 
