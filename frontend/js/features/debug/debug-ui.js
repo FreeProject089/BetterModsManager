@@ -191,6 +191,8 @@ class DebugUI {
                                     </div>
                                     <div style="display:flex; gap:8px">
                                         <button class="debug-btn debug-btn-ghost" id="rust-export-diag" style="font-size:10px; padding:4px 12px; border:1px solid rgba(255,255,255,0.1)" data-i18n="dev.btn.exportDiag">EXPORT DIAG</button>
+                                        <button class="debug-btn debug-btn-ghost" id="rust-gen-report" style="font-size:10px; padding:4px 12px; border:1px solid rgba(255,255,255,0.1)" data-i18n="dev.btn.genReport">REPORT</button>
+                                        <button class="debug-btn debug-btn-ghost" id="rust-mem-snap" style="font-size:10px; padding:4px 12px; border:1px solid rgba(255,255,255,0.1)" data-i18n="dev.btn.memSnap">MEMORY</button>
                                         <button class="debug-btn debug-btn-ghost" id="rust-copy-lldb" style="font-size:10px; padding:4px 12px; border:1px solid rgba(255,255,255,0.1)" data-i18n="dev.btn.copyCmd">COPY CMD</button>
                                         <button class="debug-btn debug-btn-primary" id="rust-refresh-logs" style="font-size:10px; padding:4px 12px" data-i18n="dev.btn.refreshLogs">REFRESH LOGS</button>
                                     </div>
@@ -598,6 +600,52 @@ class DebugUI {
         // The production tool: one JSON with build/version/uptime/memory + the same log
         // lines this tab shows, written to app-data/diagnostics and revealed. What a bug
         // report needs, without asking the user to screenshot devtools and hunt files.
+        // A report, not a dump: the same facts as the JSON export, ordered so the
+        // first screen answers "what is this and what went wrong". The JSON is right
+        // for a machine; this is for the moment it is actually used, which is someone
+        // pasting their problem into a chat where nobody reads a wall of JSON.
+        this._get('rust-gen-report')?.addEventListener('click', async () => {
+            try {
+                const path = await window.__TAURI__.core.invoke('generate_diagnostic_report', { frontend: collectWebviewEnv() });
+                window.showToast?.((window.t?.('dev.reportSaved') || 'Diagnostic report saved') + ' — ' + path, 'success', 6000);
+                window.__TAURI__.core.invoke('open_folder', { path: String(path).replace(/[\/][^\/]+$/, '') }).catch(() => { });
+            }
+            catch (e) {
+                window.showToast?.((window.t?.('common.error') || 'Error') + ': ' + e, 'error');
+            }
+        });
+        this._get('rust-mem-snap')?.addEventListener('click', async () => {
+            const btn = this._get('rust-mem-snap');
+            // It samples for 2.5s. Without saying so the button looks broken, and the
+            // user presses it again — which starts a second sampling run.
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = '…';
+            }
+            try {
+                // performance.memory is Chromium-only and absent under some flags, so
+                // it is read defensively: the process figures are the point, the JS
+                // heap is the bonus that says whether a leak is ours or the webview's.
+                const pm = performance.memory;
+                const jsHeap = pm ? {
+                    usedJSHeapSize: pm.usedJSHeapSize,
+                    totalJSHeapSize: pm.totalJSHeapSize,
+                    jsHeapSizeLimit: pm.jsHeapSizeLimit,
+                } : null;
+                const path = await window.__TAURI__.core.invoke('capture_memory_snapshot', { jsHeap });
+                window.showToast?.((window.t?.('dev.memSaved') || 'Memory snapshot saved') + ' — ' + path, 'success', 6000);
+                window.__TAURI__.core.invoke('open_folder', { path: String(path).replace(/[\/][^\/]+$/, '') }).catch(() => { });
+            }
+            catch (e) {
+                window.showToast?.((window.t?.('common.error') || 'Error') + ': ' + e, 'error');
+            }
+            finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = window.t?.('dev.btn.memSnap') || 'MEMORY';
+                }
+            }
+        });
         this._get('rust-export-diag')?.addEventListener('click', async () => {
             try {
                 const path = await window.__TAURI__.core.invoke('export_diagnostics', { frontend: collectWebviewEnv() });

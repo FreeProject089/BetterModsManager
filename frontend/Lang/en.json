@@ -7021,5 +7021,9 @@
   "notif.f_error": "Errors",
   "notif.f_warning": "Warnings",
   "notif.f_success": "Success",
-  "notif.f_info": "Info"
+  "notif.f_info": "Info",
+  "dev.btn.genReport": "REPORT",
+  "dev.btn.memSnap": "MEMORY",
+  "dev.reportSaved": "Diagnostic report saved",
+  "dev.memSaved": "Memory snapshot saved"
 }
