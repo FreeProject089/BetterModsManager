@@ -1,99 +1,135 @@
 {
-    "contributors": [
-        {
-            "id": "freeproject",
-            "username": "FreeProject089",
-            "pfp": "assets/pfp.webp",
-            "role": "Main Dev / Creator",
-            "description": "Creator of Better Mod Manager and lead developer.",
-            "github": "https://github.com/FreeProject089",
-            "website": "https://freeproject089.github.io/BMM_Web/",
-            "category": "staff",
-            "subcategory": "dev"
-        },
-        {
-            "id": "c0c0_1er",
-            "username": "c0c0_1er",
-            "pfp": "assets/pfpc0c0.png",
-            "role": "Community Support / Staff",
-            "description": "Helping the community and managing the Discord server.",
-            "github": "https://github.com/WarGameRP",
-            "category": "staff",
-            "subcategory": "community_support"
-        },
-        {
-            "id": "charger",
-            "username": "madbomber8526",
-            "display_name": "Charger",
-            "discord_id": "485056947477938188",
-            "pfp": "assets/userpfp/charger.png",
-            "role": "Ko-Fi Supporter",
-            "description": "First supporter on Ko-fi",
-            "category": "kofi"
-        },
-        {
-            "id": "jarjar",
-            "username": "banksfam_",
-            "display_name": "JAR JAR",
-            "discord_id": "449591271175225355",
-            "pfp": "assets/userpfp/JarJar.png",
-            "role": "Early Access Tester",
-            "description": "Helping to find bugs and improve the app.",
-            "category": "tester",
-            "subcategory": "early_access"
-        },
-        {
-            "id": "captain_pug",
-            "username": "unclesneep",
-            "display_name": "Captain_Pug",
-            "discord_id": "761967053791297536",
-            "pfp": "assets/userpfp/CaptainPug.png",
-            "role": "PTB Tester",
-            "description": "Public Test Branch tester.",
-            "category": "tester",
-            "subcategory": "ptb"
-        },
-        {
-            "id": "machinegun",
-            "username": "machinegun",
-            "display_name": "Machinegun",
-            "discord_id": "162362221475659778",
-            "pfp": "assets/userpfp/machinegun.png",
-            "role": "PTB Tester",
-            "description": "Public Test Branch tester.",
-            "category": "tester",
-            "subcategory": "ptb"
-        },
-        {
-            "id": "rayak",
-            "username": "rayak_71_cef",
-            "display_name": "RAYAK_71_CEF",
-            "discord_id": "312342647924588545",
-            "pfp": "assets/userpfp/rayak71cef.png",
-            "role": "PTB Tester",
-            "description": "Public Test Branch tester.",
-            "category": "tester",
-            "subcategory": "ptb"
-        },
-        {
-            "id": "max_husky",
-            "username": "max_trymtube",
-            "display_name": "Max-Husky",
-            "discord_id": "694296582455165069",
-            "pfp": "assets/userpfp/maxtrymtube.png",
-            "role": "Early Access Tester",
-            "description": "Helping to find bugs and improve the app.",
-            "category": "tester",
-            "subcategory": "early_access"
-        }
-    ],
-    "messages": [
-        "Better Mods Manager — Modern Modding for DCS World",
-        "Join our Discord community for support and updates",
-        "Thank you for using BMM! Your feedback matters.",
-        "Project source code is available on GitHub",
-        "\"Finally! A Beautiful Mod Manager that helps me solve problems!\" — Christopher \"JAR JAR\" Banks",
-        "Easy to use, \"Click\" on or off Mods. — Charger",
-        "\"Best mod manager out here ! :)\" — BMM Moderator"
-    ]
+  "contributors": [
+    {
+      "id": "freeproject",
+      "username": "FreeProject089",
+      "pfp": "assets/pfp.webp",
+      "role": "Main Dev / Creator",
+      "description": "Creator of Better Mod Manager and lead developer.",
+      "github": "https://github.com/FreeProject089",
+      "website": "https://freeproject089.github.io/BMM_Web/",
+      "category": "staff",
+      "subcategory": "dev"
+    },
+    {
+      "id": "c0c0_1er",
+      "username": "c0c0_1er",
+      "pfp": "assets/pfpc0c0.png",
+      "role": "Community Support / Staff",
+      "description": "Helping the community and managing the Discord server.",
+      "github": "https://github.com/WarGameRP",
+      "category": "staff",
+      "subcategory": "community_support"
+    },
+    {
+      "id": "charger",
+      "username": "madbomber8526",
+      "display_name": "Charger",
+      "discord_id": "485056947477938188",
+      "pfp": "assets/userpfp/charger.png",
+      "role": "Ko-Fi Supporter",
+      "description": "First supporter on Ko-fi",
+      "category": "kofi"
+    },
+    {
+      "id": "jarjar",
+      "username": "banksfam_",
+      "display_name": "JAR JAR",
+      "discord_id": "449591271175225355",
+      "pfp": "assets/userpfp/JarJar.png",
+      "role": "Early Access Tester",
+      "description": "Helping to find bugs and improve the app.",
+      "category": "tester",
+      "subcategory": "early_access"
+    },
+    {
+      "id": "captain_pug",
+      "username": "unclesneep",
+      "display_name": "Captain_Pug",
+      "discord_id": "761967053791297536",
+      "pfp": "assets/userpfp/CaptainPug.png",
+      "role": "PTB Tester",
+      "description": "Public Test Branch tester.",
+      "category": "tester",
+      "subcategory": "ptb"
+    },
+    {
+      "id": "machinegun",
+      "username": "machinegun",
+      "display_name": "Machinegun",
+      "discord_id": "162362221475659778",
+      "pfp": "assets/userpfp/machinegun.png",
+      "role": "PTB Tester",
+      "description": "Public Test Branch tester.",
+      "category": "tester",
+      "subcategory": "ptb"
+    },
+    {
+      "id": "rayak",
+      "username": "rayak_71_cef",
+      "display_name": "RAYAK_71_CEF",
+      "discord_id": "312342647924588545",
+      "pfp": "assets/userpfp/rayak71cef.png",
+      "role": "PTB Tester",
+      "description": "Public Test Branch tester.",
+      "category": "tester",
+      "subcategory": "ptb"
+    },
+    {
+      "id": "max_husky",
+      "username": "max_trymtube",
+      "display_name": "Max-Husky",
+      "discord_id": "694296582455165069",
+      "pfp": "assets/userpfp/maxtrymtube.png",
+      "role": "Early Access Tester",
+      "description": "Helping to find bugs and improve the app.",
+      "category": "tester",
+      "subcategory": "early_access"
+    },
+    {
+      "id": "tac25w",
+      "username": "tac25w",
+      "pfp": "assets/userpfp/tac25w.png",
+      "role": "Early Access Tester",
+      "description": "Helping to find bugs and improve the app.",
+      "category": "tester",
+      "subcategory": "early_access"
+    },
+    {
+      "id": "turbinman2026",
+      "username": "turbinman2026",
+      "pfp": "assets/userpfp/turbinman2026.png",
+      "role": "Early Access Tester",
+      "description": "Helping to find bugs and improve the app.",
+      "category": "tester",
+      "subcategory": "early_access"
+    },
+    {
+      "id": "kerboul",
+      "username": "kerboul",
+      "pfp": "assets/userpfp/kerboul.png",
+      "role": "Early Access Tester",
+      "description": "Helping to find bugs and improve the app.",
+      "category": "tester",
+      "subcategory": "early_access"
+    },
+    {
+      "id": "annhwu",
+      "username": "annhwu",
+      "pfp": "assets/userpfp/annhwu.png",
+      "role": "Early Access Tester",
+      "description": "Helping to find bugs and improve the app.",
+      "category": "tester",
+      "subcategory": "early_access"
+    }
+  ],
+  "messages": [
+    "Better Mods Manager — Modern Modding for DCS World",
+    "Join our Discord community for support and updates",
+    "Thank you for using BMM! Your feedback matters.",
+    "Project source code is available on GitHub",
+    "\"Finally! A Beautiful Mod Manager that helps me solve problems!\" — Christopher \"JAR JAR\" Banks",
+    "Easy to use, \"Click\" on or off Mods. — Charger",
+    "\"Best mod manager out here ! :)\" — BMM Moderator"
+  ]
 }
