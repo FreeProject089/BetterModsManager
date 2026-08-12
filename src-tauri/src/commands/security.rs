@@ -428,6 +428,118 @@ fn bc_http_client() -> &'static reqwest::Client {
     crate::commands::net::client()
 }
 
+// ── BetterCommunity API key ──────────────────────────────────────────────────
+//
+// BCWEB notifications live behind an API key, and a key is a credential: it must not
+// go into localStorage, where every script in the webview can read it and where it
+// sits in a file a backup will happily copy around.
+//
+// So it lives here, in app-data, and it is never handed back to the frontend. The
+// webview can set it, ask WHETHER one exists, and clear it — it can never read it.
+// That is the whole point: a compromised page cannot exfiltrate what it was never
+// given, and every request that needs the key is made by this process.
+//
+// It is stored in clear on disk, which is a real limitation and worth naming: anyone
+// who can read the app-data folder can read the key. Two things make that the right
+// trade rather than a shrug. The folder already holds the user's profile paths and
+// configuration, so it is already an asset worth protecting; and the key is SCOPED —
+// `notifications:read` grants reading notifications and nothing else, which is
+// exactly what a scope system is for. The alternative that removes this limitation
+// is the OS credential store, which costs an FFI dependency and works on one
+// platform.
+
+fn bc_key_path(app: &AppHandle) -> Result<PathBuf, String> {
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("No app-data directory: {}", e))?;
+    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    Ok(dir.join("bcweb-api-key"))
+}
+
+/// Store the user's BetterCommunity API key. An empty value clears it, so the UI
+/// does not need a separate "clear" path for the obvious gesture of emptying a field.
+#[tauri::command]
+pub fn set_bcweb_api_key(app: AppHandle, key: String) -> Result<bool, String> {
+    let path = bc_key_path(&app)?;
+    let key = key.trim();
+    if key.is_empty() {
+        let _ = fs::remove_file(&path);
+        return Ok(false);
+    }
+    fs::write(&path, key.as_bytes()).map_err(|e| format!("Could not save the key: {}", e))?;
+    Ok(true)
+}
+
+/// Whether a key is stored. Deliberately NOT the key itself — see the module note.
+#[tauri::command]
+pub fn has_bcweb_api_key(app: AppHandle) -> bool {
+    bc_key_path(&app)
+        .ok()
+        .and_then(|p| fs::read_to_string(p).ok())
+        .map(|k| !k.trim().is_empty())
+        .unwrap_or(false)
+}
+
+/// Fetch this account's notifications from BCWEB.
+///
+/// `since` is an ISO timestamp — the newest one the caller already holds — so a
+/// poller receives only what arrived after it, instead of re-reading the same list
+/// every few minutes and de-duplicating it itself.
+///
+/// The URL is built here from the caller's base rather than taken whole, so a
+/// compromised page cannot point the Authorization header at a server of its
+/// choosing. That is the difference between a proxy and a credential oracle.
+#[tauri::command(async)]
+pub async fn bcweb_notifications(
+    app: AppHandle,
+    base: String,
+    since: Option<String>,
+) -> Result<String, String> {
+    let key = bc_key_path(&app)
+        .ok()
+        .and_then(|p| fs::read_to_string(p).ok())
+        .map(|k| k.trim().to_string())
+        .filter(|k| !k.is_empty())
+        .ok_or_else(|| "no_key".to_string())?;
+
+    let base = base.trim().trim_end_matches('/');
+    if !base.starts_with("https://") && !base.starts_with("http://") {
+        return Err("Bad API base".to_string());
+    }
+    let mut url = format!("{}/v1/notifications", base);
+    if let Some(s) = since.as_ref().filter(|s| !s.trim().is_empty()) {
+        // An ISO-8601 timestamp needs its ':' and '+' escaped in a query string.
+        // Hand-encoding the two characters that actually occur beats adding a crate
+        // for it — and anything else in this value is refused rather than encoded,
+        // because a since value that is not a timestamp is a bug, not a string to carry.
+        let raw = s.trim();
+        if !raw.chars().all(|c| c.is_ascii_alphanumeric() || ":-+.TZtz".contains(c)) {
+            return Err("Bad since value".to_string());
+        }
+        url.push_str(&format!("?since={}", raw.replace(':', "%3A").replace('+', "%2B")));
+    }
+
+    let resp = bc_http_client()
+        .get(&url)
+        .header("Authorization", format!("Bearer {}", key))
+        .timeout(std::time::Duration::from_secs(8))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    let status = resp.status();
+    let text = resp.text().await.map_err(|e| e.to_string())?;
+    if !status.is_success() {
+        // 401 gets its own name so the UI can say "your key was revoked or expired"
+        // rather than showing a raw body the user cannot act on.
+        if status.as_u16() == 401 || status.as_u16() == 403 {
+            return Err("bad_key".to_string());
+        }
+        return Err(if text.is_empty() { format!("http_{}", status.as_u16()) } else { text });
+    }
+    Ok(text)
+}
+
 /// Proxy a GET to a BetterCommunity API URL from Rust. The webview lives at the
 /// `tauri.localhost` origin, so a direct `fetch()` to the BCWEB API is a cross-origin
 /// request subject to browser CORS (and fails when the base doesn't send the right

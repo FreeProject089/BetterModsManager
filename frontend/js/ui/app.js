@@ -890,6 +890,9 @@ async function main() {
     initNavbarVersion();
     initNotificationCenter();
     initWebviewErrorTrap();
+    // Second source for the same centre. Does nothing without a stored key, so it
+    // costs an idle check for everyone who has not linked an account.
+    void import('../core/bcweb-notifications.js').then(m => m.startBcwebNotifications()).catch(() => { });
     initUpdateNotes();
     initMapper();
     initPlugins();
