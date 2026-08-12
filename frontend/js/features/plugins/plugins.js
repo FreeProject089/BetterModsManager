@@ -5122,6 +5122,66 @@ function getDeepLinkDefs() {
             example: 'bmm://repo/sync?url=https://monserveur.com/repo.json&profile=prof-uuid&mods_dir=C:/Mods&password=secret',
         },
         {
+            scheme: 'download',
+            params: [
+                { name: 'url', required: true, desc: 'URL directe de l\'archive du mod à télécharger.' },
+                { name: 'name', required: false, desc: 'Nom affiché pendant le téléchargement. Défaut : « Mod Inconnu ».' },
+            ],
+            desc: 'Télécharger et importer un mod depuis une URL',
+            about: 'Télécharge l\'archive puis l\'importe dans la bibliothèque. <code>bmm://import</code> est un alias strict du même gestionnaire — les deux existent parce que les sites de mods emploient l\'un ou l\'autre verbe ; il n\'y a pas de différence de comportement.',
+            example: 'bmm://download?url=https://exemple.com/mon-mod.zip&name=Mon%20Mod',
+        },
+        {
+            scheme: 'import',
+            params: [
+                { name: 'url', required: true, desc: 'URL directe de l\'archive du mod.' },
+                { name: 'name', required: false, desc: 'Nom affiché pendant le téléchargement.' },
+            ],
+            desc: 'Alias de bmm://download',
+            about: 'Strictement le même gestionnaire que <code>bmm://download</code>. Conservé parce que les sites de mods publient l\'un ou l\'autre verbe.',
+            example: 'bmm://import?url=https://exemple.com/mon-mod.zip',
+        },
+        {
+            scheme: 'benchmark/open',
+            params: [
+                { name: 'dataset', required: false, desc: '<code>sandbox</code> (défaut) ou <code>real</code>.' },
+                { name: 'size', required: false, desc: 'Préréglage S / M / L / XL. Défaut M.' },
+                { name: 'mb', required: false, desc: 'Taille explicite en Mo, si vous ne voulez pas d\'un préréglage.' },
+            ],
+            desc: 'Ouvrir le banc d\'essai pré-réglé',
+            about: 'Ouvre l\'outil de benchmark avec le jeu de données et la taille déjà choisis. N\'exécute rien de lui-même : le lancement reste un geste explicite, parce qu\'un benchmark écrit sur le disque.',
+            example: 'bmm://benchmark/open?dataset=sandbox&size=L',
+        },
+        {
+            scheme: 'theme/import-inline',
+            params: [
+                { name: 'data', required: true, desc: 'Thème JSON encodé en base64 (URL-encodé).' },
+            ],
+            desc: 'Importer un thème contenu dans le lien lui-même',
+            about: 'Le thème voyage <b>dans</b> le lien : rien à héberger, rien à télécharger, et le lien fonctionne hors-ligne. À l\'inverse d\'une URL de fichier, ce que vous partagez ne peut pas changer après coup — c\'est l\'intérêt, et la limite : un lien trop long est refusé par certains clients de messagerie.',
+            example: 'bmm://theme/import-inline?data=<base64>',
+        },
+        {
+            scheme: 'language/import-inline',
+            params: [
+                { name: 'data', required: true, desc: 'Dictionnaire JSON encodé en base64 (URL-encodé).' },
+                { name: 'code', required: false, desc: 'Code de langue. Défaut <code>custom</code>.' },
+                { name: 'gz', required: false, desc: '<code>1</code> si les données sont compressées en gzip avant l\'encodage base64 — un dictionnaire complet dépasse sinon la longueur d\'URL acceptée.' },
+            ],
+            desc: 'Importer une traduction contenue dans le lien',
+            about: 'Même principe que <code>theme/import-inline</code>, appliqué à un dictionnaire de traduction. L\'option <code>gz</code> existe parce qu\'une langue entière est bien plus volumineuse qu\'un thème.',
+            example: 'bmm://language/import-inline?code=fr-QC&gz=1&data=<base64>',
+        },
+        {
+            scheme: 'settings/navbar',
+            params: [
+                { name: 'code', required: true, desc: 'Code de partage d\'une configuration de navigation.' },
+            ],
+            desc: 'Appliquer une configuration de barre de navigation',
+            about: 'Applique une disposition de navigation partagée (boutons, ordre, pages personnalisées). Le code est validé avant d\'être appliqué ; un code invalide ne modifie rien.',
+            example: 'bmm://settings/navbar?code=<code>',
+        },
+        {
             scheme: 'repo/gen',
             params: [],
             desc: 'Ouvrir la génération de repo',
