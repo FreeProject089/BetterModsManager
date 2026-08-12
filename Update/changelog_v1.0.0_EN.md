@@ -379,9 +379,13 @@ above tracks the ecosystem/customization work layered on top of it.*
 - **Enabling a mod no longer freezes the app.** In Tauri v2 a synchronous command runs on
   the main thread, so the file-cache rebuild every activation triggers blocked the whole
   window. Disk-walking commands now run on a worker thread.
-- **Loading indicators actually spin.** A transform animation only runs on the compositor
-  once its layer is promoted, and that promotion is committed by the main thread: inserted
-  during heavy work, the spinner sat frozen and looked exactly like a hang.
+- **Loading indicators actually spin.** They were never frozen — they had been switched
+  off. A global rule pairs a 0.01ms duration with `animation-iteration-count: 1` under
+  `prefers-reduced-motion`, so a spinner completed one instant turn and stopped: pixel-
+  identical to a hung app. Windows reports reduced-motion whenever Accessibility >
+  Visual effects > "Animation effects" is off, so this fired on a stock machine with no
+  BMM setting involved. Progress indicators are now exempt from that rule and from the
+  app's own animation kill-switch, turning at a deliberately slow 2.4s.
 - The library action bar accounts for the space a docked panel takes.
 
 ## [NEW] Documentation
@@ -390,3 +394,38 @@ above tracks the ecosystem/customization work layered on top of it.*
   `.bmmtheme` format field by field, the drop-in folder, and a from-zero build order.
 - The documentation PDF's first page carries the author and the exact edition (version +
   commit timestamp).
+
+## [NEW] The scheduler runs your code
+
+- A step can **Run a script** — PowerShell, CMD, Bash or Python — written into the task.
+  The body is saved to a temp file and the interpreter is handed the FILE, so nothing you
+  write is ever pasted into a command line: no quoting to get right, and no stray quote can
+  change what runs. `{item.name}` / `{item.id}` are substituted inside a FOR EACH.
+- Name a variable and the script's first output line becomes a value later steps can test —
+  otherwise a script could only pass or fail.
+- **Permissions are now three separate grants** — run external programs, run scripts, fire
+  deeplinks — each naming what it unlocks, instead of one box called "allow custom
+  commands". Firing a deeplink had been gated by nothing at all, despite reaching anything
+  the app exposes. Existing tasks keep what they had; none gains *run scripts*, because
+  that capability did not exist when the old checkbox was ticked.
+- A scheduled command no longer freezes the window while it runs.
+
+## [NEW] Notification centre
+
+- A bell beside **Check for Updates** keeps every message BMM has shown you, with its
+  source, time and text. A toast is a three-second window onto something that already
+  happened; miss it and there was no second place to look.
+
+## [IMPROVED] Panels and diagnostics
+
+- Dragging a docked panel's edge no longer judders: the width is written once per frame
+  instead of once per mouse event.
+- The tutorial's bottom strip has a **height handle** — it never had one, and its height
+  had never once been written.
+- The tutorial's chapter chips scroll again. The handler had been bound to the inner
+  element, which has no overflow of its own, so every scroll instruction did nothing.
+- **Exported diagnostics now include the webview's environment**: the OS accessibility and
+  colour preferences, viewport and pixel ratio, and recent uncaught errors. This is where
+  the spinner bug actually lived, and nothing had reported it.
+- The *Notifier* custom-page template is gone; it demonstrated one call the app already
+  makes everywhere.

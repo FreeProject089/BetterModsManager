@@ -369,10 +369,14 @@ section ci-dessus suit le travail d'écosystème/personnalisation ajouté par-de
   s'exécute sur le thread principal : la reconstruction du cache de fichiers déclenchée par
   chaque activation bloquait donc toute la fenêtre. Les commandes qui parcourent le disque
   s'exécutent désormais sur un thread de travail.
-- **Les indicateurs de chargement tournent réellement.** Une animation de transformation
-  n'est prise en charge par le compositeur qu'une fois sa couche promue, et cette promotion
-  est validée par le thread principal : insérée pendant un travail lourd, elle restait figée
-  et donnait l'illusion d'un blocage.
+- **Les indicateurs de chargement tournent réellement.** Ils n'étaient pas figés — ils
+  étaient éteints. Une règle globale associe une durée de 0,01 ms à
+  `animation-iteration-count: 1` sous `prefers-reduced-motion` : le spinner faisait un
+  tour instantané puis s'arrêtait, strictement identique à une app plantée. Windows
+  signale reduced-motion dès que Accessibilité > Effets visuels > « Effets d'animation »
+  est désactivé, donc cela se déclenchait sur une machine standard, sans aucun réglage
+  BMM en cause. Les indicateurs de progression sont désormais exemptés de cette règle et
+  du coupe-circuit d'animation de l'app, et tournent à 2,4 s, volontairement lentement.
 - La barre d'actions de la bibliothèque tient compte de l'espace pris par un panneau ancré.
 
 ## [NOUVEAU] Documentation
@@ -382,3 +386,43 @@ section ci-dessus suit le travail d'écosystème/personnalisation ajouté par-de
   construction depuis zéro.
 - La première page du PDF de la documentation porte l'auteur et l'édition exacte (version +
   horodatage du commit).
+
+## [NOUVEAU] Le planificateur exécute votre code
+
+- Une étape peut **Exécuter un script** — PowerShell, CMD, Bash ou Python — écrit dans la
+  tâche. Le corps est enregistré dans un fichier temporaire et c'est le FICHIER qui est
+  remis à l'interpréteur : rien de ce que vous écrivez n'est collé dans une ligne de
+  commande, donc aucun échappement à réussir et aucun guillemet égaré ne peut changer ce
+  qui s'exécute. `{item.name}` / `{item.id}` sont remplacés dans un POUR CHAQUE.
+- Nommez une variable et la première ligne de sortie devient une valeur testable par les
+  étapes suivantes — sinon un script ne pouvait que réussir ou échouer.
+- **Les permissions sont désormais trois autorisations distinctes** — lancer des programmes
+  externes, exécuter des scripts, déclencher des deeplinks — chacune nommant ce qu'elle
+  débloque, au lieu d'une case « autoriser les commandes personnalisées ». Déclencher un
+  deeplink n'était gardé par rien, alors que cela atteint tout ce que l'app expose. Les
+  tâches existantes gardent leurs droits ; aucune ne gagne *exécuter des scripts*, cette
+  capacité n'existant pas quand l'ancienne case a été cochée.
+- Une commande planifiée ne gèle plus la fenêtre pendant son exécution.
+
+## [NOUVEAU] Centre de notifications
+
+- Une cloche à côté de **Vérifier les mises à jour** conserve chaque message que BMM vous a
+  affiché, avec sa source, son heure et son texte. Un toast est une fenêtre de trois
+  secondes sur un événement déjà passé ; si vous le manquiez, il n'existait aucun second
+  endroit où regarder.
+
+## [AMÉLIORÉ] Panneaux et diagnostics
+
+- Tirer le bord d'un panneau ancré ne saccade plus : la largeur est écrite une fois par
+  image et non une fois par événement souris.
+- La bande basse du tutoriel a une **poignée de hauteur** — elle n'en avait aucune, et sa
+  hauteur n'avait jamais été écrite une seule fois.
+- Les pastilles de chapitre du tutoriel défilent à nouveau. Le gestionnaire était attaché à
+  l'élément intérieur, qui n'a aucun débordement propre : chaque instruction de défilement
+  ne faisait rien.
+- **Les diagnostics exportés incluent l'environnement de la webview** : préférences
+  d'accessibilité et de couleurs de l'OS, viewport et densité de pixels, erreurs récentes
+  non capturées. C'est précisément là que vivait le bug du spinner, et rien ne le
+  rapportait.
+- Le modèle de page personnalisée *Notifier* est retiré ; il démontrait un appel que l'app
+  fait déjà partout.
