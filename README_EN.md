@@ -114,6 +114,10 @@ Traditional mod managers use symlinks or hardlinks that are OS-dependent, fragil
 
 - **Advanced CLI** — Headless control for scripts and CI pipelines: `bmm-mcp-server.exe list-mods --profile dcs`, `sync-profile`, `activate-mod`, `export-modpack`, `analyze-crashes`. All commands return structured JSON.
 
+- **Scheduler** — A task pairs a trigger with a workflow, and a workflow branches, loops and waits: IF/ELSE, FOR EACH, SWITCH, TRY/ON ERROR, BREAK/CONTINUE. A step can run a **script you write** — PowerShell, CMD, Bash or Python. It is saved to a file and the interpreter is handed the file, so nothing you type is ever placed on a command line and there is no quoting to get wrong. Repo syncs run for real rather than opening a dialog nobody is there to confirm.
+
+- **Task permissions** — Three capabilities, granted separately and off by default: run external programs, run scripts, fire deeplinks. Each names what it unlocks rather than hiding behind one "allow unsafe" box, and a step whose permission is missing fails with a message saying which to grant — it never runs quietly.
+
 ---
 
 ### Community & Ecosystem
@@ -125,6 +129,8 @@ Traditional mod managers use symlinks or hardlinks that are OS-dependent, fragil
 - **Discord Rich Presence** — Shows your active game profile, current mod count, and whether you're hosting a repository server — visible to friends in Discord without any setup.
 
 - **BetaHub Integration** — One-click structured bug reports sent directly from inside BMM. Includes automatic context capture (OS version, profile state, recent actions) and proof-of-work spam protection.
+
+- **Notification centre** — A toast is a three-second window onto something that already happened; miss it and it was gone. Every message BMM has shown you is now kept, with its source, its time and its full text — searchable, filterable, with the unread count drawn onto the taskbar icon. Link a BetterCommunity account and its notifications join the same list.
 
 ---
 

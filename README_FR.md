@@ -114,6 +114,10 @@ Les gestionnaires classiques utilisent des liens symboliques ou des liens durs �
 
 - **CLI avancée** — Contrôle sans interface pour les scripts et pipelines CI : `bmm-mcp-server.exe list-mods --profile dcs`, `sync-profile`, `activate-mod`, `export-modpack`, `analyze-crashes`. Toutes les commandes retournent du JSON structuré.
 
+- **Planificateur** — Une tâche associe un déclencheur à un workflow, et un workflow se ramifie, boucle et attend : SI/SINON, POUR CHAQUE, SELON, ESSAYER/EN CAS D'ERREUR, INTERROMPRE/CONTINUER. Une étape peut exécuter un **script que vous écrivez** — PowerShell, CMD, Bash ou Python. Il est enregistré dans un fichier et c'est ce fichier qui est remis à l'interpréteur : rien de ce que vous tapez n'est placé sur une ligne de commande, il n'y a donc aucun échappement à réussir. Les synchronisations de dépôt s'exécutent réellement, au lieu d'ouvrir une fenêtre que personne n'est là pour valider.
+
+- **Permissions par tâche** — Trois capacités accordées séparément et désactivées par défaut : lancer des programmes externes, exécuter des scripts, déclencher des deeplinks. Chacune nomme ce qu'elle débloque au lieu de se cacher derrière une case « autoriser », et une étape dont la permission manque échoue avec un message indiquant laquelle accorder — elle ne s'exécute jamais en silence.
+
 ---
 
 ### Communauté et écosystème
@@ -125,6 +129,8 @@ Les gestionnaires classiques utilisent des liens symboliques ou des liens durs �
 - **Discord Rich Presence** — Affiche votre profil de jeu actif, le nombre de mods en cours et si vous hébergez un serveur de dépôt — visible par vos amis dans Discord sans aucune configuration.
 
 - **Intégration BetaHub** — Rapports de bugs structurés envoyés directement depuis BMM en un clic. Inclut la capture automatique du contexte (version OS, état du profil, actions récentes) et une protection anti-spam par preuve de travail.
+
+- **Centre de notifications** — Un toast est une fenêtre de trois secondes sur un événement déjà passé ; le manquer, c'était le perdre. Chaque message que BMM vous a affiché est désormais conservé avec sa source, son heure et son texte complet — cherchable, filtrable, et le nombre de non-lues est dessiné sur l'icône de la barre des tâches. Liez un compte BetterCommunity et ses notifications rejoignent la même liste.
 
 ---
 
