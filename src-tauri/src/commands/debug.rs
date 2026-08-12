@@ -56,7 +56,10 @@ pub async fn get_rust_logs(max_lines: Option<usize>) -> Result<Vec<String>, AppE
 /// as-is. What it carries is the app's own state: build, uptime, memory, and the same
 /// in-memory log lines the Rust tab already shows.
 #[tauri::command]
-pub async fn export_diagnostics(app: tauri::AppHandle) -> Result<String, AppError> {
+pub async fn export_diagnostics(
+    app: tauri::AppHandle,
+    frontend: Option<serde_json::Value>,
+) -> Result<String, AppError> {
     use tauri::Manager;
     let stats = get_debug_stats().await?;
     let logs = crate::commands::crash::get_log_lines();
@@ -72,6 +75,12 @@ pub async fn export_diagnostics(app: tauri::AppHandle) -> Result<String, AppErro
         "memory_mb": stats.memory_mb,
         "exported_at": chrono::Local::now().to_rfc3339(),
         "log_lines": logs,
+        // The webview's own environment, which this process structurally cannot see.
+        // It is where a whole class of "the app is broken" reports actually lives: a
+        // frozen spinner that turned out to be Windows' "Animation effects" switch
+        // reaching the WebView as prefers-reduced-motion took three wrong diagnoses to
+        // find, because nothing reported it. Null when the caller sends nothing.
+        "frontend": frontend,
     });
 
     let dir = app.path().app_data_dir().map_err(|e| AppError::from(e.to_string()))?.join("diagnostics");

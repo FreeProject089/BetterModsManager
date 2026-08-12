@@ -1,5 +1,6 @@
 ﻿// @ts-nocheck
 import { debugHub } from './debug.js';
+import { collectWebviewEnv } from './webview-env.js';
 import { appState } from '../../core/state.js';
 import { invoke } from '../../core/api.js';
 import { t, applyTranslations } from '../../core/i18n.js';
@@ -618,7 +619,7 @@ class DebugUI {
         // report needs, without asking the user to screenshot devtools and hunt files.
         this._get('rust-export-diag')?.addEventListener('click', async () => {
             try {
-                const path = await window.__TAURI__.core.invoke('export_diagnostics');
+                const path = await window.__TAURI__.core.invoke('export_diagnostics', { frontend: collectWebviewEnv() });
                 window.showToast?.((window.t?.('dev.diagExported') || 'Diagnostic exported') + ' — ' + path, 'success');
                 window.__TAURI__.core.invoke('open_folder', { path: String(path).replace(/[\/][^\/]+$/, '') }).catch(() => {});
             } catch (e) {

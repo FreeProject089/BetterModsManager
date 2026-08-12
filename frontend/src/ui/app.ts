@@ -91,6 +91,10 @@ async function waitForModalClosed(id: string): Promise<void> {
 // ── Tauri bridge ──────────────────────────────────────────
 import { loadTauri, invoke, pickFolder, pickFile, saveFile, convertFileSrc, listenFileDrop, sendOsNotification } from '../core/api.js';
 import { recordNotification, initNotificationCenter } from './notification-center.js';
+// Imported from the tiny standalone module, NOT from debug-ui: the trap has to be
+// installed at boot to be worth anything, and pulling the whole DevTools surface
+// onto the boot path to get it would trade one diagnostic for a slower start.
+import { initWebviewErrorTrap } from '../features/debug/webview-env.js';
 
 export { invoke, pickFolder, pickFile, saveFile, listenFileDrop, sendOsNotification };
 
@@ -870,6 +874,7 @@ async function main() {
     initNavbarLangDropdown();
     initNavbarVersion();
     initNotificationCenter();
+    initWebviewErrorTrap();
     initUpdateNotes();
     initMapper();
     initPlugins();
