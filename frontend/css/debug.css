@@ -902,3 +902,21 @@
     color: var(--debug-text-muted);
     line-height: 1.45;
 }
+
+/* Repeated layout idioms, named once.
+   Each of these was written out verbatim in several places. Naming them changes
+   nothing on screen — that is the point: it is the difference between a panel whose
+   layout is stated once and one where the same three declarations are retyped and
+   then drift apart the first time somebody tunes one of them. */
+.debug-fill { flex: 1; }
+.debug-fill-scroll { flex: 1; overflow-y: auto; }
+.debug-row { display: flex; gap: 8px; }
+.debug-row-split {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 4px;
+}
+.debug-empty {
+    padding: 10px;
+    color: var(--debug-text-muted);
+}

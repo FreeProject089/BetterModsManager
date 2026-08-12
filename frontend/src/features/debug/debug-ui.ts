@@ -166,7 +166,7 @@ class DebugUI {
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/></svg>
                         </button>
                     </div>
-                    <div id="console-logs" style="flex:1; overflow-y:auto"></div>
+                    <div id="console-logs" class="debug-fill-scroll"></div>
                 </div>
                 <div class="debug-pane" id="pane-timeline">
                     <div class="timeline-filters" style="padding:8px; border-bottom:1px solid rgba(255,255,255,0.05); display:flex; gap:6px; align-items:center">
@@ -175,12 +175,12 @@ class DebugUI {
                         <button class="filter-btn" data-filter="logs" data-i18n="dev.label.logs">LOGS</button>
                         <button class="filter-btn" data-filter="tasks" data-i18n="dev.label.tasks">TASKS</button>
                         <button class="filter-btn" data-filter="error" data-i18n="dev.label.error">ERR</button>
-                        <div style="flex:1"></div>
+                        <div class="debug-fill"></div>
                         <button class="debug-btn" id="timeline-clear-manual" data-i18n-tooltip="dev.btn.clearHistory" onmouseenter="window.showTaskyHelp('dev.tool.clearHistoryTip', 'help')" onmouseleave="window.hideTaskyHelp()">
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/></svg>
                         </button>
                     </div>
-                    <div id="timeline-list" style="flex:1; overflow-y:auto"></div>
+                    <div id="timeline-list" class="debug-fill-scroll"></div>
                 </div>
                 <div class="debug-pane" id="pane-debugger">
                     <div class="debugger-layout" style="display:flex; height:100%; flex-direction:column">
@@ -199,7 +199,7 @@ class DebugUI {
                                         <div style="font-size:13px; font-weight:600; color:var(--debug-text-primary); margin-bottom:2px" data-i18n="dev.title.rust">Rust Debugger (GDB/LLDB)</div>
                                         <div class="debug-label" data-i18n="dev.msg.rustDesc">Attach a native debugger or view backend logs.</div>
                                     </div>
-                                    <div style="display:flex; gap:8px">
+                                    <div class="debug-row">
                                         <button class="debug-btn debug-btn-ghost debug-btn-sm" id="rust-export-diag" data-i18n="dev.btn.exportDiag">EXPORT DIAG</button>
                                         <button class="debug-btn debug-btn-ghost debug-btn-sm" id="rust-gen-report" data-i18n="dev.btn.genReport">REPORT</button>
                                         <button class="debug-btn debug-btn-ghost debug-btn-sm" id="rust-mem-snap" data-i18n="dev.btn.memSnap">MEMORY</button>
@@ -301,14 +301,14 @@ class DebugUI {
 
                                         <div id="dbg-grid-config" style="display:none; padding-top:12px; border-top:1px dashed rgba(255,255,255,0.1)">
                                             <div style="margin-bottom:12px">
-                                                <div style="display:flex; justify-content:space-between; margin-bottom:4px">
+                                                <div class="debug-row-split">
                                                     <div id="dbg-label-grid-h" style="font-size:12px; font-weight:600; color:var(--debug-text-primary)" data-i18n="dev.label.gridH">Horizontal Spacing</div>
                                                     <div class="debug-label"><span id="dbg-grid-h-val">16</span>px</div>
                                                 </div>
                                                 <input type="range" id="dbg-grid-h" min="0" max="64" value="16" class="custom-range" style="width:100%; --val:25%">
                                             </div>
                                             <div>
-                                                <div style="display:flex; justify-content:space-between; margin-bottom:4px">
+                                                <div class="debug-row-split">
                                                     <div id="dbg-label-grid-v" style="font-size:12px; font-weight:600; color:var(--debug-text-primary)" data-i18n="dev.label.gridV">Vertical Spacing</div>
                                                     <div class="debug-label"><span id="dbg-grid-v-val">16</span>px</div>
                                                 </div>
@@ -349,15 +349,15 @@ class DebugUI {
                     <div style="padding:16px">
                         <div style="margin-bottom:12px; font-size:10px; color:var(--text-muted); display:flex; justify-content:space-between">
                             <span data-i18n="dev.label.hotPatch">HOT-PATCH: CSS / JS</span>
-                            <div style="display:flex; gap:8px">
+                            <div class="debug-row">
                                 <button id="playground-reset" class="debug-btn debug-btn-ghost" style="color:var(--debug-accent); font-size:10px; padding:2px 6px" data-i18n="dev.btn.reset">RESET</button>
                                 <button id="playground-export" class="debug-btn debug-btn-ghost" style="color:var(--debug-success); font-size:10px; padding:2px 6px" data-i18n="dev.btn.exportPatch">EXPORT PATCH</button>
                             </div>
                         </div>
                         <textarea id="playground-code" style="width:100%; height:120px; background:rgba(0,0,0,0.3); border:1px solid var(--debug-border); border-radius:8px; color:var(--debug-accent); font-family:inherit; padding:12px; font-size:11px; outline:none" data-i18n-placeholder="dev.placeholder.playground" placeholder="/* Enter CSS or JS here... */"></textarea>
                         <div style="margin-top:12px; display:flex; gap:8px">
-                            <button class="debug-btn debug-btn-primary" style="flex:1" id="playground-apply-css" data-i18n="dev.btn.applyCss">APPLIQUER CSS</button>
-                            <button class="debug-btn debug-btn-success" style="flex:1" id="playground-run-js" data-i18n="dev.btn.runJs">EXÉCUTER JS</button>
+                            <button class="debug-btn debug-btn-primary debug-fill" id="playground-apply-css" data-i18n="dev.btn.applyCss">APPLIQUER CSS</button>
+                            <button class="debug-btn debug-btn-success debug-fill" id="playground-run-js" data-i18n="dev.btn.runJs">EXÉCUTER JS</button>
                         </div>
                         <div style="margin-top:20px; font-size:10px; color:var(--text-muted)" data-i18n="dev.label.activePatches">ACTIVE PATCHES</div>
                         <div id="patch-tree" style="margin-top:8px; display:flex; flex-direction:column; gap:6px"></div>
@@ -2018,7 +2018,7 @@ class DebugUI {
         const container = this._get('rust-logs-container');
         if (!container) return;
         
-        container.innerHTML = `<div style="padding:10px; color:var(--text-muted)">Chargement...</div>`;
+        container.innerHTML = `<div class="debug-empty">Chargement...</div>`;
         
         try {
             const { invoke } = window.__TAURI__.core;
@@ -2037,7 +2037,7 @@ class DebugUI {
                         ${this.escapeHtml(line)}
                     </div>
                 `;
-            }).join('') || '<div style="padding:10px; color:var(--text-muted)">None log Rust trouvé.</div>';
+            }).join('') || '<div class="debug-empty">None log Rust trouvé.</div>';
             
             container.scrollTop = container.scrollHeight;
         } catch (e) {
