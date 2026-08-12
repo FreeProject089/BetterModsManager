@@ -7037,5 +7037,13 @@
   "sched.bmmFolderHint": "Created inside BMM’s own data folder. Sub-paths are allowed; the folder cannot be placed outside it.",
   "tut.fieldHidden": "That field is not on screen right now.",
   "tut.fieldHiddenIn": "That field is in “{where}” — open it first.",
-  "detail.fromRepo": "From server repo"
+  "detail.fromRepo": "From server repo",
+  "settings.bcKey.title": "BetterCommunity notifications",
+  "settings.bcKey.desc": "Paste an API key with the notifications:read scope and BMM will show your BetterCommunity notifications in its notification centre. Create one on the website under Profile → API keys.",
+  "settings.bcKey.ph": "Paste your key",
+  "settings.bcKey.set": "A key is stored. Paste a new one to replace it.",
+  "settings.bcKey.none": "No key stored — BetterCommunity notifications are off.",
+  "settings.bcKey.ok": "Key saved.",
+  "settings.bcKey.okN": "{n} notification(s) fetched.",
+  "settings.bcKey.removed": "Key removed."
 }

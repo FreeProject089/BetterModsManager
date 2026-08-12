@@ -1660,6 +1660,74 @@ async function initSecurityInfoCard() {
         dbtn.addEventListener('click', openDiscordLinkFlow);
         row.appendChild(dbtn);
         card?.appendChild(row);
+        // ── BetterCommunity API key ──────────────────────────────────────────
+        // Beside the account link because they answer adjacent questions, but they
+        // are NOT the same thing and the copy says so: linking proves which account
+        // is yours, a key lets BMM read something on your behalf. Conflating them is
+        // how a user ends up expecting notifications from a link that never carried
+        // a credential.
+        const keyBox = document.createElement('details');
+        keyBox.style.cssText = 'margin-top:12px;font-size:12px';
+        keyBox.innerHTML = `
+            <summary style="cursor:pointer;color:var(--text-secondary)">${escHtml(t('settings.bcKey.title') || 'BetterCommunity notifications')}</summary>
+            <div style="margin-top:8px;color:var(--text-muted);line-height:1.5">${escHtml(t('settings.bcKey.desc') || 'Paste an API key with the notifications:read scope and BMM will show your BetterCommunity notifications in its notification centre. Create one on the website under Profile \u2192 API keys.')}</div>
+            <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+                <input type="password" id="bc-api-key" class="input" style="flex:1;min-width:200px" placeholder="${escAttr(t('settings.bcKey.ph') || 'Paste your key')}" autocomplete="off" spellcheck="false">
+                <button id="btn-bc-key-save" class="btn btn-sm btn-accent">${escHtml(t('common.save') || 'Save')}</button>
+                <button id="btn-bc-key-clear" class="btn btn-sm">${escHtml(t('common.remove') || 'Remove')}</button>
+            </div>
+            <div id="bc-key-state" style="margin-top:7px;color:var(--text-muted)"></div>`;
+        card?.appendChild(keyBox);
+        const keyState = keyBox.querySelector('#bc-key-state');
+        const keyInput = keyBox.querySelector('#bc-api-key');
+        // The field is never PREFILLED. The backend does not hand the key back — that
+        // is the point of storing it there — so the only honest thing to show is
+        // whether one exists.
+        const paintKeyState = async () => {
+            let has = false;
+            try {
+                has = await invoke('has_bcweb_api_key');
+            }
+            catch { /* offline-safe */ }
+            keyState.textContent = has
+                ? (t('settings.bcKey.set') || 'A key is stored. Paste a new one to replace it.')
+                : (t('settings.bcKey.none') || 'No key stored — BetterCommunity notifications are off.');
+        };
+        void paintKeyState();
+        keyBox.querySelector('#btn-bc-key-save')?.addEventListener('click', async () => {
+            const v = keyInput.value.trim();
+            if (!v)
+                return;
+            try {
+                await invoke('set_bcweb_api_key', { key: v });
+                keyInput.value = ''; // never leave a credential sitting in the DOM
+                const m = await import('../../core/bcweb-notifications.js');
+                m.stopBcwebNotifications();
+                await m.startBcwebNotifications();
+                // Pull once immediately: a key you just pasted that shows nothing for
+                // ten minutes is indistinguishable from a key that does not work.
+                const n = await m.pullBcwebNotifications();
+                toast(n > 0
+                    ? (t('settings.bcKey.okN') || '{n} notification(s) fetched.').replace('{n}', String(n))
+                    : (t('settings.bcKey.ok') || 'Key saved.'), 'success');
+            }
+            catch (e) {
+                toast((t('common.error') || 'Error') + ': ' + e, 'error');
+            }
+            void paintKeyState();
+        });
+        keyBox.querySelector('#btn-bc-key-clear')?.addEventListener('click', async () => {
+            try {
+                await invoke('set_bcweb_api_key', { key: '' });
+                keyInput.value = '';
+                (await import('../../core/bcweb-notifications.js')).stopBcwebNotifications();
+                toast(t('settings.bcKey.removed') || 'Key removed.', 'info');
+            }
+            catch (e) {
+                toast((t('common.error') || 'Error') + ': ' + e, 'error');
+            }
+            void paintKeyState();
+        });
         // Dev/test config is now driven by app.cfg (BCTestMode / BCTestBase). Shown here
         // read-only so it's clear WHERE the blog/account link points and how to change it.
         const cfg = document.createElement('details');
