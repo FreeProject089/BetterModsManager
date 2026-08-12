@@ -818,11 +818,55 @@ function applyAssets(theme: BmmTheme): void {
         const isVideo = /^data:video\//i.test(wallpaper) || /\.(mp4|webm|ogv)(\?|$)/i.test(wallpaper);
         if (isVideo) {
             document.documentElement.style.removeProperty('--bmm-app-bg-image');
+            _setVideoWallpaper(wallpaper);
         } else {
             document.documentElement.style.setProperty('--bmm-app-bg-image', `url("${wallpaper}")`);
+            _setVideoWallpaper(null);
         }
     } else {
         document.documentElement.style.removeProperty('--bmm-app-bg-image');
+        _setVideoWallpaper(null);
+    }
+}
+
+/**
+ * A video wallpaper.
+ *
+ * A background-image cannot play one, so this is a real <video> laid in the same
+ * place as the image layer (#app-window-outer::before) and wearing the same three
+ * tokens — blur, opacity, cover — so switching an image wallpaper for a video one
+ * changes nothing else about how the app looks.
+ *
+ * muted + playsinline are what let it autoplay at all; a wallpaper that needs a
+ * click to start is not a wallpaper. It is inert (pointer-events:none) and sits at
+ * z-index 0 like the image layer, so it can never take a click from the app.
+ */
+function _setVideoWallpaper(src: string | null): void {
+    const ID = 'bmm-app-wallpaper-video';
+    const existing = document.getElementById(ID) as HTMLVideoElement | null;
+    if (!src) { existing?.remove(); return; }
+
+    const host = document.getElementById('app-window-outer') || document.body;
+    let v = existing;
+    if (!v) {
+        v = document.createElement('video');
+        v.id = ID;
+        v.muted = true;
+        v.loop = true;
+        v.autoplay = true;
+        (v as any).playsInline = true;
+        v.setAttribute('playsinline', '');
+        v.setAttribute('aria-hidden', 'true');
+        v.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;object-fit:cover;'
+            + 'z-index:0;pointer-events:none;'
+            + 'filter:blur(var(--bmm-app-bg-blur));opacity:var(--bmm-app-bg-opacity, 0.3);';
+        host.insertBefore(v, host.firstChild);
+    }
+    if (v.getAttribute('src') !== src) {
+        v.setAttribute('src', src);
+        // Autoplay can still be refused (a policy, a codec); a silent still frame is
+        // a better outcome than an unhandled rejection in the console.
+        v.play?.().catch(() => { /* a paused first frame is an acceptable wallpaper */ });
     }
 }
 
@@ -851,6 +895,7 @@ export function resetTheme(): void {
     // The wallpaper is applied the same way, so it must be cleared the same way —
     // a reset that leaves the previous theme's background painted is not a reset.
     document.documentElement.style.removeProperty('--bmm-app-bg-image');
+    document.getElementById('bmm-app-wallpaper-video')?.remove();
     localStorage.removeItem(ACTIVE_KEY);
 }
 
