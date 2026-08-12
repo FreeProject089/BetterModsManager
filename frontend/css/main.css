@@ -15964,3 +15964,29 @@ body.i18nsb-docked #modal-i18n-sandbox .i18n-sb-progress { max-width: 100%; }
     row-gap: 8px;
 }
 .sched-flow-hint { flex: 1 1 260px; min-width: 0; }
+
+/* ── Scheduler: a rhythm the eye can follow ──────────────────────────────────
+   The workflow gained nesting (branches inside branches inside a for-each) while
+   the spacing stayed flat: an 8px gap between siblings AND 8px before a branch,
+   so depth read as one uniform column of blocks. These give the tree the two
+   things it was missing — breathing room between top-level steps, and a visible
+   step down at each level. */
+.sched-timeline > .sched-steps { gap: 12px; }
+.sched-branch {
+    margin-top: 10px;
+    padding: 8px 0 8px 14px;
+    border-left-width: 2px;
+}
+/* A branch's own label should read as a divider, not as another step. */
+.sched-branch-label {
+    margin-bottom: 6px;
+    letter-spacing: 0.08em;
+    opacity: 0.75;
+}
+/* The add-row is an invitation, not a step — keep it clear of the block above. */
+.sched-add-row { margin-top: 10px; }
+.sched-branch > .sched-add-row { margin-top: 8px; margin-bottom: 2px; }
+/* A step head with many controls (for-each: source, max, every, hint) must wrap
+   into tidy rows instead of one cramped line. */
+.sched-step-head { row-gap: 6px; }
+.sched-step-head > .input { max-width: 100%; }
