@@ -6930,5 +6930,9 @@
   "iconpack.upload": "Importer…",
   "iconpack.more": "Afficher plus",
   "iconpack.tooBig": "L'image doit faire moins de 128 Ko",
-  "plugins.iconLibrary": "Bibliothèque (5000+ icônes)…"
+  "plugins.iconLibrary": "Bibliothèque (5000+ icônes)…",
+  "i18n.startTitle": "Trois façons de commencer",
+  "i18n.startPickList": "Choisis une clé dans la liste à gauche — tu vois sa valeur, ses usages, et tu édites.",
+  "i18n.startPickScreen": "« Pick » puis clique n'importe quel texte de BMM : sa clé s'ouvre ici directement.",
+  "i18n.startNextMissing": "« Suivant manquant » saute de trou en trou — le chemin le plus court pour finir une langue."
 }

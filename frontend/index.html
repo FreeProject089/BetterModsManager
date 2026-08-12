@@ -3414,17 +3414,12 @@
                         <div class="modal-overlay" id="modal-i18n-sandbox" style="z-index:9999;">
                             <div class="modal glass i18n-sb" style="max-width:1080px; width:96%; height:88vh; display:flex; flex-direction:column;">
                                 <div class="modal-header i18n-sb-header" style="flex-shrink:0;">
-                                    <div style="display:flex;align-items:center;gap:12px;min-width:0;">
-                                        <div class="i18n-sb-logo">
-                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg>
-                                        </div>
-                                        <div style="min-width:0;">
-                                            <h2 style="margin:0;font-size:17px;" data-i18n="i18n.title">Translation Sandbox</h2>
-                                            <p class="i18n-sb-subtitle" style="margin:2px 0 0;font-size:12px;color:var(--text-muted);" data-i18n="i18n.subtitle">Edit translations in a sandbox — nothing is saved to BMM until you export.</p>
-                                            <div class="i18n-sb-progress" id="i18n-progress">
-                                                <div class="i18n-sb-progress-bar"><span id="i18n-progress-fill"></span></div>
-                                                <span class="i18n-sb-progress-txt" id="i18n-progress-txt"></span>
-                                            </div>
+                                    <div style="display:flex;align-items:center;gap:12px;min-width:0;flex:1;">
+                                        <h2 style="margin:0;font-size:15px;white-space:nowrap;" data-i18n="i18n.title"
+                                            data-i18n-tooltip="i18n.subtitle">Translation Sandbox</h2>
+                                        <div class="i18n-sb-progress" id="i18n-progress" style="flex:1;max-width:260px;">
+                                            <div class="i18n-sb-progress-bar"><span id="i18n-progress-fill"></span></div>
+                                            <span class="i18n-sb-progress-txt" id="i18n-progress-txt"></span>
                                         </div>
                                     </div>
                                     <div class="i18n-sb-header-actions">
@@ -3436,6 +3431,7 @@
                                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 11-6 6v3h3l6-6"/><path d="m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"/></svg>
                                             <span data-i18n="i18n.highlightHcShort">Scan</span>
                                         </button>
+                                        <span class="i18n-sb-toolsep" aria-hidden="true"></span>
                                         <label class="i18n-ovl-opacity" id="i18n-ovl-opacity" data-i18n-tooltip="i18n.overlayOpacity">
                                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 0 20z" fill="currentColor" stroke="none"/></svg>
                                             <input type="range" min="35" max="100" value="100" id="i18n-ovl-opacity-range">
@@ -3445,7 +3441,6 @@
                                         </button>
                                         <button class="i18n-sb-tool" id="i18n-overlay-toggle" data-i18n-tooltip="i18n.overlayMode">
                                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><rect x="12" y="11" width="8" height="7" rx="1" fill="currentColor" stroke="none"/></svg>
-                                            <span data-i18n="i18n.overlayModeShort">Float</span>
                                         </button>
                                         <button class="modal-close" data-close="modal-i18n-sandbox">
                                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -3493,9 +3488,11 @@
                                     </div>
                                     <div class="i18n-sb-right">
                                         <div id="i18n-detail" class="i18n-sb-detail">
-                                            <div class="i18n-sb-empty">
-                                                <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:0.4;margin-bottom:14px;"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg>
-                                                <div data-i18n="i18n.pickKey">Select a key on the left to edit it and see where it's used.</div>
+                                            <div class="i18n-sb-start">
+                                                <div class="i18n-sb-start-title" data-i18n="i18n.startTitle">Trois façons de commencer</div>
+                                                <div class="i18n-sb-start-row"><span class="i18n-sb-start-num">1</span><span data-i18n="i18n.startPickList">Choisis une clé dans la liste à gauche — tu vois sa valeur, ses usages, et tu édites.</span></div>
+                                                <div class="i18n-sb-start-row"><span class="i18n-sb-start-num">2</span><span data-i18n="i18n.startPickScreen">« Pick » puis clique n'importe quel texte de BMM : sa clé s'ouvre ici directement.</span></div>
+                                                <div class="i18n-sb-start-row"><span class="i18n-sb-start-num">3</span><span data-i18n="i18n.startNextMissing">« Suivant manquant » saute de trou en trou — le chemin le plus court pour finir une langue.</span></div>
                                             </div>
                                         </div>
                                     </div>

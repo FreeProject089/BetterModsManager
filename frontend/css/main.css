@@ -15069,11 +15069,6 @@ body.bmm-toolbar-stacked-labels .profile-select-icon-wrap select { width: 100% !
    ══════════════════════════════════════════════════════════════════════════ */
 .modal.i18n-sb { position: relative; }
 .i18n-sb-header { gap: 14px; position: relative; }
-.i18n-sb-logo {
-    width: 40px; height: 40px; flex-shrink: 0;
-    display: flex; align-items: center; justify-content: center;
-    background: rgba(6,182,212,0.15); border-radius: 10px;
-}
 .i18n-sb-header-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .i18n-overlay-active .i18n-sb-header { flex-wrap: wrap; row-gap: 8px; }
 .i18n-overlay-active .i18n-sb-header-actions { flex-wrap: wrap; row-gap: 6px; margin-left: auto; }
@@ -15669,3 +15664,49 @@ body.i18nsb-docked #modal-i18n-sandbox .i18nsb-dock-resize { display: block; }
 .ipk-cell:hover { border-color: var(--accent); color: var(--text-primary); background: var(--bmm-bg-hover); }
 .ipk-name { font-size: 9px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ipk-foot { display: flex; align-items: center; justify-content: space-between; padding-top: 8px; color: var(--text-muted); font-size: 11px; }
+
+
+/* ── Translation sandbox: the de-genericization pass ─────────────────────────
+   The header lost its decorative logo tile and permanent subtitle (title keeps
+   the explanation as a tooltip); tools split into labeled ACTIONS and icon-only
+   WINDOW MODES with a separator; the empty state became three concrete gestures
+   instead of a big centered icon. */
+.i18n-sb-toolsep {
+    width: 1px;
+    height: 20px;
+    background: var(--bmm-s10);
+    margin: 0 2px;
+}
+.i18n-sb-start {
+    max-width: 430px;
+    margin: 26px 0 0 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.i18n-sb-start-title {
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 2px;
+}
+.i18n-sb-start-row {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    font-size: 12.5px;
+    line-height: 1.55;
+    color: var(--text-secondary);
+}
+.i18n-sb-start-num {
+    flex-shrink: 0;
+    width: 20px; height: 20px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 6px;
+    background: rgba(6,182,212,0.14);
+    color: var(--cyan);
+    font-size: 11px; font-weight: 800;
+    margin-top: 1px;
+}
