@@ -16135,7 +16135,13 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
    direction with room — the same reasoning as every other footer menu here. */
 .nc-panel {
     position: fixed;
-    z-index: 12000;
+    /* 12000 was far too low. This app's overlay layers run to 99999 and beyond
+       (the tutorial spotlight sits at 9999995), so the panel was rendering UNDER
+       them: clicks never reached it, landed on whatever was on top, and the
+       outside-click handler correctly concluded you had clicked outside and closed
+       it. It read as "the panel closes the moment I touch it" and was really "the
+       panel was never the thing you touched". */
+    z-index: 999990;
     width: 340px;
     max-width: calc(100vw - 16px);
     max-height: min(460px, 70vh);
@@ -16302,4 +16308,44 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
     border-color: var(--accent);
     color: var(--text-on-accent);
     font-weight: 600;
+}
+
+/* A long notification is collapsed to three lines — a wall of text makes the list
+   unscannable, which is the one job this panel has. Clicking the entry expands it,
+   because truncation you cannot undo just moves the lost information somewhere else. */
+.nc-item { cursor: pointer; }
+.nc-msg {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.nc-item.expanded .nc-msg {
+    display: block;
+    overflow: visible;
+    white-space: pre-wrap;
+}
+/* Only entries that are actually clipped advertise it. A hint on a one-line message
+   promises something that does not happen. */
+.nc-item.clipped .nc-body::after {
+    content: attr(data-more);
+    font-size: 10px;
+    color: var(--accent);
+    opacity: 0.85;
+}
+.nc-item.expanded .nc-body::after { content: none; }
+
+/* Mapper: the profile chip drew TWO icons in one slot. .mapper-profile-ic is the
+   static placeholder glyph the wrap ships with; .profile-icon-display is the
+   selected profile's own icon, injected by the custom-select. Both are flex items
+   of the same 34px-tall row and both were visible, so they printed over each other.
+   The real icon wins when it exists — a placeholder's whole purpose is to stand in
+   until the real thing arrives.
+
+   :not(:empty) matters: the display element is created up front and only FILLED when
+   the selected profile actually has an icon. Keying on its existence alone would
+   hide the placeholder for icon-less profiles and leave the slot blank — trading an
+   overlap for a hole. */
+#view-mapper .mapper-profile-wrap:has(.profile-icon-display:not(:empty)) .mapper-profile-ic {
+    display: none;
 }

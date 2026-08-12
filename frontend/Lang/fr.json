@@ -7023,5 +7023,6 @@
   "dev.btn.genReport": "RAPPORT",
   "dev.btn.memSnap": "MÉMOIRE",
   "dev.reportSaved": "Rapport de diagnostic enregistré",
-  "dev.memSaved": "Instantané mémoire enregistré"
+  "dev.memSaved": "Instantané mémoire enregistré",
+  "notif.more": "Cliquer pour lire"
 }

@@ -7025,5 +7025,6 @@
   "dev.btn.genReport": "REPORT",
   "dev.btn.memSnap": "MEMORY",
   "dev.reportSaved": "Diagnostic report saved",
-  "dev.memSaved": "Memory snapshot saved"
+  "dev.memSaved": "Memory snapshot saved",
+  "notif.more": "Click to read"
 }

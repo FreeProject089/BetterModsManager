@@ -250,6 +250,24 @@ function _wirePanel(): void {
     });
     _panel.querySelector('#nc-read-all')?.addEventListener('click', markAllRead);
     _panel.querySelector('#nc-clear')?.addEventListener('click', clearAll);
+    // Clicking an entry expands it. Marked `clipped` only when the rendered box is
+    // actually shorter than its content — guessing from string length is wrong at
+    // every panel width, and a "click to read more" hint on a message that is fully
+    // visible promises something that does not happen.
+    _panel.querySelectorAll<HTMLElement>('.nc-item').forEach(li => {
+        const msg = li.querySelector('.nc-msg') as HTMLElement | null;
+        if (msg && msg.scrollHeight > msg.clientHeight + 1) {
+            li.classList.add('clipped');
+            li.querySelector('.nc-body')?.setAttribute('data-more', t('notif.more') || 'Click to read');
+        }
+        li.addEventListener('click', ev => {
+            // Not when the target was the delete button, or reading a long entry
+            // would delete it.
+            if ((ev.target as HTMLElement).closest('[data-del]')) return;
+            li.classList.toggle('expanded');
+        });
+    });
+
     _panel.querySelectorAll<HTMLElement>('[data-del]').forEach(b => {
         b.addEventListener('click', ev => { ev.stopPropagation(); removeEntry(b.dataset.del!); });
     });
@@ -265,8 +283,15 @@ function closePanel(): void {
 
 const _outside = (e: MouseEvent) => {
     if (!_panel) return;
+    // composedPath() rather than contains(target): it reports the full chain the
+    // event actually travelled, so it still says "inside" when the target sits in a
+    // shadow root or has already been replaced by a repaint between the event firing
+    // and this handler running. contains() gets both of those wrong.
+    const path = typeof e.composedPath === 'function' ? e.composedPath() : [];
+    const bell = document.getElementById('btn-notif-center');
+    if (path.includes(_panel) || (bell && path.includes(bell))) return;
     const target = e.target as Node;
-    if (_panel.contains(target) || document.getElementById('btn-notif-center')?.contains(target)) return;
+    if (_panel.contains(target) || bell?.contains(target)) return;
     closePanel();
 };
 const _esc = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); closePanel(); } };
