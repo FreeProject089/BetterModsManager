@@ -1879,9 +1879,7 @@ class DebugUI {
 
     showContextMenu(x, y, items) {
         this.contextMenu.innerHTML = items.map(item => `
-            <div class="ctx-item" style="padding:8px 12px; font-size:11px; color:rgba(255,255,255,0.8); cursor:pointer; border-radius:4px; transition:all 0.1s" 
-                 onmouseover="this.style.background='var(--bmm-s10)'; this.style.color='white'"
-                 onmouseout="this.style.background='transparent'; this.style.color='rgba(255,255,255,0.8)'">
+            <div class="ctx-item">
                 ${item.label}
             </div>
         `).join('');

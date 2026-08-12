@@ -920,3 +920,26 @@
     padding: 10px;
     color: var(--debug-text-muted);
 }
+
+/* Context-menu items.
+   These were styled inline, and the declaration was TRUNCATED: it ended on a bare
+   `transition:` with no value, so the style attribute ran on and swallowed the
+   `onmouseover=` that followed it. The remaining handler text became stray attributes
+   and the hover never worked at all — the items have been inert since they were
+   written. Nothing reports this: it is valid-enough HTML, just not what anyone meant.
+
+   In CSS, where a missing value is a rule the browser drops rather than a quote that
+   eats the next attribute. */
+.ctx-item {
+    padding: 8px 12px;
+    font-size: 11px;
+    color: var(--debug-text-primary);
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background 0.12s ease, color 0.12s ease;
+}
+.ctx-item:hover,
+.ctx-item:focus-visible {
+    background: var(--bmm-s10);
+    color: var(--debug-text-primary);
+}
