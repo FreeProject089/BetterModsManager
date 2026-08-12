@@ -81,8 +81,60 @@ Les fichiers de langue se trouvent dans `frontend/Lang/`.
 ---
 
 ## ️ Maintenance du système i18n
-Pour ajouter une nouvelle clé de traduction :
-1.  Ajouter la clé dans `en.json` et `fr.json`.
-2.  Ajouter la clé avec la valeur `"..."` dans `template.json`.
-3.  Mettre à jour ce fichier `i18n_reference.md` si une nouvelle catégorie est créée.
-4.  Utiliser `t('ma.cle')` dans le JavaScript ou `data-i18n="ma.cle"` dans le HTML.
+
+À la date de rédaction : **6868 clés**, identiques dans `en.json` et `fr.json`.
+
+Pour ajouter une clé de traduction :
+1.  Ajoutez la clé dans `en.json` et `fr.json`.
+2.  Ajoutez la clé avec la valeur `"..."` dans `template.json`.
+3.  Mettez à jour ce fichier `i18n_reference.md` si une nouvelle catégorie est créée.
+4.  Utilisez `t('ma.cle')` en JavaScript ou `data-i18n="ma.cle"` en HTML.
+
+### Ce sont les guards qui font la règle
+
+Deux scripts l'appliquent, et ce sont eux qui font échouer un build — pas la relecture :
+
+- **`scripts/check-i18n-parity.mjs`** — `en.json` et `fr.json` doivent contenir
+  exactement le même ensemble de clés. Pas « à peu près » : ajouter une chaîne anglaise
+  sans sa française échoue ici, et c'est pour ça que le français n'est jamais une
+  corvée de rattrapage.
+- **`scripts/check-i18n-keys.mjs`** — chaque `t('…')` *littéral* du code doit résoudre.
+  Son ensemble `KNOWN_MISSING` est vide et doit le rester : une entrée dedans est une
+  clé que quelqu'un a décidé de devoir.
+
+Le mot **littéral** est la limite à connaître. Une clé construite à l'exécution —
+`t('sched.act.' + action.type)`, `t('notif.f_' + kind)` — est invisible au vérificateur,
+qui ne peut pas savoir ce que l'expression produira. Ces motifs sont réels et utiles,
+mais ils échangent une garantie à la compilation contre une garantie à l'exécution :
+une clé calculée demande donc sa propre vérification. La méthode fiable est d'extraire
+la liste que le code va réellement construire et de la comparer au dictionnaire :
+
+```js
+// toutes les actions déclarées du planificateur, contre le dictionnaire
+const acts = [...src.matchAll(/\{ v: '([a-zA-Z.]+)', label:/g)].map(m => m[1]);
+const missing = acts.filter(v => !(`sched.act.${v}` in fr));
+```
+
+C'est exactement cette vérification qui a trouvé `sched.act.custom.script` manquante
+après l'ajout d'une action dont la traduction avait été oubliée. La relecture, non.
+
+### `t(cle, repli)` et pourquoi le repli est en anglais
+
+`t()` renvoie le repli quand une clé est absente : une traduction manquante dégrade
+donc vers de l'anglais lisible au lieu d'afficher la clé brute à l'utilisateur. C'est
+voulu — et c'est aussi pourquoi le guard de parité compte : sans lui, le repli
+masquerait discrètement chaque trou et le français pourrirait sur place sans que rien
+n'ait l'air cassé.
+
+### Les unités et les symboles sont des chaînes aussi
+
+Le piège facile à manquer : ce qui semble trop petit pour être traduit. Un temps
+relatif renvoyant `${d} j` — abréviation française de *jour* — est parti tel quel vers
+des lecteurs anglophones sous la forme d'un « 3 j » incompréhensible, et aucun guard ne
+pouvait l'attraper puisque ça n'était jamais passé par `t()`. Quand une API de la
+plateforme connaît déjà la réponse (`Intl.RelativeTimeFormat`, `toLocaleDateString`),
+utilisez-la plutôt que d'écrire l'unité à la main.
+
+Les opérateurs (`==`, `>=`), les codes de taille (S/M/L/XL) et les noms d'algorithmes
+(`blake3`, `sha256`) sont le cas inverse : des symboles et des noms propres,
+correctement laissés non traduits. Les traduire serait pire que de les laisser.
