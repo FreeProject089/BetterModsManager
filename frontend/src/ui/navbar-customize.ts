@@ -124,26 +124,12 @@ async function refresh() {
 document.getElementById('refresh').addEventListener('click', refresh);
 refresh();`,
     },
-    {
-        label: 'Notifier', labelKey: 'navedit.tplNotifier',
-        html: `<h1>Notifier</h1>
-<p class="sub">Sends a BMM toast — needs the <b>notify</b> permission.</p>
-<input id="msg" placeholder="Your message" style="width:100%;box-sizing:border-box;padding:10px;border-radius:8px;background:#131b2b;color:#e6edf3;border:1px solid #232d42">
-<div style="margin-top:12px"><button id="send">Send</button></div>
-<div class="out" id="status">Ready.</div>`,
-        css: TPL_CSS_BASE,
-        js: `// Needs the "notify" permission.
-document.getElementById('send').addEventListener('click', async () => {
-  const msg = document.getElementById('msg').value.trim();
-  if (!msg) return;
-  try {
-    await bmm.notify(msg, 'info');
-    document.getElementById('status').textContent = 'Sent.';
-  } catch (e) {
-    document.getElementById('status').textContent = 'Refused: ' + e + ' — tick "notify".';
-  }
-});`,
-    },
+    // The "Notifier" template was removed: it demonstrated bmm.notify() and nothing
+    // else, so the page it produced did one thing the app already does everywhere,
+    // and it was the template most likely to be picked by someone expecting a
+    // starting point rather than a one-line demo. The remaining three each leave you
+    // with something to build ON. bmm.notify is documented with the rest of the
+    // sandbox API; it does not need a page of its own to advertise it.
 ];
 
 interface CustomNavItem {

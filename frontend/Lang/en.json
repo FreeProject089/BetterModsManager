@@ -6971,7 +6971,6 @@
   "navedit.tplBlank": "Blank page",
   "navedit.tplNotes": "Notes (saved locally — storage)",
   "navedit.tplDashboard": "Dashboard (app info)",
-  "navedit.tplNotifier": "Notifier (notify)",
   "navedit.tplReplaceTitle": "Replace the current code?",
   "navedit.tplReplaceDesc": "The template overwrites the HTML, CSS and JS below.",
   "themes.dockNoRoom": "Window too narrow to dock — staying floating",

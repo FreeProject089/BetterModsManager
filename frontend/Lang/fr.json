@@ -6969,7 +6969,6 @@
   "navedit.tplBlank": "Page vide",
   "navedit.tplNotes": "Notes (enregistrées localement — storage)",
   "navedit.tplDashboard": "Tableau de bord (infos app)",
-  "navedit.tplNotifier": "Notificateur (notify)",
   "navedit.tplReplaceTitle": "Remplacer le code actuel ?",
   "navedit.tplReplaceDesc": "Le modèle écrase le HTML, le CSS et le JS ci-dessous.",
   "themes.dockNoRoom": "Fenêtre trop étroite pour ancrer — reste flottant",
