@@ -6896,5 +6896,8 @@
   "navedit.importCode": "Coller un lien / code",
   "navedit.importCodeHint": "Applique une disposition partagée via un lien bmm://",
   "navedit.exportFileHint": "Tout : disposition, pages perso, permissions, icônes",
-  "navedit.importFileHint": "Restaure un export complet, pages incluses"
+  "navedit.importFileHint": "Restaure un export complet, pages incluses",
+  "dev.session.idleHint": "Rien n'enregistre, donc tous les compteurs restent à zéro — le panneau fonctionne, il n'a juste rien à mesurer. Lance une capture de test ci-dessous pour voir le flux en direct.",
+  "dev.session.startTest": "Démarrer une capture de test (masquée)",
+  "dev.session.stopTest": "Arrêter la capture de test"
 }

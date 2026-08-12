@@ -20,7 +20,7 @@
 
 import { t } from '../../core/i18n.js';
 import { getConsent, exportData } from '../../core/analytics.js';
-import { isFullReplay, observeReplay, unobserveReplay, isRecording, getExtraBlockSelectors } from '../../core/replay-recorder.js';
+import { isFullReplay, observeReplay, unobserveReplay, isRecording, getExtraBlockSelectors, subscribeReplay, unsubscribeReplay, type ReplaySubscriber } from '../../core/replay-recorder.js';
 
 let events = 0;
 let lastEventAt: number | null = null;
@@ -29,6 +29,20 @@ let biggest = 0;
 let biggestType = -1;
 let observing = false;
 let timer: number | null = null;
+
+// The explicit test capture. Field report: "le session recorder fonctionne pas" —
+// nothing was broken, nothing was RECORDING, so the observe-only counters sat at
+// zero forever and read as a dead pane. The pane still never records by itself;
+// this is a labelled button the user presses, masked, local, stopped on teardown.
+let _testSub: ReplaySubscriber | null = null;
+function _testCaptureRunning(): boolean { return _testSub !== null; }
+async function _toggleTestCapture(): Promise<void> {
+    if (_testSub) { const s = _testSub; _testSub = null; await unsubscribeReplay(s); return; }
+    const sub = ((_ev: any, _ck: boolean) => { /* the observer does the counting */ }) as ReplaySubscriber;
+    sub.requiresMasking = true;          // NEVER an unmasked capture from a debug pane
+    _testSub = sub;
+    await subscribeReplay(sub);
+}
 
 // Per-type tallies. rrweb's event.type is a small int; FullSnapshot (2) is what
 // actually costs memory, IncrementalSnapshot (3) is what tells you the page is alive.
@@ -119,6 +133,13 @@ function renderStats(host: HTMLElement) {
         live ? (isFullReplay() ? 'running · full replay' : 'running · masked') : 'not running',
         live ? 'color:var(--success,#22c55e)' : 'color:var(--text-muted,#7c8698)',
     ));
+    if (!live) {
+        const why = document.createElement('div');
+        why.style.cssText = 'font-size:10px;color:var(--text-muted,#7c8698);padding:4px 0 6px;line-height:1.5';
+        why.textContent = t('dev.session.idleHint')
+            || 'Nothing is recording, so every counter stays at zero — that is the pane working, not failing. Start a test capture below to watch the stream live.';
+        host.append(why);
+    }
     host.append(row(t('dev.session.events') || 'Events seen', String(events)));
     host.append(row(t('dev.session.buffer') || 'Total captured', fmtBytes(bytes)));
     host.append(row(t('dev.session.biggest') || 'Largest single event', fmtBytes(biggest)));
@@ -208,6 +229,17 @@ async function build(pane: HTMLElement) {
 
     const bar = document.createElement('div');
     bar.style.cssText = 'margin-top:12px;display:flex;gap:8px;align-items:center';
+    const cap = document.createElement('button');
+    cap.className = 'btn btn-sm';
+    const capLabel = () => {
+        cap.textContent = _testCaptureRunning()
+            ? (t('dev.session.stopTest') || 'Stop the test capture')
+            : (t('dev.session.startTest') || 'Start a test capture (masked)');
+    };
+    capLabel();
+    cap.addEventListener('click', () => { void _toggleTestCapture().then(() => { capLabel(); renderStats(stats); }); });
+    bar.append(cap);
+
     const btn = document.createElement('button');
     btn.className = 'btn btn-sm';
     btn.textContent = t('dev.session.reload') || 'Reload payload';
@@ -250,5 +282,6 @@ export function resetSessionPane() {
 export async function disposeSessionPane() {
     unmountSessionPane();
     if (observing) { unobserveReplay(onEvent); observing = false; }
+    if (_testSub) { const s = _testSub; _testSub = null; await unsubscribeReplay(s); }
     resetSessionPane();
 }

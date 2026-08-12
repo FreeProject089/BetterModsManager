@@ -6898,5 +6898,8 @@
   "navedit.importCode": "Paste a link / code",
   "navedit.importCodeHint": "Apply a layout someone shared as a bmm:// link",
   "navedit.exportFileHint": "Everything: layout, custom pages, permissions, icons",
-  "navedit.importFileHint": "Restores a full export, pages included"
+  "navedit.importFileHint": "Restores a full export, pages included",
+  "dev.session.idleHint": "Nothing is recording, so every counter stays at zero — that is the pane working, not failing. Start a test capture below to watch the stream live.",
+  "dev.session.startTest": "Start a test capture (masked)",
+  "dev.session.stopTest": "Stop the test capture"
 }

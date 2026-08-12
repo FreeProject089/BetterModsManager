@@ -1679,7 +1679,18 @@ export async function initSettings() {
     // Keyboard shortcuts are now a central, rebindable command registry (core/commands.ts) —
     // the global dispatcher is started once in app.ts. Here we just mount the manager UI.
     const skHost = document.getElementById('shortcuts-manager');
-    if (skHost) renderShortcutsManager(skHost);
+    if (skHost) {
+        renderShortcutsManager(skHost);
+        // The manager's strings are resolved at render time (tr()), not via data-i18n,
+        // so a language switch left it in the old language until an app restart.
+        // setLang dispatches 'langChanged' — re-render on it, once (guard the flag).
+        if (!(skHost as any)._skLangWired) {
+            (skHost as any)._skLangWired = true;
+            document.addEventListener('langChanged', () => {
+                if (skHost.isConnected) renderShortcutsManager(skHost);
+            });
+        }
+    }
     await initStorageSettings();
     await initLanguageSettings();
     initI18nSandbox();
