@@ -2635,7 +2635,7 @@
   "credits.jsLabel": "Interface Vanilla JS & CSS",
   "credits.kofi": "Soutenir sur Ko-fi",
   "kofi.title": "Better Mods Manager te plaît ?",
-  "kofi.text": "BMM est gratuit et développé sur mon temps libre. S'il t'en fait gagner, un petit pourboire sur Ko-fi garde le projet vivant et sans pub. Sans pression — il reste 100% gratuit dans tous les cas. 💛",
+  "kofi.text": "BMM est gratuit et développé sur mon temps libre. S’il vous en fait gagner, un petit pourboire sur Ko-fi garde le projet vivant et sans publicité. Aucune pression — il reste 100 % gratuit dans tous les cas.",
   "kofi.support": "Soutenir sur Ko-fi",
   "kofi.popular": "Populaire",
   "kofi.tierHint": "Choisissez un montant — ça ouvre Ko-fi.",
@@ -7062,5 +7062,6 @@
   "sched.syncOverwriteT": "Écraser tous les fichiers",
   "sched.syncOverwrite": "Re-télécharge et remplace les fichiers déjà identiques. Plus lent, et vos modifications locales sont perdues.",
   "sched.syncDeleteT": "Supprimer les mods absents du dépôt",
-  "sched.syncDelete": "Supprime tout ce qui se trouve dans le dossier des mods et pas dans le dépôt. Sur une tâche planifiée, cela s’exécute sans personne pour l’arrêter — laissez désactivé sauf si ce dossier n’est rempli que par ce dépôt."
+  "sched.syncDelete": "Supprime tout ce qui se trouve dans le dossier des mods et pas dans le dépôt. Sur une tâche planifiée, cela s’exécute sans personne pour l’arrêter — laissez désactivé sauf si ce dossier n’est rempli que par ce dépôt.",
+  "kofi.tierAria": "Donner {n} sur Ko-fi"
 }

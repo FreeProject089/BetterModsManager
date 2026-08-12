@@ -11,8 +11,18 @@
  */
 import { t } from '../core/i18n.js';
 import { getLinks } from '../core/links-config.js';
+import { escHtml, escAttr } from '../core/utils.js';
 
 const OPTOUT_KEY = 'bmm_kofi_optout';
+
+/** One drawn cup, reused for every tier.
+ *
+ *  The tiers used to be ☕, ☕☕☕ and ☕☕☕☕☕ — repeated emoji standing in for an
+ *  amount. Three problems, the same three the tutorial's emoji had: the glyph is
+ *  whatever the platform's font decides, so the row looks different on every machine;
+ *  it cannot take a colour from the theme; and counting cups is a worse way to read
+ *  "3" than the numeral 3. One consistent cup, and the number does the talking. */
+const CUP_SVG = '<svg class="kofi-cup" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h13v6a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V8z"/><path d="M17 9h1.5a2.5 2.5 0 0 1 0 5H17"/><path d="M7 2.5c0 1-.8 1.3-.8 2.3M10.5 2.5c0 1-.8 1.3-.8 2.3M14 2.5c0 1-.8 1.3-.8 2.3"/></svg>';
 
 function kofiUrl(): string {
     try { return getLinks().kofi || 'https://ko-fi.com/I2I31ZIPPG'; }
@@ -53,13 +63,17 @@ export function showKofiReminder(): void {
         </div>
 
         <h3 class="kofi-title" id="kofi-title">${t('kofi.title') || 'Enjoying Better Mods Manager?'}</h3>
-        <p class="kofi-text">${t('kofi.text') || 'BMM is free and made on my own time. If it saves you some, a small tip on Ko-fi keeps the project alive and ad-free. No pressure — it stays 100% free either way. 💛'}</p>
+        <p class="kofi-text">${t('kofi.text') || 'BMM is free and made on my own time. If it saves you some, a small tip on Ko-fi keeps the project alive and ad-free. No pressure — it stays 100% free either way.'}</p>
 
         <div class="kofi-actions">
-          <div class="kofi-tiers" role="group">
-            <a class="kofi-tier" href="${KOFI_URL}" target="_blank" rel="noopener noreferrer" data-kofi-go><span class="kofi-tier-amt">☕</span><span class="kofi-tier-lbl">1</span></a>
-            <a class="kofi-tier kofi-tier--pop" href="${KOFI_URL}" target="_blank" rel="noopener noreferrer" data-kofi-go><span class="kofi-pop">${t('kofi.popular') || 'Popular'}</span><span class="kofi-tier-amt">☕☕☕</span><span class="kofi-tier-lbl">3</span></a>
-            <a class="kofi-tier" href="${KOFI_URL}" target="_blank" rel="noopener noreferrer" data-kofi-go><span class="kofi-tier-amt">☕☕☕☕☕</span><span class="kofi-tier-lbl">5</span></a>
+          <div class="kofi-tiers" role="group" aria-label="${escAttr(t('kofi.tierHint') || 'Pick an amount')}">
+            ${[1, 3, 5].map(n => `
+            <a class="kofi-tier${n === 3 ? ' kofi-tier--pop' : ''}" href="${KOFI_URL}" target="_blank" rel="noopener noreferrer" data-kofi-go
+               aria-label="${escAttr((t('kofi.tierAria') || 'Tip {n} on Ko-fi').replace('{n}', String(n)))}">
+              ${n === 3 ? `<span class="kofi-pop">${escHtml(t('kofi.popular') || 'Popular')}</span>` : ''}
+              ${CUP_SVG}
+              <span class="kofi-tier-amt">${n}</span>
+            </a>`).join('')}
           </div>
           <div class="kofi-tier-hint">${t('kofi.tierHint') || 'Pick an amount — it opens Ko-fi.'}</div>
           <a class="kofi-btn-primary" href="${KOFI_URL}" target="_blank" rel="noopener noreferrer" id="kofi-go">

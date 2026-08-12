@@ -2637,7 +2637,7 @@
   "credits.jsLabel": "Vanilla JS & CSS Interface",
   "credits.kofi": "Support on Ko-fi",
   "kofi.title": "Enjoying Better Mods Manager?",
-  "kofi.text": "BMM is free and built on my own time. If it saves you some, a small tip on Ko-fi keeps the project alive and ad-free. No pressure — it stays 100% free either way. 💛",
+  "kofi.text": "BMM is free and made on my own time. If it saves you some, a small tip on Ko-fi keeps the project alive and ad-free. No pressure — it stays 100% free either way.",
   "kofi.support": "Support on Ko-fi",
   "kofi.popular": "Popular",
   "kofi.tierHint": "Pick an amount — it opens Ko-fi.",
@@ -7064,5 +7064,6 @@
   "sched.syncOverwriteT": "Overwrite every file",
   "sched.syncOverwrite": "Re-downloads and replaces files that already match. Slower, and your local edits are lost.",
   "sched.syncDeleteT": "Delete mods the repo does not have",
-  "sched.syncDelete": "Removes anything in the mods folder that is not in the repo. On a schedule this runs with nobody watching — leave it off unless the folder is only ever filled by this repo."
+  "sched.syncDelete": "Removes anything in the mods folder that is not in the repo. On a schedule this runs with nobody watching — leave it off unless the folder is only ever filled by this repo.",
+  "kofi.tierAria": "Tip {n} on Ko-fi"
 }
