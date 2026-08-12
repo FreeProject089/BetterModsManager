@@ -844,13 +844,20 @@ function _renderStep(): void {
     });
 
     /* ── Chips drag-scroll + wheel-to-horizontal ── */
-    const chipsWrap = panel.querySelector('.tut-part-chips-wrap') as HTMLElement | null;
+    // The SCROLLER, not the wrap. This whole block was bound to
+    // .tut-part-chips-wrap — the inner element, which is `width: max-content` and
+    // therefore never has any overflow of its own. It IS the overflow; its parent is
+    // what scrolls. Every scrollLeft write below was landing on an element whose
+    // scrollWidth equals its clientWidth, so it silently did nothing, and with
+    // `scrollbar-width: none` hiding the bar there was no other way to move the row:
+    // a vertical wheel does not scroll an overflow-x container on its own. The markup
+    // gained the wrapper at some point and the wiring stayed on the old node.
+    const chipsWrap = (panel.querySelector('.tut-chips-scroller')
+        || panel.querySelector('.tut-part-chips-wrap')) as HTMLElement | null;
     if (chipsWrap) {
         // Scroll active chip into view
         const activeChip = chipsWrap.querySelector('.tut-part-chip.active') as HTMLElement | null;
         if (activeChip) {
-            const wrapRect  = chipsWrap.getBoundingClientRect();
-            const chipRect  = activeChip.getBoundingClientRect();
             const chipLeft  = activeChip.offsetLeft;
             const chipRight = chipLeft + activeChip.offsetWidth;
             if (chipRight > chipsWrap.scrollLeft + chipsWrap.clientWidth) {
@@ -862,6 +869,10 @@ function _renderStep(): void {
 
         // Wheel → horizontal scroll
         chipsWrap.addEventListener('wheel', (e: WheelEvent) => {
+            // Only claim the wheel when the row actually overflows. Preventing default
+            // unconditionally swallowed the scroll of whatever is behind a row that
+            // already fits — the user's wheel would simply stop working over it.
+            if (chipsWrap.scrollWidth <= chipsWrap.clientWidth) return;
             e.preventDefault();
             chipsWrap.scrollLeft += e.deltaY || e.deltaX;
         }, { passive: false });
