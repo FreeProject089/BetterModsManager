@@ -15548,7 +15548,7 @@ h1 {
      glyph turning in place is the textbook permitted exception, and it is kept
      deliberately slow here rather than merely re-enabled. */
   [style*="animation:spin"], [style*="animation: spin"],
-  .community-spinner, .kit-spinner, .bmm-spin,
+  .community-spinner,
   .bh-submit-btn.loading::after {
     animation-duration: 2.4s !important;
     animation-iteration-count: infinite !important;
@@ -15805,11 +15805,16 @@ body.i18nsb-docked #modal-i18n-sandbox .i18nsb-dock-resize { display: block; }
 
    The attribute selectors are deliberate: most spinners in this codebase carry
    `style="animation:spin …"` inline (60+ sites), and one rule beats touching them
-   all. New code should use .bmm-spin. */
+   all. New code should use .bmm-spin.
+
+   IMPORTANT, so nobody re-derives it: this was NOT the cause of the frozen spinner
+   reported from the field. That turned out to be prefers-reduced-motion pairing a
+   0.01ms duration with animation-iteration-count: 1 — see the carve-out further
+   down. This rule is kept because a compositor hint on a permanently rotating
+   element is cheap and correct on its own merits, not because it fixed anything. */
 [style*="animation:spin"],
 [style*="animation: spin"],
 .community-spinner,
-.kit-spinner,
 .bmm-spin {
     will-change: transform;
 }
@@ -16058,12 +16063,18 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
     from { transform: rotate(0deg); }
     to   { transform: rotate(360deg); }
 }
+/* ONLY the inline sites. They are the ones naming `spin`, the shadowed keyframes;
+   redirecting them is the whole point. `.community-spinner` deliberately does NOT
+   appear here — it has working keyframes of its own (`community-spin`), and forcing
+   a name over them with !important would silently discard any later change made
+   there by someone who cannot see this rule. It only needs the layer hint. */
+[style*="animation:spin"],
+[style*="animation: spin"] {
+    animation-name: bmm-spin !important;
+}
 [style*="animation:spin"],
 [style*="animation: spin"],
-.community-spinner,
-.kit-spinner,
-.bmm-spin {
-    animation-name: bmm-spin !important;
+.community-spinner {
     transform-origin: 50% 50%;
     will-change: transform;
 }

@@ -264,8 +264,6 @@ body.bmm-no-anim *::after {
 body.bmm-no-anim [style*="animation:spin"],
 body.bmm-no-anim [style*="animation: spin"],
 body.bmm-no-anim .community-spinner,
-body.bmm-no-anim .kit-spinner,
-body.bmm-no-anim .bmm-spin,
 body.bmm-no-anim .bh-submit-btn.loading::after {
     animation-duration: 2.4s !important;
 }
