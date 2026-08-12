@@ -797,6 +797,71 @@ async function runAction(action: Action, task: Task, ctx: Record<string, number>
         case 'folder.open':      if (p.path) await invoke('open_folder', { path: p.path }); break;
         case 'repo.connect':     dl('repo/connect', { url: p.url, name: p.name }); break;
         case 'repo.sync':        dl('repo/sync', { url: p.url, profile: p.profile }); break;
+        case 'repo.syncNow': {
+            // A REAL sync, not a deeplink. Every other repo action here only opens the
+            // UI prefilled, which is useless at 3am with nobody to press the button.
+            //
+            // The three directories are explicit parameters rather than resolved from
+            // the active profile, and that is deliberate. The sync dialog does not
+            // resolve them either — the user types or browses them — so there is no
+            // existing, tested resolution to reuse, and inventing one here would put a
+            // guess in front of `deleteExtra`. Same values, chosen by the same human,
+            // once, when the task is written.
+            if (!p.url || !p.gameDir || !p.modsDir) {
+                throw new Error(t('sched.syncMissing') || 'This sync step needs a repo URL, a game folder and a mods folder.');
+            }
+
+            // Resolve which profile INSIDE the repo to install. Fetching first also
+            // answers the "repo with no repo.json" case with a real message instead of
+            // a sync that runs against nothing.
+            let info: any;
+            try {
+                info = await invoke('fetch_repo_info', {
+                    url: p.url,
+                    creatorId: await invoke('get_creator_id').catch(() => null),
+                    password: p.password || null,
+                });
+            } catch (e) {
+                throw new Error((t('sched.syncNoManifest') || 'Could not read that repo (no repo.json, or it is unreachable): {e}').replace('{e}', String(e)));
+            }
+            const repoProfiles: any[] = info?.profiles || [];
+            const wanted = String(p.repoProfile || '').trim().toLowerCase();
+            const chosen = wanted
+                ? repoProfiles.find(rp => String(rp.id).toLowerCase() === wanted || String(rp.name || '').toLowerCase() === wanted)
+                : (repoProfiles.length === 1 ? repoProfiles[0] : null);
+            if (!chosen) {
+                // Never guess which profile to install. Picking one from several would
+                // install somebody's whole mod set into a folder on a timer.
+                throw new Error((t('sched.syncPickProfile') || 'Name which repo profile to sync. Available: {list}')
+                    .replace('{list}', repoProfiles.map(rp => rp.name || rp.id).join(', ') || '—'));
+            }
+
+            const summary = await invoke('sync_server_repo', { args: {
+                url: p.url,
+                creatorId: await invoke('get_creator_id').catch(() => null),
+                password: p.password || null,
+                gameDir: p.gameDir,
+                modsDir: p.modsDir,
+                backupDir: p.backupDir || '',
+                choices: [{
+                    repoProfileId: chosen.id,
+                    // An existing local profile, never null. Null means "create new",
+                    // which on a schedule would mint a fresh profile every single run.
+                    targetLocalProfileId: p.targetProfile || null,
+                    selectedModIds: null,
+                }],
+                // BOTH default OFF and stay off unless the task says otherwise. These
+                // two are what turn a sync into data loss, and a scheduled task runs
+                // when nobody is watching to stop it.
+                overwriteAll: !!p.overwriteAll,
+                deleteExtra: !!p.deleteExtra,
+                downloadLimit: parseInt(p.downloadLimit, 10) || 0,
+                unzipArchives: p.keepZipped ? false : true,
+                addRepoAsUpdateSource: true,
+            } });
+            _captureOutput(p, (summary as any)?.installed ?? '', ctx);
+            break;
+        }
         case 'repo.gen':         dl('repo/gen'); break;
         case 'repo.update':      dl('repo/update', { dir: p.dir }); break;
         case 'repo.host':        dl('repo/host', { dir: p.dir, port: p.port }); break;
@@ -2032,6 +2097,7 @@ const ACTION_TYPES: { v: string; label: string; needs?: string; group: string }[
     { v: 'custom.command', label: 'Run custom command', needs: 'command', group: 'system' },
     { v: 'custom.script', label: 'Run a script', needs: 'script', group: 'system' },
     { v: 'folder.create', label: 'Create a folder (BMM data)', needs: 'bmmfolder', group: 'system' },
+    { v: 'repo.syncNow', label: 'Sync a server repo (unattended)', needs: 'reposync', group: 'repo' },
     { v: 'deeplink', label: 'Run bmm:// deeplink', needs: 'url', group: 'system' },
 ];
 
@@ -2123,6 +2189,29 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
             </details>
             <span class="sched-cmd-hint">${t('sched.cmdHint') || 'Tip: grant “Run external programs” in this task’s Permissions, or it won’t run.'}</span>
         </div>`;
+    else if (needs === 'reposync') {
+        const profOpts = _profiles.map((pr: any) =>
+            `<option value="${escAttr(pr.id)}"${params.targetProfile === pr.id ? ' selected' : ''}>${escHtml(pr.name || pr.id)}</option>`).join('');
+        host.innerHTML = `
+        <div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${t('sched.syncUrl') || '1. Repo URL'}</label>
+            <input class="input sched-rs-url" placeholder="https://example.com/repo.json" value="${escAttr(params.url || '')}">
+            <label class="sched-cmd-label">${t('sched.syncRepoProfile') || '2. Which profile inside the repo'}</label>
+            <input class="input sched-rs-rprof" placeholder="${escAttr(t('sched.syncRepoProfilePh') || 'its name, e.g. Main — required when the repo has several')}" value="${escAttr(params.repoProfile || '')}">
+            <label class="sched-cmd-label">${t('sched.syncTarget') || '3. Install into this local profile'}</label>
+            <select class="input sched-rs-target"><option value="">${escHtml(t('sched.syncTargetNone') || '— pick one —')}</option>${profOpts}</select>
+            <label class="sched-cmd-label">${t('sched.syncFolders') || '4. Folders'}</label>
+            <div class="sched-cmd-row"><input class="input sched-rs-game" placeholder="${escAttr(t('sched.syncGamePh') || 'game folder')}" value="${escAttr(params.gameDir || '')}"><button type="button" class="btn btn-sm btn-secondary sched-rs-browse" data-for="game">${t('sched.choose') || 'Choose…'}</button></div>
+            <div class="sched-cmd-row" style="margin-top:6px"><input class="input sched-rs-mods" placeholder="${escAttr(t('sched.syncModsPh') || 'mods folder')}" value="${escAttr(params.modsDir || '')}"><button type="button" class="btn btn-sm btn-secondary sched-rs-browse" data-for="mods">${t('sched.choose') || 'Choose…'}</button></div>
+            <div class="sched-cmd-row" style="margin-top:6px"><input class="input sched-rs-backup" placeholder="${escAttr(t('sched.syncBackupPh') || 'backup folder (optional)')}" value="${escAttr(params.backupDir || '')}"><button type="button" class="btn btn-sm btn-secondary sched-rs-browse" data-for="backup">${t('sched.choose') || 'Choose…'}</button></div>
+            <details class="sched-cmd-adv">
+                <summary>${t('sched.syncDanger') || 'Destructive options — off by default'}</summary>
+                <label class="sched-opt" style="margin-top:6px"><input type="checkbox" class="sched-rs-overwrite" ${params.overwriteAll ? 'checked' : ''}><div><b>${t('sched.syncOverwriteT') || 'Overwrite every file'}</b><span>${t('sched.syncOverwrite') || 'Re-downloads and replaces files that already match. Slower, and your local edits are lost.'}</span></div></label>
+                <label class="sched-opt"><input type="checkbox" class="sched-rs-delete" ${params.deleteExtra ? 'checked' : ''}><div><b>${t('sched.syncDeleteT') || 'Delete mods the repo does not have'}</b><span>${t('sched.syncDelete') || 'Removes anything in the mods folder that is not in the repo. On a schedule this runs with nobody watching — leave it off unless the folder is only ever filled by this repo.'}</span></div></label>
+                <input class="input sched-rs-pass" type="password" style="margin-top:6px" placeholder="${escAttr(t('sched.syncPassPh') || 'download password (if the repo needs one)')}" value="${escAttr(params.password || '')}">
+            </details>
+        </div>`;
+    }
     else if (needs === 'bmmfolder') host.innerHTML = _field(needs,
         `<input class="input sched-p-bmmdir" placeholder="${escAttr(t('sched.bmmFolderPh') || 'e.g. backups/weekly')}" value="${escAttr(params.path || '')}">`)
         + `<span class="sched-cmd-hint">${t('sched.bmmFolderHint') || 'Created inside BMM’s own data folder. Sub-paths are allowed; the folder cannot be placed outside it.'}</span>`;
@@ -2283,6 +2372,31 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
     host.querySelector('.sched-p-prog')?.addEventListener('input', (e) => { params.program = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-p-args')?.addEventListener('input', (e) => { params.args = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-p-wd')?.addEventListener('input', (e) => { params.workingDir = (e.target as HTMLInputElement).value; });
+    const rsBind = (sel: string, key: string, prop: 'value' | 'checked' = 'value') => {
+        host.querySelector(sel)?.addEventListener(prop === 'checked' ? 'change' : 'input', (e) => {
+            params[key] = (e.target as any)[prop];
+        });
+    };
+    rsBind('.sched-rs-url', 'url'); rsBind('.sched-rs-rprof', 'repoProfile');
+    rsBind('.sched-rs-target', 'targetProfile'); rsBind('.sched-rs-game', 'gameDir');
+    rsBind('.sched-rs-mods', 'modsDir'); rsBind('.sched-rs-backup', 'backupDir');
+    rsBind('.sched-rs-pass', 'password');
+    rsBind('.sched-rs-overwrite', 'overwriteAll', 'checked');
+    rsBind('.sched-rs-delete', 'deleteExtra', 'checked');
+    host.querySelectorAll('.sched-rs-browse').forEach((b) => b.addEventListener('click', async () => {
+        const which = (b as HTMLElement).dataset.for!;
+        // Imported here, like the other browse buttons in this file do — the dialog
+        // module is not on the scheduler's own load path.
+        const { pickFolder } = await import('../../core/api.js');
+        const d = await pickFolder().catch(() => null);
+        if (!d) return;
+        const map: Record<string, [string, string]> = {
+            game: ['.sched-rs-game', 'gameDir'], mods: ['.sched-rs-mods', 'modsDir'], backup: ['.sched-rs-backup', 'backupDir'],
+        };
+        const [sel, key] = map[which];
+        params[key] = d;
+        (host.querySelector(sel) as HTMLInputElement).value = d;
+    }));
     host.querySelector('.sched-p-bmmdir')?.addEventListener('input', (e) => { params.path = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-p-engine')?.addEventListener('change', (e) => { params.engine = (e.target as HTMLSelectElement).value; });
     host.querySelector('.sched-p-code')?.addEventListener('input', (e) => { params.code = (e.target as HTMLTextAreaElement).value; });
