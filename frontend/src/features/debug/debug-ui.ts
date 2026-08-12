@@ -200,10 +200,10 @@ class DebugUI {
                                         <div style="font-size:11px; color:var(--text-muted)" data-i18n="dev.msg.rustDesc">Attach a native debugger or view backend logs.</div>
                                     </div>
                                     <div style="display:flex; gap:8px">
-                                        <button class="debug-btn debug-btn-ghost" id="rust-export-diag" style="font-size:10px; padding:4px 12px; border:1px solid rgba(255,255,255,0.1)" data-i18n="dev.btn.exportDiag">EXPORT DIAG</button>
-                                        <button class="debug-btn debug-btn-ghost" id="rust-gen-report" style="font-size:10px; padding:4px 12px; border:1px solid rgba(255,255,255,0.1)" data-i18n="dev.btn.genReport">REPORT</button>
-                                        <button class="debug-btn debug-btn-ghost" id="rust-mem-snap" style="font-size:10px; padding:4px 12px; border:1px solid rgba(255,255,255,0.1)" data-i18n="dev.btn.memSnap">MEMORY</button>
-                                        <button class="debug-btn debug-btn-ghost" id="rust-copy-lldb" style="font-size:10px; padding:4px 12px; border:1px solid rgba(255,255,255,0.1)" data-i18n="dev.btn.copyCmd">COPY CMD</button>
+                                        <button class="debug-btn debug-btn-ghost debug-btn-sm" id="rust-export-diag" data-i18n="dev.btn.exportDiag">EXPORT DIAG</button>
+                                        <button class="debug-btn debug-btn-ghost debug-btn-sm" id="rust-gen-report" data-i18n="dev.btn.genReport">REPORT</button>
+                                        <button class="debug-btn debug-btn-ghost debug-btn-sm" id="rust-mem-snap" data-i18n="dev.btn.memSnap">MEMORY</button>
+                                        <button class="debug-btn debug-btn-ghost" id="rust-copy-lldb" data-i18n="dev.btn.copyCmd">COPY CMD</button>
                                         <button class="debug-btn debug-btn-primary" id="rust-refresh-logs" style="font-size:10px; padding:4px 12px" data-i18n="dev.btn.refreshLogs">REFRESH LOGS</button>
                                     </div>
                                 </div>
@@ -213,8 +213,8 @@ class DebugUI {
                             </div>
                             <div class="debug-subpane" id="subpane-html" style="height:100%; overflow-y:auto; padding:8px; display:none; flex-direction:column">
                                 <div style="margin-bottom:8px; display:flex; gap:8px">
-                                    <button class="debug-btn" id="html-refresh-dom" style="font-size:10px; padding:2px 8px" data-i18n="dev.btn.refreshDom">Generate DOM Tree</button>
-                                    <button class="debug-btn debug-btn-ghost" id="html-collapse-all" style="font-size:10px; padding:2px 8px" data-i18n="dev.btn.collapseAll">Collapse All</button>
+                                    <button class="debug-btn" id="html-refresh-dom"  data-i18n="dev.btn.refreshDom">Generate DOM Tree</button>
+                                    <button class="debug-btn debug-btn-ghost" id="html-collapse-all"  data-i18n="dev.btn.collapseAll">Collapse All</button>
                                 </div>
                                 <div id="html-dom-tree" style="font-family:'JetBrains Mono'; font-size:11px"></div>
                             </div>

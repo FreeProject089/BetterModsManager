@@ -841,3 +841,50 @@
 }
 
 /* .debug-switch-warning folded into the single .debug-switch:checked rule above. */
+
+/* ── Button sizes, so a button never has to argue with its own class ──────────
+   Twenty-nine .debug-btn instances each carried an inline style re-specifying
+   font-size, padding and border — slightly differently each time. The class defined
+   a look and every button overrode it, which is why the panel read as a pile of
+   controls rather than a toolbar. Two size variants replace all of it; a button now
+   says WHAT it is, not how to draw itself. */
+.debug-btn-sm {
+    padding: 4px 12px;
+    font-size: 10px;
+}
+.debug-btn-xs {
+    padding: 2px 8px;
+    font-size: 10px;
+    font-weight: 500;
+}
+
+/* Rows of buttons line up and wrap as whole buttons — never mid-label, and never a
+   lone orphan pushed onto its own line by a stray margin. */
+.debug-actions,
+.debug-btn-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+
+/* The hover lift was `transform: translateY(-1px)` on `transition: all`, which
+   animates every property including colour and border — the browser cannot know
+   which ones matter, so it watches them all. Naming them is both cheaper and
+   steadier, and it stops the 1px nudge from jittering a row of buttons that share a
+   baseline. */
+.debug-btn {
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.debug-btn:hover {
+    transform: none;
+}
+.debug-btn:active {
+    transform: translateY(1px);
+}
+/* Keyboard users get the same affordance as the mouse — a debug panel is where you
+   end up when something is already wrong, and it should not also fight you. */
+.debug-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
