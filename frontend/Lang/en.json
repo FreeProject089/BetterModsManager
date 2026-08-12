@@ -6963,5 +6963,8 @@
   "sched.continue": "CONTINUE",
   "sched.continueHint": "skip to the next iteration",
   "sched.stop": "STOP",
-  "sched.stopHint": "end the whole task, successfully"
+  "sched.stopHint": "end the whole task, successfully",
+  "credits.stackWhatIs": "What it is",
+  "credits.stackWhyHere": "Why BMM uses it",
+  "credits.stackOpenPage": "Open its page"
 }

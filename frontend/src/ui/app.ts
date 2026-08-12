@@ -1520,13 +1520,36 @@ function initCredits() {
         { name: "Prisma Client", v: "5.22", key: "prisma", url: npm("@prisma/client") },
         { name: "Tauri API", v: "2", key: "tauri-api", url: npm("@tauri-apps/api") },
         { name: "Tauri CLI", v: "2", key: "tauri-cli", url: npm("@tauri-apps/cli") },
-        { name: "Concurrently", v: "9.2", key: "concurrently", url: npm("concurrently") }
+        { name: "Concurrently", v: "9.2", key: "concurrently", url: npm("concurrently") },
+        { name: "Lucide", v: "0.5", key: "lucide", url: npm("lucide") },
+        { name: "Simple Icons", v: "13", key: "simple-icons", url: npm("simple-icons") }
     ];
+
+    // Where each piece actually earns its place. A dependency list answers "what do
+    // we ship"; this answers "why", which is the only reason to read one. Entries are
+    // optional on purpose — the point is to explain the load-bearing ones, not to pad
+    // every row with a paraphrase of its own README.
+    const STACK_ROLE: Record<string, { en: string; fr: string }> = {
+        'jwalk':         { en: 'Walks your mod folders. Recursive scanning is the hottest path in BMM, so it runs in parallel.', fr: 'Parcourt tes dossiers de mods. Le scan récursif est le chemin le plus chaud de BMM, donc il tourne en parallèle.' },
+        'rayon':         { en: 'Turns per-file work (hashing, copying, verifying) into multithreaded iteration without hand-rolling a pool.', fr: 'Transforme le travail par fichier (hash, copie, vérification) en itération multithread sans écrire de pool à la main.' },
+        'blake3':        { en: 'Every integrity check and every delta-sync decision compares BLAKE3 fingerprints, never file contents.', fr: 'Chaque vérification d’intégrité et chaque décision de delta-sync compare des empreintes BLAKE3, jamais le contenu des fichiers.' },
+        'ed25519-dalek': { en: 'Signs and verifies repo manifests, so a mod list can prove who produced it.', fr: 'Signe et vérifie les manifestes de dépôt, pour qu’une liste de mods puisse prouver qui l’a produite.' },
+        'tokio':         { en: 'The async runtime behind downloads, the local API and the repo server.', fr: 'Le runtime asynchrone derrière les téléchargements, l’API locale et le serveur de dépôt.' },
+        'mimalloc':      { en: 'Replaces the system allocator — measurably faster under the allocation storm a large library scan produces.', fr: 'Remplace l’allocateur système — mesurablement plus rapide sous la tempête d’allocations d’un gros scan.' },
+        'rrweb':         { en: 'Records a session as replayable DOM events: the .bmmreplay files behind bug reports and the docs player.', fr: 'Enregistre une session en événements DOM rejouables : les fichiers .bmmreplay des rapports de bug et du lecteur de docs.' },
+        'dompurify':     { en: 'Sanitises every piece of markdown BMM renders, because catalogs and repos are content written by other people.', fr: 'Assainit chaque markdown affiché par BMM, parce que catalogues et dépôts sont du contenu écrit par d’autres.' },
+        'lucide':        { en: 'Build-time source of the 2000+ stroke icons in the shared picker. Generated to JSON — never a runtime dependency.', fr: 'Source à la compilation des 2000+ icônes du sélecteur partagé. Générée en JSON — jamais une dépendance d’exécution.' },
+        'simple-icons':  { en: 'Build-time source of the 3400+ brand glyphs, sharded per first letter so one stored icon costs KB, not MB.', fr: 'Source à la compilation des 3400+ glyphes de marques, shardée par première lettre pour qu’une icône stockée coûte des Ko, pas des Mo.' },
+        'clap':          { en: 'Parses the BMM CLI — the same surface the MCP server exposes to agents.', fr: 'Analyse le CLI de BMM — la même surface que le serveur MCP expose aux agents.' },
+        'schemars':      { en: 'Generates the JSON Schemas the MCP tools advertise, so an agent knows what a tool accepts.', fr: 'Génère les schémas JSON annoncés par les outils MCP, pour qu’un agent sache ce qu’un outil accepte.' },
+        'tauri-api':     { en: 'The bridge the whole UI talks through: every action crosses it to reach the Rust core.', fr: 'Le pont par lequel toute l’UI passe : chaque action le traverse pour atteindre le cœur Rust.' },
+    };
+    (window as any).__bmmStackRole = STACK_ROLE;
     content.innerHTML = `
         <div class="stack-section-title" data-i18n="credits.stackBackend">${t('credits.stackBackend')}</div>
         <div class="stack-grid">
             ${backend.map(item => `
-                <div class="stack-item" style="cursor:pointer" onclick="window.openExternal('${item.url}')">
+                <div class="stack-item" style="cursor:pointer" data-stack-key="${item.key}" data-stack-name="${escAttr(item.name)}" data-stack-v="${escAttr(item.v)}" data-stack-url="${escAttr(item.url)}">
                     <div class="stack-item-header">
                         <span class="stack-item-name">${item.name}</span>
                         <span class="stack-item-version">${item.v}</span>
@@ -1538,7 +1561,7 @@ function initCredits() {
         <div class="stack-section-title" data-i18n="credits.stackFrontend">${t('credits.stackFrontend')}</div>
         <div class="stack-grid">
             ${frontend.map(item => `
-                <div class="stack-item" style="cursor:pointer" onclick="window.openExternal('${item.url}')">
+                <div class="stack-item" style="cursor:pointer" data-stack-key="${item.key}" data-stack-name="${escAttr(item.name)}" data-stack-v="${escAttr(item.v)}" data-stack-url="${escAttr(item.url)}">
                     <div class="stack-item-header">
                         <span class="stack-item-name">${item.name}</span>
                         <span class="stack-item-version">${item.v}</span>
@@ -1554,8 +1577,64 @@ function initCredits() {
             </button>
         </div>
     `;
+
+    // A card used to launch the browser on click, which is an abrupt way to answer
+    // "what is this?". It opens an explainer first — what the library does, what BMM
+    // uses it FOR — and the way out to its page is an explicit button.
+    content.onclick = (e) => {
+        const card = (e.target as HTMLElement).closest('.stack-item') as HTMLElement | null;
+        if (!card?.dataset.stackKey) return;
+        openStackDetail(card.dataset.stackKey, card.dataset.stackName || '',
+                        card.dataset.stackV || '', card.dataset.stackUrl || '');
+    };
     modal.classList.add('open');
 };
+
+/** The dependency explainer: what it is, why it is here, then the way out. */
+function openStackDetail(key: string, name: string, version: string, url: string): void {
+    document.getElementById('bmm-stack-detail')?.remove();
+    const role = (window as any).__bmmStackRole?.[key];
+    const lang = getLang() === 'fr' ? 'fr' : 'en';
+    // The card's own description lives under one of two key prefixes (crates vs npm).
+    const desc = t(`credits.stackCrate.${key}`) !== `credits.stackCrate.${key}`
+        ? t(`credits.stackCrate.${key}`)
+        : t(`credits.stackPkg.${key}`);
+    const overlay = document.createElement('div');
+    overlay.id = 'bmm-stack-detail';
+    overlay.className = 'modal-generic-overlay open';
+    overlay.innerHTML = `
+        <div class="modal stackd-modal">
+            <div class="stackd-head">
+                <div class="stackd-id">
+                    <span class="stackd-name">${escHtml(name)}</span>
+                    <span class="stackd-v">v${escHtml(version)}</span>
+                </div>
+                <button class="stackd-close" id="stackd-close" data-tooltip="${escAttr(t('common.close') || 'Close')}">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </div>
+            <div class="stackd-block">
+                <div class="stackd-label">${escHtml(t('credits.stackWhatIs') || 'What it is')}</div>
+                <p class="stackd-text">${escHtml(desc)}</p>
+            </div>
+            ${role ? `<div class="stackd-block stackd-role">
+                <div class="stackd-label">${escHtml(t('credits.stackWhyHere') || 'Why BMM uses it')}</div>
+                <p class="stackd-text">${escHtml(role[lang])}</p>
+            </div>` : ''}
+            <div class="stackd-foot">
+                <button class="btn btn-secondary btn-sm" id="stackd-open">${escHtml(t('credits.stackOpenPage') || 'Open its page')} ↗</button>
+            </div>
+        </div>`;
+    (document.getElementById('app-window-outer') || document.body).appendChild(overlay);
+    const close = () => overlay.remove();
+    overlay.querySelector('#stackd-close')?.addEventListener('click', close);
+    overlay.addEventListener('mousedown', (ev) => { if (ev.target === overlay) close(); });
+    overlay.querySelector('#stackd-open')?.addEventListener('click', () => {
+        (window as any).openExternal?.(url);
+        close();
+    });
+}
+
 (window as any).openContributorModal = (id: string) => {
     const c = CONTRIBUTORS.find(x => x.id === id);
     if (!c)

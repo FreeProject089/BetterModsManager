@@ -6961,5 +6961,8 @@
   "sched.continue": "CONTINUER",
   "sched.continueHint": "passe à l'itération suivante",
   "sched.stop": "ARRÊTER",
-  "sched.stopHint": "termine toute la tâche, avec succès"
+  "sched.stopHint": "termine toute la tâche, avec succès",
+  "credits.stackWhatIs": "Ce que c'est",
+  "credits.stackWhyHere": "Pourquoi BMM l'utilise",
+  "credits.stackOpenPage": "Ouvrir sa page"
 }

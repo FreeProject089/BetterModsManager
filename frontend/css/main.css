@@ -15851,3 +15851,46 @@ body.i18nsb-docked #modal-i18n-sandbox .i18n-sb-left {
 body.i18nsb-docked #modal-i18n-sandbox .i18n-sb-right { min-height: 0; }
 body.i18nsb-docked #modal-i18n-sandbox .i18n-sb-filters { flex-wrap: wrap; row-gap: 6px; }
 body.i18nsb-docked #modal-i18n-sandbox .i18n-sb-header-actions { flex-wrap: wrap; row-gap: 6px; }
+
+/* ── Dependency explainer (Credits → Technical Architecture) ─────────────────
+   Clicking a stack card used to launch a browser. It opens this first: what the
+   library is, and — the part worth reading — what BMM uses it FOR. */
+.stackd-modal {
+    width: min(520px, 92vw);
+    display: flex; flex-direction: column; gap: 14px;
+    padding: 20px 22px 18px;
+}
+.stackd-head { display: flex; align-items: flex-start; gap: 12px; }
+.stackd-id { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; }
+.stackd-name { font-size: 17px; font-weight: 700; color: var(--text-primary); }
+.stackd-v {
+    font-family: var(--font-mono); font-size: 11px; font-weight: 700;
+    padding: 2px 7px; border-radius: 5px;
+    background: var(--bmm-s06); color: var(--text-muted);
+}
+.stackd-close {
+    margin-left: auto; flex-shrink: 0;
+    width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center;
+    background: transparent; border: 1px solid var(--border); border-radius: 8px;
+    color: var(--text-muted); cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+}
+.stackd-close:hover { color: var(--danger); border-color: var(--danger); }
+.stackd-block {
+    padding: 12px 14px; border-radius: 10px;
+    background: var(--bmm-s02); border: 1px solid var(--border);
+}
+/* The "why" block is the one that earns the modal — give it the accent. */
+.stackd-role {
+    background: var(--bmm-s04);
+    border-color: var(--bmm-border-accent, var(--accent));
+    border-left-width: 3px;
+}
+.stackd-label {
+    font-size: 10px; font-weight: 800; letter-spacing: 0.09em; text-transform: uppercase;
+    color: var(--text-muted); margin-bottom: 6px;
+}
+.stackd-role .stackd-label { color: var(--accent); }
+.stackd-text { margin: 0; font-size: 13px; line-height: 1.6; color: var(--text-secondary); }
+.stackd-role .stackd-text { color: var(--text-primary); }
+.stackd-foot { display: flex; justify-content: flex-end; }
