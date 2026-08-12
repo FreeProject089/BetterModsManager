@@ -16029,3 +16029,30 @@ body.i18nsb-docked #modal-i18n-sandbox .i18n-sb-progress { max-width: 100%; }
 .bmm-dock-resize { display: none; }
 body.bte-docked #bmm-theme-editor .bmm-dock-resize,
 body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
+
+/* ── The spinner, made un-shadowable ─────────────────────────────────────────
+   `@keyframes spin` is declared THREE times (main.css twice, mapper.css once) and
+   the last one parsed wins globally — mapper.css's, which has only a `to` frame.
+   An implicit `from` is the element's current transform, so anything that already
+   carried one animated from there instead of from 0, and a name that any
+   stylesheet can redefine is not a name you can rely on.
+
+   `bmm-spin` is declared once, here, with both frames and an explicit origin, and
+   every inline `animation:spin …` is redirected onto it. The rule wins on
+   specificity + order over the inline shorthand's *name* because animation-name is
+   a longhand: the inline style sets the shorthand, this overrides one component of
+   it. will-change keeps the rotation on the compositor. */
+@keyframes bmm-spin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+}
+[style*="animation:spin"],
+[style*="animation: spin"],
+.community-spinner,
+.kit-spinner,
+.bmm-spin {
+    animation-name: bmm-spin !important;
+    transform-origin: 50% 50%;
+    transform-box: fill-box;          /* an SVG rotates about ITS OWN centre */
+    will-change: transform;
+}
