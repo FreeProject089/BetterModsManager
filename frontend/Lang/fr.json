@@ -6939,5 +6939,8 @@
   "themes.pickMiddle": "clic molette",
   "themes.pickHintToken": "sur un élément pour trouver son token",
   "themes.pickHintTarget": "sur un élément pour le cibler",
-  "themes.pickHintShift": "Maj + clic droit : éditer cet élément précisément"
+  "themes.pickHintShift": "Maj + clic droit : éditer cet élément précisément",
+  "themes.revealTip": "Clic : montre-moi ce que ça peint",
+  "themes.revealNone": "Rien à l'écran n'utilise ça pour l'instant",
+  "themes.revealHits": "élément(s) peints par ce token"
 }

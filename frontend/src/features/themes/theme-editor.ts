@@ -368,6 +368,12 @@ function buildPanel(): void {
     makeDraggable(_panel, _panel.querySelector('#bte-header') as HTMLElement);
     if (!_ro) { _ro = new ResizeObserver(() => saveGeom()); _ro.observe(_panel!); }
 
+    // Delegated: the tabs re-render on every edit, so per-row listeners would be
+    // re-bound (and leaked) constantly.
+    _panel.addEventListener('click', (e) => {
+        const lbl = (e.target as HTMLElement).closest('.bte-token-reveal') as HTMLElement | null;
+        if (lbl?.dataset.reveal) { e.preventDefault(); revealToken(lbl.dataset.reveal); }
+    });
     _panel.querySelector('#bte-close')!.addEventListener('click', closeEditor);
     _panel.querySelector('#bte-dock')!.addEventListener('click', () => _bteSetDock(!_bteDocked()));
     _btePlantDockResize(_panel);
@@ -940,8 +946,9 @@ function buildSimpleTab(): string {
                 } else {
                     inp = `<input type="text" class="bte-var-inp" data-var="${tok.key}" value="${escHtml(custom)}" placeholder="${escHtml(currentLabel(tok.key, tok.type))}">`;
                 }
-                return `<div class="bte-token-row${custom ? ' has-custom' : ''}">
-                    <label class="bte-token-lbl"
+                return `<div class="bte-token-row${custom ? ' has-custom' : ''}" data-token="${escAttr(tok.key)}">
+                    <label class="bte-token-lbl bte-token-reveal" data-reveal="${escAttr(tok.key)}"
+                        data-tooltip="${escAttr(t('themes.revealTip') || 'Click: show me what this paints')}"
                         onmouseenter="window.showTaskyHelp('${escJs(tok.desc)}','info',true)" onmouseleave="window.hideTaskyHelp()">${escHtml(tok.label)} ${mdnLink}</label>
                     <div class="bte-token-ctrl">
                         ${inp}
@@ -1603,6 +1610,47 @@ function showPickHint(kind: 'token' | 'target'): void {
         ${kind === 'token' ? `<span class="bte-pick-hint-alt">${t('themes.pickHintShift') || 'Maj + clic droit : éditer cet élément précisément'}</span>` : ''}
         <span class="bte-pick-hint-esc">Échap</span>`;
     (document.getElementById('app-window-outer') || document.body).appendChild(hint);
+}
+
+/** Show me what this token actually paints.
+ *
+ *  Field ask: "qu'on puisse cliquer sur un des trucs dans le theme editor et que ça
+ *  nous l'affiche en clair". A token name means nothing until you see the pixels it
+ *  owns, so clicking a row's label flashes every live element currently painted
+ *  with that value.
+ *
+ *  Matching is by COMPUTED VALUE, not by rule: a var can be consumed through any
+ *  number of intermediate custom properties, and only the resolved colour is
+ *  reliably comparable. The walk is capped and reads only the properties the token
+ *  could plausibly drive, so it stays a click and not a freeze. */
+function revealToken(tokenKey: string): void {
+    const want = getComputedStyle(document.documentElement).getPropertyValue(tokenKey).trim();
+    if (!want) { toast(t('themes.revealNone') || 'Nothing on screen uses this yet', 'info', 1800); return; }
+    const probe = document.createElement('span');
+    probe.style.color = want;
+    document.body.appendChild(probe);
+    const target = getComputedStyle(probe).color;
+    probe.remove();
+
+    document.querySelectorAll('.bte-reveal-flash').forEach(e => e.classList.remove('bte-reveal-flash'));
+    const PROPS = ['backgroundColor', 'color', 'borderTopColor', 'borderLeftColor', 'outlineColor'] as const;
+    const all = document.querySelectorAll<HTMLElement>('.app-shell *');
+    let hits = 0;
+    for (let i = 0; i < all.length && i < 4000 && hits < 60; i++) {
+        const el = all[i];
+        if (el.closest('#bmm-theme-editor, #bte-elov')) continue;   // not the tool itself
+        const r = el.getBoundingClientRect();
+        if (r.width < 2 || r.height < 2) continue;                  // invisible: nothing to show
+        const cs = getComputedStyle(el);
+        for (const prop of PROPS) {
+            if (cs[prop] === target) { el.classList.add('bte-reveal-flash'); hits++; break; }
+        }
+    }
+    if (!hits) { toast(t('themes.revealNone') || 'Nothing on screen uses this yet', 'info', 1800); return; }
+    const first = document.querySelector('.bte-reveal-flash') as HTMLElement | null;
+    first?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    toast(`${hits} ${t('themes.revealHits') || 'element(s) painted by this token'}`, 'info', 2200);
+    setTimeout(() => document.querySelectorAll('.bte-reveal-flash').forEach(e => e.classList.remove('bte-reveal-flash')), 2600);
 }
 
 function stopPick(): void {

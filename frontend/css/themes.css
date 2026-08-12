@@ -760,3 +760,20 @@ body.bmm-has-nav-logo .sidebar-brand .brand::before {
     font-size: 10px;
     font-weight: 700;
 }
+
+/* ── "Show me what this token paints" ───────────────────────────────────────
+   Clicking a token's label flashes every live element currently painted with its
+   value. An outline + halo, never a colour change: recolouring the match would
+   hide the very thing the user asked to see. */
+.bte-token-reveal { cursor: pointer; }
+.bte-token-reveal:hover { color: var(--bmm-accent); }
+.bte-reveal-flash {
+    outline: 2px solid var(--bmm-accent) !important;
+    outline-offset: 2px !important;
+    box-shadow: 0 0 0 4px rgba(var(--bmm-accent-r, 59), var(--bmm-accent-g, 130), var(--bmm-accent-b, 246), 0.25) !important;
+    animation: bteRevealPulse 0.9s ease-in-out infinite;
+}
+@keyframes bteRevealPulse {
+    0%, 100% { outline-offset: 2px; }
+    50%      { outline-offset: 5px; }
+}

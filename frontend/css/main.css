@@ -15774,3 +15774,23 @@ body.i18nsb-docked #modal-i18n-sandbox .i18nsb-dock-resize { display: block; }
     transition: opacity 0.15s;
 }
 #setting-tag-color2.tag-color2-hidden { opacity: 0; pointer-events: none; }
+
+/* ── Translation sandbox, docked: one column, not two ────────────────────────
+   The keys list and the detail editor sit side by side, which is right in the
+   full-screen modal and unreadable in a 460px dock — the detail pane became a
+   ~180px ribbon of wrapped words (field screenshot). Docked, they stack: the list
+   on top with a bounded height, the editor below it with the rest. */
+body.i18nsb-docked #modal-i18n-sandbox .i18n-sb-panel[data-i18n-panel="keys"] {
+    flex-direction: column;
+}
+body.i18nsb-docked #modal-i18n-sandbox .i18n-sb-left {
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+    max-height: 46%;
+    border-right: none;
+    border-bottom: 1px solid var(--bmm-s08);
+}
+body.i18nsb-docked #modal-i18n-sandbox .i18n-sb-right { min-height: 0; }
+body.i18nsb-docked #modal-i18n-sandbox .i18n-sb-filters { flex-wrap: wrap; row-gap: 6px; }
+body.i18nsb-docked #modal-i18n-sandbox .i18n-sb-header-actions { flex-wrap: wrap; row-gap: 6px; }

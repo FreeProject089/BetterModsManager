@@ -6941,5 +6941,8 @@
   "themes.pickMiddle": "middle-click",
   "themes.pickHintToken": "an element to find its token",
   "themes.pickHintTarget": "an element to target it",
-  "themes.pickHintShift": "Shift + right-click: edit this element precisely"
+  "themes.pickHintShift": "Shift + right-click: edit this element precisely",
+  "themes.revealTip": "Click: show me what this paints",
+  "themes.revealNone": "Nothing on screen uses this yet",
+  "themes.revealHits": "element(s) painted by this token"
 }
