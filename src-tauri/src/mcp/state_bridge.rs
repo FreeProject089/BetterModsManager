@@ -1220,6 +1220,25 @@ pub fn list_schedules() -> anyhow::Result<serde_json::Value> {
     Ok(serde_json::from_str(&txt)?)
 }
 
+/// Scaffold a plugin DRAFT: write plugin.json (+ README) into
+/// <data>/plugin-drafts/<id>/. Deliberately NOT an install — a plugin can carry
+/// scripts, so authoring lands in a drafts folder the user zips and installs
+/// through the app's normal (permission-gated) flow. Returns the draft path.
+pub fn create_plugin_scaffold(manifest: serde_json::Value) -> anyhow::Result<serde_json::Value> {
+    let obj = manifest.as_object().ok_or_else(|| anyhow::anyhow!("manifest must be a JSON object"))?;
+    let id = obj.get("id").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
+    let name = obj.get("name").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
+    if id.is_empty() || name.is_empty() { anyhow::bail!("manifest.id and manifest.name are required"); }
+    require_plain_name(&id)?; // CWE-22: the id becomes a folder name
+    let dir = get_bmm_data_dir().join("plugin-drafts").join(&id);
+    std::fs::create_dir_all(&dir)?;
+    std::fs::write(dir.join("plugin.json"), serde_json::to_string_pretty(&manifest)?)?;
+    let readme = format!(
+        "# {}\n\nDraft scaffolded via the BMM MCP/CLI.\n\nTo install: zip the CONTENTS of this folder (plugin.json at the zip root)\nand use Plugins & API -> Install from file in BMM.\n", name);
+    std::fs::write(dir.join("README.md"), readme)?;
+    Ok(serde_json::json!({ "id": id, "path": dir.to_string_lossy() }))
+}
+
 /// Create or update a scheduler task (upsert by id into schedules.json).
 ///
 /// The task is the SAME shape the in-app builder saves: { id?, name, enabled?,

@@ -362,6 +362,17 @@ enum Commands {
         id: String,
     },
 
+    /// Scaffold a plugin draft (plugin.json + README) in <app-data>/plugin-drafts/<id>/.
+    /// Authoring only — zip the draft and install it through BMM's normal flow.
+    CreatePlugin {
+        /// Path to a plugin.json manifest, or '-' for stdin
+        #[arg(long, conflicts_with = "json")]
+        file: Option<String>,
+        /// Inline manifest JSON
+        #[arg(long)]
+        json: Option<String>,
+    },
+
     /// Launch a benchmark (running app)
     Benchmark {
         /// Dataset: sandbox (generated) or real (my mods)
@@ -782,6 +793,25 @@ async fn run_cli_command(cmd: Commands) -> anyhow::Result<()> {
             let res = state_bridge::delete_schedule(&id)?;
             println!("  {} deleted {} ({} remaining)", "OK".green().bold(), id.cyan(),
                 res.get("remaining").and_then(|v| v.as_u64()).unwrap_or(0));
+        }
+
+        Commands::CreatePlugin { file, json } => {
+            let raw = match (file, json) {
+                (Some(f), _) if f == "-" => {
+                    use std::io::Read;
+                    let mut b = String::new();
+                    std::io::stdin().read_to_string(&mut b)?;
+                    b
+                }
+                (Some(f), _) => std::fs::read_to_string(&f)?,
+                (None, Some(j)) => j,
+                (None, None) => anyhow::bail!("provide --file <plugin.json> (or - for stdin) or --json '<manifest>'"),
+            };
+            let manifest: serde_json::Value = serde_json::from_str(&raw)?;
+            let res = state_bridge::create_plugin_scaffold(manifest)?;
+            println!("  {} plugin draft at {}", "OK".green().bold(),
+                res.get("path").and_then(|v| v.as_str()).unwrap_or("?").cyan());
+            println!("  zip its contents and install via Plugins & API -> Install from file");
         }
 
         Commands::RunSchedule { id } => {

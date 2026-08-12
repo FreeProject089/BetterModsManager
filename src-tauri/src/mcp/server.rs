@@ -336,6 +336,13 @@ impl BmmMcpServer {
         }
     }
 
+    fn tool_create_plugin_scaffold(&self, manifest: serde_json::Value) -> Result<CallToolResult, rmcp::ErrorData> {
+        match state_bridge::create_plugin_scaffold(manifest) {
+            Ok(v) => ok_json(&v),
+            Err(e) => err_result(&e.to_string()),
+        }
+    }
+
     fn tool_list_sessions(&self) -> Result<CallToolResult, rmcp::ErrorData> {
         let sessions: Vec<_> = state_bridge::list_crash_reports().into_iter()
             .filter(|r| r.category.contains("Session")).collect();
@@ -499,6 +506,17 @@ impl ServerHandler for BmmMcpServer {
                     "type": "object",
                     "properties": { "id": { "type": "string" } },
                     "required": ["id"]
+                })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_create_plugin_scaffold",
+                "Scaffold a BMM plugin DRAFT: writes plugin.json (+ README) into <app-data>/plugin-drafts/<id>/. This is authoring, NOT installation — plugins can carry scripts, so the user zips the draft and installs it through the app's normal permission-gated flow. `manifest` needs at least { id, name }; optional: version, author, description, game, permissions[], tags[], website, modlist. Returns the draft folder path.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": {
+                        "manifest": { "type": "object", "description": "The plugin.json content ({ id, name, version?, author?, description?, game?, permissions?, tags?, website?, modlist? })." }
+                    },
+                    "required": ["manifest"]
                 })).unwrap()),
             ),
 
@@ -1112,6 +1130,11 @@ impl ServerHandler for BmmMcpServer {
                 "bmm_delete_schedule" => {
                     let id = match args.get("id").and_then(|v| v.as_str()) { Some(i) => i, None => return err_result("`id` is required") };
                     self.tool_delete_schedule(id)
+                }
+                "bmm_create_plugin_scaffold" => {
+                    let manifest = args.get("manifest").cloned().unwrap_or(serde_json::Value::Null);
+                    if !manifest.is_object() { return err_result("`manifest` must be a JSON object"); }
+                    self.tool_create_plugin_scaffold(manifest)
                 }
                 "bmm_run_schedule" => {
                     let id = args.get("id").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing id", None))?;

@@ -132,6 +132,7 @@ values.
 | `bmm_list_schedules` | — |  | List the saved Scheduling & automation tasks (works offline) |
 | `bmm_create_schedule` | `task` | ✓ | Create or update an automation (same shape the in-app builder saves; if/repeat/doWhile/forEach/switch blocks). Created DISABLED unless enabled:true |
 | `bmm_delete_schedule` | `id` | ✓ | Delete an automation |
+| `bmm_create_plugin_scaffold` | `manifest` | ✓ | Writes a plugin DRAFT (plugin.json + README) into plugin-drafts/ — authoring only, installation stays the app's normal flow |
 | `bmm_run_schedule` | `id`\* | app | Trigger a saved scheduler task by id in the running BMM app |
 | `bmm_run_benchmark` | `dataset` (sandbox/real), `size` (S/M/L/XL/CUSTOM), `mb`, `sources`, `profiles`, `mode` (manual/auto) | app | Launch a BMM benchmark in the running app |
 

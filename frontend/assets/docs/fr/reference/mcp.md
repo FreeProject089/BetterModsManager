@@ -134,6 +134,7 @@ donne les valeurs acceptées.
 | `bmm_list_schedules` | — |  | Liste les tâches de Planification & automatisation enregistrées (fonctionne hors ligne) |
 | `bmm_create_schedule` | `task` | ✓ | Crée ou met à jour une automatisation (même forme que le builder in-app ; blocs if/repeat/doWhile/forEach/switch). Créée DÉSACTIVÉE sans enabled:true |
 | `bmm_delete_schedule` | `id` | ✓ | Supprime une automatisation |
+| `bmm_create_plugin_scaffold` | `manifest` | ✓ | Écrit un BROUILLON de plugin (plugin.json + README) dans plugin-drafts/ — autorat seulement, l'installation reste le flux normal de l'app |
 | `bmm_run_schedule` | `id`\* | app | Déclenche une tâche du planificateur par son id, dans l'app BMM ouverte |
 | `bmm_run_benchmark` | `dataset` (sandbox/real), `size` (S/M/L/XL/CUSTOM), `mb`, `sources`, `profiles`, `mode` (manual/auto) | app | Lance un benchmark BMM dans l'app ouverte |
 
