@@ -60,6 +60,8 @@ const TOKENS: Token[] = [
     { key:'--bmm-titlebar-bg',   label:'Title bar (exact)', type:'color', group:'Background', desc:'Exact title-bar background (supports rgba for transparency).', mdn:'background' },
     { key:'--bmm-loader-bg',     label:'Boot / exit screen',type:'color', group:'Background', desc:'Background of the startup & close screen.', mdn:'background-color' },
     { key:'--bmm-app-bg-image',  label:'Wallpaper',         type:'image', group:'Background', desc:'A full-app background image (wallpaper). Pick or paste a URL.', mdn:'background-image' },
+    { key:'--bmm-app-bg-size',   label:'Wallpaper fit',     type:'size',  group:'Background', desc:'How the wallpaper fills the window: cover, contain, or a size like 800px. Applies to a video wallpaper too.', mdn:'background-size' },
+    { key:'--bmm-app-bg-position', label:'Wallpaper position', type:'size', group:'Background', desc:'Which part of the wallpaper stays visible: center, top, or a pair like 50% 20%. Applies to a video wallpaper too.', mdn:'background-position' },
     { key:'--bmm-app-bg-blur',   label:'Wallpaper blur',    type:'size',  group:'Background', desc:'Blur applied to the wallpaper, e.g. 8px.', mdn:'filter' },
     { key:'--bmm-app-bg-opacity',label:'Wallpaper opacity', type:'size',  group:'Background', desc:'Wallpaper opacity from 0 (hidden) to 1 (full).', mdn:'opacity' },
 
@@ -127,6 +129,8 @@ const TOKENS: Token[] = [
     // Intro / Outro (boot loader + close animation). The boot background lives in the
     // Background group as "Boot / exit screen" — it was duplicated here, so two rows edited
     // the same variable and both showed a "customised" badge.
+    { key:'--bmm-nav-logo-h',    label:'Sidebar logo height', type:'size', group:'Background', desc:'Height of the sidebar logo block when a theme supplies a logo image, e.g. 52px.', mdn:'height' },
+    { key:'--bmm-mascot-w',      label:'Tasky size',        type:'size',  group:'Intro & Outro', desc:'Width of the floating Tasky mascot, e.g. 110px.', mdn:'width' },
     { key:'--bmm-loader-img',    label:'Boot mascot image',    type:'image', group:'Intro & Outro', desc:'Image shown spinning while BMM starts (url or pick a file).', mdn:'background-image' },
     { key:'--bmm-intro-duration',label:'Intro/exit speed',     type:'size',  group:'Intro & Outro', desc:'Boot/exit fade duration, e.g. 0.65s. Lower = faster.', mdn:'transition' },
     { key:'--bmm-anim-speed',    label:'Animation speed',      type:'size',  group:'Intro & Outro', desc:'Global animation multiplier. 1 = normal, 0 = instant (disable all).', mdn:'animation' },

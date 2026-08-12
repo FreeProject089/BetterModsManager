@@ -125,6 +125,12 @@
     /* ── Images / Backgrounds ─────────────────────────────────────────────── */
     --bmm-app-bg-image: none;      /* set to url('...') for a wallpaper */
     --bmm-app-bg-size:  cover;
+    /* Per-asset placement. The assets themselves are pickable images; these decide
+       how each one SITS, which is the difference between a wallpaper that works
+       and one you have to re-crop outside the app. */
+    --bmm-app-bg-position: center;    /* center | top | bottom | 50% 20% … */
+    --bmm-nav-logo-h:      52px;      /* sidebar logo block height */
+    --bmm-mascot-w:        110px;     /* floating Tasky width */
     --bmm-app-bg-blur:  0px;       /* backdrop-filter blur on content above bg */
     --bmm-sidebar-bg-image: none;
     --bmm-nav-logo-url: none;      /* url(...) to replace the BMM logo */
@@ -259,7 +265,7 @@ body.bmm-no-anim *::after {
     inset: 0;
     background-image: var(--bmm-app-bg-image);
     background-size: var(--bmm-app-bg-size);
-    background-position: center;
+    background-position: var(--bmm-app-bg-position, center);
     background-repeat: no-repeat;
     filter: blur(var(--bmm-app-bg-blur));
     z-index: 0;

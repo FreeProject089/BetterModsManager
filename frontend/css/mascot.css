@@ -126,7 +126,7 @@ body.is-maximized #app-mascot-container {
 }
 
 #app-mascot {
-    width: 110px;
+    width: var(--bmm-mascot-w, 110px);
     height: auto;
     filter: drop-shadow(2px 4px 12px rgba(0,0,0,0.6));
     transform: rotate(-3deg);

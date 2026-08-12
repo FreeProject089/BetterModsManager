@@ -857,7 +857,10 @@ function _setVideoWallpaper(src: string | null): void {
         (v as any).playsInline = true;
         v.setAttribute('playsinline', '');
         v.setAttribute('aria-hidden', 'true');
-        v.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;object-fit:cover;'
+        // object-fit/position mirror the image layer's size/position tokens, so the
+        // same two controls place an image and a video identically.
+        v.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;'
+            + 'object-fit:var(--bmm-app-bg-size, cover);object-position:var(--bmm-app-bg-position, center);'
             + 'z-index:0;pointer-events:none;'
             + 'filter:blur(var(--bmm-app-bg-blur));opacity:var(--bmm-app-bg-opacity, 0.3);';
         host.insertBefore(v, host.firstChild);

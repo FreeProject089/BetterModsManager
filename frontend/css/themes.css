@@ -703,7 +703,7 @@ body.bmm-has-nav-logo .sidebar-brand .brand::before {
     content: '';
     display: block;
     width: 100%;
-    height: 52px;
+    height: var(--bmm-nav-logo-h, 52px);
     background-image: var(--bmm-nav-logo-url);
     background-size: contain;
     background-position: center;
