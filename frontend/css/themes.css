@@ -644,3 +644,51 @@ body.bte-picking #bte-elov, body.bte-picking #bte-elov * { cursor: auto !importa
 }
 .bte-file-menu[hidden] { display: none; }
 .bte-file-menu .btn { justify-content: flex-start; width: 100%; }
+
+/* ── Theme editor dock mode ──────────────────────────────────────────────────
+   body.bte-docked pins the editor to the window's right edge as a full-height
+   column (same shape as the tutorial dock); the app shell is padded aside by
+   the engine. The inline float geometry is cleared by _bteSetDock, so these
+   rules own the layout while docked. */
+body.bte-docked #bmm-theme-editor {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: auto;
+    width: var(--bte-dock-w, 430px);
+    height: auto;
+    min-height: 0;
+    border-radius: 0;
+    border-top-width: 1px;
+    border-left: 1px solid var(--bmm-s10);
+    resize: none;
+}
+body.bte-docked #bmm-theme-editor .bte-header { cursor: default; }
+#bte-dock.active { color: var(--bmm-accent); }
+
+/* The dock's width grip — same affordance as the tutorial dock's. */
+.bte-dock-resize {
+    display: none;
+    position: absolute;
+    top: 0; bottom: 0; left: 0;
+    width: 12px;
+    cursor: ew-resize;
+    z-index: 5;
+}
+body.bte-docked #bmm-theme-editor .bte-dock-resize { display: block; }
+.bte-dock-resize::after {
+    content: '';
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 5px; height: 46px;
+    border-radius: 999px;
+    background: var(--bmm-text-muted);
+    opacity: 0.5;
+    transition: background 0.15s, opacity 0.15s;
+}
+.bte-dock-resize:hover::after, .bte-dock-resize.dragging::after {
+    background: var(--bmm-accent);
+    opacity: 1;
+}

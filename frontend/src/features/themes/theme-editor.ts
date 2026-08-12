@@ -231,14 +231,82 @@ export function initThemeEditor(): void {
 export function openEditor(): void {
     if (!_panel) buildPanel();
     _panel!.style.display = 'flex';
+    if (localStorage.getItem(BTE_DOCK_KEY) === 'right') _bteSetDock(true);
     _draft = JSON.parse(JSON.stringify(getActiveTheme() || {}));
     _origTheme = getActiveTheme() ? JSON.parse(JSON.stringify(getActiveTheme())) : null;
     renderTab(_tab);
     if (!_draft.custom_elements) _draft.custom_elements = [];
 }
 
+// ── Dock mode: the editor as a side panel ────────────────────────────────────
+// Field ask: "qu'on puisse aussi le passer en mode sidebar". Same shape as the
+// tutorial dock: a body class, the app shell padded aside, width draggable and
+// persisted. Float geometry is untouched — undocking restores it via applyGeom().
+const BTE_DOCK_KEY  = 'bmm.themeEditor.dock';
+const BTE_DOCKW_KEY = 'bmm.themeEditor.dockW';
+
+function _bteDockW(): number {
+    const w = parseInt(localStorage.getItem(BTE_DOCKW_KEY) || '', 10);
+    return Number.isFinite(w) ? Math.max(340, Math.min(w, Math.round(innerWidth * 0.6))) : 430;
+}
+
+function _bteShellPad(w: number | null): void {
+    const shell = document.querySelector('.app-shell') as HTMLElement | null;
+    if (shell) shell.style.paddingRight = w ? `${w}px` : '';
+}
+
+function _bteDocked(): boolean { return document.body.classList.contains('bte-docked'); }
+
+function _bteSetDock(on: boolean): void {
+    if (!_panel) return;
+    document.body.classList.toggle('bte-docked', on);
+    localStorage.setItem(BTE_DOCK_KEY, on ? 'right' : 'float');
+    if (on) {
+        const w = _bteDockW();
+        document.body.style.setProperty('--bte-dock-w', `${w}px`);
+        // The inline float geometry would beat any stylesheet — clear it; the CSS
+        // dock rules take over. Float geometry itself survives in localStorage.
+        Object.assign(_panel.style, { position: '', left: '', top: '', width: '', height: '', resize: '' });
+        _bteShellPad(w);
+    } else {
+        _bteShellPad(null);
+        document.body.style.removeProperty('--bte-dock-w');
+        applyGeom();
+        _panel.style.display = 'flex';
+    }
+    const btn = _panel.querySelector('#bte-dock');
+    btn?.classList.toggle('active', on);
+}
+
+function _btePlantDockResize(panel: HTMLElement): void {
+    if (panel.querySelector('.bte-dock-resize')) return;
+    const grip = document.createElement('div');
+    grip.className = 'bte-dock-resize';
+    grip.addEventListener('mousedown', (e: MouseEvent) => {
+        if (!_bteDocked()) return;
+        e.preventDefault();
+        grip.classList.add('dragging');
+        const move = (me: MouseEvent) => {
+            const w = Math.max(340, Math.min(innerWidth - me.clientX, Math.round(innerWidth * 0.6)));
+            document.body.style.setProperty('--bte-dock-w', `${w}px`);
+            _bteShellPad(w);
+        };
+        const up = () => {
+            grip.classList.remove('dragging');
+            document.removeEventListener('mousemove', move);
+            document.removeEventListener('mouseup', up);
+            const w = parseInt(getComputedStyle(document.body).getPropertyValue('--bte-dock-w'), 10);
+            if (Number.isFinite(w)) localStorage.setItem(BTE_DOCKW_KEY, String(w));
+        };
+        document.addEventListener('mousemove', move);
+        document.addEventListener('mouseup', up);
+    });
+    panel.appendChild(grip);
+}
+
 function closeEditor(): void {
     _panel && (_panel.style.display = 'none');
+    if (_bteDocked()) { document.body.classList.remove('bte-docked'); _bteShellPad(null); }
     stopPick();
 }
 
@@ -251,6 +319,7 @@ function buildPanel(): void {
             <div class="bte-logo">${ICON.palette(17)}</div>
             <span class="bte-title">${t('themes.editorTitle')||'Theme Editor'}</span>
             <div class="bte-header-actions">
+                <button class="bte-tool" id="bte-dock" data-tooltip="${t('themes.dockToggle')||'Dock to the side / float'}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="15" y1="4" x2="15" y2="20"/></svg></button>
                 <button class="bte-tool" id="bte-pick-token" data-tooltip="${t('themes.pickElement')||'Pick element to edit token'}">${ICON.eyedropper(14)}</button>
                 <button class="bte-tool" id="bte-reset" data-tooltip="${t('common.reset')||'Reset'}">${ICON.reset(13)}</button>
                 <button class="bte-close" id="bte-close">${ICON.close(14)}</button>
@@ -298,6 +367,8 @@ function buildPanel(): void {
     if (!_ro) { _ro = new ResizeObserver(() => saveGeom()); _ro.observe(_panel!); }
 
     _panel.querySelector('#bte-close')!.addEventListener('click', closeEditor);
+    _panel.querySelector('#bte-dock')!.addEventListener('click', () => _bteSetDock(!_bteDocked()));
+    _btePlantDockResize(_panel);
 
     // The File menu: opens upward (the footer is at the modal's bottom), closes on any
     // choice or outside click.
@@ -2089,6 +2160,9 @@ function applyGeom(): void {
 
 function saveGeom(): void {
     if (!_panel) return;
+    // Docked size is the dock's own preference — never let it overwrite the
+    // float geometry (the ResizeObserver fires for dock width drags too).
+    if (_bteDocked()) return;
     const r = _panel.getBoundingClientRect();
     localStorage.setItem(OVL_KEY, JSON.stringify({ left:r.left, top:r.top, width:r.width, height:r.height }));
 }
@@ -2097,6 +2171,7 @@ function makeDraggable(panel: HTMLElement, handle: HTMLElement): void {
     if (!handle || (handle as any)._bteDrag) return;
     (handle as any)._bteDrag = true;
     handle.addEventListener('mousedown', (e: MouseEvent) => {
+        if (_bteDocked()) return;                    // a dock does not drag
         if ((e.target as HTMLElement).closest('button,input,select,textarea')) return;
         e.preventDefault();
         const r = panel.getBoundingClientRect();
