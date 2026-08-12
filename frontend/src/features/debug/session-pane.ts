@@ -206,6 +206,42 @@ async function renderPayload(host: HTMLElement) {
     if (truncated) text = text.slice(0, PREVIEW_LIMIT);
 
     host.append(heading(t('dev.session.exact') || 'Exactly what would be sent'));
+
+    // An empty queue rendered as a bare "[]", which reads as "this pane is broken"
+    // rather than "there is nothing to send". The whole point here is a privacy
+    // claim you can READ, so an empty store has to say WHY it is empty — and still
+    // show the shape an event would take, or the claim is unverifiable precisely
+    // when it is most reassuring.
+    if (count === 0) {
+        const why = document.createElement('div');
+        why.style.cssText = 'padding:8px 0 4px;font-size:11px;line-height:1.6;color:var(--text-secondary,#9aa4b5)';
+        why.textContent = consent === false
+            ? (t('dev.session.emptyDeclined') || 'Nothing is stored: you declined telemetry, so no event is ever recorded.')
+            : consent === null
+                ? (t('dev.session.emptyUnasked') || 'Nothing is stored: telemetry has not been accepted, and BMM records nothing until it is.')
+                : (t('dev.session.emptyNone') || 'Telemetry is on, but nothing has been recorded yet this session.');
+        host.append(why);
+
+        const shapeLabel = document.createElement('div');
+        shapeLabel.style.cssText = 'margin-top:10px;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted,#7c8698)';
+        shapeLabel.textContent = t('dev.session.shape') || 'The shape an event would have';
+        host.append(shapeLabel);
+
+        const shape = document.createElement('pre');
+        shape.style.cssText = 'margin:6px 0 0;padding:8px;background:rgba(0,0,0,.3);border:1px solid var(--debug-border,#2a3242);border-radius:6px;font-size:10px;white-space:pre-wrap;color:var(--text-muted,#7c8698)';
+        // Written out rather than sampled, so it is honest even with an empty store:
+        // these are the only fields the pipeline ever fills.
+        shape.textContent = JSON.stringify({
+            event: 'view_opened',
+            at: '2026-08-13T10:00:00Z',
+            app_version: '1.0.0',
+            os: 'windows',
+            locale: 'fr-FR',
+            props: { view: 'library' },
+        }, null, 2);
+        host.append(shape);
+        return;
+    }
     if (truncated) {
         const note = document.createElement('div');
         note.style.cssText = 'margin-bottom:6px;color:var(--warning,#f59e0b)';

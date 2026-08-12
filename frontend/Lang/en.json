@@ -6979,5 +6979,9 @@
   "iconpack.auto": "Brand colour",
   "iconpack.autoTip": "Use each brand's official colour",
   "iconpack.tint": "Colour",
-  "iconpack.tintTip": "Tint the icon"
+  "iconpack.tintTip": "Tint the icon",
+  "dev.session.emptyDeclined": "Nothing is stored: you declined telemetry, so no event is ever recorded.",
+  "dev.session.emptyUnasked": "Nothing is stored: telemetry has not been accepted, and BMM records nothing until it is.",
+  "dev.session.emptyNone": "Telemetry is on, but nothing has been recorded yet this session.",
+  "dev.session.shape": "The shape an event would have"
 }
