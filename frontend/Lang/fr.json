@@ -6973,5 +6973,9 @@
   "navedit.tplReplaceTitle": "Remplacer le code actuel ?",
   "navedit.tplReplaceDesc": "Le modèle écrase le HTML, le CSS et le JS ci-dessous.",
   "themes.dockNoRoom": "Fenêtre trop étroite pour ancrer — reste flottant",
-  "i18n.dockNoRoom": "Fenêtre trop étroite pour ancrer — reste en fenêtre"
+  "i18n.dockNoRoom": "Fenêtre trop étroite pour ancrer — reste en fenêtre",
+  "iconpack.auto": "Couleur de la marque",
+  "iconpack.autoTip": "Utiliser la couleur officielle de chaque marque",
+  "iconpack.tint": "Couleur",
+  "iconpack.tintTip": "Teinter l'icône"
 }

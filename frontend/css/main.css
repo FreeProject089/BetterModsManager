@@ -15931,3 +15931,20 @@ body.i18nsb-docked #modal-i18n-sandbox .i18n-sb-header-actions {
    dock, where the panel is opaque by construction. */
 body.i18nsb-docked #modal-i18n-sandbox .i18n-ovl-opacity { display: none; }
 body.i18nsb-docked #modal-i18n-sandbox .i18n-sb-progress { max-width: 100%; }
+
+/* ── Icon picker: the colour row ─────────────────────────────────────────────
+   The colour is part of the answer, not a separate setting — it rides the ref the
+   caller stores, so it survives every share the icon does. */
+.ipk-colour { display: flex; align-items: center; gap: 12px; }
+.ipk-auto, .ipk-tint {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 11px; color: var(--text-muted); cursor: pointer; white-space: nowrap;
+}
+.ipk-auto input, .ipk-tint input { accent-color: var(--accent); cursor: pointer; margin: 0; }
+.ipk-auto:has(input:checked), .ipk-tint:has(input:checked) { color: var(--accent); }
+#ipk-tint {
+    width: 26px; height: 26px; padding: 0; border: none; border-radius: 6px;
+    background: transparent; cursor: pointer;
+    transition: opacity 0.15s;
+}
+#ipk-tint:disabled { opacity: 0.3; cursor: not-allowed; }

@@ -6975,5 +6975,9 @@
   "navedit.tplReplaceTitle": "Replace the current code?",
   "navedit.tplReplaceDesc": "The template overwrites the HTML, CSS and JS below.",
   "themes.dockNoRoom": "Window too narrow to dock — staying floating",
-  "i18n.dockNoRoom": "Window too narrow to dock — staying a window"
+  "i18n.dockNoRoom": "Window too narrow to dock — staying a window",
+  "iconpack.auto": "Brand colour",
+  "iconpack.autoTip": "Use each brand's official colour",
+  "iconpack.tint": "Colour",
+  "iconpack.tintTip": "Tint the icon"
 }

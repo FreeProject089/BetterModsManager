@@ -52,6 +52,26 @@ function _loadSimpleShard(slug) {
     }
     return _shardP[k];
 }
+// A ref may carry its colour: "lucide:star|#22c55e", or "si:github|auto" for the
+// brand's official hex (Simple Icons ships one per brand). Keeping it IN the string
+// is what preserves the property the whole design rests on — an icon is data, so it
+// travels through every share path (profiles, tags, repos) with no extra plumbing.
+function splitRef(ref) {
+    const i = ref.lastIndexOf('|');
+    // A data: URI can contain '|', and it carries no colour — never split those.
+    if (i < 0 || ref.startsWith('data:'))
+        return { base: ref, colour: null };
+    return { base: ref.slice(0, i), colour: ref.slice(i + 1) || null };
+}
+/** Attach (or clear) a colour on a ref. `'auto'` means the brand's own hex. */
+export function withIconColour(ref, colour) {
+    const { base } = splitRef(ref);
+    return colour ? `${base}|${colour}` : base;
+}
+/** The colour carried by a ref, if any. */
+export function iconColourOf(ref) {
+    return splitRef(ref).colour;
+}
 /** Is this string an icon-pack ref this module can render? */
 export function isPackIcon(ref) {
     return typeof ref === 'string'
@@ -59,10 +79,11 @@ export function isPackIcon(ref) {
 }
 /** Ensure the pack a ref needs is in memory (no-op for data: URIs). */
 export async function ensurePackFor(ref) {
-    if (ref.startsWith('lucide:'))
+    const { base } = splitRef(ref);
+    if (base.startsWith('lucide:'))
         await _loadLucide();
-    else if (ref.startsWith('si:'))
-        await _loadSimpleShard(ref.slice(3));
+    else if (base.startsWith('si:'))
+        await _loadSimpleShard(base.slice(3));
 }
 /** Warm every pack a list of refs needs. The one place that knows how to do this,
  *  so a new tag-rendering surface is one call instead of a copied incantation. */
@@ -91,6 +112,18 @@ export function renderTagChip(tag, opts = {}) {
  *  ensurePackFor() (or the picker, which loads eagerly) beforehand; a miss while
  *  the pack is still loading renders '' and the next re-render finds it. */
 export function renderPackIcon(ref, size = 16, color) {
+    // An explicit `color` argument still wins — a caller that needs the glyph to
+    // match its surroundings (a tag chip tinting to the tag's colour) must be able
+    // to say so. The ref's own colour is the default, not a lock.
+    const parsed = splitRef(ref);
+    if (parsed.colour) {
+        ref = parsed.base;
+        if (!color) {
+            color = parsed.colour === 'auto'
+                ? `#${_simple?.[ref.slice(3)]?.h || '888888'}` // the brand's official hex
+                : parsed.colour;
+        }
+    }
     if (ref.startsWith('data:image/')) {
         return `<img src="${escAttr(ref)}" alt="" style="width:${size}px;height:${size}px;border-radius:3px;object-fit:cover" />`;
     }
@@ -147,6 +180,15 @@ export function openIconPicker(opts = {}) {
                 <div class="ipk-grid" id="ipk-grid"></div>
                 <div class="ipk-foot">
                     <span class="ipk-count"><b id="ipk-count"></b> ${escHtml(t('iconpack.available') || 'available')}</span>
+                    <div class="ipk-colour">
+                        <label class="ipk-auto" id="ipk-auto-wrap" title="${escAttr(t('iconpack.autoTip') || 'Use each brand’s official colour')}">
+                            <input type="checkbox" id="ipk-auto"> ${escHtml(t('iconpack.auto') || 'Brand colour')}
+                        </label>
+                        <label class="ipk-tint" title="${escAttr(t('iconpack.tintTip') || 'Tint the icon')}">
+                            <input type="checkbox" id="ipk-tint-on"> ${escHtml(t('iconpack.tint') || 'Colour')}
+                        </label>
+                        <input type="color" id="ipk-tint" value="#3b82f6" disabled>
+                    </div>
                     <button class="btn btn-ghost btn-sm" id="ipk-more" style="display:none">${t('iconpack.more') || 'Show more'}</button>
                 </div>
             </div>`;
@@ -170,9 +212,9 @@ export function openIconPicker(opts = {}) {
                 || (src === 'si' && (_simple?.[n]?.t || '').toLowerCase().includes(q)));
         };
         const cellHtml = (n) => {
-            const ref = `${src}:${n}`;
+            const ref = withIconColour(`${src}:${n}`, chosenColour());
             const label = src === 'si' ? (_simple?.[n]?.t || n) : n;
-            return `<button type="button" class="ipk-cell" data-ref="${escAttr(ref)}" title="${escAttr(label)}">${renderPackIcon(ref, 20)}<span class="ipk-name">${escHtml(label)}</span></button>`;
+            return `<button type="button" class="ipk-cell" data-ref="${escAttr(`${src}:${n}`)}" title="${escAttr(label)}">${renderPackIcon(ref, 20)}<span class="ipk-name">${escHtml(label)}</span></button>`;
         };
         const render = () => {
             const all = names();
@@ -180,10 +222,33 @@ export function openIconPicker(opts = {}) {
             countEl.textContent = `${all.length}`;
             moreBtn.style.display = all.length > shown ? '' : 'none';
         };
+        // The colour is part of the answer, not a separate setting: it rides the ref
+        // the caller stores, so it survives every share the icon does.
+        const autoBox = overlay.querySelector('#ipk-auto');
+        const tintOn = overlay.querySelector('#ipk-tint-on');
+        const tint = overlay.querySelector('#ipk-tint');
+        const chosenColour = () => {
+            if (src === 'si' && autoBox.checked)
+                return 'auto';
+            return tintOn.checked ? tint.value : null;
+        };
+        const syncColourUi = () => {
+            tint.disabled = !tintOn.checked;
+            overlay.querySelector('#ipk-auto-wrap').style.display = src === 'si' ? '' : 'none';
+            if (src === 'si' && autoBox.checked) {
+                tintOn.checked = false;
+                tint.disabled = true;
+            }
+            render();
+        };
+        autoBox.addEventListener('change', syncColourUi);
+        tintOn.addEventListener('change', () => { if (tintOn.checked)
+            autoBox.checked = false; syncColourUi(); });
+        tint.addEventListener('input', () => render());
         grid.addEventListener('click', (e) => {
             const cell = e.target.closest('.ipk-cell');
             if (cell?.dataset.ref)
-                done(cell.dataset.ref);
+                done(withIconColour(cell.dataset.ref, chosenColour()));
         });
         // Append the new page instead of re-rendering everything: a full rebuild
         // made each successive click slower (quadratic over 15 pages of brands).
@@ -205,7 +270,7 @@ export function openIconPicker(opts = {}) {
                 grid.innerHTML = `<div class="ipk-loading">${escHtml(t('common.loading') || 'Loading…')}</div>`;
                 await _loadSimpleAll();
             }
-            render();
+            syncColourUi();
         }));
         overlay.querySelector('#ipk-upload').addEventListener('change', (e) => {
             const file = e.target.files?.[0];
@@ -225,7 +290,7 @@ export function openIconPicker(opts = {}) {
             src = 'si';
             overlay.querySelectorAll('.ipk-tab').forEach(x => x.classList.toggle('active', x.dataset.src === 'si'));
         }
-        void _loadLucide().then(() => (src === 'si' ? _loadSimpleAll() : Promise.resolve())).then(() => { render(); search.focus(); });
+        void _loadLucide().then(() => (src === 'si' ? _loadSimpleAll() : Promise.resolve())).then(() => { syncColourUi(); search.focus(); });
     });
 }
 //# sourceMappingURL=icon-pack.js.map
