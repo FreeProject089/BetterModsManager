@@ -70,12 +70,34 @@ that feature fails.
 | `https://bettercommunity.ch/api/assets/contributors.json` | The credits list | The Credits screen shows the bundled copy |
 | `https://bettercommunity.ch/` | The site itself | Blog, account and community buttons lead nowhere |
 | `https://telemetry.bettercommunity.ch/batch/` | Accepts batched telemetry `POST`s | Nothing user-facing. Telemetry is opt-in and dropped on failure |
+| `https://bettercommunity.ch/api/link/request` · `/api/link/status` | The account-link handshake: request a code, then poll whether it was entered | The identity card in Settings says BetterCommunity is unreachable; BMM keeps working locally |
+| `https://bettercommunity.ch/v1/notifications` | This account's notifications, for the notification centre | The centre still holds everything BMM itself said; only the BCWEB source goes quiet |
 
 The collector and its **public** ingest key (`analytics_key`, `bmm_pk_…`) are entries in
 `links.json` like everything else, so the endpoint can be moved and the key rotated from the admin
 panel without a release. They were missing from the file until now and lived only in the
 compiled-in fallback, which meant neither could change without shipping a new BMM. The private
 admin key never ships — it exists only on the telemetry server.
+
+### The one authenticated call
+
+`/v1/notifications` is the only URL in this file BMM sends a credential to — an API key with
+the `notifications:read` scope, as `Authorization: Bearer …`.
+
+Three things about it are deliberate and worth not undoing:
+
+- **The key never reaches the webview.** It lives in app-data and is read only by
+  `bcweb_notifications` in `commands/security.rs`. The frontend can store one, ask whether one
+  exists, and clear it — it cannot read it. A compromised page cannot send what it was never given.
+- **The URL is assembled in Rust** from a base, not passed in whole. Otherwise that command would
+  be an oracle that attaches your Authorization header to any host that asks for it.
+- **`/api/link/status` must never carry the key.** It takes only a creator id and no
+  authentication, and a creator id is something users hand to repo owners for whitelisting. A
+  secret returned there would go straight to the people it exists to be kept from.
+
+Polling is every ten minutes and sends `since`, so the server returns only what arrived after the
+newest entry already held. A `401`/`403` is reported as a revoked or expired key and stops the
+poller, rather than retrying against a credential that will never work again.
 
 Test mode is read once at startup from `app.cfg` (`BCTestMode` / `BCTestBase`), which lets these
 point at a local instance without touching the code.
