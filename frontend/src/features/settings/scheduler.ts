@@ -40,6 +40,15 @@ type Step = (
     | { kind: 'forEach'; source: 'mods' | 'enabledMods' | 'disabledMods' | 'profiles' | 'modpacks' | 'themes'; maxIters: number; everySec: number; steps: Step[] }
     // Switch: evaluate cases in order, run the FIRST whose condition holds, else default.
     | { kind: 'switch'; cases: { condition: Condition; steps: Step[] }[]; default: Step[] }
+    // Try/catch: run `steps`; if anything in them fails, run `onError` INSTEAD of
+    // aborting the whole task. Without it, one unreachable path or one missing file
+    // killed an eight-step automation on step two.
+    | { kind: 'try'; steps: Step[]; onError: Step[] }
+    // Loop signals, and a clean end for the whole task. These are what make forEach
+    // usable in practice: "for each mod, try to verify; on error notify and continue".
+    | { kind: 'break' }
+    | { kind: 'continue' }
+    | { kind: 'stop' }
     // Editor-only flags shared by every kind: collapsed (folded in the editor) and
     // disabled (kept in the workflow but skipped at run time — like commenting out).
 ) & { collapsed?: boolean; disabled?: boolean };
@@ -86,6 +95,7 @@ function normalizeSteps(steps: any[]): Step[] {
         if (!st || typeof st !== 'object') continue;
         if (st.kind === 'if') { st.then = normalizeSteps(st.then); st.else = normalizeSteps(st.else); }
         else if (st.kind === 'repeat' || st.kind === 'forEach') { st.steps = normalizeSteps(st.steps); }
+        else if (st.kind === 'try') { st.steps = normalizeSteps(st.steps); st.onError = normalizeSteps(st.onError); }
         else if (st.kind === 'switch') {
             st.cases = Array.isArray(st.cases) ? st.cases : [];
             for (const c of st.cases) {
@@ -301,6 +311,29 @@ async function runTask(task: Task): Promise<void> {
     renderScheduleList();
 }
 
+/** Non-local control flow. Thrown, because a step can sit at any depth and the
+ *  loop that must react to it is an unknown number of frames up. Never surfaces
+ *  as an error: every construct that can consume one does, and the task runner
+ *  treats a stray one as a clean end. */
+class FlowSignal {
+    constructor(public kind: 'break' | 'continue') {}
+}
+
+/** Run a loop body, translating break/continue into the loop's own control flow.
+ *  Returns false when the loop must end. */
+async function runLoopBody(steps: Step[], task: Task, ctx: Record<string, number>): Promise<boolean> {
+    try {
+        await runSteps(steps, task, ctx);
+    } catch (e) {
+        if (e instanceof FlowSignal) {
+            if (e.kind === 'break') return false;
+            if (e.kind === 'continue') return true;
+        }
+        throw e;                       // a real failure, or a `stop` for the runner
+    }
+    return true;
+}
+
 async function runSteps(steps: Step[], task: Task, ctx: Record<string, number>): Promise<void> {
     for (const step of steps || []) {
         if (step.disabled) continue;   // switched off in the editor — skipped, not deleted
@@ -319,13 +352,13 @@ async function runSteps(steps: Step[], task: Task, ctx: Record<string, number>):
             if (step.mode === 'times') {
                 const times = Math.min(Math.max(0, step.times || 1), max);
                 for (let n = 0; n < times; n++) {
-                    await runSteps(step.steps, task, ctx);
+                    if (!await runLoopBody(step.steps, task, ctx)) break;
                     if (gap) await new Promise(r => setTimeout(r, gap));
                 }
             } else if (step.mode === 'doWhile') {
                 // do-while: the body runs FIRST, then the condition decides another lap.
                 for (let n = 0; n < max; n++) {
-                    await runSteps(step.steps, task, ctx);
+                    if (!await runLoopBody(step.steps, task, ctx)) break;
                     const ok = step.condition ? await evalCondition(step.condition, ctx) : false;
                     if (!ok) break;
                     if (gap) await new Promise(r => setTimeout(r, gap));
@@ -335,7 +368,7 @@ async function runSteps(steps: Step[], task: Task, ctx: Record<string, number>):
                 for (let n = 0; n < max; n++) {
                     const ok = step.condition ? await evalCondition(step.condition, ctx) : true;
                     if ((step.mode === 'while') ? !ok : ok) break;
-                    await runSteps(step.steps, task, ctx);
+                    if (!await runLoopBody(step.steps, task, ctx)) break;
                     if (gap) await new Promise(r => setTimeout(r, gap));
                 }
             }
@@ -346,9 +379,24 @@ async function runSteps(steps: Step[], task: Task, ctx: Record<string, number>):
             for (const item of items.slice(0, max)) {
                 // The body runs on a per-item COPY with {item.*} placeholders resolved —
                 // actions stay ordinary actions, they just receive concrete values.
-                await runSteps(substituteItem(step.steps, item), task, ctx);
+                if (!await runLoopBody(substituteItem(step.steps, item), task, ctx)) break;
                 if (gap) await new Promise(r => setTimeout(r, gap));
             }
+        } else if (step.kind === 'try') {
+            try {
+                await runSteps(step.steps, task, ctx);
+            } catch (e) {
+                if (e instanceof FlowSignal) throw e;      // signals pass through
+                await runSteps(step.onError, task, ctx);
+            }
+        } else if (step.kind === 'break') {
+            throw new FlowSignal('break');
+        } else if (step.kind === 'continue') {
+            throw new FlowSignal('continue');
+        } else if (step.kind === 'stop') {
+            // Reuse the runner's existing clean-exit path (_StopTask) instead of a
+            // second stop mechanism — it already reports the task as successful.
+            throw new _StopTask(t('sched.stopHint') || 'stopped by a Stop step');
         } else if (step.kind === 'switch') {
             let ran = false;
             for (const c of step.cases || []) {
@@ -926,6 +974,7 @@ function stepCount(steps: Step[]): number {
         if (s.kind === 'if') n += stepCount(s.then) + stepCount(s.else);
         else if (s.kind === 'repeat' || s.kind === 'forEach') n += stepCount(s.steps);
         else if (s.kind === 'switch') n += stepCount(s.default) + (s.cases || []).reduce((acc, c) => acc + stepCount(c.steps), 0);
+        else if (s.kind === 'try') n += stepCount(s.steps) + stepCount(s.onError);
     }
     return n;
 }
@@ -1002,6 +1051,7 @@ function _stepHasContent(step: Step): boolean {
     if (step.kind === 'if') return ((step.then?.length || 0) + (step.else?.length || 0)) > 0;
     if (step.kind === 'repeat' || step.kind === 'forEach') return (step.steps?.length || 0) > 0;
     if (step.kind === 'switch') return ((step.default?.length || 0) + (step.cases || []).reduce((a, c) => a + (c.steps?.length || 0), 0)) > 0;
+    if (step.kind === 'try') return ((step.steps?.length || 0) + (step.onError?.length || 0)) > 0;
     return false;
 }
 /** Delete a step — confirms first if it contains inner steps, snapshots for undo. */
@@ -1437,6 +1487,27 @@ function renderStepsEditor(host: HTMLElement, steps: Step[], depth = 0): void {
             renderStepsEditor(block.querySelector('.sched-fe-body') as HTMLElement, step.steps, depth + 1);
             renderAddRow(block.querySelector('.sched-fe-add') as HTMLElement, step.steps, depth + 1, host, steps, depth);
             _wireFold(block, step);
+        } else if (step.kind === 'try') {
+            block.innerHTML = `<div class="sched-step-head">${_foldBtn(step)}${_kindTile('try')}
+                    <span class="sched-step-tag sched-if">${t('sched.try') || 'TRY'}</span>
+                    <span style="font-size:11px;color:var(--text-muted)">${t('sched.tryHint') || 'if anything below fails, run ON ERROR instead of aborting the task'}</span></div>
+                <div class="sched-branch"><div class="sched-branch-label">${t('sched.tryDo') || 'TRY'}</div><div class="sched-try-body"></div><div class="sched-try-add"></div></div>
+                <div class="sched-branch"><div class="sched-branch-label">${t('sched.tryCatch') || 'ON ERROR'}</div><div class="sched-catch-body"></div><div class="sched-catch-add"></div></div>`;
+            renderStepsEditor(block.querySelector('.sched-try-body') as HTMLElement, step.steps, depth + 1);
+            renderStepsEditor(block.querySelector('.sched-catch-body') as HTMLElement, step.onError, depth + 1);
+            renderAddRow(block.querySelector('.sched-try-add') as HTMLElement, step.steps, depth + 1, host, steps, depth);
+            renderAddRow(block.querySelector('.sched-catch-add') as HTMLElement, step.onError, depth + 1, host, steps, depth);
+            _wireFold(block, step);
+        } else if (step.kind === 'break' || step.kind === 'continue' || step.kind === 'stop') {
+            const label = step.kind === 'break' ? (t('sched.break') || 'BREAK')
+                        : step.kind === 'continue' ? (t('sched.continue') || 'CONTINUE')
+                        : (t('sched.stop') || 'STOP');
+            const hint = step.kind === 'break' ? (t('sched.breakHint') || 'leave the loop now')
+                       : step.kind === 'continue' ? (t('sched.continueHint') || 'skip to the next iteration')
+                       : (t('sched.stopHint') || 'end the whole task, successfully');
+            block.innerHTML = `<div class="sched-step-head">${_kindTile('signal')}
+                    <span class="sched-step-tag sched-repeat">${label}</span>
+                    <span style="font-size:11px;color:var(--text-muted)">${hint}</span></div>`;
         } else if (step.kind === 'switch') {
             block.innerHTML = `<div class="sched-step-head">${_foldBtn(step)}${_kindTile('switch')}
                     <span class="sched-step-tag sched-if">${t('sched.switch') || 'SWITCH'}</span>
@@ -1567,7 +1638,11 @@ function renderAddRow(host: HTMLElement, steps: Step[], depth = 0, rerenderHost?
         <button class="btn btn-xs sched-chip sched-add-wait" data-add="waitFor" data-tooltip="${escAttr(t('sched.legendWait') || '')}">${KIND_ICON.waitFor} ${t('sched.addWaitFor') || 'Wait until'}</button>
         <button class="btn btn-xs sched-chip sched-add-delay" data-add="delay" data-tooltip="${escAttr(t('sched.legendDelay') || '')}">${KIND_ICON.delay} ${t('sched.addDelay') || 'Pause'}</button>
         <button class="btn btn-xs sched-chip sched-add-foreach" data-add="forEach" data-tooltip="${escAttr(t('sched.legendForEach') || '')}">${KIND_ICON.forEach} ${t('sched.addForEach') || 'For each'}</button>
-        <button class="btn btn-xs sched-chip sched-add-switch" data-add="switch" data-tooltip="${escAttr(t('sched.legendSwitch') || '')}">${KIND_ICON.switch} ${t('sched.addSwitch') || 'Switch'}</button>`;
+        <button class="btn btn-xs sched-chip sched-add-switch" data-add="switch" data-tooltip="${escAttr(t('sched.legendSwitch') || '')}">${KIND_ICON.switch} ${t('sched.addSwitch') || 'Switch'}</button>
+        <button class="btn btn-xs sched-chip sched-add-try" data-add="try" data-tooltip="${escAttr(t('sched.legendTry') || '')}">${KIND_ICON.try} ${t('sched.addTry') || 'Try / on error'}</button>
+        <button class="btn btn-xs sched-chip sched-add-break" data-add="break" data-tooltip="${escAttr(t('sched.legendBreak') || '')}">${KIND_ICON.signal} ${t('sched.addBreak') || 'Break'}</button>
+        <button class="btn btn-xs sched-chip sched-add-continue" data-add="continue" data-tooltip="${escAttr(t('sched.legendContinue') || '')}">${KIND_ICON.signal} ${t('sched.addContinue') || 'Continue'}</button>
+        <button class="btn btn-xs sched-chip sched-add-stop" data-add="stop" data-tooltip="${escAttr(t('sched.legendStop') || '')}">${KIND_ICON.signal} ${t('sched.addStop') || 'Stop'}</button>`;
     const rerender = () => {
         // Preserve the modal's scroll position so adding a step deep in a big task
         // doesn't yank the view back to the top (a real annoyance with lots of content).
@@ -1590,6 +1665,8 @@ function _makeStep(kind: string): Step {
     if (kind === 'repeat') return { kind: 'repeat', mode: 'while', condition: { type: 'always', params: {} }, maxIters: 100, everySec: 1, steps: [] } as Step;
     if (kind === 'forEach') return { kind: 'forEach', source: 'enabledMods', maxIters: 100, everySec: 0, steps: [] } as Step;
     if (kind === 'switch') return { kind: 'switch', cases: [{ condition: { type: 'always', params: {} }, steps: [] }], default: [] } as Step;
+    if (kind === 'try') return { kind: 'try', steps: [], onError: [] } as Step;
+    if (kind === 'break' || kind === 'continue' || kind === 'stop') return { kind } as Step;
     if (kind === 'waitFor') return { kind: 'waitFor', condition: { type: 'allModsActive', params: {} }, timeoutSec: 120 } as Step;
     if (kind === 'delay') return { kind: 'delay', seconds: 5 } as Step;
     return { kind: 'action', action: { type: 'profile.activate', params: {} } } as Step;
@@ -1633,6 +1710,8 @@ const KIND_ICON: Record<string, string> = {
     delay:   '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="6.5" y="4.5" width="4" height="15" rx="1.2"/><rect x="13.5" y="4.5" width="4" height="15" rx="1.2"/></svg>',
     forEach: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="7" height="5" rx="1"/><rect x="3" y="15" width="7" height="5" rx="1"/><path d="M14 6.5h7M14 17.5h7M14 12h7"/></svg>',
     switch:  '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v5"/><path d="M12 8 5 13v8M12 8l7 5v8"/></svg>',
+    try:     '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>',
+    signal:  '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="14" height="14" rx="2"/></svg>',
 };
 /** Kind-coloured icon tile that opens every step head (the visual anchor). */
 function _kindTile(kind: string): string {
@@ -1648,6 +1727,7 @@ function _foldBtn(step: any): string {
     if (step.kind === 'if') sum = `${(step.then?.length || 0) + (step.else?.length || 0)} ${t('sched.stepsInside') || 'inside'}`;
     else if (step.kind === 'repeat' || step.kind === 'forEach') sum = `${step.steps?.length || 0} ${t('sched.stepsInside') || 'inside'}`;
     else if (step.kind === 'switch') sum = `${(step.cases?.length || 0)} cases`;
+    else if (step.kind === 'try') sum = `${(step.steps?.length || 0)} + ${(step.onError?.length || 0)}`;
     else if (step.kind === 'delay') sum = `${step.seconds || 0}${t('sched.unitSec') || 's'}`;
     const sumHtml = sum ? `<span class="sched-fold-sum">${sum}</span>` : '';
     return `<button class="btn btn-xs btn-ghost sched-fold" data-tooltip="${escAttr(t('sched.foldTip') || 'Collapse / expand')}" aria-label="fold">${SCHED_CHEV}</button>${sumHtml}`;
