@@ -25,7 +25,13 @@ const MIN_APP_W = 700;
  *  floating than to hand back something unusable. */
 const MIN_DOCK_W = 300;
 
-const _claims = new Map<string, number>();
+// Each claim keeps BOTH numbers: what the panel asked for and what it was given.
+// Storing only the granted width made re-fitting lossy — a window dragged narrow
+// clamped the claim, and dragging it wide again re-fitted the *clamped* value, so
+// the space was never handed back. The request is the panel's preference and must
+// survive the squeeze.
+interface Claim { want: number; got: number; }
+const _claims = new Map<string, Claim>();
 
 /** How much of `requested` this window can actually spare. 0 means "no room —
  *  do not dock". Exported so a caller can ask BEFORE committing to dock mode. */
@@ -36,7 +42,7 @@ export function fitDockWidth(requested: number): number {
 }
 
 function _apply(): void {
-    const width = _claims.size ? Math.max(...Array.from(_claims.values())) : 0;
+    const width = _claims.size ? Math.max(...Array.from(_claims.values()).map(c => c.got)) : 0;
     const shell = document.querySelector('.app-shell') as HTMLElement | null;
     if (shell) shell.style.paddingRight = width ? `${width}px` : '';
     // ONE state the whole app can lay out against. Rules used to key on
@@ -57,7 +63,7 @@ function _apply(): void {
 export function claimDockSpace(id: string, width: number): number {
     const granted = fitDockWidth(width);
     if (!granted) { _claims.delete(id); _apply(); return 0; }
-    _claims.set(id, granted);
+    _claims.set(id, { want: width, got: granted });
     _apply();
     return granted;
 }
@@ -72,20 +78,27 @@ export function releaseDockSpace(id: string): void {
 export function hasDockClaims(): boolean { return _claims.size > 0; }
 
 // Re-fit on resize: a window dragged narrow must shrink its dock rather than let
-// it eat the app. Each claim keeps its own requested width, so widening the window
-// gives the space back. Debounced — resize fires continuously while dragging.
+// it eat the app, and dragging it wide again must give the space back. Debounced —
+// resize fires continuously while dragging.
 let _rzTimer: ReturnType<typeof setTimeout> | null = null;
 window.addEventListener('resize', () => {
     if (!_claims.size) return;
     if (_rzTimer) clearTimeout(_rzTimer);
     _rzTimer = setTimeout(() => {
-        for (const [id, w] of Array.from(_claims.entries())) {
-            const granted = fitDockWidth(w);
-            if (granted) _claims.set(id, granted); else _claims.delete(id);
+        const dropped: string[] = [];
+        for (const [id, c] of Array.from(_claims.entries())) {
+            // Re-fit the ORIGINAL request, so widening the window restores the
+            // panel's real preference instead of freezing it at a past clamp.
+            const granted = fitDockWidth(c.want);
+            if (granted) _claims.set(id, { want: c.want, got: granted });
+            else { _claims.delete(id); dropped.push(id); }
         }
         _apply();
-        // A dock that lost its space entirely must be told, or it keeps painting
-        // over the app with nothing reserved underneath it.
-        if (!_claims.size) document.dispatchEvent(new CustomEvent('bmm:dock:no-room'));
+        // Every dock that lost its space must be told INDIVIDUALLY. Firing only
+        // when the map empties would leave a loser painting over the app whenever
+        // another panel still fit — the exact overlap this module prevents.
+        if (dropped.length) {
+            document.dispatchEvent(new CustomEvent('bmm:dock:no-room', { detail: { ids: dropped } }));
+        }
     }, 120);
 });

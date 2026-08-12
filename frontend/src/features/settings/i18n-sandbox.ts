@@ -691,7 +691,9 @@ function toggleDockMode(modal: HTMLElement, force?: boolean, remember = true): v
     }
 }
 
-document.addEventListener('bmm:dock:no-room', () => {
+document.addEventListener('bmm:dock:no-room', (e) => {
+    const ids = (e as CustomEvent).detail?.ids as string[] | undefined;
+    if (ids && !ids.includes('i18n-sandbox')) return;    // someone else's loss
     if (_dockMode && _modal) toggleDockMode(_modal, false, false);
 });
 

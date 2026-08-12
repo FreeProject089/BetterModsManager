@@ -290,7 +290,11 @@ function _bteSetDock(on: boolean): void {
 
 // The window can shrink under the dock. When the shared owner runs out of room it
 // says so, and a docked editor returns to floating instead of covering the app.
-document.addEventListener('bmm:dock:no-room', () => { if (_bteDocked()) _bteSetDock(false); });
+document.addEventListener('bmm:dock:no-room', (e) => {
+    const ids = (e as CustomEvent).detail?.ids as string[] | undefined;
+    if (ids && !ids.includes('theme-editor')) return;   // someone else's loss
+    if (_bteDocked()) _bteSetDock(false);
+});
 
 function _btePlantDockResize(panel: HTMLElement): void {
     if (panel.querySelector('.bte-dock-resize')) return;
