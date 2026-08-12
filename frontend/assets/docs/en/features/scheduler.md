@@ -168,6 +168,11 @@ Beyond a flat list of actions, a task can branch and repeat:
 | **`if`** | Runs one set of steps when a condition holds, another (`else`) when it doesn't. |
 | **`repeat`** | Runs its steps repeatedly — `while` a condition holds, `until` one does, or a fixed number of `times`. `everySec` sets the gap between iterations, and **`maxIters` is a hard safety cap** so a `while`/`until` loop can never run forever. |
 | **`waitFor`** | Pauses until a condition becomes true, polling every `pollSec`, up to `timeoutSec`. On timeout it either **aborts** the task or **continues** anyway — your choice. |
+| **`forEach`** | Runs its steps once **per item of a live collection** — enabled mods, disabled mods, all mods, profiles, modpacks or themes, fetched at run time. Inside the body, `{item.id}` / `{item.name}` (any field of the item) are substituted into every action parameter. Same `maxIters` cap and per-lap pause as `repeat`. |
+| **`switch`** | Ordered cases, each with its own condition — the **first** that matches runs, else the `default` branch. Cleaner than a ladder of nested `if`s. |
+
+`repeat` also has a **`do… while`** mode: the body runs FIRST, then the condition decides
+another lap — the post-check loop, for "try once, keep going while it works".
 
 The bundled example is a `repeat` in `times` mode (loop 3×). Swap the mode to `while`/`until`
 and give it a `value` or `appRunning` condition, and you have automations like "*keep checking

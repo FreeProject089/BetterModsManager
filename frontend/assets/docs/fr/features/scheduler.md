@@ -153,6 +153,11 @@ Au-delà d'une liste plate d'actions, une tâche peut se ramifier et se répéte
 | **`si`** | Exécute un jeu d'étapes quand une condition tient, un autre (`sinon`) quand elle ne tient pas. |
 | **`répéter`** | Exécute ses étapes en boucle — `tant que` une condition tient, `jusqu'à` ce qu'une tienne, ou un nombre fixe de `fois`. `everySec` fixe l'écart entre itérations, et **`maxIters` est un plafond de sécurité strict** pour qu'une boucle `tant que`/`jusqu'à` ne tourne jamais indéfiniment. |
 | **`attendre`** | Met en pause jusqu'à ce qu'une condition devienne vraie, en sondant toutes les `pollSec`, jusqu'à `timeoutSec`. Au timeout, elle **abandonne** la tâche ou **continue** quand même — au choix. |
+| **`pour chaque`** | Exécute ses étapes une fois **par élément d'une collection vivante** — mods activés, désactivés, tous, profils, modpacks ou thèmes, récupérée au moment de l'exécution. Dans le corps, `{item.id}` / `{item.name}` (n'importe quel champ de l'élément) sont substitués dans chaque paramètre d'action. Même plafond `maxIters` et pause par tour que `répéter`. |
+| **`switch`** | Des cas ordonnés, chacun avec sa condition — le **premier** qui correspond s'exécute, sinon la branche `défaut`. Plus propre qu'un escalier de `si` imbriqués. |
+
+`répéter` gagne aussi un mode **`do… while`** : le corps s'exécute D'ABORD, puis la condition
+décide d'un autre tour — la boucle post-condition, pour « essaie une fois, continue tant que ça marche ».
 
 L'exemple fourni est un `répéter` en mode `fois` (boucle 3×). Change le mode en
 `tant que`/`jusqu'à` avec une condition `Comparaison de valeur` ou `App en cours`, et tu
