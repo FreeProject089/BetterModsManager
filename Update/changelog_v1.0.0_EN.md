@@ -308,3 +308,85 @@ This version represents the transition to the 1.0 milestone, focusing on cross-p
 ---
 *Release 1.0.0 represents the final consolidation of the core feature set; the section
 above tracks the ecosystem/customization work layered on top of it.*
+
+---
+
+## [MAJOR] Shared icon library (Lucide + Simple Icons)
+
+- **2017 Lucide glyphs** and **3453 Simple Icons brands** available across BMM, plus your
+  own images (PNG/JPG/SVG/WebP, 128 KB cap, embedded).
+- An icon is a plain string (`lucide:x`, `si:x`, `data:image/…`), so it travels through
+  **every share path** — exported profiles, repos, catalogs — with no extra code.
+- One picker (search across 5000+, tabs, upload) wired into three surfaces: **custom
+  tags**, **profile visual icon**, **plugin creation**.
+- Lazy-loaded and **sharded per letter**: painting a stored brand icon fetches ~150 KB, not
+  the full 4.6 MB pack (that one arrives only if you open the Brands tab). The boot script
+  budget is unchanged.
+
+## [NEW] Tags: icons and gradients
+
+- A tag can carry an **icon** (library above) and a **two-colour gradient** instead of a
+  flat tint.
+- Tags are now **editable** (new `update_tag` command): the form switches to edit mode,
+  with an explicit Cancel.
+- One renderer (`renderTagChip`) serves all five surfaces — card grid, list rows, details
+  panel, "+N" modal, Settings — which previously drew five slightly different versions of
+  the same tag.
+
+## [MAJOR] Scheduler: the full control-flow family
+
+- **For each**: run the body once per item of a *live* collection (enabled / disabled / all
+  mods, profiles, modpacks, themes), substituting `{item.id}`, `{item.name}` — or any field
+  — into action parameters.
+- **Switch**: ordered cases, each with its own condition; the first that matches runs, else
+  the default branch.
+- **do… while**: the body runs first, then the condition decides another lap.
+- Tasks authored by an agent or the CLI are **normalized on load**, so an incomplete shape
+  can never stop the editor from opening.
+
+## [MAJOR] MCP & CLI: authoring, not just reading
+
+- `bmm_create_schedule` / `bmm_delete_schedule` (MCP) and `create-schedule` /
+  `delete-schedule` (CLI, via `--file`, `--json` or stdin): an agent or a script can now
+  **compose** a whole automation, control-flow blocks included.
+- `bmm_create_plugin_scaffold` / `create-plugin`: writes a plugin **draft**
+  (`plugin.json` + README) into `plugin-drafts/<id>/`. Deliberately not an install — a
+  plugin can carry scripts, so installation stays the app's normal, permission-gated flow.
+- Safety: a task created without an explicit `enabled: true` lands **disabled**, to be
+  inspected before it is armed. An *update* that omits the field keeps the stored state.
+
+## [NEW] Dockable side panels
+
+- The **interactive tutorial**, the **theme editor** and the **translation sandbox** can
+  dock to the window edge as a full-height column, with a draggable, remembered width.
+- The app reflows around them: a single owner (`dock-space`) reserves the space, so opening
+  a second panel no longer clobbers the first one's reservation.
+- Each panel **changes shape** per mode: the sandbox stacks its two columns when docked,
+  the tutorial moves its toolbar onto two rows.
+
+## [IMPROVED] Theme editor
+
+- **Dock mode** (above) and a **File** menu grouping Import / Share / Export.
+- **Clicking a token's label** flashes every element actually painted with that value — the
+  shortest way to learn what a token controls.
+- The **element picker** finally states how it works (right-click / middle-click), and
+  **Shift + right-click** always opens the precise element editor.
+- The **sidebar logo** token works (it was written but no rule ever read it).
+- The *Surfaces* and *Toasts* groups got their icon and description back.
+
+## [FIXED] Responsiveness and UI freezes
+
+- **Enabling a mod no longer freezes the app.** In Tauri v2 a synchronous command runs on
+  the main thread, so the file-cache rebuild every activation triggers blocked the whole
+  window. Disk-walking commands now run on a worker thread.
+- **Loading indicators actually spin.** A transform animation only runs on the compositor
+  once its layer is promoted, and that promotion is committed by the main thread: inserted
+  during heavy work, the spinner sat frozen and looked exactly like a hang.
+- The library action bar accounts for the space a docked panel takes.
+
+## [NEW] Documentation
+
+- New **"Make your own theme"** page (EN + FR): every token explained group by group, the
+  `.bmmtheme` format field by field, the drop-in folder, and a from-zero build order.
+- The documentation PDF's first page carries the author and the exact edition (version +
+  commit timestamp).

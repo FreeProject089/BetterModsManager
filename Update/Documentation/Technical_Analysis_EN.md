@@ -806,3 +806,44 @@ The MCP server now builds against **rmcp 1.8** (stdio transport unchanged), clea
 
 *Better Mod Manager is developed by FreeProject089 — Engineered for uncompromising performance, file safety, and modern mod management.*
 
+## 55. Icon library: loading and sharding (v1.0.0+)
+
+The packs are JSON generated offline by `scripts/gen-icon-pack.mjs` from the npm packages
+`lucide` (ISC) and `simple-icons` (CC0) — never runtime dependencies. The libraries' own
+formats are kept: Lucide's `iconNode` arrays (`[tag, attrs][]`) and Simple Icons' single
+24×24 path. The SVG is built **at render time**, so the JSON stays data rather than markup.
+
+The brand pack is 4.6 MB. It ships **twice**: whole, for the picker (which needs every name
+to search), and as **27 first-letter shards** for painting a stored ref. Rendering
+`si:github` therefore loads `si/g.json`. Without that, a single brand tag pulled 4.6 MB on
+the startup path — exactly the kind of cost that makes a manager feel slow.
+
+Rendering (`renderPackIcon`) is **synchronous**: card generators cannot await. A ref whose
+pack is not loaded yet renders an empty string and the next render finds the glyph — so the
+warm-up is fired without being awaited, never in front of `get_mods`.
+
+## 56. Docked panel space reservation (v1.0.0+)
+
+Three panels can dock to the same edge. Each used to write `.app-shell`'s `padding-right`
+as an inline style, so the second clobbered the first's reservation and closing either one
+removed the padding the other still depended on.
+
+`ui/dock-space.ts` is the single owner: each panel **claims** its width under its own name,
+the widest wins (they stack at the same edge), and releasing a claim recomputes from
+whatever is left. The module also sets `body.bmm-docked` and `--bmm-dock-w` — one state for
+every layout rule to key on, instead of one class per panel.
+
+## 57. Responsiveness: synchronous commands and the main thread (v1.0.0+)
+
+In Tauri v2, a command declared `#[tauri::command]` **without** `(async)` runs on the
+window's main thread. Any command that walks the disk therefore freezes the UI for the
+duration of that walk. `get_mods` was one, and it rebuilds the file cache after every mod
+activation — the cause of the freeze reported in the field.
+
+The rule adopted: **any command touching `read_dir`, `WalkDir` or `metadata` over a
+user-sized tree is `(async)`**, not only the ones a freeze has already been reported for.
+
+The UI corollary: a `transform` animation only runs on the compositor once its layer is
+promoted, and that promotion is committed by the main thread. A spinner inserted during
+heavy work never gets its layer and sits frozen — which looks like a hang without being
+one. `will-change: transform` asks for the layer up front.

@@ -733,3 +733,50 @@ Le serveur MCP se compile désormais contre **rmcp 1.8** (transport stdio inchan
 
 *Better Mod Manager est développé par FreeProject089 — Conçu pour une performance sans compromis, la sécurité des fichiers et une gestion moderne des mods.*
 
+## 55. Bibliothèque d'icônes : chargement et sharding (v1.0.0+)
+
+Les packs sont des JSON générés hors ligne par `scripts/gen-icon-pack.mjs` depuis les
+paquets npm `lucide` (ISC) et `simple-icons` (CC0) — jamais des dépendances d'exécution.
+Format d'origine conservé : les `iconNode` de Lucide (`[balise, attributs][]`) et le chemin
+unique 24×24 de Simple Icons. Le SVG est construit **au moment de l'affichage**, donc le
+JSON reste de la donnée et non du markup.
+
+Le pack de marques pèse 4,6 Mo. Il est écrit **deux fois** : entier pour le sélecteur (qui a
+besoin de tous les noms pour chercher), et en **27 shards par première lettre** pour
+l'affichage d'une référence stockée. Rendre `si:github` charge donc `si/g.json`. Sans ça,
+un seul tag de marque tirait 4,6 Mo au démarrage — soit exactement le genre de coût qui
+fait passer un gestionnaire pour lent.
+
+Le rendu (`renderPackIcon`) est **synchrone** : les générateurs de cartes ne peuvent pas
+attendre. Une référence dont le pack n'est pas encore chargé rend une chaîne vide, et le
+rendu suivant trouve le glyphe — le préchauffage est donc lancé sans être attendu, jamais
+devant `get_mods`.
+
+## 56. Réservation d'espace des panneaux ancrés (v1.0.0+)
+
+Trois panneaux peuvent s'ancrer au même bord. Chacun écrivait auparavant le `padding-right`
+de `.app-shell` en style inline, si bien que le second écrasait la réservation du premier et
+que fermer l'un supprimait le padding dont l'autre dépendait.
+
+`ui/dock-space.ts` est le propriétaire unique : chaque panneau **déclare** sa largeur sous
+son nom, la plus large gagne (ils se superposent au même bord), et libérer une déclaration
+recalcule à partir de celles qui restent. Le module pose aussi `body.bmm-docked` et
+`--bmm-dock-w` : un seul état sur lequel toutes les règles de mise en page s'appuient, au
+lieu d'une classe par panneau.
+
+## 57. Réactivité : commandes synchrones et thread principal (v1.0.0+)
+
+En Tauri v2, une commande déclarée `#[tauri::command]` **sans** `(async)` s'exécute sur le
+thread principal de la fenêtre. Toute commande qui parcourt le disque y gèle donc l'interface
+pour la durée du parcours. C'était le cas de `get_mods`, qui reconstruit le cache de fichiers
+après chaque activation de mod — la cause du gel signalé en production.
+
+Règle retenue : **toute commande qui touche `read_dir`, `WalkDir` ou `metadata` sur une
+arborescence de taille utilisateur est `(async)`**, pas seulement celles pour lesquelles un
+gel a déjà été signalé.
+
+Corollaire côté interface : une animation de `transform` n'est prise en charge par le
+compositeur qu'une fois sa couche promue, et cette promotion est validée par le thread
+principal. Un indicateur inséré pendant un travail lourd n'obtient jamais sa couche et reste
+figé — ce qui ressemble à un gel sans en être un. `will-change: transform` réclame la couche
+d'avance.

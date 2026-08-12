@@ -292,3 +292,93 @@ Cette version marque la transition vers l'étape 1.0, en se concentrant sur l'ut
 ---
 *La version 1.0.0 représente la consolidation finale des fonctionnalités de base ; la
 section ci-dessus suit le travail d'écosystème/personnalisation ajouté par-dessus.*
+
+---
+
+## [MAJEUR] Bibliothèque d'icônes partagée (Lucide + Simple Icons)
+
+- **2017 icônes Lucide** et **3453 marques Simple Icons** disponibles partout dans BMM,
+  plus tes propres images (PNG/JPG/SVG/WebP, 128 Ko max, embarquées).
+- Une icône est une simple chaîne (`lucide:x`, `si:x`, `data:image/…`), donc elle voyage
+  telle quelle dans **tous les partages** — profils exportés, dépôts, catalogues — sans
+  une ligne de code supplémentaire.
+- Un sélecteur unique (recherche sur les 5000+, onglets, import) branché sur trois
+  surfaces : **tags personnalisés**, **icône visuelle de profil**, **création de plugin**.
+- Chargement paresseux et **sharding par lettre** : afficher une icône de marque stockée
+  télécharge ~150 Ko, pas les 4,6 Mo du pack complet (celui-ci n'arrive que si tu ouvres
+  l'onglet Marques). Le budget de scripts au démarrage est inchangé.
+
+## [NOUVEAU] Tags : icônes et dégradés
+
+- Chaque tag peut porter une **icône** (bibliothèque ci-dessus) et un **dégradé** de deux
+  couleurs au lieu d'une teinte plate.
+- Les tags sont désormais **modifiables** (nouvelle commande `update_tag`) : le formulaire
+  bascule en mode édition, avec un bouton Annuler explicite.
+- Un rendu unique (`renderTagChip`) sert les cinq surfaces — grille de cartes, lignes de
+  liste, panneau de détails, modale « +N », Paramètres — qui affichaient auparavant cinq
+  variantes légèrement différentes du même tag.
+
+## [MAJEUR] Planificateur : le contrôle de flux au complet
+
+- **Pour chaque** : exécute le corps une fois par élément d'une collection *vivante* (mods
+  activés / désactivés / tous, profils, modpacks, thèmes), avec substitution de
+  `{item.id}`, `{item.name}` — ou n'importe quel champ — dans les paramètres d'action.
+- **Switch** : des cas ordonnés, chacun avec sa condition ; le premier qui correspond
+  s'exécute, sinon la branche par défaut.
+- **do… while** : le corps s'exécute d'abord, la condition décide ensuite d'un autre tour.
+- Les tâches écrites par une IA ou en ligne de commande sont **normalisées au chargement**,
+  pour qu'une forme incomplète n'empêche jamais d'ouvrir l'éditeur.
+
+## [MAJEUR] MCP & CLI : écrire, plus seulement lire
+
+- `bmm_create_schedule` / `bmm_delete_schedule` (MCP) et `create-schedule` /
+  `delete-schedule` (CLI, via `--file`, `--json` ou stdin) : une IA ou un script peut
+  désormais **composer** une automatisation complète, blocs de contrôle inclus.
+- `bmm_create_plugin_scaffold` / `create-plugin` : génère un **brouillon** de plugin
+  (`plugin.json` + README) dans `plugin-drafts/<id>/`. Volontairement pas une
+  installation — un plugin peut porter des scripts, donc l'installation reste le flux
+  normal de l'app, avec ses permissions.
+- Garde-fou : une tâche créée sans `enabled: true` explicite arrive **désactivée**, à
+  inspecter avant de l'armer. Une *mise à jour* qui omet le champ conserve l'état existant.
+
+## [NOUVEAU] Panneaux latéraux ancrables
+
+- Le **tutoriel interactif**, l'**éditeur de thèmes** et le **bac à sable de traduction**
+  peuvent s'ancrer au bord de la fenêtre en colonne pleine hauteur, largeur réglable à la
+  poignée et mémorisée.
+- L'app se réorganise autour d'eux : un propriétaire unique (`dock-space`) réserve
+  l'espace, si bien qu'ouvrir deux panneaux n'écrase plus la réservation de l'autre.
+- Chaque panneau **change de forme** selon le mode : le bac à sable empile ses deux
+  colonnes en mode ancré, le tutoriel passe sa barre d'outils sur deux rangées.
+
+## [AMÉLIORÉ] Éditeur de thèmes
+
+- **Mode ancré** (voir ci-dessus) et menu **Fichier** regroupant Importer / Partager /
+  Exporter.
+- **Cliquer le libellé d'un token** fait clignoter tous les éléments réellement peints avec
+  cette valeur — la façon la plus courte de comprendre ce qu'un token contrôle.
+- Le **sélecteur d'élément** affiche enfin son mode d'emploi (clic droit / clic molette), et
+  **Maj + clic droit** ouvre toujours l'éditeur précis d'élément.
+- Le token **logo de la barre latérale** fonctionne (il était écrit mais aucune règle ne le
+  lisait).
+- Les groupes *Surfaces* et *Toasts* ont retrouvé leur icône et leur description.
+
+## [CORRIGÉ] Réactivité et gel de l'interface
+
+- **Activer un mod ne gèle plus l'application.** En Tauri v2, une commande synchrone
+  s'exécute sur le thread principal : la reconstruction du cache de fichiers déclenchée par
+  chaque activation bloquait donc toute la fenêtre. Les commandes qui parcourent le disque
+  s'exécutent désormais sur un thread de travail.
+- **Les indicateurs de chargement tournent réellement.** Une animation de transformation
+  n'est prise en charge par le compositeur qu'une fois sa couche promue, et cette promotion
+  est validée par le thread principal : insérée pendant un travail lourd, elle restait figée
+  et donnait l'illusion d'un blocage.
+- La barre d'actions de la bibliothèque tient compte de l'espace pris par un panneau ancré.
+
+## [NOUVEAU] Documentation
+
+- Nouvelle page **« Créer son propre thème »** (FR + EN) : chaque token expliqué, groupe par
+  groupe, le format `.bmmtheme` champ par champ, le dossier de dépôt direct, et un ordre de
+  construction depuis zéro.
+- La première page du PDF de la documentation porte l'auteur et l'édition exacte (version +
+  horodatage du commit).

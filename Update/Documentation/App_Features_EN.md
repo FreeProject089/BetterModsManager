@@ -758,3 +758,39 @@ One search box over the whole app: press **Ctrl/⌘+K** anywhere.
 
 *Better Mod Manager is developed by FreeProject089.*
 
+## 57. Shared icon library (v1.0.0+)
+
+2017 **Lucide** glyphs and 3453 **Simple Icons** brands, plus your own images, behind one
+picker (search, tabs, upload). Wired into **tags**, the **profile visual icon** and
+**plugin creation**.
+
+An icon is a string (`lucide:x`, `si:x`, `data:image/…`) — it is data, so it follows every
+existing share path (exported profile, repo, catalog) with no special handling. The packs
+load on demand and are **sharded per letter**, so painting a stored icon costs ~150 KB
+rather than 4.6 MB.
+
+## 58. Tags: icons, gradients, editing (v1.0.0+)
+
+A tag carries a name, a colour, and now an **icon** and an optional **second colour**
+(gradient). Tags are editable in place; the old form could only create. The five places
+that draw a tag go through one renderer, so the same tag looks the same everywhere.
+
+## 59. Dockable side panels (v1.0.0+)
+
+The interactive tutorial, the theme editor and the translation sandbox dock to the window
+edge as a full-height column, with a draggable, remembered width. The app reflows around
+them instead of being covered. Each panel adapts its **shape** to the mode: stacked
+columns, two-row toolbar.
+
+## 60. Scheduler: full control flow (v1.0.0+)
+
+On top of If/Else, Wait and Repeat: **For each** (over a live collection, substituting
+`{item.*}`), **Switch** (ordered cases + default) and **do… while**. Enough to write "for
+each enabled mod, verify integrity then notify" without one step per mod.
+
+## 61. Agent and script authoring (v1.0.0+)
+
+The MCP server and the CLI no longer only read — they **create**: whole automations
+(control-flow blocks included) and plugin drafts. A created task lands disabled, to be
+inspected before it is armed; a plugin lands as a draft, to be installed through the app's
+normal permission-gated flow.

@@ -655,3 +655,40 @@ Une seule barre de recherche sur toute l'app : appuyez sur **Ctrl/⌘+K** n'impo
 
 *Better Mod Manager est développé par FreeProject089.*
 
+## 57. Bibliothèque d'icônes partagée (v1.0.0+)
+
+2017 icônes **Lucide** et 3453 marques **Simple Icons**, plus tes propres images, derrière
+un sélecteur unique (recherche, onglets, import). Branchée sur les **tags**, l'**icône
+visuelle de profil** et la **création de plugin**.
+
+Une icône est une chaîne (`lucide:x`, `si:x`, `data:image/…`) : c'est de la donnée, donc
+elle suit tous les partages existants — profil exporté, dépôt, catalogue — sans traitement
+particulier. Les packs sont chargés à la demande et **shardés par lettre**, pour qu'afficher
+une icône stockée coûte ~150 Ko et non 4,6 Mo.
+
+## 58. Tags : icônes, dégradés, édition (v1.0.0+)
+
+Un tag porte un nom, une couleur, désormais une **icône** et une **seconde couleur**
+optionnelle (dégradé). Les tags s'éditent sur place ; l'ancien formulaire ne savait que
+créer. Les cinq endroits qui dessinent un tag passent par un rendu unique, ce qui garantit
+qu'un même tag a la même tête partout.
+
+## 59. Panneaux latéraux ancrables (v1.0.0+)
+
+Le tutoriel interactif, l'éditeur de thèmes et le bac à sable de traduction s'ancrent au
+bord de la fenêtre en colonne pleine hauteur, largeur réglable et mémorisée. L'application
+se réorganise autour d'eux plutôt que d'être recouverte. Chaque panneau adapte sa **forme**
+au mode : empilement des colonnes, barre d'outils sur deux rangées.
+
+## 60. Planificateur : contrôle de flux complet (v1.0.0+)
+
+En plus de Si/Sinon, Attendre et Répéter : **Pour chaque** (sur une collection vivante, avec
+substitution de `{item.*}`), **Switch** (cas ordonnés + défaut) et **do… while**. De quoi
+écrire « pour chaque mod activé, vérifie l'intégrité puis notifie » sans une étape par mod.
+
+## 61. Autorat par IA et par script (v1.0.0+)
+
+Le serveur MCP et le CLI ne se contentent plus de lire : ils **créent**. Automatisations
+complètes (blocs de contrôle inclus) et brouillons de plugins. Une tâche créée arrive
+désactivée, à inspecter avant d'être armée ; un plugin arrive en brouillon, à installer par
+le flux normal de l'app avec ses permissions.
