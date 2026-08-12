@@ -914,8 +914,18 @@ class DebugUI {
         // Debug Hub events
         debugHub.subscribe(event => {
             if (event.type === 'crash') {
-                this.crashOverlay.classList.add('active');
-                this._get('crash-details').textContent = event.data.msg || 'Unknown internal error';
+                // Guarded, because this runs from window.onerror. The overlay only
+                // exists once the DevTools panel has been built, so before that every
+                // uncaught error in the app produced a SECOND error here — and that
+                // one, thrown inside the error handler, is what surfaced. The real
+                // error was reported at the same time but the handler crash sat next
+                // to it looking like a separate fault, and the details element was
+                // never filled either way. An error reporter that fails on the errors
+                // it exists to report is worse than none.
+                this.crashOverlay?.classList.add('active');
+                const det = this._get('crash-details');
+                if (det)
+                    det.textContent = event.data?.msg || 'Unknown internal error';
                 return;
             }
             // DO NOT update UI if closed (MAJOR LAG FIX)

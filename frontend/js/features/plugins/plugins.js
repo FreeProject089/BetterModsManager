@@ -5804,7 +5804,7 @@ function getEndpointDefs() {
                 { name: 'reuseExisting', type: 'boolean', required: false, desc: 'Conserver l\'identité du manifeste précédent. Activé par défaut.' },
                 { name: 'only', type: 'array', required: false, desc: 'Restreindre aux sous-dossiers nommés. C\'est ainsi que « ne publier que ces profils / ce modpack » fonctionne sans second chemin de code.' },
             ],
-            responses: [
+            responseStatuses: [
                 { code: 200, label: 'OK', body: '{ "ok": true, "path": "C:/host/repo.json", "added": 3, "changed": 1, "removed": 0 }' },
                 { code: 403, label: 'Forbidden', body: '{ "error": "Missing permission: repo.write" }' },
             ],
