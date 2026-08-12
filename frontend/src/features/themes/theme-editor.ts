@@ -5,7 +5,7 @@
 //   Elements → add custom HTML/CSS elements anywhere in BMM
 //   Advanced → full CSS per page
 //   Installed→ manage + import + export themes
-import { claimDockSpace, releaseDockSpace } from '../../ui/dock-space.js';
+import { claimDockSpace, releaseDockSpace, makeDock } from '../../ui/dock-space.js';
 
 import { t } from '../../core/i18n.js';
 import { toast } from '../../ui/app.js';
@@ -250,16 +250,9 @@ export function openEditor(): void {
 const BTE_DOCK_KEY  = 'bmm.themeEditor.dock';
 const BTE_DOCKW_KEY = 'bmm.themeEditor.dockW';
 
-function _bteDockW(): number {
-    const w = parseInt(localStorage.getItem(BTE_DOCKW_KEY) || '', 10);
-    return Number.isFinite(w) ? Math.max(340, Math.min(w, Math.round(innerWidth * 0.6))) : 430;
-}
-
-function _bteShellPad(w: number | null): void {
-    // Shared owner: writing .app-shell padding directly meant the last dock to
-    // toggle clobbered the others' reservation (see ui/dock-space.ts).
-    if (w) claimDockSpace('theme-editor', w); else releaseDockSpace('theme-editor');
-}
+const _bteDock = makeDock({
+    id: 'theme-editor', storageKey: BTE_DOCKW_KEY, cssVar: '--bte-dock-w', min: 340, def: 430,
+});
 
 function _bteDocked(): boolean { return document.body.classList.contains('bte-docked'); }
 
@@ -271,7 +264,7 @@ function _bteSetDock(on: boolean): void {
         // The owner decides, not us: it clamps against the band the app needs and
         // returns 0 when the window simply cannot spare the width. Docking anyway
         // is exactly the "panel covers content" the user reported.
-        const w = claimDockSpace('theme-editor', _bteDockW());
+        const w = claimDockSpace('theme-editor', _bteDock.width());
         if (!w) {
             document.body.classList.remove('bte-docked');
             localStorage.setItem(BTE_DOCK_KEY, 'float');
@@ -301,29 +294,7 @@ document.addEventListener('bmm:dock:no-room', (e) => {
 });
 
 function _btePlantDockResize(panel: HTMLElement): void {
-    if (panel.querySelector('.bte-dock-resize')) return;
-    const grip = document.createElement('div');
-    grip.className = 'bte-dock-resize';
-    grip.addEventListener('mousedown', (e: MouseEvent) => {
-        if (!_bteDocked()) return;
-        e.preventDefault();
-        grip.classList.add('dragging');
-        const move = (me: MouseEvent) => {
-            const w = Math.max(340, Math.min(innerWidth - me.clientX, Math.round(innerWidth * 0.6)));
-            document.body.style.setProperty('--bte-dock-w', `${w}px`);
-            _bteShellPad(w);
-        };
-        const up = () => {
-            grip.classList.remove('dragging');
-            document.removeEventListener('mousemove', move);
-            document.removeEventListener('mouseup', up);
-            const w = parseInt(getComputedStyle(document.body).getPropertyValue('--bte-dock-w'), 10);
-            if (Number.isFinite(w)) localStorage.setItem(BTE_DOCKW_KEY, String(w));
-        };
-        document.addEventListener('mousemove', move);
-        document.addEventListener('mouseup', up);
-    });
-    panel.appendChild(grip);
+    _bteDock.plantGrip(panel, _bteDocked);
 }
 
 function closeEditor(): void {

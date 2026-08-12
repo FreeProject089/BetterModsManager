@@ -15990,3 +15990,42 @@ body.i18nsb-docked #modal-i18n-sandbox .i18n-sb-progress { max-width: 100%; }
    into tidy rows instead of one cramped line. */
 .sched-step-head { row-gap: 6px; }
 .sched-step-head > .input { max-width: 100%; }
+
+
+/* ── The dock grip, once ─────────────────────────────────────────────────────
+   .bte-dock-resize / .i18nsb-dock-resize / .tut-dock-resize were three copies of
+   the same 5px pill with the same accent hover. They are aliases of this now, so
+   the affordance cannot drift between panels. */
+.bmm-dock-resize,
+.bte-dock-resize,
+.i18nsb-dock-resize {
+    position: absolute;
+    top: 0; bottom: 0; left: 0;
+    width: 12px;
+    cursor: ew-resize;
+    z-index: 5;
+}
+.bmm-dock-resize::after,
+.bte-dock-resize::after,
+.i18nsb-dock-resize::after {
+    content: '';
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 5px; height: 46px;
+    border-radius: 999px;
+    background: var(--text-muted);
+    opacity: 0.5;
+    transition: background 0.15s, opacity 0.15s, height 0.15s;
+}
+.bmm-dock-resize:hover::after, .bmm-dock-resize.dragging::after,
+.bte-dock-resize:hover::after, .bte-dock-resize.dragging::after,
+.i18nsb-dock-resize:hover::after, .i18nsb-dock-resize.dragging::after {
+    background: var(--accent);
+    opacity: 1;
+    height: 62px;
+}
+/* Only visible on the panel that is actually docked. */
+.bmm-dock-resize { display: none; }
+body.bte-docked #bmm-theme-editor .bmm-dock-resize,
+body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }

@@ -6,7 +6,7 @@
 // devtools, create new languages, and export a finished .json.
 
 import { invoke } from '../../core/api.js';
-import { claimDockSpace, releaseDockSpace } from '../../ui/dock-space.js';
+import { claimDockSpace, releaseDockSpace, makeDock } from '../../ui/dock-space.js';
 import { getAllTranslations, getLang, t } from '../../core/i18n.js';
 import { toast } from '../../ui/app.js';
 import { escHtml, escAttr } from '../../core/utils.js';
@@ -632,10 +632,9 @@ let _savedDockStyle: string | null = null;
 const I18N_DOCK_KEY = 'bmm.i18nsb.dock';
 const I18N_DOCKW_KEY = 'bmm.i18nsb.dockW';
 
-function _i18nDockW(): number {
-    const w = parseInt(localStorage.getItem(I18N_DOCKW_KEY) || '', 10);
-    return Number.isFinite(w) ? Math.max(380, Math.min(w, Math.round(innerWidth * 0.6))) : 460;
-}
+const _i18nDock = makeDock({
+    id: 'i18n-sandbox', storageKey: I18N_DOCKW_KEY, cssVar: '--i18nsb-w', min: 380, def: 460,
+});
 
 function _i18nShellPad(w: number | null): void {
     // Shared owner — see ui/dock-space.ts (docking the theme editor AND the
@@ -663,7 +662,7 @@ function toggleDockMode(modal: HTMLElement, force?: boolean, remember = true): v
         modal.style.pointerEvents = 'none';
         modal.style.backdropFilter = 'none';
         document.body.style.overflow = '';
-        const w = claimDockSpace('i18n-sandbox', _i18nDockW());
+        const w = claimDockSpace('i18n-sandbox', _i18nDock.width());
         if (!w) {
             // No room: undo what we just set and stay a modal rather than cover the app.
             _dockMode = false;
@@ -698,29 +697,7 @@ document.addEventListener('bmm:dock:no-room', (e) => {
 });
 
 function _i18nPlantDockResize(panel: HTMLElement): void {
-    if (panel.querySelector('.i18nsb-dock-resize')) return;
-    const grip = document.createElement('div');
-    grip.className = 'i18nsb-dock-resize';
-    grip.addEventListener('mousedown', (e: MouseEvent) => {
-        if (!_dockMode) return;
-        e.preventDefault();
-        grip.classList.add('dragging');
-        const move = (me: MouseEvent) => {
-            const w = Math.max(380, Math.min(innerWidth - me.clientX, Math.round(innerWidth * 0.6)));
-            document.body.style.setProperty('--i18nsb-w', `${w}px`);
-            _i18nShellPad(w);
-        };
-        const up = () => {
-            grip.classList.remove('dragging');
-            document.removeEventListener('mousemove', move);
-            document.removeEventListener('mouseup', up);
-            const w = parseInt(getComputedStyle(document.body).getPropertyValue('--i18nsb-w'), 10);
-            if (Number.isFinite(w)) localStorage.setItem(I18N_DOCKW_KEY, String(w));
-        };
-        document.addEventListener('mousemove', move);
-        document.addEventListener('mouseup', up);
-    });
-    panel.appendChild(grip);
+    _i18nDock.plantGrip(panel, () => _dockMode);
 }
 
 function toggleOverlayMode(modal: HTMLElement, force?: boolean): void {

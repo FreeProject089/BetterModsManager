@@ -112,3 +112,73 @@ window.addEventListener('resize', () => {
         }
     }, 120);
 });
+
+// ── The dock mechanism itself ────────────────────────────────────────────────
+//
+// Three panels grew the same ~70 lines independently: read a remembered width
+// from localStorage, clamp it, write a CSS var, plant a drag grip that updates
+// both, persist on mouseup. The copies admitted it in their own comments ("same
+// shape as the theme editor's dock"), and they had already drifted — three
+// minimums (320/340/380), three storage keys, three near-identical grip handlers.
+//
+// One factory now owns it. A caller says who it is and what it prefers; it gets
+// back the width to use and a grip it can plant. Any future fix — touch support,
+// a keyboard resize, a different clamp — lands once.
+
+export interface DockController {
+    /** The width to open at: the remembered preference, clamped to what fits.
+     *  0 means "no room — do not dock" (see claimDockSpace). */
+    width(): number;
+    /** Add the drag grip to a panel. Idempotent. */
+    plantGrip(panel: HTMLElement, isDocked: () => boolean): void;
+}
+
+export function makeDock(opts: {
+    id: string;             // the claim id, also used for the grip class
+    storageKey: string;     // where the width preference lives
+    cssVar: string;         // the var the panel's CSS reads
+    min: number;            // this panel's own minimum
+    def: number;            // width when nothing is remembered
+}): DockController {
+    const read = (): number => {
+        const w = parseInt(localStorage.getItem(opts.storageKey) || '', 10);
+        return Number.isFinite(w) && w > 0 ? w : opts.def;
+    };
+
+    return {
+        width(): number {
+            // fitDockWidth is the arbiter; opts.min is this panel's own floor on top
+            // of it, so a panel that needs more than the global minimum still says so.
+            const want = Math.max(opts.min, read());
+            return fitDockWidth(want);
+        },
+
+        plantGrip(panel: HTMLElement, isDocked: () => boolean): void {
+            if (panel.querySelector('.bmm-dock-resize')) return;
+            const grip = document.createElement('div');
+            grip.className = 'bmm-dock-resize';
+            grip.addEventListener('mousedown', (e: MouseEvent) => {
+                if (!isDocked()) return;
+                e.preventDefault();
+                grip.classList.add('dragging');
+                const move = (me: MouseEvent) => {
+                    const asked = Math.max(opts.min, window.innerWidth - me.clientX);
+                    const granted = claimDockSpace(opts.id, asked);
+                    if (granted) document.body.style.setProperty(opts.cssVar, `${granted}px`);
+                };
+                const up = () => {
+                    grip.classList.remove('dragging');
+                    document.removeEventListener('mousemove', move);
+                    document.removeEventListener('mouseup', up);
+                    const w = parseInt(getComputedStyle(document.body).getPropertyValue(opts.cssVar), 10);
+                    if (Number.isFinite(w)) {
+                        try { localStorage.setItem(opts.storageKey, String(w)); } catch { /* pref only */ }
+                    }
+                };
+                document.addEventListener('mousemove', move);
+                document.addEventListener('mouseup', up);
+            });
+            panel.appendChild(grip);
+        },
+    };
+}
