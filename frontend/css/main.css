@@ -15541,6 +15541,18 @@ h1 {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+  /* …except the things that are STATUS, not decoration. `iteration-count: 1` at
+     0.01ms makes a spinner complete one turn instantly and stop — pixel-identical
+     to a hung app, which is the one message a loading indicator must never send.
+     Reduced-motion exists to stop large-area parallax, zoom and slide; a 28px
+     glyph turning in place is the textbook permitted exception, and it is kept
+     deliberately slow here rather than merely re-enabled. */
+  [style*="animation:spin"], [style*="animation: spin"],
+  .community-spinner, .kit-spinner, .bmm-spin,
+  .bh-submit-btn.loading::after {
+    animation-duration: 2.4s !important;
+    animation-iteration-count: infinite !important;
+  }
 }
 
 /* Stack modal → BMM Docs. The component list answers "what do we use"; this points at the
@@ -16053,6 +16065,5 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 .bmm-spin {
     animation-name: bmm-spin !important;
     transform-origin: 50% 50%;
-    transform-box: fill-box;          /* an SVG rotates about ITS OWN centre */
     will-change: transform;
 }

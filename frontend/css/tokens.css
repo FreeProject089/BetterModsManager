@@ -258,6 +258,18 @@ body.bmm-no-anim *::after {
     transition-duration: 0.001s !important;
 }
 
+/* Same exemption as the prefers-reduced-motion rule in main.css: a spinner is a
+   status signal. Turning the app's animations off must not make a busy app look
+   like a dead one, so the progress indicators keep turning — slowly. */
+body.bmm-no-anim [style*="animation:spin"],
+body.bmm-no-anim [style*="animation: spin"],
+body.bmm-no-anim .community-spinner,
+body.bmm-no-anim .kit-spinner,
+body.bmm-no-anim .bmm-spin,
+body.bmm-no-anim .bh-submit-btn.loading::after {
+    animation-duration: 2.4s !important;
+}
+
 /* ── App background image / wallpaper support ─────────────────────────────── */
 #app-window-outer::before {
     content: '';
