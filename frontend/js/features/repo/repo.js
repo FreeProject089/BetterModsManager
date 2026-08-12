@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { invoke, pickFolder } from '../../core/api.js';
+import { wireDismissibleTip } from '../../ui/dismissible-tip.js';
 import { toast } from '../../ui/app.js';
 import { escHtml, escAttr, formatBytes } from '../../core/utils.js';
 import { getLinks } from '../../core/links-config.js';
@@ -193,6 +194,15 @@ export const loadModpacksForExport = async (modpacksListEl) => {
     }
 };
 export function initRepo() {
+    // The mode-info banner is a good explanation the first time and a permanent
+    // block of text above the controls every time after. Same dismiss/restore
+    // affordance the mapper has, from the same place — ui/dismissible-tip.ts.
+    wireDismissibleTip({
+        bannerId: 'repo-info-banner',
+        closeId: 'btn-repo-hint-close',
+        showId: 'btn-repo-hint-show',
+        storageKey: 'bmm_repo_hint_hidden',
+    });
     const elements = {
         // --- Export elements ---
         btnPickExport: document.getElementById('btn-pick-repo-export'),
