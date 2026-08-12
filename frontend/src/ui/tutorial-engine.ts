@@ -1469,9 +1469,23 @@ function _setDockReserved(on: boolean): void {
         shell.style.paddingRight = _dockSide() === 'right' ? `${w}px` : '';
         shell.style.paddingLeft  = _dockSide() === 'left'  ? `${w}px` : '';
     }
-    // Also announce it to the shared owner, which is what sets body.bmm-docked —
-    // the single flag every layout rule keys on (ui/dock-space.ts).
-    if (_dockSide() === 'right') claimDockSpace('tutorial', w); else releaseDockSpace('tutorial');
+    // The shared owner has the last word on the width: it clamps against the band
+    // the app needs and returns what it can actually spare (0 when the window is
+    // too narrow). Honour it, or the coach ends up painting over the lesson.
+    if (_dockSide() === 'right') {
+        const granted = claimDockSpace('tutorial', w);
+        if (granted && granted !== w) {
+            document.body.style.setProperty('--tut-dock-w', `${granted}px`);
+            if (shell) shell.style.paddingRight = `${granted}px`;
+        } else if (!granted) {
+            // No room at all: the guidance becomes an overlay card rather than a
+            // column, so it never covers what it is pointing at.
+            document.body.style.removeProperty('--tut-dock-w');
+            if (shell) shell.style.paddingRight = '';
+        }
+    } else {
+        releaseDockSpace('tutorial');
+    }
     const panel = document.getElementById('tut-engine-panel');
     document.body.classList.toggle('tut-min', !!panel?.classList.contains('minimized'));
     // Re-plant after every render: _renderStep and the pill both rebuild via innerHTML,

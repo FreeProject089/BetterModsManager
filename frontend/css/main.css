@@ -15894,3 +15894,15 @@ body.i18nsb-docked #modal-i18n-sandbox .i18n-sb-header-actions { flex-wrap: wrap
 .stackd-text { margin: 0; font-size: 13px; line-height: 1.6; color: var(--text-secondary); }
 .stackd-role .stackd-text { color: var(--text-primary); }
 .stackd-foot { display: flex; justify-content: flex-end; }
+
+/* ── A dock must never be covered by, nor cover, the app ─────────────────────
+   The reservation is a padding on .app-shell, which any child that sets its own
+   width can out-grow — and an overflowing child runs straight under the panel.
+   Bounding the content area to the reserved band makes that impossible: wide
+   content scrolls inside its own box instead of sliding beneath the dock. */
+body.bmm-docked .content-area,
+body.bmm-docked .view {
+    max-width: 100%;
+    overflow-x: auto;
+}
+body.bmm-docked .view > * { max-width: 100%; }

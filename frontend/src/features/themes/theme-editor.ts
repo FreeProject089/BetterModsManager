@@ -264,12 +264,20 @@ function _bteSetDock(on: boolean): void {
     document.body.classList.toggle('bte-docked', on);
     localStorage.setItem(BTE_DOCK_KEY, on ? 'right' : 'float');
     if (on) {
-        const w = _bteDockW();
+        // The owner decides, not us: it clamps against the band the app needs and
+        // returns 0 when the window simply cannot spare the width. Docking anyway
+        // is exactly the "panel covers content" the user reported.
+        const w = claimDockSpace('theme-editor', _bteDockW());
+        if (!w) {
+            document.body.classList.remove('bte-docked');
+            localStorage.setItem(BTE_DOCK_KEY, 'float');
+            toast(t('themes.dockNoRoom') || 'Window too narrow to dock — staying floating', 'info', 2600);
+            return;
+        }
         document.body.style.setProperty('--bte-dock-w', `${w}px`);
         // The inline float geometry would beat any stylesheet — clear it; the CSS
         // dock rules take over. Float geometry itself survives in localStorage.
         Object.assign(_panel.style, { position: '', left: '', top: '', width: '', height: '', resize: '' });
-        _bteShellPad(w);
     } else {
         _bteShellPad(null);
         document.body.style.removeProperty('--bte-dock-w');
@@ -279,6 +287,10 @@ function _bteSetDock(on: boolean): void {
     const btn = _panel.querySelector('#bte-dock');
     btn?.classList.toggle('active', on);
 }
+
+// The window can shrink under the dock. When the shared owner runs out of room it
+// says so, and a docked editor returns to floating instead of covering the app.
+document.addEventListener('bmm:dock:no-room', () => { if (_bteDocked()) _bteSetDock(false); });
 
 function _btePlantDockResize(panel: HTMLElement): void {
     if (panel.querySelector('.bte-dock-resize')) return;

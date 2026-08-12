@@ -663,9 +663,19 @@ function toggleDockMode(modal: HTMLElement, force?: boolean, remember = true): v
         modal.style.pointerEvents = 'none';
         modal.style.backdropFilter = 'none';
         document.body.style.overflow = '';
-        const w = _i18nDockW();
+        const w = claimDockSpace('i18n-sandbox', _i18nDockW());
+        if (!w) {
+            // No room: undo what we just set and stay a modal rather than cover the app.
+            _dockMode = false;
+            document.body.classList.remove('i18nsb-docked');
+            if (_savedDockStyle !== null) { panel.setAttribute('style', _savedDockStyle); _savedDockStyle = null; }
+            modal.style.background = ''; modal.style.pointerEvents = ''; modal.style.backdropFilter = '';
+            document.body.style.overflow = 'hidden';
+            document.getElementById('i18n-dock-toggle')?.classList.remove('active');
+            toast(t('i18n.dockNoRoom') || 'Window too narrow to dock — staying a window', 'info', 2600);
+            return;
+        }
         document.body.style.setProperty('--i18nsb-w', `${w}px`);
-        _i18nShellPad(w);
         _i18nPlantDockResize(panel);
     } else {
         if (_savedDockStyle !== null) { panel.setAttribute('style', _savedDockStyle); _savedDockStyle = null; }
@@ -680,6 +690,10 @@ function toggleDockMode(modal: HTMLElement, force?: boolean, remember = true): v
         _i18nShellPad(null);
     }
 }
+
+document.addEventListener('bmm:dock:no-room', () => {
+    if (_dockMode && _modal) toggleDockMode(_modal, false, false);
+});
 
 function _i18nPlantDockResize(panel: HTMLElement): void {
     if (panel.querySelector('.i18nsb-dock-resize')) return;

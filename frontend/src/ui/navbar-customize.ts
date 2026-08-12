@@ -26,6 +26,10 @@ const PROTECTED = new Set(['settings']); // never hideable (you'd lose access to
 // it needs — inline handlers are blocked, so they all use addEventListener.
 interface PageTemplate { label: string; labelKey: string; html: string; css: string; js: string; }
 
+// Hard-coded colours are CORRECT here, and the colour guard's baseline records
+// that: this stylesheet ships INSIDE the user's sandboxed page, an opaque-origin
+// iframe with no access to BMM's document — `var(--bmm-*)` would resolve to
+// nothing there. A template that renders unstyled teaches the wrong thing.
 const TPL_CSS_BASE = `body {
   margin: 0;
   padding: 28px;

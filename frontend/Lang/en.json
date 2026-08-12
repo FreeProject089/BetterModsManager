@@ -6973,5 +6973,7 @@
   "navedit.tplDashboard": "Dashboard (app info)",
   "navedit.tplNotifier": "Notifier (notify)",
   "navedit.tplReplaceTitle": "Replace the current code?",
-  "navedit.tplReplaceDesc": "The template overwrites the HTML, CSS and JS below."
+  "navedit.tplReplaceDesc": "The template overwrites the HTML, CSS and JS below.",
+  "themes.dockNoRoom": "Window too narrow to dock — staying floating",
+  "i18n.dockNoRoom": "Window too narrow to dock — staying a window"
 }

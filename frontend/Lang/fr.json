@@ -6971,5 +6971,7 @@
   "navedit.tplDashboard": "Tableau de bord (infos app)",
   "navedit.tplNotifier": "Notificateur (notify)",
   "navedit.tplReplaceTitle": "Remplacer le code actuel ?",
-  "navedit.tplReplaceDesc": "Le modèle écrase le HTML, le CSS et le JS ci-dessous."
+  "navedit.tplReplaceDesc": "Le modèle écrase le HTML, le CSS et le JS ci-dessous.",
+  "themes.dockNoRoom": "Fenêtre trop étroite pour ancrer — reste flottant",
+  "i18n.dockNoRoom": "Fenêtre trop étroite pour ancrer — reste en fenêtre"
 }
