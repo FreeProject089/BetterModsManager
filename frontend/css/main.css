@@ -16208,3 +16208,40 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
     font-size: 10.5px;
     color: var(--text-muted);
 }
+
+/* ── Scheduler: task permissions ─────────────────────────────────────────────
+   Grouped and framed rather than loose in "Options", because these three are not
+   preferences — they are the boundary between an automation that rearranges BMM
+   and one that runs code on the machine. The frame is what makes that legible at
+   a glance when you reopen a task months later. */
+.sched-perm-group {
+    border: 1px solid var(--border);
+    border-radius: 11px;
+    padding: 9px 11px 5px;
+    margin-bottom: 10px;
+}
+.sched-perm-head {
+    font-size: 11.5px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+}
+.sched-perm-head span {
+    font-weight: 400;
+    color: var(--text-muted);
+    margin-left: 5px;
+}
+.sched-opt.sched-perm { margin-bottom: 4px; }
+
+/* The script body. Monospace because it is code, and `tab-size` because a pasted
+   script indented with tabs is otherwise unreadable at the browser default of 8. */
+.sched-code {
+    font-family: var(--font-mono, ui-monospace, "Cascadia Code", Consolas, monospace);
+    font-size: 12px;
+    line-height: 1.5;
+    tab-size: 4;
+    white-space: pre;
+    overflow-wrap: normal;
+    overflow-x: auto;
+    resize: vertical;
+}

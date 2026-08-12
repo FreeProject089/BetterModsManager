@@ -468,6 +468,7 @@ fn main() {
             commands::scheduler::get_schedules,
             commands::scheduler::save_schedules,
             commands::scheduler::run_scheduled_command,
+            commands::scheduler::run_scheduled_script,
             commands::scheduler::is_process_running,
             commands::scheduler::path_exists,
             commands::scheduler::register_os_schedule,

@@ -26,6 +26,38 @@ type Trigger =
     | { type: 'manual' };                                           // only via Run button / deeplink
 
 interface Action { type: string; params: Record<string, any>; }
+
+/** The three things a task can do that reach OUTSIDE its own automation.
+ *  Everything else a step can do is a BMM action the user could perform by hand;
+ *  these three are not, so each is granted on its own rather than bundled behind
+ *  one "allow unsafe" box that says nothing about what it unlocks. */
+interface TaskPerms {
+    /** Spawn an external program with arguments. */
+    command?: boolean;
+    /** Run a user-authored script through PowerShell / CMD / Bash / Python. */
+    script?: boolean;
+    /** Fire a bmm:// deeplink. This was ungated: a deeplink can reach anything the
+     *  app exposes, including actions that have no step of their own, so it was the
+     *  widest capability in the scheduler and the only one nobody had to ask for. */
+    deeplink?: boolean;
+}
+
+/** A task's effective permissions. An old task has no `perms`, only the single
+ *  allowCustomCommands flag — that flag meant "may run external programs", so it
+ *  maps to `command`, and to `deeplink` because deeplinks used to need nothing at
+ *  all and revoking them on upgrade would break working automations. It does NOT
+ *  map to `script`: that capability did not exist when consent was given, and
+ *  granting it retroactively would be inventing consent. */
+function taskPerms(task: Task): TaskPerms {
+    if (task.perms) return task.perms;
+    return { command: !!task.allowCustomCommands, deeplink: true, script: false };
+}
+
+function requirePerm(task: Task, key: keyof TaskPerms, label: string): void {
+    if (!taskPerms(task)[key]) {
+        throw new Error((t('sched.permDenied') || 'This task is not permitted to {what}. Grant it in the task’s permissions.').replace('{what}', label));
+    }
+}
 interface Condition { type: string; params: Record<string, any>; negate?: boolean; }
 type Step = (
     | { kind: 'action'; action: Action }
@@ -60,7 +92,13 @@ interface Task {
     enabled: boolean;
     trigger: Trigger;
     steps: Step[];
+    /** Legacy single opt-in. Kept as the MIGRATION SOURCE, never as the gate:
+     *  tasks saved before permissions were split still carry only this, and
+     *  dropping it would silently revoke what the user had already granted. */
     allowCustomCommands: boolean;
+    /** What this task is permitted to do beyond changing BMM's own state.
+     *  Absent on an old task — taskPerms() derives it from allowCustomCommands. */
+    perms?: TaskPerms;
     osSchedule?: boolean;   // also register a Windows Scheduled Task (runs when BMM is closed)
     lastRun?: number;       // epoch ms
     lastResult?: string;    // 'ok' | 'error: ...'
@@ -504,6 +542,24 @@ async function waitForCondition(cond: Condition, timeoutSec: number, ctx: Record
 // Size preset → run_app_benchmark `scale` string.
 const BENCH_SCALE: Record<string, string> = { S: 'small', M: 'medium', L: 'large', XL: 'xlarge' };
 
+/** Make a command's or script's output usable by the REST of the task.
+ *
+ *  Without this, running code was a dead end: it could change the world but could
+ *  not tell the automation around it what it found, so "if the script says yes,
+ *  then..." was unexpressible and the only signal was pass/fail. The trimmed first
+ *  line goes into ctx under the user's chosen name, where the existing {var}
+ *  substitution and the numeric conditions already look. */
+function _captureOutput(p: Record<string, any>, out: any, ctx: Record<string, number>): void {
+    const name = String(p.into || '').trim();
+    if (!name) return;
+    const first = String(out ?? '').split(/\r?\n/).find(l => l.trim()) || '';
+    const num = parseFloat(first.trim());
+    // ctx is numeric (that is what the conditions compare), so a non-numeric line
+    // becomes its length rather than NaN — NaN would make every comparison silently
+    // false, which reads as "the condition did not hold" instead of "no number here".
+    ctx[name] = Number.isFinite(num) ? num : first.trim().length;
+}
+
 async function runAction(action: Action, task: Task, ctx: Record<string, number>): Promise<void> {
     const p = action.params || {};
     // Fire a bmm:// deeplink through the app's canonical handler (covers every
@@ -541,16 +597,30 @@ async function runAction(action: Action, task: Task, ctx: Record<string, number>
         case 'notify':
             toast(p.message || task.name, 'info'); break;
         case 'custom.command': {
-            if (!task.allowCustomCommands) {
-                throw new Error(t('sched.customDisabled') || 'Custom commands are disabled for this task');
-            }
+            requirePerm(task, 'command', t('sched.permRunCommand') || 'run external programs');
             const args = (p.args || '').trim() ? String(p.args).split(/\s+/) : [];
-            await invoke('run_scheduled_command', {
+            const out = await invoke('run_scheduled_command', {
                 program: p.program, args, workingDir: p.workingDir || null, allow: true,
             });
+            _captureOutput(p, out, ctx);
+            break;
+        }
+        case 'custom.script': {
+            requirePerm(task, 'script', t('sched.permRunScript') || 'run scripts');
+            // The body goes through the same {item.*} / {var} substitution as every
+            // other string param, so a script inside a For-Each can act on the item
+            // it was handed instead of re-deriving it.
+            const out = await invoke('run_scheduled_script', {
+                engine: p.engine || 'powershell',
+                code: String(p.code || ''),
+                workingDir: p.workingDir || null,
+                allow: true,
+            });
+            _captureOutput(p, out, ctx);
             break;
         }
         case 'deeplink':
+            requirePerm(task, 'deeplink', t('sched.permDeeplink') || 'fire deeplinks');
             await runDeepLink(p.url); break;
 
         // ── Benchmarks ────────────────────────────────────────────────────────
@@ -1149,7 +1219,15 @@ async function openTaskModal(task: Task | null): Promise<void> {
 function draftSummary(): string {
     const bits = [triggerLabel(_draft.trigger), `${stepCount(_draft.steps)} ${t('sched.steps') || 'steps'}`];
     if (_draft.osSchedule) bits.push(t('sched.sumOs') || 'even when BMM is closed');
-    if (_draft.allowCustomCommands) bits.push(t('sched.sumCmd') || 'can run commands');
+    {
+        const pm = taskPerms(_draft as Task);
+        const granted = [
+            pm.command  && (t('sched.sumCmd') || 'can run commands'),
+            pm.script   && (t('sched.sumScript') || 'can run scripts'),
+            pm.deeplink && (t('sched.sumDeeplink') || 'can fire deeplinks'),
+        ].filter(Boolean) as string[];
+        if (granted.length) bits.push(granted.join(', '));
+    }
     return bits.join(' · ');
 }
 function refreshSummary(modal: HTMLElement): void {
@@ -1180,10 +1258,25 @@ function renderModal(modal: HTMLElement): void {
                 <div id="sched-trigger"></div>
 
                 <label class="sched-label" style="margin-top:16px">${t('sched.secOptions') || 'Options'}</label>
-                <label class="sched-opt">
-                    <input type="checkbox" id="sched-allow-cmd" ${_draft.allowCustomCommands ? 'checked' : ''}>
-                    <div><b>${t('sched.allowCmdTitle') || 'Allow custom commands'}</b><span>${t('sched.allowCmd') || 'This task may run real external programs on your PC.'}</span></div>
-                </label>
+                ${(() => {
+                    // One box called "allow custom commands" answered the wrong
+                    // question: it told you a permission was being granted but not
+                    // what it unlocked, and it silently covered deeplinks, which can
+                    // reach anything the app exposes. Three boxes, each naming a real
+                    // capability, so consent is given to something legible.
+                    const pm = taskPerms(_draft as Task);
+                    const row = (key: string, on: boolean, title: string, desc: string) => `
+                        <label class="sched-opt sched-perm">
+                            <input type="checkbox" data-perm="${key}" ${on ? 'checked' : ''}>
+                            <div><b>${title}</b><span>${desc}</span></div>
+                        </label>`;
+                    return `<div class="sched-perm-group">
+                        <div class="sched-perm-head">${t('sched.permsTitle') || 'Permissions'}<span>${t('sched.permsHint') || '— what this task may do outside BMM'}</span></div>
+                        ${row('command', !!pm.command, t('sched.allowCmdTitle') || 'Run external programs', t('sched.allowCmd') || 'This task may launch real programs on your PC.')}
+                        ${row('script', !!pm.script, t('sched.allowScriptTitle') || 'Run scripts', t('sched.allowScript') || 'This task may run PowerShell, CMD, Bash or Python code you write.')}
+                        ${row('deeplink', !!pm.deeplink, t('sched.allowDeeplinkTitle') || 'Fire deeplinks', t('sched.allowDeeplink') || 'This task may trigger bmm:// links, which can reach anything the app exposes.')}
+                    </div>`;
+                })()}
                 <label class="sched-opt">
                     <input type="checkbox" id="sched-os" ${_draft.osSchedule ? 'checked' : ''}>
                     <div><b>${t('sched.osScheduleTitle') || 'Run even when BMM is closed'}</b><span>${t('sched.osSchedule') || 'Registers a Windows Scheduled Task that launches BMM at the trigger time.'}</span></div>
@@ -1237,7 +1330,18 @@ function renderModal(modal: HTMLElement): void {
     modal.querySelector('#sched-cancel')?.addEventListener('click', () => modal.classList.remove('open'));
     modal.querySelector('#sched-name')?.addEventListener('input', (e) => { _draft.name = (e.target as HTMLInputElement).value; });
     modal.querySelector('#sched-desc')?.addEventListener('input', (e) => { _draft.description = (e.target as HTMLTextAreaElement).value; });
-    modal.querySelector('#sched-allow-cmd')?.addEventListener('change', (e) => { _draft.allowCustomCommands = (e.target as HTMLInputElement).checked; refreshSummary(modal); });
+    modal.querySelectorAll<HTMLInputElement>('[data-perm]').forEach(cb => {
+        cb.addEventListener('change', () => {
+            // Materialise the derived set on first edit, so a task saved from this
+            // modal always carries an explicit grant rather than one inferred from
+            // the legacy flag by whatever version happens to read it next.
+            const pm = { ...taskPerms(_draft as Task) };
+            (pm as any)[cb.dataset.perm!] = cb.checked;
+            _draft.perms = pm;
+            _draft.allowCustomCommands = !!pm.command;   // keep the legacy field truthful
+            refreshSummary(modal);
+        });
+    });
     modal.querySelector('#sched-os')?.addEventListener('change', (e) => { _draft.osSchedule = (e.target as HTMLInputElement).checked; refreshSummary(modal); });
     // Test run: execute the CURRENT draft's steps once, without saving the task —
     // instant feedback while building an automation instead of save→run→edit loops.
@@ -1847,6 +1951,7 @@ const ACTION_TYPES: { v: string; label: string; needs?: string; group: string }[
     { v: 'restart', label: 'Restart BMM', group: 'system' },
     { v: 'open.url', label: 'Open a URL / link', needs: 'url', group: 'system' },
     { v: 'custom.command', label: 'Run custom command', needs: 'command', group: 'system' },
+    { v: 'custom.script', label: 'Run a script', needs: 'script', group: 'system' },
     { v: 'deeplink', label: 'Run bmm:// deeplink', needs: 'url', group: 'system' },
 ];
 
@@ -1936,8 +2041,36 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
                     <button type="button" class="btn btn-sm btn-secondary sched-browse-wd">${t('sched.choose') || 'Choose…'}</button>
                 </div>
             </details>
-            <span class="sched-cmd-hint">${t('sched.cmdHint') || 'Tip: tick “Allow custom commands” at the bottom of this task, or it won’t run.'}</span>
+            <span class="sched-cmd-hint">${t('sched.cmdHint') || 'Tip: grant “Run external programs” in this task’s Permissions, or it won’t run.'}</span>
         </div>`;
+    else if (needs === 'script') {
+        const eng = params.engine || 'powershell';
+        const engines: [string, string][] = [
+            ['powershell', 'PowerShell'], ['cmd', 'CMD / Batch'], ['bash', 'Bash'], ['python', 'Python'],
+        ];
+        host.innerHTML = `
+        <div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${t('sched.scrEngine') || '1. Language'}</label>
+            <select class="input sched-p-engine" style="max-width:180px">
+                ${engines.map(([v, l]) => `<option value="${v}"${eng === v ? ' selected' : ''}>${l}</option>`).join('')}
+            </select>
+            <label class="sched-cmd-label">${t('sched.scrCode') || '2. Code'}</label>
+            <textarea class="input sched-p-code sched-code" rows="9" spellcheck="false"
+                placeholder="${escAttr(t('sched.scrCodePh') || 'Write your script here. It runs as a file — no quoting or escaping needed.')}">${escHtml(params.code || '')}</textarea>
+            <span class="sched-cmd-hint">${t('sched.scrSubst') || 'Inside a For-Each, {item.name} and {item.id} are substituted before the script runs.'}</span>
+            <details class="sched-cmd-adv">
+                <summary>${t('sched.scrAdvanced') || 'Advanced — working folder, capture output'}</summary>
+                <div class="sched-cmd-row" style="margin-top:6px">
+                    <input class="input sched-p-wd" placeholder="${escAttr(t('sched.workdirPh') || 'folder to run from (optional)')}" value="${escAttr(params.workingDir || '')}">
+                    <button type="button" class="btn btn-sm btn-secondary sched-browse-wd">${t('sched.choose') || 'Choose…'}</button>
+                </div>
+                <input class="input sched-p-into" style="margin-top:6px"
+                    placeholder="${escAttr(t('sched.scrIntoPh') || 'store the first output line in a variable, e.g. count')}" value="${escAttr(params.into || '')}">
+                <span class="sched-cmd-hint">${t('sched.scrIntoHint') || 'Named here, the result becomes a variable later steps can test — otherwise a script can only pass or fail.'}</span>
+            </details>
+            <span class="sched-cmd-hint">${t('sched.scrHint') || 'Tip: grant “Run scripts” in this task’s Permissions, or it won’t run.'}</span>
+        </div>`;
+    }
     else if (needs === 'benchmark') {
         const profOpts = _profiles.filter((p: any) => p.mods_path)
             .map((p: any) => `<option value="${escAttr(p.mods_path)}">${escHtml(p.name || p.id)}</option>`).join('');
@@ -2067,6 +2200,9 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
     host.querySelector('.sched-p-prog')?.addEventListener('input', (e) => { params.program = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-p-args')?.addEventListener('input', (e) => { params.args = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-p-wd')?.addEventListener('input', (e) => { params.workingDir = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-engine')?.addEventListener('change', (e) => { params.engine = (e.target as HTMLSelectElement).value; });
+    host.querySelector('.sched-p-code')?.addEventListener('input', (e) => { params.code = (e.target as HTMLTextAreaElement).value; });
+    host.querySelector('.sched-p-into')?.addEventListener('input', (e) => { params.into = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-browse-prog')?.addEventListener('click', async () => {
         const { pickFile } = await import('../../core/api.js');
         const f = await pickFile({ filters: [{ name: 'Programs', extensions: ['exe', 'bat', 'cmd', 'ps1', 'com'] }, { name: 'All files', extensions: ['*'] }] }).catch(() => null);

@@ -57,7 +57,11 @@ pub fn save_schedules(app_handle: AppHandle, tasks: serde_json::Value) -> Result
 /// shell string — so there is no command-injection surface (CWE-78). On Windows we
 /// still go through `cmd /c` ONLY to resolve PATH/builtins, with the program and
 /// each argument as distinct argv entries.
-#[tauri::command]
+// `(async)` is not decoration: `cmd.output()` blocks until the child EXITS, and a
+// synchronous #[tauri::command] runs on the window's main thread — so a scheduled
+// command that takes ten seconds froze the entire UI for ten seconds. Same rule the
+// mod-activation freeze taught: anything that waits belongs off the main thread.
+#[tauri::command(async)]
 pub fn run_scheduled_command(
     program: String,
     args: Vec<String>,
@@ -90,6 +94,98 @@ pub fn run_scheduled_command(
             "Command exited with {}: {}",
             output.status.code().map(|c| c.to_string()).unwrap_or_else(|| "signal".into()),
             if stderr.is_empty() { stdout } else { stderr }
+        ))
+    }
+}
+
+/// Runs a user-authored SCRIPT as part of a scheduled workflow.
+///
+/// `run_scheduled_command` can only launch a program with arguments, which is the
+/// wrong shape for "do these five things in order" — expressing that as argv means
+/// five steps, or one long string in a shell, which is the injection surface this
+/// module exists to avoid. A script is the honest form: the user writes code, it
+/// goes to a file, the interpreter is handed the FILE.
+///
+/// That is also what keeps it safe. The script body is never concatenated into a
+/// command line and never reaches a shell as text, so there is nothing to escape
+/// and no quoting rule for the user to get wrong (CWE-78). The interpreter is
+/// chosen from a fixed list — never from user input — so `engine` cannot name an
+/// arbitrary executable.
+///
+/// `allow` MUST be true; it carries the task's explicit "run scripts" permission.
+#[tauri::command(async)]
+pub fn run_scheduled_script(
+    engine: String,
+    code: String,
+    working_dir: Option<String>,
+    allow: bool,
+) -> Result<String, String> {
+    if !allow {
+        return Err("Script execution is not permitted for this task (grant it in the task's permissions).".to_string());
+    }
+    if code.trim().is_empty() {
+        return Err("Empty script".to_string());
+    }
+
+    // A closed set. `engine` selects from this table and can never BE the program,
+    // so no input reaches the spawn as an executable name.
+    let (ext, program, argv): (&str, &str, fn(&str) -> Vec<String>) = match engine.as_str() {
+        "powershell" => ("ps1", "powershell", |f: &str| {
+            vec![
+                "-NoProfile".into(),
+                "-NonInteractive".into(),
+                "-ExecutionPolicy".into(),
+                "Bypass".into(),
+                "-File".into(),
+                f.to_string(),
+            ]
+        }),
+        "cmd" => ("bat", "cmd", |f: &str| vec!["/c".into(), f.to_string()]),
+        "bash" => ("sh", "bash", |f: &str| vec![f.to_string()]),
+        "python" => ("py", "python", |f: &str| vec![f.to_string()]),
+        other => return Err(format!("Unknown script engine: {}", other)),
+    };
+
+    // A unique name per run: two tasks firing on the same tick must not write each
+    // other's script, and a stale file from a crashed run must never be executed in
+    // place of this one.
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let path = std::env::temp_dir().join(format!("bmm-sched-{}-{}.{}", std::process::id(), stamp, ext));
+
+    std::fs::write(&path, code.as_bytes()).map_err(|e| format!("Could not write the script: {}", e))?;
+
+    log_line(format!(
+        "[SCHED] Running {} script ({} bytes) at {}",
+        engine,
+        code.len(),
+        path.display()
+    ));
+
+    let file = path.to_string_lossy().to_string();
+    let mut cmd = crate::commands::proc::hidden_command(program);
+    cmd.args(argv(&file));
+    if let Some(dir) = working_dir.as_ref().filter(|d| !d.trim().is_empty()) {
+        cmd.current_dir(dir);
+    }
+    let result = cmd.output();
+
+    // Removed on EVERY path, including the spawn failing — a temp directory slowly
+    // filling with the user's scripts is both a mess and a disclosure.
+    let _ = std::fs::remove_file(&path);
+
+    let output = result.map_err(|e| format!("Could not start {}: {}", program, e))?;
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    if output.status.success() {
+        Ok(stdout)
+    } else {
+        Err(format!(
+            "Script exited with {}: {}",
+            output.status.code().map(|c| c.to_string()).unwrap_or_else(|| "signal".into()),
+            if stderr.trim().is_empty() { stdout } else { stderr }
         ))
     }
 }
