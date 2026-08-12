@@ -3,6 +3,7 @@
  * profiles.js — Profile management
  */
 import { invoke, pickFolder } from '../../core/api.js';
+import { isPackIcon, renderPackIcon, ensurePackFor, openIconPicker } from '../../ui/icon-pack.js';
 import { toast, updateLibraryProfileSelector } from '../../ui/app.js';
 import { pickFile, convertFileSrc } from '../../core/api.js';
 import { refreshMods } from '../mods/mods.js';
@@ -429,6 +430,31 @@ function renderIconPicker(gridId, hiddenInputId) {
         });
         grid.appendChild(item);
     });
+
+    // The door to the FULL icon library (2000+ Lucide, 3400+ brands, uploads).
+    // A picked ref is stored in the same hidden input — profile.icon is already a
+    // free string, so it travels through every export/share unchanged.
+    const more = document.createElement('div');
+    more.className = 'icon-option icon-option-more';
+    more.title = t('iconpack.title') || 'Choose an icon';
+    const setMorePreview = () => {
+        if (input && isPackIcon(input.value)) {
+            void ensurePackFor(input.value).then(() => { more.innerHTML = renderPackIcon(input.value, 18) || '…'; });
+            more.classList.add('selected');
+        } else {
+            more.textContent = '…';
+        }
+    };
+    setMorePreview();
+    more.addEventListener('click', async () => {
+        const ref = await openIconPicker({ current: input?.value || '' });
+        if (ref === null || !input) return;
+        input.value = ref;
+        grid.querySelectorAll('.icon-option').forEach(el => el.classList.remove('selected'));
+        more.classList.add('selected');
+        more.innerHTML = renderPackIcon(ref, 18) || '…';
+    });
+    grid.appendChild(more);
 }
 
 /** Strip Rust AppError wrapper prefixes so the user sees a human message. */
@@ -1482,6 +1508,14 @@ export async function getActiveProfileId() {
 }
 
 export function getProfileIconSvg(iconName, extraStyle = '') {
+    // Icon-pack refs (lucide:/si:/data:) render from the shared library. A ref whose
+    // pack is not in memory yet warms it and renders '' — the next re-render finds it.
+    if (isPackIcon(iconName)) {
+        const html = renderPackIcon(iconName, 16);
+        if (!html) { void ensurePackFor(iconName); return ''; }
+        return extraStyle ? `<span style="display:inline-flex;${extraStyle}">${html}</span>` : html;
+    }
+
     if (!iconName) return '';
     const style = `vertical-align:middle;${extraStyle}`;
     switch (iconName) {

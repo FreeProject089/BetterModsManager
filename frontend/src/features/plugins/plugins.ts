@@ -3171,6 +3171,7 @@ function renderCreate(container: HTMLElement) {
                                     <div class="plug-icon-builtin-grid">
                                         ${Object.entries(IC).map(([k, svg]) => `<button class="plug-icon-builtin-btn" data-ickey="${k}" data-tooltip="${k}">${svg}</button>`).join('')}
                                     </div>
+                                    <button class="btn btn-xs btn-ghost" id="pc-icon-library" style="margin-top:6px;">${t('plugins.iconLibrary') || 'Bibliothèque (5000+ icônes)…'}</button>
                                 </div>
                             </div>
                         </div>
@@ -3389,6 +3390,23 @@ function renderCreate(container: HTMLElement) {
         const preview = document.getElementById('pc-icon-preview') as HTMLElement;
         if (preview) preview.innerHTML = `<div class="plug-card-icon-default">${IC.puzzle}</div>`;
         (document.getElementById('pc-clear-icon') as HTMLElement).style.display = 'none';
+    });
+
+    // The full icon library (Lucide + brands + upload). A picked ref renders to
+    // plain SVG markup and rides the EXISTING iconBuiltinSvg path — the plugin
+    // format already persists SVG, so nothing downstream changes.
+    container.querySelector('#pc-icon-library')?.addEventListener('click', async () => {
+        const { openIconPicker, renderPackIcon, ensurePackFor } = await import('../../ui/icon-pack.js');
+        const ref = await openIconPicker();
+        if (ref === null) return;
+        await ensurePackFor(ref);
+        const svg = renderPackIcon(ref, 24);
+        if (!svg) return;
+        iconSrcPath = '';
+        iconBuiltinSvg = svg;
+        const preview = document.getElementById('pc-icon-preview') as HTMLElement;
+        if (preview) preview.innerHTML = `<div class="plug-card-icon-default" style="color:var(--accent);">${svg}</div>`;
+        container.querySelectorAll('.plug-icon-builtin-btn').forEach(b => b.classList.remove('active'));
     });
 
     // Builtin icon picker

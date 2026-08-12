@@ -6929,5 +6929,6 @@
   "iconpack.brands": "Marques",
   "iconpack.upload": "Importer…",
   "iconpack.more": "Afficher plus",
-  "iconpack.tooBig": "L'image doit faire moins de 128 Ko"
+  "iconpack.tooBig": "L'image doit faire moins de 128 Ko",
+  "plugins.iconLibrary": "Bibliothèque (5000+ icônes)…"
 }
