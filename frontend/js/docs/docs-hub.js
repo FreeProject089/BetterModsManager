@@ -62,9 +62,9 @@ const CATEGORIES = [
                 keywords: 'bmm overview intro presentation aperçu',
                 body: {
                     en: '<p>BetterModsManager (BMM) organises your mods into <b>profiles</b> you can switch between instantly, verifies every file with cryptographic hashing, and lets you share a whole setup with one link. It’s game-agnostic: any game you can mod by placing files can be managed.</p><h4>Why it’s different</h4><ul><li><b>Non-destructive</b> — activating a profile never touches your originals; BMM links or copies as needed, and backs up anything it replaces.</li><li><b>Fast</b> — a native Rust core scans thousands of files in seconds.</li><li><b>Safe</b> — BLAKE3/SHA integrity catches a corrupted download before it reaches your game.</li></ul>'
-                        + '<h4>The screens, in one glance</h4><ul><li><b>Library</b> — your mods: add, enable/disable, verify, history.</li><li><b>Profiles</b> — one per game setup; switching swaps what’s deployed.</li><li><b>Modpacks</b> — saved recipes of mods to apply in one click.</li><li><b>Mapper</b> — fix mods whose folder shape doesn’t match the game.</li><li><b>Server Repo</b> — subscribe to someone’s repo, or host your own.</li><li><b>.MM Lists</b> — import/export a mod list as a file.</li><li><b>App Catalog / Plugins</b> — install apps, themes and plugins; automate via the API.</li><li><b>Settings</b> — appearance, shortcuts, scheduler, launch packs, privacy, storage.</li></ul><p>Press <kbd>Ctrl/⌘+K</kbd> anywhere to search all of it.</p>',
+                        + '<h4>The screens, in one glance</h4><ul><li><b>Library</b> — your mods: add, enable/disable, verify, history.</li><li><b>Profiles</b> — one per game setup; switching swaps what’s deployed.</li><li><b>Modpacks</b> — saved recipes of mods to apply in one click.</li><li><b>Mapper</b> — fix mods whose folder shape doesn’t match the game.</li><li><b>Server Repo</b> — subscribe to someone’s repo, or host your own.</li><li><b>.MM Lists</b> — import/export a mod list as a file.</li><li><b>App Catalog / Plugins</b> — install apps, themes and plugins; automate via the API.</li><li><b>Settings</b> — appearance, shortcuts, scheduler, launch packs, privacy, storage.</li></ul><p>The bell beside <b>Check for Updates</b> keeps every message BMM has shown you — source, time and text — so a toast you missed is still there.</p><p>Press <kbd>Ctrl/⌘+K</kbd> anywhere to search all of it.</p>',
                     fr: '<p>BetterModsManager (BMM) organise vos mods en <b>profils</b> interchangeables en un instant, vérifie chaque fichier par hachage cryptographique et vous permet de partager une configuration complète avec un seul lien. Il est agnostique du jeu : tout jeu moddable en plaçant des fichiers peut être géré.</p><h4>Ce qui le distingue</h4><ul><li><b>Non destructif</b> — activer un profil ne touche jamais vos originaux ; BMM lie ou copie selon le besoin, et sauvegarde ce qu’il remplace.</li><li><b>Rapide</b> — un cœur natif en Rust scanne des milliers de fichiers en quelques secondes.</li><li><b>Sûr</b> — l’intégrité BLAKE3/SHA détecte un téléchargement corrompu avant qu’il n’atteigne le jeu.</li></ul>'
-                        + '<h4>Les écrans, en un coup d’œil</h4><ul><li><b>Bibliothèque</b> — vos mods : ajouter, activer/désactiver, vérifier, historique.</li><li><b>Profils</b> — un par configuration de jeu ; changer échange ce qui est déployé.</li><li><b>Modpacks</b> — des recettes de mods enregistrées, applicables en un clic.</li><li><b>Mapper</b> — corriger les mods dont l’arborescence ne correspond pas au jeu.</li><li><b>Dépôt Serveur</b> — s’abonner au dépôt de quelqu’un, ou héberger le vôtre.</li><li><b>Listes .MM</b> — importer/exporter une liste de mods en fichier.</li><li><b>App Catalog / Plugins</b> — installer applis, thèmes et plugins ; automatiser via l’API.</li><li><b>Réglages</b> — apparence, raccourcis, planificateur, launch packs, confidentialité, stockage.</li></ul><p>Appuyez sur <kbd>Ctrl/⌘+K</kbd> n’importe où pour chercher dans tout ça.</p>',
+                        + '<h4>Les écrans, en un coup d’œil</h4><ul><li><b>Bibliothèque</b> — vos mods : ajouter, activer/désactiver, vérifier, historique.</li><li><b>Profils</b> — un par configuration de jeu ; changer échange ce qui est déployé.</li><li><b>Modpacks</b> — des recettes de mods enregistrées, applicables en un clic.</li><li><b>Mapper</b> — corriger les mods dont l’arborescence ne correspond pas au jeu.</li><li><b>Dépôt Serveur</b> — s’abonner au dépôt de quelqu’un, ou héberger le vôtre.</li><li><b>Listes .MM</b> — importer/exporter une liste de mods en fichier.</li><li><b>App Catalog / Plugins</b> — installer applis, thèmes et plugins ; automatiser via l’API.</li><li><b>Réglages</b> — apparence, raccourcis, planificateur, launch packs, confidentialité, stockage.</li></ul><p>La cloche à côté de <b>Vérifier les mises à jour</b> conserve chaque message que BMM vous a affiché — source, heure et texte — donc un toast manqué reste consultable.</p><p>Appuyez sur <kbd>Ctrl/⌘+K</kbd> n’importe où pour chercher dans tout ça.</p>',
                 },
             },
             {
@@ -458,6 +458,18 @@ While BMM is open a timer fires due tasks. Hit :kbd[▶] **Run now** any time, o
 Flip this and the task registers with your OS scheduler, so it fires on time whether or not BMM is open. Deleting it in BMM removes the OS task too.
 :::
 
+### Running your own code
+
+A step can **Run a script** — PowerShell, CMD, Bash or Python — written straight into the task. BMM saves it to a temp file and hands the interpreter the file, so nothing you write is ever pasted into a command line: there is no quoting or escaping to get right, and no stray quote can change what runs. Inside a **FOR EACH**, \`{item.name}\` and \`{item.id}\` are substituted before the script starts. Name a variable under *Advanced* and the script's first output line becomes a value later steps can test — otherwise a script can only pass or fail.
+
+There is also **Run external program** for the simpler case of launching something with arguments.
+
+:::tip[Permissions are per task, and each names what it unlocks]
+A task grants three capabilities separately: **Run external programs**, **Run scripts**, and **Fire deeplinks**. Each is off until you turn it on, and a step whose permission is missing fails with a message naming the one to grant — it never runs quietly.
+
+**Fire deeplinks** deserves a moment: a \`bmm://\` link reaches anything the app exposes, including actions with no step of their own, so it is the widest of the three. Tasks made before permissions were split keep what they already had, but none gains *Run scripts* — that capability did not exist when you agreed to the old single checkbox.
+:::
+
 It can drive [Launch Packs](doc:launch-packs), your [storage](doc:storage-manager) limits and [benchmarks](doc:benchmarks). Share a whole set with **Export/Import .BMMPA** — imports arrive disabled and never register OS tasks on their own. Find it in **Settings → Scheduler**.`,
                     fr: `Le **Planificateur** transforme BMM en outil d’automatisation : une tâche associe un **déclencheur** (quand) à un **workflow** (quoi) — et un workflow peut se ramifier, boucler et attendre, pas seulement dérouler une liste plate.
 
@@ -475,6 +487,18 @@ Tant que BMM est ouvert, une minuterie déclenche les tâches dues. Fais :kbd[�
 
 :::tip[Exécuter même quand BMM est fermé]
 Active ça et la tâche s’enregistre auprès du planificateur de l’OS : elle part à l’heure, que BMM soit ouvert ou non. La supprimer dans BMM supprime aussi la tâche OS.
+:::
+
+### Exécuter ton propre code
+
+Une étape peut **Exécuter un script** — PowerShell, CMD, Bash ou Python — écrit directement dans la tâche. BMM l’enregistre dans un fichier temporaire et donne ce fichier à l’interpréteur : rien de ce que tu écris n’est collé dans une ligne de commande, il n’y a donc aucun échappement à réussir, et aucun guillemet égaré ne peut changer ce qui s’exécute. Dans un **POUR CHAQUE**, \`{item.name}\` et \`{item.id}\` sont remplacés avant le démarrage du script. Nomme une variable dans *Avancé* et la première ligne de sortie devient une valeur testable par les étapes suivantes — sinon un script ne peut que réussir ou échouer.
+
+Il existe aussi **Lancer un programme externe** pour le cas plus simple d’un exécutable avec des arguments.
+
+:::tip[Les permissions sont par tâche, et chacune dit ce qu’elle débloque]
+Une tâche accorde trois capacités séparément : **Lancer des programmes externes**, **Exécuter des scripts** et **Déclencher des deeplinks**. Chacune est désactivée tant que tu ne l’actives pas, et une étape dont la permission manque échoue avec un message indiquant laquelle accorder — elle ne s’exécute jamais en silence.
+
+**Déclencher des deeplinks** mérite une seconde d’attention : un lien \`bmm://\` atteint tout ce que l’app expose, y compris des actions sans étape dédiée — c’est la plus large des trois. Les tâches créées avant la séparation gardent ce qu’elles avaient déjà, mais aucune ne gagne *Exécuter des scripts* : cette capacité n’existait pas quand tu as coché l’ancienne case unique.
 :::
 
 Il peut piloter les [Launch Packs](doc:launch-packs), tes limites de [stockage](doc:storage-manager) et les [benchmarks](doc:benchmarks). Partage tout un jeu avec **Exporter/Importer .BMMPA** — les imports arrivent désactivés et n’enregistrent jamais de tâches OS tout seuls. Dans **Réglages → Planificateur**.`,
