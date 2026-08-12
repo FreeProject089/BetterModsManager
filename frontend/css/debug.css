@@ -888,3 +888,17 @@
     outline: 2px solid var(--accent);
     outline-offset: 2px;
 }
+
+/* A type scale, instead of every label choosing its own size.
+   The same kind of secondary text appeared at 9, 10, 11 and 12px depending on where
+   it was written — that spread is what makes a panel look assembled rather than
+   designed. Two roles cover all of it. */
+.debug-label {
+    font-size: 11px;
+    color: var(--debug-text-muted);
+}
+.debug-hint {
+    font-size: 10px;
+    color: var(--debug-text-muted);
+    line-height: 1.45;
+}

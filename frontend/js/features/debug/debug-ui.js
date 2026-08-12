@@ -151,7 +151,7 @@ class DebugUI {
             <div class="debug-content">
                 <div class="debug-pane active" id="pane-console">
                     <div class="console-tools" style="padding:8px; border-bottom:1px solid rgba(255,255,255,0.05); display:flex; gap:8px">
-                    <input type="text" id="console-search" data-i18n-placeholder="dev.placeholder.search" placeholder="Search..." style="flex:1; background:rgba(0,0,0,0.2); border:1px solid var(--debug-border); border-radius:4px; color:white; font-size:10px; padding:4px 8px; outline:none">
+                    <input type="text" id="console-search" data-i18n-placeholder="dev.placeholder.search" placeholder="Search..." style="flex:1; background:rgba(0,0,0,0.2); border:1px solid var(--debug-border); border-radius:4px; color:var(--debug-text-primary); font-size:10px; padding:4px 8px; outline:none">
                         <button class="debug-btn" id="console-clear-manual" data-i18n-tooltip="dev.btn.clearConsole" onmouseenter="window.showTaskyHelp('dev.tool.clearConsoleTip', 'help')" onmouseleave="window.hideTaskyHelp()">
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/></svg>
                         </button>
@@ -186,8 +186,8 @@ class DebugUI {
                             <div class="debug-subpane active" id="subpane-rust" style="height:100%; flex-direction:column; display:flex">
                                 <div style="padding:12px 16px; border-bottom:1px solid rgba(255,255,255,0.05); display:flex; justify-content:space-between; align-items:center; background:rgba(0,0,0,0.2)">
                                     <div>
-                                        <div style="font-size:13px; font-weight:600; color:white; margin-bottom:2px" data-i18n="dev.title.rust">Rust Debugger (GDB/LLDB)</div>
-                                        <div style="font-size:11px; color:var(--text-muted)" data-i18n="dev.msg.rustDesc">Attach a native debugger or view backend logs.</div>
+                                        <div style="font-size:13px; font-weight:600; color:var(--debug-text-primary); margin-bottom:2px" data-i18n="dev.title.rust">Rust Debugger (GDB/LLDB)</div>
+                                        <div class="debug-label" data-i18n="dev.msg.rustDesc">Attach a native debugger or view backend logs.</div>
                                     </div>
                                     <div style="display:flex; gap:8px">
                                         <button class="debug-btn debug-btn-ghost debug-btn-sm" id="rust-export-diag" data-i18n="dev.btn.exportDiag">EXPORT DIAG</button>
@@ -292,15 +292,15 @@ class DebugUI {
                                         <div id="dbg-grid-config" style="display:none; padding-top:12px; border-top:1px dashed rgba(255,255,255,0.1)">
                                             <div style="margin-bottom:12px">
                                                 <div style="display:flex; justify-content:space-between; margin-bottom:4px">
-                                                    <div id="dbg-label-grid-h" style="font-size:12px; font-weight:600; color:white" data-i18n="dev.label.gridH">Horizontal Spacing</div>
-                                                    <div style="font-size:12px; color:var(--text-muted)"><span id="dbg-grid-h-val">16</span>px</div>
+                                                    <div id="dbg-label-grid-h" style="font-size:12px; font-weight:600; color:var(--debug-text-primary)" data-i18n="dev.label.gridH">Horizontal Spacing</div>
+                                                    <div class="debug-label"><span id="dbg-grid-h-val">16</span>px</div>
                                                 </div>
                                                 <input type="range" id="dbg-grid-h" min="0" max="64" value="16" class="custom-range" style="width:100%; --val:25%">
                                             </div>
                                             <div>
                                                 <div style="display:flex; justify-content:space-between; margin-bottom:4px">
-                                                    <div id="dbg-label-grid-v" style="font-size:12px; font-weight:600; color:white" data-i18n="dev.label.gridV">Vertical Spacing</div>
-                                                    <div style="font-size:12px; color:var(--text-muted)"><span id="dbg-grid-v-val">16</span>px</div>
+                                                    <div id="dbg-label-grid-v" style="font-size:12px; font-weight:600; color:var(--debug-text-primary)" data-i18n="dev.label.gridV">Vertical Spacing</div>
+                                                    <div class="debug-label"><span id="dbg-grid-v-val">16</span>px</div>
                                                 </div>
                                                 <input type="range" id="dbg-grid-v" min="0" max="64" value="16" class="custom-range" style="width:100%; --val:25%">
                                             </div>
@@ -308,10 +308,10 @@ class DebugUI {
                                     </div>
 
                                     <div style="display:flex; justify-content:space-between; align-items:center; padding:0 4px">
-                                        <select id="css-stylesheet-select" style="background:rgba(0,0,0,0.3); border:1px solid var(--debug-border); color:white; padding:4px; font-size:11px; border-radius:4px; outline:none; max-width:200px">
+                                        <select id="css-stylesheet-select" style="background:rgba(0,0,0,0.3); border:1px solid var(--debug-border); color:var(--debug-text-primary); padding:4px; font-size:11px; border-radius:4px; outline:none; max-width:200px">
                                             <option value="" data-i18n="dev.msg.selectStylesheet">Select a stylesheet...</option>
                                         </select>
-                                        <input type="text" id="css-rule-search" data-i18n-placeholder="dev.placeholder.filter" placeholder="Filter..." style="background:rgba(0,0,0,0.3); border:1px solid var(--debug-border); padding:4px 8px; font-size:11px; color:white; border-radius:4px; outline:none; width:120px">
+                                        <input type="text" id="css-rule-search" data-i18n-placeholder="dev.placeholder.filter" placeholder="Filter..." style="background:rgba(0,0,0,0.3); border:1px solid var(--debug-border); padding:4px 8px; font-size:11px; color:var(--debug-text-primary); border-radius:4px; outline:none; width:120px">
                                     </div>
 
                                     <div style="flex:1; overflow-y:auto; min-height:100px" id="css-rules-container">
@@ -328,7 +328,7 @@ class DebugUI {
                                 <button class="debug-btn debug-btn-ghost" id="inspect-btn-clear" style="font-size:10px; padding:4px 10px" data-i18n="dev.btn.clearSelection">CLEAR SELECTION</button>
                     </div>
                     <div id="inspect-content" style="padding:16px; border-bottom:1px solid var(--debug-border); overflow-y:auto; height:100%">
-                        <div style="color:var(--text-muted); font-size:11px" data-i18n="dev.msg.selectElement">Select an element to inspect...</div>
+                        <div class="debug-label" data-i18n="dev.msg.selectElement">Select an element to inspect...</div>
                     </div>
                 </div>
                 <div class="debug-pane" id="pane-state"></div>
@@ -372,7 +372,7 @@ class DebugUI {
                 <h3 id="debug-modal-title" style="margin:0 0 12px 0; font-size:18px; color:var(--text-primary); font-weight:800" data-i18n="dev.modal.confirmTitle">Confirm Action</h3>
                 <p id="debug-modal-text" style="margin:0 0 24px 0; font-size:14px; color:var(--text-secondary); line-height:1.6; opacity:0.8" data-i18n="dev.modal.confirmText">Are you sure?</p>
                 <div id="debug-modal-input-container" style="display:none; margin-bottom:24px">
-                    <input type="text" id="debug-modal-input" style="width:100%; padding:12px; background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:white; outline:none; font-family:'JetBrains Mono'">
+                    <input type="text" id="debug-modal-input" style="width:100%; padding:12px; background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:var(--debug-text-primary); outline:none; font-family:'JetBrains Mono'">
                 </div>
                 <div style="display:flex; justify-content:flex-end; gap:12px">
                     <button id="debug-modal-cancel" class="debug-btn debug-btn-ghost" style="padding:10px 20px" data-i18n="common.cancel">Cancel</button>
@@ -405,7 +405,7 @@ class DebugUI {
 
             <div style="display:flex; flex-direction:column; align-items:center; gap:24px; margin-top: 40px; width: 100%; max-width: 480px;">
                 <div style="display:flex; flex-direction:row; align-items:center; justify-content:center; gap:16px; width:100%;">
-                    <button class="debug-btn" style="flex:1; background: linear-gradient(135deg, rgba(239,68,68,0.9), rgba(185,28,28,0.9)); color:white; padding:16px; border-radius:12px; font-weight:800; border:1px solid rgba(248, 113, 113, 0.5); cursor:pointer; box-shadow: 0 8px 32px rgba(239, 68, 68, 0.3); text-transform: uppercase; letter-spacing: 0.1em; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); font-size: 13px; backdrop-filter: blur(8px);" data-i18n="dev.crash.reload">
+                    <button class="debug-btn" style="flex:1; background: linear-gradient(135deg, rgba(239,68,68,0.9), rgba(185,28,28,0.9)); color:var(--debug-text-primary); padding:16px; border-radius:12px; font-weight:800; border:1px solid rgba(248, 113, 113, 0.5); cursor:pointer; box-shadow: 0 8px 32px rgba(239, 68, 68, 0.3); text-transform: uppercase; letter-spacing: 0.1em; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); font-size: 13px; backdrop-filter: blur(8px);" data-i18n="dev.crash.reload">
                         RELOAD APPLICATION
                     </button>
                     <button class="debug-btn" style="flex:1; background: rgba(30,41,59,0.5); color:#f8fafc; padding:16px; border-radius:12px; border:1px solid rgba(255,255,255,0.1); cursor:pointer; font-weight: 700; backdrop-filter: blur(12px); transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); text-transform: uppercase; letter-spacing: 0.05em; font-size: 13px; box-shadow: 0 4px 16px rgba(0,0,0,0.2);" id="crash-copy-dump" data-i18n="dev.crash.copyDump">
@@ -1092,7 +1092,7 @@ class DebugUI {
                 <span style="color:var(--debug-accent)">${p.type}: ${p.id}</span>
                 <button class="patch-remove" data-id="${p.id}" style="background:none; border:none; color:var(--debug-error); cursor:pointer">REMOVE</button>
             </div>
-        `).join('') || '<div style="color:var(--text-muted); font-size:10px">No active patches.</div>';
+        `).join('') || '<div class="debug-hint">No active patches.</div>';
     }
     switchTab(tabId) {
         this.activeTab = tabId;
@@ -1375,7 +1375,7 @@ class DebugUI {
             } })();
             // Escape — args/results may contain HTML/SVG (e.g. icon markup) that
             // must NOT be parsed as DOM, or the browser logs SVG-parse errors.
-            detailBlock = `<div id="${expandId}" class="timeline-detail" style="display:none;grid-column:1/-1;background:rgba(0,0,0,0.25);border-radius:6px;padding:8px;margin-top:4px;font-family:'JetBrains Mono';font-size:10px;color:var(--text-secondary);white-space:pre-wrap;overflow:hidden;max-height:120px;overflow-y:auto"><span style="color:var(--text-muted);font-size:9px">ARGS</span>\n${this.escapeHtml(argsJson)}\n<span style="color:var(--text-muted);font-size:9px">RESULT</span>\n${this.escapeHtml(resultJson)}</div>`;
+            detailBlock = `<div id="${expandId}" class="timeline-detail" style="display:none;grid-column:1/-1;background:rgba(0,0,0,0.25);border-radius:6px;padding:8px;margin-top:4px;font-family:'JetBrains Mono';font-size:10px;color:var(--text-secondary);white-space:pre-wrap;overflow:hidden;max-height:120px;overflow-y:auto"><span class="debug-hint">ARGS</span>\n${this.escapeHtml(argsJson)}\n<span class="debug-hint">RESULT</span>\n${this.escapeHtml(resultJson)}</div>`;
         }
         else if (item.details) {
             detailBlock = `<div id="${expandId}" class="timeline-detail" style="display:none;grid-column:1/-1;background:rgba(0,0,0,0.25);border-radius:6px;padding:8px;margin-top:4px;font-family:'JetBrains Mono';font-size:10px;color:var(--text-secondary);white-space:pre-wrap">${this.escapeHtml(String(item.details).slice(0, 500))}</div>`;
@@ -1410,7 +1410,7 @@ class DebugUI {
     clearSelection() {
         this.selectedEl = null;
         this._get('inspect-header').style.display = 'none';
-        this._get('inspect-content').innerHTML = '<div style="color:var(--text-muted); font-size:11px">Select an element to inspect...</div>';
+        this._get('inspect-content').innerHTML = '<div class="debug-label">Select an element to inspect...</div>';
         if (this.highlightEl)
             this.highlightEl.style.display = 'none';
         if (this.tooltipEl)
@@ -1434,7 +1434,7 @@ class DebugUI {
                 <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px">
                     <div>
                         <div style="font-weight:700; color:var(--debug-accent); font-size:14px; font-family:'JetBrains Mono'">&lt;${target.tagName.toLowerCase()}&gt;</div>
-                        <div style="color:var(--text-muted); font-size:10px">${target.id ? '#' + target.id : ''} ${Array.from(target.classList).map(c => '.' + c).join(' ')}</div>
+                        <div class="debug-hint">${target.id ? '#' + target.id : ''} ${Array.from(target.classList).map(c => '.' + c).join(' ')}</div>
                     </div>
                     <div style="display:flex; gap:4px">
                         <button class="debug-btn" id="inspect-copy-node" data-tooltip="Copy HTML" style="padding:4px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
@@ -1470,7 +1470,7 @@ class DebugUI {
                                    class="style-edit-input" 
                                    data-prop="${prop}" 
                                    value="${value}" 
-                                   style="background:rgba(0,0,0,0.2); border:1px solid var(--border); border-radius:4px; color:white; font-size:10px; padding:4px 8px; font-family:'JetBrains Mono'; outline:none">
+                                   style="background:rgba(0,0,0,0.2); border:1px solid var(--border); border-radius:4px; color:var(--debug-text-primary); font-size:10px; padding:4px 8px; font-family:'JetBrains Mono'; outline:none">
                             ${isColorOrBackground ? `<input type="color" class="style-color-helper" data-prop="${prop}" data-helper-prop="${helperProp}" style="width:16px; height:20px; padding:0; border:none; background:none; cursor:pointer" value="${colorValue.startsWith('rgb') ? this.rgbToHex(colorValue) : colorValue}">` : ''}
                         </div>
                     `;
