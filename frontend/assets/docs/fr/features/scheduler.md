@@ -2,7 +2,7 @@
 
 
 > Planifiez des actions BMM (ponctuelles ou récurrentes) — activer un mod, un modpack, un
-> profil… avec conditions (si/sinon) et commandes personnalisées. Les tâches s’exécutent tant
+> profil… avec conditions (si/sinon), tes propres scripts et des programmes externes. Les tâches s’exécutent tant
 > que BMM est ouvert.
 
 Accessible depuis [Plugins & API](doc-page:features/plugins). C'est la partie de BMM qui agit sans que vous
@@ -115,13 +115,54 @@ de BMM. Le système la réveille à l'heure, que l'app tourne ou non — tout l'
 Ça veut aussi dire que la tâche vit en dehors de BMM. La supprimer dans BMM supprime aussi la
 tâche système ; si tu fouilles la liste des tâches de ton OS, ce sont ces entrées-là.
 
-## Les commandes personnalisées
+## Exécuter ton propre code
 
-> Autoriser les commandes personnalisées.
+Deux étapes sortent de BMM. **Lancer un programme externe** démarre quelque chose avec des
+arguments. **Exécuter un script** prend du code que tu écris — PowerShell, CMD, Bash ou
+Python — directement dans la tâche.
 
-Désactivé par défaut, et à raison : une tâche planifiée capable d'exécuter n'importe quelle
-commande est une tâche capable de tout, à une heure où tu ne regardes pas. Active-la quand tu
-en as besoin, et sache ce que fait la commande.
+Le script est enregistré dans un fichier temporaire et c'est *le fichier* qui est remis à
+l'interpréteur. Rien de ce que tu tapes n'est jamais placé sur une ligne de commande : aucun
+échappement à réussir, et un guillemet égaré ne peut pas changer ce qui s'exécute. Dans un
+**Pour chaque**, `{item.name}` et `{item.id}` sont remplacés avant le démarrage, donc un seul
+script peut agir sur chaque mod à son tour.
+
+Dans *Avancé*, nomme une variable. La première ligne de sortie du script en devient la valeur,
+et les étapes suivantes peuvent la tester :
+
+```powershell
+# compte les .dll ; un SI plus loin peut se brancher sur {dlls}
+(Get-ChildItem -Recurse -Filter *.dll | Measure-Object).Count
+```
+
+Sans ça, un script ne pouvait que signaler une réussite ou un échec — « si le script dit oui,
+alors… » n'avait aucun moyen d'être exprimé.
+
+## Les permissions
+
+Chaque tâche accorde trois choses séparément, et chacune dit ce qu'elle débloque :
+
+| Autorisation | Ce qu'elle permet |
+|---|---|
+| **Lancer des programmes externes** | Démarrer un programme avec des arguments |
+| **Exécuter des scripts** | Exécuter du PowerShell / CMD / Bash / Python que tu as écrit |
+| **Déclencher des deeplinks** | Déclencher des liens `bmm://` |
+
+Les trois sont désactivées tant que tu ne les actives pas, et une étape dont la permission
+manque échoue avec un message indiquant laquelle accorder — elle ne s'exécute jamais en
+silence.
+
+!!! warning "Les deeplinks sont la plus large des trois"
+
+    Un lien `bmm://` atteint tout ce que l'app expose, y compris des actions sans étape dédiée
+    dans le planificateur. Auparavant, rien ne les gardait.
+
+!!! note "Migration depuis l'ancienne case unique"
+
+    Une tâche construite avant la séparation garde tout ce qu'elle avait — mais aucune ne gagne
+    **Exécuter des scripts**. Cette capacité n'existait pas quand tu as coché *Autoriser les
+    commandes personnalisées* : te l'accorder maintenant reviendrait à inventer ton
+    consentement plutôt qu'à l'honorer.
 
 ## Un exemple
 

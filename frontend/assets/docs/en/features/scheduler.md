@@ -2,7 +2,7 @@
 
 
 > Schedule BMM actions (one-time or recurring) — activate a mod, modpack, profile… with
-> conditions (if/else) and custom commands. Tasks run while BMM is open.
+> conditions (if/else), your own scripts and external programs. Tasks run while BMM is open.
 
 Reachable from [Plugins & API](doc-page:features/plugins). This is the part of BMM that does things without
 you driving it.
@@ -92,7 +92,7 @@ There are ~60 actions across eight groups:
 | **Appearance** | Set a theme |
 | **Benchmarks & storage** | Run an app benchmark · **benchmark a disk** · **apply a disk speed limit** · toggle **Smart I/O** / **Auto-Calibration** · **check free disk space** (see [Storage](doc-page:features/storage)) |
 | **Privacy & recorder** | Telemetry consent · session recorder · export/import a replay |
-| **System & flow** | Show a notification · Discord RPC · export a data backup · set a variable · **run another scheduled task** · restart BMM · open a URL · **run a custom command** · run a raw `bmm://` deeplink |
+| **System & flow** | Show a notification · Discord RPC · export a data backup · set a variable · **run another scheduled task** · restart BMM · open a URL · **run an external program** · **run a script you wrote** · run a raw `bmm://` deeplink |
 | **Logic & math** | Compute maths into a variable · ternary · decision table · a stop-task guard |
 
 Many actions run by firing a canonical `bmm://` deeplink through the app's own handler — the same
@@ -110,13 +110,51 @@ OS wakes it up on time whether or not the app is running — which is the whole 
 It also means the task lives outside BMM. Deleting it in BMM removes the OS task too; if you
 go poking in your OS's task list, that's what those entries are.
 
-## Custom commands
+## Running your own code
 
-> Allow custom commands.
+Two steps reach outside BMM. **Run external program** launches something with arguments.
+**Run a script** takes code you write — PowerShell, CMD, Bash or Python — straight in the
+task.
 
-Off by default, and rightly: a scheduled task that can run arbitrary commands is a scheduled
-task that can do anything, at a time you're not watching. Turn it on when you need it, and
-know what the command does.
+The script is saved to a temporary file and the interpreter is handed *the file*. Nothing you
+type is ever placed on a command line, so there is no quoting to get right and a stray quote
+can't change what runs. Inside a **For each**, `{item.name}` and `{item.id}` are substituted
+before the script starts, so one script can act on every mod in turn.
+
+Under *Advanced*, name a variable. The script's first output line becomes its value, and later
+steps can test it:
+
+```powershell
+# counts .dll files; a later IF can branch on {dlls}
+(Get-ChildItem -Recurse -Filter *.dll | Measure-Object).Count
+```
+
+Without that, a script could only report success or failure — "if the script says yes, then…"
+had no way to be expressed.
+
+## Permissions
+
+Each task grants three things separately, and each says what it unlocks:
+
+| Grant | What it allows |
+|---|---|
+| **Run external programs** | Launch a program with arguments |
+| **Run scripts** | Run PowerShell / CMD / Bash / Python you wrote |
+| **Fire deeplinks** | Trigger `bmm://` links |
+
+All three are off until you turn them on, and a step whose permission is missing fails with a
+message naming the one to grant — it never runs quietly.
+
+!!! warning "Deeplinks are the widest of the three"
+
+    A `bmm://` link reaches anything the app exposes, including actions that have no scheduler
+    step of their own. It used to be gated by nothing at all.
+
+!!! note "Upgrading from the old single checkbox"
+
+    A task you built before the split keeps everything it already had — but none gains **Run
+    scripts**. That capability didn't exist when you ticked *Allow custom commands*, so
+    granting it now would be inventing your consent rather than honouring it.
 
 ## Example
 
