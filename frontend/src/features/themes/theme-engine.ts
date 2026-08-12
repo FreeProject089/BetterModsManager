@@ -859,7 +859,13 @@ function _setVideoWallpaper(src: string | null): void {
         v.setAttribute('aria-hidden', 'true');
         // object-fit/position mirror the image layer's size/position tokens, so the
         // same two controls place an image and a video identically.
-        v.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;'
+        // ABSOLUTE, not fixed. #app-window-outer is position:relative + overflow:
+        // hidden, and a FIXED child is positioned against the viewport — an
+        // ancestor's overflow does not clip it. The video would have painted over
+        // the window's transparent outer margin and its rounded corners, which is
+        // the same trap the debug-modal shadow and the tutorial spotlight both hit.
+        // Absolute makes the parent clip it, corners included.
+        v.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;'
             + 'object-fit:var(--bmm-app-bg-size, cover);object-position:var(--bmm-app-bg-position, center);'
             + 'z-index:0;pointer-events:none;'
             + 'filter:blur(var(--bmm-app-bg-blur));opacity:var(--bmm-app-bg-opacity, 0.3);';
