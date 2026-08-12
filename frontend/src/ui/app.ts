@@ -6,7 +6,7 @@
 
 import { initProfiles, renderProfiles, updateProfileChip, openNewProfileModal, getProfileIconSvg } from '../features/profiles/profiles.js';
 import { initMods, refreshMods } from '../features/mods/mods.js';
-import { initI18n, applyTranslations, t } from '../core/i18n.js';
+import { initI18n, applyTranslations, t, getLang } from '../core/i18n.js';
 import { initBenchmark } from '../features/bench/benchmark.js';
 import { shouldShowOnboarding, startOnboarding } from './onboarding.js';
 import { initNavbarCustomize } from './navbar-customize.js';

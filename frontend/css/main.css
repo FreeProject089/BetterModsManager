@@ -15906,3 +15906,28 @@ body.bmm-docked .view {
     overflow-x: auto;
 }
 body.bmm-docked .view > * { max-width: 100%; }
+
+/* ── Translation sandbox header, docked: room to breathe, no overlap ─────────
+   At 460px the title, the two action tools, the opacity slider and three window
+   buttons all fought for one row and printed on top of each other (field
+   screenshot). Docked, the header wraps properly and the title stops shrinking
+   below its own text. */
+body.i18nsb-docked #modal-i18n-sandbox .i18n-sb-header {
+    flex-wrap: wrap;
+    row-gap: 8px;
+    align-items: center;
+}
+body.i18nsb-docked #modal-i18n-sandbox .i18n-sb-header > div:first-child {
+    flex: 1 1 100%;
+    min-width: 0;
+}
+body.i18nsb-docked #modal-i18n-sandbox .i18n-sb-header-actions {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    row-gap: 6px;
+    margin-left: 0;
+}
+/* The opacity slider only means something while floating — it is dead weight in a
+   dock, where the panel is opaque by construction. */
+body.i18nsb-docked #modal-i18n-sandbox .i18n-ovl-opacity { display: none; }
+body.i18nsb-docked #modal-i18n-sandbox .i18n-sb-progress { max-width: 100%; }

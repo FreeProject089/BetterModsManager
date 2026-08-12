@@ -93,16 +93,32 @@ document.getElementById('clear').addEventListener('click', async () => {
 <button id="refresh">Refresh</button>
 <div class="out" id="out">Press Refresh.</div>`,
         css: TPL_CSS_BASE,
-        js: `// Needs the "app info" permission.
+        js: `// Needs "app info" (bmm.read) and, for the second block, "system info".
 const out = document.getElementById('out');
 
+// The sandbox API is bmm.read(scope) for app values and bmm.system.info() for
+// hardware — there is no bmm.app.info(). See custom_pages.rs for the full surface.
+const SCOPES = ['app.name', 'app.version', 'app.platform', 'app.lang',
+                'app.online', 'theme.current', 'theme.dark', 'theme.accent'];
+
 async function refresh() {
-  try {
-    const info = await bmm.app.info();
-    out.textContent = JSON.stringify(info, null, 2);
-  } catch (e) {
-    out.textContent = 'Refused: ' + e + '\\n\\nTick "app info" on this page.';
+  const lines = [];
+  for (const scope of SCOPES) {
+    try {
+      const v = await bmm.read(scope);
+      lines.push(scope.padEnd(15) + (v === null ? '—' : v));
+    } catch (e) {
+      lines.push(scope.padEnd(15) + 'refused — tick "app info"');
+    }
   }
+  try {
+    const sys = await bmm.system.info();
+    lines.push('', '-- system (needs "system info") --');
+    for (const k of Object.keys(sys)) lines.push(String(k).padEnd(15) + sys[k]);
+  } catch (e) {
+    lines.push('', 'system info: not granted');
+  }
+  out.textContent = lines.join('\\n');
 }
 
 document.getElementById('refresh').addEventListener('click', refresh);
@@ -121,10 +137,10 @@ document.getElementById('send').addEventListener('click', async () => {
   const msg = document.getElementById('msg').value.trim();
   if (!msg) return;
   try {
-    await bmm.notify(msg);
+    await bmm.notify(msg, 'info');
     document.getElementById('status').textContent = 'Sent.';
   } catch (e) {
-    document.getElementById('status').textContent = 'Refused: ' + e;
+    document.getElementById('status').textContent = 'Refused: ' + e + ' — tick "notify".';
   }
 });`,
     },

@@ -563,3 +563,19 @@ body.tut-dock-side .tut-chips-scroller {
     border-radius: 8px;
     outline: 1px solid var(--bmm-border-accent, var(--accent));
 }
+
+/* ── The chips must still scroll in the two-row dock topbar ──────────────────
+   Making the scroller span the grid (grid-column: 1/-1) let its track size to the
+   chips' own `width: max-content`, so the box grew to fit its content instead of
+   overflowing it — and a box that never overflows never scrolls. minmax(0,…) on
+   the track and a hard max-width put the overflow back, which is what
+   `overflow-x: auto` needs to do anything. */
+body.tut-dock-side .tut-card-topbar { grid-template-columns: minmax(0, 1fr) auto; }
+body.tut-dock-side .tut-chips-scroller {
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: auto;
+    /* A touch/trackpad drag must reach the scroller, not the card behind it. */
+    touch-action: pan-x;
+    overscroll-behavior-x: contain;
+}
