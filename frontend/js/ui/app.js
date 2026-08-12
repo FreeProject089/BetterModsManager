@@ -86,9 +86,19 @@ async function waitForModalClosed(id) {
 }
 // ── Tauri bridge ──────────────────────────────────────────
 import { loadTauri, invoke, pickFolder, pickFile, saveFile, convertFileSrc, listenFileDrop, sendOsNotification } from '../core/api.js';
+import { recordNotification, initNotificationCenter } from './notification-center.js';
 export { invoke, pickFolder, pickFile, saveFile, listenFileDrop, sendOsNotification };
 // ── Toast ─────────────────────────────────────────────────
 export function toast(message, type = 'info', duration = 3000, icon = '') {
+    // Recorded here and ONLY here. A toast is a three-second window onto something
+    // that already happened — miss it and the information was simply gone, because
+    // there was no second place to look. Hooking the record into toast() rather
+    // than into each caller means the notification centre and the toast can never
+    // disagree about what the app said. (ui/notification-center.ts)
+    try {
+        recordNotification(String(message ?? ''), type);
+    }
+    catch { /* never let history break a message */ }
     const container = document.getElementById('toast-container');
     const el = document.createElement('div');
     el.className = `toast ${type}`;
@@ -840,6 +850,7 @@ async function main() {
     document.getElementById('btn-faq-resumable-alt')?.addEventListener('click', () => openDiagram('resumable-downloads'));
     initNavbarLangDropdown();
     initNavbarVersion();
+    initNotificationCenter();
     initUpdateNotes();
     initMapper();
     initPlugins();

@@ -16067,3 +16067,144 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
     transform-origin: 50% 50%;
     will-change: transform;
 }
+
+/* ── Notification centre ─────────────────────────────────────────────────────
+   The bell sits beside "Check for Updates" in the sidebar footer. Its unread
+   count lives in a data-count attribute and is drawn with ::after, so the number
+   is one attribute write and never a DOM rebuild — this repaints on every toast. */
+.btn-notif-center {
+    position: relative;
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.btn-notif-center:hover { color: var(--accent); border-color: var(--accent); }
+.btn-notif-center[aria-expanded="true"] { color: var(--accent); border-color: var(--accent); background: var(--bmm-s08); }
+.btn-notif-center.has-unread::after {
+    content: attr(data-count);
+    position: absolute;
+    top: -5px; right: -5px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    box-sizing: border-box;
+    border-radius: 999px;
+    background: var(--accent);
+    color: var(--text-on-accent);
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 16px;
+    text-align: center;
+}
+
+/* Opens upward: the button is a few pixels off the bottom edge, so up is the only
+   direction with room — the same reasoning as every other footer menu here. */
+.nc-panel {
+    position: fixed;
+    z-index: 12000;
+    width: 340px;
+    max-width: calc(100vw - 16px);
+    max-height: min(460px, 70vh);
+    display: flex;
+    flex-direction: column;
+    border-radius: 14px;
+    border: 1px solid var(--border);
+    /* Opaque on purpose: a translucent panel would render its text over whatever
+       sits behind it, and this list is often read at a glance. */
+    background: var(--bg-card);
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.42);
+    overflow: hidden;
+}
+.nc-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 11px 13px;
+    border-bottom: 1px solid var(--border);
+    flex: none;
+}
+.nc-head strong { font-size: 13px; }
+.nc-head-actions { display: flex; gap: 6px; }
+.nc-act {
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-secondary);
+    border-radius: 7px;
+    padding: 3px 8px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+}
+.nc-act:hover { color: var(--accent); border-color: var(--accent); }
+.nc-act-danger:hover { color: var(--danger); border-color: var(--danger); }
+
+.nc-list { list-style: none; margin: 0; padding: 4px; overflow-y: auto; flex: 1 1 auto; }
+.nc-item {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 9px;
+    padding: 8px 9px;
+    border-radius: 9px;
+    position: relative;
+}
+.nc-item + .nc-item { margin-top: 2px; }
+.nc-item:hover { background: var(--bmm-s05); }
+/* An accent rail, not a coloured row: the message stays on text tokens so it is
+   legible in every theme, and severity is carried by the icon and the rail. */
+.nc-item.unread::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 8px; bottom: 8px;
+    width: 2px;
+    border-radius: 999px;
+    background: var(--accent);
+}
+.nc-ico { width: 16px; height: 16px; margin-top: 1px; }
+.nc-ico svg { width: 100%; height: 100%; }
+.nc-item.info .nc-ico { color: var(--accent); }
+.nc-item.success .nc-ico { color: var(--success); }
+.nc-item.warning .nc-ico { color: var(--warning); }
+.nc-item.error .nc-ico { color: var(--danger); }
+.nc-body { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.nc-msg { font-size: 12.5px; color: var(--text-primary); overflow-wrap: anywhere; }
+.nc-meta { display: flex; align-items: center; gap: 5px; font-size: 10.5px; color: var(--text-muted); }
+.nc-src { font-weight: 600; }
+.nc-del {
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    width: 20px; height: 20px;
+    padding: 0;
+    border-radius: 6px;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s, color 0.15s;
+}
+.nc-del svg { width: 12px; height: 12px; }
+.nc-item:hover .nc-del { opacity: 1; }
+.nc-del:hover { color: var(--danger); }
+/* Keyboard users never hover, so the control must appear on focus too or it is
+   unreachable without a mouse. */
+.nc-del:focus-visible { opacity: 1; }
+
+.nc-empty { padding: 30px 20px; text-align: center; color: var(--text-muted); flex: 1 1 auto; }
+.nc-empty svg { width: 34px; height: 34px; opacity: 0.4; margin-bottom: 10px; }
+.nc-empty p { margin: 0; font-size: 12.5px; }
+.nc-empty-sub { margin-top: 5px !important; font-size: 11px; opacity: 0.75; }
+.nc-foot {
+    flex: none;
+    padding: 8px 12px;
+    border-top: 1px solid var(--border);
+    font-size: 10.5px;
+    color: var(--text-muted);
+}

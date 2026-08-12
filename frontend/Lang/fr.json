@@ -6980,5 +6980,14 @@
   "dev.session.emptyDeclined": "Rien n'est stocké : tu as refusé la télémétrie, donc aucun événement n'est jamais enregistré.",
   "dev.session.emptyUnasked": "Rien n'est stocké : la télémétrie n'a pas été acceptée, et BMM n'enregistre rien tant qu'elle ne l'est pas.",
   "dev.session.emptyNone": "La télémétrie est active, mais rien n'a encore été enregistré durant cette session.",
-  "dev.session.shape": "La forme qu'aurait un événement"
+  "dev.session.shape": "La forme qu'aurait un événement",
+  "notif.title": "Notifications",
+  "notif.tip": "Tout ce que BMM vous a dit, réuni au même endroit.",
+  "notif.empty": "Rien pour l’instant.",
+  "notif.emptySub": "Tout ce que BMM vous dira sera conservé ici.",
+  "notif.markAllRead": "Tout marquer comme lu",
+  "notif.clearAll": "Vider",
+  "notif.remove": "Supprimer",
+  "notif.justNow": "à l’instant",
+  "notif.sourcesNote": "Sources : cette app. Un compte BCWEB lié ajoutera les siennes ici."
 }
