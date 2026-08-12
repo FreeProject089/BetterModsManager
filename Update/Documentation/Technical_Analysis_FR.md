@@ -775,8 +775,79 @@ Règle retenue : **toute commande qui touche `read_dir`, `WalkDir` ou `metadata`
 arborescence de taille utilisateur est `(async)`**, pas seulement celles pour lesquelles un
 gel a déjà été signalé.
 
-Corollaire côté interface : une animation de `transform` n'est prise en charge par le
-compositeur qu'une fois sa couche promue, et cette promotion est validée par le thread
-principal. Un indicateur inséré pendant un travail lourd n'obtient jamais sa couche et reste
-figé — ce qui ressemble à un gel sans en être un. `will-change: transform` réclame la couche
-d'avance.
+Le corollaire côté interface a été écrit ici avant d'être vrai ; il est corrigé au §58.
+
+## 58. Le spinner éteint, pas figé
+
+Il a fallu trois diagnostics, et les deux premiers méritent d'être consignés : tous deux
+étaient plausibles, tous deux étaient faux.
+
+Le premier accusait la promotion de couche compositeur : une animation de `transform` n'est
+prise en charge par le compositeur qu'une fois sa couche promue, et cette promotion est
+validée par le thread principal. Le second accusait une collision de noms : `@keyframes
+spin` est déclaré trois fois et le dernier analysé l'emporte globalement. Les deux
+corrections ont été faites, les deux sont inoffensives, aucune n'a déplacé le symptôme.
+
+La cause réelle : les indicateurs n'ont jamais été figés — ils étaient **éteints**. Une
+règle globale pose, sous `prefers-reduced-motion` :
+
+```css
+animation-duration: 0.01ms !important;
+animation-iteration-count: 1 !important;
+```
+
+Une durée de 0,01 ms est survivable pour une boucle infinie. C'est `iteration-count: 1` qui
+tue : le spinner fait exactement un tour instantané puis s'arrête, immobile et strictement
+identique à une application plantée — le seul message qu'un indicateur de chargement ne doit
+jamais envoyer. Windows signale `prefers-reduced-motion: reduce` dès qu'Accessibilité →
+Effets visuels → « Effets d'animation » est désactivé : cela se déclenche donc sur une
+machine standard, sans aucun réglage dans BMM.
+
+La correction exempte les indicateurs de progression de cette règle et du coupe-circuit
+`bmm-no-anim` de l'app, à 2,4 s volontairement lents plutôt que simplement réactivés. Le
+reduced-motion existe pour arrêter le parallaxe, le zoom et le défilement pleine surface ;
+un petit glyphe qui tourne sur lui-même en est l'exception classiquement admise.
+
+**La leçon, qui a coûté deux commits :** avant d'accuser le moteur de rendu pour une
+animation qui ne joue pas, vérifiez qu'une règle globale ne l'a pas éteinte. Un commentaire
+qui décrit une intention ne prouve jamais que le code la réalise — un mécanisme plausible
+non plus.
+
+## 59. Exécuter du code utilisateur sans shell
+
+Le planificateur savait lancer un programme avec des arguments. C'est la mauvaise forme pour
+« fais ces cinq choses dans l'ordre » : l'exprimer en argv impose cinq étapes, et
+l'alternative — une longue chaîne remise à un shell — est précisément la surface d'injection
+de commande que ce module a été écrit pour éviter (CWE-78).
+
+Le script est la forme honnête. L'utilisateur écrit du code, celui-ci va dans un **fichier**,
+et c'est le fichier qui est remis à l'interpréteur. Le corps n'est jamais concaténé dans une
+ligne de commande et n'atteint jamais un shell sous forme de texte : rien à échapper, aucune
+règle de quoting à ne pas rater. L'interpréteur est choisi dans une table fermée
+(`powershell` / `cmd` / `bash` / `python`), donc le paramètre `engine` ne peut jamais *être*
+le programme. Le fichier temporaire est nommé à partir du pid et d'un horodatage en
+nanosecondes — deux tâches déclenchées au même tick ne doivent pas écrire le script l'une de
+l'autre — et il est supprimé sur tous les chemins, y compris si le lancement échoue.
+
+Les deux lanceurs sont `#[tauri::command(async)]`. `cmd.output()` bloque jusqu'à la sortie du
+processus fils ; en synchrone, il gelait la fenêtre pendant toute la vie de ce fils. C'est la
+règle du §57 appliquée à l'attente plutôt qu'au parcours de disque.
+
+## 60. Des permissions qui nomment ce qu'elles débloquent
+
+Une case unique « autoriser les commandes personnalisées » annonçait qu'une permission était
+accordée sans dire laquelle — et elle ne couvrait pas du tout les deeplinks. Déclencher un
+lien `bmm://` atteint tout ce que l'app expose, y compris des actions sans étape dédiée dans
+le planificateur : c'était à la fois la capacité la plus large du sous-système et la seule
+que personne n'avait à demander.
+
+Ce sont désormais trois autorisations distinctes : lancer des programmes externes, exécuter
+des scripts, déclencher des deeplinks.
+
+La migration est la partie intéressante. Une tâche existante ne porte que l'ancien drapeau,
+et `taskPerms()` en dérive : le drapeau signifiait « peut lancer des programmes externes »,
+il donne donc `command` ; il donne aussi `deeplink`, parce que les deeplinks n'exigeaient
+auparavant rien et que les révoquer à la mise à jour casserait des automatisations qui
+fonctionnent aujourd'hui. Il ne donne **pas** `script`. Cette capacité n'existait pas quand
+l'utilisateur a coché la case : l'accorder rétroactivement ne serait pas honorer un
+consentement, ce serait l'inventer.

@@ -843,7 +843,76 @@ activation — the cause of the freeze reported in the field.
 The rule adopted: **any command touching `read_dir`, `WalkDir` or `metadata` over a
 user-sized tree is `(async)`**, not only the ones a freeze has already been reported for.
 
-The UI corollary: a `transform` animation only runs on the compositor once its layer is
-promoted, and that promotion is committed by the main thread. A spinner inserted during
-heavy work never gets its layer and sits frozen — which looks like a hang without being
-one. `will-change: transform` asks for the layer up front.
+The UI corollary was written here before it was true, and is corrected in §58.
+
+## 58. The spinner that was switched off, not frozen
+
+Three diagnoses were needed, and the first two are worth recording because both were
+plausible and both were wrong.
+
+The first blamed compositor layer promotion: a `transform` animation only runs on the
+compositor once its layer is promoted, and that promotion is committed by the main thread,
+so a spinner inserted during heavy work never gets its layer. The second blamed a name
+collision: `@keyframes spin` is declared three times across the stylesheets and the last
+one parsed wins globally. Both changes were made, both are harmless, and neither moved the
+symptom.
+
+The actual cause is that the indicators were never frozen — they had been **switched off**.
+A global rule sets, under `prefers-reduced-motion`:
+
+```css
+animation-duration: 0.01ms !important;
+animation-iteration-count: 1 !important;
+```
+
+A 0.01ms duration is survivable for an infinite loop. It is `iteration-count: 1` that
+kills: the spinner completes exactly one instant turn and stops, static and pixel-identical
+to a hung application — the one message a loading indicator must never send. Windows
+reports `prefers-reduced-motion: reduce` whenever Accessibility → Visual effects →
+"Animation effects" is off, so this fires on a stock machine with nothing set inside BMM.
+
+The fix carves progress indicators out of that rule and out of the app's own `bmm-no-anim`
+kill-switch, at a deliberately slow 2.4s rather than simply re-enabled. Reduced-motion
+exists to stop large-area parallax, zoom and slide; a small glyph rotating in place is the
+textbook permitted exception.
+
+**The lesson, which cost two commits:** before blaming the renderer for an animation that
+will not play, check whether a global rule has turned it off. A comment describing an
+intention is never proof the code realises it, and neither is a plausible mechanism.
+
+## 59. Running user code without a shell
+
+The scheduler could launch a program with arguments. That is the wrong shape for "do these
+five things in order": expressing it as argv means five steps, and the alternative — one
+long string handed to a shell — is precisely the command-injection surface the module was
+written to avoid (CWE-78).
+
+A script is the honest form. The user writes code, it goes to a **file**, and the
+interpreter is handed the file. The body is never concatenated into a command line and
+never reaches a shell as text, so there is nothing to escape and no quoting rule for the
+user to get wrong. The interpreter is selected from a closed table (`powershell` / `cmd` /
+`bash` / `python`) and the `engine` parameter can therefore never *be* the program. The
+temp file is named from the process id and a nanosecond stamp — two tasks firing on the
+same tick must not write each other's script — and is removed on every path, including a
+failed spawn.
+
+Both spawners are `#[tauri::command(async)]`. `cmd.output()` blocks until the child exits;
+synchronous, it froze the window for the child's entire lifetime. This is §57's rule
+applied to waiting rather than to walking a disk.
+
+## 60. Permissions that name what they unlock
+
+A single checkbox labelled "allow custom commands" told the user a permission was being
+granted but not what it covered — and it did not cover deeplinks at all. Firing a `bmm://`
+link reaches anything the app exposes, including actions that have no scheduler step of
+their own, so it was simultaneously the widest capability in the subsystem and the only one
+nobody had to ask for.
+
+It is now three separate grants: run external programs, run scripts, fire deeplinks.
+
+The migration is the interesting part. An existing task carries only the old flag, and
+`taskPerms()` derives from it: the flag meant "may run external programs", so it maps to
+`command`; it also maps to `deeplink`, because deeplinks previously required nothing and
+revoking them on upgrade would break automations that work today. It does **not** map to
+`script`. That capability did not exist when the user ticked the box, so granting it
+retroactively would not be honouring consent — it would be inventing it.
