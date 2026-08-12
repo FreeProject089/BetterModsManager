@@ -1561,6 +1561,7 @@ function togglePickToken(): void {
     document.addEventListener('mouseover', onPickHover, true);
     document.addEventListener('contextmenu', onPickTokenClick, true);
     document.addEventListener('auxclick', onPickTokenClick, true);
+    showPickHint('token');
     document.addEventListener('keydown', onPickEsc, true);
     toast(t('themes.pickOn')||'Right-click (or middle-click) any element to edit it. Esc to cancel.', 'info', 3500);
 }
@@ -1573,6 +1574,7 @@ function startPickTarget(cb: (selector: string) => void): void {
     document.addEventListener('mouseover', onPickHover, true);
     document.addEventListener('contextmenu', onPickTargetClick, true);
     document.addEventListener('auxclick', onPickTargetClick, true);
+    showPickHint('target');
     document.addEventListener('keydown', onPickEsc, true);
 }
 
@@ -1580,7 +1582,31 @@ function onPickEsc(e: KeyboardEvent): void {
     if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); stopPick(); }
 }
 
+/** The on-screen pick hint.
+ *
+ *  Selection is right-click / middle-click ON PURPOSE — left-click has to keep
+ *  working so the app stays usable while you hunt for an element. But nothing said
+ *  so, so the picker read as broken. It also carries the way into the precise
+ *  editor, which used to appear only when no token could be guessed. */
+function showPickHint(kind: 'token' | 'target'): void {
+    document.getElementById('bte-pick-hint')?.remove();
+    const hint = document.createElement('div');
+    hint.id = 'bte-pick-hint';
+    hint.className = 'bte-pick-hint';
+    hint.innerHTML = `
+        <span class="bte-pick-hint-key">${t('themes.pickRight') || 'Clic droit'}</span>
+        <span class="bte-pick-hint-or">${t('common.or') || 'ou'}</span>
+        <span class="bte-pick-hint-key">${t('themes.pickMiddle') || 'clic molette'}</span>
+        <span class="bte-pick-hint-txt">${kind === 'token'
+            ? (t('themes.pickHintToken') || 'sur un élément pour trouver son token')
+            : (t('themes.pickHintTarget') || 'sur un élément pour le cibler')}</span>
+        ${kind === 'token' ? `<span class="bte-pick-hint-alt">${t('themes.pickHintShift') || 'Maj + clic droit : éditer cet élément précisément'}</span>` : ''}
+        <span class="bte-pick-hint-esc">Échap</span>`;
+    (document.getElementById('app-window-outer') || document.body).appendChild(hint);
+}
+
 function stopPick(): void {
+    document.getElementById('bte-pick-hint')?.remove();
     _pickMode = null;
     _pickTargetCb = null;
     document.body.classList.remove('bte-picking');
@@ -1628,9 +1654,12 @@ function onPickTokenClick(e: MouseEvent): void {
         guessedToken = computedColorToToken(col);
         if (guessedToken) break;
     }
+    const wantsPrecise = e.shiftKey;
     stopPick();
-    // No mapped token → let the user recolour this element directly via an override.
-    if (!guessedToken) {
+    // The precise editor used to be reachable ONLY when no token could be guessed,
+    // so on any element the guesser recognised it looked like it had disappeared.
+    // Shift is the explicit way in, and it always works.
+    if (!guessedToken || wantsPrecise) {
         openElementOverrideEditor(el);
         return;
     }

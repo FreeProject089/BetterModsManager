@@ -792,8 +792,13 @@ function applyAssets(theme: BmmTheme): void {
         _assetObserver.observe(document.body, { childList: true, subtree: true });
     }
     // App logo (sidebar)
+    // The token alone did nothing: it was declared in tokens.css and written here,
+    // but NO rule ever read it, so "Sidebar logo" in the editor changed nothing.
+    // The brand is a TEXT block, so swapping it needs a state CSS can select on —
+    // a var cannot be tested for `none` in a selector.
     if (a.logo) document.documentElement.style.setProperty('--bmm-nav-logo-url', `url("${a.logo}")`);
     else document.documentElement.style.removeProperty('--bmm-nav-logo-url');
+    document.body.classList.toggle('bmm-has-nav-logo', !!a.logo);
 }
 
 /** Remove all theme overrides and revert to BMM default. */
@@ -817,6 +822,7 @@ export function resetTheme(): void {
     clearAllEnforced();
     document.body.classList.remove('bmm-theme-light', 'bmm-no-anim');
     document.documentElement.style.removeProperty('--bmm-nav-logo-url');
+    document.body.classList.remove('bmm-has-nav-logo');
     localStorage.removeItem(ACTIVE_KEY);
 }
 

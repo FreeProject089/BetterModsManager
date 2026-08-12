@@ -692,3 +692,71 @@ body.bte-docked #bmm-theme-editor .bte-dock-resize { display: block; }
     background: var(--bmm-accent);
     opacity: 1;
 }
+
+/* ── A theme-supplied sidebar logo replaces the text brand ───────────────────
+   `--bmm-nav-logo-url` was declared in tokens.css and written by the theme engine,
+   but no rule ever read it — "Sidebar logo" in the editor changed nothing. A CSS
+   selector cannot test a custom property for `none`, so the engine also sets the
+   state class this keys on. */
+body.bmm-has-nav-logo .sidebar-brand .brand-text-logo { display: none; }
+body.bmm-has-nav-logo .sidebar-brand .brand::before {
+    content: '';
+    display: block;
+    width: 100%;
+    height: 52px;
+    background-image: var(--bmm-nav-logo-url);
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+/* ── The element picker says how to pick ─────────────────────────────────────
+   Right/middle-click is deliberate (left-click must keep working so the app stays
+   usable while hunting), but an undocumented gesture reads as a broken tool. */
+.bte-pick-hint {
+    position: absolute;
+    left: 50%;
+    bottom: 22px;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: center;
+    max-width: min(760px, 92%);
+    padding: 9px 16px;
+    border-radius: 999px;
+    background: var(--bmm-bg-overlay);
+    border: 1px solid var(--bmm-border-accent, var(--bmm-accent));
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+    color: var(--bmm-text-primary);
+    font-size: 12px;
+    z-index: 2147483646;   /* under the override popup, over everything else */
+    pointer-events: none;
+    animation: bteElovIn 0.16s ease;
+}
+.bte-pick-hint-key {
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: var(--bmm-s08);
+    border: 1px solid var(--bmm-border);
+    font-weight: 700;
+    font-size: 11px;
+}
+.bte-pick-hint-or { color: var(--bmm-text-muted); font-size: 11px; }
+.bte-pick-hint-txt { color: var(--bmm-text-secondary); }
+.bte-pick-hint-alt {
+    color: var(--bmm-accent);
+    font-size: 11px;
+    border-left: 1px solid var(--bmm-border);
+    padding-left: 10px;
+}
+.bte-pick-hint-esc {
+    margin-left: 2px;
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: var(--bmm-s05);
+    color: var(--bmm-text-muted);
+    font-size: 10px;
+    font-weight: 700;
+}

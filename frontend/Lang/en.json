@@ -6936,5 +6936,10 @@
   "i18n.startTitle": "Three ways to start",
   "i18n.startPickList": "Pick a key in the list on the left — you see its value, its usages, and you edit.",
   "i18n.startPickScreen": "'Pick', then click any text in BMM: its key opens right here.",
-  "i18n.startNextMissing": "'Next missing' jumps gap to gap — the shortest path to finishing a language."
+  "i18n.startNextMissing": "'Next missing' jumps gap to gap — the shortest path to finishing a language.",
+  "themes.pickRight": "Right-click",
+  "themes.pickMiddle": "middle-click",
+  "themes.pickHintToken": "an element to find its token",
+  "themes.pickHintTarget": "an element to target it",
+  "themes.pickHintShift": "Shift + right-click: edit this element precisely"
 }

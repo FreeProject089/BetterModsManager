@@ -6934,5 +6934,10 @@
   "i18n.startTitle": "Trois façons de commencer",
   "i18n.startPickList": "Choisis une clé dans la liste à gauche — tu vois sa valeur, ses usages, et tu édites.",
   "i18n.startPickScreen": "« Pick » puis clique n'importe quel texte de BMM : sa clé s'ouvre ici directement.",
-  "i18n.startNextMissing": "« Suivant manquant » saute de trou en trou — le chemin le plus court pour finir une langue."
+  "i18n.startNextMissing": "« Suivant manquant » saute de trou en trou — le chemin le plus court pour finir une langue.",
+  "themes.pickRight": "Clic droit",
+  "themes.pickMiddle": "clic molette",
+  "themes.pickHintToken": "sur un élément pour trouver son token",
+  "themes.pickHintTarget": "sur un élément pour le cibler",
+  "themes.pickHintShift": "Maj + clic droit : éditer cet élément précisément"
 }
