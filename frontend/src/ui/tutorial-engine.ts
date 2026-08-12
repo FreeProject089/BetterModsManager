@@ -282,9 +282,11 @@ function _isElementVisible(el: HTMLElement): boolean {
 function _cleanup(): void {
     if (_typeInterval)             { clearInterval(_typeInterval);             _typeInterval             = null; }
     if (_actionUnsub)              { _actionUnsub(); _actionUnsub = null; }
+    _stopFieldFlow();
     if (_modalPollInterval)        { clearInterval(_modalPollInterval);        _modalPollInterval        = null; }
     if (_highlightTrackerInterval) { clearInterval(_highlightTrackerInterval); _highlightTrackerInterval = null; }
     document.querySelectorAll('.tut-highlight').forEach(el => el.remove());
+    document.getElementById('tut-hl-layer')?.remove();
     document.getElementById('tut-ghost-cursor')?.remove();
     document.getElementById('tut-scroll-hint')?.remove();
     document.getElementById('tut-unsaved-overlay')?.remove();
@@ -767,6 +769,13 @@ function _renderStep(): void {
             setTimeout(() => target?.classList.remove('tut-field-flash'), 1600);
             const key = row.dataset.fieldKey;
             if (key) (window as any).showTaskyHelp?.(key, 'info', true);
+            // In a running flow, clicking a row moves the flow there — the list is
+            // a table of contents, not just a legend.
+            if (_fieldFlow) {
+                const rows = Array.from(document.querySelectorAll('.tut-field-row'));
+                const idx = rows.indexOf(row);
+                if (idx >= 0) { _fieldFlow.i = idx; _fieldFlowRender(); }
+            }
         });
     });
 
@@ -1058,7 +1067,7 @@ function _startModalPoll(modalSelector: string, fields?: { sel: string; key: str
             // step declares them, every field to fill — numbered, no dim).
             document.querySelectorAll('.tut-highlight').forEach(el => el.remove());
             if (fields && fields.length) {
-                _highlightFields(fields);
+                _startFieldFlow(fields);
             } else {
                 _highlightElement(modalSelector, 0);
             }
@@ -1081,10 +1090,122 @@ function _highlightFields(fields: { sel: string; key: string }[]): void {
     _suppressDim = false;
 }
 
+// ── Sequential field flow ────────────────────────────────────────────────────
+//
+// Field feedback: a step per field (or eight anonymous rings at once) reads as a
+// form, not a lesson. The flow guides ONE field at a time and advances ITSELF on
+// the user's real input — type the name, the ring moves to the next field and the
+// action box explains it. No Next-clicking through a form.
+//
+// Advance signals per field kind:
+//   text/textarea  → change (blur/Enter) with a non-empty value
+//   select/checkbox/radio/color → change
+//   button / grid / anything else → click
+//   read-only path fields (set programmatically by a picker) → 400ms value poll
+let _fieldFlow: {
+    fields: { sel: string; key: string }[];
+    i: number;
+    unsubs: (() => void)[];
+    poll: ReturnType<typeof setInterval> | null;
+} | null = null;
+
+function _resolveFieldEl(sel: string): HTMLElement | null {
+    let target: Element | null = document.getElementById(sel) || document.querySelector(`[id="${sel}"]`);
+    if (!target) target = _preferDemo(Array.from(document.querySelectorAll(`.${sel}`)));
+    return (_resolveCustomSelect(target) ?? target) as HTMLElement | null;
+}
+
+function _stopFieldFlow(): void {
+    if (!_fieldFlow) return;
+    _fieldFlow.unsubs.forEach(u => { try { u(); } catch { /* detached */ } });
+    if (_fieldFlow.poll) clearInterval(_fieldFlow.poll);
+    _fieldFlow = null;
+}
+
+function _fieldFlowRender(): void {
+    const flow = _fieldFlow;
+    if (!flow) return;
+    // Panel rows reflect the journey: done / current / todo.
+    document.querySelectorAll<HTMLElement>('.tut-field-row').forEach((row, idx) => {
+        row.classList.toggle('done', idx < flow.i);
+        row.classList.toggle('current', idx === flow.i);
+    });
+    document.querySelectorAll('.tut-highlight').forEach(el => el.remove());
+    const f = flow.fields[flow.i];
+    const desc = document.querySelector('#tut-action-box .tut-action-desc');
+    if (!f) {
+        // Every field visited. The step's own action event (profile-created…) still
+        // decides completion; the box goes back to describing that final act.
+        if (desc && _currentStepRef()?.action) desc.textContent = t(_currentStepRef()!.action!.desc_key);
+        return;
+    }
+    _suppressDim = true;
+    _highlightElement(f.sel, 0);
+    _suppressDim = false;
+    // The ring's badge counts the journey, not always "1".
+    const badge = document.querySelector('.tut-highlight div');
+    if (badge) badge.textContent = String(flow.i + 1);
+    if (desc) desc.textContent = `${flow.i + 1}/${flow.fields.length} — ${t(f.key)}`;
+    _resolveFieldEl(f.sel)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    _fieldFlowWire(f);
+}
+
+function _fieldFlowAdvance(): void {
+    if (!_fieldFlow) return;
+    _fieldFlow.unsubs.forEach(u => { try { u(); } catch { /* detached */ } });
+    _fieldFlow.unsubs = [];
+    if (_fieldFlow.poll) { clearInterval(_fieldFlow.poll); _fieldFlow.poll = null; }
+    _fieldFlow.i++;
+    _fieldFlowRender();
+}
+
+function _fieldFlowWire(f: { sel: string; key: string }): void {
+    const flow = _fieldFlow;
+    if (!flow) return;
+    const el = _resolveFieldEl(f.sel);
+    if (!el) return;
+    const on = (target: EventTarget, ev: string, h: (e: Event) => void) => {
+        target.addEventListener(ev, h);
+        flow.unsubs.push(() => target.removeEventListener(ev, h));
+    };
+    const tag = el.tagName;
+    const isText = (tag === 'INPUT' && !['checkbox', 'radio', 'button', 'submit', 'color', 'file'].includes((el as HTMLInputElement).type)) || tag === 'TEXTAREA';
+    if (isText) {
+        const input = el as HTMLInputElement;
+        on(el, 'change', () => { if (input.value.trim()) _fieldFlowAdvance(); });
+        on(el, 'keydown', (e) => { if ((e as KeyboardEvent).key === 'Enter' && input.value.trim()) _fieldFlowAdvance(); });
+        // Programmatic writes (folder pickers on readonly inputs) fire no events.
+        let last = input.value;
+        flow.poll = setInterval(() => {
+            if (!input.isConnected) return;
+            if (input.value !== last && input.value.trim()) _fieldFlowAdvance();
+            last = input.value;
+        }, 400);
+    } else if (tag === 'SELECT' || (tag === 'INPUT')) {
+        on(el, 'change', () => _fieldFlowAdvance());
+        on(el, 'input', () => _fieldFlowAdvance());
+    } else {
+        // Buttons, icon grids, colour swatches: the click IS the act. Advance after
+        // it lands so the app's own handler runs first.
+        on(el, 'click', () => setTimeout(_fieldFlowAdvance, 200));
+    }
+}
+
+function _currentStepRef(): TutorialStep | null {
+    try { return _currentPart().steps[_stepIndex] ?? null; } catch { return null; }
+}
+
+/** One field at a time, self-advancing. */
+function _startFieldFlow(fields: { sel: string; key: string }[]): void {
+    _stopFieldFlow();
+    _fieldFlow = { fields, i: 0, unsubs: [], poll: null };
+    _fieldFlowRender();
+}
+
 function _highlightElements(step: TutorialStep): void {
     // Field guide for fields already on the page (numbered rings, no dim).
     if (step.fields && step.fields.length) {
-        _highlightFields(step.fields);
+        _startFieldFlow(step.fields);
         return;
     }
     const selectors: string[] = [
@@ -1139,6 +1260,24 @@ function _highlightElement(selector: string, idx: number = 0): void {
     if (target) _drawHighlight(target, idx);
 }
 
+/** The layer every page highlight lives in: absolutely positioned INSIDE
+ *  #app-window-outer, overflow hidden, radius inherited — so the spotlight's huge
+ *  box-shadow is clipped to the window instead of painting over its transparent
+ *  outer margin (field screenshot: the grey covered the whole screen, rounded
+ *  corners included). Rings inside an open modal stay body-mounted (z 20000):
+ *  the modal overlay already owns the full window. */
+function _hlLayer(): HTMLElement {
+    let layer = document.getElementById('tut-hl-layer');
+    if (!layer) {
+        layer = document.createElement('div');
+        layer.id = 'tut-hl-layer';
+        layer.style.cssText = 'position:absolute;inset:0;overflow:hidden;border-radius:inherit;pointer-events:none;z-index:8990;';
+        const host = document.getElementById('app-window-outer');
+        if (host) host.appendChild(layer); else document.body.appendChild(layer);
+    }
+    return layer;
+}
+
 function _drawHighlight(target: Element, idx: number = 0): void {
     const r = target.getBoundingClientRect();
     if (r.width === 0 || r.height === 0) return;
@@ -1173,10 +1312,12 @@ function _drawHighlight(target: Element, idx: number = 0): void {
     const dim = (idx === 0 && !_suppressDim)
         ? `0 0 0 3px ${tutColorHex}40, 0 0 0 9999px rgba(8,11,18,0.60), 0 0 34px ${tutColorHex}99`
         : `0 0 0 3px ${tutColorHex}33, 0 0 26px ${tutColorHex}80`;
+    const layer = inModal ? null : _hlLayer();
+    const o = layer ? layer.getBoundingClientRect() : { top: 0, left: 0 } as DOMRect;
     hl.style.cssText = `
-        position:fixed;
-        top:${r.top - pad}px;
-        left:${r.left - pad}px;
+        position:${layer ? 'absolute' : 'fixed'};
+        top:${r.top - o.top - pad}px;
+        left:${r.left - o.left - pad}px;
         width:${r.width + pad * 2}px;
         height:${r.height + pad * 2}px;
         border:2px solid ${tutColor};
@@ -1212,7 +1353,7 @@ function _drawHighlight(target: Element, idx: number = 0): void {
         hl.appendChild(label);
     }
 
-    document.body.appendChild(hl);
+    (layer ?? document.body).appendChild(hl);
     _startHighlightTracker();
 }
 
@@ -1499,8 +1640,11 @@ function _startHighlightTracker(): void {
             const pad        = 4;
             const cs         = window.getComputedStyle(target);
             const baseRadius = parseFloat(cs.borderTopLeftRadius) || 8;
-            hl.style.top         = `${r.top - pad}px`;
-            hl.style.left        = `${r.left - pad}px`;
+            const layerEl = hl.parentElement && hl.parentElement.id === 'tut-hl-layer'
+                ? hl.parentElement.getBoundingClientRect() : null;
+            const oy = layerEl ? layerEl.top : 0;
+            hl.style.top         = `${r.top - oy - pad}px`;
+            hl.style.left        = `${r.left - (layerEl ? layerEl.left : 0) - pad}px`;
             hl.style.width       = `${r.width + pad * 2}px`;
             hl.style.height      = `${r.height + pad * 2}px`;
             hl.style.borderRadius= `${baseRadius + pad}px`;

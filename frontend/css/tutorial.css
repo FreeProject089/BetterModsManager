@@ -203,6 +203,10 @@
 
 body.tut-dock-right .tut-engine-panel,
 body.tut-dock-left  .tut-engine-panel {
+    /* absolute, not fixed: the panel is a child of #app-window-outer, so the dock
+       snaps to the WINDOW's edge instead of the screen's — docking to the viewport
+       left a strip of wallpaper between the app and the panel (field screenshot). */
+    position: absolute;
     top: 0;
     bottom: 0;
     width: var(--tut-dock-w, 360px);
@@ -495,3 +499,67 @@ body.tut-dock-side .tut-finish {
 .tut-dock-resize:hover, .tut-dock-resize.dragging { background: var(--bmm-s08); }
 body.tut-dock-right .tut-dock-resize { left: 0; }
 body.tut-dock-left  .tut-dock-resize { right: 0; }
+
+/* ── Dock topbar: two calm rows instead of one overcrowded one ──────────────
+   In a 360-420px column, back-button + chips + three window buttons on ONE row
+   truncated the chips and overlapped (field screenshot). Row 1: back | window
+   buttons. Row 2: the chips, full width, with their scroll fade. */
+body.tut-dock-side .tut-card-topbar {
+    grid-template-columns: 1fr auto;
+    row-gap: 8px;
+}
+body.tut-dock-side .tut-chips-scroller {
+    grid-column: 1 / -1;
+    grid-row: 2;
+}
+
+/* ── The resize grip earns a visible affordance ─────────────────────────────
+   It existed but looked like nothing: a transparent 7px strip nobody could find.
+   Now: a full-height hairline plus a centered pill handle; accent on hover/drag. */
+.tut-dock-resize {
+    width: 12px;
+}
+.tut-dock-resize::before {
+    content: '';
+    position: absolute;
+    top: 0; bottom: 0;
+    left: 50%;
+    width: 2px;
+    transform: translateX(-50%);
+    background: var(--border);
+    opacity: 0.5;
+    transition: background 0.15s, opacity 0.15s;
+}
+.tut-dock-resize::after {
+    content: '';
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 5px; height: 46px;
+    border-radius: 999px;
+    background: var(--text-muted);
+    opacity: 0.55;
+    transition: background 0.15s, opacity 0.15s, height 0.15s;
+}
+.tut-dock-resize:hover::before, .tut-dock-resize.dragging::before {
+    background: var(--accent);
+    opacity: 0.9;
+}
+.tut-dock-resize:hover::after, .tut-dock-resize.dragging::after {
+    background: var(--accent);
+    opacity: 1;
+    height: 64px;
+}
+
+/* ── Sequential field flow: the rows tell you where you are ─────────────────
+   done = dimmed with a struck number; current = accent ring, it's the one the
+   spotlight is on. The states are painted by the engine's _fieldFlowRender. */
+.tut-field-row.done { opacity: 0.55; }
+.tut-field-row.done .tut-field-num {
+    background: var(--success) !important;
+}
+.tut-field-row.current {
+    background: var(--bmm-bg-hover);
+    border-radius: 8px;
+    outline: 1px solid var(--bmm-border-accent, var(--accent));
+}
