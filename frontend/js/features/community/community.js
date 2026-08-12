@@ -187,7 +187,10 @@ async function loadPosts() {
     }
     catch (e) {
         _posts = null;
-        toast(t('community.loadError') || 'Could not load the community blog.', 'error');
+        // NO toast. The page itself shows the failure state with a Retry — a toast on top
+        // was the same fact twice, and it re-fired on EVERY visit while offline, turning a
+        // calm "server unreachable" into nagging. Toasts are for failures the screen does
+        // not already show.
     }
     finally {
         _loading = false;
@@ -217,7 +220,18 @@ function render() {
         bodyHtml = `<div class="community-empty"><div class="community-spinner"></div><p>${escHtml(t('community.loading') || 'Loading…')}</p></div>`;
     }
     else if (_posts === null) {
-        bodyHtml = `<div class="community-empty"><p>${escHtml(t('community.loadError') || 'Could not load the community blog.')}</p>
+        // Two different situations, two different sentences: no network at all is the
+        // reader's situation; network fine but BCWEB down (or 404ing) is ours. Telling
+        // someone offline to "retry" against a server that is fine wastes their click.
+        const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+        const msg = offline
+            ? (t('community.offline') || 'You are offline. The blog will load once the connection is back.')
+            : (t('community.serverDown') || 'BetterCommunity is not reachable right now — the server may be down or updating. Everything else in BMM keeps working.');
+        bodyHtml = `<div class="community-empty">
+      <div class="kit-callout ${offline ? 'kit-callout-info' : 'kit-callout-warning'}" style="max-width:520px;margin:0 auto 14px;text-align:left">
+        <span class="kit-callout-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span>
+        <div class="kit-callout-body">${escHtml(msg)}</div>
+      </div>
       <button class="btn btn-secondary" id="community-retry">${escHtml(t('community.retry') || 'Retry')}</button></div>`;
     }
     else {

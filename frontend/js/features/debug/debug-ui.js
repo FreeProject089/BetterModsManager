@@ -145,6 +145,7 @@ class DebugUI {
                 <div class="debug-tab" data-tab="inspect-view" data-i18n="dev.tab.inspect">Inspect</div>
                 <div class="debug-tab" data-tab="state" data-i18n="dev.tab.state">State</div>
                 <div class="debug-tab" data-tab="playground" data-i18n="dev.tab.playground">Playground</div>
+                <div class="debug-tab" data-tab="session" data-i18n="dev.tab.session">Session</div>
             </div>
             <div class="debug-content">
                 <div class="debug-pane active" id="pane-console">
@@ -188,6 +189,7 @@ class DebugUI {
                                         <div style="font-size:11px; color:var(--text-muted)" data-i18n="dev.msg.rustDesc">Attach a native debugger or view backend logs.</div>
                                     </div>
                                     <div style="display:flex; gap:8px">
+                                        <button class="debug-btn debug-btn-ghost" id="rust-export-diag" style="font-size:10px; padding:4px 12px; border:1px solid rgba(255,255,255,0.1)" data-i18n="dev.btn.exportDiag">EXPORT DIAG</button>
                                         <button class="debug-btn debug-btn-ghost" id="rust-copy-lldb" style="font-size:10px; padding:4px 12px; border:1px solid rgba(255,255,255,0.1)" data-i18n="dev.btn.copyCmd">COPY CMD</button>
                                         <button class="debug-btn debug-btn-primary" id="rust-refresh-logs" style="font-size:10px; padding:4px 12px" data-i18n="dev.btn.refreshLogs">REFRESH LOGS</button>
                                     </div>
@@ -327,6 +329,9 @@ class DebugUI {
                     </div>
                 </div>
                 <div class="debug-pane" id="pane-state"></div>
+                <!-- Filled on demand by session-pane.ts: subscribing to the recorder costs
+                     nothing until someone actually looks. -->
+                <div class="debug-pane" id="pane-session"></div>
                 <div class="debug-pane" id="pane-playground">
                     <div style="padding:16px">
                         <div style="margin-bottom:12px; font-size:10px; color:var(--text-muted); display:flex; justify-content:space-between">
@@ -373,7 +378,13 @@ class DebugUI {
             </div>
         `;
         this.modalOverlay = modalOverlay;
-        document.body.appendChild(modalOverlay); // Append to body for full-app centering
+        // Inside #app-window-outer, NOT body. The app window is an inset rounded card with
+        // a transparent margin around it (the Tasky corner); an overlay on <body> paints
+        // its dark blur over that margin and the rounded corners — the "shadow on the
+        // outer div" bug. The outer container carries contain:paint, so mounting inside
+        // clips the overlay to the app card exactly. position:fixed still centres, since
+        // contain makes the container the containing block.
+        (document.getElementById('app-window-outer') || document.body).appendChild(modalOverlay);
         // Load persisted position/size
         this.loadPosition();
         // Create Crash Overlay
@@ -583,6 +594,19 @@ class DebugUI {
             }
         });
         // Debugger Rust
+        // The production tool: one JSON with build/version/uptime/memory + the same log
+        // lines this tab shows, written to app-data/diagnostics and revealed. What a bug
+        // report needs, without asking the user to screenshot devtools and hunt files.
+        this._get('rust-export-diag')?.addEventListener('click', async () => {
+            try {
+                const path = await window.__TAURI__.core.invoke('export_diagnostics');
+                window.showToast?.((window.t?.('dev.diagExported') || 'Diagnostic exported') + ' — ' + path, 'success');
+                window.__TAURI__.core.invoke('open_folder', { path: String(path).replace(/[\/][^\/]+$/, '') }).catch(() => { });
+            }
+            catch (e) {
+                window.showToast?.((window.t?.('common.error') || 'Error') + ': ' + e, 'error');
+            }
+        });
         this._get('rust-copy-lldb')?.addEventListener('click', () => {
             const isWindows = navigator.userAgent.includes('Windows');
             const cmd = isWindows ? 'rust-gdb target/debug/better-mods-manager.exe' : 'rust-lldb target/debug/better-mods-manager';
@@ -975,6 +999,10 @@ class DebugUI {
         entry.className = `log-entry ${item.level}`;
         entry.innerHTML = `<span style="opacity:0.5; font-size:9px">[${new Date().toLocaleTimeString()}]</span> <span>${this.escapeHtml(item.message)}</span>`;
         logs.appendChild(entry);
+        // Same cap as the timeline, same reason: the hub trims its array at 500, the
+        // DOM never trimmed at all. Console appends, so the oldest is the FIRST child.
+        while (logs.children.length > 400)
+            logs.removeChild(logs.firstChild);
         // Auto-scroll if at bottom
         if (logs.scrollHeight - logs.scrollTop - logs.clientHeight < 50) {
             logs.scrollTop = logs.scrollHeight;
@@ -1018,6 +1046,17 @@ class DebugUI {
         this.savePosition();
         if (tabId === 'inspect-view' && !this.selectedEl) {
             this.clearSelection();
+        }
+        if (tabId === 'session') {
+            const pane = this.container.querySelector('#pane-session');
+            if (pane) {
+                void import('./session-pane.js').then((m) => m.mountSessionPane(pane));
+            }
+        }
+        else {
+            // Stop the 2s refresh as soon as it is off screen; the subscription stays so the
+            // counters keep meaning something when you come back.
+            void import('./session-pane.js').then((m) => m.unmountSessionPane()).catch(() => { });
         }
         if (tabId === 'debugger') {
             const activeSub = this.container.querySelector('.debug-subtab.active');
@@ -1218,6 +1257,13 @@ class DebugUI {
             entry.id = `timeline-${item.id}`;
             entry.className = 'ipc-entry timeline-entry';
             pane.prepend(entry);
+            // The DOM list must be capped like the hub arrays are. It never was: the
+            // hub keeps 500 items, but every IPC call prepended a node FOREVER — and
+            // BMM talks IPC constantly (the mini-monitor alone polls every couple of
+            // seconds), so an open DevTools grew by thousands of SVG-bearing nodes an
+            // hour. That growth is the "ça mange trop vite". Oldest fall off the end.
+            while (pane.children.length > 400)
+                pane.removeChild(pane.lastChild);
         }
         const isIPC = !!item.command;
         const ts = new Date(item.timestamp);
@@ -1918,6 +1964,12 @@ class DebugUI {
         if (this.a11yInterval) {
             clearInterval(this.a11yInterval);
             this.a11yInterval = null;
+        }
+        // Was missing from this list: close DevTools with the hardcoded-text audit on and
+        // its 3s interval kept scanning a dead UI forever — one of the "ça mange" leaks.
+        if (this.hardcodedInterval) {
+            clearInterval(this.hardcodedInterval);
+            this.hardcodedInterval = null;
         }
         if (this.mutationObserver) {
             try {

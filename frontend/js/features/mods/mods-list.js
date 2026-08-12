@@ -211,6 +211,16 @@ export function createModCard(mod) {
         userTags: S.userTags
     };
     card.innerHTML = getModCardHTML(mod, ctx);
+    // Installed from a repo with no hashes. Shown on the card rather than only in the details
+    // panel: the whole point of persisting the flag is that it stays visible afterwards, and a
+    // fact you have to go looking for is a fact nobody sees.
+    if (mod.unverified) {
+        const warn = document.createElement('span');
+        warn.className = 'mod-unverified-badge';
+        warn.textContent = t('mods.unverified') || 'unverified';
+        warn.title = t('mods.unverifiedTip') || 'Installed from a repo with no checksums — BMM could not verify these files.';
+        card.querySelector('.mod-card-name, .mod-name, h3, h4')?.append(warn);
+    }
     // Toggle handler
     const toggle = card.querySelector('.mod-toggle-input');
     toggle.addEventListener('change', async () => {

@@ -10,6 +10,9 @@ import { initRepoMonitoring } from './repo-monitoring.js';
 import { initRepoSync, setRepoPassword } from './repo-sync.js';
 import { initModUpdates } from './mod-updates.js';
 import { initRepoAdmin } from './repo-admin.js';
+import { initManifestOnly } from './manifest-only.js';
+import { initRemoteRefresh } from './remote-refresh.js';
+import { initDiscover } from './discover.js';
 // Normalise a repo URL so map lookups match regardless of trailing slash / repo.json
 export const normRepoUrl = (url) => {
     let u = (url || '').trim();
@@ -328,6 +331,9 @@ export function initRepo() {
     initRepoMonitoring(elements);
     initRepoSync(elements);
     initRepoAdmin(elements);
+    initManifestOnly();
+    initRemoteRefresh();
+    initDiscover();
     initModUpdates();
     // ── Sync / Hosting tab switcher ──────────────────────────────────────
     const activateRepoTab = (name) => {
