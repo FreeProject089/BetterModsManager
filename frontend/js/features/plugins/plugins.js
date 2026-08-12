@@ -1473,6 +1473,9 @@ async function openSmartQuickTest(m, p, rawBody) {
     else if (p === '/api/repo/info') {
         formHtml = txtInput('plug-qt-s-repo-url', 'url (repo.json URL)', 'https://monserveur.com/repo.json');
     }
+    else if (p === '/api/repo/manifest') {
+        formHtml = txtInput('plug-qt-s-manifest-dir', 'modsDir (dossier déjà hébergé)', 'C:/host/mods');
+    }
     else if (p === '/api/repo/list') {
         formHtml = `<p style="font-size:13px;color:var(--text-secondary);margin:0;">Requête GET — retourne la liste des repos connectés, aucun paramètre requis.</p>`;
     }
@@ -2758,6 +2761,13 @@ async function openSmartQuickTest(m, p, rawBody) {
         else if (p === '/api/modpacks') {
             body = '';
             // ── Repo API ──────────────────────────────────────────────────────────
+        }
+        else if (p === '/api/repo/manifest') {
+            const md = overlay.querySelector('#plug-qt-s-manifest-dir')?.value?.trim() || '';
+            if (!md)
+                return;
+            overlay.remove();
+            handleQuickTest('POST', '/api/repo/manifest', JSON.stringify({ modsDir: md }, null, 2));
         }
         else if (p === '/api/repo/info') {
             const repoUrl = overlay.querySelector('#plug-qt-s-repo-url')?.value?.trim() || '';
@@ -4386,6 +4396,7 @@ function renderScripts(container) {
             '/api/repo/connect': '{\n  "url": "https://monserveur.com/repo.json",\n  "name": "Mon Serveur"\n}',
             // camelCase — Rust backend uses #[serde(rename_all = "camelCase")]
             '/api/repo/sync': '{\n  "url": "https://monserveur.com/repo.json",\n  "gameDir": "C:/Games/MonJeu",\n  "modsDir": "C:/Games/MonJeu/Mods",\n  "backupDir": "C:/BMM/Backups",\n  "choices": [{ "repoProfileId": "prof-uuid" }],\n  "overwriteAll": false,\n  "deleteExtra": false,\n  "downloadLimit": 0,\n  "password": "",\n  "unzipArchives": true\n}',
+            '/api/repo/manifest': '{\n  "modsDir": "C:/host/mods",\n  "name": "Mon depot",\n  "author": "MonPseudo",\n  "filesBaseUrl": "https://monserveur.com/mods"\n}',
             '/api/repo/gen': '{\n  "profileIds": ["prof-uuid"],\n  "outputDir": "C:/BMM/Export",\n  "authorName": "MonPseudo",\n  "generateServer": false,\n  "zipOutput": false,\n  "zipMods": false,\n  "useCloudflare": false,\n  "useUpnp": false,\n  "useDocker": false,\n  "dockerOs": "linux",\n  "serverVersion": "std",\n  "autoStart": false,\n  "port": 8080,\n  "uploadLimit": 0,\n  "adminPassword": ""\n}',
             '/api/repo/host': '{\n  "serveDir": "C:/BMM/Export",\n  "port": 8080,\n  "uploadLimit": 0\n}',
             // DELETE routes that carry a body
@@ -5716,6 +5727,26 @@ function getEndpointDefs() {
                 { code: 400, label: 'Bad Request', body: '{ "error": "gameDir is required when creating a new profile" }' },
                 { code: 401, label: 'Unauthorized', body: '{ "error": "Unauthorized" }' },
                 { code: 409, label: 'Conflict', body: '{ "error": "A sync is already running. Cancel it first with DELETE /api/repo/sync/cancel." }' },
+            ],
+        },
+        {
+            method: 'POST', path: '/api/repo/manifest', auth: true,
+            desc: 'Générer repo.json pour un dossier déjà hébergé',
+            about: 'Écrit un <code>repo.json</code> pour un dossier de mods <b>déjà en place</b>. Contrairement à <code>/api/repo/gen</code>, il ne demande aucun profil et ne copie rien : il lit le dossier, écrit un fichier, et laisse le dossier intact. Synchrone (il ne fait que hacher), donc un script de publication peut agir directement sur le diff renvoyé. Par défaut <code>reuse_existing</code> conserve l\'identité du manifeste précédent : re-générer produit une nouvelle <i>révision du même dépôt</i>, pas un dépôt différent — mettez-le à <code>false</code> seulement si vous voulez délibérément en créer un nouveau.',
+            fields: [
+                { name: 'modsDir', type: 'string', required: true, desc: 'Dossier dont les sous-dossiers sont les mods.' },
+                { name: 'outputPath', type: 'string', required: false, desc: 'Où écrire le manifeste. Par défaut <code>repo.json</code> À CÔTÉ de modsDir, pas dedans — sinon un scan ultérieur le prendrait pour un fichier de mod.' },
+                { name: 'name', type: 'string', required: false, desc: 'Nom du dépôt inscrit dans le manifeste.' },
+                { name: 'author', type: 'string', required: false, desc: 'Auteur inscrit dans le manifeste.' },
+                { name: 'gameName', type: 'string', required: false, desc: 'Jeu ciblé.' },
+                { name: 'filesBaseUrl', type: 'string', required: false, desc: 'URL absolue du dossier auquel filesLayout est relatif.' },
+                { name: 'filesLayout', type: 'string', required: false, desc: 'Gabarit <code>{id}</code> / <code>{path}</code> ; défaut <code>mods/{id}/{path}</code>.' },
+                { name: 'reuseExisting', type: 'boolean', required: false, desc: 'Conserver l\'identité du manifeste précédent. Activé par défaut.' },
+                { name: 'only', type: 'array', required: false, desc: 'Restreindre aux sous-dossiers nommés. C\'est ainsi que « ne publier que ces profils / ce modpack » fonctionne sans second chemin de code.' },
+            ],
+            responses: [
+                { code: 200, label: 'OK', body: '{ "ok": true, "path": "C:/host/repo.json", "added": 3, "changed": 1, "removed": 0 }' },
+                { code: 403, label: 'Forbidden', body: '{ "error": "Missing permission: repo.write" }' },
             ],
         },
         {
