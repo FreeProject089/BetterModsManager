@@ -1171,11 +1171,20 @@ function renderModal(modal: HTMLElement): void {
                 <div class="sched-flow-head">
                     <span class="sched-flow-start">${t('sched.flowStart') || 'START'}</span>
                     <span class="sched-flow-hint">${t('sched.fStepsHint') || 'WHAT it does, top to bottom'} — <span class="sched-flow-hint-drag">${t('sched.dragHint') || 'drag any block into an IF/LOOP branch to nest it'}</span></span>
+                    <!-- The legend must list what the language actually has. It still
+                         showed four blocks after For-Each, Switch, Try and the loop
+                         signals were added — a legend that omits half the vocabulary
+                         teaches the user the vocabulary is smaller than it is. -->
                     <span class="sched-legend-mini">
                         <b class="sched-step-tag sched-do" data-tooltip="${escAttr(t('sched.legendDo') || '')}">${t('sched.do') || 'DO'}</b>
                         <b class="sched-step-tag sched-if" data-tooltip="${escAttr(t('sched.legendIf') || '')}">${t('sched.if') || 'IF'}</b>
                         <b class="sched-step-tag sched-repeat" data-tooltip="${escAttr(t('sched.legendLoop') || '')}">${t('sched.repeat') || 'LOOP'}</b>
+                        <b class="sched-step-tag sched-repeat" data-tooltip="${escAttr(t('sched.legendForEach') || '')}">${t('sched.forEach') || 'FOR EACH'}</b>
+                        <b class="sched-step-tag sched-if" data-tooltip="${escAttr(t('sched.legendSwitch') || '')}">${t('sched.switch') || 'SWITCH'}</b>
+                        <b class="sched-step-tag sched-if" data-tooltip="${escAttr(t('sched.legendTry') || '')}">${t('sched.try') || 'TRY'}</b>
                         <b class="sched-step-tag sched-wait" data-tooltip="${escAttr(t('sched.legendWait') || '')}">${t('sched.waitUntil') || 'WAIT'}</b>
+                        <b class="sched-step-tag sched-repeat" data-tooltip="${escAttr(t('sched.legendBreak') || '')}">${t('sched.break') || 'BREAK'}</b>
+                        <b class="sched-step-tag sched-repeat" data-tooltip="${escAttr(t('sched.legendStop') || '')}">${t('sched.stop') || 'STOP'}</b>
                     </span>
                 </div>
                 <div class="sched-timeline">

@@ -15943,3 +15943,24 @@ body.i18nsb-docked #modal-i18n-sandbox .i18n-sb-progress { max-width: 100%; }
     transition: opacity 0.15s;
 }
 #ipk-tint:disabled { opacity: 0.3; cursor: not-allowed; }
+
+/* ── Scheduler legend: nine blocks, not four ─────────────────────────────────
+   It was an inline-flex row sized for four tags. With the full vocabulary it has
+   to wrap instead of pushing the hint text off the head, and the head itself has
+   to give it a line of its own when the modal is narrow. */
+.sched-legend-mini {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    row-gap: 4px;
+    justify-content: flex-end;
+    max-width: 100%;
+}
+.sched-flow-head {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    row-gap: 8px;
+}
+.sched-flow-hint { flex: 1 1 260px; min-width: 0; }
