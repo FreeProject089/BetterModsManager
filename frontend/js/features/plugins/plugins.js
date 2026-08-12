@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { invoke, pickFile, saveFile, pickFolder, convertFileSrc, apiBase } from '../../core/api.js';
-import { toast, fetchProfileIconPaths, updateSelectProfileIcon, toastSaved } from '../../ui/app.js';
+import { toast, fetchProfileIconPaths, updateSelectProfileIcon, decorateProfileOptions, toastSaved } from '../../ui/app.js';
 import { t, getLang } from '../../core/i18n.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { dispatchBmmAction, BMM_ACTIONS } from '../../ui/tutorial-events.js';
@@ -4579,6 +4579,7 @@ function renderScripts(container) {
                     return;
                 }
                 genProfileIcon.style.display = '';
+                decorateProfileOptions(genProfileSel, _allProfiles, iconPaths);
                 updateSelectProfileIcon(genProfileSel, _allProfiles, iconPaths, genProfileIcon);
             };
             syncGenIcon();
@@ -7233,6 +7234,7 @@ function _renderActionCard(def) {
         const iconEl = card.querySelector('.profile-icon-display');
         if (profileSel && iconEl && _allProfiles.length) {
             fetchProfileIconPaths(_allProfiles).then(iconPaths => {
+                decorateProfileOptions(profileSel, _allProfiles, iconPaths);
                 updateSelectProfileIcon(profileSel, _allProfiles, iconPaths, iconEl);
                 profileSel.addEventListener('change', () => updateSelectProfileIcon(profileSel, _allProfiles, iconPaths, iconEl));
             });

@@ -662,6 +662,40 @@ export async function fetchProfileIconPaths(profiles) {
     return new Map(entries.filter(Boolean));
 }
 /** Update an icon element next to a <select> to show the selected profile's icon. */
+/** The icon markup for ONE profile, as the custom select wants it.
+ *
+ *  The dropdown already supports a per-option icon — `data-icon` on the <option>,
+ *  rendered by ui/custom-select.ts — and nothing was filling it for profiles. So the
+ *  closed select showed the profile's icon and the open list showed bare names, which
+ *  is the one moment you are actually comparing profiles and the icons would help
+ *  most.
+ *
+ *  Extracted from updateSelectProfileIcon rather than copied, so the trigger and the
+ *  list can never disagree about what a profile looks like. */
+export function profileIconMarkup(profile, iconPaths, size = 14) {
+    const custom = profile?.id ? iconPaths.get(profile.id) : null;
+    if (custom) {
+        // Cache-busted: a re-uploaded icon keeps its path, so without this the browser
+        // serves the old file forever.
+        return `<img src="${convertFileSrc(custom)}?t=${Date.now()}" style="width:${size + 2}px;height:${size + 2}px;border-radius:3px;object-fit:cover;display:block" alt="">`;
+    }
+    return getProfileIconSvg(profile?.icon || 'user', `width:${size}px;height:${size}px`);
+}
+/** Stamp every <option> of a profile select with its icon, then let the custom
+ *  select rebuild. Call it after the options have been filled. */
+export function decorateProfileOptions(selectEl, profiles, iconPaths) {
+    if (!selectEl)
+        return;
+    for (const opt of Array.from(selectEl.options)) {
+        const prof = profiles.find(x => x.id === opt.value);
+        // The placeholder row ("— pick one —") has no profile and must stay bare:
+        // giving it a default user glyph would make it look like a real choice.
+        if (prof)
+            opt.dataset.icon = profileIconMarkup(prof, iconPaths);
+        else
+            delete opt.dataset.icon;
+    }
+}
 export function updateSelectProfileIcon(selectEl, profiles, iconPaths, iconEl) {
     if (!selectEl || !iconEl)
         return;

@@ -16404,3 +16404,14 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
     min-width: 0;
 }
 .detail-repo-link-url:hover { text-decoration: underline; }
+
+/* A profile's own picture is not an app icon: the accent-tinted plate behind the
+   script-generator's glyphs makes a photo look pasted into a box. The tint stays for
+   the drawn SVG icons, where it reads as intended. :has(img) is what tells them
+   apart without threading an extra class through the option builder. */
+.bmm-csel-opt-icon:has(img) {
+    background: transparent;
+    width: 22px;
+    height: 22px;
+}
+.bmm-csel-opt-icon img { border-radius: 4px; }

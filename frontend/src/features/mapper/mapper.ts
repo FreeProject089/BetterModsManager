@@ -5,7 +5,7 @@
 
 import { invoke } from '../../core/api.js';
 import { wireDismissibleTip } from '../../ui/dismissible-tip.js';
-import { toast, fetchProfileIconPaths, updateSelectProfileIcon } from '../../ui/app.js';
+import { toast, fetchProfileIconPaths, updateSelectProfileIcon, decorateProfileOptions } from '../../ui/app.js';
 import { t } from '../../core/i18n.js';
 import { dispatchBmmAction, BMM_ACTIONS, onBmmAction } from '../../ui/tutorial-events.js';
 import { escHtml } from '../../core/utils.js';
@@ -286,6 +286,7 @@ async function refreshMapperData(): Promise<void> {
                     iconEl.className = 'profile-icon-display';
                     wrap.insertBefore(iconEl, profileSelect);
                 }
+                decorateProfileOptions(profileSelect, profiles, iconPaths);
                 updateSelectProfileIcon(profileSelect, profiles, iconPaths, iconEl);
                 profileSelect.addEventListener('change', () =>
                     updateSelectProfileIcon(profileSelect, profiles, iconPaths, iconEl));
