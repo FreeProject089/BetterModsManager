@@ -148,8 +148,20 @@ I/O limits: it measures the exact work mod activation does, on your exact hardwa
 
 ### Tags
 
-Manage your custom mod tags — the labels you filter the [Library](doc-page:features/library) by. Rename or
-remove them here in one place.
+Manage your custom mod tags — the labels you filter the [Library](doc-page:features/library) by. Create,
+edit and remove them here in one place.
+
+A tag is more than a coloured word:
+
+| | |
+|---|---|
+| **Icon** | Pick from 2000+ [Lucide](https://lucide.dev) glyphs, 3400+ brand icons, or upload your own small image. The same picker serves profile icons and plugin creation. |
+| **Gradient** | Tick *gradient* to give the tag a second colour — the chip fades from one to the other instead of a flat tint. |
+| **Edit** | The pencil on a chip loads it back into the form; the button becomes *Save*, and *Cancel* backs out without touching it. |
+
+The icon travels with the tag: because it is stored as a plain reference, a tag keeps its
+glyph through every share path — an exported profile, a [server repo](doc-page:features/repo), a catalog —
+with nothing extra to do.
 
 ### Sound & keyboard shortcuts
 

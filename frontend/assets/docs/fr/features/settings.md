@@ -159,7 +159,19 @@ que fait l'activation, sur ton matériel exact.
 ### Tags
 
 Gère tes tags de mods personnalisés — les libellés par lesquels tu filtres la
-[Bibliothèque](doc-page:features/library). Renomme-les ou supprime-les ici, au même endroit.
+[Bibliothèque](doc-page:features/library). Crée-les, modifie-les et supprime-les ici, au même endroit.
+
+Un tag, c'est plus qu'un mot coloré :
+
+| | |
+|---|---|
+| **Icône** | Choisis parmi 2000+ glyphes [Lucide](https://lucide.dev), 3400+ icônes de marques, ou importe ta propre petite image. Le même sélecteur sert aux icônes de profil et à la création de plugin. |
+| **Dégradé** | Coche *dégradé* pour donner une seconde couleur au tag — la pastille fond de l'une vers l'autre au lieu d'une teinte plate. |
+| **Modifier** | Le crayon sur une pastille la recharge dans le formulaire ; le bouton devient *Enregistrer*, et *Annuler* ressort sans rien toucher. |
+
+L'icône voyage avec le tag : comme elle est stockée sous forme de simple référence, un tag
+garde son glyphe à travers tous les partages — profil exporté, [dépôt serveur](doc-page:features/repo),
+catalogue — sans rien de plus à faire.
 
 ### Son & raccourcis clavier
 
