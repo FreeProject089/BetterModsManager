@@ -151,6 +151,13 @@ function projName(p: Post) { return p.project?.name || p.showcaseProject?.name |
 function fmtDate(d?: string) { try { return d ? new Date(d).toLocaleDateString(getLang() === 'fr' ? 'fr-FR' : 'en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : ''; } catch { return ''; } }
 
 export function initCommunity(): void {
+    // Everything here is built from template literals, so applyTranslations() cannot
+    // reach it — the view kept the language it was drawn in. render() is idempotent,
+    // so re-running it on a language change is the whole fix.
+    if (!(window as any)._commLangWired) {
+        (window as any)._commLangWired = true;
+        document.addEventListener('langChanged', () => { try { render(); } catch { /* not mounted */ } });
+    }
   _view = document.getElementById('view-community');
   (window as any).openCommunityBlog = openCommunity;
   installLightbox();

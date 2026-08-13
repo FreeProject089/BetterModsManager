@@ -14,6 +14,16 @@ let selectedProfileIds = new Set();
 let lastClickedGlobalModId = null;
 let allModsCache = []; // Global cache for all mods
 export async function initProfiles() {
+    // Same reason as the mod list: the cards are template literals with t() baked in,
+    // so a language switch left them in the previous language until something else
+    // redrew them.
+    if (!window._profLangWired) {
+        window._profLangWired = true;
+        document.addEventListener('langChanged', () => { try {
+            renderProfiles();
+        }
+        catch { /* not mounted */ } });
+    }
     document.getElementById('btn-new-profile').addEventListener('click', openNewProfileModal);
     document.getElementById('btn-confirm-profile').addEventListener('click', confirmCreateProfile);
     // Generic dropdown logic

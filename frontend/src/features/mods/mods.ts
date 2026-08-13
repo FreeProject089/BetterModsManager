@@ -43,7 +43,27 @@ const S = new Proxy(appState.state, {
 let refreshTimeout = null;
 let _lastAutoScan = 0;   // timestamp of the last auto-scan (for the configurable interval)
 
+// The mod list is built from template literals in ui/components.ts, so every label on
+// a card is baked at render time — applyTranslations() cannot reach any of it, because
+// none of it carries a data-i18n attribute. The cards therefore kept the language they
+// were drawn in until something else happened to redraw them.
+//
+// components.ts cannot subscribe to this itself: it owns no container, it only returns
+// HTML strings. The subscription belongs to whoever renders them, which is here.
+let _langWired = false;
+function wireLangRerender(): void {
+    if (_langWired) return;
+    _langWired = true;
+    document.addEventListener('langChanged', () => {
+        // Re-render only; no re-fetch. The data did not change, the words did — and
+        // re-reading the disk on a language switch would make a free action expensive.
+        try { renderModList(true); } catch { /* view not mounted */ }
+        try { if (S.selectedModId) renderModDetail(S.selectedModId); } catch { /* no detail open */ }
+    });
+}
+
 export async function initMods() {
+    wireLangRerender();
   window._refreshModsFn = refreshMods;
   ensureModCancelContextMenu();
 

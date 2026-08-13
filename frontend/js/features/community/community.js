@@ -160,6 +160,16 @@ catch {
     return '';
 } }
 export function initCommunity() {
+    // Everything here is built from template literals, so applyTranslations() cannot
+    // reach it — the view kept the language it was drawn in. render() is idempotent,
+    // so re-running it on a language change is the whole fix.
+    if (!window._commLangWired) {
+        window._commLangWired = true;
+        document.addEventListener('langChanged', () => { try {
+            render();
+        }
+        catch { /* not mounted */ } });
+    }
     _view = document.getElementById('view-community');
     window.openCommunityBlog = openCommunity;
     installLightbox();
