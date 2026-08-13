@@ -10,7 +10,7 @@ import { initI18nSandbox } from './i18n-sandbox.js';
 import { renderShortcutsManager } from '../../core/commands.js';
 import { toast } from '../../ui/app.js';
 import { getProfiles, getActiveProfileId } from '../profiles/profiles.js';
-import { formatBytes, escHtml } from '../../core/utils.js';
+import { formatBytes, escHtml, escAttr } from '../../core/utils.js';
 import { initBetaHub, openBugReportModal, openFeedbackModal } from '../betahub/betahub-modals.js';
 import { initLaunchPackSettings } from './launch_packs.js';
 import { initScheduler } from './scheduler.js';

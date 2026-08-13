@@ -593,6 +593,11 @@ export async function updateLibraryProfileSelector() {
             select.appendChild(opt);
         });
 
+        // The dropdown rows get the profile icon too, not just the closed trigger
+        // below. This select was missed when the other three were done — the list is
+        // where you compare profiles, so it is the place the icon earns most.
+        decorateProfileOptions(select as HTMLSelectElement, profiles, iconPaths);
+
         // Update the dynamic profile icon in the wrapper (supports custom icon img).
         const wrapper = (select as HTMLElement).closest('.profile-select-icon-wrap');
         if (wrapper) {

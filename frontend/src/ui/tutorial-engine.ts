@@ -12,6 +12,7 @@
  */
 
 import { t } from '../core/i18n.js';
+import { escAttr } from '../core/utils.js';
 import { claimDockSpace, releaseDockSpace, makeDock } from './dock-space.js';
 import { invoke } from '../core/api.js';
 import { onBmmAction } from './tutorial-events.js';
