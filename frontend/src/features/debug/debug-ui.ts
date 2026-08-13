@@ -30,6 +30,7 @@ class DebugUI {
         this.mutationObserver = null;
         this.a11yInterval = null;
         this._updateInterval = null;
+        this._hubSub = null;
     }
 
     // Helper to find elements within devtools containers
@@ -998,8 +999,11 @@ class DebugUI {
             }
         });
 
-        // Debug Hub events
-        debugHub.subscribe(event => {
+        // Debug Hub events. The callback is kept on the instance because destroy() must
+        // hand this exact reference back to unsubscribe(): a close/open cycle rebuilds the
+        // UI and would otherwise add a second, third, Nth permanent subscriber, each one
+        // retaining the destroyed UI and its detached DOM.
+        debugHub.subscribe(this._hubSub = event => {
             if (event.type === 'crash') {
                 // Guarded, because this runs from window.onerror. The overlay only
                 // exists once the DevTools panel has been built, so before that every
@@ -2069,6 +2073,10 @@ class DebugUI {
         // its 3s interval kept scanning a dead UI forever — one of the "ça mange" leaks.
         if (this.hardcodedInterval) { clearInterval(this.hardcodedInterval); this.hardcodedInterval = null; }
         if (this.mutationObserver) { try { this.mutationObserver.disconnect(); } catch {} this.mutationObserver = null; }
+        // The hub keeps subscribers in a Set that nothing else prunes, so a subscriber left
+        // behind here is permanent: every later log/ipc/action emit would fan out into this
+        // dead UI forever, and the closure would pin its DOM. This is the actual leak.
+        if (this._hubSub) { debugHub.unsubscribe(this._hubSub); this._hubSub = null; }
         for (const el of [this.container, this.modalOverlay, this.crashOverlay, this.highlightEl, this.tooltipEl]) {
             try { el?.remove(); } catch { /* ignore */ }
         }
