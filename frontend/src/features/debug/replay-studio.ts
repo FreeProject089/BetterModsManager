@@ -56,6 +56,10 @@ interface StudioState {
 let S: StudioState | null = null;
 let listener: ReplaySubscriber | null = null;
 let bar: HTMLElement | null = null;
+// Collapsed to a pill. Module-level rather than on S, because the bar re-renders on
+// every state change and a flag living inside the render would reset itself each
+// time — you would minimise it and watch it reopen on the next meter tick.
+let minimized = false;
 let frameEl: HTMLElement | null = null;
 
 // ── frame geometry ──────────────────────────────────────────────────────────────
@@ -468,7 +472,21 @@ function renderBar() {
   const hideRow = showHide
     ? `<div class="rstudio-hide"><span class="rstudio-hide-lbl">${t('rstudio.hidden') || 'Hidden'}:</span>${chips || `<span class="rstudio-hide-none">${t('rstudio.hidden.none') || 'nothing'}</span>`}<button class="rstudio-btn rstudio-mini ${S.picking ? 'rstudio-primary' : ''}" data-act="pick-hide">${S.picking ? (t('rstudio.pick.active') || 'Click one…') : '＋ ' + (t('rstudio.pick') || 'Hide element')}</button>${studioToggle}</div>`
     : '';
-  bar.innerHTML = `<div class="rstudio-main"><div class="rstudio-title">${t('rstudio.title') || 'Replay Studio'}</div>${controls}<button class="rstudio-btn rstudio-x" data-act="close">✕</button></div>${hideRow}`;
+  bar.innerHTML = `<div class="rstudio-main"><div class="rstudio-title">${t('rstudio.title') || 'Replay Studio'}</div>${controls}<button class="rstudio-btn rstudio-min" data-act="min" data-tooltip="${esc(t('rstudio.minimize') || 'Minimise — recording continues')}" aria-label="${esc(t('rstudio.minimize') || 'Minimise')}"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M5 12h14"/></svg></button><button class="rstudio-btn rstudio-x" data-act="close" aria-label="${esc(t('common.close') || 'Close')}"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div>${hideRow}`;
+  if (!bar.dataset.miniWired) {
+    bar.dataset.miniWired = '1';
+    bar.addEventListener('click', (e) => {
+      if (!minimized) return;
+      // The buttons inside the pill still do their own job; only a click on the pill
+      // ITSELF restores. Otherwise stopping the recording from the collapsed state
+      // would also expand it, which is the opposite of what you asked for.
+      if ((e.target as HTMLElement).closest('[data-act]')) return;
+      minimized = false;
+      renderBar();
+    });
+  }
+  bar.classList.toggle('rstudio-mini', minimized);
+  bar.classList.toggle('rstudio-live', !!rec && !paused);
   const trimIn = bar.querySelector('.rstudio-trim-in') as HTMLInputElement | null;
   if (trimIn) { trimIn.addEventListener('input', updateEstimate); updateEstimate(); }
   if (rec) updateMeter();
@@ -516,6 +534,10 @@ function onBarClick(e: Event) {
     }
     case 'vstart': void videoStart(); break;
     case 'vstop': void videoStop(); break;
+    // Minimise never stops the capture — that is the whole point of asking for it.
+    // Clicking the collapsed pill expands it again; the pill itself is the target, so
+    // there is no separate restore control to find.
+    case 'min': minimized = !minimized; renderBar(); break;
     case 'close': closeReplayStudio(); break;
   }
 }

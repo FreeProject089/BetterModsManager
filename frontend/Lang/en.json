@@ -7065,5 +7065,6 @@
   "sched.syncOverwrite": "Re-downloads and replaces files that already match. Slower, and your local edits are lost.",
   "sched.syncDeleteT": "Delete mods the repo does not have",
   "sched.syncDelete": "Removes anything in the mods folder that is not in the repo. On a schedule this runs with nobody watching — leave it off unless the folder is only ever filled by this repo.",
-  "kofi.tierAria": "Tip {n} on Ko-fi"
+  "kofi.tierAria": "Tip {n} on Ko-fi",
+  "rstudio.minimize": "Minimise — recording continues"
 }

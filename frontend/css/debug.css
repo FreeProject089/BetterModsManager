@@ -1062,3 +1062,43 @@
     border-bottom-color: var(--debug-accent);
     font-weight: 600;
 }
+
+/* ── Replay Studio, collapsed ─────────────────────────────────────────────────
+   The bar sits over the app while recording, which is exactly the app you are
+   trying to record. Minimising had to exist, and it had to be obvious that the
+   capture keeps running — a control that might have stopped your take is worse than
+   no control, because you cannot tell without checking.
+
+   So the pill keeps a live dot and stays in the accent colour while recording. The
+   whole pill is the restore target; there is no separate button to hunt for. */
+.rstudio-bar.rstudio-mini {
+    width: auto;
+    min-width: 0;
+    padding: 5px 10px;
+    cursor: pointer;
+    border-radius: 999px;
+}
+.rstudio-bar.rstudio-mini .rstudio-main { gap: 8px; }
+/* Everything except the title and the two window buttons folds away. */
+.rstudio-bar.rstudio-mini .rstudio-main > *:not(.rstudio-title):not(.rstudio-min):not(.rstudio-x),
+.rstudio-bar.rstudio-mini .rstudio-hide {
+    display: none;
+}
+.rstudio-bar.rstudio-mini .rstudio-title { margin: 0; font-size: 11px; }
+
+/* The live dot: only while actually capturing, so the pill answers "is it still
+   running?" without being expanded. */
+.rstudio-bar.rstudio-mini.rstudio-live .rstudio-title::before {
+    content: '';
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    margin-right: 6px;
+    border-radius: 50%;
+    background: var(--debug-error);
+    vertical-align: middle;
+}
+.rstudio-bar.rstudio-mini.rstudio-live { border-color: var(--debug-error); }
+
+/* The minimise glyph flips to a restore chevron once collapsed. */
+.rstudio-bar.rstudio-mini .rstudio-min svg { transform: rotate(90deg); }
