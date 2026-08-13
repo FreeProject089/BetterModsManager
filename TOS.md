@@ -52,5 +52,74 @@ Better Mods Manager respects your privacy:
 ## 9. COMMUNITY & SUPPORT
 BMM is a community-driven project. Support is provided on a best-effort basis through our community channels (Discord, Forums).
 
+## 10. RUNNING YOUR OWN CODE (SCHEDULER)
+The Scheduler can launch external programs and run scripts you write (PowerShell, CMD, Bash,
+Python). **These capabilities are off by default and are granted per task, individually.** A task
+whose permission is missing fails with a message; it never runs quietly.
+
+Code you write runs with **your** user privileges and can do anything you can do on your machine.
+The Software does not review, sandbox or restrain it. You are responsible for what your own
+automations do, including on a schedule while you are not present — the destructive options of a
+scheduled repository sync (overwrite, delete-extra) are off by default for that reason.
+
+## 11. ACCOUNTS AND BETTERCOMMUNITY
+Using the Software does not require an account. If you choose to create or link a BetterCommunity
+account:
+
+- You are responsible for your credentials and for activity under your account.
+- API keys you create are scoped. A key grants only the permissions shown when you create it, and
+  you can revoke it at any time from your account page — which invalidates every copy of it.
+- Accounts may be suspended or terminated for abuse, illegal content, or attempts to circumvent
+  moderation or access controls. Where practical you will be told why.
+- You may delete your account. Content you published may remain where removing it would break
+  other users' installations; see the platform's own terms for the specifics.
+
+## 12. CONTENT YOU PUBLISH
+If you submit an item to a catalog, host a Server Repository, or publish anything through
+BetterCommunity:
+
+- You keep ownership of what you publish.
+- You confirm you have the right to distribute it. **Do not redistribute paid or licensed
+  third-party content you do not have permission to share.**
+- You grant what is necessary to host, display and deliver it to users who request it — no more.
+- Content may be removed or unlisted if it is illegal, infringing, malicious, or breaks a
+  platform limit. Moderation decisions can be appealed through the support channels.
+
+## 13. PAID SERVICES
+Some BetterCommunity services (repository hosting, storage pools, boosts) are paid. The Software
+itself remains free.
+
+- Prices, billing terms and what each plan includes are shown before purchase.
+- Recurring subscriptions renew until cancelled; prepaid terms do not.
+- Refunds and cancellation are governed by the Payments & Refunds page on the BetterCommunity
+  site, which forms part of these Terms for paid services.
+- A lapsed subscription suspends the hosted resource after its grace period rather than deleting
+  it immediately.
+
+## 14. CHANGES TO THESE TERMS
+These Terms may change as the Software does. Material changes will be announced in the
+application and on the BetterCommunity site before they take effect. Continuing to use the
+Software after that constitutes acceptance. Each version carries the effective date below, and
+previous versions remain available in the repository's history.
+
+## 15. TERMINATION
+You may stop using the Software at any time; uninstalling ends these Terms for you, except for
+sections that by their nature survive (warranty disclaimer, liability, content you already
+published). Access to BetterCommunity services may be suspended for the reasons in section 11.
+Nothing here limits the rights the GPL-3.0 grants you over the Software itself.
+
+## 16. GOVERNING LAW
+These Terms are governed by the laws of **[JURISDICTION — to be set by the project owner]**,
+without regard to conflict-of-law rules. Nothing here removes protections that consumer law in
+your country of residence grants you and cannot be waived by agreement.
+
+## 17. CONTACT
+Questions about these Terms: the BetterCommunity site's contact form, or the project's Discord.
+Privacy requests, including access and erasure, are handled as described in **PRIVACY.md**.
+
 ---
-By using Better Mods Manager, you acknowledge that you have read, understood, and agreed to be bound by these terms.
+
+**Effective date:** 13 August 2026 · **Applies to:** BMM 1.0.0 and later
+
+By using Better Mods Manager, you acknowledge that you have read, understood, and agreed to be
+bound by these terms.

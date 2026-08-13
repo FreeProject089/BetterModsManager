@@ -52,5 +52,82 @@ Better Mods Manager respecte votre vie privée :
 ## 9. COMMUNAUTÉ ET SUPPORT
 BMM est un projet communautaire. Le support est fourni au mieux de nos capacités via nos canaux communautaires (Discord, Forums).
 
+## 10. EXÉCUTER VOTRE PROPRE CODE (PLANIFICATEUR)
+Le Planificateur peut lancer des programmes externes et exécuter des scripts que vous écrivez
+(PowerShell, CMD, Bash, Python). **Ces capacités sont désactivées par défaut et s'accordent tâche
+par tâche, individuellement.** Une tâche dont la permission manque échoue avec un message ; elle ne
+s'exécute jamais en silence.
+
+Le code que vous écrivez s'exécute avec **vos** privilèges et peut faire tout ce que vous pouvez
+faire sur votre machine. Le Logiciel ne le relit pas, ne l'isole pas et ne le bride pas. Vous êtes
+responsable de ce que font vos propres automatisations, y compris sur minuterie en votre absence —
+c'est la raison pour laquelle les options destructrices d'une synchronisation de dépôt planifiée
+(écraser, supprimer les surplus) sont désactivées par défaut.
+
+## 11. COMPTES ET BETTERCOMMUNITY
+L'usage du Logiciel n'exige aucun compte. Si vous choisissez d'en créer ou d'en lier un :
+
+- Vous êtes responsable de vos identifiants et de l'activité effectuée sous votre compte.
+- Les clés d'API que vous créez sont limitées en portée. Une clé n'accorde que les permissions
+  affichées à sa création, et vous pouvez la révoquer à tout moment depuis votre page de compte —
+  ce qui invalide toutes ses copies.
+- Un compte peut être suspendu ou fermé en cas d'abus, de contenu illégal, ou de tentative de
+  contourner la modération ou les contrôles d'accès. Dans la mesure du possible, la raison vous
+  sera indiquée.
+- Vous pouvez supprimer votre compte. Le contenu que vous avez publié peut subsister lorsque son
+  retrait casserait l'installation d'autres utilisateurs ; voir les conditions de la plateforme.
+
+## 12. CONTENU QUE VOUS PUBLIEZ
+Si vous soumettez un élément à un catalogue, hébergez un Dépôt Serveur, ou publiez quoi que ce soit
+via BetterCommunity :
+
+- Vous restez propriétaire de ce que vous publiez.
+- Vous confirmez avoir le droit de le distribuer. **Ne redistribuez pas de contenu tiers payant ou
+  sous licence que vous n'avez pas l'autorisation de partager.**
+- Vous accordez ce qui est nécessaire pour l'héberger, l'afficher et le livrer aux utilisateurs qui
+  le demandent — rien de plus.
+- Un contenu peut être retiré ou délisté s'il est illégal, contrefaisant, malveillant, ou s'il
+  dépasse une limite de la plateforme. Les décisions de modération sont contestables via les
+  canaux de support.
+
+## 13. SERVICES PAYANTS
+Certains services BetterCommunity (hébergement de dépôts, pools de stockage, boosts) sont payants.
+Le Logiciel lui-même reste gratuit.
+
+- Les prix, les conditions de facturation et le contenu de chaque offre sont affichés avant achat.
+- Les abonnements récurrents se renouvellent jusqu'à résiliation ; les durées prépayées non.
+- Les remboursements et l'annulation relèvent de la page Paiements & Remboursements du site
+  BetterCommunity, qui fait partie des présentes Conditions pour les services payants.
+- Un abonnement échu suspend la ressource hébergée après son délai de grâce plutôt que de la
+  supprimer immédiatement.
+
+## 14. MODIFICATION DES PRÉSENTES CONDITIONS
+Ces Conditions peuvent évoluer avec le Logiciel. Les changements substantiels seront annoncés dans
+l'application et sur le site BetterCommunity avant leur entrée en vigueur. Continuer à utiliser le
+Logiciel après cela vaut acceptation. Chaque version porte la date d'effet ci-dessous, et les
+versions précédentes restent consultables dans l'historique du dépôt.
+
+## 15. RÉSILIATION
+Vous pouvez cesser d'utiliser le Logiciel à tout moment ; le désinstaller met fin aux présentes
+Conditions pour vous, à l'exception des sections qui survivent par nature (exclusion de garantie,
+responsabilité, contenu déjà publié). L'accès aux services BetterCommunity peut être suspendu pour
+les motifs de la section 11. Rien ici ne limite les droits que la GPL-3.0 vous accorde sur le
+Logiciel lui-même.
+
+## 16. DROIT APPLICABLE
+Les présentes Conditions sont régies par le droit de **[JURIDICTION — à définir par le
+propriétaire du projet]**, sans égard aux règles de conflit de lois. Rien ici ne retire les
+protections que le droit de la consommation de votre pays de résidence vous accorde et auxquelles
+il n'est pas possible de renoncer par contrat.
+
+## 17. CONTACT
+Questions sur ces Conditions : le formulaire de contact du site BetterCommunity, ou le Discord du
+projet. Les demandes relatives aux données personnelles, y compris l'accès et l'effacement, sont
+traitées comme décrit dans **PRIVACY_FR.md**.
+
 ---
-En utilisant Better Mods Manager, vous reconnaissez avoir lu, compris et accepté d'être lié par les termes de ce contrat.
+
+**Date d'effet :** 13 août 2026 · **S'applique à :** BMM 1.0.0 et versions ultérieures
+
+En utilisant Better Mods Manager, vous reconnaissez avoir lu, compris et accepté d'être lié par
+les présentes conditions.
