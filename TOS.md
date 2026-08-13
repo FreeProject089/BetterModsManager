@@ -109,9 +109,13 @@ published). Access to BetterCommunity services may be suspended for the reasons 
 Nothing here limits the rights the GPL-3.0 grants you over the Software itself.
 
 ## 16. GOVERNING LAW
-These Terms are governed by the laws of **[JURISDICTION — to be set by the project owner]**,
-without regard to conflict-of-law rules. Nothing here removes protections that consumer law in
-your country of residence grants you and cannot be waived by agreement.
+These Terms are governed by the substantive law of **Switzerland**, excluding its
+conflict-of-law rules and the United Nations Convention on Contracts for the International Sale
+of Goods (CISG).
+
+Nothing here removes protections that the consumer law of your country of residence grants you
+and that cannot be waived by agreement. If you are a consumer resident in the EU or the UK, you
+keep the right to bring proceedings in the courts of your own country.
 
 ## 17. CONTACT
 Questions about these Terms: the BetterCommunity site's contact form, or the project's Discord.

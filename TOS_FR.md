@@ -115,10 +115,14 @@ les motifs de la section 11. Rien ici ne limite les droits que la GPL-3.0 vous a
 Logiciel lui-même.
 
 ## 16. DROIT APPLICABLE
-Les présentes Conditions sont régies par le droit de **[JURIDICTION — à définir par le
-propriétaire du projet]**, sans égard aux règles de conflit de lois. Rien ici ne retire les
-protections que le droit de la consommation de votre pays de résidence vous accorde et auxquelles
-il n'est pas possible de renoncer par contrat.
+Les présentes Conditions sont régies par le droit matériel **suisse**, à l'exclusion de
+ses règles de conflit de lois et de la Convention des Nations Unies sur les contrats de vente
+internationale de marchandises (CVIM).
+
+Rien ici ne retire les protections que le droit de la consommation de votre pays de résidence
+vous accorde et auxquelles il n'est pas possible de renoncer par contrat. Si vous êtes un
+consommateur résidant dans l'UE ou au Royaume-Uni, vous conservez le droit d'agir devant les
+tribunaux de votre propre pays.
 
 ## 17. CONTACT
 Questions sur ces Conditions : le formulaire de contact du site BetterCommunity, ou le Discord du
