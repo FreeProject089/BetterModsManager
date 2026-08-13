@@ -959,3 +959,106 @@
     word-break: break-word;
 }
 .debug-rustline:nth-child(even) { background: var(--bmm-s02); }
+
+/* ── Header toolbar: three groups, not seven identical buttons ────────────────
+   Seven controls sat in one undifferentiated row, and the two at the end were
+   "clear everything" and "close" — adjacent, same size, same colour. That is a row
+   where a misclick costs you your session, and nothing in the design said so.
+
+   The buttons are square icon targets now, and the last two are separated from the
+   tools and given their own hover colours, so destruction and dismissal read
+   differently from the things you press all the time. */
+.debug-controls {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.debug-controls .debug-btn {
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    flex: none;
+}
+/* A hairline before the last pair. ::before on the trash button rather than a spacer
+   element, so the markup does not need to know about the grouping. */
+#dbg-clear-all,
+#debug-btn-close {
+    position: relative;
+}
+#dbg-clear-all::before {
+    content: '';
+    position: absolute;
+    left: -4px;
+    top: 5px;
+    bottom: 5px;
+    width: 1px;
+    background: var(--bmm-s10);
+}
+#dbg-clear-all:hover {
+    background: color-mix(in srgb, var(--debug-warn) 18%, transparent);
+    border-color: color-mix(in srgb, var(--debug-warn) 45%, transparent);
+    color: var(--debug-warn);
+}
+#debug-btn-close:hover {
+    background: color-mix(in srgb, var(--debug-error) 18%, transparent);
+    border-color: color-mix(in srgb, var(--debug-error) 45%, transparent);
+    color: var(--debug-error);
+}
+
+/* The title stops being crowded by them. */
+.debug-title {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    letter-spacing: 0.06em;
+    margin-right: 12px;
+}
+
+/* ── The sandbox pair, calmed down ────────────────────────────────────────────
+   "Apply CSS" and "Run JS" were a saturated gradient blue and a flat green, full
+   width, in a panel that is otherwise greys and hairlines. They read as the loudest
+   thing on screen while being two of the least dangerous actions in it — a patch you
+   can undo with the Reset button sitting above them.
+
+   Tinted rather than filled: still obviously the primary pair, still distinguishable
+   from each other, no longer shouting over the code they act on. `color-mix` keeps
+   them tied to the same tokens as everything else, so a theme change carries them
+   along instead of leaving two hard-coded blocks behind. */
+.debug-btn-primary {
+    background: color-mix(in srgb, var(--debug-accent) 16%, transparent);
+    border-color: color-mix(in srgb, var(--debug-accent) 45%, transparent);
+    color: var(--debug-accent);
+}
+.debug-btn-primary:hover {
+    background: color-mix(in srgb, var(--debug-accent) 26%, transparent);
+    border-color: var(--debug-accent);
+}
+.debug-btn-success {
+    background: color-mix(in srgb, var(--debug-success) 16%, transparent);
+    border-color: color-mix(in srgb, var(--debug-success) 45%, transparent);
+    color: var(--debug-success);
+}
+.debug-btn-success:hover {
+    background: color-mix(in srgb, var(--debug-success) 26%, transparent);
+    border-color: var(--debug-success);
+}
+
+/* ── One tab style, not two ───────────────────────────────────────────────────
+   The main row and the sub-row (RUST ENGINE / DOM / CSS) were styled separately and
+   had drifted — different weights, different underline treatment. Two rows of tabs
+   that do not look like the same mechanism make a panel feel assembled from parts. */
+.debug-subtab {
+    font-size: 10.5px;
+    letter-spacing: 0.04em;
+    padding: 7px 12px;
+    border-bottom: 2px solid transparent;
+    color: var(--debug-text-muted);
+    background: transparent;
+    border-radius: 0;
+}
+.debug-subtab:hover { color: var(--debug-text-primary); }
+.debug-subtab.active {
+    color: var(--debug-accent);
+    border-bottom-color: var(--debug-accent);
+    font-weight: 600;
+}
