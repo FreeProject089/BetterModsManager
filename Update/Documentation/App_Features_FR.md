@@ -737,3 +737,28 @@ fenêtre et sa densité de pixels, ainsi que les erreurs non capturées de la se
 éléments modifient silencieusement le comportement de l'app tout en étant invisibles sur une
 capture d'écran — un spinner qui refusait de tourner a été remonté jusqu'à un interrupteur
 d'accessibilité de Windows que rien n'avait jamais rapporté.
+
+## 66. Choisir le démarrage de BMM depuis l'installateur (v1.0.0+)
+
+La page Configuration de l'installateur n'est pas décorative : ce que vous y choisissez est
+appliqué au premier lancement, pour que BMM s'ouvre déjà configuré au lieu de vous reposer
+les mêmes questions.
+
+- **Thème.** Le sélecteur affiche une tuile par thème intégré avec ses vraies couleurs
+  (fond, surface, accent, texte), et se propose une seconde fois sur la page finale — un
+  thème est une décision sur une image, et c'est le premier moment où vous n'avez plus rien
+  d'autre en tête. Votre choix est désormais réellement appliqué au premier lancement.
+- **Langue.** `auto` suit votre système ; choisir explicitement une langue saute aussi
+  l'invite de langue au premier démarrage de BMM.
+- **Télémétrie anonyme** et **Discord Rich Presence** arrivent **déjà cochées**. Les deux
+  sont bien visibles sur cette page, vous pouvez les décocher avant d'installer, et changer
+  d'avis à tout moment dans les Réglages. Ce que la télémétrie envoie est décrit dans
+  **PRIVACY_FR.md**, qui énonce explicitement ce pré-cochage plutôt que de vous le laisser
+  découvrir.
+- **Les Conditions et la Politique de confidentialité** affichées pendant l'installation le
+  sont dans votre langue lorsqu'une traduction est fournie, et leurs tableaux — dont le
+  récapitulatif « ce qui quitte votre PC » — sont maintenant lisibles, et non du markdown
+  brut.
+
+Chacun de ces choix est facultatif, et les valeurs par défaut de BMM s'appliquent
+inchangées à une installation qui n'est jamais passée par l'installateur.

@@ -835,3 +835,25 @@ system's accessibility and colour preferences, the window size and pixel ratio, 
 uncaught errors from the session. These silently change how the app behaves while being
 invisible in a screenshot — a spinner that refused to turn was traced to a Windows
 accessibility switch that nothing had ever reported.
+
+## 66. Choosing how BMM starts, in the installer (v1.0.0+)
+
+The installer's Configuration page is not decoration: what you pick there is applied at
+first launch, so BMM opens already set up rather than asking you the same questions again.
+
+- **Theme.** The picker shows a tile per built-in theme with its real colours (background,
+  surface, accent, text), and offers itself once more on the final page — a theme is a
+  decision about a picture, and that is the first moment you have nothing else to think
+  about. Your choice is now genuinely applied on first launch.
+- **Language.** `auto` follows your operating system; picking a language explicitly also
+  skips BMM's first-run language prompt.
+- **Anonymous telemetry** and **Discord Rich Presence** arrive **already ticked**. Both are
+  plainly visible on that page and you can untick either before installing, and change your
+  mind at any time in Settings. What telemetry sends is described in **PRIVACY.md**, which
+  states this pre-ticked default explicitly rather than leaving you to discover it.
+- **The Terms and Privacy Policy** shown during installation are displayed in your language
+  when a translated copy is bundled, and their tables — including the "what leaves your PC"
+  summary — are now readable rather than raw markdown.
+
+Every one of these is optional, and BMM's own defaults apply unchanged to an installation
+that never ran the installer.

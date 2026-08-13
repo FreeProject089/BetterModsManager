@@ -851,3 +851,98 @@ auparavant rien et que les révoquer à la mise à jour casserait des automatisa
 fonctionnent aujourd'hui. Il ne donne **pas** `script`. Cette capacité n'existait pas quand
 l'utilisateur a coché la case : l'accorder rétroactivement ne serait pas honorer un
 consentement, ce serait l'inventer.
+
+## 61. La bulle qui a survécu à son tutoriel
+
+Minimiser le tutoriel interactif après un « Montre-moi », puis le fermer, laissait la
+bulle d'astuce flotter au-dessus de l'application, sans rien derrière.
+
+Le curseur fantôme et sa légende sont deux éléments, et la légende est un **frère** sur
+`<body>`, pas un enfant du fantôme. Retirer le fantôme n'emportait donc jamais la légende.
+Seul le chemin de complétion normale retirait les deux explicitement ; le teardown ne
+retirait que le fantôme, si bien que toute sortie du tutoriel autre que « le terminer »
+laissait la légende. Un second « Montre-moi » en empilait une de plus.
+
+La même leçon est arrivée deux fois dans le même fichier, car la mise en page du panneau
+minimisé était fausse elle aussi — et sa feuille de style l'expliquait par un commentaire
+inexact :
+
+```css
+/* Ces règles doivent l'emporter sur celles de la colonne ancrée, ce qu'elles font
+   par le nombre de classes et parce qu'elles viennent plus loin dans ce fichier. */
+.tut-engine-panel.minimized.pill-float { … }
+```
+
+Les règles d'ancrage sont `body.tut-dock-right .tut-engine-panel.minimized` : les *mêmes*
+trois classes, plus deux sélecteurs d'élément. À nombre de classes égal, ce sont les
+sélecteurs d'élément qui départagent — en faveur de l'ancrage. `height: 46px` et
+`bottom: 0` écrasaient donc le `height: auto` et le `bottom: 24px` de la pastille, tassant
+un contenu auto-dimensionné dans une boîte rigide collée au bord. Un `body ` en tête
+égalise la spécificité et laisse l'ordre du fichier décider, comme le commentaire l'avait
+toujours voulu.
+
+**La leçon :** deux éléments créés ensemble doivent être détruits ensemble — faire de l'un
+l'enfant de l'autre, ou retirer les deux sur tous les chemins, jamais un seul. Et un
+commentaire qui affirme un résultat de spécificité n'en est pas la preuve : comptez les
+sélecteurs d'élément, pas seulement les classes.
+
+## 62. L'abonné qui a survécu à sa propre interface
+
+Les DevTools consommaient de plus en plus de mémoire à mesure que l'application tournait,
+et tous les suspects évidents étaient innocents. Leurs quatre tampons (`logs`, `ipcCalls`,
+`patches`, `actions`) sont plafonnés à `maxItems` ; leurs trois intervalles sont nettoyés
+dans `destroy()` ; l'audit d'accessibilité est un ajout/retrait idempotent d'une classe ;
+et le patch de `addEventListener` stocke ce qu'il apprend dans un attribut `data-` **sur
+l'élément lui-même**, donc il ne retient aucune référence extérieure et meurt avec le nœud.
+
+La fuite était dans le contrat même du teardown. `destroy()` annule le conteneur et
+`toggle()` reconstruit via `init()` — « reconstruit à la prochaine ouverture » est voulu.
+Mais `init()` atteint `attachListeners()`, qui appelait `debugHub.subscribe()` avec une
+nouvelle fonction fléchée, et `unsubscribe()` n'apparaissait nulle part dans le fichier.
+Le hub conserve ses abonnés dans un `Set` que rien d'autre ne purge : chaque cycle
+ouvrir→fermer→ouvrir ajoutait donc un callback définitif, et chaque closure épinglait le
+DOM détaché de l'interface détruite. Pire, `emit()` diffuse chaque ligne de log, appel IPC
+et action à tout le `Set` : après N cycles, chacun s'exécutait N fois, dans des interfaces
+mortes.
+
+Un effet de second ordre le rendait visible même panneau fermé. Le hub conditionne
+l'émission d'état à `listeners.size > 0` ; le `Set` étant durablement non vide, l'état
+continuait d'être émis indéfiniment, DevTools clos.
+
+**La leçon :** un teardown dont l'objet sera reconstruit doit défaire *toutes* les
+inscriptions faites par cet objet, y compris celles faites dans d'**autres** modules. Les
+minuteries et observateurs qu'il possède sont la moitié facile ; un callback confié à la
+collection d'autrui est la moitié qu'on oublie, parce que rien, dans l'objet détruit, ne
+pointe vers lui.
+
+## 63. La valeur écrite, et jamais lue
+
+Le thème choisi dans le sélecteur de l'installateur ne survivait jamais au premier
+lancement. Aucun des deux côtés n'était visiblement cassé : le manifeste associe cette page
+à `settings.active_theme`, et l'écrivain du handoff l'inscrivait bien dans le fichier.
+Personne ne le lisait. `apply_settings` traitait la langue, le saut du tutoriel, la
+télémétrie, le RPC Discord, l'E/S intelligente, le son, le mode système de fichiers,
+l'enregistreur de session et les drapeaux légaux — `active_theme` était simplement absent
+de la liste, si bien que chaque installation retombait sur le thème par défaut quel que
+soit le choix, en silence.
+
+La même forme est réapparue la même semaine dans un autre dépôt — la plateforme web, en
+JavaScript, dans une fonctionnalité sans aucun rapport avec les thèmes — ce qui est la
+raison pour laquelle elle est consignée ici plutôt que classée comme accident isolé. Ce
+code s'ouvrait sur
+
+```js
+const p = db();          // db() est asynchrone dans ce dépôt
+```
+
+à l'intérieur d'un `try`/`catch` écrit pour qu'un hoquet GeoIP ou base ne refuse jamais une
+connexion. `p` était donc une promesse en attente, l'accès de propriété suivant levait
+aussitôt, et le catch avalait l'erreur. La fonctionnalité serait partie sans rien
+enregistrer du tout, tous les contrôles alentour au vert — morte, et l'air vivante.
+
+**La leçon :** un handoff a deux extrémités, et chaque moitié peut être parfaitement
+correcte pendant que la paire ne fait rien. Testez l'aller-retour, pas les moitiés. Et un
+`try`/`catch` écrit pour protéger un chemin critique masquera vos propres erreurs avec
+autant de bonne volonté que la panne qu'il visait — ce qui est exactement pourquoi le
+correctif a été vérifié en relisant les lignes en base, et non en regardant la connexion
+réussir.

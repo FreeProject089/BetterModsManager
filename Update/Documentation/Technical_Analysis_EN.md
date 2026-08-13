@@ -916,3 +916,90 @@ The migration is the interesting part. An existing task carries only the old fla
 revoking them on upgrade would break automations that work today. It does **not** map to
 `script`. That capability did not exist when the user ticked the box, so granting it
 retroactively would not be honouring consent — it would be inventing it.
+
+## 61. The bubble that outlived its tutorial
+
+Minimising the interactive tutorial after a "Show me", then closing it, left the hint
+bubble floating over the application with nothing behind it.
+
+The ghost cursor and its caption are two elements, and the caption is a **sibling** on
+`<body>`, not a child of the ghost. Removing the ghost therefore never took the caption
+with it. Only the normal-completion path removed both explicitly; the teardown removed
+just the ghost, so every route out of the tutorial that was not "finish it" leaked the
+caption. Creating a second Show-me stacked another one on top.
+
+The same lesson arrived twice in one file, because the minimised panel's layout was also
+wrong, and its stylesheet said why in a comment that was false:
+
+```css
+/* These rules must beat the side-dock column rules, which they do by class count
+   and by coming later in this file. */
+.tut-engine-panel.minimized.pill-float { … }
+```
+
+The dock rules are `body.tut-dock-right .tut-engine-panel.minimized` — the *same* three
+classes, plus two element selectors. Class count is tied; element selectors break the tie,
+in the dock's favour. So `height: 46px` and `bottom: 0` were overriding the pill's
+`height: auto` and `bottom: 24px`, squeezing auto-sized content into a rigid box pinned to
+the screen edge. A leading `body ` levels the specificity and lets source order decide, as
+the comment always intended.
+
+**The lesson:** two elements created together must be destroyed together — make one the
+child of the other, or remove both on every path, never one. And a comment asserting a
+specificity outcome is not a proof of it: count the element selectors, not just the
+classes.
+
+## 62. The subscriber that survived its own UI
+
+DevTools ate memory the longer the application ran, and the obvious suspects were all
+innocent. Its four buffers (`logs`, `ipcCalls`, `patches`, `actions`) are each capped at
+`maxItems`; its three intervals are cleared in `destroy()`; the accessibility audit is an
+idempotent add/remove of one class; and the `addEventListener` monkeypatch stores what it
+learns in a `data-` attribute **on the element itself**, so it retains no outside
+reference and dies with the node.
+
+The leak was in the teardown's own contract. `destroy()` nulls the container and
+`toggle()` rebuilds through `init()` — "rebuilt next time it opens" is by design. But
+`init()` reaches `attachListeners()`, which called `debugHub.subscribe()` with a fresh
+inline arrow, and `unsubscribe()` appeared nowhere in the file. The hub keeps its
+subscribers in a `Set` that nothing else prunes, so every open→close→open cycle added one
+more permanent callback, and each closure pinned the destroyed UI's detached DOM. Worse,
+`emit()` fans every log line, IPC call and action out to the whole `Set`: after N cycles,
+each of those ran N times, into dead interfaces.
+
+There was a second-order effect that made it visible even with the panel shut. The hub
+gates state emission on `listeners.size > 0`; once the `Set` was permanently non-empty,
+state kept being emitted forever with DevTools closed.
+
+**The lesson:** a teardown whose object is rebuilt afterwards must undo every registration
+that object made, including the ones it made in **other** modules. Timers and observers it
+owns are the easy half; a callback handed to somebody else's collection is the half that
+gets forgotten, because nothing in the destroyed object points at it.
+
+## 63. The value written, and never read
+
+The theme chosen on the installer's picker never survived the first launch. Neither side
+was obviously broken: the manifest maps that page to `settings.active_theme`, and the
+handoff writer duly wrote it into the file. Nothing read it. `apply_settings` handled
+language, tutorial skip, telemetry, Discord RPC, smart I/O, sound, filesystem mode, the
+session recorder and the legal flags — `active_theme` was simply absent from the list, so
+every install landed on the default whatever the user picked, in silence.
+
+The same shape turned up the same week in a different codebase — the web platform, in
+JavaScript, in a feature that had nothing to do with themes — which is why it is recorded
+here rather than filed as a one-off. That code opened with
+
+```js
+const p = db();          // db() is async in this codebase
+```
+
+inside a `try`/`catch` written so that a GeoIP or database hiccup could never deny a
+login. `p` was therefore a pending promise, the very next property access threw, and the
+catch swallowed it. The feature would have shipped recording nothing at all while every
+surrounding check stayed green — dead, and looking alive.
+
+**The lesson:** a handoff has two ends, and each half can be perfectly correct while the
+pair does nothing. Test the round trip, not the halves. And a `try`/`catch` written to
+protect a critical path will hide your own mistakes inside it just as willingly as the
+failure it was meant for — which is exactly why the fix was verified by reading rows back
+out of the database rather than by watching the login succeed.
