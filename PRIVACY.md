@@ -142,7 +142,32 @@ page with an embed, your browser engine loads it directly from YouTube/Google, w
 IP and may set cookies under **Google's** privacy policy (we use the `youtube‑nocookie` style embed
 where possible). When offline, a bundled local video is shown instead and nothing is contacted.
 
-### 3.6 Optional integrations
+### 3.6 Linking a BetterCommunity account (optional)
+If you choose to link an account, BMM sends your **Creator ID** to bettercommunity.ch to
+request a one-time code, then polls whether the code has been entered. The Creator ID is an
+identifier, not a secret â€” you already hand it to repo owners for whitelisting. No password or
+e-mail is sent by BMM at any point in this exchange.
+
+### 3.7 BetterCommunity notifications (optional, needs an API key)
+If â€” and only if â€” you store a BetterCommunity **API key** in *Settings â†’ Identity & API*, BMM
+asks that account's notifications from `bettercommunity.ch/v1/notifications` **every ten minutes**
+while the app is open, and shows them in its notification centre.
+
+Three things about this are worth stating plainly, because it is the only request BMM makes that
+carries a credential:
+
+- **The key never enters the web view.** It is stored in BMM's app-data folder and read only by
+  the native process, which makes the request. The interface can save one, ask whether one exists,
+  and delete it â€” it can never read it back.
+- **It is scoped.** The key you create carries `notifications:read` and nothing else. Compromised,
+  it permits reading your notifications; it cannot post, pay, publish or change your account.
+- **It is stored in clear on disk.** Anyone who can read your app-data folder can read the key.
+  You can remove it at any time from the same screen, and revoke it from your account page on the
+  website â€” which also invalidates any copy of it.
+
+No key stored means no request is ever made.
+
+### 3.8 Optional integrations
 Any feature you explicitly configure (Discord webhook, Cloudflare tunnel, …) sends data to the
 service you configured, under that service's own terms.
 
@@ -159,6 +184,8 @@ service you configured, under that service's own terms.
 | Host a Server Repo | Yes (incoming) | Visitors' IP + Creator ID stored locally | You (host) |
 | Submit a BetaHub bug report / feedback | Yes | What you typed + attachments | BetaHub service |
 | Check for updates / download plugin/app | Yes | Your IP (standard HTTPS) | GitHub / download host |
+| Link a BetterCommunity account | Yes | Creator ID (an identifier, not a secret) | bettercommunity.ch |
+| **BetterCommunity notifications** (only with a stored API key) | Yes, every 10 min | An API key scoped to `notifications:read` | bettercommunity.ch |
 
 ---
 

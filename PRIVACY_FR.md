@@ -152,7 +152,35 @@ depuis YouTube/Google, qui peut voir votre IP et déposer des cookies selon la p
 confidentialité de **Google** (nous utilisons l'intégration de type `youtube‑nocookie` quand c'est
 possible). Hors ligne, une vidéo locale est affichée à la place et rien n'est contacté.
 
-### 3.6 Intégrations optionnelles
+### 3.6 Liaison d'un compte BetterCommunity (optionnel)
+Si vous choisissez de lier un compte, BMM envoie votre **Creator ID** à bettercommunity.ch pour
+demander un code à usage unique, puis interroge le serveur pour savoir si ce code a été saisi. Le
+Creator ID est un identifiant, pas un secret — vous le donnez déjà aux propriétaires de dépôts
+pour figurer dans leurs listes blanches. Aucun mot de passe ni adresse e-mail n'est envoyé par BMM
+au cours de cet échange.
+
+### 3.7 Notifications BetterCommunity (optionnel, nécessite une clé d'API)
+Si — et seulement si — vous enregistrez une **clé d'API** BetterCommunity dans *Réglages →
+Identité & API*, BMM demande les notifications de ce compte à
+`bettercommunity.ch/v1/notifications` **toutes les dix minutes** pendant que l'app est ouverte, et
+les affiche dans son centre de notifications.
+
+Trois points méritent d'être énoncés clairement, car c'est la seule requête de BMM qui transporte
+un identifiant d'authentification :
+
+- **La clé n'entre jamais dans la vue web.** Elle est stockée dans le dossier de données de BMM et
+  lue uniquement par le processus natif, qui effectue la requête. L'interface peut en enregistrer
+  une, demander s'il en existe une, et la supprimer — elle ne peut jamais la relire.
+- **Elle est limitée en portée.** La clé que vous créez porte `notifications:read` et rien
+  d'autre. Compromise, elle permet de lire vos notifications ; elle ne peut ni publier, ni payer,
+  ni modifier votre compte.
+- **Elle est stockée en clair sur le disque.** Quiconque peut lire votre dossier de données peut
+  lire la clé. Vous pouvez la retirer à tout moment depuis le même écran, et la révoquer depuis
+  votre page de compte sur le site — ce qui invalide aussi toute copie qui en aurait été faite.
+
+Sans clé enregistrée, aucune requête n'est jamais effectuée.
+
+### 3.8 Intégrations optionnelles
 Toute fonction que vous configurez explicitement (webhook Discord, tunnel Cloudflare, …) envoie des
 données au service configuré, selon ses propres conditions.
 
@@ -169,6 +197,8 @@ données au service configuré, selon ses propres conditions.
 | Héberger un Server Repo | Oui (entrant) | IP + Creator ID des visiteurs stockés localement | Vous (hôte) |
 | Envoyer un rapport/retour BetaHub | Oui | Ce que vous saisissez + pièces jointes | Service BetaHub |
 | Vérifier les MAJ / télécharger plugin/app | Oui | Votre IP (HTTPS standard) | GitHub / hôte de téléchargement |
+| Lier un compte BetterCommunity | Oui | Creator ID (un identifiant, pas un secret) | bettercommunity.ch |
+| **Notifications BetterCommunity** (uniquement avec une clé d'API enregistrée) | Oui, toutes les 10 min | Une clé d'API limitée à `notifications:read` | bettercommunity.ch |
 
 ---
 
