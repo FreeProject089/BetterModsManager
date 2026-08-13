@@ -117,6 +117,8 @@ Nothing here removes protections that the consumer law of your country of reside
 and that cannot be waived by agreement. If you are a consumer resident in the EU or the UK, you
 keep the right to bring proceedings in the courts of your own country.
 
+The place of jurisdiction is **Lausanne, canton of Vaud, Switzerland**.
+
 ## 17. CONTACT
 Questions about these Terms: the BetterCommunity site's contact form, or the project's Discord.
 Privacy requests, including access and erasure, are handled as described in **PRIVACY.md**.

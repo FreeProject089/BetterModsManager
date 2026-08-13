@@ -124,6 +124,8 @@ vous accorde et auxquelles il n'est pas possible de renoncer par contrat. Si vou
 consommateur résidant dans l'UE ou au Royaume-Uni, vous conservez le droit d'agir devant les
 tribunaux de votre propre pays.
 
+Le for est à **Lausanne, canton de Vaud, Suisse**.
+
 ## 17. CONTACT
 Questions sur ces Conditions : le formulaire de contact du site BetterCommunity, ou le Discord du
 projet. Les demandes relatives aux données personnelles, y compris l'accès et l'effacement, sont
