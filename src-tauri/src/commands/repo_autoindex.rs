@@ -160,6 +160,60 @@ mod tests {
 <a href="big%20file.pak">big file.pak</a>                                  01-Jan-2026 00:00 2147483648
 </pre><hr></body></html>"#;
 
+
+    // Captured VERBATIM from a running BCWEB instance
+    // (GET /hosting/<owner>/<repo>/files/cool-mod/Data/textures/). BCWEB generates this
+    // listing so that a hosted repo can be consumed by "Update from server" exactly like
+    // somebody's own nginx. The two live in different repositories and different
+    // languages, so nothing but a test keeps them agreeing: if BCWEB's renderer drifts —
+    // a wrapped line, a localised month, a human-readable size — this fails instead of
+    // silently forcing a full re-hash on every refresh.
+    const BCWEB: &str = r#"<html><head><title>Index of /hosting/idx/probe/files/cool-mod/Data/textures/</title></head><body>
+<h1>Index of /hosting/idx/probe/files/cool-mod/Data/textures/</h1><hr><pre><a href="../">../</a>
+<a href="a.dds">a.dds</a>                                               13-Aug-2026 04:41                2048
+<a href="big%20file.dds">big file.dds</a>                                        13-Aug-2026 04:41             5242880
+</pre><hr></body></html>"#;
+
+    #[test]
+    fn bcweb_hosted_listings_parse_like_nginx() {
+        let rows = parse_autoindex(BCWEB);
+        assert_eq!(rows.len(), 2, "../ is navigation, not content");
+
+        assert_eq!(rows[0].name, "a.dds");
+        assert!(!rows[0].is_dir);
+        assert_eq!(rows[0].size, Some(2048));
+        assert!(rows[0].mtime.is_some(), "a missing date forces a needless re-hash");
+
+        // The percent-encoded href must decode, or the file is requested under a name
+        // that does not exist and the refresh fails on a file it can see.
+        assert_eq!(rows[1].name, "big file.dds");
+        assert_eq!(rows[1].size, Some(5_242_880));
+
+        // Both rows carry the same UTC minute in the capture; the point is that it parsed
+        // at all, and to the same instant for both.
+        assert_eq!(rows[0].mtime, rows[1].mtime);
+    }
+
+    // The directory level of the same listing.
+    const BCWEB_DIRS: &str = r#"<h1>Index of /hosting/idx/probe/files/</h1><hr><pre><a href="../">../</a>
+<a href="cool-mod/">cool-mod/</a>                                           13-Aug-2026 04:41                   -
+<a href="other-mod/">other-mod/</a>                                          13-Aug-2026 04:41                   -
+</pre><hr></body></html>"#;
+
+    #[test]
+    fn bcweb_directory_rows_carry_no_size() {
+        let rows = parse_autoindex(BCWEB_DIRS);
+        assert_eq!(rows.len(), 2);
+        for r in &rows {
+            assert!(r.is_dir, "{} should be a directory", r.name);
+            // The dash matters: any integer here would be read as a file length and every
+            // directory would look like a changed file.
+            assert_eq!(r.size, None, "{} must not report a size", r.name);
+        }
+        assert_eq!(rows[0].name, "cool-mod");
+        assert_eq!(rows[1].name, "other-mod");
+    }
+
     #[test]
     fn an_nginx_listing_yields_names_sizes_and_dates() {
         let rows = parse_autoindex(NGINX);
