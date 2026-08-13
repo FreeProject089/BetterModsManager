@@ -1968,11 +1968,7 @@ class DebugUI {
                     color = 'var(--debug-accent)';
                 else if (lowerLine.includes('success') || lowerLine.includes('done'))
                     color = 'var(--debug-success)';
-                return `
-                    <div style="font-family:'JetBrains Mono'; font-size:10px; margin-bottom:2px; padding:2px 4px; border-bottom:1px solid rgba(255,255,255,0.01); white-space:pre-wrap; word-break:break-all; color:${color}">
-                        ${this.escapeHtml(line)}
-                    </div>
-                `;
+                return `<div class="debug-rustline" style="color:${color}">${this.escapeHtml(line)}</div>`;
             }).join('') || '<div class="debug-empty">None log Rust trouvé.</div>';
             container.scrollTop = container.scrollHeight;
         }

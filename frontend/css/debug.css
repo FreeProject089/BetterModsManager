@@ -943,3 +943,19 @@
     background: var(--bmm-s10);
     color: var(--debug-text-primary);
 }
+
+/* Rust log lines — same density as the Console tab, which they never had.
+   The markup put the text on its own line inside a template literal while the row
+   was `white-space: pre-wrap`. Under pre-wrap the template's own indentation IS
+   content: every row rendered a leading newline and ~24 spaces, which is where the
+   huge vertical gaps and the left offset came from. The text touches its tags now;
+   pre-wrap stays, because a log line genuinely needs its own spacing preserved. */
+.debug-rustline {
+    font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+    font-size: 10px;
+    line-height: 1.5;
+    padding: 1px 4px;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+.debug-rustline:nth-child(even) { background: var(--bmm-s02); }
