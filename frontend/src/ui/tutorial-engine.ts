@@ -290,6 +290,10 @@ function _cleanup(): void {
     document.querySelectorAll('.tut-highlight').forEach(el => el.remove());
     document.getElementById('tut-hl-layer')?.remove();
     document.getElementById('tut-ghost-cursor')?.remove();
+    // The caption is a SIBLING of the ghost on <body>, not a child, so removing the
+    // ghost never took it. Only the normal-completion path removed both, which is why
+    // it survived minimise-then-close and sat over the app with no tutorial behind it.
+    document.getElementById('tut-ghost-caption')?.remove();
     document.getElementById('tut-scroll-hint')?.remove();
     document.getElementById('tut-unsaved-overlay')?.remove();
     // Don't leave the step's modal open when moving on.
@@ -1680,6 +1684,8 @@ function _showMe(navigated: boolean = false): void {
     const color = _tutorial?.color ?? 'var(--accent)';
 
     document.getElementById('tut-ghost-cursor')?.remove();
+    // …and its caption, or a second Show-me stacks a new bubble over the old one.
+    document.getElementById('tut-ghost-caption')?.remove();
     const ghost = document.createElement('div');
     ghost.id = 'tut-ghost-cursor';
     ghost.className = 'tut-ghost-cursor';

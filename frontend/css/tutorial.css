@@ -384,9 +384,12 @@ body.tut-docked.tut-min.tut-dock-left .app-shell {
 /* ── The minimised pill floats ────────────────────────────────────────────────
    While minimised the lesson reserves nothing: the app takes its space back and the pill
    sits above it, draggable anywhere (the engine gates dragging on .minimized). These
-   rules must beat the side-dock column rules, which they do by class count and by coming
-   later in this file. */
-.tut-engine-panel.minimized.pill-float {
+   rules must beat the side-dock column rules. Class count alone does NOT do it: the dock
+   rules are `body.tut-dock-right .tut-engine-panel.minimized` — same three classes, plus
+   two element selectors, which break the tie in their favour. They were winning, forcing
+   the auto-sized pill into a rigid 46px box pinned to bottom:0. The leading `body ` below
+   levels the specificity so coming later in the file decides it, as intended. */
+body .tut-engine-panel.minimized.pill-float {
     position: fixed;
     top: auto;
     left: auto;
