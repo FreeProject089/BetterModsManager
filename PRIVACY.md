@@ -11,9 +11,12 @@ document explains the cases where data leaves your computer, and exactly what is
 
 ## 1. What we do NOT do
 
-- **No tracking without consent.** Telemetry is **opt‑in** and **off by default**. Nothing is
-  collected or sent until you explicitly enable it on the first‑run consent screen (or later in
-  Settings → Privacy).
+- **No tracking without consent.** Telemetry is **off by default** in BMM itself: nothing is
+  collected or sent until you enable it on the first‑run consent screen (or later in
+  Settings → Privacy). **One exception, stated plainly:** when you install through
+  BetterInstaller, the Configuration page shows the telemetry checkbox **already ticked**. It is
+  visible and you can untick it there before installing — but if you click through that page
+  without reading it, telemetry ends up on. Settings → Privacy turns it off at any time.
 - **No account required.** You do not need to sign in to use BMM.
 - **We never sell your personal data.** Your data is not the product and is never sold or shared
   for advertising. (This is about your data — it is not a statement about BMM's products or any
@@ -94,8 +97,9 @@ File contents, mod names or contents, the text/values you type (masked in sessio
 your real‑world identity, precise GPS/location, and anything from features you didn't use.
 
 ### 2.3 Consent & control
-- Telemetry is **off by default**. You choose on first launch and can change it anytime in
-  **Settings → Privacy**.
+- Telemetry is **off by default** in BMM itself — but the BetterInstaller Configuration page
+  pre‑ticks it (visible, and uncheckable there). You choose on first launch and can change it
+  anytime in **Settings → Privacy**.
 - When off, **nothing is collected** and nothing is sent.
 - You can **export** everything BMM has buffered, and **clear** the local buffer at any time.
 - The Privacy panel lists every **packet** BMM has sent (id, time, and a breakdown of *which

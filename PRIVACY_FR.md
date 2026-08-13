@@ -12,9 +12,13 @@ et exactement ce qui est envoyé.
 
 ## 1. Ce que nous ne faisons PAS
 
-- **Aucun pistage sans consentement.** La télémétrie est **opt‑in** et **désactivée par défaut**.
-  Rien n'est collecté ni envoyé tant que vous ne l'activez pas sur l'écran de consentement au premier
-  lancement (ou plus tard dans Réglages → Confidentialité).
+- **Aucun pistage sans consentement.** La télémétrie est **désactivée par défaut** dans BMM
+  lui-même. **Une exception, dite clairement :** lors d'une installation via BetterInstaller, la
+  page Configuration affiche la case télémétrie **déjà cochée**. Elle est visible et vous pouvez
+  la décocher avant d'installer — mais si vous passez cette page sans la lire, la télémétrie
+  finit activée. Réglages → Confidentialité permet de la couper à tout moment.
+  Hors installateur, rien n'est collecté ni envoyé tant que vous ne l'activez pas sur l'écran de
+  consentement au premier lancement (ou plus tard dans Réglages → Confidentialité).
 - **Aucun compte requis.** Pas besoin de vous connecter pour utiliser BMM.
 - **Nous ne vendons jamais vos données personnelles.** Vos données ne sont pas le produit et ne sont
   jamais vendues ni partagées à des fins publicitaires. (Ceci concerne vos données — ce n'est pas une
@@ -101,7 +105,8 @@ Le contenu des fichiers, les noms ou contenus de mods, le texte/les valeurs que 
 et tout ce qui provient de fonctions non utilisées.
 
 ### 2.3 Consentement et contrôle
-- La télémétrie est **désactivée par défaut**. Vous choisissez au premier lancement et pouvez changer
+- La télémétrie est **désactivée par défaut** dans BMM lui-même — mais la page Configuration de
+  BetterInstaller la **pré-coche** (visible, et décochable à cet endroit). Vous choisissez au premier lancement et pouvez changer
   à tout moment dans **Réglages → Confidentialité**.
 - Désactivée, **rien n'est collecté** ni envoyé.
 - Vous pouvez **exporter** tout ce que BMM a mis en cache, et **effacer** le cache local à tout moment.

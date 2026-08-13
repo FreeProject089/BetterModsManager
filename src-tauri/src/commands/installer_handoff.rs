@@ -82,6 +82,11 @@ pub struct HandoffResult {
     /// localStorage flag (that setting lives on the JS side, not in AppSettings).
     /// `None`/`Some(true)` → leave BMM's default (on).
     pub session_recorder: Option<bool>,
+    /// Theme id the installer's swatch page picked. Like the session recorder this has
+    /// no AppSettings field — the active theme lives in localStorage on the JS side — so
+    /// it is surfaced here and the frontend writes `bmm_active_theme` before
+    /// `restoreThemeAtBoot()` reads it.
+    pub active_theme: Option<String>,
 }
 
 #[tauri::command]
@@ -219,6 +224,26 @@ fn apply_settings(
     // Local session recorder — no AppSettings field (it's a JS/localStorage flag), so we
     // just surface the choice; the frontend mirrors it to `bmm_replay_enabled`.
     res.session_recorder = s.get("session_recorder").and_then(|v| v.as_bool());
+
+    // Active theme — same story: a JS/localStorage setting, surfaced for the frontend.
+    // The installer has always WRITTEN this key (installer.toml maps the swatch page to
+    // settings.active_theme); nothing here read it, so every install silently landed on
+    // the default theme whatever the user picked.
+    //
+    // The id is validated rather than trusted: it becomes part of the
+    // `bmm_theme_cache_<id>` localStorage key and is matched against built-in ids, so
+    // restrict it to the shape real theme ids have. An unknown-but-well-formed id is
+    // still safe — restoreThemeAtBoot falls back to resetTheme().
+    res.active_theme = s
+        .get("active_theme")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|id| {
+            !id.is_empty()
+                && id.len() <= 64
+                && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+        })
+        .map(str::to_string);
 
     let privacy = s.get("privacy_accepted").and_then(|v| v.as_bool()).unwrap_or(false);
     let tos = s.get("tos_accepted").and_then(|v| v.as_bool()).unwrap_or(false);

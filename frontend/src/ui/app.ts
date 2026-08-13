@@ -871,6 +871,11 @@ async function main() {
             // Local session recorder is a JS-side setting (localStorage bmm_replay_enabled,
             // default on). The installer only needs to act when the user turned it OFF.
             if (ho.session_recorder === false) localStorage.setItem('bmm_replay_enabled', '0');
+            // Theme chosen on the installer's swatch page. Also a JS-side setting, and it
+            // must land BEFORE restoreThemeAtBoot() below reads bmm_active_theme — the
+            // installer wrote this all along and nobody consumed it, so the pick never
+            // survived the first launch.
+            if (ho.active_theme) localStorage.setItem('bmm_active_theme', ho.active_theme);
             // Pre-import a bundled preset (themes / translations / catalogue / plugins)
             // through the same path as a manual backup import. Runs before i18n init
             // so freshly-imported languages are available immediately.
