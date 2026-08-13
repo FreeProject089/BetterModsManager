@@ -17,7 +17,7 @@ Open the **Theme Editor** (floating panel). It has four tabs:
 
 ## Quick start
 
-1. Pick one of the **12 built-in presets** (BMM Default, Sombre, Void/Noir, Full White, Discord, Orange/Noir, Spotify Green, Brutalist, Glass, Clay, Nord, Sakura), or
+1. Pick one of the **11 built-in presets** (BMM Default, Sombre, Void/Noir, Full White, Discord, Orange/Noir, Spotify Green, Brutalist, Clay, Nord, Sakura), or
 2. Use the **auto-palette**: pick one colour → *Generate dark* / *Generate light* builds a complete coherent theme from it.
 3. Tweak anything in the collapsible groups (Background, Accent, Text, Typography, Shape, Effects, Buttons, Charts, Diagrams, Intro & Outro…).
 4. **Save as…** to keep it (you can store as many themes as you want).

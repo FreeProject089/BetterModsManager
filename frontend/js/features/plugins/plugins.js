@@ -5284,7 +5284,7 @@ function getDeepLinkDefs() {
             params: [{ name: 'id', required: true, desc: 'ID du thème installé à activer.' }],
             desc: 'Appliquer un thème',
             about: 'Active un thème déjà installé par son ID.',
-            example: 'bmm://theme/apply?id=bmm-glass',
+            example: 'bmm://theme/apply?id=bmm-void',
         },
         {
             scheme: 'theme/import',

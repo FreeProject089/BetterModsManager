@@ -849,6 +849,18 @@ async function main() {
             // survived the first launch.
             if (ho.active_theme)
                 localStorage.setItem('bmm_active_theme', ho.active_theme);
+            // Tasky + in-app tips. Each key is read as `!== 'false'`, so only an explicit
+            // "off" needs writing — and only when the installer actually said so. A null
+            // means it was not asked about, and BMM's own default must stand.
+            for (const [k, v] of [
+                ['bmm_tasky_visible', ho.tasky_visible],
+                ['bmm_tasky_tooltip', ho.tasky_tooltip],
+                ['bmm_tasky_animated', ho.tasky_animated],
+                ['bmm_tips_visible', ho.tips_visible],
+            ]) {
+                if (typeof v === 'boolean')
+                    localStorage.setItem(k, String(v));
+            }
             // Pre-import a bundled preset (themes / translations / catalogue / plugins)
             // through the same path as a manual backup import. Runs before i18n init
             // so freshly-imported languages are available immediately.

@@ -82,6 +82,16 @@ pub struct HandoffResult {
     /// localStorage flag (that setting lives on the JS side, not in AppSettings).
     /// `None`/`Some(true)` → leave BMM's default (on).
     pub session_recorder: Option<bool>,
+    /// Tasky and the in-app tip callouts. All four live in localStorage on the JS side,
+    /// exactly like `session_recorder`, so they are surfaced rather than applied here.
+    /// `None` means the installer said nothing and BMM's own default (all on) stands —
+    /// which is why these are Option<bool> and not bool: "not mentioned" and "explicitly
+    /// off" are different instructions, and collapsing them would silently turn features
+    /// off for anyone who installed before these options existed.
+    pub tasky_visible: Option<bool>,
+    pub tasky_tooltip: Option<bool>,
+    pub tasky_animated: Option<bool>,
+    pub tips_visible: Option<bool>,
     /// Theme id the installer's swatch page picked. Like the session recorder this has
     /// no AppSettings field — the active theme lives in localStorage on the JS side — so
     /// it is surfaced here and the frontend writes `bmm_active_theme` before
@@ -224,6 +234,12 @@ fn apply_settings(
     // Local session recorder — no AppSettings field (it's a JS/localStorage flag), so we
     // just surface the choice; the frontend mirrors it to `bmm_replay_enabled`.
     res.session_recorder = s.get("session_recorder").and_then(|v| v.as_bool());
+
+    // Tasky + in-app tips: JS/localStorage settings, surfaced for the frontend to mirror.
+    res.tasky_visible = s.get("tasky_visible").and_then(|v| v.as_bool());
+    res.tasky_tooltip = s.get("tasky_tooltip").and_then(|v| v.as_bool());
+    res.tasky_animated = s.get("tasky_animated").and_then(|v| v.as_bool());
+    res.tips_visible = s.get("tips_visible").and_then(|v| v.as_bool());
 
     // Active theme — same story: a JS/localStorage setting, surfaced for the frontend.
     // The installer has always WRITTEN this key (installer.toml maps the swatch page to
