@@ -174,6 +174,43 @@ mod tests {
 <a href="big%20file.dds">big file.dds</a>                                        13-Aug-2026 04:41             5242880
 </pre><hr></body></html>"#;
 
+
+    // Captured VERBATIM from a running BCWEB instance AFTER checksums were appended to each
+    // row. The sha sits after the size on purpose: this parser walks the line backwards for
+    // the first token that parses as a u64, and a 64-character hex string overflows u64 (and
+    // usually contains letters), so it is skipped and the SIZE is still what is found.
+    // Putting it before the size would silently return the wrong length.
+    //
+    // `nohash.bin` is the third row for a reason — a file uploaded before hashing existed
+    // ends its line at the size, and that must parse identically.
+    const BCWEB_SHA: &str = r#"<h1>Index of /hosting/idx2/probe/files/mods/</h1><hr><pre><a href="../">../</a>
+<a href="a.dds">a.dds</a>                                               13-Aug-2026 08:06                2048  9f2c1b7ae4d05f3c8a1e6b0d4f7c2a91b3e8d5c7f0a2b4d6e8f1c3a5b7d9e0f2
+<a href="big%20file.pak">big file.pak</a>                                        13-Aug-2026 08:06             5242880  1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
+<a href="nohash.bin">nohash.bin</a>                                          13-Aug-2026 08:06                  10
+</pre><hr></body></html>"#;
+
+    #[test]
+    fn a_trailing_checksum_never_shifts_the_size() {
+        let rows = parse_autoindex(BCWEB_SHA);
+        assert_eq!(rows.len(), 3, "{rows:?}");
+
+        assert_eq!(rows[0].name, "a.dds");
+        assert_eq!(rows[0].size, Some(2048), "the sha must not be read as the size");
+
+        // Percent-encoded name AND a sha that is entirely digits — the worst case for a
+        // backwards scan, and still not a u64 because 64 digits overflow it.
+        assert_eq!(rows[1].name, "big file.pak");
+        assert_eq!(rows[1].size, Some(5_242_880));
+
+        // No checksum at all: the line ends at the size, exactly as before.
+        assert_eq!(rows[2].name, "nohash.bin");
+        assert_eq!(rows[2].size, Some(10));
+
+        for r in &rows {
+            assert!(r.mtime.is_some(), "{} lost its date", r.name);
+        }
+    }
+
     #[test]
     fn bcweb_hosted_listings_parse_like_nginx() {
         let rows = parse_autoindex(BCWEB);
