@@ -221,9 +221,7 @@ données au service configuré, selon ses propres conditions.
 ## 6. Contact
 
 Des questions ? Ouvrez une issue sur le dépôt GitHub :
-<a href="https://github.com/FreeProject089/BetterModsManager" target="_blank" rel="noopener noreferrer">
-BetterModsManager
-</a>
+[BetterModsManager](https://github.com/FreeProject089/BetterModsManager)
 
 > Cette politique peut évoluer avec l'application. Les changements importants seront notés dans les
 > notes de version.
