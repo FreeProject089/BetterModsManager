@@ -276,7 +276,11 @@ function _bteSetDock(on: boolean): void {
         // dock rules take over. Float geometry itself survives in localStorage.
         Object.assign(_panel.style, { position: '', left: '', top: '', width: '', height: '', resize: '' });
     } else {
-        _bteShellPad(null);
+        // Undocking must GIVE THE SPACE BACK, or the app shell keeps the padding it was
+        // granted and the layout stays squeezed with no panel in it. releaseDockSpace was
+        // already imported and never called: _bteShellPad is a leftover from a rename that
+        // missed two sites, and @ts-nocheck let it ship as a ReferenceError in production.
+        releaseDockSpace('theme-editor');
         document.body.style.removeProperty('--bte-dock-w');
         applyGeom();
         _panel.style.display = 'flex';
@@ -299,7 +303,7 @@ function _btePlantDockResize(panel: HTMLElement): void {
 
 function closeEditor(): void {
     _panel && (_panel.style.display = 'none');
-    if (_bteDocked()) { document.body.classList.remove('bte-docked'); _bteShellPad(null); }
+    if (_bteDocked()) { document.body.classList.remove('bte-docked'); releaseDockSpace('theme-editor'); }
     stopPick();
 }
 
