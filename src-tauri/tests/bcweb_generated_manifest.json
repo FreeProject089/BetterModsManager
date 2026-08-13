@@ -1,0 +1,79 @@
+{
+  "name": "Auto Manifest",
+  "description": "no repo.json here",
+  "author": "GenTest",
+  "version": "1.0",
+  "game_name": "DCS World",
+  "created_at": "2026-08-13T04:51:49.154Z",
+  "profiles": [
+    {
+      "id": "cmsr1jvhd0002cerctosmcask",
+      "name": "Auto Manifest",
+      "game_name": "DCS World",
+      "mods": [
+        {
+          "id": "cmsr1jvhd0002cerctosmcask:cool-mod",
+          "name": "cool-mod",
+          "version": "1.0",
+          "author": "GenTest",
+          "description": null,
+          "tags": [],
+          "files": [
+            {
+              "relative_path": "readme.txt",
+              "size": 9,
+              "sha256_hash": "aa11",
+              "chunks": null,
+              "mtime": 1786596709
+            },
+            {
+              "relative_path": "Data/a.dds",
+              "size": 2048,
+              "sha256_hash": "bb22",
+              "chunks": null,
+              "mtime": 1786596709
+            }
+          ],
+          "download_links": []
+        },
+        {
+          "id": "cmsr1jvhd0002cerctosmcask:other-mod",
+          "name": "other-mod",
+          "version": "1.0",
+          "author": "GenTest",
+          "description": null,
+          "tags": [],
+          "files": [
+            {
+              "relative_path": "b.pak",
+              "size": 4096,
+              "sha256_hash": "",
+              "chunks": null,
+              "mtime": 1786596709
+            }
+          ],
+          "download_links": []
+        },
+        {
+          "id": "cmsr1jvhd0002cerctosmcask:Auto Manifest",
+          "name": "Auto Manifest",
+          "version": "1.0",
+          "author": "GenTest",
+          "description": null,
+          "tags": [],
+          "files": [
+            {
+              "relative_path": "loose.txt",
+              "size": 12,
+              "sha256_hash": "cc33",
+              "chunks": null,
+              "mtime": 1786596709
+            }
+          ],
+          "download_links": []
+        }
+      ]
+    }
+  ],
+  "generated_by": "bettercommunity-hosting"
+}

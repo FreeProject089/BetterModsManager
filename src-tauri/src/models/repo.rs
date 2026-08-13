@@ -155,3 +155,52 @@ impl ServerRepo {
         }
     }
 }
+
+#[cfg(test)]
+mod bcweb_manifest_tests {
+    use super::*;
+
+    /// Captured VERBATIM from a running BCWEB instance: GET /hosting/<owner>/<repo>/repo.json
+    /// on a hosted repo where the owner uploaded NO manifest at all. BCWEB synthesises it
+    /// from the files it already holds — path, byte size and the sha256 computed at upload.
+    ///
+    /// The point of pinning it here is that the producer is JavaScript in another
+    /// repository and the consumer is this struct. Nothing else makes them agree, and the
+    /// failure would be quiet: serde would reject the document and the repo would simply
+    /// look empty rather than raise anything a user could act on.
+    const GENERATED: &str = include_str!("../../tests/bcweb_generated_manifest.json");
+
+    #[test]
+    fn a_bcweb_generated_manifest_deserializes() {
+        let repo: ServerRepo =
+            serde_json::from_str(GENERATED).expect("BCWEB's generated manifest must load");
+
+        assert_eq!(repo.name, "Auto Manifest");
+        assert_eq!(repo.game_name, "DCS World", "derived from the repo's first tag");
+        assert_eq!(repo.profiles.len(), 1);
+
+        let mods = &repo.profiles[0].mods;
+        // One entry per top-level directory, plus one for files loose at the root — named
+        // after the repo, so nothing is dropped on the floor.
+        let names: Vec<&str> = mods.iter().map(|m| m.name.as_str()).collect();
+        assert!(names.contains(&"cool-mod"), "{names:?}");
+        assert!(names.contains(&"other-mod"), "{names:?}");
+        assert!(names.contains(&"Auto Manifest"), "loose files need a home: {names:?}");
+
+        // Paths are relative to their mod directory, not to the repo root.
+        let cool = mods.iter().find(|m| m.name == "cool-mod").unwrap();
+        let paths: Vec<&str> = cool.files.iter().map(|f| f.relative_path.as_str()).collect();
+        assert!(paths.contains(&"Data/a.dds"), "{paths:?}");
+        assert!(!paths.iter().any(|p| p.starts_with("cool-mod/")), "{paths:?}");
+
+        // Sizes survive as exact byte counts — the whole reason a manifest beats guessing.
+        let a = cool.files.iter().find(|f| f.relative_path == "Data/a.dds").unwrap();
+        assert_eq!(a.size, 2048);
+        assert_eq!(a.sha256_hash, "bb22");
+
+        // A file uploaded before hashing existed carries an empty hash rather than a
+        // wrong one. BMM then re-hashes that single file, which is the correct outcome.
+        let other = mods.iter().find(|m| m.name == "other-mod").unwrap();
+        assert_eq!(other.files[0].sha256_hash, "");
+    }
+}
