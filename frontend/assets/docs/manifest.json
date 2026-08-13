@@ -34,6 +34,7 @@
     "how-it-works/extending",
     "how-it-works/security",
     "reference/api",
+    "reference/repo-format",
     "reference/actions",
     "reference/mcp",
     "reference/tips",
@@ -541,6 +542,21 @@
         "fr": "BMM expose deux façons de le piloter depuis l'extérieur : les deeplinks (bmm://…, sans token, envoyés à la fenêtre en cours) et une API HTTP locale (token,…"
       },
       "words": 1362,
+      "diagrams": 0,
+      "fr": true
+    },
+    {
+      "path": "reference/repo-format",
+      "section": "reference",
+      "title": {
+        "en": "The repo format, and how the generator builds it",
+        "fr": "Le format de dépôt, et comment le générateur le construit"
+      },
+      "summary": {
+        "en": "A Server Repo is a folder you can put behind any web server. It holds the mod files plus one manifest, repo.json, that describes them precisely enough for…",
+        "fr": "Un Dépôt Serveur est un dossier que vous pouvez placer derrière n'importe quel serveur web."
+      },
+      "words": 878,
       "diagrams": 0,
       "fr": true
     },

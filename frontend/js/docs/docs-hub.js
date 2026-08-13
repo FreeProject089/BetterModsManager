@@ -377,6 +377,72 @@ ce qu'il remplace, ou les retire). Vos mods téléchargés ne sont jamais modifi
                 },
             },
             {
+                id: 'repo-format', view: 'repo', docsPath: 'reference/repo-format/', wide: true,
+                title: { en: 'The repo format', fr: 'Le format de dépôt' },
+                summary: { en: 'What repo.json contains, field by field — so you can write, read or debug one by hand.', fr: 'Ce que contient repo.json, champ par champ — pour en écrire, en lire ou en déboguer un à la main.' },
+                keywords: 'repo.json manifest format field schema generator chunk sha256 mtime layout files_base_url manifeste format champ schéma générateur bloc',
+                body: {
+                    en: `A repo is a folder behind any web server: the mod files, plus one **manifest** (\`repo.json\`) describing them precisely enough that another BMM knows what it already has.
+
+### What the generator writes
+
+\`repo.json\` and \`mods/\` are the only two things a subscriber needs. \`Info.json\`, \`bans.json\` and the standalone-server files are conveniences for hosting it yourself — delete them if you serve the folder with your own nginx or with BetterCommunity hosting.
+
+### The shape
+
+\`repo.json\` holds repo metadata (\`name\`, \`version\`, \`game_name\`, \`created_at\`) and a **profiles** array. Each profile has **mods**; each mod has **files**; each file carries its \`relative_path\` (relative to the mod, not the repo), exact \`size\`, \`sha256_hash\`, and \`chunks\`.
+
+:::warning[The mistake that costs the most time]
+A field can be *required* and still accept \`null\` — the **key** must be there. Omitting it is a parse error, and a parse error makes the whole repo read as **empty**, not as partly broken. \`download_links\` on a mod is the usual culprit: required, no default, easy to forget when writing a manifest by hand.
+:::
+
+### Three details that decide whether syncing is cheap
+
+- **Exact sizes.** A rounded \`"1.2K"\` compared against a byte count marks *every* file as changed, so every sync re-downloads everything. It still works — it just stops being worth anything.
+- **\`mtime\`** (Unix seconds, optional). This is what lets a refresh *skip* a file. Without it the planner reads "unknown" and re-hashes every time. It never validates a download — that is always the hash.
+- **Chunks.** Files over **4 MiB** carry per-chunk hashes, so a small change inside a huge file costs a few MB instead of the whole file.
+
+### Serving files from somewhere else
+
+By default a file is fetched from \`<base>/mods/<mod id>/<relative_path>\`. \`files_base_url\` moves the base to another host, and \`files_layout\` is a template over \`{id}\` and \`{path}\` — the default \`mods/{id}/{path}\` is what every older manifest means.
+
+### You may not need to write one at all
+
+BetterCommunity hosting **generates the manifest** from the files you upload, and serves an nginx-style directory listing so BMM can walk it. An uploaded manifest still wins where one exists, because it carries profile names, mod versions and tags that no file listing can recover.
+
+The complete field-by-field reference, including every optional key and a troubleshooting table, is on the documentation site.`,
+                    fr: `Un dépôt est un dossier derrière n'importe quel serveur web : les fichiers de mods, plus un **manifeste** (\`repo.json\`) qui les décrit assez précisément pour qu'un autre BMM sache ce qu'il possède déjà.
+
+### Ce que le générateur écrit
+
+\`repo.json\` et \`mods/\` sont les deux seules choses nécessaires à un abonné. \`Info.json\`, \`bans.json\` et les fichiers du serveur autonome sont des conforts pour héberger vous-même — supprimez-les si vous servez le dossier avec votre propre nginx ou avec l'hébergement BetterCommunity.
+
+### La forme
+
+\`repo.json\` contient les métadonnées du dépôt (\`name\`, \`version\`, \`game_name\`, \`created_at\`) et un tableau **profiles**. Chaque profil a des **mods** ; chaque mod a des **files** ; chaque fichier porte son \`relative_path\` (relatif au mod, pas au dépôt), sa \`size\` exacte, son \`sha256_hash\` et ses \`chunks\`.
+
+:::warning[L'erreur qui coûte le plus de temps]
+Un champ peut être *obligatoire* et accepter \`null\` — c'est la **clé** qui doit être là. L'omettre est une erreur d'analyse, et une erreur d'analyse fait lire le dépôt entier comme **vide**, pas comme partiellement cassé. \`download_links\` sur un mod est le coupable habituel : obligatoire, sans valeur par défaut, facile à oublier quand on écrit un manifeste à la main.
+:::
+
+### Trois détails qui décident si la synchro est bon marché
+
+- **Tailles exactes.** Un « 1,2 K » arrondi comparé à un décompte d'octets marque *tous* les fichiers comme modifiés : chaque synchro retélécharge tout. Ça marche encore — ça cesse juste de servir à quelque chose.
+- **\`mtime\`** (secondes Unix, optionnel). C'est ce qui permet à un rafraîchissement de *sauter* un fichier. Sans lui, le planificateur lit « inconnu » et re-hashe à chaque fois. Il ne valide jamais un téléchargement — c'est toujours le hachage.
+- **Blocs.** Les fichiers de plus de **4 Mio** portent des hachages par bloc : une petite modification dans un énorme fichier coûte quelques Mo au lieu du fichier entier.
+
+### Servir les fichiers depuis ailleurs
+
+Par défaut un fichier est récupéré à \`<base>/mods/<id du mod>/<relative_path>\`. \`files_base_url\` déplace la base vers un autre hôte, et \`files_layout\` est un gabarit sur \`{id}\` et \`{path}\` — le défaut \`mods/{id}/{path}\` est ce que signifie tout manifeste plus ancien.
+
+### Vous n'avez peut-être pas à en écrire
+
+L'hébergement BetterCommunity **génère le manifeste** à partir des fichiers que vous envoyez, et sert un index de répertoire au format nginx que BMM sait parcourir. Un manifeste envoyé garde la priorité là où il existe, car il porte des noms de profils, des versions de mods et des tags qu'aucune liste de fichiers ne peut reconstituer.
+
+La référence complète champ par champ, avec chaque clé optionnelle et un tableau de diagnostic, est sur le site de documentation.`,
+                },
+            },
+            {
                 id: 'plugins', view: 'plugins', diagram: 'mcp-server', docsPath: 'features/plugins/',
                 title: { en: 'Plugins & the API', fr: 'Plugins et API' },
                 summary: { en: 'Add features BMM doesn’t ship — and automate it from scripts or an AI assistant.', fr: 'Ajoutez des fonctions que BMM ne fournit pas — et automatisez-le depuis des scripts ou une IA.' },
