@@ -149,3 +149,29 @@ Aucun bloquant.
 | **Comparaisons de mots de passe non constantes** dans les templates mini-serveur & hub-server générés (CWE-208) | Faible | **Corrigé** — la nouvelle porte **mot de passe de téléchargement** côté abonnés ET la porte admin `Authorization` utilisent désormais `crypto.timingSafeEqual` dans `server.express.js.template` et `hub-server.js.template`. |
 | Advisory **dompurify** de faible sévérité (GHSA-c2j3-45gr-mqc4) dans l'outillage npm racine | Faible | **Corrigé** — `npm audit fix` → 0 vulnérabilité. |
 | Nouvelle fonctionnalité passée en revue : **mot de passe de téléchargement des dépôts** | — | Basé sur header (`X-Repo-Password`), construction `HeaderValue` gardée côté client Rust, 401 remonté en erreur typée, chemins exemptés limités à dashboard/monitoring/admin/local. Aucun secret journalisé (l'historique n'enregistre que « mot de passe absent ou faux »). |
+
+---
+
+## Nouvelles surfaces auditées (2026-08-13)
+
+Cinq capacités ont été ajoutées ce cycle. Chacune est listée avec la propriété qui la
+rend sûre, afin qu'un changement ultérieur retirant cette propriété se voie comme une
+régression et non comme une simple refonte.
+
+| Surface | Garde | Propriété qui la rend sûre |
+|---|---|---|
+| **Planificateur : exécuter un script** (`run_scheduled_script`) | permission de tâche `script`, désactivée par défaut | Le corps est écrit dans un **fichier** et c'est le fichier qui est remis à l'interpréteur. Il n'est jamais concaténé dans une ligne de commande ni transmis à un shell sous forme de texte : il n'y a donc rien à échapper (CWE-78). L'interpréteur provient d'une **table fermée** (`powershell`/`cmd`/`bash`/`python`), donc l'argument `engine` ne peut jamais devenir le programme. Le fichier temporaire est nommé à partir du pid et d'un horodatage en nanosecondes — deux tâches déclenchées au même tick ne peuvent pas écrire le script l'une de l'autre — et il est supprimé sur **tous** les chemins, y compris si le lancement échoue. |
+| **Planificateur : créer un dossier** (`create_bmm_folder`) | aucune nécessaire — confiné à app-data | Le confinement est vérifié sur le **parent canonicalisé**, et non en rejetant `..` textuellement : une liste noire d'orthographes dangereuses est un jeu qu'on perd, et Windows offre plusieurs façons d'écrire la même évasion (CWE-22). Un chemin absolu est refusé franchement plutôt que réinterprété comme relatif. Le parent doit être créé avant de pouvoir être canonicalisé, ce qui est écrit dans le code pour que cet ordre ne soit pas « simplifié » en une vérification qui s'exécuterait avant la chose qu'elle vérifie. |
+| **Planificateur : permissions de tâche** | trois autorisations distinctes | `command`, `script` et `deeplink` remplacent une case opaque « autoriser les commandes personnalisées ». **Déclencher un deeplink n'était gardé par rien** alors que cela atteint tout ce que l'app expose — la capacité la plus large du sous-système et la seule que personne n'avait à demander. La migration mappe l'ancien drapeau sur `command` et `deeplink` (les révoquer casserait des automatisations qui fonctionnent) mais **jamais** sur `script` : cette capacité n'existait pas quand le consentement a été donné. |
+| **Clé d'API BetterCommunity** (`set_bcweb_api_key`, `bcweb_notifications`) | app-data, processus natif uniquement | La clé n'est **jamais remise à la vue web**. Le frontend peut en enregistrer une, demander s'il en existe une et la supprimer ; il ne peut pas la relire, donc une page compromise ne peut pas exfiltrer ce qu'on ne lui a jamais donné. L'URL de requête est **construite côté Rust à partir d'une base**, pas transmise entière — sinon la commande serait un oracle qui colle l'en-tête Authorization sur n'importe quel hôte qui le demande. Limitation connue, nommée plutôt qu'omise : la clé est stockée **en clair** sur le disque. Elle est atténuée par la portée — `notifications:read` n'autorise que la lecture des notifications — et par le fait que le dossier app-data est déjà un actif à protéger. |
+| **BCWEB : visibilité admin des clés d'API** | `requireRole('SUPERADMIN')` | L'endpoint `/admin/users/:id` est accessible à un MOD, donc la liste des clés n'est renvoyée qu'à un SUPERADMIN et vaut `null` (et non `[]`) sinon, ce qui permet à l'interface de distinguer « pas autorisé » de « aucune ». Le `hash` n'est jamais sélectionné — c'est *le* credential, et une liste qui le divulgue livre le compte au lieu de le décrire. La révocation est scopée par `userId` en plus de l'id de clé, donc un id mal tapé ne peut pas atteindre un autre compte, et elle est idempotente. |
+
+### Pas une vulnérabilité, consigné pour ne pas être ré-investigué
+
+`/api/link/status` ne demande qu'un Creator ID et aucune authentification. C'est correct :
+un Creator ID est un identifiant que les utilisateurs donnent aux propriétaires de dépôts
+pour figurer dans leurs listes blanches, et l'endpoint ne renvoie qu'un nom d'affichage.
+Il est noté ici parce qu'il a été **envisagé puis écarté** comme canal de livraison de la
+clé de notifications : un secret renvoyé là irait droit aux personnes dont il doit être
+protégé. La clé est générée sur le `POST /me/creator-links` authentifié, qui répond à la
+session du propriétaire du compte.

@@ -141,3 +141,28 @@ No blockers.
 | **Timing-unsafe password compares** in the generated mini-server & hub-server templates (CWE-208) | Low | **Fixed** — both the new subscriber **download password** gate and the admin `Authorization` gate now use `crypto.timingSafeEqual` in `server.express.js.template` and `hub-server.js.template`. |
 | **dompurify** low-severity advisory (GHSA-c2j3-45gr-mqc4) in root npm tooling | Low | **Fixed** — `npm audit fix` → 0 vulnerabilities. |
 | New feature reviewed: **repo download password** | — | Header-based (`X-Repo-Password`), guarded `HeaderValue` construction on the Rust client, 401 surfaced as a typed error, exempt paths limited to dashboard/monitoring/admin/local. No secrets logged (history records only "wrong or missing password"). |
+
+---
+
+## New surfaces reviewed (2026-08-13)
+
+Five capabilities were added this cycle. Each is listed with the property that makes it
+safe, so a later change that removes the property is visible as a regression rather
+than a refactor.
+
+| Surface | Guard | Property that makes it safe |
+|---|---|---|
+| **Scheduler: run a user script** (`run_scheduled_script`) | task permission `script`, off by default | The body is written to a **file** and the interpreter is handed the file. It is never concatenated into a command line and never reaches a shell as text, so there is nothing to escape (CWE-78). The interpreter comes from a **closed table** (`powershell`/`cmd`/`bash`/`python`), so the `engine` argument can never itself become the program. The temp file is named from pid + nanosecond stamp — two tasks on the same tick cannot write each other's script — and is removed on **every** path, including a failed spawn. |
+| **Scheduler: create a folder** (`create_bmm_folder`) | none needed — confined to app-data | Containment is checked on the **canonicalised parent**, not by rejecting `..` textually: a blacklist of dangerous spellings is a game you lose, and Windows offers several ways to write the same escape (CWE-22). An absolute path is refused outright rather than reinterpreted as relative. The parent must be created before it can be canonicalised, which is stated in the code so the ordering is not "simplified" into a check that runs before the thing it checks. |
+| **Scheduler: task permissions** | three separate grants | `command`, `script` and `deeplink` replaced one opaque "allow custom commands" box. **Firing a deeplink was previously gated by nothing** while reaching anything the app exposes — the widest capability in the subsystem and the only one nobody had to ask for. Migration maps the old flag to `command` and `deeplink` (revoking those would break working automations) but **never** to `script`: that capability did not exist when consent was given. |
+| **BetterCommunity API key** (`set_bcweb_api_key`, `bcweb_notifications`) | app-data, native process only | The key is **never handed to the web view**. The frontend can store one, ask whether one exists and clear it; it cannot read it back, so a compromised page cannot exfiltrate what it was never given. The request URL is **built in Rust from a base**, not passed in whole — otherwise the command would be an oracle that attaches the Authorization header to any host that asks. Known limitation, named rather than omitted: the key is stored **in clear** on disk. It is mitigated by scope — `notifications:read` grants reading notifications and nothing else — and by the app-data folder already being an asset worth protecting. |
+| **BCWEB: admin visibility of user API keys** | `requireRole('SUPERADMIN')` | The `/admin/users/:id` endpoint is reachable by a MOD, so the key list is returned **only** to a SUPERADMIN and is `null` (not `[]`) otherwise, letting the UI distinguish "not permitted" from "none". The `hash` is never selected — it IS the credential, and a list that leaks it hands the account over instead of describing it. Revocation is scoped by `userId` as well as key id, so a mistyped id cannot reach into another account, and is idempotent. |
+
+### Not a finding, recorded so it is not re-investigated
+
+`/api/link/status` takes only a Creator ID and no authentication. That is correct — a
+Creator ID is an identifier users hand to repo owners for whitelisting, and the endpoint
+returns only a display name. It is noted here because it was **considered and rejected**
+as the delivery channel for the notifications key: a secret returned there would go
+straight to the people it exists to be kept from. The key is minted on the authenticated
+`POST /me/creator-links` instead, which answers the account owner's own session.
