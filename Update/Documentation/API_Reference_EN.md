@@ -119,6 +119,9 @@ This document is the single source of truth for everything that can be driven pr
 | Path | Auth | Body |
 |---|---|---|
 | `/api/mod/check-updates` | yes | `{}` — check every linked mod against its repo |
+| `/api/mod/update` | yes | `{ repoUrl? }` — pull updates for mods linked to that repo; omit `repoUrl` to cover every linked source |
+| `/api/mod/config` | `mods.write` | `{ modId, repoModId?, updateUrl?, updateSources?, directUrl? }` — set where a mod checks for its own updates |
+| `/api/repo/manifest` | `repo.write` | `{ modsDir, outputPath?, name?, author?, gameName?, filesBaseUrl?, filesLayout?, reuseExisting?, only? }` — write a `repo.json` for a folder that is already hosted. Copies nothing and needs no profile; synchronous, so a publish script can act on the diff it returns. `reuseExisting` defaults to **true**: re-running produces a new revision of the SAME repo, not a different one |
 | `/api/discord/rpc` | yes | `{ enabled: bool }` — enable/disable Discord Rich Presence |
 | `/api/data/export-auto` | yes | `{ dir, name? (template: `{date}` `{time}` `{datetime}`), increment?: "paren"\|"underscore"\|"timestamp"\|"overwrite" }` — unattended backup, returns the path written |
 | `/api/launchpack/run` | yes | `{ id }` — run a saved launch pack |
