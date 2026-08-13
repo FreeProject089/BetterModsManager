@@ -4,8 +4,10 @@ _Last updated: 2026-06_
 
 Better Mod Manager is a **local-first, open-source** desktop application (licensed under GPL‑3.0).
 It runs on your machine and, by default, does **not** track you or show ads. BMM includes an
-**optional, opt‑in telemetry** feature that is **OFF until you explicitly turn it on**. This
-document explains the cases where data leaves your computer, and exactly what is sent.
+**optional telemetry** feature that is **OFF in the application until you turn it on** — with one
+exception: the BetterInstaller Configuration page ships it pre‑ticked, visible and uncheckable
+there. This document explains the cases where data leaves your computer, and exactly what is
+sent.
 
 ---
 
@@ -183,7 +185,7 @@ service you configured, under that service's own terms.
 |---|---|---|---|
 | Browsing/managing mods, profiles, modpacks | No | — | — |
 | **Telemetry OFF (default)** | No | — | — |
-| **Telemetry ON (opt‑in)** | Yes | Anonymous usage, system profile, performance, approximate geo (counts/labels only — no contents/values) | Self‑hosted BMM dashboard |
+| **Telemetry ON** (you turned it on, or left the installer's box ticked) | Yes | Anonymous usage, system profile, performance, approximate geo (counts/labels only — no contents/values) | Self‑hosted BMM dashboard |
 | Connect / sync a Server Repo | Yes | Public IP, Creator ID | The repo's owner/server |
 | Host a Server Repo | Yes (incoming) | Visitors' IP + Creator ID stored locally | You (host) |
 | Submit a BetaHub bug report / feedback | Yes | What you typed + attachments | BetaHub service |
@@ -195,7 +197,8 @@ service you configured, under that service's own terms.
 
 ## 5. Your control
 
-- Telemetry is **opt‑in**; stay off (or fully offline) to avoid all of §2.
+- Telemetry is **off by default in the app**, but **pre‑ticked in the installer** — untick it
+  there, or turn it off in Settings → Privacy (or stay fully offline) to avoid all of §2.
 - Disable telemetry anytime; export or clear the local buffer; request per‑packet erasure.
 - The Creator ID is your **public signing key** (Ed25519), not your name or email; the private key
   stays on your PC. It is stable, so activity under it is linkable over time — see §2.1.

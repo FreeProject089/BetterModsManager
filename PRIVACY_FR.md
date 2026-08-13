@@ -4,9 +4,10 @@ _Dernière mise à jour : 2026-06_
 
 Better Mod Manager est une application de bureau **locale d'abord, open‑source** (licence GPL‑3.0).
 Elle fonctionne sur votre machine et, par défaut, ne vous piste pas et n'affiche pas de publicité.
-BMM inclut une **télémétrie optionnelle, sur consentement** qui est **DÉSACTIVÉE tant que vous ne
-l'activez pas explicitement**. Ce document explique les cas où des données quittent votre ordinateur,
-et exactement ce qui est envoyé.
+BMM inclut une **télémétrie optionnelle** qui est **DÉSACTIVÉE dans l'application tant que vous ne
+l'activez pas** — à une exception près : la page Configuration de BetterInstaller la livre
+**déjà cochée**, visible et décochable à cet endroit. Ce document explique les cas où des données
+quittent votre ordinateur, et exactement ce qui est envoyé.
 
 ---
 
@@ -197,7 +198,7 @@ données au service configuré, selon ses propres conditions.
 |---|---|---|---|
 | Naviguer/gérer mods, profils, modpacks | Non | — | — |
 | **Télémétrie OFF (défaut)** | Non | — | — |
-| **Télémétrie ON (opt‑in)** | Oui | Usage anonyme, profil système, performance, géo approximative (décomptes/libellés — pas de contenu/valeurs) | Tableau de bord BMM auto‑hébergé |
+| **Télémétrie ON** (activée par vous, ou case de l'installateur laissée cochée) | Oui | Usage anonyme, profil système, performance, géo approximative (décomptes/libellés — pas de contenu/valeurs) | Tableau de bord BMM auto‑hébergé |
 | Connexion / sync d'un Server Repo | Oui | IP publique, Creator ID | Propriétaire/serveur du repo |
 | Héberger un Server Repo | Oui (entrant) | IP + Creator ID des visiteurs stockés localement | Vous (hôte) |
 | Envoyer un rapport/retour BetaHub | Oui | Ce que vous saisissez + pièces jointes | Service BetaHub |
@@ -209,7 +210,9 @@ données au service configuré, selon ses propres conditions.
 
 ## 5. Votre contrôle
 
-- La télémétrie est **opt‑in** ; laissez‑la désactivée (ou restez hors‑ligne) pour éviter tout le §2.
+- La télémétrie est **désactivée par défaut dans l'app**, mais **pré‑cochée dans l'installateur** —
+  décochez‑la là, ou coupez‑la dans Réglages → Confidentialité (ou restez hors‑ligne) pour éviter
+  tout le §2.
 - Désactivez la télémétrie quand vous voulez ; exportez ou effacez le cache local ; demandez
   l'effacement par paquet.
 - Le Creator ID est votre **clé publique de signature** (Ed25519), pas votre nom ni e‑mail ; la clé
