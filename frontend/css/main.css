@@ -11522,6 +11522,18 @@ body.tasky-hidden .titlebar-left .titlebar-version {
     background:var(--bmm-accent-dim, rgba(var(--bmm-accent-r,245), var(--bmm-accent-g,158), var(--bmm-accent-b,11), 0.12));
     border-color:var(--bmm-border-accent, var(--border)); }
 .sched-chip-dim { opacity:.7; font-weight:500; }
+/* The next run. Given its own colour because it is the one fact on the row that
+   changes on its own, and the one people scan the list for. Uses --success rather
+   than the accent so it does not compete with the trigger chip beside it. */
+.sched-chip-next { color:var(--success, #22c55e); font-weight:700;
+    background:rgba(34,197,94,0.10); border-color:rgba(34,197,94,0.30); }
+.sched-off .sched-chip-next { display:none; }
+/* Last runs, oldest left. Bars rather than numbers: the question is "is this task
+   healthy", and a shape answers it without being read. */
+.sched-spark { display:inline-flex; align-items:flex-end; gap:2px; height:12px; padding:0 2px; }
+.sched-spark i { display:block; width:3px; height:100%; border-radius:2px; background:var(--success, #22c55e); opacity:.75; }
+.sched-spark i.err { background:var(--danger, #ef4444); opacity:1; }
+.sched-spark:hover i { opacity:1; }
 .sched-row-actions { display:flex; align-items:center; gap:6px; flex-shrink:0; }
 .sched-act { display:inline-flex; align-items:center; justify-content:center;
     width:28px; height:28px; padding:0; border-radius:8px; }

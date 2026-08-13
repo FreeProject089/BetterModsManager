@@ -13,6 +13,7 @@ import { invoke } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { toast } from '../../ui/app.js';
+import { calendarDue, nextCalendarDue } from './sched-time.js';
 
 // ── Types ───────────────────────────────────────────────────────────────────
 type Trigger =
@@ -100,6 +101,15 @@ interface Task {
      *  Absent on an old task — taskPerms() derives it from allowCustomCommands. */
     perms?: TaskPerms;
     osSchedule?: boolean;   // also register a Windows Scheduled Task (runs when BMM is closed)
+    /** When the task started existing. It is the CATCH-UP BASELINE: without it, a daily
+     *  task created at 22:00 would consider today's 21:00 window missed and fire the
+     *  moment you saved it. Backfilled on load for tasks written before this existed. */
+    createdAt?: number;
+    /** Run a calendar window that elapsed while BMM was closed, at the next launch.
+     *  Default ON — a daily backup that silently does nothing because the app was shut
+     *  at 03:00 is worse than one that runs late. At most ONE run is owed, however long
+     *  BMM was away. */
+    catchUp?: boolean;
     lastRun?: number;       // epoch ms
     lastResult?: string;    // 'ok' | 'error: ...'
     history?: { at: number; ok: boolean; ms: number; err?: string }[];  // last runs (capped)
@@ -150,7 +160,16 @@ async function loadTasks(): Promise<void> {
     try {
         const raw = await invoke('get_schedules');
         _tasks = Array.isArray(raw) ? raw : [];
-        for (const t of _tasks) t.steps = normalizeSteps(t.steps);
+        let backfilled = false;
+        for (const t of _tasks) {
+            t.steps = normalizeSteps(t.steps);
+            // Backfill the catch-up baseline for tasks written before it existed. Its
+            // last run is the honest answer; a task that has never run gets "now", so
+            // adopting catch-up can never make an old task fire for a window that
+            // elapsed before the feature was there.
+            if (!t.createdAt) { t.createdAt = t.lastRun || Date.now(); backfilled = true; }
+        }
+        if (backfilled) await saveTasks();
     } catch { _tasks = []; }
 }
 async function saveTasks(): Promise<void> {
@@ -233,11 +252,49 @@ function startEngine(): void {
     // Fire appStart tasks once shortly after launch.
     setTimeout(() => tick().catch(() => {}), 4000);
     _timer = window.setInterval(() => { tick().catch(() => {}); }, 20000);
+    // Keep the "in 4 min" chips honest. Only while the list is actually on screen —
+    // `offsetParent` is null for a hidden section, so a user who never opens the
+    // scheduler pays nothing for a countdown nobody is reading.
+    window.setInterval(() => {
+        const c = document.getElementById('scheduler-list-container');
+        if (c && c.offsetParent !== null) renderScheduleList();
+    }, 30000);
 }
 
 function nextLocalMidnightOffset(time: string): { h: number; m: number } {
     const [h, m] = time.split(':').map(n => parseInt(n, 10) || 0);
     return { h, m };
+}
+
+// ── When a calendar trigger fires ─────────────────────────────────────────────
+//
+// The arithmetic lives in ./sched-time.ts, which imports nothing and is unit-tested.
+// This file cannot be: it talks to Tauri, the DOM and i18n from its first line, which
+// is precisely why a timing bug could sit here unnoticed for as long as it did.
+
+/** When this task next runs, as epoch ms — or null if nothing is scheduled (manual,
+ *  a spent `once`, a disabled task). Shown in the list; not used for firing. */
+export function nextDue(task: Task, from: Date = new Date()): number | null {
+    if (!task.enabled) return null;
+    const tr = task.trigger;
+    const last = task.lastRun || 0;
+    const nowMs = from.getTime();
+    switch (tr.type) {
+        case 'manual': return null;
+        case 'appStart': return _appStartFired.has(task.id) ? null : nowMs;
+        case 'once': {
+            if (_onceFired.has(task.id) || task.lastRun) return null;
+            const at = new Date(tr.at).getTime();
+            return isNaN(at) ? null : at;
+        }
+        case 'interval': return (last || nowMs) + Math.max(1, tr.everyMinutes) * 60000;
+        case 'hourly': return (last || nowMs) + Math.max(1, tr.everyHours) * 3600000;
+        case 'dailyAt':
+        case 'weeklyAt':
+        case 'monthlyAt':
+            return nextCalendarDue(tr, from);
+    }
+    return null;
 }
 
 function isDue(task: Task, now: Date): boolean {
@@ -263,24 +320,13 @@ function isDue(task: Task, now: Date): boolean {
             const gap = Math.max(1, tr.everyHours) * 3600000;
             return nowMs - last >= gap;
         }
-        case 'monthlyAt': {
-            const { h, m } = nextLocalMidnightOffset(tr.time);
-            if (now.getDate() !== tr.day) return false;
-            if (now.getHours() !== h || now.getMinutes() !== m) return false;
-            return nowMs - last >= 60000;
-        }
-        case 'dailyAt': {
-            const { h, m } = nextLocalMidnightOffset(tr.time);
-            if (now.getHours() !== h || now.getMinutes() !== m) return false;
-            // Avoid double-firing within the same minute.
-            return nowMs - last >= 60000;
-        }
-        case 'weeklyAt': {
-            const { h, m } = nextLocalMidnightOffset(tr.time);
-            if (!tr.days?.includes(now.getDay())) return false;
-            if (now.getHours() !== h || now.getMinutes() !== m) return false;
-            return nowMs - last >= 60000;
-        }
+        case 'monthlyAt':
+        case 'dailyAt':
+        case 'weeklyAt':
+            // The baseline is whichever is later: the last run, or the moment the task
+            // was created. Without the creation half, saving a daily 21:00 task at 22:00
+            // would count today's window as missed and fire the instant you pressed Save.
+            return calendarDue(tr, now, Math.max(last, task.createdAt || 0), task.catchUp !== false);
     }
     return false;
 }
@@ -1167,9 +1213,11 @@ export function renderScheduleList(): void {
                     ${task.description ? `<span class="sched-row-desc">${escHtml(task.description)}</span>` : ''}
                     <span class="sched-row-sub">
                         <span class="sched-chip sched-chip-trigger">${escHtml(triggerLabel(task.trigger))}</span>
+                        ${nextRunChip(task)}
                         <span class="sched-chip">${stepCount(task.steps)} ${t('sched.steps') || 'steps'}</span>
-                        ${task.lastRun ? `<span class="sched-chip sched-chip-dim">${t('sched.last') || 'last'} ${new Date(task.lastRun).toLocaleString()}</span>` : ''}
+                        ${task.lastRun ? `<span class="sched-chip sched-chip-dim" data-tooltip="${escAttr(new Date(task.lastRun).toLocaleString())}">${t('sched.last') || 'last'} ${escHtml(agoTime(task.lastRun))}</span>` : ''}
                         ${task.lastResult ? `<span class="sched-chip ${task.lastResult === 'ok' ? 'sched-chip-ok' : 'sched-chip-err'}" data-tooltip="${escAttr(task.lastResult)}">${task.lastResult === 'ok' ? 'OK' : 'ERR'}</span>` : ''}
+                        ${runSparkline(task)}
                     </span>
                 </div>
             </div>
@@ -1197,6 +1245,7 @@ export function renderScheduleList(): void {
             copy.enabled = false;
             copy.osSchedule = false;
             copy.lastRun = undefined; copy.lastResult = undefined; copy.history = [];
+            copy.createdAt = Date.now();   // a copy is a new task, not a replay of the old one
             _tasks.push(copy);
             await saveTasks();
             renderScheduleList();
@@ -1213,6 +1262,55 @@ export function renderScheduleList(): void {
     }
 }
 
+/** "in 4 min" / "in 3 h" / "in 2 d" — a duration a human reads at a glance. The exact
+ *  timestamp goes in the tooltip, because the useful question is almost always "soon or
+ *  not", and only occasionally "at exactly what time". */
+function relTime(ms: number): string {
+    const d = Math.max(0, ms - Date.now());
+    const mins = Math.round(d / 60000);
+    if (mins < 1) return t('sched.inMoment') || 'in under a minute';
+    if (mins < 60) return `${t('sched.in') || 'in'} ${mins} min`;
+    const hrs = Math.round(mins / 60);
+    if (hrs < 48) return `${t('sched.in') || 'in'} ${hrs} h`;
+    return `${t('sched.in') || 'in'} ${Math.round(hrs / 24)} ${t('sched.days') || 'd'}`;
+}
+
+/** "3 min ago" / "2 h ago" — the mirror of relTime, for the last run. A full
+ *  locale timestamp took a third of the row to say "recently". */
+function agoTime(ms: number): string {
+    const d = Math.max(0, Date.now() - ms);
+    const mins = Math.round(d / 60000);
+    if (mins < 1) return t('sched.justNow') || 'just now';
+    if (mins < 60) return `${mins} min ${t('sched.ago') || 'ago'}`;
+    const hrs = Math.round(mins / 60);
+    if (hrs < 48) return `${hrs} h ${t('sched.ago') || 'ago'}`;
+    return `${Math.round(hrs / 24)} ${t('sched.days') || 'd'} ${t('sched.ago') || 'ago'}`;
+}
+
+/** The last few runs as bars: green ok, red failed, oldest on the left. A task that
+ *  fails every other night looks identical to a healthy one when all you keep is the
+ *  MOST RECENT result — the history was already being recorded and only the editor
+ *  ever showed it. */
+function runSparkline(task: Task): string {
+    const h = (task.history || []).slice(-8);
+    if (h.length < 2) return '';
+    const bars = h.map(r => `<i class="${r.ok ? 'ok' : 'err'}"${r.err ? ` data-tooltip="${escAttr(r.err)}"` : ''}></i>`).join('');
+    const bad = h.filter(r => !r.ok).length;
+    const label = bad
+        ? (t('sched.sparkFails') || '{n} of the last {m} runs failed').replace('{n}', String(bad)).replace('{m}', String(h.length))
+        : (t('sched.sparkOk') || 'last {m} runs all fine').replace('{m}', String(h.length));
+    return `<span class="sched-spark" data-tooltip="${escAttr(label)}">${bars}</span>`;
+}
+
+/** The next-run chip. Absent for manual tasks (nothing to say) and for disabled ones
+ *  (the row already reads as off, and "next run in 3 h" under a disabled task is a lie). */
+function nextRunChip(task: Task): string {
+    if (!task.enabled || task.trigger.type === 'manual') return '';
+    const at = nextDue(task);
+    if (at === null) return '';
+    return `<span class="sched-chip sched-chip-next" data-tooltip="${escAttr(new Date(at).toLocaleString())}">${escHtml(relTime(at))}</span>`;
+}
+
 function stepCount(steps: Step[]): number {
     let n = 0;
     for (const s of steps || []) {
@@ -1224,14 +1322,36 @@ function stepCount(steps: Step[]): number {
     }
     return n;
 }
+/** Short weekday names for the weekly chip, Sunday first to match Date.getDay(). */
+function dowNames(): string[] {
+    return [0, 1, 2, 3, 4, 5, 6].map((i) => t(`sched.dow${i}`) || ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][i]);
+}
+
+/** The trigger, as a sentence.
+ *
+ *  It used to reuse the trigger PICKER's button labels as sentence prefixes, so an hourly
+ *  task's chip read "Every N minutes 1 h" and a daily one "Daily at time 03:00" — the
+ *  literal placeholder text, with the real value appended. They are separate strings now
+ *  because they are separate jobs: one names a choice, the other describes a schedule.
+ *
+ *  Weekly also SAYS WHICH DAYS. It never did, so "Weekly 20:00" was the same chip whether
+ *  the task ran on Mondays or every day but Monday. */
 function triggerLabel(tr: Trigger): string {
     switch (tr.type) {
-        case 'once': return `${t('sched.trOnce') || 'Once'} ${new Date(tr.at).toLocaleString()}`;
-        case 'interval': return `${t('sched.trEvery') || 'Every'} ${tr.everyMinutes} min`;
-        case 'hourly': return `${t('sched.trEvery') || 'Every'} ${tr.everyHours} h`;
-        case 'dailyAt': return `${t('sched.trDaily') || 'Daily at'} ${tr.time}`;
-        case 'weeklyAt': return `${t('sched.trWeekly') || 'Weekly'} ${tr.time}`;
-        case 'monthlyAt': return `${t('sched.trMonthly') || 'Monthly'} ${t('sched.day') || 'day'} ${tr.day} ${tr.time}`;
+        case 'once': return `${t('sched.lblOnce') || 'Once on'} ${new Date(tr.at).toLocaleString()}`;
+        case 'interval': return `${t('sched.lblEvery') || 'Every'} ${tr.everyMinutes} min`;
+        case 'hourly': return `${t('sched.lblEvery') || 'Every'} ${tr.everyHours} h`;
+        case 'dailyAt': return `${t('sched.lblDaily') || 'Daily at'} ${tr.time}`;
+        case 'weeklyAt': {
+            const names = dowNames();
+            const days = [...(tr.days || [])].sort((a, b) => a - b).map((d) => names[d]).filter(Boolean);
+            // Every day selected is "daily", not a seven-item list.
+            const when = days.length === 7 ? (t('sched.lblEveryDay') || 'every day') : days.join(', ');
+            return when
+                ? `${when} ${t('sched.lblAt') || 'at'} ${tr.time}`
+                : `${t('sched.lblWeeklyNoDay') || 'Weekly — no day picked'}`;
+        }
+        case 'monthlyAt': return `${t('sched.lblMonthly') || 'Day'} ${tr.day} ${t('sched.lblAt') || 'at'} ${tr.time}`;
         case 'appStart': return t('sched.trAppStart') || 'On BMM start';
         case 'manual': return t('sched.trManual') || 'Manual only';
     }
@@ -1339,7 +1459,7 @@ async function openTaskModal(task: Task | null): Promise<void> {
     await loadPickers();
     _editing = task;
     _draft = task ? JSON.parse(JSON.stringify(task)) : {
-        id: `sched-${Date.now()}`, name: '', enabled: true,
+        id: `sched-${Date.now()}`, name: '', enabled: true, createdAt: Date.now(), catchUp: true,
         trigger: { type: 'interval', everyMinutes: 60 }, steps: [], allowCustomCommands: false,
     };
     _undo = []; _redo = [];          // fresh undo history per open
@@ -1362,6 +1482,13 @@ async function openTaskModal(task: Task | null): Promise<void> {
 /** Human one-liner for the header summary: "Daily at 08:00 · 3 steps · even when BMM is closed". */
 function draftSummary(): string {
     const bits = [triggerLabel(_draft.trigger), `${stepCount(_draft.steps)} ${t('sched.steps') || 'steps'}`];
+    // The next run, in the editor as well as the list. "Weekly 20:00" does not tell you
+    // whether that means tonight or in six days, and that is the question you have while
+    // still deciding what the trigger should be.
+    {
+        const at = nextDue({ ..._draft, enabled: true } as Task);
+        if (at !== null) bits.push(`${t('sched.next') || 'next'} ${new Date(at).toLocaleString()}`);
+    }
     if (_draft.osSchedule) bits.push(t('sched.sumOs') || 'even when BMM is closed');
     {
         const pm = taskPerms(_draft as Task);
@@ -1425,6 +1552,11 @@ function renderModal(modal: HTMLElement): void {
                     <input type="checkbox" id="sched-os" ${_draft.osSchedule ? 'checked' : ''}>
                     <div><b>${t('sched.osScheduleTitle') || 'Run even when BMM is closed'}</b><span>${t('sched.osSchedule') || 'Registers a Windows Scheduled Task that launches BMM at the trigger time.'}</span></div>
                 </label>
+                ${['dailyAt', 'weeklyAt', 'monthlyAt'].includes(_draft.trigger.type) ? `
+                <label class="sched-opt">
+                    <input type="checkbox" id="sched-catchup" ${_draft.catchUp !== false ? 'checked' : ''}>
+                    <div><b>${t('sched.catchUpTitle') || 'Catch up a missed run'}</b><span>${t('sched.catchUp') || 'If BMM was closed at the scheduled time, run once at the next launch. At most one run is owed, however long BMM was away.'}</span></div>
+                </label>` : ''}
                 ${_editing && _draft.history?.length ? `
                 <label class="sched-label" style="margin-top:16px">${t('sched.history') || 'Recent runs'}</label>
                 <div class="sched-history">
@@ -1487,6 +1619,7 @@ function renderModal(modal: HTMLElement): void {
         });
     });
     modal.querySelector('#sched-os')?.addEventListener('change', (e) => { _draft.osSchedule = (e.target as HTMLInputElement).checked; refreshSummary(modal); });
+    modal.querySelector('#sched-catchup')?.addEventListener('change', (e) => { _draft.catchUp = (e.target as HTMLInputElement).checked; refreshSummary(modal); });
     // Test run: execute the CURRENT draft's steps once, without saving the task —
     // instant feedback while building an automation instead of save→run→edit loops.
     modal.querySelector('#sched-test')?.addEventListener('click', async () => {
