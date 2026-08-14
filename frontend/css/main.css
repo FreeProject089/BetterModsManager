@@ -11793,6 +11793,15 @@ body.sched-drag-live .sched-branch .sched-drop-zone:empty {
    thing you came for — the name is what you choose by, and the sentence is what you want
    once you are hesitating between two. So the sentence moved into the tooltip, where it
    costs nothing until it is wanted. */
+/* A picker and a catalogue button, side by side. Six cards used to fill the sidebar before
+   the trigger — the thing most people opened this to set — was on screen at all, and the
+   list only grows. The description below follows the selection rather than hiding in a
+   tooltip on each card, which required hovering them one at a time. */
+.sched-preset-row { display:flex; gap:6px; align-items:center; margin-bottom:6px; }
+.sched-preset-pick { flex:1; min-width:0; font-size:12px; }
+.sched-preset-browse { display:inline-flex; align-items:center; gap:5px; white-space:nowrap; }
+.sched-preset-desc { font-size:11px; color:var(--text-muted); margin-bottom:12px; min-height:1em; }
+
 .sched-presets { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; }
 .sched-preset { display:inline-flex; align-items:center; gap:6px; text-align:left;
     padding:5px 10px; border-radius:999px; border:1px solid var(--border);

@@ -1830,6 +1830,69 @@ const PRESETS: { key: string; icon: string; title: string; desc: string; make: (
             ],
         }),
     },
+    {
+        key: 'diskguard', icon: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+        title: 'Stop early if the disk is nearly full',
+        desc: 'A guard for the TOP of another task: checks free space and stops cleanly under 10 GB, so the real work never starts on a full disk.',
+        make: () => ({
+            name: 'Disk guard',
+            trigger: { type: 'manual' },
+            steps: [
+                { kind: 'action', action: { type: 'perf.diskSpace', params: {} } },
+                {
+                    kind: 'if',
+                    condition: { type: 'value', params: { source: 'disk.free_gb', op: '<', value: 10 } },
+                    // Stopping is CLEAN, not an error: a guard that failed the task would
+                    // fill the history with red for the exact case it was written to handle.
+                    then: [{ kind: 'action', action: { type: 'task.stop', params: { reason: 'Less than 10 GB free — stopped before doing anything.' } } }],
+                    else: [],
+                },
+            ],
+        }),
+    },
+    {
+        key: 'rescan', icon: '<path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/>',
+        title: 'Rescan the library every morning',
+        desc: 'Picks up mods added or removed outside BMM, before you sit down to play.',
+        make: () => ({
+            name: 'Morning rescan',
+            trigger: { type: 'dailyAt', time: '08:00' },
+            steps: [{ kind: 'action', action: { type: 'mods.scan', params: {} } }],
+        }),
+    },
+    {
+        key: 'watchsite', icon: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+        title: 'Tell me when a server stops answering',
+        desc: 'Calls an address every 30 minutes and speaks up only when the answer is not 200. Put your own URL in the step — needs “Run external programs”.',
+        make: () => ({
+            name: 'Server watch',
+            trigger: { type: 'interval', everyMinutes: 30 },
+            steps: [
+                // allowAnyStatus on purpose: the point is to SEE a bad status and react to
+                // it, and the default would abort the task before reaching the check below.
+                { kind: 'action', action: { type: 'http.request', params: { url: 'https://example.com/health', method: 'GET', allowAnyStatus: true, timeoutMs: 10000 } } },
+                {
+                    kind: 'if',
+                    condition: { type: 'value', params: { source: 'http.status', op: '!=', value: 200 } },
+                    then: [{ kind: 'action', action: { type: 'notify', params: { message: 'The server did not answer 200.' } } }],
+                    else: [],
+                },
+            ],
+        }),
+    },
+    {
+        key: 'sharedvar', icon: '<path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/>',
+        title: 'Share a value with your other tasks',
+        desc: 'Writes one shared variable that every other task can read as {sharedNote}. A building block rather than a finished job.',
+        make: () => ({
+            name: 'Set a shared value',
+            trigger: { type: 'manual' },
+            steps: [
+                { kind: 'action', action: { type: 'var.set', params: { name: 'sharedNote', value: 'edit me', scope: 'shared' } } },
+                { kind: 'action', action: { type: 'notify', params: { message: 'Saved. Other tasks can now read {sharedNote}.' } } },
+            ],
+        }),
+    },
 ];
 
 /** Build a full task from a preset. The id and createdAt are minted here, never stored in
@@ -1909,25 +1972,37 @@ function renderModal(modal: HTMLElement): void {
         <div class="sched-layout">
             <aside class="sched-side">
                 ${(() => {
-                    // Only on a genuinely blank new task. Offering these while editing would
-                    // put a button that replaces the whole task next to the one that renames
-                    // it, and the empty-steps test means a preset picked by mistake can be
-                    // undone by clearing the steps rather than by losing work.
-                    if (_editing || _draft.steps.length || _draft.name) return '';
+                    // A picker plus a catalogue button, and the two are gated differently.
+                    //
+                    // Applying a preset REPLACES the draft, so it is offered only on a blank
+                    // new task — picking one by mistake then costs nothing, because there was
+                    // nothing to lose. Browsing a catalogue only ever opens a read-only
+                    // report, so that button stays available the whole time: wanting to look
+                    // at what other people published does not stop being reasonable the
+                    // moment you have typed a name.
+                    const blank = !_editing && !_draft.steps.length && !_draft.name;
+                    const browse = `<button type="button" class="btn btn-sm btn-secondary sched-preset-browse" id="sched-preset-catalog"
+                            data-tooltip="${escAttr(t('sched.pc.tip') || 'Automations published by other people. Each one is inspected before anything is imported.')}">
+                            ${SVG16('<path d="M12 13v8"/><path d="m8 17 4 4 4-4"/><path d="M4.393 15.269A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.436 8.284"/>')}
+                            <span>${escHtml(t('sched.pc.browse') || 'From a catalogue…')}</span>
+                        </button>`;
+                    if (!blank) {
+                        return `<label class="sched-label">${t('sched.pc.title') || 'Automations from a catalogue'}</label>
+                            <div class="sched-preset-row">${browse}</div>`;
+                    }
+                    // A select rather than a column of cards. Six cards filled the sidebar
+                    // before the trigger — the thing most people came to set — was on screen
+                    // at all, and the list only grows. The description follows the choice
+                    // instead of living in a tooltip nobody hovers.
                     return `<label class="sched-label">${t('sched.presetsTitle') || 'Start from a preset'} <span class="sched-hint-inline">${t('sched.presetsHint') || '— or build your own below'}</span></label>
-                    <div class="sched-presets">
-                        <button type="button" class="sched-preset sched-preset-more" id="sched-preset-catalog"
-                            data-tooltip="${escAttr(t('sched.pc.tip') || 'Presets published by the community. Each one is inspected before anything is imported.')}">
-                            <span class="sched-preset-ico">${SVG16('<path d="M12 13v8"/><path d="m8 17 4 4 4-4"/><path d="M4.393 15.269A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.436 8.284"/>')}</span>
-                            <span class="sched-preset-name">${escHtml(t('sched.pc.browse') || 'From a catalog…')}</span>
-                        </button>
-                        ${PRESETS.map((p) => `
-                            <button type="button" class="sched-preset" data-preset="${escAttr(p.key)}"
-                                data-tooltip="${escAttr(t('sched.presetd.' + p.key) || p.desc)}">
-                                <span class="sched-preset-ico">${SVG16(p.icon)}</span>
-                                <span class="sched-preset-name">${escHtml(t('sched.preset.' + p.key) || p.title)}</span>
-                            </button>`).join('')}
-                    </div>`;
+                    <div class="sched-preset-row">
+                        <select class="input sched-preset-pick" id="sched-preset-pick">
+                            <option value="">${escHtml(t('sched.presetPick') || 'Pick one…')}</option>
+                            ${PRESETS.map((p) => `<option value="${escAttr(p.key)}">${escHtml(t('sched.preset.' + p.key) || p.title)}</option>`).join('')}
+                        </select>
+                        ${browse}
+                    </div>
+                    <div class="sched-preset-desc" id="sched-preset-desc"></div>`;
                 })()}
                 <label class="sched-label">${t('sched.fName') || 'Name'}</label>
                 <input class="input sched-name-input" id="sched-name" value="${escAttr(_draft.name)}" placeholder="${escAttr(t('sched.fNamePh') || 'e.g. Activate DCS profile every morning')}">
@@ -2014,15 +2089,22 @@ function renderModal(modal: HTMLElement): void {
     modal.querySelector('#sched-close')?.addEventListener('click', () => modal.classList.remove('open'));
     modal.querySelector('#sched-cancel')?.addEventListener('click', () => modal.classList.remove('open'));
     modal.querySelector('#sched-preset-catalog')?.addEventListener('click', () => { void browsePresetCatalogs(); });
-    modal.querySelectorAll<HTMLElement>('[data-preset]').forEach((b) => {
-        b.addEventListener('click', () => {
-            const p = PRESETS.find((x) => x.key === b.dataset.preset);
+    {
+        const pick = modal.querySelector<HTMLSelectElement>('#sched-preset-pick');
+        const desc = modal.querySelector<HTMLElement>('#sched-preset-desc');
+        // Description on selection, before applying. A preset replaces the whole draft, so
+        // being able to read what one does WITHOUT committing to it is the difference
+        // between choosing and guessing — the tooltip on the old cards required hovering
+        // each one in turn, which nobody does.
+        pick?.addEventListener('change', () => {
+            const p = PRESETS.find((x) => x.key === pick.value);
+            if (desc) desc.textContent = p ? (t('sched.presetd.' + p.key) || p.desc) : '';
             if (!p) return;
             _snapshot();                       // undo covers this like any other edit
             _draft = taskFromPreset(p);
-            renderModal(modal!);               // re-render: the strip hides itself now that steps exist
+            renderModal(modal!);               // re-render: the picker hides now that steps exist
         });
-    });
+    }
     modal.querySelector('#sched-name')?.addEventListener('input', (e) => { _draft.name = (e.target as HTMLInputElement).value; });
     modal.querySelector('#sched-desc')?.addEventListener('input', (e) => { _draft.description = (e.target as HTMLTextAreaElement).value; });
     modal.querySelectorAll<HTMLInputElement>('[data-perm]').forEach(cb => {
