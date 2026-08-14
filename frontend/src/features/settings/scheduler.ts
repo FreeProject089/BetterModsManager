@@ -15,6 +15,7 @@ import { escHtml, escAttr } from '../../core/utils.js';
 import { toast } from '../../ui/app.js';
 import { calendarDue, nextCalendarDue } from './sched-time.js';
 import { substituteVars, type RunCtx } from './sched-vars.js';
+import { inspectBmmpa } from './bmmpa-inspect.js';
 
 // ── Types ───────────────────────────────────────────────────────────────────
 type Trigger =
@@ -240,8 +241,19 @@ export async function initScheduler(): Promise<void> {
             ex.textContent = t('sched.loadExample') || 'Load example';
             ex.title = t('sched.loadExample.d') || 'Create a ready-made simple-loop automation you can inspect and enable.';
             ex.addEventListener('click', () => createExampleAutomation());
+            const insp = document.createElement('button');
+            insp.id = 'sched-inspect-btn';
+            insp.className = 'btn btn-ghost btn-sm';
+            insp.style.gap = '6px';
+            insp.textContent = t('sched.inspectBmmpa') || 'Inspect a .BMMPA';
+            insp.title = t('sched.inspectBmmpa.d') || 'See what a shared automation would do — permissions, scripts and everything it touches — without importing it.';
+            insp.addEventListener('click', () => inspectTasksFile());
             row.appendChild(exp);
             row.appendChild(imp);
+            // Deliberately BEFORE "Load example" and right after Import: the moment somebody
+            // is about to import a file they were sent is the moment this is useful, and a
+            // button they find afterwards is a button they find too late.
+            row.appendChild(insp);
             row.appendChild(ex);
         }
     }
@@ -3060,6 +3072,76 @@ export async function exportTasksFile(): Promise<void> {
         await invoke('write_text_file', { path, content: payload });
         toast(t('sched.exported') || 'Automations exported', 'success');
     } catch (e) { toast(`${t('common.error') || 'Error'}: ${e}`, 'error'); }
+}
+
+/**
+ * Show what a shared automation contains, WITHOUT importing it.
+ *
+ * The file is read and parsed; nothing is registered, nothing runs, and no task list is
+ * touched. That separation is the whole point — importing is the commitment, and until now
+ * it was also the only way to find out what you were committing to.
+ */
+export async function inspectTasksFile(): Promise<void> {
+    const { pickFile } = await import('../../core/api.js');
+    const path = await pickFile({ filters: [{ name: 'BMM Automation', extensions: ['bmmpa', 'json'] }] }).catch(() => null);
+    if (!path) return;
+    let report;
+    try {
+        const raw: string = await invoke('read_file_text', { path });
+        report = inspectBmmpa(JSON.parse(raw));
+    } catch (e) {
+        // A parse failure is reported as such rather than as "nothing in it": the two mean
+        // very different things to somebody deciding whether to trust a file.
+        toast(`${t('sched.inspectFailed') || 'Could not read that file'} — ${String(e).slice(0, 120)}`, 'error');
+        return;
+    }
+    if (!report.ok) { toast(report.error || t('sched.inspectFailed') || 'Could not read that file', 'error'); return; }
+    showBmmpaReport(report, path);
+}
+
+function showBmmpaReport(report: ReturnType<typeof inspectBmmpa>, path: string): void {
+    const esc = (x: unknown) => escHtml(String(x ?? ''));
+    const body = report.tasks.map((tk) => `
+        <div class="sched-insp-task">
+            <div class="sched-insp-head">
+                <b>${esc(tk.name)}</b>
+                <span class="sched-insp-trigger">${esc(tk.trigger)}</span>
+                <span class="sched-insp-count">${tk.stepCount} ${esc(t('sched.insp.steps') || 'steps')}</span>
+            </div>
+            ${tk.description ? `<div class="sched-insp-desc">${esc(tk.description)}</div>` : ''}
+            ${tk.perms.length ? `<div class="sched-insp-warn"><b>${esc(t('sched.insp.asks') || 'It grants itself:')}</b> ${tk.perms.map(esc).join(' · ')}</div>` : ''}
+            ${tk.reaching.length ? `<div class="sched-insp-warn"><b>${esc(t('sched.insp.reaches') || 'Reaches outside BMM:')}</b> ${tk.reaching.map(esc).join(' · ')}</div>` : ''}
+            ${tk.targets.length ? `<div class="sched-insp-targets"><b>${esc(t('sched.insp.targets') || 'Names:')}</b> ${tk.targets.map((x) => `<code>${esc(x)}</code>`).join(' ')}</div>` : ''}
+            ${tk.scripts.map((sc) => `<details class="sched-insp-script"><summary>${esc(t('sched.insp.script') || 'Script')} — ${esc(sc.engine)}</summary><pre>${esc(sc.code)}</pre></details>`).join('')}
+        </div>`).join('');
+
+    const verdict = report.needsReview
+        ? `<div class="sched-insp-verdict sched-insp-verdict-warn">${esc(t('sched.insp.review') || 'This file asks for permissions or reaches outside BMM. Read it before importing.')}</div>`
+        : `<div class="sched-insp-verdict">${esc(t('sched.insp.clean') || 'Nothing here asks for a permission or touches anything outside BMM.')}</div>`;
+
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-generic-overlay open';
+    overlay.innerHTML = `
+        <div class="modal sched-insp-modal">
+            <div class="sched-insp-top">
+                <div>
+                    <b>${esc(t('sched.insp.title') || 'What this file contains')}</b>
+                    <span class="sched-insp-file">${esc(path.split(/[\\/]/).pop())}</span>
+                </div>
+                <button class="btn btn-ghost btn-sm" id="sched-insp-close">${esc(t('common.close') || 'Close')}</button>
+            </div>
+            ${verdict}
+            <div class="sched-insp">${body}</div>
+            <p class="sched-insp-foot">${esc(t('sched.insp.foot') || 'Nothing has been imported. Close this and use Import if you want it.')}</p>
+        </div>`;
+    const close = () => overlay.remove();
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+    overlay.querySelector('#sched-insp-close')?.addEventListener('click', close);
+    // Escape closes it too — this is a read-only view, so there is nothing to lose by
+    // dismissing it the fastest way somebody will try.
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', onKey); } };
+    document.addEventListener('keydown', onKey);
+    (document.getElementById('app-window-outer') || document.body).appendChild(overlay);
 }
 
 export async function importTasksFile(): Promise<void> {

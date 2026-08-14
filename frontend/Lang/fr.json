@@ -7133,5 +7133,17 @@
   "settings.catIndex.skipped": "{n} ignoré(s).",
   "settings.catIndex.nothing": "Rien de nouveau ici — tout ce qu’il liste est déjà ajouté.",
   "settings.catIndex.failed": "Impossible de lire cet index",
-  "settings.catIndex.added": "{n} source(s) de catalogue ajoutée(s)."
+  "settings.catIndex.added": "{n} source(s) de catalogue ajoutée(s).",
+  "sched.inspectBmmpa": "Inspecter un .BMMPA",
+  "sched.inspectBmmpa.d": "Vois ce que ferait une automatisation partagée — permissions, scripts et tout ce qu’elle touche — sans l’importer.",
+  "sched.inspectFailed": "Impossible de lire ce fichier",
+  "sched.insp.title": "Ce que contient ce fichier",
+  "sched.insp.steps": "étapes",
+  "sched.insp.asks": "Elle s’accorde :",
+  "sched.insp.reaches": "Sort de BMM :",
+  "sched.insp.targets": "Elle nomme :",
+  "sched.insp.script": "Script",
+  "sched.insp.review": "Ce fichier demande des permissions ou sort de BMM. Lis-le avant d’importer.",
+  "sched.insp.clean": "Rien ici ne demande de permission ni ne touche quoi que ce soit hors de BMM.",
+  "sched.insp.foot": "Rien n’a été importé. Ferme ceci et utilise Importer si tu le veux."
 }

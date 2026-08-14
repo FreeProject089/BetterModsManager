@@ -7111,5 +7111,17 @@
   "settings.catIndex.skipped": "{n} skipped.",
   "settings.catIndex.nothing": "Nothing new here — everything it lists is already added.",
   "settings.catIndex.failed": "Could not read that index",
-  "settings.catIndex.added": "Added {n} catalog source(s)."
+  "settings.catIndex.added": "Added {n} catalog source(s).",
+  "sched.inspectBmmpa": "Inspect a .BMMPA",
+  "sched.inspectBmmpa.d": "See what a shared automation would do — permissions, scripts and everything it touches — without importing it.",
+  "sched.inspectFailed": "Could not read that file",
+  "sched.insp.title": "What this file contains",
+  "sched.insp.steps": "steps",
+  "sched.insp.asks": "It grants itself:",
+  "sched.insp.reaches": "Reaches outside BMM:",
+  "sched.insp.targets": "Names:",
+  "sched.insp.script": "Script",
+  "sched.insp.review": "This file asks for permissions or reaches outside BMM. Read it before importing.",
+  "sched.insp.clean": "Nothing here asks for a permission or touches anything outside BMM.",
+  "sched.insp.foot": "Nothing has been imported. Close this and use Import if you want it."
 }
