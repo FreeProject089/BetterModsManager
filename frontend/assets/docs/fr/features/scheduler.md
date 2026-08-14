@@ -214,10 +214,65 @@ brouillon *non enregistré*, et le panneau latéral montre les dernières exécu
 durée). Pendant l'édition, :kbd[Ctrl+Z] / :kbd[Ctrl+Y] annulent et rétablissent, et chaque étape a
 son propre bouton *lancer juste cette étape*.
 
+## Partir d'un preset
+
+Une nouvelle tâche s'ouvre avec un **sélecteur de presets** et un bouton **Depuis un
+catalogue…**.
+
+Choisir un preset **remplace le brouillon**, donc le sélecteur n'apparaît que sur une tâche
+vierge : en choisir un par erreur ne coûte alors rien, puisqu'il n'y avait rien à perdre. La
+description s'affiche sous le sélecteur au fil du choix, avant toute application.
+
+| Preset | Ce qu'il construit |
+|---|---|
+| Sauvegarde hebdomadaire | Exporte vos données BMM chaque lundi matin et le signale |
+| Me parler des mises à jour | Vérifie chaque jour, et ne prévient **que** s'il y a quelque chose |
+| M'avertir avant que le disque soit plein | Deux fois par jour ; silencieux au-dessus du seuil |
+| Rescanner les mods à l'ouverture de BMM | Récupère les changements faits hors de BMM |
+| Ranger après la fermeture du jeu | Ménage une fois que vous arrêtez de jouer |
+| S'arrêter si le disque est presque plein | Une **garde** à mettre en tête d'une autre tâche — s'arrête *proprement* sous 10 Go |
+| Rescanner la bibliothèque chaque matin | Le même rescan, à l'heure plutôt qu'au démarrage |
+| Me prévenir quand un serveur ne répond plus | Appelle une adresse toutes les 30 minutes ; ne se manifeste que sur un statut ≠ 200 |
+| Partager une valeur avec vos autres tâches | Écrit une variable partagée comme point de départ |
+
+Aucun n'arrive avec une permission déjà accordée. Un preset qui demanderait à exécuter des
+scripts avant que vous l'ayez lu vous entraînerait à accorder sans regarder — l'inverse de ce
+pour quoi les permissions ont été séparées. Les deux qui touchent à d'autres programmes le
+disent dans leur description et laissent la case décochée.
+
+## Les automatisations publiées par d'autres
+
+**Depuis un catalogue…** reste disponible pendant l'édition, parce qu'il n'ouvre jamais qu'un
+**rapport en lecture seule** : il n'importe rien.
+
+La fenêtre liste vos sources à gauche, chacune indiquant son propre résultat. Un catalogue
+injoignable le dit sur sa ligne : un résultat vide dont la raison est repliée se lit « vous ne
+suivez rien », ce qui est autre chose — et plus décourageant — que « le serveur est en panne ».
+
+Le flux officiel vient du registre de liens de BMM : il peut donc être pointé vers un autre
+hôte — un serveur de test, un tunnel — sans livrer une nouvelle version de BMM. Les catalogues
+communautaires se suivent en collant une adresse dans le même panneau. Tout ce qu'un catalogue
+propose passe d'abord par **Inspecter** : vous voyez le déclencheur, les permissions demandées,
+tout ce que la tâche atteint hors de BMM, et le texte complet de chaque script et commande
+qu'elle transporte, avant de décider.
+
 ## Partager un jeu de tâches — `.BMMPA`
 
 **Exporter .BMMPA** écrit tout ton jeu de tâches dans un fichier JSON ; **Importer .BMMPA** charge
-celui de quelqu'un d'autre.
+celui de quelqu'un d'autre. Chaque ligne de tâche a aussi **son propre** export, qui n'écrit
+que celle-là.
+
+Exporter une seule tâche compte plus qu'il n'y paraît : partager une automatisation voulait
+dire exporter toutes les autres et supprimer le reste à la main dans un éditeur — c'est ainsi
+qu'un chemin privé ou un jeton d'API rangé dans une tâche sans rapport finit dans un fichier
+que tu croyais propre. Les deux boutons écrivent la même forme — une tâche est une liste d'une
+seule — donc tout ce qui lit un .bmmpa lit l'un comme l'autre.
+
+!!! warning "Une variable partagée voyage avec le fichier"
+
+    Les valeurs écrites avec la portée **Partagée** sont stockées en clair et transportées dans
+    un .bmmpa exporté. Si l'une contient un jeton d'API, ce jeton part chez la personne à qui tu
+    envoies le fichier. Vérifie avant de partager.
 
 !!! note "Les imports ne partent jamais tout seuls"
 

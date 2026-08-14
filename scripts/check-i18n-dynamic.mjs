@@ -17,10 +17,19 @@
 import fs from 'node:fs';
 
 const SRC = 'frontend/src/features/settings/scheduler.ts';
+const NAV = 'frontend/src/ui/navbar-customize.ts';
 const LANGS = ['frontend/Lang/en.json', 'frontend/Lang/fr.json'];
 
 const src = fs.readFileSync(SRC, 'utf8');
+const nav = fs.readFileSync(NAV, 'utf8');
 const dicts = LANGS.map((f) => ({ f, d: JSON.parse(fs.readFileSync(f, 'utf8')) }));
+
+// NOT covered, and worth saying so rather than leaving a reader to assume the sweep was
+// exhaustive: `t('plugins.' + k)` in plugins.ts and api_activity.ts, and
+// `t('detail.' + c.field)` in mods.ts. Their key parts come from runtime data — plugin
+// manifests, user-configured columns — so there is no registry in the source to expand,
+// and a gate that guessed at the value set would either miss cases or invent them. They
+// are a real gap; this file is not the place to pretend otherwise.
 
 /**
  * The text of `const NAME … = [ … ];`, from the declaration to the matching `\n];`.
@@ -81,6 +90,14 @@ const FAMILIES = [
   { prefix: 'sched.cond.',    values: () => fromList('COND_TYPES'),           what: 'condition name' },
   { prefix: 'sched.preset.',  values: () => fromArray('PRESETS', 'key'),      what: 'preset name' },
   { prefix: 'sched.presetd.', values: () => fromArray('PRESETS', 'key'),      what: 'preset description' },
+  // The navbar editor's action list. Clean today — checked before adding it — but it is
+  // the same shape of registry feeding the same shape of dynamic lookup, and a gate that
+  // only covers the place that already broke is a gate that waits for the next one.
+  {
+    prefix: 'navedit.act.',
+    values: () => [...new Set([...nav.matchAll(/(?:opener|trigger)\('([a-zA-Z0-9_-]+)'/g)].map((m) => m[1]))],
+    what: 'navbar action',
+  },
 ];
 
 const hard = [];
@@ -98,7 +115,7 @@ for (const fam of FAMILIES) {
 }
 
 if (!hard.length && !soft.length) {
-  console.log(`✓ every dynamic scheduler key resolves in both languages (${FAMILIES.length} families)`);
+  console.log(`✓ every dynamic key resolves in both languages (${FAMILIES.length} families)`);
   process.exit(0);
 }
 for (const h of hard) console.error(`✗ ${h}`);

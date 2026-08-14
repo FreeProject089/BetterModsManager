@@ -224,9 +224,62 @@ trigger), **Duplicate** (a copy is created **disabled** so it can't double-fire)
 panel shows the last runs (time · OK/ERR · duration). While editing, :kbd[Ctrl+Z] / :kbd[Ctrl+Y]
 undo and redo, and any single step has its own *run just this step* button.
 
+## Starting from a preset
+
+A new task opens with a **preset picker** and a **From a catalogue…** button.
+
+Picking a preset **replaces the draft**, so the picker only appears on a blank new task —
+choosing one by mistake then costs nothing, because there was nothing to lose. The
+description appears under the picker as you select, before anything is applied.
+
+| Preset | What it builds |
+|---|---|
+| Weekly backup | Exports your BMM data every Monday morning and says so |
+| Tell me about updates | Checks daily, and notifies **only** when there is something |
+| Warn me before the disk fills | Twice a day; silent above the threshold |
+| Rescan mods when BMM opens | Picks up changes made outside BMM |
+| Tidy up after the game closes | Housekeeping once you stop playing |
+| Stop early if the disk is nearly full | A **guard** for the top of another task — stops *cleanly* under 10 GB |
+| Rescan the library every morning | The same rescan, on a clock instead of on startup |
+| Tell me when a server stops answering | Calls an address every 30 minutes; speaks up only on a non-200 |
+| Share a value with your other tasks | Writes one shared variable as a starting point |
+
+None of them arrives with a permission already granted. A preset that asked to run scripts
+before you had read it would train you to grant that without looking, which is the opposite
+of what splitting the permissions is for — the two that touch other programs say so in their
+description and leave the box unticked.
+
+## Automations other people published
+
+**From a catalogue…** stays available while you edit, because it only ever opens a
+**read-only report** — it never imports anything.
+
+The window lists your sources down the left, each stating its own outcome. A catalogue that
+is unreachable says so on its own row: an empty result with the reason folded away reads as
+"you follow nothing", which is a different and discouraging thing from "the server is down".
+
+The official feed comes from BMM's link registry, so it can be pointed at a different host —
+a staging server or a tunnel — without shipping a new BMM. Community catalogues are followed
+by pasting an address into the same panel. Everything a catalogue offers goes through
+**Inspect** first: you see the trigger, the permissions it wants, everything it reaches
+outside BMM, and the full text of every script and command it carries, before deciding.
+
 ## Share a set of tasks — `.BMMPA`
 
-**Export .BMMPA** writes your whole task set to a JSON file; **Import .BMMPA** loads someone else's.
+**Export .BMMPA** writes your whole task set to a JSON file; **Import .BMMPA** loads someone
+else's. Each task row also has its **own** export, which writes just that one.
+
+Exporting a single task matters more than it sounds: sharing one automation used to mean
+exporting all of them and deleting the rest by hand in a text editor, which is how a private
+path or an API token sitting in an unrelated task ends up in a file you meant to share. Both
+buttons write the same shape — one task is a list of one — so anything that reads a .bmmpa
+reads either.
+
+!!! warning "A shared variable travels with the file"
+
+    Values written with scope **Shared** are stored in plain text and are carried inside an
+    exported .bmmpa. If one holds an API token, that token goes to whoever you send the file
+    to. Check before you share.
 
 !!! note "Imports never fire on their own"
 
