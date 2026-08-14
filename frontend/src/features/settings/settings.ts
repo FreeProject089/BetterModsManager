@@ -1834,8 +1834,47 @@ async function initCatalogIndexSettings() {
     const out = document.getElementById('cat-index-result');
     if (!input || !previewBtn || !importBtn || !out) return;
 
+    // A LIST, not a single address. Somebody following two communities had to choose which
+    // one to keep, and the old single value was overwritten by whatever they previewed last
+    // — including a URL they were only checking.
+    //
+    // The old key is read once and folded in, so an address already saved is not lost by
+    // this change.
+    const LIST = 'bmm_catalog_index_urls';
     const LAST = 'bmm_catalog_index_url';
-    try { input.value = localStorage.getItem(LAST) || ''; } catch { /* ignore */ }
+    const readList = (): string[] => {
+      let out: string[] = [];
+      try { out = JSON.parse(localStorage.getItem(LIST) || '[]'); } catch { out = []; }
+      if (!Array.isArray(out)) out = [];
+      try {
+        const legacy = localStorage.getItem(LAST);
+        if (legacy && !out.includes(legacy)) out.push(legacy);
+      } catch { /* ignore */ }
+      return out.filter((x) => typeof x === 'string' && x.trim());
+    };
+    const writeList = (v: string[]) => { try { localStorage.setItem(LIST, JSON.stringify(v)); } catch { /* ignore */ } };
+
+    const listHost = document.getElementById('cat-index-list');
+    const renderList = () => {
+      if (!listHost) return;
+      const urls = readList();
+      if (!urls.length) { listHost.innerHTML = ''; return; }
+      listHost.innerHTML = `<div class="cat-index-list-title">${escHtml(t('settings.catIndex.saved') || 'Sources you keep')}</div>`
+        + urls.map((u) => `<div class="cat-index-row">
+              <span class="cat-index-url" title="${escAttr(u)}">${escHtml(u)}</span>
+              <button class="btn btn-ghost btn-sm cat-index-use" data-u="${escAttr(u)}">${escHtml(t('settings.catIndex.reuse') || 'Use')}</button>
+              <button class="btn btn-ghost btn-sm cat-index-del" data-u="${escAttr(u)}">${escHtml(t('common.remove') || 'Remove')}</button>
+           </div>`).join('');
+      listHost.querySelectorAll('.cat-index-use').forEach((b) => b.addEventListener('click', () => {
+        input.value = (b as HTMLElement).dataset.u || '';
+        previewBtn.click();
+      }));
+      listHost.querySelectorAll('.cat-index-del').forEach((b) => b.addEventListener('click', () => {
+        writeList(readList().filter((x) => x !== (b as HTMLElement).dataset.u));
+        renderList();
+      }));
+    };
+    renderList();
 
     let planned: ReturnType<typeof planImport> | null = null;
 
@@ -1861,7 +1900,11 @@ async function initCatalogIndexSettings() {
                   + (dropped.length ? ` ${(t('settings.catIndex.skipped') || '{n} skipped.').replace('{n}', String(dropped.length))}` : '')
                 : (t('settings.catIndex.nothing') || 'Nothing new here — everything it lists is already added.');
             importBtn.disabled = planned.add.length === 0;
-            try { localStorage.setItem(LAST, url); } catch { /* ignore */ }
+            // Kept only once it has actually answered. Saving on every keystroke would fill
+            // the list with half-typed addresses, and saving a URL that failed would keep a
+            // dead one around forever.
+            const urls = readList();
+            if (!urls.includes(url)) { writeList([...urls, url]); renderList(); }
         } catch (e) {
             // The URL is shown back deliberately: a typo in a long address is the usual
             // cause and "failed" alone leaves you re-reading the field character by character.

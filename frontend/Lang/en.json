@@ -7147,5 +7147,7 @@
   "sched.insp.script": "Script",
   "sched.insp.review": "This file asks for permissions or reaches outside BMM. Read it before importing.",
   "sched.insp.clean": "Nothing here asks for a permission or touches anything outside BMM.",
-  "sched.insp.foot": "Nothing has been imported. Close this and use Import if you want it."
+  "sched.insp.foot": "Nothing has been imported. Close this and use Import if you want it.",
+  "settings.catIndex.saved": "Sources you keep",
+  "settings.catIndex.reuse": "Use"
 }

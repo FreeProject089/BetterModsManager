@@ -3571,29 +3571,6 @@
                         <!-- ── Auto Update Toggle ── -->
                         <!-- One address that brings in app, plugin and theme catalogs together,
                              instead of pasting a URL into each page separately. -->
-                        <div class="glass-card" id="settings-catalog-index-card">
-                            <h3 class="card-title" style="display:flex;align-items:center;gap:10px">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)"
-                                    stroke-width="2.2">
-                                    <path d="M3 5h18"></path>
-                                    <path d="M3 12h18"></path>
-                                    <path d="M3 19h18"></path>
-                                </svg>
-                                <span data-i18n="settings.catIndex.title">Catalogue index</span>
-                            </h3>
-                            <p class="card-desc" data-i18n="settings.catIndex.desc">
-                                One address that lists app, plugin and theme catalogs together. Preview it before
-                                anything is added — nothing is imported until you say so.</p>
-                            <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:10px">
-                                <input type="text" class="input-field" id="cat-index-url" style="flex:1; min-width:260px"
-                                    placeholder="https://bettercommunity.ch/api/catalogs.json">
-                                <button class="btn btn-secondary" id="cat-index-preview"
-                                    data-i18n="settings.catIndex.preview">Preview</button>
-                                <button class="btn btn-primary" id="cat-index-import" disabled
-                                    data-i18n="settings.catIndex.import">Import</button>
-                            </div>
-                            <div id="cat-index-result" style="margin-top:10px; font-size:12px"></div>
-                        </div>
 
                         <div class="glass-card" id="settings-auto-update-card"
                             style="border: 1px solid rgba(16, 185, 129, 0.15); position: relative; overflow: hidden;">
@@ -3658,6 +3635,34 @@
                         </div>
 
                         <!-- ── Theme / Appearance Card ── -->
+                        <div class="glass-card" id="settings-catalog-index-card">
+                            <h3 class="card-title" style="display:flex;align-items:center;gap:10px">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)"
+                                    stroke-width="2.2">
+                                    <path d="M3 5h18"></path>
+                                    <path d="M3 12h18"></path>
+                                    <path d="M3 19h18"></path>
+                                </svg>
+                                <span data-i18n="settings.catIndex.title">Catalogue index</span>
+                            </h3>
+                            <p class="card-desc" data-i18n="settings.catIndex.desc">
+                                One address that lists app, plugin and theme catalogs together. Preview it before
+                                anything is added — nothing is imported until you say so.</p>
+                            <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:10px">
+                                <input type="text" class="input-field" id="cat-index-url" style="flex:1; min-width:260px"
+                                    placeholder="https://bettercommunity.ch/api/catalogs.json">
+                                <button class="btn btn-secondary" id="cat-index-preview"
+                                    data-i18n="settings.catIndex.preview">Preview</button>
+                                <button class="btn btn-primary" id="cat-index-import" disabled
+                                    data-i18n="settings.catIndex.import">Import</button>
+                            </div>
+                            <div id="cat-index-result" style="margin-top:10px; font-size:12px"></div>
+                            <!-- Sources kept between sessions. One field that forgot the last
+                                 address meant re-pasting it every time, and somebody following
+                                 two communities had to choose which one to keep. -->
+                            <div id="cat-index-list" class="cat-index-list"></div>
+                        </div>
+
                         <div class="glass-card" style="border: 1px solid rgba(59,130,246,0.2); position:relative; overflow:hidden;">
                             <div style="position:absolute;top:-30px;right:-30px;width:120px;height:120px;background:rgba(59,130,246,0.06);border-radius:50%;filter:blur(30px);pointer-events:none"></div>
                             <h3 class="card-title" style="display:flex;align-items:center;gap:10px">

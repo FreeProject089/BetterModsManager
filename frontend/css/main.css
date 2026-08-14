@@ -16483,3 +16483,14 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 .sched-insp-script pre { margin: 6px 0 0; padding: 9px; border-radius: 8px; overflow: auto; max-height: 260px;
     background: var(--bg-base); border: 1px solid var(--border); font-size: 11px; white-space: pre; }
 .sched-insp-foot { font-size: 11px; color: var(--text-muted); margin-top: 10px; }
+
+/* Catalogue index sources you keep. A list rather than one remembered field: somebody
+   following two communities should not have to choose which address survives. */
+.cat-index-list { margin-top: 12px; }
+.cat-index-list-title { font-size: 11px; color: var(--text-muted); margin-bottom: 5px; }
+.cat-index-row { display: flex; align-items: center; gap: 8px; padding: 5px 0;
+    border-top: 1px solid var(--border); }
+/* min-width:0 so a long URL truncates instead of pushing the buttons off the card —
+   the blowout an unbreakable string causes in a flex row. */
+.cat-index-url { flex: 1; min-width: 0; font-size: 11px; font-family: var(--font-mono, monospace);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-dim); }
