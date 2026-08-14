@@ -76,6 +76,29 @@ for (const t of types) {
   if (t !== 'app' && !stores.includes(t)) fail.push(`STORE_KEY has no entry for the \`${t}\` type`);
 }
 
+// ── words that mean two things ────────────────────────────────────────────────
+//
+// This is a REGRESSION guard, not a detector, and the difference matters: it cannot find
+// the next ambiguous term, only stop this one being un-said.
+//
+// `preset` means a BSM audio preset AND a BMM automation, and both publish as kind=PRESET.
+// The preset guides asserted the second flatly, which sends a BSM author to the wrong page.
+// Nothing else here would catch that — every field name in those guides was correct, and a
+// name check is blind to a sentence being wrong about what the names describe.
+//
+// What actually caught it was reading the existing BCWEB pages before adding one. That is a
+// habit, not a script. This just makes sure the sentence it produced cannot quietly go away.
+const AMBIGUOUS = [
+  { term: 'preset', docs: presetDocs, must: /BSM/ },
+];
+for (const { term, docs, must: needle } of AMBIGUOUS) {
+  for (const p of docs) {
+    if (!needle.test(read(p))) {
+      fail.push(`${p}: does not say which kind of "${term}" it means — the word covers more than one thing`);
+    }
+  }
+}
+
 if (fail.length) {
   fail.forEach((f) => console.error(`✗ ${f}`));
   console.error('\n  The guides are the one place a wrong name passes every other check.');
