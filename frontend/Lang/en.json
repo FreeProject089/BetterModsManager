@@ -7174,5 +7174,14 @@
   "repo.cat.badurl": "Enter an http(s) address.",
   "repo.cat.dupe": "Already following that one.",
   "repo.cat.empty": "Nothing in the list to export.",
-  "repo.cat.saved": "Saved {n} repos."
+  "repo.cat.saved": "Saved {n} repos.",
+  "sched.pc.browse": "From a catalog…",
+  "sched.pc.tip": "Presets published by the community. Each one is inspected before anything is imported.",
+  "sched.pc.title": "Presets from a catalog",
+  "sched.pc.ask": "Address of a preset catalog:",
+  "sched.pc.none": "Nothing to show from the catalogs you follow.",
+  "sched.pc.tasks": "automations",
+  "sched.pc.inspect": "Inspect",
+  "sched.pc.loading": "Fetching…",
+  "sched.pc.skipped": "{n} skipped"
 }

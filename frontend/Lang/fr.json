@@ -7172,5 +7172,14 @@
   "repo.cat.badurl": "Saisis une adresse http(s).",
   "repo.cat.dupe": "Déjà suivi.",
   "repo.cat.empty": "Rien à exporter dans la liste.",
-  "repo.cat.saved": "{n} dépôts enregistrés."
+  "repo.cat.saved": "{n} dépôts enregistrés.",
+  "sched.pc.browse": "Depuis un catalogue…",
+  "sched.pc.tip": "Des presets publiés par la communauté. Chacun est inspecté avant tout import.",
+  "sched.pc.title": "Presets d’un catalogue",
+  "sched.pc.ask": "Adresse d’un catalogue de presets :",
+  "sched.pc.none": "Rien à afficher depuis les catalogues que tu suis.",
+  "sched.pc.tasks": "automatisations",
+  "sched.pc.inspect": "Inspecter",
+  "sched.pc.loading": "Récupération…",
+  "sched.pc.skipped": "{n} ignoré(s)"
 }

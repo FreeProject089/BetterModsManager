@@ -1,0 +1,102 @@
+// Reading a preset catalog — a published list of shareable automations.
+//
+// The feed shape is BCWEB's `catalog.json?kind=PRESET`: `{ version, name, presets: [...] }`
+// where each entry points at a `.bmmpa` rather than describing its tasks. That indirection
+// is deliberate on both sides: the .bmmpa is the file BMM already exports and imports, so
+// a client that reconstructed tasks from feed JSON would be a second parser to keep in step
+// with the first.
+//
+// Pure: parsing only. Fetching, downloading and importing are the caller's, so this can be
+// tested without a network and cannot accidentally do any of them.
+
+export interface PresetEntry {
+    id: string;
+    name: string;
+    description: string;
+    author: string;
+    version: string;
+    /** Where the .bmmpa lives. http(s) only — see below. */
+    downloadUrl: string;
+    tags: string[];
+    /** How many automations are inside, when the publisher said. Undefined is "not stated",
+     *  which is different from zero and must not be shown as it. */
+    tasks?: number;
+    /** The catalog this came from, so a list of many can say where each one is from. */
+    source?: string;
+}
+
+const str = (v: unknown, max = 300): string => (typeof v === 'string' ? v.trim().slice(0, max) : '');
+
+/**
+ * Parse a preset feed. Returns the entries it could use and the reasons it dropped the
+ * rest — never a bare list, because "3 of 20 loaded" is something the user needs told.
+ *
+ * A catalog is a document from whichever server somebody pasted, so every field is
+ * untrusted:
+ *
+ *  - http(s) only. The download_url is handed to a fetcher; a `file://` entry in a list
+ *    that gets downloaded is the obvious attack, and "it would probably fail" is not a
+ *    reason to pass it on.
+ *  - An entry with no download_url is dropped rather than shown as an un-installable row.
+ *    A row you cannot act on is a row that makes the list look broken.
+ *  - Duplicate ids collapse, first wins, so a catalog listing something twice does not
+ *    offer it twice.
+ */
+export function parsePresetFeed(raw: unknown, source = ''): { presets: PresetEntry[]; dropped: string[] } {
+    const dropped: string[] = [];
+    const doc = (raw && typeof raw === 'object' ? raw : {}) as Record<string, any>;
+    const list = Array.isArray(doc.presets) ? doc.presets : [];
+    const seen = new Set<string>();
+    const presets: PresetEntry[] = [];
+
+    for (const e of list) {
+        if (!e || typeof e !== 'object') { dropped.push('not an object'); continue; }
+        const url = str(e.download_url ?? e.downloadUrl, 600);
+        const id = str(e.id ?? e.slug, 120);
+        const name = str(e.name ?? e.title, 200) || id;
+        if (!/^https?:\/\//i.test(url)) {
+            dropped.push(`${name || id || '(unnamed)'} — no usable download address`);
+            continue;
+        }
+        if (!id) { dropped.push(`${name || '(unnamed)'} — no id`); continue; }
+        if (seen.has(id.toLowerCase())) { dropped.push(`${name} — listed twice`); continue; }
+        seen.add(id.toLowerCase());
+        presets.push({
+            id,
+            name,
+            description: str(e.description, 1000),
+            author: str(e.author, 120),
+            version: str(e.version, 40),
+            downloadUrl: url,
+            tags: Array.isArray(e.tags) ? e.tags.filter((x: unknown) => typeof x === 'string').slice(0, 8) : [],
+            // Only when it is a real count. A publisher who said nothing has not said zero.
+            tasks: Number.isFinite(e.tasks) && e.tasks >= 0 ? Number(e.tasks) : undefined,
+            ...(source ? { source } : {}),
+        });
+    }
+    return { presets, dropped };
+}
+
+/** Is this document a preset catalog at all?
+ *
+ *  Used to tell a wrong-kind paste from an empty one: "this is a plugin catalog" and
+ *  "this catalog has no presets yet" are different things to be told, and reporting the
+ *  first as the second sends somebody looking for a problem that is not there. */
+export function looksLikePresetFeed(doc: unknown): boolean {
+    return !!doc && typeof doc === 'object' && Array.isArray((doc as Record<string, any>).presets);
+}
+
+/** Preset catalogs the user follows. Same storage the catalog index writes to, so one
+ *  pulled in by an index and one added by hand end up in a single list. */
+const KEY = 'bmm_preset_catalogs';
+
+export function readPresetCatalogs(): string[] {
+    try {
+        const v = JSON.parse(localStorage.getItem(KEY) || '[]');
+        return Array.isArray(v) ? v.filter((x) => typeof x === 'string' && x.trim()) : [];
+    } catch { return []; }
+}
+
+export function writePresetCatalogs(urls: string[]): void {
+    try { localStorage.setItem(KEY, JSON.stringify([...new Set(urls)])); } catch { /* ignore */ }
+}

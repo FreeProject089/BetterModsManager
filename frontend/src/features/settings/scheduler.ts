@@ -16,6 +16,8 @@ import { toast } from '../../ui/app.js';
 import { calendarDue, nextCalendarDue } from './sched-time.js';
 import { substituteVars, type RunCtx } from './sched-vars.js';
 import { inspectBmmpa } from './bmmpa-inspect.js';
+import { parsePresetFeed, looksLikePresetFeed, readPresetCatalogs, writePresetCatalogs } from './preset-catalog.js';
+import { originLabel } from '../catalogs/catalog-index.js';
 
 // ── Types ───────────────────────────────────────────────────────────────────
 type Trigger =
@@ -1738,6 +1740,11 @@ function renderModal(modal: HTMLElement): void {
                     if (_editing || _draft.steps.length || _draft.name) return '';
                     return `<label class="sched-label">${t('sched.presetsTitle') || 'Start from a preset'} <span class="sched-hint-inline">${t('sched.presetsHint') || '— or build your own below'}</span></label>
                     <div class="sched-presets">
+                        <button type="button" class="sched-preset sched-preset-more" id="sched-preset-catalog"
+                            data-tooltip="${escAttr(t('sched.pc.tip') || 'Presets published by the community. Each one is inspected before anything is imported.')}">
+                            <span class="sched-preset-ico">☁</span>
+                            <span class="sched-preset-name">${escHtml(t('sched.pc.browse') || 'From a catalog…')}</span>
+                        </button>
                         ${PRESETS.map((p) => `
                             <button type="button" class="sched-preset" data-preset="${escAttr(p.key)}"
                                 data-tooltip="${escAttr(t('sched.presetd.' + p.key) || p.desc)}">
@@ -1830,6 +1837,7 @@ function renderModal(modal: HTMLElement): void {
 
     modal.querySelector('#sched-close')?.addEventListener('click', () => modal.classList.remove('open'));
     modal.querySelector('#sched-cancel')?.addEventListener('click', () => modal.classList.remove('open'));
+    modal.querySelector('#sched-preset-catalog')?.addEventListener('click', () => { void browsePresetCatalogs(); });
     modal.querySelectorAll<HTMLElement>('[data-preset]').forEach((b) => {
         b.addEventListener('click', () => {
             const p = PRESETS.find((x) => x.key === b.dataset.preset);
@@ -3130,6 +3138,94 @@ export async function exportTasksFile(): Promise<void> {
  * touched. That separation is the whole point — importing is the commitment, and until now
  * it was also the only way to find out what you were committing to.
  */
+/**
+ * Presets published by other people.
+ *
+ * Every entry is DOWNLOADED and INSPECTED before anything is imported — the same reader
+ * the Inspect button uses, on the same rules. A catalog of automations is a catalog of
+ * other people's code, and importing one on the strength of its description would be the
+ * thing this whole inspector exists to avoid.
+ */
+export async function browsePresetCatalogs(): Promise<void> {
+    const urls = readPresetCatalogs();
+    if (!urls.length) {
+        const added = await promptForPresetCatalog();
+        if (!added) return;
+    }
+    const all: any[] = [];
+    const problems: string[] = [];
+    for (const url of readPresetCatalogs()) {
+        try {
+            const text: string = await invoke('fetch_remote_json', { url }) as string;
+            const doc = JSON.parse(text);
+            if (!looksLikePresetFeed(doc)) {
+                // Told apart from "empty" on purpose: a plugin catalog reported as an empty
+                // preset catalog sends somebody looking for a problem that is not there.
+                problems.push(`${url} — not a preset catalog`);
+                continue;
+            }
+            const { presets, dropped } = parsePresetFeed(doc, url);
+            all.push(...presets);
+            problems.push(...dropped);
+        } catch (e) { problems.push(`${url} — ${String(e).slice(0, 80)}`); }
+    }
+    showPresetCatalog(all, problems);
+}
+
+async function promptForPresetCatalog(): Promise<boolean> {
+    const url = window.prompt(t('sched.pc.ask') || 'Address of a preset catalog:', 'https://bettercommunity.ch/api/catalog.json?project=bmm&kind=PRESET');
+    if (!url || !/^https?:\/\//i.test(url.trim())) return false;
+    writePresetCatalogs([...readPresetCatalogs(), url.trim()]);
+    return true;
+}
+
+function showPresetCatalog(presets: any[], problems: string[]): void {
+    const esc = (x: unknown) => escHtml(String(x ?? ''));
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-generic-overlay open';
+    overlay.innerHTML = `
+        <div class="modal sched-insp-modal">
+            <div class="sched-insp-top">
+                <b>${esc(t('sched.pc.title') || 'Presets from a catalog')}</b>
+                <button class="btn btn-ghost btn-sm" id="sched-pc-close">${esc(t('common.close') || 'Close')}</button>
+            </div>
+            ${presets.length ? '' : `<p class="sched-insp-foot">${esc(t('sched.pc.none') || 'Nothing to show from the catalogs you follow.')}</p>`}
+            <div class="sched-pc-list">
+                ${presets.map((p, i) => `
+                    <div class="sched-pc-row">
+                        <div class="sched-pc-main">
+                            <b>${esc(p.name)}</b>
+                            ${p.version ? `<span class="sched-pc-ver">v${esc(p.version)}</span>` : ''}
+                            ${typeof p.tasks === 'number' ? `<span class="sched-pc-n">${p.tasks} ${esc(t('sched.pc.tasks') || 'automations')}</span>` : ''}
+                            <span class="sched-pc-desc">${esc(p.description)}</span>
+                            <span class="sched-pc-from">${esc(p.author || '')}${p.author && p.source ? ' · ' : ''}${esc(p.source ? originLabel(p.source) : '')}</span>
+                        </div>
+                        <button class="btn btn-sm btn-secondary sched-pc-get" data-i="${i}">${esc(t('sched.pc.inspect') || 'Inspect')}</button>
+                    </div>`).join('')}
+            </div>
+            ${problems.length ? `<details class="sched-pc-problems"><summary>${esc((t('sched.pc.skipped') || '{n} skipped').replace('{n}', String(problems.length)))}</summary><ul>${problems.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></details>` : ''}
+        </div>`;
+    const close = () => overlay.remove();
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+    overlay.querySelector('#sched-pc-close')?.addEventListener('click', close);
+    overlay.querySelectorAll<HTMLElement>('.sched-pc-get').forEach((b) => b.addEventListener('click', async () => {
+        const p = presets[Number(b.dataset.i)];
+        b.textContent = t('sched.pc.loading') || 'Fetching…';
+        try {
+            const text: string = await invoke('fetch_remote_json', { url: p.downloadUrl }) as string;
+            const report = inspectBmmpa(JSON.parse(text));
+            if (!report.ok) { toast(report.error || t('sched.inspectFailed') || 'Could not read that file', 'error'); return; }
+            close();
+            // The same report the Inspect button shows. Downloading is not importing: this
+            // ends in a panel, and the person decides.
+            showBmmpaReport(report, p.name);
+        } catch (e) {
+            toast(`${t('sched.inspectFailed') || 'Could not read that file'} — ${String(e).slice(0, 100)}`, 'error');
+        } finally { b.textContent = t('sched.pc.inspect') || 'Inspect'; }
+    }));
+    (document.getElementById('app-window-outer') || document.body).appendChild(overlay);
+}
+
 export async function inspectTasksFile(): Promise<void> {
     const { pickFile } = await import('../../core/api.js');
     const path = await pickFile({ filters: [{ name: 'BMM Automation', extensions: ['bmmpa', 'json'] }] }).catch(() => null);

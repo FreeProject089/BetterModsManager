@@ -16531,3 +16531,19 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 .repo-cat-del { background: none; border: 0; color: var(--text-muted); cursor: pointer;
     font-size: 13px; line-height: 1; padding: 2px 5px; border-radius: 999px; }
 .repo-cat-del:hover { color: var(--danger); background: color-mix(in srgb, var(--danger) 14%, transparent); }
+
+/* Presets offered by a catalog. Each row ends in Inspect, never in Install — downloading
+   is not importing, and the decision stays with the person. */
+.sched-pc-list { display: flex; flex-direction: column; gap: 6px; }
+.sched-pc-row { display: flex; align-items: flex-start; gap: 10px; padding: 9px 11px;
+    border: 1px solid var(--border); border-radius: 10px; }
+.sched-pc-main { min-width: 0; flex: 1; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
+.sched-pc-main b { font-size: 13px; }
+.sched-pc-ver { font-size: 10px; color: var(--bmm-accent); }
+.sched-pc-n { font-size: 10px; color: var(--text-muted); }
+.sched-pc-desc { flex-basis: 100%; font-size: 12px; color: var(--text-muted); }
+.sched-pc-from { flex-basis: 100%; font-size: 10px; color: var(--text-dim); }
+/* Folded away: what was skipped matters when something is missing and is noise otherwise. */
+.sched-pc-problems { margin-top: 10px; font-size: 11px; color: var(--text-muted); }
+.sched-pc-problems summary { cursor: pointer; }
+.sched-preset-more { border-style: dashed; }
