@@ -41,6 +41,12 @@ interface TaskPerms {
      *  app exposes, including actions that have no step of their own, so it was the
      *  widest capability in the scheduler and the only one nobody had to ask for. */
     deeplink?: boolean;
+    /** Terminate a process. Separate from `command` because the risk is different in
+     *  kind: launching a program is something the user could undo, while killing one
+     *  can lose unsaved work with no warning and nothing to undo. Defaults off for
+     *  every existing task — the capability did not exist when their consent was
+     *  given, which is the same reason `script` is not inherited either. */
+    stopProcess?: boolean;
 }
 
 /** A task's effective permissions. An old task has no `perms`, only the single
@@ -709,6 +715,16 @@ async function runAction(action: Action, task: Task, ctx: Record<string, number>
             await invoke('set_active_theme', { themeId: p.id }); break;
         case 'app.launch':
             await invoke('launch_app', { appId: p.id, exePath: p.exePath || '' }); break;
+        case 'app.stop': {
+            requirePerm(task, 'stopProcess', t('sched.permStopProcess') || 'stop running programs');
+            const stopped = await invoke('stop_process', {
+                name: p.name || '', pid: p.pid || null, allow: true,
+            });
+            // Captured like any other step result, so a later step can branch on how many
+            // were actually stopped rather than only on whether the step threw.
+            _captureOutput(p, String(stopped), ctx);
+            break;
+        }
         case 'notify':
             toast(p.message || task.name, 'info'); break;
         case 'custom.command': {
@@ -1031,9 +1047,9 @@ async function evalConditionRaw(cond: Condition, ctx: Record<string, number>): P
             return !!m && !m.enabled;
         }
         case 'appRunning':
-            return await invoke('is_process_running', { name: p.name || '' }).catch(() => false);
+            return await invoke('is_process_running', { name: p.name || '', pid: p.pid || null }).catch(() => false);
         case 'appNotRunning':
-            return !(await invoke('is_process_running', { name: p.name || '' }).catch(() => false));
+            return !(await invoke('is_process_running', { name: p.name || '', pid: p.pid || null }).catch(() => false));
         case 'fileExists':
             return await invoke('path_exists', { path: p.path || '' }).catch(() => false);
         case 'online':
@@ -1546,6 +1562,7 @@ function renderModal(modal: HTMLElement): void {
                         ${row('command', !!pm.command, t('sched.allowCmdTitle') || 'Run external programs', t('sched.allowCmd') || 'This task may launch real programs on your PC.')}
                         ${row('script', !!pm.script, t('sched.allowScriptTitle') || 'Run scripts', t('sched.allowScript') || 'This task may run PowerShell, CMD, Bash or Python code you write.')}
                         ${row('deeplink', !!pm.deeplink, t('sched.allowDeeplinkTitle') || 'Fire deeplinks', t('sched.allowDeeplink') || 'This task may trigger bmm:// links, which can reach anything the app exposes.')}
+                        ${row('stopProcess', !!pm.stopProcess, t('sched.allowStopTitle') || 'Stop programs', t('sched.allowStop') || 'This task may terminate running programs. Unsaved work in them is lost, with no warning and nothing to undo.')}
                     </div>`;
                 })()}
                 <label class="sched-opt">
@@ -2191,6 +2208,7 @@ const ACTION_TYPES: { v: string; label: string; needs?: string; group: string }[
     { v: 'repo.host', label: 'Host repo (HTTP)', needs: 'repoHost', group: 'repo' },
     // ── Apps & launch ──
     { v: 'app.launch', label: 'Launch app', needs: 'app', group: 'apps' },
+    { v: 'app.stop', label: 'Stop app / process', needs: 'appStop', group: 'apps' },
     { v: 'file.open', label: 'Open / launch a file or program', needs: 'pathFile', group: 'apps' },
     { v: 'folder.open', label: 'Open a folder', needs: 'pathFolder', group: 'apps' },
     { v: 'app.install', label: 'Install app', needs: 'appInstall', group: 'apps' },
@@ -2293,6 +2311,50 @@ function _field(needs: string, controlHtml: string): string {
     return `<div class="sched-field"><label class="sched-flabel">${t(key) || NEEDS_LABEL_FALLBACK[needs]}</label>${controlHtml}</div>`;
 }
 
+type ProcInfo = { pid: number; name: string; exe: string | null; memMb: number };
+let _procsPromise: Promise<ProcInfo[]> | null = null;
+
+/**
+ * The processes running right now, for the name/pid pickers.
+ *
+ * Refreshed on demand rather than cached for the session, unlike the interpreter probe:
+ * what is running changes constantly, and a stale list is worse than none here — it would
+ * offer a pid that has already been recycled onto a different program.
+ */
+function runningProcesses(force = false): Promise<ProcInfo[]> {
+    if (force || !_procsPromise) {
+        _procsPromise = invoke('list_running_processes')
+            .then((r: any) => (Array.isArray(r) ? (r as ProcInfo[]) : []))
+            .catch(() => [] as ProcInfo[]);
+    }
+    return _procsPromise;
+}
+
+/**
+ * Fill a <datalist> with the process names actually running, so the field offers real
+ * answers instead of asking the user to remember an executable name.
+ *
+ * A name that matches nothing makes a condition that is silently always false, which is
+ * why this is worth more than it looks: the old field accepted "DCS" happily and the task
+ * simply never fired.
+ *
+ * Deduped by name — a browser with thirty helper processes should be one suggestion, not
+ * thirty — and kept in the backend's heaviest-first order, so the application somebody
+ * means is near the top.
+ */
+async function fillProcessDatalist(host: HTMLElement, id: string): Promise<void> {
+    const dl = host.querySelector(`#${id}`) as HTMLDataListElement | null;
+    if (!dl) return;
+    const procs = await runningProcesses(true);
+    if (!dl.isConnected) return;
+    const seen = new Set<string>();
+    dl.innerHTML = procs
+        .filter((p) => p.name && !seen.has(p.name.toLowerCase()) && seen.add(p.name.toLowerCase()))
+        .slice(0, 200)
+        .map((p) => `<option value="${escAttr(p.name)}">${escAttr(`pid ${p.pid} · ${p.memMb} MB`)}</option>`)
+        .join('');
+}
+
 /** What the backend probe found, once per session. */
 type EngineInfo = { engine: string; available: boolean; program: string | null; version: string | null };
 let _enginesPromise: Promise<EngineInfo[]> | null = null;
@@ -2345,6 +2407,25 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
     else if (needs === 'mod') host.innerHTML = _field(needs, `<select class="input sched-p" style="max-width:240px">${pickerOptions(_mods, params.id)}</select>`);
     else if (needs === 'modpack') host.innerHTML = _field(needs, `<select class="input sched-p" style="max-width:200px">${pickerOptions(_modpacks, params.id)}</select>`);
     else if (needs === 'theme') host.innerHTML = _field(needs, `<select class="input sched-p" style="max-width:200px">${pickerOptions(_themes, params.id)}</select>`);
+    else if (needs === 'appStop') {
+        host.innerHTML = `
+        <div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${t('sched.stopWhich') || '1. Which program'}</label>
+            <div class="sched-cmd-row">
+                <input class="input sched-p-name" list="sched-proc-list-a" placeholder="${escAttr(t('sched.appName') || 'app exe (e.g. DCS.exe)')}" value="${escAttr(params.name || '')}" style="max-width:220px">
+                <datalist id="sched-proc-list-a"></datalist>
+                <input class="input sched-p-pid" type="number" min="1" placeholder="${escAttr(t('sched.pidPh') || 'or pid')}" value="${escAttr(params.pid ?? '')}" style="max-width:110px">
+            </div>
+            <span class="sched-cmd-hint">${t('sched.stopHint') || 'Every process with that name is stopped. BMM itself is never stopped, so a task cannot kill the scheduler running it.'}</span>
+            <span class="sched-cmd-hint">${t('sched.stopPerm') || 'Grant “Stop programs” in this task’s Permissions, or it won’t run. Stopping a program can lose unsaved work.'}</span>
+        </div>`;
+        host.querySelector('.sched-p-name')?.addEventListener('input', (e) => { params.name = (e.target as HTMLInputElement).value; });
+        host.querySelector('.sched-p-pid')?.addEventListener('input', (e) => {
+            const v = parseInt((e.target as HTMLInputElement).value, 10);
+            params.pid = Number.isFinite(v) && v > 0 ? v : undefined;
+        });
+        void fillProcessDatalist(host, 'sched-proc-list-a');
+    }
     else if (needs === 'app') host.innerHTML = _field(needs, _apps.length
         ? `<select class="input sched-p" style="max-width:220px">${pickerOptions(_apps, params.id)}</select>`
         : `<input class="input sched-p" placeholder="${escAttr(t('sched.appIdPh') || 'app id (install an app first)')}" value="${escAttr(params.id || '')}" style="max-width:220px">`);
@@ -2714,7 +2795,21 @@ function renderCondParams(host: HTMLElement, cond: Condition): void {
     if (cond.type === 'profileActive') host.innerHTML = `<select class="input sched-cp" style="max-width:180px">${pickerOptions(_profiles, p.id)}</select>`;
     else if (cond.type === 'modEnabled' || cond.type === 'modDisabled') host.innerHTML = `<select class="input sched-cp" style="max-width:200px">${pickerOptions(_mods, p.id)}</select>`;
     else if (cond.type === 'modpackActive' || cond.type === 'modpackInactive') host.innerHTML = `<select class="input sched-cp" style="max-width:200px">${pickerOptions(_modpacks, p.id)}</select>`;
-    else if (cond.type === 'appRunning' || cond.type === 'appNotRunning') host.innerHTML = `<input class="input sched-cp-name" placeholder="${escAttr(t('sched.appName') || 'app exe (e.g. DCS.exe)')}" value="${escAttr(p.name || '')}" style="max-width:200px">`;
+    else if (cond.type === 'appRunning' || cond.type === 'appNotRunning') {
+        // A pid is exact but does not survive a reboot; a name survives but can match
+        // several processes or none. Both are offered, and the backend prefers the pid when
+        // one is given. The datalist is what makes the name usable at all — see
+        // fillProcessDatalist.
+        host.innerHTML = `<input class="input sched-cp-name" list="sched-proc-list" placeholder="${escAttr(t('sched.appName') || 'app exe (e.g. DCS.exe)')}" value="${escAttr(p.name || '')}" style="max-width:200px">
+            <datalist id="sched-proc-list"></datalist>
+            <input class="input sched-cp-pid" type="number" min="1" placeholder="${escAttr(t('sched.pidPh') || 'or pid')}" value="${escAttr(p.pid ?? '')}" style="max-width:110px">
+            <span class="sched-cmd-hint">${t('sched.pidHint') || 'A pid is exact but changes every restart — prefer the name for a task that runs for months.'}</span>`;
+        host.querySelector('.sched-cp-pid')?.addEventListener('input', (e) => {
+            const v = parseInt((e.target as HTMLInputElement).value, 10);
+            p.pid = Number.isFinite(v) && v > 0 ? v : undefined;
+        });
+        void fillProcessDatalist(host, 'sched-proc-list');
+    }
     else if (cond.type === 'fileExists') host.innerHTML = `<input class="input sched-cp-path" placeholder="${escAttr(t('sched.filePath') || 'C:\\path\\to\\file')}" value="${escAttr(p.path || '')}" style="min-width:240px">`;
     else if (cond.type === 'timeReached') host.innerHTML = `<input type="time" class="input sched-cp-time" value="${escAttr(p.time || '17:00')}" style="max-width:140px">`;
     else if (cond.type === 'dayOfWeek') {
