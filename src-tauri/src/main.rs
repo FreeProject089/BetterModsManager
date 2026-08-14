@@ -469,6 +469,7 @@ fn main() {
             commands::scheduler::save_schedules,
             commands::scheduler::run_scheduled_command,
             commands::scheduler::run_scheduled_script,
+            commands::scheduler::scheduler_script_engines,
             commands::scheduler::create_bmm_folder,
             commands::scheduler::is_process_running,
             commands::scheduler::path_exists,

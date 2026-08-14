@@ -129,8 +129,8 @@ pub fn run_scheduled_script(
 
     // A closed set. `engine` selects from this table and can never BE the program,
     // so no input reaches the spawn as an executable name.
-    let (ext, program, argv): (&str, &str, fn(&str) -> Vec<String>) = match engine.as_str() {
-        "powershell" => ("ps1", "powershell", |f: &str| {
+    let (ext, argv): (&str, fn(&str) -> Vec<String>) = match engine.as_str() {
+        "powershell" => ("ps1", |f: &str| {
             vec![
                 "-NoProfile".into(),
                 "-NonInteractive".into(),
@@ -140,11 +140,23 @@ pub fn run_scheduled_script(
                 f.to_string(),
             ]
         }),
-        "cmd" => ("bat", "cmd", |f: &str| vec!["/c".into(), f.to_string()]),
-        "bash" => ("sh", "bash", |f: &str| vec![f.to_string()]),
-        "python" => ("py", "python", |f: &str| vec![f.to_string()]),
+        "cmd" => ("bat", |f: &str| vec!["/c".into(), f.to_string()]),
+        "bash" => ("sh", |f: &str| vec![f.to_string()]),
+        "python" => ("py", |f: &str| vec![f.to_string()]),
         other => return Err(format!("Unknown script engine: {}", other)),
     };
+
+    // Which executable actually provides that engine on THIS machine. Still a closed
+    // set — the candidates are hard-coded per engine — but no longer a single guess.
+    //
+    // The old code spawned the literal name "python", which is the one that fails most
+    // often on Windows: `python.exe` there is usually the Microsoft Store's App
+    // Execution Alias, which opens the Store instead of running anything, while the
+    // real interpreter is `py`. A task scheduled against that alias failed at 3am with
+    // "Could not start python", long after the person who wrote it could connect the
+    // two. Resolving now, in order, and rejecting a candidate that does not answer
+    // --version, skips the alias by construction.
+    let program = resolve_engine(&engine).ok_or_else(|| missing_engine_message(&engine))?;
 
     // A unique name per run: two tasks firing on the same tick must not write each
     // other's script, and a stale file from a crashed run must never be executed in
@@ -165,7 +177,7 @@ pub fn run_scheduled_script(
     ));
 
     let file = path.to_string_lossy().to_string();
-    let mut cmd = crate::commands::proc::hidden_command(program);
+    let mut cmd = crate::commands::proc::hidden_command(&program);
     cmd.args(argv(&file));
     if let Some(dir) = working_dir.as_ref().filter(|d| !d.trim().is_empty()) {
         cmd.current_dir(dir);
@@ -188,6 +200,116 @@ pub fn run_scheduled_script(
             if stderr.trim().is_empty() { stdout } else { stderr }
         ))
     }
+}
+
+/// The executables that can provide each script engine, in preference order.
+///
+/// Hard-coded per engine, so this stays the same closed set the spawn always used —
+/// resolution picks BETWEEN these names, it never accepts one from the caller.
+///
+/// Order matters on Windows. `py` (the official launcher, installed by every
+/// python.org build) comes before `python`, because the bare `python.exe` on a
+/// stock Windows is normally the Microsoft Store App Execution Alias: a stub that
+/// opens the Store and runs nothing. Trying it first is how "Python is installed"
+/// and "the task fails" end up both being true at once.
+fn engine_candidates(engine: &str) -> &'static [&'static str] {
+    match engine {
+        "powershell" => &["powershell"],
+        "cmd" => &["cmd"],
+        "bash" => &["bash"],
+        "python" => &["py", "python3", "python"],
+        _ => &[],
+    }
+}
+
+/// Ask a candidate what version it is. Presence on PATH is NOT enough: the Store
+/// alias exists on PATH and answers nothing useful, so a candidate only counts if it
+/// exits successfully AND says something. That distinction is the whole point of
+/// probing rather than checking for a file.
+fn probe_engine(program: &str) -> Option<String> {
+    // Not everything answers `--version`, and assuming it does is how a probe reports
+    // that the shell Windows always ships is missing. Measured on Windows 11:
+    //   py --version          -> "Python 3.12.0"                    (ok)
+    //   powershell --version  -> a PARSE ERROR, exit 255            (5.1 has no such flag;
+    //                                                                it evaluates the text)
+    //   cmd --version         -> would wait for input forever
+    // So the two shells get the call they actually understand.
+    let args: &[&str] = match program {
+        "cmd" => &["/c", "ver"],
+        "powershell" => &[
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            "$PSVersionTable.PSVersion.ToString()",
+        ],
+        _ => &["--version"],
+    };
+    let out = crate::commands::proc::hidden_command(program)
+        .args(args)
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    // Some interpreters print the version to stderr (older Python 2 did), so read both.
+    let mut text = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if text.is_empty() {
+        text = String::from_utf8_lossy(&out.stderr).trim().to_string();
+    }
+    if text.is_empty() {
+        None
+    } else {
+        Some(text.lines().next().unwrap_or("").to_string())
+    }
+}
+
+/// The executable that will actually run this engine here, or None if none will.
+fn resolve_engine(engine: &str) -> Option<String> {
+    engine_candidates(engine)
+        .iter()
+        .find(|c| probe_engine(c).is_some())
+        .map(|c| c.to_string())
+}
+
+/// Said once, in the place that knows why, rather than left to a raw spawn error.
+fn missing_engine_message(engine: &str) -> String {
+    let tried = engine_candidates(engine).join(", ");
+    match engine {
+        "python" => format!(
+            "No Python interpreter found (tried: {tried}). BMM does not bundle one — \
+             install Python from python.org and make sure it is on your PATH. On Windows, \
+             a `python` that opens the Microsoft Store is the App Execution Alias, not an \
+             interpreter: disable it under Settings → Apps → App execution aliases, or use \
+             the `py` launcher."
+        ),
+        "bash" => format!(
+            "No bash found (tried: {tried}). BMM does not bundle one — on Windows it comes \
+             with Git for Windows or WSL. PowerShell and cmd are always available."
+        ),
+        other => format!("No interpreter found for {other} (tried: {tried})."),
+    }
+}
+
+/// What can actually run on this machine, so the task editor can say so BEFORE a task
+/// is saved rather than after it silently fails at three in the morning. Each entry is
+/// {engine, available, program, version} — `program` and `version` are what the probe
+/// found, which is also the honest answer to "which Python is this going to use".
+#[tauri::command(async)]
+pub fn scheduler_script_engines() -> Vec<serde_json::Value> {
+    ["powershell", "cmd", "bash", "python"]
+        .iter()
+        .map(|e| {
+            let found = engine_candidates(e)
+                .iter()
+                .find_map(|c| probe_engine(c).map(|v| (c.to_string(), v)));
+            serde_json::json!({
+                "engine": e,
+                "available": found.is_some(),
+                "program": found.as_ref().map(|(p, _)| p.clone()),
+                "version": found.as_ref().map(|(_, v)| v.clone()),
+            })
+        })
+        .collect()
 }
 
 /// True if a file or folder exists at `path`. Used by the scheduler's
