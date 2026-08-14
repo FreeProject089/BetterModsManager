@@ -71,7 +71,7 @@ pub async fn fetch_remote_json(handle: tauri::AppHandle, url: String) -> Result<
 
 /// What `http_request` hands back. The status is returned rather than folded into an
 /// `Err`, because a scheduler step may legitimately want to branch on a 404.
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, Debug)]
 pub struct HttpReply {
     pub status: u16,
     pub body: String,
@@ -138,4 +138,156 @@ pub async fn http_request(
         text
     };
     Ok(HttpReply { status, body })
+}
+
+#[cfg(test)]
+mod http_request_tests {
+    use super::*;
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+
+    /// A one-shot HTTP server on a free port. Returns the port and a handle that yields the
+    /// raw request text the client actually sent.
+    ///
+    /// Deliberately not "point the test at the dev stack". A test that needs Docker running
+    /// passes on my machine and fails on everyone else's, which makes it a test of the
+    /// environment rather than of the code. This serves one canned response over a real
+    /// socket, so reqwest, the status parse and the body read are all genuinely exercised.
+    fn one_shot(status_line: &str, body: &str) -> (u16, std::thread::JoinHandle<String>) {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind an ephemeral port");
+        let port = listener.local_addr().unwrap().port();
+        let body = body.to_string();
+        let status_line = status_line.to_string();
+        let handle = std::thread::spawn(move || {
+            let (mut sock, _) = listener.accept().expect("accept");
+            let mut buf = [0u8; 8192];
+            let n = sock.read(&mut buf).unwrap_or(0);
+            let seen = String::from_utf8_lossy(&buf[..n]).to_string();
+            let resp = format!(
+                "HTTP/1.1 {status_line}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            );
+            let _ = sock.write_all(resp.as_bytes());
+            let _ = sock.flush();
+            seen
+        });
+        (port, handle)
+    }
+
+    #[tokio::test]
+    async fn it_makes_a_real_request_and_returns_the_status_and_body() {
+        let (port, seen) = one_shot("200 OK", r#"{"version":"1.2.3"}"#);
+        let r = http_request(
+            format!("http://127.0.0.1:{port}/health"),
+            "GET".into(),
+            std::collections::HashMap::new(),
+            None,
+            Some(5_000),
+        )
+        .await
+        .expect("the request should succeed");
+        assert_eq!(r.status, 200);
+        assert_eq!(r.body, r#"{"version":"1.2.3"}"#);
+        let req = seen.join().unwrap();
+        assert!(req.starts_with("GET /health "), "the path and method reach the server: {req}");
+    }
+
+    #[tokio::test]
+    async fn a_failing_status_is_returned_not_raised() {
+        // The scheduler branches on http.status, including on a 404. Turning a non-2xx into
+        // an Err here would take that decision away from the step that is supposed to make it.
+        let (port, _seen) = one_shot("404 Not Found", "nope");
+        let r = http_request(
+            format!("http://127.0.0.1:{port}/missing"),
+            "GET".into(),
+            std::collections::HashMap::new(),
+            None,
+            Some(5_000),
+        )
+        .await
+        .expect("a 404 is an answer, not a transport failure");
+        assert_eq!(r.status, 404);
+        assert_eq!(r.body, "nope");
+    }
+
+    #[tokio::test]
+    async fn headers_and_a_body_reach_the_server() {
+        let (port, seen) = one_shot("200 OK", "ok");
+        let mut h = std::collections::HashMap::new();
+        h.insert("Authorization".to_string(), "Bearer probe-token".to_string());
+        let r = http_request(
+            format!("http://127.0.0.1:{port}/post"),
+            "POST".into(),
+            h,
+            Some("{\"a\":1}".into()),
+            Some(5_000),
+        )
+        .await
+        .expect("the request should succeed");
+        assert_eq!(r.status, 200);
+        let req = seen.join().unwrap();
+        assert!(req.contains("POST /post "), "method: {req}");
+        // Lowercased on the wire: reqwest normalises header names, which is correct — HTTP
+        // header names are case-insensitive. Asserting the capitalised form failed against a
+        // request that was perfectly well formed.
+        assert!(
+            req.to_ascii_lowercase().contains("authorization: bearer probe-token"),
+            "the header is sent: {req}"
+        );
+        assert!(req.contains("{\"a\":1}"), "the body is sent: {req}");
+    }
+
+    #[tokio::test]
+    async fn the_creator_id_header_is_never_attached() {
+        // The whole reason this is not built on catalog_get. A URL can arrive inside a
+        // downloaded .bmmpa, and an automation must not be able to make BMM identify the
+        // user to a third party — including to bettercommunity.ch on their behalf.
+        let (port, seen) = one_shot("200 OK", "ok");
+        let _ = http_request(
+            format!("http://127.0.0.1:{port}/x"),
+            "GET".into(),
+            std::collections::HashMap::new(),
+            None,
+            Some(5_000),
+        )
+        .await
+        .expect("the request should succeed");
+        let req = seen.join().unwrap();
+        assert!(
+            !req.to_ascii_lowercase().contains("x-creator-id"),
+            "no identity header may be attached: {req}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_non_http_scheme_is_refused_before_any_socket_is_opened() {
+        let err = http_request(
+            "file:///etc/passwd".into(),
+            "GET".into(),
+            std::collections::HashMap::new(),
+            None,
+            Some(5_000),
+        )
+        .await
+        .expect_err("file:// must be refused");
+        assert!(err.contains("http(s)"), "the reason is stated: {err}");
+    }
+
+    #[tokio::test]
+    async fn an_unusable_header_name_is_reported_rather_than_dropped() {
+        // Silently skipping it would send the request WITHOUT its Authorization line, and
+        // the failure would surface later as a 401 that looks like a wrong token.
+        let mut h = std::collections::HashMap::new();
+        h.insert("Bad Header".to_string(), "x".to_string());
+        let err = http_request(
+            "http://127.0.0.1:1/x".into(),
+            "GET".into(),
+            h,
+            None,
+            Some(1_000),
+        )
+        .await
+        .expect_err("a malformed header name must be an error");
+        assert!(err.contains("Bad Header"), "the offending name is named: {err}");
+    }
 }
