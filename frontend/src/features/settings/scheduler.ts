@@ -406,6 +406,15 @@ async function syncOsSchedule(task: Task): Promise<void> {
 
 async function runTask(task: Task): Promise<void> {
     const t0 = Date.now();
+    // Registered BEFORE the first step, so a task that fails immediately still appears in
+    // the panel long enough to be seen, and a task started twice is visible as such.
+    _running.set(task.id, {
+        id: task.id, name: task.name, startedAt: t0,
+        step: t('sched.run.starting') || 'starting…', depth: 0,
+        done: 0, total: (task.steps || []).filter((s) => !s.disabled).length, cancel: false,
+    });
+    renderRunningPanel();
+    ensureRunTicker();
     try {
         // Per-run variable store: actions (e.g. a benchmark) write measured values
         // here, and `value` conditions read them → "if disk speed > X then Apply".
@@ -424,10 +433,21 @@ async function runTask(task: Task): Promise<void> {
             // Guard clause / "Stop task" — a clean, intentional early exit.
             task.lastResult = 'ok';
             toast(`${task.name} — ${t('sched.stopped') || 'stopped'}${e.reason ? `: ${e.reason}` : ''}`, 'info');
+        } else if (e instanceof _CancelledTask) {
+            // Recorded as its own outcome, not as 'ok'. A person ending a run and a task
+            // deciding to end are different events, and a history that shows both as a
+            // clean finish cannot answer "did this actually do its work last night".
+            task.lastResult = `cancelled${e.at ? ` at ${e.at}` : ''}`;
+            toast(`${task.name} — ${t('sched.run.cancelled') || 'stopped by you'}`, 'info');
         } else {
             task.lastResult = `error: ${e}`;
             toast(`${task.name} — ${e}`, 'error');
         }
+    } finally {
+        // In a finally: a task that threw must not stay in the panel as "running" forever,
+        // which is the state that makes a Stop button appear broken.
+        _running.delete(task.id);
+        renderRunningPanel();
     }
     task.lastRun = Date.now();
     // Run history (last 20): timestamp, outcome, duration — shown in the editor.
@@ -462,18 +482,49 @@ async function runLoopBody(steps: Step[], task: Task, ctx: RunCtx): Promise<bool
     return true;
 }
 
-async function runSteps(steps: Step[], task: Task, ctx: RunCtx): Promise<void> {
+/**
+ * A sleep that notices Stop.
+ *
+ * Polled in short slices rather than one long timer. A five-minute pause that ignored the
+ * flag would make the button appear broken in precisely the situation people press it —
+ * waiting is when you change your mind. 250 ms is below the threshold where a click feels
+ * ignored, and costs nothing at this frequency.
+ */
+async function interruptibleSleep(ms: number, state?: RunState): Promise<void> {
+    const until = Date.now() + ms;
+    while (Date.now() < until) {
+        if (state?.cancel) throw new _CancelledTask(state.step);
+        await new Promise((r) => setTimeout(r, Math.min(250, until - Date.now())));
+    }
+}
+
+async function runSteps(steps: Step[], task: Task, ctx: RunCtx, depth = 0): Promise<void> {
+    const state = _running.get(task.id);
     for (const step of steps || []) {
         if (step.disabled) continue;   // switched off in the editor — skipped, not deleted
+        // Between steps, never inside one. A step already in flight finishes: an HTTP
+        // request is not abandoned half-sent and a launched script is not orphaned, because
+        // stopping those leaves the world in a state nothing here can describe. Delay and
+        // wait-until poll the same flag, so the case people actually wait on ends promptly.
+        if (state?.cancel) throw new _CancelledTask(state.step);
+        if (state) {
+            state.step = stepLabel(step);
+            state.depth = depth;
+            // Progress counts TOP-LEVEL steps only. Counting every nested step would make
+            // "3 of 4" jump to "17 of 4" the moment a loop starts, which is worse than
+            // coarse.
+            if (depth === 0) state.done++;
+            renderRunningPanel();
+        }
         if (step.kind === 'action') {
             await runAction(step.action, task, ctx);
         } else if (step.kind === 'delay') {
-            await new Promise(r => setTimeout(r, Math.max(0, step.seconds) * 1000));
+            await interruptibleSleep(Math.max(0, step.seconds) * 1000, state);
         } else if (step.kind === 'waitFor') {
-            await waitForCondition(step.condition, step.timeoutSec, ctx, step.pollSec, step.onTimeout);
+            await waitForCondition(step.condition, step.timeoutSec, ctx, step.pollSec, step.onTimeout, state);
         } else if (step.kind === 'if') {
             const ok = await evalCondition(step.condition, ctx);
-            await runSteps(ok ? step.then : step.else, task, ctx);
+            await runSteps(ok ? step.then : step.else, task, ctx, depth + 1);
         } else if (step.kind === 'repeat') {
             // One loop for all four modes. They differ in exactly two decisions —
             // is the condition checked BEFORE the body or after, and does a true
@@ -513,10 +564,10 @@ async function runSteps(steps: Step[], task: Task, ctx: RunCtx): Promise<void> {
             }
         } else if (step.kind === 'try') {
             try {
-                await runSteps(step.steps, task, ctx);
+                await runSteps(step.steps, task, ctx, depth + 1);
             } catch (e) {
                 if (e instanceof FlowSignal) throw e;      // signals pass through
-                await runSteps(step.onError, task, ctx);
+                await runSteps(step.onError, task, ctx, depth + 1);
             }
         } else if (step.kind === 'break') {
             throw new FlowSignal('break');
@@ -529,9 +580,9 @@ async function runSteps(steps: Step[], task: Task, ctx: RunCtx): Promise<void> {
         } else if (step.kind === 'switch') {
             let ran = false;
             for (const c of step.cases || []) {
-                if (await evalCondition(c.condition, ctx)) { await runSteps(c.steps, task, ctx); ran = true; break; }
+                if (await evalCondition(c.condition, ctx)) { await runSteps(c.steps, task, ctx, depth + 1); ran = true; break; }
             }
-            if (!ran) await runSteps(step.default || [], task, ctx);
+            if (!ran) await runSteps(step.default || [], task, ctx, depth + 1);
         }
     }
 }
@@ -613,7 +664,7 @@ function substituteItem(steps: Step[], item: any): Step[] {
 // Polls a condition until it becomes true or the timeout elapses (then throws,
 // aborting the rest of the workflow). This is what makes "wait until all mods are
 // active, then launch X" possible.
-async function waitForCondition(cond: Condition, timeoutSec: number, ctx: RunCtx, pollSec = 2, onTimeout: 'abort' | 'continue' = 'abort'): Promise<void> {
+async function waitForCondition(cond: Condition, timeoutSec: number, ctx: RunCtx, pollSec = 2, onTimeout: 'abort' | 'continue' = 'abort', state?: RunState): Promise<void> {
     const deadline = Date.now() + Math.max(1, timeoutSec || 60) * 1000;
     const pollMs = Math.max(250, (pollSec || 2) * 1000);
     // eslint-disable-next-line no-constant-condition
@@ -624,7 +675,10 @@ async function waitForCondition(cond: Condition, timeoutSec: number, ctx: RunCtx
             if (onTimeout === 'continue') return;
             throw new Error(t('sched.waitTimeout') || 'Timed out waiting for condition');
         }
-        await new Promise(r => setTimeout(r, pollMs));
+        // Interruptible, like the delay. A wait-until whose condition never comes true is
+        // THE case people reach for Stop — a task waiting for a file that will never appear
+        // is the definition of stuck, and it was the one that ignored the button.
+        await interruptibleSleep(pollMs, state);
     }
 }
 
@@ -1337,6 +1391,76 @@ function cmpNum(left: number, op: string, right: number): boolean {
 // runTask and treated as a clean stop (NOT an error).
 class _StopTask { constructor(public reason = '') {} }
 
+/** Thrown when somebody presses Stop. Distinct from _StopTask so the history can tell a
+ *  guard clause ("this task decided to end early") from an interruption ("a person ended
+ *  it"). Recording both as a clean finish would hide the second one entirely. */
+class _CancelledTask { constructor(public at = '') {} }
+
+/**
+ * What is running, right now.
+ *
+ * There was no answer to that question. A task that takes four minutes showed nothing at
+ * all until it finished, so "is it stuck, or is it working?" could only be answered by
+ * waiting — and a task that WAS stuck, on a wait-until that would never come true, could
+ * not be ended without closing BMM.
+ *
+ * A module-level map rather than state on the Task: a task can legitimately be running
+ * while its saved definition is being edited, and the two must not share a field.
+ */
+export interface RunState {
+    id: string;
+    name: string;
+    startedAt: number;
+    /** Human label for the step being executed, e.g. "Call an HTTP API". */
+    step: string;
+    /** How deep in the tree — an action inside a loop inside an if reads as 3. */
+    depth: number;
+    /** Completed top-level steps, and how many there are. */
+    done: number;
+    total: number;
+    /** Set by requestStop. Checked between steps; see the note on cooperative stopping. */
+    cancel: boolean;
+}
+
+const _running = new Map<string, RunState>();
+
+export function listRunning(): RunState[] {
+    return [..._running.values()].sort((a, b) => a.startedAt - b.startedAt);
+}
+
+/**
+ * Ask a run to stop.
+ *
+ * Cooperative, and the UI says so. The flag is checked between steps, so a step already in
+ * flight finishes first — an HTTP request mid-flight is not abandoned, a script already
+ * launched is not killed. Interrupting those would leave the outside world in a state
+ * nothing here knows how to describe, which is worse than waiting a few seconds. Delays and
+ * wait-untils poll the flag, so the common "waiting five minutes" case ends promptly.
+ */
+export function requestStop(id: string): boolean {
+    const r = _running.get(id);
+    if (!r) return false;
+    r.cancel = true;
+    return true;
+}
+
+/** A step, in words, for the running panel. Falls back to the kind rather than to a blank —
+ *  "repeat" tells you where you are; an empty string does not. */
+function stepLabel(step: Step): string {
+    if (step.kind === 'action') {
+        const type = String((step as any).action?.type || '');
+        const def = ACTION_TYPES.find((a) => a.v === type);
+        return def ? (t('sched.act.' + def.v) || def.label) : (type || 'action');
+    }
+    const words: Record<string, string> = {
+        if: t('sched.addIf') || 'If/Else',
+        repeat: t('sched.addLoop') || 'Loop',
+        waitFor: t('sched.addWaitFor') || 'Wait until',
+        delay: t('sched.addDelay') || 'Pause',
+    };
+    return words[step.kind] || step.kind;
+}
+
 // ── Safe math expression evaluator (no eval) ─────────────────────────────────
 // Supports + - * / % ^, parentheses, ctx variables, and a few pure functions.
 // A tiny recursive-descent parser — never executes arbitrary code.
@@ -1392,9 +1516,68 @@ function triggerIcon(tr: Trigger): string {
     }
 }
 
+/**
+ * The "running now" strip, above the task list.
+ *
+ * Its own element and its own render, deliberately: it repaints on every step of every run,
+ * and repainting the whole task list at that rate would fight with anything the person is
+ * doing in it — a toggle mid-click, a tooltip mid-hover.
+ *
+ * Absent entirely when nothing is running. A permanent "0 running" row is a line of screen
+ * that is noise in the normal case, and the normal case is nothing running.
+ */
+export function renderRunningPanel(): void {
+    const host = document.getElementById('scheduler-running');
+    if (!host) return;
+    const runs = listRunning();
+    if (!runs.length) { host.innerHTML = ''; host.style.display = 'none'; return; }
+    host.style.display = '';
+    const esc = (x: unknown) => escHtml(String(x ?? ''));
+    host.innerHTML = `
+        <div class="sched-run-head">${esc(t('sched.run.title') || 'Running now')}</div>
+        ${runs.map((r) => {
+            const secs = Math.max(0, Math.round((Date.now() - r.startedAt) / 1000));
+            // The step number is capped at the total: a loop re-entering top-level steps
+            // could otherwise print "5 of 4", which reads as a bug in the counter.
+            const pos = r.total ? `${Math.min(r.done, r.total)}/${r.total}` : '';
+            return `
+            <div class="sched-run-row${r.cancel ? ' is-stopping' : ''}">
+                <span class="sched-run-spin"></span>
+                <span class="sched-run-name">${esc(r.name)}</span>
+                <span class="sched-run-step">${esc(r.step)}${r.depth ? ` <span class="sched-run-depth">↳${r.depth}</span>` : ''}</span>
+                <span class="sched-run-pos">${esc(pos)}</span>
+                <span class="sched-run-age">${secs}s</span>
+                <button class="btn btn-xs btn-ghost sched-run-stop" data-stop="${escAttr(r.id)}" ${r.cancel ? 'disabled' : ''}
+                    data-tooltip="${escAttr(t('sched.run.stopTip') || 'Ends the run after the current step finishes — a request already sent is not abandoned.')}">
+                    ${r.cancel ? esc(t('sched.run.stopping') || 'stopping…') : esc(t('sched.run.stop') || 'Stop')}
+                </button>
+            </div>`;
+        }).join('')}`;
+    host.querySelectorAll<HTMLElement>('.sched-run-stop').forEach((b) => b.addEventListener('click', () => {
+        if (requestStop(String(b.dataset.stop))) renderRunningPanel();
+    }));
+}
+
+/**
+ * Keep the elapsed counter honest while a run is in flight.
+ *
+ * A run that sits on one long step would otherwise show a frozen age, which reads as a
+ * hung UI rather than a slow step. The timer only exists while something is running — a
+ * permanent interval for a panel that is empty most of the time is a permanent cost.
+ */
+let _runTick: number | null = null;
+export function ensureRunTicker(): void {
+    if (_runTick !== null) return;
+    _runTick = window.setInterval(() => {
+        if (!_running.size) { window.clearInterval(_runTick!); _runTick = null; }
+        renderRunningPanel();
+    }, 1000);
+}
+
 export function renderScheduleList(): void {
     const container = document.getElementById('scheduler-list-container');
     if (!container) return;
+    renderRunningPanel();
     if (!_tasks.length) {
         // Modern empty state: icon tile + message + hint, instead of a bare line.
         container.innerHTML = `
@@ -2112,13 +2295,37 @@ function renderModal(modal: HTMLElement): void {
         const btn = modal.querySelector('#sched-test') as HTMLButtonElement;
         btn.disabled = true;
         toast(t('sched.testing') || 'Test run started…', 'info', 1500);
+        // A test run registers like any other, so it appears in the panel and can be
+        // stopped. Without this, the one run you are MOST likely to want to abandon — the
+        // one you started to see what a half-built task does — was the only one that could
+        // not be, and a five-minute Pause meant waiting it out or closing BMM.
+        //
+        // Under the draft's id, so a test and a scheduled run of the same task cannot both
+        // claim the row. `_draft.id` exists before the task is saved; a brand-new draft
+        // without one falls back to a constant, which is fine because only one editor is
+        // open at a time.
+        const testId = _draft.id || 'draft';
+        _running.set(testId, {
+            id: testId, name: `${_draft.name || (t('sched.untitled') || 'Untitled')} (${t('sched.testRun') || 'Test run'})`,
+            startedAt: Date.now(), step: t('sched.run.starting') || 'starting…', depth: 0,
+            done: 0, total: (_draft.steps || []).filter((s) => !s.disabled).length, cancel: false,
+        });
+        renderRunningPanel();
+        ensureRunTicker();
         try {
-            await runSteps(_draft.steps, _draft, { nums: {}, text: {}, shared: readSharedVars() });
+            await runSteps(_draft.steps, { ..._draft, id: testId } as Task, { nums: {}, text: {}, shared: readSharedVars() });
             toast(t('sched.testOk') || 'Test run finished.', 'success');
         } catch (e) {
             if (e instanceof _StopTask) toast(`${t('sched.stopped') || 'stopped'}${(e as any).reason ? `: ${(e as any).reason}` : ''}`, 'info');
+            else if (e instanceof _CancelledTask) toast(t('sched.run.cancelled') || 'stopped by you', 'info');
             else toast(`${t('sched.testFail') || 'Test run failed'} — ${e}`, 'error');
-        } finally { btn.disabled = false; }
+        } finally {
+            // In the finally for the same reason runTask's is: a test that threw must not
+            // leave a row in the panel with a Stop button that does nothing.
+            _running.delete(testId);
+            renderRunningPanel();
+            btn.disabled = false;
+        }
     });
     modal.querySelector('#sched-save')?.addEventListener('click', async () => {
         if (!_draft.name.trim()) { toast(t('sched.needName') || 'Name required', 'warning'); return; }

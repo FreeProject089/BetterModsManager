@@ -7253,5 +7253,12 @@
   "sched.presetd.watchsite": "Appelle une adresse toutes les 30 minutes et ne se manifeste que si la réponse n’est pas 200. Mettez votre propre URL dans l’étape — exige « Exécuter des programmes externes ».",
   "sched.preset.sharedvar": "Partager une valeur avec vos autres tâches",
   "sched.presetd.sharedvar": "Écrit une variable partagée que toutes les autres tâches peuvent lire par {sharedNote}. Une brique de construction, pas une tâche finie.",
-  "sched.presetPick": "Choisir…"
+  "sched.presetPick": "Choisir…",
+  "sched.run.title": "En cours",
+  "sched.run.starting": "démarrage…",
+  "sched.run.stop": "Arrêter",
+  "sched.run.stopping": "arrêt…",
+  "sched.run.stopTip": "Termine l’exécution après l’étape en cours — une requête déjà partie n’est pas abandonnée.",
+  "sched.run.cancelled": "arrêtée par vous",
+  "sched.untitled": "Sans titre"
 }

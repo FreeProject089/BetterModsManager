@@ -4234,6 +4234,9 @@
                                 profil… avec conditions (si/sinon) et commandes personnalisées. Les tâches s'exécutent
                                 tant que BMM est ouvert.
                             </p>
+                            <!-- Runs in flight. Empty and hidden when nothing is running,
+                                 so it costs no screen in the normal case. -->
+                            <div id="scheduler-running" class="sched-run-panel" style="display:none"></div>
                             <div id="scheduler-list-container"
                                 style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;">
                                 <!-- Injected from JS -->

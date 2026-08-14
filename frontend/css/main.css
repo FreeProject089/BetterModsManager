@@ -11797,6 +11797,31 @@ body.sched-drag-live .sched-branch .sched-drop-zone:empty {
    the trigger — the thing most people opened this to set — was on screen at all, and the
    list only grows. The description below follows the selection rather than hiding in a
    tooltip on each card, which required hovering them one at a time. */
+/* Runs in flight, above the task list.
+   Its own block because it repaints on every step — folding it into the list would mean
+   rebuilding rows somebody may be mid-click on. Hidden entirely when nothing runs. */
+.sched-run-panel { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px;
+    padding: 10px 12px; border-radius: 12px; border: 1px solid var(--border);
+    background: var(--bg-secondary); }
+.sched-run-head { font-size: 11px; text-transform: uppercase; letter-spacing: .04em;
+    color: var(--text-muted); }
+.sched-run-row { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 12px; }
+.sched-run-row.is-stopping { opacity: .6; }
+.sched-run-name { font-weight: 600; white-space: nowrap; }
+/* The step is the part that changes; it gets the space and the truncation. */
+.sched-run-step { color: var(--text-secondary); min-width: 0; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.sched-run-depth { color: var(--text-muted); font-size: 10px; }
+.sched-run-pos, .sched-run-age { font-size: 10px; color: var(--text-muted); white-space: nowrap; }
+.sched-run-stop { margin-left: 4px; }
+/* A spinner, not a progress bar: the runner cannot know how long a step will take, and a
+   bar that guesses is a bar that lies. Animation only — reduced-motion leaves a static dot,
+   which still reads as "something is here" rather than disappearing. */
+.sched-run-spin { width: 8px; height: 8px; border-radius: 50%; flex: none;
+    background: var(--bmm-accent); animation: sched-run-pulse 1.2s ease-in-out infinite; }
+@keyframes sched-run-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
+@media (prefers-reduced-motion: reduce) { .sched-run-spin { animation: none; } }
+
 /* The "not a secret store" line, next to the shared-variable scope. It had a class and no
    rule, so it rendered as an ordinary grey hint — indistinguishable from "leave empty if
    none" two fields up. A warning that reads like a tip is one people skim past, and the

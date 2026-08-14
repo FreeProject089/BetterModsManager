@@ -7255,5 +7255,12 @@
   "sched.preset.sharedvar": "Share a value with your other tasks",
   "sched.presetd.sharedvar": "Writes one shared variable every other task can read as {sharedNote}. A building block rather than a finished job.",
   "sched.presetPick": "Pick one…",
-  "sched.act.http.request": "Call an HTTP API"
+  "sched.act.http.request": "Call an HTTP API",
+  "sched.run.title": "Running now",
+  "sched.run.starting": "starting…",
+  "sched.run.stop": "Stop",
+  "sched.run.stopping": "stopping…",
+  "sched.run.stopTip": "Ends the run after the current step finishes — a request already sent is not abandoned.",
+  "sched.run.cancelled": "stopped by you",
+  "sched.untitled": "Untitled"
 }
