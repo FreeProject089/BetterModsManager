@@ -15,6 +15,7 @@ import { escHtml, escAttr } from '../../core/utils.js';
 import { toast } from '../../ui/app.js';
 import { calendarDue, nextCalendarDue } from './sched-time.js';
 import { substituteVars, VAR_NAME_RE, type RunCtx } from './sched-vars.js';
+import { parseHeaderLines, readJsonPath, statusIsFailure } from './http-action.js';
 import { inspectBmmpa } from './bmmpa-inspect.js';
 import { parsePresetFeed, looksLikePresetFeed, readPresetCatalogs, writePresetCatalogs } from './preset-catalog.js';
 import { originLabel } from '../catalogs/catalog-index.js';
@@ -923,14 +924,7 @@ async function runAction(action: Action, task: Task, ctx: RunCtx): Promise<void>
             if (!/^https?:\/\//i.test(url)) {
                 throw new Error((t('sched.http.badUrl') || 'Not an http(s) address: {u}').replace('{u}', url || '(empty)'));
             }
-            const headers: Record<string, string> = {};
-            // Written as lines because that is how people have them to hand — copied out
-            // of curl or a docs page — and a JSON object here would mean escaping quotes
-            // inside a field that already holds {var} braces.
-            for (const line of String(p.headers || '').split(/\r?\n/)) {
-                const i = line.indexOf(':');
-                if (i > 0) headers[line.slice(0, i).trim()] = line.slice(i + 1).trim();
-            }
+            const headers = parseHeaderLines(String(p.headers || ''));
             const res: any = await invoke('http_request', {
                 url,
                 method: String(p.method || 'GET').toUpperCase(),
@@ -948,21 +942,13 @@ async function runAction(action: Action, task: Task, ctx: RunCtx): Promise<void>
             // to pull one field out of a response, which is the common case.
             let captured = text;
             if (p.jsonPath) {
-                try {
-                    let cur: any = JSON.parse(text);
-                    for (const seg of String(p.jsonPath).split('.').filter(Boolean)) {
-                        cur = cur?.[/^\d+$/.test(seg) ? Number(seg) : seg];
-                    }
-                    // undefined stringifies to "undefined", which reads like a value.
-                    captured = cur === undefined || cur === null ? '' : (typeof cur === 'object' ? JSON.stringify(cur) : String(cur));
-                } catch {
-                    throw new Error(t('sched.http.badJson') || 'The response was not JSON, so no field could be read from it.');
-                }
+                try { captured = readJsonPath(text, String(p.jsonPath)); }
+                catch { throw new Error(t('sched.http.badJson') || 'The response was not JSON, so no field could be read from it.'); }
             }
             // A failing status throws rather than capturing the error page as if it were
             // the answer — otherwise a 500 whose body is HTML becomes the value of a
             // variable a later step trusts.
-            if (!p.allowAnyStatus && (status < 200 || status >= 300)) {
+            if (statusIsFailure(status, !!p.allowAnyStatus)) {
                 throw new Error((t('sched.http.status') || 'HTTP {s} from {u}').replace('{s}', String(status)).replace('{u}', url));
             }
             _captureOutput(p, captured, ctx);
