@@ -1332,6 +1332,7 @@ export function renderScheduleList(): void {
                 </label>
                 <button class="btn btn-xs btn-ghost sched-act" data-act="run" data-tooltip="${escAttr(t('sched.runNow') || 'Run now')}">${I('<polygon points="5 3 19 12 5 21 5 3"/>')}</button>
                 <button class="btn btn-xs btn-ghost sched-act" data-act="dup" data-tooltip="${escAttr(t('sched.dupTask') || 'Duplicate task')}">${I('<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>')}</button>
+                <button class="btn btn-xs btn-ghost sched-act" data-act="exp1" data-tooltip="${escAttr(t('sched.exportOne') || 'Export this automation')}">${I('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/>')}</button>
                 <button class="btn btn-xs btn-ghost sched-act" data-act="edit" data-tooltip="${escAttr(t('common.edit') || 'Edit')}">${I('<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>')}</button>
                 <button class="btn btn-xs btn-ghost sched-act sched-act-del" data-act="del" data-tooltip="${escAttr(t('common.delete') || 'Delete')}">${I('<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>')}</button>
             </div>`;
@@ -1340,6 +1341,7 @@ export function renderScheduleList(): void {
             if (task.osSchedule) await syncOsSchedule(task);
         });
         row.querySelector('[data-act="run"]')?.addEventListener('click', () => runTask(task));
+        row.querySelector('[data-act="exp1"]')?.addEventListener('click', () => { void exportOneTask(task.id); });
         // Duplicate: full deep clone under a new id. Deliberately created DISABLED
         // and without the OS mirror so saving the copy can't double-fire anything.
         row.querySelector('[data-act="dup"]')?.addEventListener('click', async () => {
@@ -3130,16 +3132,46 @@ function renderCondParams(host: HTMLElement, cond: Condition): void {
 // share. We reuse the gated write_text_file / read_file_text commands.
 const BMMPA_MAGIC = 'BMMPA';
 
-export async function exportTasksFile(): Promise<void> {
-    if (!_tasks.length) { toast(t('sched.noTasks') || 'No tasks to export', 'info'); return; }
+/**
+ * Write a .bmmpa holding `tasks`.
+ *
+ * One task or forty go through the same envelope — `tasks` stays an array of one rather
+ * than gaining a singular `task` field. A second shape would mean a second branch in every
+ * reader: BMM's importer, BMM's inspector, and BCWEB's moderation inspector. Three places
+ * to keep in agreement, so that a file can say the same thing two ways.
+ *
+ * `suggested` only seeds the save dialog; the person picks the real path.
+ */
+async function writeBmmpa(tasks: Task[], suggested: string): Promise<void> {
+    if (!tasks.length) { toast(t('sched.noTasks') || 'No tasks to export', 'info'); return; }
     const { saveFile } = await import('../../core/api.js');
-    const path = await saveFile({ defaultPath: 'automations.bmmpa', filters: [{ name: 'BMM Automation', extensions: ['bmmpa'] }] }).catch(() => null);
+    const path = await saveFile({ defaultPath: suggested, filters: [{ name: 'BMM Automation', extensions: ['bmmpa'] }] }).catch(() => null);
     if (!path) return;
-    const payload = JSON.stringify({ magic: BMMPA_MAGIC, version: 1, exported: new Date().toISOString(), tasks: _tasks }, null, 2);
+    const payload = JSON.stringify({ magic: BMMPA_MAGIC, version: 1, exported: new Date().toISOString(), tasks }, null, 2);
     try {
         await invoke('write_text_file', { path, content: payload });
-        toast(t('sched.exported') || 'Automations exported', 'success');
+        toast((t('sched.exportedN') || 'Exported {n} automation(s)').replace('{n}', String(tasks.length)), 'success');
     } catch (e) { toast(`${t('common.error') || 'Error'}: ${e}`, 'error'); }
+}
+
+export async function exportTasksFile(): Promise<void> {
+    await writeBmmpa(_tasks, 'automations.bmmpa');
+}
+
+/**
+ * Export one task. Sharing a single automation used to mean exporting everything and
+ * hand-editing the JSON to delete the rest — which is how a private path or an API token
+ * sitting in another task ends up in a file somebody meant to share.
+ */
+export async function exportOneTask(id: string): Promise<void> {
+    const task = _tasks.find((x) => x.id === id);
+    if (!task) { toast(t('sched.noTasks') || 'No tasks to export', 'info'); return; }
+    // A task name becomes a filename here, so anything a filesystem treats specially has
+    // to go — including the path separators, or the save dialog opens somewhere else.
+    const safe = String(task.name || 'automation')
+        .replace(/[<>:"/\\|?* -]/g, '-').replace(/\s+/g, '-')
+        .replace(/^[.\s-]+|[.\s-]+$/g, '').slice(0, 60) || 'automation';
+    await writeBmmpa([task], `${safe}.bmmpa`);
 }
 
 /**
@@ -3426,7 +3458,16 @@ function showBmmpaReport(report: ReturnType<typeof inspectBmmpa>, path: string):
             ${tk.perms.length ? `<div class="sched-insp-warn"><b>${esc(t('sched.insp.asks') || 'It grants itself:')}</b> ${tk.perms.map((k) => esc(PERM[k] || k)).join(' · ')}</div>` : ''}
             ${tk.reaching.length ? `<div class="sched-insp-warn"><b>${esc(t('sched.insp.reaches') || 'Reaches outside BMM:')}</b> ${tk.reaching.map((k) => esc(REACH[k] || k)).join(' · ')}</div>` : ''}
             ${tk.targets.length ? `<div class="sched-insp-targets"><b>${esc(t('sched.insp.targets') || 'Names:')}</b> ${tk.targets.map((x) => `<code>${esc(x)}</code>`).join(' ')}</div>` : ''}
-            ${tk.scripts.map((sc) => `<details class="sched-insp-script"><summary>${esc(t('sched.insp.script') || 'Script')} — ${esc(sc.engine)}</summary><pre>${esc(sc.code)}</pre></details>`).join('')}
+            ${tk.scripts.map((sc) => `<details class="sched-insp-script">
+                <summary>${esc(sc.engine === 'command'
+                    ? (t('sched.insp.command') || 'Command')
+                    : (t('sched.insp.script') || 'Script'))} — ${esc(sc.engine)}</summary>
+                <div class="sched-insp-codewrap">
+                    <button class="sched-insp-copy" data-copy="${escAttr(sc.code)}"
+                        data-tooltip="${escAttr(t('sched.insp.copy') || 'Copy to clipboard')}">${esc(t('sched.insp.copy') || 'Copy')}</button>
+                    <pre>${esc(sc.code)}</pre>
+                </div>
+            </details>`).join('')}
         </div>`).join('');
 
     const verdict = report.needsReview
@@ -3451,6 +3492,21 @@ function showBmmpaReport(report: ReturnType<typeof inspectBmmpa>, path: string):
     const close = () => overlay.remove();
     overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
     overlay.querySelector('#sched-insp-close')?.addEventListener('click', close);
+    // Copy the body out to try it somewhere safe. Reading a script in a <pre> and deciding
+    // it is fine is exactly the judgement this panel exists to support, and "paste it into
+    // a sandbox first" is the careful version of that — so it should not require selecting
+    // twenty lines by hand without catching the scrollbar.
+    overlay.querySelectorAll<HTMLElement>('.sched-insp-copy').forEach((b) => b.addEventListener('click', async (e) => {
+        e.preventDefault();   // the button lives inside <summary>'s sibling; stop the toggle
+        try {
+            await navigator.clipboard.writeText(b.dataset.copy || '');
+            const was = b.textContent;
+            b.textContent = t('sched.insp.copied') || 'Copied';
+            setTimeout(() => { b.textContent = was; }, 1200);
+        } catch {
+            toast(t('sched.insp.copyFail') || 'Could not reach the clipboard.', 'error');
+        }
+    }));
     // Escape closes it too — this is a read-only view, so there is nothing to lose by
     // dismissing it the fastest way somebody will try.
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', onKey); } };

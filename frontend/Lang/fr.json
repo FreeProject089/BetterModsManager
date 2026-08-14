@@ -7195,5 +7195,11 @@
   "sched.pc.unreachable": "injoignable",
   "sched.pc.notfeed": "pas un catalogue de presets",
   "sched.pc.badUrl": "Ce n’est pas une adresse http(s).",
-  "sched.pc.dup": "Vous suivez déjà ce catalogue."
+  "sched.pc.dup": "Vous suivez déjà ce catalogue.",
+  "sched.exportedN": "{n} automatisation(s) exportée(s)",
+  "sched.exportOne": "Exporter cette automatisation",
+  "sched.insp.command": "Commande",
+  "sched.insp.copy": "Copier",
+  "sched.insp.copied": "Copié",
+  "sched.insp.copyFail": "Le presse-papiers est inaccessible."
 }

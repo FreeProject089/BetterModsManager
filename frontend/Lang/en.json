@@ -7197,5 +7197,11 @@
   "sched.pc.unreachable": "unreachable",
   "sched.pc.notfeed": "not a preset catalogue",
   "sched.pc.badUrl": "That is not an http(s) address.",
-  "sched.pc.dup": "You already follow that catalogue."
+  "sched.pc.dup": "You already follow that catalogue.",
+  "sched.exportedN": "Exported {n} automation(s)",
+  "sched.exportOne": "Export this automation",
+  "sched.insp.command": "Command",
+  "sched.insp.copy": "Copy",
+  "sched.insp.copied": "Copied",
+  "sched.insp.copyFail": "Could not reach the clipboard."
 }

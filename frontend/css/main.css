@@ -16483,6 +16483,13 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 .sched-insp-targets code { font-size: 11px; }
 .sched-insp-script { margin-top: 8px; }
 .sched-insp-script summary { font-size: 12px; cursor: pointer; color: var(--bmm-accent); }
+/* Copy sits over the code rather than above it: the block can be 260px of scroll, and a
+   button that scrolls away is a button you have to hunt for. */
+.sched-insp-codewrap { position: relative; }
+.sched-insp-copy { position: absolute; top: 10px; right: 10px; z-index: 1;
+    font-size: 10px; padding: 2px 8px; border-radius: 999px; cursor: pointer;
+    border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-secondary); }
+.sched-insp-copy:hover { color: var(--bmm-accent); border-color: var(--bmm-accent); }
 /* The script body is the thing a reviewer most needs to actually read, so it gets room
    and keeps its own whitespace — reflowed code is code you cannot judge. */
 .sched-insp-script pre { margin: 6px 0 0; padding: 9px; border-radius: 8px; overflow: auto; max-height: 260px;

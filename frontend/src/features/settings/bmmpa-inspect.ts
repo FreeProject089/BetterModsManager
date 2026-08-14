@@ -50,7 +50,15 @@ export interface TaskSummary {
     perms: string[];
     /** Action types by which this task touches the world outside BMM. */
     reaching: string[];
-    /** Every script body it carries, so a reviewer can read the actual code. */
+    /**
+     * Every runnable body it carries, so a reviewer can read the actual code.
+     *
+     * Commands are in here beside scripts. `custom.command` with program `powershell` and
+     * args `-Enc <base64>` is a script by any measure that matters to somebody deciding
+     * whether to trust a file; listing only `custom.script` would let the same payload
+     * through by spelling it differently. `engine` is the script engine, or `command` for
+     * a program invocation.
+     */
     scripts: { engine: string; code: string }[];
     /** Every external URL or program it names. */
     targets: string[];
@@ -104,6 +112,13 @@ function walkSteps(steps: any[], out: TaskSummary): StepSummary[] {
             }
             if (type === 'custom.script' && typeof p.code === 'string') {
                 out.scripts.push({ engine: String(p.engine || 'powershell'), code: p.code });
+            }
+            if (type === 'custom.command' && typeof p.program === 'string' && p.program.trim()) {
+                // Reassembled as one line because that is what will run. Arguments listed
+                // separately read as harmless nouns; `--output-document /etc/cron.d/x` does
+                // not, and the reviewer should see the whole thing the way the shell will.
+                const args = Array.isArray(p.args) ? p.args.map((a: unknown) => String(a)) : [];
+                out.scripts.push({ engine: 'command', code: [p.program.trim(), ...args].join(' ') });
             }
             // Anything naming something outside BMM. Collected verbatim and NOT resolved —
             // an inspector that fetched a URL to describe it would be doing the thing it
