@@ -2766,7 +2766,21 @@ function diskOptions(selected: string): string {
 
 const COND_TYPES = ['always', 'value', 'profileActive', 'modEnabled', 'modDisabled', 'modpackActive', 'modpackInactive', 'allModsActive', 'appRunning', 'appNotRunning', 'fileExists', 'fileHash', 'fileSize', 'fileType', 'fileName', 'fileNewer', 'online', 'timeReached', 'dayOfWeek', 'timeRange', 'commandSucceeds'];
 // Values a preceding action can capture (used by the `value` condition).
-const VALUE_SOURCES = ['disk.read_mbps', 'disk.write_mbps', 'disk.suggested_limit', 'benchmark.mbps', 'benchmark.total_ms', 'lasttask.ok'];
+// Every variable an action writes into `ctx`, so a `value` condition can read all of
+// them. Four were missing — check_disk_space has always written disk.free_gb,
+// disk.free_percent and disk.total_gb, and app.checkUpdate writes update.available, but
+// none appeared in this dropdown, and the dropdown is the only way to name a source. The
+// actions were writing to variables no condition could reach: "if an update is available,
+// notify me" was simply not expressible.
+//
+// Keep this in step with the context writes in runAction. A source listed here with
+// nothing writing it reads as always-zero; a write missing from here is unreachable.
+const VALUE_SOURCES = [
+    'disk.read_mbps', 'disk.write_mbps', 'disk.suggested_limit',
+    'disk.free_gb', 'disk.free_percent', 'disk.total_gb',
+    'benchmark.mbps', 'benchmark.total_ms',
+    'update.available', 'lasttask.ok',
+];
 function conditionEditor(cond: Condition): HTMLElement {
     const el = document.createElement('div');
     const render = () => {
