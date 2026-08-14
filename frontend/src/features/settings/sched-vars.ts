@@ -20,7 +20,31 @@
 export interface RunCtx {
     nums: Record<string, number>;
     text: Record<string, string>;
+    /**
+     * Variables that outlive the run: written by `var.set` with scope `shared`, and
+     * readable by every task.
+     *
+     * Kept in a THIRD bag rather than merged into `text` so the precedence is a property
+     * of the data instead of a rule about the order two objects were spread in. A step's
+     * own capture must win over a stored value with the same name — otherwise a task that
+     * captures `path` starts reading some other task's `path` from last Tuesday, and the
+     * failure looks like the script misbehaving.
+     */
+    shared?: Record<string, string>;
 }
+
+/**
+ * Where a `var.set` writes.
+ *
+ * `run` disappears when the task finishes; `shared` persists and is visible to every task.
+ * Two words rather than a boolean because the stored task is JSON somebody reads and
+ * shares — `scope: "shared"` says what it does, `persist: true` does not say to whom.
+ */
+export type VarScope = 'run' | 'shared';
+
+/** Names a variable may have. Deliberately the same shape substituteVars will match:
+ *  a name it cannot substitute is a variable that silently never works. */
+export const VAR_NAME_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 
 /**
  * Replace {var} in every string parameter with what an earlier step captured.
@@ -47,8 +71,13 @@ export function substituteVars(params: Record<string, any>, ctx: RunCtx): Record
         if (typeof v === 'string') {
             return v.replace(/\{([a-zA-Z_][a-zA-Z0-9_.]*)\}/g, (m, k) => {
                 if (k.startsWith('item.')) return m;
+                // Order matters and is the point: this run's capture, then this run's
+                // number, then a stored value. A step that captured `path` two lines up
+                // must not read some other task's `path` from last Tuesday — that failure
+                // presents as the script misbehaving, and sends you to the wrong file.
                 if (Object.prototype.hasOwnProperty.call(ctx.text, k)) return ctx.text[k];
                 if (Object.prototype.hasOwnProperty.call(ctx.nums, k)) return String(ctx.nums[k]);
+                if (ctx.shared && Object.prototype.hasOwnProperty.call(ctx.shared, k)) return ctx.shared[k];
                 return m;
             });
         }

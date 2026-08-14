@@ -28,7 +28,7 @@ export const RISK_KEYS = ['command', 'script', 'deeplink', 'stopProcess'] as con
  *  and `app.stop` share no prefix, and a future `foo.command` should not be flagged by
  *  accident. */
 const REACHING_ACTIONS = new Set([
-    'custom.command', 'custom.script', 'app.stop', 'app.launch',
+    'custom.command', 'custom.script', 'app.stop', 'app.launch', 'http.request',
     'file.open', 'folder.open', 'open.url', 'restart', 'task.run',
 ]);
 

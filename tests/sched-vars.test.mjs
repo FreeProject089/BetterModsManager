@@ -71,3 +71,36 @@ describe('substituteVars', () => {
     assert.equal(substituteVars({ p: '{outPath}' }, empty).p, '{outPath}');
   });
 });
+
+describe('shared variables', () => {
+  // Variables that outlive a run. The precedence is the whole risk: a stored value that
+  // shadowed a fresh capture would make a task read another task's leftovers, and the
+  // symptom is a script that looks like it is misbehaving.
+  const withShared = {
+    nums: { count: 3 },
+    text: { path: 'C:\fresh' },
+    shared: { path: 'C:\stale', token: 'abc123', count: '999' },
+  };
+
+  test('a shared value is substituted when nothing this run captured that name', () => {
+    assert.equal(substituteVars({ h: 'Bearer {token}' }, withShared).h, 'Bearer abc123');
+  });
+
+  test("this run's capture beats a stored value with the same name", () => {
+    assert.equal(substituteVars({ p: '{path}' }, withShared).p, 'C:\fresh');
+  });
+
+  test("this run's NUMBER also beats a stored value", () => {
+    // text → nums → shared. A number captured this run is still this run's.
+    assert.equal(substituteVars({ c: '{count}' }, withShared).c, '3');
+  });
+
+  test('a context with no shared bag behaves exactly as before', () => {
+    // The field is optional: every existing caller passes two bags and must keep working.
+    assert.equal(substituteVars({ p: '{token}' }, { nums: {}, text: {} }).p, '{token}');
+  });
+
+  test('an unknown name is still left alone, not blanked', () => {
+    assert.equal(substituteVars({ p: '{nope}' }, withShared).p, '{nope}');
+  });
+});

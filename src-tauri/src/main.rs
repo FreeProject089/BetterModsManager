@@ -687,6 +687,7 @@ fn main() {
             crate::commands::mapper::create_mod_folder,
             crate::commands::mapper::rename_mod_item,
             commands::net::fetch_remote_json,
+            commands::net::http_request,
             commands::plugins::fetch_plugin_catalog,
             commands::plugins::install_plugin,
             commands::plugins::install_plugin_from_file,

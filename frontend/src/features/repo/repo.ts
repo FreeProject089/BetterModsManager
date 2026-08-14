@@ -1070,9 +1070,17 @@ export function initRepo() {
             try {
                 // Bypass browser and GitHub caching to get the absolute latest list
                 const bustUrl = `${getLinks().server_browse}?t=${Date.now()}`;
-                const response = await fetch(bustUrl, { cache: 'no-store' });
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                repoList = normaliseRepoFeed(await response.json());
+                // Through the backend, NOT a webview fetch(). The webview enforces CORS and
+                // bettercommunity.ch sends no Access-Control-Allow-Origin, so a direct
+                // fetch fails with "blocked by CORS policy" from origin tauri.localhost —
+                // and worse, it reports that even when the real problem was a 503, because
+                // an error response carries no CORS headers either. The browser then hides
+                // the status behind an opaque TypeError. fetch_remote_json exists for
+                // exactly this and every other feed already uses it; this call was left
+                // behind. It also surfaces the true status, so "the site is down" stops
+                // being reported as a permissions problem.
+                const text: string = await invoke('fetch_remote_json', { url: bustUrl });
+                repoList = normaliseRepoFeed(JSON.parse(text));
 
                 // Repo catalogs somebody added themselves, merged in after the official
                 // list. Their entries are tagged `community` HERE rather than trusted from
@@ -1082,9 +1090,13 @@ export function initRepo() {
                 for (const catUrl of readRepoCatalogs()) {
                     try {
                         const sep = catUrl.includes('?') ? '&' : '?';
-                        const r = await fetch(`${catUrl}${sep}t=${Date.now()}`, { cache: 'no-store' });
-                        if (!r.ok) continue;
-                        for (const entry of normaliseRepoFeed(await r.json())) {
+                        // Same reason as the official feed above: a webview fetch to a
+                        // third-party catalogue is subject to CORS, and almost no static
+                        // JSON host sends the header. Followed catalogues would have failed
+                        // for most people, silently, since one unreachable catalogue is
+                        // swallowed on purpose here.
+                        const raw: string = await invoke('fetch_remote_json', { url: `${catUrl}${sep}t=${Date.now()}` });
+                        for (const entry of normaliseRepoFeed(JSON.parse(raw))) {
                             // A repo already in the official list wins. The same address in
                             // both is one repo, and showing it twice with two badges makes
                             // people wonder which one is real.

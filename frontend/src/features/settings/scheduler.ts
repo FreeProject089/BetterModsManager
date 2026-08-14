@@ -14,7 +14,7 @@ import { t } from '../../core/i18n.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { toast } from '../../ui/app.js';
 import { calendarDue, nextCalendarDue } from './sched-time.js';
-import { substituteVars, type RunCtx } from './sched-vars.js';
+import { substituteVars, VAR_NAME_RE, type RunCtx } from './sched-vars.js';
 import { inspectBmmpa } from './bmmpa-inspect.js';
 import { parsePresetFeed, looksLikePresetFeed, readPresetCatalogs, writePresetCatalogs } from './preset-catalog.js';
 import { originLabel } from '../catalogs/catalog-index.js';
@@ -408,7 +408,13 @@ async function runTask(task: Task): Promise<void> {
     try {
         // Per-run variable store: actions (e.g. a benchmark) write measured values
         // here, and `value` conditions read them → "if disk speed > X then Apply".
-        const ctx: RunCtx = { nums: {}, text: {} };
+        //
+        // Seeded with the shared variables, read at the START of the run and not again.
+        // A snapshot rather than a live view on purpose: a task that read a value another
+        // task rewrote halfway through would behave differently depending on scheduling,
+        // which is the least debuggable kind of difference. A var.set inside THIS run
+        // updates the snapshot as well as the store, so a later step sees its own write.
+        const ctx: RunCtx = { nums: {}, text: {}, shared: readSharedVars() };
         await runSteps(task.steps, task, ctx);
         task.lastResult = 'ok';
         toast(`${t('sched.ran') || 'Ran'}: ${task.name}`, 'success');
@@ -695,6 +701,36 @@ async function flushDirty(): Promise<void> {
  *  then..." was unexpressible and the only signal was pass/fail. The trimmed first
  *  line goes into ctx under the user's chosen name, where the existing {var}
  *  substitution and the numeric conditions already look. */
+/**
+ * Variables that outlive a run, shared by every task.
+ *
+ * localStorage, like the rest of the scheduler's state, and read fresh on each access
+ * rather than cached in a module variable: two tasks can be mid-run at once, and a cached
+ * copy would let the second overwrite what the first just wrote.
+ *
+ * These are NOT a secret store. A task will hold an API token here because that is the
+ * obvious thing to do with it, and localStorage is readable by anything running in the
+ * webview — which the UI says next to the field rather than leaving people to assume.
+ */
+const SHARED_VARS_KEY = 'bmm.sched.vars';
+
+export function readSharedVars(): Record<string, string> {
+    try {
+        const raw = JSON.parse(localStorage.getItem(SHARED_VARS_KEY) || '{}');
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+        const out: Record<string, string> = {};
+        // Filtered on the way OUT as well as in. A hand-edited store, or one written by an
+        // older build, must not hand back a name that substituteVars cannot match — that
+        // is a variable which appears in the list and never resolves.
+        for (const [k, v] of Object.entries(raw)) if (VAR_NAME_RE.test(k)) out[k] = String(v ?? '');
+        return out;
+    } catch { return {}; }
+}
+
+export function writeSharedVars(vars: Record<string, string>): void {
+    try { localStorage.setItem(SHARED_VARS_KEY, JSON.stringify(vars)); } catch { /* quota */ }
+}
+
 function _captureOutput(p: Record<string, any>, out: any, ctx: RunCtx): void {
     const name = String(p.into || '').trim();
     if (!name) return;
@@ -805,6 +841,95 @@ async function runAction(action: Action, task: Task, ctx: RunCtx): Promise<void>
         case 'deeplink':
             requirePerm(task, 'deeplink', t('sched.permDeeplink') || 'fire deeplinks');
             await runDeepLink(p.url); break;
+
+        // ── Variables ────────────────────────────────────────────────────────
+        case 'var.set': {
+            const name = String(p.name || '').trim();
+            // Refused rather than skipped. A variable named `my var` can never be read
+            // back — substituteVars will not match it — so accepting the write would
+            // create something that looks stored and is permanently unreadable.
+            if (!VAR_NAME_RE.test(name)) {
+                throw new Error((t('sched.var.badName') || 'Not a usable variable name: {n}').replace('{n}', name || '(empty)'));
+            }
+            const value = String(p.value ?? '');
+            if (p.scope === 'shared') {
+                const all = readSharedVars();
+                all[name] = value;
+                writeSharedVars(all);
+                // The run context sees it immediately too, so a later step in THIS task
+                // does not have to wait for the next run to read what was just written.
+                ctx.shared = { ...(ctx.shared || {}), [name]: value };
+            } else {
+                ctx.text[name] = value;
+                const n = parseFloat(value);
+                ctx.nums[name] = Number.isFinite(n) ? n : value.length;
+            }
+            break;
+        }
+        case 'var.clear': {
+            const name = String(p.name || '').trim();
+            const all = readSharedVars();
+            if (name) delete all[name]; else for (const k of Object.keys(all)) delete all[k];
+            writeSharedVars(all);
+            if (ctx.shared) { if (name) delete ctx.shared[name]; else ctx.shared = {}; }
+            break;
+        }
+
+        // ── Talking to something else ────────────────────────────────────────
+        case 'http.request': {
+            // Under the SAME permission as running a program. An HTTP call can post the
+            // contents of a captured variable anywhere, and a task that can do that
+            // without asking would make the other permissions decorative.
+            requirePerm(task, 'command', t('sched.permHttp') || 'reach external services');
+            const url = String(p.url || '').trim();
+            if (!/^https?:\/\//i.test(url)) {
+                throw new Error((t('sched.http.badUrl') || 'Not an http(s) address: {u}').replace('{u}', url || '(empty)'));
+            }
+            const headers: Record<string, string> = {};
+            // Written as lines because that is how people have them to hand — copied out
+            // of curl or a docs page — and a JSON object here would mean escaping quotes
+            // inside a field that already holds {var} braces.
+            for (const line of String(p.headers || '').split(/\r?\n/)) {
+                const i = line.indexOf(':');
+                if (i > 0) headers[line.slice(0, i).trim()] = line.slice(i + 1).trim();
+            }
+            const res: any = await invoke('http_request', {
+                url,
+                method: String(p.method || 'GET').toUpperCase(),
+                headers,
+                body: p.body ? String(p.body) : null,
+                timeoutMs: Math.min(120_000, Math.max(1_000, parseInt(p.timeoutMs, 10) || 15_000)),
+            });
+            const status = Number(res?.status) || 0;
+            const text = String(res?.body ?? '');
+            // Status is always available for a condition, under a name that cannot collide
+            // with a user's own: dots are not allowed in a variable name.
+            ctx.nums['http.status'] = status;
+            ctx.text['http.status'] = String(status);
+            // A JSON pointer, when asked for. Anything else would need a script step just
+            // to pull one field out of a response, which is the common case.
+            let captured = text;
+            if (p.jsonPath) {
+                try {
+                    let cur: any = JSON.parse(text);
+                    for (const seg of String(p.jsonPath).split('.').filter(Boolean)) {
+                        cur = cur?.[/^\d+$/.test(seg) ? Number(seg) : seg];
+                    }
+                    // undefined stringifies to "undefined", which reads like a value.
+                    captured = cur === undefined || cur === null ? '' : (typeof cur === 'object' ? JSON.stringify(cur) : String(cur));
+                } catch {
+                    throw new Error(t('sched.http.badJson') || 'The response was not JSON, so no field could be read from it.');
+                }
+            }
+            // A failing status throws rather than capturing the error page as if it were
+            // the answer — otherwise a 500 whose body is HTML becomes the value of a
+            // variable a later step trusts.
+            if (!p.allowAnyStatus && (status < 200 || status >= 300)) {
+                throw new Error((t('sched.http.status') || 'HTTP {s} from {u}').replace('{s}', String(status)).replace('{u}', url));
+            }
+            _captureOutput(p, captured, ctx);
+            break;
+        }
 
         // ── Benchmarks ────────────────────────────────────────────────────────
         case 'benchmark.run': {
@@ -1884,7 +2009,7 @@ function renderModal(modal: HTMLElement): void {
         btn.disabled = true;
         toast(t('sched.testing') || 'Test run started…', 'info', 1500);
         try {
-            await runSteps(_draft.steps, _draft, { nums: {}, text: {} });
+            await runSteps(_draft.steps, _draft, { nums: {}, text: {}, shared: readSharedVars() });
             toast(t('sched.testOk') || 'Test run finished.', 'success');
         } catch (e) {
             if (e instanceof _StopTask) toast(`${t('sched.stopped') || 'stopped'}${(e as any).reason ? `: ${(e as any).reason}` : ''}`, 'info');
@@ -2243,7 +2368,7 @@ function renderStepsEditor(host: HTMLElement, steps: Step[], depth = 0): void {
                 try {
                     // Run a shallow copy with disabled cleared, so even a switched-off
                     // step can be test-fired on demand.
-                    await runSteps([{ ...(step as any), disabled: false } as Step], _draft, { nums: {}, text: {} });
+                    await runSteps([{ ...(step as any), disabled: false } as Step], _draft, { nums: {}, text: {}, shared: readSharedVars() });
                     toast(t('sched.stepDone') || 'Step finished.', 'success');
                 } catch (err) {
                     if (err instanceof _StopTask) toast(`${t('sched.stopped') || 'stopped'}${(err as any).reason ? `: ${(err as any).reason}` : ''}`, 'info');
@@ -2489,6 +2614,9 @@ const ACTION_TYPES: { v: string; label: string; needs?: string; group: string }[
     { v: 'folder.create', label: 'Create a folder (BMM data)', needs: 'bmmfolder', group: 'system' },
     { v: 'repo.syncNow', label: 'Sync a server repo (unattended)', needs: 'reposync', group: 'repo' },
     { v: 'deeplink', label: 'Run bmm:// deeplink', needs: 'url', group: 'system' },
+    { v: 'var.set', label: 'Set a variable', needs: 'varSet', group: 'logic' },
+    { v: 'var.clear', label: 'Clear a shared variable', needs: 'varClear', group: 'logic' },
+    { v: 'http.request', label: 'Call an HTTP API', needs: 'http', group: 'system' },
 ];
 
 function actionEditor(action: Action, onStructureChange?: () => void): HTMLElement {
@@ -2749,6 +2877,61 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
         </div>`;
         void paintEngineStatus(host, eng);
     }
+    else if (needs === 'varSet') {
+        const shared = params.scope === 'shared';
+        host.innerHTML = `
+        <div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${t('sched.var.name') || '1. Name'}</label>
+            <input class="input sched-p-varname" spellcheck="false"
+                placeholder="${escAttr(t('sched.var.namePh') || 'letters, digits and _ — this is what {name} will match')}"
+                value="${escAttr(params.name || '')}">
+            <label class="sched-cmd-label">${t('sched.var.value') || '2. Value'}</label>
+            <textarea class="input sched-p-varvalue" rows="2" spellcheck="false"
+                placeholder="${escAttr(t('sched.var.valuePh') || 'Plain text. {other} variables are substituted first.')}">${escHtml(params.value || '')}</textarea>
+            <label class="sched-cmd-label">${t('sched.var.scope') || '3. How long it lasts'}</label>
+            <select class="input sched-p-varscope" style="max-width:280px">
+                <option value="run"${shared ? '' : ' selected'}>${escHtml(t('sched.var.scopeRun') || 'This run only')}</option>
+                <option value="shared"${shared ? ' selected' : ''}>${escHtml(t('sched.var.scopeShared') || 'Shared — every task, until changed')}</option>
+            </select>
+            <span class="sched-cmd-hint">${escHtml(t('sched.var.hint') || 'A value this run captured always wins over a shared one with the same name, so a shared variable can never shadow a fresh result.')}</span>
+            <span class="sched-cmd-hint sched-var-warn">${escHtml(t('sched.var.secret') || 'Not a secret store: shared values sit in BMM’s local storage in plain text, and travel in an exported .bmmpa. Keep tokens out of them.')}</span>
+        </div>`;
+    }
+    else if (needs === 'varClear') host.innerHTML = _field(needs,
+        `<input class="input sched-p-varname" spellcheck="false" placeholder="${escAttr(t('sched.var.clearPh') || 'name to clear — leave empty to clear them all')}" value="${escAttr(params.name || '')}">`)
+        + `<span class="sched-cmd-hint">${escHtml(t('sched.var.clearHint') || 'Only shared variables. A run’s own values disappear when it ends.')}</span>`;
+    else if (needs === 'http') {
+        const m = String(params.method || 'GET').toUpperCase();
+        const methods = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD'];
+        host.innerHTML = `
+        <div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${t('sched.http.req') || '1. Request'}</label>
+            <div class="sched-cmd-row">
+                <select class="input sched-p-method" style="max-width:110px">
+                    ${methods.map((x) => `<option value="${x}"${m === x ? ' selected' : ''}>${x}</option>`).join('')}
+                </select>
+                <input class="input sched-p-url" spellcheck="false" placeholder="https://api.example.com/v1/status" value="${escAttr(params.url || '')}">
+            </div>
+            <label class="sched-cmd-label">${t('sched.http.headers') || '2. Headers'}</label>
+            <textarea class="input sched-p-headers" rows="2" spellcheck="false"
+                placeholder="${escAttr(t('sched.http.headersPh') || 'One per line — Authorization: Bearer {token}')}">${escHtml(params.headers || '')}</textarea>
+            <label class="sched-cmd-label">${t('sched.http.body') || '3. Body'}</label>
+            <textarea class="input sched-p-httpbody" rows="3" spellcheck="false"
+                placeholder="${escAttr(t('sched.http.bodyPh') || 'Sent as-is. Ignored by GET and HEAD.')}">${escHtml(params.body || '')}</textarea>
+            <span class="sched-cmd-hint">${escHtml(t('sched.http.subst') || '{variables} are substituted in the address, the headers and the body before the call.')}</span>
+            <details class="sched-cmd-adv">
+                <summary>${t('sched.http.adv') || 'Advanced — read one field, timeout, allow error statuses'}</summary>
+                <input class="input sched-p-jsonpath" style="margin-top:6px" spellcheck="false"
+                    placeholder="${escAttr(t('sched.http.jsonPh') || 'field to read, e.g. data.0.version — blank keeps the whole body')}" value="${escAttr(params.jsonPath || '')}">
+                <input class="input sched-p-into" style="margin-top:6px"
+                    placeholder="${escAttr(t('sched.http.intoPh') || 'store the result in a variable, e.g. latest')}" value="${escAttr(params.into || '')}">
+                <input class="input sched-p-timeout" type="number" min="1000" max="120000" style="margin-top:6px"
+                    placeholder="${escAttr(t('sched.http.timeoutPh') || 'timeout in ms (default 15000)')}" value="${escAttr(params.timeoutMs || '')}">
+                <label class="sched-opt" style="margin-top:6px"><input type="checkbox" class="sched-p-anystatus" ${params.allowAnyStatus ? 'checked' : ''}><div><b>${escHtml(t('sched.http.anyT') || 'Treat 4xx and 5xx as success')}</b><span>${escHtml(t('sched.http.any') || 'Off by default: otherwise a 500 whose body is an HTML error page becomes the value of a variable a later step trusts. {http.status} is always readable either way.')}</span></div></label>
+            </details>
+            <span class="sched-cmd-hint">${escHtml(t('sched.http.perm') || 'Needs the “Run external programs” permission — a request can post a captured value anywhere.')}</span>
+        </div>`;
+    }
     else if (needs === 'benchmark') {
         const profOpts = _profiles.filter((p: any) => p.mods_path)
             .map((p: any) => `<option value="${escAttr(p.mods_path)}">${escHtml(p.name || p.id)}</option>`).join('');
@@ -2910,6 +3093,19 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
     });
     host.querySelector('.sched-p-code')?.addEventListener('input', (e) => { params.code = (e.target as HTMLTextAreaElement).value; });
     host.querySelector('.sched-p-into')?.addEventListener('input', (e) => { params.into = (e.target as HTMLInputElement).value; });
+    // Variables and HTTP. Bound here with the rest rather than inside their own branch:
+    // every one of these is a querySelector that finds nothing for the other action types,
+    // which is how the existing bindings already work.
+    host.querySelector('.sched-p-varname')?.addEventListener('input', (e) => { params.name = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-varvalue')?.addEventListener('input', (e) => { params.value = (e.target as HTMLTextAreaElement).value; });
+    host.querySelector('.sched-p-varscope')?.addEventListener('change', (e) => { params.scope = (e.target as HTMLSelectElement).value; });
+    host.querySelector('.sched-p-method')?.addEventListener('change', (e) => { params.method = (e.target as HTMLSelectElement).value; });
+    host.querySelector('.sched-p-url')?.addEventListener('input', (e) => { params.url = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-headers')?.addEventListener('input', (e) => { params.headers = (e.target as HTMLTextAreaElement).value; });
+    host.querySelector('.sched-p-httpbody')?.addEventListener('input', (e) => { params.body = (e.target as HTMLTextAreaElement).value; });
+    host.querySelector('.sched-p-jsonpath')?.addEventListener('input', (e) => { params.jsonPath = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-timeout')?.addEventListener('input', (e) => { params.timeoutMs = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-anystatus')?.addEventListener('change', (e) => { params.allowAnyStatus = (e.target as HTMLInputElement).checked; });
     host.querySelector('.sched-browse-prog')?.addEventListener('click', async () => {
         const { pickFile } = await import('../../core/api.js');
         const f = await pickFile({ filters: [{ name: 'Programs', extensions: ['exe', 'bat', 'cmd', 'ps1', 'com'] }, { name: 'All files', extensions: ['*'] }] }).catch(() => null);
@@ -3019,6 +3215,11 @@ const VALUE_SOURCES = [
     'disk.free_gb', 'disk.free_percent', 'disk.total_gb',
     'benchmark.mbps', 'benchmark.total_ms',
     'update.available', 'lasttask.ok',
+    // Written by http.request on every call, including a failed one. Listed here because
+    // check-scheduler-vars caught that it was not: a value an action writes and no
+    // condition can select is half a feature, and the half that is missing is the point —
+    // "call the API, and if it answered 404 do something else".
+    'http.status',
 ];
 function conditionEditor(cond: Condition): HTMLElement {
     const el = document.createElement('div');
