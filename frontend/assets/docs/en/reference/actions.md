@@ -123,6 +123,7 @@ Those captured values are what the `value` condition compares against — that's
 | Open a URL / link | Opens a link in your browser | |
 | Run custom command | **Runs an arbitrary program** | requires *Allow custom commands* on the task |
 | Run `bmm://` deeplink | Fires any deeplink | can reach any deeplink action |
+| Call an HTTP API | **Sends a request to any address** and captures the reply | requires *Run external programs*; sets `http.status` |
 
 ### Logic & maths
 
@@ -132,6 +133,54 @@ Those captured values are what the `value` condition compares against — that's
 | Ternary | `var = condition ? a : b` |
 | Rule table | Walks rows, **first match wins**, writes the result into a variable |
 | Stop the task (guard clause) | Ends the task **cleanly** — not an error |
+| Set a variable | Writes a value, for this run or shared with every task |
+| Clear a shared variable | Removes one, or all of them |
+
+### Variables that outlive a run
+
+A step's captured output disappears when the task ends. **Set a variable** with the scope
+**Shared** keeps it, and every task can read it with `{name}`.
+
+Lookup order is fixed, and the order is the safety property:
+
+1. what **this run** captured, as text
+2. what **this run** captured, as a number
+3. a **shared** value
+
+A value captured this run always wins. Without that, a task that captures `path` would start
+reading some other task's `path` from last week — and that failure looks like the script
+misbehaving, which sends you to the wrong file.
+
+!!! warning "Not a secret store"
+
+    Shared values sit in BMM's local storage in plain text, and they travel inside an exported
+    `.bmmpa`. An API token in one is a token you have shared with anyone you send the file to.
+
+### Calling an HTTP API
+
+`{variables}` are substituted in the address, the headers and the body before the call, so a
+captured value or a shared token can be part of the request.
+
+| Field | Notes |
+|---|---|
+| Method | GET · POST · PUT · PATCH · DELETE · HEAD |
+| Headers | One per line, `Name: value` — the form you copy out of curl |
+| Body | Sent as-is; ignored by GET and HEAD |
+| Field to read | A path like `data.0.version` pulls one value out of a JSON reply |
+| Treat 4xx/5xx as success | Off by default |
+
+`http.status` is always readable afterwards, including on failure, so a task can branch on a
+404. With the checkbox off, a non-2xx **stops the step** rather than capturing the error page as
+if it were the answer — otherwise a 500 whose body is HTML becomes the value a later step trusts.
+
+It needs **Run external programs**, the same permission as launching a program. A request can
+post a captured variable anywhere, so a task able to do it unasked would make the other
+permissions decorative.
+
+The call is made by BMM's backend, and deliberately **without** the identity header BMM sends to
+BetterCommunity: an automation that arrived in a downloaded `.bmmpa` must not be able to make
+BMM identify you to a third party. Nothing about the request is written to the log, because the
+address can carry a token in its query string.
 
 ### Conditions
 

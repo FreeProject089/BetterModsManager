@@ -731,6 +731,44 @@ export function writeSharedVars(vars: Record<string, string>): void {
     try { localStorage.setItem(SHARED_VARS_KEY, JSON.stringify(vars)); } catch { /* quota */ }
 }
 
+/**
+ * Offer the programs that are running right now.
+ *
+ * The field was a bare text box, so naming a program meant knowing its executable name or
+ * walking a file picker to it. The scheduler already asks the backend for the process list
+ * — it is how the PID-based actions work — and the same answer is the better half of this
+ * field.
+ *
+ * Full path first where there is one, because that is what will actually be launched: two
+ * different `java.exe` on one machine is normal, and a bare name picks whichever the PATH
+ * happens to find. The bare name is offered too, for the case where PATH resolution is the
+ * intent.
+ *
+ * Failure is silent and leaves an ordinary text box. This is a convenience over a field
+ * that already worked; an error toast because a suggestion list could not be built would
+ * be reporting a problem the person does not have.
+ */
+async function fillProgramSuggestions(host: HTMLElement): Promise<void> {
+    const list = host.querySelector('#sched-prog-list');
+    if (!list) return;
+    try {
+        const procs: any[] = await invoke('list_running_processes') as any[];
+        const seen = new Set<string>();
+        const opts: string[] = [];
+        for (const pr of procs) {
+            for (const v of [pr?.exe, pr?.name]) {
+                const s = String(v || '').trim();
+                if (!s || seen.has(s)) continue;
+                seen.add(s);
+                // 60 is past the point where the dropdown stops being scannable, and the
+                // list arrives heaviest-first so the useful ones are already at the top.
+                if (opts.length < 60) opts.push(`<option value="${escAttr(s)}">`);
+            }
+        }
+        list.innerHTML = opts.join('');
+    } catch { /* a text box with no suggestions is the field as it was */ }
+}
+
 function _captureOutput(p: Record<string, any>, out: any, ctx: RunCtx): void {
     const name = String(p.into || '').trim();
     if (!name) return;
@@ -2798,11 +2836,19 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
         : `<input class="input sched-p" placeholder="${escAttr(t('sched.appIdPh') || 'app id (install an app first)')}" value="${escAttr(params.id || '')}" style="max-width:220px">`);
     else if (needs === 'message') host.innerHTML = _field(needs, `<input class="input sched-p" placeholder="${escAttr(t('sched.message') || 'message')}" value="${escAttr(params.message || '')}">`);
     else if (needs === 'url') host.innerHTML = _field(needs, `<input class="input sched-p" placeholder="bmm://mod/enable?id=…" value="${escAttr(params.url || '')}">`);
-    else if (needs === 'command') host.innerHTML = `
+    else if (needs === 'command') {
+        host.innerHTML = `
         <div class="sched-cmd-builder">
             <label class="sched-cmd-label">${t('sched.cmdProgram') || '1. Program to run'}</label>
             <div class="sched-cmd-row">
-                <input class="input sched-p-prog" placeholder="${escAttr(t('sched.programPh') || 'e.g. notepad.exe')}" value="${escAttr(params.program || '')}">
+                <!-- A datalist rather than a <select>: what is running right now is a good
+                     SUGGESTION and a terrible constraint. The program a task launches is
+                     usually one that is NOT running — that is generally the point — so the
+                     list has to sit beside free typing instead of replacing it. Filled
+                     asynchronously below; an empty list leaves an ordinary text box. -->
+                <input class="input sched-p-prog" list="sched-prog-list" spellcheck="false"
+                    placeholder="${escAttr(t('sched.programPh') || 'e.g. notepad.exe — or pick one that is running')}" value="${escAttr(params.program || '')}">
+                <datalist id="sched-prog-list"></datalist>
                 <button type="button" class="btn btn-sm btn-secondary sched-browse-prog">${t('sched.choose') || 'Choose…'}</button>
             </div>
             <label class="sched-cmd-label">${t('sched.cmdArgs') || '2. Arguments'} <span class="sched-cmd-opt">${t('common.optional') || '(optional)'}</span></label>
@@ -2816,6 +2862,8 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
             </details>
             <span class="sched-cmd-hint">${t('sched.cmdHint') || 'Tip: grant “Run external programs” in this task’s Permissions, or it won’t run.'}</span>
         </div>`;
+        void fillProgramSuggestions(host);
+    }
     else if (needs === 'reposync') {
         const profOpts = _profiles.map((pr: any) =>
             `<option value="${escAttr(pr.id)}"${params.targetProfile === pr.id ? ' selected' : ''}>${escHtml(pr.name || pr.id)}</option>`).join('');

@@ -125,6 +125,7 @@ Ces valeurs captées sont ce que compare la condition `value` — c'est ainsi qu
 | Ouvrir une URL / un lien | Ouvre un lien dans ton navigateur | |
 | Lancer une commande personnalisée | **Exécute un programme arbitraire** | exige *Autoriser les commandes personnalisées* sur la tâche |
 | Lancer un deeplink `bmm://` | Déclenche n'importe quel deeplink | peut atteindre n'importe quelle action de deeplink |
+| Appeler une API HTTP | **Envoie une requête à n'importe quelle adresse** et capture la réponse | exige « Exécuter des programmes externes » ; renseigne `http.status` |
 
 ### Logique & maths
 
@@ -134,6 +135,56 @@ Ces valeurs captées sont ce que compare la condition `value` — c'est ainsi qu
 | Ternaire | `var = condition ? a : b` |
 | Table de règles | Parcourt les lignes, **la première qui correspond gagne**, écrit le résultat dans une variable |
 | Arrêter la tâche (guard clause) | Termine la tâche **proprement** — ce n'est pas une erreur |
+| Définir une variable | Écrit une valeur, pour cette exécution ou partagée avec toutes les tâches |
+| Effacer une variable partagée | En retire une, ou toutes |
+
+### Des variables qui survivent à l'exécution
+
+La sortie capturée par une étape disparaît quand la tâche se termine. **Définir une variable**
+avec la portée **Partagée** la conserve, et toutes les tâches peuvent la lire par `{nom}`.
+
+L'ordre de recherche est fixe, et c'est cet ordre qui protège :
+
+1. ce que **cette exécution** a capturé, en texte
+2. ce que **cette exécution** a capturé, en nombre
+3. une valeur **partagée**
+
+Une valeur capturée pendant l'exécution l'emporte toujours. Sans cela, une tâche qui capture
+`path` se mettrait à lire le `path` d'une autre tâche datant de la semaine dernière — et cette
+panne-là ressemble à un script qui déraille, ce qui vous envoie chercher au mauvais endroit.
+
+!!! warning "Ce n'est pas un coffre à secrets"
+
+    Les valeurs partagées sont en clair dans le stockage local de BMM, et elles voyagent dans un
+    `.bmmpa` exporté. Un jeton d'API rangé là est un jeton partagé avec toute personne à qui vous
+    envoyez le fichier.
+
+### Appeler une API HTTP
+
+Les `{variables}` sont remplacées dans l'adresse, les en-têtes et le corps avant l'appel : une
+valeur capturée ou un jeton partagé peuvent donc faire partie de la requête.
+
+| Champ | Remarques |
+|---|---|
+| Méthode | GET · POST · PUT · PATCH · DELETE · HEAD |
+| En-têtes | Un par ligne, `Nom: valeur` — la forme qu'on copie depuis curl |
+| Corps | Envoyé tel quel ; ignoré par GET et HEAD |
+| Champ à lire | Un chemin comme `data.0.version` extrait une valeur d'une réponse JSON |
+| Traiter 4xx/5xx comme un succès | Désactivé par défaut |
+
+`http.status` est toujours lisible ensuite, y compris en cas d'échec : une tâche peut donc
+brancher sur un 404. Case décochée, un statut hors 2xx **arrête l'étape** au lieu de capturer la
+page d'erreur comme si c'était la réponse — sinon un 500 dont le corps est du HTML devient la
+valeur qu'une étape suivante croira.
+
+L'action exige « Exécuter des programmes externes », la même permission que lancer un programme.
+Une requête peut envoyer une variable capturée n'importe où ; une tâche capable de le faire sans
+demander rendrait les autres permissions décoratives.
+
+L'appel part du backend de BMM, et délibérément **sans** l'en-tête d'identité que BMM envoie à
+BetterCommunity : une automatisation arrivée dans un `.bmmpa` téléchargé ne doit pas pouvoir
+faire vous identifier auprès d'un tiers. Rien de la requête n'est journalisé, car l'adresse peut
+porter un jeton dans sa query string.
 
 ### Conditions
 
