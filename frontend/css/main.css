@@ -11787,6 +11787,10 @@ body.sched-drag-live .sched-branch .sched-drop-zone:empty {
 .sched-cmd-adv > summary { font-size:11px; color:var(--text-secondary); cursor:pointer; padding:4px 0; opacity:.85; }
 .sched-cmd-adv > summary:hover { opacity:1; }
 .sched-cmd-hint { font-size:11px; color: var(--accent); opacity:.95; margin-top:4px; }
+/* The selected script language has no interpreter on this machine, so the task cannot run.
+   A warning tone rather than the accent every other hint wears: this one is not advice, it
+   is the reason the task will fail. */
+.sched-engine-status.sched-engine-missing { color: var(--warning); opacity:1; font-weight:600; }
 
 /* ── Step blocks redesigned (IF / WAIT UNTIL / WAIT) ───────────────────────── */
 .sched-step { transition:border-color .14s ease, box-shadow .14s ease; }

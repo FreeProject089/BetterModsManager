@@ -2293,6 +2293,52 @@ function _field(needs: string, controlHtml: string): string {
     return `<div class="sched-field"><label class="sched-flabel">${t(key) || NEEDS_LABEL_FALLBACK[needs]}</label>${controlHtml}</div>`;
 }
 
+/** What the backend probe found, once per session. */
+type EngineInfo = { engine: string; available: boolean; program: string | null; version: string | null };
+let _enginesPromise: Promise<EngineInfo[]> | null = null;
+
+// Probed once and reused. Each probe spawns interpreters to ask their version, which is
+// far too expensive to redo on every keystroke in the engine dropdown — and the answer
+// cannot change while the app is open without the user installing something, at which
+// point reopening BMM is a reasonable price.
+function scriptEngines(): Promise<EngineInfo[]> {
+    if (!_enginesPromise) {
+        // This project's invoke() returns Promise<any> and is not generic — the cast is the
+        // annotation, not a type argument.
+        _enginesPromise = invoke('scheduler_script_engines')
+            .then((r: any) => (Array.isArray(r) ? (r as EngineInfo[]) : []))
+            .catch(() => [] as EngineInfo[]);
+    }
+    return _enginesPromise;
+}
+
+/**
+ * Say whether the selected language can actually run here, and which binary it will use.
+ *
+ * BMM bundles no interpreter, so "does Python work?" is a property of the machine, not of
+ * the build — and the honest answer is often no. Without this, the first sign of trouble
+ * was a task failing at whatever hour it was scheduled for.
+ */
+async function paintEngineStatus(host: HTMLElement, engine: string): Promise<void> {
+    const el = host.querySelector('.sched-engine-status') as HTMLElement | null;
+    if (!el) return;
+    el.textContent = t('sched.scrEngChecking') || 'Checking…';
+    const info = (await scriptEngines()).find((e) => e.engine === engine);
+    // Still the panel we started on? The user can switch language while the probe runs.
+    if (!el.isConnected) return;
+    if (!info) { el.textContent = ''; return; }
+    if (info.available) {
+        el.classList.remove('sched-engine-missing');
+        el.textContent = (t('sched.scrEngOk') || 'Will run with {program} ({version}) on this computer.')
+            .replace('{program}', info.program || engine).replace('{version}', info.version || '?');
+    } else {
+        el.classList.add('sched-engine-missing');
+        el.textContent = engine === 'python'
+            ? (t('sched.scrEngNoPy') || 'No Python found on this computer. BMM does not bundle one — this task will fail until you install Python and it is on your PATH.')
+            : (t('sched.scrEngNo') || 'Not available on this computer — this task will fail until it is installed.');
+    }
+}
+
 function renderParams(host: HTMLElement, needs: string | undefined, params: Record<string, any>): void {
     if (!needs) { host.innerHTML = ''; return; }
     if (needs === 'profile') host.innerHTML = _field(needs, `<select class="input sched-p" style="max-width:200px">${pickerOptions(_profiles, params.id)}</select>`);
@@ -2359,6 +2405,12 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
             <select class="input sched-p-engine" style="max-width:180px">
                 ${engines.map(([v, l]) => `<option value="${v}"${eng === v ? ' selected' : ''}>${l}</option>`).join('')}
             </select>
+            <!-- Filled in asynchronously by paintEngineStatus. BMM bundles no interpreter,
+                 so the answer to "will this run?" is a property of THIS machine and cannot
+                 be known at build time. Saying it here is the difference between finding out
+                 now and finding out from a failed run at 3am. -->
+            <span class="sched-cmd-hint sched-engine-status"></span>
+            <!-- painted right after this innerHTML lands; see the void call below -->
             <label class="sched-cmd-label">${t('sched.scrCode') || '2. Code'}</label>
             <textarea class="input sched-p-code sched-code" rows="9" spellcheck="false"
                 placeholder="${escAttr(t('sched.scrCodePh') || 'Write your script here. It runs as a file — no quoting or escaping needed.')}">${escHtml(params.code || '')}</textarea>
@@ -2375,6 +2427,7 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
             </details>
             <span class="sched-cmd-hint">${t('sched.scrHint') || 'Tip: grant “Run scripts” in this task’s Permissions, or it won’t run.'}</span>
         </div>`;
+        void paintEngineStatus(host, eng);
     }
     else if (needs === 'benchmark') {
         const profOpts = _profiles.filter((p: any) => p.mods_path)
@@ -2531,7 +2584,10 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
         (host.querySelector(sel) as HTMLInputElement).value = d;
     }));
     host.querySelector('.sched-p-bmmdir')?.addEventListener('input', (e) => { params.path = (e.target as HTMLInputElement).value; });
-    host.querySelector('.sched-p-engine')?.addEventListener('change', (e) => { params.engine = (e.target as HTMLSelectElement).value; });
+    host.querySelector('.sched-p-engine')?.addEventListener('change', (e) => {
+        params.engine = (e.target as HTMLSelectElement).value;
+        void paintEngineStatus(host, params.engine);
+    });
     host.querySelector('.sched-p-code')?.addEventListener('input', (e) => { params.code = (e.target as HTMLTextAreaElement).value; });
     host.querySelector('.sched-p-into')?.addEventListener('input', (e) => { params.into = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-browse-prog')?.addEventListener('click', async () => {
