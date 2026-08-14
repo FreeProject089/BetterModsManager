@@ -7270,5 +7270,17 @@
   "sched.insp.alsoCarries": "Also in this file:",
   "sched.insp.launchpacks": "launch pack(s)",
   "sched.insp.modpacks": "modpack(s)",
-  "sched.insp.unresolved": "Names {n} thing(s) it does not include — these will fail on another machine:"
+  "sched.insp.unresolved": "Names {n} thing(s) it does not include — these will fail on another machine:",
+  "sched.pc.refresh": "Refresh",
+  "sched.pc.refreshTip": "Fetch every source again",
+  "sched.pc.retry": "Try again",
+  "sched.pc.details": "exact message",
+  "sched.pc.emptyHelp": "Nothing is wrong — they simply have no automations in them. Follow another address on the left.",
+  "sched.pc.downHelp": "Each source on the left says what happened. A server being down is not something you can fix from here; a wrong address is.",
+  "sched.pc.e404": "Nothing at that address (404).",
+  "sched.pc.e403": "That catalogue is private ({c}).",
+  "sched.pc.e5xx": "The server is having trouble ({c}) — not your address.",
+  "sched.pc.etimeout": "No answer in time.",
+  "sched.pc.ednst": "That host does not resolve — check the address.",
+  "sched.pc.eunreach": "Could not reach it."
 }

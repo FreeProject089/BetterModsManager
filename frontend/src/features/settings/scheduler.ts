@@ -3907,6 +3907,31 @@ export async function browsePresetCatalogs(): Promise<void> {
  *
  * Nothing here imports. Inspect downloads and analyses; the decision stays with the person.
  */
+/**
+ * A transport error, in words somebody can act on.
+ *
+ * The panel used to print the raw string — "error sending request for url (https://…" —
+ * truncated mid-address. That tells a reader nothing about which of the two things went
+ * wrong, and those two things have different answers: a typo in the address is theirs to
+ * fix, a server that is down is not. The original is kept, behind a fold, because when
+ * neither guess is right the exact text is the only thing left.
+ */
+function explainFetchError(raw: string): { short: string; raw: string } {
+    const r = String(raw || '');
+    const status = r.match(/HTTP (\d{3})/);
+    if (status) {
+        const code = Number(status[1]);
+        if (code === 404) return { short: t('sched.pc.e404') || 'Nothing at that address (404).', raw: r };
+        if (code === 401 || code === 403) return { short: t('sched.pc.e403') || 'That catalogue is private ({c}).'.replace('{c}', String(code)), raw: r };
+        if (code >= 500) return { short: (t('sched.pc.e5xx') || 'The server is having trouble ({c}) — not your address.').replace('{c}', String(code)), raw: r };
+        return { short: `HTTP ${code}`, raw: r };
+    }
+    if (/timed? ?out|timeout/i.test(r)) return { short: t('sched.pc.etimeout') || 'No answer in time.', raw: r };
+    if (/dns|resolve|name/i.test(r)) return { short: t('sched.pc.ednst') || 'That host does not resolve — check the address.', raw: r };
+    if (/not a preset catalogue/i.test(r)) return { short: t('sched.pc.notfeed') || 'not a preset catalogue', raw: r };
+    return { short: t('sched.pc.eunreach') || 'Could not reach it.', raw: r };
+}
+
 function showPresetCatalog(data: { presets: any[]; sources: PresetSource[] }): void {
     const esc = (x: unknown) => escHtml(String(x ?? ''));
     const overlay = document.createElement('div');
@@ -3932,7 +3957,11 @@ function showPresetCatalog(data: { presets: any[]; sources: PresetSource[] }): v
                         data-tooltip="${escAttr(t('sched.pc.unfollow') || 'Stop following this catalogue')}">${SVG16('<path d="M18 6 6 18"/><path d="m6 6 12 12"/>')}</button>`}
                 </div>
                 <div class="sched-pc-src-url" title="${escAttr(s.url)}">${esc(s.url)}</div>
-                ${s.detail ? `<div class="sched-pc-src-why">${esc(s.detail)}</div>` : ''}
+                ${s.detail ? (() => {
+                    const e = explainFetchError(s.detail!);
+                    return `<div class="sched-pc-src-why">${esc(e.short)}</div>
+                        <details class="sched-pc-src-raw"><summary>${esc(t('sched.pc.details') || 'exact message')}</summary>${esc(e.raw)}</details>`;
+                })() : ''}
             </div>`;
     };
 
@@ -3942,12 +3971,22 @@ function showPresetCatalog(data: { presets: any[]; sources: PresetSource[] }): v
             ? presets.filter((p) => `${p.name} ${p.description} ${p.author || ''}`.toLowerCase().includes(q))
             : presets;
         if (!shown.length) {
-            const why = presets.length
-                ? (t('sched.pc.noMatch') || 'Nothing matches that search.')
-                : sources.some((s) => s.state === 'ok')
-                    ? (t('sched.pc.emptyFeeds') || 'The catalogues you follow published nothing yet.')
-                    : (t('sched.pc.allDown') || 'No catalogue answered. The sources on the left say why.');
-            return `<p class="sched-pc-empty">${esc(why)}</p>`;
+            // Three different situations, and they need different sentences. "Nothing to
+            // show" covers all three and helps with none.
+            if (presets.length) return `<p class="sched-pc-empty">${esc(t('sched.pc.noMatch') || 'Nothing matches that search.')}</p>`;
+            const anyOk = sources.some((x) => x.state === 'ok');
+            const title = anyOk
+                ? (t('sched.pc.emptyFeeds') || 'The catalogues you follow published nothing yet.')
+                : (t('sched.pc.allDown') || 'No catalogue answered.');
+            const body = anyOk
+                ? (t('sched.pc.emptyHelp') || 'Nothing is wrong — they simply have no automations in them. Follow another address on the left.')
+                : (t('sched.pc.downHelp') || 'Each source on the left says what happened. A server being down is not something you can fix from here; a wrong address is.');
+            return `<div class="sched-pc-blank">
+                <div class="sched-pc-blank-icon">${SVG16('<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>')}</div>
+                <b>${esc(title)}</b>
+                <p>${esc(body)}</p>
+                <button class="btn btn-sm btn-secondary" id="sched-pc-retry">${esc(t('sched.pc.retry') || 'Try again')}</button>
+            </div>`;
         }
         return shown.map((p) => `
             <div class="sched-pc-card">
@@ -3970,6 +4009,8 @@ function showPresetCatalog(data: { presets: any[]; sources: PresetSource[] }): v
         <div class="modal sched-pc-modal">
             <div class="sched-insp-top">
                 <b>${esc(t('sched.pc.title') || 'Automations from a catalogue')}</b>
+                <button class="btn btn-ghost btn-sm" id="sched-pc-refresh"
+                    data-tooltip="${escAttr(t('sched.pc.refreshTip') || 'Fetch every source again')}">${esc(t('sched.pc.refresh') || 'Refresh')}</button>
                 <button class="btn btn-ghost btn-sm" id="sched-pc-close">${esc(t('common.close') || 'Close')}</button>
             </div>
             <div class="sched-pc-body">
@@ -3996,6 +4037,8 @@ function showPresetCatalog(data: { presets: any[]; sources: PresetSource[] }): v
 
     function wire(): void {
         overlay.querySelector('#sched-pc-close')?.addEventListener('click', close);
+        overlay.querySelector('#sched-pc-refresh')?.addEventListener('click', () => { void reload(); });
+        overlay.querySelector('#sched-pc-retry')?.addEventListener('click', () => { void reload(); });
 
         const q = overlay.querySelector<HTMLInputElement>('#sched-pc-q');
         q?.addEventListener('input', () => {

@@ -7268,5 +7268,17 @@
   "sched.insp.alsoCarries": "Également dans ce fichier :",
   "sched.insp.launchpacks": "pack(s) de lancement",
   "sched.insp.modpacks": "modpack(s)",
-  "sched.insp.unresolved": "Désigne {n} élément(s) qu’il n’inclut pas — ils échoueront sur une autre machine :"
+  "sched.insp.unresolved": "Désigne {n} élément(s) qu’il n’inclut pas — ils échoueront sur une autre machine :",
+  "sched.pc.refresh": "Actualiser",
+  "sched.pc.refreshTip": "Réinterroger toutes les sources",
+  "sched.pc.retry": "Réessayer",
+  "sched.pc.details": "message exact",
+  "sched.pc.emptyHelp": "Rien ne va mal — ils n’ont simplement aucune automatisation. Suivez une autre adresse à gauche.",
+  "sched.pc.downHelp": "Chaque source à gauche dit ce qui s’est passé. Un serveur en panne ne se répare pas d’ici ; une adresse erronée, si.",
+  "sched.pc.e404": "Rien à cette adresse (404).",
+  "sched.pc.e403": "Ce catalogue est privé ({c}).",
+  "sched.pc.e5xx": "Le serveur a un problème ({c}) — ce n’est pas votre adresse.",
+  "sched.pc.etimeout": "Pas de réponse à temps.",
+  "sched.pc.ednst": "Cet hôte ne résout pas — vérifiez l’adresse.",
+  "sched.pc.eunreach": "Impossible de le joindre."
 }

@@ -16657,6 +16657,23 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 .sched-pc-n { font-size: 10px; color: var(--text-muted); }
 .sched-pc-from { font-size: 10px; color: var(--text-secondary); overflow-wrap: anywhere; }
 .sched-pc-empty { font-size: 12px; color: var(--text-muted); grid-column: 1 / -1; }
+
+/* The empty state, when there is genuinely nothing to show.
+   One grey sentence in the middle of a large panel answers "is this broken?" with "maybe".
+   This says which of the three situations you are in — no match, nothing published, or
+   nothing answered — and offers the one action that helps. */
+.sched-pc-blank { grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center;
+    text-align: center; gap: 8px; padding: 32px 16px; }
+.sched-pc-blank-icon { display: grid; place-items: center; width: 34px; height: 34px;
+    border-radius: 50%; border: 1px solid var(--border); color: var(--text-muted); }
+.sched-pc-blank b { font-size: 13px; }
+.sched-pc-blank p { font-size: 12px; color: var(--text-muted); max-width: 42ch; margin: 0; }
+
+/* The transport error, verbatim, folded away. The short sentence above it is what somebody
+   acts on; this is what is left when neither guess was right. */
+.sched-pc-src-raw { margin-top: 3px; font-size: 10px; color: var(--text-muted); }
+.sched-pc-src-raw summary { cursor: pointer; }
+.sched-pc-src-raw { overflow-wrap: anywhere; }
 .sched-preset-more { border-style: dashed; }
 
 @media (max-width: 720px) {
