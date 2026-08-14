@@ -7127,5 +7127,9 @@
   "settings.catIndex.saved": "Sources you keep",
   "settings.catIndex.reuse": "Use",
   "apps.sources.isIndex": "That is a catalogue INDEX, not an app catalog — add it under Settings → Catalogue index, where you can see what it would import.",
-  "apps.sources.via": "via"
+  "apps.sources.via": "via",
+  "sched.filter": "Filter tasks…",
+  "sched.filter.n": "{n} of {total}",
+  "sched.filter.total": "{total} tasks",
+  "sched.filter.none": "No task matches that."
 }

@@ -7149,5 +7149,9 @@
   "settings.catIndex.saved": "Sources que tu gardes",
   "settings.catIndex.reuse": "Utiliser",
   "apps.sources.isIndex": "C’est un INDEX de catalogues, pas un catalogue d’applications — ajoute-le dans Réglages → Index de catalogues, où tu verras ce qu’il importerait.",
-  "apps.sources.via": "via"
+  "apps.sources.via": "via",
+  "sched.filter": "Filtrer les tâches…",
+  "sched.filter.n": "{n} sur {total}",
+  "sched.filter.total": "{total} tâches",
+  "sched.filter.none": "Aucune tâche ne correspond."
 }

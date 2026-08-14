@@ -266,6 +266,9 @@ export async function initScheduler(): Promise<void> {
     startEngine();
 }
 let _langWired = false;
+// Kept across re-renders but NOT persisted: a filter is about the next few seconds, and one
+// that survived a restart would hide tasks from somebody who had forgotten they set it.
+let _taskFilter = '';
 
 function startEngine(): void {
     if (_timer !== null) return;
@@ -1243,8 +1246,54 @@ export function renderScheduleList(): void {
         return;
     }
     container.innerHTML = '';
+
+    // A filter, but only once there are enough tasks to need one.
+    //
+    // Below the threshold it would be furniture: three rows are faster to read than to
+    // filter, and a search box above them is one more thing between you and the task you
+    // came for. Above it, scanning a wall of rows is the actual problem.
+    const NEEDS_FILTER_AT = 8;
+    let shown = _tasks;
+    if (_tasks.length >= NEEDS_FILTER_AT) {
+        const bar = document.createElement('div');
+        bar.className = 'sched-filter';
+        bar.innerHTML = `
+            <input type="text" class="input sched-filter-input" id="sched-filter-input"
+                placeholder="${escAttr(t('sched.filter') || 'Filter tasks…')}" value="${escAttr(_taskFilter)}">
+            <span class="sched-filter-count" id="sched-filter-count"></span>`;
+        container.appendChild(bar);
+        const inp = bar.querySelector('#sched-filter-input') as HTMLInputElement;
+        inp.addEventListener('input', () => {
+            _taskFilter = inp.value;
+            renderScheduleList();
+            // Re-rendering replaces the field, so focus and caret have to be put back or
+            // typing a second character lands nowhere.
+            const again = document.getElementById('sched-filter-input') as HTMLInputElement | null;
+            if (again) { again.focus(); again.setSelectionRange(again.value.length, again.value.length); }
+        });
+        const needle = _taskFilter.trim().toLowerCase();
+        if (needle) {
+            // Name and description: the two things somebody remembers about a task they
+            // wrote weeks ago.
+            shown = _tasks.filter((tk) => `${tk.name} ${tk.description || ''}`.toLowerCase().includes(needle));
+        }
+        const count = bar.querySelector('#sched-filter-count');
+        if (count) {
+            count.textContent = needle
+                ? (t('sched.filter.n') || '{n} of {total}').replace('{n}', String(shown.length)).replace('{total}', String(_tasks.length))
+                : (t('sched.filter.total') || '{total} tasks').replace('{total}', String(_tasks.length));
+        }
+        if (!shown.length) {
+            const none = document.createElement('div');
+            none.className = 'sched-filter-none';
+            none.textContent = t('sched.filter.none') || 'No task matches that.';
+            container.appendChild(none);
+            return;
+        }
+    }
+
     const I = (d: string) => `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
-    for (const task of _tasks) {
+    for (const task of shown) {
         const row = document.createElement('div');
         row.className = `sched-row ${task.enabled ? 'sched-on' : 'sched-off'}`;
         row.innerHTML = `
@@ -1690,10 +1739,10 @@ function renderModal(modal: HTMLElement): void {
                     return `<label class="sched-label">${t('sched.presetsTitle') || 'Start from a preset'} <span class="sched-hint-inline">${t('sched.presetsHint') || '— or build your own below'}</span></label>
                     <div class="sched-presets">
                         ${PRESETS.map((p) => `
-                            <button type="button" class="sched-preset" data-preset="${escAttr(p.key)}">
+                            <button type="button" class="sched-preset" data-preset="${escAttr(p.key)}"
+                                data-tooltip="${escAttr(t('sched.presetd.' + p.key) || p.desc)}">
                                 <span class="sched-preset-ico">${p.icon}</span>
-                                <span><b>${escHtml(t('sched.preset.' + p.key) || p.title)}</b>
-                                <span>${escHtml(t('sched.presetd.' + p.key) || p.desc)}</span></span>
+                                <span class="sched-preset-name">${escHtml(t('sched.preset.' + p.key) || p.title)}</span>
                             </button>`).join('')}
                     </div>`;
                 })()}

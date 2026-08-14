@@ -11787,16 +11787,21 @@ body.sched-drag-live .sched-branch .sched-drop-zone:empty {
 .sched-cmd-adv > summary { font-size:11px; color:var(--text-secondary); cursor:pointer; padding:4px 0; opacity:.85; }
 .sched-cmd-adv > summary:hover { opacity:1; }
 .sched-cmd-hint { font-size:11px; color: var(--accent); opacity:.95; margin-top:4px; }
-/* Preset picker, shown only on a blank new task. A column of wide targets rather than a
-   row of chips: each carries a sentence saying what the task does, and a chip cannot. */
-.sched-presets { display:flex; flex-direction:column; gap:6px; margin-bottom:14px; }
-.sched-preset { display:flex; gap:9px; align-items:flex-start; text-align:left; width:100%;
-    padding:9px 10px; border-radius:8px; border:1px solid var(--border);
-    background: var(--bg-elevated); color: var(--text); cursor:pointer; }
+/* Preset picker, shown only on a blank new task.
+   Chips in a wrapping row, not a column of cards. Five full-width cards each carrying a
+   sentence turned the top of a narrow sidebar into a wall you scrolled past to reach the
+   thing you came for — the name is what you choose by, and the sentence is what you want
+   once you are hesitating between two. So the sentence moved into the tooltip, where it
+   costs nothing until it is wanted. */
+.sched-presets { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; }
+.sched-preset { display:inline-flex; align-items:center; gap:6px; text-align:left;
+    padding:5px 10px; border-radius:999px; border:1px solid var(--border);
+    background: var(--bg-elevated); color: var(--text); cursor:pointer; font-size:12px; }
 .sched-preset:hover { border-color: var(--accent); background: var(--bg-hover); }
-.sched-preset-ico { font-size:16px; line-height:1.2; flex:0 0 auto; }
-.sched-preset b { display:block; font-size:12px; margin-bottom:2px; }
-.sched-preset span span { font-size:11px; color: var(--text-muted); line-height:1.35; }
+.sched-preset-ico { font-size:13px; line-height:1; flex:0 0 auto; }
+/* No truncation: a clipped preset name is a preset nobody picks, and there are five of
+   them — they fit. */
+.sched-preset-name { white-space:nowrap; }
 /* The selected script language has no interpreter on this machine, so the task cannot run.
    A warning tone rather than the accent every other hint wears: this one is not advice, it
    is the reason the task will fail. */
@@ -16499,3 +16504,10 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
    context for a decision, not the row's subject — the URL is. */
 .apps-source-from { font-size: 10px; color: var(--text-muted); background: var(--bg-base);
     border: 1px solid var(--border); border-radius: 999px; padding: 1px 7px; white-space: nowrap; flex: 0 0 auto; }
+
+/* Task filter — only rendered once there are enough tasks to need one. */
+.sched-filter { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+.sched-filter-input { flex:1; min-width:0; }
+.sched-filter-count { font-size:11px; color: var(--text-muted); white-space:nowrap; flex:0 0 auto; }
+/* Says why the list is empty. A blank area reads as "something broke". */
+.sched-filter-none { font-size:12px; color: var(--text-muted); padding:14px 4px; }
