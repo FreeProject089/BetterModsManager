@@ -41,8 +41,17 @@ export function readRepoCatalogs() {
         return [];
     }
 }
-/** The follow/unfollow strip above the repo browser. */
-export function renderRepoCatalogStrip(reload) {
+/**
+ * The follow/unfollow strip above the repo browser.
+ *
+ * `getRepos` is how Export reaches the list that is on screen. It has to be passed in:
+ * the list lives in `initRepo`'s scope, and this function is a sibling, not a child.
+ * Reading it directly compiled and shipped — this file is `@ts-nocheck`, so nothing
+ * objected — and then threw `ReferenceError: repoList is not defined` on the first click.
+ * `(repoList || [])` did not save it either: `||` still has to evaluate the name before it
+ * can pick a side, so a bare undefined identifier throws rather than falling back.
+ */
+export function renderRepoCatalogStrip(reload, getRepos = () => []) {
     const host = document.getElementById('repo-cat-list');
     const input = document.getElementById('repo-cat-url');
     const addBtn = document.getElementById('repo-cat-add');
@@ -92,7 +101,7 @@ export function renderRepoCatalogStrip(reload) {
         // Create a catalog FROM what is on screen. Somebody who has assembled a list worth
         // sharing should not have to hand-write JSON to share it — and the shape it writes
         // is the one this same browser reads, so a round trip is the test.
-        const rows = (repoList || []).map((r) => ({
+        const rows = getRepos().map((r) => ({
             name: r.name, url: r.url, description: r.description || '',
             region: r.region || '', category: r.category === 'official' ? 'community' : (r.category || 'community'),
         }));
