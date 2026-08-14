@@ -7123,5 +7123,17 @@
   "sched.syncDeleteT": "Delete mods the repo does not have",
   "sched.syncDelete": "Removes anything in the mods folder that is not in the repo. On a schedule this runs with nobody watching — leave it off unless the folder is only ever filled by this repo.",
   "kofi.tierAria": "Tip {n} on Ko-fi",
-  "rstudio.minimize": "Minimise — recording continues"
+  "rstudio.minimize": "Minimise — recording continues",
+  "settings.catIndex.title": "Catalogue index",
+  "settings.catIndex.desc": "One address that lists app, plugin and theme catalogs together. Preview it before anything is added — nothing is imported until you say so.",
+  "settings.catIndex.preview": "Preview",
+  "settings.catIndex.import": "Import",
+  "settings.catIndex.badUrl": "Enter an http(s) address.",
+  "settings.catIndex.loading": "Fetching…",
+  "settings.catIndex.willAdd": "Will add: {what}.",
+  "settings.catIndex.already": "{n} already there.",
+  "settings.catIndex.skipped": "{n} skipped.",
+  "settings.catIndex.nothing": "Nothing new here — everything it lists is already added.",
+  "settings.catIndex.failed": "Could not read that index",
+  "settings.catIndex.added": "Added {n} catalog source(s)."
 }

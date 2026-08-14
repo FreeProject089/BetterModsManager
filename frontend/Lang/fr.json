@@ -7121,5 +7121,17 @@
   "sched.syncDeleteT": "Supprimer les mods absents du dépôt",
   "sched.syncDelete": "Supprime tout ce qui se trouve dans le dossier des mods et pas dans le dépôt. Sur une tâche planifiée, cela s’exécute sans personne pour l’arrêter — laissez désactivé sauf si ce dossier n’est rempli que par ce dépôt.",
   "kofi.tierAria": "Donner {n} sur Ko-fi",
-  "rstudio.minimize": "Réduire — l’enregistrement continue"
+  "rstudio.minimize": "Réduire — l’enregistrement continue",
+  "settings.catIndex.title": "Index de catalogues",
+  "settings.catIndex.desc": "Une seule adresse qui liste ensemble les catalogues d’apps, de plugins et de thèmes. Prévisualisez avant d’ajouter quoi que ce soit — rien n’est importé tant que vous ne le demandez pas.",
+  "settings.catIndex.preview": "Prévisualiser",
+  "settings.catIndex.import": "Importer",
+  "settings.catIndex.badUrl": "Saisissez une adresse http(s).",
+  "settings.catIndex.loading": "Récupération…",
+  "settings.catIndex.willAdd": "Sera ajouté : {what}.",
+  "settings.catIndex.already": "{n} déjà présent(s).",
+  "settings.catIndex.skipped": "{n} ignoré(s).",
+  "settings.catIndex.nothing": "Rien de nouveau ici — tout ce qu’il liste est déjà ajouté.",
+  "settings.catIndex.failed": "Impossible de lire cet index",
+  "settings.catIndex.added": "{n} source(s) de catalogue ajoutée(s)."
 }

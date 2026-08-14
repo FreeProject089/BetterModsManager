@@ -8,6 +8,7 @@ import { t } from '../../core/i18n.js';
 import { getLinks, bcRoot, bcTestMode, bcTestBase } from '../../core/links-config.js';
 import { initI18nSandbox } from './i18n-sandbox.js';
 import { renderShortcutsManager } from '../../core/commands.js';
+import { parseCatalogIndex, planImport, STORE_KEY } from '../catalogs/catalog-index.js';
 import { toast } from '../../ui/app.js';
 import { getProfiles, getActiveProfileId } from '../profiles/profiles.js';
 import { formatBytes, escHtml, escAttr } from '../../core/utils.js';
@@ -1811,11 +1812,93 @@ async function initSecurityInfoCard() {
 
 // ── Settings Initializer ──────────────────────────────────
 
+/** The community-source list for a type, from wherever that type keeps it. */
+function readSources(type: string): string[] {
+    const key = STORE_KEY[type];
+    if (!key) return [];   // apps live in the Rust backend, handled separately below
+    try { return JSON.parse(localStorage.getItem(key) || '[]'); } catch { return []; }
+}
+
+/**
+ * Import a catalog index: one URL that names catalogs of several types.
+ *
+ * Preview first, always. This adds sources that BMM will fetch on every startup, from a
+ * document on somebody else's server — showing what would change, and requiring a second
+ * click, is the difference between a convenience and a thing that silently grew your
+ * startup fetch list.
+ */
+async function initCatalogIndexSettings() {
+    const input = document.getElementById('cat-index-url') as HTMLInputElement | null;
+    const previewBtn = document.getElementById('cat-index-preview') as HTMLButtonElement | null;
+    const importBtn = document.getElementById('cat-index-import') as HTMLButtonElement | null;
+    const out = document.getElementById('cat-index-result');
+    if (!input || !previewBtn || !importBtn || !out) return;
+
+    const LAST = 'bmm_catalog_index_url';
+    try { input.value = localStorage.getItem(LAST) || ''; } catch { /* ignore */ }
+
+    let planned: ReturnType<typeof planImport> | null = null;
+
+    previewBtn.addEventListener('click', async () => {
+        const url = input.value.trim();
+        if (!/^https?:\/\//i.test(url)) { toast(t('settings.catIndex.badUrl') || 'Enter an http(s) address.', 'error'); return; }
+        previewBtn.disabled = true;
+        importBtn.disabled = true;
+        planned = null;
+        out.textContent = t('settings.catIndex.loading') || 'Fetching…';
+        try {
+            // Through the backend, so the same TLS + identity handling every other catalog
+            // fetch gets applies here too.
+            const text = await invoke('fetch_remote_json', { url }) as string;
+            const { index, dropped } = parseCatalogIndex(JSON.parse(text));
+            const existing: Record<string, string[]> = { plugin: readSources('plugin'), theme: readSources('theme') };
+            planned = planImport(index, existing);
+            const byType = planned.add.reduce((m: Record<string, number>, e) => ({ ...m, [e.type]: (m[e.type] || 0) + 1 }), {});
+            const parts = Object.entries(byType).map(([k, n]) => `${n} ${k}`);
+            out.textContent = planned.add.length
+                ? `${(t('settings.catIndex.willAdd') || 'Will add: {what}.').replace('{what}', parts.join(', '))}`
+                  + (planned.already.length ? ` ${(t('settings.catIndex.already') || '{n} already there.').replace('{n}', String(planned.already.length))}` : '')
+                  + (dropped.length ? ` ${(t('settings.catIndex.skipped') || '{n} skipped.').replace('{n}', String(dropped.length))}` : '')
+                : (t('settings.catIndex.nothing') || 'Nothing new here — everything it lists is already added.');
+            importBtn.disabled = planned.add.length === 0;
+            try { localStorage.setItem(LAST, url); } catch { /* ignore */ }
+        } catch (e) {
+            // The URL is shown back deliberately: a typo in a long address is the usual
+            // cause and "failed" alone leaves you re-reading the field character by character.
+            out.textContent = `${t('settings.catIndex.failed') || 'Could not read that index'} — ${String(e).slice(0, 120)}`;
+            planned = null;
+        } finally { previewBtn.disabled = false; }
+    });
+
+    importBtn.addEventListener('click', async () => {
+        if (!planned?.add.length) return;
+        importBtn.disabled = true;
+        let ok = 0;
+        for (const e of planned.add) {
+            try {
+                if (e.type === 'app') {
+                    await invoke('add_community_source', { url: e.url });
+                } else {
+                    const key = STORE_KEY[e.type];
+                    if (!key) continue;
+                    const list = readSources(e.type);
+                    if (!list.includes(e.url)) { list.push(e.url); localStorage.setItem(key, JSON.stringify(list)); }
+                }
+                ok += 1;
+            } catch { /* one bad entry must not abandon the rest of the index */ }
+        }
+        out.textContent = (t('settings.catIndex.added') || 'Added {n} catalog source(s).').replace('{n}', String(ok));
+        toast((t('settings.catIndex.added') || 'Added {n} catalog source(s).').replace('{n}', String(ok)), 'success');
+        planned = null;
+    });
+}
+
 export async function initSettings() {
     await initGithubPatSettings();
     await initShaSettings();
     await initDiscordRpcSettings();
     await initSoundSettings();
+    await initCatalogIndexSettings();
     // Keyboard shortcuts are now a central, rebindable command registry (core/commands.ts) —
     // the global dispatcher is started once in app.ts. Here we just mount the manager UI.
     const skHost = document.getElementById('shortcuts-manager');
