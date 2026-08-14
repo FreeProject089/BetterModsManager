@@ -1471,6 +1471,124 @@ async function loadPickers(): Promise<void> {
     _apps = Object.entries(inst).map(([id, info]: any) => ({ id, name: info?.title || id, exe: info?.exe_path || '' }));
 }
 
+/**
+ * Ready-made tasks, offered when creating a new one.
+ *
+ * The scheduler can express a great deal and an empty editor shows none of it: the first
+ * screen is a name field and an "add step" button, which teaches nothing about what a
+ * task can be. Each preset is a real, complete task that does something worth doing on
+ * its own — not a demo — so it can be saved unchanged or used as a starting point.
+ *
+ * Every action type, parameter name, condition source and trigger shape below was read
+ * out of runAction/VALUE_SOURCES rather than remembered. A preset with an invented field
+ * would be worse than no preset: it is presented as the correct way to do the thing.
+ *
+ * Nothing here needs a permission. A preset that arrives already asking to run scripts or
+ * kill processes trains people to grant those without reading, which is the opposite of
+ * what splitting the permissions was for — the two that touch other programs are written
+ * so the user has to grant it deliberately, and say so in their description.
+ */
+const PRESETS: { key: string; icon: string; title: string; desc: string; make: () => Partial<Task> }[] = [
+    {
+        key: 'backup', icon: '💾',
+        title: 'Weekly backup',
+        desc: 'Every Monday at 09:00, export your BMM data and say so.',
+        make: () => ({
+            name: 'Weekly backup',
+            trigger: { type: 'weeklyAt', time: '09:00', days: [1] },
+            steps: [
+                { kind: 'action', action: { type: 'data.exportAuto', params: { increment: true } } },
+                { kind: 'action', action: { type: 'notify', params: { message: 'Weekly backup done.' } } },
+            ],
+        }),
+    },
+    {
+        key: 'updates', icon: '🔄',
+        title: 'Tell me about updates',
+        desc: 'Every morning, check for mod and BMM updates — and only notify if there is one.',
+        make: () => ({
+            name: 'Check for updates',
+            trigger: { type: 'dailyAt', time: '09:00' },
+            steps: [
+                { kind: 'action', action: { type: 'mods.checkUpdates', params: {} } },
+                { kind: 'action', action: { type: 'app.checkUpdate', params: {} } },
+                // The point of the `if`: a daily "no updates" toast is a notification people
+                // learn to dismiss without reading, which costs you the one that mattered.
+                {
+                    kind: 'if',
+                    condition: { type: 'value', params: { source: 'update.available', op: '==', value: 1 } },
+                    then: [{ kind: 'action', action: { type: 'notify', params: { message: 'A BMM update is available.' } } }],
+                    else: [],
+                },
+            ],
+        }),
+    },
+    {
+        key: 'disk', icon: '🧮',
+        title: 'Warn me before the disk fills',
+        desc: 'Twice a day, check free space and warn under 20 GB. Silent otherwise.',
+        make: () => ({
+            name: 'Low disk space warning',
+            trigger: { type: 'interval', everyMinutes: 720 },
+            steps: [
+                { kind: 'action', action: { type: 'perf.diskSpace', params: {} } },
+                {
+                    kind: 'if',
+                    condition: { type: 'value', params: { source: 'disk.free_gb', op: '<', value: 20 } },
+                    then: [{ kind: 'action', action: { type: 'notify', params: { message: 'Less than 20 GB free — mods may fail to install.' } } }],
+                    else: [],
+                },
+            ],
+        }),
+    },
+    {
+        key: 'scan', icon: '📁',
+        title: 'Rescan mods when BMM opens',
+        desc: 'Picks up anything you added to the mods folder outside BMM.',
+        make: () => ({
+            name: 'Rescan mods on start',
+            trigger: { type: 'appStart' },
+            steps: [{ kind: 'action', action: { type: 'mods.scan', params: {} } }],
+        }),
+    },
+    {
+        key: 'aftergame', icon: '🎮',
+        title: 'Tidy up after the game closes',
+        desc: 'Waits for the game to exit, then stops its launcher and rescans your mods. Fill in the two names, and grant “Stop programs”.',
+        make: () => ({
+            name: 'Tidy up after playing',
+            trigger: { type: 'interval', everyMinutes: 5 },
+            steps: [
+                // Guard first: without it this task fires every five minutes forever, and
+                // "the game is not running" is true almost all day.
+                {
+                    kind: 'if',
+                    condition: { type: 'appRunning', params: { name: '' } },
+                    then: [],
+                    else: [{ kind: 'action', action: { type: 'task.stop', params: { reason: 'the game is not running' } } }],
+                },
+                {
+                    kind: 'waitFor',
+                    condition: { type: 'appNotRunning', params: { name: '' } },
+                    timeoutSec: 14400, pollSec: 30, onTimeout: 'abort',
+                },
+                { kind: 'action', action: { type: 'app.stop', params: { name: '' } } },
+                { kind: 'action', action: { type: 'mods.scan', params: {} } },
+            ],
+        }),
+    },
+];
+
+/** Build a full task from a preset. The id and createdAt are minted here, never stored in
+ *  the preset itself — two tasks made from one preset must not share an id. */
+function taskFromPreset(p: (typeof PRESETS)[number]): Task {
+    return {
+        id: `sched-${Date.now()}`, enabled: true, createdAt: Date.now(), catchUp: true,
+        allowCustomCommands: false, name: '', trigger: { type: 'interval', everyMinutes: 60 }, steps: [],
+        ...p.make(),
+    } as Task;
+}
+
 async function openTaskModal(task: Task | null): Promise<void> {
     await loadPickers();
     _editing = task;
@@ -1537,6 +1655,22 @@ function renderModal(modal: HTMLElement): void {
         </div>
         <div class="sched-layout">
             <aside class="sched-side">
+                ${(() => {
+                    // Only on a genuinely blank new task. Offering these while editing would
+                    // put a button that replaces the whole task next to the one that renames
+                    // it, and the empty-steps test means a preset picked by mistake can be
+                    // undone by clearing the steps rather than by losing work.
+                    if (_editing || _draft.steps.length || _draft.name) return '';
+                    return `<label class="sched-label">${t('sched.presetsTitle') || 'Start from a preset'} <span class="sched-hint-inline">${t('sched.presetsHint') || '— or build your own below'}</span></label>
+                    <div class="sched-presets">
+                        ${PRESETS.map((p) => `
+                            <button type="button" class="sched-preset" data-preset="${escAttr(p.key)}">
+                                <span class="sched-preset-ico">${p.icon}</span>
+                                <span><b>${escHtml(t('sched.preset.' + p.key) || p.title)}</b>
+                                <span>${escHtml(t('sched.presetd.' + p.key) || p.desc)}</span></span>
+                            </button>`).join('')}
+                    </div>`;
+                })()}
                 <label class="sched-label">${t('sched.fName') || 'Name'}</label>
                 <input class="input sched-name-input" id="sched-name" value="${escAttr(_draft.name)}" placeholder="${escAttr(t('sched.fNamePh') || 'e.g. Activate DCS profile every morning')}">
                 <textarea class="input" id="sched-desc" rows="2" placeholder="${escAttr(t('sched.fDescriptionPh') || 'Description (optional)')}" style="resize:vertical;margin-top:8px">${escHtml(_draft.description || '')}</textarea>
@@ -1621,6 +1755,15 @@ function renderModal(modal: HTMLElement): void {
 
     modal.querySelector('#sched-close')?.addEventListener('click', () => modal.classList.remove('open'));
     modal.querySelector('#sched-cancel')?.addEventListener('click', () => modal.classList.remove('open'));
+    modal.querySelectorAll<HTMLElement>('[data-preset]').forEach((b) => {
+        b.addEventListener('click', () => {
+            const p = PRESETS.find((x) => x.key === b.dataset.preset);
+            if (!p) return;
+            _snapshot();                       // undo covers this like any other edit
+            _draft = taskFromPreset(p);
+            renderModal(modal!);               // re-render: the strip hides itself now that steps exist
+        });
+    });
     modal.querySelector('#sched-name')?.addEventListener('input', (e) => { _draft.name = (e.target as HTMLInputElement).value; });
     modal.querySelector('#sched-desc')?.addEventListener('input', (e) => { _draft.description = (e.target as HTMLTextAreaElement).value; });
     modal.querySelectorAll<HTMLInputElement>('[data-perm]').forEach(cb => {
