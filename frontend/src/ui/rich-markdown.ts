@@ -12,6 +12,20 @@ const CALLOUT_ALERT: Record<string, string> = {
   warning: 'WARNING', caution: 'CAUTION', danger: 'CAUTION', important: 'IMPORTANT', callout: 'NOTE', custom: 'NOTE',
 };
 
+// Step markers. The same four alphabets md.jsx uses on the website, so the same source
+// numbers identically in both — a procedure that reads "1. 2. 3." in the blog and
+// "A. B. C." in the app would be two documents, not one.
+//
+// Past the end of an alphabet it falls back to the number rather than wrapping to A
+// again, which would silently repeat a marker.
+const ROMAN = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x', 'xi', 'xii'];
+export function stepMarker(kind: string, n: number): string {
+  if (kind === 'a' || kind === 'alpha') return n <= 26 ? String.fromCharCode(64 + n) : String(n);
+  if (kind === 'i' || kind === 'roman') return ROMAN[n - 1] || String(n);
+  if (kind === 'dot' || kind === 'none' || kind === 'bullet') return '•';
+  return String(n);
+}
+
 function parseDirAttrs(s: string): Record<string, string> {
   const out: Record<string, string> = {};
   if (!s) return out;
@@ -115,7 +129,57 @@ export function expandDocBlocks(md: string, opts: ExpandOpts = {}, _top = true):
       inner.push(lines[i]); i++;
     }
     const innerMd = expandDocBlocks(inner.join('\n'), opts, false).trim();
-    if (name === 'cards') { out.push('', `<div class="community-cards">${innerMd}</div>`, ''); }
+    if (name === 'steps') {
+      // A numbered sequence, matching the `:::steps` / `:::step` the website renders.
+      //
+      // The markers are computed HERE rather than left to CSS counters, for the same
+      // reason md.jsx does it on the site: the numbers have to be identical in both
+      // places, and a CSS counter cannot be relied on anywhere the HTML is reused (an
+      // e-mail, a copied snippet, a theme that resets counters).
+      const kind = String(attrs.type || attrs.marker || '1').toLowerCase();
+      let n = Math.max(1, parseInt(attrs.start, 10) || 1);
+      // Only direct `step` children are numbered — a stray paragraph between two steps
+      // must not consume a marker, or the list silently skips a number.
+      // REPLACE the child's placeholder marker rather than prepending another. A step
+      // always emits data-marker="•" so it still renders on its own; adding a second
+      // attribute here produced `data-marker="1" data-marker="•"` on one element, which
+      // is valid enough that nothing complained and wrong in a way only a test caught.
+      const numbered = innerMd.replace(/(<div class="community-step") data-marker="[^"]*"/g, () => {
+        const m = stepMarker(kind, n); n += 1;
+        return `<div class="community-step" data-marker="${escAttr(m)}"`;
+      });
+      const vertical = String(attrs.orientation || attrs.dir || 'vertical') !== 'horizontal';
+      out.push('', `<div class="community-steps ${vertical ? 'community-steps-v' : 'community-steps-h'}">${numbered}</div>`, '');
+    }
+    else if (name === 'step' || name === 'stage') {
+      // The marker is stamped by the parent above. A step used on its own still renders —
+      // half a component is worse than a plain paragraph — it simply gets a bullet.
+      const title = label || attrs.title || '';
+      out.push('', `<div class="community-step" data-marker="•">`
+        + (title ? `<div class="community-step-title">${escHtml(title)}</div>` : '')
+        + `<div class="community-step-body">${innerMd}</div></div>`, '');
+    }
+    else if (name === 'roadmap') {
+      // Phases with a state. `done` / `doing` / `todo` are the site's three, and anything
+      // else falls back to todo rather than rendering an empty marker.
+      const vertical = String(attrs.orientation || attrs.dir || 'vertical') !== 'horizontal';
+      const title = label || attrs.title || '';
+      out.push('', `<div class="community-roadmap ${vertical ? 'community-roadmap-v' : 'community-roadmap-h'}">`
+        + (title ? `<div class="community-roadmap-title">${escHtml(title)}</div>` : '')
+        + `${innerMd}</div>`, '');
+    }
+    else if (name === 'phase') {
+      const state = ['done', 'doing', 'todo'].includes(String(attrs.state || '').toLowerCase())
+        ? String(attrs.state).toLowerCase() : 'todo';
+      const mark = state === 'done' ? '✓' : state === 'doing' ? '→' : '○';
+      const title = label || attrs.title || '';
+      out.push('', `<div class="community-phase community-phase-${state}">`
+        + `<div class="community-phase-mark" aria-hidden="true">${mark}</div>`
+        + `<div class="community-phase-body">`
+        + (title ? `<div class="community-phase-title">${escHtml(title)}</div>` : '')
+        + `${innerMd}</div></div>`, '');
+    }
+    else if (name === 'cards') { out.push('', `<div class="community-cards">${innerMd}</div>`, ''); }
     else if (name === 'columns' || name === 'row') { out.push('', `<div class="community-columns">${innerMd}</div>`, ''); }
     else if (name === 'column' || name === 'col') { out.push('', `<div class="community-column">${mdInline(innerMd)}</div>`, ''); }
     else if (name === 'card' || name === 'ref') {

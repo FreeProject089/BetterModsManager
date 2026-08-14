@@ -434,3 +434,58 @@
 .bmm-replay-embed-text { display: flex; flex-direction: column; min-width: 0; }
 .bmm-replay-embed-title { font-weight: 600; }
 .bmm-replay-embed-sub { font-size: 12px; opacity: .7; }
+
+/* ── :::steps / :::roadmap ─────────────────────────────────────────────────────
+   The markdown blocks BCWEB renders, down-converted by ui/rich-markdown.ts. Styled
+   here so the same source looks the same in the blog and in the app — the whole
+   reason that converter exists.
+
+   The rail is drawn on the STEP, not on the marker: `height: 100%` on a 26px marker
+   resolves against the marker, so the line came out 26px long. Same fix the website
+   needed. */
+.community-steps { display: flex; flex-direction: column; gap: 2px; margin: 14px 0; }
+.community-steps-h { flex-direction: row; flex-wrap: wrap; gap: 12px; }
+.community-steps-h .community-step { flex: 1 1 200px; }
+.community-steps-h .community-step::before { display: none; }
+
+.community-step { position: relative; padding: 0 0 16px 38px; }
+.community-step:last-child { padding-bottom: 0; }
+/* The connecting rail. Hidden on the last step so the line stops at the last marker
+   instead of trailing into whatever follows the block. */
+.community-step::before {
+  content: ''; position: absolute; left: 12px; top: 26px; bottom: 0; width: 2px;
+  background: var(--bmm-border, rgba(255,255,255,.12));
+}
+.community-step:last-child::before { display: none; }
+.community-step::after {
+  content: attr(data-marker);
+  position: absolute; left: 0; top: 0; width: 26px; height: 26px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 999px; font-size: 12px; font-weight: 700; line-height: 1;
+  color: var(--bmm-accent); background: color-mix(in srgb, var(--bmm-accent) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--bmm-accent) 40%, transparent);
+}
+.community-step-title { font-weight: 700; margin-bottom: 4px; padding-top: 4px; }
+.community-step-body > :first-child { margin-top: 0; }
+.community-step-body > :last-child { margin-bottom: 0; }
+
+.community-roadmap { margin: 14px 0; }
+.community-roadmap-title { font-weight: 700; margin-bottom: 8px; }
+.community-roadmap-h { display: flex; flex-wrap: wrap; gap: 12px; }
+.community-roadmap-h .community-phase { flex: 1 1 180px; }
+
+.community-phase { display: flex; gap: 10px; align-items: flex-start; padding: 6px 0; }
+.community-phase-mark {
+  flex: 0 0 auto; width: 22px; height: 22px; border-radius: 999px;
+  display: flex; align-items: center; justify-content: center; font-size: 12px; line-height: 1;
+  border: 1px solid var(--bmm-border, rgba(255,255,255,.14));
+}
+/* Three states, three tones — and never colour alone: the ✓ / → / ○ carries the same
+   information for anyone who cannot separate the hues. */
+.community-phase-done .community-phase-mark { color: var(--bmm-success, #4ade80); border-color: color-mix(in srgb, var(--bmm-success, #4ade80) 45%, transparent); }
+.community-phase-doing .community-phase-mark { color: var(--bmm-accent); border-color: color-mix(in srgb, var(--bmm-accent) 45%, transparent); }
+.community-phase-todo .community-phase-mark { color: var(--bmm-text-dim, #94a3b8); }
+.community-phase-done .community-phase-title { text-decoration: line-through; opacity: .75; }
+.community-phase-title { font-weight: 600; }
+.community-phase-body > :first-child { margin-top: 0; }
+.community-phase-body > :last-child { margin-bottom: 0; }
