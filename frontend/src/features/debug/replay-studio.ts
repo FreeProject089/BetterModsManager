@@ -14,6 +14,7 @@
 // live-app pass to confirm end-to-end — they can't be exercised without the running webview.
 
 import { invoke } from '../../core/api.js';
+import { planCuts, applyCuts, shiftPastCuts, type CutRange } from './replay-cut.js';
 import { t } from '../../core/i18n.js';
 import { loadRrweb, subscribeReplay, unsubscribeReplay, isFullReplay, setExtraBlockSelectors, type ReplaySubscriber } from '../../core/replay-recorder.js';
 import { captureSupport, startCapture, stopCapture, isCapturing } from './video-capture.js';
@@ -311,15 +312,38 @@ function compress(ts: number, pauses: { start: number; end: number }[]): number 
   return ts - paused;
 }
 
-// Build the .bmmreplay (rrweb events + region timeline), honouring an optional END trim.
+// Cuts asked for on the review bar, in COMPRESSED time (what the user sees on the
+// timeline), applied on export. Kept out of S.events so the raw take survives and a cut can
+// be taken back by rebuilding from it.
+let cutRanges: CutRange[] = [];
+
+// Build the .bmmreplay (rrweb events + region timeline), honouring an optional END trim and
+// any mid-timeline cuts.
 function buildBundle(trimEndMs?: number): string | null {
   if (!S || S.events.length < 2) return null;
   const first = S.events[0].timestamp;
-  const events = S.events
+  let events = S.events
     .map((ev) => ({ ...ev, timestamp: compress(ev.timestamp, S!.pauses) }))
     .filter((ev) => trimEndMs == null || ev.timestamp - compress(first, S!.pauses) <= trimEndMs);
+  // After pause-compression and the end trim, so the ranges mean what the review bar showed.
+  // planCuts snaps every cut end forward to the next full snapshot; see replay-cut.ts for
+  // why a cut cannot end anywhere else.
+  if (cutRanges.length) {
+    const base0 = events.length ? events[0].timestamp : 0;
+    const abs = cutRanges.map((c) => ({ start: base0 + c.start, end: base0 + c.end }));
+    const plan = planCuts(events, abs);
+    events = applyCuts(events, plan.cuts);
+  }
   const base = compress(first, S.pauses);
-  const regions: RegionKey[] = S.regions.map((r) => ({ t: Math.max(0, compress(r.ts, S!.pauses) - base), rect: r.rect }));
+  // Region keyframes ride the same timeline as the events, so a cut has to move them too —
+  // otherwise the viewport would pan to a frame that belongs to a moment no longer in the
+  // file. Keyframes that fall INSIDE a cut are dropped; the one before it still applies.
+  let regions: RegionKey[] = S.regions.map((r) => ({ t: Math.max(0, compress(r.ts, S!.pauses) - base), rect: r.rect }));
+  if (cutRanges.length) {
+    regions = regions
+      .filter((r) => !cutRanges.some((c) => r.t >= c.start && r.t < c.end))
+      .map((r) => ({ ...r, t: Math.max(0, shiftPastCuts(r.t, cutRanges)) }));
+  }
   const durationMs = events.length ? events[events.length - 1].timestamp - events[0].timestamp : 0;
   return JSON.stringify({
     bmmReplay: 1,
@@ -432,9 +456,21 @@ function renderBar() {
     // Only an END trim is offered. A start trim would have to drop the opening full snapshot
     // that every later event is a delta against, producing a file that cannot be played — so
     // it is deliberately absent rather than quietly broken.
+    const cutList = cutRanges.length
+      ? `<span class="rstudio-cuts">${cutRanges.map((c, i) =>
+          `<span class="rstudio-cut-chip" data-cut="${i}">${(c.start / 1000).toFixed(1)}–${(c.end / 1000).toFixed(1)}s ×</span>`).join('')}</span>`
+      : '';
     controls =
       `<span class="rstudio-status">${t('rstudio.done') || 'Recorded'} ${dur.toFixed(1)}s · ${fmtMB(S.bytes)}</span>` +
       `<label class="rstudio-trim">${t('rstudio.trimend') || 'Keep first'} <input type="number" class="rstudio-trim-in" min="1" step="1" max="${Math.ceil(dur)}" value="${Math.ceil(dur)}"> s</label>` +
+      // Cutting from the middle, unlike the end trim above, cannot land wherever it likes:
+      // the end of a cut snaps forward to the next full snapshot, and the chip shows where
+      // it actually landed rather than what was typed.
+      `<label class="rstudio-trim">${t('rstudio.cut') || 'Cut'} ` +
+        `<input type="number" class="rstudio-cut-a" min="0" step="0.5" max="${Math.ceil(dur)}" placeholder="${t('rstudio.cutfrom') || 'from'}"> – ` +
+        `<input type="number" class="rstudio-cut-b" min="0" step="0.5" max="${Math.ceil(dur)}" placeholder="${t('rstudio.cutto') || 'to'}"> s</label>` +
+      btn('cutadd', t('rstudio.cutadd') || 'Add cut') +
+      cutList +
       `<span class="rstudio-est"></span>` +
       btn('export', t('rstudio.export') || 'Export .bmmreplay', 'rstudio-primary') +
       btn('reset', t('rstudio.new') || 'New');
@@ -509,6 +545,16 @@ function updateEstimate() {
 }
 
 function onBarClick(e: Event) {
+  // A cut chip removes itself. Handled before the [data-act] lookup because a chip is not a
+  // button — making it one would have put it in the toolbar's tab order between the fields
+  // it sits next to.
+  const chip = (e.target as HTMLElement).closest('[data-cut]') as HTMLElement | null;
+  if (chip && S) {
+    e.stopPropagation();
+    const i = Number(chip.getAttribute('data-cut'));
+    if (Number.isInteger(i)) { cutRanges.splice(i, 1); renderBar(); }
+    return;
+  }
   const el = (e.target as HTMLElement).closest('[data-act]') as HTMLElement | null;
   if (!el || !S) return;
   // Keep the click on the toolbar — never let it bubble to the app underneath.
@@ -525,7 +571,36 @@ function onBarClick(e: Event) {
       studioExport(Number.isFinite(keep) ? keep * 1000 : undefined);
       break;
     }
-    case 'reset': S.events = []; S.regions = []; S.pauses = []; S.bytes = 0; S.warned = false; S.autoStopped = false; renderBar(); break;
+    case 'cutadd': {
+      const a = bar?.querySelector('.rstudio-cut-a') as HTMLInputElement | null;
+      const b = bar?.querySelector('.rstudio-cut-b') as HTMLInputElement | null;
+      const from = a ? parseFloat(a.value) : NaN;
+      const to = b ? parseFloat(b.value) : NaN;
+      if (!Number.isFinite(from) || !Number.isFinite(to) || to <= from) {
+        setStatus(t('rstudio.cutbad') || 'Give a start and an end, with the end after the start.');
+        break;
+      }
+      // Planned against the real events so the chip shows where the cut ACTUALLY lands —
+      // its end snaps forward to the next full snapshot, and a cut with no snapshot after
+      // it is refused rather than silently swallowing the rest of the take.
+      const compressed = S.events.map((ev) => ({ ...ev, timestamp: compress(ev.timestamp, S!.pauses) }));
+      const base0 = compressed.length ? compressed[0].timestamp : 0;
+      const plan = planCuts(compressed, [{ start: base0 + from * 1000, end: base0 + to * 1000 }]);
+      if (!plan.cuts.length) {
+        setStatus(t('rstudio.cutnoanchor') || 'Nothing to resume on after that point — a cut has to end where the recording was paused and resumed.');
+        break;
+      }
+      const c = plan.cuts[0];
+      cutRanges.push({ start: c.start - base0, end: c.end - base0 });
+      if (plan.snapped.length) {
+        setStatus((t('rstudio.cutsnapped') || 'Cut ends at {s}s — the next point the recording can resume from.')
+          .replace('{s}', ((c.end - base0) / 1000).toFixed(1)));
+      }
+      if (a) a.value = ''; if (b) b.value = '';
+      renderBar();
+      break;
+    }
+    case 'reset': S.events = []; S.regions = []; S.pauses = []; S.bytes = 0; S.warned = false; S.autoStopped = false; cutRanges = []; renderBar(); break;
     case 'pick-hide': pickToHide(); break;
     case 'unhide': {
       const sel = el.getAttribute('data-sel');
