@@ -57,6 +57,38 @@ export const INDEX_TYPES = ['app', 'plugin', 'theme', 'preset', 'repo'] as const
  *  - Duplicate URLs collapse, keeping the first: an index listing something twice must not
  *    make the caller add it twice.
  */
+/**
+ * Is this document an INDEX of catalogs, rather than a catalog?
+ *
+ * Somebody handed an index URL will paste it into whichever "add a catalog source" field
+ * is in front of them — they are all boxes that take a URL, and nothing on screen says
+ * which kind of document each expects. Adding an index as an app catalog fails silently:
+ * it has no `apps` array, so BMM reads zero entries and reports a source that works and
+ * contains nothing. Detecting it is what turns that into "this is an index, shall I add it
+ * as one?".
+ *
+ * Shape, never the URL. A file called catalogs.json can be anything and a catalog can be
+ * called anything; guessing from the name is how the wrong document gets accepted with
+ * confidence.
+ *
+ * The test is deliberately narrow: a `catalogs` ARRAY whose entries look like index
+ * entries — a url and a type. A document merely carrying the word "catalogs" is not one,
+ * and misidentifying a real catalog would take a working source away from somebody.
+ */
+export function looksLikeIndex(doc: unknown): boolean {
+    if (!doc || typeof doc !== 'object' || Array.isArray(doc)) return false;
+    const d = doc as Record<string, any>;
+    // An explicit self-declaration is enough on its own — BCWEB sends kind: 'catalog-index'
+    // — but is NOT required, so a hand-written index still works.
+    if (String(d.kind || '').toLowerCase() === 'catalog-index' && Array.isArray(d.catalogs)) return true;
+    if (!Array.isArray(d.catalogs) || d.catalogs.length === 0) return false;
+    // A catalog feed never carries a top-level `catalogs` array of {url,type} objects; those
+    // carry apps/plugins/themes/presets instead. Requiring BOTH fields keeps a document that
+    // happens to list catalog NAMES from being mistaken for one that lists their addresses.
+    return d.catalogs.every((e: any) => e && typeof e === 'object'
+        && typeof e.url === 'string' && typeof e.type === 'string');
+}
+
 export function parseCatalogIndex(raw: unknown, forApp = 'bmm'): { index: CatalogIndex; dropped: string[] } {
     const dropped: string[] = [];
     const doc = (raw && typeof raw === 'object' ? raw : {}) as Record<string, any>;

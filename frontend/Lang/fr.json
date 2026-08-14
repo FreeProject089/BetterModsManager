@@ -7147,5 +7147,6 @@
   "sched.insp.clean": "Rien ici ne demande de permission ni ne touche quoi que ce soit hors de BMM.",
   "sched.insp.foot": "Rien n’a été importé. Ferme ceci et utilise Importer si tu le veux.",
   "settings.catIndex.saved": "Sources que tu gardes",
-  "settings.catIndex.reuse": "Utiliser"
+  "settings.catIndex.reuse": "Utiliser",
+  "apps.sources.isIndex": "C’est un INDEX de catalogues, pas un catalogue d’applications — ajoute-le dans Réglages → Index de catalogues, où tu verras ce qu’il importerait."
 }

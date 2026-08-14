@@ -10,7 +10,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const { parseCatalogIndex, planImport, INDEX_TYPES, STORE_KEY, ROUTABLE } = await import(
+const { parseCatalogIndex, planImport, INDEX_TYPES, STORE_KEY, ROUTABLE, looksLikeIndex } = await import(
   pathToFileURL(join(ROOT, 'frontend/js/features/catalogs/catalog-index.js')).href
 );
 
@@ -161,6 +161,52 @@ describe('the two types the feed gained', () => {
     assert.deepEqual([...ROUTABLE], [...INDEX_TYPES], 'a type is accepted with nowhere to route it');
     for (const t of INDEX_TYPES) {
       assert.ok(t === 'app' || STORE_KEY[t], `${t} has no store`);
+    }
+  });
+});
+
+describe('telling an index from a catalog', () => {
+  test('recognises one BCWEB sends', () => {
+    assert.equal(looksLikeIndex({ kind: 'catalog-index', catalogs: [{ type: 'app', url: 'https://e.com/a.json' }] }), true);
+  });
+
+  test('recognises a hand-written one with no kind field', () => {
+    // Self-declaration is enough on its own but must not be required, or only our own
+    // server could publish an index.
+    assert.equal(looksLikeIndex({ version: '1.0', catalogs: [{ type: 'plugin', url: 'https://e.com/p.json' }] }), true);
+  });
+
+  test('does NOT mistake a real catalog for one', () => {
+    // The expensive direction. Misidentifying a working app catalog would take a source
+    // away from somebody and tell them it was the wrong kind of file.
+    for (const doc of [
+      { version: '1.0', name: 'x', apps: [{ id: 'a', download: { url: 'u' } }] },
+      { version: '1.0', plugins: [{ id: 'p' }] },
+      { version: '1.0', themes: [] },
+      { version: '1.0', presets: [{ id: 'q' }] },
+    ]) {
+      assert.equal(looksLikeIndex(doc), false, `${JSON.stringify(doc).slice(0, 40)} was called an index`);
+    }
+  });
+
+  test('a bare mention of "catalogs" is not an index', () => {
+    // A document that lists catalog NAMES is not one that lists their addresses. Requiring
+    // both url and type on every entry is what separates them.
+    assert.equal(looksLikeIndex({ catalogs: ['one', 'two'] }), false);
+    assert.equal(looksLikeIndex({ catalogs: [{ name: 'one' }] }), false);
+    assert.equal(looksLikeIndex({ catalogs: [{ url: 'https://e.com/a.json' }] }), false);
+    assert.equal(looksLikeIndex({ catalogs: [] }), false);
+  });
+
+  test('one bad entry disqualifies the document', () => {
+    // every(), not some(): a catalog feed that happened to carry one index-shaped object
+    // would otherwise be adopted whole.
+    assert.equal(looksLikeIndex({ catalogs: [{ type: 'app', url: 'https://e.com/a.json' }, { name: 'not an entry' }] }), false);
+  });
+
+  test('survives anything that is not an object', () => {
+    for (const junk of [null, undefined, 0, '', 'catalogs', [], [{ type: 'app', url: 'u' }]]) {
+      assert.equal(looksLikeIndex(junk), false, `${JSON.stringify(junk)} was called an index`);
     }
   });
 });

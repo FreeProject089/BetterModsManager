@@ -915,6 +915,29 @@ function renderSources() {
         const url = input.value.trim();
         if (!url.startsWith('http')) { toast(t('apps.sources.invalidUrl')||'Invalid URL', 'error'); return; }
         try {
+            // An index pasted here would be accepted and then read as an app catalog with no
+            // `apps` array — a source that "works" and contains nothing, with no hint that
+            // the wrong kind of document was added. Somebody handed an index URL pastes it
+            // into whichever box is in front of them; they all take a URL and none of them
+            // says which document it wants.
+            //
+            // Checked by SHAPE, not by the address: a file called catalogs.json can be
+            // anything. Fetched through the backend so the same TLS and identity handling
+            // every other catalog fetch gets applies here too.
+            try {
+                const probe: string = await invoke('fetch_remote_json', { url }, { quiet: true }) as string;
+                const doc = JSON.parse(probe);
+                const { looksLikeIndex } = await import('../catalogs/catalog-index.js');
+                if (looksLikeIndex(doc)) {
+                    // Not added here, and not silently added elsewhere either. Importing an
+                    // index adds several sources at once, which is a bigger action than the
+                    // one that was asked for — it belongs behind the preview in Settings,
+                    // where you see what it would change before it changes.
+                    toast(t('apps.sources.isIndex') || 'That is a catalogue INDEX, not an app catalog — add it under Settings → Catalogue index, where you can see what it would import.', 'info');
+                    return;
+                }
+            } catch { /* unreachable or not JSON — let the normal add path report it */ }
+
             _state.community_sources = await invoke('add_community_source', { url });
             input.value = '';
             toast(t('apps.sources.added')||'Source added', 'success');
