@@ -11796,7 +11796,7 @@ body.sched-drag-live .sched-branch .sched-drop-zone:empty {
 .sched-presets { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; }
 .sched-preset { display:inline-flex; align-items:center; gap:6px; text-align:left;
     padding:5px 10px; border-radius:999px; border:1px solid var(--border);
-    background: var(--bg-elevated); color: var(--text); cursor:pointer; font-size:12px; }
+    background: var(--bg-card); color: var(--text-primary); cursor:pointer; font-size:12px; }
 .sched-preset:hover { border-color: var(--accent); background: var(--bg-hover); }
 .sched-preset-ico { font-size:13px; line-height:1; flex:0 0 auto; }
 /* No truncation: a clipped preset name is a preset nobody picks, and there are five of
@@ -16469,7 +16469,7 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 .sched-insp-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .sched-insp-file { font-size: 11px; color: var(--text-muted); margin-left: 8px; }
 .sched-insp-verdict { font-size: 12px; padding: 9px 11px; border-radius: 9px; margin-bottom: 12px;
-    border: 1px solid var(--border); background: var(--bg-elevated); }
+    border: 1px solid var(--border); background: var(--bg-card); }
 /* Warning tone, not danger: asking for a permission is not proof of ill intent, and
    colouring it as an attack would train people to ignore the one that matters. */
 .sched-insp-verdict-warn { color: var(--warning); border-color: color-mix(in srgb, var(--warning) 45%, transparent); }
@@ -16486,7 +16486,7 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 /* The script body is the thing a reviewer most needs to actually read, so it gets room
    and keeps its own whitespace — reflowed code is code you cannot judge. */
 .sched-insp-script pre { margin: 6px 0 0; padding: 9px; border-radius: 8px; overflow: auto; max-height: 260px;
-    background: var(--bg-base); border: 1px solid var(--border); font-size: 11px; white-space: pre; }
+    background: var(--bg-secondary); border: 1px solid var(--border); font-size: 11px; white-space: pre; }
 .sched-insp-foot { font-size: 11px; color: var(--text-muted); margin-top: 10px; }
 
 /* Catalogue index sources you keep. A list rather than one remembered field: somebody
@@ -16498,11 +16498,11 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 /* min-width:0 so a long URL truncates instead of pushing the buttons off the card —
    the blowout an unbreakable string causes in a flex row. */
 .cat-index-url { flex: 1; min-width: 0; font-size: 11px; font-family: var(--font-mono, monospace);
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-dim); }
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-secondary); }
 
 /* Where a catalog source came from, when an index brought it in. Quiet by design: it is
    context for a decision, not the row's subject — the URL is. */
-.apps-source-from { font-size: 10px; color: var(--text-muted); background: var(--bg-base);
+.apps-source-from { font-size: 10px; color: var(--text-muted); background: var(--bg-secondary);
     border: 1px solid var(--border); border-radius: 999px; padding: 1px 7px; white-space: nowrap; flex: 0 0 auto; }
 
 /* Task filter — only rendered once there are enough tasks to need one. */
@@ -16514,7 +16514,7 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 
 /* Which custom repo catalog an entry came from. Quiet next to the category badge: the
    badge says what it is, this says where it came from, and only the first is a claim. */
-.repo-src-tag { font-size: 9px; color: var(--text-muted); background: var(--bg-base);
+.repo-src-tag { font-size: 9px; color: var(--text-muted); background: var(--bg-secondary);
     border: 1px solid var(--border); border-radius: 999px; padding: 1px 7px; margin-left: 6px;
     white-space: nowrap; }
 
@@ -16525,7 +16525,7 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 .repo-cats-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .repo-cat-chip { display: inline-flex; align-items: center; gap: 5px; font-size: 11px;
     padding: 2px 4px 2px 9px; border-radius: 999px; border: 1px solid var(--border);
-    background: var(--bg-elevated); color: var(--text-dim); }
+    background: var(--bg-card); color: var(--text-secondary); }
 /* A real button, not a styled span: removing a source is an action, and it should be
    reachable by keyboard like every other one. */
 .repo-cat-del { background: none; border: 0; color: var(--text-muted); cursor: pointer;
@@ -16542,7 +16542,7 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 .sched-pc-ver { font-size: 10px; color: var(--bmm-accent); }
 .sched-pc-n { font-size: 10px; color: var(--text-muted); }
 .sched-pc-desc { flex-basis: 100%; font-size: 12px; color: var(--text-muted); }
-.sched-pc-from { flex-basis: 100%; font-size: 10px; color: var(--text-dim); }
+.sched-pc-from { flex-basis: 100%; font-size: 10px; color: var(--text-secondary); }
 /* Folded away: what was skipped matters when something is missing and is noise otherwise. */
 .sched-pc-problems { margin-top: 10px; font-size: 11px; color: var(--text-muted); }
 .sched-pc-problems summary { cursor: pointer; }
