@@ -866,8 +866,13 @@ async function renderTree(nodes, container, isModSide) {
 }
 function updateSelectionCounter() {
     const el = document.getElementById('mapper-selection-count');
-    if (el)
-        el.textContent = `${selectedPaths.size} ${t("modpack.modsSelected")}`;
+    if (!el)
+        return;
+    // Hidden at zero rather than reading "0 selected". A badge that is always present says
+    // nothing when it says zero, and it competes with the panel title for the same glance.
+    const n = selectedPaths.size;
+    el.hidden = n === 0;
+    el.textContent = n === 0 ? '' : `${n} ${t("modpack.modsSelected")}`;
 }
 function updateSaveButtonVisibility() {
     const saveBtn = document.getElementById('btn-mapper-save');

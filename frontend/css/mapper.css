@@ -232,10 +232,65 @@
     box-shadow: 0 0 15px rgba(59, 130, 246, 0.2);
 }
 
+/* The top row of a panel header: title, optional badge, controls. Was an inline style
+   repeated in both panels, which is how the two drifted apart in the first place. */
+.panel-header-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    gap: var(--space-2, 8px);
+}
+
+/* The row under it — a <select> on one side, a path on the other. They are different
+   elements with different natural heights, and that 10px difference pushed the two file
+   trees out of line by exactly that much. Reserving one height makes the panels comparable,
+   which is the entire point of showing them side by side. */
+.panel-header {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3, 12px);
+}
+.panel-header > * {
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+}
+/* The row under the title: a <select> on one side, a path on the other, two elements with
+   different natural heights. Reserving one height is what keeps the two file trees starting
+   on the same line — and comparing them is the only reason they are side by side. */
+.panel-header > .panel-header-sub {
+    width: 100%;
+    min-height: 29px;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+}
+
 .selection-counter {
     font-size: 0.75rem;
-    color: var(--accent);
+    color: var(--text-on-accent);
+    background: var(--accent);
+    border-radius: 999px;
+    padding: 2px 8px;
     font-weight: 700;
+    white-space: nowrap;
+}
+
+/* Legend inside the panel it describes, pinned under the tree. `flex: 0 0 auto` so it
+   never competes with the scrolling tree for space. */
+.panel-legend {
+    flex: 0 0 auto;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2, 8px);
+    padding: var(--space-2, 8px) var(--space-3, 12px);
+    border-top: 1px solid var(--border-color);
+    opacity: 0.85;
+}
+.panel-legend .legend-item {
+    margin-right: 0;
+    font-size: 0.72rem;
 }
 
 /* Legend dots */

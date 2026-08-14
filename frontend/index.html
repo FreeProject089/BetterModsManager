@@ -2924,12 +2924,6 @@
                                     <span data-i18n="mapper.multiSelectHint">Hold Ctrl to select multiple files or
                                         folders.</span>
                                 </span>
-                                <span class="mhb-legend">
-                                    <span class="legend-item"><span class="dot orange"></span><span
-                                            data-i18n="mapper.root">Root</span></span>
-                                    <span class="legend-item"><span class="dot green"></span><span
-                                            data-i18n="mapper.subfolder">Sub-folder</span></span>
-                                </span>
                             </div>
                         </div>
                         <button class="mapper-hint-close" id="btn-mapper-hint-close" data-i18n-tooltip="mapper.hideTips"
@@ -2951,10 +2945,13 @@
                         <!-- Left Panel: Mods -->
                         <div class="mapper-panel glass-card" id="mapper-mods-panel">
                             <div class="panel-header">
-                                <div
-                                    style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                                <div class="panel-header-top">
                                     <h3 class="panel-title" data-i18n="mapper.modSide">Structure du Mod</h3>
-                                    <div class="selection-counter" id="mapper-selection-count">0 sélectionné</div>
+                                    <!-- Filled by mapper.ts. Empty and hidden until something IS
+                                         selected: a permanent "0 selected" is a label that only ever
+                                         says nothing, and it shipped raw French before boot because
+                                         a count cannot carry data-i18n. -->
+                                    <div class="selection-counter" id="mapper-selection-count" hidden></div>
                                     <div class="tree-controls">
                                         <button class="btn-icon-small" id="btn-mapper-mod-expand"
                                             data-i18n-tooltip="mapper.expandAll">
@@ -2972,11 +2969,10 @@
                                         </button>
                                     </div>
                                 </div>
-                                <select id="mapper-mod-select" class="profile-select"
-                                    style="width: 100%; margin-top: 12px;">
+                                <select id="mapper-mod-select" class="profile-select panel-header-sub">
                                     <option value="" data-i18n="mapper.selectMod">— Sélectionner un mod —</option>
                                 </select>
-                                <div class="search-box-mini" style="margin-top: 8px;">
+                                <div class="search-box-mini">
                                     <input type="text" id="mapper-mod-search" placeholder="Filtrer les fichiers..."
                                         data-i18n-placeholder="mapper.searchMod" class="bmm-input-small">
                                 </div>
@@ -2995,8 +2991,7 @@
                         <!-- Right Panel: Game -->
                         <div class="mapper-panel glass-card" id="mapper-game-panel">
                             <div class="panel-header">
-                                <div
-                                    style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                                <div class="panel-header-top">
                                     <h3 class="panel-title" data-i18n="mapper.gameSide">Dossier du Jeu</h3>
                                     <div class="tree-controls">
                                         <button class="btn-icon-small" id="btn-mapper-game-expand"
@@ -3015,18 +3010,31 @@
                                         </button>
                                     </div>
                                 </div>
-                                <div class="game-path-display" id="mapper-game-path" data-tooltip="...">...</div>
-                                <div class="search-box-mini" style="margin-top: 8px;">
+                                <div class="game-path-display panel-header-sub" id="mapper-game-path" data-tooltip="...">...</div>
+                                <div class="search-box-mini">
                                     <input type="text" id="mapper-game-search"
                                         placeholder="Filtrer le dossier du jeu..."
                                         data-i18n-placeholder="mapper.searchGame" class="bmm-input-small">
                                 </div>
+
                             </div>
                             <div class="panel-content">
                                 <div id="mapper-game-tree" class="file-tree">
                                     <div class="empty-hint" data-i18n="mapper.loadProfileHint">Chargez un profil pour
                                         voir le dossier du jeu</div>
                                 </div>
+                            </div>
+                            <!-- The Root / Sub-folder dots colour THIS tree, so they belong to this
+                                 panel — not to the help banner, where they described something you
+                                 had to look away from to read about and disappeared entirely the
+                                 first time somebody dismissed the tips. Below the tree, not in the
+                                 header: the header decides where both trees start, and the two
+                                 panels only read as a comparison while those two lines agree. -->
+                            <div class="panel-legend">
+                                <span class="legend-item"><span class="dot orange"></span><span
+                                        data-i18n="mapper.root">Root</span></span>
+                                <span class="legend-item"><span class="dot green"></span><span
+                                        data-i18n="mapper.subfolder">Sub-folder</span></span>
                             </div>
                         </div>
                     </div>
