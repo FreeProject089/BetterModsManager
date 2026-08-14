@@ -263,8 +263,44 @@ fn probe_engine(program: &str) -> Option<String> {
     }
 }
 
+/// A runtime BMM manages itself, beside its own executable.
+///
+/// This is the contract an installer fills: drop an interpreter at
+/// `<exe dir>/runtime/<engine>/` and BMM uses it in preference to anything on PATH. The
+/// path is derived from current_exe rather than a configured string, so nothing the user
+/// or a task can set decides which binary runs.
+///
+/// Preferred over PATH deliberately. A machine with no Python is the case this exists for,
+/// but a machine with a broken one — the Microsoft Store alias, a half-removed 3.8, a
+/// PATH entry pointing at a deleted folder — is more common and fails more confusingly.
+/// A copy BMM put there is one it can reason about.
+fn managed_engine(engine: &str) -> Option<String> {
+    let dir = std::env::current_exe().ok()?.parent()?.join("runtime").join(engine);
+    // Only the names an interpreter is actually shipped under; never a name from input.
+    for exe in ["python.exe", "python", "bin/python3", "python3"] {
+        let p = dir.join(exe);
+        if p.is_file() {
+            return Some(p.to_string_lossy().to_string());
+        }
+    }
+    None
+}
+
 /// The executable that will actually run this engine here, or None if none will.
+///
+/// A managed copy first, then PATH. Both are still verified by probing: a file being
+/// present says nothing about whether it runs, and an installer that half-extracted an
+/// archive would otherwise be preferred over a working system interpreter.
 fn resolve_engine(engine: &str) -> Option<String> {
+    if let Some(p) = managed_engine(engine) {
+        if probe_engine(&p).is_some() {
+            return Some(p);
+        }
+        log_line(format!(
+            "[SCHED] Ignoring managed {} at {} — it did not answer --version",
+            engine, p
+        ));
+    }
     engine_candidates(engine)
         .iter()
         .find(|c| probe_engine(c).is_some())
@@ -276,11 +312,11 @@ fn missing_engine_message(engine: &str) -> String {
     let tried = engine_candidates(engine).join(", ");
     match engine {
         "python" => format!(
-            "No Python interpreter found (tried: {tried}). BMM does not bundle one — \
-             install Python from python.org and make sure it is on your PATH. On Windows, \
-             a `python` that opens the Microsoft Store is the App Execution Alias, not an \
-             interpreter: disable it under Settings → Apps → App execution aliases, or use \
-             the `py` launcher."
+            "No Python interpreter found (tried a managed copy in BMM's runtime folder, \
+             then: {tried}). BMM does not bundle one — install Python from python.org and \
+             make sure it is on your PATH. On Windows, a `python` that opens the Microsoft \
+             Store is the App Execution Alias, not an interpreter: disable it under \
+             Settings → Apps → App execution aliases, or use the `py` launcher."
         ),
         "bash" => format!(
             "No bash found (tried: {tried}). BMM does not bundle one — on Windows it comes \
@@ -687,6 +723,29 @@ mod process_tests {
         assert!(!is_process_running(String::new(), Some(u32::MAX)));
         assert!(!is_process_running("no-such-binary-xyz".into(), None));
         assert!(!is_process_running(String::new(), None));
+    }
+
+    /// A managed runtime is preferred, but only if it RUNS. A file at the right path that
+    /// does not answer must not shadow a working interpreter on PATH — otherwise a
+    /// half-extracted download would take the scheduler from "works" to "broken", which is
+    /// worse than never having offered to install anything.
+    #[test]
+    fn a_managed_runtime_that_does_not_run_is_ignored() {
+        let dir = std::env::current_exe().unwrap().parent().unwrap().join("runtime").join("python");
+        std::fs::create_dir_all(&dir).unwrap();
+        let fake = dir.join(if cfg!(windows) { "python.exe" } else { "python" });
+        std::fs::write(&fake, b"not an executable").unwrap();
+
+        assert!(managed_engine("python").is_some(), "the file should be FOUND");
+        let resolved = resolve_engine("python");
+        assert_ne!(
+            resolved.as_deref(),
+            Some(fake.to_string_lossy().as_ref()),
+            "a file that cannot run was chosen anyway"
+        );
+
+        let _ = std::fs::remove_file(&fake);
+        let _ = std::fs::remove_dir(&dir);
     }
 
     /// Without the task's permission nothing is killed, and the check happens BEFORE any
