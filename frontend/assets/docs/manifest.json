@@ -35,6 +35,7 @@
     "how-it-works/security",
     "reference/api",
     "reference/repo-format",
+    "reference/catalog-index",
     "reference/actions",
     "reference/mcp",
     "reference/tips",
@@ -557,6 +558,21 @@
         "fr": "Un Dépôt Serveur est un dossier que vous pouvez placer derrière n'importe quel serveur web."
       },
       "words": 878,
+      "diagrams": 0,
+      "fr": true
+    },
+    {
+      "path": "reference/catalog-index",
+      "section": "reference",
+      "title": {
+        "en": "The catalogue index format",
+        "fr": "Le format d'index de catalogues"
+      },
+      "summary": {
+        "en": "A catalogue lists things to install. An index lists catalogues.",
+        "fr": "Un catalogue liste des choses à installer. Un index liste des catalogues."
+      },
+      "words": 687,
       "diagrams": 0,
       "fr": true
     },

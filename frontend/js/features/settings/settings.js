@@ -7,6 +7,7 @@ import { t } from '../../core/i18n.js';
 import { bcRoot, bcTestMode } from '../../core/links-config.js';
 import { initI18nSandbox } from './i18n-sandbox.js';
 import { renderShortcutsManager } from '../../core/commands.js';
+import { parseCatalogIndex, planImport, STORE_KEY, rememberOrigin } from '../catalogs/catalog-index.js';
 import { toast } from '../../ui/app.js';
 import { getProfiles, getActiveProfileId } from '../profiles/profiles.js';
 import { formatBytes, escHtml, escAttr } from '../../core/utils.js';
@@ -1885,11 +1886,171 @@ async function initSecurityInfoCard() {
     });
 }
 // ── Settings Initializer ──────────────────────────────────
+/** The community-source list for a type, from wherever that type keeps it. */
+function readSources(type) {
+    const key = STORE_KEY[type];
+    if (!key)
+        return []; // apps live in the Rust backend, handled separately below
+    try {
+        return JSON.parse(localStorage.getItem(key) || '[]');
+    }
+    catch {
+        return [];
+    }
+}
+/**
+ * Import a catalog index: one URL that names catalogs of several types.
+ *
+ * Preview first, always. This adds sources that BMM will fetch on every startup, from a
+ * document on somebody else's server — showing what would change, and requiring a second
+ * click, is the difference between a convenience and a thing that silently grew your
+ * startup fetch list.
+ */
+async function initCatalogIndexSettings() {
+    const input = document.getElementById('cat-index-url');
+    const previewBtn = document.getElementById('cat-index-preview');
+    const importBtn = document.getElementById('cat-index-import');
+    const out = document.getElementById('cat-index-result');
+    if (!input || !previewBtn || !importBtn || !out)
+        return;
+    // A LIST, not a single address. Somebody following two communities had to choose which
+    // one to keep, and the old single value was overwritten by whatever they previewed last
+    // — including a URL they were only checking.
+    //
+    // The old key is read once and folded in, so an address already saved is not lost by
+    // this change.
+    const LIST = 'bmm_catalog_index_urls';
+    const LAST = 'bmm_catalog_index_url';
+    const readList = () => {
+        let out = [];
+        try {
+            out = JSON.parse(localStorage.getItem(LIST) || '[]');
+        }
+        catch {
+            out = [];
+        }
+        if (!Array.isArray(out))
+            out = [];
+        try {
+            const legacy = localStorage.getItem(LAST);
+            if (legacy && !out.includes(legacy))
+                out.push(legacy);
+        }
+        catch { /* ignore */ }
+        return out.filter((x) => typeof x === 'string' && x.trim());
+    };
+    const writeList = (v) => { try {
+        localStorage.setItem(LIST, JSON.stringify(v));
+    }
+    catch { /* ignore */ } };
+    const listHost = document.getElementById('cat-index-list');
+    const renderList = () => {
+        if (!listHost)
+            return;
+        const urls = readList();
+        if (!urls.length) {
+            listHost.innerHTML = '';
+            return;
+        }
+        listHost.innerHTML = `<div class="cat-index-list-title">${escHtml(t('settings.catIndex.saved') || 'Sources you keep')}</div>`
+            + urls.map((u) => `<div class="cat-index-row">
+              <span class="cat-index-url" title="${escAttr(u)}">${escHtml(u)}</span>
+              <button class="btn btn-ghost btn-sm cat-index-use" data-u="${escAttr(u)}">${escHtml(t('settings.catIndex.reuse') || 'Use')}</button>
+              <button class="btn btn-ghost btn-sm cat-index-del" data-u="${escAttr(u)}">${escHtml(t('common.remove') || 'Remove')}</button>
+           </div>`).join('');
+        listHost.querySelectorAll('.cat-index-use').forEach((b) => b.addEventListener('click', () => {
+            input.value = b.dataset.u || '';
+            previewBtn.click();
+        }));
+        listHost.querySelectorAll('.cat-index-del').forEach((b) => b.addEventListener('click', () => {
+            writeList(readList().filter((x) => x !== b.dataset.u));
+            renderList();
+        }));
+    };
+    renderList();
+    let planned = null;
+    previewBtn.addEventListener('click', async () => {
+        const url = input.value.trim();
+        if (!/^https?:\/\//i.test(url)) {
+            toast(t('settings.catIndex.badUrl') || 'Enter an http(s) address.', 'error');
+            return;
+        }
+        previewBtn.disabled = true;
+        importBtn.disabled = true;
+        planned = null;
+        out.textContent = t('settings.catIndex.loading') || 'Fetching…';
+        try {
+            // Through the backend, so the same TLS + identity handling every other catalog
+            // fetch gets applies here too.
+            const text = await invoke('fetch_remote_json', { url });
+            const { index, dropped } = parseCatalogIndex(JSON.parse(text));
+            const existing = { plugin: readSources('plugin'), theme: readSources('theme') };
+            planned = planImport(index, existing);
+            const byType = planned.add.reduce((m, e) => ({ ...m, [e.type]: (m[e.type] || 0) + 1 }), {});
+            const parts = Object.entries(byType).map(([k, n]) => `${n} ${k}`);
+            out.textContent = planned.add.length
+                ? `${(t('settings.catIndex.willAdd') || 'Will add: {what}.').replace('{what}', parts.join(', '))}`
+                    + (planned.already.length ? ` ${(t('settings.catIndex.already') || '{n} already there.').replace('{n}', String(planned.already.length))}` : '')
+                    + (dropped.length ? ` ${(t('settings.catIndex.skipped') || '{n} skipped.').replace('{n}', String(dropped.length))}` : '')
+                : (t('settings.catIndex.nothing') || 'Nothing new here — everything it lists is already added.');
+            importBtn.disabled = planned.add.length === 0;
+            // Kept only once it has actually answered. Saving on every keystroke would fill
+            // the list with half-typed addresses, and saving a URL that failed would keep a
+            // dead one around forever.
+            const urls = readList();
+            if (!urls.includes(url)) {
+                writeList([...urls, url]);
+                renderList();
+            }
+        }
+        catch (e) {
+            // The URL is shown back deliberately: a typo in a long address is the usual
+            // cause and "failed" alone leaves you re-reading the field character by character.
+            out.textContent = `${t('settings.catIndex.failed') || 'Could not read that index'} — ${String(e).slice(0, 120)}`;
+            planned = null;
+        }
+        finally {
+            previewBtn.disabled = false;
+        }
+    });
+    importBtn.addEventListener('click', async () => {
+        if (!planned?.add.length)
+            return;
+        importBtn.disabled = true;
+        let ok = 0;
+        for (const e of planned.add) {
+            try {
+                if (e.type === 'app') {
+                    await invoke('add_community_source', { url: e.url });
+                }
+                else {
+                    const key = STORE_KEY[e.type];
+                    if (!key)
+                        continue;
+                    const list = readSources(e.type);
+                    if (!list.includes(e.url)) {
+                        list.push(e.url);
+                        localStorage.setItem(key, JSON.stringify(list));
+                    }
+                }
+                // Recorded only after the add succeeded, so a source that failed to be
+                // added does not get an origin pointing at an index it never came from.
+                rememberOrigin(e.url, input.value.trim());
+                ok += 1;
+            }
+            catch { /* one bad entry must not abandon the rest of the index */ }
+        }
+        out.textContent = (t('settings.catIndex.added') || 'Added {n} catalog source(s).').replace('{n}', String(ok));
+        toast((t('settings.catIndex.added') || 'Added {n} catalog source(s).').replace('{n}', String(ok)), 'success');
+        planned = null;
+    });
+}
 export async function initSettings() {
     await initGithubPatSettings();
     await initShaSettings();
     await initDiscordRpcSettings();
     await initSoundSettings();
+    await initCatalogIndexSettings();
     // Keyboard shortcuts are now a central, rebindable command registry (core/commands.ts) —
     // the global dispatcher is started once in app.ts. Here we just mount the manager UI.
     const skHost = document.getElementById('shortcuts-manager');

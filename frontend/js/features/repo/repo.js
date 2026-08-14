@@ -3,6 +3,7 @@ import { invoke, pickFolder } from '../../core/api.js';
 import { wireDismissibleTip } from '../../ui/dismissible-tip.js';
 import { toast, toastSaved } from '../../ui/app.js';
 import { escHtml, escAttr, formatBytes } from '../../core/utils.js';
+import { originLabel } from '../catalogs/catalog-index.js';
 import { getLinks } from '../../core/links-config.js';
 import { t } from '../../core/i18n.js';
 // Sub-modules
@@ -15,6 +16,110 @@ import { initManifestOnly } from './manifest-only.js';
 import { initRemoteRefresh } from './remote-refresh.js';
 import { initDiscover } from './discover.js';
 // Normalise a repo URL so map lookups match regardless of trailing slash / repo.json
+/** Accept both feed shapes without caring which is which.
+ *
+ *  BMM's own browse list is a bare array; BCWEB's /api/repos.json is { repos: [...] }.
+ *  Both are legitimate and both exist in the wild, so a reader insisting on one would
+ *  reject half the catalogs people can actually point it at.
+ */
+function normaliseRepoFeed(doc) {
+    if (Array.isArray(doc))
+        return doc;
+    if (doc && Array.isArray(doc.repos))
+        return doc.repos;
+    return [];
+}
+/** Repo-catalog URLs the user added. Shares the key the catalog index writes to, so a repo
+ *  catalog pulled in by an index and one pasted by hand land in the same list — two lists
+ *  would mean two places to look when removing one. */
+export function readRepoCatalogs() {
+    try {
+        const v = JSON.parse(localStorage.getItem('bmm_repo_catalogs') || '[]');
+        return Array.isArray(v) ? v.filter((x) => typeof x === 'string' && x.trim()) : [];
+    }
+    catch {
+        return [];
+    }
+}
+/** The follow/unfollow strip above the repo browser. */
+export function renderRepoCatalogStrip(reload) {
+    const host = document.getElementById('repo-cat-list');
+    const input = document.getElementById('repo-cat-url');
+    const addBtn = document.getElementById('repo-cat-add');
+    const expBtn = document.getElementById('repo-cat-export');
+    if (!host || !input || !addBtn || !expBtn)
+        return;
+    // Called every time the browser opens, so the listeners must be bound ONCE. Without
+    // this, the second open binds a second click handler and one click fires two reloads;
+    // by the fifth open the browser refetches five times per click. The chips are repainted
+    // on every call regardless — that part is cheap and must stay current.
+    const already = host._bmmBound === true;
+    host._bmmBound = true;
+    const paint = () => {
+        const urls = readRepoCatalogs();
+        host.innerHTML = urls.length
+            ? urls.map((u) => `<span class="repo-cat-chip" title="${escAttr(u)}">${escHtml(originLabel(u))}
+                 <button class="repo-cat-del" data-u="${escAttr(u)}" aria-label="${escAttr(t('common.remove') || 'Remove')}">×</button></span>`).join('')
+            : '';
+        host.querySelectorAll('.repo-cat-del').forEach((b) => b.addEventListener('click', () => {
+            writeRepoCatalogs(readRepoCatalogs().filter((x) => x !== b.dataset.u));
+            paint();
+            reload();
+        }));
+    };
+    paint();
+    if (already)
+        return;
+    addBtn.addEventListener('click', () => {
+        const url = input.value.trim();
+        if (!/^https?:\/\//i.test(url)) {
+            toast(t('repo.cat.badurl') || 'Enter an http(s) address.', 'error');
+            return;
+        }
+        const urls = readRepoCatalogs();
+        if (urls.includes(url)) {
+            toast(t('repo.cat.dupe') || 'Already following that one.', 'info');
+            return;
+        }
+        writeRepoCatalogs([...urls, url]);
+        input.value = '';
+        paint();
+        // Reloaded rather than merged in place: the browser already knows how to fetch and
+        // de-duplicate, and doing it twice is two chances to disagree about which entry won.
+        reload();
+    });
+    expBtn.addEventListener('click', async () => {
+        // Create a catalog FROM what is on screen. Somebody who has assembled a list worth
+        // sharing should not have to hand-write JSON to share it — and the shape it writes
+        // is the one this same browser reads, so a round trip is the test.
+        const rows = (repoList || []).map((r) => ({
+            name: r.name, url: r.url, description: r.description || '',
+            region: r.region || '', category: r.category === 'official' ? 'community' : (r.category || 'community'),
+        }));
+        if (!rows.length) {
+            toast(t('repo.cat.empty') || 'Nothing in the list to export.', 'info');
+            return;
+        }
+        const doc = JSON.stringify({ name: 'My repo catalog', generatedAt: new Date().toISOString(), repos: rows }, null, 2);
+        const { saveFile } = await import('../../core/api.js');
+        const path = await saveFile({ defaultPath: 'repos.json', filters: [{ name: 'Repo catalog', extensions: ['json'] }] }).catch(() => null);
+        if (!path)
+            return;
+        try {
+            await invoke('write_text_file', { path, content: doc });
+            toast((t('repo.cat.saved') || 'Saved {n} repos.').replace('{n}', String(rows.length)), 'success');
+        }
+        catch (e) {
+            toast(String(e), 'error');
+        }
+    });
+}
+export function writeRepoCatalogs(urls) {
+    try {
+        localStorage.setItem('bmm_repo_catalogs', JSON.stringify([...new Set(urls)]));
+    }
+    catch { /* ignore */ }
+}
 export const normRepoUrl = (url) => {
     let u = (url || '').trim();
     u = u.replace(/\/repo\.json$/i, '').replace(/\/+$/, '');
@@ -944,7 +1049,29 @@ export function initRepo() {
                 const response = await fetch(bustUrl, { cache: 'no-store' });
                 if (!response.ok)
                     throw new Error(`HTTP ${response.status}`);
-                repoList = await response.json();
+                repoList = normaliseRepoFeed(await response.json());
+                // Repo catalogs somebody added themselves, merged in after the official
+                // list. Their entries are tagged `community` HERE rather than trusted from
+                // the feed: a catalog that could label its own entries "official" would
+                // borrow a badge it was never given — the same rule apply_trust enforces
+                // for app catalogs.
+                for (const catUrl of readRepoCatalogs()) {
+                    try {
+                        const sep = catUrl.includes('?') ? '&' : '?';
+                        const r = await fetch(`${catUrl}${sep}t=${Date.now()}`, { cache: 'no-store' });
+                        if (!r.ok)
+                            continue;
+                        for (const entry of normaliseRepoFeed(await r.json())) {
+                            // A repo already in the official list wins. The same address in
+                            // both is one repo, and showing it twice with two badges makes
+                            // people wonder which one is real.
+                            if (repoList.some((x) => normRepoUrl(x.url || '') === normRepoUrl(entry.url || '')))
+                                continue;
+                            repoList.push({ ...entry, category: 'community', source_catalog: catUrl });
+                        }
+                    }
+                    catch { /* one unreachable catalog must not empty the browser */ }
+                }
                 // Build a url → expected-signature map (recorded by the BMM team when
                 // validating the repo). repo-sync compares the live repo's signature
                 // against this to detect content changed since verification.
@@ -1033,7 +1160,7 @@ export function initRepo() {
                             <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap;">
                                 <span style="font-size:14px; font-weight:700; color:var(--text-primary);">${escHtml(repo.name)}</span>
                                 ${isBoosted(repo) ? `<span style="font-size:9px; font-weight:800; padding:2px 7px; border-radius:4px; text-transform:uppercase; letter-spacing:0.5px; background:rgba(245,158,11,0.15); color:var(--bmm-warning); border:1px solid rgba(245,158,11,0.35); display:flex; align-items:center; gap:3px;" data-tooltip="${t('repo.boostedServer') || 'Boosted — featured on BetterCommunity'}"><svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M13 2 3 14h7l-1 8 10-12h-7z"/></svg> Boosted</span>` : ''}
-                                <span class="repo-badge" style="font-size:9px; font-weight:800; padding:2px 8px; border-radius:4px; text-transform:uppercase; letter-spacing:0.5px; ${repo.category === 'official' ? 'background:rgba(16,185,129,0.15); color:var(--bmm-success);' : 'background:rgba(59,130,246,0.15); color:var(--bmm-accent);'}">${escHtml(repo.category)}</span>
+                                <span class="repo-badge" style="font-size:9px; font-weight:800; padding:2px 8px; border-radius:4px; text-transform:uppercase; letter-spacing:0.5px; ${repo.category === 'official' ? 'background:rgba(16,185,129,0.15); color:var(--bmm-success);' : repo.category === 'community' ? 'background:color-mix(in srgb, var(--bmm-warning) 15%, transparent); color:var(--bmm-warning);' : 'background:rgba(59,130,246,0.15); color:var(--bmm-accent);'}">${escHtml(repo.category)}</span>${repo.source_catalog ? `<span class="repo-src-tag" title="${escAttr(repo.source_catalog)}">${escHtml(originLabel(repo.source_catalog))}</span>` : ''}
                                 ${repo.hash ? `<span style="font-size:9px; font-weight:800; padding:2px 7px; border-radius:4px; text-transform:uppercase; letter-spacing:0.5px; background:rgba(16,185,129,0.12); color:var(--bmm-success); border:1px solid rgba(16,185,129,0.25); display:flex; align-items:center; gap:3px;" data-tooltip="${t('repo.verifiedServer') || 'Verified server — hash validated by the BMM team'}"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> Verified</span>` : ''}
                                 ${repo.whitelist_enabled === true
                 ? `<span style="font-size:9px; font-weight:800; padding:2px 7px; border-radius:4px; text-transform:uppercase; letter-spacing:0.5px; background:rgba(34,197,94,0.12); color:var(--bmm-success); border:1px solid rgba(34,197,94,0.3); display:flex; align-items:center; gap:3px;" data-tooltip="${t('repo.whitelistServer') || 'This server uses a whitelist — access is restricted'}"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Whitelist</span>`
@@ -1247,6 +1374,10 @@ export function initRepo() {
         if (btnBrowse) {
             btnBrowse.addEventListener('click', () => {
                 modal.classList.add('open');
+                // Wired once per open, before the fetch: the strip must be usable while the
+                // list is still loading, and binding after would leave it dead if the fetch
+                // failed — which is exactly when somebody wants to add another source.
+                renderRepoCatalogStrip(() => { void fetchRepoList(); });
                 fetchRepoList();
             });
         }
