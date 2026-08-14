@@ -26,3 +26,6 @@ src-tauri/gen/
 
 # Local release/build output (installer artifacts, etc.)
 /Release/
+
+# Working plan for the current batch — local scratch, deliberately never committed.
+PLAN.md
