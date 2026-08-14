@@ -3654,6 +3654,107 @@ function renderCondParams(host: HTMLElement, cond: Condition): void {
 const BMMPA_MAGIC = 'BMMPA';
 
 /**
+ * Which actions name something else by id, and what kind of thing.
+ *
+ * Data rather than a name pattern: `task.run` and `launchpack.run` share a suffix and
+ * nothing else, and a future `foo.run` should not be treated as a reference by accident.
+ * Every one of these keeps its target in `params.id`.
+ */
+const REF_ACTIONS: Record<string, 'task' | 'launchpack' | 'modpack' | 'profile'> = {
+    'task.run': 'task',
+    'launchpack.run': 'launchpack',
+    'modpack.enable': 'modpack',
+    'modpack.disable': 'modpack',
+    'profile.activate': 'profile',
+};
+
+/** Every id a task names, by kind. Walks the whole tree — a sub-task called from inside a
+ *  loop inside an if is still a dependency, and a collector that reads only the top level
+ *  produces a file that is missing exactly the parts that were hardest to find. */
+function collectRefs(steps: Step[], out: Record<string, Set<string>> = {}): Record<string, Set<string>> {
+    for (const st of steps || []) {
+        if ((st as any).kind === 'action') {
+            const kind = REF_ACTIONS[String((st as any).action?.type || '')];
+            const id = String((st as any).action?.params?.id || '').trim();
+            if (kind && id) (out[kind] = out[kind] || new Set()).add(id);
+        }
+        for (const key of ['steps', 'then', 'else', 'onError', 'default'] as const) {
+            if (Array.isArray((st as any)[key])) collectRefs((st as any)[key], out);
+        }
+        if (Array.isArray((st as any).cases)) {
+            for (const c of (st as any).cases) if (Array.isArray(c?.steps)) collectRefs(c.steps, out);
+        }
+    }
+    return out;
+}
+
+/**
+ * A task plus everything it calls, transitively.
+ *
+ * Sharing a task that runs two other tasks used to share one third of an automation: the
+ * file imported, the step was there, and it failed at run time on an id that means nothing
+ * on the other machine. Following the references is the difference between sending an
+ * automation and sending a reference to one.
+ *
+ * The `seen` set is not an optimisation — two tasks that call each other are a legitimate
+ * thing to build (a retry loop, an error handler that re-runs the main job), and without it
+ * this recurses until the stack ends.
+ */
+function withSubTasks(root: Task, all: Task[]): { tasks: Task[]; missing: string[] } {
+    const byId = new Map(all.map((x) => [x.id, x]));
+    const out: Task[] = [];
+    const missing: string[] = [];
+    const seen = new Set<string>();
+    const walk = (task: Task) => {
+        if (seen.has(task.id)) return;
+        seen.add(task.id);
+        out.push(task);
+        for (const id of collectRefs(task.steps).task || []) {
+            const sub = byId.get(id);
+            // A reference to a task that does not exist HERE is recorded, not skipped. It
+            // is usually a task deleted since, and the person exporting is the only one who
+            // can still say what it was.
+            if (sub) walk(sub); else if (!missing.includes(id)) missing.push(id);
+        }
+    };
+    walk(root);
+    return { tasks: out, missing };
+}
+
+/**
+ * The launch packs and modpacks a set of tasks names, as definitions.
+ *
+ * Included because they are small, self-describing JSON that means nothing by id alone on
+ * another machine. Apps and mods are NOT: those are files, often gigabytes, frequently
+ * licensed, and a .bmmpa is a text document somebody reads before trusting.
+ *
+ * Failure is per-kind and silent-ish: a backend that cannot list launch packs should not
+ * stop somebody exporting a task, so the export continues without them and the inspector
+ * shows the reference as unresolved — which is the truth.
+ */
+async function collectIncludes(tasks: Task[]): Promise<Record<string, any[]>> {
+    const refs: Record<string, Set<string>> = {};
+    for (const t of tasks) collectRefs(t.steps, refs);
+    const includes: Record<string, any[]> = {};
+
+    if (refs.launchpack?.size) {
+        try {
+            const packs = await invoke('get_launch_packs') as any[];
+            const want = refs.launchpack;
+            includes.launchpacks = (packs || []).filter((p: any) => want.has(String(p?.id)));
+        } catch { /* see above */ }
+    }
+    if (refs.modpack?.size) {
+        try {
+            const packs = await invoke('load_modpacks') as any[];
+            const want = refs.modpack;
+            includes.modpacks = (packs || []).filter((p: any) => want.has(String(p?.id ?? p?.name)));
+        } catch { /* see above */ }
+    }
+    return includes;
+}
+
+/**
  * Write a .bmmpa holding `tasks`.
  *
  * One task or forty go through the same envelope — `tasks` stays an array of one rather
@@ -3668,7 +3769,13 @@ async function writeBmmpa(tasks: Task[], suggested: string): Promise<void> {
     const { saveFile } = await import('../../core/api.js');
     const path = await saveFile({ defaultPath: suggested, filters: [{ name: 'BMM Automation', extensions: ['bmmpa'] }] }).catch(() => null);
     if (!path) return;
-    const payload = JSON.stringify({ magic: BMMPA_MAGIC, version: 1, exported: new Date().toISOString(), tasks }, null, 2);
+    const includes = await collectIncludes(tasks);
+    const payload = JSON.stringify({
+        magic: BMMPA_MAGIC, version: 1, exported: new Date().toISOString(), tasks,
+        // Only when there is something. An empty `includes: {}` in every file
+        // invites a reader to render an empty section on every import.
+        ...(Object.keys(includes).length ? { includes } : {}),
+    }, null, 2);
     try {
         await invoke('write_text_file', { path, content: payload });
         toast((t('sched.exportedN') || 'Exported {n} automation(s)').replace('{n}', String(tasks.length)), 'success');
@@ -3692,7 +3799,21 @@ export async function exportOneTask(id: string): Promise<void> {
     const safe = String(task.name || 'automation')
         .replace(/[<>:"/\\|?* -]/g, '-').replace(/\s+/g, '-')
         .replace(/^[.\s-]+|[.\s-]+$/g, '').slice(0, 60) || 'automation';
-    await writeBmmpa([task], `${safe}.bmmpa`);
+    // Everything it calls, transitively. Sharing a task that runs two other tasks used
+    // to share one third of an automation: it imported, the step was there, and it failed
+    // at run time on an id that means nothing on the other machine.
+    const { tasks, missing } = withSubTasks(task, _tasks);
+    if (missing.length) {
+        // Said out loud rather than exported quietly. A reference to a task deleted since
+        // is something only the person exporting can still explain.
+        toast((t('sched.exp.missing') || '{n} referenced task(s) no longer exist and cannot be included.')
+            .replace('{n}', String(missing.length)), 'warning');
+    }
+    if (tasks.length > 1) {
+        toast((t('sched.exp.withSubs') || 'Including {n} task(s) this one calls.')
+            .replace('{n}', String(tasks.length - 1)), 'info');
+    }
+    await writeBmmpa(tasks, `${safe}.bmmpa`);
 }
 
 /**
@@ -3968,6 +4089,45 @@ function showBmmpaReport(report: ReturnType<typeof inspectBmmpa>, path: string):
         restart: t('bmi.r.restart') || 'Restarts BMM',
         'task.run': t('bmi.r.task') || 'Runs another scheduled task',
     };
+    /**
+     * The step tree, in full.
+     *
+     * The panel used to say "12 steps" and list the risky verbs. That answers "should I be
+     * nervous" and not "what does this actually do" — and the second question is the one
+     * somebody has when the answer to the first is "a bit".
+     *
+     * Nested with real indentation, because a task's shape IS its meaning: three actions in
+     * a row and three actions inside a loop that runs a hundred times are the same list and
+     * very different automations.
+     */
+    const tree = (nodes: any[], depth = 0): string => nodes.map((n) => {
+        const label = n.type
+            ? (t('sched.act.' + n.type) || n.type)
+            : (t('sched.addIf') && n.kind === 'if' ? t('sched.addIf') : n.kind);
+        const params = n.params
+            ? Object.entries(n.params).map(([k, v]) =>
+                `<span class="sched-insp-kv"><i>${esc(k)}</i> ${esc(v)}</span>`).join('')
+            : '';
+        // A reference the file does not satisfy is the most useful line here: such a task
+        // imports cleanly and fails later, on a machine whose owner has no idea what the id
+        // was meant to be.
+        const ref = n.refId
+            ? (n.refName
+                ? `<span class="sched-insp-ref">→ ${esc(n.refName)}</span>`
+                : `<span class="sched-insp-ref is-missing">→ ${esc(t('sched.insp.notIncluded') || 'not in this file')}: <code>${esc(n.refId)}</code></span>`)
+            : '';
+        return `
+            <div class="sched-insp-node" style="margin-left:${depth * 14}px">
+                <div class="sched-insp-node-head">
+                    <span class="sched-insp-kind">${esc(label)}</span>
+                    ${n.note ? `<span class="sched-insp-flag">!</span>` : ''}
+                    ${ref}
+                </div>
+                ${params ? `<div class="sched-insp-params">${params}</div>` : ''}
+            </div>
+            ${tree(n.children || [], depth + 1)}`;
+    }).join('');
+
     const body = report.tasks.map((tk) => `
         <div class="sched-insp-task">
             <div class="sched-insp-head">
@@ -3989,7 +4149,30 @@ function showBmmpaReport(report: ReturnType<typeof inspectBmmpa>, path: string):
                     <pre>${esc(sc.code)}</pre>
                 </div>
             </details>`).join('')}
+            <details class="sched-insp-steps" open>
+                <summary>${esc(t('sched.insp.tree') || 'Every step, in order')}</summary>
+                <div class="sched-insp-tree">${tree((tk as any).steps || [])}</div>
+            </details>
         </div>`).join('');
+
+    // What the file carries besides tasks, and what it names but does not carry. Both go
+    // above the verdict: "12 automations" means something different when three of them call
+    // a fourth that is not here.
+    const inc = (report as any).includes || { launchpacks: 0, modpacks: 0 };
+    const unres: { kind: string; id: string }[] = (report as any).unresolved || [];
+    const extras = [
+        inc.launchpacks ? `${inc.launchpacks} ${t('sched.insp.launchpacks') || 'launch pack(s)'}` : '',
+        inc.modpacks ? `${inc.modpacks} ${t('sched.insp.modpacks') || 'modpack(s)'}` : '',
+    ].filter(Boolean).join(' · ');
+    const extraLine = extras
+        ? `<div class="sched-insp-extra">${esc(t('sched.insp.alsoCarries') || 'Also in this file:')} ${esc(extras)}</div>`
+        : '';
+    const missingLine = unres.length
+        ? `<div class="sched-insp-warn">${esc((t('sched.insp.unresolved')
+            || 'Names {n} thing(s) it does not include — these will fail on another machine:')
+            .replace('{n}', String(unres.length)))}
+            ${unres.slice(0, 8).map((u) => `<code>${esc(u.kind)}:${esc(u.id)}</code>`).join(' ')}</div>`
+        : '';
 
     const verdict = report.needsReview
         ? `<div class="sched-insp-verdict sched-insp-verdict-warn">${esc(t('sched.insp.review') || 'This file asks for permissions or reaches outside BMM. Read it before importing.')}</div>`
@@ -4007,6 +4190,8 @@ function showBmmpaReport(report: ReturnType<typeof inspectBmmpa>, path: string):
                 <button class="btn btn-ghost btn-sm" id="sched-insp-close">${esc(t('common.close') || 'Close')}</button>
             </div>
             ${verdict}
+            ${extraLine}
+            ${missingLine}
             <div class="sched-insp">${body}</div>
             <p class="sched-insp-foot">${esc(t('sched.insp.foot') || 'Nothing has been imported. Close this and use Import if you want it.')}</p>
         </div>`;

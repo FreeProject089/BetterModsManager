@@ -38,6 +38,28 @@ export interface StepSummary {
     type?: string;
     /** Why this step is worth a reviewer's attention, if it is. */
     note?: string;
+    /**
+     * The step's own parameters, flattened to strings.
+     *
+     * Carried because a summary that says "Run custom command" and nothing else asks the
+     * reviewer to trust a verb. WHICH program, with which arguments, against which URL, is
+     * the entire question. Nothing is redacted: the author of the file put these values in
+     * it, and a reviewer who cannot see the token a request would send cannot judge the
+     * request.
+     *
+     * Script and command bodies are NOT duplicated here — they have their own section, with
+     * a copy button and a 20 KB cap.
+     */
+    params?: Record<string, string>;
+    /**
+     * For an action that names another thing by id (`task.run`, `launchpack.run`, …): what
+     * the id points at, if the FILE carries it. `null` means the file references something
+     * it does not include — the single most useful thing this panel can tell you, because
+     * such a task imports cleanly and then fails on a machine that never had it.
+     */
+    refKind?: string;
+    refId?: string;
+    refName?: string | null;
     children: StepSummary[];
 }
 
@@ -67,6 +89,10 @@ export interface TaskSummary {
 }
 
 export interface InspectResult {
+    /** How many launch packs / modpacks the file carries alongside its tasks. */
+    includes?: { launchpacks: number; modpacks: number };
+    /** References the file makes but does not satisfy. These import cleanly and fail later. */
+    unresolved?: { kind: string; id: string }[];
     ok: boolean;
     error?: string;
     version?: number;
@@ -91,6 +117,38 @@ function describeTrigger(t: any): string {
         case 'manual': return 'manually only';
         default: return `unknown trigger: ${String(t.type ?? '(none)')}`;
     }
+}
+
+/** Actions that name another thing by id, and what kind. Mirrors the scheduler's own map;
+ *  kept here too because this file must stay importable without it (the BCWEB copy has no
+ *  scheduler to read from). */
+const REF_ACTIONS: Record<string, string> = {
+    'task.run': 'task',
+    'launchpack.run': 'launchpack',
+    'modpack.enable': 'modpack',
+    'modpack.disable': 'modpack',
+    'profile.activate': 'profile',
+};
+
+/**
+ * Parameters as short strings, for display.
+ *
+ * Bodies are skipped — `code`, and the reassembled command — because they have their own
+ * section with a copy button, and repeating a forty-line script inside a tree row makes the
+ * tree unreadable for the exact file that most needs reading.
+ *
+ * Everything is capped. A parameter can hold a whole JSON document, and a reviewer scanning
+ * a step list needs to see THAT it is there, at a length they can scan.
+ */
+function flattenParams(p: Record<string, any>): Record<string, string> | undefined {
+    const out: Record<string, string> = {};
+    for (const [k, v] of Object.entries(p || {})) {
+        if (k === 'code' || v === undefined || v === null || v === '') continue;
+        const s = typeof v === 'object' ? JSON.stringify(v) : String(v);
+        if (!s) continue;
+        out[k] = s.length > 300 ? `${s.slice(0, 300)}…` : s;
+    }
+    return Object.keys(out).length ? out : undefined;
 }
 
 /** Walk every step, including the bodies of if / repeat / forEach / switch / try.
@@ -120,6 +178,9 @@ function walkSteps(steps: any[], out: TaskSummary): StepSummary[] {
                 const args = Array.isArray(p.args) ? p.args.map((a: unknown) => String(a)) : [];
                 out.scripts.push({ engine: 'command', code: [p.program.trim(), ...args].join(' ') });
             }
+            node.params = flattenParams(p);
+            const refKind = REF_ACTIONS[type];
+            if (refKind && p.id) { node.refKind = refKind; node.refId = String(p.id); }
             // Anything naming something outside BMM. Collected verbatim and NOT resolved —
             // an inspector that fetched a URL to describe it would be doing the thing it
             // exists to avoid.
@@ -188,11 +249,44 @@ export function inspectBmmpa(doc: unknown): InspectResult {
         return summary;
     });
 
+    // Resolve every reference against what the FILE carries, now that all tasks are read.
+    //
+    // Done here rather than during the walk because a task can call one declared later in
+    // the file, and a resolver that only looked backwards would report half the references
+    // as missing — worse than not resolving at all, because it would be wrong rather than
+    // absent.
+    const taskNames = new Map(tasks.slice(0, 500).map((tk: any) => [String(tk?.id ?? ''), String(tk?.name ?? '(unnamed)')]));
+    const included: Record<string, Set<string>> = {
+        launchpack: new Set(asArray(d.includes?.launchpacks).map((x: any) => String(x?.id ?? ''))),
+        modpack: new Set(asArray(d.includes?.modpacks).map((x: any) => String(x?.id ?? x?.name ?? ''))),
+    };
+    const unresolved: { kind: string; id: string }[] = [];
+    const resolve = (nodes: StepSummary[]): void => {
+        for (const n of nodes) {
+            if (n.refId && n.refKind) {
+                const name = n.refKind === 'task'
+                    ? (taskNames.get(n.refId) ?? null)
+                    : (included[n.refKind]?.has(n.refId) ? n.refId : null);
+                n.refName = name;
+                // A profile is never carried in a .bmmpa — it is machine-specific — so an
+                // unresolved profile reference is normal and not worth flagging as a gap.
+                if (name === null && n.refKind !== 'profile') unresolved.push({ kind: n.refKind, id: n.refId });
+            }
+            resolve(n.children);
+        }
+    };
+    for (const tk of out) resolve(tk.steps);
+
     return {
         ok: true,
         version: typeof d.version === 'number' ? d.version : undefined,
         exported: typeof d.exported === 'string' ? d.exported : undefined,
         tasks: out,
+        includes: {
+            launchpacks: asArray(d.includes?.launchpacks).length,
+            modpacks: asArray(d.includes?.modpacks).length,
+        },
+        unresolved,
         needsReview: out.some((t) => t.perms.length > 0 || t.reaching.length > 0),
     };
 }

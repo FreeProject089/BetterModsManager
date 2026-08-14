@@ -7262,5 +7262,13 @@
   "sched.run.stopping": "stopping…",
   "sched.run.stopTip": "Ends the run after the current step finishes — a request already sent is not abandoned.",
   "sched.run.cancelled": "stopped by you",
-  "sched.untitled": "Untitled"
+  "sched.untitled": "Untitled",
+  "sched.exp.missing": "{n} referenced task(s) no longer exist and cannot be included.",
+  "sched.exp.withSubs": "Including {n} task(s) this one calls.",
+  "sched.insp.tree": "Every step, in order",
+  "sched.insp.notIncluded": "not in this file",
+  "sched.insp.alsoCarries": "Also in this file:",
+  "sched.insp.launchpacks": "launch pack(s)",
+  "sched.insp.modpacks": "modpack(s)",
+  "sched.insp.unresolved": "Names {n} thing(s) it does not include — these will fail on another machine:"
 }

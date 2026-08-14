@@ -7260,5 +7260,13 @@
   "sched.run.stopping": "arrêt…",
   "sched.run.stopTip": "Termine l’exécution après l’étape en cours — une requête déjà partie n’est pas abandonnée.",
   "sched.run.cancelled": "arrêtée par vous",
-  "sched.untitled": "Sans titre"
+  "sched.untitled": "Sans titre",
+  "sched.exp.missing": "{n} tâche(s) référencée(s) n’existent plus et ne peuvent pas être incluses.",
+  "sched.exp.withSubs": "Inclut {n} tâche(s) appelée(s) par celle-ci.",
+  "sched.insp.tree": "Chaque étape, dans l’ordre",
+  "sched.insp.notIncluded": "absent de ce fichier",
+  "sched.insp.alsoCarries": "Également dans ce fichier :",
+  "sched.insp.launchpacks": "pack(s) de lancement",
+  "sched.insp.modpacks": "modpack(s)",
+  "sched.insp.unresolved": "Désigne {n} élément(s) qu’il n’inclut pas — ils échoueront sur une autre machine :"
 }

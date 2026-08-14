@@ -53,8 +53,20 @@ const cmp = (label, a, b) => {
   if (onlyWeb.length) problems.push(`${label}: only BCWEB flags ${onlyWeb.join(', ')} — BMM's own inspector is the quieter one`);
 };
 
+// Which action types each reader treats as naming ANOTHER thing by id. Added after the
+// gate passed a change it should have caught: the two readers gained a detailed view at
+// different times, and nothing here compared it. A reader that does not know `task.run`
+// points at a task shows a moderator a step with an opaque id where the other shows the
+// name of the automation it calls.
+function refs(src, file) {
+  const m = src.match(/REF_ACTIONS[^=]*=\s*\{([\s\S]*?)\}/);
+  if (!m) { console.error(`✗ could not find REF_ACTIONS in ${file} — the gate cannot compare what it cannot read`); process.exit(2); }
+  return new Set([...m[1].matchAll(/'([^']+)':/g)].map((x) => x[1]));
+}
+
 cmp('reaching actions', reaching(ts, TS), reaching(mjs, MJS));
 cmp('actions carrying code', bodied(ts), bodied(mjs));
+cmp('id references', refs(ts, TS), refs(mjs, MJS));
 
 // RISK_KEYS drives the permission badges. Both readers emit these codes and the two UIs
 // translate them, so a code added on one side renders as a bare identifier on the other.
@@ -63,7 +75,7 @@ const riskWeb = new Set([...(read(MJS).match(/RISK_KEYS\s*=\s*\[([\s\S]*?)\]/)?.
 if (riskTs.size && riskWeb.size) cmp('permission codes', riskTs, riskWeb);
 
 if (!problems.length) {
-  console.log('✓ .bmmpa inspectors agree (reaching actions, code-bearing actions, permission codes)');
+  console.log('✓ .bmmpa inspectors agree (reaching actions, code-bearing actions, id references, permission codes)');
   process.exit(0);
 }
 for (const p of problems) console.error(`✗ ${p}`);
