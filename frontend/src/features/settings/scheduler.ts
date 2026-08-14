@@ -1002,8 +1002,6 @@ async function runAction(action: Action, task: Task, ctx: RunCtx): Promise<void>
             toast(`${task.name}: ${mount} limit → ${limit > 0 ? limit + ' MB/s' : 'unlimited'}`, 'success');
             break;
         }
-        case 'var.set':                            // store a literal value for later conditions
-            ctx.nums[String(p.name || 'var')] = Number(p.value) || 0; break;
 
         // ── Logic & math ──────────────────────────────────────────────────────
         case 'math.set': {                         // target = <expression over ctx>
@@ -2703,7 +2701,7 @@ const ACTION_TYPES: { v: string; label: string; needs?: string; group: string }[
     { v: 'notify', label: 'Show notification', needs: 'message', group: 'system' },
     { v: 'discord.rpc', label: 'Discord Rich Presence', needs: 'toggle', group: 'system' },
     { v: 'data.exportAuto', label: 'Export data (backup)', needs: 'exportAuto', group: 'system' },
-    { v: 'var.set', label: 'Set a value (for conditions)', needs: 'var', group: 'system' },
+    { v: 'var.set', label: 'Set a variable', needs: 'varSet', group: 'logic' },
     { v: 'app.checkUpdate', label: 'Check for BMM update', needs: 'checkUpdate', group: 'system' },
     { v: 'system.clearApiLog', label: 'Clear API log', group: 'system' },
     { v: 'system.clearResourceRecords', label: 'Clear resource monitor records', group: 'system' },
@@ -2720,7 +2718,6 @@ const ACTION_TYPES: { v: string; label: string; needs?: string; group: string }[
     { v: 'folder.create', label: 'Create a folder (BMM data)', needs: 'bmmfolder', group: 'system' },
     { v: 'repo.syncNow', label: 'Sync a server repo (unattended)', needs: 'reposync', group: 'repo' },
     { v: 'deeplink', label: 'Run bmm:// deeplink', needs: 'url', group: 'system' },
-    { v: 'var.set', label: 'Set a variable', needs: 'varSet', group: 'logic' },
     { v: 'var.clear', label: 'Clear a shared variable', needs: 'varClear', group: 'logic' },
     { v: 'http.request', label: 'Call an HTTP API', needs: 'http', group: 'system' },
 ];
