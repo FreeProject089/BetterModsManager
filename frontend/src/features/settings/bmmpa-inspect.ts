@@ -13,28 +13,24 @@
 // never resolves a URL. That is not a style preference: the whole value of an inspector is
 // that looking at a thing cannot be the thing happening.
 
-/** What a task asks to do beyond changing BMM's own state. Mirrors TaskPerms. */
-export const RISK_LABEL: Record<string, string> = {
-    command: 'Runs external programs',
-    script: 'Runs scripts (PowerShell / CMD / Bash / Python)',
-    deeplink: 'Fires bmm:// deeplinks',
-    stopProcess: 'Stops running programs',
-};
+/** The permission keys a task can grant itself. Mirrors TaskPerms.
+ *
+ *  Codes rather than sentences. The words live where they can be translated; a model that
+ *  hands out English prose forces every view to print English, which is what the BCWEB
+ *  copy of this actually did until its French moderation screen showed it. One client
+ *  today is not a reason to build the shape that breaks with two. */
+export const RISK_KEYS = ['command', 'script', 'deeplink', 'stopProcess'] as const;
 
-/** Action types that reach outside BMM whatever the permissions say. Kept as data rather
- *  than a regex over the type name: `custom.command` and `app.stop` share no prefix, and a
- *  future `foo.command` should not be flagged by accident. */
-const REACHING_ACTIONS: Record<string, string> = {
-    'custom.command': 'Runs an external program',
-    'custom.script': 'Runs a script',
-    'app.stop': 'Stops a program',
-    'app.launch': 'Launches an app',
-    'file.open': 'Opens a file or program',
-    'folder.open': 'Opens a folder',
-    'open.url': 'Opens a URL',
-    'restart': 'Restarts BMM',
-    'task.run': 'Runs another scheduled task',
-};
+/** Action types that reach outside BMM whatever the permissions say.
+ *
+ *  A Set of types, not a map to prose: the type IS the stable identifier and the words
+ *  belong to whoever displays it. Data rather than a regex on the name — `custom.command`
+ *  and `app.stop` share no prefix, and a future `foo.command` should not be flagged by
+ *  accident. */
+const REACHING_ACTIONS = new Set([
+    'custom.command', 'custom.script', 'app.stop', 'app.launch',
+    'file.open', 'folder.open', 'open.url', 'restart', 'task.run',
+]);
 
 export interface StepSummary {
     kind: string;
@@ -50,9 +46,9 @@ export interface TaskSummary {
     description?: string;
     enabled: boolean;
     trigger: string;
-    /** Permissions the file grants itself. */
+    /** Permission CODES the file grants itself — see RISK_KEYS. */
     perms: string[];
-    /** Human-readable reasons this task touches the world outside BMM. */
+    /** Action types by which this task touches the world outside BMM. */
     reaching: string[];
     /** Every script body it carries, so a reviewer can read the actual code. */
     scripts: { engine: string; code: string }[];
@@ -102,9 +98,9 @@ function walkSteps(steps: any[], out: TaskSummary): StepSummary[] {
             const type = String(st?.action?.type || '');
             const p = st?.action?.params || {};
             node.type = type;
-            if (REACHING_ACTIONS[type]) {
-                node.note = REACHING_ACTIONS[type];
-                if (!out.reaching.includes(REACHING_ACTIONS[type])) out.reaching.push(REACHING_ACTIONS[type]);
+            if (REACHING_ACTIONS.has(type)) {
+                node.note = type;
+                if (!out.reaching.includes(type)) out.reaching.push(type);
             }
             if (type === 'custom.script' && typeof p.code === 'string') {
                 out.scripts.push({ engine: String(p.engine || 'powershell'), code: p.code });
@@ -168,9 +164,9 @@ export function inspectBmmpa(doc: unknown): InspectResult {
         // something, and reporting "no permissions" for it would be a lie of omission.
         const perms = tk?.perms && typeof tk.perms === 'object' ? tk.perms : null;
         if (perms) {
-            for (const k of Object.keys(RISK_LABEL)) if (perms[k]) summary.perms.push(RISK_LABEL[k]);
+            for (const k of RISK_KEYS) if (perms[k]) summary.perms.push(k);
         } else if (tk?.allowCustomCommands) {
-            summary.perms.push(RISK_LABEL.command, RISK_LABEL.deeplink);
+            summary.perms.push('command', 'deeplink');
         }
         summary.steps = walkSteps(tk?.steps, summary);
         summary.stepCount = countSteps(summary.steps);

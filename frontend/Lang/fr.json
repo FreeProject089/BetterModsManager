@@ -7153,5 +7153,18 @@
   "sched.filter": "Filtrer les tâches…",
   "sched.filter.n": "{n} sur {total}",
   "sched.filter.total": "{total} tâches",
-  "sched.filter.none": "Aucune tâche ne correspond."
+  "sched.filter.none": "Aucune tâche ne correspond.",
+  "bmi.p.command": "Exécute des programmes externes",
+  "bmi.p.script": "Exécute des scripts (PowerShell / CMD / Bash / Python)",
+  "bmi.p.deeplink": "Déclenche des liens bmm://",
+  "bmi.p.stop": "Arrête des programmes en cours",
+  "bmi.r.command": "Exécute un programme externe",
+  "bmi.r.script": "Exécute un script",
+  "bmi.r.stop": "Arrête un programme",
+  "bmi.r.launch": "Lance une application",
+  "bmi.r.file": "Ouvre un fichier ou un programme",
+  "bmi.r.folder": "Ouvre un dossier",
+  "bmi.r.url": "Ouvre une URL",
+  "bmi.r.restart": "Redémarre BMM",
+  "bmi.r.task": "Exécute une autre tâche planifiée"
 }

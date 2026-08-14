@@ -7155,5 +7155,18 @@
   "sched.filter": "Filter tasks…",
   "sched.filter.n": "{n} of {total}",
   "sched.filter.total": "{total} tasks",
-  "sched.filter.none": "No task matches that."
+  "sched.filter.none": "No task matches that.",
+  "bmi.p.command": "Runs external programs",
+  "bmi.p.script": "Runs scripts (PowerShell / CMD / Bash / Python)",
+  "bmi.p.deeplink": "Fires bmm:// deeplinks",
+  "bmi.p.stop": "Stops running programs",
+  "bmi.r.command": "Runs an external program",
+  "bmi.r.script": "Runs a script",
+  "bmi.r.stop": "Stops a program",
+  "bmi.r.launch": "Launches an app",
+  "bmi.r.file": "Opens a file or program",
+  "bmi.r.folder": "Opens a folder",
+  "bmi.r.url": "Opens a URL",
+  "bmi.r.restart": "Restarts BMM",
+  "bmi.r.task": "Runs another scheduled task"
 }

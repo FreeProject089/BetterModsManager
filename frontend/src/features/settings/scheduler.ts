@@ -3150,6 +3150,26 @@ export async function inspectTasksFile(): Promise<void> {
 
 function showBmmpaReport(report: ReturnType<typeof inspectBmmpa>, path: string): void {
     const esc = (x: unknown) => escHtml(String(x ?? ''));
+    // The analyser returns codes; the words are the view's. An unknown code falls back to
+    // itself rather than to a blank — seeing "app.frobnicate" tells you something, seeing
+    // nothing does not.
+    const PERM: Record<string, string> = {
+        command: t('bmi.p.command') || 'Runs external programs',
+        script: t('bmi.p.script') || 'Runs scripts (PowerShell / CMD / Bash / Python)',
+        deeplink: t('bmi.p.deeplink') || 'Fires bmm:// deeplinks',
+        stopProcess: t('bmi.p.stop') || 'Stops running programs',
+    };
+    const REACH: Record<string, string> = {
+        'custom.command': t('bmi.r.command') || 'Runs an external program',
+        'custom.script': t('bmi.r.script') || 'Runs a script',
+        'app.stop': t('bmi.r.stop') || 'Stops a program',
+        'app.launch': t('bmi.r.launch') || 'Launches an app',
+        'file.open': t('bmi.r.file') || 'Opens a file or program',
+        'folder.open': t('bmi.r.folder') || 'Opens a folder',
+        'open.url': t('bmi.r.url') || 'Opens a URL',
+        restart: t('bmi.r.restart') || 'Restarts BMM',
+        'task.run': t('bmi.r.task') || 'Runs another scheduled task',
+    };
     const body = report.tasks.map((tk) => `
         <div class="sched-insp-task">
             <div class="sched-insp-head">
@@ -3158,8 +3178,8 @@ function showBmmpaReport(report: ReturnType<typeof inspectBmmpa>, path: string):
                 <span class="sched-insp-count">${tk.stepCount} ${esc(t('sched.insp.steps') || 'steps')}</span>
             </div>
             ${tk.description ? `<div class="sched-insp-desc">${esc(tk.description)}</div>` : ''}
-            ${tk.perms.length ? `<div class="sched-insp-warn"><b>${esc(t('sched.insp.asks') || 'It grants itself:')}</b> ${tk.perms.map(esc).join(' · ')}</div>` : ''}
-            ${tk.reaching.length ? `<div class="sched-insp-warn"><b>${esc(t('sched.insp.reaches') || 'Reaches outside BMM:')}</b> ${tk.reaching.map(esc).join(' · ')}</div>` : ''}
+            ${tk.perms.length ? `<div class="sched-insp-warn"><b>${esc(t('sched.insp.asks') || 'It grants itself:')}</b> ${tk.perms.map((k) => esc(PERM[k] || k)).join(' · ')}</div>` : ''}
+            ${tk.reaching.length ? `<div class="sched-insp-warn"><b>${esc(t('sched.insp.reaches') || 'Reaches outside BMM:')}</b> ${tk.reaching.map((k) => esc(REACH[k] || k)).join(' · ')}</div>` : ''}
             ${tk.targets.length ? `<div class="sched-insp-targets"><b>${esc(t('sched.insp.targets') || 'Names:')}</b> ${tk.targets.map((x) => `<code>${esc(x)}</code>`).join(' ')}</div>` : ''}
             ${tk.scripts.map((sc) => `<details class="sched-insp-script"><summary>${esc(t('sched.insp.script') || 'Script')} — ${esc(sc.engine)}</summary><pre>${esc(sc.code)}</pre></details>`).join('')}
         </div>`).join('');

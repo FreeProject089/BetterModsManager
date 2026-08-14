@@ -1,5 +1,6 @@
 // Reading a .bmmpa without running it, against the COMPILED module.
 //
+// Note: the analyser reports CODES, not prose — the words belong to whatever renders it.
 // The property every assertion here defends: LOOKING at a shared automation must not be
 // the automation happening, and the report must not be clean for a file that is not.
 import { test, describe } from 'node:test';
@@ -9,7 +10,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const { inspectBmmpa, RISK_LABEL } = await import(
+const { inspectBmmpa, RISK_KEYS } = await import(
   pathToFileURL(join(ROOT, 'frontend/js/features/settings/bmmpa-inspect.js')).href
 );
 
@@ -17,9 +18,9 @@ const file = (tasks) => ({ magic: 'BMMPA', version: 1, exported: '2026-01-01T00:
 const act = (type, params = {}) => ({ kind: 'action', action: { type, params } });
 
 describe('what the file says it may do', () => {
-  test('reports each granted permission in words', () => {
+  test('reports each granted permission as a code', () => {
     const r = inspectBmmpa(file([{ name: 'T', perms: { script: true, stopProcess: true }, steps: [] }]));
-    assert.deepEqual(r.tasks[0].perms.sort(), [RISK_LABEL.script, RISK_LABEL.stopProcess].sort());
+    assert.deepEqual(r.tasks[0].perms.sort(), ['script', 'stopProcess'].sort());
     assert.equal(r.needsReview, true);
   });
 
@@ -27,8 +28,8 @@ describe('what the file says it may do', () => {
     // allowCustomCommands is the legacy single flag. Reporting "no permissions" for it
     // would be a lie of omission on exactly the oldest files in circulation.
     const r = inspectBmmpa(file([{ name: 'Old', allowCustomCommands: true, steps: [] }]));
-    assert.ok(r.tasks[0].perms.includes(RISK_LABEL.command));
-    assert.ok(r.tasks[0].perms.includes(RISK_LABEL.deeplink));
+    assert.ok(r.tasks[0].perms.includes('command'));
+    assert.ok(r.tasks[0].perms.includes('deeplink'));
   });
 
   test('a task that asks for nothing and touches nothing needs no review', () => {
@@ -113,4 +114,10 @@ test('counts every step, including nested ones', () => {
   }]));
   // 2 top-level + 3 inside = 5
   assert.equal(r.tasks[0].stepCount, 5);
+});
+
+test("RISK_KEYS is the permission vocabulary", () => {
+  // Pins the contract a view relies on to translate them. A key added to TaskPerms without
+  // one here would be silently unreportable.
+  assert.deepEqual([...RISK_KEYS], ["command", "script", "deeplink", "stopProcess"]);
 });
