@@ -319,20 +319,137 @@ pub fn path_exists(path: String) -> bool {
     !path.trim().is_empty() && std::path::Path::new(path.trim()).exists()
 }
 
-/// True if a process whose name matches `name` is currently running. Used by the
-/// scheduler's "app is running" condition / "wait until app launched" step.
+/// True if the target process is running. Used by the scheduler's "app is running"
+/// condition / "wait until app launched" step.
+///
+/// `pid` wins when given. A name is a guess that can match several processes or none —
+/// two copies of the same game, a launcher that renames itself between versions — while
+/// a pid names exactly one. The name path stays because a scheduled task is written once
+/// and runs for months: pids do not survive a reboot, so "is Steam running?" can only be
+/// asked by name.
 #[tauri::command]
-pub fn is_process_running(name: String) -> bool {
-    use sysinfo::{System, ProcessRefreshKind, UpdateKind};
-    let needle = name.trim().to_lowercase();
-    if needle.is_empty() { return false; }
-    let stem = needle.trim_end_matches(".exe");
+pub fn is_process_running(name: String, pid: Option<u32>) -> bool {
+    use sysinfo::{ProcessRefreshKind, System, UpdateKind};
     let mut sys = System::new();
     sys.refresh_processes_specifics(ProcessRefreshKind::new().with_exe(UpdateKind::OnlyIfNotSet));
+    if let Some(want) = pid.filter(|p| *p > 0) {
+        return sys.processes().contains_key(&sysinfo::Pid::from_u32(want));
+    }
+    let needle = name.trim().to_lowercase();
+    if needle.is_empty() {
+        return false;
+    }
+    let stem = needle.trim_end_matches(".exe");
     sys.processes().values().any(|p| {
         let pname = p.name().to_lowercase();
-        pname == needle || pname == format!("{}.exe", stem) || pname.trim_end_matches(".exe") == stem
+        pname == needle
+            || pname == format!("{}.exe", stem)
+            || pname.trim_end_matches(".exe") == stem
     })
+}
+
+/// Everything currently running, so a task can be pointed at a real process instead of a
+/// guessed name — {pid, name, exe, memMb}.
+///
+/// This existed nowhere: "app is running" took a name typed from memory, and a name that
+/// never matches makes a condition that is silently always false, which is the worst kind
+/// of broken schedule because it looks like it works.
+///
+/// Read-only, and deliberately not permission-gated: it reports what the OS already shows
+/// in any task manager. Acting on a process is a different matter — see stop_process.
+#[tauri::command(async)]
+pub fn list_running_processes() -> Vec<serde_json::Value> {
+    use sysinfo::{ProcessRefreshKind, System, UpdateKind};
+    let mut sys = System::new();
+    sys.refresh_processes_specifics(ProcessRefreshKind::new().with_exe(UpdateKind::OnlyIfNotSet));
+    let mut out: Vec<serde_json::Value> = sys
+        .processes()
+        .iter()
+        .map(|(pid, p)| {
+            serde_json::json!({
+                "pid": pid.as_u32(),
+                "name": p.name(),
+                "exe": p.exe().map(|e| e.to_string_lossy().to_string()),
+                "memMb": (p.memory() / (1024 * 1024)) as u64,
+            })
+        })
+        .collect();
+    // Heaviest first: the process somebody wants to name in a task is almost never the
+    // 4 MB background service, and an alphabetical list of 400 entries is a list nobody
+    // reads to the end.
+    out.sort_by(|a, b| {
+        b["memMb"]
+            .as_u64()
+            .unwrap_or(0)
+            .cmp(&a["memMb"].as_u64().unwrap_or(0))
+    });
+    out
+}
+
+/// Stop a process, by pid or by name.
+///
+/// `allow` carries the task's explicit permission, exactly as run_scheduled_script does:
+/// terminating a process can lose unsaved work, so it must be granted, not assumed.
+///
+/// Refuses to kill BMM itself. A task that stops the app running it would kill the
+/// scheduler mid-step, leaving the run recorded as neither finished nor failed — and the
+/// obvious way to write it ("close everything called Better*") would do exactly that by
+/// accident.
+#[tauri::command(async)]
+pub fn stop_process(name: String, pid: Option<u32>, allow: bool) -> Result<u32, String> {
+    use sysinfo::{ProcessRefreshKind, System, UpdateKind};
+    if !allow {
+        return Err(
+            "Stopping a process is not permitted for this task (grant it in the task's permissions)."
+                .to_string(),
+        );
+    }
+    let me = std::process::id();
+    let mut sys = System::new();
+    sys.refresh_processes_specifics(ProcessRefreshKind::new().with_exe(UpdateKind::OnlyIfNotSet));
+
+    let targets: Vec<_> = if let Some(want) = pid.filter(|p| *p > 0) {
+        sys.processes()
+            .iter()
+            .filter(|(k, _)| k.as_u32() == want)
+            .map(|(_, p)| p)
+            .collect()
+    } else {
+        let needle = name.trim().to_lowercase();
+        if needle.is_empty() {
+            return Err("No process name or pid given.".to_string());
+        }
+        let stem = needle.trim_end_matches(".exe");
+        sys.processes()
+            .values()
+            .filter(|p| {
+                let pname = p.name().to_lowercase();
+                pname == needle
+                    || pname == format!("{}.exe", stem)
+                    || pname.trim_end_matches(".exe") == stem
+            })
+            .collect()
+    };
+
+    let mut killed = 0u32;
+    for p in targets {
+        if p.pid().as_u32() == me {
+            log_line("[SCHED] Refusing to stop BMM itself".to_string());
+            continue;
+        }
+        if p.kill() {
+            killed += 1;
+        }
+    }
+    log_line(format!(
+        "[SCHED] stop_process name={:?} pid={:?} -> {} stopped",
+        name, pid, killed
+    ));
+    if killed == 0 {
+        Err("Nothing matched — the process was not running.".to_string())
+    } else {
+        Ok(killed)
+    }
 }
 
 // ── Windows Task Scheduler integration ────────────────────────────────────────
@@ -530,4 +647,56 @@ pub fn create_bmm_folder(app: tauri::AppHandle, relative: String) -> Result<Stri
 
     log_line(format!("[SCHED] Created folder {}", final_path.display()));
     Ok(final_path.to_string_lossy().to_string())
+}
+
+#[cfg(test)]
+mod process_tests {
+    use super::*;
+
+    /// The listing has to see the real OS, not just compile. This process is guaranteed to
+    /// be in it, which makes it the one assertion that cannot pass by accident on an empty
+    /// or failed refresh — a bare `!is_empty()` would.
+    #[test]
+    fn lists_this_very_process() {
+        let me = std::process::id();
+        let all = list_running_processes();
+        assert!(
+            all.len() > 1,
+            "expected a populated process list, got {}",
+            all.len()
+        );
+        assert!(
+            all.iter().any(|p| p["pid"].as_u64() == Some(me as u64)),
+            "the test's own pid {} was not in the listing",
+            me
+        );
+        // Heaviest first — the ordering the picker relies on to be readable.
+        let mems: Vec<u64> = all.iter().filter_map(|p| p["memMb"].as_u64()).collect();
+        assert!(
+            mems.windows(2).all(|w| w[0] >= w[1]),
+            "listing is not sorted by memory"
+        );
+    }
+
+    /// pid beats name, and a pid that exists answers true while a name that does not answers
+    /// false — the two halves of the condition the scheduler asks every tick.
+    #[test]
+    fn pid_takes_priority_over_name() {
+        let me = std::process::id();
+        assert!(is_process_running("no-such-binary-xyz".into(), Some(me)));
+        assert!(!is_process_running(String::new(), Some(u32::MAX)));
+        assert!(!is_process_running("no-such-binary-xyz".into(), None));
+        assert!(!is_process_running(String::new(), None));
+    }
+
+    /// Without the task's permission nothing is killed, and the check happens BEFORE any
+    /// process is looked up — the ordering is the safety property, not the message.
+    #[test]
+    fn stop_requires_permission_and_spares_bmm() {
+        let me = std::process::id();
+        assert!(stop_process("anything".into(), Some(me), false).is_err());
+        // Permission granted, target is this very process: it must refuse rather than
+        // terminate the test runner, which is also what would kill the scheduler mid-run.
+        assert!(stop_process(String::new(), Some(me), true).is_err());
+    }
 }
