@@ -18,6 +18,17 @@ import { substituteVars, type RunCtx } from './sched-vars.js';
 import { inspectBmmpa } from './bmmpa-inspect.js';
 import { parsePresetFeed, looksLikePresetFeed, readPresetCatalogs, writePresetCatalogs } from './preset-catalog.js';
 import { originLabel } from '../catalogs/catalog-index.js';
+import { getLinks } from '../../core/links-config.js';
+
+/**
+ * A 16px line icon, drawn the way every other icon in this panel is drawn: one stroked
+ * path inheriting `currentColor`, so it takes the theme's text colour and stays legible
+ * on a light background. Emoji do not — they carry their own colours, they render as a
+ * different typeface on every OS, and several of them are simply a coloured square in the
+ * webview. The preset chips were the last place in the scheduler still using them.
+ */
+const SVG16 = (d: string): string =>
+    `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
 
 // ── Types ───────────────────────────────────────────────────────────────────
 type Trigger =
@@ -1567,7 +1578,7 @@ async function loadPickers(): Promise<void> {
  */
 const PRESETS: { key: string; icon: string; title: string; desc: string; make: () => Partial<Task> }[] = [
     {
-        key: 'backup', icon: '💾',
+        key: 'backup', icon: '<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>',
         title: 'Weekly backup',
         desc: 'Every Monday at 09:00, export your BMM data and say so.',
         make: () => ({
@@ -1580,7 +1591,7 @@ const PRESETS: { key: string; icon: string; title: string; desc: string; make: (
         }),
     },
     {
-        key: 'updates', icon: '🔄',
+        key: 'updates', icon: '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>',
         title: 'Tell me about updates',
         desc: 'Every morning, check for mod and BMM updates — and only notify if there is one.',
         make: () => ({
@@ -1601,7 +1612,7 @@ const PRESETS: { key: string; icon: string; title: string; desc: string; make: (
         }),
     },
     {
-        key: 'disk', icon: '🧮',
+        key: 'disk', icon: '<line x1="22" x2="2" y1="12" y2="12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><line x1="6" x2="6.01" y1="16" y2="16"/><line x1="10" x2="10.01" y1="16" y2="16"/>',
         title: 'Warn me before the disk fills',
         desc: 'Twice a day, check free space and warn under 20 GB. Silent otherwise.',
         make: () => ({
@@ -1619,7 +1630,7 @@ const PRESETS: { key: string; icon: string; title: string; desc: string; make: (
         }),
     },
     {
-        key: 'scan', icon: '📁',
+        key: 'scan', icon: '<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
         title: 'Rescan mods when BMM opens',
         desc: 'Picks up anything you added to the mods folder outside BMM.',
         make: () => ({
@@ -1629,7 +1640,7 @@ const PRESETS: { key: string; icon: string; title: string; desc: string; make: (
         }),
     },
     {
-        key: 'aftergame', icon: '🎮',
+        key: 'aftergame', icon: '<line x1="6" x2="10" y1="11" y2="11"/><line x1="8" x2="8" y1="9" y2="13"/><line x1="15" x2="15.01" y1="12" y2="12"/><line x1="18" x2="18.01" y1="10" y2="10"/><path d="M17.32 5H6.68a4 4 0 0 0-3.978 3.59c-.006.052-.01.101-.017.152C2.604 9.416 2 14.456 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 0 1 9.828 16h4.344a2 2 0 0 1 1.414.586L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.544-.604-6.584-.685-7.258-.007-.05-.011-.1-.017-.151A4 4 0 0 0 17.32 5z"/>',
         title: 'Tidy up after the game closes',
         desc: 'Waits for the game to exit, then stops its launcher and rescans your mods. Fill in the two names, and grant “Stop programs”.',
         make: () => ({
@@ -1742,13 +1753,13 @@ function renderModal(modal: HTMLElement): void {
                     <div class="sched-presets">
                         <button type="button" class="sched-preset sched-preset-more" id="sched-preset-catalog"
                             data-tooltip="${escAttr(t('sched.pc.tip') || 'Presets published by the community. Each one is inspected before anything is imported.')}">
-                            <span class="sched-preset-ico">☁</span>
+                            <span class="sched-preset-ico">${SVG16('<path d="M12 13v8"/><path d="m8 17 4 4 4-4"/><path d="M4.393 15.269A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.436 8.284"/>')}</span>
                             <span class="sched-preset-name">${escHtml(t('sched.pc.browse') || 'From a catalog…')}</span>
                         </button>
                         ${PRESETS.map((p) => `
                             <button type="button" class="sched-preset" data-preset="${escAttr(p.key)}"
                                 data-tooltip="${escAttr(t('sched.presetd.' + p.key) || p.desc)}">
-                                <span class="sched-preset-ico">${p.icon}</span>
+                                <span class="sched-preset-ico">${SVG16(p.icon)}</span>
                                 <span class="sched-preset-name">${escHtml(t('sched.preset.' + p.key) || p.title)}</span>
                             </button>`).join('')}
                     </div>`;
@@ -3146,83 +3157,221 @@ export async function exportTasksFile(): Promise<void> {
  * other people's code, and importing one on the strength of its description would be the
  * thing this whole inspector exists to avoid.
  */
-export async function browsePresetCatalogs(): Promise<void> {
-    const urls = readPresetCatalogs();
-    if (!urls.length) {
-        const added = await promptForPresetCatalog();
-        if (!added) return;
-    }
-    const all: any[] = [];
-    const problems: string[] = [];
-    for (const url of readPresetCatalogs()) {
+/** One row of the sources panel: where it came from, and how that went. */
+interface PresetSource {
+    url: string;
+    official: boolean;
+    state: 'ok' | 'error' | 'notfeed';
+    count: number;
+    detail?: string;
+}
+
+/**
+ * The official feed comes from the link registry, never from a literal here.
+ *
+ * It used to be typed into a `window.prompt` default, which meant the official catalogue
+ * could only ever be the production domain. A BCWEB running behind a tunnel — cloudflared,
+ * ngrok, a staging host — was unreachable no matter how well it worked, so the one path
+ * that most needs testing before release was the one path that could not be tested. An
+ * empty entry in links.json now means "no official feed", which is a thing a fork may
+ * legitimately want to say.
+ */
+function officialPresetUrl(): string {
+    try { return String(getLinks().preset_catalog || '').trim(); } catch { return ''; }
+}
+
+async function loadPresetSources(): Promise<{ presets: any[]; sources: PresetSource[] }> {
+    const official = officialPresetUrl();
+    // Deduplicated against the followed list: somebody who pasted the official address by
+    // hand should see one source, not the same catalogue twice under two badges.
+    const followed = readPresetCatalogs().filter((u) => u.trim() !== official);
+    const wanted = [...(official ? [{ url: official, official: true }] : []),
+                    ...followed.map((url) => ({ url, official: false }))];
+
+    const presets: any[] = [];
+    const sources: PresetSource[] = [];
+    for (const { url, official: isOff } of wanted) {
         try {
             const text: string = await invoke('fetch_remote_json', { url }) as string;
             const doc = JSON.parse(text);
             if (!looksLikePresetFeed(doc)) {
                 // Told apart from "empty" on purpose: a plugin catalog reported as an empty
                 // preset catalog sends somebody looking for a problem that is not there.
-                problems.push(`${url} — not a preset catalog`);
+                sources.push({ url, official: isOff, state: 'notfeed', count: 0 });
                 continue;
             }
-            const { presets, dropped } = parsePresetFeed(doc, url);
-            all.push(...presets);
-            problems.push(...dropped);
-        } catch (e) { problems.push(`${url} — ${String(e).slice(0, 80)}`); }
+            const parsed = parsePresetFeed(doc, url);
+            // Trust follows the address, not the document — the rule apply_trust enforces
+            // for app catalogs. A community feed cannot call its own entries official by
+            // saying so in JSON.
+            for (const p of parsed.presets) presets.push({ ...p, official: isOff });
+            sources.push({ url, official: isOff, state: 'ok', count: parsed.presets.length,
+                           detail: parsed.dropped.length ? parsed.dropped.join('\n') : undefined });
+        } catch (e) {
+            // The failure is kept ON the source rather than pooled into one "skipped" list.
+            // When bettercommunity.ch answers 503, the useful thing to see is which feed is
+            // down — not a footnote under an empty page that reads as "you follow nothing".
+            sources.push({ url, official: isOff, state: 'error', count: 0, detail: String(e).slice(0, 160) });
+        }
     }
-    showPresetCatalog(all, problems);
+    return { presets, sources };
 }
 
-async function promptForPresetCatalog(): Promise<boolean> {
-    const url = window.prompt(t('sched.pc.ask') || 'Address of a preset catalog:', 'https://bettercommunity.ch/api/catalog.json?project=bmm&kind=PRESET');
-    if (!url || !/^https?:\/\//i.test(url.trim())) return false;
-    writePresetCatalogs([...readPresetCatalogs(), url.trim()]);
-    return true;
+export async function browsePresetCatalogs(): Promise<void> {
+    showPresetCatalog(await loadPresetSources());
 }
 
-function showPresetCatalog(presets: any[], problems: string[]): void {
+/**
+ * Browse automations published by other people.
+ *
+ * Built as sources-beside-results rather than one flat list, for a reason the 503 on
+ * bettercommunity.ch demonstrated: the old panel showed "Nothing to show from the catalogs
+ * you follow" with the real reason folded into a collapsed "1 skipped" line. That sentence
+ * is false and discouraging — you follow a catalogue, it is simply down. Here every source
+ * is a row that states its own outcome, so an unreachable feed reads as an unreachable
+ * feed.
+ *
+ * Nothing here imports. Inspect downloads and analyses; the decision stays with the person.
+ */
+function showPresetCatalog(data: { presets: any[]; sources: PresetSource[] }): void {
     const esc = (x: unknown) => escHtml(String(x ?? ''));
     const overlay = document.createElement('div');
     overlay.className = 'modal-generic-overlay open';
-    overlay.innerHTML = `
-        <div class="modal sched-insp-modal">
+    let { presets, sources } = data;
+    let filter = '';
+
+    const sourceRow = (s: PresetSource) => {
+        const label = s.official
+            ? (t('sched.pc.official') || 'Official')
+            : (t('sched.pc.community') || 'Community');
+        const state = s.state === 'ok'
+            ? `<span class="sched-pc-src-n">${s.count} ${esc(t('sched.pc.tasks') || 'automations')}</span>`
+            : `<span class="sched-pc-src-bad">${esc(s.state === 'notfeed'
+                ? (t('sched.pc.notfeed') || 'not a preset catalogue')
+                : (t('sched.pc.unreachable') || 'unreachable'))}</span>`;
+        return `
+            <div class="sched-pc-src${s.state === 'ok' ? '' : ' is-bad'}">
+                <div class="sched-pc-src-head">
+                    <span class="sched-pc-badge${s.official ? ' is-official' : ''}">${esc(label)}</span>
+                    ${state}
+                    ${s.official ? '' : `<button class="sched-pc-drop" data-url="${escAttr(s.url)}"
+                        data-tooltip="${escAttr(t('sched.pc.unfollow') || 'Stop following this catalogue')}">${SVG16('<path d="M18 6 6 18"/><path d="m6 6 12 12"/>')}</button>`}
+                </div>
+                <div class="sched-pc-src-url" title="${escAttr(s.url)}">${esc(s.url)}</div>
+                ${s.detail ? `<div class="sched-pc-src-why">${esc(s.detail)}</div>` : ''}
+            </div>`;
+    };
+
+    const cards = () => {
+        const q = filter.trim().toLowerCase();
+        const shown = q
+            ? presets.filter((p) => `${p.name} ${p.description} ${p.author || ''}`.toLowerCase().includes(q))
+            : presets;
+        if (!shown.length) {
+            const why = presets.length
+                ? (t('sched.pc.noMatch') || 'Nothing matches that search.')
+                : sources.some((s) => s.state === 'ok')
+                    ? (t('sched.pc.emptyFeeds') || 'The catalogues you follow published nothing yet.')
+                    : (t('sched.pc.allDown') || 'No catalogue answered. The sources on the left say why.');
+            return `<p class="sched-pc-empty">${esc(why)}</p>`;
+        }
+        return shown.map((p) => `
+            <div class="sched-pc-card">
+                <div class="sched-pc-card-top">
+                    <b>${esc(p.name)}</b>
+                    ${p.official ? `<span class="sched-pc-badge is-official">${esc(t('sched.pc.official') || 'Official')}</span>` : ''}
+                    ${p.version ? `<span class="sched-pc-ver">v${esc(p.version)}</span>` : ''}
+                </div>
+                <div class="sched-pc-card-desc">${esc(p.description)}</div>
+                <div class="sched-pc-card-foot">
+                    <span class="sched-pc-from">${esc(p.author || '')}${p.author && p.source ? ' · ' : ''}${esc(p.source ? originLabel(p.source) : '')}</span>
+                    ${typeof p.tasks === 'number' ? `<span class="sched-pc-n">${p.tasks} ${esc(t('sched.pc.tasks') || 'automations')}</span>` : ''}
+                    <button class="btn btn-sm btn-secondary sched-pc-get" data-i="${presets.indexOf(p)}">${esc(t('sched.pc.inspect') || 'Inspect')}</button>
+                </div>
+            </div>`).join('');
+    };
+
+    const paint = () => {
+        overlay.innerHTML = `
+        <div class="modal sched-pc-modal">
             <div class="sched-insp-top">
-                <b>${esc(t('sched.pc.title') || 'Presets from a catalog')}</b>
+                <b>${esc(t('sched.pc.title') || 'Automations from a catalogue')}</b>
                 <button class="btn btn-ghost btn-sm" id="sched-pc-close">${esc(t('common.close') || 'Close')}</button>
             </div>
-            ${presets.length ? '' : `<p class="sched-insp-foot">${esc(t('sched.pc.none') || 'Nothing to show from the catalogs you follow.')}</p>`}
-            <div class="sched-pc-list">
-                ${presets.map((p, i) => `
-                    <div class="sched-pc-row">
-                        <div class="sched-pc-main">
-                            <b>${esc(p.name)}</b>
-                            ${p.version ? `<span class="sched-pc-ver">v${esc(p.version)}</span>` : ''}
-                            ${typeof p.tasks === 'number' ? `<span class="sched-pc-n">${p.tasks} ${esc(t('sched.pc.tasks') || 'automations')}</span>` : ''}
-                            <span class="sched-pc-desc">${esc(p.description)}</span>
-                            <span class="sched-pc-from">${esc(p.author || '')}${p.author && p.source ? ' · ' : ''}${esc(p.source ? originLabel(p.source) : '')}</span>
-                        </div>
-                        <button class="btn btn-sm btn-secondary sched-pc-get" data-i="${i}">${esc(t('sched.pc.inspect') || 'Inspect')}</button>
-                    </div>`).join('')}
+            <div class="sched-pc-body">
+                <aside class="sched-pc-side">
+                    <div class="sched-pc-side-h">${esc(t('sched.pc.sources') || 'Sources')}</div>
+                    ${sources.map(sourceRow).join('') || `<p class="sched-pc-empty">${esc(t('sched.pc.noSources') || 'No source configured.')}</p>`}
+                    <div class="sched-pc-add">
+                        <input class="input" id="sched-pc-url" placeholder="${escAttr(t('sched.pc.ask') || 'Address of a preset catalogue')}">
+                        <button class="btn btn-sm btn-secondary" id="sched-pc-follow">${esc(t('sched.pc.follow') || 'Follow')}</button>
+                    </div>
+                </aside>
+                <section class="sched-pc-main">
+                    <input class="input sched-pc-search" id="sched-pc-q" value="${escAttr(filter)}"
+                           placeholder="${escAttr(t('sched.pc.search') || 'Search automations')}">
+                    <div class="sched-pc-grid">${cards()}</div>
+                </section>
             </div>
-            ${problems.length ? `<details class="sched-pc-problems"><summary>${esc((t('sched.pc.skipped') || '{n} skipped').replace('{n}', String(problems.length)))}</summary><ul>${problems.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></details>` : ''}
         </div>`;
+        wire();
+    };
+
     const close = () => overlay.remove();
+    const reload = async () => { const d = await loadPresetSources(); presets = d.presets; sources = d.sources; paint(); };
+
+    function wire(): void {
+        overlay.querySelector('#sched-pc-close')?.addEventListener('click', close);
+
+        const q = overlay.querySelector<HTMLInputElement>('#sched-pc-q');
+        q?.addEventListener('input', () => {
+            filter = q.value;
+            // Only the grid is repainted. Rebuilding the whole modal would take the caret
+            // out of the box on every keystroke.
+            const grid = overlay.querySelector('.sched-pc-grid');
+            if (grid) { grid.innerHTML = cards(); wireCards(); }
+        });
+
+        const urlBox = overlay.querySelector<HTMLInputElement>('#sched-pc-url');
+        const follow = async () => {
+            const url = (urlBox?.value || '').trim();
+            if (!/^https?:\/\//i.test(url)) { toast(t('sched.pc.badUrl') || 'That is not an http(s) address.', 'error'); return; }
+            if (readPresetCatalogs().includes(url) || url === officialPresetUrl()) {
+                toast(t('sched.pc.dup') || 'You already follow that catalogue.', 'info'); return;
+            }
+            writePresetCatalogs([...readPresetCatalogs(), url]);
+            await reload();
+        };
+        overlay.querySelector('#sched-pc-follow')?.addEventListener('click', () => { void follow(); });
+        urlBox?.addEventListener('keydown', (e) => { if ((e as KeyboardEvent).key === 'Enter') void follow(); });
+
+        overlay.querySelectorAll<HTMLElement>('.sched-pc-drop').forEach((b) => b.addEventListener('click', async () => {
+            writePresetCatalogs(readPresetCatalogs().filter((u) => u !== b.dataset.url));
+            await reload();
+        }));
+
+        wireCards();
+    }
+
+    function wireCards(): void {
+        overlay.querySelectorAll<HTMLElement>('.sched-pc-get').forEach((b) => b.addEventListener('click', async () => {
+            const p = presets[Number(b.dataset.i)];
+            b.textContent = t('sched.pc.loading') || 'Fetching…';
+            try {
+                const text: string = await invoke('fetch_remote_json', { url: p.downloadUrl }) as string;
+                const report = inspectBmmpa(JSON.parse(text));
+                if (!report.ok) { toast(report.error || t('sched.inspectFailed') || 'Could not read that file', 'error'); return; }
+                close();
+                // Downloading is not importing: this ends in a report, and the person decides.
+                showBmmpaReport(report, p.name);
+            } catch (e) {
+                toast(`${t('sched.inspectFailed') || 'Could not read that file'} — ${String(e).slice(0, 100)}`, 'error');
+            } finally { b.textContent = t('sched.pc.inspect') || 'Inspect'; }
+        }));
+    }
+
     overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
-    overlay.querySelector('#sched-pc-close')?.addEventListener('click', close);
-    overlay.querySelectorAll<HTMLElement>('.sched-pc-get').forEach((b) => b.addEventListener('click', async () => {
-        const p = presets[Number(b.dataset.i)];
-        b.textContent = t('sched.pc.loading') || 'Fetching…';
-        try {
-            const text: string = await invoke('fetch_remote_json', { url: p.downloadUrl }) as string;
-            const report = inspectBmmpa(JSON.parse(text));
-            if (!report.ok) { toast(report.error || t('sched.inspectFailed') || 'Could not read that file', 'error'); return; }
-            close();
-            // The same report the Inspect button shows. Downloading is not importing: this
-            // ends in a panel, and the person decides.
-            showBmmpaReport(report, p.name);
-        } catch (e) {
-            toast(`${t('sched.inspectFailed') || 'Could not read that file'} — ${String(e).slice(0, 100)}`, 'error');
-        } finally { b.textContent = t('sched.pc.inspect') || 'Inspect'; }
-    }));
+    paint();
     (document.getElementById('app-window-outer') || document.body).appendChild(overlay);
 }
 

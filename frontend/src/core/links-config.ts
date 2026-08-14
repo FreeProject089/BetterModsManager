@@ -29,6 +29,13 @@ export interface BmmLinks {
     contributors:     string;
     autoupdate_api:   string;
     apps_catalog:     string;
+    // The official catalogue of scheduler automations, and the index that lists every
+    // official catalogue. Both were written into the scheduler as string literals, which
+    // made the official feed unreachable from anywhere but bettercommunity.ch — so a
+    // tunnelled BCWEB (cloudflared, ngrok) could be running perfectly and BMM would still
+    // talk to the domain that is down. Being in the registry is what makes them testable.
+    preset_catalog:   string;
+    catalog_index:    string;
     // Telemetry (opt-in). HTTPS PostHog-compatible capture endpoint + PUBLIC key.
     // `analytics_key` is a PUBLIC ingest key — it ships inside the app and only
     // permits submitting telemetry. The PRIVATE admin key (deletion approvals,
@@ -60,6 +67,8 @@ const DEFAULTS: BmmLinks = {
     contributors:     'https://bettercommunity.ch/api/assets/contributors.json',
     autoupdate_api:   'https://api.github.com/repos/FreeProject089/BetterModsManager/releases',
     apps_catalog:     'https://raw.githubusercontent.com/BetterDCS/BMM_App_Catalogue/main/catalog.json',
+    preset_catalog:   'https://bettercommunity.ch/api/catalog.json?project=bmm&kind=PRESET',
+    catalog_index:    'https://bettercommunity.ch/api/catalogs.json',
     // Telemetry: production collector (MUST be HTTPS — BMM refuses plain HTTP, so the
     // old localhost dev default only worked in test builds). For LOCAL testing, override
     // via a hosted links.json or an HTTPS tunnel (ngrok/cloudflared) ending in "/batch/".

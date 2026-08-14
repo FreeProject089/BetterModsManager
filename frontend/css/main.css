@@ -16532,18 +16532,66 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
     font-size: 13px; line-height: 1; padding: 2px 5px; border-radius: 999px; }
 .repo-cat-del:hover { color: var(--danger); background: color-mix(in srgb, var(--danger) 14%, transparent); }
 
-/* Presets offered by a catalog. Each row ends in Inspect, never in Install — downloading
-   is not importing, and the decision stays with the person. */
-.sched-pc-list { display: flex; flex-direction: column; gap: 6px; }
-.sched-pc-row { display: flex; align-items: flex-start; gap: 10px; padding: 9px 11px;
-    border: 1px solid var(--border); border-radius: 10px; }
-.sched-pc-main { min-width: 0; flex: 1; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
-.sched-pc-main b { font-size: 13px; }
+/* Automations offered by a catalogue. Every card ends in Inspect, never in Install —
+   downloading is not importing, and the decision stays with the person.
+
+   Sources sit BESIDE the results rather than under them. The first version put the whole
+   outcome of the network in a collapsed "1 skipped" line under the words "Nothing to show
+   from the catalogs you follow", which is the wrong sentence when the truth is that
+   bettercommunity.ch answered 503: you do follow a catalogue, it is down. A source that
+   failed now says so on its own row, at full size. */
+.sched-pc-modal { width: min(920px, 94vw); }
+.sched-pc-body { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 14px; }
+/* minmax(0, 1fr), not 1fr: a long unbroken URL in a card would otherwise set the column's
+   minimum width and push the grid wider than the modal. */
+
+.sched-pc-side { display: flex; flex-direction: column; gap: 8px; min-width: 0;
+    border-right: 1px solid var(--border); padding-right: 12px; }
+.sched-pc-side-h { font-size: 11px; text-transform: uppercase; letter-spacing: .04em;
+    color: var(--text-muted); }
+.sched-pc-src { border: 1px solid var(--border); border-radius: 9px; padding: 7px 9px;
+    background: var(--bg-secondary); min-width: 0; }
+.sched-pc-src.is-bad { border-color: color-mix(in srgb, var(--danger) 45%, var(--border)); }
+.sched-pc-src-head { display: flex; align-items: center; gap: 6px; }
+.sched-pc-src-url { font-size: 10px; color: var(--text-muted); margin-top: 3px;
+    overflow-wrap: anywhere; }
+.sched-pc-src-why { font-size: 10px; color: var(--danger); margin-top: 4px;
+    overflow-wrap: anywhere; white-space: pre-wrap; }
+.sched-pc-src-n { font-size: 10px; color: var(--text-muted); }
+.sched-pc-src-bad { font-size: 10px; color: var(--danger); }
+.sched-pc-drop { margin-left: auto; background: none; border: 0; padding: 2px;
+    color: var(--text-muted); cursor: pointer; display: flex; }
+.sched-pc-drop:hover { color: var(--danger); }
+.sched-pc-add { display: flex; gap: 6px; margin-top: 4px; }
+.sched-pc-add .input { min-width: 0; flex: 1; font-size: 11px; }
+
+/* The badge says where a thing came from. Trust follows the address it was fetched from,
+   never a field inside the document — the rule apply_trust enforces for app catalogs. */
+.sched-pc-badge { font-size: 9px; text-transform: uppercase; letter-spacing: .04em;
+    padding: 1px 6px; border-radius: 999px; border: 1px solid var(--border);
+    color: var(--text-secondary); }
+.sched-pc-badge.is-official { border-color: color-mix(in srgb, var(--bmm-accent) 55%, transparent);
+    color: var(--bmm-accent); }
+
+.sched-pc-main { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.sched-pc-search { font-size: 12px; }
+.sched-pc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 8px; max-height: 52vh; overflow-y: auto; }
+.sched-pc-card { border: 1px solid var(--border); border-radius: 10px; padding: 10px 11px;
+    background: var(--bg-secondary); display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.sched-pc-card-top { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.sched-pc-card-top b { font-size: 13px; }
+.sched-pc-card-desc { font-size: 12px; color: var(--text-muted); }
+.sched-pc-card-foot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: auto; }
+.sched-pc-card-foot .btn { margin-left: auto; }
 .sched-pc-ver { font-size: 10px; color: var(--bmm-accent); }
 .sched-pc-n { font-size: 10px; color: var(--text-muted); }
-.sched-pc-desc { flex-basis: 100%; font-size: 12px; color: var(--text-muted); }
-.sched-pc-from { flex-basis: 100%; font-size: 10px; color: var(--text-secondary); }
-/* Folded away: what was skipped matters when something is missing and is noise otherwise. */
-.sched-pc-problems { margin-top: 10px; font-size: 11px; color: var(--text-muted); }
-.sched-pc-problems summary { cursor: pointer; }
+.sched-pc-from { font-size: 10px; color: var(--text-secondary); overflow-wrap: anywhere; }
+.sched-pc-empty { font-size: 12px; color: var(--text-muted); grid-column: 1 / -1; }
 .sched-preset-more { border-style: dashed; }
+
+@media (max-width: 720px) {
+    .sched-pc-body { grid-template-columns: minmax(0, 1fr); }
+    .sched-pc-side { border-right: 0; padding-right: 0;
+        border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+}
