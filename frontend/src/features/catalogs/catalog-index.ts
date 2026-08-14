@@ -1,0 +1,122 @@
+// Reading a catalog INDEX — one URL that lists catalogs of several types.
+//
+// BMM configures one fixed URL per type (links.json carries `apps_catalog` and
+// `plugin_catalog` separately), and the only chaining it had, `community_imports`, lives
+// on AppCatalog — so it can bring in more app catalogs and nothing else. There was no way
+// to hand BMM a single address and have it pick up app, plugin and theme catalogs
+// together. This is that reader.
+//
+// The parsing half is pure and lives here so it can be tested directly; the applying half
+// takes its stores as arguments for the same reason. Everything that talks to Tauri or
+// localStorage stays in the caller.
+
+/** One catalog named by an index. */
+export interface IndexEntry {
+    /** app · plugin · theme · preset — which subsystem it belongs to. */
+    type: string;
+    url: string;
+    name?: string;
+    description?: string;
+    owner?: string;
+    items?: number;
+    /** What the document CLAIMS. Never trusted — see parseCatalogIndex. */
+    official?: boolean;
+}
+
+export interface CatalogIndex {
+    version?: string;
+    name?: string;
+    description?: string;
+    catalogs: IndexEntry[];
+}
+
+/** Types BMM can actually route. An entry naming anything else is dropped, not guessed. */
+export const INDEX_TYPES = ['app', 'plugin', 'theme'] as const;
+
+/**
+ * Parse and sanitise an index document.
+ *
+ * Rejects rather than repairs. An index is a remote document from a server the user
+ * pasted a URL for, so every field is untrusted input:
+ *
+ *  - Only http(s) URLs survive. A `file://` or `javascript:` entry in a list that gets
+ *    handed to a fetcher is the obvious attack, and "it would probably fail anyway" is not
+ *    a reason to pass it on.
+ *  - `official` is dropped entirely. BMM assigns trust from the source URL — apply_trust
+ *    overrides whatever an app catalog claims — and an index that could grant it would be
+ *    a way around that, not an extension of it.
+ *  - Unknown types are dropped. Guessing that "plugins" means "plugin" is how a preset
+ *    catalog ends up in the themes list.
+ *  - Duplicate URLs collapse, keeping the first: an index listing something twice must not
+ *    make the caller add it twice.
+ */
+export function parseCatalogIndex(raw: unknown): { index: CatalogIndex; dropped: string[] } {
+    const dropped: string[] = [];
+    const doc = (raw && typeof raw === 'object' ? raw : {}) as Record<string, any>;
+    const list = Array.isArray(doc.catalogs) ? doc.catalogs : [];
+    const seen = new Set<string>();
+    const catalogs: IndexEntry[] = [];
+
+    for (const e of list) {
+        if (!e || typeof e !== 'object') { dropped.push('not an object'); continue; }
+        const type = String(e.type || '').trim().toLowerCase();
+        const url = String(e.url || '').trim();
+        if (!(INDEX_TYPES as readonly string[]).includes(type)) {
+            dropped.push(`${url || '(no url)'} — unknown type ${JSON.stringify(e.type)}`);
+            continue;
+        }
+        if (!/^https?:\/\//i.test(url)) {
+            dropped.push(`${url || '(no url)'} — not an http(s) url`);
+            continue;
+        }
+        const key = url.toLowerCase();
+        if (seen.has(key)) { dropped.push(`${url} — listed twice`); continue; }
+        seen.add(key);
+        catalogs.push({
+            type,
+            url,
+            name: typeof e.name === 'string' ? e.name.slice(0, 120) : undefined,
+            description: typeof e.description === 'string' ? e.description.slice(0, 400) : undefined,
+            owner: typeof e.owner === 'string' ? e.owner.slice(0, 120) : undefined,
+            items: Number.isFinite(e.items) ? Number(e.items) : undefined,
+        });
+    }
+
+    return {
+        index: {
+            version: typeof doc.version === 'string' ? doc.version : undefined,
+            name: typeof doc.name === 'string' ? doc.name.slice(0, 120) : undefined,
+            description: typeof doc.description === 'string' ? doc.description.slice(0, 400) : undefined,
+            catalogs,
+        },
+        dropped,
+    };
+}
+
+/** Where each type's community sources are kept. Not a new store — these are the two the
+ *  deeplink handler already writes to, so a catalog added by either route lands in one
+ *  place and shows up in the same list. */
+export const STORE_KEY: Record<string, string> = {
+    plugin: 'bmm_plugin_catalogs',
+    theme: 'bmm_theme_community_sources',
+};
+
+/**
+ * Work out what importing an index would change, without changing anything.
+ *
+ * Separated from applying so the caller can show "3 new, 2 already there" before doing it
+ * — and so this can be tested without a browser. `existing` is what each store already
+ * holds, keyed by type.
+ */
+export function planImport(
+    index: CatalogIndex,
+    existing: Record<string, string[]>,
+): { add: IndexEntry[]; already: IndexEntry[] } {
+    const add: IndexEntry[] = [];
+    const already: IndexEntry[] = [];
+    for (const e of index.catalogs) {
+        const have = (existing[e.type] || []).map((u) => u.toLowerCase());
+        (have.includes(e.url.toLowerCase()) ? already : add).push(e);
+    }
+    return { add, already };
+}
