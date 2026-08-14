@@ -14,6 +14,7 @@ import { t } from '../../core/i18n.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { toast } from '../../ui/app.js';
 import { calendarDue, nextCalendarDue } from './sched-time.js';
+import { substituteVars, type RunCtx } from './sched-vars.js';
 
 // ── Types ───────────────────────────────────────────────────────────────────
 type Trigger =
@@ -27,6 +28,7 @@ type Trigger =
     | { type: 'manual' };                                           // only via Run button / deeplink
 
 interface Action { type: string; params: Record<string, any>; }
+
 
 /** The three things a task can do that reach OUTSIDE its own automation.
  *  Everything else a step can do is a BMM action the user could perform by hand;
@@ -378,7 +380,7 @@ async function runTask(task: Task): Promise<void> {
     try {
         // Per-run variable store: actions (e.g. a benchmark) write measured values
         // here, and `value` conditions read them → "if disk speed > X then Apply".
-        const ctx: Record<string, number> = {};
+        const ctx: RunCtx = { nums: {}, text: {} };
         await runSteps(task.steps, task, ctx);
         task.lastResult = 'ok';
         toast(`${t('sched.ran') || 'Ran'}: ${task.name}`, 'success');
@@ -412,7 +414,7 @@ class FlowSignal {
 
 /** Run a loop body, translating break/continue into the loop's own control flow.
  *  Returns false when the loop must end. */
-async function runLoopBody(steps: Step[], task: Task, ctx: Record<string, number>): Promise<boolean> {
+async function runLoopBody(steps: Step[], task: Task, ctx: RunCtx): Promise<boolean> {
     try {
         await runSteps(steps, task, ctx);
     } catch (e) {
@@ -425,7 +427,7 @@ async function runLoopBody(steps: Step[], task: Task, ctx: Record<string, number
     return true;
 }
 
-async function runSteps(steps: Step[], task: Task, ctx: Record<string, number>): Promise<void> {
+async function runSteps(steps: Step[], task: Task, ctx: RunCtx): Promise<void> {
     for (const step of steps || []) {
         if (step.disabled) continue;   // switched off in the editor — skipped, not deleted
         if (step.kind === 'action') {
@@ -576,7 +578,7 @@ function substituteItem(steps: Step[], item: any): Step[] {
 // Polls a condition until it becomes true or the timeout elapses (then throws,
 // aborting the rest of the workflow). This is what makes "wait until all mods are
 // active, then launch X" possible.
-async function waitForCondition(cond: Condition, timeoutSec: number, ctx: Record<string, number>, pollSec = 2, onTimeout: 'abort' | 'continue' = 'abort'): Promise<void> {
+async function waitForCondition(cond: Condition, timeoutSec: number, ctx: RunCtx, pollSec = 2, onTimeout: 'abort' | 'continue' = 'abort'): Promise<void> {
     const deadline = Date.now() + Math.max(1, timeoutSec || 60) * 1000;
     const pollMs = Math.max(250, (pollSec || 2) * 1000);
     // eslint-disable-next-line no-constant-condition
@@ -665,19 +667,31 @@ async function flushDirty(): Promise<void> {
  *  then..." was unexpressible and the only signal was pass/fail. The trimmed first
  *  line goes into ctx under the user's chosen name, where the existing {var}
  *  substitution and the numeric conditions already look. */
-function _captureOutput(p: Record<string, any>, out: any, ctx: Record<string, number>): void {
+function _captureOutput(p: Record<string, any>, out: any, ctx: RunCtx): void {
     const name = String(p.into || '').trim();
     if (!name) return;
-    const first = String(out ?? '').split(/\r?\n/).find(l => l.trim()) || '';
-    const num = parseFloat(first.trim());
-    // ctx is numeric (that is what the conditions compare), so a non-numeric line
-    // becomes its length rather than NaN — NaN would make every comparison silently
-    // false, which reads as "the condition did not hold" instead of "no number here".
-    ctx[name] = Number.isFinite(num) ? num : first.trim().length;
+    const whole = String(out ?? '').trim();
+    const first = String(out ?? '').split(/\r?\n/).find(l => l.trim())?.trim() || '';
+    const num = parseFloat(first);
+    // The number, for conditions. A non-numeric line still becomes its length rather than
+    // NaN — NaN would make every comparison silently false, which reads as "the condition
+    // did not hold" instead of "there was no number here".
+    ctx.nums[name] = Number.isFinite(num) ? num : first.length;
+    // And the text, which is what a script usually actually returns. This is the half that
+    // was missing: without it a script that printed a path or a name was reduced to the
+    // length of that string and there was no way to get the string itself back.
+    //
+    // The WHOLE output, not just the first line — a script listing three files is a normal
+    // thing to want, and first-line-only was a limit inherited from needing one number.
+    ctx.text[name] = whole;
 }
 
-async function runAction(action: Action, task: Task, ctx: Record<string, number>): Promise<void> {
-    const p = action.params || {};
+
+async function runAction(action: Action, task: Task, ctx: RunCtx): Promise<void> {
+    // Substituted once, here, so every action sees resolved parameters without each case
+    // having to remember to ask. `action.params` itself is left alone — it is the saved
+    // task, and rewriting it would bake one run's values into the stored definition.
+    const p = substituteVars(action.params || {}, ctx);
     // Noted BEFORE the action runs, not after: a step that throws half-way through
     // has still changed something, and the screens are wrong either way. Try/On error
     // can swallow that throw and let the task continue, so recording it only on
@@ -777,9 +791,9 @@ async function runAction(action: Action, task: Task, ctx: Record<string, number>
             const report: any = await invoke('run_app_benchmark', { mode: dataset, realSources: sources, scale });
             const totalMs = Number(report?.total_ms) || 0;
             const bytes = Number(report?.env?.dataset_bytes ?? report?.dataset_bytes) || 0;
-            ctx['benchmark.total_ms'] = totalMs;
-            if (bytes > 0 && totalMs > 0) ctx['benchmark.mbps'] = Math.round((bytes / 1048576) / (totalMs / 1000) * 10) / 10;
-            toast(`${task.name}: benchmark ${Math.round(totalMs)} ms${ctx['benchmark.mbps'] ? ` · ${ctx['benchmark.mbps']} MB/s` : ''}`, 'info');
+            ctx.nums['benchmark.total_ms'] = totalMs;
+            if (bytes > 0 && totalMs > 0) ctx.nums['benchmark.mbps'] = Math.round((bytes / 1048576) / (totalMs / 1000) * 10) / 10;
+            toast(`${task.name}: benchmark ${Math.round(totalMs)} ms${ctx.nums['benchmark.mbps'] ? ` · ${ctx.nums['benchmark.mbps']} MB/s` : ''}`, 'info');
             break;
         }
 
@@ -795,10 +809,10 @@ async function runAction(action: Action, task: Task, ctx: Record<string, number>
             const mount = p.mountPoint || (await firstDiskMount());
             if (!mount) throw new Error('No disk to benchmark');
             const r: any = await invoke('benchmark_disk', { mountPoint: mount });
-            ctx['disk.read_mbps'] = Number(r?.read_mb_s) || 0;
-            ctx['disk.write_mbps'] = Number(r?.write_mb_s) || 0;
-            ctx['disk.suggested_limit'] = Number(r?.suggested_limit) || 0;
-            toast(`${task.name}: ${mount} ${ctx['disk.read_mbps']}↓ / ${ctx['disk.write_mbps']}↑ MB/s`, 'info');
+            ctx.nums['disk.read_mbps'] = Number(r?.read_mb_s) || 0;
+            ctx.nums['disk.write_mbps'] = Number(r?.write_mb_s) || 0;
+            ctx.nums['disk.suggested_limit'] = Number(r?.suggested_limit) || 0;
+            toast(`${task.name}: ${mount} ${ctx.nums['disk.read_mbps']}↓ / ${ctx.nums['disk.write_mbps']}↑ MB/s`, 'info');
             break;
         }
         case 'storage.applyLimit': {
@@ -806,31 +820,31 @@ async function runAction(action: Action, task: Task, ctx: Record<string, number>
             if (!mount) throw new Error('No disk selected');
             const limit = p.limitMbS != null && p.limitMbS !== ''
                 ? Math.max(1, parseInt(p.limitMbS, 10) || 0)
-                : Math.round(ctx['disk.suggested_limit'] || 0);
+                : Math.round(ctx.nums['disk.suggested_limit'] || 0);
             await invoke('set_disk_limit', { mountPoint: mount, limitMbS: limit > 0 ? limit : null });
             toast(`${task.name}: ${mount} limit → ${limit > 0 ? limit + ' MB/s' : 'unlimited'}`, 'success');
             break;
         }
         case 'var.set':                            // store a literal value for later conditions
-            ctx[String(p.name || 'var')] = Number(p.value) || 0; break;
+            ctx.nums[String(p.name || 'var')] = Number(p.value) || 0; break;
 
         // ── Logic & math ──────────────────────────────────────────────────────
         case 'math.set': {                         // target = <expression over ctx>
             const target = String(p.target || 'result');
-            try { ctx[target] = evalExpr(String(p.expr || '0'), ctx); }
+            try { ctx.nums[target] = evalExpr(String(p.expr || '0'), ctx); }
             catch (e) { throw new Error(`${t('sched.mathErr') || 'Math error'}: ${e}`); }
             break;
         }
         case 'var.ternary': {                      // target = cond ? ifTrue : ifFalse
             const ok = p.condition ? await evalCondition(p.condition, ctx) : false;
-            ctx[String(p.target || 'result')] = Number(ok ? p.ifTrue : p.ifFalse) || 0;
+            ctx.nums[String(p.target || 'result')] = Number(ok ? p.ifTrue : p.ifFalse) || 0;
             break;
         }
         case 'rule.table': {                       // first matching rule sets target
-            const src = Number(ctx[String(p.source || '')] ?? NaN);
+            const src = Number(ctx.nums[String(p.source || '')] ?? NaN);
             const target = String(p.target || 'result');
             for (const r of (Array.isArray(p.rows) ? p.rows : [])) {
-                if (cmpNum(src, r.op, Number(r.value))) { ctx[target] = Number(r.result) || 0; break; }
+                if (cmpNum(src, r.op, Number(r.value))) { ctx.nums[target] = Number(r.result) || 0; break; }
             }
             break;
         }
@@ -936,8 +950,8 @@ async function runAction(action: Action, task: Task, ctx: Record<string, number>
             if (p.id) {
                 await runTaskById(String(p.id));
                 const sub = _tasks.find(tk => tk.id === p.id);
-                ctx['lasttask.ok'] = sub && sub.lastResult === 'ok' ? 1 : 0;
-                if (sub) toast(`${t('sched.subTaskDone') || 'Sub-task finished'}: ${sub.name} → ${sub.lastResult}`, ctx['lasttask.ok'] ? 'info' : 'warning');
+                ctx.nums['lasttask.ok'] = sub && sub.lastResult === 'ok' ? 1 : 0;
+                if (sub) toast(`${t('sched.subTaskDone') || 'Sub-task finished'}: ${sub.name} → ${sub.lastResult}`, ctx.nums['lasttask.ok'] ? 'info' : 'warning');
             }
             break;
         case 'telemetry.consent': dl('telemetry/consent', { enabled: b(p.enabled) }); break;
@@ -950,7 +964,7 @@ async function runAction(action: Action, task: Task, ctx: Record<string, number>
         case 'restart':          dl('restart'); break;
         case 'app.checkUpdate': {
             const info: any = await invoke('check_for_update', { includePrerelease: !!p.enabled });
-            ctx['update.available'] = info?.has_update ? 1 : 0;
+            ctx.nums['update.available'] = info?.has_update ? 1 : 0;
             if (info?.has_update) toast(`${task.name}: ${t('sched.updateAvail') || 'update available'} — v${info.latest_version}`, 'info');
             break;
         }
@@ -960,10 +974,10 @@ async function runAction(action: Action, task: Task, ctx: Record<string, number>
             const mount = p.mountPoint || (await firstDiskMount());
             if (!mount) throw new Error('No disk to check');
             const r: any = await invoke('check_disk_space', { path: mount });
-            ctx['disk.free_gb'] = Math.round((r?.available_bytes || 0) / 1073741824 * 10) / 10;
-            ctx['disk.total_gb'] = Math.round((r?.total_bytes || 0) / 1073741824 * 10) / 10;
-            ctx['disk.free_percent'] = Math.round((r?.free_percent || 0) * 10) / 10;
-            toast(`${task.name}: ${mount} — ${ctx['disk.free_gb']} GB ${t('sched.free') || 'free'} (${ctx['disk.free_percent']}%)`, 'info');
+            ctx.nums['disk.free_gb'] = Math.round((r?.available_bytes || 0) / 1073741824 * 10) / 10;
+            ctx.nums['disk.total_gb'] = Math.round((r?.total_bytes || 0) / 1073741824 * 10) / 10;
+            ctx.nums['disk.free_percent'] = Math.round((r?.free_percent || 0) * 10) / 10;
+            toast(`${task.name}: ${mount} — ${ctx.nums['disk.free_gb']} GB ${t('sched.free') || 'free'} (${ctx.nums['disk.free_percent']}%)`, 'info');
             break;
         }
         case 'open.url': {
@@ -1009,18 +1023,18 @@ async function runDeepLink(url: string): Promise<void> {
 }
 
 // ── Condition evaluation ──────────────────────────────────────────────────────
-async function evalCondition(cond: Condition, ctx: Record<string, number> = {}): Promise<boolean> {
+async function evalCondition(cond: Condition, ctx: RunCtx = { nums: {}, text: {} }): Promise<boolean> {
     let r = await evalConditionRaw(cond, ctx);
     return cond.negate ? !r : r;
 }
-async function evalConditionRaw(cond: Condition, ctx: Record<string, number>): Promise<boolean> {
+async function evalConditionRaw(cond: Condition, ctx: RunCtx): Promise<boolean> {
     const p = cond.params || {};
     const now = new Date();
     switch (cond.type) {
         case 'always': return true;
         case 'value': {
             // Compare a captured value (e.g. disk.write_mbps, benchmark.mbps) to a threshold.
-            const left = Number(ctx[String(p.source)] ?? NaN);
+            const left = Number(ctx.nums[String(p.source)] ?? NaN);
             const right = Number(p.value);
             if (Number.isNaN(left)) return false;
             switch (p.op) {
@@ -1156,7 +1170,7 @@ const _MATH_FUNCS: Record<string, (...a: number[]) => number> = {
     ceil: Math.ceil, sqrt: Math.sqrt, pow: Math.pow, sign: Math.sign,
     clamp: (x, lo, hi) => Math.min(Math.max(x, lo), hi),
 };
-function evalExpr(expr: string, ctx: Record<string, number>): number {
+function evalExpr(expr: string, ctx: RunCtx): number {
     const tokens = (String(expr).match(/\d+\.?\d*|[A-Za-z_][\w.]*|[-+*/%(),^]/g) || []);
     let pos = 0;
     const peek = () => tokens[pos];
@@ -1175,7 +1189,7 @@ function evalExpr(expr: string, ctx: Record<string, number>): number {
                 const f = _MATH_FUNCS[t.toLowerCase()]; if (!f) throw new Error('fn ' + t);
                 return f(...args);
             }
-            return Number(ctx[t] ?? 0);
+            return Number(ctx.nums[t] ?? 0);
         }
         throw new Error('tok ' + t);
     };
@@ -1788,7 +1802,7 @@ function renderModal(modal: HTMLElement): void {
         btn.disabled = true;
         toast(t('sched.testing') || 'Test run started…', 'info', 1500);
         try {
-            await runSteps(_draft.steps, _draft, {});
+            await runSteps(_draft.steps, _draft, { nums: {}, text: {} });
             toast(t('sched.testOk') || 'Test run finished.', 'success');
         } catch (e) {
             if (e instanceof _StopTask) toast(`${t('sched.stopped') || 'stopped'}${(e as any).reason ? `: ${(e as any).reason}` : ''}`, 'info');
@@ -2147,7 +2161,7 @@ function renderStepsEditor(host: HTMLElement, steps: Step[], depth = 0): void {
                 try {
                     // Run a shallow copy with disabled cleared, so even a switched-off
                     // step can be test-fired on demand.
-                    await runSteps([{ ...(step as any), disabled: false } as Step], _draft, {});
+                    await runSteps([{ ...(step as any), disabled: false } as Step], _draft, { nums: {}, text: {} });
                     toast(t('sched.stepDone') || 'Step finished.', 'success');
                 } catch (err) {
                     if (err instanceof _StopTask) toast(`${t('sched.stopped') || 'stopped'}${(err as any).reason ? `: ${(err as any).reason}` : ''}`, 'info');
