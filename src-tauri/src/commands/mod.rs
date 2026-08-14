@@ -13,6 +13,7 @@ pub mod crash;
 pub mod tutorial_demo;
 pub mod autoupdate;
 pub mod benchmark;
+pub mod sandbox_gen;
 pub mod disk;
 pub mod image;
 pub mod repo;
