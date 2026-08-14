@@ -1,6 +1,12 @@
-# Preset catalog — sharing automations
+# Preset catalog — sharing BMM automations
 
-A **preset** is a scheduled automation somebody else built: a nightly repo sync, a
+> **"Preset" means two things on BetterCommunity.** A **BSM** preset is a single JSON file
+> of audio settings — see *Preset catalog (BSM)* in the BetterCommunity docs. A **BMM**
+> preset is a scheduled automation. Both are published as `kind=PRESET`; the `app` field
+> is what tells them apart, and BMM only reads entries marked `bmm` or unmarked. This page
+> is about the BMM kind.
+
+A BMM preset is a scheduled automation somebody else built: a nightly repo sync, a
 tidy-up after a game closes, a weekly backup. BMM already exports them as `.bmmpa` files.
 A **preset catalog** is a published list of them.
 
