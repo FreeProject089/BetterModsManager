@@ -11830,6 +11830,27 @@ body.sched-drag-live .sched-branch .sched-drop-zone:empty {
 .sched-insp-kv i { font-style: normal; color: var(--text-secondary); margin-right: 3px; }
 .sched-insp-extra { font-size: 11px; color: var(--text-secondary); margin-top: 4px; }
 
+/* The dependency and conflict tree.
+   Indentation carries the structure, so the rows are deliberately plain: a node with three
+   badges on it is one the reader must stop at, and everything else should get out of the
+   way. Markers are words rather than colours alone — a faint red row on a light theme is
+   exactly what gets skimmed past. */
+.mg-modal { width: min(760px, 94vw); }
+.mg-summary { font-size: 11px; color: var(--text-muted); margin-bottom: 8px; }
+.mg-warn { font-size: 11px; color: var(--warning); margin-bottom: 8px; overflow-wrap: anywhere; }
+.mg-body { max-height: 60vh; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+.mg-node { display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    border-left: 2px solid var(--border); padding: 2px 0 2px 8px; }
+.mg-name { font-size: 12px; }
+.mg-tag { font-size: 9px; text-transform: uppercase; letter-spacing: .04em;
+    padding: 1px 5px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-secondary); }
+.mg-tag.is-missing { color: var(--warning); border-color: color-mix(in srgb, var(--warning) 55%, transparent); }
+.mg-tag.is-cycle { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 55%, transparent); }
+.mg-tag.is-conflict { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 55%, transparent); }
+/* Between two root trees: they are separate graphs, and running them together reads as one
+   tree with a strange shape. */
+.mg-sep { height: 1px; background: var(--border); margin: 10px 0; }
+
 /* Runs in flight, above the task list.
    Its own block because it repaints on every step — folding it into the list would mean
    rebuilding rows somebody may be mid-click on. Hidden entirely when nothing runs. */

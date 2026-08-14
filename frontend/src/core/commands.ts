@@ -487,6 +487,15 @@ export function refreshNavCommands() {
 function registerCore() {
   refreshNavCommands();
 
+  registerCommand({
+    id: 'mods.graph', category: 'mods',
+    title: { en: 'Dependencies & conflicts…', fr: 'Dépendances et conflits…' },
+    keywords: 'dependency dependencies conflict conflicts tree graph require needs dépendance conflit arbre',
+    // Lazy, like style.open: this pulls in the graph module and reads the whole mod list,
+    // and most launches never open it.
+    run: () => { void import('../features/mods/mod-graph-view.js').then((m) => m.showModGraph()); },
+    defaultChord: null,
+  });
   // The four legacy actions — same defaults as before (Ctrl+letter), now rebindable + in the palette.
   registerCommand({
     id: 'style.open', category: 'settings',

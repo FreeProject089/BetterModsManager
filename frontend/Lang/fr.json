@@ -7281,5 +7281,17 @@
   "sched.pc.etimeout": "Pas de réponse à temps.",
   "sched.pc.ednst": "Cet hôte ne résout pas — vérifiez l’adresse.",
   "sched.pc.eunreach": "Impossible de le joindre.",
-  "credits.stackFilter": "Filtrer par nom…"
+  "credits.stackFilter": "Filtrer par nom…",
+  "mg.title": "Dépendances et conflits",
+  "mg.summary": "{m} mods · {r} à la racine · {c} paire(s) en conflit",
+  "mg.copy": "Copier en texte",
+  "mg.copyTip": "Copier l’arbre en texte — cherchable et citable, contrairement à une capture",
+  "mg.copied": "Arbre copié.",
+  "mg.missing": "non installé",
+  "mg.missingSummary": "{n} dépendance(s) nommée(s) par un mod et fournie(s) par rien :",
+  "mg.cycle": "cycle",
+  "mg.repeat": "déjà vu plus haut",
+  "mg.conflicts": "{n} conflit(s)",
+  "mg.none": "Aucun mod à dessiner.",
+  "mg.failed": "Impossible de lire la liste des mods"
 }

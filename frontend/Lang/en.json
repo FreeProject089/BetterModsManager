@@ -7283,5 +7283,17 @@
   "sched.pc.etimeout": "No answer in time.",
   "sched.pc.ednst": "That host does not resolve — check the address.",
   "sched.pc.eunreach": "Could not reach it.",
-  "credits.stackFilter": "Filter by name…"
+  "credits.stackFilter": "Filter by name…",
+  "mg.title": "Dependencies & conflicts",
+  "mg.summary": "{m} mods · {r} top-level · {c} conflicting pair(s)",
+  "mg.copy": "Copy as text",
+  "mg.copyTip": "Copy the tree as text — searchable and quotable, unlike a screenshot",
+  "mg.copied": "Tree copied.",
+  "mg.missing": "not installed",
+  "mg.missingSummary": "{n} dependency/ies named by a mod and provided by nothing:",
+  "mg.cycle": "cycle",
+  "mg.repeat": "seen above",
+  "mg.conflicts": "{n} conflict(s)",
+  "mg.none": "No mods to draw.",
+  "mg.failed": "Could not read the mod list"
 }
