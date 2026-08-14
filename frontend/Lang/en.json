@@ -7150,5 +7150,6 @@
   "sched.insp.foot": "Nothing has been imported. Close this and use Import if you want it.",
   "settings.catIndex.saved": "Sources you keep",
   "settings.catIndex.reuse": "Use",
-  "apps.sources.isIndex": "That is a catalogue INDEX, not an app catalog — add it under Settings → Catalogue index, where you can see what it would import."
+  "apps.sources.isIndex": "That is a catalogue INDEX, not an app catalog — add it under Settings → Catalogue index, where you can see what it would import.",
+  "apps.sources.via": "via"
 }

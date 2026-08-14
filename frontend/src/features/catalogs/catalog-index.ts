@@ -166,6 +166,46 @@ export const STORE_KEY: Record<string, string> = {
  *  parser with nowhere to put it is accepted and then dropped on the floor by the caller,
  *  which looks exactly like the server never sending it. `app` is the one deliberate
  *  exception — it has a backend command instead of a local store. */
+
+/** Where an imported catalog came from: catalog URL → the index that listed it.
+ *
+ *  A SEPARATE map rather than a richer entry in the source lists themselves. Those lists
+ *  are plain arrays of URLs written by the deeplink handler too, and changing their shape
+ *  would mean every reader and writer of them agreeing at once — including one in the Rust
+ *  backend. This is additive: anything that does not know about provenance keeps working,
+ *  and a missing entry simply means "added by hand", which is the truth.
+ */
+const ORIGIN_KEY = 'bmm_catalog_origins';
+
+export function readOrigins(): Record<string, string> {
+    try {
+        const v = JSON.parse(localStorage.getItem(ORIGIN_KEY) || '{}');
+        return v && typeof v === 'object' && !Array.isArray(v) ? v : {};
+    } catch { return {}; }
+}
+
+/** Record that `catalogUrl` arrived via `indexUrl`. */
+export function rememberOrigin(catalogUrl: string, indexUrl: string): void {
+    if (!catalogUrl || !indexUrl) return;
+    try {
+        const m = readOrigins();
+        m[catalogUrl] = indexUrl;
+        localStorage.setItem(ORIGIN_KEY, JSON.stringify(m));
+    } catch { /* ignore */ }
+}
+
+/** The index a catalog came from, or null if nobody recorded one. Null is a real answer —
+ *  "added by hand" — not a missing value to paper over. */
+export function originOf(catalogUrl: string): string | null {
+    return readOrigins()[catalogUrl] || null;
+}
+
+/** Just the host, for a compact label. Falls back to the whole string rather than to a
+ *  blank: an unparseable origin is still information. */
+export function originLabel(indexUrl: string): string {
+    try { return new URL(indexUrl).host; } catch { return indexUrl; }
+}
+
 export const ROUTABLE = INDEX_TYPES.filter((t) => t === 'app' || !!STORE_KEY[t]);
 
 /**

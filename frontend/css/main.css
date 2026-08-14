@@ -16494,3 +16494,8 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
    the blowout an unbreakable string causes in a flex row. */
 .cat-index-url { flex: 1; min-width: 0; font-size: 11px; font-family: var(--font-mono, monospace);
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-dim); }
+
+/* Where a catalog source came from, when an index brought it in. Quiet by design: it is
+   context for a decision, not the row's subject — the URL is. */
+.apps-source-from { font-size: 10px; color: var(--text-muted); background: var(--bg-base);
+    border: 1px solid var(--border); border-radius: 999px; padding: 1px 7px; white-space: nowrap; flex: 0 0 auto; }

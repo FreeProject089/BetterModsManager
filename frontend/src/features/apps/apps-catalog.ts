@@ -2,6 +2,7 @@
 import { invoke, pickFolder, pickFile } from '../../core/api.js';
 import { toast } from '../../ui/app.js';
 import { t } from '../../core/i18n.js';
+import { readOrigins, originLabel } from '../catalogs/catalog-index.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { getLinks } from '../../core/links-config.js';
 
@@ -50,6 +51,9 @@ interface AppsState {
 // ── Module state ──────────────────────────────────────────────────────────────
 
 let _catalog: AppEntry[] = [];
+// Read once per render rather than per row — localStorage is synchronous, and a dozen
+// rows would be a dozen parses of the same JSON.
+let _origins: Record<string, string> = {};
 let _state: AppsState = { installed: {}, favorites: [], history: [], community_sources: [] };
 let _activeTab = 'browse';
 let _searchQ = '';
@@ -882,6 +886,7 @@ function renderHistory() {
 // ── Sources ───────────────────────────────────────────────────────────────────
 
 function renderSources() {
+    _origins = readOrigins();
     const content = document.getElementById('apps-content');
     if (!content) return;
 
@@ -905,6 +910,16 @@ function renderSources() {
         <div class="apps-source-row">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
           <span class="apps-source-url" data-tooltip="${escAttr(url)}">${escHtml(url)}</span>
+          ${(() => {
+            // Where this source came from. Shown because a list of a dozen URLs gives no
+            // way to tell one you chose from one an index brought in — which matters when
+            // you want to stop following a whole index rather than hunt its entries.
+            //
+            // No badge at all when nobody recorded an origin: absent means "added by hand",
+            // which is a real answer, and labelling it would be inventing one.
+            const from = _origins[url];
+            return from ? `<span class="apps-source-from" data-tooltip="${escAttr(from)}">${escHtml(t('apps.sources.via') || 'via')} ${escHtml(originLabel(from))}</span>` : '';
+          })()}
           <button class="btn btn-xs btn-ghost btn-danger-ghost apps-source-remove" data-url="${escAttr(url)}">${IC.close}</button>
         </div>`).join('')}
       </div>

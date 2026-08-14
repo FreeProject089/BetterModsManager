@@ -8,7 +8,7 @@ import { t } from '../../core/i18n.js';
 import { getLinks, bcRoot, bcTestMode, bcTestBase } from '../../core/links-config.js';
 import { initI18nSandbox } from './i18n-sandbox.js';
 import { renderShortcutsManager } from '../../core/commands.js';
-import { parseCatalogIndex, planImport, STORE_KEY } from '../catalogs/catalog-index.js';
+import { parseCatalogIndex, planImport, STORE_KEY, rememberOrigin } from '../catalogs/catalog-index.js';
 import { toast } from '../../ui/app.js';
 import { getProfiles, getActiveProfileId } from '../profiles/profiles.js';
 import { formatBytes, escHtml, escAttr } from '../../core/utils.js';
@@ -1927,6 +1927,9 @@ async function initCatalogIndexSettings() {
                     const list = readSources(e.type);
                     if (!list.includes(e.url)) { list.push(e.url); localStorage.setItem(key, JSON.stringify(list)); }
                 }
+                // Recorded only after the add succeeded, so a source that failed to be
+                // added does not get an origin pointing at an index it never came from.
+                rememberOrigin(e.url, input.value.trim());
                 ok += 1;
             } catch { /* one bad entry must not abandon the rest of the index */ }
         }
