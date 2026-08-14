@@ -11797,6 +11797,12 @@ body.sched-drag-live .sched-branch .sched-drop-zone:empty {
    the trigger — the thing most people opened this to set — was on screen at all, and the
    list only grows. The description below follows the selection rather than hiding in a
    tooltip on each card, which required hovering them one at a time. */
+/* The "not a secret store" line, next to the shared-variable scope. It had a class and no
+   rule, so it rendered as an ordinary grey hint — indistinguishable from "leave empty if
+   none" two fields up. A warning that reads like a tip is one people skim past, and the
+   thing being skimmed here is "your API token travels inside any file you export". */
+.sched-var-warn { color: var(--warning); }
+
 .sched-preset-row { display:flex; gap:6px; align-items:center; margin-bottom:6px; }
 .sched-preset-pick { flex:1; min-width:0; font-size:12px; }
 .sched-preset-browse { display:inline-flex; align-items:center; gap:5px; white-space:nowrap; }
