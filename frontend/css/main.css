@@ -10441,9 +10441,13 @@ body.tasky-hidden .titlebar-left .titlebar-version {
 }
 
 /* Technical Stack Modal Styles */
+/* Multi-column, not one. Fifty entries stacked in a single column is a wall: finding
+   whether BMM ships `zip` meant scrolling past forty things nobody asked about, on a modal
+   wide enough for three. minmax(220px, 1fr) so it collapses to one column when narrow
+   rather than squeezing three unreadable ones. */
 .stack-grid {
     display: grid;
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
     gap: 15px;
     max-height: 400px;
     overflow-y: auto;
@@ -10488,6 +10492,13 @@ body.tasky-hidden .titlebar-left .titlebar-version {
     color: var(--bmm-text-secondary);
     line-height: 1.4;
 }
+
+/* The filter, and the count beside each heading. The count answers "how much is there"
+   before you start reading, and drops as you type so an empty section reads as "nothing
+   matched" rather than as a rendering fault. */
+.stack-filter { width: 100%; margin-bottom: 14px; font-size: 13px; }
+.stack-count { font-size: 11px; font-weight: 600; color: var(--text-muted);
+    border: 1px solid var(--border); border-radius: 999px; padding: 1px 7px; margin-left: 6px; }
 
 .stack-section-title {
     font-size: 0.75rem;

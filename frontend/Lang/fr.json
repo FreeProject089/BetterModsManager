@@ -7280,5 +7280,6 @@
   "sched.pc.e5xx": "Le serveur a un problème ({c}) — ce n’est pas votre adresse.",
   "sched.pc.etimeout": "Pas de réponse à temps.",
   "sched.pc.ednst": "Cet hôte ne résout pas — vérifiez l’adresse.",
-  "sched.pc.eunreach": "Impossible de le joindre."
+  "sched.pc.eunreach": "Impossible de le joindre.",
+  "credits.stackFilter": "Filtrer par nom…"
 }

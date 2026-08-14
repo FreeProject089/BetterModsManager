@@ -1656,7 +1656,9 @@ function initCredits() {
     };
     (window as any).__bmmStackRole = STACK_ROLE;
     content.innerHTML = `
-        <div class="stack-section-title" data-i18n="credits.stackBackend">${t('credits.stackBackend')}</div>
+        <input class="input stack-filter" id="stack-filter" spellcheck="false"
+            placeholder="${escAttr(t('credits.stackFilter') || 'Filter by name…')}">
+        <div class="stack-section-title" data-i18n="credits.stackBackend">${t('credits.stackBackend')} <span class="stack-count">${backend.length}</span></div>
         <div class="stack-grid">
             ${backend.map(item => `
                 <div class="stack-item" style="cursor:pointer" data-stack-key="${item.key}" data-stack-name="${escAttr(item.name)}" data-stack-v="${escAttr(item.v)}" data-stack-url="${escAttr(item.url)}">
@@ -1668,7 +1670,7 @@ function initCredits() {
                 </div>
             `).join('')}
         </div>
-        <div class="stack-section-title" data-i18n="credits.stackFrontend">${t('credits.stackFrontend')}</div>
+        <div class="stack-section-title" data-i18n="credits.stackFrontend">${t('credits.stackFrontend')} <span class="stack-count">${frontend.length}</span></div>
         <div class="stack-grid">
             ${frontend.map(item => `
                 <div class="stack-item" style="cursor:pointer" data-stack-key="${item.key}" data-stack-name="${escAttr(item.name)}" data-stack-v="${escAttr(item.v)}" data-stack-url="${escAttr(item.url)}">
@@ -1697,6 +1699,23 @@ function initCredits() {
         openStackDetail(card.dataset.stackKey, card.dataset.stackName || '',
                         card.dataset.stackV || '', card.dataset.stackUrl || '');
     };
+    // Filtering hides cards instead of re-rendering them: each one gets a click handler bound
+    // below, and rebuilding the markup would quietly drop every listener.
+    const filterBox = content.querySelector('#stack-filter') as HTMLInputElement | null;
+    filterBox?.addEventListener('input', () => {
+        const q = filterBox.value.trim().toLowerCase();
+        content.querySelectorAll<HTMLElement>('.stack-item').forEach((el) => {
+            const name = (el.dataset.stackName || '').toLowerCase();
+            el.style.display = !q || name.includes(q) ? '' : 'none';
+        });
+        // Each section header shows how many of ITS items survive, so an empty section
+        // reads as "nothing here matched" rather than as a rendering fault.
+        content.querySelectorAll<HTMLElement>('.stack-grid').forEach((grid) => {
+            const visible = [...grid.querySelectorAll<HTMLElement>('.stack-item')].filter((x) => x.style.display !== 'none').length;
+            const title = grid.previousElementSibling?.querySelector('.stack-count');
+            if (title) title.textContent = String(visible);
+        });
+    });
     modal.classList.add('open');
 };
 
