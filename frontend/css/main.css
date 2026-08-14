@@ -16511,3 +16511,23 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 .sched-filter-count { font-size:11px; color: var(--text-muted); white-space:nowrap; flex:0 0 auto; }
 /* Says why the list is empty. A blank area reads as "something broke". */
 .sched-filter-none { font-size:12px; color: var(--text-muted); padding:14px 4px; }
+
+/* Which custom repo catalog an entry came from. Quiet next to the category badge: the
+   badge says what it is, this says where it came from, and only the first is a claim. */
+.repo-src-tag { font-size: 9px; color: var(--text-muted); background: var(--bg-base);
+    border: 1px solid var(--border); border-radius: 999px; padding: 1px 7px; margin-left: 6px;
+    white-space: nowrap; }
+
+/* Repo catalogs you follow, above the browser's filter bar. */
+.repo-cats { margin-bottom: 10px; }
+.repo-cats-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.repo-cats-row .input-field { flex: 1; min-width: 200px; }
+.repo-cats-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.repo-cat-chip { display: inline-flex; align-items: center; gap: 5px; font-size: 11px;
+    padding: 2px 4px 2px 9px; border-radius: 999px; border: 1px solid var(--border);
+    background: var(--bg-elevated); color: var(--text-dim); }
+/* A real button, not a styled span: removing a source is an action, and it should be
+   reachable by keyboard like every other one. */
+.repo-cat-del { background: none; border: 0; color: var(--text-muted); cursor: pointer;
+    font-size: 13px; line-height: 1; padding: 2px 5px; border-radius: 999px; }
+.repo-cat-del:hover { color: var(--danger); background: color-mix(in srgb, var(--danger) 14%, transparent); }

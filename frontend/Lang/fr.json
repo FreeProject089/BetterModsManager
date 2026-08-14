@@ -7166,5 +7166,11 @@
   "bmi.r.folder": "Ouvre un dossier",
   "bmi.r.url": "Ouvre une URL",
   "bmi.r.restart": "Redémarre BMM",
-  "bmi.r.task": "Exécute une autre tâche planifiée"
+  "bmi.r.task": "Exécute une autre tâche planifiée",
+  "repo.cat.add": "Ajouter un catalogue de dépôts",
+  "repo.cat.export": "En créer un depuis cette liste",
+  "repo.cat.badurl": "Saisis une adresse http(s).",
+  "repo.cat.dupe": "Déjà suivi.",
+  "repo.cat.empty": "Rien à exporter dans la liste.",
+  "repo.cat.saved": "{n} dépôts enregistrés."
 }

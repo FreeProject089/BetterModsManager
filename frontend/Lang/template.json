@@ -7144,5 +7144,11 @@
   "bmi.r.folder": "Opens a folder",
   "bmi.r.url": "Opens a URL",
   "bmi.r.restart": "Restarts BMM",
-  "bmi.r.task": "Runs another scheduled task"
+  "bmi.r.task": "Runs another scheduled task",
+  "repo.cat.add": "Add a repo catalog",
+  "repo.cat.export": "Create one from this list",
+  "repo.cat.badurl": "Enter an http(s) address.",
+  "repo.cat.dupe": "Already following that one.",
+  "repo.cat.empty": "Nothing in the list to export.",
+  "repo.cat.saved": "Saved {n} repos."
 }

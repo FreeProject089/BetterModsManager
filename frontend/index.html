@@ -6413,6 +6413,20 @@
                         <p style="margin-top:12px;" data-i18n="repo.browserLoading">Loading repositories...</p>
                     </div>
                     <div id="repo-browser-content" style="display:none;">
+                        <!-- Repo catalogs the user follows. Above the filter bar because it
+                             changes WHAT is in the list; the filter only changes what you
+                             see of it. -->
+                        <div class="repo-cats" id="repo-cats">
+                            <div class="repo-cats-row">
+                                <input type="text" class="input-field" id="repo-cat-url"
+                                    placeholder="https://bettercommunity.ch/api/repos.json">
+                                <button class="btn btn-secondary btn-sm" id="repo-cat-add"
+                                    data-i18n="repo.cat.add">Add a repo catalog</button>
+                                <button class="btn btn-ghost btn-sm" id="repo-cat-export"
+                                    data-i18n="repo.cat.export">Create one from this list</button>
+                            </div>
+                            <div class="repo-cats-list" id="repo-cat-list"></div>
+                        </div>
                         <!-- Filter bar -->
                         <div
                             style="background:rgba(255,255,255,0.025);border:1px solid var(--bmm-s06);border-radius:12px;padding:10px 14px;margin-bottom:12px;backdrop-filter:blur(10px);">
