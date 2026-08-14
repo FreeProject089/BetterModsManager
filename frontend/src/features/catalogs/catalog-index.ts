@@ -12,8 +12,10 @@
 
 /** One catalog named by an index. */
 export interface IndexEntry {
-    /** app · plugin · theme · preset — which subsystem it belongs to. */
+    /** app · plugin · theme · preset · repo — which subsystem it belongs to. */
     type: string;
+    /** Which Better* product it is for. Absent means the publisher did not say. */
+    app?: string;
     url: string;
     name?: string;
     description?: string;
@@ -31,7 +33,12 @@ export interface CatalogIndex {
 }
 
 /** Types BMM can actually route. An entry naming anything else is dropped, not guessed. */
-export const INDEX_TYPES = ['app', 'plugin', 'theme'] as const;
+// `repo` and `preset` were missing while the feed already published both, so a perfectly
+// good index entry was thrown away by the reader — and that failure looks like the server
+// not sending it, which is the wrong place to go looking. Keep this in step with what the
+// index can emit; a type accepted here with nowhere to route it is lost by the caller,
+// which is worse than refusing it.
+export const INDEX_TYPES = ['app', 'plugin', 'theme', 'preset', 'repo'] as const;
 
 /**
  * Parse and sanitise an index document.
@@ -50,7 +57,7 @@ export const INDEX_TYPES = ['app', 'plugin', 'theme'] as const;
  *  - Duplicate URLs collapse, keeping the first: an index listing something twice must not
  *    make the caller add it twice.
  */
-export function parseCatalogIndex(raw: unknown): { index: CatalogIndex; dropped: string[] } {
+export function parseCatalogIndex(raw: unknown, forApp = 'bmm'): { index: CatalogIndex; dropped: string[] } {
     const dropped: string[] = [];
     const doc = (raw && typeof raw === 'object' ? raw : {}) as Record<string, any>;
     const list = Array.isArray(doc.catalogs) ? doc.catalogs : [];
@@ -65,6 +72,20 @@ export function parseCatalogIndex(raw: unknown): { index: CatalogIndex; dropped:
             dropped.push(`${url || '(no url)'} — unknown type ${JSON.stringify(e.type)}`);
             continue;
         }
+        // Not for this app. An index may list catalogs for every Better* product, and
+        // pulling a BSM theme catalog into BMM would put entries in front of people that
+        // their app cannot install.
+        //
+        // An entry with NO app is KEPT, deliberately. Absent means "nobody said", which is
+        // the state of every catalog published before the field existed — dropping those
+        // would empty the index for the people who have been using it longest. The
+        // asymmetry is the point: an explicit mismatch is a statement, a missing value is
+        // not.
+        const app = String(e.app || '').trim().toLowerCase();
+        if (app && forApp && app !== forApp) {
+            dropped.push(`${url} — for ${app}, not ${forApp}`);
+            continue;
+        }
         if (!/^https?:\/\//i.test(url)) {
             dropped.push(`${url || '(no url)'} — not an http(s) url`);
             continue;
@@ -75,6 +96,7 @@ export function parseCatalogIndex(raw: unknown): { index: CatalogIndex; dropped:
         catalogs.push({
             type,
             url,
+            ...(app ? { app } : {}),
             name: typeof e.name === 'string' ? e.name.slice(0, 120) : undefined,
             description: typeof e.description === 'string' ? e.description.slice(0, 400) : undefined,
             owner: typeof e.owner === 'string' ? e.owner.slice(0, 120) : undefined,
@@ -99,7 +121,20 @@ export function parseCatalogIndex(raw: unknown): { index: CatalogIndex; dropped:
 export const STORE_KEY: Record<string, string> = {
     plugin: 'bmm_plugin_catalogs',
     theme: 'bmm_theme_community_sources',
+    // New stores, following the existing naming rather than inventing a scheme. `app` is
+    // absent on purpose: app sources live in the Rust backend behind add_community_source,
+    // and the caller special-cases it.
+    preset: 'bmm_preset_catalogs',
+    repo: 'bmm_repo_catalogs',
 };
+
+/** Every type this module can actually deliver somewhere.
+ *
+ *  The check that stops INDEX_TYPES and STORE_KEY drifting apart: a type accepted by the
+ *  parser with nowhere to put it is accepted and then dropped on the floor by the caller,
+ *  which looks exactly like the server never sending it. `app` is the one deliberate
+ *  exception — it has a backend command instead of a local store. */
+export const ROUTABLE = INDEX_TYPES.filter((t) => t === 'app' || !!STORE_KEY[t]);
 
 /**
  * Work out what importing an index would change, without changing anything.

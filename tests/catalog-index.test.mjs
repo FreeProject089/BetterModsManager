@@ -10,7 +10,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const { parseCatalogIndex, planImport, INDEX_TYPES } = await import(
+const { parseCatalogIndex, planImport, INDEX_TYPES, STORE_KEY, ROUTABLE } = await import(
   pathToFileURL(join(ROOT, 'frontend/js/features/catalogs/catalog-index.js')).href
 );
 
@@ -38,9 +38,12 @@ describe('parseCatalogIndex', () => {
 
   test('drops an unknown type instead of guessing it', () => {
     // "plugins" looks like "plugin"; guessing is how a preset catalog lands in themes.
-    // `preset` is in the feed's vocabulary but has no store to route it to, so it is
-    // dropped here rather than accepted and then lost by the caller.
-    for (const type of ['plugins', 'preset', 'PRESET', '', null, 5, {}]) {
+    //
+    // `preset` used to be in this list, with a comment explaining that it had no store to
+    // route it to. It has one now, so it belongs in the accepted set — the rule was never
+    // "preset is not a real type", it was "do not accept what you cannot deliver", and the
+    // second half of that changed.
+    for (const type of ['plugins', 'repos', 'themes', '', null, 5, {}]) {
       const { index } = parseCatalogIndex(doc([{ type, url: 'https://e.com/a.json' }]));
       assert.equal(index.catalogs.length, 0, `type ${JSON.stringify(type)} was kept`);
     }
@@ -105,8 +108,59 @@ describe('planImport', () => {
   });
 });
 
-test('INDEX_TYPES is the routable set, and nothing else', () => {
-  // A type added here without a store to route it to would be accepted and then dropped
-  // on the floor by the caller.
-  assert.deepEqual([...INDEX_TYPES], ['app', 'plugin', 'theme']);
+describe('which app an entry is for', () => {
+  const mixed = () => doc([
+    { type: 'plugin', url: 'https://e.com/bmm.json', app: 'bmm' },
+    { type: 'theme', url: 'https://e.com/bsm.json', app: 'bsm' },
+    { type: 'app', url: 'https://e.com/anyone.json' },
+  ]);
+
+  test('drops what another product published', () => {
+    // An index lists catalogs for every Better* product. Pulling a BSM theme catalog into
+    // BMM puts things in front of people that their app cannot install.
+    const { index } = parseCatalogIndex(mixed(), 'bmm');
+    assert.deepEqual(index.catalogs.map((c) => c.url), ['https://e.com/bmm.json', 'https://e.com/anyone.json']);
+  });
+
+  test('keeps an entry that names no app at all', () => {
+    // Absent means "nobody said" — the state of every catalog published before the field
+    // existed. Dropping those would empty the index for the people using it longest.
+    const { index } = parseCatalogIndex(doc([{ type: 'app', url: 'https://e.com/x.json' }]), 'bmm');
+    assert.equal(index.catalogs.length, 1);
+    assert.equal('app' in index.catalogs[0], false);
+  });
+
+  test('says which app it dropped it for, not just that it did', () => {
+    const { dropped } = parseCatalogIndex(mixed(), 'bmm');
+    assert.equal(dropped.length, 1);
+    assert.match(dropped[0], /for bsm, not bmm/);
+  });
+
+  test('matches the app case-insensitively', () => {
+    const { index } = parseCatalogIndex(doc([{ type: 'app', url: 'https://e.com/x.json', app: 'BMM' }]), 'bmm');
+    assert.equal(index.catalogs.length, 1);
+    assert.equal(index.catalogs[0].app, 'bmm');
+  });
+});
+
+describe('the two types the feed gained', () => {
+  test('repo and preset are accepted, not thrown away', () => {
+    // Both were already being published while the reader refused them — a failure that
+    // looks like the server not sending them.
+    const { index } = parseCatalogIndex(doc([
+      { type: 'repo', url: 'https://e.com/repos.json', app: 'bmm' },
+      { type: 'preset', url: 'https://e.com/presets.json', app: 'bmm' },
+    ]), 'bmm');
+    assert.deepEqual(index.catalogs.map((c) => c.type), ['repo', 'preset']);
+  });
+
+  test('every accepted type has somewhere to go', () => {
+    // The guard against INDEX_TYPES and STORE_KEY drifting apart: a type the parser keeps
+    // with no store is dropped by the CALLER instead, which looks identical to the server
+    // never sending it. 'app' is the one exception — a backend command, not a local store.
+    assert.deepEqual([...ROUTABLE], [...INDEX_TYPES], 'a type is accepted with nowhere to route it');
+    for (const t of INDEX_TYPES) {
+      assert.ok(t === 'app' || STORE_KEY[t], `${t} has no store`);
+    }
+  });
 });
