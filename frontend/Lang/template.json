@@ -6868,6 +6868,7 @@
   "betahub.errorHourlyLimit": "Hourly report limit reached — try again later.",
   "betahub.themeFeedback": "Theme feedback",
   "betahub.noReports": "No reports yet.",
+  "betahub.noHistory": "",
   "betahub.themeBug": "Theme bug",
   "rstudio.autostop": "Stopped at the memory budget — the take is complete and playable.",
   "history.error": "Could not load the history",

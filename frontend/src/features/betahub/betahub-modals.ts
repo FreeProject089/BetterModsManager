@@ -554,7 +554,7 @@ async function renderCrashReports(): Promise<void> {
     const list = document.getElementById('bh-bug-report-list');
     if (!list) return;
 
-    list.innerHTML = `<div class="bh-report-loading" style="padding:15px;text-align:center;font-size:12px;color:var(--text-muted)">${t('common.loading')}</div>`;
+    list.innerHTML = `<div class="bh-state bh-state-loading">${t('common.loading')}</div>`;
 
     try {
         let reports = await invoke('list_crash_reports') as any[];
@@ -574,7 +574,7 @@ async function renderCrashReports(): Promise<void> {
         });
 
         if (reports.length === 0) {
-            list.innerHTML = `<div class="bh-report-empty" data-i18n="betahub.noReports">${t('betahub.noReports')}</div>`;
+            list.innerHTML = `<div class="bh-state" data-i18n="betahub.noReports">${t('betahub.noReports')}</div>`;
             return;
         }
 
@@ -628,7 +628,7 @@ async function renderCrashReports(): Promise<void> {
             list.appendChild(item);
         });
     } catch (err) {
-        list.innerHTML = `<div class="bh-report-error" style="color:var(--danger);padding:10px;font-size:11px">${t('betahub.errorListReports')}: ${err}</div>`;
+        list.innerHTML = `<div class="bh-state bh-state-error">${t('betahub.errorListReports')}: ${err}</div>`;
     }
 }
 
@@ -1235,7 +1235,10 @@ function renderReportHistory(): void {
         const filteredHistory = history.filter((item: any) => item.type === historyCurrentTab);
         
         if (filteredHistory.length === 0) {
-            list.innerHTML = `<div style="text-align:center; padding:12px; font-size:11px; color:var(--text-muted); font-style:italic">No records found.</div>`;
+            // Was hard-coded English inside a template string, so it stayed English in every
+            // language — the kind of thing a translation audit never sees because it is not a
+            // key.
+            list.innerHTML = `<div class="bh-state" data-i18n="betahub.noHistory">${t('betahub.noHistory')}</div>`;
             if (viewOlderBtn) viewOlderBtn.style.display = 'none';
             return;
         }

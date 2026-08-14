@@ -1133,3 +1133,24 @@
     transform: translateY(-2px);
     filter: brightness(1.1);
 }
+
+/* One row for every "nothing to show yet" state in this feature: loading, empty, failed.
+   They were four separate inline styles with four different paddings (15/12/10px) and three
+   font sizes, so the panel jumped by a few pixels depending on WHY it was empty — a wobble
+   that reads as a rendering bug rather than as a state. */
+.bh-state {
+    padding: var(--space-3, 12px);
+    text-align: center;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    font-style: italic;
+}
+/* Semantic, not decorative: only the failure is coloured, so colour still means something
+   when it appears. */
+.bh-state-error {
+    color: var(--danger);
+    font-style: normal;
+}
+.bh-state-loading {
+    font-style: normal;
+}
