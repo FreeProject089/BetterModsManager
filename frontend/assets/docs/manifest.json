@@ -31,6 +31,7 @@
     "how-it-works/mapper",
     "how-it-works/sync-repos",
     "how-it-works/performance",
+    "how-it-works/codebase-maps",
     "how-it-works/extending",
     "how-it-works/security",
     "reference/api",
@@ -499,6 +500,21 @@
       },
       "words": 992,
       "diagrams": 2,
+      "fr": true
+    },
+    {
+      "path": "how-it-works/codebase-maps",
+      "section": "how-it-works",
+      "title": {
+        "en": "Codebase maps",
+        "fr": "Cartes du code"
+      },
+      "summary": {
+        "en": "Three tools that answer questions the compiler cannot. They read the source and print a structure; none of them ships in the app, and none of them needs the…",
+        "fr": "Trois outils qui répondent à des questions que le compilateur ne pose pas."
+      },
+      "words": 809,
+      "diagrams": 0,
       "fr": true
     },
     {

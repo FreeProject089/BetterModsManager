@@ -7330,5 +7330,19 @@
   "sched.fe.list": "a list this task built",
   "sched.fe.mapKeys": "the keys of a map",
   "sched.fe.listPh": "list name",
-  "sched.fe.mapPh": "map name"
+  "sched.fe.mapPh": "map name",
+  "sched.act.task.spawn": "Start another task WITHOUT waiting (async)",
+  "sched.act.list.set": "List — set it (JSON array or a, b, c)",
+  "sched.act.list.push": "List — add one item",
+  "sched.act.list.clear": "List — empty it",
+  "sched.act.map.set": "Map — set a key",
+  "sched.act.map.get": "Map — read a key into a variable",
+  "sched.act.map.clear": "Map — empty it",
+  "sched.actd.task.spawn": "Starts the other task and carries straight on. Use it when the rest of this task does not depend on the result — otherwise use “Run another task”, which waits.",
+  "sched.actd.list.set": "Replaces the whole list. Accepts a JSON array or a plain a, b, c line. Read it back with {list.<name>.length}, or walk it with FOR EACH.",
+  "sched.actd.list.push": "Adds one item to the end. Unlike “set it”, running twice appends twice.",
+  "sched.actd.list.clear": "Empties the list without deleting its name, so a later push starts from nothing.",
+  "sched.actd.map.set": "Stores one value under one key. A list answers “which ones”; a map answers “what goes with what”.",
+  "sched.actd.map.get": "Reads one key into a variable you name. A missing key stores an empty value — check {map.hit} to tell “not there” from “there and blank”.",
+  "sched.actd.map.clear": "Empties the map without deleting its name."
 }

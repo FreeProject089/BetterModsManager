@@ -7328,5 +7328,19 @@
   "sched.fe.list": "une liste construite par la tâche",
   "sched.fe.mapKeys": "les clés d’une table",
   "sched.fe.listPh": "nom de la liste",
-  "sched.fe.mapPh": "nom de la table"
+  "sched.fe.mapPh": "nom de la table",
+  "sched.act.task.spawn": "Lancer une autre tâche SANS attendre (asynchrone)",
+  "sched.act.list.set": "Liste — la définir (tableau JSON ou a, b, c)",
+  "sched.act.list.push": "Liste — ajouter un élément",
+  "sched.act.list.clear": "Liste — la vider",
+  "sched.act.map.set": "Table — définir une clé",
+  "sched.act.map.get": "Table — lire une clé dans une variable",
+  "sched.act.map.clear": "Table — la vider",
+  "sched.actd.task.spawn": "Lance l’autre tâche et continue immédiatement. À utiliser quand la suite ne dépend pas du résultat — sinon prenez « Exécuter une autre tâche », qui attend.",
+  "sched.actd.list.set": "Remplace toute la liste. Accepte un tableau JSON ou une simple ligne a, b, c. Relisez-la via {list.<nom>.length}, ou parcourez-la avec FOR EACH.",
+  "sched.actd.list.push": "Ajoute un élément à la fin. Contrairement à « la définir », exécuter deux fois ajoute deux fois.",
+  "sched.actd.list.clear": "Vide la liste sans supprimer son nom : un ajout ultérieur repart de zéro.",
+  "sched.actd.map.set": "Enregistre une valeur sous une clé. Une liste répond « lesquels » ; une table répond « quoi va avec quoi ».",
+  "sched.actd.map.get": "Lit une clé dans une variable que vous nommez. Une clé absente enregistre une valeur vide — testez {map.hit} pour distinguer « absente » de « présente et vide ».",
+  "sched.actd.map.clear": "Vide la table sans supprimer son nom."
 }
