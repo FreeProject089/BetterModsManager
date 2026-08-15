@@ -26,6 +26,19 @@ const JS_DIR = join(ROOT, 'frontend', 'js');
 // `from '…'` and `import('…')`, relative specifiers only — bare ones are not served here.
 const SPEC = /(?:\bfrom\s*|\bimport\s*\(\s*)['"](\.[^'"]+)['"]/g;
 
+// Comments first, or a code EXAMPLE inside one reads as a real import.
+//
+// tsc keeps comments, so a doc comment explaining what a parser matches — api-map.ts writes
+// `await import('../core/api.js')` to describe the shape it looks for — arrives in the emitted
+// JS and fails this check against a path that was never meant to resolve. The report is
+// convincing (real file, real line number) and the import does not exist, so the fix is to
+// hunt a bug that isn't there.
+//
+// Reuses the dev tool's scanner rather than a second regex: it already handles regex literals
+// and template `${}` holes, and it preserves newlines, so the line numbers below stay true.
+// Depending on the compiled tree is consistent — this checker's whole input is that tree.
+const { stripComments } = await import('../frontend/js/features/dev/dep-graph.js');
+
 function walk(dir, out = []) {
   for (const name of readdirSync(dir)) {
     const p = join(dir, name);
@@ -43,7 +56,7 @@ if (!existsSync(JS_DIR)) {
 let checked = 0;
 const missing = [];
 for (const file of walk(JS_DIR)) {
-  const text = readFileSync(file, 'utf8');
+  const text = stripComments(readFileSync(file, 'utf8'));
   for (const m of text.matchAll(SPEC)) {
     const spec = m[1];
     checked++;
