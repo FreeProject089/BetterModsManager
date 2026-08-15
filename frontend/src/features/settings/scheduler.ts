@@ -14,7 +14,7 @@ import { t } from '../../core/i18n.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { toast } from '../../ui/app.js';
 import { calendarDue, nextCalendarDue } from './sched-time.js';
-import { substituteVars, VAR_NAME_RE, type RunCtx } from './sched-vars.js';
+import { substituteVars, VAR_NAME_RE, parseList, type RunCtx } from './sched-vars.js';
 import { parseHeaderLines, readJsonPath, statusIsFailure } from './http-action.js';
 import { inspectBmmpa } from './bmmpa-inspect.js';
 import { parsePresetFeed, looksLikePresetFeed, readPresetCatalogs, writePresetCatalogs } from './preset-catalog.js';
@@ -93,7 +93,7 @@ type Step = (
     | { kind: 'repeat'; mode: 'while' | 'until' | 'times' | 'doWhile'; condition?: Condition; times?: number; maxIters: number; everySec: number; steps: Step[] }
     // For-each: run `steps` once per item of a live collection. Inside the body,
     // every string action param may reference the item as {item.id} / {item.name}.
-    | { kind: 'forEach'; source: 'mods' | 'enabledMods' | 'disabledMods' | 'profiles' | 'modpacks' | 'themes'; maxIters: number; everySec: number; steps: Step[] }
+    | { kind: 'forEach'; source: 'mods' | 'enabledMods' | 'disabledMods' | 'profiles' | 'modpacks' | 'themes' | 'list'; listName?: string; maxIters: number; everySec: number; steps: Step[] }
     // Switch: evaluate cases in order, run the FIRST whose condition holds, else default.
     | { kind: 'switch'; cases: { condition: Condition; steps: Step[] }[]; default: Step[] }
     // Try/catch: run `steps`; if anything in them fails, run `onError` INSTEAD of
@@ -553,7 +553,12 @@ async function runSteps(steps: Step[], task: Task, ctx: RunCtx, depth = 0): Prom
                 if (gap) await new Promise(r => setTimeout(r, gap));
             }
         } else if (step.kind === 'forEach') {
-            const items = await forEachItems(step.source);
+            // A list the task built itself, rather than one of the six live collections.
+            // Resolved HERE and not in forEachItems, which fetches from the app and has no
+            // access to the run context.
+            const items = step.source === 'list'
+                ? (ctx.lists?.[String(step.listName || 'list')] || [])
+                : await forEachItems(step.source);
             const max = Math.max(1, Math.min(step.maxIters || 100, 100000));
             const gap = Math.max(0, step.everySec || 0) * 1000;
             for (const item of items.slice(0, max)) {
@@ -1206,6 +1211,39 @@ async function runAction(action: Action, task: Task, ctx: RunCtx): Promise<void>
             ctx.nums['lasttask.spawned'] = 1;
             const spawned = _tasks.find(tk => tk.id === id);
             toast(`${t('sched.spawned') || 'Started in the background'}: ${spawned?.name || id}`, 'info');
+            break;
+        }
+        case 'list.set': {
+            // Replaces the whole list. `list.push` is the one that appends — a "set" that
+            // quietly appended would make a task run twice produce a list twice as long.
+            const name = String(p.name || 'list');
+            ctx.lists = ctx.lists || {};
+            ctx.lists[name] = parseList(p.value, String(p.sep || ','));
+            // Two writes on purpose. The per-list name is for text substitution
+            // ({list.mods.length} in a toast); `list.length` is the LAST list touched and is
+            // the one a condition can pick, because VALUE_SOURCES is a fixed list and a
+            // template-literal key can never appear in it. Without the fixed one, this value
+            // is written and no condition can read it — and check-scheduler-vars cannot see a
+            // dynamic key to tell you so.
+            ctx.nums[`list.${name}.length`] = ctx.lists[name].length;
+            ctx.nums['list.length'] = ctx.lists[name].length;
+            break;
+        }
+        case 'list.push': {
+            const name = String(p.name || 'list');
+            ctx.lists = ctx.lists || {};
+            const v = String(p.value ?? '').trim();
+            if (v) (ctx.lists[name] = ctx.lists[name] || []).push(v);
+            ctx.nums[`list.${name}.length`] = (ctx.lists[name] || []).length;
+            ctx.nums['list.length'] = (ctx.lists[name] || []).length;
+            break;
+        }
+        case 'list.clear': {
+            const name = String(p.name || 'list');
+            ctx.lists = ctx.lists || {};
+            ctx.lists[name] = [];
+            ctx.nums[`list.${name}.length`] = 0;
+            ctx.nums['list.length'] = 0;
             break;
         }
         case 'telemetry.consent': dl('telemetry/consent', { enabled: b(p.enabled) }); break;
@@ -2951,6 +2989,9 @@ const ACTION_TYPES: { v: string; label: string; needs?: string; group: string }[
     { v: 'folder.create', label: 'Create a folder (BMM data)', needs: 'bmmfolder', group: 'system' },
     { v: 'repo.syncNow', label: 'Sync a server repo (unattended)', needs: 'reposync', group: 'repo' },
     { v: 'deeplink', label: 'Run bmm:// deeplink', needs: 'url', group: 'system' },
+    { v: 'list.set', label: 'List — set it (JSON array or a, b, c)', needs: 'listSet', group: 'logic' },
+    { v: 'list.push', label: 'List — add one item', needs: 'listPush', group: 'logic' },
+    { v: 'list.clear', label: 'List — empty it', needs: 'listName', group: 'logic' },
     { v: 'var.clear', label: 'Clear a shared variable', needs: 'varClear', group: 'logic' },
     { v: 'http.request', label: 'Call an HTTP API', needs: 'http', group: 'system' },
 ];
@@ -3560,7 +3601,7 @@ const VALUE_SOURCES = [
     'disk.read_mbps', 'disk.write_mbps', 'disk.suggested_limit',
     'disk.free_gb', 'disk.free_percent', 'disk.total_gb',
     'benchmark.mbps', 'benchmark.total_ms',
-    'update.available', 'lasttask.ok', 'lasttask.spawned',
+    'update.available', 'lasttask.ok', 'lasttask.spawned', 'list.length',
     // Written by http.request on every call, including a failed one. Listed here because
     // check-scheduler-vars caught that it was not: a value an action writes and no
     // condition can select is half a feature, and the half that is missing is the point —

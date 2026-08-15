@@ -31,6 +31,19 @@ export interface RunCtx {
      * failure looks like the script misbehaving.
      */
     shared?: Record<string, string>;
+    /**
+     * Named lists, for the steps that need more than one value.
+     *
+     * `nums` and `text` hold exactly one thing each, so a task that collected several — the
+     * profiles it touched, the URLs a feed returned — had nowhere to put them and resorted to
+     * a delimited string that every reader had to split the same way. A fourth bag rather
+     * than a convention inside `text`, because "is this a list" then stops being a guess
+     * about the contents of a string.
+     *
+     * Strings, not `any`: everything a step can produce is text or a number, and a bag that
+     * could hold objects would let `for each` iterate something no condition can compare.
+     */
+    lists?: Record<string, string[]>;
 }
 
 /**
@@ -86,4 +99,27 @@ export function substituteVars(params: Record<string, any>, ctx: RunCtx): Record
         return v;
     };
     return rep(params);
+}
+
+/**
+ * Read a list out of what somebody typed.
+ *
+ * Accepts a JSON array or a delimited line, because both are what people actually paste: an
+ * API response is JSON, and a hand-written list is `a, b, c`. Guessing wrong on a JSON array
+ * would split it on its commas and produce items like `["a` — a failure that looks like data.
+ *
+ * Blank entries are dropped. A trailing comma is a typo, not an empty item, and an empty item
+ * would make `for each` run a step against nothing.
+ */
+export function parseList(raw: unknown, sep = ','): string[] {
+    if (Array.isArray(raw)) return raw.map((x) => String(x).trim()).filter(Boolean);
+    const s = String(raw ?? '').trim();
+    if (!s) return [];
+    if (s.startsWith('[')) {
+        try {
+            const v = JSON.parse(s);
+            if (Array.isArray(v)) return v.map((x) => String(x).trim()).filter(Boolean);
+        } catch { /* not JSON after all — fall through to the delimiter */ }
+    }
+    return s.split(sep).map((x) => x.trim()).filter(Boolean);
 }
