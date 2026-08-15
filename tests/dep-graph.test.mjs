@@ -48,6 +48,54 @@ describe('stripComments', () => {
     test('the specifier survives stripping — it is the one string that must', () => {
         assert.match(stripComments("import x from './keep.js';"), /'\.\/keep\.js'/);
     });
+
+    test('a quote inside a REGEX literal does not open a string', () => {
+        // /^(['"`])/ appears in dep-graph.ts itself. A scanner that opens a string at that
+        // apostrophe is desynchronised for the rest of the file — which is how api-map.ts
+        // reported one of its own doc COMMENTS as a finding: the comment was never stripped,
+        // because stripping had lost its place forty lines earlier.
+        //
+        // The backtick is what does the damage, and it must come FIRST for the test to
+        // discriminate: a single-quoted string cannot span lines, so an apostrophe in a
+        // regex costs one line. A lone backtick opens a TEMPLATE, which can — and it then
+        // blanks the file until the next backtick anywhere below.
+        const src = ['const m = s.match(/[`\'"]/);', 'const other = 1;', "import { a } from './a.js';"].join('\n');
+        assert.deepEqual(parseImports(src), ['./a.js']);
+    });
+
+    test('a division is not a regex', () => {
+        const src = "const r = width / 2; const q = height / 2;\nimport { a } from './a.js';";
+        assert.deepEqual(parseImports(src), ['./a.js']);
+    });
+
+    test('a backtick inside a ${} hole does not close the template', () => {
+        // The settings.ts bug. Treating a template as one blob of text let a backtick in a
+        // hole close it early; the next real closing backtick then OPENED a phantom template
+        // and blanked thirty lines of ordinary code — seven invoke() calls went invisible,
+        // with no error and no finding.
+        const src = [
+            'const h = `<p>${items.map((x) => `<b>${x}</b>`).join(``)}</p>`;',
+            "import { a } from './a.js';",
+        ].join('\n');
+        assert.deepEqual(parseImports(src), ['./a.js']);
+    });
+
+    test('an object literal inside a ${} hole does not close it early', () => {
+        const src = "const h = `${fmt({ a: 1 })} tail`;\nimport { a } from './a.js';";
+        assert.deepEqual(parseImports(src), ['./a.js']);
+    });
+
+    test('a multi-line template does not shift the lines below it', () => {
+        // Line numbers are computed on the stripped text. Losing a newline sends a real
+        // finding to the wrong line, which sends a reader to innocent code.
+        const src = 'const h = `line1\nline2\nline3`;\n// x\nconst y = 1;';
+        assert.equal(stripComments(src).split('\n').length, src.split('\n').length);
+    });
+
+    test('a block comment does not shift the lines below it either', () => {
+        const src = '/* one\n two\n three */\nconst y = 1;';
+        assert.equal(stripComments(src).split('\n').length, src.split('\n').length);
+    });
 });
 
 describe('parseImports', () => {
@@ -76,6 +124,14 @@ describe('parseImports', () => {
         // import on that line with it.
         const src = "const u = 'https://example.com'; import { a } from './a.js';";
         assert.deepEqual(parseImports(src), ['./a.js']);
+    });
+
+    test('a "specifier" containing whitespace is not one', () => {
+        // The scanner is good, not perfect. Where it loses a quote the import regex spans
+        // ordinary code and produces a specifier made of source text. Those never resolve,
+        // so they were never fake edges — but they filled the unresolved-imports list, which
+        // is meant to be short enough that somebody reads it.
+        assert.deepEqual(parseImports("import x from ') as HTMLElement;\nif (a) b';"), []);
     });
 
     test('the same specifier twice is one dependency', () => {

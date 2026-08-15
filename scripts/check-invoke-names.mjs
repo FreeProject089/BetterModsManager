@@ -16,6 +16,16 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+// Comments are not calls. This gate read raw text, so a commented-out or merely DISCUSSED
+// invoke failed the build — which is what happened the moment a file documented the shape
+// `invoke('name')` in prose. Falls back to raw text when nothing is compiled yet, so the
+// gate still runs (as it always did) rather than refusing to start.
+let strip = (s) => s;
+try {
+  ({ stripComments: strip } = await import(pathToFileURL('frontend/js/features/dev/dep-graph.js').href));
+} catch { /* not compiled: behave exactly as before */ }
 
 const MAIN = 'src-tauri/src/main.rs';
 const SRC = 'frontend/src';
@@ -47,7 +57,7 @@ const files = [];
 
 const bad = [];
 for (const f of files) {
-  const s = fs.readFileSync(f, 'utf8');
+  const s = strip(fs.readFileSync(f, 'utf8'));
   for (const m of s.matchAll(/invoke\(\s*'([a-z0-9_]+)'/g)) {
     if (registered.has(m[1])) continue;
     const line = s.slice(0, m.index).split('\n').length;

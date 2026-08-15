@@ -36,36 +36,115 @@ export function stripComments(src: string): string {
     let out = '';
     let i = 0;
     const n = src.length;
+    // Is the `/` at `i` starting a REGEX rather than a division? Decided by what came
+    // before it, which is the only way JavaScript itself can tell them apart.
+    //
+    // This matters because a regex may contain quotes — /^(['"`])/ is in this very file —
+    // and a scanner that does not know it is inside one opens a string at that apostrophe
+    // and is desynchronised for the rest of the file. That is exactly how api-map.ts
+    // reported a doc COMMENT as a dynamic invoke: the comment was never stripped, because
+    // stripping had lost track of where it was forty lines earlier.
+    const regexCanStartHere = () => {
+        for (let k = out.length - 1; k >= 0; k--) {
+            const ch = out[k];
+            if (ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r') continue;
+            if ('(,=:[!&|?{};+-*%~^<>'.includes(ch)) return true;
+            // `return /…/`, `typeof /…/` — a word before a slash is usually a variable
+            // (division), except for the keywords that take an expression.
+            const word = out.slice(Math.max(0, k - 9), k + 1).match(/[A-Za-z]+$/)?.[0] ?? '';
+            return ['return', 'typeof', 'case', 'in', 'of', 'do', 'else', 'yield', 'await'].includes(word);
+        }
+        return true; // start of file
+    };
+    // One entry per open template literal: -1 while inside its TEXT, otherwise the brace
+    // depth inside its current ${…} hole.
+    //
+    // Treating a template as a single blob of text is what broke settings.ts. A backtick
+    // inside a ${…} closed the template early; the next real closing backtick then OPENED a
+    // phantom one, and thirty lines of ordinary code were blanked — taking seven invoke()
+    // calls with them. Nothing errored and nothing was reported: the scanner simply could
+    // not see that part of the file, and said so by finding nothing there.
+    const tmpl: number[] = [];
     while (i < n) {
         const c = src[i];
         const d = src[i + 1];
+        // Inside template TEXT: everything is blanked until the hole opens or it closes.
+        if (tmpl.length && tmpl[tmpl.length - 1] === -1) {
+            if (c === '\\') { out += '  '; i += 2; continue; }
+            if (c === '`') { tmpl.pop(); out += '`'; i++; continue; }
+            if (c === '$' && d === '{') { tmpl[tmpl.length - 1] = 0; out += '  '; i += 2; continue; }
+            // Word characters survive, punctuation does not.
+            //
+            // Keeping them makes a hole-free template readable as the constant it is, so
+            // invoke(`some_command`) is a named call rather than a dynamic one. Blanking the
+            // punctuation is what stops template PROSE — the docs hub is full of it — from
+            // producing a fake import edge out of a quoted path inside a sentence.
+            //
+            // Newlines survive too; a template spans lines and every line number below it
+            // would otherwise be wrong.
+            out += c === '\n' ? '\n' : (/[A-Za-z0-9_]/.test(c) ? c : ' ');
+            i++;
+            continue;
+        }
         if (c === '/' && d === '/') {
             while (i < n && src[i] !== '\n') i++;
             continue;
         }
         if (c === '/' && d === '*') {
             i += 2;
-            while (i < n && !(src[i] === '*' && src[i + 1] === '/')) i++;
+            // Newlines are KEPT. Dropping them makes every line number computed from the
+            // stripped text wrong by the height of every comment above it — and a tool that
+            // reports a real finding at the wrong line sends you to read innocent code.
+            while (i < n && !(src[i] === '*' && src[i + 1] === '/')) { if (src[i] === '\n') out += '\n'; i++; }
             i += 2;
             continue;
         }
-        if (c === '"' || c === "'" || c === '`') {
-            // The quotes are KEPT and the body blanked: the import regexes match on the
-            // quotes, and a specifier is the one string that must survive. So the body is
-            // only blanked for template literals, where an embedded ${…} could otherwise
-            // hide a quote and desynchronise everything after it.
-            const quote = c;
-            let body = '';
+        if (c === '/' && regexCanStartHere()) {
+            // The body is blanked, not kept: a regex is never an import specifier, and its
+            // quotes and slashes are exactly what confuses everything downstream. A regex
+            // cannot span lines, so nothing shifts.
+            out += '/';
             i++;
-            while (i < n && src[i] !== quote) {
-                if (src[i] === '\\') { body += ' '; i += 2; continue; }
-                body += quote === '`' ? ' ' : src[i];
+            let inClass = false;
+            while (i < n && src[i] !== '\n') {
+                if (src[i] === '\\') { out += '  '; i += 2; continue; }
+                if (src[i] === '[') inClass = true;
+                else if (src[i] === ']') inClass = false;
+                else if (src[i] === '/' && !inClass) break;
+                out += ' ';
                 i++;
             }
-            out += quote + body + quote;
-            i++;
+            if (src[i] === '/') { out += '/'; i++; }
             continue;
         }
+        if (c === '"' || c === "'") {
+            // The quotes are KEPT and the body with them: a specifier is a string, and it is
+            // the one thing that must survive stripping. A quoted string cannot span lines,
+            // so an unterminated one cannot run away.
+            const quote = c;
+            out += quote;
+            i++;
+            while (i < n && src[i] !== quote && src[i] !== '\n') {
+                if (src[i] === '\\') { out += '  '; i += 2; continue; }
+                out += src[i];
+                i++;
+            }
+            if (src[i] === quote) { out += quote; i++; }
+            continue;
+        }
+        if (c === '`') {
+            // A template OPENS. Its text is blanked by the branch at the top of the loop;
+            // its ${…} holes are ordinary code and are scanned as such.
+            out += '`';
+            i++;
+            tmpl.push(-1);
+            continue;
+        }
+        // A `}` that closes a ${…} hole puts us back into template text. Counted, so an
+        // object literal or a block inside the hole does not close it early.
+        if (c === '{' && tmpl.length && tmpl[tmpl.length - 1] >= 0) { tmpl[tmpl.length - 1]++; out += c; i++; continue; }
+        if (c === '}' && tmpl.length && tmpl[tmpl.length - 1] > 0) { tmpl[tmpl.length - 1]--; out += c; i++; continue; }
+        if (c === '}' && tmpl.length && tmpl[tmpl.length - 1] === 0) { tmpl[tmpl.length - 1] = -1; out += ' '; i++; continue; }
         out += c;
         i++;
     }
@@ -91,7 +170,12 @@ export function stripComments(src: string): string {
 export function parseImports(src: string): string[] {
     const text = stripComments(String(src));
     const out: string[] = [];
-    const push = (s: string | undefined) => { if (s) out.push(s); };
+    // A module specifier never contains whitespace. The guard matters because the scanner is
+    // good, not perfect: on two files it still loses a quote and the import regex then spans
+    // a stretch of ordinary code, producing a "specifier" like `) as HTMLElement;\n\n if (…`.
+    // Those never resolve, so they were never fake EDGES — but they landed in the
+    // unresolved-imports list, which is supposed to mean "look at this".
+    const push = (s: string | undefined) => { if (s && !/\s/.test(s)) out.push(s); };
     for (const m of text.matchAll(/\bimport\s+[^'"();]*?\bfrom\s*['"]([^'"]+)['"]/g)) push(m[1]);
     for (const m of text.matchAll(/\bimport\s*['"]([^'"]+)['"]/g)) push(m[1]);
     for (const m of text.matchAll(/\bexport\s+[^'"();]*?\bfrom\s*['"]([^'"]+)['"]/g)) push(m[1]);
