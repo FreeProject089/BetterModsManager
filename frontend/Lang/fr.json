@@ -7353,5 +7353,6 @@
   "sched.en.membersPh": "ok, echec, ignore",
   "sched.en.add": "Ajouter",
   "sched.en.del": "Supprimer cet enum",
-  "sched.en.noMembers": "Un enum a besoin d’au moins une valeur."
+  "sched.en.noMembers": "Un enum a besoin d’au moins une valeur.",
+  "sched.switchGap": "Non traités : {m} — DEFAULT les absorbera."
 }

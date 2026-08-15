@@ -7355,5 +7355,6 @@
   "sched.en.membersPh": "ok, failed, skipped",
   "sched.en.add": "Add",
   "sched.en.del": "Delete this enum",
-  "sched.en.noMembers": "An enum needs at least one value."
+  "sched.en.noMembers": "An enum needs at least one value.",
+  "sched.switchGap": "Not handled: {m} — DEFAULT will catch them."
 }

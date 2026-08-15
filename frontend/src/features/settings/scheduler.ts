@@ -2407,6 +2407,37 @@ function renderEnumsPanel(modal: HTMLElement): void {
     });
 }
 
+/**
+ * The members a switch's cases do not cover — the one thing `switch` could never say, and the
+ * reason a separate `match` kind is not being built.
+ *
+ * Only speaks when EVERY case tests the same declared enum. A switch mixing an enum test with
+ * a file check is not incomplete, it is a different kind of switch, and warning about it would
+ * train people to ignore the warning.
+ *
+ * Advisory, never a save-blocker: handling three of five members and letting DEFAULT catch the
+ * rest is legitimate. A check that refuses the save becomes something to work around.
+ */
+function switchGaps(step: { cases?: { condition: Condition }[]; default?: Step[] }): { enum: string; missing: string[] } | null {
+    const cases = step.cases || [];
+    if (!cases.length) return null;
+    const first = cases[0]?.condition;
+    if (!first || first.type !== 'enumIs') return null;
+    const name = String(first.params?.enum || '');
+    if (!name) return null;
+    // Every case, or nothing. A negated case does not establish which member ran, so it also
+    // disqualifies the check rather than being counted as covering one.
+    for (const c of cases) {
+        if (c.condition?.type !== 'enumIs' || c.condition.negate) return null;
+        if (String(c.condition.params?.enum || '') !== name) return null;
+    }
+    const members = readEnums()[name];
+    if (!members) return null;
+    const covered = new Set(cases.map((c) => String(c.condition.params?.member ?? '')));
+    const missing = members.filter((m) => !covered.has(m));
+    return missing.length ? { enum: name, missing } : null;
+}
+
 function renderModal(modal: HTMLElement): void {
     modal.innerHTML = `
       <div class="modal glass sched-modal sched-full">
@@ -2927,6 +2958,11 @@ function renderStepsEditor(host: HTMLElement, steps: Step[], depth = 0): void {
                     <span class="sched-step-tag sched-if">${t('sched.switch') || 'SWITCH'}</span>
                     <span style="font-size:11px;color:var(--text-muted)">${t('sched.switchHint') || 'first matching case runs'}</span>
                     <button class="btn btn-xs sched-chip sched-sw-addcase" style="margin-left:auto">${t('sched.switchAddCase') || '+ case'}</button></div>
+                ${(() => {
+                    const gap = switchGaps(step);
+                    if (!gap) return '';
+                    return `<div class="sched-sw-gap">${escHtml((t('sched.switchGap') || 'Not handled: {m} — DEFAULT will catch them.').replace('{m}', gap.missing.join(', ')))}</div>`;
+                })()}
                 <div class="sched-sw-cases"></div>
                 <div class="sched-branch"><div class="sched-branch-label">${t('sched.switchDefault') || 'DEFAULT'}</div><div class="sched-sw-def"></div><div class="sched-sw-def-add"></div></div>`;
             const casesHost = block.querySelector('.sched-sw-cases') as HTMLElement;

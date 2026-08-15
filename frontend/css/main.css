@@ -12245,6 +12245,10 @@ body.sched-drag-live .sched-branch .sched-drop-zone:empty {
 .sched-sv-val { color:var(--text-secondary); flex:1; min-width:0;
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .sched-sv-del { flex-shrink:0; opacity:.55; }
+/* Advisory, so it reads as a note and not as an error: a switch handling three of five
+   members on purpose is legitimate, and a red banner would train people to ignore it. */
+.sched-sw-gap { font-size:11px; color:var(--text-secondary); padding:5px 9px; margin:2px 0 6px;
+    border:1px dashed var(--border); border-radius:8px; background:var(--bmm-s02, rgba(255,255,255,0.02)); }
 .sched-en-add { display:flex; flex-wrap:wrap; gap:4px; margin-top:7px; }
 .sched-en-add .input { font-size:11px; padding:3px 6px; flex:1; min-width:0; }
 .sched-sv-del:hover { opacity:1; color:var(--danger); }
