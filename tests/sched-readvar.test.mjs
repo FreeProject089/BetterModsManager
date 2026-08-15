@@ -133,3 +133,35 @@ describe('readNum — the shared-variable defect', () => {
         assert.equal(readNum(ctx({ nums: { z: 0 } }), 'z'), 0);
     });
 });
+
+describe('maps', () => {
+    test('a map reads as a map', () => {
+        assert.deepEqual(readVar(ctx({ maps: { m: { a: '1' } } }), 'm'), { t: 'map', v: { a: '1' } });
+    });
+
+    test('a list still wins over a map of the same name', () => {
+        // Both are collections; the order has to be decided somewhere rather than emerge from
+        // which `if` was typed first. Lists came first and `for each` already resolves them.
+        const c = ctx({ lists: { x: ['a'] }, maps: { x: { k: 'v' } } });
+        assert.deepEqual(readVar(c, 'x'), { t: 'list', v: ['a'] });
+    });
+
+    test('a map renders as JSON, never [object Object]', () => {
+        assert.equal(renderVar({ t: 'map', v: { a: '1' } }), '{"a":"1"}');
+    });
+
+    test("a map's number is how many keys it holds", () => {
+        assert.equal(readNum(ctx({ maps: { m: { a: '1', b: '2' } } }), 'm'), 2);
+    });
+
+    test('an empty map is 0 keys, not a missing variable', () => {
+        assert.equal(readNum(ctx({ maps: { m: {} } }), 'm'), 0);
+        assert.deepEqual(readVar(ctx({ maps: { m: {} } }), 'm'), { t: 'map', v: {} });
+    });
+
+    test('{x} naming a map is left alone by substitution, like a list', () => {
+        // Same reason as the list case: a saved task must not start pasting {"a":"1"} into a
+        // path or a command line because a new bag learned to resolve.
+        assert.deepEqual(substituteVars({ p: 'go {m} go' }, ctx({ maps: { m: { a: '1' } } })), { p: 'go {m} go' });
+    });
+});

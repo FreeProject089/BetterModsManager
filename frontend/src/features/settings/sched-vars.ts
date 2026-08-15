@@ -44,6 +44,19 @@ export interface RunCtx {
      * could hold objects would let `for each` iterate something no condition can compare.
      */
     lists?: Record<string, string[]>;
+    /**
+     * Named key→value tables.
+     *
+     * A list answers "which ones"; this answers "what goes with what" — the mod id a profile
+     * came from, the URL behind a name. Before it, a task doing that kept two lists in step by
+     * index, and one `push` on the wrong branch silently paired every row with the wrong
+     * partner from then on.
+     *
+     * A fifth bag is exactly what `SchedValue` exists to stop, and this is the last one: the
+     * storage migrates to typed values next, and `map` is already a variant there. Adding it
+     * as a bag now keeps that migration a pure refactor instead of a refactor plus a feature.
+     */
+    maps?: Record<string, Record<string, string>>;
 }
 
 /**
@@ -64,7 +77,8 @@ export interface RunCtx {
 export type SchedValue =
     | { t: 'text'; v: string }
     | { t: 'num'; v: number }
-    | { t: 'list'; v: string[] };
+    | { t: 'list'; v: string[] }
+    | { t: 'map'; v: Record<string, string> };
 
 /**
  * Resolve a name to a typed value — the one place that knows the precedence.
@@ -86,6 +100,9 @@ export function readVar(ctx: RunCtx, name: string): SchedValue | undefined {
     if (ctx.lists && Object.prototype.hasOwnProperty.call(ctx.lists, name)) {
         return { t: 'list', v: ctx.lists[name] };
     }
+    if (ctx.maps && Object.prototype.hasOwnProperty.call(ctx.maps, name)) {
+        return { t: 'map', v: ctx.maps[name] };
+    }
     if (Object.prototype.hasOwnProperty.call(ctx.text, name)) return { t: 'text', v: ctx.text[name] };
     if (Object.prototype.hasOwnProperty.call(ctx.nums, name)) return { t: 'num', v: ctx.nums[name] };
     if (ctx.shared && Object.prototype.hasOwnProperty.call(ctx.shared, name)) {
@@ -104,7 +121,7 @@ export function readVar(ctx: RunCtx, name: string): SchedValue | undefined {
  */
 export function renderVar(val: SchedValue): string {
     if (val.t === 'num') return String(val.v);
-    if (val.t === 'list') return JSON.stringify(val.v);
+    if (val.t === 'list' || val.t === 'map') return JSON.stringify(val.v);
     return val.v;
 }
 
@@ -141,6 +158,8 @@ export function readNum(ctx: RunCtx, name: string): number | undefined {
     // A list's number is its length — the one reading that is never a surprise, and it makes
     // arithmetic over a collected list work without a separate step.
     if (val.t === 'list') return val.v.length;
+    // A map's number is how many keys it holds — the same reading `list.length` already has.
+    if (val.t === 'map') return Object.keys(val.v).length;
     const n = parseFloat(val.v);
     return Number.isFinite(n) ? n : val.v.length;
 }

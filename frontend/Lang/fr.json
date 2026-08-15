@@ -7315,5 +7315,14 @@
   "sched.list.valuePh": "Un tableau JSON, ou a, b, c. Les {variables} sont substituées avant.",
   "sched.list.item": "2. Élément à ajouter",
   "sched.list.itemPh": "Une seule valeur. Les {variables} sont substituées avant.",
-  "sched.list.sep": "3. Séparateur"
+  "sched.list.sep": "3. Séparateur",
+  "sched.map.name": "1. Nom de la table",
+  "sched.map.namePh": "ex. urls — relu via {map.urls.size}",
+  "sched.map.key": "2. Clé",
+  "sched.map.keyPh": "Les {variables} sont substituées avant",
+  "sched.map.value": "3. Valeur",
+  "sched.map.valuePh": "Texte simple. Les {variables} sont substituées avant.",
+  "sched.map.into": "3. Ranger dans",
+  "sched.map.intoPh": "nom de variable — relu via {name}",
+  "sched.map.noKey": "Cette étape a besoin d’une clé."
 }

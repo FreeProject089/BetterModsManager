@@ -7317,5 +7317,14 @@
   "sched.list.valuePh": "A JSON array, or a, b, c. {variables} are substituted first.",
   "sched.list.item": "2. Item to add",
   "sched.list.itemPh": "One value. {variables} are substituted first.",
-  "sched.list.sep": "3. Separator"
+  "sched.list.sep": "3. Separator",
+  "sched.map.name": "1. Map name",
+  "sched.map.namePh": "e.g. urls — read back as {map.urls.size}",
+  "sched.map.key": "2. Key",
+  "sched.map.keyPh": "{variables} are substituted first",
+  "sched.map.value": "3. Value",
+  "sched.map.valuePh": "Plain text. {variables} are substituted first.",
+  "sched.map.into": "3. Store it in",
+  "sched.map.intoPh": "variable name — read back as {name}",
+  "sched.map.noKey": "This step needs a key."
 }

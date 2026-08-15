@@ -1246,6 +1246,53 @@ async function runAction(action: Action, task: Task, ctx: RunCtx): Promise<void>
             ctx.nums['list.length'] = 0;
             break;
         }
+        case 'map.set': {
+            // Same two-writes trick as list.set, for the same reason: the per-name key is for
+            // substitution ({map.urls.size} in a toast), and the fixed `map.size` is the one a
+            // condition can pick, because VALUE_SOURCES is a literal list and a template key
+            // can never appear in it.
+            const name = String(p.name || 'map');
+            const key = String(p.key ?? '').trim();
+            ctx.maps = ctx.maps || {};
+            const m = (ctx.maps[name] = ctx.maps[name] || {});
+            // An empty key is refused rather than stored. `m[''] = v` is a real entry that no
+            // `map.get` can ever ask for, and it would inflate the size a condition compares.
+            if (!key) throw new Error(t('sched.map.noKey') || 'This step needs a key.');
+            m[key] = String(p.value ?? '');
+            ctx.nums[`map.${name}.size`] = Object.keys(m).length;
+            ctx.nums['map.size'] = Object.keys(m).length;
+            break;
+        }
+        case 'map.get': {
+            const name = String(p.name || 'map');
+            const key = String(p.key ?? '').trim();
+            const into = String(p.into || '').trim();
+            if (!VAR_NAME_RE.test(into)) {
+                throw new Error((t('sched.var.badName') || 'Not a usable variable name: {n}').replace('{n}', into || '(empty)'));
+            }
+            const m = (ctx.maps && ctx.maps[name]) || {};
+            const hit = Object.prototype.hasOwnProperty.call(m, key);
+            // A missing key writes an EMPTY value rather than leaving the target untouched.
+            // Leaving it alone means a second read silently keeps the first read's answer, and
+            // the task carries on with a value that belongs to another key entirely — the
+            // hardest of the two to debug. `map.<name>.hit` says which happened, so a task
+            // that cares can branch on it instead of guessing from an empty string.
+            const value = hit ? m[key] : '';
+            ctx.text[into] = value;
+            const n = parseFloat(value);
+            ctx.nums[into] = Number.isFinite(n) ? n : value.length;
+            ctx.nums[`map.${name}.hit`] = hit ? 1 : 0;
+            ctx.nums['map.hit'] = hit ? 1 : 0;
+            break;
+        }
+        case 'map.clear': {
+            const name = String(p.name || 'map');
+            ctx.maps = ctx.maps || {};
+            ctx.maps[name] = {};
+            ctx.nums[`map.${name}.size`] = 0;
+            ctx.nums['map.size'] = 0;
+            break;
+        }
         case 'telemetry.consent': dl('telemetry/consent', { enabled: b(p.enabled) }); break;
         case 'telemetry.set':    dl('telemetry/set', { replay: b(p.replay), full: b(p.full), bench: b(p.bench) }); break;
         case 'recorder.set':     dl('recorder/set', { on: b(p.on), full: b(p.full), rust: b(p.rust), js: b(p.js) }); break;
@@ -3046,6 +3093,9 @@ const ACTION_TYPES: { v: string; label: string; needs?: string; group: string }[
     { v: 'list.set', label: 'List — set it (JSON array or a, b, c)', needs: 'listSet', group: 'logic' },
     { v: 'list.push', label: 'List — add one item', needs: 'listPush', group: 'logic' },
     { v: 'list.clear', label: 'List — empty it', needs: 'listName', group: 'logic' },
+    { v: 'map.set', label: 'Map — set a key', needs: 'mapSet', group: 'logic' },
+    { v: 'map.get', label: 'Map — read a key into a variable', needs: 'mapGet', group: 'logic' },
+    { v: 'map.clear', label: 'Map — empty it', needs: 'mapName', group: 'logic' },
     { v: 'var.clear', label: 'Clear a shared variable', needs: 'varClear', group: 'logic' },
     { v: 'http.request', label: 'Call an HTTP API', needs: 'http', group: 'system' },
 ];
@@ -3348,6 +3398,28 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
                 placeholder="," value="${escAttr(params.sep || '')}">`;
         host.innerHTML = `<div class="sched-cmd-builder">${nameField}${valueField}${sepField}</div>`;
     }
+    else if (needs === 'mapSet' || needs === 'mapGet' || needs === 'mapName') {
+        const nameField = `
+            <label class="sched-cmd-label">${t('sched.map.name') || '1. Map name'}</label>
+            <input class="input sched-p-varname" spellcheck="false"
+                placeholder="${escAttr(t('sched.map.namePh') || 'e.g. urls — read back as {map.urls.size}')}"
+                value="${escAttr(params.name || '')}">`;
+        const keyField = needs === 'mapName' ? '' : `
+            <label class="sched-cmd-label">${t('sched.map.key') || '2. Key'}</label>
+            <input class="input sched-p-mapkey" spellcheck="false"
+                placeholder="${escAttr(t('sched.map.keyPh') || '{variables} are substituted first')}"
+                value="${escAttr(params.key || '')}">`;
+        const tail = needs === 'mapSet' ? `
+            <label class="sched-cmd-label">${t('sched.map.value') || '3. Value'}</label>
+            <textarea class="input sched-p-varvalue" rows="2" spellcheck="false"
+                placeholder="${escAttr(t('sched.map.valuePh') || 'Plain text. {variables} are substituted first.')}">${escHtml(params.value || '')}</textarea>`
+            : needs === 'mapGet' ? `
+            <label class="sched-cmd-label">${t('sched.map.into') || '3. Store it in'}</label>
+            <input class="input sched-p-mapinto" spellcheck="false"
+                placeholder="${escAttr(t('sched.map.intoPh') || 'variable name — read back as {name}')}"
+                value="${escAttr(params.into || '')}">` : '';
+        host.innerHTML = `<div class="sched-cmd-builder">${nameField}${keyField}${tail}</div>`;
+    }
     else if (needs === 'varSet') {
         const shared = params.scope === 'shared';
         host.innerHTML = `
@@ -3570,6 +3642,8 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
     host.querySelector('.sched-p-varname')?.addEventListener('input', (e) => { params.name = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-p-varvalue')?.addEventListener('input', (e) => { params.value = (e.target as HTMLTextAreaElement).value; });
     host.querySelector('.sched-p-listsep')?.addEventListener('input', (e) => { params.sep = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-mapkey')?.addEventListener('input', (e) => { params.key = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-mapinto')?.addEventListener('input', (e) => { params.into = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-p-varscope')?.addEventListener('change', (e) => { params.scope = (e.target as HTMLSelectElement).value; });
     host.querySelector('.sched-p-method')?.addEventListener('change', (e) => { params.method = (e.target as HTMLSelectElement).value; });
     host.querySelector('.sched-p-url')?.addEventListener('input', (e) => { params.url = (e.target as HTMLInputElement).value; });
@@ -3692,6 +3766,11 @@ const VALUE_SOURCES = [
     // condition can select is half a feature, and the half that is missing is the point —
     // "call the API, and if it answered 404 do something else".
     'http.status',
+    // The last map touched: how many keys it holds, and whether the last `map.get` found its
+    // key. `map.hit` is the one that matters — without it, a missing key and a key whose value
+    // is genuinely empty are the same empty string, and a task cannot tell "not there" from
+    // "there and blank".
+    'map.size', 'map.hit',
 ];
 function conditionEditor(cond: Condition): HTMLElement {
     const el = document.createElement('div');
