@@ -1,0 +1,280 @@
+[
+  {
+    "action": "api",
+    "params": [
+      "method",
+      "path"
+    ]
+  },
+  {
+    "action": "app/install",
+    "params": [
+      "id",
+      "url",
+      "title",
+      "type",
+      "path"
+    ]
+  },
+  {
+    "action": "app/launch",
+    "params": [
+      "id",
+      "exe"
+    ]
+  },
+  {
+    "action": "benchmark/open",
+    "params": [
+      "dataset",
+      "size",
+      "mb",
+      "mode",
+      "sources",
+      "folders",
+      "profiles"
+    ]
+  },
+  {
+    "action": "benchmark/run",
+    "params": [
+      "dataset",
+      "size",
+      "mb",
+      "mode",
+      "sources",
+      "folders",
+      "profiles"
+    ]
+  },
+  {
+    "action": "data/export-auto",
+    "params": [
+      "dir",
+      "name",
+      "increment"
+    ]
+  },
+  {
+    "action": "discord/rpc",
+    "params": [
+      "enabled"
+    ]
+  },
+  {
+    "action": "docs/open",
+    "params": [
+      "article"
+    ]
+  },
+  {
+    "action": "download",
+    "params": [
+      "url",
+      "name"
+    ]
+  },
+  {
+    "action": "import",
+    "params": [
+      "url",
+      "name"
+    ]
+  },
+  {
+    "action": "install",
+    "params": [
+      "url",
+      "name"
+    ]
+  },
+  {
+    "action": "language/import",
+    "params": [
+      "path"
+    ]
+  },
+  {
+    "action": "language/import-inline",
+    "params": [
+      "data",
+      "code",
+      "gz"
+    ]
+  },
+  {
+    "action": "launchpack/run",
+    "params": [
+      "id"
+    ]
+  },
+  {
+    "action": "mod/check-updates",
+    "params": []
+  },
+  {
+    "action": "mod/disable",
+    "params": [
+      "id"
+    ]
+  },
+  {
+    "action": "mod/enable",
+    "params": [
+      "id"
+    ]
+  },
+  {
+    "action": "mod/update",
+    "params": [
+      "url",
+      "name",
+      "type"
+    ]
+  },
+  {
+    "action": "modpack/create",
+    "params": [
+      "name",
+      "profile"
+    ]
+  },
+  {
+    "action": "modpack/disable",
+    "params": [
+      "id"
+    ]
+  },
+  {
+    "action": "modpack/enable",
+    "params": [
+      "id"
+    ]
+  },
+  {
+    "action": "plugin/activate",
+    "params": [
+      "id"
+    ]
+  },
+  {
+    "action": "plugin/compare",
+    "params": [
+      "id"
+    ]
+  },
+  {
+    "action": "plugin/delete",
+    "params": [
+      "id"
+    ]
+  },
+  {
+    "action": "profile/activate",
+    "params": [
+      "id"
+    ]
+  },
+  {
+    "action": "recorder/set",
+    "params": []
+  },
+  {
+    "action": "replay/export",
+    "params": []
+  },
+  {
+    "action": "replay/import",
+    "params": [
+      "path",
+      "url"
+    ]
+  },
+  {
+    "action": "repo/connect",
+    "params": [
+      "url"
+    ]
+  },
+  {
+    "action": "repo/gen",
+    "params": []
+  },
+  {
+    "action": "repo/host",
+    "params": [
+      "dir",
+      "port"
+    ]
+  },
+  {
+    "action": "repo/sync",
+    "params": [
+      "url",
+      "profile",
+      "local_profile",
+      "game_dir",
+      "mods_dir",
+      "backup_dir",
+      "password"
+    ]
+  },
+  {
+    "action": "repo/update",
+    "params": [
+      "dir"
+    ]
+  },
+  {
+    "action": "restart",
+    "params": []
+  },
+  {
+    "action": "schedule/run",
+    "params": [
+      "id"
+    ]
+  },
+  {
+    "action": "settings/layout",
+    "params": [
+      "code"
+    ]
+  },
+  {
+    "action": "settings/navbar",
+    "params": [
+      "code"
+    ]
+  },
+  {
+    "action": "telemetry/consent",
+    "params": []
+  },
+  {
+    "action": "telemetry/set",
+    "params": []
+  },
+  {
+    "action": "theme/apply",
+    "params": [
+      "id"
+    ]
+  },
+  {
+    "action": "theme/editor",
+    "params": []
+  },
+  {
+    "action": "theme/import",
+    "params": [
+      "url"
+    ]
+  },
+  {
+    "action": "theme/import-inline",
+    "params": [
+      "data"
+    ]
+  }
+]
