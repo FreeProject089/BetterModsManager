@@ -7304,5 +7304,7 @@
   "repo.cat.pick.hint": "A catalog is something you publish — pick the sources you meant to share, not everything you happen to be following.",
   "repo.cat.pick.all": "Select all",
   "repo.cat.pick.none": "Select none",
-  "repo.cat.pick.export": "Export {n}"
+  "repo.cat.pick.export": "Export {n}",
+  "sched.spawned": "Started in the background",
+  "sched.spawnBusy": "That task is already running — not started again."
 }

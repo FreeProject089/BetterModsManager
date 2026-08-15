@@ -1183,6 +1183,31 @@ async function runAction(action: Action, task: Task, ctx: RunCtx): Promise<void>
                 if (sub) toast(`${t('sched.subTaskDone') || 'Sub-task finished'}: ${sub.name} → ${sub.lastResult}`, ctx.nums['lasttask.ok'] ? 'info' : 'warning');
             }
             break;
+        case 'task.spawn': {
+            // Starts the sub-task and moves on. `task.run` awaits, which is right when the
+            // next step depends on the result — and wrong for anything long you only wanted
+            // to set going.
+            //
+            // REFUSES a task that is already running, itself included. With `await`, a task
+            // that runs itself recurses and eventually blows the stack: bad, bounded, and
+            // visible. Without `await` it would spawn unbounded concurrent copies of itself
+            // instantly, and the only symptom would be the machine getting slower. That
+            // guard is what makes this action safe to offer at all.
+            const id = String(p.id || '');
+            if (!id) break;
+            if (_running.has(id)) {
+                toast(t('sched.spawnBusy') || 'That task is already running — not started again.', 'warning');
+                ctx.nums['lasttask.spawned'] = 0;
+                break;
+            }
+            // No await, and the rejection is handled here: an unhandled one from a detached
+            // promise surfaces as a console error with no task name attached to it.
+            void runTaskById(id).catch(() => { /* the sub-task records its own lastResult */ });
+            ctx.nums['lasttask.spawned'] = 1;
+            const spawned = _tasks.find(tk => tk.id === id);
+            toast(`${t('sched.spawned') || 'Started in the background'}: ${spawned?.name || id}`, 'info');
+            break;
+        }
         case 'telemetry.consent': dl('telemetry/consent', { enabled: b(p.enabled) }); break;
         case 'telemetry.set':    dl('telemetry/set', { replay: b(p.replay), full: b(p.full), bench: b(p.bench) }); break;
         case 'recorder.set':     dl('recorder/set', { on: b(p.on), full: b(p.full), rust: b(p.rust), js: b(p.js) }); break;
@@ -2918,6 +2943,7 @@ const ACTION_TYPES: { v: string; label: string; needs?: string; group: string }[
     { v: 'rule.table', label: 'Rule table (decision table)', needs: 'ruleTable', group: 'logic' },
     { v: 'task.stop', label: 'Stop the task (guard clause)', needs: 'stopReason', group: 'logic' },
     { v: 'task.run', label: 'Run another scheduled task', needs: 'taskId', group: 'system' },
+    { v: 'task.spawn', label: 'Start another task WITHOUT waiting (async)', needs: 'taskId', group: 'system' },
     { v: 'restart', label: 'Restart BMM', group: 'system' },
     { v: 'open.url', label: 'Open a URL / link', needs: 'url', group: 'system' },
     { v: 'custom.command', label: 'Run custom command', needs: 'command', group: 'system' },
@@ -3534,7 +3560,7 @@ const VALUE_SOURCES = [
     'disk.read_mbps', 'disk.write_mbps', 'disk.suggested_limit',
     'disk.free_gb', 'disk.free_percent', 'disk.total_gb',
     'benchmark.mbps', 'benchmark.total_ms',
-    'update.available', 'lasttask.ok',
+    'update.available', 'lasttask.ok', 'lasttask.spawned',
     // Written by http.request on every call, including a failed one. Listed here because
     // check-scheduler-vars caught that it was not: a value an action writes and no
     // condition can select is half a feature, and the half that is missing is the point —

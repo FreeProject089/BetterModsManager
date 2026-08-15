@@ -7302,5 +7302,7 @@
   "repo.cat.pick.hint": "Un catalogue se publie — choisissez les sources que vous vouliez partager, pas tout ce que vous suivez.",
   "repo.cat.pick.all": "Tout sélectionner",
   "repo.cat.pick.none": "Tout désélectionner",
-  "repo.cat.pick.export": "Exporter {n}"
+  "repo.cat.pick.export": "Exporter {n}",
+  "sched.spawned": "Lancée en arrière-plan",
+  "sched.spawnBusy": "Cette tâche tourne déjà — elle n’a pas été relancée."
 }
