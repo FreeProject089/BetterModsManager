@@ -7299,5 +7299,10 @@
   "repo.browse.down": "The repository list is unavailable right now",
   "repo.browse.downdetail": "BetterCommunity answered HTTP {s}. This is the server, not your connection — try again shortly.",
   "repo.browse.empty": "No repositories available yet",
-  "repo.browse.emptydetail": "The repository list will be available soon"
+  "repo.browse.emptydetail": "The repository list will be available soon",
+  "repo.cat.pick.title": "Choose what to put in the catalog",
+  "repo.cat.pick.hint": "A catalog is something you publish — pick the sources you meant to share, not everything you happen to be following.",
+  "repo.cat.pick.all": "Select all",
+  "repo.cat.pick.none": "Select none",
+  "repo.cat.pick.export": "Export {n}"
 }

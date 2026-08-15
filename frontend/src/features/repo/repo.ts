@@ -53,7 +53,11 @@ export function readRepoCatalogs(): string[] {
  * `(repoList || [])` did not save it either: `||` still has to evaluate the name before it
  * can pick a side, so a bare undefined identifier throws rather than falling back.
  */
-export function renderRepoCatalogStrip(reload: () => void, getRepos: () => any[] = () => []): void {
+// `getRepos` is REQUIRED, with no default. It briefly had `= () => []`, added to fix a
+// ReferenceError, and that default is why Export answered "Nothing in the list to export"
+// over a screen full of repos: the one call site never passed it. A default that means
+// "nothing" converts a loud crash into a quiet lie, and only the crash gets reported.
+export function renderRepoCatalogStrip(reload: () => void, getRepos: () => any[]): void {
     const host = document.getElementById('repo-cat-list');
     const input = document.getElementById('repo-cat-url') as HTMLInputElement | null;
     const addBtn = document.getElementById('repo-cat-add');
@@ -96,22 +100,95 @@ export function renderRepoCatalogStrip(reload: () => void, getRepos: () => any[]
         reload();
     });
 
-    expBtn.addEventListener('click', async () => {
+    expBtn.addEventListener('click', () => {
         // Create a catalog FROM what is on screen. Somebody who has assembled a list worth
         // sharing should not have to hand-write JSON to share it — and the shape it writes
         // is the one this same browser reads, so a round trip is the test.
-        const rows = getRepos().map((r: any) => ({
+        //
+        // It used to export the whole list silently. A catalog is something you publish, and
+        // "everything I happen to be following, including the half I was trying out" is
+        // rarely what you meant to publish — so it asks first.
+        const all = getRepos();
+        if (!all.length) { toast(t('repo.cat.empty'), 'info'); return; }
+        openExportPicker(all);
+    });
+}
+
+/** Choose what goes into the catalog, then write it. */
+function openExportPicker(all: any[]): void {
+    document.getElementById('repo-cat-export-pick')?.remove();
+
+    const ov = document.createElement('div');
+    ov.className = 'modal-overlay open';
+    ov.id = 'repo-cat-export-pick';
+    ov.style.zIndex = '10000';
+    ov.innerHTML = `
+        <div class="modal glass" style="max-width:640px; width:94%; max-height:82vh; display:flex; flex-direction:column;">
+            <div class="modal-header" style="flex-shrink:0;">
+                <h3>${escHtml(t('repo.cat.pick.title'))}</h3>
+                <button class="modal-close" type="button" data-x>&times;</button>
+            </div>
+            <div class="modal-body" style="flex:1; min-height:0; overflow:auto;">
+                <p style="font-size:12px; color:var(--text-muted); margin-bottom:10px;">${escHtml(t('repo.cat.pick.hint'))}</p>
+                <div style="display:flex; gap:8px; margin-bottom:10px;">
+                    <button class="btn btn-sm" type="button" data-all>${escHtml(t('repo.cat.pick.all'))}</button>
+                    <button class="btn btn-sm" type="button" data-none>${escHtml(t('repo.cat.pick.none'))}</button>
+                    <span style="margin-left:auto; font-size:12px; color:var(--text-muted);" data-count></span>
+                </div>
+                <div data-rows style="display:flex; flex-direction:column; gap:6px;"></div>
+            </div>
+            <div class="modal-footer" style="flex-shrink:0; display:flex; gap:8px; justify-content:flex-end;">
+                <button class="btn" type="button" data-x>${escHtml(t('common.cancel'))}</button>
+                <button class="btn btn-primary" type="button" data-go></button>
+            </div>
+        </div>`;
+    document.body.appendChild(ov);
+
+    const rowsEl = ov.querySelector('[data-rows]') as HTMLElement;
+    const countEl = ov.querySelector('[data-count]') as HTMLElement;
+    const goBtn = ov.querySelector('[data-go]') as HTMLButtonElement;
+
+    all.forEach((r: any, i: number) => {
+        const row = document.createElement('label');
+        row.style.cssText = 'display:flex; gap:10px; align-items:flex-start; padding:8px 10px; border:1px solid var(--border); border-radius:8px; cursor:pointer;';
+        row.innerHTML = `
+            <input type="checkbox" checked data-i="${i}" style="margin-top:3px;">
+            <span style="min-width:0;">
+                <span style="display:block; font-size:13px;">${escHtml(r.name || r.url || '')}</span>
+                <span style="display:block; font-size:11px; color:var(--text-muted); word-break:break-all;">${escHtml(r.url || '')}</span>
+            </span>`;
+        rowsEl.appendChild(row);
+    });
+
+    const boxes = () => Array.from(ov.querySelectorAll('input[type=checkbox]')) as HTMLInputElement[];
+    const sync = () => {
+        const n = boxes().filter((b) => b.checked).length;
+        countEl.textContent = `${n} / ${all.length}`;
+        goBtn.textContent = t('repo.cat.pick.export').replace('{n}', String(n));
+        goBtn.disabled = n === 0;
+    };
+    ov.addEventListener('change', sync);
+    ov.querySelector('[data-all]')?.addEventListener('click', () => { boxes().forEach((b) => { b.checked = true; }); sync(); });
+    ov.querySelector('[data-none]')?.addEventListener('click', () => { boxes().forEach((b) => { b.checked = false; }); sync(); });
+    ov.querySelectorAll('[data-x]').forEach((x) => x.addEventListener('click', () => ov.remove()));
+    // Clicking the backdrop closes; clicking inside must not.
+    ov.addEventListener('click', (e) => { if (e.target === ov) ov.remove(); });
+    sync();
+
+    goBtn.addEventListener('click', async () => {
+        const chosen = boxes().filter((b) => b.checked).map((b) => all[Number(b.dataset.i)]);
+        const rows = chosen.map((r: any) => ({
             name: r.name, url: r.url, description: r.description || '',
             region: r.region || '', category: r.category === 'official' ? 'community' : (r.category || 'community'),
         }));
-        if (!rows.length) { toast(t('repo.cat.empty') || 'Nothing in the list to export.', 'info'); return; }
         const doc = JSON.stringify({ name: 'My repo catalog', generatedAt: new Date().toISOString(), repos: rows }, null, 2);
         const { saveFile } = await import('../../core/api.js');
         const path = await saveFile({ defaultPath: 'repos.json', filters: [{ name: 'Repo catalog', extensions: ['json'] }] }).catch(() => null);
         if (!path) return;
         try {
             await invoke('write_text_file', { path, content: doc });
-            toast((t('repo.cat.saved') || 'Saved {n} repos.').replace('{n}', String(rows.length)), 'success');
+            toast(t('repo.cat.saved').replace('{n}', String(rows.length)), 'success');
+            ov.remove();
         } catch (e) { toast(String(e), 'error'); }
     });
 }
@@ -1446,7 +1523,7 @@ export function initRepo() {
                 // Wired once per open, before the fetch: the strip must be usable while the
                 // list is still loading, and binding after would leave it dead if the fetch
                 // failed — which is exactly when somebody wants to add another source.
-                renderRepoCatalogStrip(() => { void fetchRepoList(); });
+                renderRepoCatalogStrip(() => { void fetchRepoList(); }, () => repoList);
                 fetchRepoList();
             });
         }

@@ -7297,5 +7297,10 @@
   "repo.browse.down": "La liste des dépôts est indisponible pour le moment",
   "repo.browse.downdetail": "BetterCommunity a répondu HTTP {s}. C’est le serveur, pas votre connexion — réessayez sous peu.",
   "repo.browse.empty": "Aucun dépôt disponible pour l’instant",
-  "repo.browse.emptydetail": "La liste des dépôts sera bientôt disponible"
+  "repo.browse.emptydetail": "La liste des dépôts sera bientôt disponible",
+  "repo.cat.pick.title": "Choisissez ce qui va dans le catalogue",
+  "repo.cat.pick.hint": "Un catalogue se publie — choisissez les sources que vous vouliez partager, pas tout ce que vous suivez.",
+  "repo.cat.pick.all": "Tout sélectionner",
+  "repo.cat.pick.none": "Tout désélectionner",
+  "repo.cat.pick.export": "Exporter {n}"
 }
