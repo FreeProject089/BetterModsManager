@@ -7324,5 +7324,9 @@
   "sched.map.valuePh": "Texte simple. Les {variables} sont substituées avant.",
   "sched.map.into": "3. Ranger dans",
   "sched.map.intoPh": "nom de variable — relu via {name}",
-  "sched.map.noKey": "Cette étape a besoin d’une clé."
+  "sched.map.noKey": "Cette étape a besoin d’une clé.",
+  "sched.fe.list": "une liste construite par la tâche",
+  "sched.fe.mapKeys": "les clés d’une table",
+  "sched.fe.listPh": "nom de la liste",
+  "sched.fe.mapPh": "nom de la table"
 }

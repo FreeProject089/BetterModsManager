@@ -7179,5 +7179,9 @@
   "sched.map.valuePh": "Plain text. {variables} are substituted first.",
   "sched.map.into": "3. Store it in",
   "sched.map.intoPh": "variable name — read back as {name}",
-  "sched.map.noKey": "This step needs a key."
+  "sched.map.noKey": "This step needs a key.",
+  "sched.fe.list": "a list this task built",
+  "sched.fe.mapKeys": "the keys of a map",
+  "sched.fe.listPh": "list name",
+  "sched.fe.mapPh": "map name"
 }

@@ -93,7 +93,7 @@ type Step = (
     | { kind: 'repeat'; mode: 'while' | 'until' | 'times' | 'doWhile'; condition?: Condition; times?: number; maxIters: number; everySec: number; steps: Step[] }
     // For-each: run `steps` once per item of a live collection. Inside the body,
     // every string action param may reference the item as {item.id} / {item.name}.
-    | { kind: 'forEach'; source: 'mods' | 'enabledMods' | 'disabledMods' | 'profiles' | 'modpacks' | 'themes' | 'list'; listName?: string; maxIters: number; everySec: number; steps: Step[] }
+    | { kind: 'forEach'; source: 'mods' | 'enabledMods' | 'disabledMods' | 'profiles' | 'modpacks' | 'themes' | 'list' | 'mapKeys'; listName?: string; maxIters: number; everySec: number; steps: Step[] }
     // Switch: evaluate cases in order, run the FIRST whose condition holds, else default.
     | { kind: 'switch'; cases: { condition: Condition; steps: Step[] }[]; default: Step[] }
     // Try/catch: run `steps`; if anything in them fails, run `onError` INSTEAD of
@@ -558,7 +558,12 @@ async function runSteps(steps: Step[], task: Task, ctx: RunCtx, depth = 0): Prom
             // access to the run context.
             const items = step.source === 'list'
                 ? (ctx.lists?.[String(step.listName || 'list')] || [])
-                : await forEachItems(step.source);
+                // A map iterates its KEYS, so {item.id} and {item.name} are both the key and
+                // `map.get` inside the body is what reaches the value. Iterating pairs would
+                // need an item shape no other source produces.
+                : step.source === 'mapKeys'
+                    ? Object.keys(ctx.maps?.[String(step.listName || 'map')] || {})
+                    : await forEachItems(step.source);
             const max = Math.max(1, Math.min(step.maxIters || 100, 100000));
             const gap = Math.max(0, step.everySec || 0) * 1000;
             for (const item of items.slice(0, max)) {
@@ -2750,16 +2755,30 @@ function renderStepsEditor(host: HTMLElement, steps: Step[], depth = 0): void {
             renderAddRow(block.querySelector('.sched-loop-add') as HTMLElement, step.steps, depth + 1, host, steps, depth);
             _wireFold(block, step);
         } else if (step.kind === 'forEach') {
-            const srcSel = (['enabledMods', 'disabledMods', 'mods', 'profiles', 'modpacks', 'themes'] as const).map(m =>
+            // 'list' and 'mapKeys' were missing from this picker. The runtime has resolved a
+            // list source the whole time and the type has allowed it, so `for each` over a
+            // list the task built itself worked and could not be chosen — the same gap that
+            // left the list ACTIONS without a form.
+            const srcSel = (['enabledMods', 'disabledMods', 'mods', 'profiles', 'modpacks', 'themes', 'list', 'mapKeys'] as const).map(m =>
                 `<option value="${m}"${step.source === m ? ' selected' : ''}>${escHtml(t('sched.fe.' + m) || m)}</option>`).join('');
+            const ownSource = step.source === 'list' || step.source === 'mapKeys';
+            const nameBox = ownSource ? `<input class="input sched-fe-name" spellcheck="false" style="max-width:150px"
+                    placeholder="${escAttr(step.source === 'list' ? (t('sched.fe.listPh') || 'list name') : (t('sched.fe.mapPh') || 'map name'))}"
+                    value="${escAttr(step.listName || '')}">` : '';
             block.innerHTML = `<div class="sched-step-head">${_foldBtn(step)}${_kindTile('forEach')}
                     <span class="sched-step-tag sched-repeat">${t('sched.forEach') || 'FOR EACH'}</span>
-                    <select class="input sched-fe-src" style="max-width:190px">${srcSel}</select>
+                    <select class="input sched-fe-src" style="max-width:190px">${srcSel}</select>${nameBox}
                     <span style="font-size:11px;color:var(--text-muted)">${t('sched.loopMax') || 'max'}</span><input type="number" class="input sched-fe-max" min="1" value="${step.maxIters || 100}" style="max-width:90px">
                     <span style="font-size:11px;color:var(--text-muted)">${t('sched.loopEvery') || 'every'}</span><input type="number" class="input sched-fe-every" min="0" value="${step.everySec || 0}" style="max-width:80px"> ${t('sched.unitSec') || 's'}
                     <span style="font-size:10px;color:var(--text-muted)">${t('sched.fe.hint') || '{item.id} / {item.name} in the body'}</span></div>
                 <div class="sched-branch"><div class="sched-branch-label">${t('sched.fe.body') || 'PER ITEM'}</div><div class="sched-fe-body"></div><div class="sched-fe-add"></div></div>`;
-            block.querySelector('.sched-fe-src')?.addEventListener('change', (e) => { step.source = (e.target as HTMLSelectElement).value as any; });
+            block.querySelector('.sched-fe-src')?.addEventListener('change', (e) => {
+                step.source = (e.target as HTMLSelectElement).value as any;
+                // Redraw: the name box only exists for the two run-context sources, so without
+                // this, picking one shows no way to name it until the editor is reopened.
+                renderStepsEditor(host, steps, depth);
+            });
+            block.querySelector('.sched-fe-name')?.addEventListener('input', (e) => { step.listName = (e.target as HTMLInputElement).value; });
             block.querySelector('.sched-fe-max')?.addEventListener('input', (e) => { step.maxIters = parseInt((e.target as HTMLInputElement).value) || 100; });
             block.querySelector('.sched-fe-every')?.addEventListener('input', (e) => { step.everySec = parseFloat((e.target as HTMLInputElement).value) || 0; });
             renderStepsEditor(block.querySelector('.sched-fe-body') as HTMLElement, step.steps, depth + 1);
