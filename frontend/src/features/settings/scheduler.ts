@@ -14,7 +14,7 @@ import { t } from '../../core/i18n.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { toast } from '../../ui/app.js';
 import { calendarDue, nextCalendarDue } from './sched-time.js';
-import { substituteVars, VAR_NAME_RE, parseList, readNum, type RunCtx } from './sched-vars.js';
+import { substituteVars, VAR_NAME_RE, parseList, readNum, readVar, renderVar, type RunCtx } from './sched-vars.js';
 import { parseHeaderLines, readJsonPath, statusIsFailure } from './http-action.js';
 import { inspectBmmpa } from './bmmpa-inspect.js';
 import { parsePresetFeed, looksLikePresetFeed, readPresetCatalogs, writePresetCatalogs } from './preset-catalog.js';
@@ -792,6 +792,47 @@ export function readSharedVars(): Record<string, string> {
     } catch { return {}; }
 }
 
+/**
+ * Declared enums: a name, and the set of values it may hold.
+ *
+ * The point is not the values — a condition could always compare free text. It is that a
+ * SWITCH whose cases all test the same enum can be told which members it has not handled,
+ * which is the one thing `switch` could never do and the only reason `match` was ever wanted
+ * (see .Assets/.md/SCHEDULER_TYPES_DESIGN.md).
+ *
+ * Stored like the shared variables, and for the same reason: an enum outlives a run and is
+ * shared by every task, so it cannot live in RunCtx. Read fresh on every access rather than
+ * cached, because two tasks can be mid-run at once.
+ */
+const ENUMS_KEY = 'bmm.sched.enums';
+
+export function readEnums(): Record<string, string[]> {
+    try {
+        const raw = JSON.parse(localStorage.getItem(ENUMS_KEY) || '{}');
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+        const out: Record<string, string[]> = {};
+        for (const [k, v] of Object.entries(raw)) {
+            // Same filter-on-the-way-out rule as the shared variables: a name a condition
+            // could never reference would show in the list and never work.
+            if (!VAR_NAME_RE.test(k) || !Array.isArray(v)) continue;
+            // Members are de-duplicated. Two identical members make the exhaustiveness count
+            // wrong in the one direction that matters — it would report a member as unhandled
+            // while a case already covers it.
+            const seen = new Set<string>();
+            for (const m of v) {
+                const str = String(m ?? '').trim();
+                if (str && !seen.has(str)) seen.add(str);
+            }
+            if (seen.size) out[k] = [...seen];
+        }
+        return out;
+    } catch { return {}; }
+}
+
+export function writeEnums(all: Record<string, string[]>): void {
+    try { localStorage.setItem(ENUMS_KEY, JSON.stringify(all)); } catch { /* quota or private mode */ }
+}
+
 export function writeSharedVars(vars: Record<string, string>): void {
     try { localStorage.setItem(SHARED_VARS_KEY, JSON.stringify(vars)); } catch { /* quota */ }
 }
@@ -1376,6 +1417,17 @@ async function evalConditionRaw(cond: Condition, ctx: RunCtx): Promise<boolean> 
     const now = new Date();
     switch (cond.type) {
         case 'always': return true;
+        case 'enumIs': {
+            // The typed subject a switch needs. Compares a VARIABLE against one declared
+            // member of one declared enum, so the editor can later look at a switch's cases
+            // and say which members are unhandled — which free-text comparison can never
+            // support, because nothing states what the branch is about.
+            const val = readVar(ctx, String(p.name || ''));
+            if (!val) return false;
+            // Compared as text on purpose. A member is a label, not a quantity: `>` on
+            // `failed` has no meaning, and coercing here would make `0` equal `` .
+            return renderVar(val) === String(p.member ?? '');
+        }
         case 'value': {
             // Compare a captured value (e.g. disk.write_mbps, benchmark.mbps) to a threshold.
             const left = readNum(ctx, String(p.source)) ?? NaN;
@@ -2291,6 +2343,70 @@ function renderSharedVarsPanel(modal: HTMLElement): void {
     }));
 }
 
+/**
+ * Declared enums, in the same sidebar as the shared variables.
+ *
+ * Declaring one is what lets a SWITCH be told which members it has not handled. Without a
+ * declaration a case is free text and nothing can know what the branch is about — that gap,
+ * not the syntax, is the whole reason `match` was on the wish list.
+ */
+function renderEnumsPanel(modal: HTMLElement): void {
+    const side = modal.querySelector('.sched-side');
+    if (!side) return;
+    const host = (side.querySelector('.sched-en') as HTMLElement) || (() => {
+        const el = document.createElement('div');
+        el.className = 'sched-sv sched-en';
+        side.appendChild(el);
+        return el;
+    })();
+
+    const all = readEnums();
+    const names = Object.keys(all).sort();
+    const rows = names.map((n) => `
+        <div class="sched-sv-row">
+            <code class="sched-sv-name">${escHtml(n)}</code>
+            <span class="sched-sv-val" data-tooltip="${escAttr(all[n].join(', '))}">${escHtml(all[n].join(', '))}</span>
+            <button type="button" class="btn btn-ghost btn-xs sched-en-del" data-name="${escAttr(n)}"
+                data-tooltip="${escAttr(t('sched.en.del') || 'Delete this enum')}">${SCHED_X}</button>
+        </div>`).join('');
+
+    host.innerHTML = `
+        <div class="sched-sv-title">${t('sched.en.title') || 'Enums'}</div>
+        <div class="sched-sv-hint">${t('sched.en.hint') || 'A named set of values, so a Switch can be told which ones it has not handled.'}</div>
+        ${names.length ? rows : `<div class="sched-sv-empty">${t('sched.en.empty') || 'None yet.'}</div>`}
+        <div class="sched-en-add">
+            <input class="input sched-en-name" spellcheck="false" placeholder="${escAttr(t('sched.en.namePh') || 'name')}">
+            <input class="input sched-en-members" spellcheck="false" placeholder="${escAttr(t('sched.en.membersPh') || 'ok, failed, skipped')}">
+            <button type="button" class="btn btn-xs btn-secondary sched-en-save">${t('sched.en.add') || 'Add'}</button>
+        </div>`;
+
+    host.querySelectorAll('.sched-en-del').forEach((btn) => btn.addEventListener('click', () => {
+        const store = readEnums();
+        delete store[(btn as HTMLElement).dataset.name || ''];
+        writeEnums(store);
+        renderEnumsPanel(modal);
+    }));
+    host.querySelector('.sched-en-save')?.addEventListener('click', () => {
+        const name = (host.querySelector('.sched-en-name') as HTMLInputElement).value.trim();
+        const raw = (host.querySelector('.sched-en-members') as HTMLInputElement).value;
+        // Refused rather than skipped, exactly as var.set does: a name no condition could
+        // reference would appear in this list and never work.
+        if (!VAR_NAME_RE.test(name)) {
+            toast((t('sched.var.badName') || 'Not a usable variable name: {n}').replace('{n}', name || '(empty)'), 'warning');
+            return;
+        }
+        const members = parseList(raw);
+        if (!members.length) {
+            toast(t('sched.en.noMembers') || 'An enum needs at least one value.', 'warning');
+            return;
+        }
+        const store = readEnums();
+        store[name] = members;
+        writeEnums(store);
+        renderEnumsPanel(modal);
+    });
+}
+
 function renderModal(modal: HTMLElement): void {
     modal.innerHTML = `
       <div class="modal glass sched-modal sched-full">
@@ -2422,6 +2538,7 @@ function renderModal(modal: HTMLElement): void {
       </div>`;
 
     renderSharedVarsPanel(modal);
+    renderEnumsPanel(modal);
     modal.querySelector('#sched-close')?.addEventListener('click', () => modal.classList.remove('open'));
     modal.querySelector('#sched-cancel')?.addEventListener('click', () => modal.classList.remove('open'));
     modal.querySelector('#sched-preset-catalog')?.addEventListener('click', () => { void browsePresetCatalogs(); });
@@ -3764,7 +3881,7 @@ function diskOptions(selected: string): string {
         _disks.map((d: any) => `<option value="${escAttr(d.mount_point)}"${d.mount_point === selected ? ' selected' : ''}>${escHtml(d.mount_point)}${d.name ? ' · ' + escHtml(d.name) : ''}</option>`).join('');
 }
 
-const COND_TYPES = ['always', 'value', 'profileActive', 'modEnabled', 'modDisabled', 'modpackActive', 'modpackInactive', 'allModsActive', 'appRunning', 'appNotRunning', 'fileExists', 'fileHash', 'fileSize', 'fileType', 'fileName', 'fileNewer', 'online', 'timeReached', 'dayOfWeek', 'timeRange', 'commandSucceeds'];
+const COND_TYPES = ['always', 'value', 'enumIs', 'profileActive', 'modEnabled', 'modDisabled', 'modpackActive', 'modpackInactive', 'allModsActive', 'appRunning', 'appNotRunning', 'fileExists', 'fileHash', 'fileSize', 'fileType', 'fileName', 'fileNewer', 'online', 'timeReached', 'dayOfWeek', 'timeRange', 'commandSucceeds'];
 // Values a preceding action can capture (used by the `value` condition).
 // Every variable an action writes into `ctx`, so a `value` condition can read all of
 // them. Four were missing — check_disk_space has always written disk.free_gb,
@@ -3851,6 +3968,30 @@ function renderCondParams(host: HTMLElement, cond: Condition): void {
         host.innerHTML = `<input class="input sched-cp-prog" placeholder="${escAttr(t('sched.phProgram') || 'program')}" value="${escAttr(p.program || '')}" style="max-width:160px"> <input class="input sched-cp-args" placeholder="${escAttr(t('sched.phArgs') || 'args')}" value="${escAttr(p.args || '')}" style="max-width:140px">`;
         host.querySelector('.sched-cp-prog')?.addEventListener('input', (e) => { p.program = (e.target as HTMLInputElement).value; });
         host.querySelector('.sched-cp-args')?.addEventListener('input', (e) => { p.args = (e.target as HTMLInputElement).value; });
+    } else if (cond.type === 'enumIs') {
+        const enums = readEnums();
+        const names = Object.keys(enums).sort();
+        if (!names.length) {
+            host.innerHTML = `<span style="font-size:11px;color:var(--text-muted)">${t('sched.cond.noEnums') || 'No enum declared yet — add one in the sidebar.'}</span>`;
+        } else {
+            const chosen = names.includes(String(p.enum)) ? String(p.enum) : names[0];
+            p.enum = chosen;
+            const members = enums[chosen] || [];
+            if (!members.includes(String(p.member))) p.member = members[0] || '';
+            host.innerHTML = `
+                <input class="input sched-cp-name" spellcheck="false" placeholder="${escAttr(t('sched.cond.varPh') || 'variable')}" value="${escAttr(p.name || '')}" style="max-width:150px">
+                <select class="input sched-cp-enum" style="max-width:140px">${names.map(n => `<option value="${escAttr(n)}"${chosen === n ? ' selected' : ''}>${escHtml(n)}</option>`).join('')}</select>
+                <select class="input sched-cp-member" style="max-width:150px">${members.map(m => `<option value="${escAttr(m)}"${p.member === m ? ' selected' : ''}>${escHtml(m)}</option>`).join('')}</select>`;
+            host.querySelector('.sched-cp-name')?.addEventListener('input', (e) => { p.name = (e.target as HTMLInputElement).value; });
+            // Changing the enum redraws, because the member list belongs to it — leaving a
+            // member from the previous enum selected is a condition that can never be true.
+            host.querySelector('.sched-cp-enum')?.addEventListener('change', (e) => {
+                p.enum = (e.target as HTMLSelectElement).value;
+                p.member = (readEnums()[p.enum] || [])[0] || '';
+                renderCondParams(host, cond);
+            });
+            host.querySelector('.sched-cp-member')?.addEventListener('change', (e) => { p.member = (e.target as HTMLSelectElement).value; });
+        }
     } else if (cond.type === 'value') {
         host.innerHTML = `
             <select class="input sched-cp-src" style="max-width:170px">

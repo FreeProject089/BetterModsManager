@@ -7344,5 +7344,16 @@
   "sched.actd.list.clear": "Empties the list without deleting its name, so a later push starts from nothing.",
   "sched.actd.map.set": "Stores one value under one key. A list answers “which ones”; a map answers “what goes with what”.",
   "sched.actd.map.get": "Reads one key into a variable you name. A missing key stores an empty value — check {map.hit} to tell “not there” from “there and blank”.",
-  "sched.actd.map.clear": "Empties the map without deleting its name."
+  "sched.actd.map.clear": "Empties the map without deleting its name.",
+  "sched.cond.enumIs": "variable is an enum member",
+  "sched.cond.noEnums": "No enum declared yet — add one in the sidebar.",
+  "sched.cond.varPh": "variable",
+  "sched.en.title": "Enums",
+  "sched.en.hint": "A named set of values, so a Switch can be told which ones it has not handled.",
+  "sched.en.empty": "None yet.",
+  "sched.en.namePh": "name",
+  "sched.en.membersPh": "ok, failed, skipped",
+  "sched.en.add": "Add",
+  "sched.en.del": "Delete this enum",
+  "sched.en.noMembers": "An enum needs at least one value."
 }

@@ -7342,5 +7342,16 @@
   "sched.actd.list.clear": "Vide la liste sans supprimer son nom : un ajout ultérieur repart de zéro.",
   "sched.actd.map.set": "Enregistre une valeur sous une clé. Une liste répond « lesquels » ; une table répond « quoi va avec quoi ».",
   "sched.actd.map.get": "Lit une clé dans une variable que vous nommez. Une clé absente enregistre une valeur vide — testez {map.hit} pour distinguer « absente » de « présente et vide ».",
-  "sched.actd.map.clear": "Vide la table sans supprimer son nom."
+  "sched.actd.map.clear": "Vide la table sans supprimer son nom.",
+  "sched.cond.enumIs": "la variable vaut un membre d’enum",
+  "sched.cond.noEnums": "Aucun enum déclaré — ajoutez-en un dans la colonne de gauche.",
+  "sched.cond.varPh": "variable",
+  "sched.en.title": "Enums",
+  "sched.en.hint": "Un ensemble de valeurs nommé, pour qu’un Switch puisse signaler celles qu’il ne traite pas.",
+  "sched.en.empty": "Aucun pour l’instant.",
+  "sched.en.namePh": "nom",
+  "sched.en.membersPh": "ok, echec, ignore",
+  "sched.en.add": "Ajouter",
+  "sched.en.del": "Supprimer cet enum",
+  "sched.en.noMembers": "Un enum a besoin d’au moins une valeur."
 }

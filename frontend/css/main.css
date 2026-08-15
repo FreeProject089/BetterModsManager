@@ -12245,6 +12245,8 @@ body.sched-drag-live .sched-branch .sched-drop-zone:empty {
 .sched-sv-val { color:var(--text-secondary); flex:1; min-width:0;
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .sched-sv-del { flex-shrink:0; opacity:.55; }
+.sched-en-add { display:flex; flex-wrap:wrap; gap:4px; margin-top:7px; }
+.sched-en-add .input { font-size:11px; padding:3px 6px; flex:1; min-width:0; }
 .sched-sv-del:hover { opacity:1; color:var(--danger); }
 .sched-hist-row {
     display:flex; align-items:center; gap:7px; font-size:11px; color:var(--text-secondary);
