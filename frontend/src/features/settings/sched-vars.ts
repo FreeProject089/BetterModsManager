@@ -109,6 +109,43 @@ export function renderVar(val: SchedValue): string {
 }
 
 /**
+ * A variable as a number, for the paths that can only work with one — math expressions and
+ * numeric comparisons.
+ *
+ * This exists because a SHARED variable used to be invisible to every one of them. `var.set`
+ * with scope `shared` writes only `ctx.shared`; the run starts with `nums: {}` and nothing
+ * copies one into the other. So `count + 1` on a shared counter read 0 and evaluated to 1 on
+ * every run, forever, while the same name substituted correctly into a string two lines above.
+ * Nothing errored. That is the failure this whole typed-read seam is for.
+ *
+ * The coercion mirrors what `var.set` already does for run-scope values rather than inventing
+ * a better one: a parseable number is that number, and anything else is its LENGTH. Length is
+ * a strange answer, but it is the answer the run scope has always given, and two rules for
+ * "the number of this text" would be worse than one odd rule.
+ *
+ * Returns undefined for an unknown name so callers keep their own default — `evalExpr` wants
+ * 0, a comparison wants NaN, and collapsing that here would make an absent variable compare
+ * equal to zero.
+ */
+export function readNum(ctx: RunCtx, name: string): number | undefined {
+    // `nums` FIRST, deliberately against readVar's own order. Every numeric path in the
+    // scheduler reads `ctx.nums[name]` today, and a step is free to have written a number
+    // there that is not parseFloat(text) — a version string's part count, a metric with a
+    // formatted label. Consulting text first would silently change what those evaluate to.
+    // Checking nums first makes this purely additive: what resolves today resolves the same,
+    // and only names that resolved to NOTHING gain an answer.
+    if (Object.prototype.hasOwnProperty.call(ctx.nums, name)) return ctx.nums[name];
+    const val = readVar(ctx, name);
+    if (!val) return undefined;
+    if (val.t === 'num') return val.v;
+    // A list's number is its length — the one reading that is never a surprise, and it makes
+    // arithmetic over a collected list work without a separate step.
+    if (val.t === 'list') return val.v.length;
+    const n = parseFloat(val.v);
+    return Number.isFinite(n) ? n : val.v.length;
+}
+
+/**
  * Where a `var.set` writes.
  *
  * `run` disappears when the task finishes; `shared` persists and is visible to every task.

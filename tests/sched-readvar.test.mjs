@@ -12,7 +12,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const { readVar, renderVar, substituteVars } = await import(
+const { readVar, renderVar, readNum, substituteVars } = await import(
     pathToFileURL(join(here, '../frontend/js/features/settings/sched-vars.js')).href
 );
 
@@ -93,5 +93,43 @@ describe('substituteVars keeps its own rule', () => {
     test('an unknown name keeps its braces', () => {
         // Blanking it is how a task deletes the wrong folder.
         assert.deepEqual(substituteVars({ p: 'rm -rf {nope}' }, ctx()), { p: 'rm -rf {nope}' });
+    });
+});
+
+describe('readNum — the shared-variable defect', () => {
+    test('a shared variable resolves as a number', () => {
+        // THE BUG. `var.set` scope:shared writes only ctx.shared; a run starts with nums:{}
+        // and nothing copies between them. So `count + 1` on a shared counter read 0 and
+        // evaluated to 1 on every run, forever, while {count} substituted correctly into a
+        // string two lines above. Nothing errored.
+        assert.equal(readNum(ctx({ shared: { count: '7' } }), 'count'), 7);
+    });
+
+    test('nums wins over text, so nothing that resolves today changes', () => {
+        // A step may have written a number that is not parseFloat(text) — a version's part
+        // count, a metric with a formatted label. Consulting text first would silently
+        // change what those evaluate to.
+        assert.equal(readNum(ctx({ nums: { v: 3 }, text: { v: '1.5.0' } }), 'v'), 3);
+    });
+
+    test('numeric text parses; non-numeric text falls back to its length', () => {
+        // Length is odd, but it is what var.set has always stored for run-scope values, and
+        // two rules for "the number of this text" would be worse than one odd rule.
+        assert.equal(readNum(ctx({ text: { a: '4.5' } }), 'a'), 4.5);
+        assert.equal(readNum(ctx({ text: { a: 'abc' } }), 'a'), 3);
+    });
+
+    test('a list resolves to its length', () => {
+        assert.equal(readNum(ctx({ lists: { xs: ['a', 'b', 'c'] } }), 'xs'), 3);
+    });
+
+    test('an unknown name is undefined so each caller keeps its own default', () => {
+        // evalExpr wants 0 and a comparison wants NaN. Collapsing that here would make an
+        // absent variable compare equal to zero.
+        assert.equal(readNum(ctx(), 'nope'), undefined);
+    });
+
+    test('zero survives as zero, not as missing', () => {
+        assert.equal(readNum(ctx({ nums: { z: 0 } }), 'z'), 0);
     });
 });

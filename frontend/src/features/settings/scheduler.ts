@@ -14,7 +14,7 @@ import { t } from '../../core/i18n.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { toast } from '../../ui/app.js';
 import { calendarDue, nextCalendarDue } from './sched-time.js';
-import { substituteVars, VAR_NAME_RE, parseList, type RunCtx } from './sched-vars.js';
+import { substituteVars, VAR_NAME_RE, parseList, readNum, type RunCtx } from './sched-vars.js';
 import { parseHeaderLines, readJsonPath, statusIsFailure } from './http-action.js';
 import { inspectBmmpa } from './bmmpa-inspect.js';
 import { parsePresetFeed, looksLikePresetFeed, readPresetCatalogs, writePresetCatalogs } from './preset-catalog.js';
@@ -1075,7 +1075,7 @@ async function runAction(action: Action, task: Task, ctx: RunCtx): Promise<void>
             break;
         }
         case 'rule.table': {                       // first matching rule sets target
-            const src = Number(ctx.nums[String(p.source || '')] ?? NaN);
+            const src = readNum(ctx, String(p.source || '')) ?? NaN;
             const target = String(p.target || 'result');
             for (const r of (Array.isArray(p.rows) ? p.rows : [])) {
                 if (cmpNum(src, r.op, Number(r.value))) { ctx.nums[target] = Number(r.result) || 0; break; }
@@ -1326,7 +1326,7 @@ async function evalConditionRaw(cond: Condition, ctx: RunCtx): Promise<boolean> 
         case 'always': return true;
         case 'value': {
             // Compare a captured value (e.g. disk.write_mbps, benchmark.mbps) to a threshold.
-            const left = Number(ctx.nums[String(p.source)] ?? NaN);
+            const left = readNum(ctx, String(p.source)) ?? NaN;
             const right = Number(p.value);
             if (Number.isNaN(left)) return false;
             switch (p.op) {
@@ -1551,7 +1551,7 @@ function evalExpr(expr: string, ctx: RunCtx): number {
                 const f = _MATH_FUNCS[t.toLowerCase()]; if (!f) throw new Error('fn ' + t);
                 return f(...args);
             }
-            return Number(ctx.nums[t] ?? 0);
+            return readNum(ctx, t) ?? 0;
         }
         throw new Error('tok ' + t);
     };
