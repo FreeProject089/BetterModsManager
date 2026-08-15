@@ -7159,5 +7159,9 @@
   "sched.pc.tasks": "automations",
   "sched.pc.inspect": "Inspect",
   "sched.pc.loading": "Fetching…",
-  "sched.pc.skipped": "{n} skipped"
+  "sched.pc.skipped": "{n} skipped",
+  "sched.sv.title": "Shared variables",
+  "sched.sv.hint": "Kept between runs and readable by every task.",
+  "sched.sv.empty": "None yet — a “Set variable” step with scope “shared” puts one here.",
+  "sched.sv.del": "Delete this shared variable"
 }

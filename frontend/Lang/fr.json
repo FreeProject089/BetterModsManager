@@ -7304,5 +7304,9 @@
   "repo.cat.pick.none": "Tout désélectionner",
   "repo.cat.pick.export": "Exporter {n}",
   "sched.spawned": "Lancée en arrière-plan",
-  "sched.spawnBusy": "Cette tâche tourne déjà — elle n’a pas été relancée."
+  "sched.spawnBusy": "Cette tâche tourne déjà — elle n’a pas été relancée.",
+  "sched.sv.title": "Variables partagées",
+  "sched.sv.hint": "Conservées entre les exécutions et lisibles par toutes les tâches.",
+  "sched.sv.empty": "Aucune pour l’instant — une étape « Définir une variable » en portée « partagée » en ajoute une ici.",
+  "sched.sv.del": "Supprimer cette variable partagée"
 }

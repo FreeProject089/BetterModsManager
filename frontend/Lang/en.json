@@ -7306,5 +7306,9 @@
   "repo.cat.pick.none": "Select none",
   "repo.cat.pick.export": "Export {n}",
   "sched.spawned": "Started in the background",
-  "sched.spawnBusy": "That task is already running — not started again."
+  "sched.spawnBusy": "That task is already running — not started again.",
+  "sched.sv.title": "Shared variables",
+  "sched.sv.hint": "Kept between runs and readable by every task.",
+  "sched.sv.empty": "None yet — a “Set variable” step with scope “shared” puts one here.",
+  "sched.sv.del": "Delete this shared variable"
 }

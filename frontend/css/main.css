@@ -12225,6 +12225,27 @@ body.sched-drag-live .sched-branch .sched-drop-zone:empty {
 .sched-modal .sched-delay-body { display:inline-flex; align-items:center; gap:6px; }
 /* Recent-runs list (edit modal sidebar). */
 .sched-history { display:flex; flex-direction:column; gap:4px; }
+
+/* Shared variables, listed in the editor sidebar.
+   Borrows the history row's shape on purpose: same sidebar, same kind of content (a short
+   scannable list of past facts), so a second visual language here would be noise. */
+.sched-sv { margin-top:16px; padding-top:14px; border-top:1px solid var(--border); }
+.sched-sv-title { font-size:11px; font-weight:700; letter-spacing:.04em; text-transform:uppercase;
+    color:var(--text-secondary); margin-bottom:3px; }
+.sched-sv-hint { font-size:10.5px; color:var(--text-muted); margin-bottom:8px; line-height:1.35; }
+.sched-sv-empty { font-size:11px; color:var(--text-muted); line-height:1.4; }
+.sched-sv-row {
+    display:flex; align-items:center; gap:7px; font-size:11px;
+    padding:5px 9px; border:1px solid var(--border); border-radius:8px;
+    background:var(--bmm-s02, rgba(255,255,255,0.02)); margin-bottom:4px;
+}
+.sched-sv-name { color:var(--text-primary); font-weight:600; flex-shrink:0; max-width:40%;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+/* min-width:0 or a long unbroken value pushes the delete button out of the sidebar. */
+.sched-sv-val { color:var(--text-secondary); flex:1; min-width:0;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.sched-sv-del { flex-shrink:0; opacity:.55; }
+.sched-sv-del:hover { opacity:1; color:var(--danger); }
 .sched-hist-row {
     display:flex; align-items:center; gap:7px; font-size:11px; color:var(--text-secondary);
     padding:5px 9px; border:1px solid var(--border); border-radius:8px;

@@ -2186,6 +2186,59 @@ function refreshSummary(modal: HTMLElement): void {
     if (el) el.textContent = draftSummary();
 }
 
+/**
+ * The shared variables, listed.
+ *
+ * `var.set` with scope `shared` has always persisted across runs and across tasks, and nothing
+ * ever showed you what was in there — `readSharedVars` had six callers, all of them the run
+ * context or var.set/var.clear, and not one of them rendered. So the only way to discover that
+ * a name was taken was to overwrite it, and the only way to discover a typo was a task reading
+ * a variable that silently substituted to itself.
+ *
+ * Appended to the sidebar after the modal's markup is built rather than woven into that
+ * template literal: this panel has to re-render on its own whenever a variable is deleted, and
+ * a section that owns its own DOM can do that without rebuilding — and without editing the
+ * whole task editor to add a list.
+ */
+function renderSharedVarsPanel(modal: HTMLElement): void {
+    const side = modal.querySelector('.sched-side');
+    if (!side) return;
+    const host = (side.querySelector('.sched-sv') as HTMLElement) || (() => {
+        const el = document.createElement('div');
+        el.className = 'sched-sv';
+        side.appendChild(el);
+        return el;
+    })();
+
+    const all = readSharedVars();
+    const names = Object.keys(all).sort();
+    // The value is shown, not hidden. These are the user's own automation variables, and a
+    // list of names with no values answers "is it set" but never "is it right" — which is the
+    // question you actually have when a task built the wrong path.
+    const rows = names.map((n) => `
+        <div class="sched-sv-row">
+            <code class="sched-sv-name">${escHtml(n)}</code>
+            <span class="sched-sv-val" data-tooltip="${escAttr(all[n])}">${escHtml(all[n].length > 40 ? all[n].slice(0, 40) + '…' : all[n])}</span>
+            <button type="button" class="btn btn-ghost btn-xs sched-sv-del" data-name="${escAttr(n)}"
+                data-tooltip="${escAttr(t('sched.sv.del') || 'Delete this shared variable')}">${SCHED_X}</button>
+        </div>`).join('');
+
+    host.innerHTML = `
+        <div class="sched-sv-title">${t('sched.sv.title') || 'Shared variables'}</div>
+        <div class="sched-sv-hint">${t('sched.sv.hint') || 'Kept between runs and readable by every task.'}</div>
+        ${names.length ? rows : `<div class="sched-sv-empty">${t('sched.sv.empty') || 'None yet — a “Set variable” step with scope “shared” puts one here.'}</div>`}`;
+
+    host.querySelectorAll('.sched-sv-del').forEach((btn) => btn.addEventListener('click', () => {
+        const name = (btn as HTMLElement).dataset.name || '';
+        const store = readSharedVars();
+        delete store[name];
+        writeSharedVars(store);
+        // Re-render this panel only. Rebuilding the modal here would throw away whatever the
+        // user has typed into the draft, to remove one row from a list.
+        renderSharedVarsPanel(modal);
+    }));
+}
+
 function renderModal(modal: HTMLElement): void {
     modal.innerHTML = `
       <div class="modal glass sched-modal sched-full">
@@ -2316,6 +2369,7 @@ function renderModal(modal: HTMLElement): void {
         </div>
       </div>`;
 
+    renderSharedVarsPanel(modal);
     modal.querySelector('#sched-close')?.addEventListener('click', () => modal.classList.remove('open'));
     modal.querySelector('#sched-cancel')?.addEventListener('click', () => modal.classList.remove('open'));
     modal.querySelector('#sched-preset-catalog')?.addEventListener('click', () => { void browsePresetCatalogs(); });
