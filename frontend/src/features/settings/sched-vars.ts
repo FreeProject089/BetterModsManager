@@ -47,6 +47,68 @@ export interface RunCtx {
 }
 
 /**
+ * A run-time value, carrying its own type.
+ *
+ * The four bags above each exist for a real reason, and none of them is going away yet. But
+ * they mean a variable's type is decided by WHICH BAG somebody wrote it into, and the same
+ * name can sit in two bags at once — which is fine for substituting into a string (there is a
+ * precedence rule, and it is correct) and useless for branching on a value, because "whatever
+ * the first bag holding this name says" is not a type.
+ *
+ * `match`, `enum`, `maps` and `result` all need a value whose shape is knowable. This is that
+ * shape. It is introduced here first, as the single way to READ a variable, so the storage can
+ * migrate to it later without every reader changing twice.
+ *
+ * See .Assets/.md/SCHEDULER_TYPES_DESIGN.md for where this is going.
+ */
+export type SchedValue =
+    | { t: 'text'; v: string }
+    | { t: 'num'; v: number }
+    | { t: 'list'; v: string[] };
+
+/**
+ * Resolve a name to a typed value — the one place that knows the precedence.
+ *
+ * The order is the one `substituteVars` has always used, moved here rather than reinvented:
+ * this run's captured text, then this run's number, then a stored `shared` value. A step that
+ * captured `path` two lines up must not read some other task's `path` from last Tuesday.
+ *
+ * Lists are checked FIRST because they are the one shape a string cannot impersonate. A list
+ * and a text can share a name today — `list.set('x')` and a capture into `x` write different
+ * bags — and for a caller asking "what is x", the list is the answer that carries more
+ * information. Substitution deliberately does not use this rule; see below.
+ *
+ * Returns undefined for an unknown name, never a default. A caller that wants "" or 0 can say
+ * so; one that gets it silently cannot tell an empty value from a missing one, and that
+ * difference is the whole point of asking.
+ */
+export function readVar(ctx: RunCtx, name: string): SchedValue | undefined {
+    if (ctx.lists && Object.prototype.hasOwnProperty.call(ctx.lists, name)) {
+        return { t: 'list', v: ctx.lists[name] };
+    }
+    if (Object.prototype.hasOwnProperty.call(ctx.text, name)) return { t: 'text', v: ctx.text[name] };
+    if (Object.prototype.hasOwnProperty.call(ctx.nums, name)) return { t: 'num', v: ctx.nums[name] };
+    if (ctx.shared && Object.prototype.hasOwnProperty.call(ctx.shared, name)) {
+        return { t: 'text', v: ctx.shared[name] };
+    }
+    return undefined;
+}
+
+/**
+ * A value as it appears inside a string parameter.
+ *
+ * A list renders as JSON rather than `a,b,c` so that pasting it back into a step that reads a
+ * list round-trips exactly — `parseList` prefers JSON, and a comma-joined list loses any item
+ * that contained a comma. `[object Object]` was never a possibility here and must not become
+ * one when maps arrive.
+ */
+export function renderVar(val: SchedValue): string {
+    if (val.t === 'num') return String(val.v);
+    if (val.t === 'list') return JSON.stringify(val.v);
+    return val.v;
+}
+
+/**
  * Where a `var.set` writes.
  *
  * `run` disappears when the task finishes; `shared` persists and is visible to every task.
@@ -78,6 +140,13 @@ export const VAR_NAME_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
  *
  * Returns a new object; the caller's params are never mutated, because they are the saved
  * task and rewriting them would bake one run's values into the stored definition.
+ *
+ * Deliberately NOT written in terms of `readVar`, though it resolves the same three bags in
+ * the same order. `readVar` also answers for lists; this does not, and must not start to. A
+ * task saved today where `{x}` names a list leaves the braces alone, and somebody is relying
+ * on that — quietly turning it into `["a","b"]` inside a path or a command line is the kind of
+ * change that is invisible in review and destructive at run time. When the storage migrates to
+ * typed values, THIS is the function whose behaviour has to be pinned first.
  */
 export function substituteVars(params: Record<string, any>, ctx: RunCtx): Record<string, any> {
     const rep = (v: any): any => {
