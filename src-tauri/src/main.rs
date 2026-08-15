@@ -703,6 +703,7 @@ fn main() {
             commands::plugins::get_plugin_permissions,
             commands::plugins::get_api_token,
             commands::plugins::get_effective_api_port,
+            commands::plugins::get_api_status,
             commands::plugins::restart_api_server,
             commands::plugins::create_plugin_token,
             commands::plugins::revoke_plugin_token,

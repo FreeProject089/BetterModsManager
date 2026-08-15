@@ -41,10 +41,23 @@ export function parseInvokes(src: string): InvokeUse[] {
     const text = stripComments(String(src));
     const out: InvokeUse[] = [];
     const lineOf = (i: number) => text.slice(0, i).split('\n').length;
+
+    // Names that ARE invoke under another name.
+    //
+    // `const { invoke: inv } = await import('../core/api.js')` and
+    // `const inv = typeof invoke !== 'undefined' ? invoke : …` both make `inv(...)` a real
+    // call, and matching only the literal word missed them. app.ts called
+    // get_effective_api_port through exactly that alias, and this tool reported the command
+    // as having no frontend caller — a wrong entry on the one list it publishes.
+    const aliases = new Set<string>(['invoke', '_invoke']);
+    for (const m of text.matchAll(/\binvoke\s*(?::|as)\s*([A-Za-z_$][\w$]*)/g)) aliases.add(m[1]);
+    for (const m of text.matchAll(/\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=[^;\n]*\binvoke\b/g)) aliases.add(m[1]);
+    const NAMES = [...aliases].map((a) => a.replace(/[$]/g, '\\$')).join('|');
     // `_invoke` too: core/api.ts calls the raw Tauri bridge directly for log_frontend_line,
     // to avoid the wrapper's own logging recursing forever. It is a real call to a real
     // command, and a map that misses it lists that command as having no caller.
-    for (const m of text.matchAll(/(\bfunction\s+|\bconst\s+|\.)?\b_?invoke(?:<[^>]*>)?\s*\(\s*([^),]*)/g)) {
+    const CALL = new RegExp(`(\\bfunction\\s+|\\bconst\\s+|\\.)?\\b(?:${NAMES})(?:<[^>]*>)?\\s*\\(\\s*([^),]*)`, 'g');
+    for (const m of text.matchAll(CALL)) {
         // `export async function invoke(command: string, …)` is the wrapper's DECLARATION in
         // core/api.ts, not a call. Counting it reported the one file that defines the bridge
         // as having a dynamic invoke — a finding about the tool, dressed as a finding about

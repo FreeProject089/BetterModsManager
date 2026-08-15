@@ -46,6 +46,29 @@ describe('parseInvokes', () => {
         assert.deepEqual(parseInvokes("_invoke('log_frontend_line', {});").map((u) => u.name), ['log_frontend_line']);
     });
 
+    test('an ALIASED invoke is still a call', () => {
+        // `const { invoke: inv } = await import('../core/api.js')` and
+        // `const inv = typeof invoke !== 'undefined' ? invoke : …` both make `inv(...)` real.
+        // Matching only the literal word missed them, and app.ts reached
+        // get_effective_api_port through exactly that — so the command appeared on the
+        // "no frontend caller" list, which is the one list this tool publishes.
+        const destructured = [
+            "const { invoke: inv } = await import('../core/api.js');",
+            "inv('get_effective_api_port');",
+        ].join('\n');
+        assert.deepEqual(parseInvokes(destructured).map((u) => u.name), ['get_effective_api_port']);
+
+        const assigned = [
+            "const inv = typeof invoke !== 'undefined' ? invoke : w.core.invoke;",
+            "inv('scan_mods');",
+        ].join('\n');
+        assert.deepEqual(parseInvokes(assigned).map((u) => u.name), ['scan_mods']);
+    });
+
+    test('an unrelated function is not mistaken for invoke', () => {
+        assert.deepEqual(parseInvokes("fetchThings('scan_mods');"), []);
+    });
+
     test('a call in a comment is not a call', () => {
         assert.deepEqual(parseInvokes("// invoke('ghost_command');"), []);
     });

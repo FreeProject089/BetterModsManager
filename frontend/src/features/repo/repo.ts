@@ -1117,6 +1117,21 @@ export function initRepo() {
                 contentEl.style.display = 'block';
             } catch (err) {
                 console.error('Failed to fetch repo list:', err);
+                // "No repositories yet" and "the server is refusing to answer" are different
+                // facts, and showing the first for the second is how a two-hour outage reads
+                // as an empty catalogue. fetch_remote_json already surfaces the real HTTP
+                // status (that is why it exists rather than a webview fetch) — so use it.
+                const msg = String((err as any)?.message ?? err ?? '');
+                const status = msg.match(/HTTP (\d{3})/)?.[1];
+                const reason = status
+                    ? {
+                        title: t('repo.browse.down', 'The repository list is unavailable right now'),
+                        detail: t('repo.browse.downdetail', 'BetterCommunity answered HTTP {s}. This is the server, not your connection — try again shortly.').replace('{s}', status),
+                      }
+                    : {
+                        title: t('repo.browse.empty', 'No repositories available yet'),
+                        detail: t('repo.browse.emptydetail', 'The repository list will be available soon'),
+                      };
                 // Show empty state message instead of error
                 loadingEl.style.display = 'none';
                 contentEl.style.display = 'block';
@@ -1127,8 +1142,8 @@ export function initRepo() {
                             <line x1="2" y1="12" x2="22" y2="12"></line>
                             <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
                         </svg>
-                        <p style="margin-top:16px; font-size:13px;">No repositories available yet</p>
-                        <p style="font-size:11px; opacity:0.7;">The repository list will be available soon</p>
+                        <p style="margin-top:16px; font-size:13px;">${escHtml(reason.title)}</p>
+                        <p style="font-size:11px; opacity:0.7;">${escHtml(reason.detail)}</p>
                     </div>
                 `;
             }

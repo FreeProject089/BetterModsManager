@@ -1,8 +1,26 @@
 // @ts-nocheck
-import { invoke, pickFile, saveFile, pickFolder, convertFileSrc, apiBase } from '../../core/api.js';
+import { invoke, pickFile, saveFile, pickFolder, convertFileSrc, apiBase, apiRunning } from '../../core/api.js';
 import { toast, fetchProfileIconPaths, updateSelectProfileIcon, decorateProfileOptions, toastSaved } from '../../ui/app.js';
 import { t, getLang } from '../../core/i18n.js';
 import { escHtml, escAttr } from '../../core/utils.js';
+
+/**
+ * The modpack list from the LOCAL plugin API, or an empty list.
+ *
+ * The API is optional and its bind can fail — a zombie instance from a previous run still
+ * holding the port. Every call site already caught the exception and fell back to `[]`, but
+ * catching does not stop the BROWSER logging `ERR_CONNECTION_REFUSED`, so a session with no
+ * API produced one console error per feature that asked, and the real cause sat in the crash
+ * log. Asking only when something is listening is the fix; the fallback stays identical.
+ */
+async function fetchModpacks(init?: RequestInit): Promise<any[]> {
+    if (!apiRunning()) return [];
+    try {
+        const r = await fetch(apiBase() + '/api/modpacks', init);
+        return (await r.json().catch(() => ({}))).data || [];
+    } catch { return []; }
+}
+
 import { dispatchBmmAction, BMM_ACTIONS } from '../../ui/tutorial-events.js';
 import { getLinks } from '../../core/links-config.js';
 
@@ -132,9 +150,7 @@ export async function initPlugins() {
     // Keep _allModpacks in sync when any modpack is created/updated/deleted
     window.addEventListener('bmm://modpacks-updated', async () => {
         try {
-            const mpRes  = await fetch(apiBase() + '/api/modpacks');
-            const mpJson = await mpRes.json().catch(() => ({}));
-            _allModpacks = mpJson.data || [];
+            _allModpacks = await fetchModpacks();
         } catch { _allModpacks = []; }
     });
 }
@@ -207,9 +223,7 @@ async function loadInitialData() {
                 (a.name || a.id).localeCompare(b.name || b.id));
         } catch { _allModsAll = _allMods.slice(); }
         try {
-            const mpRes = await fetch(apiBase() + '/api/modpacks');
-            const mpJson = await mpRes.json().catch(() => ({}));
-            _allModpacks = mpJson.data || [];
+            _allModpacks = await fetchModpacks();
         } catch { _allModpacks = []; }
     } catch (e) {
         console.error('[PLUGINS] loadInitialData error:', e);
@@ -916,11 +930,10 @@ async function _refreshUqtData(): Promise<void> {
         try { _allTasks = await (await import('../settings/scheduler.js')).getTasks(); } catch { _allTasks = []; }
         try {
             const liveTok = (document.getElementById('plug-token-display') as HTMLInputElement)?.value?.trim() || _apiToken;
-            const mpRes = await fetch(apiBase() + '/api/modpacks', {
+            _allModpacks = await fetchModpacks({
                 headers: { 'Authorization': `Bearer ${liveTok}` },
                 signal: AbortSignal.timeout(3000),   // unreachable API must not hang the UI
             });
-            _allModpacks = (await mpRes.json().catch(() => ({}))).data || [];
         } catch { _allModpacks = []; }
     } catch { /* best effort */ }
 }
@@ -1132,9 +1145,7 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
             invoke('get_installed_plugins'),
         ]);
         try {
-            const mpRes  = await fetch(apiBase() + '/api/modpacks');
-            const mpJson = await mpRes.json().catch(() => ({}));
-            _allModpacks = mpJson.data || [];
+            _allModpacks = await fetchModpacks();
         } catch { _allModpacks = []; }
     } catch (e) { console.warn('[PLUGINS] qt data refresh failed', e); }
 

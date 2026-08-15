@@ -27,6 +27,32 @@ export function setApiPort(p: number): void {
     _apiPort = p;
     localStorage.setItem('bmm_api_port', String(p));
 }
+
+// Is anything actually LISTENING on that port?
+//
+// The port is only which one the server tried. Binding can fail — a zombie instance from a
+// previous run still holds it — and the Rust side degrades gracefully and writes one line to
+// the crash log. The frontend never knew: it read the cached port and fetched, so every
+// feature that touched the API logged its own ERR_CONNECTION_REFUSED and the real cause was
+// in a file nobody opens.
+//
+// Starts FALSE and is corrected at boot. A wrong "off" costs one skipped fetch; a wrong "on"
+// costs the console noise this exists to remove.
+let _apiRunning = false;
+export function apiRunning(): boolean { return _apiRunning; }
+
+/** Ask the backend for the truth, once, at boot. */
+export async function refreshApiStatus(): Promise<void> {
+    try {
+        const s = await invoke('get_api_status', {}, { quiet: true }) as { port?: number; running?: boolean };
+        if (s?.port) setApiPort(s.port);
+        _apiRunning = !!s?.running;
+    } catch {
+        // An old backend without the command, or a bridge that is not up yet. Assume off:
+        // the callers all degrade to an empty list, which is what they did anyway.
+        _apiRunning = false;
+    }
+}
 let _dialog: any = null;
 let _notifModule: any = null;
 let _convertFileSrc: ((path: string) => string) | null = null;

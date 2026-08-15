@@ -388,6 +388,24 @@ pub fn get_effective_api_port() -> u16 {
     crate::api::api_port()
 }
 
+/// The port AND whether anything is listening on it.
+///
+/// The doc comment above says the frontend must use the effective port, and the frontend
+/// never asked — it read a cached value from localStorage and fetched blindly. When the bind
+/// had failed (a zombie instance still holding the port) every feature that touched the API
+/// logged ERR_CONNECTION_REFUSED, and the only record of the real cause was one line in the
+/// crash log nobody reads.
+///
+/// Two fields rather than a port of 0 for "off": `api_port()` is also read by the script
+/// generators, which want the configured port whatever happened to the bind.
+#[tauri::command]
+pub fn get_api_status() -> serde_json::Value {
+    serde_json::json!({
+        "port": crate::api::api_port(),
+        "running": crate::api::api_running(),
+    })
+}
+
 /// Stop the running Plugin API server and re-spawn it on the CURRENT
 /// `settings.api_port`, so changing the port takes effect immediately without a
 /// full app restart. Returns the port it actually bound (read it back to refresh

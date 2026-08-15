@@ -18,6 +18,19 @@ pub const API_PORT: u16 = 51274;   // default — actual port is configurable in
 /// Script generators and commands read this so everything follows the setting.
 static EFFECTIVE_API_PORT: std::sync::atomic::AtomicU16 = std::sync::atomic::AtomicU16::new(51274);
 pub fn api_port() -> u16 { EFFECTIVE_API_PORT.load(Ordering::Relaxed) }
+
+/// Whether the server actually BOUND, as opposed to which port it tried.
+///
+/// The port is stored before the bind is attempted, so `api_port()` answers "which port was
+/// configured" and has always answered it even when nothing was listening — after a failed
+/// bind (a zombie instance holding it) the frontend went on fetching that port and filling
+/// the console with ERR_CONNECTION_REFUSED, one line per feature that asked.
+///
+/// The two questions are separate, so they get separate answers: script generators still want
+/// the configured port whatever happened, and the UI wants to know whether calling it is
+/// worth doing.
+static API_RUNNING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+pub fn api_running() -> bool { API_RUNNING.load(Ordering::Relaxed) }
 #[derive(Serialize)]
 struct ApiError {
     error: String,
@@ -2924,8 +2937,10 @@ pub async fn start_api_server(
         shutdown_rx.await.ok();
     }) {
         Ok((_, server)) => {
+            API_RUNNING.store(true, Ordering::Relaxed);
             crate::commands::crash::log_line(format!("[PLUGIN-API] Server started on http://127.0.0.1:{}", port));
             server.await;
+            API_RUNNING.store(false, Ordering::Relaxed);
             crate::commands::crash::log_line("[PLUGIN-API] Server stopped.".to_string());
         }
         Err(e) => {

@@ -7293,5 +7293,9 @@
   "mg.repeat": "déjà vu plus haut",
   "mg.conflicts": "{n} conflit(s)",
   "mg.none": "Aucun mod à dessiner.",
-  "mg.failed": "Impossible de lire la liste des mods"
+  "mg.failed": "Impossible de lire la liste des mods",
+  "repo.browse.down": "La liste des dépôts est indisponible pour le moment",
+  "repo.browse.downdetail": "BetterCommunity a répondu HTTP {s}. C’est le serveur, pas votre connexion — réessayez sous peu.",
+  "repo.browse.empty": "Aucun dépôt disponible pour l’instant",
+  "repo.browse.emptydetail": "La liste des dépôts sera bientôt disponible"
 }

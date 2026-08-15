@@ -1033,13 +1033,15 @@ async function main() {
 
     // ── Apply sound settings from config ──
     try {
-        const { getSettings, setApiPort, invoke: inv } = await import('../core/api.js');
+        const { getSettings, refreshApiStatus } = await import('../core/api.js');
         const cfg = await getSettings();
-        // Sync apiBase() with the port the server ACTUALLY bound this session —
-        // not settings.api_port, which may have been changed and needs a restart.
+        // Sync apiBase() with the port the server ACTUALLY bound this session — not
+        // settings.api_port, which may have been changed and needs a restart — AND with
+        // whether it bound at all. The port alone was never enough: a failed bind left every
+        // caller fetching a port nothing was listening on.
         try {
-            const p = await inv('get_effective_api_port');
-            if (p) { setApiPort(p as number); applyTranslations(); }   // re-sub port in docs examples
+            await refreshApiStatus();
+            applyTranslations();   // re-sub the port in the docs examples
         } catch {}
         const soundEnabled = cfg.sound_effects_enabled !== false;
         const soundVol = (cfg.sound_volume ?? 70) / 100;

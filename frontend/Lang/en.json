@@ -7295,5 +7295,9 @@
   "mg.repeat": "seen above",
   "mg.conflicts": "{n} conflict(s)",
   "mg.none": "No mods to draw.",
-  "mg.failed": "Could not read the mod list"
+  "mg.failed": "Could not read the mod list",
+  "repo.browse.down": "The repository list is unavailable right now",
+  "repo.browse.downdetail": "BetterCommunity answered HTTP {s}. This is the server, not your connection — try again shortly.",
+  "repo.browse.empty": "No repositories available yet",
+  "repo.browse.emptydetail": "The repository list will be available soon"
 }
