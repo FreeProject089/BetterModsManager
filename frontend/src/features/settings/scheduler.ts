@@ -3318,6 +3318,36 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
         </div>`;
         void paintEngineStatus(host, eng);
     }
+    // The three list actions had no branch here at all. `renderParams` only assigns
+    // host.innerHTML inside a matching branch, so picking "List — set it" left the PREVIOUS
+    // action's fields on screen: the list name and value could never be typed, and the step
+    // silently ran against the default name with an empty value. The actions worked; the
+    // editor could not reach them.
+    //
+    // Reuses .sched-p-varname / .sched-p-varvalue because the generic wiring at the end of
+    // this function already maps them to params.name / params.value — which is exactly what
+    // list.set, list.push and list.clear read.
+    else if (needs === 'listSet' || needs === 'listPush' || needs === 'listName') {
+        const nameField = `
+            <label class="sched-cmd-label">${t('sched.list.name') || '1. List name'}</label>
+            <input class="input sched-p-varname" spellcheck="false"
+                placeholder="${escAttr(t('sched.list.namePh') || 'e.g. mods — read back as {list.mods.length}')}"
+                value="${escAttr(params.name || '')}">`;
+        const valueField = needs === 'listName' ? '' : `
+            <label class="sched-cmd-label">${needs === 'listPush'
+                ? (t('sched.list.item') || '2. Item to add')
+                : (t('sched.list.value') || '2. Items')}</label>
+            <textarea class="input sched-p-varvalue" rows="2" spellcheck="false"
+                placeholder="${escAttr(needs === 'listPush'
+                    ? (t('sched.list.itemPh') || 'One value. {variables} are substituted first.')
+                    : (t('sched.list.valuePh') || 'A JSON array, or a, b, c. {variables} are substituted first.'))}">${escHtml(params.value || '')}</textarea>`;
+        // Only "set it" splits anything, so only it offers a separator.
+        const sepField = needs !== 'listSet' ? '' : `
+            <label class="sched-cmd-label">${t('sched.list.sep') || '3. Separator'}</label>
+            <input class="input sched-p-listsep" spellcheck="false" style="max-width:120px"
+                placeholder="," value="${escAttr(params.sep || '')}">`;
+        host.innerHTML = `<div class="sched-cmd-builder">${nameField}${valueField}${sepField}</div>`;
+    }
     else if (needs === 'varSet') {
         const shared = params.scope === 'shared';
         host.innerHTML = `
@@ -3539,6 +3569,7 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
     // which is how the existing bindings already work.
     host.querySelector('.sched-p-varname')?.addEventListener('input', (e) => { params.name = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-p-varvalue')?.addEventListener('input', (e) => { params.value = (e.target as HTMLTextAreaElement).value; });
+    host.querySelector('.sched-p-listsep')?.addEventListener('input', (e) => { params.sep = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-p-varscope')?.addEventListener('change', (e) => { params.scope = (e.target as HTMLSelectElement).value; });
     host.querySelector('.sched-p-method')?.addEventListener('change', (e) => { params.method = (e.target as HTMLSelectElement).value; });
     host.querySelector('.sched-p-url')?.addEventListener('input', (e) => { params.url = (e.target as HTMLInputElement).value; });

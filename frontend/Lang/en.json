@@ -7310,5 +7310,12 @@
   "sched.sv.title": "Shared variables",
   "sched.sv.hint": "Kept between runs and readable by every task.",
   "sched.sv.empty": "None yet — a “Set variable” step with scope “shared” puts one here.",
-  "sched.sv.del": "Delete this shared variable"
+  "sched.sv.del": "Delete this shared variable",
+  "sched.list.name": "1. List name",
+  "sched.list.namePh": "e.g. mods — read back as {list.mods.length}",
+  "sched.list.value": "2. Items",
+  "sched.list.valuePh": "A JSON array, or a, b, c. {variables} are substituted first.",
+  "sched.list.item": "2. Item to add",
+  "sched.list.itemPh": "One value. {variables} are substituted first.",
+  "sched.list.sep": "3. Separator"
 }

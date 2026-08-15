@@ -7308,5 +7308,12 @@
   "sched.sv.title": "Variables partagées",
   "sched.sv.hint": "Conservées entre les exécutions et lisibles par toutes les tâches.",
   "sched.sv.empty": "Aucune pour l’instant — une étape « Définir une variable » en portée « partagée » en ajoute une ici.",
-  "sched.sv.del": "Supprimer cette variable partagée"
+  "sched.sv.del": "Supprimer cette variable partagée",
+  "sched.list.name": "1. Nom de la liste",
+  "sched.list.namePh": "ex. mods — relu via {list.mods.length}",
+  "sched.list.value": "2. Éléments",
+  "sched.list.valuePh": "Un tableau JSON, ou a, b, c. Les {variables} sont substituées avant.",
+  "sched.list.item": "2. Élément à ajouter",
+  "sched.list.itemPh": "Une seule valeur. Les {variables} sont substituées avant.",
+  "sched.list.sep": "3. Séparateur"
 }
