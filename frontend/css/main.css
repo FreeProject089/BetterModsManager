@@ -10445,12 +10445,16 @@ body.tasky-hidden .titlebar-left .titlebar-version {
    whether BMM ships `zip` meant scrolling past forty things nobody asked about, on a modal
    wide enough for three. minmax(220px, 1fr) so it collapses to one column when narrow
    rather than squeezing three unreadable ones. */
+/* ONE scrollbar for the modal, not one per section.
+   Each section used to be a 400px box with its own `overflow-y: auto`, inside a 600px modal
+   that fitted two columns — so the fifty backend crates arrived as a two-wide list in a
+   window six rows tall, with a second scrollbar nested inside the first. Reading it meant
+   scrolling a little box inside a big box, and the section below was always cut off.
+   The sections are now their natural height and the modal body scrolls once. */
 .stack-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
     gap: 15px;
-    max-height: 400px;
-    overflow-y: auto;
     padding-right: 10px;
 }
 
@@ -16592,6 +16596,11 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 
 /* Catalogue index sources you keep. A list rather than one remembered field: somebody
    following two communities should not have to choose which address survives. */
+/* The preview/result line. It carried only a font-size inline and NO colour token, so it
+   inherited whatever the surface happened to give it — fine on the dark card it was built
+   against, and the wrong colour anywhere the surface changed. Text gets a text token. */
+.cat-index-result { margin-top: 10px; font-size: 12px; color: var(--text-secondary); }
+.cat-index-result:empty { display: none; }
 .cat-index-list { margin-top: 12px; }
 .cat-index-list-title { font-size: 11px; color: var(--text-muted); margin-bottom: 5px; }
 .cat-index-row { display: flex; align-items: center; gap: 8px; padding: 5px 0;

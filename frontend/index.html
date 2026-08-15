@@ -3656,7 +3656,7 @@
                                 <button class="btn btn-primary" id="cat-index-import" disabled
                                     data-i18n="settings.catIndex.import">Import</button>
                             </div>
-                            <div id="cat-index-result" style="margin-top:10px; font-size:12px"></div>
+                            <div id="cat-index-result" class="cat-index-result"></div>
                             <!-- Sources kept between sessions. One field that forgot the last
                                  address meant re-pasting it every time, and somebody following
                                  two communities had to choose which one to keep. -->
@@ -7726,7 +7726,7 @@
         <div id="modal-stack" class="modal-generic-overlay"
             onclick="if(event.target === this) this.classList.remove('open')">
             <div class="modal glass"
-                style="width: 600px; max-width: 95vw; border-radius: 24px; border: 1px solid var(--bmm-s15); box-shadow: 0 30px 90px rgba(0, 0, 0, 0.7); position: relative;">
+                style="width: 1080px; max-width: 95vw; max-height: 88vh; display: flex; flex-direction: column; border-radius: 24px; border: 1px solid var(--bmm-s15); box-shadow: 0 30px 90px rgba(0, 0, 0, 0.7); position: relative;">
                 <button class="modal-close" onclick="document.getElementById('modal-stack').classList.remove('open')"
                     style="position: absolute; top: 20px; right: 20px; width: 36px; height: 36px; border-radius: 12px; background: var(--bmm-s05); color: var(--bmm-text-muted); display: flex; align-items: center; justify-content: center; transition: all 0.2s; border: none; cursor: pointer; z-index: 10;">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
@@ -7735,7 +7735,7 @@
                         <line x1="6" y1="6" x2="18" y2="18"></line>
                     </svg>
                 </button>
-                <div class="modal-header" style="padding: 25px 30px;">
+                <div class="modal-header" style="padding: 25px 30px; flex-shrink: 0;">
                     <div style="display:flex; align-items:center; gap:15px;">
                         <div
                             style="width:40px; height:40px; background:rgba(59, 130, 246, 0.1); border-radius:12px; display:flex; align-items:center; justify-content:center; color:var(--bmm-info);">
@@ -7757,7 +7757,7 @@
                         </div>
                     </div>
                 </div>
-                <div class="modal-body" id="stack-modal-content" style="padding: 0 30px 40px;">
+                <div class="modal-body" id="stack-modal-content" style="padding: 0 30px 40px; flex: 1; min-height: 0; overflow-y: auto;">
                     <!-- Dynamically populated -->
                 </div>
             </div>
