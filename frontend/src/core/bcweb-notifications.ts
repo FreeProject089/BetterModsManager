@@ -11,7 +11,7 @@
 import { invoke } from './api.js';
 import { getLang } from './i18n.js';
 import { recordNotification } from '../ui/notification-center.js';
-import { bcRoot } from './links-config.js';
+import { bcApi } from './links-config.js';
 
 /** The newest createdAt already seen. Sent as `since` so the server returns only
  *  what arrived after it — a poller that re-reads the whole list every few minutes
@@ -46,7 +46,7 @@ function severityOf(kind: string): 'info' | 'success' | 'warning' | 'error' {
 export async function pullBcwebNotifications(): Promise<number> {
     let raw: string;
     try {
-        raw = await invoke('bcweb_notifications', { base: bcRoot(), since: since() }) as string;
+        raw = await invoke('bcweb_notifications', { base: bcApi(), since: since() }) as string;
     } catch (e) {
         // no_key is the normal state for anyone who has not linked an account, so it
         // is not an error to report — only a reason to stop. bad_key IS worth saying
@@ -62,7 +62,19 @@ export async function pullBcwebNotifications(): Promise<number> {
     }
 
     let list: any[] = [];
-    try { list = (JSON.parse(raw)?.notifications || []) as any[]; } catch { return 0; }
+    try {
+        list = (JSON.parse(raw)?.notifications || []) as any[];
+    } catch {
+        // Not JSON. The only way that happens is a base that points at a page rather than the
+        // API — which is exactly the bug this had, and it hid behind a silent `return 0` for
+        // as long as it existed. Said once, then stop: a poller that toasts every ten minutes
+        // about a misconfiguration is its own problem.
+        recordNotification(
+            'BetterCommunity answered with a page instead of data — the site address in links.json may be wrong.',
+            'warning', 'BCWEB');
+        stopBcwebNotifications();
+        return 0;
+    }
     if (!list.length) return 0;
 
     const fr = (getLang() || '').toLowerCase().startsWith('fr');

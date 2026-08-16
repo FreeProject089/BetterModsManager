@@ -10,7 +10,7 @@ import { t, getLang } from '../../core/i18n.js';
 import { toast } from '../../ui/app.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { renderMarkdown } from '../../ui/update-notes.js';
-import { bcRoot } from '../../core/links-config.js';
+import { bcRoot, bcApi } from '../../core/links-config.js';
 
 // BetterCommunity base resolution is centralized in links-config.ts and driven by
 // app.cfg (BCTestMode / BCTestBase): test mode → the staging base, else the production
@@ -121,7 +121,9 @@ function authorsRow(p: Post): string {
   return `<span class="community-authors">${avatars}${name}</span>`;
 }
 
-function apiBase(): string { return `${bcRoot()}/api`; }
+// The API base comes from links-config, not from a second `+ '/api'` here. The two copies
+// were the bug: the notification poller had its own and forgot the suffix.
+const apiBase = bcApi;
 
 // CORS-safe GET. The webview lives at the tauri.localhost origin, so a direct
 // fetch() to the BCWEB API is cross-origin and blocked by CORS preflight (the exact

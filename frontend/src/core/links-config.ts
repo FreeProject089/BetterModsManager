@@ -177,3 +177,14 @@ export function bcTestBase(): string { return _bcTestBase.replace(/\/+$/, ''); }
 export function bcRoot(): string {
     return (_bcTestMode ? bcTestBase() : (_links.bettercommunity || 'https://bettercommunity.ch/')).replace(/\/+$/, '');
 }
+
+/**
+ * Where the BCWEB **API** lives — the site root plus `/api`.
+ *
+ * Written once because it was written twice and one of them was wrong: the notification
+ * poller passed the site ROOT as its base, so it asked for `<site>/v1/notifications`, which
+ * is a page, not an endpoint. The site answers 200 with the HTML shell, the client's
+ * JSON.parse fails, and the poller returns "nothing new" for ever — with a valid key, a
+ * working server, and no error anywhere.
+ */
+export function bcApi(): string { return `${bcRoot()}/api`; }
