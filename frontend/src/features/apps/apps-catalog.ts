@@ -4,8 +4,7 @@ import { toast } from '../../ui/app.js';
 import { t } from '../../core/i18n.js';
 import {
     readOrigins, originLabel, forgetOrigin, enabledOnly, isDisabled, setDisabled, recordHistory,
-    looksLikeIndex, importIndexForType,
-} from '../catalogs/catalog-index.js';
+    looksLikeIndex, importIndexForType, describeKinds } from '../catalogs/catalog-index.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { getLinks } from '../../core/links-config.js';
 
@@ -967,7 +966,8 @@ function renderSources() {
                         ? (t('apps.sources.fromIndex') || 'Added {n} app catalog(s) from that index.').replace('{n}', String(r.added))
                         : r.ofType
                             ? (t('apps.sources.indexAll') || 'That index lists {n} app catalog(s) and you already follow them all.').replace('{n}', String(r.ofType))
-                            : (t('apps.sources.indexNone') || 'That index lists no app catalogs — it holds {n} entr(y/ies) of other kinds.').replace('{n}', String(r.total)),
+                            : (t('apps.sources.indexNone2') || 'No app catalogues in that index — it holds {what}. Add those from their own screens.')
+                                .replace('{what}', describeKinds(r.kinds) || String(r.total)),
                         r.added ? 'success' : 'info');
                     renderSources();
                     await loadCatalog(true);

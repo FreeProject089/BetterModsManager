@@ -7476,5 +7476,8 @@
   "plugins.phAppTitle": "Mon application",
   "plugins.phAppDesc": "Ce que fait cette application…",
   "plugins.phServerMods": "Les mods de mon serveur",
-  "plugins.phServerPlugins": "Les plugins de mon serveur"
+  "plugins.phServerPlugins": "Les plugins de mon serveur",
+  "apps.sources.indexNone2": "Aucun catalogue d’apps dans cet index — il contient {what}. Ajoute-les depuis leurs écrans respectifs.",
+  "plugins.indexNone2": "Aucun catalogue de plugins dans cet index — il contient {what}. Ajoute-les depuis leurs écrans respectifs.",
+  "themes.indexNone2": "Aucun catalogue de thèmes dans cet index — il contient {what}. Ajoute-les depuis leurs écrans respectifs."
 }

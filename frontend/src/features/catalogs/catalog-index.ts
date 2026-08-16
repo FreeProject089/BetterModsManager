@@ -194,7 +194,7 @@ export async function importIndexForType(
     type: string,
     indexUrl: string,
     addApp?: (url: string) => Promise<void>,
-): Promise<{ added: number; already: number; ofType: number; total: number }> {
+): Promise<{ added: number; already: number; ofType: number; total: number; kinds: Record<string, number> }> {
     const { index } = parseCatalogIndex(doc);
     const mine = index.catalogs.filter((e) => e.type === type);
     let added = 0;
@@ -219,7 +219,29 @@ export async function importIndexForType(
             added += 1;
         } catch { /* one bad entry must not abandon the rest of the index */ }
     }
-    return { added, already, ofType: mine.length, total: index.catalogs.length };
+    // What the index DOES hold, by type. "No plugin catalogues here" is a dead end; "no
+    // plugin catalogues — it holds 1 app catalogue" is the next step, and it is the difference
+    // between somebody thinking the import is broken and somebody opening the right screen.
+    const kinds: Record<string, number> = {};
+    for (const e of index.catalogs) kinds[e.type] = (kinds[e.type] || 0) + 1;
+    return { added, already, ofType: mine.length, total: index.catalogs.length, kinds };
+}
+
+/** "1 app catalogue and 2 theme catalogues" — the types an index holds, in the reader's
+ *  words. Sorted by count so the biggest thing in it is named first. */
+export function describeKinds(kinds: Record<string, number>): string {
+    const NAME: Record<string, [string, string]> = {
+        app: ['app catalogue', 'app catalogues'],
+        plugin: ['plugin catalogue', 'plugin catalogues'],
+        theme: ['theme catalogue', 'theme catalogues'],
+        preset: ['preset catalogue', 'preset catalogues'],
+        repo: ['repo catalogue', 'repo catalogues'],
+    };
+    return Object.entries(kinds)
+        .filter(([, n]) => n > 0)
+        .sort((a, b) => b[1] - a[1])
+        .map(([k, n]) => `${n} ${(NAME[k] || [k, `${k}s`])[n > 1 ? 1 : 0]}`)
+        .join(', ');
 }
 
 const readSources = (key: string): string[] => {

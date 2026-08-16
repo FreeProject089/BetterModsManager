@@ -7478,5 +7478,8 @@
   "plugins.phAppTitle": "My App",
   "plugins.phAppDesc": "What this app does…",
   "plugins.phServerMods": "My Server Mods",
-  "plugins.phServerPlugins": "My Server Plugins"
+  "plugins.phServerPlugins": "My Server Plugins",
+  "apps.sources.indexNone2": "No app catalogues in that index — it holds {what}. Add those from their own screens.",
+  "plugins.indexNone2": "No plugin catalogues in that index — it holds {what}. Add those from their own screens.",
+  "themes.indexNone2": "No theme catalogues in that index — it holds {what}. Add those from their own screens."
 }

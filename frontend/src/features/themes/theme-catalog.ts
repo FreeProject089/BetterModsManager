@@ -8,7 +8,7 @@ import { t } from '../../core/i18n.js';
 import { toast } from '../../ui/app.js';
 // NOTE: this file is @ts-nocheck, so a wrong name here is a runtime ReferenceError and not a
 // build error. Checked against the exports in catalog-index.ts by hand.
-import { enabledOnly, looksLikeIndex, importIndexForType } from '../catalogs/catalog-index.js';
+import { enabledOnly, looksLikeIndex, importIndexForType, describeKinds } from '../catalogs/catalog-index.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { installTheme, activateTheme, getInstalledThemes, BmmTheme } from './theme-engine.js';
 
@@ -466,7 +466,8 @@ function addCommunitySource(): void {
                     ? (t('themes.fromIndex') || 'Added {n} theme catalogue(s) from that index.').replace('{n}', String(r.added))
                     : r.ofType
                         ? (t('themes.indexAll') || 'That index lists {n} theme catalogue(s) and you already follow them all.').replace('{n}', String(r.ofType))
-                        : (t('themes.indexNone') || 'That index lists no theme catalogues — it holds {n} entr(y/ies) of other kinds.').replace('{n}', String(r.total)),
+                        : (t('themes.indexNone2') || 'No theme catalogues in that index — it holds {what}. Add those from their own screens.')
+                            .replace('{what}', describeKinds(r.kinds) || String(r.total)),
                     r.added ? 'success' : 'info');
                 // Re-read from storage: importIndexForType wrote the key, and this module
                 // holds its own copy read once at init.

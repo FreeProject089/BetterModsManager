@@ -5,7 +5,7 @@ import { t, getLang } from '../../core/i18n.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 // NOTE: this file is @ts-nocheck, so a wrong name here is a runtime ReferenceError and not a
 // build error. Checked against the exports in catalog-index.ts by hand.
-import { enabledOnly, isDisabled, setDisabled, originOf, originLabel, forgetOrigin, recordHistory, looksLikeIndex, importIndexForType, } from '../catalogs/catalog-index.js';
+import { enabledOnly, isDisabled, setDisabled, originOf, originLabel, forgetOrigin, recordHistory, looksLikeIndex, importIndexForType, describeKinds } from '../catalogs/catalog-index.js';
 /**
  * The modpack list from the LOCAL plugin API, or an empty list.
  *
@@ -647,7 +647,8 @@ async function renderCatalog(container) {
                         ? (t('plugins.fromIndex') || 'Added {n} plugin catalog(s) from that index.').replace('{n}', String(r.added))
                         : r.ofType
                             ? (t('plugins.indexAll') || 'That index lists {n} plugin catalog(s) and you already follow them all.').replace('{n}', String(r.ofType))
-                            : (t('plugins.indexNone') || 'That index lists no plugin catalogs — it holds {n} entr(y/ies) of other kinds.').replace('{n}', String(r.total)), r.added ? 'success' : 'info');
+                            : (t('plugins.indexNone2') || 'No plugin catalogues in that index — it holds {what}. Add those from their own screens.')
+                                .replace('{what}', describeKinds(r.kinds) || String(r.total)), r.added ? 'success' : 'info');
                     await reloadCatalog();
                     return;
                 }
