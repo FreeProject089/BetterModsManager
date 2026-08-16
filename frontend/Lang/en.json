@@ -7483,5 +7483,16 @@
   "plugins.indexNone2": "No plugin catalogs in that index — it holds {what}. Add those from their own screens.",
   "themes.indexNone2": "No theme catalogs in that index — it holds {what}. Add those from their own screens.",
   "settings.catIndex.histSearch": "Search the history — address, kind or action",
-  "settings.catIndex.histNoMatch": "No line matches that."
+  "settings.catIndex.histNoMatch": "No line matches that.",
+  "settings.exportAutomations": "Automations",
+  "settings.exportAutomationsDesc": "Your scheduled tasks, exactly as the scheduler saved them",
+  "settings.exportReplays": "Session recordings",
+  "settings.exportReplaysDesc": "Everything the recorder kept (.bmmreplay) — often the largest part",
+  "settings.exportCrashes": "Crash reports",
+  "settings.exportCrashesDesc": "Reports and their archive — what a maintainer asks for after a crash",
+  "settings.exportDiagnostics": "Diagnostics",
+  "settings.exportDiagnosticsDesc": "The diagnostic files BMM writes when something goes wrong",
+  "settings.exportNote2": "Writes one .DATABMM file — an archive holding everything you ticked, with a manifest saying what went in.",
+  "settings.bundleExported": "Wrote {mb} MB — {n} section(s).",
+  "settings.bundleEmpty": "Nothing to take for: {x}."
 }

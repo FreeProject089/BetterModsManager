@@ -7481,5 +7481,16 @@
   "plugins.indexNone2": "Aucun catalogue de plugins dans cet index — il contient {what}. Ajoute-les depuis leurs écrans respectifs.",
   "themes.indexNone2": "Aucun catalogue de thèmes dans cet index — il contient {what}. Ajoute-les depuis leurs écrans respectifs.",
   "settings.catIndex.histSearch": "Rechercher dans l'historique — adresse, type ou action",
-  "settings.catIndex.histNoMatch": "Aucune ligne ne correspond."
+  "settings.catIndex.histNoMatch": "Aucune ligne ne correspond.",
+  "settings.exportAutomations": "Automatisations",
+  "settings.exportAutomationsDesc": "Tes tâches planifiées, telles que le planificateur les a enregistrées",
+  "settings.exportReplays": "Enregistrements de session",
+  "settings.exportReplaysDesc": "Tout ce que l'enregistreur a gardé (.bmmreplay) — souvent la plus grosse part",
+  "settings.exportCrashes": "Rapports de plantage",
+  "settings.exportCrashesDesc": "Les rapports et leur archive — ce qu'un mainteneur demande après un plantage",
+  "settings.exportDiagnostics": "Diagnostics",
+  "settings.exportDiagnosticsDesc": "Les fichiers de diagnostic que BMM écrit quand quelque chose se passe mal",
+  "settings.exportNote2": "Écrit un seul fichier .DATABMM — une archive contenant tout ce que tu as coché, avec un manifeste listant ce qui y est entré.",
+  "settings.bundleExported": "{mb} Mo écrits — {n} section(s).",
+  "settings.bundleEmpty": "Rien à prendre pour : {x}."
 }

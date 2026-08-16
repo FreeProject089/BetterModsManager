@@ -80,13 +80,29 @@ fn write_json_dir(dir: &std::path::Path, files: &serde_json::Map<String, serde_j
 
 #[tauri::command]
 pub fn export_app_data(state: State<AppState>, app_handle: tauri::AppHandle, dest_path: String, options: Option<ExportOptions>, extras: Option<serde_json::Value>) -> Result<(), AppError> {
-    let _ = state.save(); // Save current memory to disk first
-
     let Some(opts) = options else {
         // No options → raw copy of data.json (legacy behaviour)
         std::fs::copy(&*state.data_path, dest_path)?;
         return Ok(());
     };
+    let root = build_export_json(&state, &app_handle, &opts, extras)?;
+    std::fs::write(&dest_path, serde_json::to_string_pretty(&root)?)?;
+    Ok(())
+}
+
+/// The same document, RETURNED rather than written.
+///
+/// The `.DATABMM` bundle needs this content inside its archive. Returning it here rather than
+/// re-deciding what "profiles" or "plugins" means over there is the whole point: two exporters
+/// that each read the options would disagree the first time either changed.
+#[tauri::command]
+pub fn export_app_data_json(state: State<AppState>, app_handle: tauri::AppHandle, options: ExportOptions, extras: Option<serde_json::Value>) -> Result<String, AppError> {
+    let root = build_export_json(&state, &app_handle, &options, extras)?;
+    Ok(serde_json::to_string(&root)?)
+}
+
+fn build_export_json(state: &State<AppState>, app_handle: &tauri::AppHandle, opts: &ExportOptions, extras: Option<serde_json::Value>) -> Result<serde_json::Value, AppError> {
+    let _ = state.save(); // Save current memory to disk first
 
     let data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
     let mut export_data = crate::state::AppData::default();
@@ -105,13 +121,13 @@ pub fn export_app_data(state: State<AppState>, app_handle: tauri::AppHandle, des
     root.insert("_bmm_backup".into(), serde_json::json!(2));
     root.insert("app_data".into(), serde_json::to_value(&export_data)?);
 
-    let dir = data_dir(&app_handle);
+    let dir = data_dir(app_handle);
     if opts.themes {
         let themes = read_json_dir(&dir.join("themes"));
         if !themes.is_empty() { root.insert("themes".into(), serde_json::Value::Object(themes)); }
     }
     if opts.translations {
-        let langs = read_json_dir(&get_lang_dir(&app_handle));
+        let langs = read_json_dir(&get_lang_dir(app_handle));
         if !langs.is_empty() { root.insert("translations".into(), serde_json::Value::Object(langs)); }
     }
     if opts.apps {
@@ -127,8 +143,7 @@ pub fn export_app_data(state: State<AppState>, app_handle: tauri::AppHandle, des
     // Frontend-only data (e.g. server-repo favourites from localStorage)
     if let Some(ex) = extras { if !ex.is_null() { root.insert("extras".into(), ex); } }
 
-    std::fs::write(&dest_path, serde_json::to_string_pretty(&serde_json::Value::Object(root))?)?;
-    Ok(())
+    Ok(serde_json::Value::Object(root))
 }
 
 /// Automated data export — picks the destination path itself from a target folder,

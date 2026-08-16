@@ -2492,11 +2492,46 @@ export async function initSettings() {
                             </span>
                             <label class="bmm-switch"><input type="checkbox" id="exp-apps" checked><span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span></label>
                         </label>
+                        <!-- The sections that are FILES rather than fields in data.json. They exist only
+                             in the archive: a JSON export can carry them only by inlining, which turns a
+                             40 MB recording into a 55 MB string inside a document nothing can stream. -->
+                        <label class="exp-opt">
+                            <span class="exp-opt-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
+                            <span class="exp-opt-txt">
+                                <span class="exp-opt-title">${t('settings.exportAutomations') || 'Automations'}</span>
+                                <span class="exp-opt-desc">${t('settings.exportAutomationsDesc') || 'Your scheduled tasks, exactly as the scheduler saved them'}</span>
+                            </span>
+                            <label class="bmm-switch"><input type="checkbox" id="exp-automations" checked><span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span></label>
+                        </label>
+                        <label class="exp-opt">
+                            <span class="exp-opt-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="5 3 19 12 5 21 5 3"/></svg></span>
+                            <span class="exp-opt-txt">
+                                <span class="exp-opt-title">${t('settings.exportReplays') || 'Session recordings'}</span>
+                                <span class="exp-opt-desc">${t('settings.exportReplaysDesc') || 'Everything the recorder kept (.bmmreplay) — often the largest part'}</span>
+                            </span>
+                            <label class="bmm-switch"><input type="checkbox" id="exp-replays"><span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span></label>
+                        </label>
+                        <label class="exp-opt">
+                            <span class="exp-opt-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>
+                            <span class="exp-opt-txt">
+                                <span class="exp-opt-title">${t('settings.exportCrashes') || 'Crash reports'}</span>
+                                <span class="exp-opt-desc">${t('settings.exportCrashesDesc') || 'Reports and their archive — what a maintainer asks for after a crash'}</span>
+                            </span>
+                            <label class="bmm-switch"><input type="checkbox" id="exp-crashes"><span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span></label>
+                        </label>
+                        <label class="exp-opt">
+                            <span class="exp-opt-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></span>
+                            <span class="exp-opt-txt">
+                                <span class="exp-opt-title">${t('settings.exportDiagnostics') || 'Diagnostics'}</span>
+                                <span class="exp-opt-desc">${t('settings.exportDiagnosticsDesc') || 'The diagnostic files BMM writes when something goes wrong'}</span>
+                            </span>
+                            <label class="bmm-switch"><input type="checkbox" id="exp-diagnostics"><span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span></label>
+                        </label>
                     </div>
 
                     <div class="exp-note">
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-                        <span>${t('settings.exportNote') || 'This will create a JSON file that you can use to restore your configuration later.'}</span>
+                        <span>${t('settings.exportNote2') || 'Writes one .DATABMM file — an archive holding everything you ticked, with a manifest saying what went in.'}</span>
                     </div>
                 </div>
                 
@@ -2537,11 +2572,52 @@ export async function initSettings() {
                     catch { }
                 }
                 close();
-                const destPath = await saveFile({ defaultPath: 'bmm-backup.json', filters: [{ name: 'App Data Backup', extensions: ['json'] }] });
+                // The archive carries the SAME filtered app data the JSON export builds, so the
+                // two can never disagree about what "profiles" or "plugins" means — the rule for
+                // that lives in one place and this is a second wrapper around it, not a copy.
+                const bundle = {
+                    app_data: true,
+                    themes: content.querySelector('#exp-themes').checked,
+                    theme_presets: content.querySelector('#exp-themes').checked,
+                    translations: content.querySelector('#exp-translations').checked,
+                    launch_packs: content.querySelector('#exp-modpacks').checked,
+                    automations: content.querySelector('#exp-automations').checked,
+                    apps: exportApps,
+                    replays: content.querySelector('#exp-replays').checked,
+                    crashes: content.querySelector('#exp-crashes').checked,
+                    diagnostics: content.querySelector('#exp-diagnostics').checked,
+                };
+                const destPath = await saveFile({
+                    defaultPath: 'bmm-backup.DATABMM',
+                    filters: [
+                        { name: 'BMM data bundle', extensions: ['DATABMM'] },
+                        // Still offered: a JSON backup is smaller, diffable and is what every
+                        // older BMM can read. Removing it would strand the backups people have.
+                        { name: 'App data (JSON)', extensions: ['json'] },
+                    ],
+                });
                 if (destPath) {
+                    const asJson = /\.json$/i.test(destPath);
                     try {
-                        await invoke('export_app_data', { destPath, options, extras });
-                        toast(t('settings.dataExported') || 'Data exported successfully', 'success');
+                        if (asJson) {
+                            await invoke('export_app_data', { destPath, options, extras });
+                            toast(t('settings.dataExported') || 'Data exported successfully', 'success');
+                        }
+                        else {
+                            // The app_data section is built by the JSON exporter's own rules; the
+                            // bundle command only decides which FILES ride along.
+                            const appDataJson = JSON.parse(await invoke('export_app_data_json', { options, extras }));
+                            const r = await invoke('export_data_bundle', {
+                                destPath, options: bundle, appDataJson, extras,
+                            });
+                            // What it actually took, not what was asked for. A section that was
+                            // ticked and turned out empty is the thing worth knowing.
+                            const took = r.sections.filter((x) => x.files > 0).length;
+                            const empty = r.sections.filter((x) => x.files === 0).map((x) => x.section);
+                            toast((t('settings.bundleExported') || 'Wrote {mb} MB — {n} section(s).')
+                                .replace('{mb}', (r.bytes / 1048576).toFixed(1)).replace('{n}', String(took))
+                                + (empty.length ? ` ${(t('settings.bundleEmpty') || 'Nothing to take for: {x}.').replace('{x}', empty.join(', '))}` : ''), 'success');
+                        }
                     }
                     catch (e) {
                         toast(t('settings.dataExportError', { err: String(e) }), 'error');
