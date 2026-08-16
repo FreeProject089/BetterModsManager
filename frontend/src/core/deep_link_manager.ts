@@ -426,11 +426,19 @@ async function handleDeepLink(urlStr: string): Promise<void> {
                 if (kind === 'app') {
                     await invoke('add_community_source', { url }); // app sources live in the Rust backend
                 } else if (kind === 'plugin' || kind === 'theme') {
-                    // Plugin/theme community sources are localStorage lists (dedup on add).
-                    const KEY = kind === 'plugin' ? 'bmm_plugin_catalogs' : 'bmm_theme_community_sources';
+                    // Through the shared helpers, not a second copy of the same rule. This path
+                    // used to name the storage keys itself and dedupe with `includes` — case
+                    // SENSITIVE, while addSource is not — so a link differing only in case added
+                    // a duplicate that every other screen already considered followed.
+                    const { STORE_KEY, addSource, recordHistory } = await import('../features/catalogs/catalog-index.js');
+                    const KEY = STORE_KEY[kind];
                     let list: string[] = [];
                     try { list = JSON.parse(localStorage.getItem(KEY) || '[]'); } catch { list = []; }
-                    if (!list.includes(url)) { list.push(url); localStorage.setItem(KEY, JSON.stringify(list)); }
+                    if (addSource(list, url)) {
+                        localStorage.setItem(KEY, JSON.stringify(list));
+                        // So a source added by a link can be brought back like any other.
+                        recordHistory({ action: 'add', type: kind, url, via: 'deeplink' });
+                    }
                 } else {
                     toast(`${t('common.error')}: unknown catalog kind "${kind}"`, 'error');
                     return;
