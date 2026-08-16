@@ -4422,7 +4422,10 @@ export async function exportOneTask(id: string): Promise<void> {
 interface PresetSource {
     url: string;
     official: boolean;
-    state: 'ok' | 'error' | 'notfeed';
+    // 'loading' exists so the panel can open BEFORE the feeds answer. Every other state is an
+    // outcome; this one is the absence of one, and giving it a name keeps the renderer a single
+    // switch over `state` instead of a second "are we still waiting" flag beside it.
+    state: 'ok' | 'error' | 'notfeed' | 'loading';
     count: number;
     detail?: string;
 }
@@ -4479,7 +4482,25 @@ async function loadPresetSources(): Promise<{ presets: any[]; sources: PresetSou
 }
 
 export async function browsePresetCatalogs(): Promise<void> {
-    showPresetCatalog(await loadPresetSources());
+    // The modal opens FIRST, then fills in.
+    //
+    // It used to await every source before drawing anything, so clicking the button did
+    // nothing visible until the slowest feed answered — and the feed that made this obvious was
+    // one returning 503, where "nothing happens" lasted the whole timeout. A panel whose entire
+    // job is to explain why a catalogue did not answer cannot itself hang silently while it
+    // finds out.
+    //
+    // Each source row already states its own outcome, so `pending: true` is a state the
+    // existing renderer can show rather than a second loading screen.
+    const pending = officialPresetUrl();
+    showPresetCatalog({
+        presets: [],
+        sources: pending ? [{ url: pending, official: true, state: 'loading', count: 0 }] : [],
+    });
+    const data = await loadPresetSources();
+    // Re-render in place. showPresetCatalog closes any panel it already opened, so this
+    // replaces the pending view rather than stacking a second overlay on top of it.
+    showPresetCatalog(data);
 }
 
 /**
@@ -4521,8 +4542,13 @@ function explainFetchError(raw: string): { short: string; raw: string } {
 
 function showPresetCatalog(data: { presets: any[]; sources: PresetSource[] }): void {
     const esc = (x: unknown) => escHtml(String(x ?? ''));
+    // Replace, never stack. This is called twice now — once to open immediately, once when the
+    // feeds answer — and it builds a fresh overlay each time, so without this the loading panel
+    // would sit behind the real one, both listening for clicks. Matched on its OWN marker class
+    // rather than modal-generic-overlay, which every other modal in the app also uses.
+    document.querySelectorAll('.sched-pc-overlay').forEach((el) => el.remove());
     const overlay = document.createElement('div');
-    overlay.className = 'modal-generic-overlay open';
+    overlay.className = 'modal-generic-overlay sched-pc-overlay open';
     let { presets, sources } = data;
     let filter = '';
 
@@ -4530,13 +4556,19 @@ function showPresetCatalog(data: { presets: any[]; sources: PresetSource[] }): v
         const label = s.official
             ? (t('sched.pc.official') || 'Official')
             : (t('sched.pc.community') || 'Community');
-        const state = s.state === 'ok'
-            ? `<span class="sched-pc-src-n">${s.count} ${esc(t('sched.pc.tasks') || 'automations')}</span>`
-            : `<span class="sched-pc-src-bad">${esc(s.state === 'notfeed'
-                ? (t('sched.pc.notfeed') || 'not a preset catalogue')
-                : (t('sched.pc.unreachable') || 'unreachable'))}</span>`;
+        // 'loading' is NOT an error and must not be painted like one. Everything that is not
+        // 'ok' used to fall into the red branch, so a source still being fetched would have
+        // announced itself as unreachable — the panel would open by lying about the thing it
+        // exists to report accurately.
+        const state = s.state === 'loading'
+            ? `<span class="sched-pc-src-n">${esc(t('sched.pc.loading') || 'checking…')}</span>`
+            : s.state === 'ok'
+                ? `<span class="sched-pc-src-n">${s.count} ${esc(t('sched.pc.tasks') || 'automations')}</span>`
+                : `<span class="sched-pc-src-bad">${esc(s.state === 'notfeed'
+                    ? (t('sched.pc.notfeed') || 'not a preset catalogue')
+                    : (t('sched.pc.unreachable') || 'unreachable'))}</span>`;
         return `
-            <div class="sched-pc-src${s.state === 'ok' ? '' : ' is-bad'}">
+            <div class="sched-pc-src${s.state === 'ok' || s.state === 'loading' ? '' : ' is-bad'}">
                 <div class="sched-pc-src-head">
                     <span class="sched-pc-badge${s.official ? ' is-official' : ''}">${esc(label)}</span>
                     ${state}
