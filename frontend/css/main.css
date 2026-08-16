@@ -16677,8 +16677,12 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
    from the catalogs you follow", which is the wrong sentence when the truth is that
    bettercommunity.ch answered 503: you do follow a catalogue, it is down. A source that
    failed now says so on its own row, at full size. */
-.sched-pc-modal { width: min(920px, 94vw); }
-.sched-pc-body { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 14px; }
+/* BOTH properties. `.modal` sets width:100% AND max-width:520px, so overriding width alone
+   changed nothing — max-width still capped it, and a two-column panel spent its life squeezed
+   into 520px looking broken. The width that matters here is the smaller of the two, and only
+   setting both makes this rule the one that decides. */
+.sched-pc-modal { width: min(920px, 94vw); max-width: min(920px, 94vw); }
+.sched-pc-body { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 18px; padding: 4px 2px 2px; }
 /* minmax(0, 1fr), not 1fr: a long unbroken URL in a card would otherwise set the column's
    minimum width and push the grid wider than the modal. */
 
