@@ -516,6 +516,37 @@ La référence complète champ par champ, avec chaque clé optionnelle et un tab
         },
       },
       {
+        // What BMM's own renderer (md-lite.ts) understands — deliberately a SUBSET of
+        // BetterCommunity's, and said so here. A page listing blocks that only render on the
+        // website would send people to write a roadmap that comes out as literal text in the app.
+        id: 'custom-markdown', docsPath: 'reference/custom-markdown/',
+        title: { en: 'Rich text blocks (custom markdown)', fr: 'Blocs de texte enrichi (markdown personnalisé)' },
+        summary: { en: 'Callouts, steps, columns and more — in plugin docs, article bodies and anywhere BMM shows markdown.', fr: 'Encadrés, étapes, colonnes et plus — dans les docs de plugins, les articles, et partout où BMM affiche du markdown.' },
+        keywords: 'markdown callout steps columns details replay blocks directive formatting encadré étapes colonnes mise en forme',
+        body: {
+          en: '<p>Anywhere BMM renders markdown — a plugin’s documentation, a custom page, a community article — you get ordinary markdown <b>plus</b> a set of blocks. Each one opens with <code>:::name</code> and closes with a bare <code>:::</code>.</p>'
+            + '<h4>The blocks</h4><ul>'
+            + '<li><b>Callouts</b> — <code>:::note</code>, <code>:::tip</code>, <code>:::info</code>, <code>:::success</code>, <code>:::warning</code>, <code>:::danger</code>. A title goes in brackets: <code>:::warning[Back up first]</code>.</li>'
+            + '<li><b>Steps</b> — <code>:::steps</code> wrapping several <code>:::step[Title]</code> blocks. They number themselves, so don’t number the titles.</li>'
+            + '<li><b>Columns</b> — <code>:::columns</code> wrapping <code>:::column</code> blocks. They stack on a narrow window, so never write “the one on the left”.</li>'
+            + '<li><b>Collapsible</b> — <code>:::details[Show more]</code>, hidden until clicked.</li>'
+            + '<li><b>Session replay</b> — <code>:::replay{src="…" title="…"}</code> plays a <code>.bmmreplay</code> recording inline.</li>'
+            + '<li>Plus GFM <b>tables</b>, fenced <b>code</b>, lists, quotes and mkdocs-style <code>!!!</code> admonitions.</li></ul>'
+            + '<h4>Two rules</h4><ul><li>Leave a <b>blank line</b> before a block — <code>:::note</code> tucked under a paragraph is read as part of it.</li><li><b>Close what you open.</b> Blocks nest freely, and every <code>:::</code> closes the innermost one still open.</li></ul>'
+            + '<p><b>On the website there are more</b> — cards, roadmaps, download rows, inline badges, icons and keyboard keys. Those render on BetterCommunity; in BMM they come out as plain text. The full list is in the online docs.</p>',
+          fr: '<p>Partout où BMM affiche du markdown — la documentation d’un plugin, une page personnalisée, un article de la communauté — vous avez le markdown ordinaire <b>plus</b> un jeu de blocs. Chacun s’ouvre par <code>:::nom</code> et se ferme par un <code>:::</code> seul.</p>'
+            + '<h4>Les blocs</h4><ul>'
+            + '<li><b>Encadrés</b> — <code>:::note</code>, <code>:::tip</code>, <code>:::info</code>, <code>:::success</code>, <code>:::warning</code>, <code>:::danger</code>. Le titre va entre crochets : <code>:::warning[Sauvegardez d’abord]</code>.</li>'
+            + '<li><b>Étapes</b> — <code>:::steps</code> autour de plusieurs <code>:::step[Titre]</code>. Elles se numérotent seules : ne numérotez pas les titres.</li>'
+            + '<li><b>Colonnes</b> — <code>:::columns</code> autour de blocs <code>:::column</code>. Elles s’empilent sur une fenêtre étroite : n’écrivez jamais « celle de gauche ».</li>'
+            + '<li><b>Repliable</b> — <code>:::details[Voir plus]</code>, caché jusqu’au clic.</li>'
+            + '<li><b>Replay de session</b> — <code>:::replay{src="…" title="…"}</code> joue un enregistrement <code>.bmmreplay</code> dans la page.</li>'
+            + '<li>Plus les <b>tableaux</b> GFM, le <b>code</b> en blocs, les listes, les citations et les admonitions <code>!!!</code> façon mkdocs.</li></ul>'
+            + '<h4>Deux règles</h4><ul><li>Laissez une <b>ligne vide</b> avant un bloc — <code>:::note</code> collé sous un paragraphe est lu comme en faisant partie.</li><li><b>Fermez ce que vous ouvrez.</b> Les blocs s’imbriquent librement, et chaque <code>:::</code> ferme le plus proche encore ouvert.</li></ul>'
+            + '<p><b>Sur le site il y en a d’autres</b> — cartes, feuilles de route, lignes de téléchargement, badges, icônes et touches clavier en ligne. Ceux-là s’affichent sur BetterCommunity ; dans BMM ils sortent en texte brut. La liste complète est dans la doc en ligne.</p>',
+        },
+      },
+      {
         id: 'translate-bmm', docsPath: 'how-it-works/extending/', view: 'settings', diagram: 'i18n-system',
         title: { en: 'Translate BMM (add a language)', fr: 'Traduire BMM (ajouter une langue)' },
         summary: { en: 'Create, edit and share a full translation — no rebuild, no coding.', fr: 'Créez, éditez et partagez une traduction complète — sans recompilation, sans coder.' },
