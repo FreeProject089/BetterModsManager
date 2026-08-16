@@ -147,6 +147,33 @@ export function parseCatalogIndex(raw: unknown, forApp = 'bmm'): { index: Catalo
     };
 }
 
+/**
+ * Is this parsed document a catalogue of the asked-for kind?
+ *
+ * Shape, never the address: a file called catalog.json can be anything, and catching exactly
+ * that is the point. Each kind is recognised by the array ITS OWN READER looks for, so a
+ * document this calls a plugin catalogue is one the plugin browser will actually read — the
+ * alternative is a second opinion about what a catalogue is, and two opinions drift.
+ *
+ * `index` defers to looksLikeIndex rather than repeating its rule.
+ */
+export const CATALOG_SHAPES: Record<string, (d: any) => boolean> = {
+    app: (d) => Array.isArray(d?.apps),
+    plugin: (d) => Array.isArray(d?.plugins),
+    theme: (d) => Array.isArray(d) || Array.isArray(d?.themes),
+    preset: (d) => Array.isArray(d?.presets) || Array.isArray(d?.tasks),
+    repo: (d) => Array.isArray(d?.repos),
+    index: (d) => looksLikeIndex(d),
+};
+
+export function catalogLooksLike(doc: any, kind: string): boolean {
+    if (kind === 'any') return Object.values(CATALOG_SHAPES).some((f) => f(doc));
+    const f = CATALOG_SHAPES[kind];
+    // An unknown kind is not "anything goes" — it is a question the editor should not have
+    // been able to ask, and answering true would hide that.
+    return f ? f(doc) : false;
+}
+
 /** Where each type's community sources are kept. Not a new store — these are the two the
  *  deeplink handler already writes to, so a catalog added by either route lands in one
  *  place and shows up in the same list. */

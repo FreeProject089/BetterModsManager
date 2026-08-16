@@ -20,7 +20,7 @@ import { inspectBmmpa } from './bmmpa-inspect.js';
 import { parsePresetFeed, looksLikePresetFeed, readPresetCatalogs, writePresetCatalogs } from './preset-catalog.js';
 import {
     originLabel, originOf, forgetOrigin, isDisabled, setDisabled, recordHistory,
-    hasSource, looksLikeIndex,
+    hasSource, looksLikeIndex, catalogLooksLike,
 } from '../catalogs/catalog-index.js';
 import { getLinks } from '../../core/links-config.js';
 
@@ -528,9 +528,9 @@ async function runSteps(steps: Step[], task: Task, ctx: RunCtx, depth = 0): Prom
         } else if (step.kind === 'delay') {
             await interruptibleSleep(Math.max(0, step.seconds) * 1000, state);
         } else if (step.kind === 'waitFor') {
-            await waitForCondition(step.condition, step.timeoutSec, ctx, step.pollSec, step.onTimeout, state);
+            await waitForCondition(step.condition, step.timeoutSec, ctx, step.pollSec, step.onTimeout, state, task);
         } else if (step.kind === 'if') {
-            const ok = await evalCondition(step.condition, ctx);
+            const ok = await evalCondition(step.condition, ctx, task);
             await runSteps(ok ? step.then : step.else, task, ctx, depth + 1);
         } else if (step.kind === 'repeat') {
             // One loop for all four modes. They differ in exactly two decisions —
@@ -550,7 +550,7 @@ async function runSteps(steps: Step[], task: Task, ctx: RunCtx, depth = 0): Prom
             // `until` runs while the condition is FALSE; every other mode while TRUE.
             const keepGoing = async (): Promise<boolean> => {
                 if (!step.condition) return step.mode !== 'doWhile';   // preserved default
-                const ok = await evalCondition(step.condition, ctx);
+                const ok = await evalCondition(step.condition, ctx, task);
                 return step.mode === 'until' ? !ok : ok;
             };
             for (let n = 0; n < times; n++) {
@@ -619,7 +619,7 @@ async function runSteps(steps: Step[], task: Task, ctx: RunCtx, depth = 0): Prom
         } else if (step.kind === 'switch') {
             let ran = false;
             for (const c of step.cases || []) {
-                if (await evalCondition(c.condition, ctx)) { await runSteps(c.steps, task, ctx, depth + 1); ran = true; break; }
+                if (await evalCondition(c.condition, ctx, task)) { await runSteps(c.steps, task, ctx, depth + 1); ran = true; break; }
             }
             if (!ran) await runSteps(step.default || [], task, ctx, depth + 1);
         }
@@ -703,12 +703,12 @@ function substituteItem(steps: Step[], item: any): Step[] {
 // Polls a condition until it becomes true or the timeout elapses (then throws,
 // aborting the rest of the workflow). This is what makes "wait until all mods are
 // active, then launch X" possible.
-async function waitForCondition(cond: Condition, timeoutSec: number, ctx: RunCtx, pollSec = 2, onTimeout: 'abort' | 'continue' = 'abort', state?: RunState): Promise<void> {
+async function waitForCondition(cond: Condition, timeoutSec: number, ctx: RunCtx, pollSec = 2, onTimeout: 'abort' | 'continue' = 'abort', state?: RunState, task?: Task): Promise<void> {
     const deadline = Date.now() + Math.max(1, timeoutSec || 60) * 1000;
     const pollMs = Math.max(250, (pollSec || 2) * 1000);
     // eslint-disable-next-line no-constant-condition
     while (true) {
-        if (await evalCondition(cond, ctx)) return;
+        if (await evalCondition(cond, ctx, task)) return;
         if (Date.now() >= deadline) {
             // Either abort the whole task (default) or just stop waiting and carry on.
             if (onTimeout === 'continue') return;
@@ -1179,7 +1179,7 @@ async function runAction(action: Action, task: Task, ctx: RunCtx): Promise<void>
             break;
         }
         case 'var.ternary': {                      // target = cond ? ifTrue : ifFalse
-            const ok = p.condition ? await evalCondition(p.condition, ctx) : false;
+            const ok = p.condition ? await evalCondition(p.condition, ctx, task) : false;
             ctx.nums[String(p.target || 'result')] = Number(ok ? p.ifTrue : p.ifFalse) || 0;
             break;
         }
@@ -1471,13 +1471,31 @@ async function runDeepLink(url: string): Promise<void> {
 }
 
 // ── Condition evaluation ──────────────────────────────────────────────────────
-async function evalCondition(cond: Condition, ctx: RunCtx = { nums: {}, text: {} }): Promise<boolean> {
-    let r = await evalConditionRaw(cond, ctx);
+//
+// `task` is threaded through so a condition can ask what the task is PERMITTED to do.
+// It could not before, and the consequence was not theoretical: `commandSucceeds` passed
+// `allow: true` to run_scheduled_command, so a condition could spawn any program on the
+// machine while the ACTION that runs a program refused without the `command` permission. A
+// shared .bmmpa needed only to put its command in an `if` instead of a step.
+//
+// Optional, because `var.ternary` and the editor's preview evaluate conditions outside a run.
+// Absent means "no task vouched for this", which is treated as no permission — the safe
+// direction, and the one that makes forgetting to thread it fail closed.
+async function evalCondition(cond: Condition, ctx: RunCtx = { nums: {}, text: {} }, task?: Task): Promise<boolean> {
+    let r = await evalConditionRaw(cond, ctx, task);
     return cond.negate ? !r : r;
 }
-async function evalConditionRaw(cond: Condition, ctx: RunCtx): Promise<boolean> {
+async function evalConditionRaw(cond: Condition, ctx: RunCtx, task?: Task): Promise<boolean> {
     const p = cond.params || {};
     const now = new Date();
+    /** Refuse unless the task granted this. No task = nobody granted anything. */
+    const needPerm = (key: keyof TaskPerms, what: string) => {
+        if (!task) {
+            throw new Error(t('sched.cond.noTask')
+                || 'This condition needs a permission, and it is being evaluated outside a task.');
+        }
+        requirePerm(task, key, what);
+    };
     switch (cond.type) {
         case 'always': return true;
         case 'enumIs': {
@@ -1565,6 +1583,15 @@ async function evalConditionRaw(cond: Condition, ctx: RunCtx): Promise<boolean> 
             return a <= b ? (cur >= a && cur <= b) : (cur >= a || cur <= b);
         }
         case 'commandSucceeds': {
+            // Gated like the action that runs a program, which it is. `allow: true` was
+            // hardcoded here, so this condition ran arbitrary programs with no permission at
+            // all — the one hole that made the `command` permission optional in practice,
+            // since a command in an `if` was never asked about.
+            //
+            // The refusal is thrown, not swallowed into `false`: a task denied a permission
+            // has not evaluated to "no", it has failed, and reporting it as "no" would send
+            // somebody looking for why their program returned non-zero.
+            needPerm('command', t('sched.perm.command') || 'run a program');
             const args = (p.args || '').trim() ? String(p.args).split(/\s+/) : [];
             try { await invoke('run_scheduled_command', { program: p.program, args, workingDir: p.workingDir || null, allow: true }); return true; }
             catch { return false; }
@@ -1599,6 +1626,69 @@ async function evalConditionRaw(cond: Condition, ctx: RunCtx): Promise<boolean> 
             if (!m || !m.exists || !m.modified_ms) return false;
             const ageMin = (Date.now() - Number(m.modified_ms)) / 60000;
             return ageMin <= Math.max(0, Number(p.minutes) || 0);
+        }
+        case 'pathIsDir': {
+            // `fileExists` is true for a folder too — Path::exists() does not distinguish —
+            // so "is this a file or a directory?" had no answer. file_meta already carries
+            // is_dir; nothing needed the backend, only asking.
+            const m: any = await invoke('file_meta', { path: p.path || '' }).catch(() => null);
+            if (!m || !m.exists) return false;
+            return p.want === 'file' ? !m.is_dir : !!m.is_dir;
+        }
+        case 'filesMatch': {
+            // Every file in a LIST still hashes to what a MAP says it should.
+            //
+            // fileHash answers for one file against one literal, which is no use for "did
+            // anything under this profile change?" — the question people actually have. The
+            // list holds the paths, the map holds path → hash, and both are ordinary
+            // scheduler variables, so a previous step can fill them.
+            //
+            // A path in the list with no entry in the map is a MISMATCH, not a skip: a
+            // manifest that silently ignores what it does not mention verifies nothing.
+            const paths = ctx.lists?.[String(p.list || '')] || [];
+            const want = ctx.maps?.[String(p.map || '')] || {};
+            if (!paths.length) return !!p.emptyIsTrue;
+            for (const path of paths) {
+                const expected = String(want[path] || '').toLowerCase().replace(/^b3:/, '').trim();
+                if (!expected) return false;
+                try {
+                    const h = await invoke('hash_file', { path, algo: p.algo || 'blake3' }) as string;
+                    if ((h || '').toLowerCase() !== expected) return false;
+                } catch { return false; }   // unreadable is not "unchanged"
+            }
+            return true;
+        }
+        // ── Reachability ───────────────────────────────────────────────────────
+        case 'catalogOk':
+        case 'repoOk': {
+            // Does this address answer, and is it the kind of document it claims to be?
+            //
+            // Gated on `command` for the same reason http.request is: a condition that
+            // fetches a URL can be pointed anywhere by whoever shared the .bmmpa, and a
+            // network read nobody granted would make the other permissions decorative.
+            needPerm('command', t('sched.perm.net') || 'reach the network');
+            // http_request, NOT fetch_remote_json: that one goes through catalog_get, which
+            // attaches the user's X-Creator-ID for first-party hosts. A URL out of a shared
+            // task must not be able to borrow the reader's identity.
+            const url = String(p.url || '').trim();
+            if (!/^https?:\/\//i.test(url)) return false;
+            const target = cond.type === 'repoOk' && !/\.json($|\?)/i.test(url)
+                ? `${url.replace(/\/+$/, '')}/repo.json`
+                : url;
+            try {
+                const rep: any = await invoke('http_request', {
+                    url: target, method: 'GET', headers: {}, body: null, timeoutMs: 15000,
+                });
+                if (!rep || rep.status < 200 || rep.status >= 300) return false;
+                if (p.shapeless) return true;   // "it answered 2xx" is sometimes the whole question
+                const doc = JSON.parse(rep.body || 'null');
+                if (cond.type === 'repoOk') {
+                    // A repo document, or a catalogue listing repos — both are "the repo
+                    // answered" for a caller that just wants to know before syncing.
+                    return !!doc && (Array.isArray(doc.mods) || Array.isArray(doc.repos) || typeof doc.name === 'string');
+                }
+                return catalogLooksLike(doc, String(p.kind || 'any'));
+            } catch { return false; }
         }
     }
     return false;
@@ -4080,7 +4170,7 @@ function diskOptions(selected: string): string {
         _disks.map((d: any) => `<option value="${escAttr(d.mount_point)}"${d.mount_point === selected ? ' selected' : ''}>${escHtml(d.mount_point)}${d.name ? ' · ' + escHtml(d.name) : ''}</option>`).join('');
 }
 
-const COND_TYPES = ['always', 'value', 'enumIs', 'profileActive', 'modEnabled', 'modDisabled', 'modpackActive', 'modpackInactive', 'allModsActive', 'appRunning', 'appNotRunning', 'fileExists', 'fileHash', 'fileSize', 'fileType', 'fileName', 'fileNewer', 'online', 'timeReached', 'dayOfWeek', 'timeRange', 'commandSucceeds'];
+const COND_TYPES = ['always', 'value', 'enumIs', 'profileActive', 'modEnabled', 'modDisabled', 'modpackActive', 'modpackInactive', 'allModsActive', 'appRunning', 'appNotRunning', 'fileExists', 'pathIsDir', 'fileHash', 'filesMatch', 'fileSize', 'fileType', 'fileName', 'fileNewer', 'online', 'catalogOk', 'repoOk', 'timeReached', 'dayOfWeek', 'timeRange', 'commandSucceeds'];
 // Values a preceding action can capture (used by the `value` condition).
 // Every variable an action writes into `ctx`, so a `value` condition can read all of
 // them. Four were missing — check_disk_space has always written disk.free_gb,
@@ -4224,6 +4314,41 @@ function renderCondParams(host: HTMLElement, cond: Condition): void {
     } else if (cond.type === 'fileNewer') {
         host.innerHTML = `${condFileInput(p)}<span style="font-size:11px;color:var(--text-muted)">${t('sched.modifiedWithin') || 'modified within last'}</span><input class="input sched-cp-min" type="number" min="1" value="${escAttr(p.minutes || 60)}" style="max-width:90px"> ${t('sched.unitMin') || 'min'}`;
         host.querySelector('.sched-cp-min')?.addEventListener('input', (e) => { p.minutes = (e.target as HTMLInputElement).value; });
+    } else if (cond.type === 'pathIsDir') {
+        // A file and a folder are both "exists", so the thing being chosen is which one you
+        // meant — stated as two named outcomes rather than a checkbox nobody can read twice.
+        host.innerHTML = `${condFileInput(p)}<select class="input sched-cp-want" style="max-width:150px">
+            <option value="dir"${p.want !== 'file' ? ' selected' : ''}>${escAttr(t('sched.cond.isDir') || 'is a folder')}</option>
+            <option value="file"${p.want === 'file' ? ' selected' : ''}>${escAttr(t('sched.cond.isFile') || 'is a file')}</option>
+        </select>`;
+        host.querySelector('.sched-cp-want')?.addEventListener('change', (e) => { p.want = (e.target as HTMLSelectElement).value; });
+    } else if (cond.type === 'filesMatch') {
+        host.innerHTML = `<span style="font-size:11px;color:var(--text-secondary)">${t('sched.cond.filesIn') || 'every file listed in'}</span>
+            <input class="input sched-cp-list" placeholder="${escAttr(t('sched.listName') || 'list name')}" value="${escAttr(p.list || '')}" style="max-width:150px">
+            <span style="font-size:11px;color:var(--text-secondary)">${t('sched.cond.hashesTo') || 'still hashes to what'}</span>
+            <input class="input sched-cp-map" placeholder="${escAttr(t('sched.mapName') || 'map name')}" value="${escAttr(p.map || '')}" style="max-width:150px">
+            <span style="font-size:11px;color:var(--text-secondary)">${t('sched.cond.says') || 'says'}</span>
+            <select class="input sched-cp-algo" style="max-width:120px">
+                <option value="blake3"${p.algo !== 'sha256' ? ' selected' : ''}>blake3</option>
+                <option value="sha256"${p.algo === 'sha256' ? ' selected' : ''}>sha256</option>
+            </select>`;
+        host.querySelector('.sched-cp-list')?.addEventListener('input', (e) => { p.list = (e.target as HTMLInputElement).value; });
+        host.querySelector('.sched-cp-map')?.addEventListener('input', (e) => { p.map = (e.target as HTMLInputElement).value; });
+        host.querySelector('.sched-cp-algo')?.addEventListener('change', (e) => { p.algo = (e.target as HTMLSelectElement).value; });
+    } else if (cond.type === 'catalogOk' || cond.type === 'repoOk') {
+        host.innerHTML = `<input class="input sched-cp-url" placeholder="https://…" value="${escAttr(p.url || '')}" style="min-width:240px">
+            ${cond.type === 'catalogOk' ? `<select class="input sched-cp-kind" style="max-width:150px">
+                ${['any', 'app', 'plugin', 'theme', 'preset', 'repo', 'index'].map((k) =>
+                    `<option value="${k}"${(p.kind || 'any') === k ? ' selected' : ''}>${escAttr(t('sched.cond.kind.' + k) || k)}</option>`).join('')}
+            </select>` : ''}
+            <label style="font-size:11px;color:var(--text-secondary);display:inline-flex;align-items:center;gap:4px">
+                <input type="checkbox" class="sched-cp-shapeless"${p.shapeless ? ' checked' : ''}>
+                ${escAttr(t('sched.cond.answeredOnly') || 'answered is enough')}
+            </label>
+            <span style="font-size:11px;color:var(--warning)">${escAttr(t('sched.cond.needsNet') || 'needs the “run a program” permission')}</span>`;
+        host.querySelector('.sched-cp-url')?.addEventListener('input', (e) => { p.url = (e.target as HTMLInputElement).value; });
+        host.querySelector('.sched-cp-kind')?.addEventListener('change', (e) => { p.kind = (e.target as HTMLSelectElement).value; });
+        host.querySelector('.sched-cp-shapeless')?.addEventListener('change', (e) => { p.shapeless = (e.target as HTMLInputElement).checked; });
     } else host.innerHTML = '';
 
     const cp = host.querySelector('.sched-cp') as HTMLSelectElement;

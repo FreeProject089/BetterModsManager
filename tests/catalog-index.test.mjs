@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const { parseCatalogIndex, planImport, INDEX_TYPES, STORE_KEY, ROUTABLE, looksLikeIndex, hasSource, addSource, removeSource, readHistory, recordHistory, clearHistory, HISTORY_MAX,
-  readDisabled, isDisabled, setDisabled, enabledOnly } = await import(
+  readDisabled, isDisabled, setDisabled, enabledOnly, catalogLooksLike, CATALOG_SHAPES } = await import(
   pathToFileURL(join(ROOT, 'frontend/js/features/catalogs/catalog-index.js')).href
 );
 
@@ -164,6 +164,53 @@ describe('hasSource / addSource — the preview and the writer must agree', () =
     const list = ['https://e.com/a.json'];
     addSource(list, 'https://e.com/b.json');
     assert.deepEqual(removeSource(list, 'https://E.COM/B.JSON').list, ['https://e.com/a.json']);
+  });
+});
+
+describe('catalogLooksLike — what kind of document is this?', () => {
+  test('each kind is recognised by the array its own reader looks for', () => {
+    assert.equal(catalogLooksLike({ apps: [] }, 'app'), true);
+    assert.equal(catalogLooksLike({ plugins: [] }, 'plugin'), true);
+    assert.equal(catalogLooksLike({ themes: [] }, 'theme'), true);
+    assert.equal(catalogLooksLike({ presets: [] }, 'preset'), true);
+    assert.equal(catalogLooksLike({ repos: [] }, 'repo'), true);
+  });
+
+  test('a bare array is a theme catalogue — the one kind that allows it', () => {
+    // theme-catalog.ts accepts `[...]` as well as `{ themes: [...] }`, so this must too, or
+    // a real theme catalogue would be reported as not one.
+    assert.equal(catalogLooksLike([{ id: 't' }], 'theme'), true);
+    assert.equal(catalogLooksLike([{ id: 't' }], 'plugin'), false);
+  });
+
+  test('an automation catalogue answers to presets OR tasks', () => {
+    assert.equal(catalogLooksLike({ tasks: [] }, 'preset'), true);
+  });
+
+  test('the wrong kind is refused — which is the whole point', () => {
+    // THE ONE. A file called catalog.json can be anything, and an index pasted where a
+    // plugin catalogue belongs would otherwise parse, hold no plugins, and read as empty.
+    const index = { version: '1', kind: 'catalog-index', catalogs: [{ type: 'plugin', url: 'https://e.com/p.json' }] };
+    assert.equal(catalogLooksLike(index, 'plugin'), false);
+    assert.equal(catalogLooksLike(index, 'index'), true);
+    assert.equal(catalogLooksLike({ plugins: [] }, 'index'), false);
+  });
+
+  test('index defers to looksLikeIndex rather than repeating its rule', () => {
+    const doc = { version: '1', kind: 'catalog-index', catalogs: [{ type: 'app', url: 'https://e.com/a.json' }] };
+    assert.equal(CATALOG_SHAPES.index(doc), looksLikeIndex(doc));
+    assert.equal(CATALOG_SHAPES.index({ nope: 1 }), looksLikeIndex({ nope: 1 }));
+  });
+
+  test('"any" accepts any recognised shape and still refuses junk', () => {
+    assert.equal(catalogLooksLike({ apps: [] }, 'any'), true);
+    assert.equal(catalogLooksLike({ hello: 'world' }, 'any'), false);
+    assert.equal(catalogLooksLike(null, 'any'), false);
+  });
+
+  test('an unknown kind is false, not "anything goes"', () => {
+    // Answering true would hide a condition the editor should never have produced.
+    assert.equal(catalogLooksLike({ apps: [] }, 'wat'), false);
   });
 });
 
