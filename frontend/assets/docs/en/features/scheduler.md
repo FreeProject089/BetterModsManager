@@ -286,3 +286,58 @@ reads either.
     Imported tasks get fresh ids and *Run even when BMM is closed* is forced **off**, so importing a
     file can't silently register OS-level scheduled tasks on your machine. Review and enable them
     yourself. **Load example** drops in a ready-made (disabled) task you can dissect.
+
+
+## Carrying values around
+
+A task can keep values as it runs, and read them back by name with `{braces}`.
+
+**Variables** hold one thing each. A step that captures output gives you both the text and, when
+it looks like one, the number. `Set variable` writes one yourself, and its **scope** decides how
+long it lives: *this run only*, or **shared** — kept between runs and visible to every task. The
+sidebar lists every shared variable with its value, so you can see what is already taken before
+you pick a name.
+
+!!! note "Shared variables work in arithmetic too"
+    They used to be invisible to it: `count + 1` on a shared counter read 0 and evaluated to 1
+    on every run, while the same name substituted correctly into a message two lines above.
+
+**Lists** hold several — the profiles you touched, the URLs a feed returned. `List — set it`
+takes a JSON array or a plain `a, b, c` line; `add one item` appends. Read the size with
+`{list.<name>.length}`, and walk one with **For each**, whose source picker offers your own
+lists as well as the app's collections.
+
+**Maps** answer *what goes with what* rather than *which ones* — the id a name belongs to, the
+URL behind a label. `Map — set a key`, `read a key into a variable`, `empty it`. **For each** can
+walk a map's keys.
+
+!!! warning "A missing key is not an empty value"
+    `map.get` on a key that is not there stores an empty value and sets `map.hit` to 0. Test
+    `map.hit` when the difference matters — otherwise "not there" and "there and blank" look
+    identical.
+
+## Enums, and a Switch that tells you what you missed
+
+Declare an **enum** in the sidebar — a name and its values, like `ok, failed, skipped`. A
+condition can then test *variable is member X of enum E*, which is what gives a branch a subject
+rather than a free-text comparison.
+
+Once every case of a **Switch** tests the same enum, the block lists the members you have not
+handled. The note is advisory: handling three of five on purpose and letting DEFAULT catch the
+rest is a legitimate thing to write, so it never blocks a save.
+
+## Reusable blocks
+
+Steps written once and run from anywhere. Build them in a task, name them in the sidebar with
+**Save these steps**, then drop **Run a block** wherever you need them.
+
+A block runs **with the calling task's permissions**, never its own. That is deliberate: a
+block is written once and called from many places, so permissions attached to it would be
+granted in one place and spent in another — and importing a block would become a way to run
+actions the calling task was refused.
+
+!!! warning "Two refusals you will meet"
+    Deleting a block a task still calls is refused, and a `Run a block` pointing at a name that
+    no longer exists **stops the task** rather than skipping quietly. A call that silently does
+    nothing is a task reporting success while half of it never ran. Blocks calling each other are
+    capped at 20 levels deep.

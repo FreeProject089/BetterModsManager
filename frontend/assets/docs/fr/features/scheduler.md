@@ -280,3 +280,61 @@ seule — donc tout ce qui lit un .bmmpa lit l'un comme l'autre.
     **off**, pour qu'importer un fichier n'enregistre pas silencieusement des tâches au niveau du
     système. Relis-les et active-les toi-même. **Charger l'exemple** dépose une tâche prête (et
     désactivée) que tu peux décortiquer.
+
+
+## Transporter des valeurs
+
+Une tâche peut retenir des valeurs pendant qu'elle tourne, et les relire par leur nom avec des
+`{accolades}`.
+
+**Les variables** contiennent une seule chose. Une étape qui capture une sortie vous donne le
+texte et, quand ça y ressemble, le nombre. `Définir une variable` en écrit une vous-même, et sa
+**portée** décide de sa durée de vie : *cette exécution seulement*, ou **partagée** — conservée
+entre les exécutions et visible par toutes les tâches. La colonne de gauche liste chaque variable
+partagée avec sa valeur, pour voir ce qui est déjà pris avant de choisir un nom.
+
+!!! note "Les variables partagées fonctionnent aussi dans les calculs"
+    Elles y étaient invisibles : `count + 1` sur un compteur partagé lisait 0 et valait 1 à chaque
+    exécution, alors que le même nom se substituait correctement dans un message deux lignes plus
+    haut.
+
+**Les listes** en contiennent plusieurs — les profils touchés, les URLs renvoyées par un flux.
+`Liste — la définir` accepte un tableau JSON ou une simple ligne `a, b, c` ; `ajouter un élément`
+complète. La taille se lit avec `{list.<nom>.length}`, et **Pour chaque** en parcourt une — son
+sélecteur de source propose vos propres listes autant que les collections de l'app.
+
+**Les tables** répondent à *quoi va avec quoi* plutôt qu'à *lesquels* — l'id derrière un nom,
+l'URL derrière une étiquette. `Table — définir une clé`, `lire une clé dans une variable`,
+`la vider`. **Pour chaque** peut parcourir les clés d'une table.
+
+!!! warning "Une clé absente n'est pas une valeur vide"
+    `map.get` sur une clé inexistante enregistre une valeur vide et met `map.hit` à 0. Testez
+    `map.hit` quand la différence compte — sinon « absente » et « présente et vide » se
+    ressemblent exactement.
+
+## Enums, et un Switch qui dit ce que vous avez oublié
+
+Déclarez un **enum** dans la colonne de gauche — un nom et ses valeurs, par exemple
+`ok, echec, ignore`. Une condition peut alors tester *la variable vaut le membre X de l'enum E*,
+ce qui donne un sujet à la branche au lieu d'une comparaison de texte libre.
+
+Dès que tous les cas d'un **Switch** testent le même enum, le bloc liste les membres non traités.
+L'avertissement est consultatif : en traiter trois sur cinq volontairement et laisser DEFAULT
+absorber le reste est légitime, donc il ne bloque jamais l'enregistrement.
+
+## Blocs réutilisables
+
+Des étapes écrites une fois et exécutables partout. Construisez-les dans une tâche, nommez-les
+dans la colonne de gauche avec **Enregistrer ces étapes**, puis placez **Exécuter un bloc** où
+vous en avez besoin.
+
+Un bloc s'exécute **avec les permissions de la tâche appelante**, jamais les siennes. C'est
+délibéré : un bloc est écrit une fois et appelé depuis plusieurs endroits, donc des permissions
+qui lui seraient attachées seraient accordées à un endroit et dépensées à un autre — et importer
+un bloc deviendrait un moyen d'exécuter des actions que la tâche appelante s'est vu refuser.
+
+!!! warning "Deux refus que vous rencontrerez"
+    Supprimer un bloc qu'une tâche appelle encore est refusé, et un `Exécuter un bloc` pointant
+    vers un nom disparu **arrête la tâche** au lieu de passer en silence. Un appel qui ne fait
+    rien discrètement, c'est une tâche qui annonce un succès alors que la moitié n'a jamais
+    tourné. Les blocs qui s'appellent entre eux sont plafonnés à 20 niveaux.
