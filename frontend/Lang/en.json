@@ -7481,5 +7481,7 @@
   "plugins.phServerPlugins": "My Server Plugins",
   "apps.sources.indexNone2": "No app catalogs in that index — it holds {what}. Add those from their own screens.",
   "plugins.indexNone2": "No plugin catalogs in that index — it holds {what}. Add those from their own screens.",
-  "themes.indexNone2": "No theme catalogs in that index — it holds {what}. Add those from their own screens."
+  "themes.indexNone2": "No theme catalogs in that index — it holds {what}. Add those from their own screens.",
+  "settings.catIndex.histSearch": "Search the history — address, kind or action",
+  "settings.catIndex.histNoMatch": "No line matches that."
 }

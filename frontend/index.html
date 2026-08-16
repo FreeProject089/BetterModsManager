@@ -3680,6 +3680,13 @@
 
                             <details class="cat-index-fold" id="cat-index-history-fold">
                                 <summary data-i18n="settings.catIndex.history">History</summary>
+                                <!-- The history is the one list here that grows without bound (200 lines),
+                                     and it is read to answer one question: "what happened to THIS address".
+                                     Scrolling for it is the wrong tool. -->
+                                <input type="search" class="input input-sm" id="cat-index-history-q"
+                                    data-i18n-placeholder="settings.catIndex.histSearch"
+                                    placeholder="Search the history — address, kind or action"
+                                    autocomplete="off" spellcheck="false" style="margin-bottom:8px;">
                                 <div id="cat-index-history" class="cat-index-history"></div>
                                 <button class="btn btn-ghost btn-sm" id="cat-index-history-clear"
                                     data-i18n="settings.catIndex.histClear">Clear history</button>

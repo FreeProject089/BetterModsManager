@@ -1909,6 +1909,7 @@ async function initCatalogIndexSettings() {
     const contentsHost = document.getElementById('cat-index-contents');
     const followHost = document.getElementById('cat-index-following');
     const histHost = document.getElementById('cat-index-history');
+    const histQ = document.getElementById('cat-index-history-q') as HTMLInputElement | null;
 
     // ── Following: every source BMM actually fetches, whatever put it there ──────
     //
@@ -1977,14 +1978,31 @@ async function initCatalogIndexSettings() {
 
     const renderHistory = async () => {
         if (!histHost) return;
-        const h = readHistory();
+        const all = readHistory();
+        // Matches the address, the kind and the action word — the three things a line says.
+        // The action is matched in the CURRENT language as well as its stored value, because
+        // somebody reading a French list types "ajouté", not "add".
+        const q = (histQ?.value || '').trim().toLowerCase();
+        // The ORIGINAL position travels with the line. `forgetHistoryAt` deletes by index into
+        // the whole history, so once a filter is applied the row's position in what you can see
+        // is not the position of the thing it deletes — and "drop this line" would drop a
+        // different one. The kind of bug a filter quietly introduces into a list with a delete
+        // button.
+        const h = q ? all.map((e, i) => ({ e, i })).filter(({ e }) => {
+            const words = [
+                e.url, e.type, e.action, e.via || '',
+                t(`settings.catIndex.type.${e.type}`) || '',
+                (e.action === 'add' ? t('settings.catIndex.hAdded') : t('settings.catIndex.hRemoved')) || '',
+            ];
+            return words.some((w) => String(w).toLowerCase().includes(q));
+        }) : all.map((e, i) => ({ e, i }));
         // What is followed right now, so a "removed" row knows whether it can be put back —
         // a Bring-back button beside something you already follow again is a dead control.
         const all = await readAllSources();
         const followed = new Set(Object.values(all).flat().map((u) => u.toLowerCase()));
 
         histHost.innerHTML = h.length
-            ? h.map((e, i) => {
+            ? h.map(({ e, i }) => {
                 const gone = e.action === 'remove' && !followed.has(e.url.toLowerCase());
                 return `<div class="cat-index-row cat-index-hist-${escAttr(e.action)}">
                   <span class="cat-index-when">${escHtml(new Date(e.at).toLocaleString())}</span>
@@ -1998,7 +2016,11 @@ async function initCatalogIndexSettings() {
                   <button class="btn btn-ghost btn-sm cat-index-forget" data-i="${i}" title="${escAttr(t('settings.catIndex.forget.h') || 'Drop this line from the history')}">×</button>
                </div>`;
             }).join('')
-            : `<div class="cat-index-empty">${escHtml(t('settings.catIndex.noHistory') || 'Nothing yet.')}</div>`;
+            // Two different empty states. "Nothing yet" over a history that has 90 lines and a
+            // search term in the box is a lie about the data.
+            : `<div class="cat-index-empty">${escHtml(q
+                ? (t('settings.catIndex.histNoMatch') || 'No line matches that.')
+                : (t('settings.catIndex.noHistory') || 'Nothing yet.'))}</div>`;
 
         // The point of keeping a history at all: undoing a removal without going and finding
         // the address again. It re-follows through the same `follow()` the index import uses,
@@ -2018,6 +2040,10 @@ async function initCatalogIndexSettings() {
             await renderHistory();
         }));
     };
+
+    // Typed-into rather than submitted: a history search is a filter, and waiting for Enter to
+    // filter a list already on screen is a step for nothing.
+    histQ?.addEventListener('input', () => { void renderHistory(); });
 
     document.getElementById('cat-index-history-clear')?.addEventListener('click', () => {
         clearHistory(); void renderHistory();
