@@ -78,7 +78,7 @@ const DEFAULTS: BmmLinks = {
     // a new BMM — the one thing the registry exists to avoid. They are in the file now, so
     // these values are the fallback and no longer the only copy.
     analytics_endpoint: 'https://telemetry.bettercommunity.ch/batch/',   // production collector — MUST end with /batch/
-    analytics_key:      'bmm_pk_3aab75ffc7b964990178682c918f117767ba2657',   // PUBLIC ingest key — safe to ship
+    analytics_key:      'bmm_pk_a8bc7a0dba3faca94dd497aab3c4a5e8d56f13fb',   // PUBLIC ingest key — safe to ship
     github_repo:      'https://github.com/FreeProject089/BetterModsManager',
     discord:          'https://discord.com/invite/CTaaEF9R75',
     reddit:           'https://www.reddit.com/r/BetterModManager/',

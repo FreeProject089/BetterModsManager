@@ -10,7 +10,7 @@
   "catalog_index": "https://bettercommunity.ch/api/catalogs.json",
   "_comment_analytics": "Telemetry (opt-in). analytics_key is a PUBLIC ingest key: it only permits SUBMITTING telemetry and already ships inside the app. Keeping both here means the collector can be moved, or the key rotated, without waiting for a BMM release. Empty analytics_endpoint = events stay buffered locally and nothing leaves the machine.",
   "analytics_endpoint": "https://telemetry.bettercommunity.ch/batch/",
-  "analytics_key": "bmm_pk_3aab75ffc7b964990178682c918f117767ba2657",
+  "analytics_key": "bmm_pk_a8bc7a0dba3faca94dd497aab3c4a5e8d56f13fb",
   "github_repo": "https://github.com/FreeProject089/BetterModsManager",
   "discord": "https://discord.com/invite/CTaaEF9R75",
   "reddit": "https://www.reddit.com/r/BetterModManager/",
