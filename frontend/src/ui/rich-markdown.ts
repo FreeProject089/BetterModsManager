@@ -65,6 +65,66 @@ export function iconImg(name: string): string {
 
 export interface ExpandOpts { baseUrl?: string; }
 
+/** The three states a tracker item can be in, and the words people write for each. Anything
+ *  unrecognised is `planned` — never `done`, because a typo must not report work as finished. */
+function itemState(raw: string): 'done' | 'progress' | 'planned' {
+    const v = String(raw || '').toLowerCase();
+    if (v === 'done' || v === 'shipped' || v === 'complete') return 'done';
+    if (v === 'progress' || v === 'doing' || v === 'active' || v === 'wip') return 'progress';
+    return 'planned';
+}
+
+/**
+ * The `{"categories":[…]}` tracker the website draws, drawn the same way here.
+ *
+ * Returns '' when the JSON is not a tracker — a malformed block then falls back to being
+ * printed, which is ugly and honest, rather than to an empty box that looks like "no work
+ * planned".
+ *
+ * A `done` item counts as 100 whatever its percent says: a finished line with a half-full bar
+ * is the kind of detail nobody reports and everybody notices.
+ */
+function renderTracker(json: string, title: string): string {
+    let data: any;
+    try { data = JSON.parse(json); } catch { return ''; }
+    const cats = Array.isArray(data?.categories) ? data.categories : null;
+    if (!cats?.length) return '';
+
+    let done = 0; let active = 0; let planned = 0; let sum = 0; let n = 0;
+    const catHtml = cats.map((c: any) => {
+        const items = Array.isArray(c?.items) ? c.items : [];
+        const rows = items.map((it: any) => {
+            const st = itemState(it?.status);
+            const pct = st === 'done' ? 100 : Math.max(0, Math.min(100, Number(it?.percent) || 0));
+            if (st === 'done') done++; else if (st === 'progress') active++; else planned++;
+            sum += pct; n++;
+            const mark = st === 'done' ? '✓' : st === 'progress' ? '◐' : '○';
+            return `<div class="community-track-item community-track-${st}">`
+                + `<span class="community-track-mark" aria-hidden="true">${mark}</span>`
+                + `<span class="community-track-label">${escHtml(String(it?.label ?? ''))}</span>`
+                + `<span class="community-track-bar"><i style="width:${pct}%"></i></span>`
+                + `<span class="community-track-pct">${pct}%</span>`
+                + `</div>`;
+        }).join('');
+        // The category's own figure is the mean of its items — stated, not guessed: a heading
+        // percentage that came from nowhere is the first thing a reader stops trusting.
+        const own = items.length
+            ? Math.round(items.reduce((a: number, it: any) => a + (itemState(it?.status) === 'done' ? 100 : (Number(it?.percent) || 0)), 0) / items.length)
+            : 0;
+        return `<div class="community-track-cat">`
+            + `<div class="community-track-cathead"><span>${escHtml(String(c?.name ?? ''))}</span><span class="community-track-pct">${own}%</span></div>`
+            + `<div class="community-track-catbar"><i style="width:${own}%"></i></div>`
+            + rows + `</div>`;
+    }).join('');
+
+    const overall = n ? Math.round(sum / n) : 0;
+    return `<div class="community-tracker">`
+        + `<div class="community-tracker-head">`
+        + `<span class="community-tracker-title">${escHtml(title || 'Roadmap')}</span>`
+        + `<span class="community-tracker-sum"><b>${overall}%</b> overall · ${done} done · ${active} active · ${planned} planned</span>`
+        + `</div>${catHtml}</div>`;
+}
+
 export function expandDocBlocks(md: string, opts: ExpandOpts = {}, _top = true): string {
   const baseUrl = (opts.baseUrl || '').replace(/\/+$/, '');
   const abs = (u: string) => (u && u.startsWith('/') && baseUrl) ? `${baseUrl}${u}` : u; // relative site URL → absolute
@@ -144,34 +204,54 @@ export function expandDocBlocks(md: string, opts: ExpandOpts = {}, _top = true):
       // always emits data-marker="•" so it still renders on its own; adding a second
       // attribute here produced `data-marker="1" data-marker="•"` on one element, which
       // is valid enough that nothing complained and wrong in a way only a test caught.
-      const numbered = innerMd.replace(/(<div class="community-step") data-marker="[^"]*"/g, () => {
+      // The class may now carry a state, and the tag may carry a style — so the marker is
+      // found by its ATTRIBUTE rather than by the exact opening tag. A step with `status=done`
+      // silently lost its number until this stopped matching on the class alone.
+      const numbered = innerMd.replace(/(<div class="community-step[^"]*") data-marker="[^"]*"/g, (_m, head) => {
         const m = stepMarker(kind, n); n += 1;
-        return `<div class="community-step" data-marker="${escAttr(m)}"`;
+        return `${head} data-marker="${escAttr(m)}"`;
       });
       const vertical = String(attrs.orientation || attrs.dir || 'vertical') !== 'horizontal';
-      out.push('', `<div class="community-steps ${vertical ? 'community-steps-v' : 'community-steps-h'}">${numbered}</div>`, '');
+      // `color=` paints the markers, like the site. Carried as a CSS variable on the wrapper so
+      // one attribute colours every step under it, and a step may still override its own.
+      const col = attrs.color ? ` style="--stepc:${escAttr(attrs.color)}"` : '';
+      out.push('', `<div class="community-steps ${vertical ? 'community-steps-v' : 'community-steps-h'}"${col}>${numbered}</div>`, '');
     }
     else if (name === 'step') {
       // The marker is stamped by the parent above. A step used on its own still renders —
       // half a component is worse than a plain paragraph — it simply gets a bullet.
       const title = label || attrs.title || '';
-      out.push('', `<div class="community-step" data-marker="•">`
+      // A step of its own may be coloured, and may be marked done — the site allows both, and
+      // a status that is not `done` is simply no status rather than a third state nobody set.
+      const own = attrs.color ? ` style="--stepc:${escAttr(attrs.color)}"` : '';
+      const state = String(attrs.status || '').toLowerCase() === 'done' ? ' community-step-done' : '';
+      out.push('', `<div class="community-step${state}" data-marker="•"${own}>`
         + (title ? `<div class="community-step-title">${escHtml(title)}</div>` : '')
-        + `<div class="community-step-body">${innerMd}</div></div>`, '');
+        // The body is MARKDOWN. Handing it through as raw HTML means `marked` never looks
+        // inside it — the site renders **bold** there and the app printed the asterisks.
+        + `<div class="community-step-body">${mdInline(innerMd)}</div></div>`, '');
     }
     else if (name === 'roadmap') {
-      // Phases with a state. `done` / `doing` / `todo` are the site's three, and anything
-      // else falls back to todo rather than rendering an empty marker.
+      // THREE sources on the site, and the app knew only one of them:
+      //
+      //   :::roadmap  +  :::stage children   (below)
+      //   :::roadmap  +  a ```json``` block  ← this one, and it is what people actually write
+      //   :::roadmap{src="…"}                (the site polls it; a desktop app read offline cannot)
+      //
+      // Without the JSON branch the block fell through to "render the body plainly", so a
+      // roadmap posted from the website arrived in BMM as the raw `{"categories":[…]}` printed
+      // into the middle of the article.
       const vertical = String(attrs.orientation || attrs.dir || 'vertical') !== 'horizontal';
       const title = label || attrs.title || '';
-      out.push('', `<div class="community-roadmap ${vertical ? 'community-roadmap-v' : 'community-roadmap-h'}">`
-        + (title ? `<div class="community-roadmap-title">${escHtml(title)}</div>` : '')
-        + `${innerMd}</div>`, '');
+      const jsonBlock = inner.join('\n').match(/```(?:json)?\s*([\s\S]*?)```/);
+      const tracker = jsonBlock ? renderTracker(jsonBlock[1], title) : '';
+      if (tracker) { out.push('', tracker, ''); }
+      else {
+        out.push('', `<div class="community-roadmap ${vertical ? 'community-roadmap-v' : 'community-roadmap-h'}">`
+          + (title ? `<div class="community-roadmap-title">${escHtml(title)}</div>` : '')
+          + `${innerMd}</div>`, '');
+      }
     }
-    // `stage` is the name the website's authoring guide teaches and the one people write;
-    // `phase` is the older alias. Until now `stage` fell into the STEP branch above, so a
-    // roadmap copied from the site rendered in the app as a numbered list — the stages became
-    // steps, the states vanished, and nothing looked broken enough to report.
     else if (name === 'phase' || name === 'stage') {
       // The site's three states, plus the words people actually type. Anything unrecognised is
       // `todo` and never `done`: a typo must not report work as finished.

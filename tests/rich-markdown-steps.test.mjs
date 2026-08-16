@@ -193,3 +193,54 @@ describe('a roadmap written the way the docs teach it', () => {
     assert.match(html, /community-step"/);
   });
 });
+
+describe('what the website writes, rendered the same way here', () => {
+  // These three came off one real blog post that looked right on the site and wrong in the app.
+  test('a roadmap carrying a ```json``` block draws the tracker', () => {
+    // Without this branch the block fell through to "render the body plainly", so the reader
+    // got `{"categories":[…]}` printed into the middle of the article.
+    const html = expandDocBlocks([
+      ':::roadmap[Roadmap]{orientation=vertical}',
+      '```json',
+      '{"categories":[{"name":"v1.0","items":[{"label":"Core","status":"done"},{"label":"Docs","status":"progress","percent":40},{"label":"Polish","status":"planned"}]}]}',
+      '```',
+      ':::',
+    ].join('\n'));
+    assert.match(html, /community-tracker/);
+    assert.ok(!html.includes('"categories"'), 'the raw JSON must not reach the reader');
+    assert.match(html, /<b>47%<\/b>/, 'the mean of 100, 40 and 0');
+    assert.match(html, /1 done · 1 active · 1 planned/);
+  });
+
+  test('a finished item is full whatever its percent says', () => {
+    const html = expandDocBlocks([
+      ':::roadmap',
+      '```json',
+      '{"categories":[{"name":"x","items":[{"label":"a","status":"done","percent":10}]}]}',
+      '```',
+      ':::',
+    ].join('\n'));
+    assert.match(html, /width:100%/, 'a done line with a half bar is what everybody notices');
+  });
+
+  test('malformed JSON is left visible rather than drawn as an empty box', () => {
+    // An empty tracker reads as "no work planned", which is a claim. Printing the block is
+    // ugly and true.
+    const html = expandDocBlocks(':::roadmap\n```json\n{not json\n```\n:::');
+    assert.ok(!/community-tracker/.test(html));
+  });
+
+  test('a step colour reaches the marker', () => {
+    const html = expandDocBlocks('::::steps{color="#7c3aed"}\n:::step[A]\nx\n:::\n::::');
+    assert.match(html, /--stepc:#7c3aed/);
+  });
+
+  test('a step with a status still gets its number', () => {
+    // The numbering rewrote markers by matching the exact opening tag, so adding a state class
+    // silently dropped the number and left the bullet.
+    const html = expandDocBlocks('::::steps{type=a}\n:::step[A]\nx\n:::\n:::step[B]{status=done}\ny\n:::\n::::');
+    assert.match(html, /data-marker="A"/);
+    assert.match(html, /data-marker="B"/);
+    assert.match(html, /community-step-done/);
+  });
+});

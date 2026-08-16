@@ -457,13 +457,17 @@
   background: var(--bmm-border, rgba(255,255,255,.12));
 }
 .community-step:last-child::before { display: none; }
+/* A step marked done reads as done without relying on its colour. */
+.community-step-done::after { color: var(--bmm-success, #4ade80); background: color-mix(in srgb, var(--bmm-success, #4ade80) 16%, transparent); border-color: color-mix(in srgb, var(--bmm-success, #4ade80) 40%, transparent); }
 .community-step::after {
   content: attr(data-marker);
   position: absolute; left: 0; top: 0; width: 26px; height: 26px;
   display: flex; align-items: center; justify-content: center;
   border-radius: 999px; font-size: 12px; font-weight: 700; line-height: 1;
-  color: var(--bmm-accent); background: color-mix(in srgb, var(--bmm-accent) 16%, transparent);
-  border: 1px solid color-mix(in srgb, var(--bmm-accent) 40%, transparent);
+  /* `--stepc` is set by `:::steps{color=…}` (or by a single step). Falls back to the app
+     accent, so a document that never mentions a colour looks exactly as it did. */
+  color: var(--stepc, var(--bmm-accent)); background: color-mix(in srgb, var(--stepc, var(--bmm-accent)) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--stepc, var(--bmm-accent)) 40%, transparent);
 }
 .community-step-title { font-weight: 700; margin-bottom: 4px; padding-top: 4px; }
 .community-step-body > :first-child { margin-top: 0; }
@@ -473,6 +477,29 @@
 .community-roadmap-title { font-weight: 700; margin-bottom: 8px; }
 .community-roadmap-h { display: flex; flex-wrap: wrap; gap: 12px; }
 .community-roadmap-h .community-phase { flex: 1 1 180px; }
+
+/* The JSON tracker (`:::roadmap` + a ```json``` block) — the same shape the website draws.
+   Every row says its state three ways: the mark, the label's weight and the bar. Colour alone
+   would leave "done" and "planned" identical to a colourblind reader. */
+.community-tracker { margin: 14px 0; border: 1px solid var(--bmm-border, #2a3242); border-radius: 12px; overflow: hidden; }
+.community-tracker-head { display: flex; align-items: baseline; gap: 10px; padding: 10px 14px; background: var(--bmm-bg-base, #0f1420); flex-wrap: wrap; }
+.community-tracker-title { font-weight: 700; font-size: 14px; }
+.community-tracker-sum { margin-left: auto; font-size: 12px; color: var(--bmm-text-muted, #7c8698); }
+.community-track-cat { padding: 10px 14px; border-top: 1px solid var(--bmm-border, #2a3242); }
+.community-track-cathead { display: flex; justify-content: space-between; font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+.community-track-catbar { height: 5px; border-radius: 999px; background: var(--bmm-bg-hover, #222b3b); overflow: hidden; margin-bottom: 8px; }
+.community-track-catbar > i { display: block; height: 100%; background: var(--bmm-accent, #3b82f6); }
+.community-track-item { display: grid; grid-template-columns: 16px 1fr 120px 40px; align-items: center; gap: 8px; font-size: 12.5px; padding: 3px 0; }
+.community-track-mark { text-align: center; }
+.community-track-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.community-track-bar { height: 4px; border-radius: 999px; background: var(--bmm-bg-hover, #222b3b); overflow: hidden; }
+.community-track-bar > i { display: block; height: 100%; background: var(--bmm-accent, #3b82f6); }
+.community-track-pct { font-size: 11px; text-align: right; font-variant-numeric: tabular-nums; color: var(--bmm-text-muted, #7c8698); }
+.community-track-done .community-track-mark { color: var(--bmm-success, #4ade80); }
+.community-track-done .community-track-bar > i { background: var(--bmm-success, #4ade80); }
+.community-track-planned .community-track-mark,
+.community-track-planned .community-track-label { color: var(--bmm-text-muted, #7c8698); }
+@media (max-width: 560px) { .community-track-item { grid-template-columns: 16px 1fr 40px; } .community-track-bar { display: none; } }
 
 .community-phase { display: flex; gap: 10px; align-items: flex-start; padding: 6px 0; }
 /* How far a stage has got. Only drawn when the author said — an empty bar on every stage
