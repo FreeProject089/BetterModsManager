@@ -107,10 +107,7 @@ Caché jusqu'au clic.
 Joue un enregistrement `.bmmreplay` dans la page. Préférez un fichier hébergé à côté de la page
 — un replay en 404 laisse un cadre mort en plein milieu.
 
-## Les blocs en plus du site
-
-Ceux-ci s'affichent sur BetterCommunity — billets de blog, pages de doc, réponses de FAQ, pages
-de projet. La feuille de route est celle que l'on cherche le plus souvent :
+### Feuille de route
 
 ```
 :::roadmap[Où on en est]
@@ -121,14 +118,28 @@ de projet. La feuille de route est celle que l'on cherche le plus souvent :
 :::stage[En cours]{state=doing percent=40}
 - Feuilles de route dans le blog
 :::
-:::stage[Prévu]{state=planned}
+:::stage[Prévu]
 - Parité MCP
 :::
 :::
 ```
 
-Chaque puce sous une étape devient une ligne suivie et hérite de l'état de l'étape — `done`,
-`doing` ou `planned`. `percent=` remplit la barre d'une étape en cours.
+Chaque puce sous une étape hérite de l'état de l'étape — `done`, `doing` ou `planned` — et
+`percent=` remplit la barre d'une étape en cours. Un état que BMM ne reconnaît pas est lu comme
+**prévu**, jamais comme terminé : une faute de frappe ne doit pas déclarer un travail livré.
+
+Chaque étape indique son état de trois façons — le symbole, le mot et la couleur — pour rester
+lisible par une personne daltonienne, et pour survivre à un copier-coller en texte brut.
+
+!!! note "Dans l'app, la feuille de route dit ce que dit le document"
+    La version du site accepte `src="…/progress.json"` et l'interroge. Dans BMM le bloc est
+    statique : la documentation embarquée se lit hors ligne, et un suivi qui n'affiche
+    silencieusement rien sans réseau est pire qu'un suivi qui affiche ce que la page a écrit.
+
+## Les blocs en plus du site
+
+Ceux-ci s'affichent sur BetterCommunity — billets de blog, pages de doc, réponses de FAQ, pages
+de projet — et sont affichés en texte brut par l'app.
 
 La liste complète du site, avec tous les attributs, est dans le dépôt BCWEB à
 `guides/reference/CUSTOM_MARKDOWN.md`, et sur le site sous **Docs → Rédaction → Blocs de

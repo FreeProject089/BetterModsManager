@@ -400,6 +400,27 @@
 .doc-step-body { font-size: 13.5px; line-height: 1.6; }
 .doc-step-body p:last-child { margin-bottom: 0; }
 
+/* Roadmap / progress tracker (md-lite `:::roadmap` + `:::stage`).
+   A stage says three things and each is encoded twice: the word, the shape and the colour.
+   Colour alone would leave "done" and "planned" identical to a colourblind reader — and
+   identical in the printed-out version somebody pastes into a message. */
+.doc-roadmap { margin: 0 0 16px; border: 1px solid var(--bmm-border, #2a3242); border-radius: 12px; padding: 14px; background: var(--bmm-bg-base, #0f1420); }
+.doc-roadmap-title { font-weight: 700; font-size: 14px; margin-bottom: 10px; }
+.doc-stage { margin: 0 0 12px; }
+.doc-stage:last-child { margin-bottom: 0; }
+.doc-stage-head { display: flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 600; }
+.doc-stage-dot { width: 18px; text-align: center; }
+.doc-stage-pct { margin-left: auto; font-variant-numeric: tabular-nums; font-size: 12px; color: var(--bmm-text-muted, #7c8698); }
+.doc-stage-bar { height: 4px; border-radius: 999px; background: var(--bmm-bg-hover, #222b3b); margin: 6px 0 4px; overflow: hidden; }
+.doc-stage-bar > i { display: block; height: 100%; background: var(--bmm-accent, #3b82f6); }
+.doc-stage-body { font-size: 13px; line-height: 1.6; color: var(--bmm-text-secondary, #b7c0cc); }
+.doc-stage-body ul { margin: 4px 0 0; padding-left: 20px; }
+.doc-stage-done .doc-stage-dot { color: var(--bmm-success, #22c55e); }
+.doc-stage-done .doc-stage-bar > i { background: var(--bmm-success, #22c55e); }
+.doc-stage-doing .doc-stage-dot { color: var(--bmm-accent, #3b82f6); }
+.doc-stage-planned .doc-stage-dot,
+.doc-stage-planned .doc-stage-label { color: var(--bmm-text-muted, #7c8698); }
+
 .doc-columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin: 0 0 16px; }
 .doc-details { margin: 0 0 14px; border: 1px solid var(--bmm-border, #2a3242); border-radius: 10px; overflow: hidden; }
 .doc-details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-size: 13.5px; background: var(--bmm-bg-base, #0f1420); }

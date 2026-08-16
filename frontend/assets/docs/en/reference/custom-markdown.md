@@ -106,10 +106,7 @@ Hidden until clicked.
 Plays a `.bmmreplay` recording inline. Prefer a file hosted alongside the page — a replay that
 404s leaves a dead frame in the middle of it.
 
-## The website's extra blocks
-
-These render on BetterCommunity — blog posts, docs pages, FAQ answers, project pages. The
-roadmap is the one most people are looking for:
+### Roadmap
 
 ```
 :::roadmap[Where we are]
@@ -120,14 +117,28 @@ roadmap is the one most people are looking for:
 :::stage[In progress]{state=doing percent=40}
 - Blog roadmaps
 :::
-:::stage[Planned]{state=planned}
+:::stage[Planned]
 - MCP parity
 :::
 :::
 ```
 
-Every bullet under a stage becomes a tracked item and inherits that stage's state — `done`,
-`doing` or `planned`. `percent=` fills the bar of a stage that is under way.
+Every bullet under a stage inherits that stage's state — `done`, `doing` or `planned` — and
+`percent=` fills the bar of one that is under way. A state BMM does not recognise reads as
+**planned**, never as finished: a typo must not report work as shipped.
+
+Each stage shows its state three ways — the symbol, the word and the colour — so it survives
+being read by somebody colourblind, and survives being pasted as plain text into a message.
+
+!!! note "In the app, the roadmap is what the document says"
+    The website's version can take `src="…/progress.json"` and poll it. In BMM the block is
+    static: bundled documentation is read offline, and a tracker that silently shows nothing
+    without a network is worse than one that shows what the page itself wrote down.
+
+## The website's extra blocks
+
+These render on BetterCommunity — blog posts, docs pages, FAQ answers, project pages — and
+are shown as plain text by the app.
 
 The complete website list, with every attribute, is in the BCWEB repository at
 `guides/reference/CUSTOM_MARKDOWN.md`, and on the site itself under **Docs → Authoring →
