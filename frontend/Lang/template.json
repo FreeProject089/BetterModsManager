@@ -7209,5 +7209,22 @@
   "sched.en.add": "Add",
   "sched.en.del": "Delete this enum",
   "sched.en.noMembers": "An enum needs at least one value.",
-  "sched.switchGap": "Not handled: {m} — DEFAULT will catch them."
+  "sched.switchGap": "Not handled: {m} — DEFAULT will catch them.",
+  "sched.addCall": "Run a block",
+  "sched.legendCall": "Runs a block of steps saved once and shared by every task — with THIS task’s permissions.",
+  "sched.call": "RUN BLOCK",
+  "sched.call.pick": "— pick a block —",
+  "sched.call.none": "No block yet — build some steps, then use “Save as block” in the sidebar.",
+  "sched.call.missing": "No block named “{n}”.",
+  "sched.call.perm": "runs with THIS task’s permissions",
+  "sched.call.deep": "Blocks are nested too deeply — a block is probably calling itself.",
+  "sched.bl.title": "Reusable blocks",
+  "sched.bl.hint": "Steps saved once and run from any task with “Run a block”. They use the calling task’s permissions.",
+  "sched.bl.empty": "None yet.",
+  "sched.bl.namePh": "block name",
+  "sched.bl.save": "Save these steps",
+  "sched.bl.saved": "Saved “{n}”.",
+  "sched.bl.del": "Delete this block",
+  "sched.bl.inuse": "This task still calls that block.",
+  "sched.bl.nosteps": "Add some steps first."
 }

@@ -7354,5 +7354,22 @@
   "sched.en.add": "Ajouter",
   "sched.en.del": "Supprimer cet enum",
   "sched.en.noMembers": "Un enum a besoin d’au moins une valeur.",
-  "sched.switchGap": "Non traités : {m} — DEFAULT les absorbera."
+  "sched.switchGap": "Non traités : {m} — DEFAULT les absorbera.",
+  "sched.addCall": "Exécuter un bloc",
+  "sched.legendCall": "Exécute un bloc d’étapes enregistré une fois et partagé par toutes les tâches — avec les permissions de CETTE tâche.",
+  "sched.call": "EXÉCUTER UN BLOC",
+  "sched.call.pick": "— choisir un bloc —",
+  "sched.call.none": "Aucun bloc — construisez des étapes, puis « Enregistrer ces étapes » dans la colonne de gauche.",
+  "sched.call.missing": "Aucun bloc nommé « {n} ».",
+  "sched.call.perm": "utilise les permissions de CETTE tâche",
+  "sched.call.deep": "Blocs imbriqués trop profondément — un bloc s’appelle probablement lui-même.",
+  "sched.bl.title": "Blocs réutilisables",
+  "sched.bl.hint": "Des étapes enregistrées une fois, exécutables depuis n’importe quelle tâche via « Exécuter un bloc ». Elles utilisent les permissions de la tâche appelante.",
+  "sched.bl.empty": "Aucun pour l’instant.",
+  "sched.bl.namePh": "nom du bloc",
+  "sched.bl.save": "Enregistrer ces étapes",
+  "sched.bl.saved": "« {n} » enregistré.",
+  "sched.bl.del": "Supprimer ce bloc",
+  "sched.bl.inuse": "Cette tâche appelle encore ce bloc.",
+  "sched.bl.nosteps": "Ajoutez d’abord des étapes."
 }

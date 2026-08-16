@@ -102,6 +102,10 @@ type Step = (
     | { kind: 'try'; steps: Step[]; onError: Step[] }
     // Loop signals, and a clean end for the whole task. These are what make forEach
     // usable in practice: "for each mod, try to verify; on error notify and continue".
+    // Run a named block of steps defined once and shared by every task. It carries no `steps`
+    // of its own — the body lives in the block store — which is why the tree walkers do not
+    // need a case for it: there is nothing inline to walk.
+    | { kind: 'call'; block: string }
     | { kind: 'break' }
     | { kind: 'continue' }
     | { kind: 'stop' }
@@ -579,6 +583,28 @@ async function runSteps(steps: Step[], task: Task, ctx: RunCtx, depth = 0): Prom
                 if (e instanceof FlowSignal) throw e;      // signals pass through
                 await runSteps(step.onError, task, ctx, depth + 1);
             }
+        } else if (step.kind === 'call') {
+            // A named block of steps, written once and run from anywhere.
+            //
+            // It runs INSIDE this task: same ctx, same `task`, so every permission check in
+            // runAction reads the CALLER's permissions. That is the decision the whole feature
+            // hangs on — permissions attached to a block would be granted in one place and
+            // spent in another, and importing a block would become a way to run actions the
+            // calling task was refused.
+            const blocks = readBlocks();
+            const body = blocks[String(step.block || '')];
+            // A missing block ABORTS rather than skipping. A call that silently does nothing
+            // is a task that reports success while half of it never happened.
+            if (!body) {
+                throw new Error((t('sched.call.missing') || 'No block named “{n}”.').replace('{n}', String(step.block || '')));
+            }
+            // Depth, not a visited-set: a block calling itself twice in sequence is legitimate,
+            // a block calling itself forever is not, and only the nesting tells them apart.
+            // runSteps already carries `depth` for the loop guards; this rides on it.
+            if (depth >= 20) {
+                throw new Error(t('sched.call.deep') || 'Blocks are nested too deeply — a block is probably calling itself.');
+            }
+            await runSteps(body, task, ctx, depth + 1);
         } else if (step.kind === 'break') {
             throw new FlowSignal('break');
         } else if (step.kind === 'continue') {
@@ -804,6 +830,40 @@ export function readSharedVars(): Record<string, string> {
  * shared by every task, so it cannot live in RunCtx. Read fresh on every access rather than
  * cached, because two tasks can be mid-run at once.
  */
+/**
+ * Reusable blocks: a name, and the steps it runs.
+ *
+ * Stored beside the shared variables and the enums, for the same reason — a block outlives a
+ * run and belongs to every task, so it cannot live in a task's own definition. Read fresh on
+ * each access; two tasks can be mid-run at once.
+ *
+ * The block carries NO permissions of its own. It runs inside whichever task called it, so
+ * every check reads the caller's grants — see the `call` step in runSteps for why that is the
+ * whole point rather than an implementation detail.
+ */
+const BLOCKS_KEY = 'bmm.sched.blocks';
+
+export function readBlocks(): Record<string, Step[]> {
+    try {
+        const raw = JSON.parse(localStorage.getItem(BLOCKS_KEY) || '{}');
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+        const out: Record<string, Step[]> = {};
+        for (const [k, v] of Object.entries(raw)) {
+            // Same filter-on-the-way-out rule as the other two stores: a name no step could
+            // reference would sit in the list and never run.
+            if (!VAR_NAME_RE.test(k) || !Array.isArray(v)) continue;
+            // normalizeSteps because a stored block is JSON somebody may have hand-edited or an
+            // older build wrote — the runner expects the same shape it gives a task's steps.
+            out[k] = normalizeSteps(v as Step[]);
+        }
+        return out;
+    } catch { return {}; }
+}
+
+export function writeBlocks(all: Record<string, Step[]>): void {
+    try { localStorage.setItem(BLOCKS_KEY, JSON.stringify(all)); } catch { /* quota or private mode */ }
+}
+
 const ENUMS_KEY = 'bmm.sched.enums';
 
 export function readEnums(): Record<string, string[]> {
@@ -2350,6 +2410,78 @@ function renderSharedVarsPanel(modal: HTMLElement): void {
  * declaration a case is free text and nothing can know what the branch is about — that gap,
  * not the syntax, is the whole reason `match` was on the wish list.
  */
+/**
+ * The reusable blocks, and the one way to make one: save the steps you are looking at.
+ *
+ * A separate block EDITOR would be a second copy of the step editor, and the two would drift —
+ * this project has paid for that shape enough times today. Building the steps in a task and
+ * saving them is the same editor doing the same job.
+ */
+function renderBlocksPanel(modal: HTMLElement): void {
+    const side = modal.querySelector('.sched-side');
+    if (!side) return;
+    const host = (side.querySelector('.sched-bl') as HTMLElement) || (() => {
+        const el = document.createElement('div');
+        el.className = 'sched-sv sched-bl';
+        side.appendChild(el);
+        return el;
+    })();
+
+    const all = readBlocks();
+    const names = Object.keys(all).sort();
+    const rows = names.map((n) => `
+        <div class="sched-sv-row">
+            <code class="sched-sv-name">${escHtml(n)}</code>
+            <span class="sched-sv-val">${(all[n] || []).length} ${escHtml(t('sched.steps') || 'steps')}</span>
+            <button type="button" class="btn btn-ghost btn-xs sched-bl-del" data-name="${escAttr(n)}"
+                data-tooltip="${escAttr(t('sched.bl.del') || 'Delete this block')}">${SCHED_X}</button>
+        </div>`).join('');
+
+    host.innerHTML = `
+        <div class="sched-sv-title">${t('sched.bl.title') || 'Reusable blocks'}</div>
+        <div class="sched-sv-hint">${t('sched.bl.hint') || 'Steps saved once and run from any task with “Run a block”. They use the calling task’s permissions.'}</div>
+        ${names.length ? rows : `<div class="sched-sv-empty">${t('sched.bl.empty') || 'None yet.'}</div>`}
+        <div class="sched-en-add">
+            <input class="input sched-bl-name" spellcheck="false" placeholder="${escAttr(t('sched.bl.namePh') || 'block name')}">
+            <button type="button" class="btn btn-xs btn-secondary sched-bl-save">${t('sched.bl.save') || 'Save these steps'}</button>
+        </div>`;
+
+    host.querySelectorAll('.sched-bl-del').forEach((btn) => btn.addEventListener('click', () => {
+        const name = (btn as HTMLElement).dataset.name || '';
+        // Refused while a step still calls it. A block that vanishes turns every caller into a
+        // task that fails at a step which no longer exists — and it fails at RUN time, which is
+        // the worst moment to find out.
+        const used = _draft.steps.some(function seek(s: any): boolean {
+            if (s.kind === 'call' && s.block === name) return true;
+            for (const k of ['steps', 'then', 'else', 'onError', 'default'] as const) {
+                if (Array.isArray(s[k]) && s[k].some(seek)) return true;
+            }
+            return Array.isArray(s.cases) && s.cases.some((c: any) => (c.steps || []).some(seek));
+        });
+        if (used) { toast(t('sched.bl.inuse') || 'This task still calls that block.', 'warning'); return; }
+        const store = readBlocks();
+        delete store[name];
+        writeBlocks(store);
+        renderBlocksPanel(modal);
+    }));
+
+    host.querySelector('.sched-bl-save')?.addEventListener('click', () => {
+        const name = (host.querySelector('.sched-bl-name') as HTMLInputElement).value.trim();
+        if (!VAR_NAME_RE.test(name)) {
+            toast((t('sched.var.badName') || 'Not a usable variable name: {n}').replace('{n}', name || '(empty)'), 'warning');
+            return;
+        }
+        if (!_draft.steps.length) { toast(t('sched.bl.nosteps') || 'Add some steps first.', 'warning'); return; }
+        // A deep copy, or editing the task afterwards would silently rewrite the block — the
+        // saved thing has to stop being the same object.
+        const store = readBlocks();
+        store[name] = JSON.parse(JSON.stringify(_draft.steps));
+        writeBlocks(store);
+        toast((t('sched.bl.saved') || 'Saved “{n}”.').replace('{n}', name), 'info');
+        renderBlocksPanel(modal);
+    });
+}
+
 function renderEnumsPanel(modal: HTMLElement): void {
     const side = modal.querySelector('.sched-side');
     if (!side) return;
@@ -2570,6 +2702,7 @@ function renderModal(modal: HTMLElement): void {
 
     renderSharedVarsPanel(modal);
     renderEnumsPanel(modal);
+    renderBlocksPanel(modal);
     modal.querySelector('#sched-close')?.addEventListener('click', () => modal.classList.remove('open'));
     modal.querySelector('#sched-cancel')?.addEventListener('click', () => modal.classList.remove('open'));
     modal.querySelector('#sched-preset-catalog')?.addEventListener('click', () => { void browsePresetCatalogs(); });
@@ -2943,6 +3076,27 @@ function renderStepsEditor(host: HTMLElement, steps: Step[], depth = 0): void {
             renderAddRow(block.querySelector('.sched-try-add') as HTMLElement, step.steps, depth + 1, host, steps, depth);
             renderAddRow(block.querySelector('.sched-catch-add') as HTMLElement, step.onError, depth + 1, host, steps, depth);
             _wireFold(block, step);
+        } else if (step.kind === 'call') {
+            const names = Object.keys(readBlocks()).sort();
+            // No blocks yet is a state the picker has to SAY, not show as an empty select. An
+            // empty dropdown looks like a loading bug; a sentence explains where blocks come
+            // from, which is the sidebar's "save these steps as a block".
+            const body = names.length
+                ? `<select class="input sched-call-block" style="max-width:220px">
+                       <option value=""${step.block ? '' : ' selected'}>${escHtml(t('sched.call.pick') || '— pick a block —')}</option>
+                       ${names.map((n) => `<option value="${escAttr(n)}"${step.block === n ? ' selected' : ''}>${escHtml(n)}</option>`).join('')}
+                   </select>
+                   ${step.block && !names.includes(step.block)
+                       ? `<span style="font-size:11px;color:var(--danger)">${escHtml((t('sched.call.missing') || 'No block named “{n}”.').replace('{n}', step.block))}</span>`
+                       : ''}`
+                : `<span style="font-size:11px;color:var(--text-muted)">${escHtml(t('sched.call.none') || 'No block yet — build some steps, then use “Save as block” in the sidebar.')}</span>`;
+            block.innerHTML = `<div class="sched-step-head">${_kindTile('call')}
+                    <span class="sched-step-tag sched-repeat">${t('sched.call') || 'RUN BLOCK'}</span>
+                    ${body}
+                    <span style="font-size:10px;color:var(--text-muted)">${t('sched.call.perm') || 'runs with THIS task’s permissions'}</span></div>`;
+            block.querySelector('.sched-call-block')?.addEventListener('change', (e) => {
+                (step as any).block = (e.target as HTMLSelectElement).value;
+            });
         } else if (step.kind === 'break' || step.kind === 'continue' || step.kind === 'stop') {
             const label = step.kind === 'break' ? (t('sched.break') || 'BREAK')
                         : step.kind === 'continue' ? (t('sched.continue') || 'CONTINUE')
@@ -3090,6 +3244,7 @@ function renderAddRow(host: HTMLElement, steps: Step[], depth = 0, rerenderHost?
         <button class="btn btn-xs sched-chip sched-add-foreach" data-add="forEach" data-tooltip="${escAttr(t('sched.legendForEach') || '')}">${KIND_ICON.forEach} ${t('sched.addForEach') || 'For each'}</button>
         <button class="btn btn-xs sched-chip sched-add-switch" data-add="switch" data-tooltip="${escAttr(t('sched.legendSwitch') || '')}">${KIND_ICON.switch} ${t('sched.addSwitch') || 'Switch'}</button>
         <button class="btn btn-xs sched-chip sched-add-try" data-add="try" data-tooltip="${escAttr(t('sched.legendTry') || '')}">${KIND_ICON.try} ${t('sched.addTry') || 'Try / on error'}</button>
+        <button class="btn btn-xs sched-chip sched-add-call" data-add="call" data-tooltip="${escAttr(t('sched.legendCall') || '')}">${KIND_ICON.call} ${t('sched.addCall') || 'Run a block'}</button>
         <button class="btn btn-xs sched-chip sched-add-break" data-add="break" data-tooltip="${escAttr(t('sched.legendBreak') || '')}">${KIND_ICON.signal} ${t('sched.addBreak') || 'Break'}</button>
         <button class="btn btn-xs sched-chip sched-add-continue" data-add="continue" data-tooltip="${escAttr(t('sched.legendContinue') || '')}">${KIND_ICON.signal} ${t('sched.addContinue') || 'Continue'}</button>
         <button class="btn btn-xs sched-chip sched-add-stop" data-add="stop" data-tooltip="${escAttr(t('sched.legendStop') || '')}">${KIND_ICON.signal} ${t('sched.addStop') || 'Stop'}</button>`;
@@ -3116,6 +3271,9 @@ function _makeStep(kind: string): Step {
     if (kind === 'forEach') return { kind: 'forEach', source: 'enabledMods', maxIters: 100, everySec: 0, steps: [] } as Step;
     if (kind === 'switch') return { kind: 'switch', cases: [{ condition: { type: 'always', params: {} }, steps: [] }], default: [] } as Step;
     if (kind === 'try') return { kind: 'try', steps: [], onError: [] } as Step;
+    // Empty block name on purpose: the editor's picker fills it, and a default pointing at
+    // somebody's first block would run a real block the moment the step was added.
+    if (kind === 'call') return { kind: 'call', block: '' } as Step;
     if (kind === 'break' || kind === 'continue' || kind === 'stop') return { kind } as Step;
     if (kind === 'waitFor') return { kind: 'waitFor', condition: { type: 'allModsActive', params: {} }, timeoutSec: 120 } as Step;
     if (kind === 'delay') return { kind: 'delay', seconds: 5 } as Step;
@@ -3162,6 +3320,8 @@ const KIND_ICON: Record<string, string> = {
     switch:  '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v5"/><path d="M12 8 5 13v8M12 8l7 5v8"/></svg>',
     try:     '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>',
     signal:  '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="14" height="14" rx="2"/></svg>',
+    // A box with an arrow going into it — the body lives elsewhere and is brought in here.
+    call:    '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5V16"/><path d="M13 12H2M6 8.5 2.5 12 6 15.5"/></svg>',
 };
 /** Kind-coloured icon tile that opens every step head (the visual anchor). */
 function _kindTile(kind: string): string {
