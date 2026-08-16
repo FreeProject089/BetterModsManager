@@ -16629,7 +16629,13 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 .cat-index-result { margin-top: 10px; font-size: 12px; color: var(--text-secondary); }
 .cat-index-result:empty { display: none; }
 .cat-index-list { margin-top: 12px; }
-.cat-index-list-title { font-size: 11px; color: var(--text-muted); margin-bottom: 5px; }
+/* --text-secondary, not --text-muted. Measured on the panel's own background
+   (--bmm-bg-elevated #111827): muted #475569 is 2.34:1, which fails WCAG AA's 4.5:1 for
+   normal text and is not readable at 11px — seen in the running app, where these labels
+   were very nearly invisible. Secondary #94a3b8 is 6.92:1.
+   The rule applied here: anything that must be READ or CLICKED gets secondary. Muted is
+   for text that repeats something already legible beside it. */
+.cat-index-list-title { font-size: 11px; color: var(--text-secondary); margin-bottom: 5px; }
 .cat-index-row { display: flex; align-items: center; gap: 8px; padding: 5px 0;
     border-top: 1px solid var(--border); }
 /* min-width:0 so a long URL truncates instead of pushing the buttons off the card —
@@ -16645,24 +16651,24 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 .cat-index-contents:empty { display: none; }
 
 .cat-index-fold { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 8px; }
-.cat-index-fold > summary { cursor: pointer; font-size: 11px; color: var(--text-muted);
+.cat-index-fold > summary { cursor: pointer; font-size: 11px; color: var(--text-secondary);
     list-style: none; user-select: none; }
 .cat-index-fold > summary::-webkit-details-marker { display: none; }
 .cat-index-fold > summary::before { content: '▸'; display: inline-block; width: 12px;
     transition: transform .15s ease; }
 .cat-index-fold[open] > summary::before { transform: rotate(90deg); }
-.cat-index-fold > summary:hover { color: var(--text-secondary); }
+.cat-index-fold > summary:hover { color: var(--text-primary); }
 
 /* The type badge. Fixed width so the five types form a column the eye can scan down
    rather than a ragged edge that moves with the length of each word. */
 .cat-index-type { flex: none; width: 66px; font-size: 10px; text-transform: uppercase;
-    letter-spacing: .04em; color: var(--text-muted); }
+    letter-spacing: .04em; color: var(--text-secondary); }
 .cat-index-name { flex: 1; min-width: 0; font-size: 12px; overflow: hidden;
     text-overflow: ellipsis; white-space: nowrap; }
 /* The URL is secondary once a name is present, so it gets the smaller share. */
 .cat-index-contents .cat-index-url { flex: 1.4; }
-.cat-index-items, .cat-index-owner { flex: none; font-size: 10px; color: var(--text-muted); }
-.cat-index-from { flex: none; font-size: 10px; color: var(--text-muted);
+.cat-index-items, .cat-index-owner { flex: none; font-size: 10px; color: var(--text-secondary); }
+.cat-index-from { flex: none; font-size: 10px; color: var(--text-secondary);
     background: var(--bg-secondary); border-radius: 4px; padding: 1px 5px; }
 .cat-index-have { flex: none; font-size: 10px; color: var(--success, #22c55e); }
 /* Already followed, dimmed rather than hidden: seeing that an index lists something you
@@ -16700,9 +16706,9 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 .apps-source-toggle, .plug-source-toggle { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; }
 .repo-cat-off { background: none; border: 0; cursor: pointer; color: inherit; opacity: .7; padding: 0 2px; }
 .repo-cat-off:hover { opacity: 1; }
-.cat-index-empty { font-size: 11px; color: var(--text-muted); padding: 6px 0; }
+.cat-index-empty { font-size: 11px; color: var(--text-secondary); padding: 6px 0; }
 
-.cat-index-when { flex: none; width: 130px; font-size: 10px; color: var(--text-muted); }
+.cat-index-when { flex: none; width: 130px; font-size: 10px; color: var(--text-secondary); }
 .cat-index-act { flex: none; width: 58px; font-size: 10px; }
 .cat-index-hist-add .cat-index-act { color: var(--success, #22c55e); }
 .cat-index-hist-remove .cat-index-act { color: var(--danger, #ef4444); }
