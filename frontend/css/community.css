@@ -475,6 +475,12 @@
 .community-roadmap-h .community-phase { flex: 1 1 180px; }
 
 .community-phase { display: flex; gap: 10px; align-items: flex-start; padding: 6px 0; }
+/* How far a stage has got. Only drawn when the author said — an empty bar on every stage
+   reads as "nothing has been done" rather than as "no figure was given". */
+.community-phase-pct { float: right; font-size: 11px; font-variant-numeric: tabular-nums; color: var(--bmm-text-muted, #7c8698); font-weight: 500; }
+.community-phase-bar { height: 4px; border-radius: 999px; background: var(--bmm-bg-hover, #222b3b); overflow: hidden; margin: 4px 0 6px; }
+.community-phase-bar > i { display: block; height: 100%; background: var(--bmm-accent, #3b82f6); }
+.community-phase-done .community-phase-bar > i { background: var(--bmm-success, #4ade80); }
 .community-phase-mark {
   flex: 0 0 auto; width: 22px; height: 22px; border-radius: 999px;
   display: flex; align-items: center; justify-content: center; font-size: 12px; line-height: 1;

@@ -127,3 +127,69 @@ Not yet.
     assert.match(expandDocBlocks(`:::roadmap{orientation=horizontal}\n:::`), /community-roadmap-h/);
   });
 });
+
+describe('a roadmap written the way the docs teach it', () => {
+  // THE BUG THIS FILE MISSED. The authoring guide teaches `:::stage`; `:::phase` is the older
+  // alias. `stage` fell into the STEP branch, so a roadmap copied from the website rendered in
+  // the app as a numbered list — the stages became steps and every state vanished. The tests
+  // above passed the whole time because they only ever wrote `phase`.
+  const ROADMAP = [
+    ':::roadmap[Where we are]',
+    '::::stage[Shipped]{state=done}',
+    '- The scanner',
+    '::::',
+    '::::stage[In progress]{state=doing percent=40}',
+    '- The mapper',
+    '::::',
+    '::::stage[Next]{state=planned}',
+    '- Sync',
+    '::::',
+    ':::',
+  ].join('\n');
+
+  test('stages are phases, not steps', () => {
+    const html = expandDocBlocks(ROADMAP);
+    assert.match(html, /community-roadmap/);
+    assert.ok(!/community-step"/.test(html), 'a stage rendered as a step is the bug');
+  });
+
+  test('each state is drawn', () => {
+    const html = expandDocBlocks(ROADMAP);
+    assert.match(html, /community-phase-done/);
+    assert.match(html, /community-phase-doing/);
+    assert.match(html, /community-phase-todo/, 'the site writes `planned`; this file called it `todo`');
+  });
+
+  test('the words people actually type are understood', () => {
+    for (const w of ['shipped', 'complete']) {
+      assert.match(expandDocBlocks(`:::roadmap\n::::stage[X]{state=${w}}\ny\n::::\n:::`), /community-phase-done/, w);
+    }
+    for (const w of ['active', 'wip', 'progress']) {
+      assert.match(expandDocBlocks(`:::roadmap\n::::stage[X]{state=${w}}\ny\n::::\n:::`), /community-phase-doing/, w);
+    }
+  });
+
+  test('a state nobody recognises is never "done"', () => {
+    const html = expandDocBlocks(`:::roadmap\n::::stage[X]{state=banana}\ny\n::::\n:::`);
+    assert.match(html, /community-phase-todo/);
+    assert.ok(!/community-phase-done/.test(html), 'a typo must not report work as finished');
+  });
+
+  test('percent draws a bar, and a finished stage is full', () => {
+    const html = expandDocBlocks(ROADMAP);
+    assert.match(html, /width:40%/);
+    assert.match(html, /width:100%/, 'done is 100 by definition — a finished stage with a half bar is a detail everybody notices');
+  });
+
+  test('no percent means no bar', () => {
+    // An empty bar on every stage reads as "nothing has been done" rather than "no figure
+    // was given".
+    const html = expandDocBlocks(`:::roadmap\n::::stage[X]{state=doing}\ny\n::::\n:::`);
+    assert.ok(!/community-phase-bar/.test(html));
+  });
+
+  test('`step` still means a step', () => {
+    const html = expandDocBlocks(`:::steps\n::::step[Install]\ndo it\n::::\n:::`);
+    assert.match(html, /community-step"/);
+  });
+});

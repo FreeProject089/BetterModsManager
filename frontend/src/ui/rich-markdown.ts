@@ -151,7 +151,7 @@ export function expandDocBlocks(md: string, opts: ExpandOpts = {}, _top = true):
       const vertical = String(attrs.orientation || attrs.dir || 'vertical') !== 'horizontal';
       out.push('', `<div class="community-steps ${vertical ? 'community-steps-v' : 'community-steps-h'}">${numbered}</div>`, '');
     }
-    else if (name === 'step' || name === 'stage') {
+    else if (name === 'step') {
       // The marker is stamped by the parent above. A step used on its own still renders —
       // half a component is worse than a plain paragraph — it simply gets a bullet.
       const title = label || attrs.title || '';
@@ -168,15 +168,28 @@ export function expandDocBlocks(md: string, opts: ExpandOpts = {}, _top = true):
         + (title ? `<div class="community-roadmap-title">${escHtml(title)}</div>` : '')
         + `${innerMd}</div>`, '');
     }
-    else if (name === 'phase') {
-      const state = ['done', 'doing', 'todo'].includes(String(attrs.state || '').toLowerCase())
-        ? String(attrs.state).toLowerCase() : 'todo';
+    // `stage` is the name the website's authoring guide teaches and the one people write;
+    // `phase` is the older alias. Until now `stage` fell into the STEP branch above, so a
+    // roadmap copied from the site rendered in the app as a numbered list — the stages became
+    // steps, the states vanished, and nothing looked broken enough to report.
+    else if (name === 'phase' || name === 'stage') {
+      // The site's three states, plus the words people actually type. Anything unrecognised is
+      // `todo` and never `done`: a typo must not report work as finished.
+      const raw = String(attrs.state || attrs.status || '').toLowerCase();
+      const state = ['done', 'shipped', 'complete'].includes(raw) ? 'done'
+        : ['doing', 'active', 'wip', 'progress'].includes(raw) ? 'doing' : 'todo';
       const mark = state === 'done' ? '✓' : state === 'doing' ? '→' : '○';
       const title = label || attrs.title || '';
+      // A stage under way can carry how far it has got. `done` is 100 by definition — a
+      // finished stage showing a half-full bar is the kind of detail nobody reports and
+      // everybody notices.
+      const pct = state === 'done' ? 100 : Math.max(0, Math.min(100, parseInt(attrs.percent, 10) || 0));
       out.push('', `<div class="community-phase community-phase-${state}">`
         + `<div class="community-phase-mark" aria-hidden="true">${mark}</div>`
         + `<div class="community-phase-body">`
-        + (title ? `<div class="community-phase-title">${escHtml(title)}</div>` : '')
+        + (title ? `<div class="community-phase-title">${escHtml(title)}`
+          + (pct ? `<span class="community-phase-pct">${pct}%</span>` : '') + `</div>` : '')
+        + (pct ? `<div class="community-phase-bar"><i style="width:${pct}%"></i></div>` : '')
         + `${innerMd}</div></div>`, '');
     }
     else if (name === 'cards') { out.push('', `<div class="community-cards">${innerMd}</div>`, ''); }
