@@ -209,11 +209,38 @@ export function originLabel(indexUrl: string): string {
 export const ROUTABLE = INDEX_TYPES.filter((t) => t === 'app' || !!STORE_KEY[t]);
 
 /**
+ * Is this URL already in that list?
+ *
+ * One function because it is asked TWICE — once by the preview, to say "already there", and
+ * once by the writer, to decide whether to append. Written out separately they disagreed: the
+ * preview lowercased and the writer used `Array.includes`, so a URL differing only in case was
+ * announced as already-followed and then added again, and the list grew a duplicate that is
+ * fetched on every start and visible nowhere.
+ *
+ * Host-insensitive by lowercasing the whole string rather than parsing: a path IS case
+ * sensitive on most servers, but two entries differing only in the case of a path are a typo
+ * far more often than two distinct catalogs, and following one twice is the worse outcome.
+ */
+export const hasSource = (list: string[], url: string): boolean =>
+    list.some((u) => String(u).toLowerCase() === String(url).toLowerCase());
+
+/**
+ * Append a source unless it is already there. Returns whether the list changed, so a caller
+ * can report what it actually did rather than what it was asked to do.
+ */
+export function addSource(list: string[], url: string): boolean {
+    if (hasSource(list, url)) return false;
+    list.push(url);
+    return true;
+}
+
+/**
  * Work out what importing an index would change, without changing anything.
  *
  * Separated from applying so the caller can show "3 new, 2 already there" before doing it
  * — and so this can be tested without a browser. `existing` is what each store already
- * holds, keyed by type.
+ * holds, keyed by type: a type MISSING from it reads as "follows nothing", so a caller that
+ * forgets a type reports everything it already has as new.
  */
 export function planImport(
     index: CatalogIndex,
@@ -222,8 +249,7 @@ export function planImport(
     const add: IndexEntry[] = [];
     const already: IndexEntry[] = [];
     for (const e of index.catalogs) {
-        const have = (existing[e.type] || []).map((u) => u.toLowerCase());
-        (have.includes(e.url.toLowerCase()) ? already : add).push(e);
+        (hasSource(existing[e.type] || [], e.url) ? already : add).push(e);
     }
     return { add, already };
 }

@@ -10,7 +10,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const { parseCatalogIndex, planImport, INDEX_TYPES, STORE_KEY, ROUTABLE, looksLikeIndex } = await import(
+const { parseCatalogIndex, planImport, INDEX_TYPES, STORE_KEY, ROUTABLE, looksLikeIndex, hasSource, addSource } = await import(
   pathToFileURL(join(ROOT, 'frontend/js/features/catalogs/catalog-index.js')).href
 );
 
@@ -105,6 +105,41 @@ describe('planImport', () => {
   test('a type with no store yet is all-new, not an error', () => {
     const { index } = parseCatalogIndex(doc([{ type: 'theme', url: 'https://e.com/t.json' }]));
     assert.equal(planImport(index, {}).add.length, 1);
+  });
+
+  test('a type MISSING from `existing` reports everything as new', () => {
+    // Not a bug in planImport — a trap for its callers, and one that was live. The importer
+    // built `existing` for plugin and theme only, so preset and repo catalogs you already
+    // followed were previewed as "will add" and then counted as added. Pinned so the shape of
+    // the mistake is written down somewhere.
+    const { index } = parseCatalogIndex(doc([{ type: 'preset', url: 'https://e.com/p.json' }]));
+    assert.equal(planImport(index, { plugin: [], theme: [] }).add.length, 1);
+    assert.equal(planImport(index, { preset: ['https://e.com/p.json'] }).already.length, 1);
+  });
+});
+
+describe('hasSource / addSource — the preview and the writer must agree', () => {
+  test('differing only in case is the SAME source', () => {
+    // THE ONE. The preview lowercased and the writer used Array.includes, so a URL differing
+    // only in case was announced as already-followed and then appended anyway — a duplicate
+    // fetched on every start and visible on no screen.
+    assert.equal(hasSource(['https://E.com/A.json'], 'https://e.com/a.json'), true);
+    const list = ['https://E.com/A.json'];
+    assert.equal(addSource(list, 'https://e.com/a.json'), false);
+    assert.equal(list.length, 1);
+  });
+
+  test('a genuinely new source is appended, and says so', () => {
+    const list = ['https://e.com/a.json'];
+    assert.equal(addSource(list, 'https://e.com/b.json'), true);
+    assert.deepEqual(list, ['https://e.com/a.json', 'https://e.com/b.json']);
+  });
+
+  test('planImport asks the same question, so the two cannot drift', () => {
+    const { index } = parseCatalogIndex(doc([{ type: 'plugin', url: 'https://e.com/p.json' }]));
+    const existing = { plugin: ['HTTPS://E.COM/P.JSON'] };
+    assert.equal(planImport(index, existing).already.length, 1);
+    assert.equal(addSource(existing.plugin, 'https://e.com/p.json'), false);
   });
 });
 

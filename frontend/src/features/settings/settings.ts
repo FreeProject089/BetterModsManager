@@ -8,7 +8,7 @@ import { t } from '../../core/i18n.js';
 import { getLinks, bcRoot, bcTestMode, bcTestBase } from '../../core/links-config.js';
 import { initI18nSandbox } from './i18n-sandbox.js';
 import { renderShortcutsManager } from '../../core/commands.js';
-import { parseCatalogIndex, planImport, STORE_KEY, rememberOrigin } from '../catalogs/catalog-index.js';
+import { parseCatalogIndex, planImport, STORE_KEY, rememberOrigin, addSource } from '../catalogs/catalog-index.js';
 import { toast } from '../../ui/app.js';
 import { getProfiles, getActiveProfileId } from '../profiles/profiles.js';
 import { formatBytes, escHtml, escAttr } from '../../core/utils.js';
@@ -1820,6 +1820,31 @@ function readSources(type: string): string[] {
 }
 
 /**
+ * What every type already follows, for the preview to compare against.
+ *
+ * Built from STORE_KEY rather than listed, because a hand-written list was wrong: it named
+ * plugin and theme, so preset and repo catalogs you already followed were reported as "will
+ * add" every time and the import then claimed to have added them. Nothing was corrupted — the
+ * writer deduplicates — but a preview that overstates what it will do is a preview nobody reads
+ * twice.
+ *
+ * Apps are asked of the Rust backend, which is the only place their list exists.
+ */
+async function readAllSources(): Promise<Record<string, string[]>> {
+    const out: Record<string, string[]> = {};
+    for (const type of Object.keys(STORE_KEY)) out[type] = readSources(type);
+    try {
+        const state = await invoke('get_apps_state') as { community_sources?: string[] };
+        out.app = state?.community_sources || [];
+    } catch {
+        // An unreachable backend means the app list is unknown, not empty. Empty is the safe
+        // reading here: the preview over-reports, and add_community_source deduplicates anyway.
+        out.app = [];
+    }
+    return out;
+}
+
+/**
  * Import a catalog index: one URL that names catalogs of several types.
  *
  * Preview first, always. This adds sources that BMM will fetch on every startup, from a
@@ -1890,8 +1915,7 @@ async function initCatalogIndexSettings() {
             // fetch gets applies here too.
             const text = await invoke('fetch_remote_json', { url }) as string;
             const { index, dropped } = parseCatalogIndex(JSON.parse(text));
-            const existing: Record<string, string[]> = { plugin: readSources('plugin'), theme: readSources('theme') };
-            planned = planImport(index, existing);
+            planned = planImport(index, await readAllSources());
             const byType = planned.add.reduce((m: Record<string, number>, e) => ({ ...m, [e.type]: (m[e.type] || 0) + 1 }), {});
             const parts = Object.entries(byType).map(([k, n]) => `${n} ${k}`);
             out.textContent = planned.add.length
@@ -1925,7 +1949,10 @@ async function initCatalogIndexSettings() {
                     const key = STORE_KEY[e.type];
                     if (!key) continue;
                     const list = readSources(e.type);
-                    if (!list.includes(e.url)) { list.push(e.url); localStorage.setItem(key, JSON.stringify(list)); }
+                    // addSource, not a second dedupe written here. The preview and this writer
+                    // must agree on what "already followed" means, and when they were written
+                    // separately they did not.
+                    if (addSource(list, e.url)) localStorage.setItem(key, JSON.stringify(list));
                 }
                 // Recorded only after the add succeeded, so a source that failed to be
                 // added does not get an origin pointing at an index it never came from.
