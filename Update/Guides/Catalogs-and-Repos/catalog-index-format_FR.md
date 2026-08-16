@@ -7,8 +7,25 @@ autre pour ses plugins, une autre pour ses thèmes, et à coller chacune dans un
 différent. Un index est une seule adresse qui les amène toutes, et qui continue de marcher
 quand ils en publient une nouvelle.
 
-BMM lit un index dans **Réglages → Index de catalogues**. Colle l'adresse, appuie sur
-**Prévisualiser**, et il te dit ce qu'il ajouterait avant d'ajouter quoi que ce soit.
+BMM lit un index dans **Réglages → Index de catalogues**. Colle l'adresse, puis au choix :
+
+- **Voir le contenu** — affiche chaque catalogue listé par l'index, avec son type, son nom
+  et le nombre d'éléments, et marque ceux que tu suis déjà. Ça lit et ça montre, ça
+  n'ajoute rien. Chaque ligne a son propre **Ajouter**, donc tu peux en prendre trois sur
+  trente.
+- **Tout ajouter** — suit l'index entier d'un coup. Il récupère l'adresse lui-même, tu n'as
+  pas besoin de regarder le contenu d'abord.
+
+Deux volets dessous répondent aux questions qui viennent après :
+
+- **Catalogues que tu suis** — tous les catalogues communautaires que BMM récupère au
+  démarrage, des cinq types, quelle que soit leur provenance : un index, un lien profond, ou
+  un autre panneau de réglages. Chacun est retirable ici. C'est le seul écran où les cinq
+  types se rejoignent.
+- **Historique** — ce qui a été suivi et retiré, quand, et depuis quel index. Les listes de
+  sources sont de simples tableaux sans dates : sans ça, un catalogue que tu ne te souviens
+  pas d'avoir ajouté n'a de trace nulle part — et un que tu as retiré et que tu veux
+  récupérer non plus.
 
 ---
 

@@ -7,8 +7,22 @@ for their plugins, another for their themes, and pasting each into a different s
 index is one address that brings in all of them, and keeps working when they publish a
 new one.
 
-BMM reads an index in **Settings → Catalogue index**. Paste the address, press
-**Preview**, and it tells you what it would add before it adds anything.
+BMM reads an index in **Settings → Catalogue index**. Paste the address, then either:
+
+- **Look inside** — shows every catalog the index lists, with its type, name and how many
+  items it holds, and marks the ones you already follow. It reads and displays; it adds
+  nothing. Each row has its own **Add**, so you can take three catalogs out of thirty.
+- **Add everything** — follows the whole index at once. It fetches for itself, so you do
+  not have to look inside first.
+
+Two folds under it answer the questions that come later:
+
+- **Catalogs you follow** — every community catalog BMM fetches at startup, of all five
+  types, whatever added it: an index, a deep link, or another settings panel. Each one is
+  removable here. It is the only screen where all five meet.
+- **History** — what was followed and unfollowed, when, and from which index. The source
+  lists are plain arrays with no dates, so without this a catalog you do not remember
+  adding has no record anywhere — and neither does one you removed and now want back.
 
 ---
 

@@ -3646,21 +3646,44 @@
                                 <span data-i18n="settings.catIndex.title">Catalogue index</span>
                             </h3>
                             <p class="card-desc" data-i18n="settings.catIndex.desc">
-                                One address that lists app, plugin and theme catalogs together. Preview it before
-                                anything is added — nothing is imported until you say so.</p>
+                                One address that lists app, plugin, theme, automation and repo catalogs together.
+                                Look inside it to see exactly what it holds, add the whole thing, or pick entries
+                                one at a time.</p>
                             <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:10px">
                                 <input type="text" class="input-field" id="cat-index-url" style="flex:1; min-width:260px"
                                     placeholder="https://bettercommunity.ch/api/catalogs.json">
+                                <!-- "Look inside" reads and shows, and does nothing else. Import no longer
+                                     requires it: needing a preview click before the button you actually
+                                     wanted made the safe path the slow one. -->
                                 <button class="btn btn-secondary" id="cat-index-preview"
-                                    data-i18n="settings.catIndex.preview">Preview</button>
-                                <button class="btn btn-primary" id="cat-index-import" disabled
-                                    data-i18n="settings.catIndex.import">Import</button>
+                                    data-i18n="settings.catIndex.preview">Look inside</button>
+                                <button class="btn btn-primary" id="cat-index-import"
+                                    data-i18n="settings.catIndex.import">Add everything</button>
                             </div>
                             <div id="cat-index-result" class="cat-index-result"></div>
-                            <!-- Sources kept between sessions. One field that forgot the last
+                            <!-- What the index actually contains: one row per catalog, each addable
+                                 on its own. A count told you how many would be added and nothing
+                                 about what they were. -->
+                            <div id="cat-index-contents" class="cat-index-contents"></div>
+                            <!-- Index addresses kept between sessions. One field that forgot the last
                                  address meant re-pasting it every time, and somebody following
                                  two communities had to choose which one to keep. -->
                             <div id="cat-index-list" class="cat-index-list"></div>
+
+                            <!-- Every catalog source BMM actually fetches, whatever added it —
+                                 an index, a deep link, or a hand-typed address in another panel.
+                                 Removable here, which is the only place all five types meet. -->
+                            <details class="cat-index-fold" id="cat-index-following-fold">
+                                <summary data-i18n="settings.catIndex.following">Catalogs you follow</summary>
+                                <div id="cat-index-following" class="cat-index-following"></div>
+                            </details>
+
+                            <details class="cat-index-fold" id="cat-index-history-fold">
+                                <summary data-i18n="settings.catIndex.history">History</summary>
+                                <div id="cat-index-history" class="cat-index-history"></div>
+                                <button class="btn btn-ghost btn-sm" id="cat-index-history-clear"
+                                    data-i18n="settings.catIndex.histClear">Clear history</button>
+                            </details>
                         </div>
 
                         <div class="glass-card" style="border: 1px solid rgba(59,130,246,0.2); position:relative; overflow:hidden;">

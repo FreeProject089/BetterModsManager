@@ -16637,6 +16637,53 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 .cat-index-url { flex: 1; min-width: 0; font-size: 11px; font-family: var(--font-mono, monospace);
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-secondary); }
 
+/* ── The index's contents, the sources you follow, and the history ──────────────
+   Three lists sharing .cat-index-row, so they line up as one panel rather than three
+   that happen to sit together. Every fixed-width cell is `flex:none` with min-width:0
+   on the flexible one — a long URL beside a fixed cell is exactly the blowout above. */
+.cat-index-contents, .cat-index-following, .cat-index-history { margin-top: 8px; }
+.cat-index-contents:empty { display: none; }
+
+.cat-index-fold { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 8px; }
+.cat-index-fold > summary { cursor: pointer; font-size: 11px; color: var(--text-muted);
+    list-style: none; user-select: none; }
+.cat-index-fold > summary::-webkit-details-marker { display: none; }
+.cat-index-fold > summary::before { content: '▸'; display: inline-block; width: 12px;
+    transition: transform .15s ease; }
+.cat-index-fold[open] > summary::before { transform: rotate(90deg); }
+.cat-index-fold > summary:hover { color: var(--text-secondary); }
+
+/* The type badge. Fixed width so the five types form a column the eye can scan down
+   rather than a ragged edge that moves with the length of each word. */
+.cat-index-type { flex: none; width: 66px; font-size: 10px; text-transform: uppercase;
+    letter-spacing: .04em; color: var(--text-muted); }
+.cat-index-name { flex: 1; min-width: 0; font-size: 12px; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap; }
+/* The URL is secondary once a name is present, so it gets the smaller share. */
+.cat-index-contents .cat-index-url { flex: 1.4; }
+.cat-index-items, .cat-index-owner { flex: none; font-size: 10px; color: var(--text-muted); }
+.cat-index-from { flex: none; font-size: 10px; color: var(--text-muted);
+    background: var(--bg-secondary); border-radius: 4px; padding: 1px 5px; }
+.cat-index-have { flex: none; font-size: 10px; color: var(--success, #22c55e); }
+/* Already followed, dimmed rather than hidden: seeing that an index lists something you
+   already have is the answer to "why did adding it change nothing". */
+.cat-index-row.is-followed { opacity: .6; }
+.cat-index-empty { font-size: 11px; color: var(--text-muted); padding: 6px 0; }
+
+.cat-index-when { flex: none; width: 130px; font-size: 10px; color: var(--text-muted); }
+.cat-index-act { flex: none; width: 58px; font-size: 10px; }
+.cat-index-hist-add .cat-index-act { color: var(--success, #22c55e); }
+.cat-index-hist-remove .cat-index-act { color: var(--danger, #ef4444); }
+.cat-index-history { max-height: 260px; overflow-y: auto; }
+
+/* Under a narrow window the fixed cells stop earning their width. The date and the
+   provenance badge are the first to go: both are context, and the row's subject —
+   type, name, URL — must survive at every width. */
+@media (max-width: 640px) {
+    .cat-index-when, .cat-index-from, .cat-index-owner { display: none; }
+    .cat-index-contents .cat-index-url { display: none; }
+}
+
 /* Where a catalog source came from, when an index brought it in. Quiet by design: it is
    context for a decision, not the row's subject — the URL is. */
 .apps-source-from { font-size: 10px; color: var(--text-muted); background: var(--bg-secondary);

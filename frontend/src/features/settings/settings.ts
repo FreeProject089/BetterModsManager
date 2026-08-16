@@ -8,7 +8,11 @@ import { t } from '../../core/i18n.js';
 import { getLinks, bcRoot, bcTestMode, bcTestBase } from '../../core/links-config.js';
 import { initI18nSandbox } from './i18n-sandbox.js';
 import { renderShortcutsManager } from '../../core/commands.js';
-import { parseCatalogIndex, planImport, STORE_KEY, rememberOrigin, addSource } from '../catalogs/catalog-index.js';
+import {
+    parseCatalogIndex, planImport, STORE_KEY, rememberOrigin, addSource, removeSource,
+    originOf, originLabel, forgetOrigin, readHistory, recordHistory, clearHistory,
+} from '../catalogs/catalog-index.js';
+import type { CatalogIndex, IndexEntry } from '../catalogs/catalog-index.js';
 import { toast } from '../../ui/app.js';
 import { getProfiles, getActiveProfileId } from '../profiles/profiles.js';
 import { formatBytes, escHtml, escAttr } from '../../core/utils.js';
@@ -1901,47 +1905,155 @@ async function initCatalogIndexSettings() {
     };
     renderList();
 
-    let planned: ReturnType<typeof planImport> | null = null;
+    const contentsHost = document.getElementById('cat-index-contents');
+    const followHost = document.getElementById('cat-index-following');
+    const histHost = document.getElementById('cat-index-history');
 
-    previewBtn.addEventListener('click', async () => {
-        const url = input.value.trim();
-        if (!/^https?:\/\//i.test(url)) { toast(t('settings.catIndex.badUrl') || 'Enter an http(s) address.', 'error'); return; }
-        previewBtn.disabled = true;
-        importBtn.disabled = true;
-        planned = null;
+    // ── Following: every source BMM actually fetches, whatever put it there ──────
+    //
+    // Not just what an index added. A deep link, another settings panel and this one all
+    // write the same stores, and until now nothing showed them together — so a catalog you
+    // did not remember following could only be removed by finding whichever screen owned it.
+
+    const renderFollowing = async () => {
+        if (!followHost) return;
+        const all = await readAllSources();
+        const rows: string[] = [];
+        for (const type of Object.keys(all)) {
+            for (const u of all[type]) {
+                const from = originOf(u);
+                rows.push(`<div class="cat-index-row">
+                    <span class="cat-index-type">${escHtml(t(`settings.catIndex.type.${type}`) || type)}</span>
+                    <span class="cat-index-url" title="${escAttr(u)}">${escHtml(u)}</span>
+                    ${from ? `<span class="cat-index-from" title="${escAttr(from)}">${escHtml(originLabel(from))}</span>` : ''}
+                    <button class="btn btn-ghost btn-sm cat-index-unfollow"
+                            data-t="${escAttr(type)}" data-u="${escAttr(u)}">${escHtml(t('common.remove') || 'Remove')}</button>
+                  </div>`);
+            }
+        }
+        followHost.innerHTML = rows.length
+            ? rows.join('')
+            : `<div class="cat-index-empty">${escHtml(t('settings.catIndex.noneFollowed') || 'You follow no community catalogs yet.')}</div>`;
+
+        followHost.querySelectorAll('.cat-index-unfollow').forEach((b) => b.addEventListener('click', async () => {
+            const el = b as HTMLElement;
+            const type = el.dataset.t || ''; const u = el.dataset.u || '';
+            try {
+                if (type === 'app') {
+                    await invoke('remove_community_source', { url: u });
+                } else {
+                    const key = STORE_KEY[type];
+                    if (!key) return;
+                    // removeSource, matching addSource's case-insensitivity. An exact-match
+                    // filter here would leave a source that was added under a different case
+                    // unremovable by the button that says it removes it.
+                    const { list, removed } = removeSource(readSources(type), u);
+                    if (!removed) return;
+                    localStorage.setItem(key, JSON.stringify(list));
+                }
+                forgetOrigin(u);
+                recordHistory({ action: 'remove', type, url: u });
+                await renderFollowing(); renderHistory(); renderContents();
+                toast(t('settings.catIndex.removed') || 'Removed.', 'success');
+            } catch (e) {
+                toast(`${t('common.failed') || 'Failed'} — ${String(e).slice(0, 80)}`, 'error');
+            }
+        }));
+    };
+
+    // ── History ─────────────────────────────────────────────────────────────────
+
+    const renderHistory = () => {
+        if (!histHost) return;
+        const h = readHistory();
+        histHost.innerHTML = h.length
+            ? h.map((e) => `<div class="cat-index-row cat-index-hist-${escAttr(e.action)}">
+                  <span class="cat-index-when">${escHtml(new Date(e.at).toLocaleString())}</span>
+                  <span class="cat-index-act">${escHtml(e.action === 'add'
+                      ? (t('settings.catIndex.hAdded') || 'added')
+                      : (t('settings.catIndex.hRemoved') || 'removed'))}</span>
+                  <span class="cat-index-type">${escHtml(t(`settings.catIndex.type.${e.type}`) || e.type)}</span>
+                  <span class="cat-index-url" title="${escAttr(e.url)}">${escHtml(e.url)}</span>
+                  ${e.via ? `<span class="cat-index-from" title="${escAttr(e.via)}">${escHtml(originLabel(e.via))}</span>` : ''}
+               </div>`).join('')
+            : `<div class="cat-index-empty">${escHtml(t('settings.catIndex.noHistory') || 'Nothing yet.')}</div>`;
+    };
+
+    document.getElementById('cat-index-history-clear')?.addEventListener('click', () => {
+        clearHistory(); renderHistory();
+    });
+
+    // ── The index itself ────────────────────────────────────────────────────────
+
+    /** Fetch and parse, or null with the reason already on screen. */
+    const load = async (url: string): Promise<{ index: CatalogIndex; dropped: unknown[] } | null> => {
+        if (!/^https?:\/\//i.test(url)) { toast(t('settings.catIndex.badUrl') || 'Enter an http(s) address.', 'error'); return null; }
         out.textContent = t('settings.catIndex.loading') || 'Fetching…';
         try {
             // Through the backend, so the same TLS + identity handling every other catalog
             // fetch gets applies here too.
             const text = await invoke('fetch_remote_json', { url }) as string;
-            const { index, dropped } = parseCatalogIndex(JSON.parse(text));
-            planned = planImport(index, await readAllSources());
-            const byType = planned.add.reduce((m: Record<string, number>, e) => ({ ...m, [e.type]: (m[e.type] || 0) + 1 }), {});
-            const parts = Object.entries(byType).map(([k, n]) => `${n} ${k}`);
-            out.textContent = planned.add.length
-                ? `${(t('settings.catIndex.willAdd') || 'Will add: {what}.').replace('{what}', parts.join(', '))}`
-                  + (planned.already.length ? ` ${(t('settings.catIndex.already') || '{n} already there.').replace('{n}', String(planned.already.length))}` : '')
-                  + (dropped.length ? ` ${(t('settings.catIndex.skipped') || '{n} skipped.').replace('{n}', String(dropped.length))}` : '')
-                : (t('settings.catIndex.nothing') || 'Nothing new here — everything it lists is already added.');
-            importBtn.disabled = planned.add.length === 0;
+            const parsed = parseCatalogIndex(JSON.parse(text));
             // Kept only once it has actually answered. Saving on every keystroke would fill
             // the list with half-typed addresses, and saving a URL that failed would keep a
             // dead one around forever.
             const urls = readList();
             if (!urls.includes(url)) { writeList([...urls, url]); renderList(); }
+            return parsed;
         } catch (e) {
             // The URL is shown back deliberately: a typo in a long address is the usual
             // cause and "failed" alone leaves you re-reading the field character by character.
             out.textContent = `${t('settings.catIndex.failed') || 'Could not read that index'} — ${String(e).slice(0, 120)}`;
-            planned = null;
-        } finally { previewBtn.disabled = false; }
-    });
+            return null;
+        }
+    };
 
-    importBtn.addEventListener('click', async () => {
-        if (!planned?.add.length) return;
-        importBtn.disabled = true;
+    /** The last index looked at, and what following it would change. Held so the per-entry
+     *  buttons can act without re-fetching, and re-planned after every add. */
+    let shown: CatalogIndex | null = null;
+    let shownFrom = '';
+
+    const renderContents = async () => {
+        if (!contentsHost) return;
+        if (!shown) { contentsHost.innerHTML = ''; return; }
+        const plan = planImport(shown, await readAllSources());
+        const already = new Set(plan.already.map((e) => e.url.toLowerCase()));
+        contentsHost.innerHTML = shown.catalogs.map((e) => {
+            const have = already.has(e.url.toLowerCase());
+            return `<div class="cat-index-row${have ? ' is-followed' : ''}">
+                <span class="cat-index-type">${escHtml(t(`settings.catIndex.type.${e.type}`) || e.type)}</span>
+                <span class="cat-index-name">${escHtml(e.name || e.url)}</span>
+                ${e.items ? `<span class="cat-index-items">${escHtml(String(e.items))}</span>` : ''}
+                ${e.owner ? `<span class="cat-index-owner">${escHtml(e.owner)}</span>` : ''}
+                <span class="cat-index-url" title="${escAttr(e.url)}">${escHtml(e.url)}</span>
+                ${have
+                    ? `<span class="cat-index-have">${escHtml(t('settings.catIndex.followed') || 'Following')}</span>`
+                    : `<button class="btn btn-ghost btn-sm cat-index-add1" data-u="${escAttr(e.url)}">${escHtml(t('settings.catIndex.addOne') || 'Add')}</button>`}
+              </div>`;
+        }).join('');
+
+        contentsHost.querySelectorAll('.cat-index-add1').forEach((b) => b.addEventListener('click', async () => {
+            const u = (b as HTMLElement).dataset.u || '';
+            const entry = shown?.catalogs.find((c) => c.url === u);
+            if (!entry) return;
+            const n = await follow([entry], shownFrom);
+            out.textContent = added(n);
+            await refreshAll();
+        }));
+    };
+
+    const added = (n: number) => (t('settings.catIndex.added') || 'Added {n} catalog source(s).').replace('{n}', String(n));
+
+    const refreshAll = async () => { await renderFollowing(); renderHistory(); await renderContents(); };
+
+    /**
+     * Follow these entries. Returns how many actually landed — not how many were asked for,
+     * because an entry already followed adds nothing and saying otherwise is the count bug
+     * this panel already had once.
+     */
+    const follow = async (entries: IndexEntry[], via: string): Promise<number> => {
         let ok = 0;
-        for (const e of planned.add) {
+        for (const e of entries) {
             try {
                 if (e.type === 'app') {
                     await invoke('add_community_source', { url: e.url });
@@ -1952,18 +2064,52 @@ async function initCatalogIndexSettings() {
                     // addSource, not a second dedupe written here. The preview and this writer
                     // must agree on what "already followed" means, and when they were written
                     // separately they did not.
-                    if (addSource(list, e.url)) localStorage.setItem(key, JSON.stringify(list));
+                    if (!addSource(list, e.url)) continue;
+                    localStorage.setItem(key, JSON.stringify(list));
                 }
                 // Recorded only after the add succeeded, so a source that failed to be
                 // added does not get an origin pointing at an index it never came from.
-                rememberOrigin(e.url, input.value.trim());
+                rememberOrigin(e.url, via);
+                recordHistory({ action: 'add', type: e.type, url: e.url, via });
                 ok += 1;
             } catch { /* one bad entry must not abandon the rest of the index */ }
         }
-        out.textContent = (t('settings.catIndex.added') || 'Added {n} catalog source(s).').replace('{n}', String(ok));
-        toast((t('settings.catIndex.added') || 'Added {n} catalog source(s).').replace('{n}', String(ok)), 'success');
-        planned = null;
+        return ok;
+    };
+
+    // Look inside: READ ONLY. It shows what the index holds and changes nothing — which is
+    // what the button now says, rather than being a required first step towards a second one.
+    previewBtn.addEventListener('click', async () => {
+        const url = input.value.trim();
+        previewBtn.disabled = true;
+        try {
+            const parsed = await load(url);
+            if (!parsed) { shown = null; await renderContents(); return; }
+            shown = parsed.index; shownFrom = url;
+            const n = parsed.index.catalogs.length;
+            out.textContent = (t('settings.catIndex.holds') || 'This index lists {n} catalog(s).').replace('{n}', String(n))
+                + (parsed.dropped.length ? ` ${(t('settings.catIndex.skipped') || '{n} skipped.').replace('{n}', String(parsed.dropped.length))}` : '');
+            await renderContents();
+        } finally { previewBtn.disabled = false; }
     });
+
+    // Add everything: fetches for itself. It no longer waits to be enabled by a preview
+    // click — the person who typed an address and pressed Add meant Add.
+    importBtn.addEventListener('click', async () => {
+        const url = input.value.trim();
+        importBtn.disabled = true;
+        try {
+            const parsed = await load(url);
+            if (!parsed) return;
+            shown = parsed.index; shownFrom = url;
+            const n = await follow(parsed.index.catalogs, url);
+            out.textContent = added(n);
+            toast(added(n), n ? 'success' : 'info');
+            await refreshAll();
+        } finally { importBtn.disabled = false; }
+    });
+
+    await refreshAll();
 }
 
 export async function initSettings() {

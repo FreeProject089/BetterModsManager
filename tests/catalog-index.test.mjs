@@ -10,7 +10,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const { parseCatalogIndex, planImport, INDEX_TYPES, STORE_KEY, ROUTABLE, looksLikeIndex, hasSource, addSource } = await import(
+const { parseCatalogIndex, planImport, INDEX_TYPES, STORE_KEY, ROUTABLE, looksLikeIndex, hasSource, addSource, removeSource, readHistory, recordHistory, clearHistory, HISTORY_MAX } = await import(
   pathToFileURL(join(ROOT, 'frontend/js/features/catalogs/catalog-index.js')).href
 );
 
@@ -140,6 +140,82 @@ describe('hasSource / addSource — the preview and the writer must agree', () =
     const existing = { plugin: ['HTTPS://E.COM/P.JSON'] };
     assert.equal(planImport(index, existing).already.length, 1);
     assert.equal(addSource(existing.plugin, 'https://e.com/p.json'), false);
+  });
+
+  test('removeSource takes a source out by the same name addSource refused it under', () => {
+    // THE ONE for removal. An exact-match filter would leave a source that was added under a
+    // different case unremovable by the button that says it removes it — and there is no other
+    // screen that lists all five types, so unremovable there means unremovable.
+    const { list, removed } = removeSource(['https://E.com/A.json', 'https://e.com/b.json'], 'https://e.com/a.json');
+    assert.equal(removed, true);
+    assert.deepEqual(list, ['https://e.com/b.json']);
+  });
+
+  test('removing something that is not there changes nothing, and says so', () => {
+    // The caller skips the write AND the history entry on false. Returning true here would
+    // write "removed" into the history for something that was never followed.
+    const { list, removed } = removeSource(['https://e.com/a.json'], 'https://e.com/zz.json');
+    assert.equal(removed, false);
+    assert.deepEqual(list, ['https://e.com/a.json']);
+  });
+
+  test('add then remove leaves the list as it started', () => {
+    const list = ['https://e.com/a.json'];
+    addSource(list, 'https://e.com/b.json');
+    assert.deepEqual(removeSource(list, 'https://E.COM/B.JSON').list, ['https://e.com/a.json']);
+  });
+});
+
+describe('history', () => {
+  // localStorage is not in node. A minimal stand-in is enough: these functions only get, set
+  // and remove one key, and a full mock would test the mock.
+  const store = new Map();
+  globalThis.localStorage = {
+    getItem: (k) => (store.has(k) ? store.get(k) : null),
+    setItem: (k, v) => store.set(k, String(v)),
+    removeItem: (k) => store.delete(k),
+  };
+  const reset = () => store.clear();
+
+  test('newest first, so the list reads as a log without being reversed at every call site', () => {
+    reset();
+    recordHistory({ action: 'add', type: 'plugin', url: 'a', at: 1 });
+    recordHistory({ action: 'remove', type: 'plugin', url: 'a', at: 2 });
+    assert.deepEqual(readHistory().map((e) => [e.at, e.action]), [[2, 'remove'], [1, 'add']]);
+  });
+
+  test('capped, oldest dropped', () => {
+    reset();
+    for (let i = 0; i <= HISTORY_MAX + 10; i++) recordHistory({ action: 'add', type: 'x', url: `u${i}`, at: i });
+    const h = readHistory();
+    assert.equal(h.length, HISTORY_MAX);
+    assert.equal(h[0].url, `u${HISTORY_MAX + 10}`, 'the newest survives');
+  });
+
+  test('malformed rows are dropped rather than rendered blank', () => {
+    reset();
+    store.set('bmm_catalog_history', JSON.stringify([
+      { action: 'add', type: 'p', url: 'good', at: 1 },
+      { action: 'wat', type: 'p', url: 'bad-action', at: 2 },
+      { action: 'add', type: 'p', at: 3 },
+      null,
+    ]));
+    assert.deepEqual(readHistory().map((e) => e.url), ['good']);
+  });
+
+  test('junk in the key is an empty history, not a crash', () => {
+    reset();
+    store.set('bmm_catalog_history', 'not json');
+    assert.deepEqual(readHistory(), []);
+    store.set('bmm_catalog_history', '{"not":"an array"}');
+    assert.deepEqual(readHistory(), []);
+  });
+
+  test('clearing empties it', () => {
+    reset();
+    recordHistory({ action: 'add', type: 'p', url: 'a' });
+    clearHistory();
+    assert.deepEqual(readHistory(), []);
   });
 });
 

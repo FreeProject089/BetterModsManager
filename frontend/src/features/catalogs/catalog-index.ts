@@ -206,6 +206,77 @@ export function originLabel(indexUrl: string): string {
     try { return new URL(indexUrl).host; } catch { return indexUrl; }
 }
 
+/** Forget where a source came from. Called when the source itself goes, so the map does not
+ *  accumulate provenance for catalogs nobody follows any more. */
+export function forgetOrigin(catalogUrl: string): void {
+    try {
+        const m = readOrigins();
+        if (!(catalogUrl in m)) return;
+        delete m[catalogUrl];
+        localStorage.setItem(ORIGIN_KEY, JSON.stringify(m));
+    } catch { /* ignore */ }
+}
+
+// ── History ──────────────────────────────────────────────────────────────────
+//
+// What was followed and unfollowed, and when. It exists because the source lists are plain
+// arrays with no dates: a catalog that appeared without you remembering adding it has no
+// record anywhere, and neither does one you removed and now want back.
+//
+// Deliberately not a log of everything — only the two events that change what BMM fetches at
+// startup, which is the only question this answers.
+
+const HISTORY_KEY = 'bmm_catalog_history';
+/** Kept small on purpose: this is a convenience, not an audit trail, and localStorage is a
+ *  few megabytes shared with everything else the app stores. */
+export const HISTORY_MAX = 200;
+
+export interface HistoryEntry {
+    at: number;
+    action: 'add' | 'remove';
+    type: string;
+    url: string;
+    /** The index it came from, when it came from one. Absent means added by hand. */
+    via?: string;
+}
+
+export function readHistory(): HistoryEntry[] {
+    try {
+        const v = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+        if (!Array.isArray(v)) return [];
+        // Newest first, and anything malformed dropped rather than rendered as a blank row.
+        return v.filter((e) => e && typeof e.url === 'string' && (e.action === 'add' || e.action === 'remove'));
+    } catch { return []; }
+}
+
+/** Record one event. Newest first, capped. Returns the list it wrote, so a caller can render
+ *  without reading back. */
+export function recordHistory(entry: Omit<HistoryEntry, 'at'> & { at?: number }): HistoryEntry[] {
+    const next = [{ ...entry, at: entry.at ?? Date.now() } as HistoryEntry, ...readHistory()].slice(0, HISTORY_MAX);
+    try { localStorage.setItem(HISTORY_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+    return next;
+}
+
+export function clearHistory(): void {
+    try { localStorage.removeItem(HISTORY_KEY); } catch { /* ignore */ }
+}
+
+/**
+ * Remove a source from a list, case-insensitively.
+ *
+ * The mirror of addSource, and it has to match it: a list that accepted a URL as a duplicate
+ * of an existing one must be able to remove it by the same name, or a source becomes
+ * unremovable through the button that claims to remove it.
+ *
+ * Returns the new list and whether anything went, so the caller can skip the write and the
+ * history entry when nothing changed.
+ */
+export function removeSource(list: string[], url: string): { list: string[]; removed: boolean } {
+    const low = String(url).toLowerCase();
+    const kept = list.filter((u) => String(u).toLowerCase() !== low);
+    return { list: kept, removed: kept.length !== list.length };
+}
+
 export const ROUTABLE = INDEX_TYPES.filter((t) => t === 'app' || !!STORE_KEY[t]);
 
 /**
