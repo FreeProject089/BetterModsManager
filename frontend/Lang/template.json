@@ -7271,5 +7271,21 @@
   "sched.pc.checking": "Checking that address…",
   "sched.pc.followed": "Following — {n} automation(s).",
   "sched.pc.notfeedAdd": "That address answered, but it is not a preset catalogue.",
-  "sched.pc.isIndex": "That is a catalogue INDEX, not a preset catalogue — add it under Settings → Catalogue index."
+  "sched.pc.isIndex": "That is a catalogue INDEX, not a preset catalogue — add it under Settings → Catalogue index.",
+  "repo.cat.b.title": "Build a repo catalogue",
+  "repo.cat.b.name": "Catalogue name",
+  "repo.cat.b.defname": "My repo catalogue",
+  "repo.cat.b.screen": "on screen",
+  "repo.cat.b.pull": "Pull repos in from a catalogue",
+  "repo.cat.b.pullbtn": "Pull",
+  "repo.cat.b.nosrc": "You follow no repo catalogues yet.",
+  "repo.cat.b.add": "Or pull from an address",
+  "repo.cat.b.fetch": "Pull",
+  "repo.cat.b.alsofollow": "Follow this catalogue too, so the browser keeps showing it",
+  "repo.cat.b.pulling": "Fetching…",
+  "repo.cat.b.pulled": "Added {n} of {m} — the rest were already here.",
+  "repo.cat.b.notfeed": "That answered, but it lists no repositories.",
+  "repo.cat.b.failed": "Could not read that address",
+  "repo.cat.b.count": "{n} of {m} selected",
+  "repo.cat.b.norepos": "Nothing yet — pull from a catalogue or an address above."
 }

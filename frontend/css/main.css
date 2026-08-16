@@ -16702,6 +16702,34 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
    whole point of the strip is deciding which to keep. */
 .repo-cat-chip.is-imported { border-style: dashed; }
 
+/* ── The repo-catalogue builder ────────────────────────────────────────────────
+   Three sources feeding one list, so each section states what it is. Secondary,
+   not muted: at 2.3:1 muted is not readable on this surface, and every label here
+   is something you have to read to make the choice the modal exists for. */
+.repo-cat-b-lbl { display: block; font-size: 11px; color: var(--text-secondary);
+    margin-bottom: 4px; }
+.repo-cat-b-srcs { display: flex; flex-direction: column; gap: 4px; }
+.repo-cat-b-src { display: flex; align-items: center; gap: 8px; padding: 4px 0;
+    border-top: 1px solid var(--border); }
+/* min-width:0 so a long address truncates instead of pushing the Pull button out of
+   the row — the blowout an unbreakable string causes in a flex row. */
+.repo-cat-b-url { flex: 1; min-width: 0; font-size: 11px; font-family: var(--font-mono, monospace);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-secondary); }
+.repo-cat-b-add { display: flex; gap: 6px; }
+.repo-cat-b-follow { display: flex; align-items: center; gap: 6px; margin-top: 6px;
+    font-size: 11px; color: var(--text-secondary); }
+.repo-cat-b-head { display: flex; align-items: center; gap: 8px; margin: 14px 0 6px;
+    font-size: 11px; color: var(--text-secondary); }
+.repo-cat-b-head > span { flex: 1; min-width: 0; }
+.repo-cat-b-rows { display: flex; flex-direction: column; gap: 6px; }
+.repo-cat-b-row { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px;
+    border: 1px solid var(--border); border-radius: 8px; cursor: pointer; }
+.repo-cat-b-nm { display: block; font-size: 13px; }
+.repo-cat-b-u { display: block; font-size: 11px; color: var(--text-secondary); word-break: break-all; }
+/* Where each row came from — the answer to "why is this in my catalogue?". */
+.repo-cat-b-from { flex: none; font-size: 10px; color: var(--text-secondary);
+    background: var(--bg-secondary); border-radius: 4px; padding: 1px 5px; align-self: center; }
+
 /* The on/off buttons. Small, quiet, and never the widest thing in a row. */
 .apps-source-toggle, .plug-source-toggle { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; }
 .repo-cat-off { background: none; border: 0; cursor: pointer; color: inherit; opacity: .7; padding: 0 2px; }

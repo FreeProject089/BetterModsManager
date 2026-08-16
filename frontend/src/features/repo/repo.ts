@@ -5,6 +5,7 @@ import { toast, updateLibraryProfileSelector, toastSaved } from '../../ui/app.js
 import { escHtml, escAttr, formatBytes } from '../../core/utils.js';
 import {
     originLabel, originOf, forgetOrigin, enabledOnly, isDisabled, setDisabled, recordHistory,
+    hasSource,
 } from '../catalogs/catalog-index.js';
 import { getLinks } from '../../core/links-config.js';
 import { renderProfiles } from '../profiles/profiles.js';
@@ -136,89 +137,194 @@ export function renderRepoCatalogStrip(reload: () => void, getRepos: () => any[]
         // It used to export the whole list silently. A catalog is something you publish, and
         // "everything I happen to be following, including the half I was trying out" is
         // rarely what you meant to publish — so it asks first.
-        const all = getRepos();
-        if (!all.length) { toast(t('repo.cat.empty'), 'info'); return; }
-        openExportPicker(all);
+        // The list on screen is a STARTING POINT, not the whole story. A catalogue worth
+        // publishing is usually assembled from more than one place — what you are browsing,
+        // the catalogues you already follow, and an address somebody sent you — so the
+        // builder takes all three instead of silently freezing whichever list happened to be
+        // loaded. An empty screen is no longer a dead end either: you can start from a URL.
+        openCatalogBuilder(getRepos());
     });
 }
 
-/** Choose what goes into the catalog, then write it. */
-function openExportPicker(all: any[]): void {
-    document.getElementById('repo-cat-export-pick')?.remove();
+/**
+ * Build a repo catalogue: from the list on screen, from the catalogues you follow, and from
+ * any repos.json address you paste.
+ *
+ * Every entry is written as `community`, whatever the feed it came from called itself. A
+ * catalogue that could label its own entries "official" would borrow a badge it was never
+ * given — the same rule the browser applies when it merges a followed catalogue in, and the
+ * reason it is applied HERE rather than trusted from the document.
+ */
+async function openCatalogBuilder(onScreen: any[]): Promise<void> {
+    document.getElementById('repo-cat-build')?.remove();
+
+    type Row = { repo: any; from: string; on: boolean };
+    // Keyed by normalised URL: the same repo reached through two catalogues is one repo, and
+    // a catalogue that lists it twice is a catalogue nobody can read.
+    const rows = new Map<string, Row>();
+    const addRepos = (list: any[], from: string): number => {
+        let added = 0;
+        for (const r of list) {
+            const key = normRepoUrl(r?.url || '');
+            if (!key || rows.has(key)) continue;
+            rows.set(key, { repo: r, from, on: true });
+            added += 1;
+        }
+        return added;
+    };
+    addRepos(onScreen, t('repo.cat.b.screen') || 'on screen');
 
     const ov = document.createElement('div');
     ov.className = 'modal-overlay open';
-    ov.id = 'repo-cat-export-pick';
+    ov.id = 'repo-cat-build';
     ov.style.zIndex = '10000';
-    ov.innerHTML = `
-        <div class="modal glass" style="max-width:640px; width:94%; max-height:82vh; display:flex; flex-direction:column;">
+    document.body.appendChild(ov);
+
+    let name = t('repo.cat.b.defname') || 'My repo catalogue';
+    let msg: { kind: 'ok' | 'bad'; text: string } | null = null;
+    let urlBox = '';
+    let follow = true;
+    let busy = false;
+
+    const paint = () => {
+        const list = [...rows.values()];
+        const on = list.filter((r) => r.on).length;
+        ov.innerHTML = `
+        <div class="modal glass" style="max-width:720px; width:94%; max-height:86vh; display:flex; flex-direction:column;">
             <div class="modal-header" style="flex-shrink:0;">
-                <h3>${escHtml(t('repo.cat.pick.title'))}</h3>
+                <h3>${escHtml(t('repo.cat.b.title') || 'Build a repo catalogue')}</h3>
                 <button class="modal-close" type="button" data-x>&times;</button>
             </div>
             <div class="modal-body" style="flex:1; min-height:0; overflow:auto;">
-                <p style="font-size:12px; color:var(--text-muted); margin-bottom:10px;">${escHtml(t('repo.cat.pick.hint'))}</p>
-                <div style="display:flex; gap:8px; margin-bottom:10px;">
-                    <button class="btn btn-sm" type="button" data-all>${escHtml(t('repo.cat.pick.all'))}</button>
-                    <button class="btn btn-sm" type="button" data-none>${escHtml(t('repo.cat.pick.none'))}</button>
-                    <span style="margin-left:auto; font-size:12px; color:var(--text-muted);" data-count></span>
+                <label class="repo-cat-b-lbl">${escHtml(t('repo.cat.b.name') || 'Catalogue name')}</label>
+                <input class="input" id="repo-cat-b-name" value="${escAttr(name)}" style="margin-bottom:14px;">
+
+                <label class="repo-cat-b-lbl">${escHtml(t('repo.cat.b.pull') || 'Pull repos in from a catalogue')}</label>
+                <div class="repo-cat-b-srcs">
+                    ${readRepoCatalogs().length
+                        ? readRepoCatalogs().map((u) => {
+                            const from = originOf(u);
+                            return `<div class="repo-cat-b-src">
+                                <span class="repo-cat-b-url" title="${escAttr(u)}">${escHtml(u)}</span>
+                                ${from ? `<span class="cat-index-from" title="${escAttr(from)}">${escHtml(originLabel(from))}</span>` : ''}
+                                <button class="btn btn-xs" data-pull="${escAttr(u)}">${escHtml(t('repo.cat.b.pullbtn') || 'Pull')}</button>
+                            </div>`;
+                        }).join('')
+                        : `<div class="cat-index-empty">${escHtml(t('repo.cat.b.nosrc') || 'You follow no repo catalogues yet.')}</div>`}
                 </div>
-                <div data-rows style="display:flex; flex-direction:column; gap:6px;"></div>
+
+                <label class="repo-cat-b-lbl" style="margin-top:12px;">${escHtml(t('repo.cat.b.add') || 'Or pull from an address')}</label>
+                <div class="repo-cat-b-add">
+                    <input class="input" id="repo-cat-b-url" value="${escAttr(urlBox)}" placeholder="https://example.com/repos.json">
+                    <button class="btn btn-sm btn-secondary" id="repo-cat-b-fetch"${busy ? ' disabled' : ''}>${escHtml(t('repo.cat.b.fetch') || 'Pull')}</button>
+                </div>
+                <label class="repo-cat-b-follow">
+                    <input type="checkbox" id="repo-cat-b-follow"${follow ? ' checked' : ''}>
+                    ${escHtml(t('repo.cat.b.alsofollow') || 'Follow this catalogue too, so the browser keeps showing it')}
+                </label>
+                ${msg ? `<div class="sched-pc-addout-${escAttr(msg.kind)}" style="margin-top:6px;">${escHtml(msg.text)}</div>` : ''}
+
+                <div class="repo-cat-b-head">
+                    <span>${escHtml((t('repo.cat.b.count') || '{n} of {m} selected').replace('{n}', String(on)).replace('{m}', String(list.length)))}</span>
+                    <button class="btn btn-xs" data-all>${escHtml(t('repo.cat.pick.all') || 'All')}</button>
+                    <button class="btn btn-xs" data-none>${escHtml(t('repo.cat.pick.none') || 'None')}</button>
+                </div>
+                <div class="repo-cat-b-rows">
+                    ${list.length ? list.map(({ repo, from, on: sel }, i) => `
+                        <label class="repo-cat-b-row">
+                            <input type="checkbox" data-i="${i}"${sel ? ' checked' : ''}>
+                            <span style="min-width:0;">
+                                <span class="repo-cat-b-nm">${escHtml(repo.name || repo.url || '')}</span>
+                                <span class="repo-cat-b-u">${escHtml(repo.url || '')}</span>
+                            </span>
+                            <span class="repo-cat-b-from">${escHtml(from)}</span>
+                        </label>`).join('')
+                        : `<div class="cat-index-empty">${escHtml(t('repo.cat.b.norepos') || 'Nothing yet — pull from a catalogue or an address above.')}</div>`}
+                </div>
             </div>
             <div class="modal-footer" style="flex-shrink:0; display:flex; gap:8px; justify-content:flex-end;">
-                <button class="btn" type="button" data-x>${escHtml(t('common.cancel'))}</button>
-                <button class="btn btn-primary" type="button" data-go></button>
+                <button class="btn" type="button" data-x>${escHtml(t('common.cancel') || 'Cancel')}</button>
+                <button class="btn btn-primary" type="button" data-go${on ? '' : ' disabled'}>${escHtml((t('repo.cat.pick.export') || 'Export {n}').replace('{n}', String(on)))}</button>
             </div>
         </div>`;
-    document.body.appendChild(ov);
-
-    const rowsEl = ov.querySelector('[data-rows]') as HTMLElement;
-    const countEl = ov.querySelector('[data-count]') as HTMLElement;
-    const goBtn = ov.querySelector('[data-go]') as HTMLButtonElement;
-
-    all.forEach((r: any, i: number) => {
-        const row = document.createElement('label');
-        row.style.cssText = 'display:flex; gap:10px; align-items:flex-start; padding:8px 10px; border:1px solid var(--border); border-radius:8px; cursor:pointer;';
-        row.innerHTML = `
-            <input type="checkbox" checked data-i="${i}" style="margin-top:3px;">
-            <span style="min-width:0;">
-                <span style="display:block; font-size:13px;">${escHtml(r.name || r.url || '')}</span>
-                <span style="display:block; font-size:11px; color:var(--text-muted); word-break:break-all;">${escHtml(r.url || '')}</span>
-            </span>`;
-        rowsEl.appendChild(row);
-    });
-
-    const boxes = () => Array.from(ov.querySelectorAll('input[type=checkbox]')) as HTMLInputElement[];
-    const sync = () => {
-        const n = boxes().filter((b) => b.checked).length;
-        countEl.textContent = `${n} / ${all.length}`;
-        goBtn.textContent = t('repo.cat.pick.export').replace('{n}', String(n));
-        goBtn.disabled = n === 0;
+        wire();
     };
-    ov.addEventListener('change', sync);
-    ov.querySelector('[data-all]')?.addEventListener('click', () => { boxes().forEach((b) => { b.checked = true; }); sync(); });
-    ov.querySelector('[data-none]')?.addEventListener('click', () => { boxes().forEach((b) => { b.checked = false; }); sync(); });
-    ov.querySelectorAll('[data-x]').forEach((x) => x.addEventListener('click', () => ov.remove()));
-    // Clicking the backdrop closes; clicking inside must not.
-    ov.addEventListener('click', (e) => { if (e.target === ov) ov.remove(); });
-    sync();
 
-    goBtn.addEventListener('click', async () => {
-        const chosen = boxes().filter((b) => b.checked).map((b) => all[Number(b.dataset.i)]);
-        const rows = chosen.map((r: any) => ({
-            name: r.name, url: r.url, description: r.description || '',
-            region: r.region || '', category: r.category === 'official' ? 'community' : (r.category || 'community'),
-        }));
-        const doc = JSON.stringify({ name: 'My repo catalog', generatedAt: new Date().toISOString(), repos: rows }, null, 2);
-        const { saveFile } = await import('../../core/api.js');
-        const path = await saveFile({ defaultPath: 'repos.json', filters: [{ name: 'Repo catalog', extensions: ['json'] }] }).catch(() => null);
-        if (!path) return;
+    /** Fetch one catalogue and merge what it holds. Reports why when it cannot. */
+    const pull = async (url: string, alsoFollow: boolean) => {
+        if (!/^https?:\/\//i.test(url)) { msg = { kind: 'bad', text: t('repo.cat.badurl') || 'Enter an http(s) address.' }; paint(); return; }
+        busy = true; msg = { kind: 'ok', text: t('repo.cat.b.pulling') || 'Fetching…' }; paint();
         try {
-            await invoke('write_text_file', { path, content: doc });
-            toast(t('repo.cat.saved').replace('{n}', String(rows.length)), 'success');
-            ov.remove();
-        } catch (e) { toast(String(e), 'error'); }
-    });
+            const sep = url.includes('?') ? '&' : '?';
+            const raw: string = await invoke('fetch_remote_json', { url: `${url}${sep}t=${Date.now()}` }) as string;
+            const list = normaliseRepoFeed(JSON.parse(raw));
+            if (!list.length) {
+                // Told apart from unreachable on purpose: an address that answers with the
+                // wrong document is a different problem from one that does not answer.
+                msg = { kind: 'bad', text: t('repo.cat.b.notfeed') || 'That answered, but it lists no repositories.' };
+            } else {
+                const added = addRepos(list, originLabel(url));
+                msg = { kind: 'ok', text: (t('repo.cat.b.pulled') || 'Added {n} of {m} — the rest were already here.')
+                    .replace('{n}', String(added)).replace('{m}', String(list.length)) };
+                if (alsoFollow && !hasSource(readRepoCatalogs(), url)) {
+                    writeRepoCatalogs([...readRepoCatalogs(), url]);
+                    recordHistory({ action: 'add', type: 'repo', url });
+                }
+                urlBox = '';
+            }
+        } catch (e) {
+            msg = { kind: 'bad', text: `${t('repo.cat.b.failed') || 'Could not read that address'} — ${String(e).slice(0, 120)}` };
+        } finally { busy = false; paint(); }
+    };
+
+    function wire(): void {
+        const list = [...rows.values()];
+        ov.querySelectorAll('[data-x]').forEach((x) => x.addEventListener('click', () => ov.remove()));
+        ov.addEventListener('click', (e) => { if (e.target === ov) ov.remove(); });
+
+        const nameEl = ov.querySelector<HTMLInputElement>('#repo-cat-b-name');
+        nameEl?.addEventListener('input', () => { name = nameEl.value; });
+        const urlEl = ov.querySelector<HTMLInputElement>('#repo-cat-b-url');
+        urlEl?.addEventListener('input', () => { urlBox = urlEl.value; });
+        const folEl = ov.querySelector<HTMLInputElement>('#repo-cat-b-follow');
+        folEl?.addEventListener('change', () => { follow = folEl.checked; });
+
+        ov.querySelector('#repo-cat-b-fetch')?.addEventListener('click', () => { void pull((urlEl?.value || '').trim(), follow); });
+        urlEl?.addEventListener('keydown', (e) => { if ((e as KeyboardEvent).key === 'Enter') void pull(urlEl.value.trim(), follow); });
+        ov.querySelectorAll<HTMLElement>('[data-pull]').forEach((b) => b.addEventListener('click', () => {
+            // Already followed, so it is not followed again — only its contents are pulled.
+            void pull(b.dataset.pull || '', false);
+        }));
+
+        ov.querySelectorAll<HTMLInputElement>('.repo-cat-b-row input[type=checkbox]').forEach((b) => b.addEventListener('change', () => {
+            const r = list[Number(b.dataset.i)];
+            if (r) r.on = b.checked;
+            paint();
+        }));
+        ov.querySelector('[data-all]')?.addEventListener('click', () => { list.forEach((r) => { r.on = true; }); paint(); });
+        ov.querySelector('[data-none]')?.addEventListener('click', () => { list.forEach((r) => { r.on = false; }); paint(); });
+
+        ov.querySelector('[data-go]')?.addEventListener('click', async () => {
+            const chosen = list.filter((r) => r.on).map((r) => r.repo);
+            const out = chosen.map((r: any) => ({
+                name: r.name, url: r.url, description: r.description || '',
+                region: r.region || '',
+                // community, always. See the note on this function.
+                category: 'community',
+            }));
+            const doc = JSON.stringify({ name: name.trim() || 'My repo catalogue', generatedAt: new Date().toISOString(), repos: out }, null, 2);
+            const { saveFile } = await import('../../core/api.js');
+            const path = await saveFile({ defaultPath: 'repos.json', filters: [{ name: 'Repo catalog', extensions: ['json'] }] }).catch(() => null);
+            if (!path) return;
+            try {
+                await invoke('write_text_file', { path, content: doc });
+                toast((t('repo.cat.saved') || 'Wrote {n} repositories.').replace('{n}', String(out.length)), 'success');
+                ov.remove();
+            } catch (e) { toast(String(e), 'error'); }
+        });
+    }
+
+    paint();
 }
 
 export function writeRepoCatalogs(urls: string[]): void {

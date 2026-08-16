@@ -7416,5 +7416,21 @@
   "sched.pc.checking": "Vérification de cette adresse…",
   "sched.pc.followed": "Suivi — {n} automatisation(s).",
   "sched.pc.notfeedAdd": "Cette adresse a répondu, mais ce n’est pas un catalogue d’automatisations.",
-  "sched.pc.isIndex": "C’est un INDEX de catalogues, pas un catalogue d’automatisations — ajoute-le dans Réglages → Index de catalogues."
+  "sched.pc.isIndex": "C’est un INDEX de catalogues, pas un catalogue d’automatisations — ajoute-le dans Réglages → Index de catalogues.",
+  "repo.cat.b.title": "Construire un catalogue de dépôts",
+  "repo.cat.b.name": "Nom du catalogue",
+  "repo.cat.b.defname": "Mon catalogue de dépôts",
+  "repo.cat.b.screen": "à l’écran",
+  "repo.cat.b.pull": "Récupérer les dépôts d’un catalogue",
+  "repo.cat.b.pullbtn": "Récupérer",
+  "repo.cat.b.nosrc": "Vous ne suivez encore aucun catalogue de dépôts.",
+  "repo.cat.b.add": "Ou récupérer depuis une adresse",
+  "repo.cat.b.fetch": "Récupérer",
+  "repo.cat.b.alsofollow": "Suivre aussi ce catalogue, pour qu’il reste dans le navigateur",
+  "repo.cat.b.pulling": "Récupération…",
+  "repo.cat.b.pulled": "{n} ajouté(s) sur {m} — les autres étaient déjà là.",
+  "repo.cat.b.notfeed": "Cette adresse a répondu, mais elle ne liste aucun dépôt.",
+  "repo.cat.b.failed": "Impossible de lire cette adresse",
+  "repo.cat.b.count": "{n} sur {m} sélectionné(s)",
+  "repo.cat.b.norepos": "Rien pour l’instant — récupérez depuis un catalogue ou une adresse ci-dessus."
 }
