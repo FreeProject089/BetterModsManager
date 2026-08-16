@@ -16797,6 +16797,21 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
     color: var(--text-muted); cursor: pointer; display: flex; }
 .sched-pc-drop:hover { color: var(--danger); }
 .sched-pc-add { display: flex; gap: 6px; margin-top: 4px; }
+
+/* What following just said, under the field it is about. Sized like the source rows' own
+   reason line, so an outcome here and an outcome there read as the same kind of thing. */
+.sched-pc-addout:empty { display: none; }
+.sched-pc-addout { margin-top: 6px; }
+.sched-pc-addout-ok { font-size: 11px; color: var(--success, #22c55e); }
+.sched-pc-addout-bad { font-size: 11px; color: var(--danger); }
+
+/* Switched off: listed, not fetched. Neither red nor hidden — the row still carries the
+   button that turns it back on. */
+.sched-pc-src.is-off { opacity: .6; }
+.sched-pc-src.is-off .sched-pc-src-url { text-decoration: line-through; }
+.sched-pc-toggle { background: none; border: 0; cursor: pointer; color: var(--text-secondary);
+    padding: 0 2px; line-height: 0; }
+.sched-pc-toggle:hover { color: var(--text-primary); }
 .sched-pc-add .input { min-width: 0; flex: 1; font-size: 11px; }
 
 /* The badge says where a thing came from. Trust follows the address it was fetched from,

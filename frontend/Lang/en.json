@@ -7414,5 +7414,9 @@
   "sched.pc.via": "via",
   "repo.cat.on": "Fetch this one again",
   "repo.cat.off": "Stop fetching this one",
-  "repo.cat.via": "via"
+  "repo.cat.via": "via",
+  "sched.pc.checking": "Checking that address…",
+  "sched.pc.followed": "Following — {n} automation(s).",
+  "sched.pc.notfeedAdd": "That address answered, but it is not a preset catalogue.",
+  "sched.pc.isIndex": "That is a catalogue INDEX, not a preset catalogue — add it under Settings → Catalogue index."
 }

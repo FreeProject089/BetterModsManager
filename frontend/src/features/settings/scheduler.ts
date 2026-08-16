@@ -18,7 +18,10 @@ import { substituteVars, VAR_NAME_RE, parseList, readNum, readVar, renderVar, ty
 import { parseHeaderLines, readJsonPath, statusIsFailure } from './http-action.js';
 import { inspectBmmpa } from './bmmpa-inspect.js';
 import { parsePresetFeed, looksLikePresetFeed, readPresetCatalogs, writePresetCatalogs } from './preset-catalog.js';
-import { originLabel, originOf, forgetOrigin, isDisabled, setDisabled, recordHistory } from '../catalogs/catalog-index.js';
+import {
+    originLabel, originOf, forgetOrigin, isDisabled, setDisabled, recordHistory,
+    hasSource, looksLikeIndex,
+} from '../catalogs/catalog-index.js';
 import { getLinks } from '../../core/links-config.js';
 
 /**
@@ -4557,6 +4560,11 @@ function showPresetCatalog(data: { presets: any[]; sources: PresetSource[] }): v
     overlay.className = 'modal-generic-overlay sched-pc-overlay open';
     let { presets, sources } = data;
     let filter = '';
+    // What following last said, and what was typed. Both survive a repaint on purpose:
+    // paint() rebuilds the whole overlay, so an address that vanished from the field the
+    // moment its own error appeared would have to be retyped to be corrected.
+    let addOut: { kind: 'ok' | 'bad'; text: string; raw?: string } | null = null;
+    let addUrl = '';
 
     const sourceRow = (s: PresetSource) => {
         const label = s.official
@@ -4674,9 +4682,16 @@ function showPresetCatalog(data: { presets: any[]; sources: PresetSource[] }): v
                     <div class="sched-pc-side-h">${esc(t('sched.pc.sources') || 'Sources')}</div>
                     ${sources.map(sourceRow).join('') || `<p class="sched-pc-empty">${esc(t('sched.pc.noSources') || 'No source configured.')}</p>`}
                     <div class="sched-pc-add">
-                        <input class="input" id="sched-pc-url" placeholder="${escAttr(t('sched.pc.ask') || 'Address of a preset catalogue')}">
+                        <input class="input" id="sched-pc-url" value="${escAttr(addUrl)}" placeholder="${escAttr(t('sched.pc.ask') || 'Address of a preset catalogue')}">
                         <button class="btn btn-sm btn-secondary" id="sched-pc-follow">${esc(t('sched.pc.follow') || 'Follow')}</button>
                     </div>
+                    <!-- Where following says what happened. A toast was the only feedback, and
+                         a toast that has already faded is indistinguishable from no feedback at
+                         all — which is what "it just does nothing" means. -->
+                    <div class="sched-pc-addout" id="sched-pc-addout">${addOut ? `
+                        <div class="sched-pc-addout-${escAttr(addOut.kind)}">${esc(addOut.text)}</div>
+                        ${addOut.raw ? `<details class="sched-pc-src-raw"><summary>${esc(t('sched.pc.details') || 'exact message')}</summary>${esc(addOut.raw)}</details>` : ''}
+                    ` : ''}</div>
                 </aside>
                 <section class="sched-pc-main">
                     <!-- Refresh lives here, beside the search, exactly where the theme
@@ -4714,14 +4729,64 @@ function showPresetCatalog(data: { presets: any[]; sources: PresetSource[] }): v
         });
 
         const urlBox = overlay.querySelector<HTMLInputElement>('#sched-pc-url');
+        const followBtn = overlay.querySelector<HTMLButtonElement>('#sched-pc-follow');
+
+        /**
+         * Follow a catalogue — after checking it is one.
+         *
+         * It used to write the address and then re-fetch EVERY source. Two consequences, and
+         * the second is the one that reads as "nothing happened": you waited for the slowest
+         * feed you already followed before seeing anything, and a bad address was added anyway
+         * with its failure buried in a row that only appeared once that wait was over.
+         *
+         * Now the new address is fetched ALONE and judged first. Nothing is written unless it
+         * answers with a preset catalogue, so the followed list cannot fill up with addresses
+         * that were never going to work, and the reason is stated where the field is rather
+         * than in a toast that has already gone.
+         */
+        urlBox?.addEventListener('input', () => { addUrl = urlBox.value; });
+
         const follow = async () => {
             const url = (urlBox?.value || '').trim();
-            if (!/^https?:\/\//i.test(url)) { toast(t('sched.pc.badUrl') || 'That is not an http(s) address.', 'error'); return; }
-            if (readPresetCatalogs().includes(url) || url === officialPresetUrl()) {
-                toast(t('sched.pc.dup') || 'You already follow that catalogue.', 'info'); return;
+            addUrl = url;
+            const say = (kind: 'ok' | 'bad', text: string, raw?: string) => { addOut = { kind, text, raw }; paint(); };
+
+            if (!/^https?:\/\//i.test(url)) { say('bad', t('sched.pc.badUrl') || 'That is not an http(s) address.'); return; }
+            // Case-insensitively, and against the official row too — the same question the
+            // rest of the catalogue code asks of a URL.
+            if (hasSource([...readPresetCatalogs(), officialPresetUrl()].filter(Boolean), url)) {
+                say('bad', t('sched.pc.dup') || 'You already follow that catalogue.'); return;
             }
-            writePresetCatalogs([...readPresetCatalogs(), url]);
-            await reload();
+
+            if (followBtn) followBtn.disabled = true;
+            say('ok', t('sched.pc.checking') || 'Checking that address…');
+            try {
+                const text: string = await invoke('fetch_remote_json', { url }) as string;
+                const doc = JSON.parse(text);
+                // An INDEX pasted here is the common mistake and deserves its own sentence:
+                // it would parse, contain no presets, and look like an empty catalogue.
+                if (looksLikeIndex(doc)) {
+                    say('bad', t('sched.pc.isIndex') || 'That is a catalogue INDEX, not a preset catalogue — add it under Settings → Catalogue index.');
+                    return;
+                }
+                if (!looksLikePresetFeed(doc)) {
+                    say('bad', t('sched.pc.notfeedAdd') || 'That address answered, but it is not a preset catalogue.');
+                    return;
+                }
+                const n = (doc.presets || doc.tasks || []).length || 0;
+                writePresetCatalogs([...readPresetCatalogs(), url]);
+                recordHistory({ action: 'add', type: 'preset', url });
+                addUrl = '';
+                say('ok', (t('sched.pc.followed') || 'Following — {n} automation(s).').replace('{n}', String(n)));
+                await reload();
+            } catch (e) {
+                // The explained reason AND the exact message, the same pair the source rows
+                // use. "Failed" alone is what sent people to look for a problem elsewhere.
+                const ex = explainFetchError(String(e));
+                say('bad', ex.short, ex.raw);
+            } finally {
+                if (followBtn) followBtn.disabled = false;
+            }
         };
         overlay.querySelector('#sched-pc-follow')?.addEventListener('click', () => { void follow(); });
         urlBox?.addEventListener('keydown', (e) => { if ((e as KeyboardEvent).key === 'Enter') void follow(); });

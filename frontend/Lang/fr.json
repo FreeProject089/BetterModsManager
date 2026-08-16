@@ -7412,5 +7412,9 @@
   "sched.pc.via": "via",
   "repo.cat.on": "Le récupérer à nouveau",
   "repo.cat.off": "Arrêter de le récupérer",
-  "repo.cat.via": "via"
+  "repo.cat.via": "via",
+  "sched.pc.checking": "Vérification de cette adresse…",
+  "sched.pc.followed": "Suivi — {n} automatisation(s).",
+  "sched.pc.notfeedAdd": "Cette adresse a répondu, mais ce n’est pas un catalogue d’automatisations.",
+  "sched.pc.isIndex": "C’est un INDEX de catalogues, pas un catalogue d’automatisations — ajoute-le dans Réglages → Index de catalogues."
 }
