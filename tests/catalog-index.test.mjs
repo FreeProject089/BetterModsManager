@@ -10,7 +10,8 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const { parseCatalogIndex, planImport, INDEX_TYPES, STORE_KEY, ROUTABLE, looksLikeIndex, hasSource, addSource, removeSource, readHistory, recordHistory, clearHistory, HISTORY_MAX } = await import(
+const { parseCatalogIndex, planImport, INDEX_TYPES, STORE_KEY, ROUTABLE, looksLikeIndex, hasSource, addSource, removeSource, readHistory, recordHistory, clearHistory, HISTORY_MAX,
+  readDisabled, isDisabled, setDisabled, enabledOnly } = await import(
   pathToFileURL(join(ROOT, 'frontend/js/features/catalogs/catalog-index.js')).href
 );
 
@@ -163,6 +164,68 @@ describe('hasSource / addSource — the preview and the writer must agree', () =
     const list = ['https://e.com/a.json'];
     addSource(list, 'https://e.com/b.json');
     assert.deepEqual(removeSource(list, 'https://E.COM/B.JSON').list, ['https://e.com/a.json']);
+  });
+});
+
+describe('disabled sources — follow the index, not that one catalog', () => {
+  const store = new Map();
+  globalThis.localStorage = globalThis.localStorage || {
+    getItem: (k) => (store.has(k) ? store.get(k) : null),
+    setItem: (k, v) => store.set(k, String(v)),
+    removeItem: (k) => store.delete(k),
+  };
+  const reset = () => { localStorage.setItem('bmm_catalog_disabled', '[]'); };
+
+  test('a source nobody disabled is enabled — that is the default for every existing one', () => {
+    reset();
+    assert.equal(isDisabled('https://e.com/a.json'), false);
+    assert.deepEqual(enabledOnly(['https://e.com/a.json']), ['https://e.com/a.json']);
+  });
+
+  test('disabling keeps the source and only stops it being fetched', () => {
+    // The whole distinction: removed is forgotten, disabled is remembered and skipped.
+    reset();
+    setDisabled('https://e.com/a.json', true);
+    assert.equal(isDisabled('https://e.com/a.json'), true);
+    assert.deepEqual(enabledOnly(['https://e.com/a.json', 'https://e.com/b.json']), ['https://e.com/b.json']);
+  });
+
+  test('case-insensitively, like every other question asked of a URL here', () => {
+    reset();
+    setDisabled('https://E.COM/A.json', true);
+    assert.equal(isDisabled('https://e.com/a.json'), true);
+    assert.deepEqual(enabledOnly(['https://e.com/a.json']), []);
+  });
+
+  test('re-enabling puts it back', () => {
+    reset();
+    setDisabled('https://e.com/a.json', true);
+    setDisabled('https://e.com/a.json', false);
+    assert.equal(isDisabled('https://e.com/a.json'), false);
+    assert.deepEqual(readDisabled(), []);
+  });
+
+  test('disabling twice does not list it twice', () => {
+    reset();
+    setDisabled('https://e.com/a.json', true);
+    setDisabled('https://E.com/A.json', true);
+    assert.equal(readDisabled().length, 1);
+  });
+
+  test('enabledOnly returns the SAME array when nothing is disabled', () => {
+    // Not a micro-optimisation for its own sake: this runs on every catalogue fetch at
+    // startup, for five types, and the overwhelmingly common case is an empty set.
+    reset();
+    const urls = ['a', 'b'];
+    assert.equal(enabledOnly(urls), urls);
+  });
+
+  test('junk in the key means nothing is disabled, not a crash', () => {
+    localStorage.setItem('bmm_catalog_disabled', 'not json');
+    assert.deepEqual(readDisabled(), []);
+    localStorage.setItem('bmm_catalog_disabled', '{"not":"an array"}');
+    assert.deepEqual(readDisabled(), []);
+    assert.deepEqual(enabledOnly(['a']), ['a']);
   });
 });
 

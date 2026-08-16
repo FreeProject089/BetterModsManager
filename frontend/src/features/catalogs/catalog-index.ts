@@ -217,6 +217,58 @@ export function forgetOrigin(catalogUrl: string): void {
     } catch { /* ignore */ }
 }
 
+// ── Disabled sources ─────────────────────────────────────────────────────────
+//
+// "Follow this index, but not that one catalog in it."
+//
+// A SEPARATE set rather than a flag inside each source list, for the same reason origins are
+// separate: those lists are plain arrays of URLs written by the deeplink handler, by five
+// different settings panels, and for apps by the Rust backend. Changing their shape means
+// every reader and writer agreeing at once, across a language boundary. This is additive —
+// anything that does not know about it keeps working, and a URL that is not in here is
+// enabled, which is the right default for every source that already exists.
+//
+// Disabling is not removing, and the difference is the point: a removed source is forgotten,
+// a disabled one is remembered and not fetched. Removing the only copy of a URL you might
+// want back is what makes people keep catalogs they do not want.
+
+const DISABLED_KEY = 'bmm_catalog_disabled';
+
+export function readDisabled(): string[] {
+    try {
+        const v = JSON.parse(localStorage.getItem(DISABLED_KEY) || '[]');
+        return Array.isArray(v) ? v.filter((x) => typeof x === 'string' && x.trim()) : [];
+    } catch { return []; }
+}
+
+/** Is this source turned off? Case-insensitive, like every other question asked of a URL here. */
+export const isDisabled = (url: string): boolean => hasSource(readDisabled(), url);
+
+/** Turn a source off or on. Returns the new disabled list. */
+export function setDisabled(url: string, off: boolean): string[] {
+    const next = readDisabled();
+    if (off) addSource(next, url); else return write(removeSource(next, url).list);
+    return write(next);
+}
+const write = (list: string[]): string[] => {
+    try { localStorage.setItem(DISABLED_KEY, JSON.stringify(list)); } catch { /* ignore */ }
+    return list;
+};
+
+/**
+ * The sources a fetcher should actually fetch.
+ *
+ * Every catalogue fetcher calls this on its URL list, and that is the ONLY thing that makes a
+ * disabled source disabled — the flag is inert until something honours it. Written once here
+ * so five fetchers cannot each get the filter subtly wrong.
+ */
+export function enabledOnly(urls: string[]): string[] {
+    const off = readDisabled();
+    if (!off.length) return urls;   // the common case, and it must not build a Set for nothing
+    const low = new Set(off.map((u) => u.toLowerCase()));
+    return urls.filter((u) => !low.has(String(u).toLowerCase()));
+}
+
 // ── History ──────────────────────────────────────────────────────────────────
 //
 // What was followed and unfollowed, and when. It exists because the source lists are plain
@@ -259,6 +311,23 @@ export function recordHistory(entry: Omit<HistoryEntry, 'at'> & { at?: number })
 
 export function clearHistory(): void {
     try { localStorage.removeItem(HISTORY_KEY); } catch { /* ignore */ }
+}
+
+/**
+ * Drop ONE line, by its position in the list `readHistory` returns.
+ *
+ * By index rather than by URL because the same catalog can appear many times — followed,
+ * removed, followed again — and "drop this line" must not mean "forget everything about this
+ * catalog". An out-of-range index is a no-op rather than a truncation: the list may have been
+ * re-rendered since the button was drawn, and silently deleting the wrong row is worse than
+ * doing nothing.
+ */
+export function forgetHistoryAt(i: number): HistoryEntry[] {
+    const cur = readHistory();
+    if (!Number.isInteger(i) || i < 0 || i >= cur.length) return cur;
+    cur.splice(i, 1);
+    try { localStorage.setItem(HISTORY_KEY, JSON.stringify(cur)); } catch { /* ignore */ }
+    return cur;
 }
 
 /**

@@ -7,7 +7,7 @@ import { t } from '../../core/i18n.js';
 import { bcRoot, bcTestMode } from '../../core/links-config.js';
 import { initI18nSandbox } from './i18n-sandbox.js';
 import { renderShortcutsManager } from '../../core/commands.js';
-import { parseCatalogIndex, planImport, STORE_KEY, rememberOrigin, addSource, removeSource, originOf, originLabel, forgetOrigin, readHistory, recordHistory, clearHistory, } from '../catalogs/catalog-index.js';
+import { parseCatalogIndex, planImport, STORE_KEY, rememberOrigin, addSource, removeSource, originOf, originLabel, forgetOrigin, readHistory, recordHistory, clearHistory, forgetHistoryAt, isDisabled, setDisabled, } from '../catalogs/catalog-index.js';
 import { toast } from '../../ui/app.js';
 import { getProfiles, getActiveProfileId } from '../profiles/profiles.js';
 import { formatBytes, escHtml, escAttr } from '../../core/utils.js';
@@ -2010,10 +2010,13 @@ async function initCatalogIndexSettings() {
         for (const type of Object.keys(all)) {
             for (const u of all[type]) {
                 const from = originOf(u);
-                rows.push(`<div class="cat-index-row">
+                const off = isDisabled(u);
+                rows.push(`<div class="cat-index-row${off ? ' is-off' : ''}">
                     <span class="cat-index-type">${escHtml(t(`settings.catIndex.type.${type}`) || type)}</span>
                     <span class="cat-index-url" title="${escAttr(u)}">${escHtml(u)}</span>
                     ${from ? `<span class="cat-index-from" title="${escAttr(from)}">${escHtml(originLabel(from))}</span>` : ''}
+                    <button class="btn btn-ghost btn-sm cat-index-toggle" data-u="${escAttr(u)}"
+                            title="${escAttr(off ? (t('settings.catIndex.enable.h') || 'Fetch this one again') : (t('settings.catIndex.disable.h') || 'Keep it in the list but stop fetching it'))}">${escHtml(off ? (t('settings.catIndex.enable') || 'Off') : (t('settings.catIndex.disable') || 'On'))}</button>
                     <button class="btn btn-ghost btn-sm cat-index-unfollow"
                             data-t="${escAttr(type)}" data-u="${escAttr(u)}">${escHtml(t('common.remove') || 'Remove')}</button>
                   </div>`);
@@ -2022,6 +2025,14 @@ async function initCatalogIndexSettings() {
         followHost.innerHTML = rows.length
             ? rows.join('')
             : `<div class="cat-index-empty">${escHtml(t('settings.catIndex.noneFollowed') || 'You follow no community catalogs yet.')}</div>`;
+        // On/off, which is NOT remove. Removing the only copy of a URL you might want back is
+        // what makes people keep catalogs they do not want; this keeps it listed and skips it.
+        followHost.querySelectorAll('.cat-index-toggle').forEach((b) => b.addEventListener('click', async () => {
+            const u = b.dataset.u || '';
+            setDisabled(u, !isDisabled(u));
+            await renderFollowing();
+            await renderContents();
+        }));
         followHost.querySelectorAll('.cat-index-unfollow').forEach((b) => b.addEventListener('click', async () => {
             const el = b;
             const type = el.dataset.t || '';
@@ -2045,8 +2056,8 @@ async function initCatalogIndexSettings() {
                 forgetOrigin(u);
                 recordHistory({ action: 'remove', type, url: u });
                 await renderFollowing();
-                renderHistory();
-                renderContents();
+                await renderHistory();
+                await renderContents();
                 toast(t('settings.catIndex.removed') || 'Removed.', 'success');
             }
             catch (e) {
@@ -2055,25 +2066,51 @@ async function initCatalogIndexSettings() {
         }));
     };
     // ── History ─────────────────────────────────────────────────────────────────
-    const renderHistory = () => {
+    const renderHistory = async () => {
         if (!histHost)
             return;
         const h = readHistory();
+        // What is followed right now, so a "removed" row knows whether it can be put back —
+        // a Bring-back button beside something you already follow again is a dead control.
+        const all = await readAllSources();
+        const followed = new Set(Object.values(all).flat().map((u) => u.toLowerCase()));
         histHost.innerHTML = h.length
-            ? h.map((e) => `<div class="cat-index-row cat-index-hist-${escAttr(e.action)}">
+            ? h.map((e, i) => {
+                const gone = e.action === 'remove' && !followed.has(e.url.toLowerCase());
+                return `<div class="cat-index-row cat-index-hist-${escAttr(e.action)}">
                   <span class="cat-index-when">${escHtml(new Date(e.at).toLocaleString())}</span>
                   <span class="cat-index-act">${escHtml(e.action === 'add'
-                ? (t('settings.catIndex.hAdded') || 'added')
-                : (t('settings.catIndex.hRemoved') || 'removed'))}</span>
+                    ? (t('settings.catIndex.hAdded') || 'added')
+                    : (t('settings.catIndex.hRemoved') || 'removed'))}</span>
                   <span class="cat-index-type">${escHtml(t(`settings.catIndex.type.${e.type}`) || e.type)}</span>
                   <span class="cat-index-url" title="${escAttr(e.url)}">${escHtml(e.url)}</span>
                   ${e.via ? `<span class="cat-index-from" title="${escAttr(e.via)}">${escHtml(originLabel(e.via))}</span>` : ''}
-               </div>`).join('')
+                  ${gone ? `<button class="btn btn-ghost btn-sm cat-index-readd" data-t="${escAttr(e.type)}" data-u="${escAttr(e.url)}" data-v="${escAttr(e.via || '')}">${escHtml(t('settings.catIndex.readd') || 'Bring back')}</button>` : ''}
+                  <button class="btn btn-ghost btn-sm cat-index-forget" data-i="${i}" title="${escAttr(t('settings.catIndex.forget.h') || 'Drop this line from the history')}">×</button>
+               </div>`;
+            }).join('')
             : `<div class="cat-index-empty">${escHtml(t('settings.catIndex.noHistory') || 'Nothing yet.')}</div>`;
+        // The point of keeping a history at all: undoing a removal without going and finding
+        // the address again. It re-follows through the same `follow()` the index import uses,
+        // so it lands in the same store with the same provenance and records its own line.
+        histHost.querySelectorAll('.cat-index-readd').forEach((b) => b.addEventListener('click', async () => {
+            const el = b;
+            const n = await follow([{ type: el.dataset.t || '', url: el.dataset.u || '' }], el.dataset.v || '');
+            if (n)
+                toast(added(n), 'success');
+            await refreshAll();
+        }));
+        histHost.querySelectorAll('.cat-index-forget').forEach((b) => b.addEventListener('click', async () => {
+            // By INDEX into the list this render was built from, not by URL: the same URL can
+            // appear many times, and dropping every line about a catalog is not what "drop
+            // this line" says.
+            forgetHistoryAt(Number(b.dataset.i));
+            await renderHistory();
+        }));
     };
     document.getElementById('cat-index-history-clear')?.addEventListener('click', () => {
         clearHistory();
-        renderHistory();
+        void renderHistory();
     });
     // ── The index itself ────────────────────────────────────────────────────────
     /** Fetch and parse, or null with the reason already on screen. */
@@ -2142,7 +2179,7 @@ async function initCatalogIndexSettings() {
         }));
     };
     const added = (n) => (t('settings.catIndex.added') || 'Added {n} catalog source(s).').replace('{n}', String(n));
-    const refreshAll = async () => { await renderFollowing(); renderHistory(); await renderContents(); };
+    const refreshAll = async () => { await renderFollowing(); await renderHistory(); await renderContents(); };
     /**
      * Follow these entries. Returns how many actually landed — not how many were asked for,
      * because an entry already followed adds nothing and saying otherwise is the count bug

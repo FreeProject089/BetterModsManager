@@ -3,7 +3,9 @@ import { invoke, pickFolder } from '../../core/api.js';
 import { wireDismissibleTip } from '../../ui/dismissible-tip.js';
 import { toast, updateLibraryProfileSelector, toastSaved } from '../../ui/app.js';
 import { escHtml, escAttr, formatBytes } from '../../core/utils.js';
-import { originLabel } from '../catalogs/catalog-index.js';
+import {
+    originLabel, originOf, forgetOrigin, enabledOnly, isDisabled, setDisabled, recordHistory,
+} from '../catalogs/catalog-index.js';
 import { getLinks } from '../../core/links-config.js';
 import { renderProfiles } from '../profiles/profiles.js';
 import { t } from '../../core/i18n.js';
@@ -74,11 +76,37 @@ export function renderRepoCatalogStrip(reload: () => void, getRepos: () => any[]
     const paint = () => {
         const urls = readRepoCatalogs();
         host.innerHTML = urls.length
-            ? urls.map((u) => `<span class="repo-cat-chip" title="${escAttr(u)}">${escHtml(originLabel(u))}
-                 <button class="repo-cat-del" data-u="${escAttr(u)}" aria-label="${escAttr(t('common.remove') || 'Remove')}">×</button></span>`).join('')
+            ? urls.map((u) => {
+                const off = isDisabled(u);
+                // originLabel(u) is the chip's LABEL — the host of the catalogue itself, not
+                // its provenance. originOf(u) is the index that brought it in, and it is a
+                // different question with a different answer; the tooltip carries both.
+                const from = originOf(u);
+                const tip = from
+                    ? `${u}\n${t('repo.cat.via') || 'via'} ${originLabel(from)}`
+                    : u;
+                return `<span class="repo-cat-chip${off ? ' is-off' : ''}${from ? ' is-imported' : ''}" title="${escAttr(tip)}">${escHtml(originLabel(u))}
+                 <button class="repo-cat-off" data-u="${escAttr(u)}" aria-label="${escAttr(off ? (t('repo.cat.on') || 'Fetch this one again') : (t('repo.cat.off') || 'Stop fetching this one'))}">${off ? '○' : '●'}</button>
+                 <button class="repo-cat-del" data-u="${escAttr(u)}" aria-label="${escAttr(t('common.remove') || 'Remove')}">×</button></span>`;
+            }).join('')
             : '';
+        // Bound inside paint(), like .repo-cat-del: the outer listeners bind once behind the
+        // _bmmBound guard, but this markup is rebuilt on every paint.
+        host.querySelectorAll('.repo-cat-off').forEach((b) => b.addEventListener('click', () => {
+            const u = (b as HTMLElement).dataset.u || '';
+            setDisabled(u, !isDisabled(u));
+            paint();
+            reload();
+        }));
         host.querySelectorAll('.repo-cat-del').forEach((b) => b.addEventListener('click', () => {
-            writeRepoCatalogs(readRepoCatalogs().filter((x) => x !== (b as HTMLElement).dataset.u));
+            const u = (b as HTMLElement).dataset.u || '';
+            writeRepoCatalogs(readRepoCatalogs().filter((x) => x !== u));
+            // Same three as everywhere else: forget where it came from, clear its on/off flag
+            // so it does not come back switched off, and write the line that lets the history
+            // bring it back.
+            forgetOrigin(u);
+            setDisabled(u, false);
+            recordHistory({ action: 'remove', type: 'repo', url: u });
             paint();
             reload();
         }));
@@ -1164,7 +1192,8 @@ export function initRepo() {
                 // the feed: a catalog that could label its own entries "official" would
                 // borrow a badge it was never given — the same rule apply_trust enforces
                 // for app catalogs.
-                for (const catUrl of readRepoCatalogs()) {
+                // enabledOnly: a catalogue switched off keeps its chip and is not fetched.
+                for (const catUrl of enabledOnly(readRepoCatalogs())) {
                     try {
                         const sep = catUrl.includes('?') ? '&' : '?';
                         // Same reason as the official feed above: a webview fetch to a

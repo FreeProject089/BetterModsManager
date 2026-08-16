@@ -3,7 +3,7 @@ import { invoke, pickFolder } from '../../core/api.js';
 import { wireDismissibleTip } from '../../ui/dismissible-tip.js';
 import { toast, toastSaved } from '../../ui/app.js';
 import { escHtml, escAttr, formatBytes } from '../../core/utils.js';
-import { originLabel } from '../catalogs/catalog-index.js';
+import { originLabel, originOf, forgetOrigin, enabledOnly, isDisabled, setDisabled, recordHistory, } from '../catalogs/catalog-index.js';
 import { getLinks } from '../../core/links-config.js';
 import { t } from '../../core/i18n.js';
 // Sub-modules
@@ -51,7 +51,11 @@ export function readRepoCatalogs() {
  * `(repoList || [])` did not save it either: `||` still has to evaluate the name before it
  * can pick a side, so a bare undefined identifier throws rather than falling back.
  */
-export function renderRepoCatalogStrip(reload, getRepos = () => []) {
+// `getRepos` is REQUIRED, with no default. It briefly had `= () => []`, added to fix a
+// ReferenceError, and that default is why Export answered "Nothing in the list to export"
+// over a screen full of repos: the one call site never passed it. A default that means
+// "nothing" converts a loud crash into a quiet lie, and only the crash gets reported.
+export function renderRepoCatalogStrip(reload, getRepos) {
     const host = document.getElementById('repo-cat-list');
     const input = document.getElementById('repo-cat-url');
     const addBtn = document.getElementById('repo-cat-add');
@@ -67,11 +71,37 @@ export function renderRepoCatalogStrip(reload, getRepos = () => []) {
     const paint = () => {
         const urls = readRepoCatalogs();
         host.innerHTML = urls.length
-            ? urls.map((u) => `<span class="repo-cat-chip" title="${escAttr(u)}">${escHtml(originLabel(u))}
-                 <button class="repo-cat-del" data-u="${escAttr(u)}" aria-label="${escAttr(t('common.remove') || 'Remove')}">×</button></span>`).join('')
+            ? urls.map((u) => {
+                const off = isDisabled(u);
+                // originLabel(u) is the chip's LABEL — the host of the catalogue itself, not
+                // its provenance. originOf(u) is the index that brought it in, and it is a
+                // different question with a different answer; the tooltip carries both.
+                const from = originOf(u);
+                const tip = from
+                    ? `${u}\n${t('repo.cat.via') || 'via'} ${originLabel(from)}`
+                    : u;
+                return `<span class="repo-cat-chip${off ? ' is-off' : ''}${from ? ' is-imported' : ''}" title="${escAttr(tip)}">${escHtml(originLabel(u))}
+                 <button class="repo-cat-off" data-u="${escAttr(u)}" aria-label="${escAttr(off ? (t('repo.cat.on') || 'Fetch this one again') : (t('repo.cat.off') || 'Stop fetching this one'))}">${off ? '○' : '●'}</button>
+                 <button class="repo-cat-del" data-u="${escAttr(u)}" aria-label="${escAttr(t('common.remove') || 'Remove')}">×</button></span>`;
+            }).join('')
             : '';
+        // Bound inside paint(), like .repo-cat-del: the outer listeners bind once behind the
+        // _bmmBound guard, but this markup is rebuilt on every paint.
+        host.querySelectorAll('.repo-cat-off').forEach((b) => b.addEventListener('click', () => {
+            const u = b.dataset.u || '';
+            setDisabled(u, !isDisabled(u));
+            paint();
+            reload();
+        }));
         host.querySelectorAll('.repo-cat-del').forEach((b) => b.addEventListener('click', () => {
-            writeRepoCatalogs(readRepoCatalogs().filter((x) => x !== b.dataset.u));
+            const u = b.dataset.u || '';
+            writeRepoCatalogs(readRepoCatalogs().filter((x) => x !== u));
+            // Same three as everywhere else: forget where it came from, clear its on/off flag
+            // so it does not come back switched off, and write the line that lets the history
+            // bring it back.
+            forgetOrigin(u);
+            setDisabled(u, false);
+            recordHistory({ action: 'remove', type: 'repo', url: u });
             paint();
             reload();
         }));
@@ -97,18 +127,85 @@ export function renderRepoCatalogStrip(reload, getRepos = () => []) {
         // de-duplicate, and doing it twice is two chances to disagree about which entry won.
         reload();
     });
-    expBtn.addEventListener('click', async () => {
+    expBtn.addEventListener('click', () => {
         // Create a catalog FROM what is on screen. Somebody who has assembled a list worth
         // sharing should not have to hand-write JSON to share it — and the shape it writes
         // is the one this same browser reads, so a round trip is the test.
-        const rows = getRepos().map((r) => ({
+        //
+        // It used to export the whole list silently. A catalog is something you publish, and
+        // "everything I happen to be following, including the half I was trying out" is
+        // rarely what you meant to publish — so it asks first.
+        const all = getRepos();
+        if (!all.length) {
+            toast(t('repo.cat.empty'), 'info');
+            return;
+        }
+        openExportPicker(all);
+    });
+}
+/** Choose what goes into the catalog, then write it. */
+function openExportPicker(all) {
+    document.getElementById('repo-cat-export-pick')?.remove();
+    const ov = document.createElement('div');
+    ov.className = 'modal-overlay open';
+    ov.id = 'repo-cat-export-pick';
+    ov.style.zIndex = '10000';
+    ov.innerHTML = `
+        <div class="modal glass" style="max-width:640px; width:94%; max-height:82vh; display:flex; flex-direction:column;">
+            <div class="modal-header" style="flex-shrink:0;">
+                <h3>${escHtml(t('repo.cat.pick.title'))}</h3>
+                <button class="modal-close" type="button" data-x>&times;</button>
+            </div>
+            <div class="modal-body" style="flex:1; min-height:0; overflow:auto;">
+                <p style="font-size:12px; color:var(--text-muted); margin-bottom:10px;">${escHtml(t('repo.cat.pick.hint'))}</p>
+                <div style="display:flex; gap:8px; margin-bottom:10px;">
+                    <button class="btn btn-sm" type="button" data-all>${escHtml(t('repo.cat.pick.all'))}</button>
+                    <button class="btn btn-sm" type="button" data-none>${escHtml(t('repo.cat.pick.none'))}</button>
+                    <span style="margin-left:auto; font-size:12px; color:var(--text-muted);" data-count></span>
+                </div>
+                <div data-rows style="display:flex; flex-direction:column; gap:6px;"></div>
+            </div>
+            <div class="modal-footer" style="flex-shrink:0; display:flex; gap:8px; justify-content:flex-end;">
+                <button class="btn" type="button" data-x>${escHtml(t('common.cancel'))}</button>
+                <button class="btn btn-primary" type="button" data-go></button>
+            </div>
+        </div>`;
+    document.body.appendChild(ov);
+    const rowsEl = ov.querySelector('[data-rows]');
+    const countEl = ov.querySelector('[data-count]');
+    const goBtn = ov.querySelector('[data-go]');
+    all.forEach((r, i) => {
+        const row = document.createElement('label');
+        row.style.cssText = 'display:flex; gap:10px; align-items:flex-start; padding:8px 10px; border:1px solid var(--border); border-radius:8px; cursor:pointer;';
+        row.innerHTML = `
+            <input type="checkbox" checked data-i="${i}" style="margin-top:3px;">
+            <span style="min-width:0;">
+                <span style="display:block; font-size:13px;">${escHtml(r.name || r.url || '')}</span>
+                <span style="display:block; font-size:11px; color:var(--text-muted); word-break:break-all;">${escHtml(r.url || '')}</span>
+            </span>`;
+        rowsEl.appendChild(row);
+    });
+    const boxes = () => Array.from(ov.querySelectorAll('input[type=checkbox]'));
+    const sync = () => {
+        const n = boxes().filter((b) => b.checked).length;
+        countEl.textContent = `${n} / ${all.length}`;
+        goBtn.textContent = t('repo.cat.pick.export').replace('{n}', String(n));
+        goBtn.disabled = n === 0;
+    };
+    ov.addEventListener('change', sync);
+    ov.querySelector('[data-all]')?.addEventListener('click', () => { boxes().forEach((b) => { b.checked = true; }); sync(); });
+    ov.querySelector('[data-none]')?.addEventListener('click', () => { boxes().forEach((b) => { b.checked = false; }); sync(); });
+    ov.querySelectorAll('[data-x]').forEach((x) => x.addEventListener('click', () => ov.remove()));
+    // Clicking the backdrop closes; clicking inside must not.
+    ov.addEventListener('click', (e) => { if (e.target === ov)
+        ov.remove(); });
+    sync();
+    goBtn.addEventListener('click', async () => {
+        const chosen = boxes().filter((b) => b.checked).map((b) => all[Number(b.dataset.i)]);
+        const rows = chosen.map((r) => ({
             name: r.name, url: r.url, description: r.description || '',
             region: r.region || '', category: r.category === 'official' ? 'community' : (r.category || 'community'),
         }));
-        if (!rows.length) {
-            toast(t('repo.cat.empty') || 'Nothing in the list to export.', 'info');
-            return;
-        }
         const doc = JSON.stringify({ name: 'My repo catalog', generatedAt: new Date().toISOString(), repos: rows }, null, 2);
         const { saveFile } = await import('../../core/api.js');
         const path = await saveFile({ defaultPath: 'repos.json', filters: [{ name: 'Repo catalog', extensions: ['json'] }] }).catch(() => null);
@@ -116,7 +213,8 @@ export function renderRepoCatalogStrip(reload, getRepos = () => []) {
             return;
         try {
             await invoke('write_text_file', { path, content: doc });
-            toast((t('repo.cat.saved') || 'Saved {n} repos.').replace('{n}', String(rows.length)), 'success');
+            toast(t('repo.cat.saved').replace('{n}', String(rows.length)), 'success');
+            ov.remove();
         }
         catch (e) {
             toast(String(e), 'error');
@@ -1071,7 +1169,8 @@ export function initRepo() {
                 // the feed: a catalog that could label its own entries "official" would
                 // borrow a badge it was never given — the same rule apply_trust enforces
                 // for app catalogs.
-                for (const catUrl of readRepoCatalogs()) {
+                // enabledOnly: a catalogue switched off keeps its chip and is not fetched.
+                for (const catUrl of enabledOnly(readRepoCatalogs())) {
                     try {
                         const sep = catUrl.includes('?') ? '&' : '?';
                         // Same reason as the official feed above: a webview fetch to a
@@ -1105,6 +1204,21 @@ export function initRepo() {
             }
             catch (err) {
                 console.error('Failed to fetch repo list:', err);
+                // "No repositories yet" and "the server is refusing to answer" are different
+                // facts, and showing the first for the second is how a two-hour outage reads
+                // as an empty catalogue. fetch_remote_json already surfaces the real HTTP
+                // status (that is why it exists rather than a webview fetch) — so use it.
+                const msg = String(err?.message ?? err ?? '');
+                const status = msg.match(/HTTP (\d{3})/)?.[1];
+                const reason = status
+                    ? {
+                        title: t('repo.browse.down', 'The repository list is unavailable right now'),
+                        detail: t('repo.browse.downdetail', 'BetterCommunity answered HTTP {s}. This is the server, not your connection — try again shortly.').replace('{s}', status),
+                    }
+                    : {
+                        title: t('repo.browse.empty', 'No repositories available yet'),
+                        detail: t('repo.browse.emptydetail', 'The repository list will be available soon'),
+                    };
                 // Show empty state message instead of error
                 loadingEl.style.display = 'none';
                 contentEl.style.display = 'block';
@@ -1115,8 +1229,8 @@ export function initRepo() {
                             <line x1="2" y1="12" x2="22" y2="12"></line>
                             <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
                         </svg>
-                        <p style="margin-top:16px; font-size:13px;">No repositories available yet</p>
-                        <p style="font-size:11px; opacity:0.7;">The repository list will be available soon</p>
+                        <p style="margin-top:16px; font-size:13px;">${escHtml(reason.title)}</p>
+                        <p style="font-size:11px; opacity:0.7;">${escHtml(reason.detail)}</p>
                     </div>
                 `;
             }
@@ -1396,7 +1510,7 @@ export function initRepo() {
                 // Wired once per open, before the fetch: the strip must be usable while the
                 // list is still loading, and binding after would leave it dead if the fetch
                 // failed — which is exactly when somebody wants to add another source.
-                renderRepoCatalogStrip(() => { void fetchRepoList(); });
+                renderRepoCatalogStrip(() => { void fetchRepoList(); }, () => repoList);
                 fetchRepoList();
             });
         }

@@ -18,11 +18,36 @@ BMM reads an index in **Settings → Catalogue index**. Paste the address, then 
 Two folds under it answer the questions that come later:
 
 - **Catalogs you follow** — every community catalog BMM fetches at startup, of all five
-  types, whatever added it: an index, a deep link, or another settings panel. Each one is
-  removable here. It is the only screen where all five meet.
-- **History** — what was followed and unfollowed, when, and from which index. The source
-  lists are plain arrays with no dates, so without this a catalog you do not remember
-  adding has no record anywhere — and neither does one you removed and now want back.
+  types, whatever added it: an index, a deep link, or another settings panel. Each one can
+  be switched **off** or removed here. It is the only screen where all five meet.
+- **History** — what was followed and unfollowed, when, and from which index. Anything you
+  removed and no longer follow has a **Bring back** button, so undoing a removal does not
+  mean going and finding the address again. Individual lines can be dropped.
+
+## Off is not removed
+
+A source you switch **off** stays in the list and is not fetched. A source you **remove** is
+forgotten. The difference matters when an index brings in six catalogs and you want five of
+them: removing the sixth means finding its address again if you change your mind, so people
+keep catalogs they do not want rather than lose them.
+
+The switch is in four places besides Settings, on the panel that owns each kind of source:
+
+| Where | Panel |
+|---|---|
+| Apps | Community Catalog Sources |
+| Plugins | Community catalogs |
+| Automations | the Sources column of the automation catalogue |
+| Repos | the catalogue chips above the repo list |
+
+Those panels also now show **via <host>** on any source an index brought in, so a catalog you
+added by hand and one that arrived with an index are told apart — which is the question you
+are actually asking when you go there to remove one. Themes have no source panel of their
+own; use Settings → Catalogue index.
+
+Removing a source from any of those panels does the same three things Settings does: forgets
+where it came from, clears its off switch, and writes the history line that lets you bring it
+back.
 
 ---
 

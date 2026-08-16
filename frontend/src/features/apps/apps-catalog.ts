@@ -2,7 +2,9 @@
 import { invoke, pickFolder, pickFile } from '../../core/api.js';
 import { toast } from '../../ui/app.js';
 import { t } from '../../core/i18n.js';
-import { readOrigins, originLabel } from '../catalogs/catalog-index.js';
+import {
+    readOrigins, originLabel, forgetOrigin, enabledOnly, isDisabled, setDisabled, recordHistory,
+} from '../catalogs/catalog-index.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { getLinks } from '../../core/links-config.js';
 
@@ -292,7 +294,9 @@ async function loadCatalog(force = false) {
     try {
         const result = await invoke('fetch_app_catalogs', {
             catalogUrl: getLinks().apps_catalog,
-            extraCommunityUrls: _state.community_sources,
+            // enabledOnly, so a source switched off is kept in the list and not fetched.
+            // The flag is inert until a fetcher honours it, and this is the app fetcher.
+            extraCommunityUrls: enabledOnly(_state.community_sources),
         });
         _catalog = result.apps;
         // Only alert if EVERY source failed; partial failures (e.g. a placeholder
@@ -907,7 +911,7 @@ function renderSources() {
           <span class="apps-source-label">${t('apps.sources.official')||'Official'}</span>
         </div>
         ${_state.community_sources.map(url => `
-        <div class="apps-source-row">
+        <div class="apps-source-row${isDisabled(url) ? ' is-off' : ''}">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
           <span class="apps-source-url" data-tooltip="${escAttr(url)}">${escHtml(url)}</span>
           ${(() => {
@@ -920,6 +924,10 @@ function renderSources() {
             const from = _origins[url];
             return from ? `<span class="apps-source-from" data-tooltip="${escAttr(from)}">${escHtml(t('apps.sources.via') || 'via')} ${escHtml(originLabel(from))}</span>` : '';
           })()}
+          <button class="btn btn-xs btn-ghost apps-source-toggle" data-url="${escAttr(url)}"
+                  data-tooltip="${escAttr(isDisabled(url)
+                      ? (t('apps.sources.on') || 'Fetch this one again')
+                      : (t('apps.sources.off') || 'Keep it listed but stop fetching it'))}">${escHtml(isDisabled(url) ? (t('apps.sources.isOff') || 'off') : (t('apps.sources.isOn') || 'on'))}</button>
           <button class="btn btn-xs btn-ghost btn-danger-ghost apps-source-remove" data-url="${escAttr(url)}">${IC.close}</button>
         </div>`).join('')}
       </div>
@@ -962,12 +970,28 @@ function renderSources() {
         } catch (e) { toast(String(e), 'error'); }
     });
 
+    content.querySelectorAll('.apps-source-toggle').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const url = (btn as HTMLElement).dataset.url || '';
+            setDisabled(url, !isDisabled(url));
+            renderSources();
+            await loadCatalog(true);
+        });
+    });
+
     content.querySelectorAll('.apps-source-remove').forEach(btn => {
         btn.addEventListener('click', async () => {
             const url = (btn as HTMLElement).dataset.url || '';
             try {
                 _state.community_sources = await invoke('remove_community_source', { url });
-                renderSources();
+                // The same three things Settings drops when it unfollows. Removing here used
+                // to leave the origin behind, write no history line — so a source removed
+                // from this panel could not be brought back from the history that exists for
+                // exactly that — and keep an OFF flag that would come back with it.
+                forgetOrigin(url);
+                setDisabled(url, false);
+                recordHistory({ action: 'remove', type: 'app', url });
+                renderSources();   // re-reads _origins itself
                 await loadCatalog(true);
             } catch (e) { toast(String(e), 'error'); }
         });

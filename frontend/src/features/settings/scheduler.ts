@@ -18,7 +18,7 @@ import { substituteVars, VAR_NAME_RE, parseList, readNum, readVar, renderVar, ty
 import { parseHeaderLines, readJsonPath, statusIsFailure } from './http-action.js';
 import { inspectBmmpa } from './bmmpa-inspect.js';
 import { parsePresetFeed, looksLikePresetFeed, readPresetCatalogs, writePresetCatalogs } from './preset-catalog.js';
-import { originLabel } from '../catalogs/catalog-index.js';
+import { originLabel, originOf, forgetOrigin, isDisabled, setDisabled, recordHistory } from '../catalogs/catalog-index.js';
 import { getLinks } from '../../core/links-config.js';
 
 /**
@@ -4425,7 +4425,10 @@ interface PresetSource {
     // 'loading' exists so the panel can open BEFORE the feeds answer. Every other state is an
     // outcome; this one is the absence of one, and giving it a name keeps the renderer a single
     // switch over `state` instead of a second "are we still waiting" flag beside it.
-    state: 'ok' | 'error' | 'notfeed' | 'loading';
+    // 'off' is not an outcome either: the feed was never asked. It is a state rather than a
+    // filter because a source removed from this list cannot be switched back on FROM this
+    // list — the one control that undoes it would be the one thing the filter hides.
+    state: 'ok' | 'error' | 'notfeed' | 'loading' | 'off';
     count: number;
     detail?: string;
 }
@@ -4455,6 +4458,9 @@ async function loadPresetSources(): Promise<{ presets: any[]; sources: PresetSou
     const presets: any[] = [];
     const sources: PresetSource[] = [];
     for (const { url, official: isOff } of wanted) {
+        // Switched off: listed, not fetched. Recorded as a source so the row — and the button
+        // that switches it back on — still exists.
+        if (!isOff && isDisabled(url)) { sources.push({ url, official: false, state: 'off', count: 0 }); continue; }
         try {
             const text: string = await invoke('fetch_remote_json', { url }) as string;
             const doc = JSON.parse(text);
@@ -4564,18 +4570,37 @@ function showPresetCatalog(data: { presets: any[]; sources: PresetSource[] }): v
             ? `<span class="sched-pc-src-n">${esc(t('sched.pc.loading') || 'checking…')}</span>`
             : s.state === 'ok'
                 ? `<span class="sched-pc-src-n">${s.count} ${esc(t('sched.pc.tasks') || 'automations')}</span>`
-                : `<span class="sched-pc-src-bad">${esc(s.state === 'notfeed'
-                    ? (t('sched.pc.notfeed') || 'not a preset catalogue')
-                    : (t('sched.pc.unreachable') || 'unreachable'))}</span>`;
+                // 'off' is neither good nor bad — nobody asked it anything. Painting it red
+                // would report a problem where there is a choice.
+                : s.state === 'off'
+                    ? `<span class="sched-pc-src-n">${esc(t('sched.pc.off') || 'switched off')}</span>`
+                    : `<span class="sched-pc-src-bad">${esc(s.state === 'notfeed'
+                        ? (t('sched.pc.notfeed') || 'not a preset catalogue')
+                        : (t('sched.pc.unreachable') || 'unreachable'))}</span>`;
+        const bad = s.state === 'error' || s.state === 'notfeed';
         return `
-            <div class="sched-pc-src${s.state === 'ok' || s.state === 'loading' ? '' : ' is-bad'}">
+            <div class="sched-pc-src${bad ? ' is-bad' : ''}${s.state === 'off' ? ' is-off' : ''}">
                 <div class="sched-pc-src-head">
                     <span class="sched-pc-badge${s.official ? ' is-official' : ''}">${esc(label)}</span>
                     ${state}
-                    ${s.official ? '' : `<button class="sched-pc-drop" data-url="${escAttr(s.url)}"
+                    ${s.official ? '' : `<button class="sched-pc-toggle" data-url="${escAttr(s.url)}"
+                        data-tooltip="${escAttr(s.state === 'off'
+                            ? (t('sched.pc.on') || 'Fetch this one again')
+                            : (t('sched.pc.offit') || 'Keep it listed but stop fetching it'))}">${
+                        s.state === 'off'
+                            ? SVG16('<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>')
+                            : SVG16('<path d="M10.7 5.1A10.9 10.9 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-2.2 3.1"/><path d="M6.6 6.6A17 17 0 0 0 2 12s3.5 7 10 7a10.9 10.9 0 0 0 4.2-.8"/><path d="m2 2 20 20"/>')
+                    }</button>
+                    <button class="sched-pc-drop" data-url="${escAttr(s.url)}"
                         data-tooltip="${escAttr(t('sched.pc.unfollow') || 'Stop following this catalogue')}">${SVG16('<path d="M18 6 6 18"/><path d="m6 6 12 12"/>')}</button>`}
                 </div>
                 <div class="sched-pc-src-url" title="${escAttr(s.url)}">${esc(s.url)}</div>
+                ${(() => {
+                    // Where it came from, when an index brought it in. The panel that follows
+                    // catalogues one at a time never said which index a source arrived with.
+                    const from = s.official ? null : originOf(s.url);
+                    return from ? `<div class="sched-pc-src-from">${esc(t('sched.pc.via') || 'via')} ${esc(originLabel(from))}</div>` : '';
+                })()}
                 ${s.detail ? (() => {
                     const e = explainFetchError(s.detail!);
                     return `<div class="sched-pc-src-why">${esc(e.short)}</div>
@@ -4701,8 +4726,22 @@ function showPresetCatalog(data: { presets: any[]; sources: PresetSource[] }): v
         overlay.querySelector('#sched-pc-follow')?.addEventListener('click', () => { void follow(); });
         urlBox?.addEventListener('keydown', (e) => { if ((e as KeyboardEvent).key === 'Enter') void follow(); });
 
+        overlay.querySelectorAll<HTMLElement>('.sched-pc-toggle').forEach((b) => b.addEventListener('click', async () => {
+            const u = b.dataset.url || '';
+            setDisabled(u, !isDisabled(u));
+            await reload();
+        }));
+
         overlay.querySelectorAll<HTMLElement>('.sched-pc-drop').forEach((b) => b.addEventListener('click', async () => {
-            writePresetCatalogs(readPresetCatalogs().filter((u) => u !== b.dataset.url));
+            const u = b.dataset.url || '';
+            writePresetCatalogs(readPresetCatalogs().filter((x) => x !== u));
+            // The provenance, the history line and the on/off flag go with it — otherwise a
+            // catalogue removed here leaves a stale origin behind, and a source that was OFF
+            // when removed comes back OFF if it is ever followed again, which reads as the
+            // re-follow having silently failed.
+            forgetOrigin(u);
+            setDisabled(u, false);
+            recordHistory({ action: 'remove', type: 'preset', url: u });
             await reload();
         }));
 

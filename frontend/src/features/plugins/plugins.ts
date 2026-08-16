@@ -3,6 +3,11 @@ import { invoke, pickFile, saveFile, pickFolder, convertFileSrc, apiBase, apiRun
 import { toast, fetchProfileIconPaths, updateSelectProfileIcon, decorateProfileOptions, toastSaved } from '../../ui/app.js';
 import { t, getLang } from '../../core/i18n.js';
 import { escHtml, escAttr } from '../../core/utils.js';
+// NOTE: this file is @ts-nocheck, so a wrong name here is a runtime ReferenceError and not a
+// build error. Checked against the exports in catalog-index.ts by hand.
+import {
+    enabledOnly, isDisabled, setDisabled, originOf, originLabel, forgetOrigin, recordHistory,
+} from '../catalogs/catalog-index.js';
 
 /**
  * The modpack list from the LOCAL plugin API, or an empty list.
@@ -532,7 +537,10 @@ async function fetchMergedPluginCatalog(): Promise<{ plugins: any[]; errors: str
     const byId = new Map<string, any>();
     for (const p of official) byId.set(p.id, p);
 
-    for (const src of getPluginCatalogSources()) {
+    // enabledOnly: a source switched off stays in the list and is not fetched. Wrapped at the
+    // loop rather than inside fetchCommunityCatalog, so the skip is visible where the sources
+    // are chosen instead of hidden one level down.
+    for (const src of enabledOnly(getPluginCatalogSources())) {
         try {
             const plugins = await fetchCommunityCatalog(src);
             for (const p of plugins) if (!byId.has(p.id)) byId.set(p.id, p);
@@ -843,16 +851,42 @@ function renderSourcesList(container: HTMLElement) {
         list.innerHTML = `<p class="plug-sources-empty">${t('plugins.noCommunityCatalogs') || 'No community catalogs added yet.'}</p>`;
         return;
     }
-    list.innerHTML = sources.map(src => `
-        <div class="plug-source-row">
+    list.innerHTML = sources.map(src => {
+        // Where it came from, when an index brought it in. This panel showed a bare list of
+        // URLs, so a source you added by hand and one an index imported looked identical —
+        // which is the question you are asking when you come here to remove one.
+        const from = originOf(src);
+        const off = isDisabled(src);
+        return `
+        <div class="plug-source-row${off ? ' is-off' : ''}">
             <span class="plug-source-icon">${isUrlSource(src) ? IC.globe : IC.folder}</span>
             <span class="plug-source-url" data-tooltip="${escAttr(src)}">${escHtml(src)}</span>
+            ${from ? `<span class="plug-source-from" data-tooltip="${escAttr(from)}">${escHtml(t('plugins.sources.via') || 'via')} ${escHtml(originLabel(from))}</span>` : ''}
+            <button class="btn btn-xs btn-ghost plug-source-toggle" data-src="${escAttr(src)}"
+                    data-tooltip="${escAttr(off ? (t('plugins.sources.on') || 'Fetch this one again') : (t('plugins.sources.off') || 'Keep it listed but stop fetching it'))}">${escHtml(off ? (t('plugins.sources.isOff') || 'off') : (t('plugins.sources.isOn') || 'on'))}</button>
             <button class="btn btn-xs btn-ghost plug-source-del" data-src="${escAttr(src)}">${IC.trash}</button>
-        </div>`).join('');
+        </div>`;
+    }).join('');
+
+    list.querySelectorAll('.plug-source-toggle').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const src = (btn as HTMLElement).dataset.src!;
+            setDisabled(src, !isDisabled(src));
+            _catalog = null;
+            await renderCatalog(container);
+        });
+    });
+
     list.querySelectorAll('.plug-source-del').forEach(btn => {
         btn.addEventListener('click', async () => {
             const src = (btn as HTMLElement).dataset.src!;
             setPluginCatalogSources(getPluginCatalogSources().filter(s => s !== src));
+            // Provenance, on/off flag and a history line — the same three Settings drops when
+            // it unfollows. Without the history line a source removed here cannot be brought
+            // back from the one screen that exists to bring things back.
+            forgetOrigin(src);
+            setDisabled(src, false);
+            recordHistory({ action: 'remove', type: 'plugin', url: src });
             _catalog = null;
             await renderCatalog(container);
         });

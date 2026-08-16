@@ -16668,6 +16668,38 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 /* Already followed, dimmed rather than hidden: seeing that an index lists something you
    already have is the answer to "why did adding it change nothing". */
 .cat-index-row.is-followed { opacity: .6; }
+
+/* Turned off: still listed, not fetched. Struck through rather than merely faded, because
+   faded reads as "disabled control" and this row's controls are very much still live —
+   the thing that is off is the CATALOGUE, not the row. */
+.cat-index-row.is-off .cat-index-url { text-decoration: line-through; opacity: .55; }
+.cat-index-row.is-off .cat-index-type { opacity: .55; }
+
+/* The same "listed but not fetched" state in the four panels that own their own source
+   lists. One rule per panel because their rows are different elements, but deliberately
+   the same treatment — a source switched off should look switched off wherever you meet it. */
+.apps-source-row.is-off .apps-source-url,
+.plug-source-row.is-off .plug-source-url,
+.sched-pc-src.is-off .sched-pc-src-url { text-decoration: line-through; opacity: .55; }
+.repo-cat-chip.is-off { opacity: .5; text-decoration: line-through; }
+
+/* Where a source came from, in the panels that never showed it. Quiet: it is context for a
+   decision, not the row's subject — the URL is. Matches .apps-source-from, which already
+   did this, rather than inventing a second look for the same fact. */
+.plug-source-from, .sched-pc-src-from {
+    font-size: 10px; color: var(--text-muted); background: var(--bg-secondary);
+    border-radius: 4px; padding: 1px 5px; white-space: nowrap; flex: none;
+}
+.sched-pc-src-from { display: inline-block; margin-top: 3px; }
+
+/* An imported chip is worth telling apart from a hand-added one at a glance, since the
+   whole point of the strip is deciding which to keep. */
+.repo-cat-chip.is-imported { border-style: dashed; }
+
+/* The on/off buttons. Small, quiet, and never the widest thing in a row. */
+.apps-source-toggle, .plug-source-toggle { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; }
+.repo-cat-off { background: none; border: 0; cursor: pointer; color: inherit; opacity: .7; padding: 0 2px; }
+.repo-cat-off:hover { opacity: 1; }
 .cat-index-empty { font-size: 11px; color: var(--text-muted); padding: 6px 0; }
 
 .cat-index-when { flex: none; width: 130px; font-size: 10px; color: var(--text-muted); }

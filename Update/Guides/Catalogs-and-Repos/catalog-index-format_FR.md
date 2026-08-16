@@ -20,12 +20,37 @@ Deux volets dessous répondent aux questions qui viennent après :
 
 - **Catalogues que tu suis** — tous les catalogues communautaires que BMM récupère au
   démarrage, des cinq types, quelle que soit leur provenance : un index, un lien profond, ou
-  un autre panneau de réglages. Chacun est retirable ici. C'est le seul écran où les cinq
-  types se rejoignent.
-- **Historique** — ce qui a été suivi et retiré, quand, et depuis quel index. Les listes de
-  sources sont de simples tableaux sans dates : sans ça, un catalogue que tu ne te souviens
-  pas d'avoir ajouté n'a de trace nulle part — et un que tu as retiré et que tu veux
-  récupérer non plus.
+  un autre panneau de réglages. Chacun peut être **désactivé** ou retiré ici. C'est le seul
+  écran où les cinq types se rejoignent.
+- **Historique** — ce qui a été suivi et retiré, quand, et depuis quel index. Tout ce que tu
+  as retiré et que tu ne suis plus a un bouton **Remettre**, donc annuler un retrait ne veut
+  pas dire retrouver l'adresse. Les lignes peuvent être retirées une par une.
+
+## Désactivé n'est pas retiré
+
+Une source **désactivée** reste dans la liste et n'est pas récupérée. Une source **retirée**
+est oubliée. La différence compte quand un index amène six catalogues et que tu en veux cinq :
+retirer le sixième veut dire retrouver son adresse si tu changes d'avis, donc les gens gardent
+des catalogues dont ils ne veulent pas plutôt que de les perdre.
+
+L'interrupteur est à quatre endroits en plus des Réglages, sur le panneau qui possède chaque
+type de source :
+
+| Où | Panneau |
+|---|---|
+| Apps | Sources de catalogues communautaires |
+| Plugins | Catalogues communautaires |
+| Automatisations | la colonne Sources du catalogue d'automatisations |
+| Dépôts | les pastilles de catalogue au-dessus de la liste |
+
+Ces panneaux affichent aussi désormais **via <hôte>** sur toute source amenée par un index :
+un catalogue ajouté à la main et un arrivé avec un index se distinguent enfin — et c'est
+exactement la question que tu te poses en allant là pour en retirer un. Les thèmes n'ont pas
+de panneau de sources à eux ; passe par Réglages → Index de catalogues.
+
+Retirer une source depuis n'importe lequel de ces panneaux fait les trois mêmes choses que les
+Réglages : oublier sa provenance, effacer son interrupteur, et écrire la ligne d'historique qui
+permet de la remettre.
 
 ---
 

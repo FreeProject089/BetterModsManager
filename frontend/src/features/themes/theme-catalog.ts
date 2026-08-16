@@ -6,6 +6,9 @@
 import { invoke, saveFile } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
 import { toast } from '../../ui/app.js';
+// NOTE: this file is @ts-nocheck, so a wrong name here is a runtime ReferenceError and not a
+// build error. Checked against the exports in catalog-index.ts by hand.
+import { enabledOnly } from '../catalogs/catalog-index.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { installTheme, activateTheme, getInstalledThemes, BmmTheme } from './theme-engine.js';
 
@@ -191,8 +194,16 @@ async function fetchCatalog(force = false): Promise<void> {
 
     try {
         const isUrl = (s: string) => /^https?:\/\//i.test(s);
-        const urlSources = _communitySources.filter(isUrl);
-        const fileSources = _communitySources.filter(s => !isUrl(s));
+        // Filtered BEFORE the url/file split, not after. Local catalogs are read through a
+        // separate loop below, so filtering only the URL half would leave a switched-off
+        // local catalog loading — off for one kind of source and on for the other.
+        //
+        // enabledOnly re-reads localStorage on every call, which matters here:
+        // `_communitySources` is read once at init, so a source switched off from Settings
+        // would otherwise stay on until restart.
+        const live = enabledOnly(_communitySources);
+        const urlSources = live.filter(isUrl);
+        const fileSources = live.filter(s => !isUrl(s));
         const all: BmmTheme[] = [];
         // URL sources + the official catalog go through the backend — it sends the site
         // identity header (so PRIVATE community catalogs resolve) and, unlike a browser
