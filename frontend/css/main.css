@@ -16686,7 +16686,11 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
    button takes what it needs and no more. */
 .sched-pc-searchrow { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
 .sched-pc-searchrow .sched-pc-search { flex: 1; min-width: 0; margin-bottom: 0; }
-.sched-pc-body { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 18px; padding: 4px 2px 2px; }
+/* 24px each side, the same as .modal-header — the sources column was sitting against the edge
+   while the title above it was inset, so the panel looked like two different boxes stacked. A
+   body that does not share the header's gutter reads as a layout mistake even when nothing is
+   wrong with it. */
+.sched-pc-body { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 20px; padding: 4px 24px 20px; }
 /* minmax(0, 1fr), not 1fr: a long unbroken URL in a card would otherwise set the column's
    minimum width and push the grid wider than the modal. */
 
