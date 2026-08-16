@@ -5509,6 +5509,8 @@
   "apps.create.desc": "Build a catalog.json you can host on GitHub and share with others.",
   "apps.create.catalogName": "Catalog name",
   "apps.create.catalogDesc": "Description",
+  "apps.create.namePh": "My Catalog",
+  "apps.create.descPh": "What this catalog is about",
   "apps.create.apps": "Apps",
   "apps.create.addApp": "Add app",
   "apps.create.editApp": "Edit App",
@@ -7322,5 +7324,12 @@
   "themes.indexNone": "That index lists no theme catalogs — it holds {n} entr(y/ies) of other kinds.",
   "sched.pc.fromIndex": "Added {n} automation catalog(s) from that index.",
   "sched.pc.indexAll": "That index lists {n} automation catalog(s) and you already follow them all.",
-  "sched.pc.indexNone": "That index lists no automation catalogs — it holds {n} entr(y/ies) of other kinds."
+  "sched.pc.indexNone": "That index lists no automation catalogs — it holds {n} entr(y/ies) of other kinds.",
+  "plugins.phNewName": "New name",
+  "plugins.phModpackName": "My Modpack",
+  "plugins.phAuthorName": "My nickname",
+  "plugins.phAppTitle": "My App",
+  "plugins.phAppDesc": "What this app does…",
+  "plugins.phServerMods": "My Server Mods",
+  "plugins.phServerPlugins": "My Server Plugins"
 }

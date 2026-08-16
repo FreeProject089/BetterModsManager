@@ -5507,6 +5507,8 @@
   "apps.create.desc": "Construisez un catalog.json à héberger sur GitHub et partager avec d'autres.",
   "apps.create.catalogName": "Nom du catalogue",
   "apps.create.catalogDesc": "Description",
+  "apps.create.namePh": "Mon catalogue",
+  "apps.create.descPh": "De quoi parle ce catalogue",
   "apps.create.apps": "Applications",
   "apps.create.addApp": "Ajouter une app",
   "apps.create.editApp": "Modifier l'app",
@@ -7467,5 +7469,12 @@
   "themes.indexNone": "Cet index ne liste aucun catalogue de thèmes — il contient {n} entrée(s) d’autres types.",
   "sched.pc.fromIndex": "{n} catalogue(s) d’automatisations ajouté(s) depuis cet index.",
   "sched.pc.indexAll": "Cet index liste {n} catalogue(s) d’automatisations et vous les suivez déjà tous.",
-  "sched.pc.indexNone": "Cet index ne liste aucun catalogue d’automatisations — il contient {n} entrée(s) d’autres types."
+  "sched.pc.indexNone": "Cet index ne liste aucun catalogue d’automatisations — il contient {n} entrée(s) d’autres types.",
+  "plugins.phNewName": "Nouveau nom",
+  "plugins.phModpackName": "Mon Modpack",
+  "plugins.phAuthorName": "Mon pseudo",
+  "plugins.phAppTitle": "Mon application",
+  "plugins.phAppDesc": "Ce que fait cette application…",
+  "plugins.phServerMods": "Les mods de mon serveur",
+  "plugins.phServerPlugins": "Les plugins de mon serveur"
 }

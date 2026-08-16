@@ -819,7 +819,7 @@ function openPluginCatalogBuilder(onSourcesChanged) {
                 <button class="plug-ov-close-btn btn btn-sm btn-ghost">${IC.x}</button>
             </div>
             <div class="plug-cat-meta">
-                <div class="plug-form-row"><label class="plug-form-label">${t('plugins.catalogName') || 'Catalog name'} *</label><input type="text" id="pcb-name" class="input" value="${escAttr(d.name)}" placeholder="My Server Plugins"></div>
+                <div class="plug-form-row"><label class="plug-form-label">${t('plugins.catalogName') || 'Catalog name'} *</label><input type="text" id="pcb-name" class="input" value="${escAttr(d.name)}" placeholder="${escAttr(t('plugins.phServerPlugins'))}"></div>
                 <div class="plug-form-row" style="max-width:120px;"><label class="plug-form-label">${t('plugins.createVersion')}</label><input type="text" id="pcb-version" class="input" value="${escAttr(d.version)}"></div>
             </div>
             <div class="plug-cat-addbar">
@@ -1373,7 +1373,7 @@ async function openSmartQuickTest(m, p, rawBody) {
             <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;">
                 <div style="flex:2;min-width:130px;display:flex;flex-direction:column;gap:2px;">
                     <label class="plug-form-label" style="font-size:10px;">name</label>
-                    <input type="text" id="plug-qt-s-name" class="input input-sm" placeholder="Nouveau nom" style="font-size:12px;">
+                    <input type="text" id="plug-qt-s-name" class="input input-sm" placeholder="${escAttr(t('plugins.phNewName'))}" style="font-size:12px;">
                 </div>
                 <div style="flex:1;min-width:110px;display:flex;flex-direction:column;gap:2px;">
                     <label class="plug-form-label" style="font-size:10px;">game_name</label>
@@ -1476,7 +1476,7 @@ async function openSmartQuickTest(m, p, rawBody) {
             <!-- Nom requis -->
             <div class="plug-qt-smart-field" style="flex-direction:column;">
                 <label class="plug-form-label" style="margin-bottom:3px;">name <span style="color:var(--danger)">*</span></label>
-                <input type="text" id="plug-qt-s-name" class="input" placeholder="Mon Modpack" style="font-size:13px;">
+                <input type="text" id="plug-qt-s-name" class="input" placeholder="${escAttr(t('plugins.phModpackName'))}" style="font-size:13px;">
             </div>
             <!-- Description + Game name -->
             <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;">
@@ -1716,7 +1716,7 @@ async function openSmartQuickTest(m, p, rawBody) {
                 </div>
                 <div style="flex:1;min-width:120px;display:flex;flex-direction:column;gap:2px;">
                     <label class="plug-form-label" style="font-size:10px;">author_name <span style="color:var(--danger)">*</span></label>
-                    <input type="text" id="plug-qt-s-author-name" class="input" placeholder="Mon Pseudo" style="font-size:12px;">
+                    <input type="text" id="plug-qt-s-author-name" class="input" placeholder="${escAttr(t('plugins.phAuthorName'))}" style="font-size:12px;">
                 </div>
             </div>
             <!-- Seed -->
@@ -1773,10 +1773,10 @@ async function openSmartQuickTest(m, p, rawBody) {
               <div><label class="plug-form-label" style="margin-bottom:4px;">id ${req}</label>
                 <input id="plug-qt-catapp-id" class="input" placeholder="my-app" style="font-family:var(--font-mono);font-size:12px;"></div>
               <div><label class="plug-form-label" style="margin-bottom:4px;">title ${req}</label>
-                <input id="plug-qt-catapp-title" class="input" placeholder="My App" style="font-size:12px;"></div>
+                <input id="plug-qt-catapp-title" class="input" placeholder="${escAttr(t('plugins.phAppTitle'))}" style="font-size:12px;"></div>
             </div>
             <div><label class="plug-form-label" style="margin-bottom:4px;">description</label>
-              <textarea id="plug-qt-catapp-desc" class="input" rows="2" style="resize:vertical;font-size:12px;width:100%;" placeholder="What this app does…"></textarea></div>
+              <textarea id="plug-qt-catapp-desc" class="input" rows="2" style="resize:vertical;font-size:12px;width:100%;" placeholder="${escAttr(t('plugins.phAppDesc'))}"></textarea></div>
             <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
               <div><label class="plug-form-label" style="margin-bottom:4px;">category</label>
                 <select id="plug-qt-catapp-cat" class="select select-sm" style="width:100%"><option value="utility">Utility</option><option value="game">Game</option><option value="other">Other</option></select></div>
@@ -3508,7 +3508,7 @@ function renderCreate(container) {
                     </div>
                     <div class="plug-form-row">
                         <label class="plug-form-label">${t('plugins.createName')} *</label>
-                        <input type="text" id="pc-name" class="input" placeholder="My Server Mods">
+                        <input type="text" id="pc-name" class="input" placeholder="${escAttr(t('plugins.phServerMods'))}">
                     </div>
                     <div class="plug-form-row">
                         <label class="plug-form-label">${t('plugins.createGame')}</label>

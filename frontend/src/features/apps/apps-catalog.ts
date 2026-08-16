@@ -1035,9 +1035,9 @@ function renderCreate() {
 
       <div class="apps-create-section">
         <label class="apps-install-label">${t('apps.create.catalogName')||'Catalog name'}</label>
-        <input class="apps-path-input" id="cr-name" type="text" placeholder="My Catalog" value="${escAttr(_draft.name)}">
+        <input class="apps-path-input" id="cr-name" type="text" placeholder="${escAttr(t('apps.create.namePh'))}" value="${escAttr(_draft.name)}">
         <label class="apps-install-label" style="margin-top:10px">${t('apps.create.catalogDesc')||'Description'}</label>
-        <input class="apps-path-input" id="cr-desc" type="text" placeholder="What this catalog is about" value="${escAttr(_draft.description)}">
+        <input class="apps-path-input" id="cr-desc" type="text" placeholder="${escAttr(t('apps.create.descPh'))}" value="${escAttr(_draft.description)}">
       </div>
 
       <div class="apps-create-section">
