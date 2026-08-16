@@ -28,6 +28,7 @@
     "how-it-works/scanning-cache",
     "how-it-works/integrity-hashing",
     "how-it-works/conflicts",
+    "how-it-works/dependencies",
     "how-it-works/mapper",
     "how-it-works/sync-repos",
     "how-it-works/performance",
@@ -456,6 +457,21 @@
       },
       "words": 726,
       "diagrams": 4,
+      "fr": true
+    },
+    {
+      "path": "how-it-works/dependencies",
+      "section": "how-it-works",
+      "title": {
+        "en": "Dependencies & conflicts, as a tree",
+        "fr": "Dépendances et conflits, en arbre"
+      },
+      "summary": {
+        "en": "Every mod already carries a list of the mods it needs, and BMM already knows which mods fight over which files. What was missing was the shape.",
+        "fr": "Chaque mod porte déjà la liste des mods dont il a besoin, et BMM sait déjà quels mods se disputent quels fichiers. Ce qui manquait, c'est la forme."
+      },
+      "words": 484,
+      "diagrams": 0,
       "fr": true
     },
     {
