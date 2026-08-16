@@ -7371,5 +7371,6 @@
   "sched.bl.saved": "« {n} » enregistré.",
   "sched.bl.del": "Supprimer ce bloc",
   "sched.bl.inuse": "Cette tâche appelle encore ce bloc.",
-  "sched.bl.nosteps": "Ajoutez d’abord des étapes."
+  "sched.bl.nosteps": "Ajoutez d’abord des étapes.",
+  "sched.pc.sub": "Publiées par d autres — rien n est importé sans votre accord"
 }

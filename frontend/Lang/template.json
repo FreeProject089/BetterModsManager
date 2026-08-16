@@ -7226,5 +7226,6 @@
   "sched.bl.saved": "Saved “{n}”.",
   "sched.bl.del": "Delete this block",
   "sched.bl.inuse": "This task still calls that block.",
-  "sched.bl.nosteps": "Add some steps first."
+  "sched.bl.nosteps": "Add some steps first.",
+  "sched.pc.sub": "Published by other people — nothing is imported until you say so"
 }

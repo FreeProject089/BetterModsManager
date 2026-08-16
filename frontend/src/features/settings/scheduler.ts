@@ -4626,11 +4626,23 @@ function showPresetCatalog(data: { presets: any[]; sources: PresetSource[] }): v
     const paint = () => {
         overlay.innerHTML = `
         <div class="modal sched-pc-modal">
-            <div class="sched-insp-top">
-                <b>${esc(t('sched.pc.title') || 'Automations from a catalogue')}</b>
-                <button class="btn btn-ghost btn-sm" id="sched-pc-refresh"
-                    data-tooltip="${escAttr(t('sched.pc.refreshTip') || 'Fetch every source again')}">${esc(t('sched.pc.refresh') || 'Refresh')}</button>
-                <button class="btn btn-ghost btn-sm" id="sched-pc-close">${esc(t('common.close') || 'Close')}</button>
+            <!-- The house modal header, not a bespoke one. This panel used sched-insp-top with a
+                 bare bold title and two text buttons, which is why it read as unfinished beside
+                 every other catalogue in the app: same job, different furniture. Icon tile,
+                 title with a subtitle, and a real × — the shape theme-catalog.ts already uses. -->
+            <div class="modal-header">
+                <div style="display:flex;align-items:center;gap:12px;">
+                    <div style="width:36px;height:36px;border-radius:9px;background:rgba(59,130,246,0.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--bmm-accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+                    </div>
+                    <div>
+                        <h2 style="margin:0;font-size:16px;">${esc(t('sched.pc.title') || 'Automations from a catalogue')}</h2>
+                        <p style="margin:0;font-size:11px;color:var(--bmm-text-muted);">${esc(t('sched.pc.sub') || 'Published by other people — nothing is imported until you say so')}</p>
+                    </div>
+                </div>
+                <button class="modal-close" id="sched-pc-close" data-tooltip="${escAttr(t('common.close') || 'Close')}">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
             </div>
             <div class="sched-pc-body">
                 <aside class="sched-pc-side">
@@ -4642,8 +4654,16 @@ function showPresetCatalog(data: { presets: any[]; sources: PresetSource[] }): v
                     </div>
                 </aside>
                 <section class="sched-pc-main">
-                    <input class="input sched-pc-search" id="sched-pc-q" value="${escAttr(filter)}"
-                           placeholder="${escAttr(t('sched.pc.search') || 'Search automations')}">
+                    <!-- Refresh lives here, beside the search, exactly where the theme
+                         catalogue puts it. It was in the header; moving it kept its id so the
+                         existing handler still finds it — a button relocated must not become a
+                         handler bound to nothing. -->
+                    <div class="sched-pc-searchrow">
+                        <input class="input sched-pc-search" id="sched-pc-q" value="${escAttr(filter)}"
+                               placeholder="${escAttr(t('sched.pc.search') || 'Search automations')}">
+                        <button class="btn btn-ghost btn-sm" id="sched-pc-refresh"
+                            data-tooltip="${escAttr(t('sched.pc.refreshTip') || 'Fetch every source again')}">${esc(t('sched.pc.refresh') || 'Refresh')}</button>
+                    </div>
                     <div class="sched-pc-grid">${cards()}</div>
                 </section>
             </div>

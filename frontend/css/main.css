@@ -16682,6 +16682,10 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
    into 520px looking broken. The width that matters here is the smaller of the two, and only
    setting both makes this rule the one that decides. */
 .sched-pc-modal { width: min(920px, 94vw); max-width: min(920px, 94vw); }
+/* Search and Refresh on one row, like the theme catalogue. The search keeps the width; the
+   button takes what it needs and no more. */
+.sched-pc-searchrow { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+.sched-pc-searchrow .sched-pc-search { flex: 1; min-width: 0; margin-bottom: 0; }
 .sched-pc-body { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 18px; padding: 4px 2px 2px; }
 /* minmax(0, 1fr), not 1fr: a long unbroken URL in a card would otherwise set the column's
    minimum width and push the grid wider than the modal. */
