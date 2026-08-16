@@ -2070,7 +2070,10 @@ async function initCatalogIndexSettings() {
     const renderHistory = async () => {
         if (!histHost)
             return;
-        const all = readHistory();
+        // Named `lines`, not `all`: `all` already means "every source that is followed" twelve
+        // lines below, and re-using it here shadowed nothing — it collided, and the whole
+        // settings module stopped parsing. A crash on load, from a name.
+        const lines = readHistory();
         // Matches the address, the kind and the action word — the three things a line says.
         // The action is matched in the CURRENT language as well as its stored value, because
         // somebody reading a French list types "ajouté", not "add".
@@ -2080,14 +2083,14 @@ async function initCatalogIndexSettings() {
         // is not the position of the thing it deletes — and "drop this line" would drop a
         // different one. The kind of bug a filter quietly introduces into a list with a delete
         // button.
-        const h = q ? all.map((e, i) => ({ e, i })).filter(({ e }) => {
+        const h = q ? lines.map((e, i) => ({ e, i })).filter(({ e }) => {
             const words = [
                 e.url, e.type, e.action, e.via || '',
                 t(`settings.catIndex.type.${e.type}`) || '',
                 (e.action === 'add' ? t('settings.catIndex.hAdded') : t('settings.catIndex.hRemoved')) || '',
             ];
             return words.some((w) => String(w).toLowerCase().includes(q));
-        }) : all.map((e, i) => ({ e, i }));
+        }) : lines.map((e, i) => ({ e, i }));
         // What is followed right now, so a "removed" row knows whether it can be put back —
         // a Bring-back button beside something you already follow again is a dead control.
         const all = await readAllSources();
