@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const { parseCatalogIndex, planImport, INDEX_TYPES, STORE_KEY, ROUTABLE, looksLikeIndex, hasSource, addSource, removeSource, readHistory, recordHistory, clearHistory, HISTORY_MAX,
-  readDisabled, isDisabled, setDisabled, enabledOnly, catalogLooksLike, CATALOG_SHAPES, importIndexForType, originOf } = await import(
+  readDisabled, isDisabled, setDisabled, enabledOnly, catalogLooksLike, CATALOG_SHAPES, importIndexForType, originOf, catalogLabel, describeKinds } = await import(
   pathToFileURL(join(ROOT, 'frontend/js/features/catalogs/catalog-index.js')).href
 );
 
@@ -505,5 +505,44 @@ describe('importIndexForType — one type out of an index', () => {
     assert.equal(r.added, 0);
     assert.equal(r.total, 0);
     assert.equal(localStorage.getItem(STORE_KEY.plugin), null);
+  });
+});
+
+describe('what a catalogue chip says', () => {
+  // The strip showed `originLabel`, which is the HOST — right for "where did this come from",
+  // wrong for a list: four feeds from one server read `localhost` four times, and the address
+  // that tells them apart lived in a tooltip nobody hovers.
+  test('the file and the kind are what distinguish two feeds on one host', () => {
+    assert.equal(catalogLabel('http://localhost:5176/api/catalog.json?project=bmm&kind=PLUGIN'),
+      'localhost:5176 · catalog.json bmm/PLUGIN');
+    assert.equal(catalogLabel('http://localhost:5176/api/catalog.json?project=bmm&kind=THEME'),
+      'localhost:5176 · catalog.json bmm/THEME');
+  });
+
+  test('a bare host stays a bare host', () => {
+    assert.equal(catalogLabel('https://example.com/'), 'example.com');
+  });
+
+  test('noise in the query is not carried onto a chip', () => {
+    assert.equal(catalogLabel('https://x.dev/feed.json?utm_source=twitter&sig=abcdef'), 'x.dev · feed.json');
+  });
+
+  test('something that is not a URL is shown as it was typed', () => {
+    // Better than an empty chip: whatever they pasted is the only thing that identifies it.
+    assert.equal(catalogLabel('not a url'), 'not a url');
+  });
+});
+
+describe('describeKinds', () => {
+  test('the biggest group is named first', () => {
+    assert.equal(describeKinds({ app: 2, plugin: 3 }), '3 plugin catalogues, 2 app catalogues');
+  });
+
+  test('singular and plural are both right', () => {
+    assert.equal(describeKinds({ theme: 1 }), '1 theme catalogue');
+  });
+
+  test('an empty index describes nothing', () => {
+    assert.equal(describeKinds({}), '');
   });
 });

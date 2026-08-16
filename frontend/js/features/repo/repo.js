@@ -3,7 +3,7 @@ import { invoke, pickFolder } from '../../core/api.js';
 import { wireDismissibleTip } from '../../ui/dismissible-tip.js';
 import { toast, toastSaved } from '../../ui/app.js';
 import { escHtml, escAttr, formatBytes } from '../../core/utils.js';
-import { originLabel, originOf, forgetOrigin, enabledOnly, isDisabled, setDisabled, recordHistory, hasSource, } from '../catalogs/catalog-index.js';
+import { originLabel, originOf, forgetOrigin, enabledOnly, isDisabled, setDisabled, recordHistory, hasSource, catalogLabel } from '../catalogs/catalog-index.js';
 import { getLinks } from '../../core/links-config.js';
 import { t } from '../../core/i18n.js';
 // Sub-modules
@@ -80,7 +80,7 @@ export function renderRepoCatalogStrip(reload, getRepos) {
                 const tip = from
                     ? `${u}\n${t('repo.cat.via') || 'via'} ${originLabel(from)}`
                     : u;
-                return `<span class="repo-cat-chip${off ? ' is-off' : ''}${from ? ' is-imported' : ''}" title="${escAttr(tip)}">${escHtml(originLabel(u))}
+                return `<span class="repo-cat-chip${off ? ' is-off' : ''}${from ? ' is-imported' : ''}" title="${escAttr(tip)}">${escHtml(catalogLabel(u))}
                  <button class="repo-cat-off" data-u="${escAttr(u)}" aria-label="${escAttr(off ? (t('repo.cat.on') || 'Fetch this one again') : (t('repo.cat.off') || 'Stop fetching this one'))}">${off ? '○' : '●'}</button>
                  <button class="repo-cat-del" data-u="${escAttr(u)}" aria-label="${escAttr(t('common.remove') || 'Remove')}">×</button></span>`;
             }).join('')
@@ -174,6 +174,23 @@ async function openCatalogBuilder(onScreen) {
     ov.id = 'repo-cat-build';
     ov.style.zIndex = '10000';
     document.body.appendChild(ov);
+    // A modal that does not lock the page scrolls it under itself: the wheel over the dim
+    // area moves the list behind, which is the "it interacts with what is behind" everybody
+    // reports and nobody can quite name. Restored on close, and restored exactly — an empty
+    // string, not `auto`, so a stylesheet that sets its own overflow keeps it.
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const close = () => {
+        document.body.style.overflow = prevOverflow;
+        document.removeEventListener('keydown', onKey);
+        ov.remove();
+    };
+    // Escape closes it, like every other dialog in the app and like every dialog anywhere.
+    const onKey = (e) => { if (e.key === 'Escape') {
+        e.stopPropagation();
+        close();
+    } };
+    document.addEventListener('keydown', onKey);
     let name = t('repo.cat.b.defname') || 'My repo catalogue';
     let msg = null;
     let urlBox = '';
@@ -282,9 +299,9 @@ async function openCatalogBuilder(onScreen) {
     };
     function wire() {
         const list = [...rows.values()];
-        ov.querySelectorAll('[data-x]').forEach((x) => x.addEventListener('click', () => ov.remove()));
+        ov.querySelectorAll('[data-x]').forEach((x) => x.addEventListener('click', close));
         ov.addEventListener('click', (e) => { if (e.target === ov)
-            ov.remove(); });
+            close(); });
         const nameEl = ov.querySelector('#repo-cat-b-name');
         nameEl?.addEventListener('input', () => { name = nameEl.value; });
         const urlEl = ov.querySelector('#repo-cat-b-url');
@@ -322,7 +339,7 @@ async function openCatalogBuilder(onScreen) {
             try {
                 await invoke('write_text_file', { path, content: doc });
                 toast((t('repo.cat.saved') || 'Wrote {n} repositories.').replace('{n}', String(out.length)), 'success');
-                ov.remove();
+                close(); // NOT ov.remove(): the page would stay locked with the modal gone
             }
             catch (e) {
                 toast(String(e), 'error');

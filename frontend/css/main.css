@@ -1217,7 +1217,11 @@ body.is-maximized .titlebar-spacer {
     animation: fadeIn 0.18s ease;
     padding: 32px;
     overflow: hidden;
-    contain: paint;
+    /* `contain: paint` used to sit here. It clips descendants to the padding box, and the
+       modal's own `box-shadow: 0 8px 20px …` is painted OUTSIDE its border box — so the
+       shadow was cut off along a hard rectangle, which is what "the shadow is broken" looks
+       like. The overlay is one full-screen element with a blur; there is nothing here for
+       paint containment to save. */
 }
 
 .bmm-switch input:checked+.bmm-switch-track {
@@ -3352,7 +3356,11 @@ body.bmm-toolbar-opaque .lib-header-shell {
     animation: fadeIn 0.18s ease;
     padding: 32px;
     overflow: hidden;
-    contain: paint;
+    /* `contain: paint` used to sit here. It clips descendants to the padding box, and the
+       modal's own `box-shadow: 0 8px 20px …` is painted OUTSIDE its border box — so the
+       shadow was cut off along a hard rectangle, which is what "the shadow is broken" looks
+       like. The overlay is one full-screen element with a blur; there is nothing here for
+       paint containment to save. */
 }
 
 .modal-overlay.open {

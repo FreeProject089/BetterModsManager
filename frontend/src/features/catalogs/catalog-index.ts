@@ -310,6 +310,31 @@ export function originLabel(indexUrl: string): string {
     try { return new URL(indexUrl).host; } catch { return indexUrl; }
 }
 
+/**
+ * A catalogue's own name for a chip: the host, plus whatever distinguishes it from the others
+ * on the same host.
+ *
+ * `originLabel` answers "where did this come from" and the host alone is the right answer for
+ * that. It is the wrong answer for a LIST of catalogues: four feeds from one server all read
+ * `localhost`, the full address lives in a tooltip nobody hovers, and the strip becomes four
+ * identical chips. The distinguishing part is usually the file, or the query that selects a
+ * kind — so both are kept, and nothing else is.
+ */
+export function catalogLabel(url: string): string {
+    let u: URL;
+    try { u = new URL(url); } catch { return url; }
+    const file = u.pathname.split('/').filter(Boolean).pop() || '';
+    // The query narrows a feed to one project or one kind; those two are what tell two
+    // otherwise-identical addresses apart. Anything else is noise on a chip.
+    const bits = [];
+    for (const k of ['project', 'kind', 'app', 'type', 'scope']) {
+        const v = u.searchParams.get(k);
+        if (v) bits.push(v);
+    }
+    const tail = [file, bits.join('/')].filter(Boolean).join(' ');
+    return tail ? `${u.host} · ${tail}` : u.host;
+}
+
 /** Forget where a source came from. Called when the source itself goes, so the map does not
  *  accumulate provenance for catalogs nobody follows any more. */
 export function forgetOrigin(catalogUrl: string): void {
