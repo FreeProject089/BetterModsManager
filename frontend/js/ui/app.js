@@ -1003,16 +1003,15 @@ async function main() {
     await initSettings();
     // ── Apply sound settings from config ──
     try {
-        const { getSettings, setApiPort, invoke: inv } = await import('../core/api.js');
+        const { getSettings, refreshApiStatus } = await import('../core/api.js');
         const cfg = await getSettings();
-        // Sync apiBase() with the port the server ACTUALLY bound this session —
-        // not settings.api_port, which may have been changed and needs a restart.
+        // Sync apiBase() with the port the server ACTUALLY bound this session — not
+        // settings.api_port, which may have been changed and needs a restart — AND with
+        // whether it bound at all. The port alone was never enough: a failed bind left every
+        // caller fetching a port nothing was listening on.
         try {
-            const p = await inv('get_effective_api_port');
-            if (p) {
-                setApiPort(p);
-                applyTranslations();
-            } // re-sub port in docs examples
+            await refreshApiStatus();
+            applyTranslations(); // re-sub the port in the docs examples
         }
         catch { }
         const soundEnabled = cfg.sound_effects_enabled !== false;
@@ -1614,7 +1613,9 @@ window.openStackModal = () => {
     };
     window.__bmmStackRole = STACK_ROLE;
     content.innerHTML = `
-        <div class="stack-section-title" data-i18n="credits.stackBackend">${t('credits.stackBackend')}</div>
+        <input class="input stack-filter" id="stack-filter" spellcheck="false"
+            placeholder="${escAttr(t('credits.stackFilter') || 'Filter by name…')}">
+        <div class="stack-section-title" data-i18n="credits.stackBackend">${t('credits.stackBackend')} <span class="stack-count">${backend.length}</span></div>
         <div class="stack-grid">
             ${backend.map(item => `
                 <div class="stack-item" style="cursor:pointer" data-stack-key="${item.key}" data-stack-name="${escAttr(item.name)}" data-stack-v="${escAttr(item.v)}" data-stack-url="${escAttr(item.url)}">
@@ -1626,7 +1627,7 @@ window.openStackModal = () => {
                 </div>
             `).join('')}
         </div>
-        <div class="stack-section-title" data-i18n="credits.stackFrontend">${t('credits.stackFrontend')}</div>
+        <div class="stack-section-title" data-i18n="credits.stackFrontend">${t('credits.stackFrontend')} <span class="stack-count">${frontend.length}</span></div>
         <div class="stack-grid">
             ${frontend.map(item => `
                 <div class="stack-item" style="cursor:pointer" data-stack-key="${item.key}" data-stack-name="${escAttr(item.name)}" data-stack-v="${escAttr(item.v)}" data-stack-url="${escAttr(item.url)}">
@@ -1654,6 +1655,24 @@ window.openStackModal = () => {
             return;
         openStackDetail(card.dataset.stackKey, card.dataset.stackName || '', card.dataset.stackV || '', card.dataset.stackUrl || '');
     };
+    // Filtering hides cards instead of re-rendering them: each one gets a click handler bound
+    // below, and rebuilding the markup would quietly drop every listener.
+    const filterBox = content.querySelector('#stack-filter');
+    filterBox?.addEventListener('input', () => {
+        const q = filterBox.value.trim().toLowerCase();
+        content.querySelectorAll('.stack-item').forEach((el) => {
+            const name = (el.dataset.stackName || '').toLowerCase();
+            el.style.display = !q || name.includes(q) ? '' : 'none';
+        });
+        // Each section header shows how many of ITS items survive, so an empty section
+        // reads as "nothing here matched" rather than as a rendering fault.
+        content.querySelectorAll('.stack-grid').forEach((grid) => {
+            const visible = [...grid.querySelectorAll('.stack-item')].filter((x) => x.style.display !== 'none').length;
+            const title = grid.previousElementSibling?.querySelector('.stack-count');
+            if (title)
+                title.textContent = String(visible);
+        });
+    });
     modal.classList.add('open');
 };
 /** The dependency explainer: what it is, why it is here, then the way out. */
