@@ -16661,8 +16661,15 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 
 /* The type badge. Fixed width so the five types form a column the eye can scan down
    rather than a ragged edge that moves with the length of each word. */
-.cat-index-type { flex: none; width: 66px; font-size: 10px; text-transform: uppercase;
-    letter-spacing: .04em; color: var(--text-secondary); }
+/* A fixed width so the types form a column the eye can scan down — but ONLY with the
+   overflow rules beside it. Without them "AUTOMATISATION" simply ran out of its 66px and
+   printed straight over the URL, which is what a fixed width does to a word that does not
+   fit: it does not wrap and it does not clip, it overlaps. Seen on screen, not in a check.
+   Wide enough for the longest label in either language, and truncated if a longer one ever
+   arrives. */
+.cat-index-type { flex: none; width: 92px; min-width: 0; font-size: 10px; text-transform: uppercase;
+    letter-spacing: .04em; color: var(--text-secondary);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cat-index-name { flex: 1; min-width: 0; font-size: 12px; overflow: hidden;
     text-overflow: ellipsis; white-space: nowrap; }
 /* The URL is secondary once a name is present, so it gets the smaller share. */

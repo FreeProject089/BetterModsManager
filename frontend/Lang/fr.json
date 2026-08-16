@@ -7455,5 +7455,17 @@
   "sched.listName": "nom de la liste",
   "sched.mapName": "nom de la map",
   "sched.perm.command": "lancer un programme",
-  "sched.perm.net": "accéder au réseau"
+  "sched.perm.net": "accéder au réseau",
+  "apps.sources.fromIndex": "{n} catalogue(s) d’apps ajouté(s) depuis cet index.",
+  "apps.sources.indexAll": "Cet index liste {n} catalogue(s) d’apps et vous les suivez déjà tous.",
+  "apps.sources.indexNone": "Cet index ne liste aucun catalogue d’apps — il contient {n} entrée(s) d’autres types.",
+  "plugins.fromIndex": "{n} catalogue(s) de plugins ajouté(s) depuis cet index.",
+  "plugins.indexAll": "Cet index liste {n} catalogue(s) de plugins et vous les suivez déjà tous.",
+  "plugins.indexNone": "Cet index ne liste aucun catalogue de plugins — il contient {n} entrée(s) d’autres types.",
+  "themes.fromIndex": "{n} catalogue(s) de thèmes ajouté(s) depuis cet index.",
+  "themes.indexAll": "Cet index liste {n} catalogue(s) de thèmes et vous les suivez déjà tous.",
+  "themes.indexNone": "Cet index ne liste aucun catalogue de thèmes — il contient {n} entrée(s) d’autres types.",
+  "sched.pc.fromIndex": "{n} catalogue(s) d’automatisations ajouté(s) depuis cet index.",
+  "sched.pc.indexAll": "Cet index liste {n} catalogue(s) d’automatisations et vous les suivez déjà tous.",
+  "sched.pc.indexNone": "Cet index ne liste aucun catalogue d’automatisations — il contient {n} entrée(s) d’autres types."
 }

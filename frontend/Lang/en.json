@@ -7457,5 +7457,17 @@
   "sched.listName": "list name",
   "sched.mapName": "map name",
   "sched.perm.command": "run a program",
-  "sched.perm.net": "reach the network"
+  "sched.perm.net": "reach the network",
+  "apps.sources.fromIndex": "Added {n} app catalog(s) from that index.",
+  "apps.sources.indexAll": "That index lists {n} app catalog(s) and you already follow them all.",
+  "apps.sources.indexNone": "That index lists no app catalogs — it holds {n} entr(y/ies) of other kinds.",
+  "plugins.fromIndex": "Added {n} plugin catalog(s) from that index.",
+  "plugins.indexAll": "That index lists {n} plugin catalog(s) and you already follow them all.",
+  "plugins.indexNone": "That index lists no plugin catalogs — it holds {n} entr(y/ies) of other kinds.",
+  "themes.fromIndex": "Added {n} theme catalog(s) from that index.",
+  "themes.indexAll": "That index lists {n} theme catalog(s) and you already follow them all.",
+  "themes.indexNone": "That index lists no theme catalogs — it holds {n} entr(y/ies) of other kinds.",
+  "sched.pc.fromIndex": "Added {n} automation catalog(s) from that index.",
+  "sched.pc.indexAll": "That index lists {n} automation catalog(s) and you already follow them all.",
+  "sched.pc.indexNone": "That index lists no automation catalogs — it holds {n} entr(y/ies) of other kinds."
 }

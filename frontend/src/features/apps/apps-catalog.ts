@@ -4,6 +4,7 @@ import { toast } from '../../ui/app.js';
 import { t } from '../../core/i18n.js';
 import {
     readOrigins, originLabel, forgetOrigin, enabledOnly, isDisabled, setDisabled, recordHistory,
+    looksLikeIndex, importIndexForType,
 } from '../catalogs/catalog-index.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { getLinks } from '../../core/links-config.js';
@@ -950,13 +951,26 @@ function renderSources() {
             try {
                 const probe: string = await invoke('fetch_remote_json', { url }, { quiet: true }) as string;
                 const doc = JSON.parse(probe);
-                const { looksLikeIndex } = await import('../catalogs/catalog-index.js');
                 if (looksLikeIndex(doc)) {
-                    // Not added here, and not silently added elsewhere either. Importing an
-                    // index adds several sources at once, which is a bigger action than the
-                    // one that was asked for — it belongs behind the preview in Settings,
-                    // where you see what it would change before it changes.
-                    toast(t('apps.sources.isIndex') || 'That is a catalogue INDEX, not an app catalog — add it under Settings → Catalogue index, where you can see what it would import.', 'info');
+                    // Imported HERE, and only its app entries. This used to refuse and point at
+                    // Settings, which was correct and unhelpful: this panel knows it is the app
+                    // browser, the index says which entries are apps, and following them is the
+                    // same three writes this handler already does by hand.
+                    //
+                    // Its other four types are left alone. An index lists catalogues for all of
+                    // them, and an app browser quietly following theme catalogues would be a
+                    // bigger action than the one that was asked for.
+                    const r = await importIndexForType(doc, 'app', url,
+                        async (u) => { _state.community_sources = await invoke('add_community_source', { url: u }); });
+                    input.value = '';
+                    toast(r.added
+                        ? (t('apps.sources.fromIndex') || 'Added {n} app catalog(s) from that index.').replace('{n}', String(r.added))
+                        : r.ofType
+                            ? (t('apps.sources.indexAll') || 'That index lists {n} app catalog(s) and you already follow them all.').replace('{n}', String(r.ofType))
+                            : (t('apps.sources.indexNone') || 'That index lists no app catalogs — it holds {n} entr(y/ies) of other kinds.').replace('{n}', String(r.total)),
+                        r.added ? 'success' : 'info');
+                    renderSources();
+                    await loadCatalog(true);
                     return;
                 }
             } catch { /* unreachable or not JSON — let the normal add path report it */ }

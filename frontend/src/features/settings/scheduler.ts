@@ -20,7 +20,7 @@ import { inspectBmmpa } from './bmmpa-inspect.js';
 import { parsePresetFeed, looksLikePresetFeed, readPresetCatalogs, writePresetCatalogs } from './preset-catalog.js';
 import {
     originLabel, originOf, forgetOrigin, isDisabled, setDisabled, recordHistory,
-    hasSource, looksLikeIndex, catalogLooksLike,
+    hasSource, looksLikeIndex, catalogLooksLike, importIndexForType,
 } from '../catalogs/catalog-index.js';
 import { getLinks } from '../../core/links-config.js';
 
@@ -4602,7 +4602,11 @@ async function loadPresetSources(): Promise<{ presets: any[]; sources: PresetSou
             // Trust follows the address, not the document — the rule apply_trust enforces
             // for app catalogs. A community feed cannot call its own entries official by
             // saying so in JSON.
-            for (const p of parsed.presets) presets.push({ ...p, official: isOff });
+            // `_src` so a source can be hidden WITHOUT re-fetching every feed. Switching one
+            // off used to call reload(), which re-asked every catalogue over the network to
+            // answer a question already on screen — seconds of waiting for a checkbox. With
+            // the origin on each card the panel can filter in place.
+            for (const p of parsed.presets) presets.push({ ...p, official: isOff, _src: url });
             sources.push({ url, official: isOff, state: 'ok', count: parsed.presets.length,
                            detail: parsed.dropped.length ? parsed.dropped.join('\n') : undefined });
         } catch (e) {
@@ -4688,6 +4692,9 @@ function showPresetCatalog(data: { presets: any[]; sources: PresetSource[] }): v
     // What following last said, and what was typed. Both survive a repaint on purpose:
     // paint() rebuilds the whole overlay, so an address that vanished from the field the
     // moment its own error appeared would have to be retyped to be corrected.
+    // Sources switched off since the panel opened. Their cards are filtered out in place; the
+    // next open re-reads the flag from storage, so this is a view of the session, not a store.
+    let hidden: string[] = [];
     let addOut: { kind: 'ok' | 'bad'; text: string; raw?: string } | null = null;
     let addUrl = '';
 
@@ -4744,9 +4751,11 @@ function showPresetCatalog(data: { presets: any[]; sources: PresetSource[] }): v
 
     const cards = () => {
         const q = filter.trim().toLowerCase();
+        // Sources switched off in THIS session are filtered here rather than re-fetched away.
+        const live = hidden.length ? presets.filter((p) => !hidden.includes(p._src)) : presets;
         const shown = q
-            ? presets.filter((p) => `${p.name} ${p.description} ${p.author || ''}`.toLowerCase().includes(q))
-            : presets;
+            ? live.filter((p) => `${p.name} ${p.description} ${p.author || ''}`.toLowerCase().includes(q))
+            : live;
         if (!shown.length) {
             // Three different situations, and they need different sentences. "Nothing to
             // show" covers all three and helps with none.
@@ -4891,7 +4900,17 @@ function showPresetCatalog(data: { presets: any[]; sources: PresetSource[] }): v
                 // An INDEX pasted here is the common mistake and deserves its own sentence:
                 // it would parse, contain no presets, and look like an empty catalogue.
                 if (looksLikeIndex(doc)) {
-                    say('bad', t('sched.pc.isIndex') || 'That is a catalogue INDEX, not a preset catalogue — add it under Settings → Catalogue index.');
+                    // Imported here, and only its automation entries. Refusing and pointing at
+                    // Settings was correct and unhelpful: this panel knows which type it is,
+                    // and the index says which of its entries are that type.
+                    const r = await importIndexForType(doc, 'preset', url);
+                    addUrl = '';
+                    say(r.added ? 'ok' : 'bad', r.added
+                        ? (t('sched.pc.fromIndex') || 'Added {n} automation catalogue(s) from that index.').replace('{n}', String(r.added))
+                        : r.ofType
+                            ? (t('sched.pc.indexAll') || 'That index lists {n} automation catalogue(s) and you already follow them all.').replace('{n}', String(r.ofType))
+                            : (t('sched.pc.indexNone') || 'That index lists no automation catalogues — it holds {n} entr(y/ies) of other kinds.').replace('{n}', String(r.total)));
+                    if (r.added) await reload();
                     return;
                 }
                 if (!looksLikePresetFeed(doc)) {
@@ -4916,10 +4935,17 @@ function showPresetCatalog(data: { presets: any[]; sources: PresetSource[] }): v
         overlay.querySelector('#sched-pc-follow')?.addEventListener('click', () => { void follow(); });
         urlBox?.addEventListener('keydown', (e) => { if ((e as KeyboardEvent).key === 'Enter') void follow(); });
 
-        overlay.querySelectorAll<HTMLElement>('.sched-pc-toggle').forEach((b) => b.addEventListener('click', async () => {
+        overlay.querySelectorAll<HTMLElement>('.sched-pc-toggle').forEach((b) => b.addEventListener('click', () => {
             const u = b.dataset.url || '';
-            setDisabled(u, !isDisabled(u));
-            await reload();
+            const off = !isDisabled(u);
+            setDisabled(u, off);
+            // In place. Everything needed is already loaded: the source row keeps its count,
+            // and its cards are the ones carrying this `_src`. Turning one back ON re-uses the
+            // presets fetched earlier in this session rather than asking the network again.
+            const row = sources.find((x) => x.url === u);
+            if (row) row.state = off ? 'off' : (row.count ? 'ok' : 'notfeed');
+            hidden = off ? [...hidden, u] : hidden.filter((x) => x !== u);
+            paint();
         }));
 
         overlay.querySelectorAll<HTMLElement>('.sched-pc-drop').forEach((b) => b.addEventListener('click', async () => {

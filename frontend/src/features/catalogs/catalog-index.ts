@@ -174,6 +174,61 @@ export function catalogLooksLike(doc: any, kind: string): boolean {
     return f ? f(doc) : false;
 }
 
+/**
+ * Follow the entries of ONE type out of an index.
+ *
+ * Every catalogue browser takes an address, and somebody handed an index URL pastes it into
+ * whichever box is in front of them — they all take a URL and none of them says which document
+ * it wants. Refusing with "add it under Settings" was correct and unhelpful: the panel knows
+ * which type it is, the index says which entries are that type, and the import is the same
+ * three writes it already does by hand.
+ *
+ * Only its own type. An index lists catalogues for five of them, and a plugin browser quietly
+ * following theme catalogues would be a bigger action than the one that was asked for.
+ *
+ * `addApp` exists because app sources live in the Rust backend rather than localStorage; every
+ * other type is written here. Passing it is how a caller says "I am the app browser".
+ */
+export async function importIndexForType(
+    doc: unknown,
+    type: string,
+    indexUrl: string,
+    addApp?: (url: string) => Promise<void>,
+): Promise<{ added: number; already: number; ofType: number; total: number }> {
+    const { index } = parseCatalogIndex(doc);
+    const mine = index.catalogs.filter((e) => e.type === type);
+    let added = 0;
+    let already = 0;
+
+    for (const e of mine) {
+        try {
+            if (type === 'app') {
+                if (!addApp) continue;
+                await addApp(e.url);
+            } else {
+                const key = STORE_KEY[type];
+                if (!key) continue;
+                const list = readSources(key);
+                if (!addSource(list, e.url)) { already += 1; continue; }
+                localStorage.setItem(key, JSON.stringify(list));
+            }
+            // Recorded only after the add succeeded, so a source that failed does not get an
+            // origin pointing at an index it never came from.
+            rememberOrigin(e.url, indexUrl);
+            recordHistory({ action: 'add', type, url: e.url, via: indexUrl });
+            added += 1;
+        } catch { /* one bad entry must not abandon the rest of the index */ }
+    }
+    return { added, already, ofType: mine.length, total: index.catalogs.length };
+}
+
+const readSources = (key: string): string[] => {
+    try {
+        const v = JSON.parse(localStorage.getItem(key) || '[]');
+        return Array.isArray(v) ? v.filter((x) => typeof x === 'string') : [];
+    } catch { return []; }
+};
+
 /** Where each type's community sources are kept. Not a new store — these are the two the
  *  deeplink handler already writes to, so a catalog added by either route lands in one
  *  place and shows up in the same list. */

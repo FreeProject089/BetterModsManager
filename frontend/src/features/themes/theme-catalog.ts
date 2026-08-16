@@ -8,7 +8,7 @@ import { t } from '../../core/i18n.js';
 import { toast } from '../../ui/app.js';
 // NOTE: this file is @ts-nocheck, so a wrong name here is a runtime ReferenceError and not a
 // build error. Checked against the exports in catalog-index.ts by hand.
-import { enabledOnly } from '../catalogs/catalog-index.js';
+import { enabledOnly, looksLikeIndex, importIndexForType } from '../catalogs/catalog-index.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { installTheme, activateTheme, getInstalledThemes, BmmTheme } from './theme-engine.js';
 
@@ -450,10 +450,32 @@ function addCommunitySource(): void {
     (document.getElementById('app-window-outer') || document.body).appendChild(ov);
     const close = () => ov.remove();
     const input = ov.querySelector('#tc-src-input') as HTMLInputElement;
-    const submit = () => {
+    const submit = async () => {
         const url = input.value.trim();
         if (!url) return;
         if (!/^https?:\/\//i.test(url)) { toast(t('themes.communityInvalid') || 'Enter a valid http(s) URL', 'warning'); return; }
+        // An INDEX pasted here is a real intention, not a typo: every catalogue box takes a
+        // URL and none says which document it wants. Import its THEME entries and leave the
+        // other four types alone — following them all would be a bigger action than the ask.
+        try {
+            const probe: string = await invoke('fetch_remote_json', { url }, { quiet: true }) as string;
+            const doc = JSON.parse(probe);
+            if (looksLikeIndex(doc)) {
+                const r = await importIndexForType(doc, 'theme', url);
+                toast(r.added
+                    ? (t('themes.fromIndex') || 'Added {n} theme catalogue(s) from that index.').replace('{n}', String(r.added))
+                    : r.ofType
+                        ? (t('themes.indexAll') || 'That index lists {n} theme catalogue(s) and you already follow them all.').replace('{n}', String(r.ofType))
+                        : (t('themes.indexNone') || 'That index lists no theme catalogues — it holds {n} entr(y/ies) of other kinds.').replace('{n}', String(r.total)),
+                    r.added ? 'success' : 'info');
+                // Re-read from storage: importIndexForType wrote the key, and this module
+                // holds its own copy read once at init.
+                try { _communitySources = JSON.parse(localStorage.getItem(COMMUNITY_SRC_KEY) || '[]'); } catch { /* keep what we had */ }
+                close();
+                fetchCatalog(true).then(renderCatalog);
+                return;
+            }
+        } catch { /* unreachable or not JSON — fall through to the normal add */ }
         if (!_communitySources.includes(url)) {
             _communitySources.push(url);
             localStorage.setItem(COMMUNITY_SRC_KEY, JSON.stringify(_communitySources));

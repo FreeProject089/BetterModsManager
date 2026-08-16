@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const { parseCatalogIndex, planImport, INDEX_TYPES, STORE_KEY, ROUTABLE, looksLikeIndex, hasSource, addSource, removeSource, readHistory, recordHistory, clearHistory, HISTORY_MAX,
-  readDisabled, isDisabled, setDisabled, enabledOnly, catalogLooksLike, CATALOG_SHAPES } = await import(
+  readDisabled, isDisabled, setDisabled, enabledOnly, catalogLooksLike, CATALOG_SHAPES, importIndexForType, originOf } = await import(
   pathToFileURL(join(ROOT, 'frontend/js/features/catalogs/catalog-index.js')).href
 );
 
@@ -429,5 +429,81 @@ describe('telling an index from a catalog', () => {
     for (const junk of [null, undefined, 0, '', 'catalogs', [], [{ type: 'app', url: 'u' }]]) {
       assert.equal(looksLikeIndex(junk), false, `${JSON.stringify(junk)} was called an index`);
     }
+  });
+});
+
+describe('importIndexForType — one type out of an index', () => {
+  // Cleared through the localStorage INTERFACE, not through a Map of this block's own. An
+  // earlier describe already installed the stub, so `globalThis.localStorage || {...}` keeps
+  // THAT one — and a reset that empties a map nothing reads leaves the previous test's writes
+  // standing, which is what the last assertion here caught.
+  const reset = () => {
+    for (const k of [...Object.values(STORE_KEY), 'bmm_catalog_origins', 'bmm_catalog_history', 'bmm_catalog_disabled']) {
+      localStorage.removeItem(k);
+    }
+  };
+  const mixed = () => doc([
+    { type: 'plugin', url: 'https://e.com/p1.json' },
+    { type: 'plugin', url: 'https://e.com/p2.json' },
+    { type: 'theme', url: 'https://e.com/t.json' },
+    { type: 'app', url: 'https://e.com/a.json' },
+  ]);
+
+  test('follows ONLY its own type, and leaves the rest of the index alone', () => {
+    // A plugin browser quietly following theme catalogues would be a bigger action than the
+    // one that was asked for.
+    reset();
+    return importIndexForType(mixed(), 'plugin', 'https://e.com/idx.json').then((r) => {
+      assert.equal(r.added, 2);
+      assert.equal(r.ofType, 2);
+      assert.equal(r.total, 4);
+      assert.deepEqual(JSON.parse(localStorage.getItem(STORE_KEY.plugin)), ['https://e.com/p1.json', 'https://e.com/p2.json']);
+      assert.equal(localStorage.getItem(STORE_KEY.theme), null, 'the theme store is untouched');
+    });
+  });
+
+  test('an entry already followed is counted, not added twice', async () => {
+    reset();
+    localStorage.setItem(STORE_KEY.plugin, JSON.stringify(['https://E.COM/P1.JSON']));
+    const r = await importIndexForType(mixed(), 'plugin', 'https://e.com/idx.json');
+    assert.equal(r.added, 1);
+    assert.equal(r.already, 1, 'case-insensitively, like everywhere else');
+    assert.equal(JSON.parse(localStorage.getItem(STORE_KEY.plugin)).length, 2);
+  });
+
+  test('what it followed carries its provenance and a history line', async () => {
+    reset();
+    await importIndexForType(mixed(), 'theme', 'https://e.com/idx.json');
+    assert.equal(originOf('https://e.com/t.json'), 'https://e.com/idx.json');
+    assert.equal(readHistory()[0].url, 'https://e.com/t.json');
+    assert.equal(readHistory()[0].via, 'https://e.com/idx.json');
+  });
+
+  test('an index with none of your type adds nothing and says how many it held', async () => {
+    reset();
+    const r = await importIndexForType(doc([{ type: 'app', url: 'https://e.com/a.json' }]), 'plugin', 'https://e.com/idx.json');
+    assert.equal(r.added, 0);
+    assert.equal(r.ofType, 0);
+    assert.equal(r.total, 1);
+  });
+
+  test('apps go through the backend, never localStorage', async () => {
+    // STORE_KEY has no `app` entry on purpose — app sources live in Rust. Without the
+    // callback there is nowhere to put them, and inventing a key would create a list
+    // nothing reads.
+    reset();
+    const seen = [];
+    const r = await importIndexForType(mixed(), 'app', 'https://e.com/idx.json', async (u) => { seen.push(u); });
+    assert.deepEqual(seen, ['https://e.com/a.json']);
+    assert.equal(r.added, 1);
+    assert.equal(localStorage.getItem('bmm_app_catalogs'), null);
+  });
+
+  test('junk is not an index, and nothing is written', async () => {
+    reset();
+    const r = await importIndexForType({ plugins: [] }, 'plugin', 'https://e.com/idx.json');
+    assert.equal(r.added, 0);
+    assert.equal(r.total, 0);
+    assert.equal(localStorage.getItem(STORE_KEY.plugin), null);
   });
 });

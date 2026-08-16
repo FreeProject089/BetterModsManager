@@ -7,6 +7,7 @@ import { escHtml, escAttr } from '../../core/utils.js';
 // build error. Checked against the exports in catalog-index.ts by hand.
 import {
     enabledOnly, isDisabled, setDisabled, originOf, originLabel, forgetOrigin, recordHistory,
+    looksLikeIndex, importIndexForType,
 } from '../catalogs/catalog-index.js';
 
 /**
@@ -602,6 +603,26 @@ async function renderCatalog(container: HTMLElement) {
         if (!src) return;
         const list = getPluginCatalogSources();
         if (list.includes(src)) { toast(t('plugins.sourceExists') || 'Source already added', 'info'); return; }
+        // An INDEX pasted here is the common mistake, and it is a real intention rather than a
+        // typo: the boxes all take a URL and none says which document it wants. Import its
+        // PLUGIN entries and leave its other four types alone.
+        if (isUrlSource(src)) {
+            try {
+                const probe: string = await invoke('fetch_remote_json', { url: src }, { quiet: true }) as string;
+                const doc = JSON.parse(probe);
+                if (looksLikeIndex(doc)) {
+                    const r = await importIndexForType(doc, 'plugin', src);
+                    toast(r.added
+                        ? (t('plugins.fromIndex') || 'Added {n} plugin catalog(s) from that index.').replace('{n}', String(r.added))
+                        : r.ofType
+                            ? (t('plugins.indexAll') || 'That index lists {n} plugin catalog(s) and you already follow them all.').replace('{n}', String(r.ofType))
+                            : (t('plugins.indexNone') || 'That index lists no plugin catalogs — it holds {n} entr(y/ies) of other kinds.').replace('{n}', String(r.total)),
+                        r.added ? 'success' : 'info');
+                    await reloadCatalog();
+                    return;
+                }
+            } catch { /* unreachable or not JSON — the normal add path reports it properly */ }
+        }
         // Validate it actually loads before persisting.
         try { await fetchCommunityCatalog(src); }
         catch (e) {
