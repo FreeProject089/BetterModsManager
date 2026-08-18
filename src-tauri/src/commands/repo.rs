@@ -2882,11 +2882,60 @@ fn default_layout_for(mods_dir: &Path, output_path: &Path) -> Option<String> {
     Some(format!("{}/{{id}}/{{path}}", rel))
 }
 
+/// One folder to read mods from, and which of its subdirectories to take.
+///
+/// The manifest used to describe exactly one directory, which made two ordinary situations
+/// impossible: a collection kept in more than one place, and "publish these profiles" when
+/// the profiles do not share a mods folder — the second was refused outright, with an error
+/// telling the owner to publish them as separate repos, which is not what they asked for.
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ManifestSource {
+    /// Directory whose subdirectories are the mods.
+    pub dir: String,
+    /// Restrict to these subdirectory names. See `GenerateManifestArgs::only_dirs`: None is
+    /// "all of them", an empty list is "the selection resolved to nothing" and is refused.
+    #[serde(default)]
+    pub only_dirs: Option<Vec<String>>,
+    /// What to call this source in the report — a profile name, usually. Never written into
+    /// the manifest: a client has no use for where the owner happened to keep the files.
+    #[serde(default)]
+    pub label: Option<String>,
+}
+
+/// What one source contributed. Reported per source because "312 mods" over four folders
+/// hides the folder that contributed none, which is the one with the wrong path in it.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ManifestSourceReport {
+    pub dir: String,
+    pub label: Option<String>,
+    pub mods: usize,
+    pub files: usize,
+    pub bytes: u64,
+}
+
 #[derive(Debug, Clone, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GenerateManifestArgs {
-    /// Directory whose subdirectories are the mods.
-    pub mods_dir: String,
+    /// Directory whose subdirectories are the mods. The single-folder form, kept because the
+    /// API, the CLI and every existing publish script speak it; `sources` supersedes it.
+    #[serde(default)]
+    pub mods_dir: Option<String>,
+    /// Several folders at once. When present and non-empty this is what gets read, and
+    /// `mods_dir`/`only_dirs` are ignored.
+    #[serde(default)]
+    pub sources: Option<Vec<ManifestSource>>,
+    /// Publish these local profiles, resolved to folders by the command itself.
+    ///
+    /// The screen used to do this resolution in JavaScript, by asking for every known mod and
+    /// keeping the ones whose path started with the profile's mods folder. That is a string
+    /// comparison over paths the app did not normalise, and when it matched nothing it did
+    /// not fail — it produced an EMPTY selection, which the backend then refused with "the
+    /// selection is empty", for a profile full of mods. Resolved here, against AppData, by
+    /// the same rule the full export uses.
+    #[serde(default)]
+    pub profile_ids: Option<Vec<String>>,
     /// Where to write the manifest. Defaults to `repo.json` beside `mods_dir` rather than
     /// inside it, so a later scan never picks the manifest up as one of the mod files.
     pub output_path: Option<String>,
@@ -2946,6 +2995,8 @@ pub struct GenerateManifestReport {
     pub modpacks_skipped: Vec<String>,
     /// True when the manifest carries a fresh signature.
     pub signed: bool,
+    /// One line per folder read. A source that contributed nothing still appears, with zero.
+    pub sources: Vec<ManifestSourceReport>,
 }
 
 /// Generate a `repo.json` for a directory of mods that is already hosted somewhere.
@@ -2967,11 +3018,22 @@ pub struct GenerateManifestReport {
 pub async fn generate_repo_manifest(
     handle: AppHandle,
     state: State<'_, AppState>,
-    args: GenerateManifestArgs,
+    mut args: GenerateManifestArgs,
 ) -> Result<GenerateManifestReport, String> {
     // Resolved here rather than in the scanner: this is the only layer that can see both
     // AppData (which knows a mod's BMM id and where its folder is) and the manifest's
     // folder-name ids.
+    if let Some(ids) = args.profile_ids.clone().filter(|v| !v.is_empty()) {
+        let from_profiles = {
+            let data = state.data.lock().map_err(|_| "Failed to lock AppState".to_string())?;
+            sources_from_profiles(&data, &ids)?
+        };
+        // Appended, so "these profiles AND this folder" is one repo rather than a choice.
+        let mut all = args.sources.take().unwrap_or_default();
+        all.extend(from_profiles);
+        args.sources = Some(all);
+    }
+
     let (packs, folder_of) = {
         let data = state.data.lock().map_err(|_| "Failed to lock AppState".to_string())?;
         let folder_of: HashMap<String, String> = data.mods.iter()
@@ -2990,6 +3052,7 @@ pub async fn generate_repo_manifest(
 
     let share_mode = args.modpack_share_mode.clone().unwrap_or_else(|| "public".to_string());
     let handle2 = handle.clone();
+    let handle3 = handle.clone();
     tauri::async_runtime::spawn_blocking(move || {
         generate_repo_manifest_sync(
             args,
@@ -2997,10 +3060,131 @@ pub async fn generate_repo_manifest(
             folder_of,
             share_mode,
             |bytes| super::security::sign_message(&handle2, bytes),
+            move |done, total, name| {
+                let _ = handle3.emit("bmm://repo-manifest-progress", serde_json::json!({
+                    "done": done, "total": total, "name": name,
+                    "progress": if total == 0 { 0.0 } else { done as f64 * 100.0 / total as f64 },
+                }));
+            },
         )
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+/// Profiles, as folders to read.
+///
+/// The rule is the one `export_server_repo` already uses: a mod belongs to a profile when its
+/// folder sits under the profile's mods folder, compared on the raw paths and again on the
+/// canonical ones so a trailing separator or a junction does not silently exclude everything.
+/// Profiles sharing a mods folder become ONE source — scanning it twice would make every mod
+/// in it collide with itself.
+///
+/// This used to be done in JavaScript, by asking for every known mod and keeping the ones
+/// whose path string started with the profile's mods folder. When that matched nothing it did
+/// not fail: it produced an EMPTY selection, and the backend refused it with "the selection is
+/// empty" for a profile full of mods. A profile that really has no mods is an error naming the
+/// profile — "nothing selected" and "everything in the folder" must never be confused.
+pub(crate) fn sources_from_profiles(
+    data: &crate::state::AppData,
+    profile_ids: &[String],
+) -> Result<Vec<ManifestSource>, String> {
+    let mut out: Vec<ManifestSource> = Vec::new();
+    for pid in profile_ids {
+        let Some(profile) = data.profiles.iter().find(|p| &p.id == pid) else {
+            return Err(format!("Unknown profile: {pid}"));
+        };
+        let mut names: Vec<String> = Vec::new();
+        for m in &data.mods {
+            let under = m.mod_folder_path.starts_with(&profile.mods_path)
+                || match (m.mod_folder_path.canonicalize(), profile.mods_path.canonicalize()) {
+                    (Ok(a), Ok(b)) => a.starts_with(&b),
+                    _ => false,
+                };
+            if !under { continue; }
+            // The FOLDER NAME, which is what the manifest calls a mod — taken from the path
+            // rather than from the mod's display name, which is a different string entirely.
+            if let Some(name) = m.mod_folder_path.file_name() {
+                names.push(name.to_string_lossy().to_string());
+            }
+        }
+        names.sort();
+        names.dedup();
+        if names.is_empty() {
+            return Err(format!(
+                "Profile '{}' has no mods under {} — nothing would be published",
+                profile.name,
+                profile.mods_path.display()
+            ));
+        }
+        let dir = profile.mods_path.to_string_lossy().to_string();
+        match out.iter_mut().find(|s| s.dir.eq_ignore_ascii_case(&dir)) {
+            Some(existing) => {
+                if let Some(have) = existing.only_dirs.as_mut() { have.extend(names); }
+                existing.label = Some(match existing.label.take() {
+                    Some(l) => format!("{l}, {}", profile.name),
+                    None => profile.name.clone(),
+                });
+            }
+            None => out.push(ManifestSource {
+                dir,
+                only_dirs: Some(names),
+                label: Some(profile.name.clone()),
+            }),
+        }
+    }
+    Ok(out)
+}
+
+/// The folders to read, from either form of the arguments.
+///
+/// Two sources naming the same directory are merged rather than scanned twice — two profiles
+/// under one mods folder is the normal case, not a mistake. Merging their selections is a
+/// union, and a source that asked for the whole directory wins over one that named a few
+/// folders in it: the owner asked for everything in that folder somewhere in the selection.
+fn resolve_sources(args: &GenerateManifestArgs) -> Result<Vec<ManifestSource>, String> {
+    let listed: Vec<ManifestSource> = match args.sources.as_ref().filter(|v| !v.is_empty()) {
+        Some(v) => v.clone(),
+        None => {
+            let dir = args.mods_dir.as_deref().map(str::trim).filter(|s| !s.is_empty())
+                .ok_or("No folder given — pick at least one mods folder")?;
+            vec![ManifestSource {
+                dir: dir.to_string(),
+                only_dirs: args.only_dirs.clone(),
+                label: None,
+            }]
+        }
+    };
+
+    let mut out: Vec<ManifestSource> = Vec::new();
+    for s in listed {
+        let dir = s.dir.trim().trim_end_matches(['/', '\\']).to_string();
+        if dir.is_empty() {
+            return Err("One of the folders is empty".to_string());
+        }
+        // Compared by canonical path where possible: `D:\mods` and `D:\mods\` and
+        // `D:\games\..\mods` are one folder, and scanning it twice would make every mod in
+        // it collide with itself.
+        let key = std::fs::canonicalize(&dir).unwrap_or_else(|_| PathBuf::from(&dir));
+        match out.iter_mut().find(|e| {
+            std::fs::canonicalize(&e.dir).unwrap_or_else(|_| PathBuf::from(&e.dir)) == key
+        }) {
+            Some(existing) => {
+                match (existing.only_dirs.as_mut(), s.only_dirs) {
+                    (Some(have), Some(add)) => have.extend(add),
+                    // One of the two wants the whole folder.
+                    _ => existing.only_dirs = None,
+                }
+                if existing.label.is_none() { existing.label = s.label; }
+                else if let Some(l) = s.label {
+                    let cur = existing.label.take().unwrap_or_default();
+                    existing.label = Some(format!("{cur}, {l}"));
+                }
+            }
+            None => out.push(ManifestSource { dir, only_dirs: s.only_dirs, label: s.label }),
+        }
+    }
+    Ok(out)
 }
 
 pub(crate) fn generate_repo_manifest_sync(
@@ -3009,18 +3193,29 @@ pub(crate) fn generate_repo_manifest_sync(
     folder_of: HashMap<String, String>,
     share_mode: String,
     sign: impl Fn(&[u8]) -> Result<(String, String), String>,
+    // Called as (done, total, folder name). Hashing a DCS collection is minutes of work; with
+    // nothing reported the screen looked frozen and the button dead, which is how "it does
+    // not generate anything" gets reported for something that was busy the whole time.
+    on_progress: impl Fn(usize, usize, &str),
 ) -> Result<GenerateManifestReport, String> {
     use crate::models::repo::RepoProfile;
     use walkdir::WalkDir;
 
-    let mods_dir = PathBuf::from(&args.mods_dir);
-    if !mods_dir.is_dir() {
-        return Err(format!("Not a directory: {}", mods_dir.display()));
+    let sources = resolve_sources(&args)?;
+    for s in &sources {
+        if !Path::new(&s.dir).is_dir() {
+            return Err(format!("Not a directory: {}", s.dir));
+        }
     }
+    // The first source is what a single-folder manifest has always been written beside, and
+    // it is the only sensible default when there are several: `repo.json` has to land
+    // somewhere, and inventing a shared ancestor of four folders on different drives is how
+    // a file ends up written to the root of C:.
+    let first_dir = PathBuf::from(&sources[0].dir);
 
     let output_path = match args.output_path.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
         Some(p) => PathBuf::from(p),
-        None => mods_dir.parent().unwrap_or(&mods_dir).join("repo.json"),
+        None => first_dir.parent().unwrap_or(&first_dir).join("repo.json"),
     };
 
     // Read the previous manifest before overwriting it — both to carry identity forward and
@@ -3036,109 +3231,179 @@ pub(crate) fn generate_repo_manifest_sync(
             .collect()
     }).unwrap_or_default();
 
-    let only: Option<std::collections::HashSet<String>> = args.only_dirs.as_ref()
-        .map(|v| v.iter().map(|s| s.trim().to_lowercase()).collect());
-    if only.as_ref().map(|o| o.is_empty()).unwrap_or(false) {
-        return Err("The selection is empty — nothing would be published".to_string());
-    }
-
-    let mut entries: Vec<_> = fs::read_dir(&mods_dir).map_err(|e| e.to_string())?
-        .filter_map(|e| e.ok())
-        .filter(|e| e.path().is_dir())
-        .filter(|e| match &only {
-            Some(set) => set.contains(&e.file_name().to_string_lossy().to_lowercase()),
-            None => true,
-        })
-        .collect();
-    entries.sort_by_key(|e| e.file_name());
-
     let mut repo_mods = Vec::new();
     let mut total_files = 0usize;
     let mut total_bytes = 0u64;
+    let mut source_reports: Vec<ManifestSourceReport> = Vec::new();
 
-    for entry in entries {
-        let dir = entry.path();
-        let id = entry.file_name().to_string_lossy().to_string();
+    // Counted before anything is hashed, so the progress that follows is out of a real total
+    // rather than climbing towards a number nobody knows. read_dir only — no file is opened.
+    let expected: usize = sources.iter().map(|s| {
+        let only: Option<std::collections::HashSet<String>> = s.only_dirs.as_ref()
+            .map(|v| v.iter().map(|x| x.trim().to_lowercase()).collect());
+        fs::read_dir(&s.dir).map(|rd| rd.filter_map(|e| e.ok())
+            .filter(|e| e.path().is_dir())
+            .filter(|e| match &only {
+                Some(set) => set.contains(&e.file_name().to_string_lossy().to_lowercase()),
+                None => true,
+            })
+            .count()).unwrap_or(0)
+    }).sum();
+    let mut scanned = 0usize;
 
-        // The walk is cheap and stays serial; the hashing is what costs, and every file
-        // is independent of every other, so it does not have to be done one at a time.
-        let mut todo: Vec<(String, std::path::PathBuf, u64, Option<i64>)> = Vec::new();
-        for f in WalkDir::new(&dir).into_iter().filter_map(|e| e.ok()) {
-            let p = f.path();
-            if !p.is_file() { continue; }
-            let rel = match p.strip_prefix(&dir) {
-                Ok(r) => r.to_string_lossy().replace('\\', "/"),
-                Err(_) => continue,
-            };
-            let meta = f.metadata().ok();
-            let size = meta.as_ref().map(|m| m.len()).unwrap_or(0);
-            // Recorded so a later refresh against a REMOTE listing can tell this file apart
-            // from a changed one without downloading it. Never used to validate a download.
-            let mtime = meta.as_ref()
-                .and_then(|m| m.modified().ok())
-                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                .map(|d| d.as_secs() as i64);
-            // Chunk hashes only earn their size on files big enough to resume or patch.
-            todo.push((rel, p.to_path_buf(), size, mtime));
+    // A mod's id is its FOLDER NAME, and the manifest is one flat list of ids — so two
+    // sources each holding a `weapon-pack/` describe two different sets of files under one
+    // name. Merging them silently would publish a repo where half the files 404 for
+    // everybody, so the pair is reported and nothing is written.
+    let mut claimed: HashMap<String, PathBuf> = HashMap::new();
+    let mut collisions: Vec<String> = Vec::new();
+
+    for src in &sources {
+        let src_dir = PathBuf::from(&src.dir);
+        let only: Option<std::collections::HashSet<String>> = src.only_dirs.as_ref()
+            .map(|v| v.iter().map(|s| s.trim().to_lowercase()).collect());
+        if only.as_ref().map(|o| o.is_empty()).unwrap_or(false) {
+            return Err(format!(
+                "The selection for {} is empty — nothing would be published",
+                src_dir.display()
+            ));
         }
-        if todo.is_empty() { continue; }
 
-        // On the bounded pool rather than rayon's global one: that pool is capped at half
-        // the cores precisely so hashing cannot saturate the machine and freeze the
-        // window, and building a manifest for a large collection is exactly the case it
-        // was capped for.
-        //
-        // par_iter().map().collect::<Vec<_>>() preserves INPUT order — rayon's indexed
-        // iterators are ordered, so parallelising here cannot shuffle anything. The sort
-        // below is not defending against that; it is defending against WalkDir, whose
-        // depth-first walk is not lexicographic: a mod holding both `data/` and
-        // `data.txt` is visited in the order the filesystem lists them, and '.' sorts
-        // before '/'. The manifest gets signed, so the file order has to come from the
-        // paths and not from how the directory happened to be enumerated.
-        let mut files: Vec<RepoFile> = crate::fs_utils::hash_pool().install(|| {
-            use rayon::prelude::*;
-            todo.par_iter()
-                .map(|(rel, path, size, mtime)| {
-                    // Chunk hashes only earn their size on files big enough to resume or patch.
-                    let (hash, chunks) = compute_file_hash_and_chunks(path, *size as usize > CHUNK_SIZE)?;
-                    Ok(RepoFile {
-                        relative_path: rel.clone(),
-                        size: *size,
-                        sha256_hash: hash,
-                        chunks,
-                        mtime: *mtime,
+        let mut entries: Vec<_> = fs::read_dir(&src_dir).map_err(|e| e.to_string())?
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().is_dir())
+            .filter(|e| match &only {
+                Some(set) => set.contains(&e.file_name().to_string_lossy().to_lowercase()),
+                None => true,
+            })
+            .collect();
+        entries.sort_by_key(|e| e.file_name());
+
+        let mut rep = ManifestSourceReport {
+            dir: src_dir.to_string_lossy().to_string(),
+            label: src.label.clone(),
+            mods: 0,
+            files: 0,
+            bytes: 0,
+        };
+
+        for entry in entries {
+            let dir = entry.path();
+            let id = entry.file_name().to_string_lossy().to_string();
+            scanned += 1;
+            on_progress(scanned, expected, &id);
+
+            match claimed.get(&id.to_lowercase()) {
+                // The same folder reached twice (two profiles under one mods directory) is one
+                // mod, not a conflict.
+                Some(prev) if prev == &dir => continue,
+                Some(prev) => {
+                    collisions.push(format!("{} — {} and {}", id, prev.display(), dir.display()));
+                    continue;
+                }
+                None => {}
+            }
+
+            // The walk is cheap and stays serial; the hashing is what costs, and every file
+            // is independent of every other, so it does not have to be done one at a time.
+            let mut todo: Vec<(String, std::path::PathBuf, u64, Option<i64>)> = Vec::new();
+            for f in WalkDir::new(&dir).into_iter().filter_map(|e| e.ok()) {
+                let p = f.path();
+                if !p.is_file() { continue; }
+                let rel = match p.strip_prefix(&dir) {
+                    Ok(r) => r.to_string_lossy().replace('\\', "/"),
+                    Err(_) => continue,
+                };
+                let meta = f.metadata().ok();
+                let size = meta.as_ref().map(|m| m.len()).unwrap_or(0);
+                // Recorded so a later refresh against a REMOTE listing can tell this file apart
+                // from a changed one without downloading it. Never used to validate a download.
+                let mtime = meta.as_ref()
+                    .and_then(|m| m.modified().ok())
+                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                    .map(|d| d.as_secs() as i64);
+                // Chunk hashes only earn their size on files big enough to resume or patch.
+                todo.push((rel, p.to_path_buf(), size, mtime));
+            }
+            if todo.is_empty() { continue; }
+
+            // On the bounded pool rather than rayon's global one: that pool is capped at half
+            // the cores precisely so hashing cannot saturate the machine and freeze the
+            // window, and building a manifest for a large collection is exactly the case it
+            // was capped for.
+            //
+            // par_iter().map().collect::<Vec<_>>() preserves INPUT order — rayon's indexed
+            // iterators are ordered, so parallelising here cannot shuffle anything. The sort
+            // below is not defending against that; it is defending against WalkDir, whose
+            // depth-first walk is not lexicographic: a mod holding both `data/` and
+            // `data.txt` is visited in the order the filesystem lists them, and '.' sorts
+            // before '/'. The manifest gets signed, so the file order has to come from the
+            // paths and not from how the directory happened to be enumerated.
+            let mut files: Vec<RepoFile> = crate::fs_utils::hash_pool().install(|| {
+                use rayon::prelude::*;
+                todo.par_iter()
+                    .map(|(rel, path, size, mtime)| {
+                        // Chunk hashes only earn their size on files big enough to resume or patch.
+                        let (hash, chunks) = compute_file_hash_and_chunks(path, *size as usize > CHUNK_SIZE)?;
+                        Ok(RepoFile {
+                            relative_path: rel.clone(),
+                            size: *size,
+                            sha256_hash: hash,
+                            chunks,
+                            mtime: *mtime,
+                        })
                     })
-                })
-                .collect::<Result<Vec<_>, String>>()
-        })?;
-        total_bytes += files.iter().map(|f| f.size).sum::<u64>();
-        files.sort_by(|a, b| a.relative_path.cmp(&b.relative_path));
-        total_files += files.len();
+                    .collect::<Result<Vec<_>, String>>()
+            })?;
+            let bytes = files.iter().map(|f| f.size).sum::<u64>();
+            total_bytes += bytes;
+            files.sort_by(|a, b| a.relative_path.cmp(&b.relative_path));
+            total_files += files.len();
+            rep.mods += 1;
+            rep.files += files.len();
+            rep.bytes += bytes;
+            claimed.insert(id.to_lowercase(), dir.clone());
 
-        repo_mods.push(RepoMod {
-            id: id.clone(),
-            name: id,
-            version: "1.0.0".to_string(),
-            author: args.author.clone(),
-            description: None,
-            tags: Vec::new(),
-            files,
-            archive: None,
-            download_links: Vec::new(),
-            dependencies: Vec::new(),
-            changelog: None,
-            update_url: None,
-            direct_url: None,
-            update_sources: Vec::new(),
-        });
+            repo_mods.push(RepoMod {
+                id: id.clone(),
+                name: id,
+                version: "1.0.0".to_string(),
+                author: args.author.clone(),
+                description: None,
+                tags: Vec::new(),
+                files,
+                archive: None,
+                download_links: Vec::new(),
+                dependencies: Vec::new(),
+                changelog: None,
+                update_url: None,
+                direct_url: None,
+                update_sources: Vec::new(),
+            });
+        }
+
+        source_reports.push(rep);
+    }
+
+    if !collisions.is_empty() {
+        return Err(format!(
+            "Two folders would publish the same mod id — rename one, or publish them as \
+             separate repos:\n{}",
+            collisions.join("\n")
+        ));
     }
 
     if repo_mods.is_empty() {
         return Err(format!(
             "No mods found in {} — expected one subdirectory per mod",
-            mods_dir.display()
+            sources.iter().map(|s| s.dir.as_str()).collect::<Vec<_>>().join(", ")
         ));
     }
+
+    // Sorted by id, not left in the order the folders happened to be listed in. The manifest
+    // is signed: without this, moving a folder up the list in the UI changes the payload, and
+    // every subscriber sees a "new revision" of a repo whose content is identical.
+    repo_mods.sort_by(|a, b| a.id.cmp(&b.id));
 
     let now: HashMap<String, String> = repo_mods.iter()
         .map(|m| (m.id.clone(), mod_content_hash(m)))
@@ -3187,7 +3452,16 @@ pub(crate) fn generate_repo_manifest_sync(
     //
     // Derived from the two paths rather than assumed, so "manifest beside the folder" and
     // "manifest inside it" both come out right. An explicit value always wins.
-    let derived_layout = default_layout_for(&mods_dir, &output_path);
+    //
+    // Only derivable from ONE folder: with several, the mods do not all sit under a single
+    // directory here, so there is no relative path that describes them. Whoever serves them
+    // has put them under one root on the server — the default `mods/{id}/{path}` — and if
+    // they have not, the layout field is theirs to set.
+    let derived_layout = if sources.len() == 1 {
+        default_layout_for(&first_dir, &output_path)
+    } else {
+        None
+    };
     repo.files_layout = args.files_layout.as_ref()
         .map(|l| l.trim().to_string())
         .filter(|l| !l.is_empty())
@@ -3280,6 +3554,7 @@ pub(crate) fn generate_repo_manifest_sync(
         added,
         removed,
         changed,
+        sources: source_reports,
     })
 }
 
@@ -3390,7 +3665,9 @@ mod manifest_tests {
 
     fn args(root: &PathBuf) -> GenerateManifestArgs {
         GenerateManifestArgs {
-            mods_dir: root.join("mods").to_string_lossy().to_string(),
+            mods_dir: Some(root.join("mods").to_string_lossy().to_string()),
+            sources: None,
+            profile_ids: None,
             output_path: None,
             name: Some("Test Repo".into()),
             author: Some("me".into()),
@@ -3425,7 +3702,7 @@ mod manifest_tests {
             .flat_map(|p| p.mods.iter())
             .map(|m| (m.mod_id.clone(), m.mod_name.clone()))
             .collect();
-        generate_repo_manifest_sync(a, packs, folder_of, "public".to_string(), signer)
+        generate_repo_manifest_sync(a, packs, folder_of, "public".to_string(), signer, |_, _, _| {})
     }
 
     /// Hashing runs in parallel now, and rayon returns results in whatever order the
@@ -3659,7 +3936,7 @@ mod manifest_tests {
         fs::write(root.join("test/alpha/a.pak"), b"a").unwrap();
 
         let mut a = args(&root);
-        a.mods_dir = root.join("test").to_string_lossy().to_string();
+        a.mods_dir = Some(root.join("test").to_string_lossy().to_string());
         a.files_base_url = None;
         run(a, vec![]).unwrap();
 
@@ -3711,17 +3988,248 @@ mod manifest_tests {
         assert!(run(a, vec![]).is_err());
     }
 
+    // ---- Profiles → folders -------------------------------------------------------------
+    //
+    // The resolution that used to live in the screen, as a `startsWith` over path strings.
+    // When it matched nothing it produced an empty selection rather than an error, and the
+    // backend refused THAT with "the selection is empty" — for a profile full of mods.
+
+    fn profile_at(name: &str, mods_path: &PathBuf) -> crate::models::profile::Profile {
+        let mut p = crate::models::profile::Profile::new(
+            name.to_string(), "Game".into(), mods_path.clone(), mods_path.clone(), mods_path.clone(),
+        );
+        p.id = format!("id-{name}");
+        p
+    }
+
+    fn mod_at(folder: &PathBuf) -> crate::models::mod_entry::ModEntry {
+        let mut m: crate::models::mod_entry::ModEntry =
+            serde_json::from_str(r#"{
+                "id": "m", "name": "M", "version": "1", "author": null, "description": null,
+                "dependencies": [], "enabled": true, "mod_folder_path": "",
+                "status": "Enabled", "added_at": "now"
+            }"#).unwrap();
+        m.id = folder.to_string_lossy().to_string();
+        m.mod_folder_path = folder.clone();
+        m
+    }
+
+    fn data_with(profiles: Vec<crate::models::profile::Profile>,
+                 mods: Vec<crate::models::mod_entry::ModEntry>) -> crate::state::AppData {
+        let mut d = crate::state::AppData::default();
+        d.profiles = profiles;
+        d.mods = mods;
+        d
+    }
+
+    #[test]
+    fn a_profile_resolves_to_its_folder_and_its_mod_folder_names() {
+        let root = scratch("prof");
+        let mods_path = root.join("mods");
+        let d = data_with(
+            vec![profile_at("Alpha", &mods_path)],
+            vec![mod_at(&mods_path.join("cool-mod")), mod_at(&mods_path.join("other-mod"))],
+        );
+        let out = super::sources_from_profiles(&d, &["id-Alpha".to_string()]).unwrap();
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].only_dirs.as_deref(), Some(&["cool-mod".to_string(), "other-mod".to_string()][..]));
+        assert_eq!(out[0].label.as_deref(), Some("Alpha"));
+    }
+
+    #[test]
+    fn two_profiles_under_one_folder_become_one_source() {
+        // Scanned twice, every mod in that folder would collide with itself and the whole
+        // manifest would be refused.
+        let root = scratch("prof-share");
+        let mods_path = root.join("mods");
+        let d = data_with(
+            vec![profile_at("Alpha", &mods_path), profile_at("Beta", &mods_path)],
+            vec![mod_at(&mods_path.join("cool-mod"))],
+        );
+        let out = super::sources_from_profiles(&d, &["id-Alpha".into(), "id-Beta".into()]).unwrap();
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].label.as_deref(), Some("Alpha, Beta"));
+    }
+
+    #[test]
+    fn two_profiles_on_different_folders_are_two_sources_not_a_refusal() {
+        // THE bug: this pair used to be turned away with "publish them as separate repos".
+        let root = scratch("prof-split");
+        let a = root.join("mods");
+        let b = root.join("elsewhere");
+        fs::create_dir_all(b.join("third-mod")).unwrap();
+        let d = data_with(
+            vec![profile_at("Alpha", &a), profile_at("Beta", &b)],
+            vec![mod_at(&a.join("cool-mod")), mod_at(&b.join("third-mod"))],
+        );
+        let out = super::sources_from_profiles(&d, &["id-Alpha".into(), "id-Beta".into()]).unwrap();
+        assert_eq!(out.len(), 2);
+    }
+
+    #[test]
+    fn a_profile_with_no_mods_names_itself_instead_of_selecting_nothing() {
+        let root = scratch("prof-empty");
+        let d = data_with(vec![profile_at("Alpha", &root.join("mods"))], vec![]);
+        let err = super::sources_from_profiles(&d, &["id-Alpha".to_string()]).unwrap_err();
+        assert!(err.contains("Alpha"), "{err}");
+        // And NOT the message that sent everyone looking at the wrong thing.
+        assert!(!err.contains("The selection"), "{err}");
+    }
+
+    // ---- Several folders at once -------------------------------------------------------
+    //
+    // The manifest described exactly one directory, so "publish these two profiles" was
+    // refused whenever the profiles did not share a mods folder — with an error telling the
+    // owner to publish them as separate repos, which is not the thing they asked for.
+
+    /// A second folder, somewhere else entirely, in the same manifest.
+    fn second_folder(root: &PathBuf, mod_name: &str) -> String {
+        let d = root.join("elsewhere").join(mod_name);
+        fs::create_dir_all(&d).unwrap();
+        fs::write(d.join("c.pak"), b"ccc").unwrap();
+        root.join("elsewhere").to_string_lossy().to_string()
+    }
+
+    fn src(dir: &str) -> super::ManifestSource {
+        super::ManifestSource { dir: dir.to_string(), only_dirs: None, label: None }
+    }
+
+    #[test]
+    fn two_folders_produce_one_manifest_holding_both() {
+        let root = scratch("multi");
+        let other = second_folder(&root, "third-mod");
+        let mut a = args(&root);
+        a.sources = Some(vec![src(&root.join("mods").to_string_lossy()), src(&other)]);
+
+        let rep = run(a, vec![]).unwrap();
+        assert_eq!(rep.mods, 3, "two from mods/, one from elsewhere/");
+
+        let repo = read(&root);
+        let mut ids: Vec<String> = repo.profiles[0].mods.iter().map(|m| m.id.clone()).collect();
+        ids.sort();
+        assert_eq!(ids, vec!["cool-mod", "other-mod", "third-mod"]);
+
+        // Per source, because "3 mods" over two folders hides the folder that gave none —
+        // which is the one with the wrong path in it.
+        assert_eq!(rep.sources.len(), 2);
+        assert_eq!(rep.sources[0].mods, 2);
+        assert_eq!(rep.sources[1].mods, 1);
+    }
+
+    #[test]
+    fn the_order_the_folders_were_given_in_does_not_change_the_manifest() {
+        // It is SIGNED. Left in source order, dragging a folder up the list in the UI
+        // rewrites the payload, and every subscriber sees a new revision of a repo whose
+        // content nobody touched.
+        let root = scratch("multi-order");
+        let other = second_folder(&root, "third-mod");
+        let mods = root.join("mods").to_string_lossy().to_string();
+
+        let mut a = args(&root);
+        a.sources = Some(vec![src(&mods), src(&other)]);
+        run(a, vec![]).unwrap();
+        let forward: ServerRepo = read(&root);
+
+        let mut b = args(&root);
+        b.sources = Some(vec![src(&other), src(&mods)]);
+        run(b, vec![]).unwrap();
+        let reversed: ServerRepo = read(&root);
+
+        assert_eq!(forward.signature, reversed.signature);
+    }
+
+    #[test]
+    fn the_same_folder_twice_is_one_folder_not_a_collision() {
+        // Two profiles under one mods directory is the ordinary case. Scanned twice, every
+        // mod in it would collide with itself and the whole manifest would be refused.
+        let root = scratch("multi-same");
+        let mods = root.join("mods").to_string_lossy().to_string();
+        let mut a = args(&root);
+        a.sources = Some(vec![
+            src(&mods),
+            src(&format!("{}{}", mods, std::path::MAIN_SEPARATOR)),
+        ]);
+
+        let rep = run(a, vec![]).unwrap();
+        assert_eq!(rep.mods, 2);
+        assert_eq!(rep.sources.len(), 1, "merged into one source, not scanned twice");
+    }
+
+    #[test]
+    fn two_folders_holding_the_same_mod_name_are_refused_by_name() {
+        // A mod's id is its folder name and the manifest is one flat list, so the two would
+        // collapse into one entry describing one of them — a repo where half the files 404
+        // for everybody. The error has to say WHICH folders, or it is unactionable.
+        let root = scratch("multi-clash");
+        let clash = root.join("elsewhere/cool-mod");
+        fs::create_dir_all(&clash).unwrap();
+        fs::write(clash.join("z.pak"), b"zzz").unwrap();
+
+        let mut a = args(&root);
+        a.sources = Some(vec![
+            src(&root.join("mods").to_string_lossy()),
+            src(&root.join("elsewhere").to_string_lossy()),
+        ]);
+
+        let err = run(a, vec![]).unwrap_err();
+        assert!(err.contains("cool-mod"), "{err}");
+        assert!(err.contains("elsewhere"), "{err}");
+        assert!(!root.join("repo.json").exists(), "a refused generation wrote a manifest");
+    }
+
+    #[test]
+    fn a_selection_still_applies_per_folder() {
+        // "Publish these profiles" is a per-folder filter — one folder taken whole and
+        // another restricted must not turn into everything.
+        let root = scratch("multi-only");
+        let other = second_folder(&root, "third-mod");
+        let mut a = args(&root);
+        a.sources = Some(vec![
+            super::ManifestSource {
+                dir: root.join("mods").to_string_lossy().to_string(),
+                only_dirs: Some(vec!["cool-mod".into()]),
+                label: Some("Profile A".into()),
+            },
+            src(&other),
+        ]);
+
+        let rep = run(a, vec![]).unwrap();
+        assert_eq!(rep.mods, 2);
+        let repo = read(&root);
+        let ids: Vec<String> = repo.profiles[0].mods.iter().map(|m| m.id.clone()).collect();
+        assert!(!ids.contains(&"other-mod".to_string()), "the filter leaked: {ids:?}");
+        assert_eq!(rep.sources[0].label.as_deref(), Some("Profile A"));
+    }
+
+    #[test]
+    fn several_folders_do_not_get_a_guessed_layout() {
+        // With one folder the layout is derived from where the manifest lands beside it.
+        // With several there is no such relative path, and guessing one from the first
+        // folder would point every mod from the others at a directory that does not exist.
+        let root = scratch("multi-layout");
+        fs::create_dir_all(root.join("test/alpha")).unwrap();
+        fs::write(root.join("test/alpha/a.pak"), b"a").unwrap();
+        let other = second_folder(&root, "third-mod");
+
+        let mut a = args(&root);
+        a.files_base_url = None;
+        a.sources = Some(vec![src(&root.join("test").to_string_lossy()), src(&other)]);
+        run(a, vec![]).unwrap();
+
+        assert_eq!(read(&root).files_layout, None, "a layout was guessed from one of several folders");
+    }
+
     #[test]
     fn an_empty_or_wrong_folder_is_an_error_rather_than_an_empty_repo() {
         let root = scratch("empty");
         let empty = root.join("nothing");
         fs::create_dir_all(&empty).unwrap();
         let mut a = args(&root);
-        a.mods_dir = empty.to_string_lossy().to_string();
+        a.mods_dir = Some(empty.to_string_lossy().to_string());
         assert!(run(a, vec![]).is_err());
 
         let mut a = args(&root);
-        a.mods_dir = root.join("does-not-exist").to_string_lossy().to_string();
+        a.mods_dir = Some(root.join("does-not-exist").to_string_lossy().to_string());
         assert!(run(a, vec![]).is_err());
     }
 }

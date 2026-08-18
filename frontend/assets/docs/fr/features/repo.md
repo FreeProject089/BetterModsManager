@@ -84,7 +84,7 @@ déjà.
 | Voie | Ce qu'elle fait | Quand l'utiliser |
 |---|---|---|
 | **Export complet** | Copie chaque mod dans un dossier de sortie, à côté du manifeste. | Tu pars de zéro ; les mods sont sur cette machine. |
-| **Manifeste seul** | Écrit seulement `repo.json` pour un dossier que BMM peut lire ici. **Rien n'est copié.** | Les mods sont déjà là où tu les veux. |
+| **Manifeste seul** | Écrit seulement `repo.json` pour des dossiers que BMM peut lire ici — un, plusieurs, ou un ensemble de profils. **Rien n'est copié.** | Les mods sont déjà là où tu les veux. |
 | **Mettre à jour depuis le serveur** | Lit l'index de ton serveur et écrit le manifeste sans rapatrier le dépôt. | Les mods n'existent que sur le serveur. |
 
 Quelle que soit la voie, le manifeste liste chaque mod, sa version, les hachages SHA-256 par
@@ -97,6 +97,16 @@ vient de toi et n'a pas été altéré. Chaque génération resigne, y compris l
 `addons/<mod>/` sont décrits plutôt que déplacés. En *Manifeste seul*, la disposition est
 déduite de la position du manifeste par rapport au dossier, si bien que `repo.json` et le
 dossier restent portables ensemble.
+
+**Plusieurs dossiers, un seul dépôt.** *Manifeste seul* prend une liste : ajoute autant de
+dossiers de mods que tu veux, ou passe en *Depuis des profils* et coche-en plusieurs — des
+profils rangés dans des dossiers de mods différents n'ont plus à devenir des dépôts séparés.
+L'id d'un mod est son nom de dossier : deux dossiers contenant un dossier du même nom
+décriraient deux choses différentes sous une seule id — la paire est signalée et rien n'est
+écrit, plutôt que fusionnée en un dépôt où la moitié des fichiers répondent 404. Avec plus
+d'un dossier la disposition n'est plus déduite (il n'y a pas de répertoire unique d'où la
+déduire) — `mods/{id}/{path}` par défaut s'applique, et le rapport dit ce que chaque dossier
+a apporté, y compris ceux qui n'ont rien apporté.
 
 ### Mettre à jour
 

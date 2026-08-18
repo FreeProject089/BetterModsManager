@@ -1842,17 +1842,16 @@
                                         </button>
                                     </div>
 
+                                    <!-- A LIST of folders, not one: a collection kept in two
+                                         places is one repo, and it used to be impossible. -->
                                     <div id="manifest-folder-block" style="margin-bottom:10px;">
                                         <span style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:700;"
-                                            data-i18n="repo.manifestModsDir">DOSSIER DES MODS</span>
-                                        <div style="display:flex; gap:6px; margin-top:5px;">
-                                            <input type="text" id="manifest-mods-dir" class="form-input" readonly
-                                                placeholder="mods"
-                                                style="flex:1; height:28px; font-size:11px; padding:0 8px; background:var(--bmm-bg-base); border:1px solid var(--bmm-s10); border-radius:4px; color:var(--text);">
-                                            <button class="btn btn-sm" id="btn-manifest-browse"
-                                                style="height:28px; padding:0 10px; font-size:11px; font-weight:700;"
-                                                data-i18n="common.browse">PARCOURIR</button>
-                                        </div>
+                                            data-i18n="repo.manifestModsDirs">DOSSIERS DE MODS</span>
+                                        <div id="manifest-folder-list"
+                                            style="margin-top:5px; max-height:130px; overflow-y:auto; background:var(--bmm-bg-base); border:1px solid var(--bmm-s08); border-radius:6px; padding:6px;"></div>
+                                        <button class="btn btn-sm" id="btn-manifest-browse"
+                                            style="height:26px; padding:0 10px; margin-top:6px; font-size:11px; font-weight:700;"
+                                            data-i18n="repo.manifestAddFolder">AJOUTER UN DOSSIER</button>
                                     </div>
 
                                     <div id="manifest-profile-block" style="display:none; margin-bottom:10px;">
@@ -1860,6 +1859,24 @@
                                             data-i18n="repo.manifestProfiles">PROFILS A PUBLIER</span>
                                         <div id="manifest-profile-list"
                                             style="margin-top:5px; max-height:130px; overflow-y:auto; background:var(--bmm-bg-base); border:1px solid var(--bmm-s08); border-radius:6px; padding:6px;"></div>
+                                        <p style="font-size:10px; color:var(--text-muted); margin:5px 0 0; line-height:1.4;"
+                                            data-i18n="repo.manifestProfilesHint">Des profils sur des dossiers differents donnent un seul repo.json.</p>
+                                    </div>
+
+                                    <!-- Where repo.json lands. Empty = beside the first folder,
+                                         which is what it has always done. -->
+                                    <div style="margin-bottom:10px;">
+                                        <span style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:700;"
+                                            data-i18n="repo.manifestOutputDir">OU ECRIRE repo.json</span>
+                                        <div style="display:flex; gap:6px; margin-top:5px;">
+                                            <input type="text" id="manifest-output-dir" class="form-input" readonly
+                                                data-i18n-placeholder="repo.manifestOutputDirPlaceholder"
+                                                placeholder="A cote du premier dossier"
+                                                style="flex:1; height:28px; font-size:11px; padding:0 8px; background:var(--bmm-bg-base); border:1px solid var(--bmm-s10); border-radius:4px; color:var(--text);">
+                                            <button class="btn btn-sm" id="btn-manifest-output"
+                                                style="height:28px; padding:0 10px; font-size:11px; font-weight:700;"
+                                                data-i18n="common.browse">PARCOURIR</button>
+                                        </div>
                                     </div>
 
                                     <!-- Modpacks apply to BOTH modes: a pack is a selection of
@@ -1891,6 +1908,11 @@
 
                                     <div id="manifest-result"
                                         style="display:none; font-size:11px; line-height:1.6; background:var(--bmm-bg-base); border:1px solid var(--bmm-s08); border-radius:6px; padding:8px; margin-bottom:10px;"></div>
+
+                                    <!-- Hashing a real collection takes minutes. A disabled
+                                         button and an empty card read as "it does nothing". -->
+                                    <div id="manifest-progress"
+                                        style="display:none; font-size:11px; color:var(--text-muted); margin-bottom:8px; word-break:break-all;"></div>
 
                                     <div style="display:flex; gap:10px; align-items:center;">
                                         <button class="btn btn-primary" id="btn-generate-manifest"

@@ -6,9 +6,15 @@
 // of it. This card produces exactly that, and never writes into the mods folder.
 //
 // Two ways in, one backend call:
-//   • a folder on disk, used as-is;
+//   • folders on disk, used as-is;
 //   • a set of profiles, which resolve to their mods folder plus the list of mod folder
 //     names to include — so "publish only these profiles" is a filter, not a second path.
+//
+// Both are a LIST. It used to be one folder, and one folder only, which made the profile
+// mode useless for the case it exists for: selecting two profiles that do not share a mods
+// folder was refused outright, with an error telling the owner to publish them as separate
+// repos. A collection kept in two places was equally impossible. The backend takes several
+// sources now; this screen is where they are chosen.
 
 import { invoke, pickFolder } from '../../core/api.js';
 import { toast } from '../../ui/app.js';
@@ -16,6 +22,21 @@ import { t } from '../../core/i18n.js';
 import { formatBytes } from '../../core/utils.js';
 
 type Mode = 'folder' | 'profile';
+
+/** One folder to read, and which of its subfolders to take. `onlyDirs: null` = all of them. */
+interface Source {
+    dir: string;
+    onlyDirs: string[] | null;
+    label: string | null;
+}
+
+interface SourceReport {
+    dir: string;
+    label: string | null;
+    mods: number;
+    files: number;
+    bytes: number;
+}
 
 interface ManifestReport {
     outputPath: string;
@@ -28,6 +49,7 @@ interface ManifestReport {
     modpacks: number;
     modpacksSkipped: string[];
     signed: boolean;
+    sources: SourceReport[];
 }
 
 interface Profile {
@@ -44,6 +66,8 @@ interface Modpack {
 let mode: Mode = 'folder';
 let profiles: Profile[] = [];
 let modpacks: Modpack[] = [];
+/** Folder mode's chosen folders, in the order they were added. */
+let folders: string[] = [];
 
 const $ = (id: string) => document.getElementById(id);
 
@@ -58,6 +82,34 @@ function setMode(next: Mode) {
     if (folderBlock) folderBlock.style.display = next === 'folder' ? '' : 'none';
     if (profileBlock) profileBlock.style.display = next === 'profile' ? '' : 'none';
     if (next === 'profile') void loadProfiles();
+}
+
+/** The chosen folders, each with a way to drop it. Full path shown — a manifest built over
+ *  the wrong `mods` folder of three is a valid file describing the wrong server. */
+function renderFolders() {
+    const list = $('manifest-folder-list');
+    if (!list) return;
+    if (!folders.length) {
+        list.innerHTML = `<div style="font-size:11px; color:var(--text-muted); padding:4px;">${
+            t('repo.manifestNoFolders') || 'No folder chosen yet'}</div>`;
+        return;
+    }
+    list.innerHTML = folders.map((_, i) => `
+        <div style="display:flex; align-items:center; gap:6px; padding:3px 0;">
+            <span class="manifest-folder-path" style="flex:1; font-size:11px; color:var(--text); word-break:break-all;"></span>
+            <button class="btn btn-sm manifest-folder-drop" data-index="${i}"
+                style="height:22px; padding:0 8px; font-size:10px; font-weight:700;">✕</button>
+        </div>`).join('');
+    // Paths are data — assigned as text, never interpolated into markup.
+    list.querySelectorAll<HTMLElement>('.manifest-folder-path').forEach((el, i) => {
+        el.textContent = folders[i];
+    });
+    list.querySelectorAll<HTMLButtonElement>('.manifest-folder-drop').forEach((b) => {
+        b.addEventListener('click', () => {
+            folders.splice(Number(b.dataset.index), 1);
+            renderFolders();
+        });
+    });
 }
 
 async function loadModpacks() {
@@ -114,19 +166,24 @@ async function loadProfiles() {
     });
 }
 
-/// Which mod folder names to publish, and which directory they live in.
+/// What to publish: folders, or profile ids for the backend to resolve.
 ///
-/// Profiles sharing one mods folder are merged; profiles pointing at different folders are
-/// refused rather than silently publishing only the first, since the manifest describes a
-/// single directory and the other profiles' mods would just be missing.
-async function resolveSelection(): Promise<{ modsDir: string; onlyDirs: string[] | null } | null> {
+/// The profile branch used to do the resolution here — ask for every known mod, keep the ones
+/// whose path string starts with the profile's mods folder, send the folder names. When that
+/// matched nothing it did not fail; it sent an EMPTY list, and the backend refused it with
+/// "the selection is empty" for a profile full of mods. It is one `starts_with` over paths
+/// this side never normalised, and the backend already owns the rule for the full export, so
+/// the ids go over as ids.
+async function resolveSelection(): Promise<{ sources: Source[]; profileIds: string[] } | null> {
     if (mode === 'folder') {
-        const dir = ($('manifest-mods-dir') as HTMLInputElement | null)?.value?.trim();
-        if (!dir) {
-            toast(t('repo.manifestPickFolder') || 'Choose the mods folder first', 'error');
+        if (!folders.length) {
+            toast(t('repo.manifestPickFolder') || 'Add at least one mods folder first', 'error');
             return null;
         }
-        return { modsDir: dir, onlyDirs: null };
+        return {
+            sources: folders.map((dir) => ({ dir, onlyDirs: null, label: null })),
+            profileIds: [],
+        };
     }
 
     const checked = Array.from(document.querySelectorAll<HTMLInputElement>('.manifest-profile-cb:checked'))
@@ -136,29 +193,7 @@ async function resolveSelection(): Promise<{ modsDir: string; onlyDirs: string[]
         toast(t('repo.manifestPickProfiles') || 'Select at least one profile', 'error');
         return null;
     }
-
-    const dirs = [...new Set(checked.map((p) => p.mods_path))];
-    if (dirs.length > 1) {
-        toast(t('repo.manifestMixedFolders') || 'Those profiles use different mods folders — publish them as separate repos', 'error');
-        return null;
-    }
-
-    let names: string[] = [];
-    try {
-        const all = (await invoke('get_all_mods')) as Array<{ mod_folder_path: string }>;
-        const prefix = dirs[0].replace(/[\\/]+$/, '');
-        names = all
-            .map((m) => m.mod_folder_path)
-            .filter((p) => p.startsWith(prefix))
-            .map((p) => p.slice(prefix.length).replace(/^[\\/]+/, '').split(/[\\/]/)[0])
-            .filter(Boolean);
-        names = [...new Set(names)];
-    } catch {
-        names = [];
-    }
-    // An empty resolution is refused by the backend too — publishing "everything" because a
-    // selection resolved to nothing is how a private mod reaches a public server.
-    return { modsDir: dirs[0], onlyDirs: names };
+    return { sources: [], profileIds: checked.map((p) => p.id) };
 }
 
 function renderReport(r: ManifestReport) {
@@ -166,6 +201,18 @@ function renderReport(r: ManifestReport) {
     if (!box) return;
     const line = (label: string, ids: string[], color: string) =>
         ids.length ? `<div style="color:${color}">${label}: ${ids.length} — ${ids.slice(0, 6).join(', ')}${ids.length > 6 ? '…' : ''}</div>` : '';
+    // Per folder, and only when there is more than one — a single-folder report saying
+    // "folder: 12 mods" above "12 mods" is noise. With several, the line that matters is the
+    // folder that contributed nothing, and a total of 312 hides it completely.
+    const perSource = (r.sources || []).length > 1
+        ? `<div style="margin-top:6px; border-top:1px solid var(--bmm-s08); padding-top:5px;">${
+            r.sources.map((s, i) => `
+                <div style="display:flex; gap:6px; align-items:baseline; color:${s.mods ? 'var(--text-muted)' : 'var(--warning)'};">
+                    <span class="manifest-src-name" data-i="${i}" style="flex:1; word-break:break-all;"></span>
+                    <span>${s.mods} · ${formatBytes(s.bytes)}</span>
+                </div>`).join('')}</div>`
+        : '';
+
     box.style.display = '';
     box.innerHTML = `
         <div style="color:var(--success); font-weight:700; margin-bottom:4px;">repo.json</div>
@@ -174,9 +221,23 @@ function renderReport(r: ManifestReport) {
         ${r.signed ? '' : `<div style="color:var(--warning)">${t('repo.manifestUnsigned') || 'Written unsigned — signing key unavailable'}</div>`}
         ${line(t('repo.manifestAdded') || 'Added', r.added, 'var(--success)')}
         ${line(t('repo.manifestChanged') || 'Changed', r.changed, 'var(--warning)')}
-        ${line(t('repo.manifestRemoved') || 'Removed', r.removed, 'var(--danger)')}`;
+        ${line(t('repo.manifestRemoved') || 'Removed', r.removed, 'var(--danger)')}
+        ${perSource}`;
     const pathEl = box.querySelector('div:nth-child(2)');
     if (pathEl) pathEl.textContent = r.outputPath;
+    // Folder paths and profile names are both user data.
+    box.querySelectorAll<HTMLElement>('.manifest-src-name').forEach((el) => {
+        const s = r.sources[Number(el.dataset.i)];
+        el.textContent = s.label ? `${s.label} — ${s.dir}` : s.dir;
+    });
+
+    // A folder that gave nothing is the one interesting outcome of a multi-folder run: the
+    // manifest is valid, the total looks plausible, and one profile's mods are simply absent.
+    const empty = (r.sources || []).filter((s) => !s.mods);
+    if (empty.length) {
+        toast(`${t('repo.manifestEmptySource') || 'Folders that contributed no mods'}: ${
+            empty.map((s) => s.label || s.dir).join(', ')}`, 'warning');
+    }
 
     // Removals are the one outcome worth interrupting for: a mistyped path produces a
     // perfectly valid manifest that publishes an empty server, and it looks like success.
@@ -190,17 +251,33 @@ function renderReport(r: ManifestReport) {
     }
 }
 
-async function generate() {
+/// Hashing a real collection is minutes of work. With nothing said, the button sat disabled
+/// and the card sat empty — which reads exactly like "it does not generate anything", and was
+/// reported as such for a run that was busy the whole time.
+function setBusy(on: boolean, text?: string) {
     const btn = $('btn-generate-manifest') as HTMLButtonElement | null;
+    if (btn) { btn.disabled = on; btn.style.opacity = on ? '0.6' : ''; }
+    const line = $('manifest-progress');
+    if (!line) return;
+    line.style.display = on ? '' : 'none';
+    if (text) line.textContent = text;
+}
+
+async function generate() {
     const selection = await resolveSelection();
     if (!selection) return;
 
-    if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
+    setBusy(true, t('repo.manifestWorking') || 'Reading the folders…');
     try {
+        const outDir = ($('manifest-output-dir') as HTMLInputElement | null)?.value?.trim();
         const report = (await invoke('generate_repo_manifest', {
             args: {
-                modsDir: selection.modsDir,
-                onlyDirs: selection.onlyDirs,
+                sources: selection.sources,
+                profileIds: selection.profileIds,
+                // Where repo.json lands. Left empty it goes beside the first folder, which is
+                // what it has always done — but with several folders "beside the first" is an
+                // arbitrary choice, so it is worth being able to say.
+                outputPath: outDir ? `${outDir.replace(/[\\/]+$/, '')}/repo.json` : null,
                 filesBaseUrl: ($('manifest-files-base-url') as HTMLInputElement | null)?.value?.trim() || null,
                 filesLayout: ($('manifest-files-layout') as HTMLInputElement | null)?.value?.trim() || null,
                 modpackIds: selectedModpackIds(),
@@ -212,21 +289,46 @@ async function generate() {
     } catch (e) {
         toast(String(e), 'error');
     } finally {
-        if (btn) { btn.disabled = false; btn.style.opacity = ''; }
+        setBusy(false);
     }
 }
 
+/// Attached once, at init, and left attached: the listener is cheap, and re-attaching per run
+/// is how a screen ends up with six of them reporting the same folder six times.
+async function listenForProgress() {
+    const ev = (window as any).__TAURI__?.event;
+    if (!ev?.listen) return;
+    await ev.listen('bmm://repo-manifest-progress', (event: { payload: { done: number; total: number; name: string } }) => {
+        const p = event.payload;
+        if (!p) return;
+        const line = $('manifest-progress');
+        if (!line || line.style.display === 'none') return;
+        line.textContent = `${p.done}/${p.total} — ${p.name}`;
+    });
+}
+
 export function initManifestOnly() {
+    void listenForProgress();
     $('btn-manifest-mode-folder')?.addEventListener('click', () => setMode('folder'));
     $('btn-manifest-mode-profile')?.addEventListener('click', () => setMode('profile'));
     $('btn-manifest-browse')?.addEventListener('click', async () => {
         const picked = await pickFolder();
+        if (!picked) return;
+        // Same folder twice is a no-op rather than a duplicate row: the backend merges them,
+        // so a second row would promise something the manifest does not do.
+        if (folders.some((f) => f.toLowerCase() === picked.toLowerCase())) return;
+        folders.push(picked);
+        renderFolders();
+    });
+    $('btn-manifest-output')?.addEventListener('click', async () => {
+        const picked = await pickFolder();
         if (picked) {
-            const input = $('manifest-mods-dir') as HTMLInputElement | null;
+            const input = $('manifest-output-dir') as HTMLInputElement | null;
             if (input) input.value = picked;
         }
     });
     $('btn-generate-manifest')?.addEventListener('click', () => void generate());
     setMode('folder');
+    renderFolders();
     void loadModpacks();
 }

@@ -5857,9 +5857,10 @@ function getEndpointDefs() {
         {
             method: 'POST', path: '/api/repo/manifest', auth: true,
             desc: 'Générer repo.json pour un dossier déjà hébergé',
-            about: 'Écrit un <code>repo.json</code> pour un dossier de mods <b>déjà en place</b>. Contrairement à <code>/api/repo/gen</code>, il ne demande aucun profil et ne copie rien : il lit le dossier, écrit un fichier, et laisse le dossier intact. Synchrone (il ne fait que hacher), donc un script de publication peut agir directement sur le diff renvoyé. Par défaut <code>reuse_existing</code> conserve l\'identité du manifeste précédent : re-générer produit une nouvelle <i>révision du même dépôt</i>, pas un dépôt différent — mettez-le à <code>false</code> seulement si vous voulez délibérément en créer un nouveau.',
+            about: 'Écrit un <code>repo.json</code> pour un ou plusieurs dossiers de mods <b>déjà en place</b>. Contrairement à <code>/api/repo/gen</code>, il ne demande aucun profil et ne copie rien : il lit le dossier, écrit un fichier, et laisse le dossier intact. Synchrone (il ne fait que hacher), donc un script de publication peut agir directement sur le diff renvoyé. Par défaut <code>reuse_existing</code> conserve l\'identité du manifeste précédent : re-générer produit une nouvelle <i>révision du même dépôt</i>, pas un dépôt différent — mettez-le à <code>false</code> seulement si vous voulez délibérément en créer un nouveau.',
             fields: [
-                { name: 'modsDir', type: 'string', required: true, desc: 'Dossier dont les sous-dossiers sont les mods.' },
+                { name: 'modsDir', type: 'string', required: false, desc: 'Dossier dont les sous-dossiers sont les mods. Obligatoire si <code>sources</code> est absent.' },
+                { name: 'sources', type: 'array', required: false, desc: 'Plusieurs dossiers d\'un coup : <code>[{ "dir": "…", "onlyDirs": ["…"], "label": "…" }]</code>. Prioritaire sur <code>modsDir</code>. Deux dossiers qui publieraient un mod du même nom sont refusés (l\'id d\'un mod est son nom de dossier) et rien n\'est écrit.' },
                 { name: 'outputPath', type: 'string', required: false, desc: 'Où écrire le manifeste. Par défaut <code>repo.json</code> À CÔTÉ de modsDir, pas dedans — sinon un scan ultérieur le prendrait pour un fichier de mod.' },
                 { name: 'name', type: 'string', required: false, desc: 'Nom du dépôt inscrit dans le manifeste.' },
                 { name: 'author', type: 'string', required: false, desc: 'Auteur inscrit dans le manifeste.' },
@@ -5867,7 +5868,7 @@ function getEndpointDefs() {
                 { name: 'filesBaseUrl', type: 'string', required: false, desc: 'URL absolue du dossier auquel filesLayout est relatif.' },
                 { name: 'filesLayout', type: 'string', required: false, desc: 'Gabarit <code>{id}</code> / <code>{path}</code> ; défaut <code>mods/{id}/{path}</code>.' },
                 { name: 'reuseExisting', type: 'boolean', required: false, desc: 'Conserver l\'identité du manifeste précédent. Activé par défaut.' },
-                { name: 'only', type: 'array', required: false, desc: 'Restreindre aux sous-dossiers nommés. C\'est ainsi que « ne publier que ces profils / ce modpack » fonctionne sans second chemin de code.' },
+                { name: 'onlyDirs', type: 'array', required: false, desc: 'Restreindre aux sous-dossiers nommés. C\'est ainsi que « ne publier que ces profils / ce modpack » fonctionne sans second chemin de code.' },
             ],
             responseStatuses: [
                 { code: 200, label: 'OK', body: '{ "ok": true, "path": "C:/host/repo.json", "added": 3, "changed": 1, "removed": 0 }' },

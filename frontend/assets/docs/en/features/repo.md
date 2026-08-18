@@ -80,7 +80,7 @@ They are alternatives — pick the one that matches where your mods already are.
 | Route | What it does | Use it when |
 |---|---|---|
 | **Full export** | Copies every mod into an output folder alongside the manifest. | Starting from scratch; the mods are on this machine. |
-| **Manifest only** | Writes just `repo.json` for a folder BMM can read here. **Nothing is copied.** | The mods are already where you want them. |
+| **Manifest only** | Writes just `repo.json` for folders BMM can read here — one, several, or a set of profiles. **Nothing is copied.** | The mods are already where you want them. |
 | **Update from the server** | Reads your server's directory listing and writes the manifest without pulling the repo back. | The mods live only on the server. |
 
 Whichever you use, the manifest lists every mod, its version, per-file SHA-256 hashes (plus
@@ -92,6 +92,15 @@ re-signs, including updates.
 `{path}`, default `mods/{id}/{path}` — so files already served under, say, `addons/<mod>/`
 are described rather than relocated. In *Manifest only* the layout is derived from where the
 manifest lands relative to the folder, so `repo.json` and the folder stay portable together.
+
+**Several folders, one repo.** *Manifest only* takes a list: add as many mods folders as you
+like, or switch to *From profiles* and tick several — profiles kept in different mods folders
+no longer have to become separate repos. A mod's id is its folder name, so two folders holding
+a folder of the same name would describe two different things under one id: that pair is
+reported and nothing is written, rather than being merged into a repo where half the files
+404. With more than one folder the layout is no longer derived (there is no single directory
+to derive it from) — the default `mods/{id}/{path}` applies, and the report says what each
+folder contributed, including the ones that contributed nothing.
 
 ### Updating
 
