@@ -163,6 +163,23 @@ The icon travels with the tag: because it is stored as a plain reference, a tag 
 glyph through every share path — an exported profile, a [server repo](doc-page:features/repo), a catalog —
 with nothing extra to do.
 
+### Notifications
+
+Two switches, and they do different things.
+
+**Popup notifications** turns off the bubbles at the bottom of the screen. What it does *not*
+turn off is the message: every notification is recorded in the **notification centre** before
+it is displayed, so switching the popups off changes where you read them, not whether they
+exist. That is the whole reason the setting is safe to use — nothing is lost, it just stops
+interrupting.
+
+**Errors are never silenced.** An error nobody is shown and nobody thinks to look for is an
+app that failed quietly, which is worse than a bubble you did not want.
+
+**OS notifications** is separate: those are the system's own toasts, sent by
+[automations](doc-page:features/scheduler) and long jobs so you hear about them when BMM is not the window
+you are looking at.
+
 ### Sound & keyboard shortcuts
 
 Toggle UI sounds, and review the keyboard shortcuts BMM responds to.

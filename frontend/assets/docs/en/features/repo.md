@@ -118,6 +118,13 @@ changed — an incomplete repo and a stale one are different problems. It writes
 locally; you upload that one file with the client you already use, so BMM never needs write
 access to your server.
 
+You do not need a local manifest to start. Point it at a base URL and, if the server already
+publishes a `repo.json`, BMM fetches that as the starting point instead of your own last copy
+— so a repo you host but whose manifest you no longer have on this machine can still be
+updated, and a machine that has never seen the repo can produce a correct one. With no local
+path given, the result is written under `RemoteRepos/` rather than next to files you did not
+choose.
+
 !!! note "Requires directory listing"
     *Update from the server* reads your server's own index, so `autoindex on` (nginx) or the
     equivalent must be enabled. Without it BMM cannot see what the server holds.

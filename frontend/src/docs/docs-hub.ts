@@ -33,7 +33,7 @@ interface Article {
   body: L;                 // HTML: <p>, <h4>, <ul><li>, <b>, <code>, <pre>
   media?: Media;           // an illustration rendered above the body
   tutorial?: TutorialLink; // deep-link into the interactive tutorial (right part+step)
-  diagram?: string;        // diagram registry id → window.openDiagram
+  diagram?: string | string[];  // diagram registry id(s) → window.openDiagram
   docsPath?: string;       // appended to DOCS_SITE for "Read full docs"
   view?: string;           // a nav data-view → "Open in BMM" button that jumps to that screen
   keywords?: string;       // extra search terms (any language, space separated)
@@ -95,7 +95,7 @@ const CATEGORIES: Category[] = [
         },
       },
       {
-        id: 'first-profile', docsPath: 'getting-started/first-launch/', view: 'profiles', tutorial: { id: 'basics', part: 'profiles', step: 's1' }, diagram: 'profile-system',
+        id: 'first-profile', docsPath: 'getting-started/first-launch/', view: 'profiles', tutorial: { id: 'basics', part: 'profiles', step: 's1' }, diagram: ['profile-system', 'profile-customization'],
         title: { en: 'Create your first profile', fr: 'Créer votre premier profil' },
         summary: { en: 'A profile = one game folder + the exact mods enabled in it. Here are the three folders it needs.', fr: 'Un profil = un dossier de jeu + les mods exacts qui y sont activés. Voici les trois dossiers qu’il demande.' },
         keywords: 'profile setup game path mods backup folder create profil dossier',
@@ -156,7 +156,7 @@ ce qu'il remplace, ou les retire). Vos mods téléchargés ne sont jamais modifi
         },
       },
       {
-        id: 'scan', docsPath: 'how-it-works/scanning-cache/', view: 'library', tutorial: { id: 'basics', part: 'scan', step: 's0' }, diagram: 'mod-sync',
+        id: 'scan', docsPath: 'how-it-works/scanning-cache/', view: 'library', tutorial: { id: 'basics', part: 'scan', step: 's0' }, diagram: ['mod-sync', 'mod-import'],
         title: { en: 'Scan & sync your mods', fr: 'Scanner et synchroniser vos mods' },
         summary: { en: 'Let BMM index what you already have and keep it up to date.', fr: 'Laissez BMM indexer ce que vous avez déjà et le tenir à jour.' },
         keywords: 'scan sync index refresh detect scanner',
@@ -168,7 +168,7 @@ ce qu'il remplace, ou les retire). Vos mods téléchargés ne sont jamais modifi
         },
       },
       {
-        id: 'staying-updated', docsPath: 'getting-started/install/', diagram: 'update-system',
+        id: 'staying-updated', docsPath: 'getting-started/install/', diagram: ['update-system', 'app-update'],
         title: { en: 'Staying up to date', fr: 'Rester à jour' },
         summary: { en: 'How BMM and your mods keep current — safely.', fr: 'Comment BMM et vos mods restent à jour — en toute sécurité.' },
         keywords: 'update updates version upgrade current mise à jour mettre',
@@ -1784,7 +1784,7 @@ Voir aussi [Référence des actions](doc:actions-reference) et [Plugins & API](d
         },
       },
       {
-        id: 'benchmarks', docsPath: 'how-it-works/performance/', view: 'settings', diagram: 'blake3-hashing',
+        id: 'benchmarks', docsPath: 'how-it-works/performance/', view: 'settings', diagram: ['blake3-hashing', 'perf-monitoring'],
         title: { en: 'Benchmarks & performance', fr: 'Benchmarks et performances' },
         summary: { en: 'Measure how fast BMM scans, hashes and deploys on your machine.', fr: 'Mesurez la vitesse de scan, de hachage et de déploiement sur votre machine.' },
         keywords: 'benchmark performance speed hash blake3 measure performances vitesse',
@@ -2104,6 +2104,21 @@ function diagramList(): { id: string; title: string }[] {
   }).sort((a, b) => a.title.localeCompare(b.title));
 }
 
+/** An article's diagrams, however it declared them. An article can genuinely have more than
+ *  one — "how a mod is imported" and "how it is then kept in sync" are two pictures of the
+ *  same subject, and forcing a choice is what left four diagrams written, translated, shipped
+ *  and linked from nowhere. */
+function diaIds(a: Article): string[] {
+  if (!a.diagram) return [];
+  return Array.isArray(a.diagram) ? a.diagram : [a.diagram];
+}
+
+/** The registry's own title for a diagram, so a second button says WHICH one it opens. */
+function diaTitle(id: string): string {
+  const key = (diagrams as Record<string, any>)[id]?.titleKey as string | undefined;
+  return (key && t(key)) || id.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 // ── rendering: chrome (header, part toggle, search) ────────────────────────────────
 function chrome(): string {
   const seg = (p: Part, label: L, sub: L) =>
@@ -2196,7 +2211,7 @@ function articleCard(a: Article): string {
       <span class="dh-art-s">${tr(a.summary)}</span>
       <span class="dh-art-tags">
         ${a.tutorial ? `<span class="dh-tag dh-tag-tut">${svg('play', 11)} ${tr({ en: 'Tutorial', fr: 'Tutoriel' })}</span>` : ''}
-        ${a.diagram ? `<span class="dh-tag dh-tag-dia">${svg('diagram', 11)} ${tr({ en: 'Diagram', fr: 'Diagramme' })}</span>` : ''}
+        ${diaIds(a).length ? `<span class="dh-tag dh-tag-dia">${svg('diagram', 11)} ${tr({ en: 'Diagram', fr: 'Diagramme' })}${diaIds(a).length > 1 ? ` · ${diaIds(a).length}` : ''}</span>` : ''}
         ${a.media ? `<span class="dh-tag dh-tag-med">${svg('play', 11)} ${tr({ en: 'Demo', fr: 'Démo' })}</span>` : ''}
       </span>
     </button>`;
@@ -2220,7 +2235,7 @@ function articleView(cat: Category, a: Article): string {
   const rel = [
     a.view ? `<button class="dh-rel dh-rel-open" data-nav="${a.view}">${svg('arrow', 15)} ${tr({ en: 'Open', fr: 'Ouvrir' })} ${navLabel(a.view)} ${tr({ en: 'in BMM', fr: 'dans BMM' })}</button>` : '',
     a.tutorial ? `<button class="dh-rel dh-rel-tut" data-tut="${a.tutorial.id}" data-tut-part="${a.tutorial.part || ''}" data-tut-step="${a.tutorial.step || ''}">${svg('play', 15)} ${tr({ en: 'Try it in the tutorial', fr: 'Essayer dans le tutoriel' })}</button>` : '',
-    a.diagram ? `<button class="dh-rel dh-rel-dia" data-diagram="${a.diagram}">${svg('diagram', 15)} ${tr({ en: 'Open the diagram', fr: 'Ouvrir le diagramme' })}</button>` : '',
+    ...diaIds(a).map((id, i, all) => `<button class="dh-rel dh-rel-dia" data-diagram="${id}">${svg('diagram', 15)} ${all.length > 1 ? escapeHtml(diaTitle(id)) : tr({ en: 'Open the diagram', fr: 'Ouvrir le diagramme' })}</button>`),
     // The full page is BUNDLED, so it opens in place rather than sending you to a browser. The
     // external link stays for the site itself (search, PDF, sharing a URL).
     // Label reads as "what pressing this gives you". The full page is the default, so it starts

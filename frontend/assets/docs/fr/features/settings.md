@@ -173,6 +173,24 @@ L'icône voyage avec le tag : comme elle est stockée sous forme de simple réf�
 garde son glyphe à travers tous les partages — profil exporté, [dépôt serveur](doc-page:features/repo),
 catalogue — sans rien de plus à faire.
 
+### Notifications
+
+Deux interrupteurs, et ils ne font pas la même chose.
+
+**Notifications contextuelles** coupe les bulles en bas de l'écran. Ce qu'il ne coupe *pas*,
+c'est le message : chaque notification est enregistrée dans le **centre de notifications**
+avant d'être affichée, donc désactiver les bulles change l'endroit où tu les lis, pas leur
+existence. C'est précisément pour ça que le réglage est sans risque — rien n'est perdu, ça
+cesse juste de t'interrompre.
+
+**Les erreurs ne sont jamais silencées.** Une erreur que personne ne voit et que personne ne
+pense à aller chercher, c'est une appli qui a échoué en silence — pire qu'une bulle non
+désirée.
+
+**Notifications système** est un réglage distinct : ce sont les bulles de l'OS, envoyées par
+les [automatisations](doc-page:features/scheduler) et les tâches longues pour que tu sois prévenu quand BMM
+n'est pas la fenêtre que tu regardes.
+
 ### Son & raccourcis clavier
 
 Active/coupe les sons de l'interface, et consulte les raccourcis clavier auxquels BMM répond.

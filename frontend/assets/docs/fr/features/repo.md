@@ -124,6 +124,13 @@ simplement changé — un dépôt incomplet et un dépôt périmé sont deux pro
 Elle écrit `repo.json` en local ; tu envoies ce seul fichier avec le client dont tu te sers
 déjà, donc BMM n'a jamais besoin d'un accès en écriture à ton serveur.
 
+Tu n'as pas besoin d'un manifeste local pour commencer. Donne-lui une URL de base et, si le
+serveur publie déjà un `repo.json`, BMM va le chercher comme point de départ à la place de ta
+dernière copie — un dépôt que tu héberges mais dont tu n'as plus le manifeste sur cette
+machine reste donc mettable à jour, et une machine qui n'a jamais vu le dépôt peut en produire
+un correct. Sans chemin local, le résultat est écrit dans `RemoteRepos/` plutôt qu'à côté de
+fichiers que tu n'as pas choisis.
+
 !!! note "Nécessite l'index de répertoire"
     *Mettre à jour depuis le serveur* lit l'index de ton serveur : `autoindex on` (nginx) ou
     l'équivalent doit être activé. Sans lui, BMM ne peut pas voir ce que le serveur contient.
