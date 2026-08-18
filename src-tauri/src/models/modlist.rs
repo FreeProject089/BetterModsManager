@@ -23,6 +23,13 @@ pub struct ModList {
     /// list from last year must still open.
     #[serde(default)]
     pub tag_defs: Vec<crate::models::tag::TagDef>,
+    /// Modpacks whose mods are ALL in this list.
+    ///
+    /// A pack referring to a mod the list does not carry would install nine of its twelve
+    /// mods and look like the pack is broken — the same rule the repo manifest applies, and
+    /// for the same reason.
+    #[serde(default)]
+    pub modpacks: Vec<crate::models::modpack::LocalModpack>,
 }
 
 /// A download link for a mod with its type
@@ -58,6 +65,19 @@ pub struct ModListEntry {
     /// Full file tree of the mod showing what gets copied where
     /// Each path is relative to the mod root (= relative to game root)
     pub file_tree: Vec<ModFileEntry>,
+    /// What this mod needs, BY NAME.
+    ///
+    /// The mod entry stores dependencies as BMM ids, and an id from somebody else's install
+    /// resolves to nothing here — the importer would write a requirement pointing at a mod
+    /// that does not exist, which reads as "this mod is broken". A name is what both sides
+    /// can match on, and it is what the person sharing the list sees on screen.
+    #[serde(default)]
+    pub dependencies: Vec<String>,
+    /// Where this mod updates itself from, when it does. Carried so a shared list keeps its
+    /// repos: importing a list and then having to re-attach every update source by hand is
+    /// how a list arrives half-alive.
+    #[serde(default)]
+    pub update_sources: Vec<crate::models::mod_entry::UpdateSource>,
     /// Instructions on placement and special setup
     pub install_notes: String,
     /// Custom tags
@@ -77,6 +97,7 @@ impl ModList {
             created_at: chrono::Local::now().to_rfc3339(),
             mods: Vec::new(),
             tag_defs: Vec::new(),
+            modpacks: Vec::new(),
         }
     }
 }

@@ -68,3 +68,106 @@ fn a_local_definition_wins_over_the_one_in_the_file() {
     assert_eq!(merged.iter().find(|t| t.id == "t-1").unwrap().name, "My Liveries");
     assert!(merged.iter().any(|t| t.id == "t-9"));
 }
+
+// ── The container ────────────────────────────────────────────────────────────
+//
+// A `.mm` is a ZIP now: the list has grown past "a JSON document" — tag definitions, whole
+// modpacks, update sources — and the next thing it needs to carry is a file rather than a
+// field. Every list anybody has ever exported is a bare JSON document, so both open.
+
+use crate::commands::modlist::{read_modlist_file, MODLIST_ENTRY};
+use std::fs;
+
+fn tmp(name: &str) -> std::path::PathBuf {
+    let d = std::env::temp_dir().join("bmm_mm_container");
+    let _ = fs::create_dir_all(&d);
+    d.join(name)
+}
+
+fn zip_with(path: &std::path::Path, entries: &[(&str, &str)]) {
+    use std::io::Write;
+    let f = fs::File::create(path).unwrap();
+    let mut z = zip::ZipWriter::new(f);
+    let o = zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+    for (name, body) in entries {
+        z.start_file(*name, o).unwrap();
+        z.write_all(body.as_bytes()).unwrap();
+    }
+    z.finish().unwrap();
+}
+
+#[test]
+fn a_zipped_list_opens() {
+    let mut list = ModList::new("Zipped".into(), "DCS".into(), "C:/DCS".into());
+    list.tag_defs = vec![tag("t-1", "Liveries")];
+    let p = tmp("zipped.mm");
+    zip_with(&p, &[(MODLIST_ENTRY, &serde_json::to_string(&list).unwrap())]);
+
+    let back = read_modlist_file(&p).unwrap();
+    assert_eq!(back.name, "Zipped");
+    assert_eq!(back.tag_defs.len(), 1);
+}
+
+/// THE ONE: every .mm in the world right now is a bare JSON document.
+#[test]
+fn a_plain_json_list_still_opens() {
+    let list = ModList::new("Old".into(), "DCS".into(), "C:/DCS".into());
+    let p = tmp("plain.mm");
+    fs::write(&p, serde_json::to_string_pretty(&list).unwrap()).unwrap();
+
+    assert_eq!(read_modlist_file(&p).unwrap().name, "Old");
+}
+
+#[test]
+fn the_bytes_decide_not_the_extension() {
+    // A zipped list saved as .json, and a JSON list saved as .mm. Both are what they are.
+    let list = ModList::new("Either".into(), "DCS".into(), "".into());
+    let z = tmp("actually-a-zip.json");
+    zip_with(&z, &[(MODLIST_ENTRY, &serde_json::to_string(&list).unwrap())]);
+    assert_eq!(read_modlist_file(&z).unwrap().name, "Either");
+
+    let j = tmp("actually-json.mm");
+    fs::write(&j, serde_json::to_string(&list).unwrap()).unwrap();
+    assert_eq!(read_modlist_file(&j).unwrap().name, "Either");
+}
+
+#[test]
+fn an_archive_without_the_list_says_so_rather_than_parsing_nothing() {
+    let p = tmp("empty.mm");
+    zip_with(&p, &[("readme.txt", "hello")]);
+    let err = read_modlist_file(&p).unwrap_err().to_string();
+    assert!(err.contains(MODLIST_ENTRY), "{err}");
+}
+
+#[test]
+fn dependencies_travel_as_names() {
+    // An id from somebody else's install resolves to nothing here, so the importer would
+    // write a requirement pointing at a mod that does not exist.
+    let json = r#"{
+        "format_version": "1.0", "name": "L", "description": null, "game_name": "DCS",
+        "game_path_hint": "", "author": null, "created_at": "now",
+        "mods": [{
+            "name": "Cockpit", "version": "1", "author": null, "description": null,
+            "download_links": [], "file_tree": [], "install_notes": "", "tags": [],
+            "dependencies": ["Core Textures"]
+        }]
+    }"#;
+    let list: ModList = serde_json::from_str(json).unwrap();
+    assert_eq!(list.mods[0].dependencies, vec!["Core Textures".to_string()]);
+}
+
+#[test]
+fn an_entry_written_before_dependencies_existed_still_opens() {
+    let json = r#"{
+        "format_version": "1.0", "name": "L", "description": null, "game_name": "DCS",
+        "game_path_hint": "", "author": null, "created_at": "now",
+        "mods": [{
+            "name": "Old", "version": "1", "author": null, "description": null,
+            "download_links": [], "file_tree": [], "install_notes": "", "tags": []
+        }]
+    }"#;
+    let list: ModList = serde_json::from_str(json).unwrap();
+    assert!(list.mods[0].dependencies.is_empty());
+    assert!(list.mods[0].update_sources.is_empty());
+    assert!(list.modpacks.is_empty());
+}

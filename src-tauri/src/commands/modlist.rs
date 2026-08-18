@@ -19,6 +19,10 @@ struct ModSnapshot {
     description: Option<String>,
     download_links: Vec<DownloadLink>,
     tags: Vec<String>,
+    /// Resolved to NAMES while the lock is held — an id means nothing on the machine that
+    /// opens the file.
+    dependencies: Vec<String>,
+    update_sources: Vec<crate::models::mod_entry::UpdateSource>,
 }
 
 #[tauri::command]
@@ -33,7 +37,7 @@ pub async fn export_modlist(
     include_hashes: bool,
 ) -> Result<(), AppError> {
     // ── Phase 1: hold lock only long enough to read in-memory state ──────────
-    let (game_name, game_path_hint, snapshots, tag_defs) = {
+    let (game_name, game_path_hint, snapshots, tag_defs, packs) = {
         let data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
 
         let active_profile = if let Some(ref id) = data.active_profile_id {
@@ -65,6 +69,15 @@ pub async fn export_modlist(
                     label: dl.label.clone(),
                 }).collect(),
                 tags: m.tags.clone(),
+                dependencies: m.dependencies.iter()
+                    .filter_map(|dep| {
+                        // A cross-profile reference is "profile::mod"; only the mod half can
+                        // be resolved, and only within what this export can see.
+                        let id = dep.rsplit("::").next().unwrap_or(dep);
+                        data.mods.iter().find(|o| o.id == id).map(|o| o.name.clone())
+                    })
+                    .collect(),
+                update_sources: m.update_sources.clone(),
             })
         }).collect();
 
@@ -77,7 +90,19 @@ pub async fn export_modlist(
             .cloned()
             .collect();
 
-        (game_name, game_path_hint, snapshots, tag_defs)
+        // Modpacks whose mods are ALL in this list. A pack that half-installs is worse than
+        // a pack that is missing — the same rule the repo manifest applies.
+        let exported: std::collections::HashSet<String> =
+            snapshots.iter().map(|s| s.name.clone()).collect();
+        let name_of: std::collections::HashMap<String, String> = data.mods.iter()
+            .map(|m| (m.id.clone(), m.name.clone()))
+            .collect();
+        let packs: Vec<crate::models::modpack::LocalModpack> = data.modpacks.iter()
+            .filter(|p| p.mods.iter().all(|r| name_of.get(&r.mod_id).is_some_and(|n| exported.contains(n))))
+            .cloned()
+            .collect();
+
+        (game_name, game_path_hint, snapshots, tag_defs, packs)
         // lock dropped here
     };
 
@@ -87,6 +112,7 @@ pub async fn export_modlist(
     modlist.description = Some(description);
     modlist.author = Some(author);
     modlist.tag_defs = tag_defs;
+    modlist.modpacks = packs;
 
     // Reset the cancel flag before starting
     state.export_cancelled.store(false, Ordering::SeqCst);
@@ -123,6 +149,8 @@ pub async fn export_modlist(
             file_tree,
             install_notes: String::new(),
             tags: snap.tags,
+            dependencies: snap.dependencies,
+            update_sources: snap.update_sources,
         });
     }
 
@@ -138,9 +166,37 @@ pub async fn export_modlist(
     let mut doc = serde_json::to_value(&modlist)?;
     crate::commands::doc_sign::sign_doc(&handle, &mut doc, "mm");
     let json = serde_json::to_string_pretty(&doc)?;
-    tokio::task::spawn_blocking(move || std::fs::write(&output_path, json))
-        .await
-        .map_err(|e| AppError::LockError(e.to_string()))??;
+
+    // Written as a ZIP. The list has grown past "a JSON document": it carries tag
+    // definitions, whole modpacks and update sources, and the next thing it needs to carry
+    // is a file rather than a field — an icon, a readme, a preset. A container has somewhere
+    // to put those; a document has to base64 them into itself.
+    //
+    // The extension does not change. `.mm` is what people have, what the docs say, and what
+    // BCWEB's inspector recognises — and read_modlist_file opens both shapes, so nothing
+    // anybody already exported stops working.
+    let entries = vec![(MODLIST_ENTRY.to_string(), json.into_bytes())];
+    let manifest = crate::commands::doc_sign::archive_manifest(&handle, "mm", &entries);
+    let sig = serde_json::to_vec_pretty(&manifest)?;
+
+    tokio::task::spawn_blocking(move || -> std::io::Result<()> {
+        use std::io::Write;
+        let file = std::fs::File::create(&output_path)?;
+        let mut zip = zip::ZipWriter::new(file);
+        let opts = zip::write::FileOptions::default()
+            .compression_method(zip::CompressionMethod::Deflated);
+        for (name, data) in entries.iter()
+            .chain(std::iter::once(&(crate::commands::doc_sign::ARCHIVE_ENTRY.to_string(), sig)))
+        {
+            zip.start_file(name.clone(), opts)
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+            zip.write_all(data)?;
+        }
+        zip.finish().map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+        Ok(())
+    })
+    .await
+    .map_err(|e| AppError::LockError(e.to_string()))??;
     Ok(())
 }
 
@@ -199,8 +255,35 @@ fn hash_file_streaming(path: &PathBuf) -> Option<String> {
 
 #[tauri::command]
 pub fn import_modlist(path: String) -> Result<ModList, AppError> {
-    let content = std::fs::read_to_string(&path)?;
-    serde_json::from_str(&content).map_err(|e| AppError::Json(e))
+    read_modlist_file(std::path::Path::new(&path))
+}
+
+/// The name the document has inside a `.mm` archive.
+pub const MODLIST_ENTRY: &str = "modlist.json";
+
+/// Read a `.mm`, in either shape.
+///
+/// A `.mm` is a ZIP now — it carries the list plus the tag definitions, the modpacks and the
+/// update sources, and there is more to come. The old shape is a bare JSON document, and
+/// every list anybody has ever exported is one, so BOTH open here. The BYTES decide: a ZIP
+/// starts with `PK`, which is not something a JSON document can start with.
+///
+/// Deliberately not a version field. A file written last year has no idea a version field
+/// was going to exist, and asking "is this a zip" is a question the file answers about
+/// itself.
+pub fn read_modlist_file(path: &std::path::Path) -> Result<ModList, AppError> {
+    let bytes = std::fs::read(path)?;
+    if bytes.starts_with(b"PK") {
+        let mut zip = zip::ZipArchive::new(std::io::Cursor::new(&bytes))
+            .map_err(|e| AppError::LockError(format!("not a readable .mm archive: {e}")))?;
+        let mut file = zip.by_name(MODLIST_ENTRY)
+            .map_err(|_| AppError::LockError(format!("this .mm has no {MODLIST_ENTRY}")))?;
+        let mut text = String::new();
+        std::io::Read::read_to_string(&mut file, &mut text)?;
+        return serde_json::from_str(&text).map_err(AppError::Json);
+    }
+    let text = String::from_utf8_lossy(&bytes).to_string();
+    serde_json::from_str(&text).map_err(AppError::Json)
 }
 
 #[tauri::command]

@@ -1941,6 +1941,7 @@ pub async fn install_from_modlist(
                 new_mod.author = entry.author.clone();
                 new_mod.description = entry.description.clone();
                 new_mod.tags = entry.tags.clone();
+                new_mod.update_sources = entry.update_sources.clone();
                 new_mod.install_notes = entry.install_notes.clone();
                 let mid = new_mod.id.clone();
                 let _mod_folder = new_mod.mod_folder_path.clone();
@@ -1996,6 +1997,7 @@ pub async fn install_from_modlist(
                 new_mod.version = entry.version.clone();
                 new_mod.author = entry.author.clone();
                 new_mod.tags = entry.tags.clone();
+                new_mod.update_sources = entry.update_sources.clone();
                 new_mod.install_notes = entry.install_notes.clone();
                 let mid = new_mod.id.clone();
                 data.mods.push(new_mod);
@@ -2108,6 +2110,7 @@ pub async fn install_from_modlist(
                     new_mod.author = entry.author.clone();
                     new_mod.description = entry.description.clone();
                     new_mod.tags = entry.tags.clone();
+                new_mod.update_sources = entry.update_sources.clone();
                     new_mod.install_notes = entry.install_notes.clone();
                     new_mod.download_links = entry.download_links.iter().map(|l| crate::models::mod_entry::DownloadLink {
                         url: l.url.clone(),
@@ -2166,6 +2169,52 @@ pub async fn install_from_modlist(
     }
 
 
+
+    // ── What the list said BESIDE the mods ────────────────────────────────────────
+    //
+    // Dependencies and modpacks both travel as NAMES, because an id from somebody else's
+    // install resolves to nothing here. They are applied last, once every mod in the list
+    // has an id on this machine — a dependency written while half the list was still being
+    // installed would point at a mod that did not exist yet.
+    {
+        let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        let id_of: HashMap<String, String> = data.mods.iter()
+            .map(|m| (m.name.clone(), m.id.clone()))
+            .collect();
+
+        for entry in &modlist.mods {
+            let Some(mid) = id_of.get(&entry.name) else { continue };
+            let resolved: Vec<String> = entry.dependencies.iter()
+                .filter_map(|name| id_of.get(name).cloned())
+                .collect();
+            if resolved.is_empty() { continue; }
+            if let Some(m) = data.mods.iter_mut().find(|m| &m.id == mid) {
+                for d in resolved {
+                    if !m.dependencies.contains(&d) { m.dependencies.push(d); }
+                }
+            }
+        }
+
+        // A pack whose mods are not ALL here is skipped rather than added half-empty: it
+        // would install nine of its twelve mods and look like the pack is broken.
+        for pack in &modlist.modpacks {
+            let mut remapped = pack.clone();
+            let mut missing = false;
+            for r in remapped.mods.iter_mut() {
+                match id_of.get(&r.mod_name) {
+                    Some(id) => r.mod_id = id.clone(),
+                    None => { missing = true; break; }
+                }
+            }
+            if missing { continue; }
+            // A pack id already present is somebody's own pack; the imported one is added
+            // under a fresh id rather than overwriting it.
+            if data.modpacks.iter().any(|p| p.id == remapped.id) {
+                remapped.id = uuid::Uuid::new_v4().to_string();
+            }
+            data.modpacks.push(remapped);
+        }
+    }
 
     let _ = state.save();
     Ok(results)
