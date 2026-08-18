@@ -58,6 +58,7 @@ pub fn create_profile(
     // Validate paths
     let game_p = PathBuf::from(&payload.game_path);
     let mods_p = PathBuf::from(&payload.mods_path);
+    let backup_given = !payload.backup_path.trim().is_empty();
     let backup_p = PathBuf::from(&payload.backup_path);
 
     if !game_p.exists() {
@@ -76,6 +77,33 @@ pub fn create_profile(
         mods_p.clone(),
         backup_p.clone(),
     );
+
+    // No backup folder given → one under the app's own data directory, named after the
+    // profile, created here.
+    //
+    // The backup folder holds the game files a mod REPLACED, so it is the thing that makes
+    // disabling a mod reversible — which is why it can never be shared between profiles, and
+    // why leaving it blank used to be an error. But the only requirements are "it exists" and
+    // "it is this profile's alone", and `Backups/<profile id>` satisfies both: the id is
+    // unique by construction, so two profiles cannot collide even if they are named the same.
+    //
+    // The game and mods folders stay required — BMM cannot invent where your game lives.
+    // This one it can, so it does.
+    let backup_p = if backup_given {
+        backup_p
+    } else {
+        let dir = app.path().app_data_dir()
+            .unwrap_or_else(|_| PathBuf::from("."))
+            .join("Backups")
+            .join(&profile.id);
+        std::fs::create_dir_all(&dir).map_err(|e| {
+            AppError::Internal(format!("Impossible de créer le dossier de sauvegarde {} : {}", dir.display(), e))
+        })?;
+        profile.backup_path = dir.clone();
+        info!("No backup folder given for '{}' — using {}", profile.name, dir.display());
+        dir
+    };
+
     profile.color = payload.color;
     profile.icon = payload.icon;
     let result = profile.clone();

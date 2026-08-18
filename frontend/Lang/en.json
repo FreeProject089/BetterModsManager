@@ -7552,5 +7552,19 @@
   "mod.pickModsForFile": "Pick the mod(s) whose copy of this file you want to open in the explorer:",
   "repo.monEmptyHint": "Active downloads appear here in real time",
   "common.confirmGeneric": "Are you sure you want to continue?",
-  "mapper.confirmGeneric": "Really perform this action?"
+  "mapper.confirmGeneric": "Really perform this action?",
+  "legacy.title": "You already have a mod manager set up",
+  "legacy.lede": "BMM can read its configuration and turn each of your setups into a profile — same game folder, same mods folder, same backup folder. You do not have to redo anything to try it.",
+  "legacy.ovgme": "OvGME",
+  "legacy.omm": "Open Mod Manager",
+  "legacy.import": "Import",
+  "legacy.importing": "Importing…",
+  "legacy.imported": "{n} profile(s) imported",
+  "legacy.nothingNew": "Nothing new to import",
+  "legacy.failed": "Import failed: {error}",
+  "legacy.skip": "Not now",
+  "legacy.andMore": "{names} and {n} more",
+  "legacy.note": "Importing moves no files and changes nothing in the other manager — it only creates profiles pointing at the folders you already use.",
+  "prof.backupDirOptional": "Leave blank — BMM picks one",
+  "prof.backupDirHint": "Optional. Left blank, BMM creates one in its own data folder, named after this profile — it only has to exist and be this profile's alone."
 }

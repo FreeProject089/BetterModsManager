@@ -30,6 +30,7 @@
     <!-- Last: overrides main.css for the Sync panel without touching its markup. -->
     <link rel="stylesheet" href="css/repo-sync.css" />
     <link rel="stylesheet" href="css/style-modal.css" />
+    <link rel="stylesheet" href="css/legacy-import.css" />
     <link rel="stylesheet" href="assets/cropper/cropper.min.css">
     <script src="assets/cropper/cropper.min.js"></script>
     <!-- GSAP — used for boot loader animation (vendored locally, CWE-829: no CDN/SRI risk) -->
@@ -5899,14 +5900,17 @@
                         </div>
                     </div>
                     <div class="form-group">
-                        <label class="form-label" data-i18n="prof.backupDir">Dossier de sauvegarde <span
-                                class="required">*</span></label>
+                        <label class="form-label" data-i18n="prof.backupDir">Dossier de sauvegarde</label>
                         <div class="path-picker">
                             <input type="text" class="form-input" id="prof-backup-path" placeholder="C:\Backups\..."
-                                data-i18n-placeholder="prof.backupDirPlaceholder" readonly />
+                                data-i18n-placeholder="prof.backupDirOptional" readonly />
                             <button class="btn btn-secondary btn-sm" id="btn-pick-backup-path"
                                 data-i18n="prof.browse">Parcourir</button>
                         </div>
+                        <!-- Optional: left blank, create_profile puts it under the app's own
+                             data folder, named after the profile. It only has to exist and
+                             belong to this profile alone. -->
+                        <div class="form-hint" data-i18n="prof.backupDirHint">Laisse vide et BMM en crée un pour toi.</div>
                     </div>
                 </div>
                 <div class="modal-footer">

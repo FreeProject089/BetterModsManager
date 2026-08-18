@@ -7,6 +7,7 @@ pub mod profile;
 pub mod mods;
 pub mod modlist;
 pub mod ovgme;
+pub mod legacy_scan;
 pub mod update;
 pub mod tag;
 pub mod history;

@@ -411,6 +411,7 @@ fn main() {
             commands::modlist::add_download_link,
             commands::modlist::remove_download_link,
             commands::ovgme::import_ovgme_profiles,
+            commands::legacy_scan::scan_legacy_managers,
             commands::update::get_update_notes,
             commands::update::get_old_updates_count,
             commands::update::get_update_folder_structure,

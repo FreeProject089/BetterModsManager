@@ -1,0 +1,89 @@
+/* The first-launch "import your OvGME / Open Mod Manager setup" offer.
+   See src/ui/legacy-import.ts. Tokens only — this can appear before the tutorial and right
+   after the style modal, so it has to be correct in every theme, light included. */
+
+.legacy-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 100040;               /* under the style modal, over the app */
+    display: grid;
+    place-items: center;
+    background: rgba(0, 0, 0, 0.55);   /* scrim: intentionally black in every theme */
+    animation: legacyFadeIn 0.18s ease;
+}
+@keyframes legacyFadeIn { from { opacity: 0; } }
+
+.legacy-modal {
+    width: min(560px, calc(100vw - 48px));
+    background: var(--bmm-bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
+    overflow: hidden;
+}
+
+.legacy-lede {
+    margin: 0 0 16px;
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--text-secondary);
+}
+
+.legacy-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--bmm-s03);
+}
+.legacy-row + .legacy-row { margin-top: 10px; }
+
+/* min-width:0 or a long Windows path refuses to shrink and pushes the button off the card. */
+.legacy-row-info { flex: 1; min-width: 0; }
+
+.legacy-row-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+.legacy-row-names {
+    margin-top: 2px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+/* The path it was read from: present so the offer is checkable, quiet so it is not the
+   first thing read. Ellipsised from the LEFT would be nicer; direction:rtl breaks the
+   backslashes, so it truncates at the end like everything else here. */
+.legacy-row-src {
+    margin-top: 3px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.legacy-row-btn { flex-shrink: 0; }
+.legacy-row-btn:disabled { opacity: 0.6; cursor: default; }
+
+.legacy-note {
+    margin: 16px 0 0;
+    font-size: 11.5px;
+    line-height: 1.5;
+    color: var(--text-muted);
+}
+
+/* Optional-field hint under a form input. Introduced with the backup folder becoming
+   optional; general on purpose, because the next optional field will want the same. */
+.form-hint {
+    margin-top: 6px;
+    font-size: 11px;
+    line-height: 1.45;
+    color: var(--text-muted);
+}

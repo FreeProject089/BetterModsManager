@@ -577,7 +577,10 @@ async function confirmCreateProfile() {
     const color = document.getElementById('prof-color').value || '#3b82f6';
     const icon = document.getElementById('prof-icon').value || null;
 
-    if (!name || !gamePath || !modsPath || !backupPath) {
+    // backupPath is optional: create_profile puts it under the app's own data folder when
+    // it is blank. Requiring it here made a folder BMM can pick for you look like a decision
+    // you had to make before you could start.
+    if (!name || !gamePath || !modsPath) {
         toast(t('prof.missingFields'), 'error');
         return;
     }

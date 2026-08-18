@@ -426,6 +426,11 @@ pub fn archive_manifest(handle: &AppHandle, format: &str, entries: &[(String, Ve
 /// The verdict on an archive: the signature over the list, AND the files against the list.
 ///
 /// `entries` are the archive's contents as (name, bytes), including `bmm_signature.json`.
+// Unused in the desktop binary today: an archive arriving here has already been verified by
+// the installer path, and the reviewer-facing check runs in BCWEB's browser inspector. Kept
+// because it is the Rust half of a two-language contract — the JS implementation must keep
+// producing the same verdicts, and these tests are what proves it still does.
+#[allow(dead_code)]
 pub fn verify_archive(entries: &[(String, Vec<u8>)], expected_format: &str) -> Verdict {
     let Some((_, raw)) = entries.iter().find(|(n, _)| n == ARCHIVE_ENTRY) else {
         return Verdict::Unsigned;
