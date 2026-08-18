@@ -185,6 +185,23 @@ Ainsi « *si `disk.write_mbps` `<` 50, affiche un avertissement* » devient une 
 la valeur source n'a jamais été captée, la condition est simplement fausse — elle ne se
 déclenche pas sur une donnée manquante. Chaque condition peut aussi être **niée**.
 
+### Les groupes — `all` et `any`
+
+`all` et `any` contiennent une **liste d'autres conditions**, pour qu'une garde pose plusieurs
+questions sans un escalier de `si` imbriqués. « Quand le jeu est fermé **et** qu'il est plus de
+18 h **et** qu'une sauvegarde existe » tient dans un seul `all` ; un `any` à la place donne un
+*ou*. Ce sont eux-mêmes des conditions, donc ils s'imbriquent, et la négation que chaque
+condition avait déjà donne le *non*.
+
+Deux comportements à connaître, parce que ce sont ceux qu'on devine mal :
+
+- Un groupe **s'arrête à la première réponse qui tranche**. `all` s'arrête au premier faux,
+  `any` au premier vrai — les conditions suivantes ne sont donc jamais évaluées. Ça compte :
+  une condition peut lancer une commande ou aller sur le réseau, alors mets la moins chère
+  en premier.
+- Un `all` **vide est vrai** ; un `any` vide est faux. Ajouter un groupe sans le remplir tout
+  de suite ne bloque pas la tâche que tu es en train d'écrire.
+
 ## Boucles & attente
 
 Au-delà d'une liste plate d'actions, une tâche peut se ramifier et se répéter :

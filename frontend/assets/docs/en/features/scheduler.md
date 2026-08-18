@@ -185,6 +185,22 @@ until something becomes true (`waitFor`, below).
 | `fileExists` · `fileHash` · `fileSize` · `fileType` | File checks — a path exists, or its hash (blake3/sha256), size or type matches. |
 | `commandSucceeds` | An external command runs and exits `0`. |
 | `value` | A captured number compares against a threshold (below). |
+| `all` · `any` | Every / at least one of the conditions inside it holds (below). |
+
+### Groups — `all` and `any`
+
+`all` and `any` hold a **list of other conditions**, so a gate can ask more than one question
+without a staircase of nested ifs. "When the game is closed **and** it is after 18:00 **and**
+a backup exists" is one `all`; swap in an `any` for an *or*. They are conditions themselves,
+so they nest, and `negate` — which every condition already had — gives you *not*.
+
+Two behaviours worth knowing, because they are what you would get wrong:
+
+- A group **stops at the first answer that decides it**. `all` stops at the first false,
+  `any` at the first true — so the conditions after it never run. That matters because a
+  condition can run a command or reach the network: put the cheap check first.
+- An **empty `all` is true**; an empty `any` is false. Adding a group and not filling it in
+  yet does not block the task you are in the middle of writing.
 
 ### The `value` condition
 
