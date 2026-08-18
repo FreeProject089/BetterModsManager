@@ -52,6 +52,31 @@ distinct from updating the app itself.
 Export everything, import it back. Use export before anything you're not sure about — it's the
 cheapest insurance in the app.
 
+Two shapes, and the difference matters:
+
+| | |
+|---|---|
+| **`.DATABMM`** | A ZIP holding your settings and profiles **plus the files** — themes, launch packs, automations, session recordings, your navbar and every custom page. Signed, so a reader can tell it is still the archive BMM wrote. |
+| **JSON** | Settings and profiles only. Smaller, diffable, and readable by every older BMM — which is why it is still offered. |
+
+A JSON backup cannot carry files: inlining a 40&nbsp;MB recording turns it into a 55&nbsp;MB
+base64 string inside a document nothing can stream. That is the whole reason `.DATABMM` exists.
+
+Tick only the sections you want; each one reports what it **actually took**, so a section you
+asked for that turned out empty is something you find out now rather than the day you need it.
+
+!!! tip "Navigation is three places, and a backup needs all three"
+
+    Your navbar layout, each custom page's source, and each page's permissions and stored data
+    live separately. The **Navigation & custom pages** section takes all three. Two out of three
+    restores something broken — buttons pointing at pages that are gone, or a page that lost the
+    permissions it was written against and fails at the first thing it tries to do.
+
+!!! note "A `.DATABMM` is a backup, not a restore button"
+
+    There is no one-click restore for it yet. It is an ordinary ZIP on purpose, so you can open
+    it with anything and put back the part you need.
+
 !!! danger "Factory reset"
 
     The Debug section can wipe BMM back to zero. It asks first. There is no undo — export your

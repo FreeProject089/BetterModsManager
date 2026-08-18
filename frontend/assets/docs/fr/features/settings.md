@@ -55,6 +55,34 @@ vérifie tes *mods* (voir [Dépôt Serveur](doc-page:features/repo)), à ne pas 
 Exporte tout, réimporte. Fais un export avant toute manip dont tu n'es pas sûr : c'est
 l'assurance la moins chère de l'app.
 
+Deux formes, et la différence compte :
+
+| | |
+|---|---|
+| **`.DATABMM`** | Un ZIP contenant tes réglages et tes profils **plus les fichiers** — thèmes, launch packs, automatisations, enregistrements de session, ta barre de navigation et chaque page personnalisée. Signé, pour qu'un lecteur puisse vérifier que c'est toujours l'archive que BMM a écrite. |
+| **JSON** | Réglages et profils seulement. Plus petit, diffable, et lisible par toutes les anciennes versions de BMM — c'est pour ça qu'il est toujours proposé. |
+
+Une sauvegarde JSON ne peut pas transporter de fichiers : inliner un enregistrement de
+40&nbsp;Mo le transforme en une chaîne base64 de 55&nbsp;Mo dans un document que rien ne peut
+lire en flux. C'est toute la raison d'être du `.DATABMM`.
+
+Ne coche que les sections que tu veux ; chacune rapporte ce qu'elle a **réellement pris**, donc
+une section demandée qui s'avère vide, tu l'apprends maintenant et pas le jour où tu en as
+besoin.
+
+!!! tip "La navigation, c'est trois endroits, et une sauvegarde a besoin des trois"
+
+    Ta barre de navigation, la source de chaque page personnalisée, et les permissions et
+    données stockées de chaque page vivent séparément. La section **Navigation et pages
+    personnalisées** prend les trois. Deux sur trois restaure quelque chose de cassé : des
+    boutons pointant sur des pages disparues, ou une page qui a perdu les permissions pour
+    lesquelles elle a été écrite et qui échoue à la première chose qu'elle tente.
+
+!!! note "Un `.DATABMM` est une sauvegarde, pas un bouton de restauration"
+
+    Il n'y a pas encore de restauration en un clic. C'est un ZIP ordinaire, exprès : tu peux
+    l'ouvrir avec n'importe quoi et remettre en place la partie dont tu as besoin.
+
 !!! danger "Réinitialisation d'usine"
 
     La section Debug peut remettre BMM à zéro. Elle demande confirmation. Il n'y a pas de
