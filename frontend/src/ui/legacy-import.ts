@@ -16,7 +16,12 @@
 
 import { t } from '../core/i18n.js';
 import { invoke } from '../core/api.js';
-import { toast } from './app.js';
+
+// No toast here, and not to dodge the import cycle it would create (app.ts reaches this
+// module back through onboarding): the modal is the thing on screen when the import
+// finishes, and a message behind it is a message you have to close something to read. The
+// result is written into the modal, where you are already looking. style-modal.ts avoids the
+// same edge for the same kind of reason.
 
 const OVERLAY_ID = 'bmm-legacy-import';
 
@@ -97,17 +102,29 @@ export async function offerLegacyImport(next: () => void): Promise<void> {
     head.appendChild(el('h3', '', t('legacy.title')));
     modal.appendChild(head);
 
+    const skip = el('button', 'btn btn-secondary', t('legacy.skip')) as HTMLButtonElement;
+    skip.type = 'button';
+    skip.addEventListener('click', finish);
+
     const body = el('div', 'modal-body');
     body.appendChild(el('p', 'legacy-lede', t('legacy.lede')));
+
+    // The result line, written where you are already looking. Closing is then YOUR move:
+    // an import that silently dismissed the modal would leave you unsure what it did.
+    const result = el('p', 'legacy-result');
+    result.hidden = true;
 
     const runImport = async (cmd: string, okKey: string) => {
         try {
             const n = await invoke(cmd) as number;
-            toast(n > 0 ? t(okKey, { n: String(n) }) : t('legacy.nothingNew'), n > 0 ? 'success' : 'info');
+            result.textContent = n > 0 ? t(okKey, { n: String(n) }) : t('legacy.nothingNew');
+            result.className = n > 0 ? 'legacy-result ok' : 'legacy-result';
         } catch (e) {
-            toast(t('legacy.failed', { error: String(e) }), 'error');
+            result.textContent = t('legacy.failed', { error: String(e) });
+            result.className = 'legacy-result bad';
         }
-        finish();
+        result.hidden = false;
+        skip.textContent = t('legacy.done');
     };
 
     if (scan.ovgme?.count) {
@@ -120,13 +137,11 @@ export async function offerLegacyImport(next: () => void): Promise<void> {
     // What importing does NOT do, said before the click rather than discovered after it: it
     // reads their configuration and creates profiles pointing at the same folders. It moves
     // no files, and it changes nothing in the other manager.
+    body.appendChild(result);
     body.appendChild(el('p', 'legacy-note', t('legacy.note')));
     modal.appendChild(body);
 
     const foot = el('div', 'modal-footer');
-    const skip = el('button', 'btn btn-secondary', t('legacy.skip')) as HTMLButtonElement;
-    skip.type = 'button';
-    skip.addEventListener('click', finish);
     foot.appendChild(skip);
     modal.appendChild(foot);
 

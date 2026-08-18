@@ -7566,5 +7566,6 @@
   "legacy.andMore": "{names} and {n} more",
   "legacy.note": "Importing moves no files and changes nothing in the other manager — it only creates profiles pointing at the folders you already use.",
   "prof.backupDirOptional": "Leave blank — BMM picks one",
-  "prof.backupDirHint": "Optional. Left blank, BMM creates one in its own data folder, named after this profile — it only has to exist and be this profile's alone."
+  "prof.backupDirHint": "Optional. Left blank, BMM creates one in its own data folder, named after this profile — it only has to exist and be this profile's alone.",
+  "legacy.done": "Close"
 }
