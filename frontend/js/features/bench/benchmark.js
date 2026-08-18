@@ -1085,7 +1085,7 @@ function updateStatsView(container, point) {
     if (uptimeVal)
         uptimeVal.textContent = formatUnit(point.process_uptime || 0, 's');
     if (replayTime)
-        replayTime.textContent = `Time: ${new Date(point.timestamp * 1000).toLocaleTimeString()}`;
+        replayTime.textContent = t('bench.pointTime', { time: new Date(point.timestamp * 1000).toLocaleTimeString() });
     // Averages/Peaks
     if (benchmarkData.length > 0) {
         const avgCpu = benchmarkData.reduce((acc, p) => acc + p.cpu_usage, 0) / benchmarkData.length;

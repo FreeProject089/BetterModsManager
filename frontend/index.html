@@ -731,7 +731,7 @@
                     <!-- Title row: outside the glass shell -->
                     <div class="lib-header-title">
                         <h1 class="view-title" data-i18n="lib.title">Bibliothèque de Mods</h1>
-                        <p class="view-subtitle" id="lib-subtitle">Sélectionnez un profil pour commencer</p>
+                        <p class="view-subtitle" id="lib-subtitle" data-i18n="lib.subtitlePickProfile">Sélectionnez un profil pour commencer</p>
                     </div>
                     <!-- Action buttons tab: right-aligned, floats above the filter bar (creates notch shape) -->
                     <div class="lib-actions-tab">
@@ -5195,19 +5195,19 @@
                                             </div>
                                         </div>
                                         <ul id="bh-feedback-suggestions" class="bh-strength-suggestions">
-                                            <li>+ Add a descriptive title</li>
-                                            <li>+ Expand your description</li>
+                                            <li data-i18n="hub.suggestAddTitle">+ Add a descriptive title</li>
+                                            <li data-i18n="hub.suggestExpandDesc">+ Expand your description</li>
                                         </ul>
                                     </div>
                                     <!-- Guidance -->
                                     <div class="bh-guidance-box">
-                                        <h4 class="bh-guidance-title">Expert Guidance</h4>
+                                        <h4 class="bh-guidance-title" data-i18n="hub.guidanceTitle">Expert Guidance</h4>
                                         <ul class="bh-guidance-list">
-                                            <li><strong>Be Specific:</strong> Focus on one feature. Describe scenarios.
+                                            <li><strong data-i18n="hub.guideSpecific">Be Specific:</strong> <span data-i18n="hub.guideSpecificBody">Focus on one feature. Describe scenarios.</span>
                                             </li>
-                                            <li><strong>Explain the Benefit:</strong> How does it improve BMM?</li>
-                                            <li><strong>Use Examples:</strong> Refer to other tools or features.</li>
-                                            <li><strong>Keep it Clear:</strong> Use bullet points and paragraphs.</li>
+                                            <li><strong data-i18n="hub.guideBenefit">Explain the Benefit:</strong> <span data-i18n="hub.guideBenefitBody">How does it improve BMM?</span></li>
+                                            <li><strong data-i18n="hub.guideExamples">Use Examples:</strong> <span data-i18n="hub.guideExamplesBody">Refer to other tools or features.</span></li>
+                                            <li><strong data-i18n="hub.guideClear">Keep it Clear:</strong> <span data-i18n="hub.guideClearBody">Use bullet points and paragraphs.</span></li>
                                         </ul>
                                     </div>
                                 </div>
@@ -5495,8 +5495,8 @@
                                             </div>
                                         </div>
                                         <ul id="bh-bug-suggestions" class="bh-strength-suggestions">
-                                            <li>+ Add steps to reproduce</li>
-                                            <li>+ Expand your description</li>
+                                            <li data-i18n="hub.suggestAddSteps">+ Add steps to reproduce</li>
+                                            <li data-i18n="hub.suggestExpandDesc">+ Expand your description</li>
                                         </ul>
                                     </div>
 
@@ -6227,7 +6227,7 @@
                         </svg>
                         <h3 style="margin-bottom:8px; font-size:18px" data-i18n="prof.deleteConfirmMsg">Confirmation de
                             suppression</h3>
-                        <p style="font-size:14px; opacity:0.8; line-height:1.5" id="delete-profile-warning-text">
+                        <p style="font-size:14px; opacity:0.8; line-height:1.5" id="delete-profile-warning-text" data-i18n="prof.deleteConfirmWarning">
                             Voulez-vous vraiment supprimer ce profil ? Cette action est irréversible.
                         </p>
                     </div>
@@ -6536,9 +6536,9 @@
                                     style="padding:7px 10px;background:var(--bmm-s04);border:1px solid var(--bmm-s08);border-radius:8px;color:var(--text-secondary);font-size:12px;outline:none;cursor:pointer;transition:border-color 0.15s;"
                                     onfocus="this.style.borderColor='rgba(99,102,241,0.4)'"
                                     onblur="this.style.borderColor='rgba(255,255,255,0.08)'">
-                                    <option value="all">All servers</option>
-                                    <option value="whitelist">Whitelist ON</option>
-                                    <option value="no-whitelist">No whitelist</option>
+                                    <option value="all" data-i18n="srv.filterAllServers">All servers</option>
+                                    <option value="whitelist" data-i18n="srv.filterWhitelistOn">Whitelist ON</option>
+                                    <option value="no-whitelist" data-i18n="srv.filterNoWhitelist">No whitelist</option>
                                 </select>
                                 <label
                                     style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-secondary);cursor:pointer;white-space:nowrap;padding:6px 2px;">
@@ -7021,7 +7021,7 @@
                     </button>
                 </div>
                 <div class="modal-body" style="padding:16px 20px;overflow-y:auto;max-height:350px;">
-                    <div style="font-size:11px;color:var(--text-muted);margin-bottom:12px;">Sélectionnez le(s) mod(s) dont vous voulez ouvrir ce fichier dans l'explorateur:</div>
+                    <div style="font-size:11px;color:var(--text-muted);margin-bottom:12px;" data-i18n="mod.pickModsForFile">Sélectionnez le(s) mod(s) dont vous voulez ouvrir ce fichier dans l'explorateur :</div>
                     <div id="conflict-file-selector-list" style="display:flex;flex-direction:column;gap:8px;"></div>
                 </div>
                 <div style="padding:14px 20px;border-top:1px solid var(--bmm-s06);display:flex;justify-content:flex-end;gap:8px;background:var(--bmm-bg-base);">
@@ -7185,7 +7185,7 @@
                             </div>
                             <p style="margin:0; font-size:15px; font-weight:600; color:var(--text-secondary);"
                                 data-i18n="repo.monEmpty">Aucun téléchargement actif pour le moment...</p>
-                            <p style="margin:8px 0 0 0; font-size:12px; opacity:0.6;">Les téléchargements actifs
+                            <p style="margin:8px 0 0 0; font-size:12px; opacity:0.6;" data-i18n="repo.monEmptyHint">Les téléchargements actifs
                                 apparaîtront ici en temps réel</p>
                         </div>
                     </div>
@@ -7214,7 +7214,7 @@
                     </div>
                 </div>
                 <div class="modal-body" style="padding: 24px;">
-                    <div id="confirm-message"
+                    <div id="confirm-message" data-i18n="common.confirmGeneric"
                         style="margin:0; line-height:1.6; color:var(--text-muted); font-size:14px;">
                         Êtes-vous sûr de vouloir continuer ?</div>
                 </div>
@@ -7762,7 +7762,7 @@
                         style="top: 22px; right: 22px;">&times;</button>
                 </div>
                 <div class="modal-body" style="padding: 30px 28px;">
-                    <p id="mapper-confirm-message"
+                    <p id="mapper-confirm-message" data-i18n="mapper.confirmGeneric"
                         style="margin: 0; color: var(--text-muted); line-height: 1.6; font-size: 0.95rem;">Voulez-vous
                         vraiment effectuer cette action ?</p>
                 </div>
@@ -7871,7 +7871,7 @@
         <div class="tasky-speech-bubble">
             <div style="display:flex; align-items:center; gap:10px;">
                 <div id="tasky-bubble-eyes" style="width:20px; height:20px; flex-shrink:0;"></div>
-                <p id="tasky-explanation">Passez votre souris sur une étape pour que je vous explique !</p>
+                <p id="tasky-explanation" data-i18n="docs.diagram.taskyInstruction">Passez votre souris sur une étape pour que je vous explique !</p>
             </div>
         </div>
     </div>

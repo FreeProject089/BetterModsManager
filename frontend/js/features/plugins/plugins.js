@@ -2227,10 +2227,10 @@ async function openSmartQuickTest(m, p, rawBody) {
         const curl = `curl -X ${m} "${apiBase()}${resolvedCopyPath}"${authHeader}${bodyFlag}`;
         try {
             await navigator.clipboard.writeText(curl);
-            toast('cURL copié ! 📋', 'success');
+            toast(t('plugins.curlCopied'), 'success');
         }
         catch {
-            window.prompt('Copiez la commande cURL :', curl);
+            window.prompt(t('plugins.curlCopyManual'), curl);
         }
     });
     // ── Create Modpack helpers ────────────────────────────────────────────────
@@ -2887,7 +2887,7 @@ async function openSmartQuickTest(m, p, rawBody) {
             // Collect selected repo profiles (from auto-fetch panel checkboxes)
             const checkedRepoProfIds = Array.from(overlay.querySelectorAll('.plug-qt-sync-prof-check:checked')).map(c => c.value).filter(Boolean);
             if (!repoUrl || !gameDir || !modsDir || !backupDir) {
-                toast('url, game_dir, mods_dir et backup_dir sont obligatoires', 'warning');
+                toast(t('plugins.qtFieldsRequired', { fields: 'url, game_dir, mods_dir, backup_dir' }), 'warning');
                 return;
             }
             // Build choices — only include if profiles were explicitly selected
@@ -2984,7 +2984,7 @@ async function openSmartQuickTest(m, p, rawBody) {
         else if (p === '/api/repo/update') {
             const repoDir = overlay.querySelector('#plug-qt-s-repo-dir')?.value?.trim() || '';
             if (!repoDir) {
-                toast('repo_dir est obligatoire', 'warning');
+                toast(t('plugins.qtFieldsRequired', { fields: 'repo_dir' }), 'warning');
                 return;
             }
             overlay.remove();
@@ -3052,7 +3052,7 @@ async function openSmartQuickTest(m, p, rawBody) {
             const ftype = overlay.querySelector('#plug-qt-app-ftype')?.value || 'exe';
             const iPath = overlay.querySelector('#plug-qt-app-path')?.value?.trim() || '';
             if (!appId || !dlUrl) {
-                toast('app_id et download_url sont obligatoires', 'warning');
+                toast(t('plugins.qtFieldsRequired', { fields: 'app_id, download_url' }), 'warning');
                 return;
             }
             const installBody = JSON.stringify({ appId, appTitle, downloadUrl: dlUrl, fileType: ftype, installPath: iPath }, null, 2);
@@ -3065,7 +3065,7 @@ async function openSmartQuickTest(m, p, rawBody) {
             const appId = overlay.querySelector('#plug-qt-launch-id')?.value?.trim() || sel?.value || '';
             const exePath = overlay.querySelector('#plug-qt-launch-exe')?.value?.trim() || '';
             if (!appId) {
-                toast('app_id est obligatoire', 'warning');
+                toast(t('plugins.qtFieldsRequired', { fields: 'app_id' }), 'warning');
                 return;
             }
             overlay.remove();
@@ -3149,7 +3149,7 @@ async function openSmartQuickTest(m, p, rawBody) {
             const portStr = overlay.querySelector('#plug-qt-s-http-port')?.value?.trim();
             const ulStr = overlay.querySelector('#plug-qt-s-http-upload-limit')?.value?.trim();
             if (!serveDir) {
-                toast('serve_dir est obligatoire', 'warning');
+                toast(t('plugins.qtFieldsRequired', { fields: 'serve_dir' }), 'warning');
                 return;
             }
             const hostPl = { serveDir };

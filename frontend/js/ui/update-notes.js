@@ -998,7 +998,7 @@ function showUpdateAvailableModal(info) {
             }
             catch (err) {
                 toast(t('common.error') + ': ' + String(err), 'error');
-                progressLabel.textContent = 'Error — try the full installer';
+                progressLabel.textContent = t('update.errTryFullInstaller');
                 incrementalBtn.disabled = false;
                 if (modal.querySelector('#btn-download-install-update')) {
                     modal.querySelector('#btn-download-install-update').disabled = false;

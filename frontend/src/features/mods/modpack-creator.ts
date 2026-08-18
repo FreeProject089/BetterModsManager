@@ -1190,13 +1190,13 @@ async function _showRepairModal(container, pack, report, onComplete) {
                 if (!hasLink && isMissingMref) {
                     modRepairErrors.push(t('modpack.repair.noLink', { name: mref.mod_name }) || `${mref.mod_name} : aucun lien fourni`);
                     statusText.style.color = 'var(--text-muted)';
-                    statusText.textContent = `⚠ ${mref.mod_name} : aucun lien fourni, ignoré.`;
+                    statusText.textContent = `⚠ ${t('modpack.repair.noLinkSkipped', { name: mref.mod_name })}`;
                     await new Promise(r => setTimeout(r, 1200));
                     statusText.style.color = '';
                     continue;
                 }
 
-                statusText.textContent = `Réparation de ${mref.mod_name}...`;
+                statusText.textContent = t('modpack.repair.repairing', { name: mref.mod_name });
                 statusPct.textContent = `0%`;
                 progressBar.style.width = `0%`;
 

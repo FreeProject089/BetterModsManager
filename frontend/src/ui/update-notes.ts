@@ -1025,7 +1025,7 @@ function showUpdateAvailableModal(info) {
                 progressSection.style.borderColor = 'rgba(16,185,129,0.2)';
             } catch (err) {
                 toast(t('common.error') + ': ' + String(err), 'error');
-                progressLabel.textContent = 'Error — try the full installer';
+                progressLabel.textContent = t('update.errTryFullInstaller');
                 incrementalBtn.disabled = false;
                 if (modal.querySelector('#btn-download-install-update')) {
                     (modal.querySelector('#btn-download-install-update') as HTMLButtonElement).disabled = false;

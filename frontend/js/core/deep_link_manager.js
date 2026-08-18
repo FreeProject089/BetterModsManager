@@ -352,7 +352,7 @@ async function handleDeepLink(urlStr) {
                     prefill.port = parseInt(port, 10);
             }
             setTimeout(() => document.dispatchEvent(new CustomEvent('bmm:repo-focus', { detail: { section, prefill } })), 400);
-            toast(`Deep Link: ${action}`, 'info');
+            toast(t('deeplink.opened', { action }), 'info');
             return;
         }
         // ── Mod updates: check / apply ────────────────────────────────────
@@ -360,7 +360,7 @@ async function handleDeepLink(urlStr) {
             const navBtn = document.querySelector('.nav-item[data-view="repo"], [data-view="repo"]');
             navBtn?.click();
             setTimeout(() => { import('../features/repo/mod-updates.js').then(m => m.checkModUpdates(false)).catch(() => { }); }, 400);
-            toast(`Deep Link: ${action}`, 'info');
+            toast(t('deeplink.opened', { action }), 'info');
             return;
         }
         if (action === 'mod/update') {
@@ -373,7 +373,7 @@ async function handleDeepLink(urlStr) {
                 else
                     import('../features/repo/mod-updates.js').then(m => m.checkModUpdates(false)).catch(() => { });
             }, 400);
-            toast(`Deep Link: ${action}`, 'info');
+            toast(t('deeplink.opened', { action }), 'info');
             return;
         }
         // ── BetterCommunity catalog install: bmm://catalog/<kind>/install ──
@@ -781,7 +781,7 @@ async function handleDeepLink(urlStr) {
             const enabled = parsedUrl.searchParams.get('enabled') === '1' || parsedUrl.searchParams.get('enabled') === 'true';
             try {
                 await (await import('../features/settings/settings.js')).setDiscordRpc(enabled);
-                toast('Discord RPC ' + (enabled ? 'on' : 'off'), 'success');
+                toast(t(enabled ? 'settings.discordRpcOn' : 'settings.discordRpcOff'), 'success');
             }
             catch (e) {
                 toast(`${t('common.error') || 'Error'}: ${e}`, 'error');

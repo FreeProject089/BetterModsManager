@@ -27,7 +27,7 @@ export function initDebugMenu() {
             try {
                 toast(t('common.loading'), 'info');
                 const path = await invoke('trigger_manual_crash_report');
-                toast(`Report generated: ${path}`, 'success', 5000);
+                toast(t('debug.reportGenerated', { path }), 'success', 5000);
             }
             catch (err) {
                 toast((window.t ? window.t('common.error') : 'Failed') + ': ' + err, 'error');

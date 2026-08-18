@@ -997,7 +997,7 @@ function updateStatsView(container: HTMLElement, point: BenchmarkPoint) {
     if (ramVal) ramVal.textContent = formatUnit(point.ram_usage, 'MB');
     if (diskVal) diskVal.textContent = `${formatUnit(point.disk_read, 'KB/s')} / ${formatUnit(point.disk_write, 'KB/s')}`;
     if (uptimeVal) uptimeVal.textContent = formatUnit(point.process_uptime || 0, 's');
-    if (replayTime) replayTime.textContent = `Time: ${new Date(point.timestamp * 1000).toLocaleTimeString()}`;
+    if (replayTime) replayTime.textContent = t('bench.pointTime', { time: new Date(point.timestamp * 1000).toLocaleTimeString() });
 
     // Averages/Peaks
     if (benchmarkData.length > 0) {

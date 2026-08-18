@@ -2104,9 +2104,9 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
         const curl = `curl -X ${m} "${apiBase()}${resolvedCopyPath}"${authHeader}${bodyFlag}`;
         try {
             await navigator.clipboard.writeText(curl);
-            toast('cURL copié ! 📋', 'success');
+            toast(t('plugins.curlCopied'), 'success');
         } catch {
-            window.prompt('Copiez la commande cURL :', curl);
+            window.prompt(t('plugins.curlCopyManual'), curl);
         }
     });
 
@@ -2645,7 +2645,7 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
             // Collect selected repo profiles (from auto-fetch panel checkboxes)
             const checkedRepoProfIds = Array.from(overlay.querySelectorAll<HTMLInputElement>('.plug-qt-sync-prof-check:checked')).map(c => c.value).filter(Boolean);
             if (!repoUrl || !gameDir || !modsDir || !backupDir) {
-                toast('url, game_dir, mods_dir et backup_dir sont obligatoires', 'warning');
+                toast(t('plugins.qtFieldsRequired', { fields: 'url, game_dir, mods_dir, backup_dir' }), 'warning');
                 return;
             }
             // Build choices — only include if profiles were explicitly selected
@@ -2728,7 +2728,7 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
 
         } else if (p === '/api/repo/update') {
             const repoDir  = (overlay.querySelector('#plug-qt-s-repo-dir')   as HTMLInputElement)?.value?.trim() || '';
-            if (!repoDir) { toast('repo_dir est obligatoire', 'warning'); return; }
+            if (!repoDir) { toast(t('plugins.qtFieldsRequired', { fields: 'repo_dir' }), 'warning'); return; }
             overlay.remove();
             // Drive the BMM UI — navigate to repo page and open the update modal
             // pre-filled with the chosen repo directory. The user sees the full UI.
@@ -2783,7 +2783,7 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
             const dlUrl    = (overlay.querySelector('#plug-qt-app-url')   as HTMLInputElement)?.value?.trim() || '';
             const ftype    = (overlay.querySelector('#plug-qt-app-ftype') as HTMLSelectElement)?.value || 'exe';
             const iPath    = (overlay.querySelector('#plug-qt-app-path')  as HTMLInputElement)?.value?.trim() || '';
-            if (!appId || !dlUrl) { toast('app_id et download_url sont obligatoires', 'warning'); return; }
+            if (!appId || !dlUrl) { toast(t('plugins.qtFieldsRequired', { fields: 'app_id, download_url' }), 'warning'); return; }
             const installBody = JSON.stringify({ appId, appTitle, downloadUrl: dlUrl, fileType: ftype, installPath: iPath }, null, 2);
             overlay.remove();
             handleQuickTest('POST', '/api/apps/install', installBody);
@@ -2793,7 +2793,7 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
             const sel = overlay.querySelector('#plug-qt-launch-sel') as HTMLSelectElement | null;
             const appId   = (overlay.querySelector('#plug-qt-launch-id')  as HTMLInputElement)?.value?.trim() || sel?.value || '';
             const exePath = (overlay.querySelector('#plug-qt-launch-exe') as HTMLInputElement)?.value?.trim() || '';
-            if (!appId) { toast('app_id est obligatoire', 'warning'); return; }
+            if (!appId) { toast(t('plugins.qtFieldsRequired', { fields: 'app_id' }), 'warning'); return; }
             overlay.remove();
             handleQuickTest('POST', '/api/apps/launch', JSON.stringify({ appId, exePath }, null, 2));
             return;
@@ -2852,7 +2852,7 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
             const serveDir = (overlay.querySelector('#plug-qt-s-serve-dir')          as HTMLInputElement)?.value?.trim() || '';
             const portStr  = (overlay.querySelector('#plug-qt-s-http-port')          as HTMLInputElement)?.value?.trim();
             const ulStr    = (overlay.querySelector('#plug-qt-s-http-upload-limit')  as HTMLInputElement)?.value?.trim();
-            if (!serveDir) { toast('serve_dir est obligatoire', 'warning'); return; }
+            if (!serveDir) { toast(t('plugins.qtFieldsRequired', { fields: 'serve_dir' }), 'warning'); return; }
             const hostPl: any = { serveDir };
             if (portStr) hostPl.port        = parseInt(portStr, 10) || 8080;
             if (ulStr)   hostPl.uploadLimit = parseInt(ulStr, 10) || 0;

@@ -410,7 +410,7 @@ function initNavigation() {
                         cidLabel.innerHTML = `<span class="spinner" style="width:8px;height:8px;border:1.5px solid rgba(139,92,246,0.3);border-top-color:#8b5cf6;border-radius:50%;animation:spin 0.9s linear infinite;display:inline-block;flex-shrink:0"></span> COMPUTING...`;
                     }
                     if (cidHint)
-                        cidHint.textContent = 'Hashing file content...';
+                        cidHint.textContent = t('mod.hashingContent');
                     if (cidBtn)
                         cidBtn.style.opacity = '0.4';
                 }

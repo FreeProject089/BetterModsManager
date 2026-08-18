@@ -338,7 +338,7 @@ async function handleDeepLink(urlStr: string): Promise<void> {
                 const port = parsedUrl.searchParams.get('port'); if (port) prefill.port = parseInt(port, 10);
             }
             setTimeout(() => document.dispatchEvent(new CustomEvent('bmm:repo-focus', { detail: { section, prefill } })), 400);
-            toast(`Deep Link: ${action}`, 'info');
+            toast(t('deeplink.opened', { action }), 'info');
             return;
         }
 
@@ -347,7 +347,7 @@ async function handleDeepLink(urlStr: string): Promise<void> {
             const navBtn = document.querySelector('.nav-item[data-view="repo"], [data-view="repo"]') as HTMLElement | null;
             navBtn?.click();
             setTimeout(() => { import('../features/repo/mod-updates.js').then(m => m.checkModUpdates(false)).catch(() => {}); }, 400);
-            toast(`Deep Link: ${action}`, 'info');
+            toast(t('deeplink.opened', { action }), 'info');
             return;
         }
         if (action === 'mod/update') {
@@ -358,7 +358,7 @@ async function handleDeepLink(urlStr: string): Promise<void> {
                 if (url) document.dispatchEvent(new CustomEvent('bmm:repo-focus', { detail: { section: 'connect', prefill: { url } } }));
                 else import('../features/repo/mod-updates.js').then(m => m.checkModUpdates(false)).catch(() => {});
             }, 400);
-            toast(`Deep Link: ${action}`, 'info');
+            toast(t('deeplink.opened', { action }), 'info');
             return;
         }
 
@@ -709,7 +709,7 @@ async function handleDeepLink(urlStr: string): Promise<void> {
         // ── Discord RPC: bmm://discord/rpc?enabled=1 ──────────────────────────────
         if (action === 'discord/rpc') {
             const enabled = parsedUrl.searchParams.get('enabled') === '1' || parsedUrl.searchParams.get('enabled') === 'true';
-            try { await (await import('../features/settings/settings.js')).setDiscordRpc(enabled); toast('Discord RPC ' + (enabled ? 'on' : 'off'), 'success'); }
+            try { await (await import('../features/settings/settings.js')).setDiscordRpc(enabled); toast(t(enabled ? 'settings.discordRpcOn' : 'settings.discordRpcOff'), 'success'); }
             catch (e) { toast(`${t('common.error') || 'Error'}: ${e}`, 'error'); }
             return;
         }
