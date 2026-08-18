@@ -7514,5 +7514,10 @@
   "repo.remoteFromServer": "Updated the repo.json already on the server",
   "sched.more": "Files…",
   "sched.pc.doneToast": "{n} automation(s) found in the catalogues",
-  "sched.pc.noneToast": "The catalogues returned nothing"
+  "sched.pc.noneToast": "The catalogues returned nothing",
+  "sched.cond.all": "All of (AND)",
+  "sched.cond.any": "Any of (OR)",
+  "sched.cond.allHint": "Every one of these must hold",
+  "sched.cond.anyHint": "At least one of these must hold",
+  "sched.cond.add": "condition"
 }

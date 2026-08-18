@@ -7351,5 +7351,10 @@
   "repo.remoteFromServer": "",
   "sched.more": "",
   "sched.pc.doneToast": "",
-  "sched.pc.noneToast": ""
+  "sched.pc.noneToast": "",
+  "sched.cond.all": "",
+  "sched.cond.any": "",
+  "sched.cond.allHint": "",
+  "sched.cond.anyHint": "",
+  "sched.cond.add": ""
 }

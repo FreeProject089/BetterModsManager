@@ -7512,5 +7512,10 @@
   "repo.remoteFromServer": "repo.json déjà sur le serveur, mis à jour",
   "sched.more": "Fichiers…",
   "sched.pc.doneToast": "{n} automatisation(s) trouvée(s) dans les catalogues",
-  "sched.pc.noneToast": "Les catalogues n’ont rien renvoyé"
+  "sched.pc.noneToast": "Les catalogues n’ont rien renvoyé",
+  "sched.cond.all": "Toutes (ET)",
+  "sched.cond.any": "Au moins une (OU)",
+  "sched.cond.allHint": "Toutes ces conditions doivent être vraies",
+  "sched.cond.anyHint": "Au moins une de ces conditions doit être vraie",
+  "sched.cond.add": "condition"
 }

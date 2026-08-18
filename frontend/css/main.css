@@ -17057,3 +17057,29 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 .bmm-seg-item:hover { background: var(--bmm-s06); color: var(--text); }
 .bmm-seg-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .bmm-seg-item svg { flex-shrink: 0; }
+
+/* ── Condition groups in the scheduler ─────────────────────────────────────────
+   A group holds conditions, and a condition can be a group. The indent and the
+   left rule are what make three levels readable — without them a nested "any"
+   inside an "all" is a flat list of six rows that all look equally important. */
+.sched-cond-group {
+    border-left: 2px solid var(--bmm-s10);
+    padding: 6px 0 6px 10px;
+    margin-top: 4px;
+}
+.sched-cond-group-head {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+}
+.sched-cond-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 3px 0;
+}
+.sched-cond-row > :first-child { flex: 1; min-width: 0; }
+.sched-cond-del { flex-shrink: 0; opacity: 0.6; }
+.sched-cond-del:hover { opacity: 1; color: var(--danger); }

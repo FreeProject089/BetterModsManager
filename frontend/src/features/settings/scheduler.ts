@@ -1524,6 +1524,33 @@ async function evalConditionRaw(cond: Condition, ctx: RunCtx, task?: Task): Prom
     };
     switch (cond.type) {
         case 'always': return true;
+        // ── Boolean groups ───────────────────────────────────────────────────────────
+        //
+        // "Run this when the game is closed AND it is after 18:00 AND a backup exists" had
+        // to be written as three nested ifs, each with its own else — and the moment one
+        // needed an OR it became a switch whose cases repeated most of each other. Every
+        // condition in this file answers about ONE thing, which is right; what was missing
+        // was a way to say "these together".
+        //
+        // `all` and `any` hold a list of conditions in `params.of` and are themselves
+        // conditions, so they nest, and `negate` (which every condition already has) gives
+        // NOT. That is the whole of boolean algebra in two more types and no new concept.
+        //
+        // Short-circuiting is deliberate and not just for speed: a condition can run a
+        // command or reach the network, and "A AND B" must not run B when A already
+        // decided. An EMPTY group is `true` for `all` and `false` for `any` — the standard
+        // reading, and the one that makes a half-built group in the editor behave
+        // predictably rather than blocking the task.
+        case 'all': {
+            const of: Condition[] = Array.isArray(p.of) ? p.of : [];
+            for (const c of of) { if (!(await evalCondition(c, ctx, task))) return false; }
+            return true;
+        }
+        case 'any': {
+            const of: Condition[] = Array.isArray(p.of) ? p.of : [];
+            for (const c of of) { if (await evalCondition(c, ctx, task)) return true; }
+            return false;
+        }
         case 'enumIs': {
             // The typed subject a switch needs. Compares a VARIABLE against one declared
             // member of one declared enum, so the editor can later look at a switch's cases
@@ -4196,7 +4223,7 @@ function diskOptions(selected: string): string {
         _disks.map((d: any) => `<option value="${escAttr(d.mount_point)}"${d.mount_point === selected ? ' selected' : ''}>${escHtml(d.mount_point)}${d.name ? ' · ' + escHtml(d.name) : ''}</option>`).join('');
 }
 
-const COND_TYPES = ['always', 'value', 'enumIs', 'profileActive', 'modEnabled', 'modDisabled', 'modpackActive', 'modpackInactive', 'allModsActive', 'appRunning', 'appNotRunning', 'fileExists', 'pathIsDir', 'fileHash', 'filesMatch', 'fileSize', 'fileType', 'fileName', 'fileNewer', 'online', 'catalogOk', 'repoOk', 'timeReached', 'dayOfWeek', 'timeRange', 'commandSucceeds'];
+const COND_TYPES = ['always', 'all', 'any', 'value', 'enumIs', 'profileActive', 'modEnabled', 'modDisabled', 'modpackActive', 'modpackInactive', 'allModsActive', 'appRunning', 'appNotRunning', 'fileExists', 'pathIsDir', 'fileHash', 'filesMatch', 'fileSize', 'fileType', 'fileName', 'fileNewer', 'online', 'catalogOk', 'repoOk', 'timeReached', 'dayOfWeek', 'timeRange', 'commandSucceeds'];
 // Values a preceding action can capture (used by the `value` condition).
 // Every variable an action writes into `ctx`, so a `value` condition can read all of
 // them. Four were missing — check_disk_space has always written disk.free_gb,
@@ -4248,6 +4275,43 @@ function condFileInput(p: Record<string, any>): string {
 
 function renderCondParams(host: HTMLElement, cond: Condition): void {
     const p = cond.params || (cond.params = {});
+    // A GROUP renders the conditions inside it, each with its own full editor — so a group
+    // can hold a group, and "A and (B or not C)" is built by clicking rather than by nesting
+    // three ifs and repeating their else branches.
+    if (cond.type === 'all' || cond.type === 'any') {
+        if (!Array.isArray(p.of)) p.of = [];
+        const draw = () => {
+            host.innerHTML = `
+                <div class="sched-cond-group">
+                    <div class="sched-cond-group-head">${escHtml(cond.type === 'all'
+                        ? (t('sched.cond.allHint') || 'Every one of these must hold')
+                        : (t('sched.cond.anyHint') || 'At least one of these must hold'))}</div>
+                    <div class="sched-cond-list"></div>
+                    <button type="button" class="btn btn-xs btn-ghost sched-cond-add">+ ${escHtml(t('sched.cond.add') || 'condition')}</button>
+                </div>`;
+            const list = host.querySelector('.sched-cond-list') as HTMLElement;
+            (p.of as Condition[]).forEach((sub, i) => {
+                const row = document.createElement('div');
+                row.className = 'sched-cond-row';
+                const del = document.createElement('button');
+                del.type = 'button';
+                del.className = 'btn btn-xs btn-ghost sched-cond-del';
+                del.textContent = '✕';
+                del.title = t('common.delete') || 'Remove';
+                del.addEventListener('click', () => { _snapshot(); (p.of as Condition[]).splice(i, 1); draw(); });
+                row.appendChild(conditionEditor(sub));
+                row.appendChild(del);
+                list.appendChild(row);
+            });
+            host.querySelector('.sched-cond-add')?.addEventListener('click', () => {
+                _snapshot();
+                (p.of as Condition[]).push({ type: 'always', params: {} });
+                draw();
+            });
+        };
+        draw();
+        return;
+    }
     if (cond.type === 'profileActive') host.innerHTML = `<select class="input sched-cp" style="max-width:180px">${pickerOptions(_profiles, p.id)}</select>`;
     else if (cond.type === 'modEnabled' || cond.type === 'modDisabled') host.innerHTML = `<select class="input sched-cp" style="max-width:200px">${pickerOptions(_mods, p.id)}</select>`;
     else if (cond.type === 'modpackActive' || cond.type === 'modpackInactive') host.innerHTML = `<select class="input sched-cp" style="max-width:200px">${pickerOptions(_modpacks, p.id)}</select>`;
