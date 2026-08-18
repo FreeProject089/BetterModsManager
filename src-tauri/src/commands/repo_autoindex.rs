@@ -525,6 +525,11 @@ pub async fn plan_remote_repo_refresh(
 #[derive(Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RemoteRefreshReport {
+    /// True when the previous manifest was read FROM THE SERVER rather than from a local
+    /// file. Reported because it changes what the numbers below mean: hashes were carried
+    /// forward from a document the server handed us, which the signature check accepted.
+    #[serde(default)]
+    pub previous_from_server: bool,
     pub manifest_path: String,
     pub mods: usize,
     pub files: usize,
@@ -574,9 +579,40 @@ pub async fn refresh_repo_from_server(
     }));
     let listing = crawl(&base, &client).await?;
 
-    let previous: Option<ServerRepo> = std::fs::read_to_string(&manifest_path)
+    // The previous manifest, from disk — or FROM THE SERVER when there is no local copy.
+    //
+    // This is the ordinary case and it was the unsupported one: the repo.json already lives
+    // beside the mods, and asking somebody to first download it, point a file picker at it,
+    // and then ask BMM to update it is three steps to fetch a file BMM can fetch. Without a
+    // previous manifest the planner has nothing to carry forward, so EVERY file comes back
+    // hashless and every mod installs "unverified" — which is what that report was.
+    //
+    // Fetched, never trusted blindly: it goes through the same signature check as a local
+    // one (see plan_refresh), so a manifest the server rewrote is treated as "not ours" and
+    // its hashes are recomputed rather than believed.
+    let mut previous: Option<ServerRepo> = std::fs::read_to_string(&manifest_path)
         .ok()
         .and_then(|s| serde_json::from_str(&s).ok());
+    let mut previous_from_server = false;
+    if previous.is_none() {
+        // `<base>/repo.json` and one level up, which is where the two layouts put it: beside
+        // the mods folder, or inside it.
+        for url in [format!("{}/repo.json", base), base.rsplit_once('/').map(|(p, _)| format!("{}/repo.json", p)).unwrap_or_default()] {
+            if url.is_empty() { continue; }
+            let Ok(resp) = client.get(&url).send().await else { continue };
+            if !resp.status().is_success() { continue; }
+            let Ok(text) = resp.text().await else { continue };
+            if let Ok(doc) = serde_json::from_str::<ServerRepo>(&text) {
+                previous = Some(doc);
+                previous_from_server = true;
+                let _ = window.emit("bmm://repo-export-progress", serde_json::json!({
+                    "step": format!("Found the repo.json already on the server ({url})"),
+                    "progress": 6.0, "current_file": "",
+                }));
+                break;
+            }
+        }
+    }
     let mine = crate::commands::security::get_creator_id(handle.clone()).ok();
     let plan = plan_refresh(
         &listing,
@@ -761,6 +797,20 @@ pub async fn refresh_repo_from_server(
     };
 
     let json = serde_json::to_string_pretty(&repo).map_err(|e| e.to_string())?;
+    // Where it lands when the caller named no local file: beside the app data, under a name
+    // taken from the repo. Somewhere real and reported, rather than refusing to write at the
+    // end of a job that already did all the work.
+    let manifest_path = if manifest_path.trim().is_empty() {
+        let dir = { use tauri::Manager; handle.path().app_data_dir() }.unwrap_or_default().join("RemoteRepos");
+        let _ = std::fs::create_dir_all(&dir);
+        let stem: String = repo.name.chars()
+            .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '-' })
+            .collect();
+        dir.join(format!("{}-repo.json", stem.trim_matches('-')))
+            .to_string_lossy().to_string()
+    } else {
+        manifest_path
+    };
     std::fs::write(&manifest_path, json).map_err(|e| e.to_string())?;
 
     let _ = window.emit("bmm://repo-export-progress", serde_json::json!({
@@ -768,6 +818,7 @@ pub async fn refresh_repo_from_server(
     }));
 
     Ok(RemoteRefreshReport {
+        previous_from_server,
         manifest_path,
         mods: mods_count,
         files: files_count,

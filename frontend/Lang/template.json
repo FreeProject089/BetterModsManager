@@ -7346,5 +7346,7 @@
   "settings.toastsMute": "",
   "settings.toastsMuteDesc": "",
   "settings.toastsOn": "",
-  "settings.toastsOff": ""
+  "settings.toastsOff": "",
+  "repo.remoteManifestHint": "",
+  "repo.remoteFromServer": ""
 }

@@ -6754,7 +6754,7 @@
   "repo.remoteTitle": "Mettre à jour depuis le serveur",
   "repo.remoteIntro": "Tes mods sont uniquement sur le serveur ? BMM lit son listing et met à jour repo.json sans rapatrier le repo. Nécessite l'index de répertoire (autoindex) activé.",
   "repo.remoteBaseUrl": "URL DU DOSSIER DES MODS",
-  "repo.remoteManifest": "TON repo.json LOCAL",
+  "repo.remoteManifest": "TON repo.json LOCAL (OPTIONNEL)",
   "repo.remoteForce": "Tout revérifier (re-hasher chaque fichier)",
   "repo.remotePlan": "VÉRIFIER (SANS RIEN CHANGER)",
   "repo.remoteRefresh": "METTRE À JOUR",
@@ -7507,5 +7507,7 @@
   "settings.toastsMute": "Notifications contextuelles",
   "settings.toastsMuteDesc": "Désactive les bulles en bas de l'écran. Tout reste consultable dans le centre de notifications, et les erreurs s'affichent toujours.",
   "settings.toastsOn": "Notifications activées",
-  "settings.toastsOff": "Notifications désactivées — tout reste dans le centre de notifications"
+  "settings.toastsOff": "Notifications désactivées — tout reste dans le centre de notifications",
+  "repo.remoteManifestHint": "Laisse vide si le repo.json est déjà sur le serveur : BMM le récupère, vérifie sa signature et écrit la version mise à jour. C’est ce qui évite que tous les mods reviennent « non vérifiés ».",
+  "repo.remoteFromServer": "repo.json déjà sur le serveur, mis à jour"
 }

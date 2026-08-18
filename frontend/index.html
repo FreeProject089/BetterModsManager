@@ -1951,7 +1951,7 @@
 
                                     <div style="margin-bottom:14px;">
                                         <span style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:700;"
-                                            data-i18n="repo.remoteManifest">TON repo.json LOCAL</span>
+                                            data-i18n="repo.remoteManifest">TON repo.json LOCAL (OPTIONNEL)</span>
                                         <div style="display:flex; gap:6px; margin-top:5px;">
                                             <input type="text" id="remote-manifest-path" class="form-input" readonly
                                                 placeholder="repo.json"
@@ -1960,6 +1960,11 @@
                                                 style="height:28px; padding:0 10px; font-size:11px; font-weight:700;"
                                                 data-i18n="common.browse">PARCOURIR</button>
                                         </div>
+                                        <p style="font-size:10px; color:var(--text-muted); margin:5px 0 0; line-height:1.4;"
+                                            data-i18n="repo.remoteManifestHint">Laisse vide si le repo.json est deja
+                                            sur le serveur : BMM le recupere, verifie sa signature et ecrit la version
+                                            mise a jour. C&apos;est ce qui evite que tous les mods reviennent
+                                            &laquo; non verifies &raquo;.</p>
                                     </div>
 
                                     <div style="display:flex; gap:10px; margin-bottom:10px;">

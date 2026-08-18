@@ -29,6 +29,7 @@ interface PlanReport {
 interface RefreshReport {
     created: boolean;
     manifestPath: string;
+    previousFromServer: boolean;
     mods: number;
     files: number;
     hashed: number;
@@ -50,10 +51,11 @@ function inputs(): Record<string, unknown> | null {
         toast(t('repo.remoteNeedUrl') || 'Enter the URL of the mods folder', 'error');
         return null;
     }
-    if (!manifestPath) {
-        toast(t('repo.remoteNeedManifest') || 'Choose your local repo.json', 'error');
-        return null;
-    }
+    // No local file is FINE now. Empty means "the repo.json is already on the server" —
+    // BMM fetches it, checks its signature like any other, and writes the updated one beside
+    // the app data. Requiring a local copy first was three steps to obtain a file BMM can
+    // obtain, and skipping it meant every mod came back unverified because there was no
+    // previous manifest to carry hashes forward from.
     return {
         baseUrl,
         manifestPath,
@@ -117,6 +119,12 @@ async function run(which: 'plan' | 'refresh') {
             const r = (await invoke('refresh_repo_from_server', args)) as RefreshReport;
             show([
                 ['', r.manifestPath, 'var(--text-muted)'],
+                // Where the previous manifest came from changes what "already covered" means:
+                // those hashes were carried forward from a document the SERVER handed us, and
+                // the reader deserves to know that rather than infer it.
+                ...(r.previousFromServer
+                    ? [[t('repo.remoteFromServer') || 'Updated the repo.json already on the server', '✓', 'var(--success)'] as [string, string, string]]
+                    : []),
                 ['', `${r.mods} mods · ${r.files} files`],
                 [t('repo.remoteMissing') || 'Newly published', String(r.added), 'var(--accent)'],
                 [t('repo.remoteChanged') || 'Updated', String(r.changed), 'var(--warning)'],

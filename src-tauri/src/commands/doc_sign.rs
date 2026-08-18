@@ -555,3 +555,35 @@ mod archive_tests {
         assert!(matches!(verify_archive(&a, "bmmplug"), Verdict::Valid { .. }));
     }
 }
+
+/// Print a signed ARCHIVE sample, for the Node verifier's test.
+///
+/// Same reason as the document one above: the two implementations live in different
+/// languages and repositories, and nothing else would notice them drifting apart until every
+/// plugin a moderator opened read as tampered.
+#[cfg(test)]
+mod cross_language_archive {
+    use super::*;
+    use ed25519_dalek::{Signer, SigningKey, VerifyingKey};
+
+    #[test]
+    fn print_a_signed_archive_sample() {
+        let entries: Vec<(String, Vec<u8>)> = vec![
+            ("plugin.json".to_string(), br#"{"id":"demo","name":"Demo"}"#.to_vec()),
+            ("scripts/run.js".to_string(), b"export const go = () => 1;\n".to_vec()),
+            // A binary entry, because a plugin ships icons and a hash must not care.
+            ("icon.png".to_string(), vec![0x89, 0x50, 0x4e, 0x47, 0x00, 0x01, 0x02]),
+        ];
+        let mut doc = entry_list("bmmplug", &entries);
+        let sk = SigningKey::from_bytes(&[9u8; 32]);
+        let vk: VerifyingKey = (&sk).into();
+        let bytes = payload(&doc, "bmmplug").unwrap();
+        doc.as_object_mut().unwrap().insert(FIELD.into(), serde_json::json!({
+            "format": "bmmplug",
+            "author_id": hex::encode(vk.to_bytes()),
+            "signature": hex::encode(sk.sign(&bytes).to_bytes()),
+            "signed_at": "2026-08-18T10:00:00+02:00",
+        }));
+        println!("ARCHIVE_SAMPLE {}", serde_json::to_string(&doc).unwrap());
+    }
+}
