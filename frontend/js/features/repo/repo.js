@@ -397,7 +397,11 @@ export const copyToClipboard = async (text, successMsg) => {
 // #modal-confirm-generic and touches no repo state — and living here meant anything that
 // wanted a yes/no had to import this 4000-line module, or write its own. One did.
 // Re-exported so every existing `import { showConfirm } from './repo.js'` keeps working.
-export { showConfirm } from '../../ui/confirm.js';
+// Imported as well as re-exported: `export … from` forwards the name, it does not bring it
+// into this module's scope, and repo.ts calls showConfirm itself. tsc is told to skip this
+// file, so nothing said so — check-undefined-names did.
+import { showConfirm } from '../../ui/confirm.js';
+export { showConfirm };
 // --- Profile Checklist (exportable function) ---
 export const loadProfilesForExport = async (profilesListEl) => {
     if (!profilesListEl)
