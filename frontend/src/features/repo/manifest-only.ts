@@ -257,10 +257,19 @@ function renderReport(r: ManifestReport) {
 function setBusy(on: boolean, text?: string) {
     const btn = $('btn-generate-manifest') as HTMLButtonElement | null;
     if (btn) { btn.disabled = on; btn.style.opacity = on ? '0.6' : ''; }
-    const line = $('manifest-progress');
-    if (!line) return;
-    line.style.display = on ? '' : 'none';
-    if (text) line.textContent = text;
+    const box = $('manifest-progress');
+    if (!box) return;
+    box.style.display = on ? '' : 'none';
+    if (text) { const l = $('manifest-progress-label'); if (l) l.textContent = text; }
+    if (!on) {
+        // Reset on the way out, or the next run opens showing the last one's last file.
+        const fill = $('manifest-progress-fill');
+        if (fill) fill.style.width = '0%';
+        const pct = $('manifest-progress-pct');
+        if (pct) pct.textContent = '0%';
+        const now = $('manifest-progress-now');
+        if (now) now.textContent = '';
+    }
 }
 
 async function generate() {
@@ -301,9 +310,19 @@ async function listenForProgress() {
     await ev.listen('bmm://repo-manifest-progress', (event: { payload: { done: number; total: number; name: string } }) => {
         const p = event.payload;
         if (!p) return;
-        const line = $('manifest-progress');
-        if (!line || line.style.display === 'none') return;
-        line.textContent = `${p.done}/${p.total} — ${p.name}`;
+        const box = $('manifest-progress');
+        if (!box || box.style.display === 'none') return;
+        const pct = p.total > 0 ? Math.round((p.done / p.total) * 100) : 0;
+        const fill = $('manifest-progress-fill');
+        if (fill) fill.style.width = `${pct}%`;
+        const label = $('manifest-progress-pct');
+        if (label) label.textContent = `${pct}%`;
+        const head = $('manifest-progress-label');
+        if (head) head.textContent = `${p.done}/${p.total}`;
+        // The file being hashed, on its own line: it is the thing that proves the bar is
+        // moving between two percentages that are the same number.
+        const now = $('manifest-progress-now');
+        if (now) now.textContent = p.name || '';
     });
 }
 

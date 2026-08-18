@@ -1781,19 +1781,12 @@
                                         </button>
                                     </div>
 
-                                    <div id="repo-export-progress-container" style="display:none;margin-top:14px;">
-                                        <div
-                                            style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-secondary);margin-bottom:5px;">
+                                    <div id="repo-export-progress-container" class="bmm-progress" style="display:none;--bmm-progress-ink:var(--cyan);">
+                                        <div class="bmm-progress-head">
                                             <span id="repo-export-status" data-i18n="repo.exporting">...</span>
-                                            <span id="repo-export-percent"
-                                                style="font-weight:600;color:var(--cyan);">0%</span>
+                                            <span class="bmm-progress-pct" id="repo-export-percent">0%</span>
                                         </div>
-                                        <div
-                                            style="height:5px;background:var(--bmm-s08);border-radius:4px;overflow:hidden;">
-                                            <div id="repo-export-progress-fill"
-                                                style="height:100%;width:0%;background:linear-gradient(90deg,var(--cyan),#00f0ff);transition:width 0.25s ease;box-shadow:0 0 8px var(--cyan);border-radius:4px;">
-                                            </div>
-                                        </div>
+                                        <div class="bmm-progress-track"><div class="bmm-progress-fill" id="repo-export-progress-fill"></div></div>
                                     </div>
 
                                     <!-- Update existing repo (incremental) -->
@@ -1911,8 +1904,14 @@
 
                                     <!-- Hashing a real collection takes minutes. A disabled
                                          button and an empty card read as "it does nothing". -->
-                                    <div id="manifest-progress"
-                                        style="display:none; font-size:11px; color:var(--text-muted); margin-bottom:8px; word-break:break-all;"></div>
+                                    <div id="manifest-progress" class="bmm-progress" style="display:none; margin-bottom:10px;">
+                                        <div class="bmm-progress-head">
+                                            <span id="manifest-progress-label" data-i18n="repo.manifestWorking">Lecture des dossiers...</span>
+                                            <span class="bmm-progress-pct" id="manifest-progress-pct">0%</span>
+                                        </div>
+                                        <div class="bmm-progress-track"><div class="bmm-progress-fill" id="manifest-progress-fill"></div></div>
+                                        <div class="bmm-progress-now" id="manifest-progress-now"></div>
+                                    </div>
 
                                     <div style="display:flex; gap:10px; align-items:center;">
                                         <button class="btn btn-primary" id="btn-generate-manifest"
@@ -2812,26 +2811,16 @@
                                             data-i18n="repo.howDoesItWork">COMMENT ÇA MARCHE ?</span>
                                     </button>
 
-                                    <div id="repo-sync-progress-container" style="display:none;margin-top:14px;">
-                                        <div
-                                            style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-secondary);margin-bottom:5px;">
+                                    <div id="repo-sync-progress-container" class="bmm-progress" style="display:none;">
+                                        <div class="bmm-progress-head">
                                             <div style="display:flex;align-items:center;gap:8px">
                                                 <span id="repo-sync-status" data-i18n="common.loading">...</span>
                                                 <span id="repo-sync-paused-badge"
                                                     style="display:none;background:rgba(245,158,11,0.2);color:var(--warning);padding:2px 6px;border-radius:4px;font-size:9px;font-weight:800;letter-spacing:0.5px">PAUSED</span>
                                             </div>
-                                            <span id="repo-sync-percent"
-                                                style="font-weight:600;color:var(--accent);">0%</span>
+                                            <span class="bmm-progress-pct" id="repo-sync-percent">0%</span>
                                         </div>
-                                        <div
-                                            style="height:5px;background:var(--bmm-s08);border-radius:4px;overflow:hidden;">
-                                            <div id="repo-sync-progress-fill"
-                                                style="height:100%;width:0%;background:var(--accent);transition:width 0.25s ease;box-shadow:0 0 10px rgba(59, 130, 246, 0.5);border-radius:4px;position:relative;overflow:hidden;">
-                                                <div
-                                                    style="position:absolute;top:0;left:0;right:0;bottom:0;background:linear-gradient(90deg, transparent, var(--bmm-s20), transparent);animation:sync-progress-shine 2s infinite;">
-                                                </div>
-                                            </div>
-                                        </div>
+                                        <div class="bmm-progress-track"><div class="bmm-progress-fill" id="repo-sync-progress-fill"></div></div>
                                         <div id="repo-sync-details"
                                             style="font-size:10px;color:var(--text-muted);margin-top:8px;font-family:var(--font-mono);line-height:1.8;max-height:80px;overflow-y:auto;background:var(--bmm-bg-base);border-radius:6px;padding:6px 8px;word-break:break-all;">
                                         </div>

@@ -16942,3 +16942,76 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 .bmm-tag-menu-sep { height: 1px; margin: 4px 2px; background: var(--bmm-border, var(--border)); }
 .bmm-tag-new { display: flex; flex-direction: column; gap: 6px; padding: 6px; }
 .bmm-tag-new-row { display: flex; align-items: center; gap: 6px; }
+
+/* ── One progress bar ──────────────────────────────────────────────────────────
+   There were three, written inline in three places: 5px tall, one cyan, one blue,
+   one a plain line of text. They report the same kind of thing — a long job the
+   window is holding still for — and a reader should not have to learn each one.
+
+   Taller (9px), because the complaint was that they were not visible, and a 5px
+   line under a paragraph of small text is not something the eye finds. The accent
+   is a variable so a card can keep its own colour without redefining the bar. */
+.bmm-progress {
+    --bmm-progress-ink: var(--accent);
+    margin-top: 12px;
+}
+.bmm-progress-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+}
+.bmm-progress-pct {
+    font-weight: 700;
+    font-family: var(--font-mono);
+    color: var(--bmm-progress-ink);
+    font-variant-numeric: tabular-nums;   /* or the percentage jitters as it counts */
+}
+.bmm-progress-track {
+    height: 9px;
+    background: var(--bmm-s08);
+    border: 1px solid var(--bmm-s10);
+    border-radius: 6px;
+    overflow: hidden;
+}
+.bmm-progress-fill {
+    height: 100%;
+    width: 0%;
+    border-radius: 5px;
+    background: var(--bmm-progress-ink);
+    box-shadow: 0 0 10px color-mix(in srgb, var(--bmm-progress-ink) 55%, transparent);
+    transition: width 0.25s ease;
+    position: relative;
+    overflow: hidden;
+}
+/* The sheen says "still working" while the number is not moving — which is most of a
+   long file. Off under reduced-motion: it is decoration, and the bar still fills. */
+.bmm-progress-fill::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent, var(--bmm-s20), transparent);
+    animation: bmm-progress-shine 2s infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+    .bmm-progress-fill::after { animation: none; }
+    .bmm-progress-fill { transition: none; }
+}
+@keyframes bmm-progress-shine {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+}
+/* What it is working on right now. Monospace and clipped to one line: a mod called
+   something enormous must not reflow the card on every file. */
+.bmm-progress-now {
+    font-size: 10px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    margin-top: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
