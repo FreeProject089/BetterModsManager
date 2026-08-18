@@ -7602,5 +7602,11 @@
   "restore.s.Crashes": "Rapports de plantage",
   "restore.s.diagnostics": "Diagnostics",
   "restore.s.other": "Entrées non reconnues",
-  "restore.notif": "{n} fichier(s) restauré(s) depuis un .DATABMM — {sections}."
+  "restore.notif": "{n} fichier(s) restauré(s) depuis un .DATABMM — {sections}.",
+  "repo.serverPanelTitle": "Serveur",
+  "repo.tabMonitoring": "Surveillance",
+  "repo.tabWhitelist": "Whitelist",
+  "repo.tabBans": "Bannissements",
+  "repo.whitelistOffNote": "Désactivée : tout le monde peut se connecter.",
+  "repo.bansNote": "Les bannissements sont vérifiés avant la whitelist."
 }

@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { invoke } from '../../core/api.js';
+import { openServerModal, SERVER_TAB_EVENT } from './server-modal.js';
 import { toast, toastSaved } from '../../ui/app.js';
 import { t } from '../../core/i18n.js';
 import { escHtml, escAttr } from '../../core/utils.js';
@@ -132,17 +133,13 @@ export function initRepoAdmin(elements) {
     }
 
     if (btnOpenBans) {
-        btnOpenBans.addEventListener('click', () => {
-            modalBans.classList.add('open');
-            loadBanList();
-        });
+        btnOpenBans.addEventListener('click', () => { openServerModal('bans'); loadBanList(); });
     }
 
-    document.querySelectorAll('[data-close="modal-bans"]').forEach(btn => {
-        btn.onclick = () => { if(modalBans) modalBans.classList.remove('open'); };
-    });
-    modalBans?.addEventListener('click', (e) => {
-        if (e.target === modalBans) modalBans.classList.remove('open');
+    // Refreshed when its tab is SHOWN, not only when the modal opens — otherwise banning
+    // something from the monitoring table and switching over shows a list from before it.
+    document.addEventListener(SERVER_TAB_EVENT, (e) => {
+        if ((e as CustomEvent).detail?.tab === 'bans') loadBanList();
     });
 
     if (btnAddManualBan) {
@@ -283,16 +280,13 @@ export function initRepoAdmin(elements) {
 
     if (btnOpenWhitelist) {
         btnOpenWhitelist.addEventListener('click', () => {
-            modalWhitelist.classList.add('open');
+            openServerModal('whitelist');
             loadWhitelist();
         });
     }
 
-    document.querySelectorAll('[data-close="modal-whitelist"]').forEach(btn => {
-        btn.onclick = () => { if(modalWhitelist) modalWhitelist.classList.remove('open'); };
-    });
-    modalWhitelist?.addEventListener('click', (e) => {
-        if (e.target === modalWhitelist) modalWhitelist.classList.remove('open');
+    document.addEventListener(SERVER_TAB_EVENT, (e) => {
+        if ((e as CustomEvent).detail?.tab === 'whitelist') { loadWhitelist(); }
     });
 
 }

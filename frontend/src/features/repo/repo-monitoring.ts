@@ -1,5 +1,6 @@
 ﻿// @ts-nocheck
 import { invoke } from '../../core/api.js';
+import { openServerModal, SERVER_TAB_EVENT } from './server-modal.js';
 import { t } from '../../core/i18n.js';
 import { escHtml, escAttr, formatBytes } from '../../core/utils.js';
 import { copyToClipboard } from './repo.js';
@@ -178,17 +179,19 @@ export function initRepoMonitoring(elements) {
     };
 
     if (btnOpenMonitoring) {
-        btnOpenMonitoring.addEventListener('click', () => {
-            modalMonitoring.classList.add('open');
-            startMonitoring();
-        });
+        btnOpenMonitoring.addEventListener('click', () => openServerModal('monitoring'));
     }
 
-    document.querySelectorAll('[data-close="modal-monitoring"]').forEach(btn => {
-        btn.addEventListener('click', stopMonitoring);
-    });
-    modalMonitoring?.addEventListener('click', (e) => {
-        if (e.target === modalMonitoring) stopMonitoring();
+    // Polling follows the VISIBLE TAB, not the modal.
+    //
+    // This asks the server for the connected-client table every second. When the three panels
+    // were three modals, closing one stopped it; now you can be looking at the ban list with
+    // the modal still open, and a poll running behind a panel nobody is reading is the kind of
+    // load that only shows up on somebody else's server.
+    document.addEventListener(SERVER_TAB_EVENT, (e) => {
+        const tab = (e as CustomEvent).detail?.tab;
+        if (tab === 'monitoring') startMonitoring();
+        else stopMonitoring();
     });
 
     return {

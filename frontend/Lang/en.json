@@ -7604,5 +7604,11 @@
   "restore.s.Crashes": "Crash reports",
   "restore.s.diagnostics": "Diagnostics",
   "restore.s.other": "Unrecognised entries",
-  "restore.notif": "Restored {n} file(s) from a .DATABMM — {sections}."
+  "restore.notif": "Restored {n} file(s) from a .DATABMM — {sections}.",
+  "repo.serverPanelTitle": "Server",
+  "repo.tabMonitoring": "Monitoring",
+  "repo.tabWhitelist": "Whitelist",
+  "repo.tabBans": "Bans",
+  "repo.whitelistOffNote": "Off: anyone may connect.",
+  "repo.bansNote": "Bans are checked before the whitelist."
 }

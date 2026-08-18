@@ -31,6 +31,7 @@
     <link rel="stylesheet" href="css/repo-sync.css" />
     <link rel="stylesheet" href="css/style-modal.css" />
     <link rel="stylesheet" href="css/legacy-import.css" />
+    <link rel="stylesheet" href="css/server-modal.css" />
     <link rel="stylesheet" href="assets/cropper/cropper.min.css">
     <script src="assets/cropper/cropper.min.js"></script>
     <!-- GSAP — used for boot loader animation (vendored locally, CWE-829: no CDN/SRI risk) -->
@@ -7109,38 +7110,68 @@
         </div>
 
         <!-- Monitoring Modal -->
-        <div class="modal-overlay" id="modal-monitoring" style="z-index: 1100;">
-            <div class="modal glass"
-                style="max-width: 1000px; width: 95%; max-height:85vh; display:flex; flex-direction:column; border: 1px solid var(--bmm-s10); border-radius: 16px; overflow: hidden;">
-                <div class="modal-header server-modal-header"
-                    style="padding: 20px 24px; background: linear-gradient(135deg, rgba(6,182,212,0.08) 0%, rgba(6,182,212,0.02) 100%); border-bottom: 1px solid rgba(6,182,212,0.15);">
-                    <div style="display:flex; align-items:center; gap:14px;">
-                        <div
-                            style="width:48px; height:48px; background:linear-gradient(135deg, rgba(6,182,212,0.2) 0%, rgba(6,182,212,0.1) 100%); border-radius:14px; display:flex; align-items:center; justify-content:center; color:var(--cyan); border: 1px solid rgba(6,182,212,0.3); box-shadow: 0 4px 12px rgba(6,182,212,0.15);">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2.5">
-                                <path d="M21 12V7H5a2 2 0 0 1 0-4h14v4" />
-                                <path d="M3 5v14a2 2 0 0 0 2 2h16v-5" />
-                                <path d="M18 12a2 2 0 0 0 0 4h4v-4Z" />
-                            </svg>
-                        </div>
-                        <div>
-                            <h2 data-i18n="repo.monitoringTitle"
-                                style="margin:0; font-size:19px; font-weight:800; color:var(--text-primary); letter-spacing:-0.01em;">
-                                SERVER MONITORING</h2>
-                            <p style="margin:4px 0 0 0; font-size:11px; color:var(--cyan); font-weight:600; opacity: 0.9;"
-                                data-i18n="repo.monitoringSubtitle">REAL-TIME CONNECTED USERS</p>
-                        </div>
+        <!-- ── The server, in one modal ────────────────────────────────────────────
+             Monitoring, whitelist and bans used to be three separate overlays, each with its
+             own 48px gradient header saying which of the three you had opened. They are three
+             views of ONE thing — who is connected, who may connect, who may not — and every
+             real task crosses them: you watch the table, you see an address you do not like,
+             you ban it, you check it is gone. That was three open/close cycles.
+
+             One modal, three tabs, and the tab rail is also the answer to "where am I".
+
+             Every inner id below is the one the old markup used, deliberately: repo-monitoring
+             and repo-admin populate these by id, and this is a rewrite of the SHELL. Changing
+             the ids too would have turned a layout change into a behaviour change, with
+             nothing to tell the two apart when something broke. -->
+        <div class="modal-overlay" id="modal-server" style="z-index: 1100;">
+            <div class="modal glass srv-modal">
+                <div class="modal-header srv-header">
+                    <div class="srv-title">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                            <path d="M21 12V7H5a2 2 0 0 1 0-4h14v4" />
+                            <path d="M3 5v14a2 2 0 0 0 2 2h16v-5" />
+                            <path d="M18 12a2 2 0 0 0 0 4h4v-4Z" />
+                        </svg>
+                        <h2 data-i18n="repo.serverPanelTitle">Server</h2>
                     </div>
-                    <button class="modal-close" data-close="modal-monitoring"
-                        style="width:36px; height:36px; border-radius:10px; background:var(--bmm-s05); border:1px solid var(--bmm-s10); transition:all 0.2s ease;">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2.5">
+                    <button class="modal-close srv-close" data-close="modal-server" aria-label="Close">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                             <line x1="18" y1="6" x2="6" y2="18"></line>
                             <line x1="6" y1="6" x2="18" y2="18"></line>
                         </svg>
                     </button>
                 </div>
+
+                <!-- The rail. `aria-selected` is what the stylesheet reads, so the state a
+                     screen reader gets and the state you can see cannot disagree. -->
+                <div class="srv-tabs" role="tablist">
+                    <button class="srv-tab" role="tab" data-srv-tab="monitoring" aria-selected="true"
+                        aria-controls="srv-panel-monitoring" id="srv-tabbtn-monitoring">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                            <path d="M3 12h4l3 8 4-16 3 8h4" />
+                        </svg>
+                        <span data-i18n="repo.tabMonitoring">Monitoring</span>
+                        <span class="srv-tab-count" id="srv-count-monitoring"></span>
+                    </button>
+                    <button class="srv-tab" role="tab" data-srv-tab="whitelist" aria-selected="false"
+                        aria-controls="srv-panel-whitelist" id="srv-tabbtn-whitelist">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                            <path d="M20 6 9 17l-5-5" />
+                        </svg>
+                        <span data-i18n="repo.tabWhitelist">Whitelist</span>
+                        <span class="srv-tab-count admin-modal-counter admin-modal-counter--accent" id="whitelist-counter" style="display:none">0</span>
+                    </button>
+                    <button class="srv-tab" role="tab" data-srv-tab="bans" aria-selected="false"
+                        aria-controls="srv-panel-bans" id="srv-tabbtn-bans">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                            <circle cx="12" cy="12" r="9" /><path d="m5.6 5.6 12.8 12.8" />
+                        </svg>
+                        <span data-i18n="repo.tabBans">Bans</span>
+                        <span class="srv-tab-count admin-modal-counter" id="bans-counter" style="display:none">0</span>
+                    </button>
+                </div>
+
+                <div class="srv-panel" id="srv-panel-monitoring" role="tabpanel" aria-labelledby="srv-tabbtn-monitoring">
                 <div class="monitoring-stats-bar">
                     <div class="monitoring-stat">
                         <span class="monitoring-stat-label" data-i18n="repo.monStatClients">CLIENTS</span>
@@ -7203,97 +7234,89 @@
                                 data-i18n="repo.monEmpty">Aucun téléchargement actif pour le moment...</p>
                             <p style="margin:8px 0 0 0; font-size:12px; opacity:0.6;" data-i18n="repo.monEmptyHint">Les téléchargements actifs
                                 apparaîtront ici en temps réel</p>
-                        </div>
-                    </div>
                 </div>
-            </div>
-        </div>
-
-        <!-- Modal: Generic Premium Confirmation -->
-        <div class="modal-overlay" id="modal-confirm-generic" style="z-index: 9999;">
-            <div class="modal glass" style="max-width: 400px; width: 90%; border: 1px solid var(--bmm-s10);">
-                <div class="modal-header" style="border-bottom: none; padding-bottom: 0;">
-                    <div style="display:flex; align-items:center; gap:12px; width: 100%;">
-                        <div id="confirm-icon-container"
-                            style="width:40px; height:40px; background:rgba(239, 68, 68, 0.1); border-radius:12px; display:flex; align-items:center; justify-content:center; color:var(--danger);">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2.5">
-                                <path
-                                    d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-                                <line x1="12" y1="9" x2="12" y2="13" />
-                                <line x1="12" y1="17" x2="12.01" y2="17" />
-                            </svg>
-                        </div>
-                        <h3 id="confirm-title"
-                            style="margin:0; font-size:18px; font-weight:800; color:var(--text-primary);">Confirmation
-                        </h3>
-                    </div>
-                </div>
-                <div class="modal-body" style="padding: 24px;">
-                    <div id="confirm-message" data-i18n="common.confirmGeneric"
-                        style="margin:0; line-height:1.6; color:var(--text-muted); font-size:14px;">
-                        Êtes-vous sûr de vouloir continuer ?</div>
-                </div>
-                <div class="modal-footer"
-                    style="padding: 16px 24px; display: flex; justify-content: flex-end; gap: 12px; border-top: none;">
-                    <button class="btn btn-ghost modal-close" id="btn-confirm-cancel" style="min-width: 100px;"
-                        data-i18n="common.cancel">Annuler</button>
-                    <button class="btn btn-danger" id="btn-confirm-yes"
-                        style="min-width: 120px; font-weight: 800; text-transform: uppercase;"
-                        data-i18n="common.confirm">CONFIRMER</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Ban List Modal -->
-        <div id="modal-bans" class="modal-overlay" style="z-index: 1105;">
-            <div class="modal glass"
-                style="max-width: 800px; width: 90%; max-height: 85vh; display:flex; flex-direction:column; border: 1px solid var(--bmm-s10); border-radius: 16px; overflow: hidden;">
-                <div class="modal-header server-modal-header"
-                    style="padding: 20px 24px; background: linear-gradient(135deg, rgba(239, 68, 68, 0.08) 0%, rgba(239, 68, 68, 0.02) 100%); border-bottom: 1px solid rgba(239, 68, 68, 0.15);">
-                    <div style="display:flex; align-items:center; gap:14px;">
-                        <div
-                            style="width:48px; height:48px; background:linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(239, 68, 68, 0.1) 100%); border-radius:14px; display:flex; align-items:center; justify-content:center; color:var(--danger); border: 1px solid rgba(239, 68, 68, 0.3); box-shadow: 0 4px 12px rgba(239, 68, 68, 0.15);">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2.5">
-                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
-                                <line x1="12" y1="8" x2="12" y2="12"></line>
-                                <line x1="12" y1="16" x2="12.01" y2="16"></line>
-                            </svg>
-                        </div>
-                        <div>
-                            <div style="display:flex; align-items:center; gap:10px; margin-bottom:2px;">
-                                <h2 data-i18n="repo.bansTitle"
-                                    style="margin:0; font-size:19px; font-weight:800; color:var(--text-primary); letter-spacing:-0.01em;">
-                                    BAN MANAGEMENT</h2>
-                                <span id="bans-counter" class="admin-modal-counter admin-modal-counter--danger"
-                                    style="display:none;">0</span>
-                            </div>
-                            <p style="margin:0; font-size:11px; color:var(--danger); font-weight:600; opacity: 0.9;"
-                                data-i18n="repo.bansSubtitle">BANNED IPS AND CREATOR KEYS</p>
-                        </div>
-                    </div>
-                    <div style="display:flex; align-items:center; gap:12px;">
-                        <button class="btn btn-ghost btn-xs" id="btn-export-bans"
-                            style="font-size:10px; height: 36px; padding: 0 14px; border:none; color:var(--cyan); border-radius: 10px; font-weight: 700; background:transparent; opacity:0.7; transition:opacity 0.2s ease;">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2.5" style="margin-right:6px;">
+                <div class="srv-panel" id="srv-panel-whitelist" role="tabpanel" aria-labelledby="srv-tabbtn-whitelist" hidden>
+                    <!-- The master switch, and what it does when it is off. It governs the
+                         whole server, not this list, so it says so — a switch labelled only
+                         "Enable" next to a list of addresses reads as enabling the list. -->
+                    <div class="srv-actions">
+                        <button id="whitelist-toggle-btn" class="srv-switch" type="button">
+                            <input type="checkbox" id="whitelist-toggle" class="toggle toggle-accent toggle-xs" style="pointer-events:none">
+                            <span data-i18n="repo.whitelistEnable">Activer</span>
+                        </button>
+                        <span class="srv-actions-note" data-i18n="repo.whitelistOffNote">Off: anyone may connect.</span>
+                        <button class="btn btn-ghost btn-xs srv-export" id="btn-export-whitelist" type="button">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
                                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                                 <polyline points="7 10 12 15 17 10" />
                                 <line x1="12" y1="15" x2="12" y2="3" />
                             </svg>
-                            EXPORT
-                        </button>
-                        <button class="modal-close" data-close="modal-bans"
-                            style="width:36px; height:36px; border-radius:10px; background:var(--bmm-s05); border:1px solid var(--bmm-s10); transition:all 0.2s ease;">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2.5">
-                                <line x1="18" y1="6" x2="6" y2="18"></line>
-                                <line x1="6" y1="6" x2="18" y2="18"></line>
-                            </svg>
+                            <span data-i18n="repo.exportBtn">Export</span>
                         </button>
                     </div>
+                <div class="modal-body"
+                    style="padding: 0; display:flex; flex-direction:column; flex:1; overflow:hidden;">
+                    <!-- Manual Whitelist Form -->
+                    <div
+                        style="padding:20px 24px; background:rgba(59, 130, 246, 0.03); border-bottom:1px solid rgba(59, 130, 246, 0.1);">
+                        <h3 style="margin:0 0 14px 0; font-size:11px; font-weight:800; color:var(--accent); text-transform:uppercase; letter-spacing:0.12em;"
+                            data-i18n="repo.whitelistManualTitle">Ajouter a la main</h3>
+                        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                            <input type="text" id="manual-whitelist-ip" class="form-input"
+                                style="flex:1; min-width:140px; font-size:13px; height:40px; background:var(--bmm-bg-base); border-radius: 12px; border-color: rgba(59, 130, 246, 0.2);"
+                                placeholder="IP Address..." data-i18n-placeholder="repo.whitelistManualIP" />
+                            <input type="text" id="manual-whitelist-key" class="form-input"
+                                style="flex:1; min-width:140px; font-size:13px; height:40px; background:var(--bmm-bg-base); border-radius: 12px; border-color: rgba(59, 130, 246, 0.2);"
+                                placeholder="Creator Key..." data-i18n-placeholder="repo.whitelistManualKey" />
+                            <button class="btn btn-primary btn-sm" id="btn-add-manual-whitelist"
+                                style="height:40px; padding: 0 24px; font-weight:800; font-size:12px; border-radius: 12px; box-shadow: 0 4px 16px rgba(59, 130, 246, 0.3);">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2.5" style="margin-right:8px">
+                                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                                    <path d="m9 12 2 2 4-4"></path>
+                                </svg>
+                                <span data-i18n="repo.whitelistManualAdd">AUTORISER</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Search and Filters -->
+                    <div class="modal-search-bar"
+                        style="margin: 16px 24px; padding:12px 16px; background:var(--bmm-s02); border-radius:12px; border:1px solid var(--bmm-s05); display:flex; align-items:center; gap:12px;">
+                        <div style="position:relative; flex:1; display: flex; align-items: center;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)"
+                                stroke-width="2.5" style="position:absolute; left:0; pointer-events: none;">
+                                <circle cx="11" cy="11" r="8" />
+                                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                            </svg>
+                            <input type="text" id="whitelist-search" class="form-input"
+                                style="width:100%; height:32px; padding-left:28px; font-size:13px; border:none; background: transparent;"
+                                placeholder="Search whitelist..." data-i18n-placeholder="repo.whitelistSearch" />
+                        </div>
+                        <div style="width: 1px; height: 24px; background: var(--bmm-s10);"></div>
+                        <button class="btn btn-outline-danger btn-xs" id="btn-clear-whitelist"
+                            style="height:32px; border-radius:8px; font-weight:800; font-size:10px; padding: 0 12px; border-color: rgba(239, 68, 68, 0.3);"
+                            data-i18n="repo.whitelistClearBtn">
+                            CLEAR ALL
+                        </button>
+                    </div>
+
+                    <!-- List items injected by JS -->
+                    <div id="whitelist-list-container" style="flex:1; overflow-y:auto; padding:0 24px 24px;">
+                        <!-- List items injected by JS -->
                 </div>
+                <div class="srv-panel" id="srv-panel-bans" role="tabpanel" aria-labelledby="srv-tabbtn-bans" hidden>
+                    <div class="srv-actions">
+                        <span class="srv-actions-note" data-i18n="repo.bansNote">Bans are checked before the whitelist.</span>
+                        <button class="btn btn-ghost btn-xs srv-export" id="btn-export-bans" type="button">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                <polyline points="7 10 12 15 17 10" />
+                                <line x1="12" y1="15" x2="12" y2="3" />
+                            </svg>
+                            <span data-i18n="repo.exportBtn">Export</span>
+                        </button>
+                    </div>
                 <div class="modal-body"
                     style="padding: 0; display:flex; flex-direction:column; flex:1; overflow:hidden;">
                     <!-- Manual Ban Form -->
@@ -7348,120 +7371,50 @@
                     <!-- List items injected by JS -->
                     <div id="ban-list-container" style="flex:1; overflow-y:auto; padding:0 24px 24px;">
                         <!-- List items injected by JS -->
-                    </div>
                 </div>
             </div>
         </div>
 
-        <!-- Whitelist Modal -->
-        <div id="modal-whitelist" class="modal-overlay" style="z-index: 1106;">
-            <div class="modal glass"
-                style="max-width: 800px; width: 90%; max-height: 85vh; display:flex; flex-direction:column; border: 1px solid var(--bmm-s10); border-radius: 16px; overflow: hidden;">
-                <div class="modal-header server-modal-header"
-                    style="padding: 20px 24px; background: linear-gradient(135deg, rgba(59, 130, 246, 0.08) 0%, rgba(59, 130, 246, 0.02) 100%); border-bottom: 1px solid rgba(59, 130, 246, 0.15);">
-                    <div style="display:flex; align-items:center; gap:14px;">
-                        <div
-                            style="width:48px; height:48px; background:linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(59, 130, 246, 0.1) 100%); border-radius:14px; display:flex; align-items:center; justify-content:center; color:var(--accent); border:1px solid rgba(59, 130, 246, 0.3); box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);">
+
+        <!-- Modal: Generic Premium Confirmation -->
+        <div class="modal-overlay" id="modal-confirm-generic" style="z-index: 9999;">
+            <div class="modal glass" style="max-width: 400px; width: 90%; border: 1px solid var(--bmm-s10);">
+                <div class="modal-header" style="border-bottom: none; padding-bottom: 0;">
+                    <div style="display:flex; align-items:center; gap:12px; width: 100%;">
+                        <div id="confirm-icon-container"
+                            style="width:40px; height:40px; background:rgba(239, 68, 68, 0.1); border-radius:12px; display:flex; align-items:center; justify-content:center; color:var(--danger);">
                             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="2.5">
-                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
-                                <path d="m9 12 2 2 4-4"></path>
+                                <path
+                                    d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                                <line x1="12" y1="9" x2="12" y2="13" />
+                                <line x1="12" y1="17" x2="12.01" y2="17" />
                             </svg>
                         </div>
-                        <div>
-                            <div style="display:flex; align-items:center; gap:10px; margin-bottom:2px;">
-                                <h2 data-i18n="repo.whitelistTitle"
-                                    style="margin:0; font-size:19px; font-weight:800; color:var(--text-primary); letter-spacing:-0.01em;">
-                                    WHITELIST MANAGEMENT</h2>
-                                <span id="whitelist-counter" class="admin-modal-counter admin-modal-counter--accent"
-                                    style="display:none;">0</span>
-                            </div>
-                            <p style="margin:0; font-size:11px; color:var(--accent); font-weight:600; opacity: 0.9;"
-                                data-i18n="repo.whitelistSubtitle">Only the people you list can reach this server</p>
-                        </div>
-                    </div>
-                    <div style="display:flex; align-items:center; gap:12px;">
-                        <button class="btn btn-ghost btn-xs" id="btn-export-whitelist"
-                            style="font-size:10px; height: 36px; padding: 0 14px; border:none; color:var(--cyan); border-radius: 10px; font-weight: 700; background:transparent; opacity:0.7; transition:opacity 0.2s ease;">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2.5" style="margin-right:6px;">
-                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                                <polyline points="7 10 12 15 17 10" />
-                                <line x1="12" y1="15" x2="12" y2="3" />
-                            </svg>
-                            EXPORT
-                        </button>
-                        <button id="whitelist-toggle-btn"
-                            style="display:flex; align-items:center; gap:10px; background:rgba(59, 130, 246, 0.15); padding:8px 16px; border-radius:24px; border:1px solid rgba(59, 130, 246, 0.3); cursor:pointer; transition:all 0.2s ease;">
-                            <span style="font-size:10px; font-weight:900; color:var(--accent); letter-spacing: 0.05em;"
-                                data-i18n="repo.whitelistEnable">Activer</span>
-                            <input type="checkbox" id="whitelist-toggle" class="toggle toggle-accent toggle-xs"
-                                style="pointer-events:none;">
-                        </button>
-                        <button class="modal-close" data-close="modal-whitelist"
-                            style="width:36px; height:36px; border-radius:10px; background:var(--bmm-s05); border:1px solid var(--bmm-s10); transition:all 0.2s ease;">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2.5">
-                                <line x1="18" y1="6" x2="6" y2="18"></line>
-                                <line x1="6" y1="6" x2="18" y2="18"></line>
-                            </svg>
-                        </button>
+                        <h3 id="confirm-title"
+                            style="margin:0; font-size:18px; font-weight:800; color:var(--text-primary);">Confirmation
+                        </h3>
                     </div>
                 </div>
-                <div class="modal-body"
-                    style="padding: 0; display:flex; flex-direction:column; flex:1; overflow:hidden;">
-                    <!-- Manual Whitelist Form -->
-                    <div
-                        style="padding:20px 24px; background:rgba(59, 130, 246, 0.03); border-bottom:1px solid rgba(59, 130, 246, 0.1);">
-                        <h3 style="margin:0 0 14px 0; font-size:11px; font-weight:800; color:var(--accent); text-transform:uppercase; letter-spacing:0.12em;"
-                            data-i18n="repo.whitelistManualTitle">Ajouter a la main</h3>
-                        <div style="display:flex; gap:10px; flex-wrap:wrap;">
-                            <input type="text" id="manual-whitelist-ip" class="form-input"
-                                style="flex:1; min-width:140px; font-size:13px; height:40px; background:var(--bmm-bg-base); border-radius: 12px; border-color: rgba(59, 130, 246, 0.2);"
-                                placeholder="IP Address..." data-i18n-placeholder="repo.whitelistManualIP" />
-                            <input type="text" id="manual-whitelist-key" class="form-input"
-                                style="flex:1; min-width:140px; font-size:13px; height:40px; background:var(--bmm-bg-base); border-radius: 12px; border-color: rgba(59, 130, 246, 0.2);"
-                                placeholder="Creator Key..." data-i18n-placeholder="repo.whitelistManualKey" />
-                            <button class="btn btn-primary btn-sm" id="btn-add-manual-whitelist"
-                                style="height:40px; padding: 0 24px; font-weight:800; font-size:12px; border-radius: 12px; box-shadow: 0 4px 16px rgba(59, 130, 246, 0.3);">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                    stroke-width="2.5" style="margin-right:8px">
-                                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
-                                    <path d="m9 12 2 2 4-4"></path>
-                                </svg>
-                                <span data-i18n="repo.whitelistManualAdd">AUTORISER</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Search and Filters -->
-                    <div class="modal-search-bar"
-                        style="margin: 16px 24px; padding:12px 16px; background:var(--bmm-s02); border-radius:12px; border:1px solid var(--bmm-s05); display:flex; align-items:center; gap:12px;">
-                        <div style="position:relative; flex:1; display: flex; align-items: center;">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)"
-                                stroke-width="2.5" style="position:absolute; left:0; pointer-events: none;">
-                                <circle cx="11" cy="11" r="8" />
-                                <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                            </svg>
-                            <input type="text" id="whitelist-search" class="form-input"
-                                style="width:100%; height:32px; padding-left:28px; font-size:13px; border:none; background: transparent;"
-                                placeholder="Search whitelist..." data-i18n-placeholder="repo.whitelistSearch" />
-                        </div>
-                        <div style="width: 1px; height: 24px; background: var(--bmm-s10);"></div>
-                        <button class="btn btn-outline-danger btn-xs" id="btn-clear-whitelist"
-                            style="height:32px; border-radius:8px; font-weight:800; font-size:10px; padding: 0 12px; border-color: rgba(239, 68, 68, 0.3);"
-                            data-i18n="repo.whitelistClearBtn">
-                            CLEAR ALL
-                        </button>
-                    </div>
-
-                    <!-- List items injected by JS -->
-                    <div id="whitelist-list-container" style="flex:1; overflow-y:auto; padding:0 24px 24px;">
-                        <!-- List items injected by JS -->
-                    </div>
+                <div class="modal-body" style="padding: 24px;">
+                    <div id="confirm-message" data-i18n="common.confirmGeneric"
+                        style="margin:0; line-height:1.6; color:var(--text-muted); font-size:14px;">
+                        Êtes-vous sûr de vouloir continuer ?</div>
+                </div>
+                <div class="modal-footer"
+                    style="padding: 16px 24px; display: flex; justify-content: flex-end; gap: 12px; border-top: none;">
+                    <button class="btn btn-ghost modal-close" id="btn-confirm-cancel" style="min-width: 100px;"
+                        data-i18n="common.cancel">Annuler</button>
+                    <button class="btn btn-danger" id="btn-confirm-yes"
+                        style="min-width: 120px; font-weight: 800; text-transform: uppercase;"
+                        data-i18n="common.confirm">CONFIRMER</button>
                 </div>
             </div>
         </div>
+
+        <!-- Ban List Modal -->
+
+        <!-- Whitelist Modal -->
 
         <!-- Modal for Mapper Inputs -->
         <div id="modal-mapper-input" class="modal-generic-overlay">

@@ -13,6 +13,7 @@ import { t } from '../../core/i18n.js';
 // Sub-modules
 import { initRepoServer } from './repo-server.js';
 import { initRepoMonitoring } from './repo-monitoring.js';
+import { initServerModal } from './server-modal.js';
 import { initRepoSync, showSyncSummary, setRepoPassword } from './repo-sync.js';
 import { initModUpdates } from './mod-updates.js';
 import { initRepoAdmin } from './repo-admin.js';
@@ -593,11 +594,13 @@ export function initRepo() {
 
         // --- Monitoring, Bans, Whitelist ---
         btnOpenMonitoring: document.getElementById('btn-open-monitoring'),
-        modalMonitoring: document.getElementById('modal-monitoring'),
+        // All three are the SAME element now. Kept as three names because the features
+        // that use them are still three features — merging the UI did not merge those.
+        modalMonitoring: document.getElementById('modal-server'),
         monitoringListBody: document.getElementById('monitoring-list-body'),
         monitoringEmptyHint: document.getElementById('monitoring-empty-hint'),
         btnOpenBans: document.getElementById('btn-open-bans'),
-        modalBans: document.getElementById('modal-bans'),
+        modalBans: document.getElementById('modal-server'),
         banListContainer: document.getElementById('ban-list-container'),
         inputBanSearch: document.getElementById('ban-search'),
         selectBanFilter: document.getElementById('ban-filter-type'),
@@ -607,7 +610,7 @@ export function initRepo() {
         manualBanIp: document.getElementById('manual-ban-ip'),
         manualBanKey: document.getElementById('manual-ban-key'),
         btnOpenWhitelist: document.getElementById('btn-open-whitelist'),
-        modalWhitelist: document.getElementById('modal-whitelist'),
+        modalWhitelist: document.getElementById('modal-server'),
         whitelistListContainer: document.getElementById('whitelist-list-container'),
         whitelistToggle: document.getElementById('whitelist-toggle'),
         whitelistToggleBtn: document.getElementById('whitelist-toggle-btn'),
@@ -653,6 +656,9 @@ export function initRepo() {
 
     // Initialize Sub-Modules
     initRepoServer(elements);
+    // The shell first: the three features below bind their own open buttons and listen for
+    // the tab event, and neither is useful until the rail exists.
+    initServerModal();
     initRepoMonitoring(elements);
     initRepoSync(elements);
     initRepoAdmin(elements);

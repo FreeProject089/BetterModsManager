@@ -1,0 +1,128 @@
+/* The server modal — monitoring, whitelist and bans in one place.
+   See src/features/repo/server-modal.ts and #modal-server in index.html.
+
+   Written with tokens only. This panel is read while something is happening on a real server,
+   often at a glance, so it has to be legible in every theme rather than in the one it was
+   designed in. */
+
+.srv-modal {
+    max-width: 1000px;
+    width: 95%;
+    max-height: 86vh;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+}
+
+/* One header for three views. It no longer announces WHICH of the three you opened — the tab
+   rail does that, and it does it without you having to close anything to find out. */
+.srv-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+}
+.srv-title { display: flex; align-items: center; gap: 10px; color: var(--accent); }
+.srv-title h2 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: var(--text-primary);
+}
+.srv-close {
+    width: 32px; height: 32px;
+    border-radius: 9px;
+    background: var(--bmm-s05);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    display: grid; place-items: center;
+    transition: color .15s ease, background .15s ease;
+}
+.srv-close:hover { color: var(--text-primary); background: var(--bmm-s10); }
+
+/* The rail. Scrolls rather than wraps: three tabs that reflow onto two lines move the panel
+   under them, which is exactly what you do not want while watching a live table. */
+.srv-tabs {
+    display: flex;
+    gap: 4px;
+    padding: 8px 12px 0;
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+.srv-tabs::-webkit-scrollbar { display: none; }
+
+.srv-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 9px 14px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+    border-radius: 10px 10px 0 0;
+    /* The selected tab is marked by a line that meets the panel, not by a fill: a filled tab
+       and a filled panel next to each other read as two separate surfaces. */
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    transition: color .15s ease, border-color .15s ease;
+}
+.srv-tab:hover { color: var(--text-primary); }
+/* Driven by aria-selected, so what a screen reader is told and what you can see are the same
+   fact rather than two that have to be kept in step. */
+.srv-tab[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); }
+
+.srv-tab-count {
+    min-width: 18px;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: var(--bmm-s10);
+    color: var(--text-secondary);
+    font-size: 10px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+}
+.srv-tab[aria-selected="true"] .srv-tab-count { background: var(--accent); color: var(--bmm-bg-base); }
+
+/* A panel fills what is left and scrolls inside itself, so the tab rail never scrolls away
+   from a long ban list. `hidden` is honoured explicitly — display:flex would otherwise win
+   over the attribute and show every panel at once. */
+.srv-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-height: 0; }
+.srv-panel[hidden] { display: none; }
+
+/* The row that carries what used to be in a header: the master switch, a note, an export. */
+.srv-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border);
+}
+.srv-actions-note { font-size: 11px; color: var(--text-muted); flex: 1; min-width: 120px; }
+.srv-switch {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    padding: 6px 14px;
+    border-radius: 999px;
+    background: var(--bmm-s05);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: border-color .15s ease;
+}
+.srv-switch:hover { border-color: var(--accent); }
+.srv-export { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; }
