@@ -6,7 +6,7 @@ n'a pas besoin de posséder les mods au préalable.
 
 La définition de BMM lui-même :
 
-> Un fichier JSON contenant votre liste complète de mods, liens de téléchargement, ordre
+> Un fichier contenant votre liste complète de mods, liens de téléchargement, ordre
 > d'installation et configuration.
 
 Toute la différence est là. Un modpack dit *quels mods* ; une liste `.MM` dit *quels mods,
@@ -57,15 +57,30 @@ qu'on veut en essayant la config de quelqu'un d'autre.
 
 ## Ce qui voyage réellement dans un `.MM`
 
-C'est un seul fichier JSON. À côté des métadonnées de la liste (nom, jeu, auteur, date),
-chaque mod porte tout le nécessaire pour le reproduire :
+Un `.MM` est une **archive ZIP** contenant `modlist.json`, plus une signature. C'était
+auparavant un simple document JSON, et **les deux s'ouvrent toujours** — toutes les listes
+déjà exportées sont à l'ancien format, et BMM tranche d'après les octets du fichier plutôt
+que d'après un champ de version.
+
+À côté des métadonnées de la liste (nom, jeu, auteur, date), chaque mod porte tout le
+nécessaire pour le reproduire :
 
 | Par mod | À quoi ça sert |
 |---|---|
 | **Liens de téléchargement** | Une ou plusieurs URL — étiquetées `github`, `google_drive`, `direct`, `mega`, ou `other` — pour que le destinataire récupère le mod sans le posséder d'abord. |
 | **Arbre de fichiers** | La disposition des fichiers du mod (chemins et tailles), et des **hachages** par fichier optionnels. C'est ce qui alimente la vérification et ce que BMM compare pour trouver les [conflits](doc-page:features/library#conflicts). |
+| **Dépendances** | Ce dont le mod a besoin, **par nom** — un identifiant interne ne veut rien dire sur l'installation de quelqu'un d'autre, un nom est ce que les deux côtés peuvent rapprocher. |
+| **Sources de mise à jour** | D'où le mod se met à jour, pour qu'une liste partagée garde ses dépôts au lieu d'arriver avec chaque source à rebrancher à la main. |
 | **Notes d'installation** | Les instructions de placement ou de configuration attachées par l'auteur. |
 | **Ordre** | La place du mod dans la liste. |
+
+Et à côté des mods, la liste porte :
+
+| Aussi dans le fichier | À quoi ça sert |
+|---|---|
+| **Définitions des tags** | Le nom, la couleur et l'icône de chaque tag référencé. Sans elles, les tags arrivent sous forme d'identifiants qui ne résolvent rien et disparaissent purement et simplement. |
+| **Modpacks** | Tout pack dont les mods sont **tous** dans la liste. Un pack qui installe neuf mods sur douze est pire qu'un pack absent : un pack partiel est donc laissé de côté. |
+| **Une signature** | Écrite avec ta clé de créateur. Quiconque ouvre le fichier — y compris les outils de modération de BetterCommunity — peut dire s'il est toujours ce que tu as écrit. |
 
 !!! note "« Règles de conflit » = l'ordre"
 

@@ -6,7 +6,7 @@ need to own the mods first.
 
 BMM's own definition:
 
-> A JSON file containing your complete list of mods, download links, installation order and
+> A file containing your complete list of mods, download links, installation order and
 > configuration.
 
 That's the difference in one line. A modpack says *which mods*; a `.MM` list says *which
@@ -55,15 +55,29 @@ almost always what you want when trying someone else's setup.
 
 ## What actually travels in a `.MM`
 
-It's a single JSON file. Alongside the list metadata (name, game, author, date), each mod
-carries everything needed to reproduce it:
+A `.MM` is a **ZIP** holding `modlist.json`, plus a signature. It used to be a bare JSON
+document, and **both still open** — every list anybody has ever exported is the old shape,
+and BMM decides from the file's own bytes rather than from a version field.
+
+Alongside the list metadata (name, game, author, date), each mod carries everything needed
+to reproduce it:
 
 | Per mod | What it's for |
 |---|---|
 | **Download links** | One or more URLs — tagged `github`, `google_drive`, `direct`, `mega`, or `other` — so the recipient can fetch the mod without owning it first. |
 | **File tree** | The mod's file layout (paths and sizes), and optional per-file **hashes**. This is what powers verification and what BMM compares to find [conflicts](doc-page:features/library#conflicts). |
+| **Dependencies** | What the mod needs, **by name** — an internal id means nothing on somebody else's install, so names are what both sides can match on. |
+| **Update sources** | Where the mod updates itself from, so a shared list keeps its repos instead of arriving with every source to re-attach by hand. |
 | **Install notes** | Any placement or special-setup instructions the author attached. |
 | **Order** | The mod's place in the list. |
+
+And beside the mods, the list carries:
+
+| Also in the file | What it's for |
+|---|---|
+| **Tag definitions** | The name, colour and icon of every tag the entries refer to. Without these the tags arrive as ids that resolve to nothing and simply vanish. |
+| **Modpacks** | Any pack whose mods are **all** in the list. A pack that installs nine of its twelve mods is worse than one that is missing, so a partial pack is left out. |
+| **A signature** | Written with your creator key. Anyone opening it — including [BetterCommunity's moderation tools](https://bettercommunity.ch) — can tell whether the file is still what you wrote. |
 
 !!! note "\"Conflict rules\" = the order"
 

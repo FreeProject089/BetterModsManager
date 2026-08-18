@@ -20,6 +20,15 @@ BMM transforme le profil choisi en un dépôt servable. Le mot est littéral : l
   l'identité de l'hôte, et la clé publique est l'`author_id` du dépôt. Un abonné peut vérifier la
   signature pour confirmer que le dépôt vient bien de cet auteur.
 
+    Cette même clé signe désormais **tous les fichiers que BMM écrit**, pas seulement
+    `repo.json` — les listes de mods (`.mm`), les automatisations (`.bmmpa`), les barres de
+    navigation (`.bmmnav`), les modpacks, les enregistrements de session et la sauvegarde
+    `.DATABMM`. Les documents JSON portent un bloc `bmm_signature` ; les formats ZIP
+    (`.bmmplug`, `.bmmtheme` et `.mm`) portent une entrée `bmm_signature.json` qui liste
+    chaque autre fichier et son SHA-256 — échanger un script à côté d'un manifeste intact
+    est donc détecté. Un fichier sans signature se lit comme **non signé**, jamais comme
+    invalide : tout ce qui a été écrit avant existe, et d'autres outils écrivent ces formats.
+
 Le servir ne demande aucun logiciel de BMM : un client va chercher `<votre-url>/repo.json` puis
 les fichiers en dessous, donc **n'importe quel hébergeur statique convient** — vous déposez le
 répertoire exporté et c'est fini. BMM peut aussi s'en charger, via son **mini-serveur intégré**

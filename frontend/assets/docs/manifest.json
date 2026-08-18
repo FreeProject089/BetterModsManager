@@ -140,7 +140,7 @@
         "en": "A .MM file is your complete setup, written down — and unlike a modpack, it carries the download links, so the person receiving it doesn't need to own the mods…",
         "fr": "Un fichier .MM, c'est ta configuration complète, écrite — et contrairement à un modpack, il embarque les liens de téléchargement : la personne qui le reçoit…"
       },
-      "words": 410,
+      "words": 458,
       "diagrams": 0,
       "fr": true
     },
@@ -500,7 +500,7 @@
         "en": "A server repo turns one person's profile into a hosted source of truth: everyone who subscribes converges on the exact same mods, versions and order — and…",
         "fr": "Un dépôt serveur transforme le profil d'une personne en source de vérité hébergée : tous les abonnés convergent vers exactement les mêmes mods, versions et…"
       },
-      "words": 1092,
+      "words": 1179,
       "diagrams": 2,
       "fr": true
     },

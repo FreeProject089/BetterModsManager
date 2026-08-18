@@ -19,6 +19,14 @@ BMM turns the chosen profile into a servable repository. That word is literal: t
   host's identity, and the public key is the repo's `author_id`. A subscriber can verify the
   signature to confirm the repo really came from that author.
 
+    The same key now signs **every file BMM writes**, not just `repo.json` — mod lists
+    (`.mm`), automations (`.bmmpa`), navbar bundles (`.bmmnav`), modpacks, session replays
+    and the `.DATABMM` backup. JSON documents carry a `bmm_signature` block; ZIP formats
+    (`.bmmplug`, `.bmmtheme`, and `.mm`) carry a `bmm_signature.json` entry listing every
+    other file and its SHA-256, so swapping a script beside an untouched manifest is caught.
+    A file with no signature reads as **unsigned**, never as invalid: everything written
+    before this exists, and other tools write these formats too.
+
 Serving it needs no software of BMM's at all: a client fetches `<your-url>/repo.json` and then
 the files beneath it, so **any static web host works** — upload the exported directory and you
 are done. BMM can also run it for you, from the **built-in mini-server** or a generated
