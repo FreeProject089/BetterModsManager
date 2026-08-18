@@ -7348,5 +7348,8 @@
   "settings.toastsOn": "",
   "settings.toastsOff": "",
   "repo.remoteManifestHint": "",
-  "repo.remoteFromServer": ""
+  "repo.remoteFromServer": "",
+  "sched.more": "",
+  "sched.pc.doneToast": "",
+  "sched.pc.noneToast": ""
 }

@@ -243,39 +243,65 @@ export async function initScheduler(): Promise<void> {
         // Add Export / Import .BMMPA buttons next to "New task".
         const row = btn.parentElement;
         if (row && !document.getElementById('sched-export-btn')) {
-            const exp = document.createElement('button');
-            exp.id = 'sched-export-btn';
-            exp.className = 'btn btn-ghost btn-sm';
-            exp.style.gap = '6px';
-            exp.textContent = t('sched.exportBmmpa') || 'Export .BMMPA';
-            exp.addEventListener('click', () => exportTasksFile());
-            const imp = document.createElement('button');
-            imp.id = 'sched-import-btn';
-            imp.className = 'btn btn-ghost btn-sm';
-            imp.style.gap = '6px';
-            imp.textContent = t('sched.importBmmpa') || 'Import .BMMPA';
-            imp.addEventListener('click', () => importTasksFile());
-            const ex = document.createElement('button');
-            ex.id = 'sched-example-btn';
-            ex.className = 'btn btn-ghost btn-sm';
-            ex.style.gap = '6px';
-            ex.textContent = t('sched.loadExample') || 'Load example';
-            ex.title = t('sched.loadExample.d') || 'Create a ready-made simple-loop automation you can inspect and enable.';
-            ex.addEventListener('click', () => createExampleAutomation());
-            const insp = document.createElement('button');
-            insp.id = 'sched-inspect-btn';
-            insp.className = 'btn btn-ghost btn-sm';
-            insp.style.gap = '6px';
-            insp.textContent = t('sched.inspectBmmpa') || 'Inspect a .BMMPA';
-            insp.title = t('sched.inspectBmmpa.d') || 'See what a shared automation would do — permissions, scripts and everything it touches — without importing it.';
-            insp.addEventListener('click', () => inspectTasksFile());
-            row.appendChild(exp);
-            row.appendChild(imp);
-            // Deliberately BEFORE "Load example" and right after Import: the moment somebody
-            // is about to import a file they were sent is the moment this is useful, and a
-            // button they find afterwards is a button they find too late.
-            row.appendChild(insp);
-            row.appendChild(ex);
+            // ONE button, and a menu behind it.
+            //
+            // There were four of these in a row beside "New task" — Export, Import, Inspect,
+            // Load example — and three of them are things somebody does once. Four buttons of
+            // equal weight say four equally likely things, and the row pushed the one that
+            // matters off to the left.
+            //
+            // The menu is built from a list rather than four near-identical blocks, so adding
+            // a fifth entry cannot come with a fifth copy of the wiring.
+            const ITEMS: Array<[string, string, string, () => void]> = [
+                ['sched-export-btn', t('sched.exportBmmpa') || 'Export .BMMPA', '', () => exportTasksFile()],
+                ['sched-import-btn', t('sched.importBmmpa') || 'Import .BMMPA', '', () => importTasksFile()],
+                // Deliberately next to Import: the moment somebody is about to import a file
+                // they were sent is the moment this is useful, and one they find afterwards is
+                // one they find too late.
+                ['sched-inspect-btn', t('sched.inspectBmmpa') || 'Inspect a .BMMPA',
+                    t('sched.inspectBmmpa.d') || 'See what a shared automation would do — permissions, scripts and everything it touches — without importing it.',
+                    () => inspectTasksFile()],
+                ['sched-example-btn', t('sched.loadExample') || 'Load example',
+                    t('sched.loadExample.d') || 'Create a ready-made simple-loop automation you can inspect and enable.',
+                    () => createExampleAutomation()],
+            ];
+
+            const wrap = document.createElement('div');
+            wrap.style.cssText = 'position:relative;display:inline-block';
+            const more = document.createElement('button');
+            more.id = 'sched-more-btn';
+            more.className = 'btn btn-ghost btn-sm';
+            more.style.gap = '6px';
+            more.textContent = t('sched.more') || 'Files…';
+            const menu = document.createElement('div');
+            menu.className = 'bmm-tag-menu';
+            menu.style.display = 'none';
+            menu.style.minWidth = '210px';
+            menu.style.left = 'auto';
+            menu.style.right = '0';
+            for (const [id, label, hint, run] of ITEMS) {
+                const b = document.createElement('button');
+                b.type = 'button';
+                b.id = id;                       // kept: the command palette and the tutorial address these
+                b.className = 'bmm-tag-menu-row';
+                b.textContent = label;
+                if (hint) b.title = hint;
+                b.addEventListener('click', () => { menu.style.display = 'none'; run(); });
+                menu.appendChild(b);
+            }
+            more.addEventListener('click', (e) => {
+                e.stopPropagation();
+                menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+            });
+            document.addEventListener('mousedown', (ev: any) => {
+                if (menu.style.display === 'none') return;
+                if (!ev.target?.closest?.('#sched-more-btn') && !ev.target?.closest?.('.bmm-tag-menu')) {
+                    menu.style.display = 'none';
+                }
+            });
+            wrap.appendChild(more);
+            wrap.appendChild(menu);
+            row.appendChild(wrap);
         }
     }
     // Let the interactive tutorial build a real automation for the user.
@@ -4623,6 +4649,10 @@ async function loadPresetSources(): Promise<{ presets: any[]; sources: PresetSou
     return { presets, sources };
 }
 
+/// Which open of the catalogue panel is current. Bumped on every open, cleared on close, so
+/// a slow load that finishes after the reader walked away knows it is stale.
+let _catalogOpenToken = 0;
+
 export async function browsePresetCatalogs(): Promise<void> {
     // The modal opens FIRST, then fills in.
     //
@@ -4635,11 +4665,29 @@ export async function browsePresetCatalogs(): Promise<void> {
     // Each source row already states its own outcome, so `pending: true` is a state the
     // existing renderer can show rather than a second loading screen.
     const pending = officialPresetUrl();
+    // Each open gets a token. The panel below stamps it, the close handler clears it, and the
+    // re-render at the end refuses to run against a stale one.
+    const token = ++_catalogOpenToken;
     showPresetCatalog({
         presets: [],
         sources: pending ? [{ url: pending, official: true, state: 'loading', count: 0 }] : [],
     });
     const data = await loadPresetSources();
+
+    // CLOSED MEANS CLOSED. A source that does not answer holds this await open for its whole
+    // timeout, and the panel re-rendered when it finally returned — so closing it while an
+    // unreachable catalogue was still being waited on made it spring back, which is not a
+    // thing a window is allowed to do. The result is announced instead, and it is still one
+    // click away.
+    if (token !== _catalogOpenToken || !document.querySelector('.sched-pc-overlay')) {
+        const found = (data.presets || []).length;
+        const failed = (data.sources || []).filter((x: any) => x.state === 'error').length;
+        toast(found
+            ? (t('sched.pc.doneToast') || '{n} automation(s) found in the catalogues').replace('{n}', String(found))
+            : (t('sched.pc.noneToast') || 'The catalogues returned nothing'),
+        failed ? 'warning' : 'info');
+        return;
+    }
     // Re-render in place. showPresetCatalog closes any panel it already opened, so this
     // replaces the pending view rather than stacking a second overlay on top of it.
     showPresetCatalog(data);
@@ -4849,7 +4897,9 @@ function showPresetCatalog(data: { presets: any[]; sources: PresetSource[] }): v
         wire();
     };
 
-    const close = () => overlay.remove();
+    // Clearing the token is what makes "closed" stick: a pending load that finishes
+    // afterwards reports itself instead of re-opening this.
+    const close = () => { _catalogOpenToken += 1; overlay.remove(); };
     const reload = async () => { const d = await loadPresetSources(); presets = d.presets; sources = d.sources; paint(); };
 
     function wire(): void {

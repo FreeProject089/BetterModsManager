@@ -7511,5 +7511,8 @@
   "settings.toastsOn": "Notifications on",
   "settings.toastsOff": "Notifications off — everything is still in the notification centre",
   "repo.remoteManifestHint": "Leave empty if the repo.json is already on the server: BMM fetches it, checks its signature and writes the updated one. This is what stops every mod coming back \"unverified\".",
-  "repo.remoteFromServer": "Updated the repo.json already on the server"
+  "repo.remoteFromServer": "Updated the repo.json already on the server",
+  "sched.more": "Files…",
+  "sched.pc.doneToast": "{n} automation(s) found in the catalogues",
+  "sched.pc.noneToast": "The catalogues returned nothing"
 }
