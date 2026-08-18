@@ -78,10 +78,31 @@ besoin.
     boutons pointant sur des pages disparues, ou une page qui a perdu les permissions pour
     lesquelles elle a été écrite et qui échoue à la première chose qu'elle tente.
 
-!!! note "Un `.DATABMM` est une sauvegarde, pas un bouton de restauration"
+### La remettre en place
 
-    Il n'y a pas encore de restauration en un clic. C'est un ZIP ordinaire, exprès : tu peux
-    l'ouvrir avec n'importe quoi et remettre en place la partie dont tu as besoin.
+**Restaurer un `.DATABMM`** ouvre l'archive et te montre ce qu'elle contient *avant* d'écrire
+quoi que ce soit : chaque section, sa taille, et si le fichier est toujours celui que BMM a
+écrit. Tu coches ce que tu veux récupérer. Rien n'est coché pour toi — une boîte de
+restauration déjà armée est une boîte qu'on valide sans lire.
+
+Deux choses se comportent différemment du reste, et c'est volontaire :
+
+| | |
+|---|---|
+| **Profils, mods et réglages** | **Remplace** ce que tu as ; ce n'est pas fusionné. Une fusion devrait inventer une réponse pour deux profils du même nom avec des dossiers différents. Ton `data.json` actuel est copié à côté d'abord, dans un fichier horodaté, et le message te dit où. |
+| **Rapports de plantage et diagnostics** | Listés, et jamais restaurés. Ils décrivent ce qui est arrivé à une installation sur une machine — remettre ceux de l'an dernier ici donne un dossier de support qui ment sur l'app dans laquelle il se trouve. |
+
+Une archive **non signée** se restaure normalement : tout ce qui a été écrit avant l'existence
+des signatures est non signé. Celle qui doit t'arrêter, c'est *modifiée depuis sa signature*,
+et l'écran le dit avec ces mots-là.
+
+BMM recharge ensuite, parce que la moitié de l'app lit son état au démarrage.
+
+!!! note "Ça reste un ZIP ordinaire"
+
+    L'extension dit que le fichier appartient à BMM ; le contenu est une archive normale,
+    exprès, pour que tu puisses toujours l'ouvrir avec n'importe quoi et en sortir un fichier
+    à la main.
 
 !!! danger "Réinitialisation d'usine"
 

@@ -72,10 +72,30 @@ asked for that turned out empty is something you find out now rather than the da
     restores something broken — buttons pointing at pages that are gone, or a page that lost the
     permissions it was written against and fails at the first thing it tries to do.
 
-!!! note "A `.DATABMM` is a backup, not a restore button"
+### Putting one back
 
-    There is no one-click restore for it yet. It is an ordinary ZIP on purpose, so you can open
-    it with anything and put back the part you need.
+**Restore a `.DATABMM`** opens the archive and shows you what is in it *before* it writes
+anything: each section, its size, and whether the file is still the one BMM wrote. You tick
+what you want back. Nothing is ticked for you — a restore dialog that arrives pre-armed is one
+you can confirm without reading.
+
+Two things behave differently from the rest, and both on purpose:
+
+| | |
+|---|---|
+| **Profiles, mods & settings** | **Replaces** what you have; it is not merged into it. A merge would have to invent an answer for two profiles with the same name and different folders. Your current `data.json` is copied aside first, to a timestamped file, and the message names where. |
+| **Crash reports & diagnostics** | Listed, and never restored. They describe what happened to one installation on one machine — putting last year's into this one gives you a support folder that lies about the app it sits in. |
+
+An **unsigned** archive restores normally: everything written before signing existed is
+unsigned. The one worth stopping for is *changed since it was signed*, which the screen says in
+those words.
+
+BMM reloads afterwards, because half the app reads its state at startup.
+
+!!! note "It is still an ordinary ZIP"
+
+    The extension says it belongs to BMM; the contents are a plain archive, deliberately, so
+    you can always open it with anything and take out one file by hand.
 
 !!! danger "Factory reset"
 
