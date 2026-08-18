@@ -101,3 +101,51 @@
 }
 .legacy-result.ok  { border-color: var(--success); color: var(--text-primary); }
 .legacy-result.bad { border-color: var(--error);   color: var(--text-primary); }
+
+/* ── Restoring a .DATABMM (src/features/settings/restore-bundle.ts) ──────────
+   Lives beside the legacy-import styles because both are the same shape of screen: a modal
+   that shows you what a file contains before it does anything with it. */
+
+.restore-meta { margin-bottom: 12px; }
+.restore-path {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    word-break: break-all;
+}
+.restore-when { margin-top: 3px; font-size: 12px; color: var(--text-secondary); }
+
+/* The verdict, coloured by what it MEANS rather than by severity: unsigned is neutral, not a
+   warning — most archives ever written are unsigned. Only "changed since signing" is red. */
+.restore-sig {
+    padding: 8px 11px;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    font-size: 12.5px;
+    line-height: 1.45;
+    color: var(--text-secondary);
+    background: var(--bmm-s03);
+    margin-bottom: 14px;
+}
+.restore-sig.valid    { border-color: var(--success); }
+.restore-sig.tampered { border-color: var(--error); color: var(--text-primary); }
+.restore-sig .restore-author { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); }
+
+.restore-list { display: flex; flex-direction: column; gap: 8px; }
+.restore-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 9px 11px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    cursor: pointer;
+}
+/* A section that cannot be restored is dimmed and not clickable, but still LISTED — hiding it
+   would leave a reader wondering why the sizes do not add up to the file. */
+.restore-row.off { opacity: 0.55; cursor: default; }
+.restore-row input { margin-top: 2px; flex-shrink: 0; }
+.restore-row-txt { min-width: 0; }
+.restore-row-title { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.restore-row-sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.restore-row-warn { font-size: 11px; color: var(--error); margin-top: 3px; line-height: 1.4; }

@@ -2818,6 +2818,13 @@ export async function initSettings() {
             }
         });
     }
+    // Restoring a .DATABMM. Loaded on demand: the screen is a modal nobody opens on a normal
+    // visit to Settings, and it pulls in the confirm dialog with it.
+    document.getElementById('btn-restore-bundle')?.addEventListener('click', () => {
+        void import('./restore-bundle.js')
+            .then((m) => m.openRestoreBundle())
+            .catch((e) => toast(String(e), 'error'));
+    });
     // ── BetaHub ──────────────────────────────────────────────
     initBetaHub();
     document.getElementById('btn-settings-betahub-bugreport')

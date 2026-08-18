@@ -424,6 +424,8 @@ fn main() {
             commands::settings::export_app_data,
             commands::settings::export_app_data_json,
             commands::export_bundle::export_data_bundle,
+            commands::restore_bundle::inspect_data_bundle,
+            commands::restore_bundle::restore_data_bundle,
             commands::settings::export_app_data_auto,
             commands::settings::import_app_data,
             commands::settings::factory_reset,

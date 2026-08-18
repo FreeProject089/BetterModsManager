@@ -4682,6 +4682,18 @@
                                     </svg>
                                     <span data-i18n="settings.dataImport">Importer</span>
                                 </button>
+                                <!-- Restoring a .DATABMM. Separate from Import, which reads the
+                                     JSON backup: the archive carries FILES, and putting them
+                                     back is a different, riskier action that shows you what is
+                                     in the file before it writes anything. -->
+                                <button class="btn btn-secondary btn-sm" id="btn-restore-bundle">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <path d="M3 12a9 9 0 1 0 3-6.7L3 8"></path>
+                                        <polyline points="3 3 3 8 8 8"></polyline>
+                                    </svg>
+                                    <span data-i18n="settings.dataRestore">Restaurer un .DATABMM</span>
+                                </button>
                             </div>
                         </div>
 
