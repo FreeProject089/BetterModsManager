@@ -188,7 +188,11 @@ pub async fn export_modpack(
     let pack = get_modpack_by_id(handle.clone(), id).await?.ok_or("Modpack not found")?;
 
     let default_name = format!("{}.bmp", pack.name.replace(" ", "_"));
-    let json = serde_json::to_string_pretty(&pack).map_err(|e| e.to_string())?;
+    // Signed like every other document BMM writes: a modpack is a list of mods somebody
+    // else installs from, which is exactly the shape of file worth vouching for.
+    let mut doc = serde_json::to_value(&pack).map_err(|e| e.to_string())?;
+    crate::commands::doc_sign::sign_doc(&handle, &mut doc, "bmp");
+    let json = serde_json::to_string_pretty(&doc).map_err(|e| e.to_string())?;
 
     let target = match dest_dir.filter(|d| !d.trim().is_empty()) {
         Some(d) => {

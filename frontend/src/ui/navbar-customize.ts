@@ -244,7 +244,10 @@ async function exportNavBundle(): Promise<void> {
     const bundle: NavBundle = { format: 'bmmnav', version: 1, navbar: cfg, pages };
     const path = await saveFile({ defaultPath: 'my-navbar.bmmnav', filters: [{ name: 'BMM Navigation', extensions: ['bmmnav'] }] }).catch(() => null);
     if (!path) return;
-    try { await invoke('write_text_file', { path, content: JSON.stringify(bundle) }); (window as any).toast?.(t('navedit.bundleExported') || 'Navigation exported', 'success'); }
+    // Signed on the way to disk. A .bmmnav carries custom PAGES with their permissions and
+    // network origins — it is the one export where "is this still what its author wrote"
+    // decides whether importing it is safe.
+    try { await invoke('write_signed_document', { path, json: JSON.stringify(bundle), format: 'bmmnav' }); (window as any).toast?.(t('navedit.bundleExported') || 'Navigation exported', 'success'); }
     catch (e) { (window as any).toast?.(String(e), 'error'); }
 }
 

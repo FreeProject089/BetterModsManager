@@ -308,31 +308,42 @@ pub async fn export_theme(
         }
     };
 
+    // Collected FIRST, then written. The signature covers every entry, so the list has to
+    // exist before the archive does — and building it from the same Vec the writer uses is
+    // what makes "what was signed" and "what was written" the same thing by construction.
+    let mut entries: Vec<(String, Vec<u8>)> = Vec::new();
+    if theme_dir.exists() {
+        // Installed theme -> bundle its full folder (theme.json + assets + fonts).
+        for entry in jwalk::WalkDir::new(&theme_dir).into_iter().flatten() {
+            let p = entry.path();
+            if p.is_file() {
+                let rel = p.strip_prefix(&theme_dir).unwrap_or(&p);
+                let rel_str = rel.to_string_lossy().replace(char::from(92), "/");
+                let data = std::fs::read(&p).map_err(|e| e.to_string())?;
+                entries.push((rel_str, data));
+            }
+        }
+    } else if let Some(json) = theme_json {
+        // Not installed (built-in preset or unsaved draft) -> the supplied JSON is the theme.
+        entries.push(("theme.json".to_string(), json.into_bytes()));
+    } else {
+        return Err(format!("Theme '{}' not found", theme_id));
+    }
+
+    let manifest = crate::commands::doc_sign::archive_manifest(&app_handle, "bmmtheme", &entries);
+    entries.push((
+        crate::commands::doc_sign::ARCHIVE_ENTRY.to_string(),
+        serde_json::to_vec_pretty(&manifest).map_err(|e| e.to_string())?,
+    ));
+
     let file = std::fs::File::create(&save_path).map_err(|e| e.to_string())?;
     let mut zip = zip::ZipWriter::new(file);
     let opts = zip::write::FileOptions::default()
         .compression_method(zip::CompressionMethod::Deflated);
     use std::io::Write;
-
-    if theme_dir.exists() {
-        // Installed theme → bundle its full folder (theme.json + assets + fonts).
-        for entry in jwalk::WalkDir::new(&theme_dir).into_iter().flatten() {
-            let p = entry.path();
-            if p.is_file() {
-                let rel = p.strip_prefix(&theme_dir).unwrap_or(&p);
-                let rel_str = rel.to_string_lossy().replace('\\', "/");
-                zip.start_file(rel_str, opts).map_err(|e| e.to_string())?;
-                let data = std::fs::read(&p).map_err(|e| e.to_string())?;
-                zip.write_all(&data).map_err(|e| e.to_string())?;
-            }
-        }
-    } else if let Some(json) = theme_json {
-        // Not installed (built-in preset or unsaved draft) → write the supplied
-        // JSON straight into the .bmmtheme. Built-ins have no separate assets.
-        zip.start_file("theme.json", opts).map_err(|e| e.to_string())?;
-        zip.write_all(json.as_bytes()).map_err(|e| e.to_string())?;
-    } else {
-        return Err(format!("Theme '{}' not found", theme_id));
+    for (name, data) in &entries {
+        zip.start_file(name.clone(), opts).map_err(|e| e.to_string())?;
+        zip.write_all(data).map_err(|e| e.to_string())?;
     }
     zip.finish().map_err(|e| e.to_string())?;
     Ok(())

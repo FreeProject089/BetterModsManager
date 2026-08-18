@@ -1377,6 +1377,7 @@ fn action_to_api_call(action: &ScriptAction) -> Option<(String, String, String)>
 
 #[tauri::command]
 pub async fn export_plugin(
+    app_handle: tauri::AppHandle,
     state: State<'_, AppState>,
     plugin_id: String,
     dest_path: String,
@@ -1392,11 +1393,10 @@ pub async fn export_plugin(
     let plugin_dir = PathBuf::from(&plugin.install_dir);
     let dest = PathBuf::from(&dest_path);
 
-    let file = std::fs::File::create(&dest).map_err(|e| e.to_string())?;
-    let mut zip = zip::ZipWriter::new(file);
-    let options = zip::write::FileOptions::default()
-        .compression_method(zip::CompressionMethod::Deflated);
-
+    // Every entry is collected FIRST, so the signature can cover the whole archive: a
+    // plugin's scripts sit beside its manifest, and vouching only for the manifest would say
+    // "this plugin is intact" while the code next to it could be swapped.
+    let mut entries: Vec<(String, Vec<u8>)> = Vec::new();
     let mut has_manifest = false;
     if plugin_dir.exists() {
         for entry in walkdir::WalkDir::new(&plugin_dir) {
@@ -1404,12 +1404,10 @@ pub async fn export_plugin(
             let path = entry.path();
             if path.is_file() {
                 let rel = path.strip_prefix(&plugin_dir).map_err(|e| e.to_string())?;
-                let rel_str = rel.to_string_lossy();
+                let rel_str = rel.to_string_lossy().replace(char::from(92), "/");
                 if rel_str == "plugin.json" { has_manifest = true; }
-                let zip_path = format!("{}/{}", plugin_id, rel_str);
-                zip.start_file(zip_path, options).map_err(|e| e.to_string())?;
                 let data = std::fs::read(path).map_err(|e| e.to_string())?;
-                std::io::Write::write_all(&mut zip, &data).map_err(|e| e.to_string())?;
+                entries.push((format!("{}/{}", plugin_id, rel_str), data));
             }
         }
     }
@@ -1417,10 +1415,23 @@ pub async fn export_plugin(
     if !has_manifest {
         let manifest_json = serde_json::to_string_pretty(&plugin.manifest)
             .map_err(|e| e.to_string())?;
-        zip.start_file(format!("{}/plugin.json", plugin_id), options).map_err(|e| e.to_string())?;
-        std::io::Write::write_all(&mut zip, manifest_json.as_bytes()).map_err(|e| e.to_string())?;
+        entries.push((format!("{}/plugin.json", plugin_id), manifest_json.into_bytes()));
     }
 
+    let signed = crate::commands::doc_sign::archive_manifest(&app_handle, "bmmplug", &entries);
+    entries.push((
+        crate::commands::doc_sign::ARCHIVE_ENTRY.to_string(),
+        serde_json::to_vec_pretty(&signed).map_err(|e| e.to_string())?,
+    ));
+
+    let file = std::fs::File::create(&dest).map_err(|e| e.to_string())?;
+    let mut zip = zip::ZipWriter::new(file);
+    let options = zip::write::FileOptions::default()
+        .compression_method(zip::CompressionMethod::Deflated);
+    for (name, data) in &entries {
+        zip.start_file(name.clone(), options).map_err(|e| e.to_string())?;
+        std::io::Write::write_all(&mut zip, data).map_err(|e| e.to_string())?;
+    }
     zip.finish().map_err(|e| e.to_string())?;
     log_line(format!("[PLUGINS] Exported plugin '{}' to {:?}", plugin_id, dest));
     Ok(())

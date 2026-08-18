@@ -371,3 +371,187 @@ mod cross_language {
         println!("SIGNED_SAMPLE {}", serde_json::to_string(&doc).unwrap());
     }
 }
+
+// ── Archives ──────────────────────────────────────────────────────────────────
+//
+// A `.bmmplug` and a `.bmmtheme` are ZIPs, so there is no document to put a block inside.
+// Signing only the manifest they carry would be worse than not signing them at all: it would
+// say "this plugin is intact" while every script beside the manifest could be swapped.
+//
+// So the archive gains one more entry, `bmm_signature.json`, which is an ordinary signed
+// document (same block, same rules) whose CONTENT is a list of every other entry and its
+// SHA-256:
+//
+//   { "format": "bmmplug", "entries": [ { "name": "plugin.json", "sha256": "…" }, … ],
+//     "bmm_signature": { … } }
+//
+// Verifying is then two questions, and both must pass: does the block verify over the list,
+// and does every file in the archive hash to what the list says. Adding a file is caught
+// because it is not in the list; changing one because its hash moved; removing one because
+// the list still names it.
+
+/// The name of the entry that carries an archive's signature.
+pub const ARCHIVE_ENTRY: &str = "bmm_signature.json";
+
+fn sha256_hex(bytes: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    let mut h = Sha256::new();
+    h.update(bytes);
+    hex::encode(h.finalize())
+}
+
+/// The list of entries and their hashes, as a document. Sorted by name, so two archives with
+/// the same content produce the same list however the writer happened to walk the folder.
+fn entry_list(format: &str, entries: &[(String, Vec<u8>)]) -> Value {
+    let mut rows: Vec<(&String, String)> = entries.iter()
+        .filter(|(n, _)| n != ARCHIVE_ENTRY)
+        .map(|(n, d)| (n, sha256_hex(d)))
+        .collect();
+    rows.sort_by(|a, b| a.0.cmp(b.0));
+    serde_json::json!({
+        "format": format,
+        "entries": rows.iter()
+            .map(|(n, h)| serde_json::json!({ "name": n, "sha256": h }))
+            .collect::<Vec<_>>(),
+    })
+}
+
+/// Build the signed manifest for an archive, from its entries as (name, bytes).
+pub fn archive_manifest(handle: &AppHandle, format: &str, entries: &[(String, Vec<u8>)]) -> Value {
+    let mut doc = entry_list(format, entries);
+    sign_doc(handle, &mut doc, format);
+    doc
+}
+
+/// The verdict on an archive: the signature over the list, AND the files against the list.
+///
+/// `entries` are the archive's contents as (name, bytes), including `bmm_signature.json`.
+pub fn verify_archive(entries: &[(String, Vec<u8>)], expected_format: &str) -> Verdict {
+    let Some((_, raw)) = entries.iter().find(|(n, _)| n == ARCHIVE_ENTRY) else {
+        return Verdict::Unsigned;
+    };
+    let doc: Value = match serde_json::from_slice(raw) {
+        Ok(v) => v,
+        Err(e) => return Verdict::Malformed { reason: format!("{ARCHIVE_ENTRY} is not JSON: {e}") },
+    };
+    // The block first: if the list itself was edited, nothing it claims about the files means
+    // anything.
+    match verify_doc(&doc, expected_format) {
+        Verdict::Valid { author_id, signed_at, format } => {
+            let listed: std::collections::HashMap<String, String> = doc.get("entries")
+                .and_then(|v| v.as_array())
+                .map(|a| a.iter().filter_map(|e| Some((
+                    e.get("name")?.as_str()?.to_string(),
+                    e.get("sha256")?.as_str()?.to_string(),
+                ))).collect())
+                .unwrap_or_default();
+
+            for (name, data) in entries.iter().filter(|(n, _)| n != ARCHIVE_ENTRY) {
+                match listed.get(name) {
+                    // A file that is not in the list was added after signing.
+                    None => return Verdict::Tampered { author_id },
+                    Some(h) if *h != sha256_hex(data) => return Verdict::Tampered { author_id },
+                    _ => {}
+                }
+            }
+            // A file the list names and the archive no longer has was removed after signing.
+            let present: std::collections::HashSet<&String> = entries.iter().map(|(n, _)| n).collect();
+            if listed.keys().any(|n| !present.contains(n)) {
+                return Verdict::Tampered { author_id };
+            }
+            Verdict::Valid { author_id, signed_at, format }
+        }
+        other => other,
+    }
+}
+
+#[cfg(test)]
+mod archive_tests {
+    use super::*;
+    use ed25519_dalek::{Signer, SigningKey, VerifyingKey};
+
+    /// The same list `archive_manifest` builds, signed with a fixed key instead of the
+    /// keyring — so the test exercises the real payload and the real verifier.
+    fn signed_manifest(format: &str, entries: &[(String, Vec<u8>)]) -> Vec<u8> {
+        let mut doc = entry_list(format, entries);
+        let sk = SigningKey::from_bytes(&[9u8; 32]);
+        let vk: VerifyingKey = (&sk).into();
+        let bytes = payload(&doc, format).unwrap();
+        doc.as_object_mut().unwrap().insert(FIELD.into(), serde_json::json!({
+            "format": format,
+            "author_id": hex::encode(vk.to_bytes()),
+            "signature": hex::encode(sk.sign(&bytes).to_bytes()),
+            "signed_at": "2026-08-18T10:00:00+02:00",
+        }));
+        serde_json::to_vec(&doc).unwrap()
+    }
+
+    fn archive() -> Vec<(String, Vec<u8>)> {
+        let mut e = vec![
+            ("plugin.json".to_string(), b"{\"name\":\"Thing\"}".to_vec()),
+            ("scripts/run.js".to_string(), b"console.log(1)".to_vec()),
+        ];
+        let sig = signed_manifest("bmmplug", &e);
+        e.push((ARCHIVE_ENTRY.to_string(), sig));
+        e
+    }
+
+    #[test]
+    fn a_signed_archive_verifies() {
+        assert!(matches!(verify_archive(&archive(), "bmmplug"), Verdict::Valid { .. }));
+    }
+
+    /// THE ONE that signing only the manifest would miss: the manifest is untouched and a
+    /// script beside it was swapped.
+    #[test]
+    fn changing_a_file_the_manifest_does_not_mention_is_still_caught() {
+        let mut a = archive();
+        a[1].1 = b"console.log(evil)".to_vec();
+        assert!(matches!(verify_archive(&a, "bmmplug"), Verdict::Tampered { .. }));
+    }
+
+    #[test]
+    fn adding_a_file_is_caught() {
+        let mut a = archive();
+        a.insert(1, ("extra.js".to_string(), b"anything".to_vec()));
+        assert!(matches!(verify_archive(&a, "bmmplug"), Verdict::Tampered { .. }));
+    }
+
+    #[test]
+    fn removing_a_file_is_caught() {
+        let mut a = archive();
+        a.remove(1);
+        assert!(matches!(verify_archive(&a, "bmmplug"), Verdict::Tampered { .. }));
+    }
+
+    #[test]
+    fn the_list_itself_cannot_be_edited() {
+        // Rewriting a hash in the list to match a swapped file breaks the block over it.
+        let mut a = archive();
+        let mut doc: Value = serde_json::from_slice(&a[2].1).unwrap();
+        doc["entries"][0]["sha256"] = serde_json::json!("0".repeat(64));
+        a[2].1 = serde_json::to_vec(&doc).unwrap();
+        assert!(matches!(verify_archive(&a, "bmmplug"), Verdict::Tampered { .. }));
+    }
+
+    #[test]
+    fn an_archive_with_no_signature_entry_is_unsigned() {
+        let e = vec![("plugin.json".to_string(), b"{}".to_vec())];
+        assert_eq!(verify_archive(&e, "bmmplug"), Verdict::Unsigned);
+    }
+
+    #[test]
+    fn a_theme_signature_does_not_vouch_for_a_plugin() {
+        let mut e = vec![("theme.json".to_string(), b"{}".to_vec())];
+        let sig = signed_manifest("bmmtheme", &e);
+        e.push((ARCHIVE_ENTRY.to_string(), sig));
+        assert!(matches!(verify_archive(&e, "bmmplug"), Verdict::Malformed { .. }));
+    }
+
+    #[test]
+    fn the_order_entries_were_written_in_does_not_matter() {
+        let mut a = archive();
+        a.swap(0, 1);
+        assert!(matches!(verify_archive(&a, "bmmplug"), Verdict::Valid { .. }));
+    }
+}

@@ -731,6 +731,10 @@ pub fn replay_spool_finalize(
             out.write_all(b",").map_err(|e| e.to_string())?;
         }
         out.write_all(b"\"events\":[").map_err(|e| e.to_string())?;
+        // Hashed as it streams: the bytes go past exactly once, so this costs a hash update
+        // per event and nothing in memory.
+        let mut hasher = { use sha2::Digest; sha2::Sha256::new() };
+        let mut event_count = 0usize;
         let mut first = true;
         let mut skipped = 0usize;
         for seg in &files {
@@ -744,6 +748,8 @@ pub fn replay_spool_finalize(
                 if !l.starts_with('{') || !l.ends_with('}') { skipped += 1; continue; }
                 if !first { out.write_all(b",").map_err(|e| e.to_string())?; }
                 out.write_all(l.as_bytes()).map_err(|e| e.to_string())?;
+                { use sha2::Digest; hasher.update(l.as_bytes()); }
+                event_count += 1;
                 first = false;
             }
         }
@@ -755,6 +761,32 @@ pub fn replay_spool_finalize(
         out.write_all(b",\"rustLog\":").map_err(|e| e.to_string())?;
         let log = serde_json::to_string(&rust_log).unwrap_or_else(|_| "\"\"".into());
         out.write_all(log.as_bytes()).map_err(|e| e.to_string())?;
+
+        // Signed by its DIGEST, not by its content.
+        //
+        // Every other BMM document is signed over the document itself, but a replay is
+        // assembled streaming precisely so it never exists in memory — a session runs to
+        // hundreds of megabytes. Loading it back to sign it would undo the one design
+        // decision this function is built around.
+        //
+        // So the same shape the archives use: what gets signed is a small document that
+        // carries a hash of the big thing. `events_sha256` is a running hash of exactly the
+        // bytes written above, so verifying means re-hashing the events array and comparing —
+        // no second rule, and nothing held in memory on either side.
+        let digest = hex::encode({
+            use sha2::Digest;
+            hasher.finalize()
+        });
+        let mut sig_doc = serde_json::json!({
+            "format": "bmmreplay",
+            "events_sha256": digest,
+            "events": event_count,
+        });
+        crate::commands::doc_sign::sign_doc(&app_handle, &mut sig_doc, "bmmreplay");
+        out.write_all(b",\"bmm_signature_of\":").map_err(|e| e.to_string())?;
+        out.write_all(serde_json::to_string(&sig_doc).unwrap_or_else(|_| "null".into()).as_bytes())
+            .map_err(|e| e.to_string())?;
+
         out.write_all(b"}").map_err(|e| e.to_string())?;
         out.flush().map_err(|e| e.to_string())?;
     }
