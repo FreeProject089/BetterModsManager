@@ -234,23 +234,15 @@ pub fn restore_data_bundle(
         // Where each section lands. Written out rather than "strip the prefix and join",
         // because three of them do NOT mirror their archive path: Lang lives outside the data
         // dir, and navigation splits into two folders plus a value the frontend has to apply.
-        let dest: Option<PathBuf> = match section.prefix {
-            "app_data.json" => { app_data_val = serde_json::from_slice(&buf).ok(); None }
-            "extras.json" => { result.extras = serde_json::from_slice(&buf).ok(); None }
-            "automations" => Some(dir.join("schedules.json")),
-            "Lang" => Some(crate::fs_utils::get_lang_dir(&app_handle).join(safe.file_name().unwrap_or_default())),
-            "navigation" => {
-                if name == "navigation/navbar.json" {
-                    result.navbar = serde_json::from_slice(&buf).ok();
-                    None
-                } else if let Some(rest) = name.strip_prefix("navigation/pages-data/") {
-                    Some(dir.join("custom_pages_data").join(rest))
-                } else if let Some(rest) = name.strip_prefix("navigation/pages/") {
-                    Some(dir.join("custom_pages").join(rest))
-                } else { None }
-            }
-            _ => Some(dir.join(&safe)),
-        };
+        // The three entries that are VALUES rather than files are read here; where everything
+        // else goes is `dest_for`, which is pure and tested.
+        match section.prefix {
+            "app_data.json" => app_data_val = serde_json::from_slice(&buf).ok(),
+            "extras.json" => result.extras = serde_json::from_slice(&buf).ok(),
+            "navigation" if name == "navigation/navbar.json" => result.navbar = serde_json::from_slice(&buf).ok(),
+            _ => {}
+        }
+        let dest = dest_for(section.prefix, &name, &dir, &crate::fs_utils::get_lang_dir(&app_handle));
 
         if let Some(dest) = dest {
             if let Some(parent) = dest.parent() {
@@ -286,9 +278,30 @@ pub fn restore_data_bundle(
     Ok(result)
 }
 
-/// Only used to keep `Path` in scope for the signature above on every platform.
-#[allow(dead_code)]
-fn _unused(_p: &Path) {}
+/// Where one archive entry lands on disk, or `None` when it is not a file at all — the two
+/// JSON blobs that become in-memory state, and the navbar layout only the frontend can write.
+///
+/// Split out of `restore_data_bundle` so it can be tested: the routing is the part that is
+/// easy to get quietly wrong (three sections do not mirror their archive path) and the rest of
+/// that function needs a running app to exercise.
+fn dest_for(section: &str, name: &str, data_dir: &Path, lang_dir: &Path) -> Option<PathBuf> {
+    match section {
+        // Handled by the caller as values, not files.
+        "app_data.json" | "extras.json" => None,
+        "automations" => Some(data_dir.join("schedules.json")),
+        // Lang lives outside the data dir, and flat: only the file name survives.
+        "Lang" => Path::new(name).file_name().map(|f| lang_dir.join(f)),
+        "navigation" => {
+            if name == "navigation/navbar.json" { None }
+            else if let Some(rest) = name.strip_prefix("navigation/pages-data/") {
+                Some(data_dir.join("custom_pages_data").join(rest))
+            } else if let Some(rest) = name.strip_prefix("navigation/pages/") {
+                Some(data_dir.join("custom_pages").join(rest))
+            } else { None }
+        }
+        _ => Some(data_dir.join(name)),
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -312,6 +325,142 @@ mod tests {
         assert!(!section_for("Crashes/Reports/x.zip").unwrap().restorable);
         assert!(!section_for("diagnostics/report.txt").unwrap().restorable);
         assert!(section_for("themes/dark.json").unwrap().restorable);
+    }
+
+    fn dirs() -> (PathBuf, PathBuf) {
+        (PathBuf::from("/data"), PathBuf::from("/lang"))
+    }
+
+    #[test]
+    fn the_three_sections_that_do_not_mirror_their_path_land_where_they_should() {
+        let (d, l) = dirs();
+        // automations is ONE file in the archive and one file on disk, under a different name.
+        assert_eq!(dest_for("automations", "automations/schedules.json", &d, &l).unwrap(),
+                   d.join("schedules.json"));
+        // Lang is flat, outside the data dir.
+        assert_eq!(dest_for("Lang", "Lang/en.json", &d, &l).unwrap(), l.join("en.json"));
+        // navigation splits in two, and its layout is not a file at all.
+        assert_eq!(dest_for("navigation", "navigation/pages/abc/index.html", &d, &l).unwrap(),
+                   d.join("custom_pages").join("abc/index.html"));
+        assert_eq!(dest_for("navigation", "navigation/pages-data/abc/grants.json", &d, &l).unwrap(),
+                   d.join("custom_pages_data").join("abc/grants.json"));
+        assert!(dest_for("navigation", "navigation/navbar.json", &d, &l).is_none());
+    }
+
+    /// THE ONE: what keeps these two apart is the TRAILING SLASH, not the order they are
+    /// tested in. `navigation/pages-data/x` does not start with `navigation/pages/`, so the
+    /// two prefixes are disjoint — but drop the slash to "tidy" the match and it does start
+    /// with `navigation/pages`, and every page's grants land inside custom_pages under a
+    /// folder called `-data`. The page then restores looking complete and silently without its
+    /// permissions, which is the failure worth a test: it is invisible until the page runs.
+    ///
+    /// (Verified rather than assumed: `"navigation/pages-data/…".strip_prefix("navigation/
+    /// pages/")` is None, and `strip_prefix("navigation/pages")` is `-data/…`.)
+    #[test]
+    fn pages_data_is_not_swallowed_by_pages() {
+        let (d, l) = dirs();
+        let got = dest_for("navigation", "navigation/pages-data/abc/grants.json", &d, &l).unwrap();
+        assert!(got.starts_with(d.join("custom_pages_data")), "landed at {got:?}");
+        assert!(!got.to_string_lossy().contains("-data/"), "landed inside custom_pages: {got:?}");
+    }
+
+    #[test]
+    fn a_value_entry_is_never_written_as_a_file() {
+        let (d, l) = dirs();
+        assert!(dest_for("app_data.json", "app_data.json", &d, &l).is_none());
+        assert!(dest_for("extras.json", "extras.json", &d, &l).is_none());
+    }
+
+    #[test]
+    fn everything_else_keeps_its_path_under_the_data_dir() {
+        let (d, l) = dirs();
+        assert_eq!(dest_for("themes", "themes/dark.json", &d, &l).unwrap(), d.join("themes/dark.json"));
+        assert_eq!(dest_for("Replays", "Replays/a.bmmreplay", &d, &l).unwrap(), d.join("Replays/a.bmmreplay"));
+    }
+
+    // ── inspect, against a real archive ──────────────────────────────────────
+    //
+    // inspect_data_bundle takes nothing but a path, so this is the half of the feature that
+    // can be exercised end to end without a running app: build a .DATABMM, read it back.
+
+    fn write_bundle(path: &Path, entries: &[(&str, &str)]) {
+        use std::io::Write;
+        let f = std::fs::File::create(path).unwrap();
+        let mut z = zip::ZipWriter::new(f);
+        let o = zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+        for (name, body) in entries {
+            z.start_file(*name, o).unwrap();
+            z.write_all(body.as_bytes()).unwrap();
+        }
+        z.finish().unwrap();
+    }
+
+    fn tmp(name: &str) -> PathBuf {
+        let d = std::env::temp_dir().join("bmm_restore_tests");
+        let _ = std::fs::create_dir_all(&d);
+        d.join(name)
+    }
+
+    #[test]
+    fn inspect_reports_each_section_and_flags_what_will_be_skipped() {
+        let p = tmp("basic.DATABMM");
+        write_bundle(&p, &[
+            ("manifest.json", r#"{"format":"DATABMM","version":1,"app_version":"1.0.0","created":"2026-08-18T10:00:00Z"}"#),
+            ("themes/dark.json", "{}"),
+            ("themes/light.json", "{}"),
+            ("Crashes/Reports/a.zip", "x"),
+            ("app_data.json", "{}"),
+        ]);
+        let info = inspect_data_bundle(p.to_string_lossy().to_string()).unwrap();
+
+        assert_eq!(info.app_version.as_deref(), Some("1.0.0"));
+        // No signature block in this manifest — unsigned, and that is not an error.
+        assert_eq!(info.signature, "unsigned");
+
+        let themes = info.sections.iter().find(|s| s.section == "themes").unwrap();
+        assert_eq!(themes.files, 2);
+        assert!(themes.restorable);
+
+        let crashes = info.sections.iter().find(|s| s.section == "Crashes").unwrap();
+        assert!(!crashes.restorable, "crash reports must be listed as not restorable");
+
+        // The manifest itself is not a section anybody restores.
+        assert!(!info.sections.iter().any(|s| s.section == "manifest.json"));
+    }
+
+    /// An archive somebody edited must SAY so. This is the whole reason the manifest is
+    /// signed: the sections it lists are the sections the screen offers to write.
+    #[test]
+    fn a_manifest_whose_signature_no_longer_matches_reads_as_tampered() {
+        use ed25519_dalek::{Signer, SigningKey, VerifyingKey};
+        let mut doc = serde_json::json!({ "format": "DATABMM", "version": 1, "app_version": "1.0.0" });
+        let sk = SigningKey::from_bytes(&[7u8; 32]);
+        let vk: VerifyingKey = (&sk).into();
+        let payload = crate::commands::doc_sign::payload(&doc, "databmm").unwrap();
+        doc.as_object_mut().unwrap().insert(crate::commands::doc_sign::FIELD.into(), serde_json::json!({
+            "format": "databmm",
+            "author_id": hex::encode(vk.to_bytes()),
+            "signature": hex::encode(sk.sign(&payload).to_bytes()),
+            "signed_at": "2026-08-18T10:00:00+02:00",
+        }));
+
+        let good = tmp("signed.DATABMM");
+        write_bundle(&good, &[("manifest.json", &serde_json::to_string(&doc).unwrap()), ("themes/a.json", "{}")]);
+        assert_eq!(inspect_data_bundle(good.to_string_lossy().to_string()).unwrap().signature, "valid");
+
+        // One field changed after signing — the archive now claims a version it was not
+        // signed with.
+        doc["app_version"] = serde_json::json!("9.9.9");
+        let bad = tmp("edited.DATABMM");
+        write_bundle(&bad, &[("manifest.json", &serde_json::to_string(&doc).unwrap()), ("themes/a.json", "{}")]);
+        assert_eq!(inspect_data_bundle(bad.to_string_lossy().to_string()).unwrap().signature, "tampered");
+    }
+
+    #[test]
+    fn a_file_that_is_not_a_zip_is_an_error_not_a_panic() {
+        let p = tmp("notazip.DATABMM");
+        std::fs::write(&p, b"this is not a zip").unwrap();
+        assert!(inspect_data_bundle(p.to_string_lossy().to_string()).is_err());
     }
 
     #[test]

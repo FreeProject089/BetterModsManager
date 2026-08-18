@@ -124,7 +124,7 @@ fn canonical(value: &Value, out: &mut String) {
     }
 }
 
-fn payload(doc: &Value, format: &str) -> Result<Vec<u8>, String> {
+pub(crate) fn payload(doc: &Value, format: &str) -> Result<Vec<u8>, String> {
     let mut bare = doc.clone();
     if let Some(obj) = bare.as_object_mut() {
         obj.remove(FIELD);
