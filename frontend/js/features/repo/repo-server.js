@@ -12,6 +12,15 @@ export function initRepoServer(elements) {
     let _unlistenConnected = null;
     let _unlistenDlStarted = null;
     let _unlistenDlFinished = null;
+    // Line icons, not emoji.
+    //
+    // A toast that opens with 🔌 renders as a different picture on every platform — a plug on
+    // one, a wall socket on another, a colour photograph on a third — and none of them match the
+    // rest of a window drawn in 2px strokes. `toast()` has taken an SVG since it was written; the
+    // server notifications were the last place still passing a character.
+    const ICON_PLUG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 2v6M15 2v6M6 8h12v3a6 6 0 0 1-12 0z"/><path d="M12 17v5"/></svg>';
+    const ICON_DOWN = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 12 5 5 5-5"/><path d="M4 21h16"/></svg>';
+    const ICON_DONE = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
     // ── Subscribe to server-side events ──────────────────────────────────────
     async function subscribeServerEvents() {
         if (!window.__TAURI__)
@@ -20,19 +29,19 @@ export function initRepoServer(elements) {
         _unlistenConnected = await listen('bmm://server-client-connected', (event) => {
             const { ip, creator_id, protocol } = event.payload;
             const id = creator_id || t('repo.notifClientAnonymous');
-            toast(`🔌 ${t('repo.notifClientConnected')} — ${protocol} [${ip}] · ID: ${id}`, 'info', 5000);
+            toast(`${t('repo.notifClientConnected')} — ${protocol} [${ip}] · ID: ${id}`, 'info', 5000, ICON_PLUG);
         });
         _unlistenDlStarted = await listen('bmm://server-download-started', (event) => {
             const { ip, creator_id, file, total_size, protocol } = event.payload;
             const id = creator_id || t('repo.notifClientAnonymous');
             const shortFile = (file || '').split('/').pop() || file;
-            toast(`⬇️ ${t('repo.notifDownloadStarted')} — ${protocol} [${ip}]\n${id} · ${shortFile} (${formatBytes(total_size)})`, 'info', 4000);
+            toast(`${t('repo.notifDownloadStarted')} — ${protocol} [${ip}]\n${id} · ${shortFile} (${formatBytes(total_size)})`, 'info', 4000, ICON_DOWN);
         });
         _unlistenDlFinished = await listen('bmm://server-download-finished', (event) => {
             const { ip, creator_id, file, total_size, protocol } = event.payload;
             const id = creator_id || t('repo.notifClientAnonymous');
             const shortFile = (file || '').split('/').pop() || file;
-            toast(`✅ ${t('repo.notifDownloadFinished')} — ${protocol} [${ip}]\n${id} · ${shortFile} (${formatBytes(total_size)})`, 'success', 5000);
+            toast(`${t('repo.notifDownloadFinished')} — ${protocol} [${ip}]\n${id} · ${shortFile} (${formatBytes(total_size)})`, 'success', 5000, ICON_DONE);
         });
     }
     function unsubscribeServerEvents() {

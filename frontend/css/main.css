@@ -17015,3 +17015,45 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
     overflow: hidden;
     text-overflow: ellipsis;
 }
+
+/* ── A segmented row ───────────────────────────────────────────────────────────
+   The server's three panels — monitoring, whitelist, bans — were three ghost
+   buttons in three different colours at 10px uppercase, each shouting a different
+   thing beside the one button that actually matters (start/stop).
+
+   They are three views of the SAME server, so they read as one control: equal
+   weight, one ink, and the icon carries the difference. Colour is reserved for
+   the thing that changes state. */
+.bmm-seg {
+    display: flex;
+    padding: 3px;
+    gap: 3px;
+    border: 1px solid var(--bmm-s10);
+    border-radius: 10px;
+    background: var(--bmm-bg-base);
+}
+.bmm-seg-item {
+    flex: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: 30px;
+    padding: 0 8px;
+    border: none;
+    border-radius: 7px;
+    background: none;
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+    /* A long label in a narrow window shortens rather than wrapping the row into
+       two lines of different heights. */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.bmm-seg-item:hover { background: var(--bmm-s06); color: var(--text); }
+.bmm-seg-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.bmm-seg-item svg { flex-shrink: 0; }
