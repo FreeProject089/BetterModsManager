@@ -162,10 +162,23 @@
                 font-size: 15px;
                 font-weight: 700;
                 letter-spacing: 0.09em;
+                color: var(--bmm-warning);
                 background: linear-gradient(110deg, #fbbf24 0%, var(--bmm-warning) 100%);
                 -webkit-background-clip: text;
                 -webkit-text-fill-color: transparent;
                 background-clip: text;
+            }
+            /* Gradient TEXT is painted by clipping a background to the glyphs, which means
+               the glyphs themselves are transparent. When the background does not paint —
+               Windows high contrast, forced-colors, a printer — the word disappears
+               entirely. This is the splash screen's own name, so it disappearing is the
+               whole screen looking broken. The colour above is the fallback; this restores
+               it wherever the clip cannot apply. */
+            @media (forced-colors: active), print {
+                .ld-w2 {
+                    -webkit-text-fill-color: currentColor;
+                    background: none;
+                }
             }
         </style>
 
@@ -7097,9 +7110,9 @@
                         </div>
                         <div>
                             <h2 data-i18n="repo.monitoringTitle"
-                                style="margin:0; font-size:20px; font-weight:900; color:var(--text-primary); letter-spacing: -0.02em; background: linear-gradient(135deg, var(--text-primary) 0%, var(--cyan) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
+                                style="margin:0; font-size:19px; font-weight:800; color:var(--text-primary); letter-spacing:-0.01em;">
                                 SERVER MONITORING</h2>
-                            <p style="margin:4px 0 0 0; font-size:11px; color:var(--cyan); text-transform:uppercase; letter-spacing:0.1em; font-weight:700; opacity: 0.9;"
+                            <p style="margin:4px 0 0 0; font-size:11px; color:var(--cyan); font-weight:600; opacity: 0.9;"
                                 data-i18n="repo.monitoringSubtitle">REAL-TIME CONNECTED USERS</p>
                         </div>
                     </div>
@@ -7235,12 +7248,12 @@
                         <div>
                             <div style="display:flex; align-items:center; gap:10px; margin-bottom:2px;">
                                 <h2 data-i18n="repo.bansTitle"
-                                    style="margin:0; font-size:20px; font-weight:900; color:var(--text-primary); letter-spacing: -0.02em; background: linear-gradient(135deg, var(--text-primary) 0%, var(--danger) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
+                                    style="margin:0; font-size:19px; font-weight:800; color:var(--text-primary); letter-spacing:-0.01em;">
                                     BAN MANAGEMENT</h2>
                                 <span id="bans-counter" class="admin-modal-counter admin-modal-counter--danger"
                                     style="display:none;">0</span>
                             </div>
-                            <p style="margin:0; font-size:11px; color:var(--danger); text-transform:uppercase; letter-spacing:0.1em; font-weight:700; opacity: 0.9;"
+                            <p style="margin:0; font-size:11px; color:var(--danger); font-weight:600; opacity: 0.9;"
                                 data-i18n="repo.bansSubtitle">BANNED IPS AND CREATOR KEYS</p>
                         </div>
                     </div>
@@ -7342,13 +7355,13 @@
                         <div>
                             <div style="display:flex; align-items:center; gap:10px; margin-bottom:2px;">
                                 <h2 data-i18n="repo.whitelistTitle"
-                                    style="margin:0; font-size:20px; font-weight:900; color:var(--text-primary); letter-spacing: -0.02em; background: linear-gradient(135deg, var(--text-primary) 0%, var(--accent) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
+                                    style="margin:0; font-size:19px; font-weight:800; color:var(--text-primary); letter-spacing:-0.01em;">
                                     WHITELIST MANAGEMENT</h2>
                                 <span id="whitelist-counter" class="admin-modal-counter admin-modal-counter--accent"
                                     style="display:none;">0</span>
                             </div>
-                            <p style="margin:0; font-size:11px; color:var(--accent); text-transform:uppercase; letter-spacing:0.1em; font-weight:700; opacity: 0.9;"
-                                data-i18n="repo.whitelistSubtitle">RESTRICTED ACCESS TO AUTHORIZED USERS</p>
+                            <p style="margin:0; font-size:11px; color:var(--accent); font-weight:600; opacity: 0.9;"
+                                data-i18n="repo.whitelistSubtitle">Only the people you list can reach this server</p>
                         </div>
                     </div>
                     <div style="display:flex; align-items:center; gap:12px;">
@@ -7365,7 +7378,7 @@
                         <button id="whitelist-toggle-btn"
                             style="display:flex; align-items:center; gap:10px; background:rgba(59, 130, 246, 0.15); padding:8px 16px; border-radius:24px; border:1px solid rgba(59, 130, 246, 0.3); cursor:pointer; transition:all 0.2s ease;">
                             <span style="font-size:10px; font-weight:900; color:var(--accent); letter-spacing: 0.05em;"
-                                data-i18n="repo.whitelistEnable">ACTIVER</span>
+                                data-i18n="repo.whitelistEnable">Activer</span>
                             <input type="checkbox" id="whitelist-toggle" class="toggle toggle-accent toggle-xs"
                                 style="pointer-events:none;">
                         </button>
@@ -7385,7 +7398,7 @@
                     <div
                         style="padding:20px 24px; background:rgba(59, 130, 246, 0.03); border-bottom:1px solid rgba(59, 130, 246, 0.1);">
                         <h3 style="margin:0 0 14px 0; font-size:11px; font-weight:800; color:var(--accent); text-transform:uppercase; letter-spacing:0.12em;"
-                            data-i18n="repo.whitelistManualTitle">AJOUTER À LA WHITELIST</h3>
+                            data-i18n="repo.whitelistManualTitle">Ajouter a la main</h3>
                         <div style="display:flex; gap:10px; flex-wrap:wrap;">
                             <input type="text" id="manual-whitelist-ip" class="form-input"
                                 style="flex:1; min-width:140px; font-size:13px; height:40px; background:var(--bmm-bg-base); border-radius: 12px; border-color: rgba(59, 130, 246, 0.2);"
