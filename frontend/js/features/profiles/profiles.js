@@ -309,7 +309,7 @@ async function disableAllRequestedMods() {
     }
     document.body.classList.add('loading');
     try {
-        await invoke('disable_mods_for_profiles', { profileIds });
+        await invoke('disable_mods_for_profiles', { profileIds, modIds: null });
         toast(t('prof.modsDisabledBulk'), 'success');
     }
     catch (err) {
@@ -334,24 +334,14 @@ async function disableGlobalMods(modIds) {
     if (modIds.length > 5)
         document.body.classList.add('loading');
     try {
-        const profiles = await invoke('get_profiles');
-        const activeProfileId = await invoke('get_active_profile_id');
-        for (const modId of modIds) {
-            // Find all profiles where it is active
-            const targetProfiles = profiles.filter(p => Array.isArray(p.active_mods) && p.active_mods.includes(modId));
-            for (const p of targetProfiles) {
-                // If it's the active profile, we can use the regular disable_mod
-                // Otherwise we might need to set it directly in the profile data
-                // But the backend `disable_mod` actually syncs all profiles on the same root!
-                // So calling it once per root is enough.
-                // For simplicity, we'll try to use the most "correct" one.
-                // If the mod is in the active profile's mods_path, we use it.
-                await invoke('disable_mod', { modId });
-                // Wait, disable_mod takes (window, state, mod_id). 
-                // The frontend invoke only passes mod_id.
-                // It uses the active profile in the backend.
-            }
-        }
+        // One call, and the backend decides which profiles are involved.
+        //
+        // This used to loop over the profiles a mod was active in and call `disable_mod` once
+        // per profile — but `disable_mod` works on the ACTIVE profile and returns Ok straight
+        // away for a mod that is not in it. So every mod belonging to another profile was
+        // "disabled" with a success toast and nothing happening. The loop even computed the
+        // right profiles and then threw them away.
+        await invoke('disable_mods_for_profiles', { profileIds: [], modIds });
         toast(t('prof.modsDisabled', { count: modIds.length }) || `${modIds.length} mods désactivés`, 'success');
         // Force cache refresh by clearing it before re-rendering
         allModsCache = [];
@@ -1256,7 +1246,11 @@ export async function renderProfiles() {
                     // If we were just highlighting one mod without having it in the selection set, add it first
                     const currentHighlight = document.querySelector('.global-active-mod-item.highlight-mod');
                     if (currentHighlight && selectedGlobalModIds.size === 0) {
-                        const hId = currentHighlight.dataset.id;
+                        // `data-mod-id`, which is what the element actually carries. Reading
+                        // `dataset.id` gave undefined, so ctrl-clicking a second mod started
+                        // the selection at one instead of two — and "Disable selected", which
+                        // only appears above one, never appeared on the first ctrl-click.
+                        const hId = currentHighlight.dataset.modId;
                         if (hId) {
                             selectedGlobalModIds.add(hId);
                             currentHighlight.classList.add('selected');

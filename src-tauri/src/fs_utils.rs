@@ -384,8 +384,28 @@ where
 }
 
 
-/// Get all file paths (relative) inside a mod folder, recursively.
+/// Get all file paths (relative) inside a mod, recursively.
+///
+/// A mod is a FOLDER or an ARCHIVE, and this answers for both. It used to answer only for
+/// folders: handed a `.zip`, WalkDir yields the zip itself, `strip_prefix` reduces it to an
+/// empty path, and the caller receives a list of one nothing.
+///
+/// That was not a cosmetic difference. `disable_mod` builds what to delete from
+/// `installed_files` UNION this list, so "Disable all" left an archived mod's files sitting
+/// in the game folder while marking the mod off — the thing that gets reported as "disable
+/// all does not disable archived mods". Conflict detection compares two of these lists, so
+/// an archived mod also silently conflicted with nothing, ever.
+///
+/// The entries are read from the archive's index — nothing is extracted here. Callers that
+/// need real bytes go through `archive::mod_read_root` and get a directory; callers that need
+/// the file list get the same answer for both shapes, which is the point.
 pub fn list_mod_files(mod_folder: &Path) -> Result<Vec<PathBuf>> {
+    if crate::archive::is_archive(mod_folder) {
+        return Ok(crate::archive::archive_entries(mod_folder)?
+            .into_iter()
+            .map(|(rel, _)| PathBuf::from(rel))
+            .collect());
+    }
     let mut files = Vec::new();
     for entry in WalkDir::new(mod_folder)
         .into_iter()
@@ -706,5 +726,77 @@ mod unapply_stacked_tests {
         ).unwrap();
 
         assert!(!game.join("Data/new.pak").exists());
+    }
+}
+
+#[cfg(test)]
+mod list_mod_files_tests {
+    use super::list_mod_files;
+    use std::fs;
+    use std::io::Write;
+
+    /// A zip holding two files, one of them nested.
+    fn zip_at(path: &std::path::Path) {
+        let f = fs::File::create(path).unwrap();
+        let mut z = zip::ZipWriter::new(f);
+        let o = zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Stored);
+        z.start_file("readme.txt", o).unwrap();
+        z.write_all(b"hi").unwrap();
+        z.start_file("Data/thing.pak", o).unwrap();
+        z.write_all(b"bytes").unwrap();
+        z.finish().unwrap();
+    }
+
+    /// THE ONE. An archived mod used to answer this question with a list of one empty path,
+    /// which is why "Disable all" left its files in the game folder: what gets deleted is
+    /// `installed_files` UNION this, and this contributed nothing.
+    #[test]
+    fn an_archived_mod_lists_the_files_inside_it() {
+        let dir = std::env::temp_dir().join("bmm_lmf_archive");
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let zip = dir.join("CoolMod.zip");
+        zip_at(&zip);
+
+        let mut got: Vec<String> = list_mod_files(&zip).unwrap()
+            .into_iter().map(|p: std::path::PathBuf| p.components().map(|c| c.as_os_str().to_string_lossy().to_string()).collect::<Vec<_>>().join("/")).collect();
+        got.sort();
+        assert_eq!(got, vec!["Data/thing.pak".to_string(), "readme.txt".to_string()]);
+        assert!(!got.iter().any(|s| s.is_empty()), "an empty relative path is the old bug");
+    }
+
+    #[test]
+    fn a_folder_mod_still_lists_the_same_way() {
+        let dir = std::env::temp_dir().join("bmm_lmf_folder/CoolMod");
+        let _ = fs::remove_dir_all(std::env::temp_dir().join("bmm_lmf_folder"));
+        fs::create_dir_all(dir.join("Data")).unwrap();
+        fs::write(dir.join("readme.txt"), b"hi").unwrap();
+        fs::write(dir.join("Data/thing.pak"), b"bytes").unwrap();
+
+        let mut got: Vec<String> = list_mod_files(&dir).unwrap()
+            .into_iter().map(|p: std::path::PathBuf| p.components().map(|c| c.as_os_str().to_string_lossy().to_string()).collect::<Vec<_>>().join("/")).collect();
+        got.sort();
+        assert_eq!(got, vec!["Data/thing.pak".to_string(), "readme.txt".to_string()]);
+    }
+
+    /// The two shapes of the same mod must be indistinguishable here, or conflict detection
+    /// between a zipped mod and its unzipped twin finds nothing.
+    #[test]
+    fn the_zipped_and_unzipped_twin_agree() {
+        let root = std::env::temp_dir().join("bmm_lmf_twin");
+        let _ = fs::remove_dir_all(&root);
+        let folder = root.join("CoolMod");
+        fs::create_dir_all(folder.join("Data")).unwrap();
+        fs::write(folder.join("readme.txt"), b"hi").unwrap();
+        fs::write(folder.join("Data/thing.pak"), b"bytes").unwrap();
+        let zip = root.join("CoolMod.zip");
+        zip_at(&zip);
+
+        let norm = |v: Vec<std::path::PathBuf>| {
+            let mut s: Vec<String> = v.into_iter().map(|p: std::path::PathBuf| p.components().map(|c| c.as_os_str().to_string_lossy().to_string()).collect::<Vec<_>>().join("/")).collect();
+            s.sort();
+            s
+        };
+        assert_eq!(norm(list_mod_files(&folder).unwrap()), norm(list_mod_files(&zip).unwrap()));
     }
 }

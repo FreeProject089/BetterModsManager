@@ -2318,23 +2318,51 @@ pub async fn toggle_all_mods(window: Window, state: State<'_, AppState>, enable:
 }
 
 #[tauri::command]
-pub async fn disable_mods_for_profiles(_window: Window, state: State<'_, AppState>, profile_ids: Vec<String>) -> Result<(), String> {
-    log_line(format!("[MOD] Bulk disabling mods for {} profile(s)", profile_ids.len()));
-    
+pub async fn disable_mods_for_profiles(
+    _window: Window,
+    state: State<'_, AppState>,
+    profile_ids: Vec<String>,
+    // `mod_ids`: restrict to these mods; None = every active mod in the listed profiles.
+    //
+    // This is what makes "disable the mods I selected" possible at all. The Profiles screen
+    // used to do it by calling `disable_mod` once per mod, which acts ON THE ACTIVE PROFILE
+    // and returns Ok immediately for a mod that is not in it — so selecting mods belonging to
+    // another profile, right-clicking, and choosing "Disable selected" reported success and
+    // disabled nothing. One command, both jobs: whole profiles, or named mods.
+    mod_ids: Option<Vec<String>>,
+) -> Result<(), String> {
+    let wanted: Option<HashSet<String>> = mod_ids.map(|v| v.into_iter().collect());
+    log_line(format!(
+        "[MOD] Bulk disabling {} for {} profile(s)",
+        wanted.as_ref().map_or("all mods".to_string(), |w| format!("{} mod(s)", w.len())),
+        profile_ids.len()
+    ));
+
     // 1. Group mods by (game_path, backup_path) to minimize physical IO
     let mut tasks: HashMap<(PathBuf, PathBuf), HashSet<String>> = HashMap::new();
+    // Which profiles are actually touched. With no profile list and a mod list, that means
+    // "every profile where these mods are active" — the question the global list asks.
+    let mut touched: HashSet<String> = HashSet::new();
 
     {
         let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
-        for p_id in &profile_ids {
-            if let Some(p) = data.profiles.iter().find(|prof| &prof.id == p_id) {
-                if p.active_mods.is_empty() { continue; }
-                let key = (p.game_path.clone(), p.backup_path.clone());
-                let entry = tasks.entry(key).or_default();
-                for mid in &p.active_mods {
-                    entry.insert(mid.clone());
-                }
-            }
+        for p in data.profiles.iter() {
+            let listed = profile_ids.iter().any(|id| id == &p.id);
+            if !profile_ids.is_empty() && !listed { continue; }
+            if p.active_mods.is_empty() { continue; }
+            // Without an explicit profile list, only a profile holding one of the wanted mods
+            // is touched; an empty list with no mod filter would mean "every profile", which
+            // no caller asks for and which would be a spectacular thing to do by accident.
+            if profile_ids.is_empty() && wanted.is_none() { continue; }
+            let mine: Vec<String> = p.active_mods.iter()
+                .filter(|mid| wanted.as_ref().map_or(true, |w| w.contains(*mid)))
+                .cloned()
+                .collect();
+            if mine.is_empty() { continue; }
+            touched.insert(p.id.clone());
+            let key = (p.game_path.clone(), p.backup_path.clone());
+            let entry = tasks.entry(key).or_default();
+            for mid in mine { entry.insert(mid); }
         }
     }
 
@@ -2396,9 +2424,14 @@ pub async fn disable_mods_for_profiles(_window: Window, state: State<'_, AppStat
 
     {
         let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
-        for p_id in &profile_ids {
+        for p_id in &touched {
             if let Some(p) = data.profiles.iter_mut().find(|prof| &prof.id == p_id) {
-                p.active_mods.clear();
+                match &wanted {
+                    // Only what was asked for. Clearing the list here is what made this
+                    // command unusable for a selection: it emptied the profile.
+                    Some(w) => p.active_mods.retain(|mid| !w.contains(mid)),
+                    None => p.active_mods.clear(),
+                }
             }
         }
         
