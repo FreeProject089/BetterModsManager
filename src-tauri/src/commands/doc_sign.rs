@@ -56,24 +56,87 @@ pub enum Verdict {
     Malformed { reason: String },
 }
 
-/// The payload that gets signed: the document without its signature block, canonically
-/// serialised, with the format name bound in.
+/// The payload that gets signed: the document without its signature block, written in a
+/// canonical form, with the format name bound in.
 ///
-/// Serialised through `serde_json::to_vec` on a `Value`, whose object keys are sorted when
-/// the `preserve_order` feature is off — which it is here. Two runs over the same content
-/// therefore produce the same bytes, which is the only reason any of this verifies.
+/// Canonical here means "a form another language can reproduce", because the verifier that
+/// matters most is not in Rust — BCWEB's moderation tools read these files in Node, and a
+/// scheme that only Rust can reproduce is a scheme where every document reads as tampered.
+///
+/// `serde_json::to_vec` is NOT that form. It prints a float that happens to be whole as
+/// `1.0`; JavaScript, having parsed the same document, prints `1`. Neither is wrong and the
+/// difference is invisible until every signature fails. So numbers are written here in the
+/// shortest form that round-trips, which is what both languages produce for the values these
+/// documents carry — counts, sizes, percentages, timestamps.
+///
+/// The boundary, stated rather than discovered: a float beyond ~1e21 or below ~1e-7 formats
+/// differently in the two languages (JavaScript switches to exponent notation sooner). No
+/// BMM format carries one. If one ever does, this is where it will be noticed — as a loud
+/// "tampered", not as a silent pass.
+fn canonical(value: &Value, out: &mut String) {
+    match value {
+        Value::Null => out.push_str("null"),
+        Value::Bool(b) => out.push_str(if *b { "true" } else { "false" }),
+        Value::Number(n) => {
+            if let Some(i) = n.as_i64() {
+                out.push_str(&i.to_string());
+            } else if let Some(u) = n.as_u64() {
+                out.push_str(&u.to_string());
+            } else if let Some(f) = n.as_f64() {
+                // A whole float is written as an integer, because that is what a language
+                // which never had an integer type will produce for the same value.
+                if f.fract() == 0.0 && f.abs() < 9e15 {
+                    out.push_str(&(f as i64).to_string());
+                } else {
+                    out.push_str(&f.to_string());
+                }
+            } else {
+                out.push_str("null");
+            }
+        }
+        // Strings go through serde: the escaping rules it applies (quote, backslash, control
+        // characters, and nothing else) are the ones JSON.stringify applies.
+        Value::String(s) => out.push_str(&serde_json::to_string(s).unwrap_or_else(|_| "\"\"".into())),
+        Value::Array(items) => {
+            out.push('[');
+            for (i, v) in items.iter().enumerate() {
+                if i > 0 { out.push(','); }
+                canonical(v, out);
+            }
+            out.push(']');
+        }
+        Value::Object(map) => {
+            // Keys SORTED, so a document that has been through another tool's formatter —
+            // reordered, reindented — still verifies. serde_json's Map is already ordered
+            // this way with `preserve_order` off; sorting explicitly means this does not
+            // depend on a Cargo feature staying switched off.
+            let mut keys: Vec<&String> = map.keys().collect();
+            keys.sort();
+            out.push('{');
+            for (i, k) in keys.iter().enumerate() {
+                if i > 0 { out.push(','); }
+                out.push_str(&serde_json::to_string(k).unwrap_or_else(|_| "\"\"".into()));
+                out.push(':');
+                canonical(&map[*k], out);
+            }
+            out.push('}');
+        }
+    }
+}
+
 fn payload(doc: &Value, format: &str) -> Result<Vec<u8>, String> {
     let mut bare = doc.clone();
     if let Some(obj) = bare.as_object_mut() {
         obj.remove(FIELD);
     }
-    let body = serde_json::to_vec(&bare).map_err(|e| e.to_string())?;
+    let mut body = String::new();
+    canonical(&bare, &mut body);
     // The format is prefixed rather than merged into the document, so signing does not
     // depend on the document having room for it.
     let mut out = Vec::with_capacity(body.len() + format.len() + 1);
     out.extend_from_slice(format.as_bytes());
     out.push(0x1e); // record separator — cannot occur in JSON text
-    out.extend_from_slice(&body);
+    out.extend_from_slice(body.as_bytes());
     Ok(out)
 }
 
@@ -268,5 +331,43 @@ mod tests {
         signed(&mut d, "mm");
         let reordered: Value = serde_json::from_str(&serde_json::to_string_pretty(&d).unwrap()).unwrap();
         assert!(matches!(verify_doc(&reordered, "mm"), Verdict::Valid { .. }));
+    }
+}
+
+/// Print a signed sample document, for the Node-side verifier's test to consume.
+///
+/// The two implementations of the canonical form live in different languages and different
+/// repositories, and nothing else would notice them drifting apart until every document a
+/// moderator opened read as tampered. This is run by `apps/api/test/bmm-signature.test.mjs`
+/// through `cargo test -- --nocapture`, and the sample it prints is checked in.
+#[cfg(test)]
+mod cross_language {
+    use super::*;
+
+    #[test]
+    fn print_a_signed_sample() {
+        let mut doc = serde_json::json!({
+            "format_version": "1.0",
+            "name": "Cross-language sample",
+            "count": 3,
+            "ratio": 0.5,
+            // A whole float: the exact value that made serde and JavaScript disagree.
+            "whole": 2.0,
+            "nested": { "b": [1, 2, { "z": true, "a": null }], "a": "quote \" tab 	 newline 
+" },
+            "mods": []
+        });
+        // The fixed key from the tests above, so the sample is reproducible.
+        use ed25519_dalek::{Signer, SigningKey, VerifyingKey};
+        let sk = SigningKey::from_bytes(&[7u8; 32]);
+        let vk: VerifyingKey = (&sk).into();
+        let bytes = payload(&doc, "mm").unwrap();
+        doc.as_object_mut().unwrap().insert(FIELD.into(), serde_json::json!({
+            "format": "mm",
+            "author_id": hex::encode(vk.to_bytes()),
+            "signature": hex::encode(sk.sign(&bytes).to_bytes()),
+            "signed_at": "2026-08-18T10:00:00+02:00",
+        }));
+        println!("SIGNED_SAMPLE {}", serde_json::to_string(&doc).unwrap());
     }
 }
