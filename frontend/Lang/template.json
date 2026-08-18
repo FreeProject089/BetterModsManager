@@ -1192,6 +1192,8 @@
   "detail.sectionGeneral": "General",
   "detail.sectionLinks": "Links",
   "detail.selectTag": "— Add a tag —",
+  "detail.noTagsYet": "",
+  "detail.newTag": "",
   "detail.tags": "Tags",
   "__SECTION_CTX__": "--- CONTEXT MENUS ---",
   "ctx.copyPath": "Copy Relative Path",
@@ -7337,5 +7339,7 @@
   "plugins.phAppTitle": "My App",
   "plugins.phAppDesc": "What this app does…",
   "plugins.phServerMods": "My Server Mods",
-  "plugins.phServerPlugins": "My Server Plugins"
+  "plugins.phServerPlugins": "My Server Plugins",
+  "common.create": "",
+  "settings.tagName": ""
 }

@@ -16904,3 +16904,41 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
     .sched-pc-side { border-right: 0; padding-right: 0;
         border-bottom: 1px solid var(--border); padding-bottom: 10px; }
 }
+
+/* ── The tag picker in the mod detail panel ────────────────────────────────────
+   A native <select> renders an <option> as text, so a tag's icon and colour —
+   the two things that tell tags apart — were invisible in the one place you pick
+   one. This is the list that replaced it. Opaque on purpose: it floats over the
+   panel's own content. */
+.bmm-tag-menu {
+    position: absolute;
+    left: 0; right: 0; top: calc(100% + 4px);
+    z-index: 40;
+    max-height: 230px;
+    overflow-y: auto;
+    padding: 4px;
+    background: var(--bmm-bg-elevated, var(--bg-secondary));
+    border: 1px solid var(--bmm-border, var(--border));
+    border-radius: 8px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+.bmm-tag-menu-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 5px 6px;
+    border: none;
+    border-radius: 6px;
+    background: none;
+    color: var(--text);
+    font-size: 11px;
+    text-align: left;
+    cursor: pointer;
+}
+.bmm-tag-menu-row:hover { background: var(--bmm-s08, rgba(255, 255, 255, 0.06)); }
+.bmm-tag-menu-row[disabled] { opacity: 0.45; cursor: default; }
+.bmm-tag-menu-row[disabled]:hover { background: none; }
+.bmm-tag-menu-sep { height: 1px; margin: 4px 2px; background: var(--bmm-border, var(--border)); }
+.bmm-tag-new { display: flex; flex-direction: column; gap: 6px; padding: 6px; }
+.bmm-tag-new-row { display: flex; align-items: center; gap: 6px; }

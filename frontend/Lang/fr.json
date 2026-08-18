@@ -1190,6 +1190,8 @@
   "detail.sectionGeneral": "Général",
   "detail.sectionLinks": "Liens",
   "detail.selectTag": "Ajouter un tag",
+  "detail.noTagsYet": "Aucun tag pour le moment",
+  "detail.newTag": "Nouveau tag…",
   "detail.tags": "Tags",
   "detail.version": "Version",
   "__SECTION_CTX__": "--- MENUS CONTEXTUELS ---",
@@ -7498,5 +7500,7 @@
   "settings.exportDiagnosticsDesc": "Les fichiers de diagnostic que BMM écrit quand quelque chose se passe mal",
   "settings.exportNote2": "Écrit un seul fichier .DATABMM — une archive contenant tout ce que tu as coché, avec un manifeste listant ce qui y est entré.",
   "settings.bundleExported": "{mb} Mo écrits — {n} section(s).",
-  "settings.bundleEmpty": "Rien à prendre pour : {x}."
+  "settings.bundleEmpty": "Rien à prendre pour : {x}.",
+  "common.create": "Créer",
+  "settings.tagName": "Nom du tag"
 }

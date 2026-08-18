@@ -1192,6 +1192,8 @@
   "detail.sectionGeneral": "General",
   "detail.sectionLinks": "Links",
   "detail.selectTag": "— Add a tag —",
+  "detail.noTagsYet": "No tags yet",
+  "detail.newTag": "New tag…",
   "detail.tags": "Tags",
   "__SECTION_CTX__": "--- CONTEXT MENUS ---",
   "ctx.copyPath": "Copy Relative Path",
@@ -7500,5 +7502,7 @@
   "settings.exportDiagnosticsDesc": "The diagnostic files BMM writes when something goes wrong",
   "settings.exportNote2": "Writes one .DATABMM file — an archive holding everything you ticked, with a manifest saying what went in.",
   "settings.bundleExported": "Wrote {mb} MB — {n} section(s).",
-  "settings.bundleEmpty": "Nothing to take for: {x}."
+  "settings.bundleEmpty": "Nothing to take for: {x}.",
+  "common.create": "Create",
+  "settings.tagName": "Tag name"
 }

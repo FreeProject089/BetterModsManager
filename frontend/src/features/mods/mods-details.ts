@@ -263,7 +263,6 @@ export async function renderModDetail(modId) {
     setTimeout(autoResize, 0);
   }
 
-  const tagSelect = panel.querySelector('#detail-tag-select');
   const tagList = panel.querySelector('#detail-tags-list');
   let modTags = [...(mod.tags || [])];
 
@@ -292,20 +291,14 @@ export async function renderModDetail(modId) {
     mod._currentTags = modTags;
   };
 
-  S.userTags.forEach(tDef => {
-    const opt = document.createElement('option');
-    opt.value = tDef.id; opt.textContent = tDef.name;
-    tagSelect.appendChild(opt);
-  });
-
-  tagSelect.onchange = e => {
-    const tid = e.target.value;
-    if (tid && !modTags.includes(tid)) {
-      if (modTags.length >= 3) toast(t('mod.tagLimit'), 'warning');
-      else { modTags.push(tid); renderTagsUI(); }
-    }
-    e.target.value = '';
+  const addTag = (tid: string) => {
+    if (!tid || modTags.includes(tid)) return;
+    if (modTags.length >= 3) { toast(t('mod.tagLimit'), 'warning'); return; }
+    modTags.push(tid);
+    renderTagsUI();
   };
+
+  setupTagPicker(panel, () => modTags, addTag);
   renderTagsUI();
   
   panel.querySelector('#btn-save-detail').onclick = async () => {
@@ -469,4 +462,124 @@ export function showIntegrityReport(mod: any, report: any) {
     content.innerHTML = `<div style="padding:10px 0;"><h3 style="color:var(--warning)">${t('integrity.issues')}</h3><p>Mod: <strong>${escHtml(mod.name)}</strong></p>${renderSec(t('integrity.missing'), report.missing, 'var(--danger)')}${renderSec(t('integrity.modified'), report.modified, 'var(--warning)')}${renderSec(t('integrity.added'), report.added, 'var(--accent)')}</div>`;
   }
   modal.classList.add('open');
+}
+
+/**
+ * The tag picker: a list of real chips, and a way to make a new one without leaving.
+ *
+ * It was a native `<select>`. An `<option>` is text — the browser will not draw an icon or a
+ * colour inside one — so the two things that tell tags apart were invisible in the one place
+ * you pick a tag, and the only way to create a tag was to leave the mod, go to Settings, make
+ * it, come back and find the mod again.
+ */
+function setupTagPicker(panel, currentTags: () => string[], addTag: (id: string) => void) {
+  const btn = panel.querySelector('#detail-tag-open');
+  const menu = panel.querySelector('#detail-tag-menu');
+  if (!btn || !menu) return;
+
+  const close = () => { menu.style.display = 'none'; };
+  const draw = () => {
+    const taken = new Set(currentTags());
+    menu.innerHTML = '';
+
+    const tags = [...(S.userTags || [])].sort((a, b) => a.name.localeCompare(b.name));
+    if (!tags.length) {
+      const empty = document.createElement('div');
+      empty.className = 'bmm-tag-menu-row';
+      empty.setAttribute('disabled', '');
+      empty.textContent = t('detail.noTagsYet') || 'No tags yet';
+      menu.appendChild(empty);
+    }
+    for (const tDef of tags) {
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'bmm-tag-menu-row';
+      // The chip is the whole point: same renderer as everywhere else, so a tag looks here
+      // exactly like it looks on the card it is about to land on.
+      row.innerHTML = renderTagChip(tDef, { fontSize: 11, pad: '2px 8px' });
+      if (taken.has(tDef.id)) {
+        row.setAttribute('disabled', '');
+        row.disabled = true;
+      } else {
+        row.onclick = () => { addTag(tDef.id); draw(); };
+      }
+      menu.appendChild(row);
+    }
+
+    const sep = document.createElement('div');
+    sep.className = 'bmm-tag-menu-sep';
+    menu.appendChild(sep);
+
+    const newRow = document.createElement('button');
+    newRow.type = 'button';
+    newRow.className = 'bmm-tag-menu-row';
+    newRow.innerHTML = `<span style="font-weight:700">＋</span> <span>${escHtml(t('detail.newTag') || 'New tag…')}</span>`;
+    newRow.onclick = () => drawNew();
+    menu.appendChild(newRow);
+  };
+
+  /** The creation form, inline. Name, colour, icon — the same three fields Settings asks
+   *  for, and the same `create_tag` behind them, so a tag made here is not a lesser tag. */
+  const drawNew = () => {
+    menu.innerHTML = '';
+    const box = document.createElement('div');
+    box.className = 'bmm-tag-new';
+    box.innerHTML = `
+      <div class="bmm-tag-new-row">
+        <input type="text" class="input-field bmm-tag-name" maxlength="30"
+               placeholder="${escAttr(t('settings.tagName') || 'Tag name')}"
+               style="flex:1;padding:5px;font-size:11px">
+        <input type="color" class="bmm-tag-color" value="#f97316"
+               style="width:30px;height:26px;padding:0;border:none;background:none;cursor:pointer">
+        <button type="button" class="btn btn-sm bmm-tag-icon" style="height:26px;padding:0 8px;font-size:11px">＋</button>
+      </div>
+      <div class="bmm-tag-new-row" style="justify-content:flex-end">
+        <button type="button" class="btn btn-sm bmm-tag-cancel" style="height:24px;padding:0 8px;font-size:10px">${escHtml(t('common.cancel') || 'Cancel')}</button>
+        <button type="button" class="btn btn-sm btn-primary bmm-tag-save" style="height:24px;padding:0 10px;font-size:10px">${escHtml(t('common.create') || 'Create')}</button>
+      </div>`;
+    menu.appendChild(box);
+
+    let iconRef = '';
+    const nameEl = box.querySelector('.bmm-tag-name') as HTMLInputElement;
+    nameEl.focus();
+
+    box.querySelector('.bmm-tag-icon').onclick = async () => {
+      const { openIconPicker, renderPackIcon } = await import('../../ui/icon-pack.js');
+      const ref = await openIconPicker({ current: iconRef });
+      if (ref === null) return;
+      iconRef = ref;
+      box.querySelector('.bmm-tag-icon').innerHTML = renderPackIcon(ref, 14) || '＋';
+    };
+    box.querySelector('.bmm-tag-cancel').onclick = () => draw();
+    box.querySelector('.bmm-tag-save').onclick = async () => {
+      const name = nameEl.value.trim();
+      if (!name) { toast(t('settings.tagNameRequired') || 'Name required', 'error'); return; }
+      try {
+        const color = (box.querySelector('.bmm-tag-color') as HTMLInputElement).value;
+        const tag = await invoke('create_tag', { name, color, icon: iconRef, color2: null });
+        // Refreshed from the backend rather than pushed locally: Settings reads the same
+        // list, and two copies of "the tags" is how one of them goes stale.
+        S.userTags = await invoke('get_tags').catch(() => S.userTags);
+        addTag(tag.id);
+        draw();
+      } catch (err) {
+        toast(t('settings.tagCreateError', { err: String(err) }) || String(err), 'error');
+      }
+    };
+  };
+
+  btn.onclick = (e) => {
+    e.stopPropagation();
+    const open = menu.style.display !== 'none';
+    if (open) { close(); return; }
+    draw();
+    menu.style.display = 'block';
+  };
+  // Anywhere else closes it, including the panel behind — but not a click inside the menu,
+  // which is how the creation form survives long enough to be filled in.
+  document.addEventListener('mousedown', (ev) => {
+    if (menu.style.display === 'none') return;
+    if (ev.target.closest?.('#detail-tag-picker')) return;
+    close();
+  });
 }

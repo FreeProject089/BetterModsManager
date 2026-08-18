@@ -320,9 +320,17 @@ export function getModDetailHTML(mod, ctx) {
       <div class="detail-section" id="detail-tags-container" style="margin-top:10px">
         <label class="detail-label" data-i18n="detail.tags" style="display:flex;align-items:center;gap:4px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg> Tags</label>
         <div id="detail-tags-list" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>
-        <select id="detail-tag-select" class="input-field" style="width:100%;padding:6px;font-size:11px">
-            <option value="">— ${t('detail.selectTag')} —</option>
-        </select>
+        <!-- A native <select> cannot draw a tag: an <option> is text, so the icon and the
+             colour — the two things that tell tags apart at a glance — were invisible in the
+             one place you pick one. This is a button that opens a list of real chips. -->
+        <div id="detail-tag-picker" style="position:relative">
+          <button type="button" id="detail-tag-open" class="input-field"
+                  style="width:100%;padding:6px;font-size:11px;text-align:left;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:6px">
+            <span>— ${t('detail.selectTag')} —</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          <div id="detail-tag-menu" class="bmm-tag-menu" style="display:none"></div>
+        </div>
       </div>
 
       <!-- Dependencies Section -->
