@@ -44,7 +44,16 @@ export function initModlist() {
         const description = document.getElementById('mm-description').value.trim();
         const author = document.getElementById('mm-author').value.trim();
         const includeHashes = document.getElementById('mm-include-hashes')?.checked ?? true;
-        const path = await saveFile({ defaultPath: 'modlist.mm', filters: [{ name: 'Mod List', extensions: ['mm', 'json'] }] });
+        // Named after the list, not "modlist.mm". Somebody who typed "DCS Cold War" and then
+        // saved three of these had three files called modlist.mm to tell apart.
+        // Character by character rather than a regex: the set to strip includes a backslash,
+        // and a backslash inside a regex inside a template is exactly where an escape gets
+        // eaten and the guard silently stops guarding.
+        const ILLEGAL = '<>:"/|?*' + String.fromCharCode(92);
+        const safeName = [...(listName || 'modlist')]
+            .map((c) => (ILLEGAL.includes(c) || c.charCodeAt(0) < 32 ? '-' : c))
+            .join('').slice(0, 60).trim() || 'modlist';
+        const path = await saveFile({ defaultPath: `${safeName}.mm`, filters: [{ name: 'Mod List', extensions: ['mm', 'json'] }] });
         if (!path)
             return;
         const progressOverlay = document.getElementById('export-progress-overlay');

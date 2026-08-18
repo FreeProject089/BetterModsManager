@@ -12,6 +12,17 @@ pub struct ModList {
     pub author: Option<String>,
     pub created_at: String,
     pub mods: Vec<ModListEntry>,
+    /// The tags the entries below refer to, defined.
+    ///
+    /// Every entry carries `tags` as a list of IDs, and an id means nothing on the machine
+    /// that opens the file: the importer wrote the ids onto the new mods and the screen then
+    /// looked each one up in ITS tags, found nothing, and drew no chip. So a shared list
+    /// arrived with its tags silently gone. The definitions travel with them now.
+    ///
+    /// `#[serde(default)]` because every .mm written before this has no such field, and a
+    /// list from last year must still open.
+    #[serde(default)]
+    pub tag_defs: Vec<crate::models::tag::TagDef>,
 }
 
 /// A download link for a mod with its type
@@ -65,6 +76,7 @@ impl ModList {
             author: None,
             created_at: chrono::Local::now().to_rfc3339(),
             mods: Vec::new(),
+            tag_defs: Vec::new(),
         }
     }
 }

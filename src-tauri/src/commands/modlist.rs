@@ -32,7 +32,7 @@ pub async fn export_modlist(
     include_hashes: bool,
 ) -> Result<(), AppError> {
     // ── Phase 1: hold lock only long enough to read in-memory state ──────────
-    let (game_name, game_path_hint, snapshots) = {
+    let (game_name, game_path_hint, snapshots, tag_defs) = {
         let data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
 
         let active_profile = if let Some(ref id) = data.active_profile_id {
@@ -67,7 +67,16 @@ pub async fn export_modlist(
             })
         }).collect();
 
-        (game_name, game_path_hint, snapshots)
+        // The definitions of every tag these mods refer to. Collected here, under the same
+        // lock, because it is the only place that can see both.
+        let used: std::collections::HashSet<String> =
+            snapshots.iter().flat_map(|s| s.tags.iter().cloned()).collect();
+        let tag_defs: Vec<crate::models::tag::TagDef> = data.custom_tags.iter()
+            .filter(|t| used.contains(&t.id))
+            .cloned()
+            .collect();
+
+        (game_name, game_path_hint, snapshots, tag_defs)
         // lock dropped here
     };
 
@@ -76,6 +85,7 @@ pub async fn export_modlist(
     let mut modlist = ModList::new(list_name, game_name, game_path_hint);
     modlist.description = Some(description);
     modlist.author = Some(author);
+    modlist.tag_defs = tag_defs;
 
     // Reset the cancel flag before starting
     state.export_cancelled.store(false, Ordering::SeqCst);
@@ -142,6 +152,11 @@ fn build_file_tree(
     cancel_flag: &std::sync::atomic::AtomicBool,
 ) -> Vec<ModFileEntry> {
     let mut entries = Vec::new();
+    // An archived mod is a .zip, and a .zip has to be read as what is INSIDE it or the
+    // exported list describes a single file called "" with the size of the archive. Every
+    // other reader in the app already goes through this; this one did not, which is why a
+    // list exported from a collection of archives arrived describing nothing.
+    let folder = &crate::archive::mod_read_root(folder);
     if let Ok(files) = fs_utils::list_mod_files(folder) {
         for rel in files {
             // Check cancellation before each file when SHA-256 is active
@@ -223,3 +238,7 @@ pub fn remove_download_link(
     state.save()?;
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "modlist_tests.rs"]
+mod modlist_tests;

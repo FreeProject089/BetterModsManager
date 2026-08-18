@@ -1853,6 +1853,21 @@ pub async fn install_from_modlist(
     let modlist: crate::models::modlist::ModList =
         serde_json::from_str(&modlist_json).map_err(|e| format!("Invalid modlist: {}", e))?;
 
+    // The tags the list refers to, before anything is installed.
+    //
+    // Every entry carries tag IDs, and the installer writes them onto the new mods. Without
+    // the definitions those ids resolve to nothing and the screen draws no chip — a shared
+    // list arrived with its tags silently gone. An id already known here WINS: the local
+    // definition is the user's, and a list must not repaint somebody's tags.
+    {
+        let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        for def in &modlist.tag_defs {
+            if !data.custom_tags.iter().any(|t| t.id == def.id) {
+                data.custom_tags.push(def.clone());
+            }
+        }
+    }
+
     let mut newly_created_profile_id: Option<String> = None;
     let mut newly_added_mod_ids: Vec<String> = Vec::new();
     let mut newly_added_mod_folders: Vec<PathBuf> = Vec::new();
