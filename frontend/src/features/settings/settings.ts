@@ -2399,6 +2399,14 @@ export async function initSettings() {
                             <label class="bmm-switch"><input type="checkbox" id="exp-replays"><span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span></label>
                         </label>
                         <label class="exp-opt">
+                            <span class="exp-opt-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></span>
+                            <span class="exp-opt-txt">
+                                <span class="exp-opt-title">${t('settings.exportNavigation') || 'Navigation & custom pages'}</span>
+                                <span class="exp-opt-desc">${t('settings.exportNavigationDesc') || 'Your navbar layout plus every custom page — source, permissions and stored data'}</span>
+                            </span>
+                            <label class="bmm-switch"><input type="checkbox" id="exp-navigation" checked><span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span></label>
+                        </label>
+                        <label class="exp-opt">
                             <span class="exp-opt-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>
                             <span class="exp-opt-txt">
                                 <span class="exp-opt-title">${t('settings.exportCrashes') || 'Crash reports'}</span>
@@ -2473,6 +2481,7 @@ export async function initSettings() {
                     translations: content.querySelector('#exp-translations').checked,
                     launch_packs: content.querySelector('#exp-modpacks').checked,
                     automations: content.querySelector('#exp-automations').checked,
+                    navigation: content.querySelector('#exp-navigation').checked,
                     apps: exportApps,
                     replays: content.querySelector('#exp-replays').checked,
                     crashes: content.querySelector('#exp-crashes').checked,
@@ -2498,8 +2507,16 @@ export async function initSettings() {
                             // The app_data section is built by the JSON exporter's own rules; the
                             // bundle command only decides which FILES ride along.
                             const appDataJson = JSON.parse(await invoke('export_app_data_json', { options, extras }) as string);
+                            // The navbar layout is in localStorage; Rust cannot read it, so it
+                            // travels with the call. Read here rather than in the bundle command
+                            // for the same reason appDataJson is: one place owns the shape.
+                            let navbarConfig: unknown = null;
+                            if (bundle.navigation) {
+                                try { navbarConfig = JSON.parse(localStorage.getItem('bmm_navbar_config') || 'null'); }
+                                catch { navbarConfig = null; }
+                            }
                             const r = await invoke('export_data_bundle', {
-                                destPath, options: bundle, appDataJson, extras,
+                                destPath, options: bundle, appDataJson, extras, navbarConfig,
                             }) as { bytes: number; sections: { section: string; files: number; note?: string }[] };
                             // What it actually took, not what was asked for. A section that was
                             // ticked and turned out empty is the thing worth knowing.

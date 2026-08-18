@@ -5,6 +5,7 @@
 import { t } from '../core/i18n.js';
 import { invoke, pickFile, saveFile } from '../core/api.js';
 import { initPageBroker, refreshGrants } from './custom-page-broker.js';
+import { showConfirm } from './confirm.js';
 
 const LS_KEY = 'bmm_navbar_config';
 
@@ -257,6 +258,30 @@ async function importNavBundle(): Promise<void> {
     let bundle: NavBundle;
     try { bundle = JSON.parse(await invoke('read_nav_bundle', { path }) as string); } catch (e) { (window as any).toast?.(String(e), 'error'); return; }
     if (bundle.format !== 'bmmnav' || !bundle.navbar) { (window as any).toast?.(t('navedit.badBundle') || 'Not a valid .bmmnav file', 'error'); return; }
+
+    // Check the signature BEFORE creating anything.
+    //
+    // Export signs this file precisely because of what the next twenty lines do: create pages
+    // from somebody else's HTML/CSS/JS and hand them the capabilities and network origins the
+    // file asks for. Signing it and then not reading the signature is the same as not signing
+    // it — the check has to sit in front of the grants, not beside them.
+    //
+    // UNSIGNED is not refused. Every .bmmnav written before signing existed is unsigned, and
+    // so is one built by hand; refusing those would break sharing to protect nothing. What is
+    // refused without an explicit yes is TAMPERED — a file that claims an author and no longer
+    // matches, which is the only state that says something went wrong rather than unstated.
+    try {
+        const raw = await invoke('read_nav_bundle', { path }) as string;
+        const v = await invoke('verify_bmm_document', { json: raw, format: 'bmmnav' }) as { state: string; authorId?: string };
+        if (v.state === 'tampered' || v.state === 'malformed') {
+            const go = await showConfirm(
+                t('navedit.sigBadTitle'),
+                t('navedit.sigBadBody'),
+            );
+            if (!go) return;
+        }
+    } catch (e) { console.warn('[nav] signature check failed', e); }
+
     // Recreate each shared page (new ids), then remap the custom buttons' targets.
     const idMap: Record<string, string> = {};
     for (const p of bundle.pages || []) {

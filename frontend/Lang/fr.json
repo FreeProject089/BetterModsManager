@@ -7565,5 +7565,9 @@
   "legacy.note": "L'import ne déplace aucun fichier et ne change rien dans l'autre gestionnaire — il crée seulement des profils pointant sur les dossiers que tu utilises déjà.",
   "prof.backupDirOptional": "Laisse vide — BMM en choisit un",
   "prof.backupDirHint": "Optionnel. Laissé vide, BMM en crée un dans son propre dossier de données, au nom de ce profil — il doit seulement exister et n'appartenir qu'à ce profil.",
-  "legacy.done": "Fermer"
+  "legacy.done": "Fermer",
+  "settings.exportNavigation": "Navigation et pages personnalisées",
+  "settings.exportNavigationDesc": "Ta barre de navigation et chaque page personnalisée — source, permissions et données stockées",
+  "navedit.sigBadTitle": "Ce fichier a été modifié après sa signature",
+  "navedit.sigBadBody": "Il revendique un auteur mais ne correspond plus à ce qu'il a signé. L'import crée des pages avec les permissions et les accès réseau que le fichier demande. Continuer quand même ?"
 }

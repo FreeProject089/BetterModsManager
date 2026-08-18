@@ -7567,5 +7567,9 @@
   "legacy.note": "Importing moves no files and changes nothing in the other manager — it only creates profiles pointing at the folders you already use.",
   "prof.backupDirOptional": "Leave blank — BMM picks one",
   "prof.backupDirHint": "Optional. Left blank, BMM creates one in its own data folder, named after this profile — it only has to exist and be this profile's alone.",
-  "legacy.done": "Close"
+  "legacy.done": "Close",
+  "settings.exportNavigation": "Navigation & custom pages",
+  "settings.exportNavigationDesc": "Your navbar layout plus every custom page — source, permissions and stored data",
+  "navedit.sigBadTitle": "This file was changed after it was signed",
+  "navedit.sigBadBody": "It claims an author but no longer matches what they signed. Importing creates pages with the permissions and network access the file asks for. Continue anyway?"
 }

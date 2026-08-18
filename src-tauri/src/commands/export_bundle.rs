@@ -33,6 +33,7 @@ pub struct BundleOptions {
     #[serde(default)] pub translations: bool,
     #[serde(default)] pub launch_packs: bool,
     #[serde(default)] pub automations: bool,
+    #[serde(default)] pub navigation: bool,
     #[serde(default)] pub apps: bool,
     #[serde(default)] pub replays: bool,
     #[serde(default)] pub crashes: bool,
@@ -124,6 +125,11 @@ pub fn export_data_bundle(
     options: BundleOptions,
     app_data_json: Option<serde_json::Value>,
     extras: Option<serde_json::Value>,
+    // The navbar layout lives in localStorage, which Rust cannot read, so the caller hands
+    // it over the same way it hands over the filtered app data. Without it the pages would
+    // be backed up and the buttons that reach them would not — a restore with every page
+    // present and no way to open one.
+    navbar_config: Option<serde_json::Value>,
 ) -> Result<BundleResult, AppError> {
     let _ = state.save(); // whatever is in memory belongs in the backup
     let dir = data_dir(&app_handle);
@@ -158,6 +164,31 @@ pub fn export_data_bundle(
         let p = dir.join("schedules.json");
         if p.exists() { add_file(&mut zip, "automations", &p, &mut rep); }
         else { rep.note = Some("no automations saved".into()); }
+        sections.push(rep);
+    }
+
+    // Navigation: the navbar layout AND the custom pages it points at, which is three
+    // separate places on disk and in the browser. Backing up any two of them restores
+    // something broken:
+    //   · the layout          → localStorage, passed in by the caller
+    //   · a page's source     → custom_pages/<id>/
+    //   · its permissions and stored data → custom_pages_data/<id>/
+    // The permissions especially: a page restored without its grants silently loses the
+    // capabilities it was written against and fails at the first thing it tries to do.
+    if options.navigation {
+        let mut rep = SectionReport { section: "navigation".into(), files: 0, bytes: 0, note: None };
+        if let Some(cfg) = navbar_config.filter(|v| !v.is_null()) {
+            let body = serde_json::to_vec_pretty(&cfg)?;
+            zip.start_file("navigation/navbar.json", json_opts).map_err(|e| AppError::from(e.to_string()))?;
+            zip.write_all(&body)?;
+            rep.files += 1;
+            rep.bytes += body.len() as u64;
+        }
+        let src = add_dir(&mut zip, "navigation/pages", &dir.join("custom_pages"), &[], "navigation");
+        let dat = add_dir(&mut zip, "navigation/pages-data", &dir.join("custom_pages_data"), &[], "navigation");
+        rep.files += src.files + dat.files;
+        rep.bytes += src.bytes + dat.bytes;
+        if rep.files == 0 { rep.note = Some("no custom navigation or pages".into()); }
         sections.push(rep);
     }
 

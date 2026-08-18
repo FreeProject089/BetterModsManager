@@ -393,47 +393,11 @@ export const copyToClipboard = async (text, successMsg) => {
         toast(t('repo.urlCopyError') || "Copy error", "error");
     }
 };
-export const showConfirm = (title, message, isDanger = true) => {
-    return new Promise((resolve) => {
-        const modal = document.getElementById('modal-confirm-generic');
-        const titleEl = document.getElementById('confirm-title');
-        const messageEl = document.getElementById('confirm-message');
-        const btnYes = document.getElementById('btn-confirm-yes');
-        const btnCancel = document.getElementById('btn-confirm-cancel');
-        const iconContainer = document.getElementById('confirm-icon-container');
-        if (!modal || !btnYes || !btnCancel)
-            return resolve(false);
-        titleEl.textContent = title || t('common.confirm') || "Confirmation";
-        messageEl.textContent = message || "";
-        if (isDanger) {
-            btnYes.className = 'btn btn-danger';
-            if (iconContainer) {
-                iconContainer.style.background = 'rgba(239, 68, 68, 0.1)';
-                iconContainer.style.color = 'var(--danger)';
-            }
-        }
-        else {
-            btnYes.className = 'btn btn-accent';
-            if (iconContainer) {
-                iconContainer.style.background = 'rgba(59, 130, 246, 0.1)';
-                iconContainer.style.color = 'var(--accent)';
-            }
-        }
-        const cleanup = () => {
-            modal.classList.remove('open');
-            btnYes.onclick = null;
-            btnCancel.onclick = null;
-            modal.onclick = null;
-        };
-        btnYes.onclick = () => { cleanup(); resolve(true); };
-        btnCancel.onclick = () => { cleanup(); resolve(false); };
-        modal.onclick = (e) => { if (e.target === modal) {
-            cleanup();
-            resolve(false);
-        } };
-        modal.classList.add('open');
-    });
-};
+// showConfirm now lives in ui/confirm.ts. It was never repo-specific — it drives the shared
+// #modal-confirm-generic and touches no repo state — and living here meant anything that
+// wanted a yes/no had to import this 4000-line module, or write its own. One did.
+// Re-exported so every existing `import { showConfirm } from './repo.js'` keeps working.
+export { showConfirm } from '../../ui/confirm.js';
 // --- Profile Checklist (exportable function) ---
 export const loadProfilesForExport = async (profilesListEl) => {
     if (!profilesListEl)
