@@ -7601,5 +7601,6 @@
   "restore.s.navigation": "Navigation et pages personnalisées",
   "restore.s.Crashes": "Rapports de plantage",
   "restore.s.diagnostics": "Diagnostics",
-  "restore.s.other": "Entrées non reconnues"
+  "restore.s.other": "Entrées non reconnues",
+  "restore.notif": "{n} fichier(s) restauré(s) depuis un .DATABMM — {sections}."
 }

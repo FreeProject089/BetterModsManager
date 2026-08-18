@@ -69,6 +69,9 @@ class DebugUI {
         if (willOpen) {
             if (!this.container)
                 this.init(); // lazy build on first open
+            this._ensureStateStyles();
+            // The pane is rebuilt from scratch on open, so the last signature is meaningless.
+            this._stateSignature = null;
             this.isOpen = true;
             this.container.classList.add('open');
             this.refreshAllPanes();
@@ -399,7 +402,7 @@ class DebugUI {
             <img src="assets/Tasky.png" style="width:120px; height:auto; filter: grayscale(1) contrast(2) brightness(0.6) sepia(1) hue-rotate(-50deg) drop-shadow(0 0 30px rgba(239, 68, 68, 0.3)); margin-bottom:32px; opacity:0.8; animation: pulse-tasky 4s infinite;">
             <div class="crash-title" style="letter-spacing: 0.2em; font-size: 28px; font-weight: 900; background: linear-gradient(to bottom, #ffffff, #94a3b8); -webkit-background-clip: text; -webkit-text-fill-color: transparent;" data-i18n="dev.crash.title">SYSTEM HALT</div>
             <div class="crash-subtitle" style="color: var(--danger); font-weight: 800; font-family: var(--font-mono); margin-bottom: 24px; text-shadow: 0 0 15px rgba(239, 68, 68, 0.4);" data-i18n="dev.crash.subtitle">CRITICAL_LEVEL_EXCEPTION // KERNEL_PANIC_PREVENTED</div>
-            
+
             <div class="crash-details" id="crash-details" style="background: rgba(0,0,0,0.4); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 12px; padding: 24px; margin: 20px 0; max-width: 600px; line-height: 1.6; font-size: 13px; color: #cbd5e1; box-shadow: inset 0 2px 10px rgba(0,0,0,0.5);" data-i18n="dev.crash.details">
                 An unhandled exception has occurred. A debug dump has been saved to your local storage.
             </div>
@@ -413,7 +416,7 @@ class DebugUI {
                         COPY DUMP
                     </button>
                 </div>
-                
+
                 <button class="debug-btn" style="background:none; color:rgba(239, 68, 68, 0.7); font-size:12px; font-weight: 600; text-decoration:none; border:none; cursor:pointer; transition: all 0.2s; padding: 10px 20px; border-radius: 8px; white-space: nowrap; display: inline-block; width: max-content;" id="crash-dismiss" data-i18n="dev.crash.dismiss">
                     Dismiss & Continue (Unstable System State)
                 </button>
@@ -524,7 +527,7 @@ class DebugUI {
         if (!this.container)
             this.init();
         // Allow alerts if explicitly triggered, but they will only be visible if DevTools is open
-        // OR we can explicitly open DevTools for important alerts? 
+        // OR we can explicitly open DevTools for important alerts?
         // User said they are visible when NOT activated, so we should probably not show them or open DevTools.
         if (!this.isOpen)
             return;
@@ -1448,7 +1451,7 @@ class DebugUI {
                 <div style="font-size:10px; color:var(--text-muted); margin-bottom:4px">SOURCE GUESS</div>
                 <div style="color:var(--debug-success); font-family:'JetBrains Mono'; font-size:11px; background:rgba(0,0,0,0.2); padding:4px 8px; border-radius:4px">${sourceGuess}</div>
             </div>
-            
+
             <div style="font-size:11px; font-weight:700; color:var(--text-muted); margin-bottom:8px; display:flex; align-items:baseline; gap:6px">
                 LIVE STYLES
                 <span style="font-weight:400; font-size:9px; opacity:0.6">(Auto-applies on change)</span>
@@ -1470,16 +1473,16 @@ class DebugUI {
                                     <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6m4-10h7v7m-11 4L22 2"/></svg>
                                 </a>
                             </div>
-                            <input type="text" 
-                                   class="style-edit-input" 
-                                   data-prop="${prop}" 
-                                   value="${value}" 
+                            <input type="text"
+                                   class="style-edit-input"
+                                   data-prop="${prop}"
+                                   value="${value}"
                                    style="background:rgba(0,0,0,0.2); border:1px solid var(--border); border-radius:4px; color:var(--debug-text-primary); font-size:10px; padding:4px 8px; font-family:'JetBrains Mono'; outline:none">
                             ${isColorOrBackground ? `<input type="color" class="style-color-helper" data-prop="${prop}" data-helper-prop="${helperProp}" style="width:16px; height:20px; padding:0; border:none; background:none; cursor:pointer" value="${colorValue.startsWith('rgb') ? this.rgbToHex(colorValue) : colorValue}">` : ''}
                         </div>
                     `;
         }).join('')}
-                
+
                 <div style="margin-top:12px; border-top:1px solid var(--bmm-s05); padding-top:12px">
                     <button class="debug-btn" id="inspect-add-prop" style="width:100%; border-style:dashed; opacity:0.6; font-size:10px">+ ADD CUSTOM PROPERTY</button>
                 </div>
@@ -1537,26 +1540,65 @@ class DebugUI {
         const [r, g, b] = rgb.match(/\d+/g).map(Number);
         return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
     }
+    /** A value the way a state inspector should show it: what it IS, not all of it.
+     *
+     *  This used to be `JSON.stringify(value)`, which meant `allMods`, `displayedMods` and
+     *  `conflictCache` — the entire mod library, twice, plus every conflict list — were
+     *  serialised in full and then truncated to one ellipsised line. Every second, because
+     *  the state pane is on a 1s timer. On a real library that is megabytes of string built
+     *  and thrown away per tick, which is the DevTools "lag on open".
+     *
+     *  A summary is also simply better: `Array(482)` answers the question a state inspector is
+     *  for, and the first forty characters of a serialised mod list never did.
+     */
+    _describe(value) {
+        if (value === null)
+            return 'null';
+        if (value === undefined)
+            return 'undefined';
+        if (Array.isArray(value))
+            return `Array(${value.length})`;
+        if (value instanceof Set)
+            return `Set(${value.size})`;
+        if (value instanceof Map)
+            return `Map(${value.size})`;
+        if (typeof value === 'object') {
+            const keys = Object.keys(value);
+            // Small plain objects are worth showing whole — they are usually the settings
+            // somebody opened this pane to read.
+            if (keys.length <= 4) {
+                const body = JSON.stringify(value);
+                if (body.length <= 120)
+                    return body;
+            }
+            return `{${keys.length} key${keys.length === 1 ? '' : 's'}}`;
+        }
+        const str = String(value);
+        return str.length > 120 ? `${str.slice(0, 119)}…` : str;
+    }
     updateStateView() {
         const pane = this._get('pane-state');
         const state = appState.state;
+        // Nothing changed → nothing to rebuild. The pane repaints on a 1s timer whether or
+        // not the state moved, and rebuilding identical markup still costs a full parse, a
+        // layout and a paint. The signature is built from the SUMMARIES, which is cheap
+        // precisely because they are summaries.
+        const rows = Object.entries(state).map(([k, v]) => [k, this._describe(v)]);
+        const signature = rows.map(([k, v]) => `${k}=${v}`).join('|');
+        if (signature === this._stateSignature)
+            return;
+        this._stateSignature = signature;
         let html = '<div style="padding:16px; font-family:inherit">';
-        for (const [key, value] of Object.entries(state)) {
-            const displayValue = typeof value === 'object' ? JSON.stringify(value) : value;
+        for (const [key, shown] of rows) {
             html += `
                 <div class="state-row" style="margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; cursor:pointer; padding:4px 8px; border-radius:4px; transition:background 0.2s" data-key="${key}">
-                    <span style="color:var(--text-muted)">${key}:</span>
-                    <span style="color:var(--debug-accent); font-weight:600; text-align:right; max-width:60%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">${this.escapeHtml(String(displayValue))}</span>
+                    <span style="color:var(--text-muted)">${this.escapeHtml(key)}:</span>
+                    <span style="color:var(--debug-accent); font-weight:600; text-align:right; max-width:60%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">${this.escapeHtml(shown)}</span>
                 </div>
             `;
         }
         html += '</div>';
         pane.innerHTML = html;
-        // Add hover effect
-        pane.querySelectorAll('.state-row').forEach(row => {
-            row.addEventListener('mouseenter', () => row.style.background = 'var(--bmm-s05)');
-            row.addEventListener('mouseleave', () => row.style.background = '');
-        });
     }
     clearUI() {
         this._get('pane-console').innerHTML = '';
@@ -1991,6 +2033,16 @@ class DebugUI {
         if (l.includes('INFO'))
             return 'var(--debug-accent)';
         return 'var(--debug-success)';
+    }
+    /** The hover highlight the removed listeners used to do. Two listeners per row, re-added
+     *  on every repaint, for something one CSS rule does — and CSS cannot leak them. */
+    _ensureStateStyles() {
+        if (document.getElementById('bmm-debug-state-style'))
+            return;
+        const st = document.createElement('style');
+        st.id = 'bmm-debug-state-style';
+        st.textContent = '#bmm-debug-overlay .state-row:hover { background: var(--bmm-s05); }';
+        document.head.appendChild(st);
     }
     startUpdateLoop() {
         // Refresh state view periodically when open if we aren't using deep Proxies for everything

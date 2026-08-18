@@ -14,6 +14,7 @@
 import { t } from '../../core/i18n.js';
 import { invoke, pickFile } from '../../core/api.js';
 import { showConfirm } from '../../ui/confirm.js';
+import { recordNotification } from '../../ui/notification-center.js';
 
 interface BundleSection { section: string; files: number; bytes: number; restorable: boolean }
 interface BundleInfo {
@@ -154,14 +155,38 @@ export async function openRestoreBundle(): Promise<void> {
                 try { localStorage.setItem('bmm_navbar_config', JSON.stringify(r.navbar)); } catch { /* private mode */ }
             }
             overlay.remove();
+
+            // The record has to OUTLIVE the reload, and a toast does not.
+            //
+            // Worth being precise about what protects it, because the obvious answer is
+            // wrong. `extras` above is a localStorage blob from the archive and it contains
+            // the notification centre's own key — but the centre holds an in-memory cache and
+            // writes it back on a 400 ms debounce, so whatever is in memory wins a moment
+            // later whichever order these two run in. The archive's old history is discarded
+            // either way.
+            //
+            // Recording after extras is still the right order: it is correct on purpose
+            // rather than by a timing accident, and it stays correct if that debounce ever
+            // goes away.
+            //
+            // toast() records what it shows, so the summary is toasted (short, transient) and
+            // the DETAIL is recorded directly, without a second toast: the backup path is far
+            // too long for a bubble and is exactly the thing you go looking for tomorrow.
             (window as any).toast?.(t('restore.done', { n: String(r.files) }), 'success');
-            // Named, not just mentioned: "your old data is at X" is what makes a destructive
-            // action survivable, and it is useless if you have to go looking for the path.
+            recordNotification(
+                t('restore.notif', {
+                    n: String(r.files),
+                    sections: (r.restored || []).map((k) => sectionLabel(k)).join(', ') || '—',
+                }) + (r.backupOfPrevious ? ` ${t('restore.previousAt', { path: r.backupOfPrevious })}` : ''),
+                'info',
+                'Restore',
+            );
             if (r.backupOfPrevious) {
                 (window as any).toast?.(t('restore.previousAt', { path: r.backupOfPrevious }), 'info', 12000);
             }
-            // A reload, because half this app read its state at boot. Delayed so both messages
-            // are readable first.
+            // A reload, because half this app reads its state at boot. Delayed so both
+            // messages are readable first — and long enough for the centre's 400 ms debounced
+            // save to have run, or the entry this whole block exists for would not survive it.
             setTimeout(() => window.location.reload(), 3000);
         } catch (e) {
             go.disabled = false;

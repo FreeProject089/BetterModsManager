@@ -36,7 +36,7 @@ class DebugUI {
     // Helper to find elements within devtools containers
     _get(id) {
         if (!this.container) return document.getElementById(id);
-        return this.container.querySelector(`#${id}`) || 
+        return this.container.querySelector(`#${id}`) ||
                (this.modalOverlay ? this.modalOverlay.querySelector(`#${id}`) : null) ||
                (this.crashOverlay ? this.crashOverlay.querySelector(`#${id}`) : null) ||
                document.getElementById(id);
@@ -76,6 +76,9 @@ class DebugUI {
 
         if (willOpen) {
             if (!this.container) this.init();   // lazy build on first open
+            this._ensureStateStyles();
+            // The pane is rebuilt from scratch on open, so the last signature is meaningless.
+            this._stateSignature = null;
             this.isOpen = true;
             this.container.classList.add('open');
             this.refreshAllPanes();
@@ -91,7 +94,7 @@ class DebugUI {
         this.updateStateView();
         this.updatePatchTree();
         this.updateMetrics(debugHub.metrics);
-        
+
         // Re-populate logs from hub
         const logsPane = this._get('console-logs');
         if (logsPane) {
@@ -412,7 +415,7 @@ class DebugUI {
             <img src="assets/Tasky.png" style="width:120px; height:auto; filter: grayscale(1) contrast(2) brightness(0.6) sepia(1) hue-rotate(-50deg) drop-shadow(0 0 30px rgba(239, 68, 68, 0.3)); margin-bottom:32px; opacity:0.8; animation: pulse-tasky 4s infinite;">
             <div class="crash-title" style="letter-spacing: 0.2em; font-size: 28px; font-weight: 900; background: linear-gradient(to bottom, #ffffff, #94a3b8); -webkit-background-clip: text; -webkit-text-fill-color: transparent;" data-i18n="dev.crash.title">SYSTEM HALT</div>
             <div class="crash-subtitle" style="color: var(--danger); font-weight: 800; font-family: var(--font-mono); margin-bottom: 24px; text-shadow: 0 0 15px rgba(239, 68, 68, 0.4);" data-i18n="dev.crash.subtitle">CRITICAL_LEVEL_EXCEPTION // KERNEL_PANIC_PREVENTED</div>
-            
+
             <div class="crash-details" id="crash-details" style="background: rgba(0,0,0,0.4); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 12px; padding: 24px; margin: 20px 0; max-width: 600px; line-height: 1.6; font-size: 13px; color: #cbd5e1; box-shadow: inset 0 2px 10px rgba(0,0,0,0.5);" data-i18n="dev.crash.details">
                 An unhandled exception has occurred. A debug dump has been saved to your local storage.
             </div>
@@ -426,7 +429,7 @@ class DebugUI {
                         COPY DUMP
                     </button>
                 </div>
-                
+
                 <button class="debug-btn" style="background:none; color:rgba(239, 68, 68, 0.7); font-size:12px; font-weight: 600; text-decoration:none; border:none; cursor:pointer; transition: all 0.2s; padding: 10px 20px; border-radius: 8px; white-space: nowrap; display: inline-block; width: max-content;" id="crash-dismiss" data-i18n="dev.crash.dismiss">
                     Dismiss & Continue (Unstable System State)
                 </button>
@@ -515,7 +518,7 @@ class DebugUI {
         const input = this._get('debug-modal-input');
         const confirmBtn = this._get('debug-modal-confirm');
         const cancelBtn = this._get('debug-modal-cancel');
-        
+
         titleEl.textContent = title || t('dev.modal.confirmTitle');
         textEl.textContent = text || t('dev.modal.confirmText');
         inputContainer.style.display = 'block';
@@ -544,9 +547,9 @@ class DebugUI {
     showAlert(title, text) {
         if (!this.container) this.init();
         // Allow alerts if explicitly triggered, but they will only be visible if DevTools is open
-        // OR we can explicitly open DevTools for important alerts? 
+        // OR we can explicitly open DevTools for important alerts?
         // User said they are visible when NOT activated, so we should probably not show them or open DevTools.
-        if (!this.isOpen) return; 
+        if (!this.isOpen) return;
 
         const overlay = this.modalOverlay;
         const titleEl = this._get('debug-modal-title');
@@ -562,7 +565,7 @@ class DebugUI {
 
         const close = () => {
             overlay.classList.remove('active');
-            setTimeout(() => { 
+            setTimeout(() => {
                 if (!overlay.classList.contains('active')) {
                     overlay.style.display = 'none';
                     cancelBtn.style.display = 'block'; // Restore for next calls
@@ -749,10 +752,10 @@ class DebugUI {
             const hInput = document.getElementById('dbg-grid-h');
             const vInput = document.getElementById('dbg-grid-v');
             if (!hInput || !vInput) return;
-            
+
             const h = hInput.value;
             const v = vInput.value;
-            
+
             hInput.style.setProperty('--val', ((h / 64) * 100) + '%');
             vInput.style.setProperty('--val', ((v / 64) * 100) + '%');
 
@@ -760,11 +763,11 @@ class DebugUI {
             const vValSpan = document.getElementById('dbg-grid-v-val');
             if (hValSpan) hValSpan.textContent = h;
             if (vValSpan) vValSpan.textContent = v;
-            
+
             const hBg = h > 0 ? `linear-gradient(rgba(255,255,255,0.15) 1px, transparent 1px)` : '';
             const vBg = v > 0 ? `linear-gradient(90deg, rgba(255,255,255,0.15) 1px, transparent 1px)` : '';
             const bgStr = [hBg, vBg].filter(Boolean).join(', ');
-            
+
             gridEl.style.backgroundImage = bgStr;
             gridEl.style.backgroundSize = `${v > 0 ? v : 10}px ${h > 0 ? h : 10}px`;
         };
@@ -772,7 +775,7 @@ class DebugUI {
         this._get('dbg-css-grid')?.addEventListener('change', e => {
             const config = document.getElementById('dbg-grid-config');
             if (config) config.style.display = e.target.checked ? 'block' : 'none';
-            
+
             let gridEl = document.getElementById('bmm-layout-grid');
             if (e.target.checked) {
                 if (!gridEl) {
@@ -915,7 +918,7 @@ class DebugUI {
         statePane.addEventListener('click', e => {
             const el = e.target.closest('.state-row');
             if (!el) return;
-            
+
             const key = el.dataset.key;
             const currentValue = appState.get(key);
             this.showPrompt(`Edit state: ${key}`, `Enter new value for '${key}':`, JSON.stringify(currentValue), (newValue) => {
@@ -1041,7 +1044,7 @@ class DebugUI {
         // Inspector mouse move
         document.addEventListener('mousemove', e => {
             if (!this.isInspecting) return;
-            
+
             // Find element under cursor (excluding debug overlay)
             const el = document.elementFromPoint(e.clientX, e.clientY);
             if (el && !el.closest('#bmm-debug-overlay') && !el.classList.contains('debug-inspect-highlight')) {
@@ -1057,12 +1060,12 @@ class DebugUI {
             if (!target) return; // FIX: Prevent crash if clicking empty space
 
             this.selectElement(target);
-            
+
             console.debug('[Inspector] Selected:', target);
 
             // Auto-fill playground with current styles for quick editing
             const computed = window.getComputedStyle(target);
-            const styleSnippet = `/* Edit styles for ${target.tagName.toLowerCase()} */\n` + 
+            const styleSnippet = `/* Edit styles for ${target.tagName.toLowerCase()} */\n` +
                 `selector {\n  background: ${computed.backgroundColor};\n  color: ${computed.color};\n  border: ${computed.border};\n}`;
             const playground = this._get('playground-code');
             if (playground) playground.value = styleSnippet;
@@ -1079,7 +1082,7 @@ class DebugUI {
         const btn = this._get('debug-btn-inspect');
         btn.classList.toggle('active', this.isInspecting);
         document.body.style.cursor = this.isInspecting ? 'crosshair' : '';
-        
+
         if (!this.isInspecting) {
             if (this.highlightEl) this.highlightEl.style.display = 'none';
             if (this.tooltipEl) this.tooltipEl.style.display = 'none';
@@ -1110,7 +1113,7 @@ class DebugUI {
     highlightElement(el) {
         this.hoveredEl = el;
         const rect = el.getBoundingClientRect();
-        
+
         this.highlightEl.style.display = 'block';
         this.highlightEl.style.top = rect.top + 'px';
         this.highlightEl.style.left = rect.left + 'px';
@@ -1120,11 +1123,11 @@ class DebugUI {
         this.tooltipEl.style.display = 'block';
         this.tooltipEl.style.top = (rect.top - 24) + 'px';
         this.tooltipEl.style.left = rect.left + 'px';
-        
+
         // Fix: safely handle className (especially for SVG elements where it's an object)
         const classAttr = el.getAttribute('class');
-        const classStr = (typeof classAttr === 'string' && classAttr) 
-            ? '.' + classAttr.trim().split(/\s+/).join('.') 
+        const classStr = (typeof classAttr === 'string' && classAttr)
+            ? '.' + classAttr.trim().split(/\s+/).join('.')
             : '';
         this.tooltipEl.textContent = `${el.tagName.toLowerCase()}${el.id ? '#' + el.id : ''}${classStr}`;
     }
@@ -1190,12 +1193,12 @@ class DebugUI {
     loadStylesheetsList() {
         const select = this._get('css-stylesheet-select');
         if (!select) return;
-        
+
         // Preserve current selection if possible
         const currentVal = select.value;
         const selectPrompt = t('dev.msg.selectStylesheet') || 'Sélectionner une feuille...';
         select.innerHTML = `<option value="">${selectPrompt}</option>`;
-        
+
         let found = false;
         Array.from(document.styleSheets).forEach((sheet, i) => {
             try {
@@ -1203,7 +1206,7 @@ class DebugUI {
                 if (!sheet.cssRules) return;
                 let name = sheet.href ? sheet.href.split('/').pop() : 'inline style';
                 if (name.includes('debug.css')) return; // Ignore debug styles
-                
+
                 const opt = document.createElement('option');
                 opt.value = i;
                 opt.textContent = `[${i}] ${name} (${sheet.cssRules.length} règles)`;
@@ -1213,7 +1216,7 @@ class DebugUI {
                 // CORS or restricted
             }
         });
-        
+
         if (found) select.value = currentVal;
     }
 
@@ -1234,12 +1237,12 @@ class DebugUI {
             for (let r = 0; r < rules.length; r++) {
                 const rule = rules[r];
                 if (rule.type !== CSSRule.STYLE_RULE) continue;
-                
+
                 // Format the cssText
                 const cssText = rule.cssText;
                 const match = cssText.match(/\{([\s\S]*)\}/);
                 let styles = match ? match[1].trim() : '';
-                
+
                 // Add minor syntax highlighting manually
                 styles = styles.split(';').map(s => s.trim()).filter(s => s).map(s => {
                     const parts = s.split(':');
@@ -1273,7 +1276,7 @@ class DebugUI {
                     const ruleIdx = e.target.dataset.rule;
                     const selector = e.target.dataset.selector;
                     const liveStyles = e.target.innerText;
-                    
+
                     const overrideId = `live-override-${sheetIdx}-${ruleIdx}`;
                     let overrideNode = document.getElementById(overrideId);
                     if (!overrideNode) {
@@ -1334,9 +1337,9 @@ class DebugUI {
             if (section.id === 'settings-pane') return 'frontend/js/settings.js';
             return `frontend/index.html #${section.id}`;
         }
-        
+
         if (el.classList.contains('nav-item')) return 'frontend/js/navigation.js';
-        
+
         return 'frontend/index.html';
     }
 
@@ -1466,7 +1469,7 @@ class DebugUI {
         pane.innerHTML = ''; // Clear previous content
         const sourceGuess = this.guessSourceFile(target);
         const computed = window.getComputedStyle(target);
-        
+
         // Commmon CSS properties for the editor
         const commonProps = ['background', 'color', 'border', 'display', 'margin', 'padding', 'width', 'height', 'font-size', 'font-weight', 'position', 'opacity', 'flex', 'grid'];
 
@@ -1485,7 +1488,7 @@ class DebugUI {
                 <div style="font-size:10px; color:var(--text-muted); margin-bottom:4px">SOURCE GUESS</div>
                 <div style="color:var(--debug-success); font-family:'JetBrains Mono'; font-size:11px; background:rgba(0,0,0,0.2); padding:4px 8px; border-radius:4px">${sourceGuess}</div>
             </div>
-            
+
             <div style="font-size:11px; font-weight:700; color:var(--text-muted); margin-bottom:8px; display:flex; align-items:baseline; gap:6px">
                 LIVE STYLES
                 <span style="font-weight:400; font-size:9px; opacity:0.6">(Auto-applies on change)</span>
@@ -1496,7 +1499,7 @@ class DebugUI {
                     const jsProp = prop.replace(/-([a-z])/g, g => g[1].toUpperCase());
                     const value = computed[jsProp];
                     const isColorOrBackground = prop.includes('color') || prop.includes('background');
-                    
+
                     // Smarter color detection: if background has images/shorthands, use background-color for helper
                     const helperProp = prop === 'background' ? 'background-color' : prop;
                     const colorValue = computed[helperProp.replace(/-([a-z])/g, g => g[1].toUpperCase())];
@@ -1509,16 +1512,16 @@ class DebugUI {
                                     <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6m4-10h7v7m-11 4L22 2"/></svg>
                                 </a>
                             </div>
-                            <input type="text" 
-                                   class="style-edit-input" 
-                                   data-prop="${prop}" 
-                                   value="${value}" 
+                            <input type="text"
+                                   class="style-edit-input"
+                                   data-prop="${prop}"
+                                   value="${value}"
                                    style="background:rgba(0,0,0,0.2); border:1px solid var(--border); border-radius:4px; color:var(--debug-text-primary); font-size:10px; padding:4px 8px; font-family:'JetBrains Mono'; outline:none">
                             ${isColorOrBackground ? `<input type="color" class="style-color-helper" data-prop="${prop}" data-helper-prop="${helperProp}" style="width:16px; height:20px; padding:0; border:none; background:none; cursor:pointer" value="${colorValue.startsWith('rgb') ? this.rgbToHex(colorValue) : colorValue}">` : ''}
                         </div>
                     `;
                 }).join('')}
-                
+
                 <div style="margin-top:12px; border-top:1px solid var(--bmm-s05); padding-top:12px">
                     <button class="debug-btn" id="inspect-add-prop" style="width:100%; border-style:dashed; opacity:0.6; font-size:10px">+ ADD CUSTOM PROPERTY</button>
                 </div>
@@ -1540,7 +1543,7 @@ class DebugUI {
             helper.oninput = (e) => {
                 const targetProp = helper.dataset.helperProp || helper.dataset.prop;
                 const input = pane.querySelector(`.style-edit-input[data-prop="${helper.dataset.prop}"]`);
-                
+
                 // If we are editing shorthand background, we update just the background-color part if possible,
                 // but usually simpler to just apply to the helperProp directly.
                 target.style[targetProp] = e.target.value;
@@ -1569,10 +1572,10 @@ class DebugUI {
             navigator.clipboard.writeText(target.outerHTML);
             console.info('[Inspector] Copied HTML to clipboard');
         };
-        
+
         this._get('inspect-send-playground').onclick = () => {
             this.switchTab('playground');
-            const styleSnippet = `/* Edit styles for ${target.tagName.toLowerCase()} */\n` + 
+            const styleSnippet = `/* Edit styles for ${target.tagName.toLowerCase()} */\n` +
                 `selector {\n  background: ${computed.backgroundColor};\n  color: ${computed.color};\n  border: ${computed.border};\n}`;
             this._get('playground-code').value = styleSnippet;
         };
@@ -1584,29 +1587,61 @@ class DebugUI {
         return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
     }
 
+    /** A value the way a state inspector should show it: what it IS, not all of it.
+     *
+     *  This used to be `JSON.stringify(value)`, which meant `allMods`, `displayedMods` and
+     *  `conflictCache` — the entire mod library, twice, plus every conflict list — were
+     *  serialised in full and then truncated to one ellipsised line. Every second, because
+     *  the state pane is on a 1s timer. On a real library that is megabytes of string built
+     *  and thrown away per tick, which is the DevTools "lag on open".
+     *
+     *  A summary is also simply better: `Array(482)` answers the question a state inspector is
+     *  for, and the first forty characters of a serialised mod list never did.
+     */
+    _describe(value) {
+        if (value === null) return 'null';
+        if (value === undefined) return 'undefined';
+        if (Array.isArray(value)) return `Array(${value.length})`;
+        if (value instanceof Set) return `Set(${value.size})`;
+        if (value instanceof Map) return `Map(${value.size})`;
+        if (typeof value === 'object') {
+            const keys = Object.keys(value);
+            // Small plain objects are worth showing whole — they are usually the settings
+            // somebody opened this pane to read.
+            if (keys.length <= 4) {
+                const body = JSON.stringify(value);
+                if (body.length <= 120) return body;
+            }
+            return `{${keys.length} key${keys.length === 1 ? '' : 's'}}`;
+        }
+        const str = String(value);
+        return str.length > 120 ? `${str.slice(0, 119)}…` : str;
+    }
+
     updateStateView() {
         const pane = this._get('pane-state');
         const state = appState.state;
+
+        // Nothing changed → nothing to rebuild. The pane repaints on a 1s timer whether or
+        // not the state moved, and rebuilding identical markup still costs a full parse, a
+        // layout and a paint. The signature is built from the SUMMARIES, which is cheap
+        // precisely because they are summaries.
+        const rows = Object.entries(state).map(([k, v]) => [k, this._describe(v)]);
+        const signature = rows.map(([k, v]) => `${k}=${v}`).join('|');
+        if (signature === this._stateSignature) return;
+        this._stateSignature = signature;
+
         let html = '<div style="padding:16px; font-family:inherit">';
-        
-        for (const [key, value] of Object.entries(state)) {
-            const displayValue = typeof value === 'object' ? JSON.stringify(value) : value;
+        for (const [key, shown] of rows) {
             html += `
                 <div class="state-row" style="margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; cursor:pointer; padding:4px 8px; border-radius:4px; transition:background 0.2s" data-key="${key}">
-                    <span style="color:var(--text-muted)">${key}:</span>
-                    <span style="color:var(--debug-accent); font-weight:600; text-align:right; max-width:60%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">${this.escapeHtml(String(displayValue))}</span>
+                    <span style="color:var(--text-muted)">${this.escapeHtml(key)}:</span>
+                    <span style="color:var(--debug-accent); font-weight:600; text-align:right; max-width:60%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">${this.escapeHtml(shown)}</span>
                 </div>
             `;
         }
-        
         html += '</div>';
         pane.innerHTML = html;
-
-        // Add hover effect
-        pane.querySelectorAll('.state-row').forEach(row => {
-            row.addEventListener('mouseenter', () => row.style.background = 'var(--bmm-s05)');
-            row.addEventListener('mouseleave', () => row.style.background = '');
-        });
     }
 
 
@@ -1640,7 +1675,7 @@ class DebugUI {
 
     auditA11y() {
         if (!this.a11yWarnings) return;
-        
+
         // 1. Missing ALT on images
         document.querySelectorAll('img').forEach(img => {
             if (!img.hasAttribute('alt') || img.alt.trim() === '') {
@@ -1699,7 +1734,7 @@ class DebugUI {
 
                 const rect = target.getBoundingClientRect();
                 const accessibleName = target.getAttribute('aria-label') || target.getAttribute('alt') || (target.innerText || target.textContent || "").trim() || target.getAttribute('title') || target.tagName.toLowerCase();
-                
+
                 readerOverlay.textContent = `Accessible: "${accessibleName}"`;
                 readerOverlay.style.display = 'block';
                 readerOverlay.style.top = (rect.bottom + window.scrollY + 5) + 'px';
@@ -1768,7 +1803,7 @@ class DebugUI {
                 if (!node.textContent.trim()) return NodeFilter.FILTER_REJECT;
                 // Skip if already has i18n
                 if (node.parentElement?.closest('[data-i18n], [data-i18n-placeholder], [data-i18n-title], [data-i18n-tooltip]')) return NodeFilter.FILTER_REJECT;
-                
+
                 return NodeFilter.FILTER_ACCEPT;
             }
         });
@@ -1854,11 +1889,11 @@ class DebugUI {
             const uptime = this._get('dbg-uptime');
 
             const stats = await invoke('get_debug_stats');
-            
+
             if (fps) fps.textContent = Math.round(metrics?.fps || 0);
             if (mem) mem.textContent = (stats.memory_mb || 0) + 'MB';
             if (pid) pid.textContent = stats.pid || '-';
-            
+
             if (uptime) {
                 const s = stats.uptime_secs || 0;
                 const hrs = Math.floor(s / 3600);
@@ -1996,7 +2031,7 @@ class DebugUI {
                 const isHidden = children.style.display === 'none';
                 children.style.display = isHidden ? 'block' : 'none';
                 toggle.textContent = isHidden ? '▼' : '▶';
-                
+
                 // Lazy load children if needed
                 if (isHidden && children.innerHTML === '') {
                     for (const child of node.children) {
@@ -2019,9 +2054,9 @@ class DebugUI {
     async refreshRustLogs() {
         const container = this._get('rust-logs-container');
         if (!container) return;
-        
+
         container.innerHTML = `<div class="debug-empty">Chargement...</div>`;
-        
+
         try {
             const { invoke } = window.__TAURI__.core;
             const logs = await invoke('get_rust_logs');
@@ -2036,7 +2071,7 @@ class DebugUI {
 
                 return `<div class="debug-rustline" style="color:${color}">${this.escapeHtml(line)}</div>`;
             }).join('') || '<div class="debug-empty">None log Rust trouvé.</div>';
-            
+
             container.scrollTop = container.scrollHeight;
         } catch (e) {
             container.innerHTML = `<div style="padding:10px; color:var(--debug-error)">Error: ${e}</div>`;
@@ -2050,6 +2085,16 @@ class DebugUI {
         if (l.includes('WARN')) return 'var(--debug-warn)';
         if (l.includes('INFO')) return 'var(--debug-accent)';
         return 'var(--debug-success)';
+    }
+
+    /** The hover highlight the removed listeners used to do. Two listeners per row, re-added
+     *  on every repaint, for something one CSS rule does — and CSS cannot leak them. */
+    _ensureStateStyles() {
+        if (document.getElementById('bmm-debug-state-style')) return;
+        const st = document.createElement('style');
+        st.id = 'bmm-debug-state-style';
+        st.textContent = '#bmm-debug-overlay .state-row:hover { background: var(--bmm-s05); }';
+        document.head.appendChild(st);
     }
 
     startUpdateLoop() {

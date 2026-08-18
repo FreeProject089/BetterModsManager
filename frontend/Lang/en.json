@@ -7603,5 +7603,6 @@
   "restore.s.navigation": "Navigation & custom pages",
   "restore.s.Crashes": "Crash reports",
   "restore.s.diagnostics": "Diagnostics",
-  "restore.s.other": "Unrecognised entries"
+  "restore.s.other": "Unrecognised entries",
+  "restore.notif": "Restored {n} file(s) from a .DATABMM — {sections}."
 }
