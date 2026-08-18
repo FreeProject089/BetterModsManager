@@ -197,6 +197,12 @@ pub fn export_data_bundle(
         "created": chrono::Utc::now().to_rfc3339(),
         "sections": sections,
     });
+    // Signed, so a restore can tell whether the archive is still the one this BMM wrote.
+    // It covers the manifest — which names every section and its file and byte counts — so
+    // adding, removing or swapping a file inside the archive shows up as a count that no
+    // longer matches a signature nobody else can produce.
+    let mut manifest = manifest;
+    crate::commands::doc_sign::sign_doc(&app_handle, &mut manifest, "databmm");
     zip.start_file("manifest.json", json_opts).map_err(|e| AppError::from(e.to_string()))?;
     zip.write_all(&serde_json::to_vec_pretty(&manifest)?)?;
 

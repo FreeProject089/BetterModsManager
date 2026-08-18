@@ -25,6 +25,7 @@ struct ModSnapshot {
 pub async fn export_modlist(
     state: tauri::State<'_, AppState>,
     window: tauri::Window,
+    handle: tauri::AppHandle,
     list_name: String,
     description: String,
     author: String,
@@ -131,7 +132,12 @@ pub async fn export_modlist(
         "done": true,
     }));
 
-    let json = serde_json::to_string_pretty(&modlist)?;
+    // Signed on the way out, like repo.json has always been. A mod list is posted and
+    // opened by strangers exactly the way a repo is, and the person opening it had no way to
+    // tell whether it was still what the author wrote.
+    let mut doc = serde_json::to_value(&modlist)?;
+    crate::commands::doc_sign::sign_doc(&handle, &mut doc, "mm");
+    let json = serde_json::to_string_pretty(&doc)?;
     tokio::task::spawn_blocking(move || std::fs::write(&output_path, json))
         .await
         .map_err(|e| AppError::LockError(e.to_string()))??;

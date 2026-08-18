@@ -4492,8 +4492,12 @@ async function writeBmmpa(tasks: Task[], suggested: string): Promise<void> {
         ...(Object.keys(includes).length ? { includes } : {}),
     }, null, 2);
     try {
-        await invoke('write_text_file', { path, content: payload });
-        toast((t('sched.exportedN') || 'Exported {n} automation(s)').replace('{n}', String(tasks.length)), 'success');
+        // Signed on the way to disk. A .bmmpa can carry scripts, so "is this still what the
+        // author wrote" is the question a person most needs answered before importing one —
+        // and the private key lives on the Rust side, where it belongs.
+        const signed = await invoke('write_signed_document', { path, json: payload, format: 'bmmpa' });
+        toast((t('sched.exportedN') || 'Exported {n} automation(s)').replace('{n}', String(tasks.length))
+            + (signed ? '' : ` — ${t('sched.exportUnsigned') || 'written unsigned'}`), 'success');
     } catch (e) { toast(`${t('common.error') || 'Error'}: ${e}`, 'error'); }
 }
 

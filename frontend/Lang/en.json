@@ -7504,5 +7504,6 @@
   "settings.bundleExported": "Wrote {mb} MB — {n} section(s).",
   "settings.bundleEmpty": "Nothing to take for: {x}.",
   "common.create": "Create",
-  "settings.tagName": "Tag name"
+  "settings.tagName": "Tag name",
+  "sched.exportUnsigned": "written unsigned"
 }

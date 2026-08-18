@@ -7502,5 +7502,6 @@
   "settings.bundleExported": "{mb} Mo écrits — {n} section(s).",
   "settings.bundleEmpty": "Rien à prendre pour : {x}.",
   "common.create": "Créer",
-  "settings.tagName": "Nom du tag"
+  "settings.tagName": "Nom du tag",
+  "sched.exportUnsigned": "écrit sans signature"
 }
