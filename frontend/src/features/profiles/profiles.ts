@@ -263,8 +263,13 @@ export async function initProfiles() {
             const isClickInsideProfile = e.target.closest('.profile-card');
             const isClickInsideModItem = e.target.closest('.global-active-mod-item');
             const isClickInsideActions = e.target.closest('.profiles-active-mods-header-actions') || e.target.closest('#btn-disable-all-global');
-            
-            if (!isClickInsideProfile && !isClickInsideModItem && !isClickInsideActions) {
+            // THE CONTEXT MENU COUNTS AS INSIDE. It was not listed, so pressing "Disable
+            // selected" cleared the selection on mousedown and the click that followed had
+            // nothing left to disable — the menu closed and looked like a click outside,
+            // which is exactly how it was reported.
+            const isClickInsideMenu = e.target.closest('#global-mods-context-menu');
+
+            if (!isClickInsideProfile && !isClickInsideModItem && !isClickInsideActions && !isClickInsideMenu) {
                 selectedProfileIds.clear();
                 selectedGlobalModIds.clear();
                 renderProfiles();
@@ -832,8 +837,11 @@ export async function renderProfiles() {
             }
 
             if (enabledCount > 0) {
+                // The chips are BUTTONS: a mod named on a profile card is the same mod as the
+                // one in the global list, and clicking it there did nothing at all — you had
+                // to find it again in a list of every mod on the machine to select it.
                 activeModsHtml = `<div style="display:flex; flex-wrap:wrap; gap:4px; margin-top:8px; max-height:60px; overflow-y:auto; padding-right:4px;" class="active-mods-list">
-                    ${enabledMods.map(m => `<span style="font-size:10px; padding:2px 6px; border-radius:4px; background:var(--bmm-s04); border:1px solid var(--border); color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:120px;" onmouseenter="window.showTaskyHelp('${escAttr(m.name)}', 'package', true)" onmouseleave="window.hideTaskyHelp()">${escHtml(m.name)}</span>`).join('')}
+                    ${enabledMods.map(m => `<span class="profile-mod-chip" data-mod-id="${escAttr(m.id)}" role="button" tabindex="0" style="font-size:10px; padding:2px 6px; border-radius:4px; background:var(--bmm-s04); border:1px solid var(--border); color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:120px; cursor:pointer;" onmouseenter="window.showTaskyHelp('${escAttr(m.name)}', 'package', true)" onmouseleave="window.hideTaskyHelp()">${escHtml(m.name)}</span>`).join('')}
                 </div>`;
             }
         } catch { }
@@ -1333,6 +1341,58 @@ export async function renderProfiles() {
             }
         });
         
+        // A mod chip ON A PROFILE CARD selects that mod, the same way the global list does.
+        // Ctrl adds to the selection; a plain click replaces it. Same set, same right-click
+        // menu — there is one idea of "the mods I picked", not two.
+        grid.querySelectorAll('.profile-mod-chip').forEach((chip) => {
+            const modId = (chip as HTMLElement).dataset.modId;
+            if (!modId) return;
+            const paint = () => {
+                grid.querySelectorAll('.profile-mod-chip').forEach((c) => {
+                    const on = selectedGlobalModIds.has((c as HTMLElement).dataset.modId || '');
+                    (c as HTMLElement).style.borderColor = on ? 'var(--accent)' : 'var(--border)';
+                    (c as HTMLElement).style.color = on ? 'var(--accent)' : 'var(--text-secondary)';
+                });
+                modItems.forEach((mi) => {
+                    mi.classList.toggle('selected', selectedGlobalModIds.has((mi as HTMLElement).dataset.modId || ''));
+                });
+            };
+            const pick = (e: any) => {
+                // The card's own click handler highlights the profile; a chip is a different
+                // target and must not also trigger it.
+                e.stopPropagation();
+                if (!e.ctrlKey && !e.metaKey) {
+                    const only = selectedGlobalModIds.size === 1 && selectedGlobalModIds.has(modId);
+                    selectedGlobalModIds.clear();
+                    if (!only) selectedGlobalModIds.add(modId);
+                } else if (selectedGlobalModIds.has(modId)) {
+                    selectedGlobalModIds.delete(modId);
+                } else {
+                    selectedGlobalModIds.add(modId);
+                }
+                paint();
+            };
+            chip.addEventListener('click', pick);
+            chip.addEventListener('keydown', (e: any) => { if (e.key === 'Enter' || e.key === ' ') pick(e); });
+            // The right-click menu, from here too: selecting a mod and then having to find it
+            // again in the global list to right-click it is the same walk twice.
+            chip.addEventListener('contextmenu', (e: any) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (!selectedGlobalModIds.has(modId)) { selectedGlobalModIds.clear(); selectedGlobalModIds.add(modId); paint(); }
+                lastClickedGlobalModId = modId;
+                const menu = document.getElementById('global-mods-context-menu');
+                if (!menu) return;
+                const selectedItem = document.getElementById('ctx-global-mod-disable-selected');
+                if (selectedItem) selectedItem.style.display = selectedGlobalModIds.size > 1 ? 'flex' : 'none';
+                menu.style.display = 'block';
+                const w = 200; const h = menu.offsetHeight || 100;
+                menu.style.left = `${e.clientX + w > window.innerWidth ? e.clientX - w : e.clientX}px`;
+                menu.style.top = `${e.clientY + h > window.innerHeight ? e.clientY - h : e.clientY}px`;
+            });
+            if (selectedGlobalModIds.has(modId)) paint();
+        });
+
         // Click profile to highlight its active mods
         profileCards.forEach(card => {
             const profileId = card.dataset.id;

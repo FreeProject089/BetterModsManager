@@ -7505,5 +7505,9 @@
   "settings.bundleEmpty": "Nothing to take for: {x}.",
   "common.create": "Create",
   "settings.tagName": "Tag name",
-  "sched.exportUnsigned": "written unsigned"
+  "sched.exportUnsigned": "written unsigned",
+  "settings.toastsMute": "Popup notifications",
+  "settings.toastsMuteDesc": "Turns off the bubbles at the bottom of the screen. Everything stays in the notification centre, and errors always show.",
+  "settings.toastsOn": "Notifications on",
+  "settings.toastsOff": "Notifications off — everything is still in the notification centre"
 }

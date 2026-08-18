@@ -7342,5 +7342,9 @@
   "plugins.phServerPlugins": "My Server Plugins",
   "common.create": "",
   "settings.tagName": "",
-  "sched.exportUnsigned": ""
+  "sched.exportUnsigned": "",
+  "settings.toastsMute": "",
+  "settings.toastsMuteDesc": "",
+  "settings.toastsOn": "",
+  "settings.toastsOff": ""
 }

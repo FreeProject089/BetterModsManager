@@ -130,6 +130,17 @@ export function toastSaved(message: string, path?: string | null): void {
 }
 
 // ── Toast ─────────────────────────────────────────────────
+/**
+ * Are the popups switched off?
+ *
+ * Read from localStorage on every call rather than cached: Settings writes it, and a cached
+ * copy would need the app restarted to take effect — which is the kind of setting people
+ * conclude is broken.
+ */
+export function toastsMuted(): boolean {
+    try { return localStorage.getItem('bmm.muteToasts') === '1'; } catch { return false; }
+}
+
 export function toast(message, type = 'info', duration = 3000, icon = '') {
     // Recorded here and ONLY here. A toast is a three-second window onto something
     // that already happened — miss it and the information was simply gone, because
@@ -137,6 +148,11 @@ export function toast(message, type = 'info', duration = 3000, icon = '') {
     // than into each caller means the notification centre and the toast can never
     // disagree about what the app said. (ui/notification-center.ts)
     try { recordNotification(String(message ?? ''), type as any); } catch { /* never let history break a message */ }
+
+    // Muted: the message is still RECORDED above, so the notification centre keeps every
+    // word — what is switched off is the popup, not the information. Errors are never muted:
+    // an error nobody is shown and nobody looks for is an app that failed silently.
+    if (toastsMuted() && type !== 'error') return () => {};
 
     const container = document.getElementById('toast-container');
     const el = document.createElement('div');
@@ -1371,6 +1387,31 @@ window.applyTaskySettings = function () {
     };
 
     document.addEventListener('mousemove', (e) => window.updateTaskyPosition(e));
+})();
+
+// ── The popup switch ─────────────────────────────────────
+//
+// Its own initialiser rather than a line inside Tasky's: they are unrelated settings, and the
+// one that hides the mascot is not where anybody would look for the one that silences the app.
+(function initToastPref() {
+    const el = document.getElementById('toggle-toasts-enabled') as HTMLInputElement | null;
+    if (!el) return;
+    // Checked = popups ON. The stored key is the negative ("muted") because that is the
+    // unusual state, and an absent key must mean "show them".
+    el.checked = !toastsMuted();
+    el.addEventListener('change', () => {
+        // ORDER MATTERS, in both directions. Switching ON: persist first, or the confirming
+        // popup is suppressed by the setting it is confirming. Switching OFF: show it first,
+        // or the last popup you would ever see is the one that never appears.
+        const on = el.checked;
+        const say = () => toast(on
+            ? (t('settings.toastsOn') || 'Notifications on')
+            : (t('settings.toastsOff') || 'Notifications off — everything is still in the notification centre'),
+        'info');
+        if (!on) say();
+        try { localStorage.setItem('bmm.muteToasts', on ? '0' : '1'); } catch { /* private mode */ }
+        if (on) say();
+    });
 })();
 
 // ── Restore Tasky preferences on page load ───────────────

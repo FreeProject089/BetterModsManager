@@ -7503,5 +7503,9 @@
   "settings.bundleEmpty": "Rien à prendre pour : {x}.",
   "common.create": "Créer",
   "settings.tagName": "Nom du tag",
-  "sched.exportUnsigned": "écrit sans signature"
+  "sched.exportUnsigned": "écrit sans signature",
+  "settings.toastsMute": "Notifications contextuelles",
+  "settings.toastsMuteDesc": "Désactive les bulles en bas de l'écran. Tout reste consultable dans le centre de notifications, et les erreurs s'affichent toujours.",
+  "settings.toastsOn": "Notifications activées",
+  "settings.toastsOff": "Notifications désactivées — tout reste dans le centre de notifications"
 }

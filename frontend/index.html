@@ -3761,6 +3761,23 @@
                                         <span class="toggle-slider"></span>
                                     </label>
                                 </div>
+                                <!-- Popup notifications. The message is still RECORDED when this
+                                     is off — what stops is the popup, not the information. -->
+                                <div
+                                    style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--bmm-s03);border:1px solid var(--border);border-radius:10px">
+                                    <div>
+                                        <div style="font-size:13px;font-weight:600;color:var(--text-primary)"
+                                            data-i18n="settings.toastsMute">Notifications contextuelles</div>
+                                        <div style="font-size:11px;color:var(--text-muted);margin-top:2px"
+                                            data-i18n="settings.toastsMuteDesc">Desactive les bulles en bas de
+                                            l'ecran. Tout reste consultable dans le centre de notifications, et les
+                                            erreurs s'affichent toujours.</div>
+                                    </div>
+                                    <label class="toggle-switch" style="flex-shrink:0">
+                                        <input type="checkbox" id="toggle-toasts-enabled" checked />
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
                                 <!-- Toggle Tasky animation -->
                                 <div
                                     style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--bmm-s03);border:1px solid var(--border);border-radius:10px">
