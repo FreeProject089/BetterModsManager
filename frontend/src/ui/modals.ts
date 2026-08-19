@@ -82,6 +82,16 @@ window.confirmCustom = (title: string, message: string, type: string = 'danger',
             return;
         }
 
+        // Normalise before opening. This modal is BORROWED by other screens (the mapper's
+        // final preview reuses it as a big scrollable panel: it adds `modal-large` and hides
+        // the confirm button), and a borrower only restores that state from its own Cancel
+        // handler. Close the borrowed modal by clicking the backdrop instead and the state
+        // stays: the very next confirmation anywhere in the app opened 1100px wide, 85vh
+        // tall, with NO confirm button — leaving the user unable to confirm anything at all.
+        // Resetting here fixes the whole class of it, however the borrower exited.
+        modal.classList.remove('modal-large');
+        yesBtn.style.display = '';
+
         titleEl.textContent = title;
         msgEl.innerHTML = message;
 

@@ -1333,7 +1333,9 @@ async function showMapperPreview(): Promise<void> {
         <div class="mapper-preview-container">
             <div class="mpv-header">
                 <div class="mpv-heading">
-                    <h3 class="mpv-title">${escHtml(t("mapper.diagnosticTitle"))}</h3>
+                    <!-- No <h3> here: the modal's own title bar already reads FINAL PREVIEW
+                         two lines above. A second heading ("Structure Diagnostic") stacked
+                         under it spent a line of vertical room saying the same thing twice. -->
                     <p class="mpv-desc">${escHtml(t("mapper.diagnosticDesc"))}</p>
                 </div>
                 <div class="mpv-stats">
@@ -1435,6 +1437,12 @@ async function showMapperPreview(): Promise<void> {
             confirmTitle.textContent = t("mapper.preview");
             confirmMsg.innerHTML = html;
 
+            // The shared modal's icon is a RED danger triangle in the markup, and only
+            // confirmCustom ever repaints it. Borrowing the modal without touching it put a
+            // red alert badge on a read-only preview. Neutral accent instead.
+            const icon = document.getElementById('confirm-icon-container');
+            if (icon) { icon.style.background = 'var(--accent-dim)'; icon.style.color = 'var(--accent)'; }
+
             confirmModal.classList.add('modal-large');
             confirmModal.classList.add('open');
 
@@ -1448,14 +1456,32 @@ async function showMapperPreview(): Promise<void> {
             // tooltip system (ui/tooltips.ts). We used to ALSO attach a mapper-specific
             // tooltip here — which showed the path TWICE on hover. Removed.
 
+            // Restore on EVERY exit, not just the Cancel button.
+            //
+            // The old version was `noBtn.addEventListener('click', closeFn, {once:true})`.
+            // Clicking the backdrop closes the overlay through the global handler in
+            // modals.ts WITHOUT going through the button, so closeFn never ran: `modal-large`
+            // and the hidden confirm button stayed on the shared modal, and the leftover
+            // once-listener was still armed — it fired on the NEXT unrelated confirmation's
+            // Cancel click and overwrote that dialog's button label.
+            //
+            // `display = ''` and not 'block': .btn is inline-flex, so 'block' would leave the
+            // button permanently mis-laid-out (icon and gap) everywhere else in the app.
+            let closed = false;
             const closeFn = () => {
+                if (closed) return;
+                closed = true;
                 confirmModal.classList.remove('open');
                 confirmModal.classList.remove('modal-large');
-                if (yesBtn) yesBtn.style.display = 'block';
+                if (yesBtn) yesBtn.style.display = '';
                 if (noBtn) noBtn.textContent = t("common.cancel");
+                noBtn?.removeEventListener('click', closeFn);
+                confirmModal.removeEventListener('click', onBackdrop);
             };
+            const onBackdrop = (ev: MouseEvent) => { if (ev.target === confirmModal) closeFn(); };
 
-            noBtn.addEventListener('click', closeFn, { once: true });
+            noBtn.addEventListener('click', closeFn);
+            confirmModal.addEventListener('click', onBackdrop);
         }
     } catch (e: any) {
         toast(e.message || e, 'error');
