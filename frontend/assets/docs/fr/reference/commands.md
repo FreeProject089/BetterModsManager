@@ -14,7 +14,7 @@ npm run dev        # surveillance TypeScript + la fenêtre Tauri, ensemble
 npm run ci         # toutes les vérifications, dans l'ordre de la CI
 ```
 
-`npm run ci` fait 42 étapes. Elle est lente exprès — c'est la différence entre « ça compile »
+`npm run ci` fait 43 étapes. Elle est lente exprès — c'est la différence entre « ça compile »
 et « ça marche ».
 
 ## Construire
@@ -86,6 +86,7 @@ npm run check:diagrams      # registre des diagrammes vs ce que les pages annonc
 npm run check:catalog-docs  # docs des catalogues vs le lecteur
 npm run check:installer     # configuration de l'installeur
 npm run check:resources     # chaque fichier réclamé par le Rust est bien embarqué
+npm run check:nesting       # index.html referme ses balises ; aucun modal dans un autre
 npm run check:links         # liens externes
 npm run check:docs          # renvois entre pages de documentation
 ```

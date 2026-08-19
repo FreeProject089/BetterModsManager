@@ -14,7 +14,7 @@ npm run dev        # TypeScript watch + the Tauri window, together
 npm run ci         # every gate, in the order CI runs them
 ```
 
-`npm run ci` is 42 steps. It is slow on purpose — it is the difference between "it compiles"
+`npm run ci` is 43 steps. It is slow on purpose — it is the difference between "it compiles"
 and "it works".
 
 ## Building
@@ -85,6 +85,7 @@ npm run check:diagrams      # diagram registry vs what pages claim
 npm run check:catalog-docs  # catalogue docs vs the reader
 npm run check:installer     # installer config
 npm run check:resources     # every file the Rust asks for is actually in the bundle
+npm run check:nesting       # index.html closes its tags; no modal inside another modal
 npm run check:links         # external links
 npm run check:docs          # documentation cross-references
 ```
