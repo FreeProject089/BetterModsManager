@@ -17091,3 +17091,16 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 .sched-cond-row > :first-child { flex: 1; min-width: 0; }
 .sched-cond-del { flex-shrink: 0; opacity: 0.6; }
 .sched-cond-del:hover { opacity: 1; color: var(--danger); }
+
+/* A tier a repo catalogue CLAIMED and was not granted. Never the official or partner
+   colours — this chip reports on a badge and must not be mistakable for one. */
+.repo-claim-badge {
+    display: inline-flex; align-items: center; gap: 3px;
+    font-size: 9px; font-weight: 800;
+    padding: 2px 8px; border-radius: 4px;
+    text-transform: uppercase; letter-spacing: 0.5px;
+    background: rgba(239, 68, 68, 0.12);
+    color: var(--danger);
+    border: 1px solid rgba(239, 68, 68, 0.42);
+    cursor: help;
+}

@@ -36,6 +36,16 @@ pub struct AppEntry {
     pub partner: Option<bool>,
     /// Which catalog URL this entry came from (injected at merge time)
     pub source_label: Option<String>,
+    /// What the SOURCE claimed this entry was — "official" or "partner" — when the tier it
+    /// was actually fetched from does not grant that.
+    ///
+    /// The claim used to be overwritten and forgotten. Keeping it is not a softening of the
+    /// rule: the entry is still community, and this never feeds a badge of its own. It is
+    /// shown attributed to the catalogue that said it, so a reader sees "this list calls
+    /// itself official" rather than either an endorsement BMM never gave or a silence that
+    /// hides an attempt to claim one.
+    #[serde(skip_deserializing)]
+    pub claimed_tier: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]

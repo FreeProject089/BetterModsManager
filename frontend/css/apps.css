@@ -279,6 +279,30 @@
     color: var(--bmm-purple);
     border: 1px solid rgba(99,102,241,0.42);
 }
+/* Community — the neutral tier. Deliberately quiet and deliberately PRESENT: the absence of
+   a badge is not a warning, it is a blank a reader fills in with whatever they assume. */
+.apps-community-badge {
+    font-size: 9.5px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--bmm-s08);
+    color: var(--text-muted);
+    border: 1px solid var(--bmm-s10);
+}
+/* A tier the source CLAIMED and was not granted. Never the official or partner colours —
+   this chip must not be mistakable for the badge it is reporting on. */
+.apps-claim-badge {
+    display: inline-flex; align-items: center; gap: 3px;
+    font-size: 9.5px;
+    font-weight: 800;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--bmm-danger-dim, rgba(239, 68, 68, 0.12));
+    color: var(--danger);
+    border: 1px solid rgba(239, 68, 68, 0.42);
+    cursor: help;
+}
 .apps-tag {
     font-size: 10px;
     font-weight: 600;

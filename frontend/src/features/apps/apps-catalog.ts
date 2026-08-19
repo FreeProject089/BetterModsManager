@@ -397,7 +397,11 @@ function renderAppCard(app: AppEntry) {
             ? `<span class="apps-card-installed-chip">${IC.check} ${t('apps.installed')||'Installed'}</span>`
             : app.official ? `<span class="apps-official-badge">✦ Official</span>`
             : app.partner ? `<span class="apps-partner-badge">Partner</span>`
-            : ''}
+            // A community entry used to render NOTHING here. An absent badge is not a
+            // warning — a reader who does not know the badge system reads blank as neutral,
+            // which is exactly the gap an impersonating catalogue lives in. Say it plainly.
+            : `<span class="apps-community-badge">${escHtml(t('apps.badge.community') || 'Community')}</span>`}
+          ${claimChip(app)}
         </div>
         ${fav ? `<div class="apps-card-fav-star">${IC.starFill}</div>` : ''}
       </div>
@@ -434,6 +438,32 @@ function catIconSm(cat: string) {
     if (cat === 'game') return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="3"/><path d="M7 12h3m-1.5-1.5v3"/><circle cx="16" cy="11" r=".7" fill="currentColor" stroke="none"/><circle cx="18" cy="13" r=".7" fill="currentColor" stroke="none"/></svg>`;
     if (cat === 'utility') return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>`;
     return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18M9 21V9"/></svg>`;
+}
+
+/**
+ * The tier a source CLAIMED for an entry it was not granted, shown attributed to that source.
+ *
+ * BMM assigns trust from where a catalogue was fetched, so a community list calling its own
+ * entries "official" cannot take the badge — apply_trust overwrites it. It used to be dropped
+ * there and forgotten, which is worse than it sounds: a careless catalogue and a deliberate
+ * impersonation then looked identical, and the one signal that separates them was thrown away
+ * before anybody could see it.
+ *
+ * So it is rendered, and the wording carries the attribution rather than the styling: "claims
+ * official" next to the source host. There is no version of this chip that could be mistaken
+ * for BMM's own badge — it never uses the official/partner colours, and it always names who
+ * said it.
+ */
+function claimChip(app: any): string {
+    if (!app?.claimed_tier) return '';
+    let host = '';
+    try { host = new URL(String(app.source_label || '')).host; } catch { host = String(app.source_label || ''); }
+    const label = app.claimed_tier === 'official'
+        ? (t('apps.badge.claimsOfficial') || 'claims “official”')
+        : (t('apps.badge.claimsPartner') || 'claims “partner”');
+    const title = (t('apps.badge.claimHint') || 'This catalogue calls itself that. BMM did not — trust comes from where a catalogue is fetched, not from what it says.')
+        + (host ? ` (${host})` : '');
+    return `<span class="apps-claim-badge" title="${escAttr(title)}">⚠ ${escHtml(label)}</span>`;
 }
 
 function thumbIcon(cat: string) {
@@ -1316,6 +1346,8 @@ function openDetailModal(appId: string) {
               ${priceBadge(app.price)}
               ${app.official ? `<span class="apps-official-badge">✦ Official</span>` : ''}
               ${app.partner && !app.official ? `<span class="apps-partner-badge">Partner</span>` : ''}
+              ${!app.official && !app.partner ? `<span class="apps-community-badge">${escHtml(t('apps.badge.community') || 'Community')}</span>` : ''}
+              ${claimChip(app)}
               ${app.version ? `<span class="apps-version">v${escHtml(app.version)}</span>` : ''}
             </div>
           </div>

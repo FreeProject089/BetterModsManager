@@ -117,12 +117,34 @@ async fn fetch_raw_catalog(app: &tauri::AppHandle, url: &str) -> Option<AppCatal
     resp.json::<AppCatalog>().await.ok()
 }
 
+/// Assign trust from WHERE an entry was fetched, never from what it says about itself.
+///
+/// The claim is not thrown away, though. A catalogue that labels its own entries "official"
+/// is telling you something worth seeing — it just is not telling you the truth about BMM's
+/// endorsement. So the badge is overwritten and the claim is recorded in `claimed_tier`,
+/// which the UI renders attributed to the source catalogue. Dropping it silently hid the one
+/// signal that distinguishes a careless list from a deliberate impersonation.
 fn apply_trust(apps: &mut Vec<AppEntry>, is_official: bool, is_partner: bool, source_url: &str) {
     for app in apps.iter_mut() {
+        // What did the document claim, before we overwrite it?
+        let claimed = if app.official == Some(true) {
+            Some("official")
+        } else if app.partner == Some(true) {
+            Some("partner")
+        } else {
+            None
+        };
         // Override whatever the JSON says — trust comes from the source URL only
         app.official     = Some(is_official);
         app.partner      = Some(is_partner && !is_official);
         app.source_label = Some(source_url.to_string());
+        // Only interesting when the claim EXCEEDS what the source was granted. A partner
+        // catalogue calling its own entries partner is simply correct.
+        app.claimed_tier = match claimed {
+            Some("official") if !is_official => Some("official".to_string()),
+            Some("partner") if !is_official && !is_partner => Some("partner".to_string()),
+            _ => None,
+        };
         // Cap tags at 3 to prevent abuse
         app.tags.truncate(3);
     }
