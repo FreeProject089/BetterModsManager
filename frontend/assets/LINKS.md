@@ -152,11 +152,28 @@ having a registry at all, but it touches a file that is frequently edited by han
 
 ---
 
-## Comment keys
+## How the file is laid out
 
-`_comment_catalogs`, `_comment_analytics`, `_comment_source`, `_comment_rpc`,
-`_comment_autoupdate` are documentation for whoever opens the file. Nothing parses them;
-`links-config.ts` ignores unknown keys.
+JSON has no comments, so the keys beginning with `_` **are** the headings. They are numbered
+to keep the reading order stable, and each one describes the group beneath it:
+
+| Heading | What follows it |
+|---|---|
+| `_1_about_this_file` | Where the file is loaded from, and which copy to edit |
+| `_2_catalogues` | Catalogues and lists |
+| `_3_updates` | The update feed and its fallback |
+| `_4_telemetry` | Endpoint and public ingest key |
+| `_5_community` | Social links — **most of these are not read**, see below |
+| `_6_discord_rpc` | Rich Presence buttons |
+
+Nothing parses them. `links-config.ts` merges the file over its defaults
+(`{ ...DEFAULTS, ...parsed }`), so an unknown key is carried along harmlessly and a missing
+one falls back — which is also why the order has no effect on behaviour and exists purely so
+the file can be read top to bottom.
+
+Adding a key? Put it in a group. If a future regroup finds one that belongs to none, it is
+parked under `_9_unsorted` rather than dropped, so it shows up as an oversight instead of
+disappearing.
 
 ---
 
