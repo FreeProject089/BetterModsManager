@@ -38,6 +38,7 @@
     "reference/api",
     "reference/repo-format",
     "reference/catalog-index",
+    "reference/links-and-updates",
     "reference/custom-markdown",
     "reference/actions",
     "reference/mcp",
@@ -606,6 +607,21 @@
         "fr": "Un catalogue liste des choses à installer. Un index liste des catalogues."
       },
       "words": 687,
+      "diagrams": 0,
+      "fr": true
+    },
+    {
+      "path": "reference/links-and-updates",
+      "section": "reference",
+      "title": {
+        "en": "Where BMM's links come from, and how it finds updates",
+        "fr": "D'où viennent les liens de BMM, et comment il cherche les mises à jour"
+      },
+      "summary": {
+        "en": "Every external address BMM touches — catalogues, the repo list, telemetry, the update feed — lives in one file, links.json, so any of them can be changed…",
+        "fr": "Toutes les adresses externes que BMM utilise — catalogues, liste des dépôts, télémétrie, flux de mises à jour — vivent dans un seul fichier, links.json, pour…"
+      },
+      "words": 563,
       "diagrams": 0,
       "fr": true
     },

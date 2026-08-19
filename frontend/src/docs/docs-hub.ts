@@ -394,6 +394,19 @@ ce qu'il remplace, ou les retire). Vos mods téléchargés ne sont jamais modifi
         },
       },
       {
+        id: 'links-and-updates', docsPath: 'reference/links-and-updates', view: 'settings',
+        title: { en: 'Links and updates', fr: 'Liens et mises à jour' },
+        summary: {
+          en: 'Where every address BMM uses comes from, and why the update check has a second source.',
+          fr: 'D’où vient chaque adresse utilisée par BMM, et pourquoi la vérification des mises à jour a une seconde source.',
+        },
+        keywords: 'links.json update autoupdate fallback github rate limit releases telemetry endpoint liens mise a jour secours quota',
+        body: {
+          en: '<p>Every external address BMM uses — catalogues, the repo list, telemetry, the update feed — lives in one file, <code>links.json</code>, so any of them can change <b>without shipping a new version of BMM</b>.</p><p>BMM loads it from BetterCommunity first, then a copy on GitHub, then the file bundled in the app, then built-in defaults — stopping at the first that answers. So a link corrected on BetterCommunity reaches every installation at its next start.</p><p><b>Updates have two sources.</b> GitHub is asked first; BetterCommunity only if GitHub cannot answer. GitHub allows 60 unauthenticated requests per hour <i>per IP address</i> — behind a company network, a university or a mobile operator, that budget can be spent entirely by other people, and the check would fail for the rest of the hour through no fault of yours.</p><ul><li>It falls back on a failed connection, a server error, or a rate limit.</li><li>It does <b>not</b> fall back on "no release found" — that feed genuinely has none, and the other almost certainly has none either.</li><li>If the fallback fails too, the error shown is the fallback’s own.</li></ul><p>Set <code>autoupdate_api_fallback</code> to an empty string to switch it off.</p>',
+          fr: '<p>Toutes les adresses externes qu’utilise BMM — catalogues, liste des dépôts, télémétrie, flux de mises à jour — vivent dans un seul fichier, <code>links.json</code>, pour que n’importe laquelle puisse changer <b>sans publier une nouvelle version de BMM</b>.</p><p>BMM le charge depuis BetterCommunity en premier, puis une copie sur GitHub, puis le fichier embarqué dans l’app, puis des valeurs par défaut — en s’arrêtant à la première qui répond. Un lien corrigé sur BetterCommunity atteint donc chaque installation à son démarrage suivant.</p><p><b>Les mises à jour ont deux sources.</b> GitHub est interrogé en premier ; BetterCommunity seulement s’il ne peut pas répondre. GitHub autorise 60 requêtes non authentifiées par heure <i>par adresse IP</i> — derrière un réseau d’entreprise, une université ou un opérateur mobile, ce quota peut être entièrement consommé par d’autres, et la vérification échouerait pendant le reste de l’heure sans que vous y soyez pour quoi que ce soit.</p><ul><li>Il bascule sur une connexion échouée, une erreur serveur ou un quota dépassé.</li><li>Il ne bascule <b>pas</b> sur « aucune version trouvée » — ce flux n’en a réellement aucune, et l’autre n’en aura presque sûrement pas davantage.</li><li>Si le secours échoue aussi, l’erreur affichée est la sienne.</li></ul><p>Mettez <code>autoupdate_api_fallback</code> à une chaîne vide pour le désactiver.</p>',
+        },
+      },
+      {
         id: 'catalog-index', docsPath: 'features/community/', view: 'settings',
         title: { en: 'Catalogue index — one address for many', fr: 'Index de catalogues — une adresse pour plusieurs' },
         summary: {
