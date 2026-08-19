@@ -16,11 +16,46 @@ pub struct FileTreeNode {
     pub children: Option<Vec<FileTreeNode>>,
 }
 
+
+/// Where to READ a mod's files from. An archived mod is a `.zip`, and its contents live in
+/// the shared extraction cache; a plain mod is its own folder.
+fn read_root(mod_folder: &Path) -> PathBuf {
+    crate::archive::mod_read_root(mod_folder)
+}
+
+/// Where to WRITE a mod's files, or a refusal.
+///
+/// The mapper's write operations — restructure, rename, delete, create — move real files
+/// around inside the mod. For an archived mod that cannot mean the extraction cache: the
+/// cache is derived and rebuilt from the `.zip`, so anything written there is silently lost
+/// the next time it is regenerated. Doing it properly means rewriting the archive, which is a
+/// different feature.
+///
+/// So this refuses, and says why and what to do. Before, the join produced a path INSIDE a
+/// zip file, which either failed with an unrelated message or did nothing at all.
+fn write_root(mod_folder: &Path) -> Result<PathBuf, AppError> {
+    if crate::archive::is_archive(mod_folder) {
+        return Err(AppError::Internal(
+            "Ce mod est archivé (.zip) : le mapper peut l'explorer mais pas le modifier. \
+             Extrayez-le d'abord (Bibliothèque → le mod → Extraire) pour réorganiser ses fichiers."
+                .to_string(),
+        ));
+    }
+    Ok(mod_folder.to_path_buf())
+}
+
 #[tauri::command]
 pub async fn get_directory_tree(path: String) -> Result<Vec<FileTreeNode>, AppError> {
     let path_clone = path.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        let root = Path::new(&path_clone);
+        // An ARCHIVED mod is a .zip, not a folder, and the mapper was handed the .zip path
+        // directly — so it logged "not a dir" and the whole screen came up empty. BMM already
+        // solves this everywhere else: mod_read_root() extracts an archive into the shared
+        // cache and hands back that directory, returning a plain folder untouched. It falls
+        // back to the original path when extraction fails, so the check below still reports a
+        // genuinely missing or corrupt one rather than swallowing it.
+        let root_owned = read_root(Path::new(&path_clone));
+        let root = root_owned.as_path();
         if !root.exists() || !root.is_dir() {
             error!("Directory not found or not a dir: {}", path_clone);
             return Err(AppError::NotFound("Le dossier n'existe pas ou n'est pas un répertoire".to_string()));
@@ -157,6 +192,7 @@ pub async fn restructure_mod_item(
         let m = data.mods.iter().find(|m| m.id == mod_id).ok_or_else(|| AppError::NotFound("Mod introuvable".to_string()))?;
         m.mod_folder_path.clone()
     };
+    let mod_folder = write_root(&mod_folder)?;
     
     let src_path = mod_folder.join(&item_rel_path);
     let item_name = src_path.file_name().ok_or_else(|| AppError::Internal("Nom d'élément invalide".to_string()))?;
@@ -216,6 +252,7 @@ pub async fn delete_mod_item(
         let m = data.mods.iter().find(|m| m.id == mod_id).ok_or_else(|| AppError::NotFound("Mod introuvable".to_string()))?;
         m.mod_folder_path.clone()
     };
+    let mod_folder = write_root(&mod_folder)?;
     
     let path = mod_folder.join(&item_rel_path);
     if !path.exists() {
@@ -245,6 +282,7 @@ pub async fn create_mod_folder(
         let m = data.mods.iter().find(|m| m.id == mod_id).ok_or_else(|| AppError::NotFound("Mod introuvable".to_string()))?;
         m.mod_folder_path.clone()
     };
+    let mod_folder = write_root(&mod_folder)?;
     
     let target_dir = if parent_rel_path.is_empty() || parent_rel_path == "." {
         mod_folder.join(folder_name)
@@ -274,6 +312,7 @@ pub async fn rename_mod_item(
         let m = data.mods.iter().find(|m| m.id == mod_id).ok_or_else(|| AppError::NotFound("Mod introuvable".to_string()))?;
         m.mod_folder_path.clone()
     };
+    let mod_folder = write_root(&mod_folder)?;
     
     let src_path = mod_folder.join(&item_rel_path);
     if !src_path.exists() {
@@ -303,6 +342,7 @@ pub async fn open_item_in_explorer(
         let m = data.mods.iter().find(|m| m.id == mod_id).ok_or_else(|| AppError::NotFound("Mod introuvable".to_string()))?;
         m.mod_folder_path.clone()
     };
+    let mod_folder = read_root(&mod_folder);
     
     let path = mod_folder.join(&item_rel_path);
     if !path.exists() {
