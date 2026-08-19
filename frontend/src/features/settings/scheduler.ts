@@ -23,6 +23,7 @@ import {
     hasSource, looksLikeIndex, catalogLooksLike, importIndexForType,
 } from '../catalogs/catalog-index.js';
 import { getLinks } from '../../core/links-config.js';
+import { askConfirm } from '../../core/api.js';
 
 /**
  * A 16px line icon, drawn the way every other icon in this panel is drawn: one stroked
@@ -273,22 +274,47 @@ export async function initScheduler(): Promise<void> {
             more.className = 'btn btn-ghost btn-sm';
             more.style.gap = '6px';
             more.textContent = t('sched.more') || 'Files…';
+            // Built to the portal's contract, which is not obvious and which the first
+            // version of this got wrong twice:
+            //
+            //   1. showGlobalDropdown CLONES the node. An inline `display:none` rides along
+            //      on the clone, and no class can override an inline style — so the menu was
+            //      moved to the portal, positioned, and stayed invisible. The button appeared
+            //      to do nothing at all.
+            //   2. cloneNode(true) does NOT copy event listeners. Per-item addEventListener
+            //      calls are lost, so even once visible every entry would have been inert.
+            //
+            // So: the template is never inserted in the page (nothing to hide), and the
+            // entries carry a data attribute that one delegated listener dispatches on.
             const menu = document.createElement('div');
-            menu.className = 'bmm-tag-menu';
-            menu.style.display = 'none';
+            // is-template: hidden where it sits, visible on the CLONE the portal makes
+            // (which gains .open). A CLASS, not an inline style — an inline display:none
+            // travels with the clone and nothing can override it, which is exactly how this
+            // menu came to open into an invisible node.
+            menu.className = 'bmm-tag-menu is-template';
             menu.style.minWidth = '210px';
-            menu.style.left = 'auto';
-            menu.style.right = '0';
+            const RUN: Record<string, () => void> = {};
             for (const [id, label, hint, run] of ITEMS) {
                 const b = document.createElement('button');
                 b.type = 'button';
                 b.id = id;                       // kept: the command palette and the tutorial address these
                 b.className = 'bmm-tag-menu-row';
+                b.dataset.schedAct = id;         // survives cloneNode; a listener does not
                 b.textContent = label;
                 if (hint) b.title = hint;
-                b.addEventListener('click', () => { menu.style.display = 'none'; run(); });
                 menu.appendChild(b);
+                RUN[id] = run;
             }
+            // One delegated listener, on the document, so it reaches the CLONE living in the
+            // portal as well as the template. Registered once with the button that owns it.
+            document.addEventListener('click', (ev: any) => {
+                const hit = ev.target?.closest?.('[data-sched-act]');
+                if (!hit) return;
+                const fn = RUN[hit.dataset.schedAct];
+                if (!fn) return;
+                (window as any).closeGlobalDropdown?.(true);
+                fn();
+            });
             // Handed to the global dropdown portal rather than shown in place.
             //
             // A menu positioned inside this card is clipped by it: the settings sections
@@ -298,19 +324,16 @@ export async function initScheduler(): Promise<void> {
             // the button, which is what every other menu in the app already does.
             more.addEventListener('click', (e) => {
                 e.stopPropagation();
-                const show = (window as any).showGlobalDropdown;
-                if (typeof show === 'function') { show(more, menu); return; }
-                // No portal (an older shell): in-place is wrong but visible, which beats a
-                // button that does nothing.
-                menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
-            });
-            document.addEventListener('mousedown', (ev: any) => {
-                if (menu.style.display === 'none') return;
-                if (!ev.target?.closest?.('#sched-more-btn') && !ev.target?.closest?.('.bmm-tag-menu')) {
-                    menu.style.display = 'none';
-                }
+                // The portal owns opening, closing, click-outside and viewport clamping. It is
+                // defined in modals.ts, which loads at boot, so there is no meaningful case
+                // where it is absent — and the previous "fallback" hid a real failure behind a
+                // path that could not work either.
+                (window as any).showGlobalDropdown?.(more, menu);
             });
             wrap.appendChild(more);
+            // Kept IN the document, hidden by .is-template. It has to be reachable by id:
+            // the tutorial spotlights sched-example-btn, and getElementById does not see a
+            // detached node.
             wrap.appendChild(menu);
             row.appendChild(wrap);
         }
@@ -2078,10 +2101,13 @@ export function renderScheduleList(): void {
                 // value that is only there because another module ran first; if it ever is not,
                 // the call throws inside an async listener and the button appears inert.
                 const ask = window.confirmCustom;
+                // askConfirm, not window.confirm: the latter does not ask anything inside the
+                // Tauri webview, it returns immediately — which is precisely how this button
+                // came to do nothing at all.
                 const ok = typeof ask === 'function'
                     ? await ask(t('sched.delTitle') || 'Delete task', `${task.name}?`, 'danger',
                         { yesLabel: t('common.delete') || 'Delete', noLabel: t('common.cancel') || 'Cancel' })
-                    : window.confirm(`${t('sched.delTitle') || 'Delete task'}\n\n${task.name}?`);
+                    : await askConfirm(`${task.name}?`, { title: t('sched.delTitle') || 'Delete task' });
                 if (!ok) return;
                 if (task.osSchedule) {
                     // An OS entry that will not unregister must not stop the task being

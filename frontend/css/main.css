@@ -16940,6 +16940,14 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 .bmm-tag-menu-row[disabled] { opacity: 0.45; cursor: default; }
 .bmm-tag-menu-row[disabled]:hover { background: none; }
 .bmm-tag-menu-sep { height: 1px; margin: 4px 2px; background: var(--bmm-border, var(--border)); }
+
+/* A menu that exists only to be CLONED into the global dropdown portal.
+   Hidden where it sits, shown on the clone — window.showGlobalDropdown adds .open to the
+   copy it appends to the portal. This is a class and not an inline style on purpose: an
+   inline display:none rides along on cloneNode() and no rule can override it, which is how
+   the scheduler Files menu opened into a node nobody could see. */
+.bmm-tag-menu.is-template { display: none; }
+.bmm-tag-menu.is-template.open { display: block; }
 .bmm-tag-new { display: flex; flex-direction: column; gap: 6px; padding: 6px; }
 .bmm-tag-new-row { display: flex; align-items: center; gap: 6px; }
 

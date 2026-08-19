@@ -253,9 +253,31 @@ export async function askConfirm(message, options = {}) {
             return await _dialog.confirm(message, options);
     }
     catch { /* fall through */ }
-    // Browser/mock fallback.
+    // Browser/mock fallback — and ONLY there.
+    //
+    // Inside the Tauri webview window.confirm() is worse than unavailable: the webview routes
+    // it at the dialog plugin's `confirm` command, which does not exist in tauri-plugin-dialog
+    // 2.x (its permission set is message/open/save only). The call rejects with
+    // "dialog.confirm not allowed. Command not found" as an UNCAUGHT promise, and the
+    // synchronous call returns immediately with undefined. Every `if (!await confirm(…))
+    // return;` then reads that as "the user said no" and cancels the action in total silence.
+    //
+    // theme-editor.ts already worked around this locally years ago and left a note saying so;
+    // this is the same bug, fixed where it starts.
+    if (isTauri())
+        return false;
     try {
         return window.confirm(message);
+    }
+    catch {
+        return false;
+    }
+}
+/** True when running inside the Tauri webview (as opposed to a browser or the mock).
+ *  Exported because "can I use a native browser dialog" is a question several modules ask. */
+export function isTauri() {
+    try {
+        return !!window.__TAURI__;
     }
     catch {
         return false;

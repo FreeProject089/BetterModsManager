@@ -3,6 +3,7 @@
  */
 import { invoke } from '../core/api.js';
 import { t } from '../core/i18n.js';
+import { askConfirm } from '../core/api.js';
 export function initModals() {
     document.querySelectorAll('[data-close]').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -49,8 +50,11 @@ window.confirmCustom = (title, message, type = 'danger', options = {}) => {
         const noBtn = document.getElementById('btn-confirm-cancel');
         const iconContainer = document.getElementById('confirm-icon-container');
         if (!modal || !titleEl || !msgEl || !yesBtn) {
-            const ok = window.confirm(`${title}\n\n${message}`);
-            resolve(ok);
+            // The in-app markup is missing, so ask natively instead — through the RUST
+            // command, never window.confirm. In the Tauri webview the latter returns
+            // immediately without asking anybody, so this branch used to cancel whatever the
+            // caller was doing while looking like the user had declined.
+            askConfirm(`${title}\n\n${message}`, { title }).then(resolve).catch(() => resolve(false));
             return;
         }
         titleEl.textContent = title;
