@@ -65,10 +65,20 @@ export async function initMapper() {
     const previewBtn = document.getElementById('btn-mapper-preview');
     const refreshBtn = document.getElementById('btn-mapper-refresh');
     const saveBtn = document.getElementById('btn-mapper-save');
-    // 1. Initial Data Load
-    await refreshMapperData();
     // Re-populate translated dropdowns when language changes
     document.addEventListener('langChanged', () => refreshMapperData());
+    // EVENTS FIRST, DATA LAST — the order is the point.
+    //
+    // This used to open with `await refreshMapperData()`, with every addEventListener below
+    // it. initMapper() is called from app.ts without await and without catch, so if that one
+    // call rejected — a profile with a missing game path, an unreadable mod folder, anything
+    // — the promise died there and NOT ONE listener in this function was ever attached. The
+    // mapper then sat looking perfectly normal and did nothing at all: no preview button, no
+    // context menus, no save. Exactly the shape of "it does nothing and the log is clean",
+    // because as far as the app was concerned nothing had gone wrong.
+    //
+    // Binding listeners needs no data. Doing it first means a data failure costs the data,
+    // not the interface.
     // 2. Events
     modSelect?.addEventListener('change', async () => {
         if (_mapperBusy)
@@ -244,6 +254,14 @@ export async function initMapper() {
         startMapperPoll();
     });
     document.querySelectorAll('.nav-item:not([data-view="mapper"])').forEach(n => n.addEventListener('click', stopMapperPoll));
+    // 1. Initial data load, LAST, and its failure is its own problem: everything above is
+    // already wired, so a bad profile costs an empty tree rather than a dead panel.
+    try {
+        await refreshMapperData();
+    }
+    catch (e) {
+        console.error('[mapper] initial data load failed', e);
+    }
 }
 /**
  * Refreshes available mods and the active profile

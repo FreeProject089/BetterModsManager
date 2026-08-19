@@ -969,13 +969,36 @@ async function main() {
     // Second source for the same centre. Does nothing without a stored key, so it
     // costs an idle check for everyone who has not linked an account.
     void import('../core/bcweb-notifications.js').then(m => m.startBcwebNotifications()).catch(() => { });
+    // These are async and were called bare — no await, no catch. A rejection in any of them
+    // became an unhandled promise rejection and, more importantly, silently abandoned the
+    // REST OF THAT init: every listener the function had not reached yet was never attached,
+    // so the feature rendered fine and responded to nothing.
+    //
+    // bootFeature keeps them parallel (none blocks the others) but names the one that failed,
+    // in the console and in BMM's own log, so "the buttons do nothing" stops being a mystery
+    // and starts being a line you can read.
+    const bootFeature = (name, run) => {
+        try {
+            const r = run();
+            if (r && typeof r.catch === 'function') {
+                r.catch((e) => {
+                    console.error(`[boot] ${name} failed to initialise`, e);
+                    invoke('log_frontend_line', { line: `[BOOT-FAIL] ${name}: ${e?.message || e}` }).catch(() => { });
+                });
+            }
+        }
+        catch (e) {
+            console.error(`[boot] ${name} threw synchronously`, e);
+            invoke('log_frontend_line', { line: `[BOOT-FAIL] ${name}: ${e?.message || e}` }).catch(() => { });
+        }
+    };
     initUpdateNotes();
-    initMapper();
-    initPlugins();
-    initAppsCatalog();
-    initCommunity();
-    initThemeEditor();
-    initThemeCatalog();
+    bootFeature('mapper', initMapper);
+    bootFeature('plugins', initPlugins);
+    bootFeature('apps-catalog', initAppsCatalog);
+    bootFeature('community', initCommunity);
+    bootFeature('theme-editor', initThemeEditor);
+    bootFeature('theme-catalog', initThemeCatalog);
     initCustomSelects();
     initTooltips();
     document.getElementById('btn-restart-onboarding')?.addEventListener('click', () => {
