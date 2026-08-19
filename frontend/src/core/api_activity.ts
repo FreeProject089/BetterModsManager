@@ -318,6 +318,19 @@ export async function initApiActivity(): Promise<void> {
                 } catch (e) { console.warn('[api-exec] recorder/set', e); }
                 break;
             }
+            case 'view/open': {
+                // The deeplink handler has had this since it was added; the api-exec bridge
+                // had not, and they are two SEPARATE switches. So "the local API can walk the
+                // app" was not true — bmm://view/open worked from a link and POST /api/view
+                // had nothing to reach. Same behaviour on both routes, which is the whole
+                // point of an action existing in two places.
+                const id = String(params.id || '');
+                if (!id) break;
+                const item = document.querySelector(`.nav-item[data-view="${CSS.escape(id)}"]`) as HTMLElement | null;
+                if (item) item.click();
+                else console.warn(`[api-exec] view/open: no screen named "${id}"`);
+                break;
+            }
             case 'replay/export':
                 // With a path, write straight there and skip the save dialog. Without one,
                 // ask as before. The dialog is right for a person clicking Export and wrong

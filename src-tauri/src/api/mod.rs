@@ -349,6 +349,11 @@ struct RecorderBody {
 struct ReplayExportBody {
     #[serde(default)] path: Option<String>,
 }
+/// Body for POST /api/view — which screen to show.
+#[derive(serde::Deserialize)]
+struct ViewBody {
+    id: String,
+}
 #[derive(serde::Deserialize)]
 struct ReplayImportBody {
     #[serde(default)] path: Option<String>,
@@ -1411,6 +1416,20 @@ pub async fn start_api_server(
             warp::reply::with_status(warp::reply::json(&serde_json::json!({
                 "ok": true, "driven_by": "bmm-ui", "action": "telemetry/set"
             })), StatusCode::ACCEPTED)
+        });
+
+    // POST /api/view  (auth) — show a screen. Body: { id: "mapper" | "library" | … }.
+    // The id is the sidebar's own data-view value; an unknown one is a no-op that says so in
+    // the app's console, exactly as the bmm://view/open deeplink behaves.
+    let tok_view = token.clone();
+    let handle_view = app_handle.clone();
+    let view = warp::path!("api" / "view")
+        .and(warp::post())
+        .and(require_token(tok_view))
+        .and(warp::body::json::<ViewBody>())
+        .and(with_app_handle(handle_view))
+        .map(|body: ViewBody, handle: tauri::AppHandle| {
+            api_exec_reply(&handle, "view/open", serde_json::json!({ "id": body.id }))
         });
 
     // POST /api/recorder  (auth) — configure the local Session recorder.
@@ -2922,6 +2941,7 @@ pub async fn start_api_server(
     // Telemetry / recorder / replay control (Privacy & telemetry + Session recorder).
     let group_tel = telemetry_consent
         .or(telemetry_settings)
+        .or(view)
         .or(recorder)
         .or(replay_export)
         .or(replay_import)

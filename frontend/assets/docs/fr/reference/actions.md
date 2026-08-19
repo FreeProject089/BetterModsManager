@@ -324,7 +324,7 @@ toute l'application — c'est ainsi que sont réalisés les enregistrements de c
 
 | | |
 |---|---|
-| Ouvrir un écran | `bmm://view/open?id=` · *(pas de route API — c'est une action d'interface)* |
+| Ouvrir un écran | `bmm://view/open?id=` · `POST /api/view` |
 
 L'`id` est la valeur de la barre latérale elle-même : `library`, `profiles`, `modpacks`, `mapper`,
 `repo`, `modlist`, `apps`, `plugins`, `community`, `settings`, `docs`, `credits`. Un id qui ne

@@ -320,7 +320,7 @@ documentation recordings on this site are made.
 
 | | |
 |---|---|
-| Open a screen | `bmm://view/open?id=` · *(no API route — it is a UI action)* |
+| Open a screen | `bmm://view/open?id=` · `POST /api/view` |
 
 The `id` is the sidebar's own value: `library`, `profiles`, `modpacks`, `mapper`, `repo`,
 `modlist`, `apps`, `plugins`, `community`, `settings`, `docs`, `credits`. An id that names no

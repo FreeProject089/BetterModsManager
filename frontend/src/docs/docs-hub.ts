@@ -948,7 +948,7 @@ On *Sync repo*, that switch makes the local copy match the remote exactly — an
 | Session recorder | \`bmm://recorder/set?…\` · \`POST /api/recorder\` |
 | Export replay | \`bmm://replay/export?path=\` · \`POST /api/replay/export\` — \`path\` skips the save dialog |
 | Import replay | \`bmm://replay/import?…\` · \`POST /api/replay/import\` |
-| **Open a screen** | \`bmm://view/open?id=\` — jumps to any sidebar screen |
+| **Open a screen** | \`bmm://view/open?id=\` · \`POST /api/view\` |
 
 #### Driving BMM without a mouse
 
@@ -1234,7 +1234,7 @@ Sur *Synchroniser un dépôt*, cet interrupteur aligne exactement la copie local
 | Enregistreur de session | \`bmm://recorder/set?…\` · \`POST /api/recorder\` |
 | Exporter le replay | \`bmm://replay/export?path=\` · \`POST /api/replay/export\` — \`path\` évite la boîte de dialogue |
 | Importer un replay | \`bmm://replay/import?…\` · \`POST /api/replay/import\` |
-| **Ouvrir un écran** | \`bmm://view/open?id=\` — va à n’importe quel écran de la barre latérale |
+| **Ouvrir un écran** | \`bmm://view/open?id=\` · \`POST /api/view\` |
 
 #### Piloter BMM sans souris
 
