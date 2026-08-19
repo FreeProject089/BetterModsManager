@@ -894,8 +894,133 @@ function updateSaveButtonVisibility() {
     }
 }
 
+
+// ── Archived (.zip) mods in the mapper ────────────────────────────────────────
+//
+// The mapper moves real files around. An archived mod has no files to move — it has one
+// container, and its contents live in a DERIVED extraction cache that is rebuilt from the
+// archive, so anything written there is silently lost.
+//
+// The mapper used to refuse, and the refusal told the user to extract the mod from the
+// Library first. There is no such action in the Library; that sentence pointed at nothing.
+//
+// So the mod is unpacked FOR them, and the only real question is what happens afterwards:
+// leave it as a folder, or put it back into a .zip once the changes are applied. That is a
+// decision about their disk, so it is asked once per mod and remembered for the session.
+type ArchiveChoice = 'zip' | 'folder';
+const _archiveChoice = new Map<string, ArchiveChoice>();
+
+/** Ask what should happen to an archived mod. null = the user cancelled. */
+function askArchiveStrategy(wasZip: boolean): Promise<ArchiveChoice | null> {
+    return new Promise((resolve) => {
+        const modal = document.getElementById('modal-confirm-generic');
+        const titleEl = document.getElementById('confirm-title');
+        const msgEl = document.getElementById('confirm-message');
+        const yesBtn = document.getElementById('btn-confirm-yes') as HTMLButtonElement | null;
+        const noBtn = document.getElementById('btn-confirm-cancel') as HTMLButtonElement | null;
+        if (!modal || !titleEl || !msgEl || !yesBtn || !noBtn) { resolve(null); return; }
+
+        titleEl.textContent = t('mapper.archiveTitle');
+        // Shown only when the original was NOT a .zip. BMM READS 7z and rar but can only
+        // WRITE zip, so "put it back" cannot mean "back into a .rar". Said before the choice,
+        // not discovered afterwards as a changed extension on their disk.
+        const note = wasZip ? '' : '<p class="mapper-arch-note">' + escHtml(t('mapper.archiveNoteFormat')) + '</p>';
+        msgEl.innerHTML =
+            '<div class="mapper-arch">' +
+            '<p class="mapper-arch-intro">' + escHtml(t('mapper.archiveIntro')) + '</p>' +
+            note +
+            '<button type="button" class="mapper-arch-opt" id="mapper-arch-zip">' +
+            '<span class="mapper-arch-opt-t">' + escHtml(t('mapper.archiveKeepZip')) + '</span>' +
+            '<span class="mapper-arch-opt-d">' + escHtml(t('mapper.archiveKeepZipDesc')) + '</span>' +
+            '</button>' +
+            '<button type="button" class="mapper-arch-opt" id="mapper-arch-folder">' +
+            '<span class="mapper-arch-opt-t">' + escHtml(t('mapper.archiveKeepFolder')) + '</span>' +
+            '<span class="mapper-arch-opt-d">' + escHtml(t('mapper.archiveKeepFolderDesc')) + '</span>' +
+            '</button>' +
+            '</div>';
+
+        // The two real answers are the cards; the footer keeps only a way out. Same borrowing
+        // pattern the plugin-permission modal uses — and confirmCustom normalises this shared
+        // modal on its next open, so an exit by any route cannot leave it broken.
+        yesBtn.style.display = 'none';
+        noBtn.textContent = t('common.cancel');
+
+        let done = false;
+        const finish = (v: ArchiveChoice | null) => {
+            if (done) return;
+            done = true;
+            modal.classList.remove('open');
+            yesBtn.style.display = '';
+            noBtn.removeEventListener('click', onCancel);
+            modal.removeEventListener('click', onBackdrop);
+            resolve(v);
+        };
+        const onCancel = () => finish(null);
+        const onBackdrop = (ev: MouseEvent) => { if (ev.target === modal) finish(null); };
+        noBtn.addEventListener('click', onCancel);
+        modal.addEventListener('click', onBackdrop);
+        msgEl.querySelector('#mapper-arch-zip')?.addEventListener('click', () => finish('zip'));
+        msgEl.querySelector('#mapper-arch-folder')?.addEventListener('click', () => finish('folder'));
+
+        modal.classList.add('open');
+    });
+}
+
+/**
+ * Make the selected mod writable, asking first if it is archived.
+ * Returns false when the user cancelled — the caller must then do nothing at all.
+ */
+async function ensureModWritable(): Promise<boolean> {
+    if (!selectedModId) return false;
+    let archived = false;
+    try { archived = await invoke('is_mod_archived', { modId: selectedModId }) as boolean; }
+    catch { return true; }   // cannot tell → let the Rust guard have the last word
+    if (!archived) return true;
+
+    const choice = await askArchiveStrategy(_selectedModIsZip());
+    if (!choice) return false;
+
+    try {
+        await invoke('unarchive_mod', { modId: selectedModId });
+        _archiveChoice.set(selectedModId, choice);
+        toast(t('mapper.archiveUnpacked'), 'success');
+        await refreshModTree(true);
+        return true;
+    } catch (e: any) {
+        toast(e.message || e, 'error');
+        return false;
+    }
+}
+
+/** True when the selected mod's file name ends in .zip (so repacking is lossless). */
+function _selectedModIsZip(): boolean {
+    const sel = document.getElementById('mapper-mod-select') as HTMLSelectElement | null;
+    const label = sel?.options[sel.selectedIndex]?.text || '';
+    return /\.zip\s*$/i.test(label.trim());
+}
+
+/** Put the mod back into a .zip if that is what was asked, once the changes are applied. */
+async function restoreArchiveIfAsked(): Promise<void> {
+    if (!selectedModId) return;
+    if (_archiveChoice.get(selectedModId) !== 'zip') return;
+    try {
+        await invoke('rearchive_mod', { modId: selectedModId });
+        _archiveChoice.delete(selectedModId);
+        toast(t('mapper.archiveRezipped'), 'success');
+        await refreshMapperData();
+    } catch (e: any) {
+        // The changes ARE saved; only the repacking failed. Say exactly that — a bare "error"
+        // would read as if the edit had been lost, and the user would redo it.
+        toast(t('mapper.archiveRezipFailed', { err: String(e?.message || e) }), 'warning');
+    }
+}
+
 async function applyAllChanges() {
     if (pendingMoves.size === 0 && pendingDeletions.size === 0) return;
+
+    // Archived mod → ask, unpack, and only then write. Cancelling leaves every queued
+    // change pending, so nothing the user lined up is thrown away by saying no.
+    if (!await ensureModWritable()) return;
     
     const saveBtn = document.getElementById('btn-mapper-save') as HTMLButtonElement;
     const originalText = saveBtn.innerHTML;
@@ -922,6 +1047,7 @@ async function applyAllChanges() {
         pendingMoves.clear();
         pendingDeletions.clear();
         pendingNewFolders.clear();
+        await restoreArchiveIfAsked();
         await refreshModTree(true);
         updateSaveButtonVisibility();
         selectedPaths.clear(); updateSelectionCounter(); updateSelectionVisuals();
@@ -937,7 +1063,10 @@ function queueMoveTo(targetPath: string) {
     const count = selectedPaths.size;
     selectedPaths.forEach(p => { pendingMoves.set(p, targetPath); });
     const targetDisplay = targetPath === "." ? (t("mapper.root") || "la racine") : targetPath;
-    toast(t("mapper.itemsMoved", { count: count.toString(), target: targetDisplay }) || `${count} éléments déplacés vers "${targetDisplay}"`, "info");
+    // t() returns the KEY itself when a key is missing, and a key is truthy — so the `||`
+    // fallback that used to sit here could never run, and the toast read "mapper.itemsMoved"
+    // verbatim. The key exists now; the fallback is gone because it was decoration.
+    toast(t("mapper.itemsMoved", { count: count.toString(), target: targetDisplay }), "info");
     updateSaveButtonVisibility();
     renderFilteredModTree();
 }
@@ -1140,6 +1269,9 @@ function setupContextMenu() {
         const currentName = lastSelectedPath?.split(/[\\/]/).pop() || "";
         openInputModal(t("mapper.rename"), t("mapper.enterName"), currentName, async (name) => {
             if (name && selectedModId && lastSelectedPath) {
+                // Renaming writes straight away instead of queueing, so it needs the same
+                // archived-mod question that applyAllChanges asks.
+                if (!await ensureModWritable()) return;
                 try {
                     const isRoot = lastSelectedPath === "." || lastSelectedPath === "" || lastSelectedPath === "/";
                     await invoke('rename_mod_item', { modId: selectedModId, itemRelPath: lastSelectedPath, newName: name });

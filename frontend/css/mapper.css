@@ -918,3 +918,37 @@
    (the tree panels clip ::after via overflow; Tasky follows the mouse, never cut) */
 #view-mapper [data-tooltip]::after,
 #view-mapper [data-tooltip]::before { display: none !important; }
+
+/* ── "This mod is a single archive" choice modal ────────────────────────────
+   Two cards rather than a yes/no pair: neither answer is the safe default, so
+   neither should look like one. The footer keeps only a way out. */
+.mapper-arch { display: flex; flex-direction: column; gap: 10px; }
+.mapper-arch-intro { margin: 0 0 2px; color: var(--text-secondary); line-height: 1.55; }
+.mapper-arch-note {
+    margin: 0;
+    padding: 9px 12px;
+    border-radius: 9px;
+    background: var(--bmm-warning-dim);
+    color: var(--bmm-warning);
+    font-size: 0.83rem;
+    line-height: 1.5;
+}
+.mapper-arch-opt {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    width: 100%;
+    padding: 12px 14px;
+    text-align: left;
+    border-radius: 11px;
+    border: 1px solid var(--bmm-s10);
+    background: var(--bmm-s04);
+    color: inherit;
+    cursor: pointer;
+    font: inherit;
+    transition: background 0.12s ease, border-color 0.12s ease;
+}
+.mapper-arch-opt:hover { background: var(--bmm-s08); border-color: var(--accent); }
+.mapper-arch-opt:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.mapper-arch-opt-t { font-weight: 700; color: var(--text-primary); }
+.mapper-arch-opt-d { font-size: 0.82rem; color: var(--text-muted); line-height: 1.5; }
