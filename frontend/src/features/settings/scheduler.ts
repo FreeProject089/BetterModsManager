@@ -234,6 +234,33 @@ export async function createExampleAutomation(): Promise<void> {
 }
 
 // ── Engine ───────────────────────────────────────────────────────────────────
+
+// One delegated listener for every Files… menu entry, registered ONCE for the module.
+//
+// It has to be delegated at all because showGlobalDropdown CLONES the menu into the portal
+// and cloneNode(true) does not copy event listeners — a handler bound to an entry would be
+// lost on the copy the user actually clicks. The data attribute survives the clone; a
+// listener does not.
+//
+// It has to be registered once because renderScheduleList() runs again on every language
+// change and every task add/delete. Registering inside that loop stacked one listener PER
+// TASK PER RENDER, none of them ever removed, each holding its own copy of the action map —
+// so a single click eventually ran the same action many times over.
+const _schedActions = new Map<string, () => void>();
+let _schedDelegated = false;
+function _wireSchedMenuDelegation(): void {
+    if (_schedDelegated) return;
+    _schedDelegated = true;
+    document.addEventListener('click', (ev: any) => {
+        const hit = ev.target?.closest?.('[data-sched-act]');
+        if (!hit) return;
+        const fn = _schedActions.get(hit.dataset.schedAct);
+        if (!fn) return;
+        (window as any).closeGlobalDropdown?.(true);
+        fn();
+    });
+}
+
 export async function initScheduler(): Promise<void> {
     await loadTasks();
     renderScheduleList();
@@ -293,7 +320,6 @@ export async function initScheduler(): Promise<void> {
             // menu came to open into an invisible node.
             menu.className = 'bmm-tag-menu is-template';
             menu.style.minWidth = '210px';
-            const RUN: Record<string, () => void> = {};
             for (const [id, label, hint, run] of ITEMS) {
                 const b = document.createElement('button');
                 b.type = 'button';
@@ -303,18 +329,8 @@ export async function initScheduler(): Promise<void> {
                 b.textContent = label;
                 if (hint) b.title = hint;
                 menu.appendChild(b);
-                RUN[id] = run;
+                _schedActions.set(id, run);
             }
-            // One delegated listener, on the document, so it reaches the CLONE living in the
-            // portal as well as the template. Registered once with the button that owns it.
-            document.addEventListener('click', (ev: any) => {
-                const hit = ev.target?.closest?.('[data-sched-act]');
-                if (!hit) return;
-                const fn = RUN[hit.dataset.schedAct];
-                if (!fn) return;
-                (window as any).closeGlobalDropdown?.(true);
-                fn();
-            });
             // Handed to the global dropdown portal rather than shown in place.
             //
             // A menu positioned inside this card is clipped by it: the settings sections
@@ -322,6 +338,7 @@ export async function initScheduler(): Promise<void> {
             // section's bottom edge and the one below it painted over them. The portal moves
             // the menu to a fixed container on <body> (z-index 999999) and positions it under
             // the button, which is what every other menu in the app already does.
+            _wireSchedMenuDelegation();
             more.addEventListener('click', (e) => {
                 e.stopPropagation();
                 // The portal owns opening, closing, click-outside and viewport clamping. It is
