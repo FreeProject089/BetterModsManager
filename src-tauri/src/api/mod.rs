@@ -343,6 +343,12 @@ struct RecorderBody {
     #[serde(default)] rust: Option<bool>,
     #[serde(default)] js: Option<bool>,
 }
+/// Optional body for POST /api/replay/export. `Default` matters: the filter falls back to
+/// it when no body is sent, so an old caller that posts nothing keeps the save-dialog path.
+#[derive(serde::Deserialize, Default)]
+struct ReplayExportBody {
+    #[serde(default)] path: Option<String>,
+}
 #[derive(serde::Deserialize)]
 struct ReplayImportBody {
     #[serde(default)] path: Option<String>,
@@ -1429,12 +1435,20 @@ pub async fn start_api_server(
     // POST /api/replay/export  (auth) — export the current local session recording.
     let tok_rex = token.clone();
     let handle_rex = app_handle.clone();
+    // Body is OPTIONAL: `{}` keeps the old behaviour (the UI asks where to save),
+    // `{ "path": "C:/…/tour.bmmreplay" }` writes straight there. A driver over this API has
+    // nobody to answer a native save dialog, so without the path the call would appear to
+    // succeed and then hang on a picker.
     let replay_export = warp::path!("api" / "replay" / "export")
         .and(warp::post())
         .and(require_token(tok_rex))
+        .and(warp::body::json::<ReplayExportBody>().or(warp::any().map(ReplayExportBody::default)).unify())
         .and(with_app_handle(handle_rex))
-        .map(|handle: tauri::AppHandle| {
-            let _ = handle.emit("bmm://api-exec", serde_json::json!({ "action": "replay/export", "params": {} }));
+        .map(|body: ReplayExportBody, handle: tauri::AppHandle| {
+            let _ = handle.emit("bmm://api-exec", serde_json::json!({
+                "action": "replay/export",
+                "params": { "path": body.path }
+            }));
             warp::reply::with_status(warp::reply::json(&serde_json::json!({
                 "ok": true, "driven_by": "bmm-ui", "action": "replay/export"
             })), StatusCode::ACCEPTED)

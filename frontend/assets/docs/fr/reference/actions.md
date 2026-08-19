@@ -313,8 +313,45 @@ opération **native** (une pause, une boucle, un affichage) qui n'a besoin d'auc
 | Consentement télémétrie | `bmm://telemetry/consent?enabled=` · `POST /api/telemetry/consent` |
 | Options de télémétrie | `bmm://telemetry/set?…` · `POST /api/telemetry/settings` |
 | Enregistreur de session | `bmm://recorder/set?…` · `POST /api/recorder` |
-| Exporter le replay | `bmm://replay/export` · `POST /api/replay/export` |
+| Exporter le replay | `bmm://replay/export?path=` · `POST /api/replay/export` — `path` évite la boîte de dialogue |
 | Importer un replay | `bmm://replay/import?…` · `POST /api/replay/import` |
+
+## Piloter BMM sans souris
+
+`bmm://view/open?id=<écran>` va à n'importe quel écran de la barre latérale, et toutes les actions
+ci-dessus peuvent être déclenchées par l'API locale. Ensemble, cela permet à un script de parcourir
+toute l'application — c'est ainsi que sont réalisés les enregistrements de ce site.
+
+| | |
+|---|---|
+| Ouvrir un écran | `bmm://view/open?id=` · *(pas de route API — c'est une action d'interface)* |
+
+L'`id` est la valeur de la barre latérale elle-même : `library`, `profiles`, `modpacks`, `mapper`,
+`repo`, `modlist`, `apps`, `plugins`, `community`, `settings`, `docs`, `credits`. Un id qui ne
+désigne aucun écran ne fait rien et le signale dans la console — il n'est volontairement pas
+validé contre une liste ici, car une liste ici pourrait contredire la barre latérale.
+
+!!! tip "Enregistrer une session de bout en bout"
+
+    ```bash
+    # démarrer l'enregistrement, non masqué
+    curl -X POST localhost:51274/api/recorder -H "Authorization: Bearer $TOKEN" \
+         -d '{"on":true,"full":true}'
+    # parcourir ce que vous voulez montrer
+    curl -X POST localhost:51274/api/...
+    # écrire le fichier sans boîte de dialogue
+    curl -X POST localhost:51274/api/replay/export -H "Authorization: Bearer $TOKEN" \
+         -d '{"path":"C:/docs/mapper.bmmreplay"}'
+    ```
+
+    `replay/export` accepte un `path` facultatif. **Avec**, le fichier est écrit directement.
+    **Sans**, BMM ouvre une boîte d'enregistrement — ce qui convient à une personne qui clique sur
+    Exporter, et pas du tout à un pilotage à distance, qui n'a personne pour répondre au sélecteur.
+    La forme deeplink `bmm://replay/export?path=…` se comporte à l'identique.
+
+    `full: true` enregistre les **vrais noms de mods et de profils**. Sans lui, ils sont masqués en
+    `••••`. Pour de la documentation publique, enregistrez sur un profil de démonstration avec
+    `full` activé plutôt que de démasquer une vraie bibliothèque.
 
 ### Contrôle de flux
 

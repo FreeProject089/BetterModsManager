@@ -309,8 +309,45 @@ either a **deeplink** (`bmm://…`), an **HTTP call** to BMM's local API, or a *
 | Telemetry consent | `bmm://telemetry/consent?enabled=` · `POST /api/telemetry/consent` |
 | Telemetry options | `bmm://telemetry/set?…` · `POST /api/telemetry/settings` |
 | Session recorder | `bmm://recorder/set?…` · `POST /api/recorder` |
-| Export replay | `bmm://replay/export` · `POST /api/replay/export` |
+| Export replay | `bmm://replay/export?path=` · `POST /api/replay/export` — `path` skips the save dialog |
 | Import replay | `bmm://replay/import?…` · `POST /api/replay/import` |
+
+## Driving BMM without a mouse
+
+`bmm://view/open?id=<screen>` jumps to any screen in the sidebar, and every action below can be
+fired over the local API. Together that means a script can walk the whole app — which is how the
+documentation recordings on this site are made.
+
+| | |
+|---|---|
+| Open a screen | `bmm://view/open?id=` · *(no API route — it is a UI action)* |
+
+The `id` is the sidebar's own value: `library`, `profiles`, `modpacks`, `mapper`, `repo`,
+`modlist`, `apps`, `plugins`, `community`, `settings`, `docs`, `credits`. An id that names no
+screen does nothing and says so in the console — it is not validated against a list here,
+because a list here could disagree with the sidebar.
+
+!!! tip "Recording a session end to end"
+
+    ```bash
+    # start recording, unmasked
+    curl -X POST localhost:51274/api/recorder -H "Authorization: Bearer $TOKEN" \
+         -d '{"on":true,"full":true}'
+    # walk wherever you want to show
+    curl -X POST localhost:51274/api/...
+    # write the file without a save dialog
+    curl -X POST localhost:51274/api/replay/export -H "Authorization: Bearer $TOKEN" \
+         -d '{"path":"C:/docs/mapper.bmmreplay"}'
+    ```
+
+    `replay/export` takes an optional `path`. **With** it, the file is written straight there.
+    **Without** it, BMM opens a save dialog — right for a person clicking Export, and wrong for
+    anything driving BMM remotely, which has nobody to answer a picker. The deeplink form
+    `bmm://replay/export?path=…` behaves identically.
+
+    `full: true` records **real mod and profile names**. Left off, they are masked as `••••`.
+    For public documentation, record on a demo profile with `full` on rather than unmasking a
+    real library.
 
 ### Control flow
 

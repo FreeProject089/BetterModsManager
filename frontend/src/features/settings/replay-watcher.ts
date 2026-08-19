@@ -291,9 +291,17 @@ export async function syncWatcher(): Promise<void> {
 /** Export the current recording (rrweb + console + Rust log) to a .bmmreplay file.
  *  Streams out of the spool straight into the chosen file — the bundle is never built in
  *  the webview, so exporting a long session costs no more memory than a short one. */
-export async function exportSession(): Promise<void> {
+/**
+ * Export the current session recording.
+ *
+ * `destPath` writes straight there and skips the picker — for the local API, which drives
+ * BMM without a person present and cannot answer a native save dialog. Omit it and a human
+ * gets the dialog they expect.
+ */
+export async function exportSession(destPath?: string): Promise<void> {
   if (!_spoolId) { toast(t('watcher.nothing') || 'Rien à exporter pour le moment', 'info'); return; }
-  const path = await saveFile({ defaultPath: `bmm-session-${Date.now()}.bmmreplay`, filters: [{ name: 'BMM Replay', extensions: ['bmmreplay', 'json'] }] }).catch(() => null);
+  const path = destPath
+    || await saveFile({ defaultPath: `bmm-session-${Date.now()}.bmmreplay`, filters: [{ name: 'BMM Replay', extensions: ['bmmreplay', 'json'] }] }).catch(() => null);
   if (!path) return;
   try {
     const written = await writeBundle('list', path);

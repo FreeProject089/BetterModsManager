@@ -319,7 +319,11 @@ export async function initApiActivity(): Promise<void> {
                 break;
             }
             case 'replay/export':
-                try { (await import('../features/settings/replay-watcher.js')).exportSession(); }
+                // With a path, write straight there and skip the save dialog. Without one,
+                // ask as before. The dialog is right for a person clicking Export and wrong
+                // for anything driving BMM over the local API, which cannot answer it —
+                // the call would just hang on a picker nobody is looking at.
+                try { await (await import('../features/settings/replay-watcher.js')).exportSession(params.path ? String(params.path) : undefined); }
                 catch (e) { console.warn('[api-exec] replay/export', e); }
                 break;
             case 'launchpack/run':

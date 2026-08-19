@@ -946,8 +946,28 @@ On *Sync repo*, that switch makes the local copy match the remote exactly — an
 | Telemetry consent | \`bmm://telemetry/consent?enabled=\` · \`POST /api/telemetry/consent\` |
 | Telemetry options | \`bmm://telemetry/set?…\` · \`POST /api/telemetry/settings\` |
 | Session recorder | \`bmm://recorder/set?…\` · \`POST /api/recorder\` |
-| Export replay | \`bmm://replay/export\` · \`POST /api/replay/export\` |
+| Export replay | \`bmm://replay/export?path=\` · \`POST /api/replay/export\` — \`path\` skips the save dialog |
 | Import replay | \`bmm://replay/import?…\` · \`POST /api/replay/import\` |
+| **Open a screen** | \`bmm://view/open?id=\` — jumps to any sidebar screen |
+
+#### Driving BMM without a mouse
+
+\`bmm://view/open?id=<screen>\` reaches every screen in the sidebar, and everything above can be
+fired over the local API — so a script can walk the whole app. That is how the recordings in
+BMM Docs are made.
+
+The \`id\` is the sidebar's own value: \`library\`, \`profiles\`, \`modpacks\`, \`mapper\`, \`repo\`,
+\`modlist\`, \`apps\`, \`plugins\`, \`community\`, \`settings\`, \`docs\`, \`credits\`. An id that names
+no screen does nothing and says so in the console.
+
+:::tip[Exporting without a dialog]
+\`replay/export\` takes an optional \`path\`. With it, the file is written straight there; without
+it BMM asks where to save — right for a person clicking Export, wrong for anything driving BMM
+remotely, which has nobody to answer a picker.
+
+\`full: true\` on the recorder records **real mod and profile names**; left off they are masked as
+\`••••\`. For public documentation, record on a demo profile rather than unmasking a real library.
+:::
 
 #### Control flow
 
@@ -1212,8 +1232,29 @@ Sur *Synchroniser un dépôt*, cet interrupteur aligne exactement la copie local
 | Consentement télémétrie | \`bmm://telemetry/consent?enabled=\` · \`POST /api/telemetry/consent\` |
 | Options de télémétrie | \`bmm://telemetry/set?…\` · \`POST /api/telemetry/settings\` |
 | Enregistreur de session | \`bmm://recorder/set?…\` · \`POST /api/recorder\` |
-| Exporter le replay | \`bmm://replay/export\` · \`POST /api/replay/export\` |
+| Exporter le replay | \`bmm://replay/export?path=\` · \`POST /api/replay/export\` — \`path\` évite la boîte de dialogue |
 | Importer un replay | \`bmm://replay/import?…\` · \`POST /api/replay/import\` |
+| **Ouvrir un écran** | \`bmm://view/open?id=\` — va à n’importe quel écran de la barre latérale |
+
+#### Piloter BMM sans souris
+
+\`bmm://view/open?id=<écran>\` atteint tous les écrans de la barre latérale, et tout ce qui précède
+peut être déclenché par l’API locale — un script peut donc parcourir toute l’application. C’est
+ainsi que sont faits les enregistrements de BMM Docs.
+
+L’\`id\` est la valeur de la barre latérale elle-même : \`library\`, \`profiles\`, \`modpacks\`,
+\`mapper\`, \`repo\`, \`modlist\`, \`apps\`, \`plugins\`, \`community\`, \`settings\`, \`docs\`,
+\`credits\`. Un id qui ne désigne aucun écran ne fait rien et le signale dans la console.
+
+:::tip[Exporter sans boîte de dialogue]
+\`replay/export\` accepte un \`path\` facultatif. Avec, le fichier est écrit directement ; sans, BMM
+demande où enregistrer — ce qui convient à une personne qui clique sur Exporter, et pas du tout à
+un pilotage à distance, qui n’a personne pour répondre au sélecteur.
+
+\`full: true\` sur l’enregistreur capture les **vrais noms de mods et de profils** ; sans lui ils
+sont masqués en \`••••\`. Pour de la documentation publique, enregistrez sur un profil de
+démonstration plutôt que de démasquer une vraie bibliothèque.
+:::
 
 #### Contrôle de flux
 

@@ -583,6 +583,27 @@ async function handleDeepLink(urlStr: string): Promise<void> {
             return;
         }
 
+        // Jump to any screen: bmm://view/open?id=<library|profiles|mapper|repo|…>
+        //
+        // docs/open has navigated by clicking the sidebar item since it was written; this is
+        // the same two lines made general, because "open the docs" was never the only screen
+        // worth linking to. BMM Docs can now point at the screen a page describes, and the
+        // local API can walk the app without anybody touching a mouse — which is what makes
+        // a scripted .bmmreplay recording possible at all.
+        //
+        // The id IS the sidebar's data-view value, so the set of valid ids is whatever the
+        // sidebar has, and an unknown id does nothing rather than throwing. Deliberately not
+        // validated against a hard-coded list: a list here would be a second copy of the
+        // navigation that could disagree with it.
+        if (action === 'view/open') {
+            const id = parsedUrl.searchParams.get('id');
+            if (!id) return;
+            const item = document.querySelector(`.nav-item[data-view="${CSS.escape(id)}"]`) as HTMLElement | null;
+            if (item) item.click();
+            else console.warn(`[deeplink] view/open: no screen named "${id}"`);
+            return;
+        }
+
         // Open a Help & Other article in-app. Lets BMM Docs (the website) link straight
         // into the integrated docs: bmm://docs/open?article=<id> (or no id → docs home).
         if (action === 'docs/open') {
@@ -693,7 +714,11 @@ async function handleDeepLink(urlStr: string): Promise<void> {
         // ── Session replay export / import:
         //    bmm://replay/export  ·  bmm://replay/import?path=…  |  ?url=… ──────────
         if (action === 'replay/export') {
-            try { (await import('../features/settings/replay-watcher.js')).exportSession(); }
+            // ?path= writes straight there and skips the save dialog, same as the local API.
+            // Kept identical on both routes on purpose: a deeplink and an API call that
+            // describe the same action and behave differently is a bug waiting to be filed.
+            const dest = parsedUrl.searchParams.get('path') || undefined;
+            try { await (await import('../features/settings/replay-watcher.js')).exportSession(dest); }
             catch (e) { toast(`${t('common.error') || 'Error'}: ${e}`, 'error'); }
             return;
         }

@@ -181,7 +181,9 @@
   },
   {
     "action": "replay/export",
-    "params": []
+    "params": [
+      "path"
+    ]
   },
   {
     "action": "replay/import",
@@ -275,6 +277,12 @@
     "action": "theme/import-inline",
     "params": [
       "data"
+    ]
+  },
+  {
+    "action": "view/open",
+    "params": [
+      "id"
     ]
   }
 ]
