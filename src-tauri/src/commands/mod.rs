@@ -36,6 +36,7 @@ pub mod whitelist_manager;
 pub mod discord;
 pub mod modpack;
 pub mod mapper;
+pub mod mod_archive;
 pub mod launch_pack;
 pub mod plugins;
 pub mod resource_tracker;
