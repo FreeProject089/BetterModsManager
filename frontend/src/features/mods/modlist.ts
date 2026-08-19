@@ -305,8 +305,15 @@ export function initModlist() {
         }
     });
 
-    // Listen for progress events
-    (window as any).__TAURI__.event.listen('bmm://mod-download-progress', (e) => {
+    // Listen for progress events.
+    //
+    // Guarded, and the guard is load-bearing: this runs from initModlist(), which main()
+    // AWAITS. Outside the Tauri webview `__TAURI__` is undefined, so the bare access threw
+    // "Cannot read properties of undefined (reading 'event')" and took the whole boot down
+    // with it — every init after this line never ran, and the app came up with empty lists
+    // and no explanation. Every other listener in this codebase already checks; this one
+    // did not.
+    (window as any).__TAURI__?.event?.listen('bmm://mod-download-progress', (e: any) => {
         const data = e.payload; // { mod_index, total_mods, mod_name, progress, status }
         const container = document.getElementById('imported-progress-list');
         if (!container) return;

@@ -342,14 +342,50 @@ export async function sendOsNotification(_title, _body) {
     return;
 }
 // Mock invoke for browser testing
+/** Demo data for the browser mock, fetched once. Never loaded inside the Tauri app —
+ *  mockInvoke is only installed when the bridge is absent. */
+let _fixtures;
+async function mockFixtures() {
+    if (_fixtures !== undefined)
+        return _fixtures;
+    try {
+        const r = await fetch('assets/mock-fixtures.json');
+        _fixtures = r.ok ? await r.json() : null;
+    }
+    catch {
+        _fixtures = null;
+    }
+    return _fixtures ?? null;
+}
 async function mockInvoke(command, args) {
     console.log(`[Mock] ${command}`, args);
-    switch (command) {
-        case 'get_profiles': return [];
-        case 'get_active_profile_id': return null;
-        case 'get_all_mods': return [];
-        default: return null;
+    // The language files are ordinary static assets, so the browser can read them itself.
+    // Returning null here — which is what this did — made loadLang() throw on `data._info`,
+    // left `t()` returning raw keys and every label in the preview blank. The preview was
+    // useless for looking at the interface, which is the one thing it is for.
+    if (command === 'get_language_content') {
+        const lang = String(args?.lang || 'fr');
+        const r = await fetch(`Lang/${lang}.json`);
+        if (!r.ok)
+            throw new Error(`no language file for ${lang}`);
+        return await r.text();
     }
+    const fx = await mockFixtures();
+    if (fx && Object.prototype.hasOwnProperty.call(fx, command))
+        return fx[command];
+    // Anything list-shaped answers with an empty list rather than null.
+    //
+    // Returning null for everything meant the preview died in a cascade of
+    // "Cannot read properties of null (reading 'length'/'filter'/'slice')" — each one an
+    // unawaited init that gave up half-way. The app is entitled to assume `list_x` returns a
+    // list; a mock that says null is lying about the contract, not testing it.
+    //
+    // A NAME heuristic, deliberately: the alternative is hard-coding a shape for a few
+    // hundred commands, which would be wrong the moment one changes. Anything needing real
+    // content gets an explicit entry in mock-fixtures.json instead.
+    if (/^(list_|get_all_)/.test(command) || /s$/.test(command))
+        return [];
+    return null;
 }
 export function convertFileSrc(path) {
     if (_convertFileSrc)
