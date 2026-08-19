@@ -4,6 +4,8 @@
   "server_browse": "https://bettercommunity.ch/api/repos.json",
   "contributors": "https://bettercommunity.ch/api/assets/contributors.json",
   "autoupdate_api": "https://api.github.com/repos/FreeProject089/BetterModsManager/releases",
+  "_comment_autoupdate": "Update feed. autoupdate_api is tried first; autoupdate_api_fallback only if that one is unreachable or rate-limited (GitHub allows 60 unauthenticated calls per hour PER IP, which a shared address can exhaust without you). A 404 does NOT fall back — it means there is genuinely no release. BCWEB serves the same JSON shape as GitHub, but lists releases at <base>/releases while GitHub lists at <base>; BMM handles both. Set to \"\" to disable the fallback.",
+  "autoupdate_api_fallback": "https://bettercommunity.ch/api/updates/bmm",
   "apps_catalog": "https://raw.githubusercontent.com/BetterDCS/BMM_App_Catalogue/main/catalog.json",
   "_comment_catalogs": "Official scheduler-automation feed and the index of official catalogues. Point these at a tunnel (cloudflared/ngrok) to test against a BCWEB that is not the production domain.",
   "preset_catalog": "https://bettercommunity.ch/api/catalog.json?project=bmm&kind=PRESET",

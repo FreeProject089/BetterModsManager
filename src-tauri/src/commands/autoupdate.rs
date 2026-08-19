@@ -59,10 +59,80 @@ pub struct IncrementalResult {
 
 const DEFAULT_UPDATE_API: &str = "https://api.github.com/repos/FreeProject089/BetterModsManager/releases";
 
+/// The URL to ask for a release list or for the latest one.
+///
+/// Two feeds are supported and their paths are NOT the same shape, which is the whole reason
+/// this function exists rather than a `format!` at each call site:
+///
+///   GitHub   base = .../repos/OWNER/REPO/releases
+///            list = base                      latest = base + "/latest"
+///   BCWEB    base = .../api/updates/bmm
+///            list = base + "/releases"        latest = base + "/latest"
+///
+/// `latest` happens to be base + "/latest" on both. The LIST is where a naive swap of one
+/// base for the other produces a 404 — and a 404 is read as NO_RELEASE, so the failure would
+/// have looked like "you are up to date" rather than like an error.
+fn release_url(api_base: &str, include_pre: bool) -> String {
+    let base = api_base.trim_end_matches('/');
+    if !include_pre {
+        return format!("{}/latest", base);
+    }
+    if base.ends_with("/releases") {
+        format!("{}?per_page=20", base)
+    } else {
+        format!("{}/releases", base)
+    }
+}
+
+/// Whether a failure against one source is worth trying the next one for.
+///
+/// A 404 is NOT: it means that feed genuinely has no release, and the fallback almost
+/// certainly has none either. Everything else is — and 403/429 is the case this whole
+/// mechanism exists for, because GitHub allows 60 unauthenticated API calls per hour PER IP.
+/// Behind a shared address (a company, a campus, a CGNAT provider) that budget is spent by
+/// other people, and BMM would report a network error for the rest of the hour.
+fn worth_retrying(err: &str) -> bool {
+    err == "NETWORK_ERROR" || err == "RATE_LIMITED"
+}
+
+/// Fetch the release object from ONE source. Errors are the small vocabulary the caller
+/// switches on: NETWORK_ERROR, RATE_LIMITED, NO_RELEASE, or a message.
+async fn fetch_release(client: &reqwest::Client, api_base: &str, include_pre: bool) -> Result<serde_json::Value, String> {
+    let url = release_url(api_base, include_pre);
+    let response = client.get(&url).send().await.map_err(|e| {
+        log_line(format!("[UPDATE] Network error from {} (skipped): {}", api_base, e));
+        "NETWORK_ERROR".to_string()
+    })?;
+    let status = response.status();
+    if !status.is_success() {
+        if status.as_u16() == 404 { return Err("NO_RELEASE".to_string()); }
+        if status.as_u16() == 403 || status.as_u16() == 429 {
+            log_line(format!("[UPDATE] {} rate-limited ({})", api_base, status));
+            return Err("RATE_LIMITED".to_string());
+        }
+        if status.as_u16() >= 500 {
+            log_line(format!("[UPDATE] {} returned {} — skipped", api_base, status));
+            return Err("NETWORK_ERROR".to_string());
+        }
+        return Err(format!("Update API returned status {}", status));
+    }
+    let parsed: serde_json::Value = response.json().await.map_err(|e| format!("JSON parse error: {}", e))?;
+    if !include_pre {
+        return Ok(parsed);
+    }
+    // The list form: newest first, and a draft is not something anybody can download.
+    let releases = parsed.as_array().cloned().unwrap_or_default();
+    match releases.into_iter().find(|r| !r["draft"].as_bool().unwrap_or(false)) {
+        Some(r) => Ok(r),
+        None => Err("NO_RELEASE".to_string()),
+    }
+}
+
+
 /// Checks GitHub releases API for a newer version.
 /// Compares version strings using semver-like logic.
 #[tauri::command]
-pub async fn check_for_update(app_handle: tauri::AppHandle, include_prerelease: Option<bool>, api_base_url: Option<String>) -> Result<UpdateInfo, String> {
+pub async fn check_for_update(app_handle: tauri::AppHandle, include_prerelease: Option<bool>, api_base_url: Option<String>, fallback_api_url: Option<String>) -> Result<UpdateInfo, String> {
     let current_version = app_handle.package_info().version.to_string();
     let include_pre = include_prerelease.unwrap_or(false);
     let api_base = api_base_url.as_deref().unwrap_or(DEFAULT_UPDATE_API);
@@ -74,44 +144,26 @@ pub async fn check_for_update(app_handle: tauri::AppHandle, include_prerelease: 
         .build()
         .map_err(|e| format!("HTTP client error: {}", e))?;
 
-    // Choose the release object to inspect:
-    //  - prerelease ON  → list releases (newest first) and take the first
-    //    non-draft one, which may be a pre-release.
-    //  - prerelease OFF → use /releases/latest (GitHub excludes pre-releases).
-    let body: serde_json::Value = if include_pre {
-        let url = format!("{}?per_page=20", api_base);
-        let response = client.get(&url).send().await.map_err(|e| {
-            log_line(format!("[UPDATE] Network error (skipped): {}", e));
-            "NETWORK_ERROR".to_string()
-        })?;
-        let status = response.status();
-        if !status.is_success() {
-            if status.as_u16() == 404 { return Err("NO_RELEASE".to_string()); }
-            if status.as_u16() >= 500 { return Err("NETWORK_ERROR".to_string()); }
-            return Err(format!("GitHub API returned status {}", status));
-        }
-        let arr: serde_json::Value = response.json().await.map_err(|e| format!("JSON parse error: {}", e))?;
-        let releases = arr.as_array().cloned().unwrap_or_default();
-        match releases.into_iter().find(|r| !r["draft"].as_bool().unwrap_or(false)) {
-            Some(r) => r,
-            None => return Err("NO_RELEASE".to_string()),
-        }
-    } else {
-        let url = format!("{}/latest", api_base);
-        let response = client.get(&url).send().await.map_err(|e| {
-            log_line(format!("[UPDATE] Network error (skipped): {}", e));
-            "NETWORK_ERROR".to_string()
-        })?;
-        let status = response.status();
-        if !status.is_success() {
-            if status.as_u16() == 404 { return Err("NO_RELEASE".to_string()); }
-            if status.as_u16() >= 500 {
-                log_line(format!("[UPDATE] GitHub returned {} — skipped", status));
-                return Err("NETWORK_ERROR".to_string());
+    // Primary, then fallback. The release object is the same shape either way — BCWEB
+    // deliberately serves the GitHub /releases and /releases/latest shapes so nothing
+    // downstream has to know which one answered.
+    //
+    // Choosing the object: prerelease ON → list, newest first, first non-draft (which may be
+    // a pre-release). Prerelease OFF → the "latest" endpoint, which excludes pre-releases.
+    let body: serde_json::Value = match fetch_release(&client, api_base, include_pre).await {
+        Ok(v) => v,
+        Err(e) => {
+            let fb = fallback_api_url.as_deref().map(str::trim).filter(|u| !u.is_empty());
+            match (worth_retrying(&e), fb) {
+                (true, Some(url)) => {
+                    log_line(format!("[UPDATE] Primary failed ({}) — trying fallback {}", e, url));
+                    // A fallback that also fails reports ITS OWN error, not the primary's: the
+                    // last thing tried is the one whose message describes the current state.
+                    fetch_release(&client, url, include_pre).await?
+                }
+                _ => return Err(e),
             }
-            return Err(format!("GitHub API returned status {}", status));
         }
-        response.json().await.map_err(|e| format!("JSON parse error: {}", e))?
     };
 
     let is_prerelease = body["prerelease"].as_bool().unwrap_or(false);

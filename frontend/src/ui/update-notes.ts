@@ -721,7 +721,13 @@ async function performUpdateCheck(showNoUpdateToast = false) {
     }
 
     try {
-        const info = await invoke('check_for_update', { includePrerelease: isPreReleaseEnabled(), apiBaseUrl: getLinks().autoupdate_api });
+        const info = await invoke('check_for_update', {
+            includePrerelease: isPreReleaseEnabled(),
+            apiBaseUrl: getLinks().autoupdate_api,
+            // Empty string disables it, which is what an older links.json yields — the
+            // Rust side treats blank as absent rather than as a URL to try.
+            fallbackApiUrl: getLinks().autoupdate_api_fallback || '',
+        });
 
         // When BMM was installed by BetterInstaller, its bundled updater is the source of
         // truth (it's exactly what an --update will apply): override the version/notes from

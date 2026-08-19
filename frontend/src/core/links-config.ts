@@ -28,6 +28,9 @@ export interface BmmLinks {
     server_browse:    string;
     contributors:     string;
     autoupdate_api:   string;
+    // Tried only when the primary is unreachable or rate-limited. BCWEB serves the same
+    // shape as the GitHub releases API, so nothing downstream knows which one answered.
+    autoupdate_api_fallback: string;
     apps_catalog:     string;
     // The official catalogue of scheduler automations, and the index that lists every
     // official catalogue. Both were written into the scheduler as string literals, which
@@ -66,6 +69,7 @@ const DEFAULTS: BmmLinks = {
     server_browse:    'https://bettercommunity.ch/api/repos.json',
     contributors:     'https://bettercommunity.ch/api/assets/contributors.json',
     autoupdate_api:   'https://api.github.com/repos/FreeProject089/BetterModsManager/releases',
+    autoupdate_api_fallback: 'https://bettercommunity.ch/api/updates/bmm',
     apps_catalog:     'https://raw.githubusercontent.com/BetterDCS/BMM_App_Catalogue/main/catalog.json',
     preset_catalog:   'https://bettercommunity.ch/api/catalog.json?project=bmm&kind=PRESET',
     catalog_index:    'https://bettercommunity.ch/api/catalogs.json',
