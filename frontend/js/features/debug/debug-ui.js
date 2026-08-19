@@ -97,8 +97,11 @@ class DebugUI {
         const timelinePane = this._get('timeline-list');
         if (timelinePane) {
             timelinePane.innerHTML = '';
-            debugHub.ipcCalls.forEach(call => this.updateTimeline(call));
-            debugHub.actions.forEach(action => this.updateTimeline(action));
+            // _renderTimelineEntry, not updateTimeline: this runs while restoring the panel,
+            // before activeTab is necessarily 'timeline', and updateTimeline now declines to
+            // draw when the tab is not in front.
+            debugHub.ipcCalls.forEach(call => this._renderTimelineEntry(call));
+            debugHub.actions.forEach(action => this._renderTimelineEntry(action));
         }
     }
     createContainer() {
@@ -1102,7 +1105,13 @@ class DebugUI {
         `).join('') || '<div class="debug-hint">No active patches.</div>';
     }
     switchTab(tabId) {
+        const wasTimeline = this.activeTab === 'timeline';
         this.activeTab = tabId;
+        // Arriving at the Timeline: everything that happened while it was hidden was
+        // recorded by the hub but not drawn, so redraw from the hub. Without this the pane
+        // would show a gap exactly as long as the time you spent on another tab.
+        if (tabId === 'timeline' && !wasTimeline)
+            this.rebuildTimeline();
         this.container.querySelectorAll('.debug-tab').forEach(t => {
             t.classList.toggle('active', t.dataset.tab === tabId);
         });
@@ -1312,7 +1321,53 @@ class DebugUI {
             entry.style.display = visible ? 'flex' : 'none';
         });
     }
+    // Queue an item for the Timeline pane.
+    //
+    // This used to BE the renderer, and it ran on every single IPC call for as long as
+    // DevTools was open — including while another tab was showing, where not one pixel of
+    // its output could be seen. Each call did a full `entry.innerHTML = …` reparse of markup
+    // carrying inline SVG, attached a listener, and PREPENDED into a list of up to 400
+    // nodes, which reflows the list every time. BMM talks IPC constantly (the mini-monitor
+    // alone polls every couple of seconds), so opening DevTools bought a permanent stream of
+    // layout work — enough to drag the whole machine down through the WebView2 compositor,
+    // not just BMM.
+    //
+    // There was already a `if (!this.isOpen) return;` upstream marked "MAJOR LAG FIX". This
+    // is the same fix finished: closed was handled, "open but looking at another tab" was
+    // not.
+    //
+    // Two changes. Nothing is rendered unless the Timeline tab is actually in front — the
+    // hub keeps the data either way, and switchTab() rebuilds the pane from it on the way
+    // in, so nothing is lost by not drawing it. And what is rendered is batched into one
+    // animation frame, so a burst of twenty IPC calls costs one layout pass instead of
+    // twenty.
     updateTimeline(item) {
+        if (!this._get('timeline-list'))
+            return;
+        if (this.activeTab !== 'timeline')
+            return;
+        (this._tlQueue || (this._tlQueue = [])).push(item);
+        if (this._tlFrame)
+            return;
+        this._tlFrame = requestAnimationFrame(() => {
+            this._tlFrame = 0;
+            const q = this._tlQueue || [];
+            this._tlQueue = [];
+            for (const it of q)
+                this._renderTimelineEntry(it);
+        });
+    }
+    /** Rebuild the whole pane from the hub — used when the Timeline tab comes to the front
+     *  after a spell of not being rendered. */
+    rebuildTimeline() {
+        const pane = this._get('timeline-list');
+        if (!pane)
+            return;
+        pane.innerHTML = '';
+        debugHub.ipcCalls.forEach(call => this._renderTimelineEntry(call));
+        debugHub.actions.forEach(action => this._renderTimelineEntry(action));
+    }
+    _renderTimelineEntry(item) {
         const pane = this._get('timeline-list');
         if (!pane)
             return;
