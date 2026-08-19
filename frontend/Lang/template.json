@@ -5641,6 +5641,7 @@
   "sched.allowCmd": "Allow this task to run custom external commands (runs real programs on your PC)",
   "sched.needName": "Name required",
   "sched.delTitle": "Delete task",
+  "sched.osUnregFail": "",
   "sched.customDisabled": "Custom commands are disabled for this task",
   "sched.trEvery": "Every N minutes",
   "sched.trDaily": "Daily at time",

@@ -5663,6 +5663,7 @@
   "sched.allowCmd": "Autoriser cette tâche à lancer des commandes externes (exécute de vrais programmes sur votre PC)",
   "sched.needName": "Nom requis",
   "sched.delTitle": "Supprimer la tâche",
+  "sched.osUnregFail": "Impossible de retirer la tâche Windows",
   "sched.customDisabled": "Les commandes personnalisées sont désactivées pour cette tâche",
   "sched.trEvery": "Toutes les N minutes",
   "sched.trDaily": "Chaque jour à",

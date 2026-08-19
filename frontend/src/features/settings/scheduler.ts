@@ -289,8 +289,19 @@ export async function initScheduler(): Promise<void> {
                 b.addEventListener('click', () => { menu.style.display = 'none'; run(); });
                 menu.appendChild(b);
             }
+            // Handed to the global dropdown portal rather than shown in place.
+            //
+            // A menu positioned inside this card is clipped by it: the settings sections
+            // establish their own painting context, so the last entries were cut off at the
+            // section's bottom edge and the one below it painted over them. The portal moves
+            // the menu to a fixed container on <body> (z-index 999999) and positions it under
+            // the button, which is what every other menu in the app already does.
             more.addEventListener('click', (e) => {
                 e.stopPropagation();
+                const show = (window as any).showGlobalDropdown;
+                if (typeof show === 'function') { show(more, menu); return; }
+                // No portal (an older shell): in-place is wrong but visible, which beats a
+                // button that does nothing.
                 menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
             });
             document.addEventListener('mousedown', (ev: any) => {
@@ -2062,10 +2073,30 @@ export function renderScheduleList(): void {
         });
         row.querySelector('[data-act="edit"]')?.addEventListener('click', () => openTaskModal(task));
         row.querySelector('[data-act="del"]')?.addEventListener('click', async () => {
-            if (!await window.confirmCustom!(t('sched.delTitle') || 'Delete task', `${task.name}?`, 'danger',
-                { yesLabel: t('common.delete') || 'Delete', noLabel: t('common.cancel') || 'Cancel' })) return;
-            if (task.osSchedule) { try { await invoke('unregister_os_schedule', { taskId: task.id }); } catch {} }
-            _tasks = _tasks.filter(x => x.id !== task.id); await saveTasks(); renderScheduleList();
+            try {
+                // Not `confirmCustom!`. The non-null assertion silences the compiler about a
+                // value that is only there because another module ran first; if it ever is not,
+                // the call throws inside an async listener and the button appears inert.
+                const ask = window.confirmCustom;
+                const ok = typeof ask === 'function'
+                    ? await ask(t('sched.delTitle') || 'Delete task', `${task.name}?`, 'danger',
+                        { yesLabel: t('common.delete') || 'Delete', noLabel: t('common.cancel') || 'Cancel' })
+                    : window.confirm(`${t('sched.delTitle') || 'Delete task'}\n\n${task.name}?`);
+                if (!ok) return;
+                if (task.osSchedule) {
+                    // An OS entry that will not unregister must not stop the task being
+                    // removed from BMM — it is reported and the deletion continues.
+                    try { await invoke('unregister_os_schedule', { taskId: task.id }); }
+                    catch (e) { toast(`${t('sched.osUnregFail') || 'Could not remove the Windows task'}: ${e}`, 'error'); }
+                }
+                _tasks = _tasks.filter(x => x.id !== task.id);
+                await saveTasks();
+                renderScheduleList();
+            } catch (e) {
+                // The point of this catch: a delete that fails now SAYS SO. Before it could
+                // only ever look like a button that does nothing.
+                toast(`${t('common.error') || 'Error'}: ${e}`, 'error');
+            }
         });
         container.appendChild(row);
     }
