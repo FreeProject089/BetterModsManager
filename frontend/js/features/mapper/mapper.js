@@ -975,8 +975,20 @@ async function ensureModWritable() {
     if (!choice)
         return false;
     try {
-        await invoke('unarchive_mod', { modId: selectedModId });
+        const folder = await invoke('unarchive_mod', { modId: selectedModId });
         _archiveChoice.set(selectedModId, choice);
+        // THE MOD HAS MOVED. `Mod.zip` is gone and `Mod/` has taken its place, and
+        // refreshModTree reads the folder path out of the <option>'s dataset — a cache
+        // filled when the list was built. Leaving the dead .zip path there made the very
+        // next get_directory_tree fail with "Le dossier n'existe pas", which refreshModTree
+        // reads as "this mod was deleted externally" and answers by setting selectedModId
+        // to null. applyAllChanges then carried on and sent `modId: null` to
+        // restructure_mod_item. Two errors in the console, one cause, and both of them here.
+        const sel = document.getElementById('mapper-mod-select');
+        const opt = sel?.options[sel.selectedIndex];
+        if (opt)
+            opt.dataset.folderPath = folder;
+        lastModFolderPath = null; // the tree cache is keyed on the path, which just changed
         toast(t('mapper.archiveUnpacked'), 'success');
         await refreshModTree(true);
         return true;
@@ -993,14 +1005,13 @@ function _selectedModIsZip() {
     return /\.zip\s*$/i.test(label.trim());
 }
 /** Put the mod back into a .zip if that is what was asked, once the changes are applied. */
-async function restoreArchiveIfAsked() {
-    if (!selectedModId)
-        return;
-    if (_archiveChoice.get(selectedModId) !== 'zip')
+async function restoreArchiveIfAsked(modId) {
+    if (_archiveChoice.get(modId) !== 'zip')
         return;
     try {
-        await invoke('rearchive_mod', { modId: selectedModId });
-        _archiveChoice.delete(selectedModId);
+        await invoke('rearchive_mod', { modId });
+        _archiveChoice.delete(modId);
+        lastModFolderPath = null; // the mod moved again: folder -> .zip
         toast(t('mapper.archiveRezipped'), 'success');
         await refreshMapperData();
     }
@@ -1017,6 +1028,18 @@ async function applyAllChanges() {
     // change pending, so nothing the user lined up is thrown away by saying no.
     if (!await ensureModWritable())
         return;
+    // Capture the id ONCE and use it for every call below.
+    //
+    // selectedModId is module state that other code is entitled to clear — refreshModTree
+    // nulls it when a mod's folder has gone missing, which is a reasonable thing for it to
+    // do. What is not reasonable is a half-finished batch of writes then sending `null` as
+    // the mod id and getting "invalid type: null, expected a string" from the Rust side. A
+    // batch that has started works on the mod it started with.
+    const modId = selectedModId;
+    if (!modId) {
+        toast(t('mapper.selectModHint'), 'warning');
+        return;
+    }
     const saveBtn = document.getElementById('btn-mapper-save');
     const originalText = saveBtn.innerHTML;
     saveBtn.disabled = true;
@@ -1024,21 +1047,21 @@ async function applyAllChanges() {
     try {
         // 1. Handle new folders
         for (const [vPath, data] of pendingNewFolders.entries()) {
-            await invoke('create_mod_folder', { modId: selectedModId, parentRelPath: data.parent, folderName: data.name });
+            await invoke('create_mod_folder', { modId, parentRelPath: data.parent, folderName: data.name });
         }
         // 2. Handle moves
         for (const [src, dst] of pendingMoves.entries()) {
-            await invoke('restructure_mod_item', { modId: selectedModId, itemRelPath: src, targetGameFolderRel: dst });
+            await invoke('restructure_mod_item', { modId, itemRelPath: src, targetGameFolderRel: dst });
         }
         // 3. Handle deletions
         for (const path of pendingDeletions) {
-            await invoke('delete_mod_item', { modId: selectedModId, itemRelPath: path });
+            await invoke('delete_mod_item', { modId, itemRelPath: path });
         }
         toast(t('common.success'), 'success');
         pendingMoves.clear();
         pendingDeletions.clear();
         pendingNewFolders.clear();
-        await restoreArchiveIfAsked();
+        await restoreArchiveIfAsked(modId);
         await refreshModTree(true);
         updateSaveButtonVisibility();
         selectedPaths.clear();
@@ -1280,9 +1303,16 @@ function setupContextMenu() {
                 // archived-mod question that applyAllChanges asks.
                 if (!await ensureModWritable())
                     return;
+                // Captured AFTER the question, for the same reason applyAllChanges captures:
+                // ensureModWritable may unpack the mod and refresh the tree, and a refresh
+                // that finds a missing folder clears selectedModId. The rename then went out
+                // with modId: null.
+                const modId = selectedModId;
+                if (!modId)
+                    return;
                 try {
                     const isRoot = lastSelectedPath === "." || lastSelectedPath === "" || lastSelectedPath === "/";
-                    await invoke('rename_mod_item', { modId: selectedModId, itemRelPath: lastSelectedPath, newName: name });
+                    await invoke('rename_mod_item', { modId, itemRelPath: lastSelectedPath, newName: name });
                     if (isRoot) {
                         await refreshMapperData();
                         // Search for the mod with the new name in the select
