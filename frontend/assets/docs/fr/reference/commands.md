@@ -99,6 +99,7 @@ Ces commandes affichent un rapport. Elles ne changent rien.
 npm run map:deps        # graphe des modules : hubs, orphelins, cycles
 npm run map:api         # appels frontend → Rust, et ce qui n'a aucun appelant
 npm run map:deeplinks   # chaque action bmm:// et les paramètres qu'elle lit
+npm run map:deeplinks:json  # ...et ÉCRIRE frontend/deeplinks.json (ce que BCWEB publie)
 npm run impact          # quels tests couvrent ton changement — et ce que rien ne couvre
 ```
 

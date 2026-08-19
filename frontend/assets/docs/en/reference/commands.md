@@ -98,6 +98,7 @@ These print reports. They change nothing.
 npm run map:deps        # module graph: hubs, orphans, cycles
 npm run map:api         # frontend → Rust calls, and what has no caller
 npm run map:deeplinks   # every bmm:// action and the parameters it reads
+npm run map:deeplinks:json  # ...and WRITE frontend/deeplinks.json (what BCWEB publishes)
 npm run impact          # which tests cover your current change — and what nothing covers
 ```
 

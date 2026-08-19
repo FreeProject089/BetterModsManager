@@ -31,6 +31,7 @@
     "map:deps": "node scripts/dep-graph.mjs",
     "map:api": "node scripts/api-map.mjs",
     "map:deeplinks": "node scripts/deeplink-map.mjs",
+    "map:deeplinks:json": "node scripts/deeplink-map.mjs --json",
     "impact": "node scripts/test-impact.mjs",
     "check:boot": "node scripts/check-boot-weight.mjs",
     "check:tokens": "node scripts/check-token-collisions.mjs",
