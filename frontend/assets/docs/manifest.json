@@ -38,6 +38,7 @@
     "reference/api",
     "reference/repo-format",
     "reference/catalog-index",
+    "reference/commands",
     "reference/links-and-updates",
     "reference/custom-markdown",
     "reference/actions",
@@ -607,6 +608,21 @@
         "fr": "Un catalogue liste des choses à installer. Un index liste des catalogues."
       },
       "words": 687,
+      "diagrams": 0,
+      "fr": true
+    },
+    {
+      "path": "reference/commands",
+      "section": "reference",
+      "title": {
+        "en": "Every command, and when you want it",
+        "fr": "Toutes les commandes, et quand tu les veux"
+      },
+      "summary": {
+        "en": "For contributors. Grouped by what you are trying to do rather than by which tool provides it, because at the moment you need a command you know the goal, not…",
+        "fr": "Pour les contributeurs. Regroupées par objectif plutôt que par outil, parce qu'au moment où tu cherches une commande, tu connais le but, pas le paquet."
+      },
+      "words": 375,
       "diagrams": 0,
       "fr": true
     },
