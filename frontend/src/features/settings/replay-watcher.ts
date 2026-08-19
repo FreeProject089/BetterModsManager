@@ -237,8 +237,17 @@ async function writeBundle(mode: 'crash' | 'list', destPath?: string): Promise<s
       tailBytes: mode === 'crash' ? CRASH_TAIL_BYTES : null,
     }) as string;
   } catch (e) {
-    // "empty spool" is the normal answer before anything has been recorded.
-    return null;
+    // "empty spool" is the normal answer before anything has been recorded, and it is the
+    // ONLY one worth swallowing. Everything else — a destination that cannot be created, a
+    // segment that vanished, a serialisation failure — used to land here too and return null,
+    // which the caller reads as "nothing to export". An export driven over the local API then
+    // answered 202 and wrote no file, thirteen times in a row, with nothing anywhere saying
+    // why. A failure that looks identical to "there was nothing to do" is not a failure
+    // anybody can act on.
+    const msg = String((e as any)?.message ?? e ?? '');
+    if (/empty spool/i.test(msg)) return null;
+    console.error('[replay] export failed:', msg);
+    throw e;
   }
 }
 
@@ -306,6 +315,7 @@ export async function exportSession(destPath?: string): Promise<void> {
   try {
     const written = await writeBundle('list', path);
     if (!written) { toast(t('watcher.nothing') || 'Rien à exporter pour le moment', 'info'); return; }
+    console.info('[replay] exported to', written);
     toast(t('watcher.exported') || 'Session exportée', 'success');
   } catch (e) { toast((t('watcher.exportFail') || 'Export échoué') + ': ' + e, 'error'); }
 }
