@@ -40,6 +40,7 @@
     "reference/catalog-index",
     "reference/commands",
     "reference/links-and-updates",
+    "reference/app-cfg",
     "reference/custom-markdown",
     "reference/actions",
     "reference/mcp",
@@ -638,6 +639,21 @@
         "fr": "Toutes les adresses externes que BMM utilise — catalogues, liste des dépôts, télémétrie, flux de mises à jour — vivent dans un seul fichier, links.json, pour…"
       },
       "words": 563,
+      "diagrams": 0,
+      "fr": true
+    },
+    {
+      "path": "reference/app-cfg",
+      "section": "reference",
+      "title": {
+        "en": "`app.cfg` — the build's own switches",
+        "fr": "`app.cfg` — les interrupteurs de la build"
+      },
+      "summary": {
+        "en": "A flat text file next to the executable that decides how a build behaves: whether the debug menu exists, whether the app may update itself, whether the blog…",
+        "fr": "Un fichier texte plat, à côté de l'exécutable, qui décide du comportement d'une build : si le menu de débogage existe, si l'application peut se mettre à jour…"
+      },
+      "words": 775,
       "diagrams": 0,
       "fr": true
     },

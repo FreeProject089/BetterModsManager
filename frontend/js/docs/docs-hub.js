@@ -393,6 +393,19 @@ ce qu'il remplace, ou les retire). Vos mods téléchargés ne sont jamais modifi
                 },
             },
             {
+                id: 'app-cfg', docsPath: 'reference/app-cfg', view: 'settings',
+                title: { en: 'app.cfg — the build’s own switches', fr: 'app.cfg — les interrupteurs de la build' },
+                summary: {
+                    en: 'Debug menu, updates, test server — the flags decided at build time, not in Settings.',
+                    fr: 'Menu de débogage, mises à jour, serveur de test — les drapeaux fixés à la compilation, pas dans les Réglages.',
+                },
+                keywords: 'app.cfg config flag prod ptb debug fsdm disableupdate eula bctestmode bctestbase build packaging drapeau configuration compilation débogage',
+                body: {
+                    en: '<p>A flat text file next to the executable that decides how a <b>build</b> behaves: whether the debug menu exists, whether BMM may update itself, whether the blog talks to a local server instead of the real site. It is read once at startup and never written back — nothing in the interface changes it.</p><p>Three things catch people out, every time:</p><ul><li><b>There is no comment syntax.</b> Most keys are found by searching the whole file for a substring, so <code>#Prod=false</code> still contains <code>prod=false</code> and debug mode is on. Delete the line instead.</li><li><b>Spaces around <code>=</code> break some keys and not others</b>, because the file is parsed twice by two pieces of code that disagree. <code>BCTestMode = true</code> works; <code>PTB = true</code> is silently ignored. Write every key tight.</li><li><b>A missing file is not an error.</b> Every flag defaults to off, which looks exactly like a normal release build — so a flag that seems ignored is usually a file that was never found.</li></ul><p>Two keys are in the file and do nothing at all, which the full page names rather than leaves you to discover. <b>Settings → Debug → resource paths</b> shows which <code>app.cfg</code> was actually read.</p>',
+                    fr: '<p>Un fichier texte plat, à côté de l’exécutable, qui décide du comportement d’une <b>build</b> : si le menu de débogage existe, si BMM peut se mettre à jour lui-même, si le blog s’adresse à un serveur local plutôt qu’au vrai site. Il est lu une fois au démarrage et jamais réécrit — rien dans l’interface ne le modifie.</p><p>Trois choses piègent tout le monde, à chaque fois :</p><ul><li><b>Il n’existe aucune syntaxe de commentaire.</b> La plupart des clés sont trouvées en cherchant une sous-chaîne dans tout le fichier : <code>#Prod=false</code> contient toujours <code>prod=false</code>, et le mode débogage est actif. Supprimez la ligne.</li><li><b>Les espaces autour du <code>=</code> cassent certaines clés et pas d’autres</b>, car le fichier est analysé deux fois par deux morceaux de code qui ne sont pas d’accord. <code>BCTestMode = true</code> fonctionne ; <code>PTB = true</code> est ignoré en silence. Écrivez chaque clé serrée.</li><li><b>Un fichier absent n’est pas une erreur.</b> Chaque drapeau vaut « désactivé » par défaut, ce qui ressemble exactement à une build de sortie ordinaire — un drapeau qui semble ignoré est donc le plus souvent un fichier jamais trouvé.</li></ul><p>Deux clés figurent dans le fichier sans rien faire du tout ; la page complète les nomme au lieu de vous laisser le découvrir. <b>Réglages → Débogage → chemins de ressources</b> montre quel <code>app.cfg</code> a réellement été lu.</p>',
+                },
+            },
+            {
                 id: 'catalog-index', docsPath: 'features/community/', view: 'settings',
                 title: { en: 'Catalogue index — one address for many', fr: 'Index de catalogues — une adresse pour plusieurs' },
                 summary: {
