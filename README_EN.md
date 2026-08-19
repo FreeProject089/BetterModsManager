@@ -150,7 +150,7 @@ Traditional mod managers use symlinks or hardlinks that are OS-dependent, fragil
 
 | Layer | Technology | Details |
 |:------|:-----------|:--------|
-| **Backend** | Rust (stable) | Tauri v1, Tokio, Reqwest, Serde, Zip-rs, thread-safe Mutex |
+| **Backend** | Rust (stable) | Tauri v2, Tokio, Reqwest, Serde, Zip-rs, thread-safe Mutex |
 | **Frontend** | TypeScript 5.7 (Strict) | Compiled to ES2022, vanilla DOM, zero frameworks |
 | **Styling** | CSS3 | Custom properties, glassmorphism, fully responsive |
 | **Cryptography** | ed25519-dalek 2.x + sha2 0.10 | Ed25519 signing, SHA-256 integrity checks |
@@ -166,7 +166,7 @@ Traditional mod managers use symlinks or hardlinks that are OS-dependent, fragil
 - **Windows** 10 or 11 (64-bit)
 - [Node.js](https://nodejs.org/) LTS
 - [Rust](https://www.rust-lang.org/tools/install) (stable toolchain)
-- [Tauri v1 prerequisites](https://tauri.app/v1/guides/getting-started/prerequisites) (WebView2, Visual C++ build tools)
+- [Tauri v2 prerequisites](https://v2.tauri.app/start/prerequisites/) (WebView2, Visual C++ build tools)
 
 ### Development Setup
 
@@ -193,6 +193,10 @@ npm run build
 | `npm run build` | Compile TS + build Windows installer |
 | `npm run watch` | TypeScript watch mode only |
 | `npm run typecheck` | Type-check without compiling |
+| `npm run ci` | Every gate, in the order CI runs them — slow on purpose |
+
+`npm run ci` is the one that matters before you push: a green `tsc` means the code compiles,
+not that the app works. **[Every command, grouped by what you are trying to do](https://freeproject089.github.io/BMM-Docs/reference/commands/)**.
 
 ---
 
@@ -205,10 +209,11 @@ npm run build
 | Feature Overview | [App_Features_EN.md](Update/Documentation/App_Features_EN.md) |
 | Technical Architecture | [Technical_Analysis_EN.md](Update/Documentation/Technical_Analysis_EN.md) |
 | Creator ID System | [creator_id.md](.Assets/.md/creator_id.md) |
-| Server Repository Guide | [REPOS_GUIDE_EN.md](Update/Guides/REPOS_GUIDE_EN.md) |
-| Docker Deployment | [DOCKER_GUIDE_EN.md](Update/Guides/DOCKER_GUIDE_EN.md) |
-| MCP Tools Reference | [MCP_Tools_List_EN.md](Update/Guides/MCP_Tools_List_EN.md) |
-| CLI Reference | [BMM_CLI_Guide_EN.md](Update/Guides/BMM_CLI_Guide_EN.md) |
+| Server Repository Guide | [REPOS_GUIDE_EN.md](.Assets/REPOS_GUIDE_EN.md) |
+| Docker Deployment | [DOCKER_GUIDE_EN.md](Update/Guides/Developer/DOCKER_GUIDE_EN.md) |
+| MCP Tools Reference | [MCP_Tools_List_EN.md](Update/Guides/Developer/MCP_Tools_List_EN.md) |
+| CLI Reference | [BMM_CLI_Guide_EN.md](Update/Guides/Developer/BMM_CLI_Guide_EN.md) |
+| Build-time flags (`app.cfg`) | [APP_CFG.md](APP_CFG.md) — debug menu, updates, test server |
 | Translation Guide | [TranslationGuide_EN.md](Update/Documentation/TranslationGuide_EN.md) |
 | Changelog v1.0.0 | [changelog_v1.0.0_EN.md](Update/changelog_v1.0.0_EN.md) |
 

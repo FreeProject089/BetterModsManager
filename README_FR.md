@@ -150,7 +150,7 @@ Les gestionnaires classiques utilisent des liens symboliques ou des liens durs �
 
 | Couche | Technologie | Détails |
 |:-------|:-----------|:--------|
-| **Backend** | Rust (stable) | Tauri v1, Tokio, Reqwest, Serde, Zip-rs, Mutex thread-safe |
+| **Backend** | Rust (stable) | Tauri v2, Tokio, Reqwest, Serde, Zip-rs, Mutex thread-safe |
 | **Frontend** | TypeScript 5.7 (Strict) | Compilé en ES2022, DOM vanille, zéro framework |
 | **Styles** | CSS3 | Propriétés personnalisées, glassmorphisme, responsive |
 | **Cryptographie** | ed25519-dalek 2.x + sha2 0.10 | Signature Ed25519, intégrité SHA-256 |
@@ -167,7 +167,7 @@ Les gestionnaires classiques utilisent des liens symboliques ou des liens durs �
 - **Windows** 10 ou 11 (64 bits)
 - [Node.js](https://nodejs.org/) LTS
 - [Rust](https://www.rust-lang.org/tools/install) (toolchain stable)
-- [Prérequis Tauri v1](https://tauri.app/v1/guides/getting-started/prerequisites) (WebView2, outils de build Visual C++)
+- [Prérequis Tauri v2](https://v2.tauri.app/start/prerequisites/) (WebView2, outils de build Visual C++)
 
 ### Installation et développement
 
@@ -194,6 +194,11 @@ npm run build
 | `npm run build` | Compilation TS + construction de l'installeur Windows |
 | `npm run watch` | Mode watch TypeScript seul |
 | `npm run typecheck` | Vérification des types sans compilation |
+| `npm run ci` | Toutes les vérifications, dans l'ordre de la CI — lente exprès |
+
+`npm run ci` est celle qui compte avant de pousser : un `tsc` vert signifie que le code
+compile, pas que l'application fonctionne. **[Toutes les commandes, groupées par
+objectif](https://freeproject089.github.io/BMM-Docs/fr/reference/commands/)**.
 
 ---
 
@@ -206,10 +211,11 @@ npm run build
 | Aperçu des fonctionnalités | [App_Features_FR.md](Update/Documentation/App_Features_FR.md) |
 | Architecture technique | [Technical_Analysis_FR.md](Update/Documentation/Technical_Analysis_FR.md) |
 | Système Creator ID | [creator_id.md](.Assets/.md/creator_id.md) |
-| Guide Serveur de dépôt | [REPOS_GUIDE_FR.md](Update/Guides/REPOS_GUIDE_FR.md) |
-| Déploiement Docker | [DOCKER_GUIDE_FR.md](Update/Guides/DOCKER_GUIDE_FR.md) |
-| Référence outils MCP | [MCP_Tools_List_FR.md](Update/Guides/MCP_Tools_List_FR.md) |
-| Référence CLI | [BMM_CLI_Guide_FR.md](Update/Guides/BMM_CLI_Guide_FR.md) |
+| Guide Serveur de dépôt | [REPOS_GUIDE_FR.md](.Assets/REPOS_GUIDE_FR.md) |
+| Déploiement Docker | [DOCKER_GUIDE_FR.md](Update/Guides/Developer/DOCKER_GUIDE_FR.md) |
+| Référence outils MCP | [MCP_Tools_List_FR.md](Update/Guides/Developer/MCP_Tools_List_FR.md) |
+| Référence CLI | [BMM_CLI_Guide_FR.md](Update/Guides/Developer/BMM_CLI_Guide_FR.md) |
+| Drapeaux de compilation (`app.cfg`) | [APP_CFG.md](APP_CFG.md) — menu de débogage, mises à jour, serveur de test |
 | Guide de traduction | [TranslationGuide_FR.md](Update/Documentation/TranslationGuide_FR.md) |
 | Journal des modifications v1.0.0 | [changelog_v1.0.0_FR.md](Update/changelog_v1.0.0_FR.md) |
 

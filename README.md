@@ -18,14 +18,14 @@
 ### 🇬🇧 English
 📖 **[View README in English](README_EN.md)**
 
-A modern, high-performance universal mod manager for Windows. Built with Rust + Tauri v1, featuring the Smart Physical Copy Engine for safe, reliable mod management with SHA-256 integrity, Server Repository sync, and AI integration via MCP.
+A modern, high-performance universal mod manager for Windows. Built with Rust + Tauri v2, featuring the Smart Physical Copy Engine for safe, reliable mod management with SHA-256 integrity, Server Repository sync, and AI integration via MCP.
 
 ---
 
 ### 🇫🇷 Français
 📖 **[Consulter le README en français](README_FR.md)**
 
-Un gestionnaire de mods universel, moderne et haute performance pour Windows. Construit avec Rust + Tauri v1, doté du moteur Smart Physical Copy pour une gestion fiable des mods avec intégrité SHA-256, synchronisation Serveur de dépôt et intégration IA via MCP.
+Un gestionnaire de mods universel, moderne et haute performance pour Windows. Construit avec Rust + Tauri v2, doté du moteur Smart Physical Copy pour une gestion fiable des mods avec intégrité SHA-256, synchronisation Serveur de dépôt et intégration IA via MCP.
 
 ---
 
