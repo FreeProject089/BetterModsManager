@@ -724,8 +724,16 @@ function ensureStyles() {
     isolation:isolate;pointer-events:auto;
     display:flex;flex-direction:column;gap:8px;padding:8px 10px;border-radius:14px;
     background:#161b22;color:#e6edf3;border:1px solid #2a2f3a;box-shadow:0 10px 40px rgba(0,0,0,.5);
-    font:600 13px/1.2 system-ui,sans-serif;max-width:min(94vw,760px);}
-  .rstudio-main{display:flex;align-items:center;gap:8px;}
+    font:600 13px/1.2 system-ui,sans-serif;
+    /* max-content, then capped. A fixed, shrink-to-fit flex container that is allowed to WRAP
+       computes a narrow preferred width and wraps early — it folded to 640px inside a 980px
+       budget and used three rows where two fit. Asking for max-content makes it take the room
+       it is allowed before wrapping at all. */
+    width:max-content;max-width:min(94vw,980px);}
+  /* Wraps to a second row instead of crushing its children. Without this the row could only
+     shrink, so "Add cut" and "Export .bmmreplay" broke across two lines INSIDE their buttons
+     and the inputs lost most of their width. */
+  .rstudio-main{display:flex;align-items:center;flex-wrap:wrap;gap:8px;row-gap:8px;}
   .rstudio-hide{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding-top:7px;border-top:1px solid #2a2f3a;}
   .rstudio-hide-lbl{font-weight:700;opacity:.7;font-size:11px;text-transform:uppercase;letter-spacing:.04em;}
   .rstudio-hide-none{opacity:.5;font-weight:500;font-size:12px;}
@@ -739,15 +747,32 @@ function ensureStyles() {
   .rstudio-mini{padding:4px 8px;font-size:12px;}
   .rstudio-title{font-weight:800;margin-right:2px;color:#3b82f6;display:flex;align-items:center;gap:6px;}
   .rstudio-btn{border:1px solid #2a2f3a;background:#0d1117;color:#e6edf3;border-radius:9px;
-    padding:6px 10px;cursor:pointer;font:inherit;transition:background .12s,border-color .12s;}
+    padding:6px 10px;cursor:pointer;font:inherit;white-space:nowrap;flex:0 0 auto;
+    transition:background .12s,border-color .12s;}
+  /* Minimise + close ride to the right end of whatever row they land on, so they stay where
+     the hand expects them once the bar wraps. */
+  .rstudio-min{margin-left:auto;}
   .rstudio-btn:hover{background:#1c2333;border-color:#3b82f6;}
   .rstudio-primary{background:var(--bmm-accent,#3b82f6);border-color:var(--bmm-accent,#3b82f6);color:var(--bmm-text-on-accent);}
   .rstudio-primary:hover{background:#2563eb;}
   .rstudio-x{padding:6px 9px;opacity:.7;}
   .rstudio-sel{background:#0d1117;color:#e6edf3;border:1px solid #2a2f3a;border-radius:9px;padding:6px 8px;font:inherit;}
-  .rstudio-status{opacity:.8;font-weight:500;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-  .rstudio-trim{display:flex;align-items:center;gap:6px;font-weight:500;opacity:.9;}
-  .rstudio-trim-in{width:56px;background:#0d1117;color:#e6edf3;border:1px solid #2a2f3a;border-radius:7px;padding:4px 6px;font:inherit;}
+  .rstudio-status{opacity:.8;font-weight:500;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:0 1 auto;min-width:0;}
+  .rstudio-trim{display:flex;align-items:center;gap:6px;font-weight:500;opacity:.9;white-space:nowrap;flex:0 0 auto;}
+  /* The cut fields are styled WITH the trim field, not separately.
+     They had no rule at all — only markup — so they rendered as default OS number inputs: white
+     boxes, taller than everything else, in the middle of a dark bar. Styling them here rather
+     than in their own block is what stops the next field from being forgotten the same way. */
+  .rstudio-trim-in,.rstudio-cut-a,.rstudio-cut-b{width:56px;background:#0d1117;color:#e6edf3;
+    border:1px solid #2a2f3a;border-radius:7px;padding:4px 6px;font:inherit;flex:0 0 auto;}
+  .rstudio-trim-in:focus,.rstudio-cut-a:focus,.rstudio-cut-b:focus{outline:none;border-color:#3b82f6;}
+  .rstudio-cut-a::placeholder,.rstudio-cut-b::placeholder{color:#6b7280;font-weight:500;}
+  /* The cuts already added, as removable chips — also markup with no rule until now. */
+  .rstudio-cuts{display:flex;align-items:center;gap:5px;flex-wrap:wrap;}
+  .rstudio-cut-chip{display:inline-flex;align-items:center;gap:4px;background:#0d1117;
+    border:1px solid #2a2f3a;border-radius:999px;padding:3px 9px;cursor:pointer;
+    font:600 11px/1.4 ui-monospace,monospace;white-space:nowrap;}
+  .rstudio-cut-chip:hover{border-color:#ef4444;color:#ef4444;}
   .rstudio-est{opacity:.65;font-size:11.5px;font-variant-numeric:tabular-nums;white-space:nowrap;}
   /* Live meter: elapsed + buffered size, with a gauge against the memory budget. */
   .rstudio-meter{display:flex;align-items:center;gap:7px;font-variant-numeric:tabular-nums;}

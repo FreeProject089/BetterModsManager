@@ -1265,34 +1265,52 @@ async function _executeApplyModpack(container, pack, isApplying) {
 
     let appliedCount = 0;
     let missingCount = 0;
+    // Mods the backend refused, kept apart from the ones that were not found at all: "you do
+    // not have it" and "it is here and would not turn on" are different problems with different
+    // fixes, and reporting them as one number sends people looking in the wrong place.
+    const failed: string[] = [];
 
     const shaIndex = await _resolveHashesToModIds(pack.mods);
+
+    // Each toggle is guarded on its own.
+    //
+    // Every `invoke` below used to be unguarded inside this loop, so the FIRST mod the backend
+    // refused threw straight out of it — every mod after that one was silently skipped, and the
+    // pack was left half applied with a single generic error. `enable_mod` refuses for ordinary
+    // reasons: MISSING_SHA when hashes have not been computed yet, an archive that cannot be
+    // extracted. One awkward mod should cost you that mod, not the pack.
+    const toggle = async (id: string, on: boolean, label: string) => {
+        try {
+            await invoke(on ? 'enable_mod' : 'disable_mod', { modId: id });
+            appliedCount++;
+            return true;
+        } catch (e: any) {
+            const raw = String(e?.message || e || '');
+            // The backend encodes this one as `MISSING_SHA|id|name` — shown as the name, since
+            // the pipe-delimited form is for the caller, not the reader.
+            failed.push(raw.startsWith('MISSING_SHA|') ? `${label} (SHA)` : label);
+            return false;
+        }
+    };
+
     for (const mref of pack.mods) {
         // Find local mod by ID or SHA-256
         const local = _findLocalByMref(mref, shaIndex);
         if (local) {
             if (isApplying && !local.enabled) {
-                await invoke('enable_mod', { modId: local.id });
-                appliedCount++;
+                await toggle(local.id, true, local.name || local.id);
                 if (mref.include_dependencies && local.dependencies && local.dependencies.length > 0) {
                     for (const depId of local.dependencies) {
                         const depLocal = _allMods.find(m => m.id === depId);
-                        if (depLocal && !depLocal.enabled) {
-                            await invoke('enable_mod', { modId: depId });
-                            appliedCount++;
-                        }
+                        if (depLocal && !depLocal.enabled) await toggle(depId, true, depLocal.name || depId);
                     }
                 }
             } else if (!isApplying && local.enabled) {
-                await invoke('disable_mod', { modId: local.id });
-                appliedCount++;
+                await toggle(local.id, false, local.name || local.id);
                 if (mref.include_dependencies && local.dependencies && local.dependencies.length > 0) {
                     for (const depId of local.dependencies) {
                         const depLocal = _allMods.find(m => m.id === depId);
-                        if (depLocal && depLocal.enabled) {
-                            await invoke('disable_mod', { modId: depId });
-                            appliedCount++;
-                        }
+                        if (depLocal && depLocal.enabled) await toggle(depId, false, depLocal.name || depId);
                     }
                 }
             }
@@ -1301,7 +1319,12 @@ async function _executeApplyModpack(container, pack, isApplying) {
         }
     }
 
-    if (isApplying && missingCount > 0) {
+    if (failed.length > 0) {
+        // Named, and capped at three: a list of forty names is a wall nobody reads, and the
+        // first few are enough to go and look.
+        const shown = failed.slice(0, 3).join(', ') + (failed.length > 3 ? ` +${failed.length - 3}` : '');
+        toast(`${t('modpack.applyFailed') || 'Could not toggle'}: ${shown}`, 'error');
+    } else if (isApplying && missingCount > 0) {
         toast(t('modpack.applyPartial').replace('{applied}', appliedCount.toString()).replace('{missing}', missingCount.toString()), 'warning');
     } else {
         toast(isApplying ? t('modpack.applyOk') : t('modpack.deactivateOk') || 'Modpack désactivé avec succès !', 'success');

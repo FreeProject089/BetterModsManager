@@ -1353,6 +1353,7 @@
   "modpack.alreadyAdded": "DÉJÀ AJOUTÉ",
   "modpack.apply": "Activer le modpack",
   "modpack.applyOk": "Modpack activé avec succès !",
+  "modpack.applyFailed": "Impossible de basculer",
   "modpack.applyPartial": "{applied} mods activés, {missing} manquants.",
   "modpack.applying": "Application du modpack...",
   "modpack.available": "disponibles",

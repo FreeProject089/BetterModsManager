@@ -1354,6 +1354,7 @@
   "modpack.alreadyAdded": "ALREADY ADDED",
   "modpack.apply": "Apply Modpack",
   "modpack.applyOk": "Modpack successfully applied!",
+  "modpack.applyFailed": "Could not toggle",
   "modpack.applyPartial": "{applied} mods enabled, {missing} missing.",
   "modpack.applying": "Applying modpack...",
   "modpack.available": "available",

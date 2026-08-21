@@ -307,13 +307,30 @@ export async function getSettings() {
 export async function updateSettings(settings) {
     return await invoke('update_settings', { settings });
 }
+/**
+ * Files and folders dropped onto the window.
+ *
+ * The event is `tauri://drag-drop`. It was `tauri://file-drop` in Tauri 1, and this listened for
+ * that name until long after the v2 migration — so dropping a folder or a zip onto the library
+ * did nothing at all, with no error anywhere: an event that is never emitted cannot fail loudly.
+ *
+ * The PAYLOAD changed with it, and that was the second half of the same break. v1 sent a bare
+ * array of paths; v2 sends `{ paths, position }`. The old code tested `payload.length > 0`,
+ * which on a v2 object is `undefined > 0` — false — so even under the right event name the
+ * callback would still never have run.
+ *
+ * Both shapes are accepted below. Not for v1 compatibility, which is gone, but because reading
+ * the paths out of whatever arrived is what makes the next rename a shrug instead of a silent
+ * dead feature. scripts/check-tauri-events.mjs now fails the build on a v1 event name.
+ */
 export async function listenFileDrop(callback) {
     try {
         const { listen } = await getEventModule();
-        return await listen('tauri://file-drop', (e) => {
-            if (e.payload && e.payload.length > 0) {
-                callback(e.payload);
-            }
+        return await listen('tauri://drag-drop', (e) => {
+            const p = e?.payload;
+            const paths = Array.isArray(p) ? p : (Array.isArray(p?.paths) ? p.paths : []);
+            if (paths.length > 0)
+                callback(paths);
         });
     }
     catch {

@@ -141,14 +141,28 @@ pub async fn build_modpack_mod_ref(
         (m, pname)
     };
 
+    // An archived mod is a .zip ON DISK, so its files have to be read from the extracted view.
+    //
+    // `list_mod_files` already knows this — for an archive it returns the entry names from
+    // inside it. What followed did not: it joined those entry names onto the .zip PATH, giving
+    // `…/thing.zip/textures/a.dds`, which exists nowhere. `metadata` failed (size 0) and
+    // `compute_file_hash` failed outright, so `?` returned Err and the ref was never built.
+    //
+    // The consequence, several steps later and looking nothing like this: a modpack containing
+    // a zipped mod would not enable it. `sha256` was empty or missing, `_findLocalByMref` skips
+    // an empty hash, the mod counted as "missing" and was quietly left off.
+    //
+    // Every other reader in this codebase resolves the path through `mod_read_root` first —
+    // update_mod_hashes, the background hasher, enable_mod. This one was the exception.
     let mod_folder = &mod_entry.mod_folder_path;
-    let files = crate::fs_utils::list_mod_files(mod_folder).map_err(|e| e.to_string())?;
+    let read_root = crate::archive::mod_read_root(mod_folder);
+    let files = crate::fs_utils::list_mod_files(&read_root).map_err(|e| e.to_string())?;
 
     let mut file_manifest = Vec::new();
     let mut first_sha = String::new();
 
     for rel in &files {
-        let full = mod_folder.join(rel);
+        let full = read_root.join(rel);
         let size = std::fs::metadata(&full).map(|m| m.len()).unwrap_or(0);
         // Tagged BLAKE3 (`b3:…`), parallel within large files. Stored in the
         // `sha256` field (kept for serde back-compat); readers detect the tag.
