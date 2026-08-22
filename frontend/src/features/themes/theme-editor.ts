@@ -1876,9 +1876,15 @@ function openElementOverrideEditor(el: HTMLElement, forcedSel?: string): void {
                     <option value="0deg">↑</option>
                     <option value="circle">◉</option>
                 </select>
+                <select class="bte-grad-target" data-tooltip="${escAttr(t('themes.gradTarget'))}">
+                    <option value="background">${escHtml(t('themes.gradTargetBg'))}</option>
+                    <option value="text">${escHtml(t('themes.gradTargetText'))}</option>
+                    <option value="border">${escHtml(t('themes.gradTargetBorder'))}</option>
+                </select>
                 <button class="btn btn-secondary btn-xs bte-grad-apply">${t('themes.applyGradient')||'Apply'}</button>
                 <button class="btn btn-ghost btn-xs bte-grad-clear" data-tooltip="${t('themes.clear')||'Clear'}">✕</button>
             </div>
+            <p class="bte-elov-hint bte-grad-hint" hidden></p>
             <div class="bte-elov-imgrow">
                 <button class="btn btn-secondary btn-xs bte-elov-img">${t('themes.replaceImage')||'Set / replace image'}</button>
                 <button class="btn btn-ghost btn-xs bte-elov-img-clear" data-tooltip="${t('themes.clear')||'Clear'}">✕</button>
@@ -1938,7 +1944,54 @@ function openElementOverrideEditor(el: HTMLElement, forcedSel?: string): void {
         });
     });
 
-    // Gradient builder → writes a `background` prop (linear or radial).
+    // Gradient builder → background, text or border.
+    //
+    // A gradient is always an IMAGE in CSS, so where it lands depends entirely on which
+    // properties carry it, and the three targets need genuinely different declarations —
+    // which is why this is a target picker and not one checkbox:
+    //   background — `background`, and that is the whole story.
+    //   text       — paint the image, clip it to the glyphs, and make the text itself
+    //                transparent so the image shows through. Four properties, and missing
+    //                any one of them yields a coloured box or invisible text.
+    //   border     — `border-image`, which needs a border-style and a width to draw into.
+    // Each target lists every property it owns, so switching or clearing removes exactly
+    // what was applied instead of leaving half a rule behind — the failure that turns an
+    // element permanently transparent with no obvious cause.
+    const GRAD_TARGETS: Record<string, (g: string) => Record<string, string>> = {
+        background: (g) => ({ background: g }),
+        text: (g) => ({
+            'background-image': g,
+            'background-clip': 'text',
+            '-webkit-background-clip': 'text',
+            'color': 'transparent',
+            '-webkit-text-fill-color': 'transparent',
+        }),
+        border: (g) => ({
+            'border-image': `${g} 1`,
+            'border-style': 'solid',
+            'border-width': '2px',
+        }),
+    };
+    const gradTargetSel = pop.querySelector('.bte-grad-target') as HTMLSelectElement | null;
+    const gradHint = pop.querySelector('.bte-grad-hint') as HTMLElement | null;
+
+    /** Drop every property any target could have written. */
+    const clearGradientProps = () => {
+        for (const make of Object.values(GRAD_TARGETS)) {
+            for (const k of Object.keys(make('x'))) delete ov.props[k];
+        }
+    };
+
+    const showGradHint = () => {
+        if (!gradHint) return;
+        const key = gradTargetSel?.value === 'border' ? 'themes.gradBorderHint'
+            : gradTargetSel?.value === 'text' ? 'themes.gradTextHint' : '';
+        gradHint.textContent = key ? t(key) : '';
+        gradHint.hidden = !key;
+    };
+    gradTargetSel?.addEventListener('change', showGradHint);
+    showGradHint();
+
     const gradApply = pop.querySelector('.bte-grad-apply');
     gradApply?.addEventListener('click', () => {
         const c1 = (pop.querySelector('.bte-grad-c1') as HTMLInputElement)?.value || '#3b82f6';
@@ -1947,11 +2000,13 @@ function openElementOverrideEditor(el: HTMLElement, forcedSel?: string): void {
         const grad = dir === 'circle'
             ? `radial-gradient(circle, ${c1}, ${c2})`
             : `linear-gradient(${dir}, ${c1}, ${c2})`;
-        ov.props['background'] = grad;
+        const target = gradTargetSel?.value || 'background';
+        clearGradientProps();                       // switching target must not stack two of them
+        Object.assign(ov.props, (GRAD_TARGETS[target] || GRAD_TARGETS.background)(grad));
         cssBox.value = propsToCss(ov.props); previewTheme(_draft); updateDirty();
     });
     pop.querySelector('.bte-grad-clear')?.addEventListener('click', () => {
-        delete ov.props['background'];
+        clearGradientProps();
         cssBox.value = propsToCss(ov.props); previewTheme(_draft); updateDirty();
     });
     pop.querySelectorAll('.bte-elov-clear').forEach(btn => {

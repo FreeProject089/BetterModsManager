@@ -7668,5 +7668,11 @@
   "csp.risk.anything": "anything at all",
   "csp.risk.dataUrl": "data: URLs count as a source",
   "csp.addPolicy": "Add a policy",
-  "csp.appliesNextLaunch": "Applies on the next launch. A policy is only read while the page is being parsed, so it cannot take effect on a screen you are already looking at."
+  "csp.appliesNextLaunch": "Applies on the next launch. A policy is only read while the page is being parsed, so it cannot take effect on a screen you are already looking at.",
+  "themes.gradTarget": "Apply to",
+  "themes.gradTargetBg": "Background",
+  "themes.gradTargetText": "Text",
+  "themes.gradTargetBorder": "Border",
+  "themes.gradBorderHint": "A gradient border uses border-image, which ignores border-radius — rounded corners go square.",
+  "themes.gradTextHint": "Gradient text hides the normal colour. If the element has no text of its own, nothing will show."
 }

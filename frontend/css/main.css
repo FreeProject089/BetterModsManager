@@ -16634,9 +16634,19 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 /* The preview/result line. It carried only a font-size inline and NO colour token, so it
    inherited whatever the surface happened to give it — fine on the dark card it was built
    against, and the wrong colour anywhere the surface changed. Text gets a text token. */
-.cat-index-result { margin-top: 10px; font-size: 12px; color: var(--text-secondary); }
+/* One vertical rhythm for the whole card.
+   The blocks used to carry four different margins (10 / 12 / 8 / 12) plus a fifth inline on
+   the controls row, so every gap in the card was a slightly different size and the
+   description sat tighter to the input than the input did to anything else. The spacing is
+   a property of the CARD, so it is set once here rather than by each block deciding for
+   itself. A hidden (:empty) block still occupies a DOM slot, so the gaps below it stay
+   correct. */
+#settings-catalog-index-card > * + * { margin-top: 14px; }
+#settings-catalog-index-card > .card-drag-handle { margin-top: 0; }
+
+.cat-index-result { font-size: 12px; color: var(--text-secondary); }
 .cat-index-result:empty { display: none; }
-.cat-index-list { margin-top: 12px; }
+.cat-index-list { }
 /* --text-secondary, not --text-muted. Measured on the panel's own background
    (--bmm-bg-elevated #111827): muted #475569 is 2.34:1, which fails WCAG AA's 4.5:1 for
    normal text and is not readable at 11px — seen in the running app, where these labels
@@ -16655,10 +16665,10 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
    Three lists sharing .cat-index-row, so they line up as one panel rather than three
    that happen to sit together. Every fixed-width cell is `flex:none` with min-width:0
    on the flexible one — a long URL beside a fixed cell is exactly the blowout above. */
-.cat-index-contents, .cat-index-following, .cat-index-history { margin-top: 8px; }
+.cat-index-following, .cat-index-history { margin-top: 8px; }
 .cat-index-contents:empty { display: none; }
 
-.cat-index-fold { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 8px; }
+.cat-index-fold { border-top: 1px solid var(--border); padding-top: 10px; }
 .cat-index-fold > summary { cursor: pointer; font-size: 11px; color: var(--text-secondary);
     list-style: none; user-select: none; }
 .cat-index-fold > summary::-webkit-details-marker { display: none; }

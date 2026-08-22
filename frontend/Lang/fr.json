@@ -7666,5 +7666,11 @@
   "csp.risk.anything": "absolument n'importe quoi",
   "csp.risk.dataUrl": "les URL data: comptent comme source",
   "csp.addPolicy": "Ajouter une politique",
-  "csp.appliesNextLaunch": "Prend effet au prochain démarrage. Une politique n’est lue que pendant l’analyse de la page : elle ne peut pas s’appliquer à un écran déjà affiché."
+  "csp.appliesNextLaunch": "Prend effet au prochain démarrage. Une politique n’est lue que pendant l’analyse de la page : elle ne peut pas s’appliquer à un écran déjà affiché.",
+  "themes.gradTarget": "Appliquer à",
+  "themes.gradTargetBg": "Fond",
+  "themes.gradTargetText": "Texte",
+  "themes.gradTargetBorder": "Bordure",
+  "themes.gradBorderHint": "Une bordure en dégradé passe par border-image, qui ignore border-radius : les coins arrondis deviennent carrés.",
+  "themes.gradTextHint": "Le texte en dégradé masque la couleur normale. Si l’élément n’a pas de texte propre, rien ne s’affichera."
 }
