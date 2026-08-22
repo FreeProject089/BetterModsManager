@@ -368,6 +368,44 @@ ce qu'il remplace, ou les retire). Vos mods téléchargés ne sont jamais modifi
         },
       },
       {
+        id: 'server-reach', view: 'repo', diagram: 'hosting-flow', docsPath: 'features/repo/',
+        title: { en: 'Reach your repo from outside', fr: 'Joindre votre d\u00e9p\u00f4t depuis l\u2019ext\u00e9rieur' },
+        summary: { en: 'BMM opens the port and runs the tunnel itself \u2014 three addresses, and what each one exposes.', fr: 'BMM ouvre le port et lance le tunnel lui\u2011m\u00eame \u2014 trois adresses, et ce que chacune expose.' },
+        keywords: 'tunnel cloudflared upnp port forward public lan external internet expose ngrok routeur port ouvrir exposer distance',
+        body: {
+          en: '<p>Starting the server on <b>Server Repo \u2192 Host</b> gives you up to <b>three</b> addresses. BMM does the exposing for you \u2014 there is no tunnel to install and no router page to open by hand.</p>'
+            + '<h4>The three addresses</h4><ul>'
+            + '<li><b>LAN address</b> \u2014 always. The server listens on <code>0.0.0.0</code>, so every machine on your network can reach it the moment it starts. Anyone on the same Wi\u2011Fi is already in scope.</li>'
+            + '<li><b>Public address</b> \u2014 shown either way, and this is the one that fools people. BMM asks your router to forward the port over <b>UPnP</b>; if that works the address comes from the router. If it does <b>not</b> work \u2014 many routers have UPnP off \u2014 BMM still shows a public address, looked up separately, and <b>nothing forwards to it</b>. Trust the <b>UPnP badge</b> beside it, not the presence of the address: red means you must forward the port on your router yourself, or use the tunnel instead. Either way it points at your home IP, which changes when your ISP says so.</li>'
+            + '<li><b>Tunnel address</b> \u2014 a <code>*.trycloudflare.com</code> URL. This one needs nothing from your router.</li></ul>'
+            + '<h4>About the tunnel</h4><p>BMM runs <b>cloudflared</b> for you. On first use it downloads the official binary from Cloudflare\u2019s GitHub releases into BMM\u2019s app data folder (Windows). If you already have cloudflared, point BMM at it in the Server Repo settings and it will use yours instead of downloading one.</p>'
+            + '<p>It is a <b>quick tunnel</b>: the hostname is random and <b>changes every time you start the server</b>. It is right for handing a link to a squadron for an evening, and wrong as a permanent address \u2014 subscribers would have to update their link each session.</p>'
+            + '<h4>What a public address actually exposes</h4><p>Both the public and tunnel addresses put a folder on <b>your own machine</b> on the internet. Before sharing one, know what the server checks, in this order:</p><ul>'
+            + '<li><b>Download password</b>, if you set one \u2014 checked before any file is even considered. Clients send it as an <code>X-Repo-Password</code> header; a browser cannot set headers, so <code>?password=</code> works too.</li>'
+            + '<li><b>Creator ID</b> \u2014 required on every mod download, so a request with no identifier at all is refused.</li>'
+            + '<li><b>BetterCommunity account</b>, if the repo requires one \u2014 the client must present a <b>signed</b> attestation. A forged or expired one is worth exactly as much as sending none.</li>'
+            + '<li><b>Bans</b>, then the <b>whitelist</b> if you enabled it. Both match on IP, creator key and account.</li></ul>'
+            + '<p>With no password and no whitelist, a repo you expose is <b>public</b>: anyone with the link downloads it. That is a deliberate default, not an oversight \u2014 but it is your decision to make before you paste the link somewhere.</p>'
+            + '<h4>Stopping</h4><p>Stopping the server closes the tunnel and asks the router to <b>remove</b> the UPnP forwarding it added. Leaving BMM running with the server stopped leaves nothing exposed.</p>'
+            + '<h4>If it will not start</h4><p>Two refusals are deliberate: the folder must contain a <code>repo.json</code> (generate the repo first), and the port must be free \u2014 <b>8080</b> by default, changeable on the same form.</p>',
+          fr: '<p>D\u00e9marrer le serveur depuis <b>D\u00e9p\u00f4t Serveur \u2192 Host</b> vous donne jusqu\u2019\u00e0 <b>trois</b> adresses. BMM s\u2019occupe de l\u2019exposition \u2014 aucun tunnel \u00e0 installer, aucune page de routeur \u00e0 ouvrir \u00e0 la main.</p>'
+            + '<h4>Les trois adresses</h4><ul>'
+            + '<li><b>Adresse LAN</b> \u2014 toujours. Le serveur \u00e9coute sur <code>0.0.0.0</code>, donc toutes les machines de votre r\u00e9seau l\u2019atteignent d\u00e8s le d\u00e9marrage. Quiconque est sur le m\u00eame Wi\u2011Fi est d\u00e9j\u00e0 concern\u00e9.</li>'
+            + '<li><b>Adresse publique</b> \u2014 affich\u00e9e dans les deux cas, et c\u2019est elle qui trompe. BMM demande \u00e0 votre routeur d\u2019ouvrir le port en <b>UPnP</b> ; si \u00e7a marche, l\u2019adresse vient du routeur. Si \u00e7a <b>ne marche pas</b> \u2014 beaucoup de routeurs ont l\u2019UPnP d\u00e9sactiv\u00e9 \u2014 BMM affiche quand m\u00eame une adresse publique, obtenue autrement, et <b>rien ne redirige vers elle</b>. Fiez-vous au <b>badge UPnP</b> juste \u00e0 c\u00f4t\u00e9, pas \u00e0 la pr\u00e9sence de l\u2019adresse : rouge signifie que vous devez ouvrir le port vous-m\u00eame sur le routeur, ou passer par le tunnel. Dans tous les cas elle pointe sur votre IP domestique, qui change quand votre FAI le d\u00e9cide.</li>'
+            + '<li><b>Adresse de tunnel</b> \u2014 une URL <code>*.trycloudflare.com</code>. Celle-ci ne demande rien \u00e0 votre routeur.</li></ul>'
+            + '<h4>\u00c0 propos du tunnel</h4><p>BMM lance <b>cloudflared</b> pour vous. \u00c0 la premi\u00e8re utilisation, il t\u00e9l\u00e9charge le binaire officiel depuis les releases GitHub de Cloudflare dans le dossier de donn\u00e9es de BMM (Windows). Si vous avez d\u00e9j\u00e0 cloudflared, indiquez son chemin dans les r\u00e9glages du D\u00e9p\u00f4t Serveur et BMM utilisera le v\u00f4tre au lieu d\u2019en t\u00e9l\u00e9charger un.</p>'
+            + '<p>C\u2019est un <b>tunnel rapide</b> : le nom d\u2019h\u00f4te est al\u00e9atoire et <b>change \u00e0 chaque d\u00e9marrage du serveur</b>. Parfait pour donner un lien \u00e0 une escadrille le temps d\u2019une soir\u00e9e, inadapt\u00e9 comme adresse permanente \u2014 vos abonn\u00e9s devraient changer de lien \u00e0 chaque session.</p>'
+            + '<h4>Ce qu\u2019une adresse publique expose vraiment</h4><p>L\u2019adresse publique et celle du tunnel mettent un dossier de <b>votre propre machine</b> sur Internet. Avant d\u2019en partager une, sachez ce que le serveur v\u00e9rifie, dans cet ordre :</p><ul>'
+            + '<li><b>Mot de passe de t\u00e9l\u00e9chargement</b>, si vous en avez mis un \u2014 v\u00e9rifi\u00e9 avant m\u00eame qu\u2019un fichier soit envisag\u00e9. Les clients l\u2019envoient dans un en\u2011t\u00eate <code>X-Repo-Password</code> ; un navigateur ne pouvant pas poser d\u2019en\u2011t\u00eate, <code>?password=</code> fonctionne aussi.</li>'
+            + '<li><b>Identifiant de cr\u00e9ateur</b> \u2014 exig\u00e9 sur chaque t\u00e9l\u00e9chargement de mod : une requ\u00eate sans aucun identifiant est refus\u00e9e.</li>'
+            + '<li><b>Compte BetterCommunity</b>, si le d\u00e9p\u00f4t l\u2019exige \u2014 le client doit pr\u00e9senter une attestation <b>sign\u00e9e</b>. Une attestation forg\u00e9e ou expir\u00e9e vaut exactement autant que ne rien envoyer.</li>'
+            + '<li><b>Bannissements</b>, puis la <b>liste blanche</b> si vous l\u2019avez activ\u00e9e. Les deux comparent l\u2019IP, la cl\u00e9 de cr\u00e9ateur et le compte.</li></ul>'
+            + '<p>Sans mot de passe ni liste blanche, un d\u00e9p\u00f4t que vous exposez est <b>public</b> : quiconque a le lien le t\u00e9l\u00e9charge. C\u2019est un choix par d\u00e9faut d\u00e9lib\u00e9r\u00e9, pas un oubli \u2014 mais c\u2019est \u00e0 vous de trancher avant de coller le lien quelque part.</p>'
+            + '<h4>Arr\u00eater</h4><p>Arr\u00eater le serveur ferme le tunnel et demande au routeur de <b>retirer</b> la redirection UPnP qu\u2019il avait ajout\u00e9e. Laisser BMM ouvert avec le serveur arr\u00eat\u00e9 n\u2019expose rien.</p>'
+            + '<h4>S\u2019il refuse de d\u00e9marrer</h4><p>Deux refus sont volontaires : le dossier doit contenir un <code>repo.json</code> (g\u00e9n\u00e9rez le d\u00e9p\u00f4t d\u2019abord), et le port doit \u00eatre libre \u2014 <b>8080</b> par d\u00e9faut, modifiable sur le m\u00eame formulaire.</p>',
+        },
+      },
+      {
         id: 'repo-admin', docsPath: 'features/repo/', view: 'repo', diagram: 'security-system',
         title: { en: 'Repo admin & monitoring', fr: 'Admin et monitoring du dépôt' },
         summary: { en: 'Watch who downloads what, live — and manage your whitelist and bans.', fr: 'Voyez qui télécharge quoi, en direct — et gérez liste blanche et bannissements.' },
@@ -2713,7 +2751,9 @@ function pageReaderView(path: string): string {
 function navList(current: string): string {
   const pages = _manifest || [];
   const out: string[] = [];
-  let section = ' ';
+  // '\0' as an escape, not a raw NUL byte: written literally it makes the whole file
+  // read as BINARY to grep and friends, which silently drops it from any source search.
+  let section = '\0';
   for (const p of pages) {
     if (p.section !== section) {
       section = p.section;
