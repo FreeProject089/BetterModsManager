@@ -15,6 +15,7 @@ import { initBetaHub, openBugReportModal, openFeedbackModal } from '../betahub/b
 import { initLaunchPackSettings } from './launch_packs.js';
 import { initScheduler } from './scheduler.js';
 import { initCardReorder } from './card-order.js';
+import { renderCspEditor, bindCspEditor } from './csp-editor.js';
 // ── GitHub PAT helper ─────────────────────────────────────
 export async function getGithubPat() {
     try {
@@ -962,7 +963,7 @@ export async function renderSettingsTags() {
             wrap.style.cssText = 'display:flex;align-items:center;gap:4px';
             wrap.innerHTML = iconMod.renderTagChip(tag, { fontSize: 12, pad: '4px 10px' })
                 + `<button data-id="${tag.id}" class="btn-edit-tag" title="${escHtml(t('common.edit') || 'Edit')}" style="background:none;border:none;color:${tag.color};cursor:pointer;padding:0;opacity:0.7">✎</button>`
-                + `<button data-id="${tag.id}" class="btn-del-tag" onmouseenter="window.showTaskyHelp('settings.tagDeleteTip', 'trash')" onmouseleave="window.hideTaskyHelp()" style="background:none;border:none;color:${tag.color};cursor:pointer;padding:0;font-size:14px">&times;</button>`;
+                + `<button data-id="${tag.id}" class="btn-del-tag" data-tasky="settings.tagDeleteTip" data-tasky-icon="trash" style="background:none;border:none;color:${tag.color};cursor:pointer;padding:0;font-size:14px">&times;</button>`;
             list.appendChild(wrap);
         });
         // Edit: prefill the form, flip the create button to save (same handler).
@@ -1623,6 +1624,17 @@ async function openDiscordLinkFlow() {
 // ── Identity & API card ────────────────────────────────────
 async function initSecurityInfoCard() {
     const elCreatorId = document.getElementById('sic-creator-id');
+    // The CSP editor rides on the security card rather than a screen of its own: the
+    // policy is a security fact about this install, like the ids above it.
+    if (elCreatorId && !document.getElementById('csp-extra')) {
+        const host = elCreatorId.closest('.settings-card');
+        if (host) {
+            const box = document.createElement('div');
+            box.innerHTML = renderCspEditor();
+            host.appendChild(box);
+            bindCspEditor(box);
+        }
+    }
     const elApiToken = document.getElementById('sic-api-token');
     const elVersion = document.getElementById('sic-bmm-version');
     // Load values

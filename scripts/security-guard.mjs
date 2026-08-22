@@ -62,13 +62,13 @@ if (violations.length) {
 // 'unsafe-inline' — which is also why an injected `<img src=x onerror=…>` runs, and why a
 // single missed escape in this app is code execution rather than a broken layout.
 //
-// There are 238 of them today, so failing the build outright would fail it on the
+// There are 120 of them today (was 238 before the tasky migration), so failing the build outright would fail it on the
 // first run. The guard fails only when the number GOES UP: the count can fall to zero at
 // whatever pace the migration takes, and cannot quietly climb back while nobody is looking.
 // When it reaches 0, turn BASELINE to 0 and this becomes a real ban.
 //
 // Update BASELINE deliberately, downwards. Raising it is the thing this exists to prevent.
-const BASELINE = 238;
+const BASELINE = 120;
 
 // Case-SENSITIVE and lowercase on purpose: HTML attributes in these templates are
 // lowercase, while  is ordinary JavaScript. A /i flag counted

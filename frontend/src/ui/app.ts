@@ -10,6 +10,7 @@ import { initI18n, applyTranslations, t, getLang } from '../core/i18n.js';
 import { initBenchmark } from '../features/bench/benchmark.js';
 import { shouldShowOnboarding, startOnboarding } from './onboarding.js';
 import { initNavbarCustomize } from './navbar-customize.js';
+import { initInlineActions } from '../core/inline-actions.js';
 import { openTutorialHub } from './tutorial-hub.js';
 import { initRepo } from '../features/repo/repo.js';
 import { appState } from '../core/state.js';
@@ -785,6 +786,10 @@ export function openExternal(url: string): void {
 
 // ── Boot ──────────────────────────────────────────────────
 async function main() {
+    // FIRST, before anything renders. These are delegated listeners on `document` that
+    // stand in for the `on…=` attributes the markup used to carry; a tooltip or an image
+    // fallback rendered before they exist would simply never respond.
+    initInlineActions();
     console.log('[BMM] App starting from generated TypeScript!');
 
     // Load external link registry first so every module can call getLinks() safely

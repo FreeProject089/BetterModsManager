@@ -274,7 +274,7 @@ export async function renderModDetail(modId) {
       const chip = document.createElement('div');
       chip.style.cssText = 'display:flex;align-items:center;gap:4px';
       chip.innerHTML = renderTagChip(tDef, { fontSize: 11, pad: '2px 8px' })
-        + `<button data-id="${tid}" onmouseenter="window.showTaskyHelp('mod.removeTagTip', 'trash')" onmouseleave="window.hideTaskyHelp()" style="background:none;border:none;color:${tDef.color};cursor:pointer;padding:0">&times;</button>`;
+        + `<button data-id="${tid}" data-tasky="mod.removeTagTip" data-tasky-icon="trash" style="background:none;border:none;color:${tDef.color};cursor:pointer;padding:0">&times;</button>`;
       chip.querySelector('button').onclick = async () => { 
         const ok = await window.confirmCustom(
           t('common.delete') || 'Retirer le tag',

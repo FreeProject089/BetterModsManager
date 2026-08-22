@@ -861,7 +861,7 @@ function buildSimpleTab(): string {
 
     const presets = BUILTIN_THEMES.map(bt => `
         <button class="bte-preset" data-preset-id="${bt.id}"
-            onmouseenter="window.showTaskyHelp('${escJs(bt.description||bt.name)}','info',true)" onmouseleave="window.hideTaskyHelp()">
+            data-tasky="${escJs(bt.description||bt.name)}" data-tasky-literal="1">
             <span class="bte-preset-dot" style="background:${bt.vars?.['--bmm-accent']||'var(--bmm-accent)'}"></span>
             ${escHtml(bt.name)}
         </button>`).join('');
@@ -872,7 +872,7 @@ function buildSimpleTab(): string {
         <div class="bte-asset-row">
             <div class="bte-asset-info">
                 <span class="bte-asset-label"
-                    onmouseenter="window.showTaskyHelp('${escJs(desc)}','image',true)" onmouseleave="window.hideTaskyHelp()">${escHtml(label)}</span>
+                    data-tasky="${escJs(desc)}" data-tasky-icon="image" data-tasky-literal="1">${escHtml(label)}</span>
                 ${assets[key] ? `<span class="bte-asset-set">✓ ${t('themes.assetSet')||'set'}</span>` : `<span class="bte-asset-none">${t('themes.assetDefault')||'default'}</span>`}
             </div>
             <div class="bte-asset-actions">
@@ -919,7 +919,7 @@ function buildSimpleTab(): string {
                 const custom = vars[tok.key] || '';
                 const ph = pickerHex(tok.key, custom);
                 const liveLabel = custom ? '' : `<span class="bte-token-live">${escHtml(currentLabel(tok.key, tok.type))}</span>`;
-                const mdnLink = tok.mdn ? `<a class="bte-mdn" href="${MDN_BASE}${tok.mdn}" target="_blank" data-tooltip="MDN: ${tok.mdn}" onmouseenter="window.showTaskyHelp('${escJs('Open the MDN documentation for the CSS property: ' + tok.mdn)}','info',true)" onmouseleave="window.hideTaskyHelp()">?</a>` : '';
+                const mdnLink = tok.mdn ? `<a class="bte-mdn" href="${MDN_BASE}${tok.mdn}" target="_blank" data-tooltip="MDN: ${tok.mdn}" onmouseenter="window.showTaskyHelp('${escJs('Open the MDN documentation for the CSS property: ' + tok.mdn)}','info',true)">?</a>` : '';
                 let inp = '';
                 if (tok.type === 'color') {
                     inp = `<div class="bte-color-wrap">
@@ -943,7 +943,7 @@ function buildSimpleTab(): string {
                 return `<div class="bte-token-row${custom ? ' has-custom' : ''}" data-token="${escAttr(tok.key)}">
                     <label class="bte-token-lbl bte-token-reveal" data-reveal="${escAttr(tok.key)}"
                         data-tooltip="${escAttr(t('themes.revealTip') || 'Click: show me what this paints')}"
-                        onmouseenter="window.showTaskyHelp('${escJs(tok.desc)}','info',true)" onmouseleave="window.hideTaskyHelp()">${escHtml(tok.label)} ${mdnLink}</label>
+                        data-tasky="${escJs(tok.desc)}" data-tasky-literal="1">${escHtml(tok.label)} ${mdnLink}</label>
                     <div class="bte-token-ctrl">
                         ${inp}
                         ${custom ? `<button class="bte-token-revert" data-var="${tok.key}" data-tooltip="${t('themes.resetToDefault')||'Reset to default'}">↩</button>` : liveLabel}
@@ -955,7 +955,7 @@ function buildSimpleTab(): string {
     }).join('');
 
     return `
-        <div class="bte-intro" onmouseenter="window.showTaskyHelp('Hover any label to see what it does. Click ? for the MDN docs. Pick a preset to start fast, then tweak.','info',true)" onmouseleave="window.hideTaskyHelp()">
+        <div class="bte-intro" data-tasky="Hover any label to see what it does. Click ? for the MDN docs. Pick a preset to start fast, then tweak." data-tasky-literal="1">
             ${t('themes.simpleIntro')||'Pick a preset, then tweak anything. Hover labels for help, click ? for MDN docs.'}
         </div>
         ${buildChangesPanel()}
@@ -1247,7 +1247,7 @@ function buildElementsTab(): string {
     const editing = isEdit ? ces.find(c => c.id === _editingCeId) : null;
 
     return `
-        <div class="bte-intro" onmouseenter="window.showTaskyHelp('${escJs(t('themes.ceTaskyHelp')||'Add your own buttons, banners or widgets anywhere in BMM. Choose WHERE (1), pick a template, then tweak the HTML (2).')}','info',true)" onmouseleave="window.hideTaskyHelp()">
+        <div class="bte-intro" onmouseenter="window.showTaskyHelp('${escJs(t('themes.ceTaskyHelp')||'Add your own buttons, banners or widgets anywhere in BMM. Choose WHERE (1), pick a template, then tweak the HTML (2).')}','info',true)">
             ${t('themes.ceIntro')||'Add your own buttons, banners, badges or widgets anywhere in BMM. Pick a spot, choose a template, done.'}
         </div>
 

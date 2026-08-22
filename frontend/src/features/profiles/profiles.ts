@@ -844,7 +844,7 @@ export async function renderProfiles() {
                 // one in the global list, and clicking it there did nothing at all — you had
                 // to find it again in a list of every mod on the machine to select it.
                 activeModsHtml = `<div style="display:flex; flex-wrap:wrap; gap:4px; margin-top:8px; max-height:60px; overflow-y:auto; padding-right:4px;" class="active-mods-list">
-                    ${enabledMods.map(m => `<span class="profile-mod-chip" data-mod-id="${escAttr(m.id)}" role="button" tabindex="0" style="font-size:10px; padding:2px 6px; border-radius:4px; background:var(--bmm-s04); border:1px solid var(--border); color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:120px; cursor:pointer;" onmouseenter="window.showTaskyHelp('${escAttr(m.name)}', 'package', true)" onmouseleave="window.hideTaskyHelp()">${escHtml(m.name)}</span>`).join('')}
+                    ${enabledMods.map(m => `<span class="profile-mod-chip" data-mod-id="${escAttr(m.id)}" role="button" tabindex="0" style="font-size:10px; padding:2px 6px; border-radius:4px; background:var(--bmm-s04); border:1px solid var(--border); color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:120px; cursor:pointer;" data-tasky="${escAttr(m.name)}" data-tasky-icon="package" data-tasky-literal="1">${escHtml(m.name)}</span>`).join('')}
                 </div>`;
             }
         } catch { }
@@ -879,22 +879,22 @@ export async function renderProfiles() {
       <div class="profile-card-paths" style="margin-bottom:16px;background:rgba(255,255,255,0.015);padding:10px 12px;border-radius:8px;border:1px solid var(--border)">
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
           <span class="clickable-label btn-open-path" data-path="${escAttr(p.game_path)}" style="font-size:11px;color:var(--text-secondary);width:110px;flex-shrink:0;text-transform:uppercase;letter-spacing:0.04em">${t('prof.gameDirLabel')}</span>
-          <span class="btn-open-path" data-path="${escAttr(p.game_path)}" style="font-size:11px;color:var(--text-primary);font-family:var(--font-mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;cursor:pointer" onmouseenter="window.showTaskyHelp(this.dataset.path, 'folder', true)" onmouseleave="window.hideTaskyHelp()">${escHtml(p.game_path)}</span>
-          <button class="btn-open-path" data-path="${escAttr(p.game_path)}" onmouseenter="window.showTaskyHelp(this.dataset.path, 'folder', true)" onmouseleave="window.hideTaskyHelp()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;padding:2px;display:flex">
+          <span class="btn-open-path" data-path="${escAttr(p.game_path)}" style="font-size:11px;color:var(--text-primary);font-family:var(--font-mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;cursor:pointer" data-tasky-from="path" data-tasky-icon="folder" data-tasky-literal="1">${escHtml(p.game_path)}</span>
+          <button class="btn-open-path" data-path="${escAttr(p.game_path)}" data-tasky-from="path" data-tasky-icon="folder" data-tasky-literal="1" style="background:none;border:none;color:var(--text-muted);cursor:pointer;padding:2px;display:flex">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
           </button>
         </div>
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
           <span class="clickable-label btn-open-path" data-path="${escAttr(p.mods_path)}" style="font-size:11px;color:var(--text-secondary);width:110px;flex-shrink:0;text-transform:uppercase;letter-spacing:0.04em">${t('prof.modsDirLabel')}</span>
-          <span class="btn-open-path" data-path="${escAttr(p.mods_path)}" style="font-size:11px;color:var(--text-primary);font-family:var(--font-mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;cursor:pointer" onmouseenter="window.showTaskyHelp(this.dataset.path, 'folder', true)" onmouseleave="window.hideTaskyHelp()">${escHtml(p.mods_path)}</span>
-          <button class="btn-open-path" data-path="${escAttr(p.mods_path)}" onmouseenter="window.showTaskyHelp(this.dataset.path, 'folder', true)" onmouseleave="window.hideTaskyHelp()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;padding:2px;display:flex">
+          <span class="btn-open-path" data-path="${escAttr(p.mods_path)}" style="font-size:11px;color:var(--text-primary);font-family:var(--font-mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;cursor:pointer" data-tasky-from="path" data-tasky-icon="folder" data-tasky-literal="1">${escHtml(p.mods_path)}</span>
+          <button class="btn-open-path" data-path="${escAttr(p.mods_path)}" data-tasky-from="path" data-tasky-icon="folder" data-tasky-literal="1" style="background:none;border:none;color:var(--text-muted);cursor:pointer;padding:2px;display:flex">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
           </button>
         </div>
         <div style="display:flex;align-items:center;gap:12px">
           <span class="clickable-label btn-open-path" data-path="${escAttr(p.backup_path)}" style="font-size:11px;color:var(--text-secondary);width:110px;flex-shrink:0;text-transform:uppercase;letter-spacing:0.04em">${t('prof.backupDirLabel')}</span>
-          <span class="btn-open-path" data-path="${escAttr(p.backup_path)}" style="font-size:11px;color:var(--text-primary);font-family:var(--font-mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;cursor:pointer" onmouseenter="window.showTaskyHelp(this.dataset.path, 'folder', true)" onmouseleave="window.hideTaskyHelp()">${escHtml(p.backup_path)}</span>
-          <button class="btn-open-path" data-path="${escAttr(p.backup_path)}" onmouseenter="window.showTaskyHelp(this.dataset.path, 'folder', true)" onmouseleave="window.hideTaskyHelp()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;padding:2px;display:flex">
+          <span class="btn-open-path" data-path="${escAttr(p.backup_path)}" style="font-size:11px;color:var(--text-primary);font-family:var(--font-mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;cursor:pointer" data-tasky-from="path" data-tasky-icon="folder" data-tasky-literal="1">${escHtml(p.backup_path)}</span>
+          <button class="btn-open-path" data-path="${escAttr(p.backup_path)}" data-tasky-from="path" data-tasky-icon="folder" data-tasky-literal="1" style="background:none;border:none;color:var(--text-muted);cursor:pointer;padding:2px;display:flex">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
           </button>
         </div>
@@ -916,18 +916,18 @@ export async function renderProfiles() {
           ${isActive ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="vertical-align:middle;margin-right:4px"><polyline points="20 6 9 17 4 12"/></svg>' + t('prof.active') : t('mod.activate')}
         </button>
         <button class="btn btn-secondary btn-sm btn-copy-profile-id" data-id="${escAttr(p.id)}" data-name="${escAttr(p.name)}"
-            onmouseenter="window.showTaskyHelp('prof.copyIdTip', 'hash')" onmouseleave="window.hideTaskyHelp()">
+            data-tasky="prof.copyIdTip" data-tasky-icon="hash">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
             <line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/>
             <line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/>
           </svg>
         </button>
-        <button class="btn btn-secondary btn-sm btn-edit-profile" data-id="${escAttr(p.id)}" onmouseenter="window.showTaskyHelp('prof.editTip', 'edit')" onmouseleave="window.hideTaskyHelp()">
+        <button class="btn btn-secondary btn-sm btn-edit-profile" data-id="${escAttr(p.id)}" data-tasky="prof.editTip" data-tasky-icon="edit">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
             <path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
           </svg>
         </button>
-        <button class="btn btn-danger btn-sm btn-del-profile" data-id="${escAttr(p.id)}" onmouseenter="window.showTaskyHelp('prof.deleteTip', 'trash')" onmouseleave="window.hideTaskyHelp()">
+        <button class="btn btn-danger btn-sm btn-del-profile" data-id="${escAttr(p.id)}" data-tasky="prof.deleteTip" data-tasky-icon="trash">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
             <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
             <path d="M10 11v6"/><path d="M14 11v6"/>
@@ -1021,8 +1021,8 @@ export async function renderProfiles() {
               <button
                 class="profile-disk-warn-btn"
                 style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:4px;background:${bgColor};border:1px solid ${color}44;cursor:pointer;padding:0;transition:opacity 0.15s;"
-                onmouseenter="window.showTaskyHelp('${tipKey}', 'alert', false)"
-                onmouseleave="window.hideTaskyHelp()"
+                data-tasky="${tipKey}" data-tasky-icon="alert"
+               
                 onclick="(function(){
                   document.querySelectorAll('.nav-item[data-view]').forEach(n=>n.classList.remove('active'));
                   document.querySelector('.nav-item[data-view=settings]')?.classList.add('active');

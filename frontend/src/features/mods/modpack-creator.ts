@@ -356,7 +356,7 @@ function _renderModpackList(container) {
                     <div class="bmm-switch-wrap btn-apply ${anyEnabled ? 'active' : ''}" 
                          style="width:38px; height:20px; position:relative; cursor:pointer; flex-shrink:0;"
                          onmouseenter="window.showTaskyHelp('${escHtml(t('modpack.quickApplyDesc') || 'Cliquez pour activer ou désactiver ce pack.')}', 'zap')"
-                         onmouseleave="window.hideTaskyHelp()">
+                        >
                         <div class="switch-bg" style="position:absolute; inset:0; border-radius:10px; background:${anyEnabled ? 'var(--success)' : 'var(--bmm-s10)'}; transition:all 0.3s; border:1px solid ${anyEnabled ? 'rgba(16,185,129,0.3)' : 'var(--bmm-s05)'};"></div>
                         <div class="switch-knob" style="position:absolute; top:3px; ${anyEnabled ? 'right:3px' : 'left:3px'}; width:14px; height:14px; border-radius:50%; background:#fff; transition:all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); box-shadow:0 2px 4px rgba(0,0,0,0.2);"></div>
                     </div>

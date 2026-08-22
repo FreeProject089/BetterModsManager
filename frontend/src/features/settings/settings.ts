@@ -931,7 +931,7 @@ export async function renderSettingsTags() {
             wrap.style.cssText = 'display:flex;align-items:center;gap:4px';
             wrap.innerHTML = iconMod.renderTagChip(tag, { fontSize: 12, pad: '4px 10px' })
                 + `<button data-id="${tag.id}" class="btn-edit-tag" title="${escHtml(t('common.edit') || 'Edit')}" style="background:none;border:none;color:${tag.color};cursor:pointer;padding:0;opacity:0.7">✎</button>`
-                + `<button data-id="${tag.id}" class="btn-del-tag" onmouseenter="window.showTaskyHelp('settings.tagDeleteTip', 'trash')" onmouseleave="window.hideTaskyHelp()" style="background:none;border:none;color:${tag.color};cursor:pointer;padding:0;font-size:14px">&times;</button>`;
+                + `<button data-id="${tag.id}" class="btn-del-tag" data-tasky="settings.tagDeleteTip" data-tasky-icon="trash" style="background:none;border:none;color:${tag.color};cursor:pointer;padding:0;font-size:14px">&times;</button>`;
             list.appendChild(wrap);
         });
 

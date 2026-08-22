@@ -1281,7 +1281,7 @@ function renderReportHistory(): void {
                         <span style="font-family:monospace; opacity:0.6">ID: ${item.id}</span>
                     </div>
                 </div>
-                <a href="${url}" target="_blank" class="bh-history-link" onmouseenter="window.showTaskyHelp('betahub.historyViewTip', 'info')" onmouseleave="window.hideTaskyHelp()" style="padding:6px; background:rgba(255,255,255,0.05); border-radius:6px; color:var(--text-secondary); transition:all 0.2s; display:flex; align-items:center; justify-content:center; border:1px solid rgba(255,255,255,0.05)">
+                <a href="${url}" target="_blank" class="bh-history-link" data-tasky="betahub.historyViewTip" style="padding:6px; background:rgba(255,255,255,0.05); border-radius:6px; color:var(--text-secondary); transition:all 0.2s; display:flex; align-items:center; justify-content:center; border:1px solid rgba(255,255,255,0.05)">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
                         <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
                     </svg>

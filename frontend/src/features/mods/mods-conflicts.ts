@@ -62,11 +62,11 @@ export function updateConflictBadgeOnCard(modId) {
     const intraSvg = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>';
     const interSvg = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>';
 
-    if (hasIntraActive) conflictHtml += `<div class="tag-conflict tag-intra-conflict active" onmouseenter="window.showTaskyHelp('lib.conflictActiveTip', 'warning')" onmouseleave="window.hideTaskyHelp()" onclick="window.openGlobalConflictModal('${modId}')" style="cursor:pointer">${intraSvg}Intra</div>`;
-    else if (hasIntraPotential) conflictHtml += `<div class="tag-conflict tag-intra-conflict potential" onmouseenter="window.showTaskyHelp('lib.conflictPotentialTip', 'warning')" onmouseleave="window.hideTaskyHelp()" onclick="window.openGlobalConflictModal('${modId}')" style="cursor:pointer">${intraSvg}Intra</div>`;
+    if (hasIntraActive) conflictHtml += `<div class="tag-conflict tag-intra-conflict active" data-tasky="lib.conflictActiveTip" data-tasky-icon="warning" onclick="window.openGlobalConflictModal('${modId}')" style="cursor:pointer">${intraSvg}Intra</div>`;
+    else if (hasIntraPotential) conflictHtml += `<div class="tag-conflict tag-intra-conflict potential" data-tasky="lib.conflictPotentialTip" data-tasky-icon="warning" onclick="window.openGlobalConflictModal('${modId}')" style="cursor:pointer">${intraSvg}Intra</div>`;
 
-    if (hasInterActive) conflictHtml += `<div class="tag-conflict tag-inter-conflict active" onmouseenter="window.showTaskyHelp('lib.conflictInterActiveTip', 'warning')" onmouseleave="window.hideTaskyHelp()" onclick="window.openGlobalConflictModal('${modId}')" style="cursor:pointer">${interSvg}Inter</div>`;
-    else if (hasInterPotential) conflictHtml += `<div class="tag-conflict tag-inter-conflict potential" onmouseenter="window.showTaskyHelp('lib.conflictInterPotentialTip', 'warning')" onmouseleave="window.hideTaskyHelp()" onclick="window.openGlobalConflictModal('${modId}')" style="cursor:pointer">${interSvg}Inter</div>`;
+    if (hasInterActive) conflictHtml += `<div class="tag-conflict tag-inter-conflict active" data-tasky="lib.conflictInterActiveTip" data-tasky-icon="warning" onclick="window.openGlobalConflictModal('${modId}')" style="cursor:pointer">${interSvg}Inter</div>`;
+    else if (hasInterPotential) conflictHtml += `<div class="tag-conflict tag-inter-conflict potential" data-tasky="lib.conflictInterPotentialTip" data-tasky-icon="warning" onclick="window.openGlobalConflictModal('${modId}')" style="cursor:pointer">${interSvg}Inter</div>`;
 
     if (conflictHtml) nameRow.insertAdjacentHTML('beforeend', conflictHtml);
   }
@@ -203,8 +203,8 @@ export async function openGlobalConflictModal(preselectModId = null) {
                    <div style="display:flex;align-items:center;background:${statusBg};padding:7px 10px;border-radius:6px;border-left:2px solid ${statusColor};gap:8px">
                      <span style="font-size:11.5px;font-weight:600;color:var(--text-primary);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:help"
                            data-tooltip="${escAttr(r.other_mod_name)}"
-                           onmouseenter="window.showTaskyHelp('${escAttr(escJs(r.other_mod_name))}', 'package', true)"
-                           onmouseleave="window.hideTaskyHelp()">${escHtml(r.other_mod_name)}</span>
+                           data-tasky="${escAttr(escJs(r.other_mod_name))}" data-tasky-icon="package" data-tasky-literal="1"
+                          >${escHtml(r.other_mod_name)}</span>
                      ${isActive ? `<span style="font-size:10px;background:rgba(255,255,255,0.08);color:var(--text-secondary);padding:1px 6px;border-radius:4px;font-family:var(--font-mono);flex-shrink:0" data-tooltip="${t('conflict.activationOrder')||'Activation order'}">#${r.activation_order}</span>` : ''}
                      <button style="font-size:10px;font-family:var(--font-mono);color:var(--accent);background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.2);padding:2px 7px;border-radius:5px;cursor:pointer;flex-shrink:0" onclick="window.showConflictContextMenu(event,'${item.sourceModId}','${r.other_mod_id}')">${r.file_count} ${t('conflict.files')||'files'}</button>
                      <span style="font-size:9px;font-weight:900;padding:2px 7px;border-radius:10px;text-transform:uppercase;color:${statusColor};border:1px solid ${statusColor};background:${statusBg};flex-shrink:0">${isActive ? (t('conflict.active')||'ACTIVE') : (t('conflict.potential')||'POTENTIAL')}</span>
@@ -221,8 +221,8 @@ export async function openGlobalConflictModal(preselectModId = null) {
                <div style="width:6px;height:6px;border-radius:50%;background:${activeCount > 0 ? 'var(--danger)' : 'var(--warning)'};flex-shrink:0;box-shadow:0 0 6px ${activeCount > 0 ? 'var(--danger)' : 'var(--warning)'}"></div>
                <span style="font-weight:700;font-size:12.5px;color:var(--text-primary);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:help"
                      data-tooltip="${escAttr(item.sourceModName)}"
-                     onmouseenter="window.showTaskyHelp('${escAttr(escJs(item.sourceModName))}', 'package', true)"
-                     onmouseleave="window.hideTaskyHelp()">${escHtml(item.sourceModName)}</span>
+                     data-tasky="${escAttr(escJs(item.sourceModName))}" data-tasky-icon="package" data-tasky-literal="1"
+                    >${escHtml(item.sourceModName)}</span>
                <div style="display:flex;align-items:center;gap:5px">${typeBadges}</div>
                ${activeCount > 0 ? `<span style="font-size:9px;font-weight:800;padding:2px 7px;border-radius:10px;color:var(--danger);border:1px solid var(--danger);background:rgba(239,68,68,0.1)">${activeCount} ${t('conflict.active')||'ACTIVE'}</span>` : ''}
                ${potentialCount > 0 ? `<span style="font-size:9px;font-weight:800;padding:2px 7px;border-radius:10px;color:var(--warning);border:1px solid var(--warning);background:rgba(245,158,11,0.1)">${potentialCount} ${t('conflict.potential')||'POTENTIAL'}</span>` : ''}

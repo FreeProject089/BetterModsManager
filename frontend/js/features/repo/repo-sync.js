@@ -4,7 +4,7 @@ import { registerRepoSyncOpener } from './auto-sync.js';
 import { toast, updateLibraryProfileSelector } from '../../ui/app.js';
 import { t } from '../../core/i18n.js';
 import { renderProfiles } from '../profiles/profiles.js';
-import { formatBytes } from '../../core/utils.js';
+import { formatBytes, escHtml } from '../../core/utils.js';
 import { checkModUpdates } from './mod-updates.js';
 import { getLinks } from '../../core/links-config.js';
 let lastFetchedRepo = null;
@@ -363,7 +363,7 @@ export function initRepoSync(elements) {
                         title.style.justifyContent = 'space-between';
                         title.style.alignItems = 'center';
                         title.innerHTML = `
-                            <span style="font-size:12px; font-weight:700;">${rp.name}</span>
+                            <span style="font-size:12px; font-weight:700;">${escHtml(rp.name)}</span>
                             <span style="font-size:10px; color:var(--text-muted);">${formatBytes(rpSizeTotal)}</span>
                         `;
                         title.style.color = 'var(--accent)';
@@ -813,7 +813,7 @@ export function showSyncSummary(summary) {
             <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:12px; padding:15px; margin-bottom:12px;">
                 <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
                     <div style="width:8px; height:8px; border-radius:50%; background:var(--accent);"></div>
-                    <span style="font-weight:700; font-size:14px; color:var(--text-primary);">${p.name}</span>
+                    <span style="font-weight:700; font-size:14px; color:var(--text-primary);">${escHtml(p.name)}</span>
                 </div>
                 <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
                     <div style="background:rgba(0,0,0,0.2); padding:10px; border-radius:8px; border:1px solid rgba(255,255,255,0.05);">

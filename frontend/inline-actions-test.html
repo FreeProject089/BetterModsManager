@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>inline-actions — delegation check</title>
+</head>
+<body>
+<!--
+  A bench for frontend/src/core/inline-actions.ts, run in a real browser engine.
+
+  It exists because the thing worth checking cannot be checked by reading: whether a
+  delegated mouseover/mouseout pair behaves like the mouseenter/mouseleave it replaced.
+  The difference is `relatedTarget` — moving the pointer from a parent onto its own child
+  fires mouseout then mouseover, and a naive delegate would hide and re-show the tooltip
+  on every internal move. That is a flicker nobody would find by inspection.
+
+  Open it directly; it prints its own results. Not part of the app.
+-->
+<h1>inline-actions delegation</h1>
+<div id="fixtures">
+    <span id="plain" data-tasky="msg.plain">plain</span>
+    <span id="iconed" data-tasky="msg.iconed" data-tasky-icon="package">with icon</span>
+    <span id="literal" data-tasky="C:\path\file.txt" data-tasky-literal="1">literal</span>
+    <span id="fromattr" data-tasky-from="path" data-path="D:\from\dataset">from dataset</span>
+    <span id="parent" data-tasky="msg.parent">parent <b id="child">child</b></span>
+    <span id="none">no tooltip here</span>
+    <button id="act" data-act="testFn" data-act-args='["a","b"]'>act</button>
+    <button id="actstop" data-act="testFn" data-act-stop="1">act+stop</button>
+    <button id="actbad" data-act="testFn" data-act-args='{{{not json'>bad args</button>
+    <img id="img" data-onerror="hide" src="does-not-exist.png" alt="">
+</div>
+<pre id="out"></pre>
+
+<script type="module">
+import { initInlineActions } from './js/core/inline-actions.js';
+
+const log = [];
+let shown = [], hidden = 0, called = [];
+window.showTaskyHelp = (key, icon, literal) => { shown.push({ key, icon, literal }); };
+window.hideTaskyHelp = () => { hidden++; };
+window.testFn = (...args) => { called.push(args); };
+
+initInlineActions();
+
+const $ = (id) => document.getElementById(id);
+const over = (el, from) => el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, relatedTarget: from || null }));
+const out_ = (el, to) => el.dispatchEvent(new MouseEvent('mouseout', { bubbles: true, relatedTarget: to || null }));
+
+let fails = 0;
+const check = (label, cond, detail = '') => {
+    log.push(`${cond ? 'PASS' : 'FAIL'}  ${label}${detail ? '  ' + detail : ''}`);
+    if (!cond) fails++;
+};
+
+// ── tooltips ──
+shown = []; over($('plain'));
+check('plain key + default icon', shown.length === 1 && shown[0].key === 'msg.plain' && shown[0].icon === 'info' && shown[0].literal === false, JSON.stringify(shown[0]));
+
+shown = []; over($('iconed'));
+check('custom icon is passed', shown[0]?.icon === 'package', JSON.stringify(shown[0]));
+
+shown = []; over($('literal'));
+check('literal flag is passed', shown[0]?.literal === true, JSON.stringify(shown[0]));
+
+shown = []; over($('fromattr'));
+check('data-tasky-from reads another attribute', shown[0]?.key === 'D:\\from\\dataset', JSON.stringify(shown[0]));
+
+// The one that matters: moving INSIDE the element must not re-fire.
+shown = []; hidden = 0;
+over($('parent'));                     // enter from outside
+over($('child'), $('parent'));         // parent -> child, still inside
+out_($('child'), $('parent'));         // child -> parent, still inside
+check('moving within the element does not re-show', shown.length === 1, `shown ${shown.length}x`);
+check('moving within the element does not hide', hidden === 0, `hidden ${hidden}x`);
+
+hidden = 0; out_($('parent'), $('none'));   // genuinely leaving
+check('leaving the element hides once', hidden === 1, `hidden ${hidden}x`);
+
+shown = []; over($('none'));
+check('an element with no data-tasky shows nothing', shown.length === 0);
+
+// ── click actions ──
+called = []; $('act').click();
+check('args are parsed from JSON', called.length === 1 && called[0][0] === 'a' && called[0][1] === 'b', JSON.stringify(called[0]));
+
+called = []; $('actstop').click();
+check('no args = called with none', called.length === 1 && called[0].length === 0);
+
+called = []; $('actbad').click();
+check('malformed args still call, with none', called.length === 1 && called[0].length === 0);
+
+// ── image fallback (error does not bubble; the listener is on capture) ──
+$('img').addEventListener('error', () => {
+    setTimeout(() => {
+        check('a broken image is hidden', $('img').style.display === 'none', `display=${$('img').style.display}`);
+        finish();
+    }, 0);
+});
+setTimeout(finish, 1500);   // in case the image resolves some other way
+
+let done = false;
+function finish() {
+    if (done) return;
+    done = true;
+    log.push('', fails ? `${fails} FAILED` : 'all passed');
+    document.getElementById('out').textContent = log.join('\n');
+    window.__RESULT__ = { fails, log };
+}
+</script>
+</body>
+</html>

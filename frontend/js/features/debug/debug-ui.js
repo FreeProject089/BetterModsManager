@@ -123,25 +123,25 @@ class DebugUI {
                     BMM DEVTOOLS
                 </div>
                 <div class="debug-controls">
-                    <button class="debug-btn" id="debug-btn-devtools" data-i18n-tooltip="dev.btn.openDevtools" onmouseenter="window.showTaskyHelp('dev.msg.jsDesc', 'icon-help')" onmouseleave="window.hideTaskyHelp()">
+                    <button class="debug-btn" id="debug-btn-devtools" data-i18n-tooltip="dev.btn.openDevtools" data-tasky="dev.msg.jsDesc" data-tasky-icon="icon-help">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
                     </button>
-                    <button class="debug-btn" id="debug-btn-inspect" onmouseenter="window.showTaskyHelp('dev.tool.inspectTip', 'icon-help')" onmouseleave="window.hideTaskyHelp()">
+                    <button class="debug-btn" id="debug-btn-inspect" data-tasky="dev.tool.inspectTip" data-tasky-icon="icon-help">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="22" y1="12" x2="18" y2="12"/><line x1="6" y1="12" x2="2" y2="12"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="22" x2="12" y2="18"/></svg>
                     </button>
-                    <button class="debug-btn" id="debug-btn-export" onmouseenter="window.showTaskyHelp('dev.tool.exportTip', 'help')" onmouseleave="window.hideTaskyHelp()">
+                    <button class="debug-btn" id="debug-btn-export" data-tasky="dev.tool.exportTip" data-tasky-icon="help">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
                     </button>
-                    <button class="debug-btn" id="debug-btn-rstudio" onmouseenter="window.showTaskyHelp('dev.tool.rstudioTip', 'help')" onmouseleave="window.hideTaskyHelp()">
+                    <button class="debug-btn" id="debug-btn-rstudio" data-tasky="dev.tool.rstudioTip" data-tasky-icon="help">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>
                     </button>
-                    <button class="debug-btn" id="debug-btn-anim" onmouseenter="window.showTaskyHelp('dev.tool.animTip', 'help')" onmouseleave="window.hideTaskyHelp()">
+                    <button class="debug-btn" id="debug-btn-anim" data-tasky="dev.tool.animTip" data-tasky-icon="help">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 2 3 14h7l-1 8 10-12h-7z"/></svg>
                     </button>
-                    <button class="debug-btn" id="dbg-clear-all" onmouseenter="window.showTaskyHelp('dev.tool.clearAllTip', 'help')" onmouseleave="window.hideTaskyHelp()">
+                    <button class="debug-btn" id="dbg-clear-all" data-tasky="dev.tool.clearAllTip" data-tasky-icon="help">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/></svg>
                     </button>
-                    <button class="debug-btn" id="debug-btn-close" onmouseenter="window.showTaskyHelp('dev.tool.closeTip', 'help')" onmouseleave="window.hideTaskyHelp()">
+                    <button class="debug-btn" id="debug-btn-close" data-tasky="dev.tool.closeTip" data-tasky-icon="help">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                     </button>
                 </div>
@@ -159,7 +159,7 @@ class DebugUI {
                 <div class="debug-pane active" id="pane-console">
                     <div class="console-tools" style="padding:8px; border-bottom:1px solid var(--bmm-s05); display:flex; gap:8px">
                     <input type="text" id="console-search" data-i18n-placeholder="dev.placeholder.search" placeholder="Search..." style="flex:1; background:rgba(0,0,0,0.2); border:1px solid var(--debug-border); border-radius:4px; color:var(--debug-text-primary); font-size:10px; padding:4px 8px; outline:none">
-                        <button class="debug-btn" id="console-clear-manual" data-i18n-tooltip="dev.btn.clearConsole" onmouseenter="window.showTaskyHelp('dev.tool.clearConsoleTip', 'help')" onmouseleave="window.hideTaskyHelp()">
+                        <button class="debug-btn" id="console-clear-manual" data-i18n-tooltip="dev.btn.clearConsole" data-tasky="dev.tool.clearConsoleTip" data-tasky-icon="help">
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/></svg>
                         </button>
                     </div>
@@ -173,7 +173,7 @@ class DebugUI {
                         <button class="filter-btn" data-filter="tasks" data-i18n="dev.label.tasks">TASKS</button>
                         <button class="filter-btn" data-filter="error" data-i18n="dev.label.error">ERR</button>
                         <div class="debug-fill"></div>
-                        <button class="debug-btn" id="timeline-clear-manual" data-i18n-tooltip="dev.btn.clearHistory" onmouseenter="window.showTaskyHelp('dev.tool.clearHistoryTip', 'help')" onmouseleave="window.hideTaskyHelp()">
+                        <button class="debug-btn" id="timeline-clear-manual" data-i18n-tooltip="dev.btn.clearHistory" data-tasky="dev.tool.clearHistoryTip" data-tasky-icon="help">
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/></svg>
                         </button>
                     </div>
