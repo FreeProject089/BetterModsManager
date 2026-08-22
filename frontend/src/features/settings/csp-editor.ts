@@ -27,6 +27,22 @@ const WEAKENING: Record<string, string> = {
     'data:': 'data: URLs count as a source',
 };
 
+/** What a source costs IN THIS DIRECTIVE.
+ *
+ *  `'unsafe-inline'` does not mean the same thing twice. In script-src it is what lets an
+ *  injected `<img src=x onerror=…>` run; in style-src it permits inline style attributes,
+ *  which this app uses on almost every element. The panel printed the script sentence under
+ *  style-src — alarming, and wrong about what the line in front of you does.
+ */
+function costOf(directive: string, source: string): string {
+    if (source === "'unsafe-inline'" && !EXECUTES.has(directive)) {
+        return directive.startsWith('style')
+            ? 'inline style attributes are allowed — which this app relies on, so removing it breaks the interface'
+            : 'inline content is allowed for this directive';
+    }
+    return WEAKENING[source];
+}
+
 /** Directives where a permissive source is a real problem rather than a cosmetic one. */
 const EXECUTES = new Set(['script-src', 'script-src-elem', 'default-src', 'object-src', 'worker-src']);
 
@@ -50,7 +66,7 @@ export function parsePolicy(policy: string): Directive[] {
             const name = (parts.shift() || '').toLowerCase();
             const risks = parts
                 .filter((p) => WEAKENING[p] !== undefined)
-                .map((source) => ({ source, why: WEAKENING[source] }));
+                .map((source) => ({ source, why: costOf(name, source) }));
             return { name, sources: parts, risks, severe: risks.length > 0 && EXECUTES.has(name) };
         });
 }

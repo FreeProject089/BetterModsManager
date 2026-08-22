@@ -637,6 +637,48 @@ function registerCore() {
     // ── Settings ────────────────────────────────────────────────────────────────
     registerCommand({ id: 'settings.storage', category: 'settings', title: { en: 'Storage & disk usage', fr: 'Stockage & espace disque' }, keywords: 'storage disk space usage dedupe stockage disque', run: callGlobal('_renderStorageModal'), defaultChord: null });
     registerCommand({ id: 'settings.hashing', category: 'settings', title: { en: 'Hashing statistics', fr: 'Statistiques de hachage' }, keywords: 'hash hashing blake3 cache stats hachage', run: callGlobal('showHashingStats'), defaultChord: null });
+    // The CSP panel sits at the bottom of the Identity & API card, which is the right place
+    // for it and not a place anyone browses. Reachable by typing "CSP" is the difference
+    // between a setting that exists and a setting that can be used.
+    registerCommand({
+        id: 'settings.csp',
+        category: 'settings',
+        title: { en: 'Content-Security-Policy', fr: 'Politique de sécurité du contenu' },
+        keywords: 'csp content security policy script-src harden strict sécurité politique durcir',
+        run: () => {
+            // Click the real nav item rather than toggling classes: it is what every other jump
+            // in this app does, so whatever else switching views entails happens too. (An earlier
+            // draft called `window.showSettings()`, which does not exist — with `?.` that opens
+            // nothing at all, silently.)
+            document.querySelector('.nav-item[data-view="settings"]')?.click();
+            // The card is built asynchronously by initSecurityInfoCard(); wait for it rather than
+            // scrolling to nothing on a cold open.
+            // Scroll, then CHECK, then retry. Switching views resets the content area's scroll
+            // position, and it does so after this runs — so a single scrollIntoView lands and is
+            // immediately undone, leaving the user at the top of a very long page with no sign
+            // anything happened. Verifying the rect is the difference between issuing a scroll
+            // and having scrolled.
+            let tries = 0;
+            const go = () => {
+                const el = document.getElementById('csp-extra')?.closest('.setting-card');
+                if (el) {
+                    // Instant, not smooth: the panel sits ~8700px down, and a smooth ride that long
+                    // is a journey to somewhere the user already asked to be.
+                    el.scrollIntoView({ block: 'center' });
+                    const r = el.getBoundingClientRect();
+                    // isConnected and a real height, not just `top` in range. Switching views detaches
+                    // and rebuilds this card, and a DETACHED element reports a rect of all zeros — so
+                    // `top === 0` passed for "it is at the top of the screen" and the loop stopped
+                    // proudly, having scrolled nothing, every single time.
+                    if (el.isConnected && r.height > 0 && r.top > -50 && r.top < window.innerHeight)
+                        return;
+                }
+                if (++tries < 40)
+                    setTimeout(go, 100);
+            };
+            go();
+        },
+    });
     // ── Help ────────────────────────────────────────────────────────────────────
     registerCommand({ id: 'help.search', category: 'help', title: { en: 'Search the documentation', fr: 'Rechercher dans la documentation' }, keywords: 'docs help search find', run: () => { window.openDocsHome?.(); document.querySelector('.nav-item[data-view="docs"]')?.click(); setTimeout(() => document.querySelector('#view-docs .dh-search')?.focus(), 80); }, defaultChord: null });
 }

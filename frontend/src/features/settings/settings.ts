@@ -1564,8 +1564,12 @@ async function initSecurityInfoCard() {
 
     // The CSP editor rides on the security card rather than a screen of its own: the
     // policy is a security fact about this install, like the ids above it.
-    if (elCreatorId && !document.getElementById('csp-extra')) {
-        const host = (elCreatorId.closest('.settings-card') as HTMLElement | null);
+    // By ID, not by walking up to a class. This read `closest('.settings-card')`, the card
+    // is a `.glass-card`, so `host` was always null and the panel was NEVER inserted — the
+    // setting existed in the build and did not exist on screen. An id is a contract; an
+    // ancestor class is a guess about markup written somewhere else.
+    if (!document.getElementById('csp-extra')) {
+        const host = document.getElementById('settings-identity-card');
         if (host) {
             const box = document.createElement('div');
             box.innerHTML = renderCspEditor();
@@ -1588,7 +1592,11 @@ async function initSecurityInfoCard() {
 
     // BetterCommunity account: live link status (detects unlink), link, link Discord.
     if (elCreatorId && !document.getElementById('btn-bc-link')) {
-        const card = (elCreatorId.closest('.settings-card') as HTMLElement | null) || elCreatorId.parentElement?.parentElement || elCreatorId.parentElement;
+        // The `.settings-card` branch that used to lead this chain never matched anything —
+        // the card is a `.glass-card` — so what has always run is the fallback below. Kept
+        // as the fallback rather than "corrected" to the card element, because that is where
+        // these controls actually sit today and moving them is not a fix.
+        const card = elCreatorId.parentElement?.parentElement || elCreatorId.parentElement;
 
         const status = document.createElement('div');
         status.id = 'bc-link-status';
