@@ -523,7 +523,10 @@ export function createModCard(mod) {
     const finalBtn = document.getElementById('btn-final-delete-mod');
     const btnRemoveOnly = document.getElementById('btn-remove-only-mod');
 
-    if (warningText) warningText.innerHTML = t('mod.deleteWarning', { name: `<strong style="color:var(--text-primary)">${mod.name}</strong>` });
+    // escHtml: a mod's name is whatever its folder or archive says it is, and the webview
+    // has no CSP - unescaped markup here executes with full access to the Tauri command
+    // surface. mods-details.ts and mods-conflicts.ts already escape the same field.
+    if (warningText) warningText.innerHTML = t('mod.deleteWarning', { name: `<strong style="color:var(--text-primary)">${escHtml(mod.name)}</strong>` });
     confirmCheck.checked = false;
     finalBtn.disabled = true;
     modal.classList.add('open');
