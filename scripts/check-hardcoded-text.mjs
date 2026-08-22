@@ -40,6 +40,12 @@ const ALLOW = new Map([
     ['A11y Warning: Button has no visible text and no aria-label', 'the developer a11y overlay, dev-only'],
     ['A11y Warning: Form field has no associated label or aria-label', 'the developer a11y overlay, dev-only'],
     ["Saved at ", 'source code inside a page TEMPLATE the user edits — translating it would translate their code'],
+    // The theme editor's custom-element starter snippets. Same reason: the user is handed
+    // this markup to edit, so the words are a placeholder in THEIR document, not our chrome.
+    ['My button', 'starter snippet the user edits, in the theme editor'],
+    ['My custom banner', 'starter snippet the user edits, in the theme editor'],
+    ['My note text', 'starter snippet the user edits, in the theme editor'],
+    ['My link', 'starter snippet the user edits, in the theme editor'],
 ]);
 
 const sinks = [
@@ -73,8 +79,50 @@ const files = [];
     }
 })(TS_ROOT);
 
+// ── generated HTML ────────────────────────────────────────────────────────────
+//
+// The sinks above cover prose assigned to a PROPERTY. They cannot see prose written into a
+// template literal and handed to innerHTML — which is how this app builds most of its UI.
+// A whole settings panel (the Content-Security-Policy editor) was written that way, entirely
+// in English, and this gate passed it without a word.
+//
+// So: text nodes inside template literals, minus the four things that are legitimately not
+// t() calls, each verified rather than assumed:
+//   · an element carrying data-i18n — applyTranslations() repaints it.
+//   · anything inside an HTML comment.
+//   · docs-hub article bodies — bilingual already, as `en:` / `fr:` pairs.
+//   · files that emit a standalone DOCUMENT rather than app UI (the benchmark report), and
+//     the starter page templates whose body IS the user's own code to edit.
+const GENERATED_SKIP = /docs-hub\.ts$|bench[\\/]benchmark\.ts$|navbar-customize\.ts$/;
+
+function generatedProse(src, file) {
+    if (GENERATED_SKIP.test(file)) return [];
+    const out = [];
+    for (const m of src.matchAll(/`(?:\\.|[^`\\])*`/g)) {
+        const lit = m[0].replace(/<!--[\s\S]*?-->/g, '');
+        if (!lit.includes('<')) continue;
+        for (const tn of lit.matchAll(/(<[^<>]*>)([^<>${}]{6,200})</g)) {
+            const openTag = tn[1];
+            const text = tn[2].replace(/\s+/g, ' ').trim();
+            if (!offends(text)) continue;
+            if (/data-i18n(?:-\w+)?\s*=/.test(openTag)) continue;
+            const before = lit.slice(Math.max(0, tn.index - 40), tn.index);
+            if (/\bt\(\s*['"][\w.]+['"]/.test(before)) continue;
+            const at = m.index + tn.index;
+            const lineStart = src.lastIndexOf('\n', at) + 1;
+            const lineEnd = src.indexOf('\n', lineStart);
+            if (/^\s*(\/\/|\*)/.test(src.slice(lineStart, lineEnd < 0 ? undefined : lineEnd))) continue;
+            out.push([src.slice(0, at).split('\n').length, text]);
+        }
+    }
+    return out;
+}
+
 for (const f of files) {
     const src = fs.readFileSync(f, 'utf8');
+    for (const [line, text] of generatedProse(src, f)) {
+        bad.push(`${f}:${line}  [generated HTML]  ${text.slice(0, 90)}`);
+    }
     src.split('\n').forEach((line, i) => {
         if (/^\s*(\/\/|\*|\/\*)/.test(line)) return;   // a comment is not on screen
         for (const [re, kind] of sinks) {

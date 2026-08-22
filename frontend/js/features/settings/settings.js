@@ -67,7 +67,7 @@ async function initGithubPatSettings() {
             const val = input.value.trim();
             if (!val) {
                 if (statusMsg)
-                    statusMsg.innerHTML = `<span style="color:var(--warning)">⚠ No token entered. Use Clear to remove the stored token.</span>`;
+                    statusMsg.innerHTML = `<span style="color:var(--warning)">⚠ ${escHtml(t('settings.tokenNoneEntered'))}</span>`;
                 return;
             }
             try {

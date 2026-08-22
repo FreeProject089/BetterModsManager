@@ -7674,5 +7674,18 @@
   "themes.gradTargetText": "Text",
   "themes.gradTargetBorder": "Border",
   "themes.gradBorderHint": "A gradient border uses border-image, which ignores border-radius — rounded corners go square.",
-  "themes.gradTextHint": "Gradient text hides the normal colour. If the element has no text of its own, nothing will show."
+  "themes.gradTextHint": "Gradient text hides the normal colour. If the element has no text of its own, nothing will show.",
+  "settings.tokenNoneEntered": "No token entered. Use Clear to remove the stored token.",
+  "plugins.qt.irreversible": "This action cannot be undone.",
+  "plugins.qt.modpackDelete": "This action <strong>cannot be undone</strong>. The modpack will be permanently deleted.",
+  "plugins.qt.restartNotice": "BMM will restart in 300 ms. The API will be briefly unavailable.",
+  "plugins.qt.repoListDesc": "GET request — returns the list of connected repos. No parameters.",
+  "plugins.qt.repoNameAuto": "The name is fetched automatically from the remote repo.json.",
+  "plugins.qt.repoRemoved": "The repo will be removed from the list of connected repos.",
+  "plugins.qt.includeActive": "(ticked = includes active mods)",
+  "plugins.qt.seedOptional": "(optional — hash stability)",
+  "plugins.qt.installPathHint": "Leave install_path empty to use BMM's default Apps folder.",
+  "plugins.qt.noAppInstalled": "No app installed. Install one from the catalogue first.",
+  "plugins.qt.noProfileInRepo": "No profile found in this repo.",
+  "plugins.qt.repoUrlToDisconnect": "url (repo URL to disconnect)"
 }

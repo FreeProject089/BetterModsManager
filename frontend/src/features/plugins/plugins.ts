@@ -1240,7 +1240,7 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
         formHtml = modSel;
     } else if (p === '/api/mods/:id') {
         formHtml = m === 'DELETE'
-            ? modSel + `<p style="font-size:11px;color:var(--danger);margin:8px 0 0;opacity:0.8;">⚠ Cette action est irréversible.</p>`
+            ? modSel + `<p style="font-size:11px;color:var(--danger);margin:8px 0 0;opacity:0.8;">⚠ ${escHtml(t('plugins.qt.irreversible'))}</p>`
             : modSel
                 + txtInput('plug-qt-s-name',        'name',        'Nouveau nom du mod',  true)
                 + txtInput('plug-qt-s-version',     'version',     '1.0.0',               true)
@@ -1252,7 +1252,7 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
         formHtml = modpackSel;
     } else if (p === '/api/profiles/:id') {
         formHtml = m === 'DELETE'
-            ? profSel + `<p style="font-size:11px;color:var(--danger);margin:8px 0 0;opacity:0.8;">⚠ Cette action est irréversible.</p>`
+            ? profSel + `<p style="font-size:11px;color:var(--danger);margin:8px 0 0;opacity:0.8;">⚠ ${escHtml(t('plugins.qt.irreversible'))}</p>`
             : profSel
                 + txtInput('plug-qt-s-name',        'name',        'Nouveau nom du profil',      true)
                 + txtInput('plug-qt-s-color',       'color',       '#3b82f6',                    true)
@@ -1336,7 +1336,7 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
                 </select>
             </div>
             <p style="font-size:12px;color:var(--danger);margin:10px 0 0;padding:8px 10px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:6px;">
-                ⚠ Cette action est <strong>irréversible</strong>. Le modpack sera définitivement supprimé.
+                ⚠ ${t('plugins.qt.modpackDelete')}
             </p>`;
 
     } else if (p === '/api/profiles') {
@@ -1359,7 +1359,7 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
             </div>` : '';
         formHtml = plugSel + strictRow + `<p style="font-size:11px;color:var(--text-muted);margin:8px 0 0;">${aboutHint}</p>`;
     } else if (p === '/api/restart') {
-        formHtml = `<p style="font-size:13px;color:var(--text-secondary);margin:0;">BMM va redémarrer dans 300 ms. L'API sera brièvement indisponible.</p>`;
+        formHtml = `<p style="font-size:13px;color:var(--text-secondary);margin:0;">${escHtml(t('plugins.qt.restartNotice'))}</p>`;
     } else if (p === '/api/modpacks/create') {
         const profileChecks = _allProfiles.length
             ? _allProfiles.map(pr => `<label style="display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:6px;cursor:pointer;" data-hover="background:rgba(255,255,255,0.05)" data-hover-out="background:transparent">
@@ -1416,7 +1416,7 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
             </div>
             <!-- Import depuis profil(s) -->
             <div class="plug-qt-smart-field" style="flex-direction:column;margin-top:8px;">
-                <label class="plug-form-label" style="margin-bottom:3px;">Importer depuis profil(s) <span style="color:var(--text-muted);font-size:9px;">(coche = inclut les mods actifs)</span></label>
+                <label class="plug-form-label" style="margin-bottom:3px;">Importer depuis profil(s) <span style="color:var(--text-muted);font-size:9px;">${escHtml(t('plugins.qt.includeActive'))}</span></label>
                 <div style="background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.07);border-radius:8px;padding:4px;max-height:100px;overflow-y:auto;scrollbar-width:thin;">${profileChecks}</div>
             </div>
             <!-- Mods à inclure -->
@@ -1442,15 +1442,15 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
         formHtml = txtInput('plug-qt-s-manifest-dir', 'modsDir (dossier déjà hébergé)', 'C:/host/mods');
 
     } else if (p === '/api/repo/list') {
-        formHtml = `<p style="font-size:13px;color:var(--text-secondary);margin:0;">Requête GET — retourne la liste des repos connectés, aucun paramètre requis.</p>`;
+        formHtml = `<p style="font-size:13px;color:var(--text-secondary);margin:0;">${escHtml(t('plugins.qt.repoListDesc'))}</p>`;
 
     } else if (p === '/api/repo/connect') {
         formHtml = txtInput('plug-qt-s-repo-url', 'url', 'https://monserveur.com/repo.json')
-            + `<p style="font-size:11px;color:var(--text-muted);margin:6px 0 0;opacity:0.85;">Le nom est récupéré automatiquement depuis le repo.json distant.</p>`;
+            + `<p style="font-size:11px;color:var(--text-muted);margin:6px 0 0;opacity:0.85;">${escHtml(t('plugins.qt.repoNameAuto'))}</p>`;
 
     } else if (p === '/api/repo' && m === 'DELETE') {
-        formHtml = txtInput('plug-qt-s-repo-url', 'url (URL du repo à déconnecter)', 'https://monserveur.com/repo.json')
-            + `<p style="font-size:11px;color:var(--danger);margin:8px 0 0;opacity:0.8;">⚠ Le repo sera retiré de la liste des repos connectés.</p>`;
+        formHtml = txtInput('plug-qt-s-repo-url', t('plugins.qt.repoUrlToDisconnect'), 'https://monserveur.com/repo.json')
+            + `<p style="font-size:11px;color:var(--danger);margin:8px 0 0;opacity:0.8;">⚠ ${escHtml(t('plugins.qt.repoRemoved'))}</p>`;
 
     } else if (p === '/api/repo/sync') {
         const profOpts2 = _allProfiles.length
@@ -1623,7 +1623,7 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
             </div>
             <!-- Seed -->
             <div style="margin-top:6px;display:flex;flex-direction:column;gap:2px;">
-                <label class="plug-form-label" style="font-size:10px;">seed <span style="color:var(--text-muted);font-size:10px;">(optionnel — stabilité des hachages)</span></label>
+                <label class="plug-form-label" style="font-size:10px;">seed <span style="color:var(--text-muted);font-size:10px;">${escHtml(t('plugins.qt.seedOptional'))}</span></label>
                 <input type="text" id="plug-qt-s-seed" class="input input-sm" placeholder="${t('plugins.qt.seedPh') || 'leave empty for random'}" style="font-family:var(--font-mono);font-size:12px;">
             </div>
             <!-- zip_output / zip_mods -->
@@ -1728,7 +1728,7 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
                 </div>
                 <div style="flex:2;min-width:180px;">${txtInput('plug-qt-app-path', 'install_path', '')}</div>
             </div>
-            <p style="font-size:11px;color:var(--text-muted);margin:0;">Laisse install_path vide pour utiliser le dossier Apps par défaut de BMM.</p>
+            <p style="font-size:11px;color:var(--text-muted);margin:0;">${escHtml(t('plugins.qt.installPathHint'))}</p>
         </div>`;
 
     } else if (p === '/api/apps/launch') {
@@ -1742,7 +1742,7 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
                 ? `<div><label class="plug-form-label">App installée</label>
                    <select id="plug-qt-launch-sel" class="select select-sm" style="width:100%;">${selOpts}</select>
                    <p style="font-size:10px;color:var(--text-muted);margin-top:4px;">Sélectionner remplira automatiquement les champs.</p></div>`
-                : '<p style="font-size:12px;color:var(--text-muted);">Aucune app installée. Installe une app d\'abord via le catalogue.</p>'}
+                : '<p style="font-size:12px;color:var(--text-muted);">'+escHtml(t('plugins.qt.noAppInstalled'))+'</p>'}
             ${txtInput('plug-qt-launch-id',  'app_id',   installed[0]?.id  || '')}
             ${txtInput('plug-qt-launch-exe', 'exe_path', installed[0]?.exe_path || 'C:/path/to/app.exe')}
         </div>`;
@@ -2423,7 +2423,7 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
                 const json = await res.json().catch(() => ({}));
                 const profiles: any[] = json.profiles || json.data?.profiles || [];
                 if (profiles.length === 0) {
-                    profilesList.innerHTML = `<p style="font-size:12px;color:var(--text-muted);padding:4px 0;">Aucun profil trouvé dans ce repo.</p>`;
+                    profilesList.innerHTML = `<p style="font-size:12px;color:var(--text-muted);padding:4px 0;">${escHtml(t('plugins.qt.noProfileInRepo'))}</p>`;
                 } else {
                     profilesList.innerHTML = profiles.map((pr: any) => `
                         <label style="display:flex;align-items:center;gap:8px;padding:3px 6px;border-radius:5px;cursor:pointer;font-size:12px;" data-hover="background:rgba(255,255,255,0.05)" data-hover-out="background:transparent">
