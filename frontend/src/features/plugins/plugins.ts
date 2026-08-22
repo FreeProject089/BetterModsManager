@@ -371,7 +371,7 @@ function buildPluginCard(plugin: any, source: 'installed' | 'catalog') {
         <div class="plug-card-header">
             <div class="plug-card-icon-wrap">
                 ${plugin.icon_path
-                    ? `<img src="${convertFileSrc(plugin.icon_path)}" class="plug-card-icon" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+                    ? `<img src="${convertFileSrc(plugin.icon_path)}" class="plug-card-icon" data-onerror="swap-next">`
                     : ''}
                 <div class="plug-card-icon-default" ${plugin.icon_path ? 'style="display:none"' : ''}>${IC.puzzle}</div>
             </div>
@@ -1262,7 +1262,7 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
                 + txtInput('plug-qt-s-backup-path', 'backup_path', 'C:/BMM/Backups/MonJeu',      true);
     } else if (p === '/api/modpacks/:id' && m === 'PUT') {
         const updModChecks = _allMods.length
-            ? _allMods.map(mod => `<label style="display:flex;align-items:center;gap:8px;padding:3px 8px;border-radius:6px;cursor:pointer;" onmouseenter="this.style.background='rgba(255,255,255,0.05)'" onmouseleave="this.style.background='transparent'">
+            ? _allMods.map(mod => `<label style="display:flex;align-items:center;gap:8px;padding:3px 8px;border-radius:6px;cursor:pointer;" data-hover="background:rgba(255,255,255,0.05)" data-hover-out="background:transparent">
                 <input type="checkbox" class="plug-qt-upd-mod-check" value="${escHtml(mod.id)}" style="accent-color:var(--accent);width:13px;height:13px;">
                 <span style="font-size:11px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" data-tooltip="${escHtml(mod.name||mod.id)}">${escHtml(mod.name||mod.id)}</span>
                 ${mod.active ? `<span style="font-size:9px;padding:1px 4px;border-radius:3px;background:rgba(34,197,94,0.15);color:color-mix(in srgb, var(--bmm-success) 60%, var(--bmm-text-primary));font-weight:700;">ON</span>` : ''}
@@ -1362,14 +1362,14 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
         formHtml = `<p style="font-size:13px;color:var(--text-secondary);margin:0;">BMM va redémarrer dans 300 ms. L'API sera brièvement indisponible.</p>`;
     } else if (p === '/api/modpacks/create') {
         const profileChecks = _allProfiles.length
-            ? _allProfiles.map(pr => `<label style="display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:6px;cursor:pointer;" onmouseenter="this.style.background='rgba(255,255,255,0.05)'" onmouseleave="this.style.background='transparent'">
+            ? _allProfiles.map(pr => `<label style="display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:6px;cursor:pointer;" data-hover="background:rgba(255,255,255,0.05)" data-hover-out="background:transparent">
                 <input type="checkbox" class="plug-qt-prof-check" value="${escHtml(pr.id)}" style="accent-color:var(--accent);width:13px;height:13px;">
                 <span style="font-size:12px;color:var(--text-primary);flex:1;">${escHtml(pr.name)}</span>
                 <span style="font-size:10px;color:var(--text-muted);">${pr.active_mods?.length || 0} mods actifs</span>
               </label>`).join('')
             : `<p style="font-size:12px;color:var(--text-muted);padding:8px;">Aucun profil.</p>`;
         const modCheckboxes = _allMods.length
-            ? _allMods.map(mod => `<label style="display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:6px;cursor:pointer;" onmouseenter="this.style.background='rgba(255,255,255,0.05)'" onmouseleave="this.style.background='transparent'">
+            ? _allMods.map(mod => `<label style="display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:6px;cursor:pointer;" data-hover="background:rgba(255,255,255,0.05)" data-hover-out="background:transparent">
                 <input type="checkbox" class="plug-qt-mod-check" value="${escHtml(mod.id)}" style="accent-color:var(--accent);width:13px;height:13px;">
                 <span style="font-size:12px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" data-tooltip="${escHtml(mod.name||mod.id)}">${escHtml(mod.name||mod.id)}</span>
                 ${mod.active ? `<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:rgba(34,197,94,0.15);color:color-mix(in srgb, var(--bmm-success) 60%, var(--bmm-text-primary));font-weight:700;">ON</span>` : ''}
@@ -1526,7 +1526,7 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
     } else if (p === '/api/repo/gen') {
         const profChecksGen = _allProfiles.length
             ? _allProfiles.map(pr => `
-              <label style="display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:6px;cursor:pointer;" onmouseenter="this.style.background='rgba(255,255,255,0.05)'" onmouseleave="this.style.background='transparent'">
+              <label style="display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:6px;cursor:pointer;" data-hover="background:rgba(255,255,255,0.05)" data-hover-out="background:transparent">
                 <input type="checkbox" class="plug-qt-host-prof-check" value="${escHtml(pr.id)}" style="accent-color:var(--accent);width:13px;height:13px;">
                 <span style="font-size:12px;flex:1;">${escHtml(pr.name)}</span>
                 <span style="font-size:10px;color:var(--text-muted);">${pr.active_mods?.length || 0} mods</span>
@@ -1594,7 +1594,7 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
                     </div>
                     <div style="flex:1;min-width:120px;">
                         <label class="plug-form-label" style="font-size:10px;margin-bottom:2px;">Mot de passe admin</label>
-                        <form style="display:contents" autocomplete="off" onsubmit="return false"><input type="password" id="plug-qt-s-admin-pw" class="input input-sm" placeholder="(optionnel)" style="font-size:12px;"></form>
+                        <form style="display:contents" autocomplete="off" data-no-submit="1"><input type="password" id="plug-qt-s-admin-pw" class="input input-sm" placeholder="(optionnel)" style="font-size:12px;"></form>
                     </div>
                 </div>
             </div>`;
@@ -2426,7 +2426,7 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
                     profilesList.innerHTML = `<p style="font-size:12px;color:var(--text-muted);padding:4px 0;">Aucun profil trouvé dans ce repo.</p>`;
                 } else {
                     profilesList.innerHTML = profiles.map((pr: any) => `
-                        <label style="display:flex;align-items:center;gap:8px;padding:3px 6px;border-radius:5px;cursor:pointer;font-size:12px;" onmouseenter="this.style.background='rgba(255,255,255,0.05)'" onmouseleave="this.style.background='transparent'">
+                        <label style="display:flex;align-items:center;gap:8px;padding:3px 6px;border-radius:5px;cursor:pointer;font-size:12px;" data-hover="background:rgba(255,255,255,0.05)" data-hover-out="background:transparent">
                             <input type="checkbox" class="plug-qt-sync-prof-check" value="${escHtml(pr.id || pr.name)}" style="accent-color:var(--accent);width:13px;height:13px;">
                             <span style="flex:1;">${escHtml(pr.name || pr.id)}</span>
                             <span style="font-size:10px;color:var(--text-muted);">${pr.mods?.length ?? pr.mod_count ?? ''} mods</span>
@@ -3677,7 +3677,7 @@ function renderScripts(container: HTMLElement) {
                     <span class="plug-api-hint">${IC.info} ${t('plugins.apiHint')} <code id="plug-api-base-url" class="plug-api-url-copy" data-tooltip="${t('plugins.copyApiUrl')}">${apiBase()}/api/</code></span>
                 </div>
                 <div class="plug-token-row">
-                    <form style="display:contents" autocomplete="off" onsubmit="return false"><input type="password" id="plug-token-display" class="input plug-token-input" readonly value="${escHtml(_apiToken)}"></form>
+                    <form style="display:contents" autocomplete="off" data-no-submit="1"><input type="password" id="plug-token-display" class="input plug-token-input" readonly value="${escHtml(_apiToken)}"></form>
                     <button class="btn btn-xs btn-ghost" id="plug-token-eye" data-tooltip="${t('plugins.showToken')}">${IC.eye}</button>
                     <button class="btn btn-sm btn-ghost" id="plug-copy-token">${IC.copy} ${t('common.copy')}</button>
                     <button class="btn btn-sm btn-danger" id="plug-reset-token">${IC.refresh} ${t('plugins.resetToken')}</button>

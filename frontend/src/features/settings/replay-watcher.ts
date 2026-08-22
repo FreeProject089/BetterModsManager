@@ -402,20 +402,20 @@ export function openReplayList(): void {
   overlay.className = 'modal-overlay open';
   overlay.style.cssText = 'position:fixed;inset:0;z-index:99998;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.55)';
   const rows = recents.length
-    ? recents.map((r, i) => `<div style="display:flex;gap:12px;align-items:center;width:100%;padding:14px 18px;border:1px solid var(--border,#2a2d34);border-radius:12px;background:rgba(255,255,255,.015);transition:background 0.2s" onmouseover="this.style.background='rgba(255,255,255,.04)'" onmouseout="this.style.background='rgba(255,255,255,.015)'">
+    ? recents.map((r, i) => `<div style="display:flex;gap:12px;align-items:center;width:100%;padding:14px 18px;border:1px solid var(--border,#2a2d34);border-radius:12px;background:rgba(255,255,255,.015);transition:background 0.2s" data-hover="background:rgba(255,255,255,.04)" data-hover-out="background:rgba(255,255,255,.015)">
         <button class="rw-pick" data-i="${i}" style="flex:1;display:flex;flex-direction:column;align-items:flex-start;gap:4px;text-align:left;background:none;border:none;cursor:pointer;padding:0">
           <span style="font-size:14px;font-weight:600;color:var(--text-primary,#e2e8f0)">${r.name}</span>
           <span style="font-size:12px;color:var(--text-muted,#8a8f98)">${new Date(r.at).toLocaleString()}</span>
         </button>
-        <button class="rw-del" data-i="${i}" style="color:var(--danger,#ef4444);font-size:16px;background:none;border:none;cursor:pointer;padding:4px;opacity:0.8;transition:opacity 0.2s" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.8'" data-tooltip="${t('common.delete') || 'Supprimer'}">✖</button>
+        <button class="rw-del" data-i="${i}" style="color:var(--danger,#ef4444);font-size:16px;background:none;border:none;cursor:pointer;padding:4px;opacity:0.8;transition:opacity 0.2s" data-hover="opacity:1" data-hover-out="opacity:0.8" data-tooltip="${t('common.delete') || 'Supprimer'}">✖</button>
       </div>`).join('')
     : `<div style="font-size:13px;color:var(--text-muted,#8a8f98);padding:16px;text-align:center">${t('watcher.noImports') || "Aucun replay récent pour l'instant."}</div>`;
   overlay.innerHTML = `
     <div style="width:min(580px,92vw);max-height:80vh;background:#13151a;border:1px solid var(--border,#2a2d34);border-radius:16px;box-shadow:0 20px 40px rgba(0,0,0,0.4);display:flex;flex-direction:column;overflow:hidden">
       <div style="display:flex;align-items:center;gap:16px;padding:20px 24px;border-bottom:1px solid rgba(255,255,255,0.06)">
         <strong style="font-size:16px;font-weight:700;color:var(--bmm-text-primary)">${t('watcher.listTitle') || 'Imported replays'}</strong><span style="flex:1"></span>
-        <button id="rw-list-pick" style="background:#e2e8f0;color:#0f1115;border:none;border-radius:20px;padding:6px 16px;font-size:13px;font-weight:600;cursor:pointer;transition:transform 0.1s" onmousedown="this.style.transform='scale(0.96)'" onmouseup="this.style.transform='none'">${t('watcher.import') || 'Import & replay'}</button>
-        <button id="rw-list-close" style="background:none;border:none;color:var(--text-muted,#8a8f98);font-size:14px;font-weight:600;cursor:pointer;padding:6px 8px;transition:color 0.2s" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='var(--text-muted,#8a8f98)'">${t('common.close') || 'Close'}</button>
+        <button id="rw-list-pick" style="background:#e2e8f0;color:#0f1115;border:none;border-radius:20px;padding:6px 16px;font-size:13px;font-weight:600;cursor:pointer;transition:transform 0.1s" data-press="transform:scale(0.96)" data-press-out="transform:none">${t('watcher.import') || 'Import & replay'}</button>
+        <button id="rw-list-close" style="background:none;border:none;color:var(--text-muted,#8a8f98);font-size:14px;font-weight:600;cursor:pointer;padding:6px 8px;transition:color 0.2s" data-hover="color:#fff" data-hover-out="color:var(--text-muted,#8a8f98)">${t('common.close') || 'Close'}</button>
       </div>
       <div style="display:flex;flex-direction:column;gap:10px;padding:20px 24px;overflow-y:auto">${rows}</div>
     </div>`;

@@ -600,7 +600,7 @@ function clearEnforcedOnOverrides(theme: BmmTheme): void {
 // ── HTML sanitization ──────────────────────────────────────────────────────────
 // Themes are files a user can import/share (custom_elements + html_swaps both
 // inject raw HTML via innerHTML). Stripping only <script> tags is NOT enough —
-// `<img src=x onerror="...">`, `<a href="javascript:...">`, `<svg onload="...">`
+// `<img src=x onerror=...>`, `<a href="javascript:...">`, `<svg onload=...>`
 // etc. all execute without ever using a <script> tag. This walks the parsed DOM
 // (via a template element — never innerHTML'd onto a live node before cleaning)
 // and removes dangerous elements/attributes before the caller ever inserts it.

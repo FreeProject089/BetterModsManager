@@ -207,7 +207,7 @@ export async function openGlobalConflictModal(preselectModId = null) {
                            data-tasky="${escAttr(escJs(r.other_mod_name))}" data-tasky-icon="package" data-tasky-literal="1"
                           >${escHtml(r.other_mod_name)}</span>
                      ${isActive ? `<span style="font-size:10px;background:rgba(255,255,255,0.08);color:var(--text-secondary);padding:1px 6px;border-radius:4px;font-family:var(--font-mono);flex-shrink:0" data-tooltip="${t('conflict.activationOrder')||'Activation order'}">#${r.activation_order}</span>` : ''}
-                     <button style="font-size:10px;font-family:var(--font-mono);color:var(--accent);background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.2);padding:2px 7px;border-radius:5px;cursor:pointer;flex-shrink:0" onclick="window.showConflictContextMenu(event,'${item.sourceModId}','${r.other_mod_id}')">${r.file_count} ${t('conflict.files')||'files'}</button>
+                     <button style="font-size:10px;font-family:var(--font-mono);color:var(--accent);background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.2);padding:2px 7px;border-radius:5px;cursor:pointer;flex-shrink:0" ${actAttrs('showConflictContextMenu', item.sourceModId, r.other_mod_id)} data-act-with="event">${r.file_count} ${t('conflict.files')||'files'}</button>
                      <span style="font-size:9px;font-weight:900;padding:2px 7px;border-radius:10px;text-transform:uppercase;color:${statusColor};border:1px solid ${statusColor};background:${statusBg};flex-shrink:0">${isActive ? (t('conflict.active')||'ACTIVE') : (t('conflict.potential')||'POTENTIAL')}</span>
                    </div>`;
                  }).join('')}
@@ -306,9 +306,9 @@ export function showConflictContextMenu(e, mod1Id, mod2Id) {
         return;
       }
       container.innerHTML = files.map(f => `<div style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.05);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.4;min-height:24px;display:flex;align-items:center;gap:8px;cursor:pointer;transition:all 0.15s ease;border-radius:6px;margin-bottom:2px"
-           onmouseover="this.style.background='rgba(59,130,246,0.15)';this.style.borderLeft='2px solid var(--accent)'"
-           onmouseout="this.style.background='transparent';this.style.borderLeft='none'"
-           onclick="window.showFileConflictSelector(event,'${escAttr(escJs(f))}','${mod1Id}','${mod2Id}')"
+           data-hover="background:rgba(59,130,246,0.15);border-left:2px solid var(--accent)"
+           data-hover-out="background:transparent;border-left:none"
+           ${actAttrs('showFileConflictSelector', f, mod1Id, mod2Id)} data-act-with="event"
            data-tooltip="${escAttr(f)}" data-tooltip="${escAttr(f)}">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;color:var(--accent)"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
         <span style="flex:1;overflow:hidden;text-overflow:ellipsis;font-size:11.5px;color:var(--text-primary)">${escHtml(f)}</span>
@@ -370,9 +370,9 @@ export async function showFileConflictSelectorAsync(e, filePath, mod1Id, mod2Id)
 
     return `
       <label style="display:flex;align-items:center;gap:10px;padding:12px;background:rgba(255,255,255,0.03);border-radius:8px;cursor:pointer;border:1.5px solid rgba(255,255,255,0.1);transition:all 0.15s ease"
-           onmouseover="this.style.background='rgba(59,130,246,0.1)';this.style.borderColor='rgba(59,130,246,0.3)';this.style.boxShadow='0 0 0 1px rgba(59,130,246,0.2)'"
-           onmouseout="this.style.background='rgba(255,255,255,0.03)';this.style.borderColor='rgba(255,255,255,0.1)';this.style.boxShadow='none'">
-        <input type="checkbox" id="${checkboxId}" style="width:18px;height:18px;cursor:pointer;accent-color:var(--accent);flex-shrink:0" onchange="window.toggleModSelector('${modId}')">
+           data-hover="background:rgba(59,130,246,0.1);border-color:rgba(59,130,246,0.3);box-shadow:0 0 0 1px rgba(59,130,246,0.2)"
+           data-hover-out="background:rgba(255,255,255,0.03);border-color:rgba(255,255,255,0.1);box-shadow:none">
+        <input type="checkbox" id="${checkboxId}" style="width:18px;height:18px;cursor:pointer;accent-color:var(--accent);flex-shrink:0" data-act-change="toggleModSelector" data-act-change-args='["${modId}"]'>
         <div style="flex:1;min-width:0">
           <div style="font-size:12px;font-weight:600;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(modName)}</div>
           <div style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);margin-top:2px">${escHtml(modId)}</div>

@@ -411,7 +411,7 @@ function setupVideoPlayers() {
                     style="position:absolute; inset:0; width:100%; height:100%; padding:0; border:0; cursor:pointer; background:#000; overflow:hidden;">
                     <img src="https://i.ytimg.com/vi/${id}/hqdefault.jpg" alt=""
                         style="width:100%; height:100%; object-fit:cover; opacity:.82;"
-                        onerror="this.style.display='none'">
+                        data-onerror="hide">
                     <span style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:68px; height:48px; border-radius:12px; background:rgba(255,0,0,.9); display:flex; align-items:center; justify-content:center;">
                         <svg width="26" height="26" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"/></svg>
                     </span>
@@ -584,7 +584,7 @@ function _runSearch(
         } else {
             diagResultsContainer.style.display = 'block';
             const trySemBtn = searchMode === 'classic'
-                ? `<button class="docs-search-no-results-try" onclick="document.getElementById('btn-toggle-search-mode').click()">
+                ? `<button class="docs-search-no-results-try" data-click-proxy="#btn-toggle-search-mode">
                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
                        ${t('docs.search.trySemantic') || 'Try Semantic mode →'}
                    </button>`

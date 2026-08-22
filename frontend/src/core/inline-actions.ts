@@ -56,9 +56,11 @@ function bindTasky(): void {
 
 /** Image fallbacks, replacing `onerror="this.style.display='none'"` and friends.
  *
- *  Markup becomes `data-onerror="hide"` (hides the image) or `data-onerror="hide-parent"`
+ *  Markup becomes `data-onerror="hide"` (hides the image), `data-onerror="hide-parent"`
  *  with `data-onerror-target="<selector>"` (hides an ancestor — used where an empty
- *  gallery should disappear rather than leave a hole).
+ *  gallery should disappear rather than leave a hole), `data-onerror="text"` with
+ *  `data-onerror-text="FR"` (replaces the image with a short text badge), or
+ *  `data-onerror="swap-next"` (hides the image and shows the placeholder beside it).
  *
  *  Registered with `capture: true` because `error` on an <img> does not bubble; it only
  *  reaches `document` on the capture phase. Getting that wrong is silent — the image just
@@ -76,8 +78,97 @@ function bindImageFallback(): void {
             const sel = el.dataset.onerrorTarget;
             const target = sel ? el.closest<HTMLElement>(sel) : el.parentElement;
             if (target) target.style.display = 'none';
+        } else if (mode === 'text') {
+            // A flag image that fails becomes its country code in small caps. Three sites
+            // spelled this out inline with three copies of the same style string; the style
+            // lives here now, so it can only be one thing.
+            const span = document.createElement('span');
+            span.style.fontSize = '10px';
+            span.style.fontWeight = '700';
+            // textContent, not innerHTML: this is the one place a fallback could reintroduce
+            // markup, and the value comes from data the app did not necessarily author.
+            span.textContent = el.dataset.onerrorText || '';
+            el.replaceWith(span);
+        } else if (mode === 'swap-next') {
+            // Hide the broken image and reveal the placeholder that already sits next to it.
+            el.style.display = 'none';
+            const next = el.nextElementSibling;
+            if (next instanceof HTMLElement) next.style.display = 'flex';
         }
     }, true);
+}
+
+/** Style-only hover, replacing 54 `onmouseover="this.style.background='x'"` handlers and
+ *  their matching `onmouseout`.
+ *
+ *  Markup becomes `data-hover="background:x"` and `data-hover-out="background:y"`, each a
+ *  plain list of CSS declarations. `data-focus` / `data-blur` and `data-press` /
+ *  `data-press-out` are the same thing for the focus and pressed states.
+ *
+ *  This is a BRIDGE, not the destination. Twenty-five of these sites carry twenty distinct
+ *  value pairs, so real `:hover` rules would have meant twenty near-identical classes for
+ *  twenty-five usages — a worse trade than it looks. What this buys is the removal of 54
+ *  handlers that each require `script-src 'unsafe-inline'`, which is the actual blocker.
+ *  Moving them into stylesheets, where hover has belonged all along, is a refactor that can
+ *  happen afterwards and cannot happen before.
+ */
+function bindHoverStyles(): void {
+    const apply = (el: HTMLElement, decls: string | undefined) => {
+        if (!decls) return;
+        for (const part of decls.split(';')) {
+            const i = part.indexOf(':');
+            if (i < 1) continue;
+            const prop = part.slice(0, i).trim();
+            const value = part.slice(i + 1).trim();
+            // setProperty rather than assigning cssText: cssText would wipe every other
+            // inline style on the element, and most of these elements carry a full inline
+            // style attribute already.
+            if (prop) el.style.setProperty(prop, value);
+        }
+    };
+    const closestHover = (t: EventTarget | null): HTMLElement | null =>
+        t instanceof Element ? t.closest<HTMLElement>('[data-hover],[data-hover-out]') : null;
+
+    // Same relatedTarget filtering as the tooltips, and for the same reason: mouseover and
+    // mouseout fire again when the pointer crosses between an element and its own child.
+    document.addEventListener('mouseover', (e) => {
+        const el = closestHover(e.target);
+        if (!el || closestHover((e as MouseEvent).relatedTarget) === el) return;
+        apply(el, el.dataset.hover);
+    });
+    document.addEventListener('mouseout', (e) => {
+        const el = closestHover(e.target);
+        if (!el || closestHover((e as MouseEvent).relatedTarget) === el) return;
+        apply(el, el.dataset.hoverOut);
+    });
+
+    // `focus`/`blur` do not bubble either — `focusin`/`focusout` are the bubbling pair, and
+    // they need no relatedTarget filtering because focus is on exactly one element at a time.
+    document.addEventListener('focusin', (e) => {
+        const el = e.target;
+        if (el instanceof HTMLElement) apply(el, el.dataset.focus);
+    });
+    document.addEventListener('focusout', (e) => {
+        const el = e.target;
+        if (el instanceof HTMLElement) apply(el, el.dataset.blur);
+    });
+
+    // The press effect. `mousedown`/`mouseup` bubble on their own, so no pair-swap is
+    // needed — only the closest() walk, because the press can land on an icon inside
+    // the button.
+    const closestPress = (t: EventTarget | null): HTMLElement | null =>
+        t instanceof Element ? t.closest<HTMLElement>('[data-press]') : null;
+    document.addEventListener('mousedown', (e) => {
+        const el = closestPress(e.target);
+        if (el) apply(el, el.dataset.press);
+    });
+    // On document, not on the element: releasing the button after dragging the pointer off
+    // it fires mouseup elsewhere, and the inline version left the element stuck pressed.
+    document.addEventListener('mouseup', () => {
+        document.querySelectorAll<HTMLElement>('[data-press-out]').forEach((el) => {
+            apply(el, el.dataset.pressOut);
+        });
+    });
 }
 
 /** Click actions of the uniform `window.fn('arg', …)` shape.
@@ -90,6 +181,45 @@ function bindImageFallback(): void {
  *  snippet of JavaScript becomes a name and a list of strings.
  */
 function bindActions(): void {
+    // The handlers that passed `this` or `event` were the ones a delegate seemed unable to
+    // replace — which was backwards: the delegate holds BOTH. `data-act-with` names what to
+    // prepend to the argument list, from a closed vocabulary of three, so an attribute still
+    // cannot express anything but a choice among known values.
+    const contextArgs = (el: HTMLElement, e: Event): unknown[] =>
+        (el.dataset.actWith || '').split(',').map((w) => w.trim()).filter(Boolean).map((w) => {
+            if (w === 'event') return e;
+            if (w === 'element') return el;
+            if (w === 'next') return el.nextElementSibling;
+            return undefined;
+        });
+
+    const run = (el: HTMLElement, e: Event, name: string, rawArgs: string | undefined) => {
+        if (el.dataset.actStop) e.stopPropagation();
+        if (el.dataset.actPrevent) e.preventDefault();
+        let args: unknown[] = [];
+        if (rawArgs) {
+            try {
+                const parsed = JSON.parse(rawArgs);
+                args = Array.isArray(parsed) ? parsed : [parsed];
+            } catch {
+                // A malformed arg list calls the function with none rather than throwing:
+                // the alternative is an unhandled error from a click, which tells the user
+                // nothing and hides the rest of the page's behaviour.
+                args = [];
+            }
+        }
+        const fn = (window as any)[name];
+        if (typeof fn === 'function') fn(...contextArgs(el, e), ...args);
+    };
+
+    // `change`, for the select/checkbox handlers. A separate attribute rather than reusing
+    // `data-act`: a checkbox fires click AND change, so one attribute serving both would
+    // call the function twice.
+    document.addEventListener('change', (e) => {
+        const el = (e.target instanceof Element) ? e.target.closest<HTMLElement>('[data-act-change]') : null;
+        if (el?.dataset.actChange) run(el, e, el.dataset.actChange, el.dataset.actChangeArgs);
+    }, true);
+
     // CAPTURE, not bubble. `data-act-stop` replaces an inline
     // `onclick="fn(); event.stopPropagation()"`, whose whole job was to keep a click on a
     // button from also reaching the card behind it. A delegated listener on `document`
@@ -102,23 +232,66 @@ function bindActions(): void {
         if (!el) return;
         const name = el.dataset.act;
         if (!name) return;
-        if (el.dataset.actStop) e.stopPropagation();
-        let args: unknown[] = [];
-        const raw = el.dataset.actArgs;
-        if (raw) {
-            try {
-                const parsed = JSON.parse(raw);
-                args = Array.isArray(parsed) ? parsed : [parsed];
-            } catch {
-                // A malformed arg list calls the function with none rather than throwing:
-                // the alternative is an unhandled error from a click, which tells the user
-                // nothing and hides the rest of the page's behaviour.
-                args = [];
-            }
-        }
-        const fn = (window as any)[name];
-        if (typeof fn === 'function') fn(...args);
+        run(el, e, name, el.dataset.actArgs);
     }, true);
+}
+
+/** The handlers that called no function at all — they poked the DOM directly.
+ *
+ *  Each is one fixed behaviour named by an attribute, so the markup states an intent
+ *  ("close this modal") instead of carrying a fragment of DOM code.
+ */
+function bindDomBehaviours(): void {
+    document.addEventListener('click', (e) => {
+        const t = e.target;
+        if (!(t instanceof Element)) return;
+
+        // Forward the click to a real control elsewhere — used by menu entries that stand in
+        // for a hidden button, so the button keeps being the single implementation.
+        const proxy = t.closest<HTMLElement>('[data-click-proxy]');
+        if (proxy) {
+            e.preventDefault();
+            document.querySelector<HTMLElement>(proxy.dataset.clickProxy || '')?.click();
+            return;
+        }
+
+        // Close a modal by dropping the `open` class, BMM's convention throughout.
+        const close = t.closest<HTMLElement>('[data-close-modal]');
+        if (close) {
+            document.querySelector<HTMLElement>(close.dataset.closeModal || '')?.classList.remove('open');
+            return;
+        }
+
+        // Remove the nearest matching ancestor — for the modals built and thrown away rather
+        // than toggled.
+        const rm = t.closest<HTMLElement>('[data-remove-closest]');
+        if (rm) rm.closest<HTMLElement>(rm.dataset.removeClosest || '')?.remove();
+    });
+
+    // Copy to the clipboard, with the brief green flash the inline versions did by hand.
+    // The value rides in an attribute rather than being interpolated into a JS string —
+    // which is what made a hash or a path a code-injection surface in the first place.
+    document.addEventListener('click', (e) => {
+        const el = (e.target instanceof Element) ? e.target.closest<HTMLElement>('[data-copy]') : null;
+        if (!el) return;
+        void navigator.clipboard.writeText(el.dataset.copy || '').then(() => {
+            const flash = el.dataset.copyFlash;
+            if (flash === 'tick') {
+                const before = el.textContent;
+                el.textContent = '✓';
+                setTimeout(() => { el.textContent = before; }, 800);
+            } else if (flash) {
+                const before = el.style.background;
+                el.style.background = flash;
+                setTimeout(() => { el.style.background = before; }, 800);
+            }
+        });
+    });
+
+    // Forms that exist only to group fields and must never navigate.
+    document.addEventListener('submit', (e) => {
+        if (e.target instanceof HTMLElement && e.target.matches('[data-no-submit]')) e.preventDefault();
+    });
 }
 
 /** Build the attributes for a delegated click action, correctly escaped.
@@ -153,6 +326,8 @@ export function initInlineActions(): void {
     if (attached) return;
     attached = true;
     bindTasky();
+    bindHoverStyles();
     bindImageFallback();
     bindActions();
+    bindDomBehaviours();
 }

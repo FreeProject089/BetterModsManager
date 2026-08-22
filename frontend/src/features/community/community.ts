@@ -109,7 +109,7 @@ function contribAvatar(a: Author, size = 22): string {
   const initials = (name.split(/\s+/).slice(0, 2).map((w) => w[0] || '').join('') || '?').toUpperCase();
   let h = 0; for (const c of name) h = (h * 31 + c.charCodeAt(0)) >>> 0;
   const style = `width:${size}px;height:${size}px;font-size:${Math.round(size * 0.42)}px;background:hsl(${h % 360} 50% 42%)`;
-  const img = src ? `<img class="community-avatar-img" src="${escAttr(src)}" alt="" loading="lazy" onerror="this.style.display='none'">` : '';
+  const img = src ? `<img class="community-avatar-img" src="${escAttr(src)}" alt="" loading="lazy" data-onerror="hide">` : '';
   return `<span class="community-avatar community-avatar--init" style="${style}">${escHtml(initials)}${img}</span>`;
 }
 // Author + collaborators row: solo → avatar + name; 2+ → avatars only (like the site).

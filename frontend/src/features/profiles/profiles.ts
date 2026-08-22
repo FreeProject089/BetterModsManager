@@ -3,6 +3,7 @@
  * profiles.js — Profile management
  */
 import { invoke, pickFolder } from '../../core/api.js';
+import { actAttrs } from '../../core/inline-actions.js';
 import { isPackIcon, renderPackIcon, ensurePackFor, openIconPicker } from '../../ui/icon-pack.js';
 import { toast, updateLibraryProfileSelector } from '../../ui/app.js';
 import { pickFile, convertFileSrc } from '../../core/api.js';
@@ -763,11 +764,11 @@ export async function renderProfiles() {
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
                     </button>
                     <div class="dropdown-content glass">
-                        <a href="#" onclick="document.getElementById('btn-import-ovgme').click(); event.preventDefault();">
+                        <a href="#" data-click-proxy="#btn-import-ovgme">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
                             <span data-i18n="prof.importOvgme">Logiciel OvGME</span>
                         </a>
-                        <a href="#" onclick="document.getElementById('btn-import-omm-auto').click(); event.preventDefault();">
+                        <a href="#" data-click-proxy="#btn-import-omm-auto">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
                                 <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
@@ -775,7 +776,7 @@ export async function renderProfiles() {
                             </svg>
                             <span data-i18n="prof.importOmmAuto">Auto-detect OMM</span>
                         </a>
-                        <a href="#" onclick="document.getElementById('btn-import-omm').click(); event.preventDefault();">
+                        <a href="#" data-click-proxy="#btn-import-omm">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
                                 <polyline points="13 2 13 9 20 9"></polyline>
@@ -785,7 +786,7 @@ export async function renderProfiles() {
                     </div>
                 </div>
             </div>
-            <button class="btn btn-ghost btn-sm" onclick="openDiagram('mod-architecture')" style="color:var(--accent); font-size:12px; border:1px solid rgba(59,130,246,0.3); margin: 0 auto; display: flex; align-items: center; gap: 8px;">
+            <button class="btn btn-ghost btn-sm" ${actAttrs('openDiagram', 'mod-architecture')} style="color:var(--accent); font-size:12px; border:1px solid rgba(59,130,246,0.3); margin: 0 auto; display: flex; align-items: center; gap: 8px;">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
                     <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>
                 </svg>
@@ -1023,13 +1024,7 @@ export async function renderProfiles() {
                 style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:4px;background:${bgColor};border:1px solid ${color}44;cursor:pointer;padding:0;transition:opacity 0.15s;"
                 data-tasky="${tipKey}" data-tasky-icon="alert"
                
-                onclick="(function(){
-                  document.querySelectorAll('.nav-item[data-view]').forEach(n=>n.classList.remove('active'));
-                  document.querySelector('.nav-item[data-view=settings]')?.classList.add('active');
-                  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
-                  document.getElementById('view-settings')?.classList.add('active');
-                  setTimeout(()=>{const el=document.getElementById('btn-storage-manager');if(el){el.click();}},150);
-                })()"
+                ${actAttrs('bmmOpenStorageManager')}
               >
                 <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="3">
                   <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
@@ -1868,3 +1863,15 @@ function escAttr(str) {
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;');
 }
+
+// The low-disk-space warning offers a shortcut to the storage manager, which means switching
+// to the Settings view first. That was six statements inlined into an onclick attribute; it
+// is the same six here, where they can be read and changed.
+(window as any).bmmOpenStorageManager = () => {
+    document.querySelectorAll('.nav-item[data-view]').forEach((n) => n.classList.remove('active'));
+    document.querySelector('.nav-item[data-view=settings]')?.classList.add('active');
+    document.querySelectorAll('.view').forEach((v) => v.classList.remove('active'));
+    document.getElementById('view-settings')?.classList.add('active');
+    // The button only exists once the settings view has rendered.
+    setTimeout(() => { document.getElementById('btn-storage-manager')?.click(); }, 150);
+};

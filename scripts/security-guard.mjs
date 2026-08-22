@@ -62,13 +62,20 @@ if (violations.length) {
 // 'unsafe-inline' — which is also why an injected `<img src=x onerror=…>` runs, and why a
 // single missed escape in this app is code execution rather than a broken layout.
 //
-// There are 98 of them today (238 before the delegation work), so failing the build outright would fail it on the
-// first run. The guard fails only when the number GOES UP: the count can fall to zero at
-// whatever pace the migration takes, and cannot quietly climb back while nobody is looking.
-// When it reaches 0, turn BASELINE to 0 and this becomes a real ban.
+// frontend/src is now at ZERO (238 before the delegation work), so for that tree this is a
+// real ban rather than a ratchet: any new inline handler fails the build.
 //
-// Update BASELINE deliberately, downwards. Raising it is the thing this exists to prevent.
-const BASELINE = 98;
+// index.html is counted SEPARATELY and is not at zero. It was outside this guard entirely
+// until the src count reached 0 and the remaining blocker turned out to be a file the guard
+// never looked at -- 216 handlers, invisible because the walk only covered src. A guard
+// reporting 0 while 216 sat in the entry document is worse than no guard, so it is measured
+// here, out loud, with its own descending baseline.
+//
+// Update either baseline deliberately, downwards. Raising one is the thing this exists to
+// prevent.
+const BASELINE = 0;
+const BASELINE_INDEX = 216;
+const INDEX_HTML = join(ROOT, 'frontend', 'index.html');
 
 // Case-SENSITIVE and lowercase on purpose: HTML attributes in these templates are
 // lowercase, while  is ordinary JavaScript. A /i flag counted
@@ -88,6 +95,24 @@ for (const file of walk(SRC)) {
 }
 const total = handlers.reduce((a, h) => a + h.n, 0);
 
+// index.html carries its own handlers, and its own count. Comments are not stripped here:
+// the file is HTML, where `//` starts nothing.
+let indexTotal = 0;
+try {
+    indexTotal = (readFileSync(INDEX_HTML, 'utf8').match(HANDLER) || []).length;
+} catch { /* no index.html: nothing to measure */ }
+
+if (indexTotal > BASELINE_INDEX) {
+    console.error(`\n\x1b[31m\u2717 security-guard: inline handlers in index.html went UP (${indexTotal} > ${BASELINE_INDEX}).\x1b[0m`);
+    process.exit(1);
+}
+if (indexTotal < BASELINE_INDEX) {
+    console.log(`\x1b[33m! security-guard: index.html is down to ${indexTotal} (baseline ${BASELINE_INDEX}).\x1b[0m`);
+    console.log('  Lower BASELINE_INDEX in scripts/security-guard.mjs to lock the gain in.');
+} else {
+    console.log(`  index.html inline handlers: ${indexTotal} (at baseline)`);
+}
+
 if (total > BASELINE) {
     console.error(`\n\x1b[31m✗ security-guard: inline event handlers went UP (${total} > ${BASELINE}).\x1b[0m`);
     console.error('  Each one needs script-src \'unsafe-inline\', which is what keeps an injected');
@@ -99,8 +124,14 @@ if (total > BASELINE) {
 if (total < BASELINE) {
     console.log(`\x1b[33m! security-guard: inline handlers are down to ${total} (baseline ${BASELINE}).\x1b[0m`);
     console.log('  Lower BASELINE in scripts/security-guard.mjs to lock the gain in.');
+} else if (BASELINE === 0) {
+    console.log('\x1b[32m\u2713 security-guard: no inline event handlers in frontend/src\x1b[0m');
 } else {
     console.log(`  inline event handlers: ${total} (at baseline; script-src still needs 'unsafe-inline')`);
+}
+
+if (total === 0 && indexTotal === 0) {
+    console.log("  both trees are clean -- script-src can drop 'unsafe-inline' in frontend/index.html.");
 }
 
 console.log('\x1b[32m✓ security-guard: no eval()/new Function() in frontend/src\x1b[0m');

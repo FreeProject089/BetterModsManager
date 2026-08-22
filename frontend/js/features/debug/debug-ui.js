@@ -1227,7 +1227,7 @@ class DebugUI {
                                 <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17.93c-3.94-.49-7-3.85-7-7.93s3.06-7.44 7-7.93V19.93z"></path></svg>
                             </button>
                         </div>
-                        <div class="live-css-editor" contenteditable="true" spellcheck="false" data-sheet="${sheetIndex}" data-rule="${r}" data-selector="${this.escapeHtml(rule.selectorText || '')}" style="outline:none; padding:4px; border:1px dashed transparent; transition:border 0.2s" onfocus="this.style.borderColor='var(--debug-accent)'" onblur="this.style.borderColor='transparent'">${styles.replace(/<span.*?>/g, '').replace(/<\/span>/g, '')}</div>
+                        <div class="live-css-editor" contenteditable="true" spellcheck="false" data-sheet="${sheetIndex}" data-rule="${r}" data-selector="${this.escapeHtml(rule.selectorText || '')}" style="outline:none; padding:4px; border:1px dashed transparent; transition:border 0.2s" data-focus="border-color:var(--debug-accent)" data-blur="border-color:transparent">${styles.replace(/<span.*?>/g, '').replace(/<\/span>/g, '')}</div>
                         <div style="color:var(--debug-accent); font-weight:700; margin-top:4px">}</div>
                     </div>
                 `;

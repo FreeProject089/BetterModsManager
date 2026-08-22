@@ -355,7 +355,7 @@ function _renderModpackList(container) {
                     </div>
                     <div class="bmm-switch-wrap btn-apply ${anyEnabled ? 'active' : ''}" 
                          style="width:38px; height:20px; position:relative; cursor:pointer; flex-shrink:0;"
-                         onmouseenter="window.showTaskyHelp('${escHtml(t('modpack.quickApplyDesc') || 'Cliquez pour activer ou désactiver ce pack.')}', 'zap')"
+                         data-tasky="${escAttr(t('modpack.quickApplyDesc') || 'Cliquez pour activer ou désactiver ce pack.')}" data-tasky-icon="zap" data-tasky-literal="1"
                         >
                         <div class="switch-bg" style="position:absolute; inset:0; border-radius:10px; background:${anyEnabled ? 'var(--success)' : 'var(--bmm-s10)'}; transition:all 0.3s; border:1px solid ${anyEnabled ? 'rgba(16,185,129,0.3)' : 'var(--bmm-s05)'};"></div>
                         <div class="switch-knob" style="position:absolute; top:3px; ${anyEnabled ? 'right:3px' : 'left:3px'}; width:14px; height:14px; border-radius:50%; background:#fff; transition:all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); box-shadow:0 2px 4px rgba(0,0,0,0.2);"></div>
@@ -1444,7 +1444,7 @@ function _showDeleteModal(container: any, pack: any): Promise<'delete' | 'edit' 
                     <h3 style="margin:0 0 3px;font-size:17px;font-weight:800;color:var(--text-primary);letter-spacing:-0.3px;">${t('modpack.deleteTitle') || 'Supprimer le launchpack'}</h3>
                     <p style="margin:0;font-size:12px;color:var(--text-muted);">${t('modpack.deleteSubtitle') || 'Cette action est irréversible. Le pack sera définitivement supprimé.'}</p>
                 </div>
-                <button id="dmod-close" style="width:28px;height:28px;border-radius:8px;border:1px solid var(--bmm-s06);background:var(--bmm-s03);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text-muted);flex-shrink:0;transition:background 0.15s;" onmouseenter="this.style.background='var(--bmm-s07)'" onmouseleave="this.style.background='var(--bmm-s03)'">
+                <button id="dmod-close" style="width:28px;height:28px;border-radius:8px;border:1px solid var(--bmm-s06);background:var(--bmm-s03);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text-muted);flex-shrink:0;transition:background 0.15s;" data-hover="background:var(--bmm-s07)" data-hover-out="background:var(--bmm-s03)">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                 </button>
             </div>
@@ -1465,12 +1465,12 @@ function _showDeleteModal(container: any, pack: any): Promise<'delete' | 'edit' 
 
             <!-- ── Actions ── -->
             <div style="padding:0 26px 24px;display:flex;align-items:center;gap:10px;">
-                <button id="dmod-edit" style="display:flex;align-items:center;gap:7px;padding:0 14px;height:34px;border-radius:9px;border:1px solid var(--bmm-s07);background:var(--bmm-s03);color:var(--text-secondary);font-size:12px;font-weight:600;cursor:pointer;margin-right:auto;transition:all 0.15s;" onmouseenter="this.style.background='rgba(0,194,255,0.07)';this.style.borderColor='rgba(0,194,255,0.2)';this.style.color='var(--accent)'" onmouseleave="this.style.background='var(--bmm-s03)';this.style.borderColor='var(--bmm-s07)';this.style.color='var(--text-secondary)'">
+                <button id="dmod-edit" style="display:flex;align-items:center;gap:7px;padding:0 14px;height:34px;border-radius:9px;border:1px solid var(--bmm-s07);background:var(--bmm-s03);color:var(--text-secondary);font-size:12px;font-weight:600;cursor:pointer;margin-right:auto;transition:all 0.15s;" data-hover="background:rgba(0,194,255,0.07);border-color:rgba(0,194,255,0.2);color:var(--accent)" data-hover-out="background:var(--bmm-s03);border-color:var(--bmm-s07);color:var(--text-secondary)">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                     ${t('modpack.edit') || 'Modifier'}
                 </button>
-                <button id="dmod-cancel" style="padding:0 16px;height:34px;border-radius:9px;border:1px solid var(--bmm-s07);background:var(--bmm-s03);color:var(--text-muted);font-size:12px;font-weight:600;cursor:pointer;transition:all 0.15s;" onmouseenter="this.style.background='var(--bmm-s07)'" onmouseleave="this.style.background='var(--bmm-s03)'">${t('common.cancel') || 'Annuler'}</button>
-                <button id="dmod-confirm" style="display:flex;align-items:center;gap:7px;padding:0 16px;height:34px;border-radius:9px;border:none;background:linear-gradient(135deg,#ef4444,#dc2626);color:#fff;font-size:12px;font-weight:700;cursor:pointer;box-shadow:0 4px 16px rgba(239,68,68,0.3);transition:all 0.15s;" onmouseenter="this.style.transform='translateY(-1px)';this.style.boxShadow='0 6px 20px rgba(239,68,68,0.45)'" onmouseleave="this.style.transform='none';this.style.boxShadow='0 4px 16px rgba(239,68,68,0.3)'">
+                <button id="dmod-cancel" style="padding:0 16px;height:34px;border-radius:9px;border:1px solid var(--bmm-s07);background:var(--bmm-s03);color:var(--text-muted);font-size:12px;font-weight:600;cursor:pointer;transition:all 0.15s;" data-hover="background:var(--bmm-s07)" data-hover-out="background:var(--bmm-s03)">${t('common.cancel') || 'Annuler'}</button>
+                <button id="dmod-confirm" style="display:flex;align-items:center;gap:7px;padding:0 16px;height:34px;border-radius:9px;border:none;background:linear-gradient(135deg,#ef4444,#dc2626);color:#fff;font-size:12px;font-weight:700;cursor:pointer;box-shadow:0 4px 16px rgba(239,68,68,0.3);transition:all 0.15s;" data-hover="transform:translateY(-1px);box-shadow:0 6px 20px rgba(239,68,68,0.45)" data-hover-out="transform:none;box-shadow:0 4px 16px rgba(239,68,68,0.3)">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                     ${t('modpack.deleteConfirmBtn') || 'Supprimer'}
                 </button>

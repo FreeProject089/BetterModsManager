@@ -31,7 +31,7 @@ const ICON = {
 };
 
 /** Escape a string for safe use inside a single-quoted JS string that itself
- *  lives in a double-quoted HTML attribute (e.g. onmouseenter="fn('TEXT')").
+ *  lives in a double-quoted HTML attribute (e.g. an inline handler calling fn('TEXT')).
  *  escAttr alone does NOT escape apostrophes, which breaks the JS string for
  *  translated text like "n'importe où".                                       */
 function escJs(s: string): string {
@@ -919,7 +919,7 @@ function buildSimpleTab(): string {
                 const custom = vars[tok.key] || '';
                 const ph = pickerHex(tok.key, custom);
                 const liveLabel = custom ? '' : `<span class="bte-token-live">${escHtml(currentLabel(tok.key, tok.type))}</span>`;
-                const mdnLink = tok.mdn ? `<a class="bte-mdn" href="${MDN_BASE}${tok.mdn}" target="_blank" data-tooltip="MDN: ${tok.mdn}" onmouseenter="window.showTaskyHelp('${escJs('Open the MDN documentation for the CSS property: ' + tok.mdn)}','info',true)">?</a>` : '';
+                const mdnLink = tok.mdn ? `<a class="bte-mdn" href="${MDN_BASE}${tok.mdn}" target="_blank" data-tooltip="MDN: ${tok.mdn}" data-tasky="${escAttr('Open the MDN documentation for the CSS property: ' + tok.mdn)}" data-tasky-literal="1">?</a>` : '';
                 let inp = '';
                 if (tok.type === 'color') {
                     inp = `<div class="bte-color-wrap">
@@ -1247,7 +1247,7 @@ function buildElementsTab(): string {
     const editing = isEdit ? ces.find(c => c.id === _editingCeId) : null;
 
     return `
-        <div class="bte-intro" onmouseenter="window.showTaskyHelp('${escJs(t('themes.ceTaskyHelp')||'Add your own buttons, banners or widgets anywhere in BMM. Choose WHERE (1), pick a template, then tweak the HTML (2).')}','info',true)">
+        <div class="bte-intro" data-tasky="${escAttr(t('themes.ceTaskyHelp')||'Add your own buttons, banners or widgets anywhere in BMM. Choose WHERE (1), pick a template, then tweak the HTML (2).')}" data-tasky-literal="1">
             ${t('themes.ceIntro')||'Add your own buttons, banners, badges or widgets anywhere in BMM. Pick a spot, choose a template, done.'}
         </div>
 

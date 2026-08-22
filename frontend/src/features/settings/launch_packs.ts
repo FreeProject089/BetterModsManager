@@ -363,7 +363,7 @@ function _renderAppPickerList(apps: InstalledApp[], filter = '') {
             : _genericIcon;
         return `<tr class="app-picker-row" data-exe="${escHtml(app.exe_path)}"
             style="border-bottom:1px solid rgba(255,255,255,0.03);cursor:pointer;transition:background .1s;"
-            onmouseenter="this.style.background='rgba(255,255,255,0.04)'" onmouseleave="this.style.background='transparent'">
+            data-hover="background:rgba(255,255,255,0.04)" data-hover-out="background:transparent">
             <td style="padding:5px 10px;text-align:center;width:28px;">
                 <input type="checkbox" class="app-picker-cb" data-path="${escHtml(app.exe_path)}" data-name="${escHtml(app.name)}"
                     style="accent-color:var(--accent);width:13px;height:13px;cursor:pointer;"
@@ -437,7 +437,14 @@ async function _loadExeIcon(cell: HTMLElement, exe: string, tauri: any) {
 }
 
 function _applyIcon(cell: HTMLElement, src: string) {
-    cell.innerHTML = `<img src="${src}" width="20" height="20" style="border-radius:3px;object-fit:contain;" onerror="this.parentElement.innerHTML='${_genericIcon.replace(/'/g, "\\'")}'">`;
+    cell.innerHTML = '';
+    const img = document.createElement('img');
+    img.width = 20;
+    img.height = 20;
+    img.style.cssText = 'border-radius:3px;object-fit:contain';
+    img.addEventListener('error', () => { cell.innerHTML = _genericIcon; });
+    img.src = src;   // last: the handler must exist before the load can fail
+    cell.appendChild(img);
 }
 
 function _updateAppPickerCount() {

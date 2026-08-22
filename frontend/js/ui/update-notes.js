@@ -811,8 +811,8 @@ function showUpdateAvailableModal(info) {
                 background:rgba(255,255,255,0.06);color:var(--bmm-text-secondary);
                 display:flex;align-items:center;justify-content:center;
                 transition:background 0.15s,color 0.15s;
-            " onmouseover="this.style.background='rgba(255,255,255,0.12)';this.style.color='#fff'"
-               onmouseout="this.style.background='rgba(255,255,255,0.06)';this.style.color='rgba(255,255,255,0.5)'">
+            " data-hover="background:rgba(255,255,255,0.12);color:#fff"
+               data-hover-out="background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.5)">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                     <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
                 </svg>
@@ -899,8 +899,8 @@ function showUpdateAvailableModal(info) {
                         color:var(--bmm-text-on-accent);font-size:13px;font-weight:700;
                         box-shadow:0 4px 16px rgba(16,185,129,0.3);
                         transition:opacity 0.15s,transform 0.15s;
-                    " onmouseover="this.style.opacity='0.9';this.style.transform='translateY(-1px)'"
-                       onmouseout="this.style.opacity='1';this.style.transform='translateY(0)'">
+                    " data-hover="opacity:0.9;transform:translateY(-1px)"
+                       data-hover-out="opacity:1;transform:translateY(0)">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
                         <span>${t('update.quickUpdate') || 'Quick Update'}</span>
                         <span style="font-size:8px;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;padding:2px 7px;border-radius:5px;background:rgba(255,255,255,0.18);">${t('update.recommended') || 'Recommended'}</span>
@@ -911,8 +911,8 @@ function showUpdateAvailableModal(info) {
                             flex:1;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);cursor:pointer;
                             background:rgba(255,255,255,0.04);color:var(--bmm-text-secondary);
                             font-size:12px;font-weight:600;transition:background 0.15s,color 0.15s;
-                        " onmouseover="this.style.background='rgba(255,255,255,0.08)';this.style.color='#fff'"
-                           onmouseout="this.style.background='rgba(255,255,255,0.04)';this.style.color='rgba(255,255,255,0.5)'"
+                        " data-hover="background:rgba(255,255,255,0.08);color:#fff"
+                           data-hover-out="background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.5)"
                         >${t('settings.later') || 'Later'}</button>
                         <button id="btn-download-install-update" style="
                             flex:2;display:flex;align-items:center;justify-content:center;gap:8px;
@@ -920,8 +920,8 @@ function showUpdateAvailableModal(info) {
                             border:1px solid rgba(59,130,246,0.3);
                             background:rgba(59,130,246,0.1);color:var(--bmm-text-primary);
                             font-size:12px;font-weight:600;transition:background 0.15s,color 0.15s;
-                        " onmouseover="this.style.background='rgba(59,130,246,0.2)';this.style.color='#fff'"
-                           onmouseout="this.style.background='rgba(59,130,246,0.1)';this.style.color='rgba(255,255,255,0.75)'">
+                        " data-hover="background:rgba(59,130,246,0.2);color:#fff"
+                           data-hover-out="background:rgba(59,130,246,0.1);color:rgba(255,255,255,0.75)">
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                             ${t('update.fullInstaller') || 'Full Installer (.msi)'}
                         </button>
@@ -931,7 +931,7 @@ function showUpdateAvailableModal(info) {
                 <!-- GitHub link -->
                 <div style="text-align:center;">
                     <a href="${escAttr(info.release_url)}" target="_blank" style="font-size:11px;color:color-mix(in srgb, var(--bmm-accent) 60%, transparent);text-decoration:none;transition:color 0.15s;"
-                       onmouseover="this.style.color='#3b82f6'" onmouseout="this.style.color='rgba(59,130,246,0.6)'">
+                       data-hover="color:#3b82f6" data-hover-out="color:rgba(59,130,246,0.6)">
                         ${t('settings.viewOnGithub') || 'View release on GitHub'} ↗
                     </a>
                 </div>
@@ -1417,7 +1417,7 @@ async function openLangSelectModal() {
             const f = l.flag.trim();
             if (f.length === 2) {
                 const code = f.toLowerCase();
-                return `<img src="https://flagcdn.com/w20/${code}.png" width="20" height="14" style="border-radius:2px;object-fit:cover;vertical-align:middle" onerror="this.outerHTML='<span style=font-size:10px;font-weight:700>${f.toUpperCase()}</span>'">`;
+                return `<img src="https://flagcdn.com/w20/${code}.png" width="20" height="14" style="border-radius:2px;object-fit:cover;vertical-align:middle" data-onerror="text" data-onerror-text="${f.toUpperCase()}">`;
             }
             return `<span style="margin-right:6px">${f}</span>`;
         };
@@ -1499,8 +1499,8 @@ async function openLangSelectModal() {
                 box-shadow: 0 4px 16px rgba(59,130,246,0.4);
                 transition: all 0.2s; transform: translateY(0);
             "
-            onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 6px 20px rgba(59,130,246,0.5)'"
-            onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 16px rgba(59,130,246,0.4)'"
+            data-hover="transform:translateY(-1px);box-shadow:0 6px 20px rgba(59,130,246,0.5)"
+            data-hover-out="transform:translateY(0);box-shadow:0 4px 16px rgba(59,130,246,0.4)"
             >
                 ${t('common.ok')} →
             </button>

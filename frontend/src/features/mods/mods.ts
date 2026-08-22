@@ -514,8 +514,8 @@ function renderHistoryModal(history) {
               detailsHtml = `
                 <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;align-items:center">
                   <div style="font-size:10px;color:var(--text-muted);display:flex;align-items:center;gap:4px;background:rgba(255,255,255,0.04);padding:4px 10px;border-radius:12px;cursor:pointer;border:1px solid rgba(255,255,255,0.05);transition:all 0.2s" 
-                       onmouseover="this.style.background='rgba(59,130,246,0.1)';this.style.borderColor='rgba(59,130,246,0.2)'" 
-                       onmouseout="this.style.background='rgba(255,255,255,0.04)';this.style.borderColor='rgba(255,255,255,0.05)'" 
+                       data-hover="background:rgba(59,130,246,0.1);border-color:rgba(59,130,246,0.2)" 
+                       data-hover-out="background:rgba(255,255,255,0.04);border-color:rgba(255,255,255,0.05)" 
                        ${actAttrs('openHistoryDetail', cacheKey)}>
                       <span style="opacity:0.7">${t('history.action.Modified') || 'Modifié'}: </span>
                       ${fieldBadges}
@@ -645,7 +645,7 @@ window.openHistoryDetail = (cacheKey) => {
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 10h10a8 8 0 0 1 8 8v2M3 10l6-6m-6 6l6 6"/></svg>
                         ${t('history.revert') || 'REVERT'}
                     </button>` : ''}
-                <button class="btn btn-primary" style="padding:8px 25px" onclick="document.getElementById('modal-history-detail').classList.remove('open')" data-i18n="common.close">${t('common.close') || 'Close'}</button>
+                <button class="btn btn-primary" style="padding:8px 25px" data-close-modal="#modal-history-detail" data-i18n="common.close">${t('common.close') || 'Close'}</button>
             `;
         }
 

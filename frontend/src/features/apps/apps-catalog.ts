@@ -16,7 +16,7 @@ function hashBlock(label: string, hash: string): string {
     return `<div style="margin-top:12px">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
             <span style="font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--text-muted)">${escHtml(label)}</span>
-            <button type="button" onclick="navigator.clipboard.writeText('${h}');this.textContent='✓';"
+            <button type="button" data-copy="${escAttr(h)}" data-copy-flash="tick"
                 style="font-size:10px;padding:2px 8px;border-radius:5px;border:1px solid var(--border);background:transparent;color:var(--text-secondary);cursor:pointer">copy</button>
         </div>
         <code style="display:block;font-family:var(--font-mono);font-size:11px;line-height:1.5;word-break:break-all;white-space:pre-wrap;user-select:all;background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text-secondary)">${h}</code>
@@ -391,7 +391,7 @@ function renderAppCard(app: AppEntry) {
     <div class="apps-card${installed?' apps-card-installed':''}" data-app-id="${escAttr(app.id)}">
       <div class="apps-card-thumb">
         <div class="apps-card-thumb-placeholder">${thumbIcon(app.category)}</div>
-        ${thumb ? `<img class="apps-card-thumb-img" src="${escAttr(thumb)}" alt="" loading="lazy" onerror="this.style.display='none'">` : ''}
+        ${thumb ? `<img class="apps-card-thumb-img" src="${escAttr(thumb)}" alt="" loading="lazy" data-onerror="hide">` : ''}
         <div class="apps-card-badges">
           ${installed
             ? `<span class="apps-card-installed-chip">${IC.check} ${t('apps.installed')||'Installed'}</span>`
@@ -536,7 +536,7 @@ function renderInstalled() {
       ${apps.map(app => `
       <div class="apps-installed-row">
         <div class="apps-installed-thumb">
-          ${app.thumb ? `<img src="${escAttr(app.thumb)}" alt="" loading="lazy" onerror="this.style.display='none'">` : thumbIcon(app.category||'other')}
+          ${app.thumb ? `<img src="${escAttr(app.thumb)}" alt="" loading="lazy" data-onerror="hide">` : thumbIcon(app.category||'other')}
         </div>
         <div class="apps-installed-info">
           <div class="apps-installed-title">${escHtml(app.title)}</div>
@@ -1319,12 +1319,12 @@ function openDetailModal(appId: string) {
       ${hasImages ? `
       <div class="adm-gallery">
         <img class="adm-hero" id="adm-hero" src="${escAttr(allImages[0])}" alt=""
-             onerror="this.closest('.adm-gallery').style.display='none'">
+             data-onerror="hide-parent" data-onerror-target=".adm-gallery">
         ${allImages.length > 1 ? `
         <div class="adm-thumbs">
           ${allImages.map((img, i) => `
           <img class="adm-thumb${i===0?' active':''}" src="${escAttr(img)}" data-src="${escAttr(img)}"
-               onerror="this.style.display='none'">`).join('')}
+               data-onerror="hide">`).join('')}
         </div>` : ''}
       </div>` : `<div class="adm-top-bar" style="background:linear-gradient(90deg,${accent}22,transparent)">
         <div class="adm-color-strip" style="background:${accent}"></div>

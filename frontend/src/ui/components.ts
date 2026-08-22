@@ -62,7 +62,7 @@ export function getModCardHTML(mod, ctx) {
     if (info) {
       const tip = (info.current_version && info.new_version)
         ? `${info.current_version} → ${info.new_version}` : (t('mod.updateAvailable') || 'Update available');
-      updateHtml = `<div class="tag-mod-update" onclick="window.bmmShowModUpdates && window.bmmShowModUpdates(); event.stopPropagation();" data-tasky="${escAttr(escJs(tip))}" data-tasky-icon="package" data-tasky-literal="1" style="display:inline-flex;align-items:center;gap:3px;cursor:pointer;background:rgba(46,204,113,0.16);color:var(--bmm-success);border:1px solid rgba(46,204,113,0.32);padding:1px 6px;border-radius:4px;font-size:9px;font-weight:700;"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>${t('mod.updateTag') || 'Update'}</div>`;
+      updateHtml = `<div class="tag-mod-update" ${actAttrsStop('bmmShowModUpdates')} data-tasky="${escAttr(escJs(tip))}" data-tasky-icon="package" data-tasky-literal="1" style="display:inline-flex;align-items:center;gap:3px;cursor:pointer;background:rgba(46,204,113,0.16);color:var(--bmm-success);border:1px solid rgba(46,204,113,0.32);padding:1px 6px;border-radius:4px;font-size:9px;font-weight:700;"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>${t('mod.updateTag') || 'Update'}</div>`;
     }
   } catch {}
 
@@ -83,7 +83,7 @@ export function getModCardHTML(mod, ctx) {
                 <div class="mod-name" data-tasky="${escAttr(escJs(mod.name))}" data-tasky-icon="package" data-tasky-literal="1">${escHtml(truncate(mod.name, 100))}</div>
                 <div class="sha-status-icon ${isShaInvalid ? 'invalid' : (isMissing ? 'missing' : 'verified')}" 
                      ${actAttrsStop('recalculateModSha', mod.id)}
-                     onmouseenter="window.showTaskyHelp('${isShaInvalid ? 'hashes.status.invalid' : (isMissing ? 'hashes.status.missing' : 'hashes.status.verified')}', '${isShaInvalid ? 'alert' : 'shield'}')"
+                     data-tasky="${isShaInvalid ? 'hashes.status.invalid' : (isMissing ? 'hashes.status.missing' : 'hashes.status.verified')}" data-tasky-icon="${isShaInvalid ? 'alert' : 'shield'}"
                     
                      style="display:inline-flex;align-items:center;justify-content:center;cursor:pointer;color:${isShaInvalid ? 'var(--danger)' : (isMissing ? 'var(--text-muted)' : 'var(--success)')};opacity:${isMissing ? '0.5' : '0.9'}; transition: all 0.2s ease;">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
@@ -98,12 +98,12 @@ export function getModCardHTML(mod, ctx) {
                     <span class="mono mod-version" style="color: var(--cyan); font-weight:600">v${escHtml(mod.version)}</span>
                     ${tagsHtml}
                 </div>
-                <div class="mod-author-container" style="font-size:10px;color:var(--text-muted);margin-top:4px;opacity:0.8;display:${mod.author ? 'flex' : 'none'};align-items:center;gap:4px;cursor:help" onmouseenter="window.showTaskyHelp('${escAttr(escJs(mod.author || ''))}', 'user', true)">
+                <div class="mod-author-container" style="font-size:10px;color:var(--text-muted);margin-top:4px;opacity:0.8;display:${mod.author ? 'flex' : 'none'};align-items:center;gap:4px;cursor:help" data-tasky="${escAttr(mod.author || '')}" data-tasky-icon="user" data-tasky-literal="1">
                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="opacity:0.7"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                     <span class="mod-author-name">${escHtml(truncate(mod.author || '', 50))}</span>
                 </div>
             </div>
-            <div class="mod-path-hint" onmouseenter="window.showTaskyHelp('${escAttr(escJs(mod.mod_folder_path || ''))}', 'folder', true)" style="font-size:10px;font-family:var(--font-mono);color:var(--text-muted);opacity:0.5;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:400px;display:flex;align-items:center;gap:4px;cursor:help">
+            <div class="mod-path-hint" data-tasky="${escAttr(mod.mod_folder_path || '')}" data-tasky-icon="folder" data-tasky-literal="1" style="font-size:10px;font-family:var(--font-mono);color:var(--text-muted);opacity:0.5;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:400px;display:flex;align-items:center;gap:4px;cursor:help">
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.6"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
                 ${escHtml(mod.mod_folder_path || '')}
             </div>
@@ -112,9 +112,9 @@ export function getModCardHTML(mod, ctx) {
         <div class="mod-actions">
             <div class="mod-actions-dropdown">
             <button class="btn btn-sm btn-icon btn-dropdown-toggle" 
-                onclick="window.showGlobalDropdown(this, this.nextElementSibling); event.stopPropagation();"
+                ${actAttrsStop('showGlobalDropdown')} data-act-with="element,next"
                 data-tasky="mod.moreActionsTip" data-tasky-icon="help";"
-                onmouseleave="window.hideTaskyHelp();"
+                
                 style="background:rgba(255,255,255,0.05);color:var(--text-secondary);border:none;padding:4px 6px;border-radius:6px;cursor:pointer">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
                         <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
@@ -181,13 +181,13 @@ export function getModCardHTML(mod, ctx) {
                         <span style="margin-left:auto;font-family:var(--font-mono);font-size:9px;color:var(--cyan);opacity:0.6;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml((mod.repo_mod_id || mod.id).slice(0, 8))}…</span>
                     </div>
                     <div class="dropdown-divider"></div>
-                    <div class="dropdown-item" onclick="window.closeGlobalDropdown && window.closeGlobalDropdown(true); window.bmmCheckModUpdate && window.bmmCheckModUpdate('${mod.id}'); event.stopPropagation();"
+                    <div class="dropdown-item" ${actAttrsStop('bmmMenuCheckModUpdate', mod.id)}
                          data-tasky="mod.checkUpdateTip" data-tasky-icon="refresh"
                         >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>
                         <span data-i18n="mod.checkUpdate">${t('mod.checkUpdate') || 'Check for updates'}</span>
                     </div>
-                    <div class="dropdown-item" onclick="window.closeGlobalDropdown && window.closeGlobalDropdown(true); window.openModUpdateConfig && window.openModUpdateConfig('${mod.id}'); event.stopPropagation();"
+                    <div class="dropdown-item" ${actAttrsStop('bmmMenuOpenModUpdateConfig', mod.id)}
                          data-tasky="mod.updateConfigTip" data-tasky-icon="package"
                         >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
@@ -303,7 +303,7 @@ export function getModDetailHTML(mod, ctx) {
             <span>${t('detail.name')}</span>
             <span id="counter-name" style="font-size:9px;opacity:0.5;font-weight:400">0/100</span>
         </label>
-        <input type="text" id="detail-name" class="input-field" value="${escAttr(mod.name)}" maxlength="100" oninput="if(this.value.length > 100) this.value = this.value.substring(0, 100)" />
+        <input type="text" id="detail-name" class="input-field" value="${escAttr(mod.name)}" maxlength="100" />
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
         <div class="detail-section">
@@ -315,7 +315,7 @@ export function getModDetailHTML(mod, ctx) {
             <span>${t('detail.author')}</span>
             <span id="counter-author" style="font-size:9px;opacity:0.5;font-weight:400">0/50</span>
           </label>
-          <input type="text" id="detail-author" class="input-field" value="${escAttr(mod.author || '')}" maxlength="50" oninput="if(this.value.length > 50) this.value = this.value.substring(0, 50)" />
+          <input type="text" id="detail-author" class="input-field" value="${escAttr(mod.author || '')}" maxlength="50" />
         </div>
       </div>
       <div class="detail-section" style="margin-top:10px">
@@ -323,7 +323,7 @@ export function getModDetailHTML(mod, ctx) {
             <span>${t('detail.description')}</span>
             <span id="counter-desc" style="font-size:9px;opacity:0.5;font-weight:400">0/2000</span>
         </label>
-        <textarea id="detail-desc" class="input-field" rows="4" style="resize:vertical;min-height:80px;line-height:1.5;padding:10px" maxlength="2000" oninput="if(this.value.length > 2000) this.value = this.value.substring(0, 2000)"></textarea>
+        <textarea id="detail-desc" class="input-field" rows="4" style="resize:vertical;min-height:80px;line-height:1.5;padding:10px" maxlength="2000"></textarea>
       </div>
 
       <!-- Tags Selection -->
@@ -469,7 +469,7 @@ export function getModDetailHTML(mod, ctx) {
         <h3 style="margin:0;font-size:16px;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" data-tasky="${escAttr(escJs(mod.name))}" data-tasky-icon="package" data-tasky-literal="1">${escHtml(truncate(mod.name, 100))}</h3>
         <div style="display:flex;align-items:center;gap:8px;margin-top:2px">
           <span style="font-family:var(--font-mono);font-size:11px;color:var(--cyan)">v${escHtml(mod.version)}</span>
-          <span style="font-size:10px;color:var(--text-muted);display:inline-flex;align-items:center;gap:4px;cursor:help" onmouseenter="window.showTaskyHelp('${escAttr(escJs(mod.mod_folder_path || ''))}', 'folder', true)">
+          <span style="font-size:10px;color:var(--text-muted);display:inline-flex;align-items:center;gap:4px;cursor:help" data-tasky="${escAttr(mod.mod_folder_path || '')}" data-tasky-icon="folder" data-tasky-literal="1">
             ${mod.enabled ? `<svg width="8" height="8" viewBox="0 0 24 24" fill="var(--success)"><circle cx="12" cy="12" r="10"/></svg> ${t('mod.statusActive') || 'ACTIVE'}` : `<svg width="8" height="8" viewBox="0 0 24 24" fill="var(--text-muted)"><circle cx="12" cy="12" r="10"/></svg> ${t('mod.statusInactive') || 'INACTIVE'}`}
           </span>
         </div>
@@ -506,3 +506,15 @@ if (typeof window !== 'undefined') {
     }
   };
 }
+
+// Two menu entries have to close the dropdown before they act, or the modal they open is
+// drawn behind a still-open menu. Both spelled that out inline, twice; it is one function
+// each now, which is also what makes them reachable as a plain `data-act` name.
+(window as any).bmmMenuCheckModUpdate = (id: string) => {
+    (window as any).closeGlobalDropdown?.(true);
+    (window as any).bmmCheckModUpdate?.(id);
+};
+(window as any).bmmMenuOpenModUpdateConfig = (id: string) => {
+    (window as any).closeGlobalDropdown?.(true);
+    (window as any).openModUpdateConfig?.(id);
+};

@@ -504,9 +504,9 @@ export function renderImportedModlist(modlist) {
                             <span
                                 style="font-size:9px; color:color-mix(in srgb, var(--bmm-success) 70%, transparent); flex-shrink:0; cursor:pointer; padding:1px 4px; border-radius:3px; border:1px solid rgba(16,185,129,0.2); background:rgba(16,185,129,0.05); transition:background 0.15s"
                                 data-tooltip="${escAttr(f.sha256)}"
-                                onclick="navigator.clipboard.writeText('${escAttr(f.sha256)}').then(()=>{this.style.background='rgba(16,185,129,0.2)';setTimeout(()=>this.style.background='rgba(16,185,129,0.05)',800)})"
-                                onmouseenter="this.style.background='rgba(16,185,129,0.12)'"
-                                onmouseleave="this.style.background='rgba(16,185,129,0.05)'"
+                                data-copy="${escAttr(f.sha256)}" data-copy-flash="rgba(16,185,129,0.2)"
+                                data-hover="background:rgba(16,185,129,0.12)"
+                                data-hover-out="background:rgba(16,185,129,0.05)"
                             >${f.sha256.substring(0, 8)}…</span>
                         ` : ''}
                     </div>

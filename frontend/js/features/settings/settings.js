@@ -765,7 +765,7 @@ async function initLanguageSettings() {
             return `<img src="https://flagcdn.com/w20/${code}.png" 
                          width="20" height="14" alt="${f.toUpperCase()}"
                          style="vertical-align: middle; border-radius: 2px; object-fit: cover;"
-                         onerror="this.outerHTML='<span style=\\'font-size:10px; font-weight:700\\'>${f.toUpperCase()}</span>'">`;
+                         data-onerror="text" data-onerror-text="${f.toUpperCase()}">`;
         }
         return f;
     };
@@ -2417,7 +2417,7 @@ export async function initSettings() {
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                         ${t('settings.exportTitle')}
                     </h3>
-                    <button class="btn-close" style="background:none; border:none; color:var(--text-muted); cursor:pointer; padding:4px" onclick="this.closest('.modal-overlay').remove()">
+                    <button class="btn-close" style="background:none; border:none; color:var(--text-muted); cursor:pointer; padding:4px" data-remove-closest=".modal-overlay">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                     </button>
                 </div>
