@@ -21,6 +21,7 @@ import { initBetaHub, openBugReportModal, openFeedbackModal } from '../betahub/b
 import { initLaunchPackSettings } from './launch_packs.js';
 import { initScheduler } from './scheduler.js';
 import { initCardReorder } from './card-order.js';
+import { renderCspEditor, bindCspEditor } from './csp-editor.js';
 
 
 // ── GitHub PAT helper ─────────────────────────────────────
@@ -1559,6 +1560,18 @@ async function openDiscordLinkFlow(): Promise<void> {
 // ── Identity & API card ────────────────────────────────────
 async function initSecurityInfoCard() {
     const elCreatorId  = document.getElementById('sic-creator-id');
+
+    // The CSP editor rides on the security card rather than a screen of its own: the
+    // policy is a security fact about this install, like the ids above it.
+    if (elCreatorId && !document.getElementById('csp-extra')) {
+        const host = (elCreatorId.closest('.settings-card') as HTMLElement | null);
+        if (host) {
+            const box = document.createElement('div');
+            box.innerHTML = renderCspEditor();
+            host.appendChild(box);
+            bindCspEditor(box);
+        }
+    }
     const elApiToken   = document.getElementById('sic-api-token');
     const elVersion    = document.getElementById('sic-bmm-version');
 
