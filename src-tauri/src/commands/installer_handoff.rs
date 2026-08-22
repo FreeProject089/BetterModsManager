@@ -97,6 +97,16 @@ pub struct HandoffResult {
     /// it is surfaced here and the frontend writes `bmm_active_theme` before
     /// `restoreThemeAtBoot()` reads it.
     pub active_theme: Option<String>,
+    /// Content-Security-Policy preset the installer offered, as a PRESET ID — never a
+    /// policy string. The extra policy lives in localStorage (csp-boot.js reads it while
+    /// the document parses, the only store readable that early), so like the theme it is
+    /// surfaced rather than applied here.
+    ///
+    /// An id, because an installer field that could carry a raw policy would be a way to
+    /// hand the app a CSP nobody reviewed. The frontend matches it against the presets it
+    /// already ships and ignores anything else, so the worst a tampered handoff can do is
+    /// name a preset that does not exist.
+    pub csp_preset: Option<String>,
 }
 
 #[tauri::command]
@@ -258,6 +268,20 @@ fn apply_settings(
             !id.is_empty()
                 && id.len() <= 64
                 && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+        })
+        .map(str::to_string);
+
+    // CSP preset — a short lowercase id, checked for shape here and matched against the
+    // real preset list on the JS side. "custom" is a deliberate no-op: it means "leave the
+    // field alone, I will write one myself in Settings".
+    res.csp_preset = s
+        .get("csp_preset")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|id| {
+            !id.is_empty()
+                && id.len() <= 32
+                && id.chars().all(|c| c.is_ascii_lowercase() || c == '-')
         })
         .map(str::to_string);
 

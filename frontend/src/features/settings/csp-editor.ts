@@ -163,6 +163,37 @@ export function renderCspEditor(): string {
 }
 
 /** Attach behaviour. Call once, after the panel is in the DOM. */
+/** Store an extra policy, or clear it. The one place that writes the key.
+ *
+ *  Returns the validation error, or null on success. Everything that can install a policy
+ *  goes through here: the Settings panel and the installer handoff. Two writers of the same
+ *  key would be two chances to skip the validation csp-boot.js also performs at startup —
+ *  and the one that skipped it would simply be ignored on the next launch, silently.
+ */
+export function setExtraPolicy(policy: string): string | null {
+    const value = String(policy || '').trim();
+    if (!value) {
+        try { localStorage.removeItem(KEY); } catch { /* nothing to remove */ }
+        return null;
+    }
+    const err = validate(value);
+    if (err) return err;
+    try { localStorage.setItem(KEY, value); } catch { return 'storage is unavailable'; }
+    return null;
+}
+
+/** Apply a named preset from PRESETS. Unknown id → false, and nothing is written.
+ *
+ *  Used by the installer handoff, where the choice arrives as a preset ID rather than a
+ *  policy string: an installer dropdown must not be able to inject an arbitrary CSP, and a
+ *  preset id is a choice among known values.
+ */
+export function applyPresetById(id: string): boolean {
+    const p = PRESETS.find((x) => x.id === id);
+    if (!p) return false;
+    return setExtraPolicy(p.policy) === null;
+}
+
 export function bindCspEditor(root: ParentNode = document): void {
     const ta = root.querySelector<HTMLTextAreaElement>('#csp-extra');
     const msg = root.querySelector<HTMLElement>('#csp-msg');
@@ -183,19 +214,13 @@ export function bindCspEditor(root: ParentNode = document): void {
     });
 
     root.querySelector('#csp-save')?.addEventListener('click', () => {
-        const err = validate(ta.value);
+        const err = setExtraPolicy(ta.value);
         if (err) return say(err, false);
-        try {
-            if (ta.value.trim()) localStorage.setItem(KEY, ta.value.trim());
-            else localStorage.removeItem(KEY);
-            say('Saved. Restart BMM for it to take effect.', true);
-        } catch {
-            say('Could not save — storage is unavailable.', false);
-        }
+        say('Saved. Restart BMM for it to take effect.', true);
     });
 
     root.querySelector('#csp-clear')?.addEventListener('click', () => {
-        try { localStorage.removeItem(KEY); } catch { /* nothing to remove */ }
+        setExtraPolicy('');
         ta.value = '';
         say('Removed. BMM will use its shipped policy on the next launch.', true);
     });

@@ -44,6 +44,47 @@ function appField(name) {
   return m ? m[1] : null;
 }
 
+// A basic-string value must END at its first unescaped quote. Nothing else in this repo
+// parses installer.toml, so a description containing a bare " parses as a truncated string
+// followed by garbage — and the FILE stops loading. That happened while adding an option
+// here: the Rust loader refused the manifest and seven of its tests went red, while this
+// gate reported "installer config OK", because it only ever regex-read the [app] table.
+//
+// Narrow on purpose: single-line `key = "..."` assignments only, skipping arrays and inline
+// tables, which have their own shapes. It is not a TOML parser and does not pretend to be —
+// it catches the one mistake a human writing prose into this file actually makes.
+function malformedStrings(src) {
+    const bad = [];
+    const QUOTE = String.fromCharCode(34);
+    const BACKSLASH = String.fromCharCode(92);
+    src.split(/\r?\n/).forEach((line, i) => {
+        const m = /^\s*[A-Za-z_][\w-]*\s*=\s*(.*)$/.exec(line);
+        if (!m) return;
+        const value = m[1].trim();
+        if (value[0] !== QUOTE) return;                         // not a basic string
+        if (value.slice(0, 3) === QUOTE + QUOTE + QUOTE) return; // multi-line, different rules
+        let closed = -1;
+        for (let j = 1; j < value.length; j++) {
+            if (value[j] === BACKSLASH) { j++; continue; }
+            if (value[j] === QUOTE) { closed = j; break; }
+        }
+        if (closed < 0) { bad.push([i + 1, 'string is never closed']); return; }
+        const after = value.slice(closed + 1).trim();
+        if (after && after[0] !== '#') {
+            bad.push([i + 1, `text after the closing quote: ${JSON.stringify(after.slice(0, 40))}`]);
+        }
+    });
+    return bad;
+}
+
+const malformed = malformedStrings(toml);
+if (malformed.length) {
+    console.error(`\n✗ installer.toml has ${malformed.length} malformed string value(s) — the manifest will not load:`);
+    for (const [line, why] of malformed) console.error(`  line ${line}: ${why}`);
+    console.error('  A " inside a description must be escaped, or use different quote marks.');
+    process.exit(1);
+}
+
 const checks = [
   {
     what: 'app identifier',

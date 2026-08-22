@@ -874,6 +874,19 @@ async function main() {
             // survived the first launch.
             if (ho.active_theme)
                 localStorage.setItem('bmm_active_theme', ho.active_theme);
+            // Content-Security-Policy preset. The value is a preset ID, and applyPresetById
+            // ignores anything that is not one of BMM's own — including "custom", which
+            // means "write nothing, I will author one in Settings". It goes through the same
+            // function the Settings panel uses, so the policy is validated the same way
+            // csp-boot.js will validate it on the next launch; a second writer here could
+            // save something the loader then drops without a word.
+            //
+            // It takes effect from the SECOND launch: a CSP meta tag is only honoured while
+            // the document is parsed, and this document has already been parsed.
+            if (ho.csp_preset && ho.csp_preset !== 'custom') {
+                const { applyPresetById } = await import('../features/settings/csp-editor.js');
+                applyPresetById(ho.csp_preset);
+            }
             // Tasky + in-app tips. Each key is read as `!== 'false'`, so only an explicit
             // "off" needs writing — and only when the installer actually said so. A null
             // means it was not asked about, and BMM's own default must stand.
