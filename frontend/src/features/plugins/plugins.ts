@@ -8775,8 +8775,10 @@ async function renderPerms(container: HTMLElement) {
                 </div>
             </div>
 
-            <div id="plug-cors-specific" style="${corsAllowAny ? 'opacity:.45;pointer-events:none;' : ''}">
-                <div class="plug-sources-add" style="margin-bottom:10px;">
+            <div id="plug-cors-specific" class="plug-cors-allowlist" data-superseded="${corsAllowAny ? '1' : '0'}">
+                <p class="plug-cors-allowlist-title">${IC.globe} ${escHtml(t('plugins.corsAllowlistTitle'))}</p>
+                ${corsAllowAny ? `<p class="plug-cors-superseded">${IC.alert} ${escHtml(t('plugins.corsSuperseded'))}</p>` : ''}
+                <div class="plug-sources-add">
                     <input type="text" id="plug-cors-input" class="input" placeholder="https://my-dashboard.example.com">
                     <button class="btn btn-sm btn-accent" id="plug-cors-add">${IC.plus} ${t('common.add') || 'Add'}</button>
                 </div>
@@ -8845,8 +8847,22 @@ async function renderPerms(container: HTMLElement) {
             ? Array.from(new Set([...corsOrigins, '*']))
             : corsOrigins.filter(o => o !== '*');
         await saveCors();
+        // A data attribute, not an inline style: the CSS owns what "superseded" looks
+        // like, and writing cssText here would also wipe anything else the element carries.
         const spec = container.querySelector('#plug-cors-specific') as HTMLElement;
-        if (spec) spec.style.cssText = on ? 'opacity:.45;pointer-events:none;' : '';
+        if (spec) {
+            spec.dataset.superseded = on ? '1' : '0';
+            // Say WHY it is inert. A control that fades with no explanation reads as broken.
+            const existing = spec.querySelector('.plug-cors-superseded');
+            if (on && !existing) {
+                const p = document.createElement('p');
+                p.className = 'plug-cors-superseded';
+                p.textContent = t('plugins.corsSuperseded');
+                spec.querySelector('.plug-cors-allowlist-title')?.after(p);
+            } else if (!on && existing) {
+                existing.remove();
+            }
+        }
     });
 
     container.querySelector('#plug-global-allow')?.addEventListener('change', (e) => {

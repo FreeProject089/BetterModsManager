@@ -7721,5 +7721,7 @@
   "repo.ssh.errLocalDir": "{dir} is not a folder.",
   "repo.ssh.errSftp": "SFTP could not start on the server: {detail}",
   "repo.ssh.errGeneric": "SSH publish failed: {detail}",
-  "sched.sshDirPh": "exported repo folder to publish"
+  "sched.sshDirPh": "exported repo folder to publish",
+  "plugins.corsAllowlistTitle": "Origins allowed to call the API",
+  "plugins.corsSuperseded": "“Allow any origin” is on, so this list is not used. Turn it off to allow only the origins you name."
 }

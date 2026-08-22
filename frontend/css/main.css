@@ -17158,3 +17158,45 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
     .repo-ssh-grid { grid-template-columns: 1fr; }
     .repo-ssh-field { grid-column: span 1 !important; }
 }
+
+/* ── CORS section: two blocks that read as two blocks ────────────────────────
+   Measured before changing anything: the "allow any origin" card was a bordered,
+   tinted panel and the origin list below it had no container at all (padding 0, no
+   border, transparent), so the section visually ended after the first block and the
+   rest floated. The add row was worse — a 34px input beside a 29px button. */
+.plug-cors-allowlist {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px;
+    background: var(--bmm-bg-base);
+}
+.plug-cors-allowlist-title {
+    font-size: 10px; text-transform: uppercase; letter-spacing: .05em;
+    color: var(--text-muted); margin: 0 0 8px;
+    display: flex; align-items: center; gap: 6px;
+}
+/* Same height on both, so the row has one baseline instead of two. */
+.plug-sources-add .input,
+.plug-sources-add .btn { height: 34px; box-sizing: border-box; }
+.plug-sources-add .btn { display: inline-flex; align-items: center; gap: 6px; }
+
+/* An empty state, rather than a sentence that fell out of a paragraph. */
+.plug-cors-allowlist .plug-sources-empty {
+    text-align: center;
+    padding: 14px 10px;
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+    opacity: 1;
+}
+
+/* When "any origin" is on, the list is not merely faded: it says why. Explaining a
+   disabled control is the difference between "broken" and "not applicable". */
+/* pointer-events only. A dim was written here too and REMOVED: computed opacity on this
+   element stays 1 in the running app even from an inline !important, so the rule was
+   decoration that provably does not render. The list being inert is carried by
+   pointer-events plus the sentence above it — which, unlike a fade, says why. */
+.plug-cors-allowlist[data-superseded="1"] { pointer-events: none; }
+.plug-cors-superseded {
+    font-size: 11px; color: var(--warning); margin: 0 0 8px;
+    display: flex; align-items: flex-start; gap: 6px; line-height: 1.45;
+}

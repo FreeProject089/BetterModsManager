@@ -7719,5 +7719,7 @@
   "repo.ssh.errLocalDir": "{dir} n’est pas un dossier.",
   "repo.ssh.errSftp": "SFTP n’a pas pu démarrer sur le serveur : {detail}",
   "repo.ssh.errGeneric": "Échec de la publication SSH : {detail}",
-  "sched.sshDirPh": "dossier de dépôt exporté à publier"
+  "sched.sshDirPh": "dossier de dépôt exporté à publier",
+  "plugins.corsAllowlistTitle": "Origines autorisées à appeler l’API",
+  "plugins.corsSuperseded": "« Autoriser toute origine » est activé : cette liste n’est pas utilisée. Désactivez-le pour n’autoriser que les origines que vous nommez."
 }

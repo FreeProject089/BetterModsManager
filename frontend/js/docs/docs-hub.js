@@ -1352,7 +1352,9 @@ A deeplink is a URL — anything that can open a link can trigger it (a \`.bat\`
 It does **not** fall back to another port. If something already holds 51274 — typically a zombie instance after an in-app restart — the API is **disabled for that whole session** and a line goes to the crash log. The app keeps working normally, so a script failing to connect is the only symptom. Check \`GET /api/health\` first.
 :::
 
-**CORS.** In a release build, origins are limited to \`https://tauri.localhost\`, \`tauri://localhost\`, \`http://tauri.localhost\`, \`https://bettercommunity.ch\`, plus anything you add under **CORS** on this page (a lone \`*\` entry opts into allow-any). The list is read **once when the API starts**. \`curl\` and deeplinks send no \`Origin\`, so none of this affects them.
+**CORS.** In a release build, origins are limited to \`https://tauri.localhost\`, \`tauri://localhost\`, \`http://tauri.localhost\`, \`https://bettercommunity.ch\`, plus anything you add under **CORS** on this page (a lone \`*\` entry opts into allow-any). The list is read **once when the API starts**, so a change needs a restart of BMM (or of the API) to take effect — the panel says so under the list. \`curl\` and deeplinks send no \`Origin\`, so none of this affects them.
+
+The panel is two decisions, not one. **Allow any origin** is the switch at the top; the bordered box under it is the allow-list you build yourself. Turning the switch on does not empty that list — it stops it being consulted, and the box says so rather than merely greying out, because a control that dims without explanation reads as broken rather than as not applicable. Turn the switch off and your list is live again, exactly as you left it.
 
 ## Authenticating
 
@@ -1637,7 +1639,9 @@ Un deeplink est une URL — tout ce qui sait ouvrir un lien peut le déclencher 
 Elle ne **bascule pas** sur un autre port. Si quelque chose occupe déjà 51274 — typiquement une instance zombie après un redémarrage in-app — l’API est **désactivée pour toute la session** et une ligne part dans le journal de crash. L’app continue de fonctionner normalement, donc le seul symptôme est un script qui n’arrive pas à se connecter. Commence par \`GET /api/health\`.
 :::
 
-**CORS.** En build release, les origines sont limitées à \`https://tauri.localhost\`, \`tauri://localhost\`, \`http://tauri.localhost\`, \`https://bettercommunity.ch\`, plus ce que tu ajoutes sous **CORS** sur cette page (une entrée \`*\` seule = tout autoriser). La liste est lue **une seule fois au démarrage de l’API**. \`curl\` et les deeplinks n’envoient pas d’\`Origin\`, rien de tout ça ne les concerne.
+**CORS.** En build release, les origines sont limitées à \`https://tauri.localhost\`, \`tauri://localhost\`, \`http://tauri.localhost\`, \`https://bettercommunity.ch\`, plus ce que tu ajoutes sous **CORS** sur cette page (une entrée \`*\` seule = tout autoriser). La liste est lue **une seule fois au démarrage de l’API** : un changement demande donc de redémarrer BMM (ou l’API) pour prendre effet — le panneau le rappelle sous la liste. \`curl\` et les deeplinks n’envoient pas d’\`Origin\`, rien de tout ça ne les concerne.
+
+Le panneau porte deux décisions, pas une. **Autoriser toute origine** est l’interrupteur du haut ; le cadre en dessous est la liste que vous constituez vous-même. Activer l’interrupteur ne vide pas cette liste — il cesse de la consulter, et le cadre le dit au lieu de simplement griser, parce qu’un contrôle qui pâlit sans explication se lit comme cassé plutôt que comme sans objet. Désactivez l’interrupteur et votre liste reprend effet, telle que vous l’aviez laissée.
 
 ## S’authentifier
 
