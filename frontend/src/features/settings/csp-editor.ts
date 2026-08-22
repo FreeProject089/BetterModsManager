@@ -97,7 +97,7 @@ export const PRESETS: { id: string; label: string; note: string; policy: string 
     {
         id: 'strict',
         label: 'Strict — first-party scripts only',
-        note: "The shipped policy already refuses inline script: an injected <img onerror=…> does not execute. What this adds is dropping 'unsafe-eval' and the third-party script hosts (YouTube, BetaHub, Google), so ONLY BMM's own files can run. Cost: embedded videos and the BetaHub feedback widget stop working, and any vendor library that compiles code at runtime stops with it.",
+        note: "The shipped policy already refuses inline script AND code built from strings: an injected <img onerror=…> does not execute, and neither does anything built from a string at runtime. What this adds is dropping the third-party script hosts (YouTube, BetaHub, Google), so ONLY BMM's own files can run. Cost: embedded videos and the BetaHub feedback widget stop working.",
         policy: "script-src 'self'; object-src 'none'; base-uri 'self'",
     },
 ];
