@@ -17114,3 +17114,47 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
     border: 1px solid rgba(239, 68, 68, 0.42);
     cursor: help;
 }
+
+/* ── Server Repo → publish over SSH ──────────────────────────────────────────
+   Tokens only, no literal colours: this panel sits inside the Host tab and has to
+   follow every theme, including the light ones. */
+.repo-ssh-card {
+    margin-top: 14px;
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bmm-bg-elevated);
+}
+.repo-ssh-head {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 13px; font-weight: 700; color: var(--text-primary);
+    margin-bottom: 4px;
+}
+.repo-ssh-badge {
+    margin-left: auto; font-size: 10px; font-weight: 700;
+    padding: 2px 8px; border-radius: 999px;
+    border: 1px solid var(--border); color: var(--text-muted);
+}
+.repo-ssh-badge[data-tone="ok"]   { color: var(--success); border-color: var(--success); }
+.repo-ssh-badge[data-tone="warn"] { color: var(--warning); border-color: var(--warning); }
+.repo-ssh-badge[data-tone="err"]  { color: var(--danger);  border-color: var(--danger); }
+.repo-ssh-desc, .repo-ssh-note {
+    font-size: 11px; color: var(--text-muted); line-height: 1.55; margin: 0 0 10px;
+}
+.repo-ssh-note { margin: 8px 0 0; }
+/* Four columns so host+port and user+folder pair up naturally; the fields declare
+   their own span. Collapses to one column when the panel is narrow. */
+.repo-ssh-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px 10px; }
+.repo-ssh-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.repo-ssh-field > span { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); }
+.repo-ssh-keyrow { display: flex; gap: 6px; align-items: center; }
+.repo-ssh-keyrow > .form-input { flex: 1; min-width: 0; }
+.repo-ssh-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.repo-ssh-progress { margin-top: 10px; }
+.repo-ssh-bar { height: 4px; border-radius: 999px; background: var(--border); overflow: hidden; }
+.repo-ssh-bar-fill { height: 100%; width: 0; background: var(--bmm-accent, var(--accent)); transition: width .15s linear; }
+.repo-ssh-progress-text { font-size: 10px; color: var(--text-muted); margin-top: 5px; font-family: var(--font-mono); }
+@media (max-width: 720px) {
+    .repo-ssh-grid { grid-template-columns: 1fr; }
+    .repo-ssh-field { grid-column: span 1 !important; }
+}

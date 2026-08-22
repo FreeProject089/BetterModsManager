@@ -89,6 +89,12 @@ regex = "1"
 bytes = "1"
 ed25519-dalek = { version = "2", features = ["rand_core"] }
 hex = "0.4"
+# ring, not the default aws-lc-rs: aws-lc-sys compiles assembly through NASM, which is not
+# installed on a stock Windows box and is not a dependency worth adding to BMM's build for
+# one feature. ring builds with the toolchain everyone already has. Verified: the default
+# feature set fails here with "NASM command not found".
+russh = { version = "0.63.0", default-features = false, features = ["ring", "rsa", "flate2"] }
+russh-sftp = "2.4.0"
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.52", features = ["Win32_System_Threading", "Win32_Storage_FileSystem"] }
 rand = "0.8"

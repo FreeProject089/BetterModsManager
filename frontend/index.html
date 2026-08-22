@@ -1564,6 +1564,77 @@
                                         </button>
                                     </div>
 
+                                    <!-- ── Publish over SSH ──
+                                         Exporting writes a folder; this is what puts it on the machine
+                                         that serves it. Separate from the export button on purpose: you
+                                         can re-publish an existing folder without regenerating it. -->
+                                    <div class="repo-ssh-card" id="repo-ssh-card">
+                                        <div class="repo-ssh-head">
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                                                <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
+                                            </svg>
+                                            <span data-i18n="repo.ssh.title">Publier par SSH</span>
+                                            <span class="repo-ssh-badge" id="repo-ssh-status" hidden></span>
+                                        </div>
+                                        <p class="repo-ssh-desc" data-i18n="repo.ssh.desc">
+                                            Envoie le dossier exporté vers le serveur qui l’héberge, par SFTP.
+                                            BMM lit votre clé privée au moment de l’envoi — elle n’est jamais copiée
+                                            ni enregistrée.
+                                        </p>
+
+                                        <div class="repo-ssh-grid">
+                                            <label class="repo-ssh-field" style="grid-column:span 3">
+                                                <span data-i18n="repo.ssh.host">Hôte</span>
+                                                <input type="text" class="form-input" id="repo-ssh-host" placeholder="exemple.com" spellcheck="false">
+                                            </label>
+                                            <label class="repo-ssh-field">
+                                                <span data-i18n="repo.ssh.port">Port</span>
+                                                <input type="number" class="form-input" id="repo-ssh-port" placeholder="22" min="1" max="65535">
+                                            </label>
+                                            <label class="repo-ssh-field" style="grid-column:span 2">
+                                                <span data-i18n="repo.ssh.user">Utilisateur</span>
+                                                <input type="text" class="form-input" id="repo-ssh-user" placeholder="freeproject" spellcheck="false">
+                                            </label>
+                                            <label class="repo-ssh-field" style="grid-column:span 2">
+                                                <span data-i18n="repo.ssh.remoteDir">Dossier distant</span>
+                                                <input type="text" class="form-input" id="repo-ssh-remote" placeholder="/var/www/repo" spellcheck="false">
+                                            </label>
+                                            <label class="repo-ssh-field" style="grid-column:span 3">
+                                                <span data-i18n="repo.ssh.keyPath">Clé privée</span>
+                                                <div class="repo-ssh-keyrow">
+                                                    <input type="text" class="form-input" id="repo-ssh-key" placeholder="id_ed25519 ou .ppk" spellcheck="false">
+                                                    <button class="btn btn-secondary btn-sm" id="repo-ssh-key-pick" type="button" data-i18n="repo.ssh.browse">Parcourir…</button>
+                                                </div>
+                                            </label>
+                                            <label class="repo-ssh-field">
+                                                <span data-i18n="repo.ssh.passphrase">Phrase secrète</span>
+                                                <input type="password" class="form-input" id="repo-ssh-pass" placeholder="—" autocomplete="off">
+                                            </label>
+                                        </div>
+
+                                        <p class="repo-ssh-note" data-i18n="repo.ssh.keyNote">
+                                            Les clés OpenSSH et PuTTY (.ppk) sont acceptées telles quelles. La phrase
+                                            secrète sert à cet envoi et n’est pas conservée.
+                                        </p>
+
+                                        <div class="repo-ssh-actions">
+                                            <button class="btn btn-secondary btn-sm" id="repo-ssh-test" type="button">
+                                                <span data-i18n="repo.ssh.test">Tester la connexion</span>
+                                            </button>
+                                            <button class="btn btn-primary btn-sm" id="repo-ssh-publish" type="button">
+                                                <span data-i18n="repo.ssh.publish">Publier le dossier exporté</span>
+                                            </button>
+                                            <button class="btn btn-ghost btn-sm" id="repo-ssh-forget" type="button" hidden>
+                                                <span data-i18n="repo.ssh.forget">Oublier l’empreinte</span>
+                                            </button>
+                                        </div>
+
+                                        <div class="repo-ssh-progress" id="repo-ssh-progress" hidden>
+                                            <div class="repo-ssh-bar"><div class="repo-ssh-bar-fill" id="repo-ssh-bar-fill"></div></div>
+                                            <div class="repo-ssh-progress-text" id="repo-ssh-progress-text"></div>
+                                        </div>
+                                    </div>
+
                                     <div id="repo-export-progress-container" class="bmm-progress" style="display:none;--bmm-progress-ink:var(--cyan);">
                                         <div class="bmm-progress-head">
                                             <span id="repo-export-status" data-i18n="repo.exporting">...</span>

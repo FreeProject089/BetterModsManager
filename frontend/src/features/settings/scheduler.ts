@@ -1361,6 +1361,12 @@ async function runAction(action: Action, task: Task, ctx: RunCtx): Promise<void>
         case 'repo.gen':         dl('repo/gen'); break;
         case 'repo.update':      dl('repo/update', { dir: p.dir }); break;
         case 'repo.host':        dl('repo/host', { dir: p.dir, port: p.port }); break;
+        case 'repo.publishSsh': {
+            const { publishStoredTarget } = await import('../repo/repo-ssh.js');
+            const sent = await publishStoredTarget(String(p.dir || ''));
+            _captureOutput(p, String(sent), ctx);
+            break;
+        }
         case 'app.install':      dl('app/install', { id: p.id, url: p.url, title: p.title }); break;
         case 'launchpack.run':   await invoke('run_launch_pack', { id: p.id }); break;
         case 'task.run':
@@ -3597,6 +3603,9 @@ const ACTION_TYPES: { v: string; label: string; needs?: string; group: string }[
     { v: 'repo.gen', label: 'Generate repo', group: 'repo' },
     { v: 'repo.update', label: 'Update repo', needs: 'repoUpdate', group: 'repo' },
     { v: 'repo.host', label: 'Host repo (HTTP)', needs: 'repoHost', group: 'repo' },
+    // Uses the SSH target saved in Server Repo. A scheduled task cannot answer a passphrase
+    // prompt at 04:00, so a key with one fails with a message instead of hanging forever.
+    { v: 'repo.publishSsh', label: 'Publish repo over SSH', needs: 'repoSshDir', group: 'repo' },
     // ── Apps & launch ──
     { v: 'app.launch', label: 'Launch app', needs: 'app', group: 'apps' },
     { v: 'app.stop', label: 'Stop app / process', needs: 'appStop', group: 'apps' },
@@ -4121,6 +4130,7 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
     else if (needs === 'repoSync') host.innerHTML = `<input class="input sched-r-url" placeholder="${escAttr(t('sched.repoUrlPh') || 'repo.json URL')}" value="${escAttr(params.url || '')}" style="min-width:240px"><input class="input sched-r-prof" placeholder="${escAttr(t('sched.repoProfPh') || 'remote profile id')}" value="${escAttr(params.profile || '')}" style="max-width:180px;margin-left:6px">`;
     else if (needs === 'repoUpdate') host.innerHTML = `<input class="input sched-r-dir" placeholder="${escAttr(t('sched.repoDirPh') || 'repo folder')}" value="${escAttr(params.dir || '')}" style="min-width:240px"><button type="button" class="btn btn-sm btn-secondary sched-browse-dir" style="margin-left:6px">${t('sched.choose') || 'Choose…'}</button>`;
     else if (needs === 'repoHost') host.innerHTML = `<input class="input sched-r-dir" placeholder="${escAttr(t('sched.serveDirPh') || 'folder to serve')}" value="${escAttr(params.dir || '')}" style="min-width:220px"><button type="button" class="btn btn-sm btn-secondary sched-browse-dir" style="margin-left:6px">${t('sched.choose') || 'Choose…'}</button><input class="input sched-r-port" type="number" min="1" placeholder="port" value="${escAttr(params.port || '')}" style="max-width:100px;margin-left:6px">`;
+    else if (needs === 'repoSshDir') host.innerHTML = `<input class="input sched-r-dir" placeholder="${escAttr(t('sched.sshDirPh') || 'exported repo folder to publish')}" value="${escAttr(params.dir || '')}" style="min-width:260px">`;
     else if (needs === 'appInstall') host.innerHTML = `<input class="input sched-a-id" placeholder="${escAttr(t('sched.appIdPh2') || 'app id')}" value="${escAttr(params.id || '')}" style="max-width:140px"><input class="input sched-a-url" placeholder="${escAttr(t('sched.appUrlPh') || 'download URL')}" value="${escAttr(params.url || '')}" style="min-width:220px;margin-left:6px"><input class="input sched-a-title" placeholder="${escAttr(t('sched.appTitlePh') || 'title (optional)')}" value="${escAttr(params.title || '')}" style="max-width:160px;margin-left:6px">`;
     else if (needs === 'mpCreate') host.innerHTML = `
         <div class="sched-field"><label class="sched-flabel">${t('sched.mpNameLbl') || 'Modpack name'}</label>
@@ -4680,7 +4690,7 @@ export async function exportOneTask(id: string): Promise<void> {
     // A task name becomes a filename here, so anything a filesystem treats specially has
     // to go — including the path separators, or the save dialog opens somewhere else.
     const safe = String(task.name || 'automation')
-        .replace(/[<>:"/\\|?* -]/g, '-').replace(/\s+/g, '-')
+        .replace(/[<>:"/\\|?*\x00-\x1f]/g, '-').replace(/\s+/g, '-')
         .replace(/^[.\s-]+|[.\s-]+$/g, '').slice(0, 60) || 'automation';
     // Everything it calls, transitively. Sharing a task that runs two other tasks used
     // to share one third of an automation: it imported, the step was there, and it failed

@@ -210,6 +210,12 @@
     ]
   },
   {
+    "action": "repo/publish-ssh",
+    "params": [
+      "dir"
+    ]
+  },
+  {
     "action": "repo/sync",
     "params": [
       "url",

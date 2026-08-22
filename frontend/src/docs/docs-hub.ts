@@ -368,6 +368,36 @@ ce qu'il remplace, ou les retire). Vos mods téléchargés ne sont jamais modifi
         },
       },
       {
+        id: 'server-publish-ssh', view: 'repo', diagram: 'hosting-flow', docsPath: 'features/repo/',
+        title: { en: 'Publish over SSH', fr: 'Publier par SSH' },
+        summary: { en: 'Send the exported folder straight to the server, without a separate file-transfer program.', fr: 'Envoyer le dossier export\u00e9 directement sur le serveur, sans programme de transfert s\u00e9par\u00e9.' },
+        keywords: 'ssh sftp publish upload key ppk openssh fingerprint scp winscp filezilla publier envoyer cl\u00e9 empreinte t\u00e9l\u00e9verser',
+        body: {
+          en: '<p>Exporting writes a folder. <b>Publish over SSH</b>, on the same screen, is what puts that folder on the machine that serves it \u2014 no separate file-transfer program, and no half-finished upload that nobody notices.</p>'
+            + '<h4>What you fill in</h4><ul>'
+            + '<li><b>Host, port, user</b> \u2014 the same three things any SSH client asks for. Port defaults to 22.</li>'
+            + '<li><b>Private key</b> \u2014 OpenSSH or PuTTY <code>.ppk</code>, both read as they are. No conversion step.</li>'
+            + '<li><b>Remote folder</b> \u2014 an absolute path. The repo\u2019s contents land INSIDE it; missing sub-folders are created.</li>'
+            + '<li><b>Passphrase</b> \u2014 only if your key has one. It is used for that upload and never written anywhere.</li></ul>'
+            + '<h4>Test before you publish</h4><p><b>Test the connection</b> does everything an upload does except upload: it authenticates, opens the folder, and writes-then-deletes a probe file. That last part is the one worth having \u2014 a key that logs in fine but lands in a folder it cannot write fails at the END of a multi-gigabyte transfer otherwise.</p>'
+            + '<h4>What BMM stores, and what it does not</h4><p>Host, port, user, remote folder and the PATH to your key are saved. The key itself never is, and neither is the passphrase. A key copied into BMM\u2019s settings would be a key inside every backup, every settings export and every crash report that attaches them.</p>'
+            + '<h4>The server\u2019s fingerprint</h4><p>The first connection records it. Every later one must match, and a CHANGED fingerprint is refused rather than warned about \u2014 the situation it protects against is exactly the one where a warning gets clicked past. If you genuinely rebuilt the machine, <b>Forget the fingerprint</b> is the deliberate way to accept the new one.</p>'
+            + '<h4>The manifest goes last</h4><p>Files are sent first and <code>repo.json</code> last, on purpose. Subscribers read the manifest and then fetch what it lists, so sending it first would hand everyone syncing during the upload a list of files that do not exist yet. This way the repo is either the old one or the new one.</p>'
+            + '<h4>Without opening the screen</h4><p>The scheduler has <b>Publish repo over SSH</b>, and the deeplink is <code>bmm://repo/publish-ssh?dir=&lt;folder&gt;</code>. Both use the target you saved here \u2014 neither can name a different host or key. A key with a passphrase cannot be used unattended: there is nobody to ask, so it fails with a message instead of waiting forever.</p>',
+          fr: '<p>L\u2019export \u00e9crit un dossier. <b>Publier par SSH</b>, sur le m\u00eame \u00e9cran, est ce qui d\u00e9pose ce dossier sur la machine qui l\u2019h\u00e9berge \u2014 sans programme de transfert s\u00e9par\u00e9, et sans envoi \u00e0 moiti\u00e9 termin\u00e9 que personne ne remarque.</p>'
+            + '<h4>Ce que vous renseignez</h4><ul>'
+            + '<li><b>H\u00f4te, port, utilisateur</b> \u2014 les trois m\u00eames choses que demande n\u2019importe quel client SSH. Le port vaut 22 par d\u00e9faut.</li>'
+            + '<li><b>Cl\u00e9 priv\u00e9e</b> \u2014 OpenSSH ou PuTTY <code>.ppk</code>, les deux lues telles quelles. Aucune conversion \u00e0 faire.</li>'
+            + '<li><b>Dossier distant</b> \u2014 un chemin absolu. Le contenu du d\u00e9p\u00f4t atterrit DEDANS ; les sous-dossiers manquants sont cr\u00e9\u00e9s.</li>'
+            + '<li><b>Phrase secr\u00e8te</b> \u2014 seulement si votre cl\u00e9 en a une. Elle sert \u00e0 cet envoi et n\u2019est \u00e9crite nulle part.</li></ul>'
+            + '<h4>Testez avant de publier</h4><p><b>Tester la connexion</b> fait tout ce que fait un envoi, sauf envoyer : elle s\u2019authentifie, ouvre le dossier, puis y \u00e9crit et efface un fichier t\u00e9moin. C\u2019est cette derni\u00e8re partie qui compte \u2014 une cl\u00e9 qui se connecte bien mais atterrit dans un dossier o\u00f9 elle ne peut pas \u00e9crire \u00e9choue sinon \u00e0 la FIN d\u2019un transfert de plusieurs gigaoctets.</p>'
+            + '<h4>Ce que BMM enregistre, et ce qu\u2019il n\u2019enregistre pas</h4><p>H\u00f4te, port, utilisateur, dossier distant et le CHEMIN de votre cl\u00e9 sont conserv\u00e9s. La cl\u00e9 elle-m\u00eame, jamais, ni la phrase secr\u00e8te. Une cl\u00e9 copi\u00e9e dans les r\u00e9glages de BMM serait une cl\u00e9 pr\u00e9sente dans chaque sauvegarde, chaque export de r\u00e9glages et chaque rapport de plantage qui les joint.</p>'
+            + '<h4>L\u2019empreinte du serveur</h4><p>La premi\u00e8re connexion l\u2019enregistre. Toutes les suivantes doivent correspondre, et une empreinte QUI CHANGE est refus\u00e9e plut\u00f4t que signal\u00e9e \u2014 la situation contre laquelle elle prot\u00e8ge est justement celle o\u00f9 l\u2019on clique \u00e0 travers un avertissement. Si vous avez r\u00e9ellement reconstruit la machine, <b>Oublier l\u2019empreinte</b> est la fa\u00e7on d\u00e9lib\u00e9r\u00e9e d\u2019accepter la nouvelle.</p>'
+            + '<h4>Le manifeste part en dernier</h4><p>Les fichiers sont envoy\u00e9s d\u2019abord et <code>repo.json</code> en dernier, expr\u00e8s. Les abonn\u00e9s lisent le manifeste puis r\u00e9cup\u00e8rent ce qu\u2019il liste : l\u2019envoyer en premier donnerait \u00e0 tous ceux qui synchronisent pendant l\u2019envoi une liste de fichiers qui n\u2019existent pas encore. Ainsi le d\u00e9p\u00f4t est soit l\u2019ancien, soit le nouveau.</p>'
+            + '<h4>Sans ouvrir l\u2019\u00e9cran</h4><p>Le planificateur propose <b>Publier le d\u00e9p\u00f4t par SSH</b>, et le lien profond est <code>bmm://repo/publish-ssh?dir=&lt;dossier&gt;</code>. Les deux utilisent la cible que vous avez enregistr\u00e9e ici \u2014 aucun des deux ne peut d\u00e9signer un autre h\u00f4te ni une autre cl\u00e9. Une cl\u00e9 avec phrase secr\u00e8te ne peut pas servir sans surveillance : il n\u2019y a personne \u00e0 qui la demander, donc l\u2019op\u00e9ration \u00e9choue avec un message au lieu d\u2019attendre ind\u00e9finiment.</p>',
+        },
+      },
+      {
         id: 'server-reach', view: 'repo', diagram: 'hosting-flow', docsPath: 'features/repo/',
         title: { en: 'Reach your repo from outside', fr: 'Joindre votre d\u00e9p\u00f4t depuis l\u2019ext\u00e9rieur' },
         summary: { en: 'BMM opens the port and runs the tunnel itself \u2014 three addresses, and what each one exposes.', fr: 'BMM ouvre le port et lance le tunnel lui\u2011m\u00eame \u2014 trois adresses, et ce que chacune expose.' },

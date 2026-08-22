@@ -253,6 +253,17 @@ export async function initApiActivity(): Promise<void> {
         switch (action) {
             // ── Repo (existing UI-driven flows) ──────────────────────────────
             case 'repo/host': driveRepo('host', params); break;
+            // Publishes to the target saved in Server Repo. The API cannot name one — see
+            // the route's comment in src-tauri/src/api/mod.rs for why that is deliberate.
+            case 'repo/publish-ssh': {
+                const { publishStoredTarget } = await import('../features/repo/repo-ssh.js');
+                publishStoredTarget(String(params?.dir || ''))
+                    .then((bytes: number) => toast(
+                        t('repo.ssh.uploaded').replace('{n}', '✓').replace('{size}', String(bytes)),
+                        'success', 7000))
+                    .catch((e: unknown) => toast(String((e as Error)?.message || e), 'error', 9000));
+                break;
+            }
             case 'repo/sync': driveRepo('sync', params); break;
             case 'repo/gen':  driveRepo('gen', params);  break;
             case 'repo/update':

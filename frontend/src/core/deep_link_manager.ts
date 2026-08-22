@@ -342,6 +342,26 @@ async function handleDeepLink(urlStr: string): Promise<void> {
             return;
         }
 
+        // ── Publish an exported repo over SSH ──
+        //
+        // Uses the target STORED in Settings, never one from the URL. A deeplink that could
+        // name a host and a key path would let any page the user clicks decide where their
+        // repo gets uploaded and which private key is read to do it — the link says
+        // "publish what I already configured", and nothing more.
+        if (action === 'repo/publish-ssh') {
+            const dir = parsedUrl.searchParams.get('dir') || '';
+            if (!dir) { toast(t('repo.ssh.pickExportFirst'), 'error'); return; }
+            const { publishStoredTarget } = await import('../features/repo/repo-ssh.js');
+            toast(t('repo.ssh.testing'), 'info');
+            try {
+                const bytes = await publishStoredTarget(dir);
+                toast(t('repo.ssh.uploaded').replace('{n}', '✓').replace('{size}', String(bytes)), 'success', 7000);
+            } catch (e) {
+                toast(String((e as Error)?.message || e), 'error', 9000);
+            }
+            return;
+        }
+
         // ── Mod updates: check / apply ────────────────────────────────────
         if (action === 'mod/check-updates') {
             const navBtn = document.querySelector('.nav-item[data-view="repo"], [data-view="repo"]') as HTMLElement | null;

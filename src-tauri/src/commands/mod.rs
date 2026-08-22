@@ -22,6 +22,7 @@ pub mod disk;
 pub mod image;
 pub mod repo;
 pub mod repo_server;
+pub mod repo_ssh;
 pub mod ban_manager;
 pub mod security;
 pub mod omm;

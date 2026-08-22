@@ -12,6 +12,7 @@ import { t } from '../../core/i18n.js';
 
 // Sub-modules
 import { initRepoServer } from './repo-server.js';
+import { initRepoSsh } from './repo-ssh.js';
 import { initRepoMonitoring } from './repo-monitoring.js';
 import { initServerModal } from './server-modal.js';
 import { initRepoSync, showSyncSummary, setRepoPassword } from './repo-sync.js';
@@ -656,6 +657,7 @@ export function initRepo() {
 
     // Initialize Sub-Modules
     initRepoServer(elements);
+    initRepoSsh();
     // The shell first: the three features below bind their own open buttons and listen for
     // the tab event, and neither is useful until the rail exists.
     initServerModal();

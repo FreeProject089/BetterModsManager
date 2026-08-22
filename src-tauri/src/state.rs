@@ -62,6 +62,13 @@ pub struct AppSettings {
     pub auto_fill_metadata: bool,
     #[serde(default)]
     pub cloudflared_path: Option<String>,
+    /// SSH host fingerprints already trusted, keyed "host:port".
+    ///
+    /// Option, not a bare map, so an existing data.json without the field still parses —
+    /// and so "never connected to anything" is distinguishable from "trusted nothing".
+    /// Fingerprints only: no key material, no passphrase, ever.
+    #[serde(default)]
+    pub ssh_known_hosts: Option<HashMap<String, String>>,
     #[serde(default)]
     pub discord_rpc_enabled: bool,
     #[serde(default)]
@@ -124,6 +131,7 @@ impl Default for AppSettings {
             last_session_clean: true,
             auto_fill_metadata: false,
             cloudflared_path: None,
+            ssh_known_hosts: None,
             discord_rpc_enabled: false,
             fs_security_mode: None,
             require_valid_sha: false,
