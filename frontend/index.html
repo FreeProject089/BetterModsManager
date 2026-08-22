@@ -4466,6 +4466,41 @@
                             </div>
                         </div>
 
+                        <!-- ── Security card ──
+                             Its own card, not a tail on Identity & API: the policy and the
+                             CORS allow-list are decisions about what the app lets in, and
+                             they were unfindable appended to a card about ids and tokens.
+                             #csp-editor-host is filled by initSecurityInfoCard(). -->
+                        <div class="glass-card" id="settings-security-card" style="margin-bottom:24px; border-left:3px solid rgba(239,68,68,0.5);">
+                            <h3 class="card-title" style="display:flex;align-items:center;gap:10px">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2.2">
+                                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                                </svg>
+                                <span data-i18n="settings.securityTitle">Sécurité</span>
+                            </h3>
+                            <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.6" data-i18n="settings.securityDesc">
+                                Ce que BMM s’autorise à charger, exécuter et laisser entrer. Ces réglages ne
+                                changent rien à vos mods — ils décident de ce que l’application accepte du reste
+                                du monde.
+                            </p>
+
+                            <!-- Cross-origin access lives on the Plugins & API screen, beside the
+                                 server it governs. Linked, never copied: a second copy of an
+                                 allow-list is a second thing to keep in step, and the one nobody
+                                 edits is the one that looks authoritative. -->
+                            <div class="sec-link-row" style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;border:1px solid var(--border-subtle,rgba(255,255,255,0.08));border-radius:9px;margin-bottom:12px">
+                                <div style="min-width:0">
+                                    <div style="font-size:12px;font-weight:600;color:var(--text-primary)" data-i18n="settings.corsLinkTitle">CORS — accès API cross-origin</div>
+                                    <div style="font-size:11px;color:var(--text-muted);line-height:1.5" data-i18n="settings.corsLinkDesc">Quelles origines web peuvent appeler l’API locale de BMM. Se règle dans Plugins &amp; API, avec le serveur qu’il gouverne.</div>
+                                </div>
+                                <button class="btn btn-ghost btn-sm" id="btn-goto-cors" type="button" style="flex-shrink:0">
+                                    <span data-i18n="settings.corsLinkOpen">Ouvrir</span>
+                                </button>
+                            </div>
+
+                            <div id="csp-editor-host"></div>
+                        </div>
+
                         <!-- ── Crash Reports ── -->
                         <div class="glass-card"
                             style="border:1px solid rgba(239,68,68,0.15);position:relative;overflow:hidden">

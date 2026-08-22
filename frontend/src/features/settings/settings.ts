@@ -1564,12 +1564,12 @@ async function initSecurityInfoCard() {
 
     // The CSP editor rides on the security card rather than a screen of its own: the
     // policy is a security fact about this install, like the ids above it.
-    // By ID, not by walking up to a class. This read `closest('.settings-card')`, the card
-    // is a `.glass-card`, so `host` was always null and the panel was NEVER inserted — the
-    // setting existed in the build and did not exist on screen. An id is a contract; an
-    // ancestor class is a guess about markup written somewhere else.
+    // Into the Security card's own host element. Twice now this has been anchored by
+    // guessing at surrounding markup — first `closest('.settings-card')`, which matched
+    // nothing because the card is a `.glass-card`, so the panel was never inserted at all.
+    // `#csp-editor-host` exists in index.html for exactly this and for nothing else.
     if (!document.getElementById('csp-extra')) {
-        const host = document.getElementById('settings-identity-card');
+        const host = document.getElementById('csp-editor-host');
         if (host) {
             const box = document.createElement('div');
             box.innerHTML = renderCspEditor();
@@ -1577,6 +1577,32 @@ async function initSecurityInfoCard() {
             bindCspEditor(box);
         }
     }
+    // Cross-origin access is configured on the Plugins & API screen, where the server it
+    // governs lives. This jumps there rather than showing a second copy of the allow-list.
+    const gotoCors = document.getElementById('btn-goto-cors');
+    if (gotoCors && !gotoCors.dataset.bound) {
+        gotoCors.dataset.bound = '1';
+        gotoCors.addEventListener('click', () => {
+            document.querySelector<HTMLElement>('.nav-item[data-view="plugins"]')?.click();
+            // The CORS controls live in the Permissions TAB of that screen, not on its
+            // landing tab — arriving on Plugins & API and leaving the reader to find them
+            // is barely better than not linking at all. The tab button only exists once the
+            // screen has rendered, so clicking it is part of the retry below.
+            let tries = 0;
+            const go = () => {
+                document.querySelector<HTMLElement>('.plug-tab[data-tab="perms"]:not(.active)')?.click();
+                const el = document.getElementById('plug-cors-any')?.closest('.plug-section-card') as HTMLElement | null;
+                if (el) {
+                    el.scrollIntoView({ block: 'center' });
+                    const r = el.getBoundingClientRect();
+                    if (el.isConnected && r.height > 0 && r.top > -50 && r.top < window.innerHeight) return;
+                }
+                if (++tries < 40) setTimeout(go, 100);
+            };
+            go();
+        });
+    }
+
     const elApiToken   = document.getElementById('sic-api-token');
     const elVersion    = document.getElementById('sic-bmm-version');
 
