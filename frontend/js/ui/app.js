@@ -1718,7 +1718,7 @@ window.openStackModal = () => {
         </div>
         <div class="stack-docs-link">
             <span data-i18n="credits.stackDocsBlurb">${t('credits.stackDocsBlurb')}</span>
-            <button type="button" onclick="window.openExternal('https://freeproject089.github.io/BMM-Docs/how-it-works/architecture/')">
+            <button type="button" ${actAttrs('openExternal', 'https://freeproject089.github.io/BMM-Docs/how-it-works/architecture/')}>
                 <span data-i18n="credits.stackDocsCta">${t('credits.stackDocsCta')}</span> ↗
             </button>
         </div>

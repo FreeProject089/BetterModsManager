@@ -5,6 +5,7 @@
  */
 
 import { t } from '../core/i18n.js';
+import { actAttrs, actAttrsStop } from '../core/inline-actions.js';
 import { renderTagChip } from './icon-pack.js';
 import { escHtml, escAttr, escJs, truncate } from '../core/utils.js';
 
@@ -33,7 +34,7 @@ export function getModCardHTML(mod, ctx) {
       return renderTagChip(tDef, { fontSize: 9, pad: '1px 5px' });
     }).join('');
 
-    const extraTagsCount = mod.tags.length > 3 ? `<button class="btn btn-ghost" onclick="window.showModTagsModal('${mod.id}'); event.stopPropagation();" style="color:var(--text-muted);font-size:9px;padding:0;height:auto;min-height:0;margin:0;background:rgba(255,255,255,0.05);border-radius:4px;padding:1px 4px;border:1px solid rgba(255,255,255,0.1)">+${mod.tags.length - 3}</button>` : '';
+    const extraTagsCount = mod.tags.length > 3 ? `<button class="btn btn-ghost" ${actAttrsStop('showModTagsModal', mod.id)} style="color:var(--text-muted);font-size:9px;padding:0;height:auto;min-height:0;margin:0;background:rgba(255,255,255,0.05);border-radius:4px;padding:1px 4px;border:1px solid rgba(255,255,255,0.1)">+${mod.tags.length - 3}</button>` : '';
     tagsHtml = `<div class="mod-tags-container" style="display:inline-flex;gap:4px;align-items:center;margin-left:6px">${visibleTags}${extraTagsCount}</div>`;
   } else {
     tagsHtml = `<div class="mod-tags-container" style="display:none;gap:4px;align-items:center;margin-left:6px"></div>`;
@@ -46,11 +47,11 @@ export function getModCardHTML(mod, ctx) {
     const hasInterActive = conflicts.some(c => c.category === 'Inter' && c.status === 'Active');
     const hasInterPotential = conflicts.some(c => c.category === 'Inter' && c.status === 'Potential');
 
-    if (hasIntraActive) conflictHtml += `<div class="tag-conflict tag-intra-conflict active" data-tasky="lib.conflictActiveTip" data-tasky-icon="alert" onclick="window.openGlobalConflictModal('${mod.id}')" style="cursor:pointer"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Intra</div>`;
-    else if (hasIntraPotential) conflictHtml += `<div class="tag-conflict tag-intra-conflict potential" data-tasky="lib.conflictPotentialTip" data-tasky-icon="warning" onclick="window.openGlobalConflictModal('${mod.id}')" style="cursor:pointer"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Intra</div>`;
+    if (hasIntraActive) conflictHtml += `<div class="tag-conflict tag-intra-conflict active" data-tasky="lib.conflictActiveTip" data-tasky-icon="alert" ${actAttrs('openGlobalConflictModal', mod.id)} style="cursor:pointer"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Intra</div>`;
+    else if (hasIntraPotential) conflictHtml += `<div class="tag-conflict tag-intra-conflict potential" data-tasky="lib.conflictPotentialTip" data-tasky-icon="warning" ${actAttrs('openGlobalConflictModal', mod.id)} style="cursor:pointer"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Intra</div>`;
 
-    if (hasInterActive) conflictHtml += `<div class="tag-conflict tag-inter-conflict active" data-tasky="lib.conflictInterActiveTip" data-tasky-icon="alert" onclick="window.openGlobalConflictModal('${mod.id}')" style="cursor:pointer"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>Inter</div>`;
-    else if (hasInterPotential) conflictHtml += `<div class="tag-conflict tag-inter-conflict potential" data-tasky="lib.conflictInterPotentialTip" data-tasky-icon="warning" onclick="window.openGlobalConflictModal('${mod.id}')" style="cursor:pointer"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>Inter</div>`;
+    if (hasInterActive) conflictHtml += `<div class="tag-conflict tag-inter-conflict active" data-tasky="lib.conflictInterActiveTip" data-tasky-icon="alert" ${actAttrs('openGlobalConflictModal', mod.id)} style="cursor:pointer"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>Inter</div>`;
+    else if (hasInterPotential) conflictHtml += `<div class="tag-conflict tag-inter-conflict potential" data-tasky="lib.conflictInterPotentialTip" data-tasky-icon="warning" ${actAttrs('openGlobalConflictModal', mod.id)} style="cursor:pointer"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>Inter</div>`;
   }
 
   // "Update available" tag — driven by the last update check (window.__bmmModUpdates)
@@ -81,7 +82,7 @@ export function getModCardHTML(mod, ctx) {
             <div style="display:flex;align-items:center;gap:8px">
                 <div class="mod-name" data-tasky="${escAttr(escJs(mod.name))}" data-tasky-icon="package" data-tasky-literal="1">${escHtml(truncate(mod.name, 100))}</div>
                 <div class="sha-status-icon ${isShaInvalid ? 'invalid' : (isMissing ? 'missing' : 'verified')}" 
-                     onclick="window.recalculateModSha('${mod.id}'); event.stopPropagation();"
+                     ${actAttrsStop('recalculateModSha', mod.id)}
                      onmouseenter="window.showTaskyHelp('${isShaInvalid ? 'hashes.status.invalid' : (isMissing ? 'hashes.status.missing' : 'hashes.status.verified')}', '${isShaInvalid ? 'alert' : 'shield'}')"
                     
                      style="display:inline-flex;align-items:center;justify-content:center;cursor:pointer;color:${isShaInvalid ? 'var(--danger)' : (isMissing ? 'var(--text-muted)' : 'var(--success)')};opacity:${isMissing ? '0.5' : '0.9'}; transition: all 0.2s ease;">
@@ -265,7 +266,7 @@ export function getModDetailHTML(mod, ctx) {
     
     return `
       <div class="collapsible-section ${isExpanded ? '' : 'collapsed'}" id="section-${id}">
-        <div class="collapsible-header" onclick="window.toggleDetailSection('${id}')">
+        <div class="collapsible-header" ${actAttrs('toggleDetailSection', id)}>
           <h4>${icon} ${title}</h4>
           <svg class="collapsible-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
         </div>
@@ -283,7 +284,7 @@ export function getModDetailHTML(mod, ctx) {
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
                 <span class="tag-conflict tag-${c.category.toLowerCase()}-conflict ${c.status.toLowerCase()}" 
                       style="cursor:pointer" 
-                      onclick="window.openGlobalConflictModal('${mod.id}')">
+                      ${actAttrs('openGlobalConflictModal', mod.id)}>
                    ${c.category === 'Intra' ? '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="margin-right:4px"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>' : '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="margin-right:4px"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>'}
                    ${c.category}
                 </span>
@@ -371,10 +372,10 @@ export function getModDetailHTML(mod, ctx) {
                 </div>
             </div>
             <div style="display:flex; gap:6px">
-                <button class="btn btn-sm btn-icon" onclick="window.deleteModHashes('${mod.id}')" data-tasky="mods.sha.delete" data-tasky-icon="trash" style="background:rgba(239,68,68,0.1); color:var(--danger); border:1px solid rgba(239,68,68,0.2); width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center">
+                <button class="btn btn-sm btn-icon" ${actAttrs('deleteModHashes', mod.id)} data-tasky="mods.sha.delete" data-tasky-icon="trash" style="background:rgba(239,68,68,0.1); color:var(--danger); border:1px solid rgba(239,68,68,0.2); width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
                 </button>
-                <button class="btn btn-sm btn-icon" id="btn-recalculate-sha" onclick="window.recalculateModSha('${mod.id}')" data-tasky="mods.sha.recalculate" data-tasky-icon="refresh" style="background:rgba(59,130,246,0.15); color:var(--accent); border:1px solid rgba(59,130,246,0.2); width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center">
+                <button class="btn btn-sm btn-icon" id="btn-recalculate-sha" ${actAttrs('recalculateModSha', mod.id)} data-tasky="mods.sha.recalculate" data-tasky-icon="refresh" style="background:rgba(59,130,246,0.15); color:var(--accent); border:1px solid rgba(59,130,246,0.2); width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
                 </button>
             </div>
@@ -406,7 +407,7 @@ export function getModDetailHTML(mod, ctx) {
               </svg>
             </button>` : ''}
             ${contentIdStatus === 'missing' || contentIdStatus === 'approximate' ? `
-            <button id="btn-compute-content-id" class="btn btn-sm btn-icon" onclick="window.recalculateModSha('${mod.id}')"  style="background:rgba(59,130,246,0.15); color:var(--accent); border:1px solid rgba(59,130,246,0.2); width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center; flex-shrink:0">
+            <button id="btn-compute-content-id" class="btn btn-sm btn-icon" ${actAttrs('recalculateModSha', mod.id)}  style="background:rgba(59,130,246,0.15); color:var(--accent); border:1px solid rgba(59,130,246,0.2); width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center; flex-shrink:0">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
             </button>` : ''}
           </div>

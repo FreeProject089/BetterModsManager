@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { appState } from '../../core/state.js';
+import { actAttrs, actAttrsStop } from '../../core/inline-actions.js';
 import { renderTagChip } from '../../ui/icon-pack.js';
 import { t, applyTranslations } from '../../core/i18n.js';
 import { getModCardHTML, getLoadingOverlayHTML } from '../../ui/components.js';
@@ -765,7 +766,7 @@ export function updateCardState(card, mod) {
         if (!tDef) return '';
         return renderTagChip(tDef, { fontSize: 9, pad: '1px 5px' });
       }).join('');
-      const extraTagsCount = mod.tags.length > 3 ? `<button class="btn btn-ghost" onclick="window.showModTagsModal('${mod.id}'); event.stopPropagation();" style="color:var(--text-muted);font-size:9px;padding:0;height:auto;min-height:0;margin:0;background:rgba(255,255,255,0.05);border-radius:4px;padding:1px 4px;border:1px solid rgba(255,255,255,0.1)">+${mod.tags.length - 3}</button>` : '';
+      const extraTagsCount = mod.tags.length > 3 ? `<button class="btn btn-ghost" ${actAttrsStop('showModTagsModal', mod.id)} style="color:var(--text-muted);font-size:9px;padding:0;height:auto;min-height:0;margin:0;background:rgba(255,255,255,0.05);border-radius:4px;padding:1px 4px;border:1px solid rgba(255,255,255,0.1)">+${mod.tags.length - 3}</button>` : '';
       tagsContainer.innerHTML = visibleTags + extraTagsCount;
     } else {
       tagsContainer.style.display = 'none';

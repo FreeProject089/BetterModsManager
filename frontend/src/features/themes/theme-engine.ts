@@ -5,6 +5,7 @@
 // Works on static AND dynamically-generated content via CSS variable cascading.
 
 import { invoke } from '../../core/api.js';
+import { actAttrs } from '../../core/inline-actions.js';
 import { t } from '../../core/i18n.js';
 import { toast } from '../../ui/app.js';
 
@@ -663,7 +664,7 @@ function applyHtmlSwaps(theme: BmmTheme): void {
 // ── Custom elements — survive re-renders via MutationObserver ─────────────────
 // A custom element's HTML goes through sanitizeHtml, which strips EVERY on* attribute — as
 // it must, since theme HTML is untrusted. That silently broke the editor's own deeplink
-// buttons: it handed you `onclick="window.__bmmDeeplink(…)"` snippets that were removed on
+// buttons: it handed you `${actAttrs('__bmmDeeplink', …)}` snippets that were removed on
 // the way in, so the button applied fine and then did nothing at all. Declare the intent in
 // a data attribute instead (data-* survives sanitising) and run it from one delegated
 // listener here, which also means no inline script ever executes.

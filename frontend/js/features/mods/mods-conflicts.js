@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { appState } from '../../core/state.js';
+import { actAttrs } from '../../core/inline-actions.js';
 import { invoke } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
 import { escHtml, escAttr, escJs } from '../../core/utils.js';
@@ -54,13 +55,13 @@ export function updateConflictBadgeOnCard(modId) {
         const intraSvg = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>';
         const interSvg = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>';
         if (hasIntraActive)
-            conflictHtml += `<div class="tag-conflict tag-intra-conflict active" data-tasky="lib.conflictActiveTip" data-tasky-icon="warning" onclick="window.openGlobalConflictModal('${modId}')" style="cursor:pointer">${intraSvg}Intra</div>`;
+            conflictHtml += `<div class="tag-conflict tag-intra-conflict active" data-tasky="lib.conflictActiveTip" data-tasky-icon="warning" ${actAttrs('openGlobalConflictModal', modId)} style="cursor:pointer">${intraSvg}Intra</div>`;
         else if (hasIntraPotential)
-            conflictHtml += `<div class="tag-conflict tag-intra-conflict potential" data-tasky="lib.conflictPotentialTip" data-tasky-icon="warning" onclick="window.openGlobalConflictModal('${modId}')" style="cursor:pointer">${intraSvg}Intra</div>`;
+            conflictHtml += `<div class="tag-conflict tag-intra-conflict potential" data-tasky="lib.conflictPotentialTip" data-tasky-icon="warning" ${actAttrs('openGlobalConflictModal', modId)} style="cursor:pointer">${intraSvg}Intra</div>`;
         if (hasInterActive)
-            conflictHtml += `<div class="tag-conflict tag-inter-conflict active" data-tasky="lib.conflictInterActiveTip" data-tasky-icon="warning" onclick="window.openGlobalConflictModal('${modId}')" style="cursor:pointer">${interSvg}Inter</div>`;
+            conflictHtml += `<div class="tag-conflict tag-inter-conflict active" data-tasky="lib.conflictInterActiveTip" data-tasky-icon="warning" ${actAttrs('openGlobalConflictModal', modId)} style="cursor:pointer">${interSvg}Inter</div>`;
         else if (hasInterPotential)
-            conflictHtml += `<div class="tag-conflict tag-inter-conflict potential" data-tasky="lib.conflictInterPotentialTip" data-tasky-icon="warning" onclick="window.openGlobalConflictModal('${modId}')" style="cursor:pointer">${interSvg}Inter</div>`;
+            conflictHtml += `<div class="tag-conflict tag-inter-conflict potential" data-tasky="lib.conflictInterPotentialTip" data-tasky-icon="warning" ${actAttrs('openGlobalConflictModal', modId)} style="cursor:pointer">${interSvg}Inter</div>`;
         if (conflictHtml)
             nameRow.insertAdjacentHTML('beforeend', conflictHtml);
     }

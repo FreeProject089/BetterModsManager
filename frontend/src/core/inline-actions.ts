@@ -90,6 +90,13 @@ function bindImageFallback(): void {
  *  snippet of JavaScript becomes a name and a list of strings.
  */
 function bindActions(): void {
+    // CAPTURE, not bubble. `data-act-stop` replaces an inline
+    // `onclick="fn(); event.stopPropagation()"`, whose whole job was to keep a click on a
+    // button from also reaching the card behind it. A delegated listener on `document`
+    // during the BUBBLE phase runs after the event has already visited every ancestor, so
+    // stopPropagation() there stops nothing that had not already happened — verified: the
+    // outer element still saw the click. Capture runs document -> target, so stopping there
+    // is the only place a delegate can honour it.
     document.addEventListener('click', (e) => {
         const el = (e.target instanceof Element) ? e.target.closest<HTMLElement>('[data-act]') : null;
         if (!el) return;
@@ -111,7 +118,31 @@ function bindActions(): void {
         }
         const fn = (window as any)[name];
         if (typeof fn === 'function') fn(...args);
-    });
+    }, true);
+}
+
+/** Build the attributes for a delegated click action, correctly escaped.
+ *
+ *  Replaces `${actAttrs('fn', a, b)}`, and fixes what that spelling could not
+ *  do safely: it interpolated values into a JAVASCRIPT string inside an HTML attribute, so
+ *  a value containing a quote closed the string and the rest of it ran — with
+ *  `'unsafe-inline'` in force, as code. 20 of the 26 sites did this with no escaping at
+ *  all, on values like a mod id that come from a folder name.
+ *
+ *  Here the values never enter a script context: JSON.stringify handles quotes and
+ *  backslashes inside the value, and the only character left to worry about is the `'`
+ *  that delimits the attribute.
+ *
+ *  Usage in a template:  `<button ${actAttrs('openThing', id)}>`
+ */
+export function actAttrs(fn: string, ...args: unknown[]): string {
+    const json = JSON.stringify(args).replace(/'/g, '&#39;').replace(/</g, '&lt;');
+    return `data-act="${fn}" data-act-args='${json}'`;
+}
+
+/** Same, for the sites whose inline version ended in `event.stopPropagation()`. */
+export function actAttrsStop(fn: string, ...args: unknown[]): string {
+    return `${actAttrs(fn, ...args)} data-act-stop="1"`;
 }
 
 let attached = false;

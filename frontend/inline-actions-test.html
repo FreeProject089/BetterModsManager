@@ -89,6 +89,31 @@ check('no args = called with none', called.length === 1 && called[0].length === 
 called = []; $('actbad').click();
 check('malformed args still call, with none', called.length === 1 && called[0].length === 0);
 
+// ── round trip: what actAttrs writes, bindActions must read back unchanged ──
+// Escaping that mangles the value is not a fix, it is a different bug.
+{
+    const { actAttrs, actAttrsStop } = await import('./js/core/inline-actions.js');
+    const nasty = "x'); alert(1); ('" + '"</b><img src=x onerror=alert(2)>';
+    const host = document.createElement('div');
+    host.innerHTML = `<button id="rt" ${actAttrs('testFn', nasty, 'second')}></button>`;
+    document.body.appendChild(host);
+    called = [];
+    document.getElementById('rt').click();
+    check('round trip: the value survives escaping', called[0]?.[0] === nasty, JSON.stringify(called[0]?.[0]));
+    check('round trip: the second argument survives', called[0]?.[1] === 'second');
+    check('round trip: no element was injected', host.querySelectorAll('img').length === 0,
+          `${host.querySelectorAll('img').length} img`);
+
+    const host2 = document.createElement('div');
+    host2.innerHTML = `<div id="outer"><button id="inner" ${actAttrsStop('testFn', 'x')}></button></div>`;
+    document.body.appendChild(host2);
+    let outerSaw = 0;
+    document.getElementById('outer').addEventListener('click', () => { outerSaw++; });
+    called = [];
+    document.getElementById('inner').click();
+    check('data-act-stop stops the click bubbling', outerSaw === 0, `outer saw ${outerSaw}`);
+}
+
 // ── image fallback (error does not bubble; the listener is on capture) ──
 $('img').addEventListener('error', () => {
     setTimeout(() => {

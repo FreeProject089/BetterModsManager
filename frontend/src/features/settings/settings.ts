@@ -4,6 +4,7 @@
  */
 
 import { invoke, getSettings, updateSettings, pickFile, saveFile } from '../../core/api.js';
+import { actAttrs } from '../../core/inline-actions.js';
 import { t } from '../../core/i18n.js';
 import { getLinks, bcRoot, bcTestMode, bcTestBase } from '../../core/links-config.js';
 import { initI18nSandbox } from './i18n-sandbox.js';
@@ -1170,7 +1171,7 @@ window.showHashingStats = async () => {
                         <option value="">${t('common.global') || 'Global (All)'}</option>
                         ${profiles.map(p => `<option value="${p.id}">${escHtml(p.name)}</option>`).join('')}
                     </select>
-                    <button class="modal-close" onclick="window.closeShaStats()">
+                    <button class="modal-close" ${actAttrs('closeShaStats')}>
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
                         </svg>
@@ -1180,7 +1181,7 @@ window.showHashingStats = async () => {
             <div class="modal-body" id="sha-stats-body" style="overflow-y:auto;flex:1;padding:24px;display:flex;flex-direction:column;gap:20px;">
             </div>
             <div class="modal-footer" style="padding:18px 24px; border-top:1px solid rgba(255,255,255,0.05); display:flex; justify-content:flex-end; gap:12px; background:rgba(0,0,0,0.2)">
-                <button class="btn btn-secondary" style="height:40px; padding:0 32px; font-weight:700; border-radius:10px" onclick="window.closeShaStats()">${t('common.close') || 'Close'}</button>
+                <button class="btn btn-secondary" style="height:40px; padding:0 32px; font-weight:700; border-radius:10px" ${actAttrs('closeShaStats')}>${t('common.close') || 'Close'}</button>
             </div>
         `;
 

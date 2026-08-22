@@ -1,5 +1,6 @@
 ﻿// @ts-nocheck
 import { appState } from '../../core/state.js';
+import { actAttrs } from '../../core/inline-actions.js';
 import { renderTagChip } from '../../ui/icon-pack.js';
 import { invoke } from '../../core/api.js';
 import { toast, openExternal } from '../../ui/app.js';
@@ -190,7 +191,7 @@ export async function renderModDetail(modId) {
           listContainer.innerHTML = conflicts.map(c => `
             <div style="background:rgba(0,0,0,0.2);padding:8px 10px;border-radius:8px;border:1px solid ${c.status === 'Active' ? 'rgba(239,68,68,0.3)' : 'rgba(245,158,11,0.3)'}">
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-                <span class="tag-conflict tag-${c.category.toLowerCase()}-conflict ${c.status.toLowerCase()}" style="cursor:pointer" onclick="window.openGlobalConflictModal('${mod.id}')">
+                <span class="tag-conflict tag-${c.category.toLowerCase()}-conflict ${c.status.toLowerCase()}" style="cursor:pointer" ${actAttrs('openGlobalConflictModal', mod.id)}>
                    ${c.category === 'Intra' ? '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="margin-right:4px"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>' : '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="margin-right:4px"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>'}
                    ${c.category}
                 </span>

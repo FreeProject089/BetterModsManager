@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { invoke, listenFileDrop, pickFolder, pickFile } from '../../core/api.js';
+import { actAttrs } from '../../core/inline-actions.js';
 import { toast } from '../../ui/app.js';
 import { renderProfiles } from '../profiles/profiles.js';
 import { t } from '../../core/i18n.js';
@@ -516,7 +517,7 @@ function renderHistoryModal(history) {
                   <div style="font-size:10px;color:var(--text-muted);display:flex;align-items:center;gap:4px;background:rgba(255,255,255,0.04);padding:4px 10px;border-radius:12px;cursor:pointer;border:1px solid rgba(255,255,255,0.05);transition:all 0.2s" 
                        onmouseover="this.style.background='rgba(59,130,246,0.1)';this.style.borderColor='rgba(59,130,246,0.2)'" 
                        onmouseout="this.style.background='rgba(255,255,255,0.04)';this.style.borderColor='rgba(255,255,255,0.05)'" 
-                       onclick="window.openHistoryDetail('${cacheKey}')">
+                       ${actAttrs('openHistoryDetail', cacheKey)}>
                       <span style="opacity:0.7">${t('history.action.Modified') || 'Modifié'}: </span>
                       ${fieldBadges}
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-left:2px;opacity:0.5"><polyline points="9 18 15 12 9 6"/></svg>
@@ -636,7 +637,7 @@ window.openHistoryDetail = (cacheKey) => {
         if (footer) {
             const isModified = item.action === 'Modified';
             footer.innerHTML = `
-                ${isModified ? `<button class="btn btn-primary" onclick="window.revertHistoryAction('${cacheKey}')" style="background:var(--accent); border:none; padding:10px 25px; border-radius:12px; font-weight:700; font-size:12px; color:var(--bmm-text-on-accent); cursor:pointer; box-shadow:0 4px 15px rgba(59,130,246,0.3); display:flex; align-items:center; gap:8px">
+                ${isModified ? `<button class="btn btn-primary" ${actAttrs('revertHistoryAction', cacheKey)} style="background:var(--accent); border:none; padding:10px 25px; border-radius:12px; font-weight:700; font-size:12px; color:var(--bmm-text-on-accent); cursor:pointer; box-shadow:0 4px 15px rgba(59,130,246,0.3); display:flex; align-items:center; gap:8px">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 10h10a8 8 0 0 1 8 8v2M3 10l6-6m-6 6l6 6"/></svg>
                         ${t('history.revert') || 'REVERT'}
                     </button>` : ''}
