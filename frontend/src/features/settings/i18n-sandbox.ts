@@ -523,8 +523,19 @@ function renderHardcoded(): void {
 
 // ── Pick text from the running app (any text, i18n or hardcoded) ─────────────────
 let _pickMode = false;
+/** The element currently outlined by pick mode. Kept so the class can be removed from ONE
+ *  node instead of asking the document who has it. */
+let _hoverEl: HTMLElement | null = null;
+
 function setHover(el: HTMLElement | null) {
-    document.querySelectorAll('.i18n-pick-hover').forEach(e => e.classList.remove('i18n-pick-hover'));
+    // This runs on every mouseover while pick or highlight mode is on — continuously, as the
+    // pointer crosses each element under it. It used to open with
+    // `document.querySelectorAll('.i18n-pick-hover')`, a full-document query over ~3900
+    // elements per pointer move, which is what made the sandbox feel heavy the whole time it
+    // was open. One reference and an early return do the same work in constant time.
+    if (el === _hoverEl) return;
+    _hoverEl?.classList.remove('i18n-pick-hover');
+    _hoverEl = el;
     if (el) el.classList.add('i18n-pick-hover');
 }
 function nearestTextEl(target: HTMLElement): HTMLElement | null {
@@ -559,7 +570,11 @@ function togglePickMode(force?: boolean): void {
     document.getElementById('i18n-pick-screen')?.classList.toggle('active', _pickMode);
     if (_pickMode) {
         if (_hlMode) toggleHighlight(false);
-        if (!_overlayMode && _modal) toggleOverlayMode(_modal, true);
+        // Only float it if it is neither floating NOR docked. Both presentations already
+        // leave the app clickable underneath (dock mode sets pointer-events:none on the
+        // backdrop too), and toggleOverlayMode CANCELS dock mode — so this used to rip a
+        // docked sandbox out of its dock every time pick mode started.
+        if (!_overlayMode && !_dockMode && _modal) toggleOverlayMode(_modal, true);
         document.body.classList.add('i18n-picking');
         document.addEventListener('mouseover', onPickHover, true);
         document.addEventListener('click', onPickClick, true);
@@ -602,7 +617,7 @@ function toggleHighlight(force?: boolean): void {
     document.getElementById('i18n-highlight-hc')?.classList.toggle('active', _hlMode);
     if (_hlMode) {
         if (_pickMode) togglePickMode(false);
-        if (!_overlayMode && _modal) toggleOverlayMode(_modal, true);
+        if (!_overlayMode && !_dockMode && _modal) toggleOverlayMode(_modal, true);   // same as pick mode
         const count = auditHardcodedScreen();
         document.body.classList.add('i18n-picking');                 // also enable click-to-open
         document.addEventListener('mouseover', onPickHover, true);
@@ -761,6 +776,7 @@ function toggleOverlayMode(modal: HTMLElement, force?: boolean): void {
         observeResize(panel);
     } else {
         if (_ro) { _ro.disconnect(); _ro = null; }   // stop before clearing styles (avoid saving reset size)
+        cancelGeomSave();                           // and drop any write still waiting to fire
         removeResizeHandles(panel);
         modal.classList.remove('i18n-overlay-active');
         modal.style.background = '';
@@ -823,9 +839,34 @@ function addResizeHandles(panel: HTMLElement, minW: number, minH: number): void 
 function removeResizeHandles(panel: HTMLElement): void {
     panel.querySelectorAll('.i18n-rsz').forEach(h => h.remove());
 }
+/** Remember the panel's geometry — debounced.
+ *
+ *  Called from a ResizeObserver, so it fired once per frame for the whole of a drag-resize.
+ *  MEASURED before claiming a win: a localStorage write here costs 0.018 ms, so the old
+ *  per-frame version was NOT the lag anyone felt — that was setHover's full-document query.
+ *  The debounce stays because writing once at the end is simply the right shape, and it
+ *  brings the two guards below with it; it is not a performance fix and should not be
+ *  remembered as one.
+ */
+let _geomTimer: number | null = null;
 function saveGeom(panel: HTMLElement): void {
-    const r = panel.getBoundingClientRect();
-    localStorage.setItem(OVL_KEY, JSON.stringify({ left: r.left, top: r.top, width: r.width, height: r.height }));
+    if (_geomTimer !== null) clearTimeout(_geomTimer);
+    _geomTimer = window.setTimeout(() => {
+        _geomTimer = null;
+        // Re-read at flush time rather than closing over a stale rect: what matters is where
+        // the panel ENDED, not where it was when the last frame fired.
+        const r = panel.getBoundingClientRect();
+        if (r.width < 1 || r.height < 1) return;   // detached or mid-teardown: not a real size
+        try {
+            localStorage.setItem(OVL_KEY, JSON.stringify({ left: r.left, top: r.top, width: r.width, height: r.height }));
+        } catch { /* storage full or unavailable: a forgotten window position is not worth an error */ }
+    }, 250);
+}
+
+/** Cancel a pending geometry write. Called when the observer is disconnected, so a flush
+ *  cannot land after the styles have been reset and save the collapsed size. */
+function cancelGeomSave(): void {
+    if (_geomTimer !== null) { clearTimeout(_geomTimer); _geomTimer = null; }
 }
 function makeDraggable(panel: HTMLElement, handle: HTMLElement): void {
     if (!handle || (handle as any)._i18nDrag) return;
