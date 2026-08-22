@@ -7,12 +7,12 @@
     <script type="importmap">
     {
         "imports": {
-            "./js/core/api.js": "./js/core/api-stub.js"
+            "../frontend/js/core/api.js": "../frontend/js/core/api-stub.js"
         }
     }
     </script>
     <!-- Real BMM CSS — exact same styles as the live app -->
-    <link rel="stylesheet" href="css/main.css"/>
+    <link rel="stylesheet" href="../frontend/css/main.css"/>
     <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
     <style>
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -45,7 +45,7 @@
         <div id="vhs-vignette"></div>
         <div id="vhs-line"></div>
         <div id="vhs-tasky-wrap">
-            <img id="vhs-tasky-img" src="assets/Tasky.png" alt="">
+            <img id="vhs-tasky-img" src="../frontend/assets/Tasky.png" alt="">
         </div>
         <div id="vhs-scanlines"></div>
         <div id="vhs-flash"></div>
@@ -53,7 +53,7 @@
 
     <script type="module">
         // Import the REAL function from the real titlebar.js — zero divergence
-        import { playVhsCloseAnimation } from './js/ui/titlebar.js';
+        import { playVhsCloseAnimation } from '../frontend/js/ui/titlebar.js';
         window.addEventListener('load', () => playVhsCloseAnimation());
     </script>
 </body>

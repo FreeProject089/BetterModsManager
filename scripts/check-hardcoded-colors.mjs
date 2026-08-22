@@ -17,7 +17,7 @@
 // has been converted. What remains is an allowlist, and each entry is there for a
 // reason worth knowing before you "fix" it:
 //
-//   · Standalone documents — the benchmark HTML report, loader-preview.html, the
+//   · Standalone documents — the benchmark HTML report, dev-pages/, the
 //     tutorial games in their iframes. They link no BMM stylesheet, so a var()
 //     resolves to nothing and the page renders with no colours at all.
 //   · Brand colours — Ko-fi orange, Discord blurple, the BetterCommunity yellow.

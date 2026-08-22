@@ -8,7 +8,7 @@ import { renderCloseSound, writeWav } from './audio-synth.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CHROME   = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
-const HTML     = 'file:///' + resolve(__dirname, 'frontend/vhs-exit-preview.html').replace(/\\/g, '/');
+const HTML     = 'file:///' + resolve(__dirname, 'dev-pages/vhs-exit-preview.html').replace(/\\/g, '/');
 const OUT_DIR  = resolve(__dirname, 'video-out');
 const FFMPEG   = 'ffmpeg';
 

@@ -8,7 +8,7 @@ import { renderBootSound, writeWav } from './audio-synth.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CHROME   = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
-const HTML     = 'file:///' + resolve(__dirname, 'frontend/loader-preview.html').replace(/\\/g, '/');
+const HTML     = 'file:///' + resolve(__dirname, 'dev-pages/loader-preview.html').replace(/\\/g, '/');
 const OUT_DIR  = resolve(__dirname, 'video-out');
 const FFMPEG   = 'ffmpeg';
 const DURATION  = 5500; // ms to record (animation completes ~3.6s + fade out buffer)

@@ -32,7 +32,7 @@
 <pre id="out"></pre>
 
 <script type="module">
-import { initInlineActions } from './js/core/inline-actions.js';
+import { initInlineActions } from '../frontend/js/core/inline-actions.js';
 
 const log = [];
 let shown = [], hidden = 0, called = [];
@@ -92,7 +92,7 @@ check('malformed args still call, with none', called.length === 1 && called[0].l
 // ── round trip: what actAttrs writes, bindActions must read back unchanged ──
 // Escaping that mangles the value is not a fix, it is a different bug.
 {
-    const { actAttrs, actAttrsStop } = await import('./js/core/inline-actions.js');
+    const { actAttrs, actAttrsStop } = await import('../frontend/js/core/inline-actions.js');
     const nasty = "x'); alert(1); ('" + '"</b><img src=x onerror=alert(2)>';
     const host = document.createElement('div');
     host.innerHTML = `<button id="rt" ${actAttrs('testFn', nasty, 'second')}></button>`;
