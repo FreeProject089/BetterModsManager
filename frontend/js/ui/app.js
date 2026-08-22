@@ -9,7 +9,7 @@ import { initI18n, applyTranslations, t, getLang } from '../core/i18n.js';
 import { initBenchmark } from '../features/bench/benchmark.js';
 import { shouldShowOnboarding, startOnboarding } from './onboarding.js';
 import { initNavbarCustomize } from './navbar-customize.js';
-import { initInlineActions } from '../core/inline-actions.js';
+import { initInlineActions, actAttrs } from '../core/inline-actions.js';
 import { openTutorialHub } from './tutorial-hub.js';
 import { initRepo } from '../features/repo/repo.js';
 import { appState } from '../core/state.js';

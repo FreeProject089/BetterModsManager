@@ -9,7 +9,7 @@ import { invoke } from '../../core/api.js';
 import { toast, toastSaved } from '../../ui/app.js';
 import { t } from '../../core/i18n.js';
 import { dispatchBmmAction, BMM_ACTIONS } from '../../ui/tutorial-events.js';
-import { formatBytes, escHtml } from '../../core/utils.js';
+import { formatBytes, escHtml, escAttr } from '../../core/utils.js';
 
 // ── State ────────────────────────────────────────────────────────────────────
 
