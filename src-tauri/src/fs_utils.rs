@@ -456,16 +456,17 @@ pub fn apply_mod_stacked(
     Ok(files)
 }
 
-/// Strip Windows UNC prefix (\\?\) or (\??\) if present, and normalize to common format
+/// Strip a Windows verbatim prefix (\\?\ or \??\) and normalize separators.
+///
+/// The prefix strip is delegated rather than repeated: this file had its own four-character
+/// version, which is wrong for \\?\UNC\server\share - it leaves `UNC\server\share`
+/// instead of \\server\share. That copy was `#[allow(dead_code)]`, so the bug sat here
+/// unused while the same mistake was live in two other files.
 #[allow(dead_code)]
 fn normalize_path(path: PathBuf) -> PathBuf {
     let path_str = path.to_string_lossy();
-    let mut s = path_str.as_ref();
-    if s.starts_with(r"\\?\") {
-        s = &s[4..];
-    } else if s.starts_with(r"\??\") {
-        s = &s[4..];
-    }
+    let stripped = crate::commands::disk::strip_verbatim(path_str.as_ref());
+    let s = if let Some(rest) = stripped.strip_prefix(r"\??\") { rest } else { stripped.as_str() };
     
     // Normalize slashes to backslashes for consistency on Windows
     PathBuf::from(s.replace('/', "\\"))

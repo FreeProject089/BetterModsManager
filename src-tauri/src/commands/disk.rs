@@ -33,6 +33,62 @@ pub struct BenchmarkResult {
 }
 
 /// Check if a path looks like a cloud sync folder
+/// A Windows path with its verbatim prefix removed, ready to be compared with a mount point.
+///
+/// `\\?\C:\x` is the verbatim form of `C:\x`, and dropping the first four characters is the
+/// right answer for it. `\\?\UNC\server\share` is the verbatim form of `\\server\share`,
+/// and dropping four characters leaves `UNC\server\share` - a string that matches no mount
+/// point and no drive letter, so every network path failed the comparison it was about to be
+/// used in. That is what this exists to get right.
+///
+/// Input is expected already lowercased by the caller, but the UNC marker is matched in both
+/// cases so the function is correct on its own.
+pub fn strip_verbatim(p: &str) -> String {
+    for marker in [r"\\?\unc\", r"\\?\UNC\"] {
+        if let Some(rest) = p.strip_prefix(marker) {
+            return format!(r"\\{rest}");
+        }
+    }
+    if let Some(rest) = p.strip_prefix(r"\\?\") {
+        return rest.to_string();
+    }
+    p.to_string()
+}
+
+/// Free and total bytes for the volume holding `path`, straight from the OS.
+///
+/// `sysinfo` enumerates LOCAL volumes. A NAS reached over UNC, and in most configurations a
+/// mapped network drive, is not in that list - so matching a path against it can only ever
+/// fail for them, however well the path is normalised. `GetDiskFreeSpaceExW` takes a path
+/// rather than a volume and answers for shares, mapped drives and cloud-mounted folders alike.
+#[cfg(windows)]
+fn os_free_space(path: &str) -> Option<(u64, u64)> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows::Win32::Storage::FileSystem::GetDiskFreeSpaceExW;
+    use windows::core::PCWSTR;
+
+    let wide: Vec<u16> = std::ffi::OsStr::new(path)
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+    let mut free_to_caller: u64 = 0;
+    let mut total: u64 = 0;
+    let ok = unsafe {
+        GetDiskFreeSpaceExW(
+            PCWSTR(wide.as_ptr()),
+            Some(&mut free_to_caller),
+            Some(&mut total),
+            None,
+        )
+    };
+    // `free_to_caller` and not the volume's raw free space: on a share with a quota those
+    // differ, and the number worth showing is the one this user may actually write.
+    if ok.is_ok() && total > 0 { Some((free_to_caller, total)) } else { None }
+}
+
+#[cfg(not(windows))]
+fn os_free_space(_path: &str) -> Option<(u64, u64)> { None }
+
 fn detect_cloud_provider(mount_point: &str, name: &str) -> Option<String> {
     let lower_mp = mount_point.to_lowercase();
     let lower_name = name.to_lowercase();
@@ -101,18 +157,14 @@ pub fn get_system_disks(state: State<AppState>) -> Result<Vec<DiskLimitInfo>, Ap
         };
 
         // Map profiles to this disk
-        let mut mp_lower = mount_point.to_lowercase();
-        if mp_lower.starts_with(r"\\?\") && mp_lower.len() >= 4 { mp_lower = mp_lower[4..].to_string(); }
+        let mp_lower = strip_verbatim(&mount_point.to_lowercase());
         let mut profile_usages = Vec::new();
         for profile in profiles.iter() {
-            let mut game_path = profile.game_path.to_string_lossy().to_lowercase();
-            if game_path.starts_with(r"\\?\") && game_path.len() >= 4 { game_path = game_path[4..].to_string(); }
+            let game_path = strip_verbatim(&profile.game_path.to_string_lossy().to_lowercase());
             
-            let mut mods_path = profile.mods_path.to_string_lossy().to_lowercase();
-            if mods_path.starts_with(r"\\?\") && mods_path.len() >= 4 { mods_path = mods_path[4..].to_string(); }
+            let mods_path = strip_verbatim(&profile.mods_path.to_string_lossy().to_lowercase());
             
-            let mut backup_path = profile.backup_path.to_string_lossy().to_lowercase();
-            if backup_path.starts_with(r"\\?\") && backup_path.len() >= 4 { backup_path = backup_path[4..].to_string(); }
+            let backup_path = strip_verbatim(&profile.backup_path.to_string_lossy().to_lowercase());
 
             if game_path.starts_with(&mp_lower) {
                 profile_usages.push(DiskProfileUsage {
@@ -315,14 +367,14 @@ pub struct DiskSpaceInfo {
 pub fn check_disk_space(path: String) -> Result<DiskSpaceInfo, String> {
     let disks = Disks::new_with_refreshed_list();
     let target = std::path::Path::new(&path);
-    let mut path_str = target.canonicalize().unwrap_or_else(|_| target.to_path_buf())
-        .to_string_lossy().to_lowercase();
-    if path_str.starts_with(r"\\?\") && path_str.len() >= 4 { path_str = path_str[4..].to_string(); }
+    let path_str = strip_verbatim(
+        &target.canonicalize().unwrap_or_else(|_| target.to_path_buf())
+            .to_string_lossy().to_lowercase(),
+    );
 
     let mut best: Option<(u64, u64, String, usize)> = None;
     for disk in disks.iter() {
-        let mut mp = disk.mount_point().to_string_lossy().to_lowercase();
-        if mp.starts_with(r"\\?\") && mp.len() >= 4 { mp = mp[4..].to_string(); }
+        let mp = strip_verbatim(&disk.mount_point().to_string_lossy().to_lowercase());
         if path_str.starts_with(&mp) {
             let len = mp.len();
             if best.as_ref().map_or(true, |(_, _, _, l)| len > *l) {
@@ -334,6 +386,12 @@ pub fn check_disk_space(path: String) -> Result<DiskSpaceInfo, String> {
     if let Some((available, total, mount_point, _)) = best {
         let free_percent = if total > 0 { (available as f64 / total as f64) * 100.0 } else { 0.0 };
         Ok(DiskSpaceInfo { available_bytes: available, total_bytes: total, mount_point, free_percent })
+    } else if let Some((available, total)) = os_free_space(&path) {
+        // No local volume claimed this path. That is the normal case for a NAS or a mapped
+        // drive rather than an error: ask the OS about the path itself. Reporting the mount
+        // point as the path keeps the shape of the answer the same for the caller.
+        let free_percent = if total > 0 { (available as f64 / total as f64) * 100.0 } else { 0.0 };
+        Ok(DiskSpaceInfo { available_bytes: available, total_bytes: total, mount_point: path.clone(), free_percent })
     } else {
         Err(format!("Impossible de trouver le disque pour: {}", path))
     }
@@ -365,4 +423,55 @@ pub fn read_file_base64(path: String) -> Result<String, String> {
     use base64::{Engine as _, engine::general_purpose};
     let data = std::fs::read(&path).map_err(|e| e.to_string())?;
     Ok(general_purpose::STANDARD.encode(data))
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn strip_verbatim_handles_drive_letters_and_unc() {
+        // The case that always worked.
+        assert_eq!(strip_verbatim(r"\\?\C:\games\mods"), r"C:\games\mods");
+        assert_eq!(strip_verbatim(r"\\?\c:\games"), r"c:\games");
+        // The case that did not. The verbatim form of \\server\share is
+        // \\?\UNC\server\share, and taking four characters off it leaves
+        // `UNC\server\share` - a string that matches no mount point and no drive letter.
+        assert_eq!(strip_verbatim(r"\\?\UNC\nas\mods"), r"\\nas\mods");
+        assert_eq!(strip_verbatim(r"\\?\unc\nas\mods"), r"\\nas\mods");
+        // No prefix - returned untouched. A plain UNC path in particular must NOT be
+        // mangled on its way into a comparison.
+        assert_eq!(strip_verbatim(r"\\nas\mods"), r"\\nas\mods");
+        assert_eq!(strip_verbatim(r"C:\games"), r"C:\games");
+        assert_eq!(strip_verbatim(""), "");
+    }
+
+    /// A UNC path resolves to a real free/total pair.
+    ///
+    /// `\\localhost\C$` is a genuine UNC path on any Windows machine, so this exercises
+    /// the network branch without a NAS on the bench. Skipped rather than failed where the
+    /// admin share is unavailable: that is a machine's configuration, not a defect here.
+    #[cfg(windows)]
+    #[test]
+    fn disk_space_answers_for_a_unc_path() {
+        let unc = r"\\localhost\C$\Windows";
+        if !std::path::Path::new(unc).exists() {
+            eprintln!("skipped: {unc} is not reachable on this machine");
+            return;
+        }
+        let info = check_disk_space(unc.to_string())
+            .expect("a UNC path must resolve to a disk-space answer, not an error");
+        assert!(info.total_bytes > 0, "total bytes should be known for a UNC path");
+        assert!(info.available_bytes <= info.total_bytes);
+    }
+
+    /// The control: an ordinary local path still resolves through the sysinfo route.
+    #[test]
+    fn disk_space_still_answers_for_a_local_path() {
+        let local = std::env::temp_dir();
+        let info = check_disk_space(local.to_string_lossy().to_string())
+            .expect("a local path must still resolve");
+        assert!(info.total_bytes > 0);
+    }
 }

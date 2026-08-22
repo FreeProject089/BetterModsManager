@@ -1109,11 +1109,14 @@ pub async fn enable_mod(window: Window, state: State<'_, AppState>, mod_id: Stri
         // Perform space check (re-using logic but simplified for brevity in loop)
         let mut check_space = |path: &std::path::Path, label: &str| -> Result<(), String> {
             let mut path_str = path.canonicalize().unwrap_or(path.to_path_buf()).to_string_lossy().to_lowercase();
-            if path_str.starts_with(r"\\?\") { path_str = path_str[4..].to_string(); }
+            // The shared strip: taking four characters off a verbatim UNC path leaves
+            // `UNC\server\share`, which matches no mount point - so a mod library on a
+            // NAS never found its disk.
+            let path_str = crate::commands::disk::strip_verbatim(&path_str);
             let mut best = None;
             for disk in disks.iter() {
                 let mut mp = disk.mount_point().to_string_lossy().to_lowercase();
-                if mp.starts_with(r"\\?\") { mp = mp[4..].to_string(); }
+                let mp = crate::commands::disk::strip_verbatim(&mp);
                 if path_str.starts_with(&mp) {
                     let len = mp.len();
                     let best_ref: &Option<(u64,u64,String)> = &best;
