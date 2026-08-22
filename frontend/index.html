@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; script-src 'self' https://app.betahub.io https://www.youtube.com https://www.youtube-nocookie.com https://s.ytimg.com https://*.ytimg.com https://www.google.com https://apis.google.com 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://app.betahub.io; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: asset: asset.localhost/ http://asset.localhost/ blob: https://* http://localhost:* http://localhost http://127.0.0.1:* https://betahub.io https://i.ytimg.com https://*.ytimg.com https://*.youtube.com https://flagcdn.com; media-src 'self' blob: data: https://* http://localhost:* http://localhost http://127.0.0.1:* https://*.googlevideo.com https://*.youtube.com https://*.youtube-nocookie.com; frame-src 'self' https: blob: bmmpage: http://bmmpage.localhost https://bmmpage.localhost; child-src 'self' https: blob: bmmpage: http://bmmpage.localhost https://bmmpage.localhost; worker-src 'self' blob:; connect-src 'self' https://* tauri://* ipc://* ipc://localhost http://ipc.localhost https://tauri.localhost http://tauri.localhost https://asset.localhost http://asset.localhost ws://localhost:* wss://localhost:* http://localhost:* http://127.0.0.1:*;">
+        content="default-src 'self'; script-src 'self' https://app.betahub.io https://www.youtube.com https://www.youtube-nocookie.com https://s.ytimg.com https://*.ytimg.com https://www.google.com https://apis.google.com 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://app.betahub.io; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: asset: asset.localhost/ http://asset.localhost/ blob: https://* http://localhost:* http://localhost http://127.0.0.1:* https://betahub.io https://i.ytimg.com https://*.ytimg.com https://*.youtube.com https://flagcdn.com; media-src 'self' blob: data: https://* http://localhost:* http://localhost http://127.0.0.1:* https://*.googlevideo.com https://*.youtube.com https://*.youtube-nocookie.com; frame-src 'self' https: blob: bmmpage: http://bmmpage.localhost https://bmmpage.localhost; child-src 'self' https: blob: bmmpage: http://bmmpage.localhost https://bmmpage.localhost; worker-src 'self' blob:; connect-src 'self' https://* tauri://* ipc://* ipc://localhost http://ipc.localhost https://tauri.localhost http://tauri.localhost https://asset.localhost http://asset.localhost ws://localhost:* wss://localhost:* http://localhost:* http://127.0.0.1:*;">
     <!-- Applies the user's extra (tightening-only) policy from Settings, if any.
          Must run DURING head parsing - a CSP meta added later is ignored - and must be an
          external file, because an inline one would need the 'unsafe-inline' this feature
@@ -189,244 +189,7 @@
             }
         </style>
 
-        <script>
-            (function () {
-                /* ─── wait for GSAP ─── */
-                let _att = 0;
-                function tryInit() {
-                    if (typeof gsap === 'undefined') { if (++_att < 80) setTimeout(tryInit, 50); return; }
-                    initLoader();
-                }
-
-                /* ─── grab BMM version from titlebar ─── */
-                function getVersion() {
-                    return new Promise(resolve => {
-                        const check = () => {
-                            const btn = document.querySelector('.titlebar-version');
-                            resolve(btn ? btn.textContent.trim() : 'V1.0.0 — FAB');
-                        };
-                        if (document.readyState !== 'loading') check();
-                        else document.addEventListener('DOMContentLoaded', check);
-                    });
-                }
-
-                /* ─── split brand into char spans ─── */
-                function buildBrand() {
-                    const wrap = document.getElementById('ld-brand');
-                    if (!wrap) return;
-                    [{ text: 'Better', cls: 'ld-w1' }, { text: 'Mod.Manager', cls: 'ld-w2' }].forEach(part => {
-                        const word = document.createElement('div');
-                        word.style.cssText = 'display:flex;align-items:baseline;overflow:visible;';
-                        [...part.text].forEach(ch => {
-                            const s = document.createElement('span');
-                            s.textContent = ch; s.className = 'ld-char ' + part.cls;
-                            word.appendChild(s);
-                        });
-                        wrap.appendChild(word);
-                    });
-                }
-
-                /* ─── main ─── */
-                function initLoader() {
-                    buildBrand();
-                    getVersion().then(ver => {
-                        const el = document.getElementById('ld-ver');
-                        if (el) el.textContent = ver + '  —  FAB';
-                    });
-
-                    /* Wait 2 frames so brand layout is stable, then measure logo center */
-                    requestAnimationFrame(() => requestAnimationFrame(() => startAnimation()));
-                }
-
-                function startAnimation() {
-                    /* Fire boot sound — set pending flag so app.ts plays it if module loads later */
-                    if (window.__bmmPlayBootSound) {
-                        try { window.__bmmPlayBootSound(); } catch(_){}
-                    } else {
-                        window.__bmmBootSoundPending = true;
-                    }
-
-                    /* Compute logo center in screen coords → orb start positions */
-                    const wrap = document.getElementById('ld-logo-wrap');
-                    const rect = wrap ? wrap.getBoundingClientRect() : { left: 0, top: 0, width: 100, height: 100 };
-                    const lx = rect.left + rect.width / 2; // logo center X on screen
-                    const ly = rect.top + rect.height / 2; // logo center Y on screen
-                    const W = window.innerWidth, H = window.innerHeight;
-
-                    /* Orbs live INSIDE logo-wrap → x,y are relative to logo center */
-                    const orbDefs = [
-                        { id: 'ld-orb-0', sx: 30 - lx, sy: 30 - ly, r: 52, spd: 0.85, off: 0 },
-                        { id: 'ld-orb-1', sx: W - lx - 30, sy: H - ly - 30, r: 64, spd: -0.58, off: Math.PI * 0.65 },
-                        { id: 'ld-orb-2', sx: W - lx - 30, sy: 30 - ly, r: 56, spd: 0.42, off: Math.PI * 1.4 },
-                    ];
-                    orbDefs.forEach(d => gsap.set('#' + d.id, { x: d.sx, y: d.sy, opacity: 0 }));
-                    gsap.set('#ld-stage', { x: 0, y: 0 });
-
-                    const tl = gsap.timeline({ defaults: { ease: 'power3.out' } });
-                    /* Exposed so app.ts can kill the whole timeline when the loader is
-                       removed early (prevents "GSAP target not found" warnings). */
-                    window.__ldTimeline = tl;
-
-                    /* 0.0 — ambient bg glow */
-                    tl.to('#ld-bg-glow', { opacity: 1, duration: 1.2, ease: 'power2.out' }, 0);
-
-                    /* 0.15 — orbs fly from corners toward logo */
-                    orbDefs.forEach((d, i) => {
-                        tl.to('#' + d.id, { opacity: 1, duration: 0.12 }, 0.15 + i * 0.05);
-                        tl.to('#' + d.id, { x: 0, y: 0, duration: 0.52, ease: 'power3.in' }, 0.15 + i * 0.05);
-                    });
-
-                    /* 0.68 — IMPACT */
-                    tl.to('#ld-flash', { opacity: 1, duration: 0.04, yoyo: true, repeat: 1, ease: 'none' }, 0.68);
-                    tl.fromTo('#ld-wave',
-                        { opacity: 0.9, scale: 0 },
-                        { opacity: 0, scale: 40, duration: 0.7, ease: 'power2.out' },
-                        0.69);
-
-                    /* 0.71 — halo rings pop in then fade out */
-                    tl.fromTo('#ld-halo',
-                        { opacity: 0, scale: 0.6 },
-                        { opacity: 1, scale: 1, duration: 0.35, ease: 'back.out(2.5)' },
-                        0.71);
-                    tl.to('#ld-halo', { opacity: 0, scale: 1.5, duration: 0.55, ease: 'power2.in' }, 1.1);
-
-                    tl.fromTo('#ld-halo2',
-                        { opacity: 0, scale: 0.5 },
-                        { opacity: 1, scale: 1, duration: 0.45, ease: 'back.out(1.8)' },
-                        0.74);
-                    tl.to('#ld-halo2', { opacity: 0, scale: 1.8, duration: 0.6, ease: 'power2.in' }, 1.2);
-
-                    /* 0.72 — diffuse glow expands */
-                    tl.fromTo('#ld-logo-glow', { opacity: 0, scale: 0.4 }, { opacity: 1, scale: 1, duration: 0.5 }, 0.72);
-
-                    /* 0.69 — logo opacity snaps on early so the spin is visible */
-                    tl.fromTo('#ld-logo',
-                        { opacity: 0, scale: 0.85, filter: 'brightness(4) blur(6px)', rotateY: 0, transformPerspective: 500 },
-                        { opacity: 1, duration: 0.12, ease: 'none' },
-                        0.69);
-                    /* spin + settle continues after opacity is already up */
-                    tl.to('#ld-logo',
-                        { scale: 1, filter: 'brightness(1) blur(0px)', rotateY: 720, transformPerspective: 500, duration: 0.65, ease: 'power2.out' },
-                        0.69);
-
-                    /* 0.78 — orbs begin orbiting */
-                    tl.call(() => startOrbit(orbDefs), null, 0.78);
-
-                    /* 1.0 — brand chars stagger in */
-                    tl.call(() => {
-                        /* Loader may already be gone on very fast boots — skip quietly
-                           instead of letting GSAP warn about missing targets. */
-                        if (!document.querySelector('.ld-char')) return;
-                        gsap.fromTo('.ld-char',
-                            { opacity: 0, y: 22, rotateX: -60, scale: 0.82 },
-                            {
-                                opacity: 1, y: 0, rotateX: 0, scale: 1,
-                                duration: 0.5, stagger: { each: 0.033, ease: 'power2.out' }, ease: 'back.out(2)'
-                            }
-                        );
-                    }, null, 1.0);
-
-                    /* 1.4 — version */
-                    tl.fromTo('#ld-ver', { opacity: 0, x: 6 }, { opacity: 1, x: 0, duration: 0.4 }, 1.4);
-
-                    /* 1.55 — progress */
-                    tl.to('#ld-prog', { opacity: 1, duration: 0.3 }, 1.55);
-                    tl.to('#ld-prog', { width: '100%', duration: 2.0, ease: 'power1.inOut' }, 1.6);
-
-                    /* ── continuous animations after settle ── */
-
-                    /* diffuse glow breathes */
-                    gsap.to('#ld-logo-glow', {
-                        scale: 1.2, opacity: 0.7, duration: 2.8,
-                        ease: 'sine.inOut', yoyo: true, repeat: -1, delay: 1.35
-                    });
-
-                    /* logo bob */
-                    gsap.to('#ld-logo', {
-                        y: -4, duration: 2.2, ease: 'sine.inOut', yoyo: true, repeat: -1, delay: 1.0
-                    });
-
-                    /* periodic outward pulse ring */
-                    function doPulse() {
-                        if (!document.getElementById('app-loader')) return; // loader removed — stop
-                        gsap.fromTo('#ld-pulse',
-                            { scale: 0.95, opacity: 0.55 },
-                            {
-                                scale: 2.6, opacity: 0, duration: 1.5, ease: 'power2.out',
-                                onComplete: () => {
-                                    if (document.getElementById('app-loader')) gsap.delayedCall(1.8, doPulse);
-                                }
-                            }
-                        );
-                    }
-                    gsap.delayedCall(1.4, doPulse);
-
-                    setupMouse();
-                    setupHover();
-                    setupClickRipple();
-                }
-
-                /* ─── elliptical orbit via ticker ─── */
-                let _orbActive = false, _orbT0 = 0;
-                function startOrbit(defs) {
-                    _orbActive = true; _orbT0 = gsap.ticker.time;
-                    const BLEND = 0.55; // seconds to grow radius from 0→full
-                    gsap.ticker.add(() => {
-                        if (!_orbActive) return;
-                        // Stop if loader was removed from DOM (prevents "target not found" warnings)
-                        if (!document.getElementById('app-loader')) { _orbActive = false; return; }
-                        const t = gsap.ticker.time - _orbT0;
-                        const blend = Math.min(t / BLEND, 1);
-                        const s = blend * blend * (3 - 2 * blend); // smoothstep
-                        defs.forEach(d => {
-                            const el = document.getElementById(d.id);
-                            if (!el) return;
-                            const a = d.off + t * d.spd;
-                            gsap.set(el, { x: Math.cos(a) * d.r * s, y: Math.sin(a) * d.r * 0.38 * s });
-                        });
-                    });
-                }
-
-                /* ─── mouse parallax (quickTo) ─── */
-                function setupMouse() {
-                    const bx = gsap.quickTo('#ld-bg-glow', 'x', { duration: 1.0, ease: 'power2.out' });
-                    const by = gsap.quickTo('#ld-bg-glow', 'y', { duration: 1.0, ease: 'power2.out' });
-                    const sx = gsap.quickTo('#ld-stage', 'x', { duration: 0.7, ease: 'power2.out' });
-                    const sy = gsap.quickTo('#ld-stage', 'y', { duration: 0.7, ease: 'power2.out' });
-                    document.getElementById('app-loader').addEventListener('mousemove', e => {
-                        const dx = (e.clientX - innerWidth / 2) / (innerWidth / 2);
-                        const dy = (e.clientY - innerHeight / 2) / (innerHeight / 2);
-                        bx(dx * 90); by(dy * 90);
-                        sx(dx * 10); sy(dy * 10);
-                    });
-                }
-
-                /* ─── logo hover pulse ─── */
-                function setupHover() {
-                    const w = document.getElementById('ld-logo-wrap');
-                    if (!w) return;
-                    w.addEventListener('mouseenter', () => gsap.to('#ld-logo', { scale: 1.1, duration: 0.3, ease: 'back.out(2)' }));
-                    w.addEventListener('mouseleave', () => gsap.to('#ld-logo', { scale: 1, duration: 0.5, ease: 'elastic.out(1,0.35)' }));
-                }
-
-                /* ─── click → ripple at cursor ─── */
-                function setupClickRipple() {
-                    document.getElementById('app-loader').addEventListener('click', e => {
-                        const r = document.createElement('div');
-                        r.style.cssText = `position:absolute;left:${e.clientX}px;top:${e.clientY}px;
-                        width:6px;height:6px;margin:-3px;border-radius:50%;pointer-events:none;z-index:10;
-                        border:1.5px solid rgba(0,194,255,0.8);box-shadow:0 0 10px rgba(0,194,255,0.4);`;
-                        document.getElementById('app-loader').appendChild(r);
-                        gsap.fromTo(r,
-                            { opacity: 0.9, scale: 0 },
-                            { opacity: 0, scale: 18, duration: 0.55, ease: 'power2.out', onComplete: () => r.remove() }
-                        );
-                    });
-                }
-
-                tryInit();
-            })();
-        </script>
+        <script src="boot-loader.js"></script>
 
         <!-- VHS / CRT TV Turn-Off Close Animation Overlay -->
         <div id="vhs-close-overlay" aria-hidden="true">
@@ -448,25 +211,25 @@
                     <span style="color:var(--bmm-text-primary)">Better</span> <span
                         style="background:linear-gradient(135deg, #fbbf24, var(--bmm-warning)); background-clip:text; -webkit-background-clip:text; -webkit-text-fill-color:transparent;">Mod.Manager</span>
                 </div>
-                <button class="titlebar-version" onclick="checkPtbMode(true)">V1.0.0</button>
+                <button class="titlebar-version" data-act="checkPtbMode" data-act-args='[true]'>V1.0.0</button>
             </div>
             <div class="titlebar-controls">
-                <button class="tb-btn" id="tb-min" onmouseenter="window.showTaskyHelp('common.minimize', 'minimize')"
-                    onmouseleave="window.hideTaskyHelp()">
+                <button class="tb-btn" id="tb-min" data-tasky="common.minimize" data-tasky-icon="minimize"
+                   >
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                         stroke-width="2.5">
                         <line x1="5" y1="12" x2="19" y2="12" />
                     </svg>
                 </button>
-                <button class="tb-btn" id="tb-max" onmouseenter="window.showTaskyHelp('common.maximize', 'maximize')"
-                    onmouseleave="window.hideTaskyHelp()">
+                <button class="tb-btn" id="tb-max" data-tasky="common.maximize" data-tasky-icon="maximize"
+                   >
                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                         stroke-width="2.5">
                         <rect x="3" y="3" width="18" height="18" rx="2" />
                     </svg>
                 </button>
                 <button class="tb-btn tb-close" id="tb-close"
-                    onmouseenter="window.showTaskyHelp('common.close', 'close')" onmouseleave="window.hideTaskyHelp()">
+                    data-tasky="common.close" data-tasky-icon="close">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                         stroke-width="2.5">
                         <line x1="18" y1="6" x2="6" y2="18" />
@@ -500,8 +263,8 @@
                 <!-- Nav -->
                 <nav class="sidebar-nav">
                     <button class="nav-item active" data-view="library" id="nav-library"
-                        onmouseenter="window.showTaskyHelp('nav.library', 'library')"
-                        onmouseleave="window.hideTaskyHelp()">
+                        data-tasky="nav.library" data-tasky-icon="library"
+                       >
                         <span class="nav-icon">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="1.8">
@@ -517,8 +280,8 @@
                     </button>
 
                     <button class="nav-item" data-view="profiles" id="nav-profiles"
-                        onmouseenter="window.showTaskyHelp('nav.profiles', 'user')"
-                        onmouseleave="window.hideTaskyHelp()">
+                        data-tasky="nav.profiles" data-tasky-icon="user"
+                       >
                         <span class="nav-icon">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="1.8">
@@ -531,8 +294,8 @@
                     </button>
 
                     <button class="nav-item" data-view="modpacks" id="nav-modpacks"
-                        onmouseenter="window.showTaskyHelp('nav.modpacks', 'package')"
-                        onmouseleave="window.hideTaskyHelp()">
+                        data-tasky="nav.modpacks" data-tasky-icon="package"
+                       >
                         <span class="nav-icon">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -545,8 +308,8 @@
                     </button>
 
                     <button class="nav-item" data-view="mapper" id="nav-mapper"
-                        onmouseenter="window.showTaskyHelp('nav.mapper', 'layers')"
-                        onmouseleave="window.hideTaskyHelp()">
+                        data-tasky="nav.mapper" data-tasky-icon="layers"
+                       >
                         <span class="nav-icon">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="1.8">
@@ -560,8 +323,8 @@
                     </button>
 
                     <button class="nav-item" data-view="repo" id="nav-repo"
-                        onmouseenter="window.showTaskyHelp('nav.repo', 'network')"
-                        onmouseleave="window.hideTaskyHelp()">
+                        data-tasky="nav.repo" data-tasky-icon="network"
+                       >
                         <span class="nav-icon">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="1.8">
@@ -574,8 +337,8 @@
                     </button>
 
                     <button class="nav-item" data-view="modlist" id="nav-modlist"
-                        onmouseenter="window.showTaskyHelp('nav.modlist', 'list')"
-                        onmouseleave="window.hideTaskyHelp()">
+                        data-tasky="nav.modlist" data-tasky-icon="list"
+                       >
                         <span class="nav-icon">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="1.8">
@@ -591,7 +354,7 @@
                     </button>
 
                     <button class="nav-item" data-view="apps" id="nav-apps"
-                        onmouseenter="window.showTaskyHelp('nav.apps', 'grid')" onmouseleave="window.hideTaskyHelp()">
+                        data-tasky="nav.apps" data-tasky-icon="grid">
                         <span class="nav-icon">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
                                 <rect x="2" y="3" width="7" height="7" rx="1"/>
@@ -604,7 +367,7 @@
                     </button>
 
                     <button class="nav-item" data-view="plugins" id="nav-plugins"
-                        onmouseenter="window.showTaskyHelp('nav.plugins', 'help')" onmouseleave="window.hideTaskyHelp()">
+                        data-tasky="nav.plugins" data-tasky-icon="help">
                         <span class="nav-icon">
                           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
@@ -616,7 +379,7 @@
                     </button>
 
                     <button class="nav-item" data-view="community" id="nav-community"
-                        onmouseenter="window.showTaskyHelp('nav.community', 'newspaper')" onmouseleave="window.hideTaskyHelp()">
+                        data-tasky="nav.community" data-tasky-icon="newspaper">
                         <span class="nav-icon">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -628,7 +391,7 @@
                     </button>
 
                     <button class="nav-item" data-view="docs" id="nav-docs"
-                        onmouseenter="window.showTaskyHelp('nav.docs', 'help')" onmouseleave="window.hideTaskyHelp()">
+                        data-tasky="nav.docs" data-tasky-icon="help">
                         <span class="nav-icon">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="1.8">
@@ -640,9 +403,9 @@
                     </button>
 
                     <button class="nav-item" data-view="credits" id="nav-credits"
-                        onmouseenter="window.showTaskyHelp('nav.credits', 'heart')"
-                        onmouseleave="window.hideTaskyHelp()"
-                        onclick="window.openCreditsModal && window.openCreditsModal()">
+                        data-tasky="nav.credits" data-tasky-icon="heart"
+                       
+                        data-act="openCreditsModal">
                         <span class="nav-icon">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="1.8">
@@ -656,8 +419,8 @@
                     <div class="nav-separator"></div>
 
                     <button class="nav-item" data-view="settings" id="nav-settings"
-                        onmouseenter="window.showTaskyHelp('nav.settings', 'settings')"
-                        onmouseleave="window.hideTaskyHelp()">
+                        data-tasky="nav.settings" data-tasky-icon="settings"
+                       >
                         <span class="nav-icon">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="1.8">
@@ -673,8 +436,8 @@
                 <!-- Sidebar footer -->
                 <div class="sidebar-footer">
                     <button class="footer-nav-item" id="btn-restart-onboarding"
-                        onmouseenter="window.showTaskyHelp('settings.restartTutorialTip', 'icon-play')"
-                        onmouseleave="window.hideTaskyHelp()">
+                        data-tasky="settings.restartTutorialTip" data-tasky-icon="icon-play"
+                       >
                         <span class="nav-icon">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="2">
@@ -695,7 +458,7 @@
                     <div class="footer-bottom-row">
                         <span class="footer-profile-name" id="chip-profile-name">—</span>
                         <button class="footer-version-pill" id="nav-version-btn"
-                            onclick="checkPtbMode(true)">v0.9.9</button>
+                            data-act="checkPtbMode" data-act-args='[true]'>v0.9.9</button>
                     </div>
 
                     <!-- Check for Updates + the notification bell, on ONE row.
@@ -704,8 +467,8 @@
                          BMM got for me?" — one asks, one remembers. -->
                     <div class="footer-update-row">
                     <button class="btn-check-updates" id="btn-check-updates"
-                        onmouseenter="window.showTaskyHelp('settings.checkUpdatesTip', 'icon-refresh')"
-                        onmouseleave="window.hideTaskyHelp()">
+                        data-tasky="settings.checkUpdatesTip" data-tasky-icon="icon-refresh"
+                       >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2.2">
                             <path d="M23 4v6h-6M1 20v-6h6" />
@@ -718,8 +481,8 @@
                          answer "what has BMM got for me?" — one asks, one remembers. -->
                     <button class="btn-notif-center" id="btn-notif-center" aria-expanded="false"
                         aria-label="Notifications" data-count="0"
-                        onmouseenter="window.showTaskyHelp('notif.tip', 'icon-info')"
-                        onmouseleave="window.hideTaskyHelp()">
+                        data-tasky="notif.tip" data-tasky-icon="icon-info"
+                       >
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
@@ -745,8 +508,8 @@
                         <div class="view-actions">
                             <!-- ── Sticky pin — leftmost, icon-only, always visible ── -->
                             <button class="btn btn-ghost view-action-util" id="btn-toggle-lib-sticky"
-                                onmouseenter="window.showTaskyHelp('lib.stickyHeaderOff', 'pin')"
-                                onmouseleave="window.hideTaskyHelp()">
+                                data-tasky="lib.stickyHeaderOff" data-tasky-icon="pin"
+                               >
                                 <!-- Lucide thumbtack / pin icon -->
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                                     <line x1="12" y1="17" x2="12" y2="22"/>
@@ -758,8 +521,8 @@
                             <div class="cancel-ops-wrapper disabled" id="cancel-ops-wrapper">
                                 <button class="btn btn-ghost view-action-util" id="btn-cancel-mod-ops"
                                     disabled
-                                    onmouseenter="window.showTaskyHelp('lib.cancelOpsTip', 'close')"
-                                    onmouseleave="window.hideTaskyHelp()">
+                                    data-tasky="lib.cancelOpsTip" data-tasky-icon="close"
+                                   >
                                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                                         <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
                                     </svg>
@@ -779,8 +542,8 @@
                             </div>
                             <div class="view-actions-sep"></div>
                             <button class="btn btn-ghost view-action-util" id="btn-show-history"
-                                onmouseenter="window.showTaskyHelp('lib.historyTip', 'icon-history')"
-                                onmouseleave="window.hideTaskyHelp()">
+                                data-tasky="lib.historyTip" data-tasky-icon="icon-history"
+                               >
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                     stroke-width="2.2">
                                     <circle cx="12" cy="12" r="10" />
@@ -789,8 +552,8 @@
                                 <span data-i18n="lib.history">Historique</span>
                             </button>
                             <button class="btn btn-ghost view-action-util" id="btn-scan-mods"
-                                onmouseenter="window.showTaskyHelp('lib.scanTip', 'icon-search')"
-                                onmouseleave="window.hideTaskyHelp()">
+                                data-tasky="lib.scanTip" data-tasky-icon="icon-search"
+                               >
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                     stroke-width="2.2">
                                     <path d="M23 4v6h-6M1 20v-6h6" />
@@ -799,8 +562,8 @@
                                 <span data-i18n="lib.scan">Scanner</span>
                             </button>
                             <button class="btn btn-ghost view-action-util" id="btn-verify-integrity"
-                                onmouseenter="window.showTaskyHelp('lib.verifyTip', 'icon-verify')"
-                                onmouseleave="window.hideTaskyHelp()">
+                                data-tasky="lib.verifyTip" data-tasky-icon="icon-verify"
+                               >
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                     stroke-width="2.2">
                                     <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
@@ -810,8 +573,8 @@
                             </button>
                             <div class="view-actions-sep"></div>
                             <button class="btn btn-ghost view-action-util" id="btn-add-mod"
-                                onmouseenter="window.showTaskyHelp('lib.addModTip', 'icon-plus')"
-                                onmouseleave="window.hideTaskyHelp()">
+                                data-tasky="lib.addModTip" data-tasky-icon="icon-plus"
+                               >
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                     stroke-width="2.5">
                                     <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
@@ -821,8 +584,8 @@
                                 <span data-i18n="lib.addMod">Ajouter un mod</span>
                             </button>
                             <button class="btn btn-ghost view-action-util" id="btn-quick-apply-modpack"
-                                onmouseenter="window.showTaskyHelp('modpack.quickApplyDesc', 'icon-zap')"
-                                onmouseleave="window.hideTaskyHelp()">
+                                data-tasky="modpack.quickApplyDesc" data-tasky-icon="icon-zap"
+                               >
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                     stroke-width="2.2">
                                     <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
@@ -833,8 +596,8 @@
                             <!-- Enable-all always visible; hover reveals Disable-all panel (no click) -->
                             <div class="enable-hover-wrap" id="enable-all-container">
                                 <button class="btn btn-ghost view-action-util" id="btn-enable-all"
-                                    onmouseenter="window.showTaskyHelp('lib.enableAllTip', 'icon-check')"
-                                    onmouseleave="window.hideTaskyHelp()">
+                                    data-tasky="lib.enableAllTip" data-tasky-icon="icon-check"
+                                   >
                                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                         stroke-width="2.2">
                                         <path d="m5 12 5 5L20 7" />
@@ -849,8 +612,8 @@
                                 <div class="disable-hover-panel">
                                     <button class="btn btn-ghost view-action-util" id="btn-disable-all-alt"
                                         style="color:var(--danger);white-space:nowrap;width:100%;"
-                                        onmouseenter="window.showTaskyHelp('lib.disableAllTip', 'icon-warning')"
-                                        onmouseleave="window.hideTaskyHelp()">
+                                        data-tasky="lib.disableAllTip" data-tasky-icon="icon-warning"
+                                       >
                                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
                                             stroke="currentColor" stroke-width="2.2">
                                             <path d="M18 6L6 18M6 6l12 12" />
@@ -886,8 +649,8 @@
                                 </div>
                                 <div class="filter-buttons">
                                     <button id="btn-view-mode" class="btn btn-icon btn-ghost btn-compact-toggle"
-                                        onmouseenter="window.showTaskyHelp('lib.toggleViewTip', 'icon-list')"
-                                        onmouseleave="window.hideTaskyHelp()">
+                                        data-tasky="lib.toggleViewTip" data-tasky-icon="icon-list"
+                                       >
                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
                                             stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
                                             <line x1="3" y1="6" x2="21" y2="6" />
@@ -898,8 +661,8 @@
                                     <!-- Check-for-updates: same style as the view-mode toggle, its own icon -->
                                     <button id="btn-lib-check-updates" class="btn btn-icon btn-ghost btn-compact-toggle"
                                         data-i18n-tooltip="lib.checkUpdates"
-                                        onmouseenter="window.showTaskyHelp('lib.checkUpdatesTip', 'refresh')"
-                                        onmouseleave="window.hideTaskyHelp()">
+                                        data-tasky="lib.checkUpdatesTip" data-tasky-icon="refresh"
+                                       >
                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
                                             stroke="currentColor" stroke-width="2.4" stroke-linecap="round"
                                             stroke-linejoin="round">
@@ -970,7 +733,7 @@
                             <div class="empty-actions"
                                 style="display:flex; gap:12px; justify-content:center; margin-top:30px">
                                 <button id="btn-new-profile-lib" class="btn btn-primary btn-lg"
-                                    onclick="window.showProfiles(); setTimeout(() => window.openNewProfileModal(), 50);"
+                                    data-act="bmmNewProfileFlow"
                                     style="padding: 12px 24px;">
                                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                         stroke-width="2.5" style="margin-right:8px">
@@ -980,7 +743,7 @@
                                     <span data-i18n="prof.create">Créer un profil</span>
                                 </button>
 
-                                <button class="btn btn-secondary btn-lg" onclick="window.showProfiles()">
+                                <button class="btn btn-secondary btn-lg" data-act="showProfiles">
                                     <span data-i18n="nav.profiles">Profils</span>
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                         stroke-width="2.5" style="margin-left:8px">
@@ -1015,7 +778,7 @@
                             </div>
 
                             <button class="btn btn-ghost" style="margin-top:25px; opacity:0.7; font-size:12px"
-                                onclick="window.openDocs('mod-architecture')">
+                                data-act="openDocs" data-act-args='["mod-architecture"]'>
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                     stroke-width="2.5" style="margin-right:6px; vertical-align:middle">
                                     <circle cx="12" cy="12" r="10" />
@@ -1045,7 +808,7 @@
                                 style="display:flex; flex-direction:column; align-items:center; gap:16px; margin-top:24px;">
                                 <div style="display:flex; justify-content:center; gap:12px;">
                                     <button class="btn btn-primary"
-                                        onclick="document.getElementById('btn-scan-mods').click()"
+                                        data-click-proxy="#btn-scan-mods"
                                         style="padding:10px 20px; font-size:13px">
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
                                             stroke="currentColor" stroke-width="2" style="margin-right:8px">
@@ -1056,7 +819,7 @@
                                         <span data-i18n="lib.scan">Scanner</span>
                                     </button>
                                     <button class="btn btn-secondary"
-                                        onclick="document.getElementById('btn-add-mod').click()"
+                                        data-click-proxy="#btn-add-mod"
                                         style="padding:10px 20px; font-size:13px">
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
                                             stroke="currentColor" stroke-width="2" style="margin-right:8px">
@@ -1066,7 +829,7 @@
                                     </button>
                                 </div>
 
-                                <button class="btn btn-ghost btn-sm" onclick="openDiagram('mod-architecture')"
+                                <button class="btn btn-ghost btn-sm" data-act="openDiagram" data-act-args='["mod-architecture"]'
                                     style="color:var(--accent); font-size:12px; border:1px solid rgba(59,130,246,0.3); margin: 0 auto; display: flex; align-items: center; gap: 8px; opacity: 0.8;">
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                         stroke-width="2.2">
@@ -1138,7 +901,7 @@
                                     </a>
                                 </div>
                             </div>
-                            <button class="btn btn-sm btn-ghost" onclick="openDiagram('mod-architecture')"
+                            <button class="btn btn-sm btn-ghost" data-act="openDiagram" data-act-args='["mod-architecture"]'
                                 style="color:var(--accent); font-size:12px; height: 32px; border: 1px solid rgba(59,130,246,0.3); margin-right: 8px;">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                     stroke-width="2.2" style="margin-right:6px">
@@ -1171,7 +934,7 @@
                             par jeu ou par configuration.
                             Créez votre premier profil pour commencer à modder en toute sécurité.</p>
 
-                        <button class="btn btn-ghost btn-sm" onclick="openDiagram('mod-architecture')"
+                        <button class="btn btn-ghost btn-sm" data-act="openDiagram" data-act-args='["mod-architecture"]'
                             style="color:var(--accent); font-size:12px; border:1px solid rgba(59,130,246,0.3); margin: 0 auto;">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="2.2" style="margin-right:6px">
@@ -1199,8 +962,8 @@
                                     style="margin: 0; font-size: 14px; font-weight: 600;">Mods Activés (Global)</h3>
                                 <button id="btn-disable-all-global" class="btn btn-danger btn-xs"
                                     style="font-size: 10px; padding: 4px 8px; border-radius: 6px; display: none;"
-                                    onmouseenter="window.showTaskyHelp('prof.disableAllTip', 'trash')"
-                                    onmouseleave="window.hideTaskyHelp()">
+                                    data-tasky="prof.disableAllTip" data-tasky-icon="trash"
+                                   >
                                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                         stroke-width="2.5" style="margin-right:4px">
                                         <path d="M18 6L6 18M6 6l12 12" />
@@ -1236,8 +999,8 @@
                         </div>
                         <div class="view-actions">
                             <button class="btn btn-secondary" id="btn-import-mm"
-                                onmouseenter="window.showTaskyHelp('mm.importTip', 'list')"
-                                onmouseleave="window.hideTaskyHelp()">
+                                data-tasky="mm.importTip" data-tasky-icon="list"
+                               >
                                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                     stroke-width="2.2">
                                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -1247,8 +1010,8 @@
                                 <span data-i18n="mm.import">Import .MM</span>
                             </button>
                             <button class="btn btn-primary" id="btn-export-mm"
-                                onmouseenter="window.showTaskyHelp('mm.exportTip', 'list')"
-                                onmouseleave="window.hideTaskyHelp()">
+                                data-tasky="mm.exportTip" data-tasky-icon="list"
+                               >
                                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                     stroke-width="2.2">
                                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -1262,8 +1025,8 @@
 
                     <!-- Info cards row -->
                     <div class="modlist-info-cards" style="margin-bottom:20px;">
-                        <div class="info-card glass" onmouseenter="window.showTaskyHelp('mm.formatTip', 'icon-info')"
-                            onmouseleave="window.hideTaskyHelp()">
+                        <div class="info-card glass" data-tasky="mm.formatTip" data-tasky-icon="icon-info"
+                           >
                             <div class="info-card-icon accent">
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                     stroke-width="1.8">
@@ -1282,8 +1045,8 @@
                                     list of mods, download links, install order and config.</p>
                             </div>
                         </div>
-                        <div class="info-card glass" onmouseenter="window.showTaskyHelp('mm.shareTip', 'icon-info')"
-                            onmouseleave="window.hideTaskyHelp()">
+                        <div class="info-card glass" data-tasky="mm.shareTip" data-tasky-icon="icon-info"
+                           >
                             <div class="info-card-icon cyan">
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                     stroke-width="1.8">
@@ -1320,8 +1083,8 @@
                                 <label class="form-label" style="display:flex;align-items:center;gap:6px;">
                                     <span data-i18n="mod.listName">List Name</span>
                                     <span class="help-icon"
-                                        onmouseenter="window.showTaskyHelp('mm.listNameTip', 'icon-info')"
-                                        onmouseleave="window.hideTaskyHelp()"><svg width="11" height="11"
+                                        data-tasky="mm.listNameTip" data-tasky-icon="icon-info"
+                                       ><svg width="11" height="11"
                                             viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                                             <circle cx="12" cy="12" r="10" />
                                             <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
@@ -1340,8 +1103,8 @@
                                 <label class="form-label" style="display:flex;align-items:center;gap:6px;">
                                     <span data-i18n="detail.description">Description</span>
                                     <span class="help-icon"
-                                        onmouseenter="window.showTaskyHelp('mm.descTip', 'icon-info')"
-                                        onmouseleave="window.hideTaskyHelp()"><svg width="11" height="11"
+                                        data-tasky="mm.descTip" data-tasky-icon="icon-info"
+                                       ><svg width="11" height="11"
                                             viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                                             <circle cx="12" cy="12" r="10" />
                                             <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
@@ -1365,8 +1128,8 @@
                                     style="font-size:12px;font-weight:700;color:var(--text-primary);display:flex;align-items:center;gap:6px">
                                     <span data-i18n="mm.includeHashes">Include SHA-256 hashes</span>
                                     <span class="help-icon"
-                                        onmouseenter="window.showTaskyHelp('mm.includeHashesTip', 'icon-integrity')"
-                                        onmouseleave="window.hideTaskyHelp()"><svg width="11" height="11"
+                                        data-tasky="mm.includeHashesTip" data-tasky-icon="icon-integrity"
+                                       ><svg width="11" height="11"
                                             viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                                             <circle cx="12" cy="12" r="10" />
                                             <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
@@ -1382,8 +1145,8 @@
                         <div class="form-actions">
                             <button class="btn btn-ghost" id="btn-cancel-export" data-i18n="prof.cancel">Cancel</button>
                             <button class="btn btn-primary" id="btn-confirm-export"
-                                onmouseenter="window.showTaskyHelp('mm.exportConfirmTip', 'list')"
-                                onmouseleave="window.hideTaskyHelp()">
+                                data-tasky="mm.exportConfirmTip" data-tasky-icon="list"
+                               >
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                     stroke-width="2.2">
                                     <polyline points="17 8 12 3 7 8" />
@@ -1437,8 +1200,8 @@
                                 <h3 class="card-title" style="margin:0;" data-i18n="mm.importedTitle">Imported List</h3>
                             </div>
                             <button class="btn btn-primary btn-sm" id="btn-install-from-mm"
-                                onmouseenter="window.showTaskyHelp('mm.installTip', 'list')"
-                                onmouseleave="window.hideTaskyHelp()">
+                                data-tasky="mm.installTip" data-tasky-icon="list"
+                               >
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                     stroke-width="2.2">
                                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -1530,9 +1293,9 @@
                                         </svg>
                                         <span data-i18n="repo.stepOneTitle">1. Générer le Dépôt</span>
                                     </h3>
-                                    <button class="btn btn-ghost btn-xs" onclick="openDiagram('hosting-flow')"
-                                        onmouseenter="window.showTaskyHelp('repo.howItWorksTip', 'icon-info')"
-                                        onmouseleave="window.hideTaskyHelp()"
+                                    <button class="btn btn-ghost btn-xs" data-act="openDiagram" data-act-args='["hosting-flow"]'
+                                        data-tasky="repo.howItWorksTip" data-tasky-icon="icon-info"
+                                       
                                         style="opacity:0.6; font-size:10px; border:1px solid rgba(0,194,255,0.2); padding:2px 8px; height:auto; flex-shrink:0;">
                                         <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
                                             stroke="currentColor" stroke-width="2.5" style="margin-right:4px">
@@ -1604,8 +1367,8 @@
                                                 style="margin-bottom:4px; font-size:11px; opacity:0.8;"
                                                 data-i18n="repo.serverSeed">Graine du serveur (Optionnel)</label>
                                             <span style="font-size:9px; color:var(--text-muted); cursor:help;"
-                                                onmouseenter="window.showTaskyHelp('repo.serverSeedTip', 'icon-verify')"
-                                                onmouseleave="window.hideTaskyHelp()">
+                                                data-tasky="repo.serverSeedTip" data-tasky-icon="icon-verify"
+                                               >
                                                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
                                                     stroke="currentColor" stroke-width="3">
                                                     <circle cx="12" cy="12" r="10" />
@@ -1629,8 +1392,8 @@
                                             <span class="checkmark"></span>
                                             <span data-i18n="repo.compressAsZip">Compresser en archive .ZIP</span>
                                             <span class="help-icon"
-                                                onmouseenter="window.showTaskyHelp('repo.zipHelp', 'info')"
-                                                onmouseleave="window.hideTaskyHelp()"
+                                                data-tasky="repo.zipHelp"
+                                               
                                                 style="margin-left:6px; cursor:help; opacity:0.6;">
                                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
                                                     stroke="currentColor" stroke-width="2.5">
@@ -1647,8 +1410,8 @@
                                             <span class="checkmark"></span>
                                             <span data-i18n="repo.zipMods">Zip each mod (one .zip per mod)</span>
                                             <span class="help-icon"
-                                                onmouseenter="window.showTaskyHelp('repo.zipModsHelp', 'info')"
-                                                onmouseleave="window.hideTaskyHelp()"
+                                                data-tasky="repo.zipModsHelp"
+                                               
                                                 style="margin-left:6px; cursor:help; opacity:0.6;">
                                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
                                                     stroke="currentColor" stroke-width="2.5">
@@ -1711,7 +1474,7 @@
                                                 <label class="form-label" style="font-size:10px;"
                                                     data-i18n="admin.password">Admin Password</label>
                                                 <div style="position:relative; display:flex; align-items:center;">
-                                                    <form style="display:contents" autocomplete="off" onsubmit="return false"><input type="password" id="repo-export-server-pass"
+                                                    <form style="display:contents" autocomplete="off" data-no-submit="1"><input type="password" id="repo-export-server-pass"
                                                         class="form-input" value="admin"
                                                         style="font-size:12px; padding:5px; padding-right:30px; background:var(--bmm-bg-base); width:100%; border:1px solid var(--bmm-s05); border-radius:4px;" /></form>
                                                     <button type="button" id="toggle-repo-export-pass"
@@ -1730,11 +1493,11 @@
                                                 <label class="form-label" style="font-size:10px;"
                                                     data-i18n="repo.miniServerDownloadPassword">Download Password</label>
                                                 <div style="position:relative; display:flex; align-items:center;">
-                                                    <form style="display:contents" autocomplete="off" onsubmit="return false"><input type="password" id="repo-export-server-download-pass"
+                                                    <form style="display:contents" autocomplete="off" data-no-submit="1"><input type="password" id="repo-export-server-download-pass"
                                                         class="form-input" value="" placeholder="none"
                                                         style="font-size:12px; padding:5px; padding-right:30px; background:var(--bmm-bg-base); width:100%; border:1px solid var(--bmm-s05); border-radius:4px;" /></form>
                                                     <button type="button"
-                                                        onclick="const p=document.getElementById('repo-export-server-download-pass'); p.type = p.type==='password'?'text':'password';"
+                                                        data-toggle-password="#repo-export-server-download-pass"
                                                         style="position:absolute; right:8px; background:none; border:none; color:var(--text-secondary); cursor:pointer; padding:0; display:flex; align-items:center; z-index:5;">
                                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
                                                             stroke="currentColor" stroke-width="2">
@@ -2098,14 +1861,14 @@
                                         <div style="display:flex; gap:6px;">
                                             <!-- autocomplete off + a wrapping form: without it the browser
                                                  offers to save this as a site login. -->
-                                            <form style="display:contents" autocomplete="off" onsubmit="return false"><input
+                                            <form style="display:contents" autocomplete="off" data-no-submit="1"><input
                                                 type="password" id="repo-server-download-password" class="form-input"
                                                 autocomplete="new-password"
                                                 data-i18n-placeholder="repo.hostDownloadPasswordPlaceholder"
                                                 placeholder="Leave empty for an open repo"
                                                 style="flex:1; font-size:12px; padding:6px; background:var(--bmm-bg-base); border:1px solid var(--border);" /></form>
                                             <button type="button" class="btn btn-sm"
-                                                onclick="const p = document.getElementById('repo-server-download-password'); p.type = p.type === 'password' ? 'text' : 'password';"
+                                                data-toggle-password="#repo-server-download-password"
                                                 data-i18n="repo.showHide">Show</button>
                                         </div>
                                         <div style="font-size:10px; color:var(--text-muted); margin-top:4px;"
@@ -2242,11 +2005,11 @@
                                                 <span style="opacity:0.35;animation:pulse-text 1.5s infinite">…</span>
                                             </div>
                                             <button class="btn btn-ghost btn-sm" id="btn-copy-my-creator-id"
-                                                onmouseenter="window.showTaskyHelp('repo.creatorIdCopyTip','icon-copy')"
-                                                onmouseleave="window.hideTaskyHelp()"
+                                                data-tasky="repo.creatorIdCopyTip" data-tasky-icon="icon-copy"
+                                               
                                                 style="padding:0 9px;height:34px;border:1px solid rgba(188,116,255,0.25);color:var(--bmm-purple);flex-shrink:0;border-radius:7px;transition:background 0.15s;"
-                                                onmouseover="this.style.background='rgba(188,116,255,0.1)'"
-                                                onmouseout="this.style.background='transparent'">
+                                                data-hover="background:rgba(188,116,255,0.1)"
+                                                data-hover-out="background:transparent">
                                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
                                                     stroke="currentColor" stroke-width="2">
                                                     <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
@@ -2274,8 +2037,8 @@
                                                 <input type="text" class="form-input" id="repo-server-url" readonly
                                                     style="color:var(--cyan);background:var(--bmm-bg-base);font-family:var(--font-mono);font-size:12px;" />
                                                 <button class="btn btn-secondary btn-sm" id="btn-copy-repo-url"
-                                                    onmouseenter="window.showTaskyHelp('common.copyTip', 'icon-copy')"
-                                                    onmouseleave="window.hideTaskyHelp()" style="padding:0 10px;">
+                                                    data-tasky="common.copyTip" data-tasky-icon="icon-copy"
+                                                    style="padding:0 10px;">
                                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
                                                         stroke="currentColor" stroke-width="2">
                                                         <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
@@ -2303,8 +2066,8 @@
                                                     readonly
                                                     style="color:var(--accent);background:var(--bmm-bg-base);font-family:var(--font-mono);font-size:12px;" />
                                                 <button class="btn btn-secondary btn-sm" id="btn-copy-repo-public-url"
-                                                    onmouseenter="window.showTaskyHelp('common.copyTip', 'icon-copy')"
-                                                    onmouseleave="window.hideTaskyHelp()" style="padding:0 10px;">
+                                                    data-tasky="common.copyTip" data-tasky-icon="icon-copy"
+                                                    style="padding:0 10px;">
                                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
                                                         stroke="currentColor" stroke-width="2">
                                                         <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
@@ -2329,8 +2092,8 @@
                                                     readonly
                                                     style="color:var(--cyan);background:var(--bmm-bg-base);font-family:var(--font-mono);font-size:12px;" />
                                                 <button class="btn btn-secondary btn-sm" id="btn-copy-repo-tunnel-url"
-                                                    onmouseenter="window.showTaskyHelp('common.copyTip', 'icon-copy')"
-                                                    onmouseleave="window.hideTaskyHelp()" style="padding:0 10px;">
+                                                    data-tasky="common.copyTip" data-tasky-icon="icon-copy"
+                                                    style="padding:0 10px;">
                                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
                                                         stroke="currentColor" stroke-width="2">
                                                         <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
@@ -2368,8 +2131,8 @@
                                                 data-i18n-placeholder="repo.miniServerRepoPlaceholder" readonly
                                                 style="font-size:11px; flex:1; min-width:0;" />
                                             <button class="btn btn-secondary btn-sm" id="btn-pick-mini-server-repo"
-                                                onmouseenter="window.showTaskyHelp('repo.miniServerSelectRepoTip', 'icon-folder')"
-                                                onmouseleave="window.hideTaskyHelp()"
+                                                data-tasky="repo.miniServerSelectRepoTip" data-tasky-icon="icon-folder"
+                                               
                                                 style="padding:0 10px; height:28px; display:flex; align-items:center; justify-content:center;">
                                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
                                                     stroke="currentColor" stroke-width="2.5">
@@ -2382,8 +2145,8 @@
                                                 </svg>
                                             </button>
                                             <button class="btn btn-secondary btn-sm" id="btn-pick-mini-folder"
-                                                onmouseenter="window.showTaskyHelp('repo.miniServerSelectFolderTip', 'icon-folder')"
-                                                onmouseleave="window.hideTaskyHelp()"
+                                                data-tasky="repo.miniServerSelectFolderTip" data-tasky-icon="icon-folder"
+                                               
                                                 style="padding:0 10px; height:28px; display:flex; align-items:center; justify-content:center;">
                                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
                                                     stroke="currentColor" stroke-width="2.5">
@@ -2430,7 +2193,7 @@
                                                     data-i18n="repo.miniServerPassword">PASSWORD</span>
                                                 <div style="display:flex; align-items:center; gap:5px;">
                                                     <button
-                                                        onclick="const p = document.getElementById('repo-mini-server-password'); p.type = p.type === 'password' ? 'text' : 'password';"
+                                                        data-toggle-password="#repo-mini-server-password"
                                                         class="btn btn-sm"
                                                         style="height:24px; width:24px; padding:0; display:flex; align-items:center; justify-content:center; background:var(--bmm-s05); border-radius:4px;">
                                                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
@@ -2439,7 +2202,7 @@
                                                             <circle cx="12" cy="12" r="3" />
                                                         </svg>
                                                     </button>
-                                                    <form style="display:contents" autocomplete="off" onsubmit="return false"><input type="password" id="repo-mini-server-password"
+                                                    <form style="display:contents" autocomplete="off" data-no-submit="1"><input type="password" id="repo-mini-server-password"
                                                         class="form-input" value="admin"
                                                         style="width:80px; height:24px; font-size:11px; padding:0 8px; background:var(--bmm-bg-base); border:1px solid var(--bmm-s10); border-radius:4px; color:var(--warning); font-weight:700;"></form>
                                                 </div>
@@ -2453,7 +2216,7 @@
                                                     data-i18n="repo.miniServerDownloadPassword">DOWNLOAD PASSWORD</span>
                                                 <div style="display:flex; align-items:center; gap:5px;">
                                                     <button
-                                                        onclick="const p = document.getElementById('repo-mini-server-download-password'); p.type = p.type === 'password' ? 'text' : 'password';"
+                                                        data-toggle-password="#repo-mini-server-download-password"
                                                         class="btn btn-sm"
                                                         style="height:24px; width:24px; padding:0; display:flex; align-items:center; justify-content:center; background:var(--bmm-s05); border-radius:4px;">
                                                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
@@ -2462,7 +2225,7 @@
                                                             <circle cx="12" cy="12" r="3" />
                                                         </svg>
                                                     </button>
-                                                    <form style="display:contents" autocomplete="off" onsubmit="return false"><input type="password" id="repo-mini-server-download-password"
+                                                    <form style="display:contents" autocomplete="off" data-no-submit="1"><input type="password" id="repo-mini-server-download-password"
                                                         class="form-input" value="" placeholder="none"
                                                         style="width:80px; height:24px; font-size:11px; padding:0 8px; background:var(--bmm-bg-base); border:1px solid var(--bmm-s10); border-radius:4px; color:var(--warning); font-weight:700;"></form>
                                                 </div>
@@ -2540,10 +2303,10 @@
                                             <span data-i18n="repo.miniServerGenerate">GÉNÉRER LE SERVEUR</span>
                                         </button>
                                         <button class="btn btn-ghost btn-sm"
-                                            onclick="openDiagram('lightweight-architecture')"
+                                            data-act="openDiagram" data-act-args='["lightweight-architecture"]'
                                             style="width:40px; height:38px; padding:0; justify-content:center; color:var(--text-muted); border:1px solid var(--bmm-s08); border-radius:8px;"
-                                            onmouseenter="window.showTaskyHelp('nav.docsViewDiagramTip', 'help')"
-                                            onmouseleave="window.hideTaskyHelp()">
+                                            data-tasky="nav.docsViewDiagramTip" data-tasky-icon="help"
+                                           >
                                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
                                                 stroke="currentColor" stroke-width="2">
                                                 <path d="M12 2L2 7l10 5 10-5-10-5z" />
@@ -2629,7 +2392,7 @@
                                             <span data-i18n="repo.syncPassToggle">This repo has a download password</span>
                                         </button>
                                         <div id="repo-sync-pass-row" style="display:none;margin-top:6px;">
-                                            <form style="display:contents" autocomplete="off" onsubmit="return false"><input
+                                            <form style="display:contents" autocomplete="off" data-no-submit="1"><input
                                                 type="password" class="form-input" id="repo-sync-password"
                                                 autocomplete="new-password"
                                                 data-i18n-placeholder="repo.syncPassPlaceholder"
@@ -2647,7 +2410,7 @@
                                                 <span id="repo-sync-game-badge"
                                                     style="font-size:10px;color:var(--text-muted);text-transform:uppercase;"></span>
                                                 <button id="btn-clear-fetched-repo"
-                                                    style="display:flex;align-items:center;justify-content:center;width:20px;height:20px;padding:0;background:transparent;border:none;border-radius:4px;cursor:pointer;color:var(--text-secondary);opacity:0.65;flex-shrink:0;transition:opacity 0.15s,color 0.15s;" onmouseenter="this.style.opacity='1';this.style.color='var(--text-primary)'" onmouseleave="this.style.opacity='0.65';this.style.color='var(--text-secondary)'">
+                                                    style="display:flex;align-items:center;justify-content:center;width:20px;height:20px;padding:0;background:transparent;border:none;border-radius:4px;cursor:pointer;color:var(--text-secondary);opacity:0.65;flex-shrink:0;transition:opacity 0.15s,color 0.15s;" data-hover="opacity:1;color:var(--text-primary)" data-hover-out="opacity:0.65;color:var(--text-secondary)">
                                                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
                                                         stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
                                                         <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -2716,8 +2479,8 @@
                                                 <span class="checkmark"></span>
                                                 <span data-i18n="repo.syncAutoCheck">Check this repo when BMM starts</span>
                                                 <span class="help-icon"
-                                                    onmouseenter="window.showTaskyHelp('repo.syncAutoCheckHelp', 'info')"
-                                                    onmouseleave="window.hideTaskyHelp()"
+                                                    data-tasky="repo.syncAutoCheckHelp"
+                                                   
                                                     style="margin-left:6px; cursor:help; opacity:0.6;">
                                                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
                                                 </span>
@@ -2729,8 +2492,8 @@
                                                 <span class="checkmark"></span>
                                                 <span data-i18n="repo.syncAddRepoSource">Follow this repo for updates on the mods it installs</span>
                                                 <span class="help-icon"
-                                                    onmouseenter="window.showTaskyHelp('repo.syncAddRepoSourceHelp', 'info')"
-                                                    onmouseleave="window.hideTaskyHelp()"
+                                                    data-tasky="repo.syncAddRepoSourceHelp"
+                                                   
                                                     style="margin-left:6px; cursor:help; opacity:0.6;">
                                                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
                                                 </span>
@@ -2742,8 +2505,8 @@
                                                 <span class="checkmark"></span>
                                                 <span data-i18n="repo.syncKeepZipped">Keep zipped mods as .zip (don't extract)</span>
                                                 <span class="help-icon"
-                                                    onmouseenter="window.showTaskyHelp('repo.syncKeepZippedHelp', 'info')"
-                                                    onmouseleave="window.hideTaskyHelp()"
+                                                    data-tasky="repo.syncKeepZippedHelp"
+                                                   
                                                     style="margin-left:6px; cursor:help; opacity:0.6;">
                                                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
                                                 </span>
@@ -3108,7 +2871,7 @@
                                 {PU.4.LPU}</p>
 
                             <div id="credits-hero-version" class="credits-hero-version-pill">—</div>
-                            <button class="btn btn-primary" onclick="openStackModal()"
+                            <button class="btn btn-primary" data-act="openStackModal"
                                 style="margin: 15px auto 25px; padding: 10px 25px; border-radius: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; gap: 10px; cursor: pointer;">
                                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                     stroke-width="2.5">
@@ -3137,7 +2900,7 @@
 
                         <!-- CONTRIBUTORS SECTION -->
                         <div class="collapsible-v3" id="contributors-collapsible">
-                            <div class="collapsible-header" onclick="this.parentElement.classList.toggle('open')">
+                            <div class="collapsible-header" data-toggle-parent="open">
                                 <div style="display:flex; align-items:center; gap:12px;">
                                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)"
                                         stroke-width="2.5">
@@ -3332,7 +3095,7 @@
                                     </svg>
                                 </a>
 
-                                <a href="#" onclick="openLicenseModal()"
+                                <a href="#" data-act="openLicenseModal"
                                     class="credit-link-card credit-link-card-license">
                                     <div class="credit-icon-box credit-icon-box-license">
                                         <svg width="35" height="35" viewBox="0 0 24 24" fill="currentColor">
@@ -3349,7 +3112,7 @@
                                     </div>
                                 </a>
 
-                                <a href="#" onclick="openTosModal()" class="credit-link-card credit-link-card-eula">
+                                <a href="#" data-act="openTosModal" class="credit-link-card credit-link-card-eula">
                                     <div class="credit-icon-box credit-icon-box-eula">
                                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
                                             stroke="currentColor" stroke-width="2">
@@ -3364,7 +3127,7 @@
                                             Legal terms — Click to read</div>
                                     </div>
                                 </a>
-                                <a href="#" onclick="openPrivacyModal()" class="credit-link-card credit-link-card-eula">
+                                <a href="#" data-act="openPrivacyModal" class="credit-link-card credit-link-card-eula">
                                     <div class="credit-icon-box credit-icon-box-eula">
                                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
                                             stroke="currentColor" stroke-width="2">
@@ -3741,7 +3504,7 @@
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:6px;"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
                                     <span data-i18n="themes.openEditor">Open Theme Editor</span>
                                 </button>
-                                <button class="btn btn-secondary btn-sm" onclick="window.openThemeCatalog?.()">
+                                <button class="btn btn-secondary btn-sm" data-act="openThemeCatalog">
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:6px;"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
                                     <span data-i18n="themes.catalogue">Theme Catalogue</span>
                                 </button>
@@ -3769,7 +3532,7 @@
                                     </div>
                                     <label class="toggle-switch" style="flex-shrink:0">
                                         <input type="checkbox" id="toggle-tasky-visible" checked
-                                            onchange="window.applyTaskySettings()" />
+                                            data-act-change="applyTaskySettings" />
                                         <span class="toggle-slider"></span>
                                     </label>
                                 </div>
@@ -3802,7 +3565,7 @@
                                     </div>
                                     <label class="toggle-switch" style="flex-shrink:0">
                                         <input type="checkbox" id="toggle-tasky-animation" checked
-                                            onchange="window.applyTaskySettings()" />
+                                            data-act-change="applyTaskySettings" />
                                         <span class="toggle-slider"></span>
                                     </label>
                                 </div>
@@ -3818,7 +3581,7 @@
                                     </div>
                                     <label class="toggle-switch" style="flex-shrink:0">
                                         <input type="checkbox" id="toggle-tasky-tooltip" checked
-                                            onchange="window.applyTaskySettings()" />
+                                            data-act-change="applyTaskySettings" />
                                         <span class="toggle-slider"></span>
                                     </label>
                                 </div>
@@ -3835,7 +3598,7 @@
                                     </div>
                                     <label class="toggle-switch" style="flex-shrink:0">
                                         <input type="checkbox" id="toggle-bmm-tips" checked
-                                            onchange="window.applyTaskySettings()" />
+                                            data-act-change="applyTaskySettings" />
                                         <span class="toggle-slider"></span>
                                     </label>
                                 </div>
@@ -3853,7 +3616,7 @@
                                         data-i18n="settings.taskyOpacityDesc">Ajuste l'opacité des bulles d'aide (100% =
                                         totalement visible).</div>
                                     <input type="range" id="tasky-opacity-slider" min="10" max="100" value="100"
-                                        step="5" oninput="window.applyTaskySettings()"
+                                        step="5" data-act-input="applyTaskySettings"
                                         style="width:100%;accent-color:var(--accent);cursor:pointer" />
                                 </div>
                                 <!-- Sound effects toggle (moved from Sound & Animations card) -->
@@ -3994,7 +3757,7 @@
                             </div>
 
                             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-                                <button class="btn btn-secondary btn-sm" onclick="window.showHashingStats()">
+                                <button class="btn btn-secondary btn-sm" data-act="showHashingStats">
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                         stroke-width="2">
                                         <path d="M21.21 15.89A10 10 0 1 1 8 2.83" />
@@ -4002,7 +3765,7 @@
                                     </svg>
                                     <span data-i18n="settings.shaStatsBtn">Hashing Progress</span>
                                 </button>
-                                <button class="btn btn-secondary btn-sm" onclick="window.recalculateAllHashesPrompt()">
+                                <button class="btn btn-secondary btn-sm" data-act="recalculateAllHashesPrompt">
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                         stroke-width="2">
                                         <path d="M23 4v6h-6M1 20v-6h6" />
@@ -4137,13 +3900,13 @@
 
                             <div style="display:flex;gap:8px;align-items:center">
                                 <div style="position:relative;flex:1">
-                                    <form style="display:contents" autocomplete="off" onsubmit="return false"><input type="password" id="setting-github-pat"
+                                    <form style="display:contents" autocomplete="off" data-no-submit="1"><input type="password" id="setting-github-pat"
                                         data-i18n-placeholder="settings.githubPatPlaceholder"
                                         placeholder="ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
                                         style="width:100%;padding:9px 40px 9px 12px;border-radius:8px;background:var(--bmm-bg-base);color:var(--bmm-text-primary);border:1px solid var(--border);font-family:var(--font-mono);font-size:12px;box-sizing:border-box;transition:border 0.2s" /></form>
                                     <button id="btn-toggle-pat-visibility"
-                                        onmouseenter="window.showTaskyHelp('repo.togglePatTip', 'help')"
-                                        onmouseleave="window.hideTaskyHelp()" aria-label="Toggle PAT visibility"
+                                        data-tasky="repo.togglePatTip" data-tasky-icon="help"
+                                        aria-label="Toggle PAT visibility"
                                         style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-muted);padding:2px;display:flex;align-items:center">
                                         <svg id="pat-eye-icon" width="15" height="15" viewBox="0 0 24 24" fill="none"
                                             stroke="currentColor" stroke-width="2">
@@ -4178,8 +3941,8 @@
                                 <div id="pat-status-msg" style="font-size:11px;color:var(--text-muted);min-height:16px">
                                 </div>
                                 <button class="btn btn-ghost btn-sm" id="btn-pat-need-help"
-                                    onmouseenter="window.showTaskyHelp('settings.githubPatHelpTooltip', 'icon-info')"
-                                    onmouseleave="window.hideTaskyHelp()" onclick="window.openHelpTo('faq.qPat')"
+                                    data-tasky="settings.githubPatHelpTooltip" data-tasky-icon="icon-info"
+                                    data-act="openHelpTo" data-act-args='["faq.qPat"]'
                                     style="font-size:11px;color:var(--accent);gap:5px;padding:4px 8px">
                                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                         stroke-width="2.5">
@@ -4228,8 +3991,8 @@
                                     <span data-i18n="storage.openManager">Ouvrir le Gestionnaire de Stockage</span>
                                 </button>
                                 <button class="btn btn-ghost btn-sm" id="btn-storage-faq"
-                                    onmouseenter="window.showTaskyHelp('settings.storageHelpTooltip', 'icon-info')"
-                                    onmouseleave="window.hideTaskyHelp()" onclick="window.openHelpTo('faq.qIo')"
+                                    data-tasky="settings.storageHelpTooltip" data-tasky-icon="icon-info"
+                                    data-act="openHelpTo" data-act-args='["faq.qIo"]'
                                     style="font-size:11px;color:var(--accent);gap:5px;padding:4px 8px">
                                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                         stroke-width="2.5">
@@ -4576,15 +4339,15 @@
                                 <div class="sic-value" id="sic-creator-id">…</div>
                                 <div class="sic-actions">
                                     <button class="sic-btn sic-reveal-btn" id="btn-sic-reveal-creator" data-target="sic-creator-id"
-                                        onmouseenter="window.showTaskyHelp('settings.identity.revealTip','icon-lock')"
-                                        onmouseleave="window.hideTaskyHelp()">
+                                        data-tasky="settings.identity.revealTip" data-tasky-icon="icon-lock"
+                                       >
                                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" id="sic-eye-creator">
                                             <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
                                         </svg>
                                     </button>
                                     <button class="sic-btn" id="btn-sic-copy-creator"
-                                        onmouseenter="window.showTaskyHelp('settings.identity.copyTip','icon-copy')"
-                                        onmouseleave="window.hideTaskyHelp()">
+                                        data-tasky="settings.identity.copyTip" data-tasky-icon="icon-copy"
+                                       >
                                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                             <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
                                         </svg>
@@ -4598,22 +4361,22 @@
                                 <div class="sic-value" id="sic-api-token">…</div>
                                 <div class="sic-actions">
                                     <button class="sic-btn sic-reveal-btn" id="btn-sic-reveal-token" data-target="sic-api-token"
-                                        onmouseenter="window.showTaskyHelp('settings.identity.revealTip','icon-lock')"
-                                        onmouseleave="window.hideTaskyHelp()">
+                                        data-tasky="settings.identity.revealTip" data-tasky-icon="icon-lock"
+                                       >
                                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" id="sic-eye-token">
                                             <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
                                         </svg>
                                     </button>
                                     <button class="sic-btn" id="btn-sic-copy-token"
-                                        onmouseenter="window.showTaskyHelp('settings.identity.copyTip','icon-copy')"
-                                        onmouseleave="window.hideTaskyHelp()">
+                                        data-tasky="settings.identity.copyTip" data-tasky-icon="icon-copy"
+                                       >
                                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                             <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
                                         </svg>
                                     </button>
                                     <button class="sic-btn danger" id="btn-sic-reset-token"
-                                        onmouseenter="window.showTaskyHelp('settings.identity.resetTokenTip','icon-warning')"
-                                        onmouseleave="window.hideTaskyHelp()">
+                                        data-tasky="settings.identity.resetTokenTip" data-tasky-icon="icon-warning"
+                                       >
                                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                             <path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
                                         </svg>
@@ -4627,8 +4390,8 @@
                                 <div class="sic-value revealed" id="sic-api-url" style="filter:none;pointer-events:auto;color:var(--cyan);">http://127.0.0.1:51274</div>
                                 <div class="sic-actions">
                                     <button class="sic-btn" id="btn-sic-copy-url"
-                                        onmouseenter="window.showTaskyHelp('settings.identity.copyTip','icon-copy')"
-                                        onmouseleave="window.hideTaskyHelp()">
+                                        data-tasky="settings.identity.copyTip" data-tasky-icon="icon-copy"
+                                       >
                                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                             <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
                                         </svg>
@@ -4641,13 +4404,13 @@
                                 <span class="sic-label" data-i18n="settings.identity.apiPort">API Port</span>
                                 <input type="number" id="sic-api-port" min="1" max="65535" value="51274"
                                     style="width:110px;background:var(--bmm-s04);border:1px solid var(--border);border-radius:7px;color:var(--text-primary);padding:5px 9px;font-size:12px;font-family:var(--font-mono);"
-                                    onmouseenter="window.showTaskyHelp('settings.identity.apiPortTip','icon-help')"
-                                    onmouseleave="window.hideTaskyHelp()">
+                                    data-tasky="settings.identity.apiPortTip" data-tasky-icon="icon-help"
+                                   >
                                 <div class="sic-actions">
                                     <button class="sic-btn" id="btn-sic-save-port" data-i18n="settings.identity.apiPortSave">Apply</button>
                                     <button class="sic-btn" id="btn-sic-reset-port" data-i18n-tooltip="settings.identity.apiPortReset"
-                                        onmouseenter="window.showTaskyHelp('settings.identity.apiPortReset','icon-help')"
-                                        onmouseleave="window.hideTaskyHelp()">
+                                        data-tasky="settings.identity.apiPortReset" data-tasky-icon="icon-help"
+                                       >
                                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                             <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>
                                         </svg>
@@ -4790,8 +4553,8 @@
                                     <div style="display:flex; gap:6px;">
                                         <button id="bh-history-clear" class="btn btn-xs btn-ghost"
                                             style="font-size:9px; height:20px; color:var(--bmm-danger)"
-                                            onmouseenter="window.showTaskyHelp('betahub.clearHistoryHelp', 'warning')"
-                                            onmouseleave="window.hideTaskyHelp()">
+                                            data-tasky="betahub.clearHistoryHelp" data-tasky-icon="warning"
+                                           >
                                             <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
                                                 stroke="currentColor" stroke-width="2.5" style="margin-right:4px">
                                                 <path
@@ -4897,8 +4660,8 @@
                             <p style="font-size:10px; color:var(--text-muted); margin-top:12px">
                                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                     stroke-width="2" style="vertical-align:middle; margin-right:4px; cursor:help;"
-                                    onmouseenter="window.showTaskyHelp('settings.debugWarn', 'alert')"
-                                    onmouseleave="window.hideTaskyHelp()">
+                                    data-tasky="settings.debugWarn" data-tasky-icon="alert"
+                                   >
                                     <circle cx="12" cy="12" r="10" />
                                     <line x1="12" y1="8" x2="12" y2="12" />
                                     <line x1="12" y1="16" x2="12.01" y2="16" />
@@ -4993,8 +4756,8 @@
                         </p>
 
                         <div id="crash-path-container" class="bh-crash-card"
-                            onmouseenter="window.showTaskyHelp('crash.openFileTip', 'info')"
-                            onmouseleave="window.hideTaskyHelp()">
+                            data-tasky="crash.openFileTip"
+                           >
                             <div class="bh-crash-icon-box"
                                 style="width:32px;height:32px;background:var(--bmm-s05);color:var(--text-secondary)">
                                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -5087,7 +4850,7 @@
                     </div>
                     <!-- Body -->
                     <div class="modal-body" style="max-height:75vh;overflow-y:auto;padding:28px">
-                        <form id="betahub-feedback-form" autocomplete="off" onsubmit="return false">
+                        <form id="betahub-feedback-form" autocomplete="off" data-no-submit="1">
                             <div style="display:grid;grid-template-columns:1fr 260px;gap:32px">
                                 <!-- Left: Form -->
                                 <div style="display:flex;flex-direction:column;gap:20px">
@@ -5325,7 +5088,7 @@
                     </div>
                     <!-- Body -->
                     <div class="modal-body" style="padding:28px;overflow-y:auto">
-                        <form id="betahub-bugreport-form" autocomplete="off" onsubmit="return false">
+                        <form id="betahub-bugreport-form" autocomplete="off" data-no-submit="1">
                             <div style="display:grid;grid-template-columns:1fr 280px;gap:28px">
                                 <!-- Left: Details -->
                                 <div style="display:flex;flex-direction:column;gap:24px">
@@ -5402,10 +5165,10 @@
                                                 <div style="display:flex;gap:8px">
                                                     <button type="button" class="bh-add-file-btn"
                                                         id="bh-bug-screenshots-add"
-                                                        onclick="document.getElementById('bh-bug-screenshots').click()"
+                                                        data-click-proxy="#bh-bug-screenshots"
                                                         data-i18n="betahub.addImage">+ Image</button>
                                                     <button type="button" class="bh-add-file-btn" id="bh-bug-video-add"
-                                                        onclick="document.getElementById('bh-bug-video').click()"
+                                                        data-click-proxy="#bh-bug-video"
                                                         data-i18n="betahub.addVideo">+ Video</button>
                                                 </div>
                                                 <input id="bh-bug-screenshots" type="file" accept="image/*" multiple
@@ -6104,8 +5867,8 @@
                         L'ordre d'activation déterminera quel mod a la priorité. Voulez-vous continuer ?</p>
                     <label class="checkbox-container"
                         style="margin-top:20px; display:flex; align-items:center; justify-content:center; gap:10px; font-size:13px; color:var(--text-secondary); cursor:pointer; padding:10px; border-radius:10px; transition:background 0.2s"
-                        onmouseover="this.style.background='rgba(255,255,255,0.03)'"
-                        onmouseout="this.style.background='transparent'">
+                        data-hover="background:rgba(255,255,255,0.03)"
+                        data-hover-out="background:transparent">
                         <input type="checkbox" id="conflict-ignore-forever"
                             style="width:18px; height:18px; cursor:pointer" />
                         <span data-i18n="conflict.dontShow">Ne plus m'avertir</span>
@@ -6163,8 +5926,8 @@
 
                     <label class="checkbox-container"
                         style="margin-top:20px; padding:12px; border-radius:10px; background:var(--bmm-s02); display:flex; align-items:center; gap:12px; cursor:pointer; transition:all 0.2s; user-select:none"
-                        onmouseover="this.style.background='rgba(255,255,255,0.05)'"
-                        onmouseout="this.style.background='rgba(255,255,255,0.02)'">
+                        data-hover="background:rgba(255,255,255,0.05)"
+                        data-hover-out="background:rgba(255,255,255,0.02)">
                         <input type="checkbox" id="duplicate-folder-ignore-forever"
                             style="width:20px; height:20px; cursor:pointer" />
                         <span data-i18n="prof.duplicateFolderDontShow"
@@ -6433,7 +6196,7 @@
                         </div>
                     </div>
                     <div style="display:flex;align-items:center;gap:8px;">
-                        <button id="btn-refresh-repo-browser" data-tooltip="Refresh list" aria-label="Refresh list" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;background:var(--bmm-s05);border:1px solid var(--bmm-s10);border-radius:8px;cursor:pointer;color:var(--text-muted);transition:all 0.15s;" onmouseover="this.style.color='var(--text-primary)'" onmouseout="this.style.color='var(--text-muted)'">
+                        <button id="btn-refresh-repo-browser" data-tooltip="Refresh list" aria-label="Refresh list" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;background:var(--bmm-s05);border:1px solid var(--bmm-s10);border-radius:8px;cursor:pointer;color:var(--text-muted);transition:all 0.15s;" data-hover="color:var(--text-primary)" data-hover-out="color:var(--text-muted)">
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.36"/></svg>
                         </button>
                         <button class="modal-close" data-close="modal-repo-browser">
@@ -6452,9 +6215,9 @@
                         <div id="quicklink-card-1" class="quicklink-card"
                             data-url="https://discord.com/invite/CTaaEF9R75" data-link-key="discord"
                             style="display:none;flex:1;min-width:180px;cursor:pointer;border-radius:11px;border:1px solid rgba(88,101,242,0.35);background:linear-gradient(135deg,rgba(88,101,242,0.12) 0%,rgba(88,101,242,0.04) 100%);transition:all 0.2s ease;"
-                            onclick="window.__TAURI__?.shell?.open(this.dataset.url) || window.open(this.dataset.url,'_blank')"
-                            onmouseenter="this.style.transform='translateY(-1px)';this.style.boxShadow='0 6px 20px rgba(88,101,242,0.25)'"
-                            onmouseleave="this.style.transform='';this.style.boxShadow=''">
+                            data-open-url="1"
+                            data-hover="transform:translateY(-1px);box-shadow:0 6px 20px rgba(88,101,242,0.25)"
+                            data-hover-out="transform:;box-shadow:">
                             <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;">
                                 <div
                                     style="width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,#5865F2 0%,#7289da 100%);border:1px solid rgba(88,101,242,0.5);display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 2px 8px rgba(88,101,242,0.35);">
@@ -6479,9 +6242,9 @@
                         </div>
                         <div id="quicklink-card-2" class="quicklink-card" data-url="https://ko-fi.com/bettercommunity" data-link-key="kofi_community"
                             style="display:none;flex:1;min-width:180px;cursor:pointer;border-radius:11px;border:1px solid rgba(245,197,24,0.3);background:linear-gradient(135deg,rgba(245,197,24,0.1) 0%,rgba(245,197,24,0.03) 100%);transition:all 0.2s ease;"
-                            onclick="window.__TAURI__?.shell?.open(this.dataset.url) || window.open(this.dataset.url,'_blank')"
-                            onmouseenter="this.style.transform='translateY(-1px)';this.style.boxShadow='0 6px 18px rgba(245,197,24,0.2)'"
-                            onmouseleave="this.style.transform='';this.style.boxShadow=''">
+                            data-open-url="1"
+                            data-hover="transform:translateY(-1px);box-shadow:0 6px 18px rgba(245,197,24,0.2)"
+                            data-hover-out="transform:;box-shadow:">
                             <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;">
                                 <div
                                     style="width:34px;height:34px;border-radius:9px;overflow:hidden;border:1px solid rgba(245,197,24,0.4);flex-shrink:0;box-shadow:0 2px 8px rgba(245,197,24,0.2);">
@@ -6539,13 +6302,13 @@
                                     </svg>
                                     <input type="text" id="repo-browser-search" placeholder="Search repositories..."
                                         style="width:100%;padding:7px 10px 7px 30px;background:var(--bmm-s04);border:1px solid var(--bmm-s08);border-radius:8px;color:var(--text-primary);font-size:12px;outline:none;transition:border-color 0.15s;box-sizing:border-box;"
-                                        onfocus="this.style.borderColor='rgba(99,102,241,0.4)'"
-                                        onblur="this.style.borderColor='rgba(255,255,255,0.08)'">
+                                        data-focus="border-color:rgba(99,102,241,0.4)"
+                                        data-blur="border-color:rgba(255,255,255,0.08)">
                                 </div>
                                 <select id="repo-browser-region-filter"
                                     style="padding:7px 10px;background:var(--bmm-s04);border:1px solid var(--bmm-s08);border-radius:8px;color:var(--text-secondary);font-size:12px;outline:none;cursor:pointer;transition:border-color 0.15s;"
-                                    onfocus="this.style.borderColor='rgba(99,102,241,0.4)'"
-                                    onblur="this.style.borderColor='rgba(255,255,255,0.08)'">
+                                    data-focus="border-color:rgba(99,102,241,0.4)"
+                                    data-blur="border-color:rgba(255,255,255,0.08)">
                                     <option value="all">All Regions</option>
                                     <option value="EU">Europe</option>
                                     <option value="US">North America</option>
@@ -6556,8 +6319,8 @@
                                 </select>
                                 <select id="repo-browser-whitelist-filter"
                                     style="padding:7px 10px;background:var(--bmm-s04);border:1px solid var(--bmm-s08);border-radius:8px;color:var(--text-secondary);font-size:12px;outline:none;cursor:pointer;transition:border-color 0.15s;"
-                                    onfocus="this.style.borderColor='rgba(99,102,241,0.4)'"
-                                    onblur="this.style.borderColor='rgba(255,255,255,0.08)'">
+                                    data-focus="border-color:rgba(99,102,241,0.4)"
+                                    data-blur="border-color:rgba(255,255,255,0.08)">
                                     <option value="all" data-i18n="srv.filterAllServers">All servers</option>
                                     <option value="whitelist" data-i18n="srv.filterWhitelistOn">Whitelist ON</option>
                                     <option value="no-whitelist" data-i18n="srv.filterNoWhitelist">No whitelist</option>
@@ -6796,8 +6559,8 @@
                     </div>
                     <div style="display:flex;align-items:center;gap:12px">
                         <button class="btn-docs-util" id="btn-docs-reset-zoom"
-                            onmouseenter="window.showTaskyHelp('benchmark.resetZoomTip', 'refresh')"
-                            onmouseleave="window.hideTaskyHelp()">
+                            data-tasky="benchmark.resetZoomTip" data-tasky-icon="refresh"
+                           >
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="2">
                                 <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
@@ -7452,7 +7215,7 @@
                         </div>
                     </div>
                     <button class="modal-close"
-                        onclick="document.getElementById('modal-mapper-input').classList.remove('open')"
+                        data-close-modal="#modal-mapper-input"
                         style="top: 22px; right: 22px;">&times;</button>
                 </div>
                 <div class="modal-body" style="padding: 30px 28px;">
@@ -7476,14 +7239,14 @@
         </div>
 
         <!-- ══ Steam-style App Picker for Launchpack ══ -->
-        <div id="modal-app-picker" class="modal-generic-overlay" onclick="if(event.target===this)this.classList.remove('open')" style="z-index:10010;">
+        <div id="modal-app-picker" class="modal-generic-overlay" data-backdrop-close="1" style="z-index:10010;">
             <div class="modal glass" style="width:700px;max-width:95vw;max-height:88vh;display:flex;flex-direction:column;">
                 <div class="modal-header" style="padding:18px 24px 14px;border-bottom:1px solid var(--bmm-s06);display:flex;align-items:center;justify-content:space-between;">
                     <div>
                         <div style="font-size:15px;font-weight:800;color:var(--text-bright);" data-i18n="settings.appPicker.title">Ajouter une application</div>
                         <div style="font-size:11px;color:var(--text-muted);margin-top:2px;" data-i18n="settings.appPicker.subtitle">Sélectionnez un ou plusieurs programmes à ajouter au Launch Pack.</div>
                     </div>
-                    <button class="modal-close" onclick="document.getElementById('modal-app-picker').classList.remove('open')" style="position:static;font-size:20px;line-height:1;">&times;</button>
+                    <button class="modal-close" data-close-modal="#modal-app-picker" style="position:static;font-size:20px;line-height:1;">&times;</button>
                 </div>
                 <!-- Search -->
                 <div style="padding:10px 16px;border-bottom:1px solid var(--bmm-s05);">
@@ -7514,7 +7277,7 @@
                 <div style="padding:12px 20px;border-top:1px solid var(--bmm-s06);display:flex;align-items:center;gap:10px;background:var(--bmm-bg-base);">
                     <button class="btn btn-secondary btn-sm" id="app-picker-browse" style="font-size:11px;" data-i18n="settings.appPicker.browse">Parcourir…</button>
                     <span id="app-picker-sel-count" style="font-size:11px;color:var(--text-muted);flex:1;"></span>
-                    <button class="btn btn-ghost btn-sm" onclick="document.getElementById('modal-app-picker').classList.remove('open')" style="font-size:11px;" data-i18n="settings.appPicker.cancel">Annuler</button>
+                    <button class="btn btn-ghost btn-sm" data-close-modal="#modal-app-picker" style="font-size:11px;" data-i18n="settings.appPicker.cancel">Annuler</button>
                     <button class="btn btn-primary btn-sm" id="app-picker-confirm" disabled style="font-size:11px;" data-i18n="settings.appPicker.confirm">Ajouter la sélection</button>
                 </div>
             </div>
@@ -7522,13 +7285,13 @@
 
         <!-- Modal for Launch Packs -->
         <div id="modal-launchpack" class="modal-generic-overlay"
-            onclick="if(event.target === this) this.classList.remove('open')">
+            data-backdrop-close="1">
             <div class="modal glass" style="width: 500px; max-width: 95vw;">
                 <div class="modal-header">
                     <h2 data-i18n="settings.launchPackModalTitle"
                         style="margin: 0; font-size: 1.2rem; color: var(--text-main);">Créer un Launch Pack</h2>
                     <button class="modal-close"
-                        onclick="document.getElementById('modal-launchpack').classList.remove('open')">&times;</button>
+                        data-close-modal="#modal-launchpack">&times;</button>
                 </div>
                 <div class="modal-body" style="padding: 20px 28px; display:flex; flex-direction:column; gap:20px;">
                     <!-- Name -->
@@ -7584,7 +7347,7 @@
                 <div class="modal-footer"
                     style="padding: 16px 28px; background: var(--bmm-bg-base); display: flex; justify-content: flex-end; gap: 12px;">
                     <button class="btn btn-ghost btn-sm"
-                        onclick="document.getElementById('modal-launchpack').classList.remove('open')"
+                        data-close-modal="#modal-launchpack"
                         data-i18n="common.cancel">Annuler</button>
                     <button class="btn btn-primary btn-sm" id="lp-btn-confirm"
                         data-i18n="settings.launchPackBtnCreate">Créer le Pack</button>
@@ -7594,7 +7357,7 @@
 
         <!-- Modal for Launch Pack Deletion -->
         <div id="modal-launchpack-delete" class="modal-generic-overlay"
-            onclick="if(event.target === this) this.classList.remove('open')">
+            data-backdrop-close="1">
             <div class="modal glass"
                 style="width: 420px; max-width: 90vw; border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 20px; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);">
                 <div class="modal-header"
@@ -7618,7 +7381,7 @@
                         </div>
                     </div>
                     <button class="modal-close"
-                        onclick="document.getElementById('modal-launchpack-delete').classList.remove('open')"
+                        data-close-modal="#modal-launchpack-delete"
                         style="top: 24px; right: 24px;">&times;</button>
                 </div>
                 <div class="modal-body" style="padding: 30px 28px;">
@@ -7646,7 +7409,7 @@
                 <div class="modal-footer"
                     style="padding: 20px 28px; background: var(--bmm-bg-base); display: flex; justify-content: flex-end; gap: 14px;">
                     <button class="btn btn-ghost"
-                        onclick="document.getElementById('modal-launchpack-delete').classList.remove('open')"
+                        data-close-modal="#modal-launchpack-delete"
                         data-i18n="common.cancel"
                         style="font-weight: 600; font-size: 0.9rem; color: var(--text-muted);">Annuler</button>
                     <button id="lp-btn-delete-confirm" data-i18n="settings.launchPackDeleteBtn" class="btn"
@@ -7739,7 +7502,7 @@
                         </div>
                     </div>
                     <button class="modal-close"
-                        onclick="document.getElementById('modal-mapper-confirm').classList.remove('open')"
+                        data-close-modal="#modal-mapper-confirm"
                         style="top: 22px; right: 22px;">&times;</button>
                 </div>
                 <div class="modal-body" style="padding: 30px 28px;">
@@ -7760,11 +7523,11 @@
 
         <!-- Modals moved inside container to avoid bleeding -->
         <div id="modal-contributor-detail" class="modal-generic-overlay"
-            onclick="if(event.target === this) this.classList.remove('open')">
+            data-backdrop-close="1">
             <div class="modal glass"
                 style="width: 700px; max-width: 95vw; border-radius: 28px; border: 1px solid var(--bmm-s15); box-shadow: 0 30px 90px rgba(0, 0, 0, 0.7); position: relative;">
                 <button class="modal-close"
-                    onclick="document.getElementById('modal-contributor-detail').classList.remove('open')"
+                    data-close-modal="#modal-contributor-detail"
                     style="position: absolute; top: 20px; right: 20px; width: 36px; height: 36px; border-radius: 12px; background: var(--bmm-s05); color: var(--bmm-text-secondary); display: flex; align-items: center; justify-content: center; transition: all 0.2s; border: none; cursor: pointer; z-index: 10;">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
                         stroke-linecap="round" stroke-linejoin="round">
@@ -7779,10 +7542,10 @@
         </div>
 
         <div id="modal-stack" class="modal-generic-overlay"
-            onclick="if(event.target === this) this.classList.remove('open')">
+            data-backdrop-close="1">
             <div class="modal glass"
                 style="width: 1080px; max-width: 95vw; max-height: 88vh; display: flex; flex-direction: column; border-radius: 24px; border: 1px solid var(--bmm-s15); box-shadow: 0 30px 90px rgba(0, 0, 0, 0.7); position: relative;">
-                <button class="modal-close" onclick="document.getElementById('modal-stack').classList.remove('open')"
+                <button class="modal-close" data-close-modal="#modal-stack"
                     style="position: absolute; top: 20px; right: 20px; width: 36px; height: 36px; border-radius: 12px; background: var(--bmm-s05); color: var(--bmm-text-muted); display: flex; align-items: center; justify-content: center; transition: all 0.2s; border: none; cursor: pointer; z-index: 10;">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
                         stroke-linecap="round" stroke-linejoin="round">
@@ -7858,50 +7621,7 @@
     </div>
 
     <!-- ─── BMM Copy Helper ─────────────────────────────────────────────────── -->
-    <script>
-        (function () {
-            var _blocks = {
-                'start-bat': '@echo off\r\ntitle BMM Server (Node.js)\r\necho Installing dependencies...\r\ncall npm install\r\nif %errorlevel% neq 0 (\r\n    echo [ERROR] Failed to install dependencies. Make sure Node.js and NPM are installed.\r\n    pause\r\n    exit /b\r\n)\r\necho Starting server...\r\ncall npm start\r\npause',
-                'start-sh': '#!/bin/bash\necho "Installing dependencies..."\nnpm install\nif [ $? -ne 0 ]; then\n    echo "[ERROR] Failed to install dependencies. Make sure Node.js and NPM are installed."\n    exit 1\nfi\necho "Starting server..."\nnpm start',
-                'repo-json': '{\n  "port": 8080,\n  "upload_limit_kb": 0,\n  "password_hash": "$argon2id$v=19$...",\n  "whitelist": [],\n  "banned": [],\n  "creator_id": "<hardware-derived, auto-generated>",\n  "mods": [\n    {\n      "name": "ExampleMod",\n      "version": "1.0.0",\n      "file": "mods/ExampleMod-1.0.0.zip",\n      "sha256": "abc123def456...",\n      "size": 1048576,\n      "required": true\n    }\n  ]\n}',
-                'docker-compose': 'services:\n  bmm-server:\n    image: ghcr.io/freeproject089/bettermods-server:latest\n    ports:\n      - "8080:8080"\n    volumes:\n      - ./data:/app/data\n    environment:\n      - BMM_PORT=8080\n      - BMM_SEED=your_secret_seed\n    restart: unless-stopped',
-                'docker-up': 'docker compose up -d',
-                'ngrok': 'ngrok http 8080',
-                'cloudflare': 'cloudflared tunnel run --token YOUR_CLOUDFLARE_TOKEN',
-                'docker-update': 'docker compose pull\ndocker compose up -d\ndocker image prune -f'
-            };
-            var _svgCopy = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy';
-
-            window.bmmCopy = function (btn, key) {
-                var text = _blocks[key] !== undefined ? _blocks[key] : key;
-                function ok() {
-                    btn.textContent = '✓ Copied';
-                    setTimeout(function () { btn.innerHTML = _svgCopy; }, 2000);
-                }
-                if (window.__TAURI__ && window.__TAURI__.clipboard) {
-                    window.__TAURI__.clipboard.writeText(text).then(ok).catch(function () {
-                        navigator.clipboard && navigator.clipboard.writeText(text).then(ok);
-                    });
-                } else if (navigator.clipboard) {
-                    navigator.clipboard.writeText(text).then(ok).catch(function () {
-                        _fallback(text, ok);
-                    });
-                } else {
-                    _fallback(text, ok);
-                }
-            };
-
-            function _fallback(text, ok) {
-                var ta = document.createElement('textarea');
-                ta.value = text;
-                ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0;pointer-events:none';
-                document.body.appendChild(ta);
-                ta.focus(); ta.select();
-                try { document.execCommand('copy'); ok(); } catch (e) { }
-                document.body.removeChild(ta);
-            }
-        })();
-    </script>
+    <script src="copy-blocks.js"></script>
 
 </body>
 

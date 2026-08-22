@@ -9,7 +9,7 @@ import { toast } from '../../ui/app.js';
 import { updateDiscordStatus } from '../settings/settings.js';
 import { refreshMods, selectMod, closeModDetail } from './mods.js';
 import { registerSingleModOp, isCancelledOp, consumeAndClearOp } from './mods-actions.js';
-import { escHtml, escJs, truncate } from '../../core/utils.js';
+import { escHtml, truncate } from '../../core/utils.js';
 import { dispatchBmmAction, BMM_ACTIONS } from '../../ui/tutorial-events.js';
 const S = new Proxy(appState.state, {
     get(target, prop) { return target[prop]; },
@@ -702,7 +702,8 @@ export function updateCardState(card, mod) {
         // Update tooltip
         const tooltipKey = isInvalid ? 'hashes.status.invalid' : (isMissing ? 'hashes.status.missing' : 'hashes.status.verified');
         const tooltipIcon = isInvalid ? 'alert' : 'shield';
-        shaIcon.setAttribute('onmouseenter', `window.showTaskyHelp('${tooltipKey}', '${tooltipIcon}')`);
+        shaIcon.dataset.tasky = tooltipKey;
+        shaIcon.dataset.taskyIcon = tooltipIcon;
     }
     // Update text content to reflect saved changes immediately
     const updateTextIfChanged = (selector, newText) => {
@@ -719,9 +720,12 @@ export function updateCardState(card, mod) {
         const authorNameEl = authorContainer.querySelector('.mod-author-name');
         if (authorNameEl)
             authorNameEl.textContent = truncate(mod.author || '', 50);
-        // Use escJs only (not escAttr): setAttribute bypasses the HTML parser so
-        // &quot; would remain literal. Single-quoted JS strings don't need " escaped.
-        authorContainer.setAttribute('onmouseenter', `window.showTaskyHelp('${escJs(mod.author || '')}', 'user', true)`);
+        // No escaping at all now: the value is assigned to a dataset property, so it never
+        // passes through the HTML parser OR a JavaScript parser. The old comment here explained
+        // which of the two escapes to use — the answer turned out to be neither.
+        authorContainer.dataset.tasky = mod.author || '';
+        authorContainer.dataset.taskyIcon = 'user';
+        authorContainer.dataset.taskyLiteral = '1';
     }
     // Update Tags
     const tagsContainer = card.querySelector('.mod-tags-container');

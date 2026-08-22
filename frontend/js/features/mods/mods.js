@@ -759,10 +759,9 @@ function _applyStickyState(view, btn, isSticky) {
     btn.style.opacity = isSticky ? '1' : '0.45';
     btn.style.color = isSticky ? 'var(--accent)' : '';
     // Update the onmouseenter so Tasky shows the right label
-    const onEnter = isSticky
-        ? "window.showTaskyHelp('lib.stickyHeaderOn','icon-pin')"
-        : "window.showTaskyHelp('lib.stickyHeaderOff','icon-pin')";
-    btn.setAttribute('onmouseenter', onEnter);
+    const taskyKey = isSticky ? 'lib.stickyHeaderOn' : 'lib.stickyHeaderOff';
+    btn.dataset.tasky = taskyKey;
+    btn.dataset.taskyIcon = 'icon-pin';
 }
 export { selectMod, closeModDetail, renderModDetail };
 //# sourceMappingURL=mods.js.map

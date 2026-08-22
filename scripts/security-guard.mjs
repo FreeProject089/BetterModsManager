@@ -74,7 +74,7 @@ if (violations.length) {
 // Update either baseline deliberately, downwards. Raising one is the thing this exists to
 // prevent.
 const BASELINE = 0;
-const BASELINE_INDEX = 216;
+const BASELINE_INDEX = 0;
 const INDEX_HTML = join(ROOT, 'frontend', 'index.html');
 
 // Case-SENSITIVE and lowercase on purpose: HTML attributes in these templates are
@@ -129,6 +129,28 @@ if (total < BASELINE) {
 } else {
     console.log(`  inline event handlers: ${total} (at baseline; script-src still needs 'unsafe-inline')`);
 }
+
+// A handler does not have to be written as an attribute to BE one. Three sites built them
+// at runtime with setAttribute('onmouseenter', '...'), which the attribute pattern above
+// cannot see and which the strict CSP blocks exactly like the written ones -- silently.
+// This is the check that would have caught them.
+const RUNTIME = /\.setAttribute\s*\(\s*['"`]on[a-z]+['"`]/g;
+const runtime = [];
+for (const file of walk(SRC)) {
+    readFileSync(file, 'utf8').split(/\r?\n/).forEach((line, i) => {
+        if (line.replace(/\/\/.*$/, '').match(RUNTIME)) {
+            runtime.push(`${relative(ROOT, file)}:${i + 1}  ${line.trim().slice(0, 90)}`);
+        }
+    });
+}
+if (runtime.length) {
+    console.error(`\n\x1b[31m\u2717 security-guard: ${runtime.length} handler(s) built at runtime via setAttribute('on...').\x1b[0m`);
+    console.error("  These need script-src 'unsafe-inline' just like written attributes, and the");
+    console.error('  strict CSP blocks them without an error. Assign a dataset property instead.');
+    for (const r of runtime) console.error(`    ${r}`);
+    process.exit(1);
+}
+console.log('\x1b[32m\u2713 security-guard: no handlers built at runtime\x1b[0m');
 
 if (total === 0 && indexTotal === 0) {
     console.log("  both trees are clean -- script-src can drop 'unsafe-inline' in frontend/index.html.");

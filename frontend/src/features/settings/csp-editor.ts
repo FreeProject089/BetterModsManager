@@ -96,8 +96,8 @@ export const PRESETS: { id: string; label: string; note: string; policy: string 
     },
     {
         id: 'strict',
-        label: 'Strict — no inline script',
-        note: 'The one that actually closes the hole: an injected <img onerror=…> stops executing. IT WILL BREAK THINGS TODAY — BMM still ships 238 inline handlers (onclick, onmouseover, onerror, onmouseenter…). Turn it on to see what breaks, not to use the app.',
+        label: 'Strict — first-party scripts only',
+        note: "The shipped policy already refuses inline script: an injected <img onerror=…> does not execute. What this adds is dropping 'unsafe-eval' and the third-party script hosts (YouTube, BetaHub, Google), so ONLY BMM's own files can run. Cost: embedded videos and the BetaHub feedback widget stop working, and any vendor library that compiles code at runtime stops with it.",
         policy: "script-src 'self'; object-src 'none'; base-uri 'self'",
     },
 ];

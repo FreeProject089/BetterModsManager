@@ -1875,3 +1875,10 @@ function escAttr(str) {
     // The button only exists once the settings view has rendered.
     setTimeout(() => { document.getElementById('btn-storage-manager')?.click(); }, 150);
 };
+
+// "New profile" from the empty state has to show the Profiles view before the modal, or the
+// modal opens over whatever view happened to be up. The delay is the render.
+(window as any).bmmNewProfileFlow = () => {
+    (window as any).showProfiles?.();
+    setTimeout(() => { (window as any).openNewProfileModal?.(); }, 50);
+};

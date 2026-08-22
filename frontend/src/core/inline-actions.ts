@@ -173,8 +173,13 @@ function bindHoverStyles(): void {
 
 /** Click actions of the uniform `window.fn('arg', …)` shape.
  *
- *  Markup becomes `data-act="fnName"` plus `data-act-args='["a","b"]'` (JSON), and
- *  `data-act-stop="1"` where the inline version called `event.stopPropagation()`.
+ *  Markup becomes `data-act="fnName"` plus `data-act-args='["a","b"]'` (JSON),
+ *  `data-act-stop="1"` where the inline version called `event.stopPropagation()`, and
+ *  `data-act-prevent="1"` for `event.preventDefault()`. `data-act-change` and
+ *  `data-act-input` are the same for those two events.
+ *
+ *  A name that is not on `window` calls nothing, exactly as the `window.fn && window.fn()`
+ *  guards in the old markup did.
  *
  *  Only functions already published on `window` are callable, and only by name — there is
  *  no expression evaluation here. That is the whole point: an attribute that used to be a
@@ -218,6 +223,10 @@ function bindActions(): void {
     document.addEventListener('change', (e) => {
         const el = (e.target instanceof Element) ? e.target.closest<HTMLElement>('[data-act-change]') : null;
         if (el?.dataset.actChange) run(el, e, el.dataset.actChange, el.dataset.actChangeArgs);
+    }, true);
+    document.addEventListener('input', (e) => {
+        const el = (e.target instanceof Element) ? e.target.closest<HTMLElement>('[data-act-input]') : null;
+        if (el?.dataset.actInput) run(el, e, el.dataset.actInput, el.dataset.actInputArgs);
     }, true);
 
     // CAPTURE, not bubble. `data-act-stop` replaces an inline
@@ -286,6 +295,36 @@ function bindDomBehaviours(): void {
                 setTimeout(() => { el.style.background = before; }, 800);
             }
         });
+    });
+
+    // A password field's reveal toggle.
+    document.addEventListener('click', (e) => {
+        const el = (e.target instanceof Element) ? e.target.closest<HTMLElement>('[data-toggle-password]') : null;
+        if (!el) return;
+        const input = document.querySelector<HTMLInputElement>(el.dataset.togglePassword || '');
+        if (input) input.type = input.type === 'password' ? 'text' : 'password';
+    });
+
+    // Click the backdrop of an overlay to close it. The `e.target === el` test is the whole
+    // point: without it, every click INSIDE the dialog closes the dialog.
+    document.addEventListener('click', (e) => {
+        const el = e.target;
+        if (el instanceof HTMLElement && el.dataset.backdropClose !== undefined) {
+            el.classList.remove('open');
+        }
+    });
+
+    // Toggle a class on the parent — the disclosure arrows.
+    document.addEventListener('click', (e) => {
+        const el = (e.target instanceof Element) ? e.target.closest<HTMLElement>('[data-toggle-parent]') : null;
+        if (el) el.parentElement?.classList.toggle(el.dataset.toggleParent || 'open');
+    });
+
+    // Open the element's CURRENT data-url in the system browser. Read at click time, not
+    // baked into the attribute, because links.json rewrites data-url after load.
+    document.addEventListener('click', (e) => {
+        const el = (e.target instanceof Element) ? e.target.closest<HTMLElement>('[data-open-url]') : null;
+        if (el?.dataset.url) (window as any).openExternal?.(el.dataset.url);
     });
 
     // Forms that exist only to group fields and must never navigate.
