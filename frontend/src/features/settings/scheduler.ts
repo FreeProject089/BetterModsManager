@@ -24,6 +24,7 @@ import {
 } from '../catalogs/catalog-index.js';
 import { getLinks } from '../../core/links-config.js';
 import { askConfirm } from '../../core/api.js';
+import { fetchSourceText } from '../../core/source-fetch.js';
 
 /**
  * A 16px line icon, drawn the way every other icon in this panel is drawn: one stroked
@@ -4784,7 +4785,10 @@ async function loadPresetSources(): Promise<{ presets: any[]; sources: PresetSou
         // that switches it back on — still exists.
         if (!isOff && isDisabled(url)) { sources.push({ url, official: false, state: 'off', count: 0 }); continue; }
         try {
-            const text: string = await invoke('fetch_remote_json', { url }) as string;
+            // A preset source may be an ssh:// one; fetchSourceText picks the transport
+            // and handles a password-protected HTTP source, so this call site knows
+            // about neither.
+            const text: string = await fetchSourceText(url);
             const doc = JSON.parse(text);
             if (!looksLikePresetFeed(doc)) {
                 // Told apart from "empty" on purpose: a plugin catalog reported as an empty

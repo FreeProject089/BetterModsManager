@@ -349,12 +349,32 @@ pub async fn export_theme(
     Ok(())
 }
 
+/// The themes inside one catalog document.
+///
+/// A catalog is either a bare array or an object with a `themes` array. Written once and
+/// shared: SSH sources arrive as text the frontend already read, and extracting them a second
+/// time in TypeScript would be the same rule in two languages, drifting the day a third shape
+/// is accepted.
+fn themes_in(json: &serde_json::Value) -> Vec<serde_json::Value> {
+    if json.is_array() {
+        json.as_array().cloned().unwrap_or_default()
+    } else {
+        json.get("themes").and_then(|v| v.as_array()).cloned().unwrap_or_default()
+    }
+}
+
 /// Fetches remote theme catalog JSON arrays and returns a merged deduplicated list.
+///
+/// `extra_docs` holds catalog documents the FRONTEND already fetched — the ones on an
+/// `ssh://` source, which only it can reach (the target and its secret live there and are
+/// never stored). They are merged and deduplicated here with everything else, so an SSH
+/// catalog is not a second-class source with its own rules.
 #[tauri::command]
 pub async fn fetch_theme_catalogs(
     app: tauri::AppHandle,
     official_url: String,
     community_urls: Vec<String>,
+    extra_docs: Option<Vec<String>>,
 ) -> Result<String, String> {
     let urls: Vec<String> = std::iter::once(official_url).chain(community_urls).collect();
     let mut all: Vec<serde_json::Value> = Vec::new();
@@ -364,13 +384,16 @@ pub async fn fetch_theme_catalogs(
         // front-end's own fetch of the same URL just gets an empty 403 and is ignored).
         if let Ok(resp) = crate::commands::net::catalog_get(&app, &url).timeout(std::time::Duration::from_secs(8)).send().await {
             if let Ok(json) = resp.json::<serde_json::Value>().await {
-                let list = if json.is_array() {
-                    json.as_array().cloned().unwrap_or_default()
-                } else {
-                    json.get("themes").and_then(|v| v.as_array()).cloned().unwrap_or_default()
-                };
-                all.extend(list);
+                all.extend(themes_in(&json));
             }
+        }
+    }
+
+    for doc in extra_docs.unwrap_or_default() {
+        // A source that answers with something unparseable is skipped, exactly as an HTTP one
+        // is above: one broken catalog must not empty the list.
+        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&doc) {
+            all.extend(themes_in(&json));
         }
     }
 

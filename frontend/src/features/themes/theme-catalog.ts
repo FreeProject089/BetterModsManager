@@ -11,6 +11,7 @@ import { toast } from '../../ui/app.js';
 import { enabledOnly, looksLikeIndex, importIndexForType, describeKinds } from '../catalogs/catalog-index.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { installTheme, activateTheme, getInstalledThemes, BmmTheme } from './theme-engine.js';
+import { fetchSourceText } from '../../core/source-fetch.js';
 
 const OFFICIAL_CATALOG = 'https://raw.githubusercontent.com/BetterDCS/BMM_Themes/main/catalog.json';
 const COMMUNITY_SRC_KEY = 'bmm_theme_community_sources';
@@ -208,10 +209,26 @@ async function fetchCatalog(force = false): Promise<void> {
         // URL sources + the official catalog go through the backend — it sends the site
         // identity header (so PRIVATE community catalogs resolve) and, unlike a browser
         // fetch, isn't bound by the CSP connect-src allowlist.
+        // An `ssh://` source is one only the FRONTEND can reach: the target and its secret
+        // live here and are never stored, so the backend has nothing to connect with. Read
+        // them here and hand the raw documents to the same merger, rather than parsing and
+        // deduplicating a second time in TypeScript — that rule exists once, in Rust.
+        // The shared parser decides what an ssh:// source is — writing the test again here
+        // would be the third copy of a rule that already has one home.
+        const { parseSshSource } = await import('../repo/repo-ssh.js');
+        const sshSources = urlSources.filter((u) => parseSshSource(u) !== null);
+        const httpSources = urlSources.filter((u) => parseSshSource(u) === null);
+        const extraDocs: string[] = [];
+        for (const u of sshSources) {
+            // One unreachable source must not empty the list, exactly as a failing HTTP one
+            // does not — the backend skips those silently too.
+            try { extraDocs.push(await fetchSourceText(u)); } catch { /* skipped */ }
+        }
         try {
             const fromBackend: string = await invoke('fetch_theme_catalogs', {
                 officialUrl: OFFICIAL_CATALOG,
-                communityUrls: urlSources,
+                communityUrls: httpSources,
+                extraDocs,
             });
             all.push(...(JSON.parse(fromBackend || '[]')));
         } catch {}

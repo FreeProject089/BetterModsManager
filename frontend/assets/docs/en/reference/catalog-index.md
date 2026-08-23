@@ -113,6 +113,34 @@ Paste an index into an ordinary "add a source" box by mistake and BMM notices an
 you at Settings. It does not add it there: importing an index adds several sources at
 once, which is a larger action than the one you asked for.
 
+## A catalogue on an SSH server
+
+A source URL can be `ssh://<target>/<path>` instead of `https://…`, for a catalogue of any
+type — app, plugin, theme or preset. `<target>` is the name of an SSH target saved in **Server
+Repo → Publish over SSH**; `<path>` is the file under that target's remote folder.
+
+```
+ssh://prod/catalogs/plugins.json
+ssh:///catalogs/plugins.json      # three slashes = the target named "default"
+```
+
+The URL carries no host, user or key on purpose — those live in the saved target, so a
+catalogue URL you paste, share or receive can never point BMM at a machine of its choosing.
+
+Only BMM reads these: the URL means nothing to a browser, and nothing to BetterCommunity.
+Which keys work, and how the public half reaches the server, is covered in
+[Server Repo](doc-page:features/repo#which-ssh-keys-work).
+
+## A catalogue behind a password
+
+A catalogue hosted on BetterCommunity can carry a **download password**, set by its owner from
+the dashboard. BMM asks for it the first time the catalogue answers `401`, remembers it for as
+long as the app is running, and never writes it to disk — so it is asked once per session, not
+once per fetch.
+
+It is the same mechanism a password-protected Server Repo uses (`X-Repo-Password`, or
+`?password=` for a browser), which is why nothing had to change in how you subscribe.
+
 ## Publishing one
 
 Serve the JSON at a stable `https` address. No account, no registration — an index is

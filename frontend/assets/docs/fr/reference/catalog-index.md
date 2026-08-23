@@ -138,3 +138,34 @@ ne portent ni `items`, ni `updatedAt`, ni `sha256` — ceux-là n'apparaissent q
 entrées communautaires — et un flux n'est listé que si quelque chose y est réellement
 publié, parce qu'une entrée d'index menant à un document vide apprend aux gens à ne plus
 faire confiance à l'index.
+
+## Un catalogue sur un serveur SSH
+
+Une URL de source peut être `ssh://<cible>/<chemin>` au lieu de `https://…`, pour un catalogue
+de n'importe quel type — app, plugin, thème ou preset. `<cible>` est le nom d'une cible SSH
+enregistrée dans **Dépôt Serveur → Publier par SSH** ; `<chemin>` est le fichier sous le
+dossier distant de cette cible.
+
+```
+ssh://prod/catalogs/plugins.json
+ssh:///catalogs/plugins.json      # trois barres = la cible nommée « default »
+```
+
+L'URL ne porte ni hôte, ni utilisateur, ni clé, et c'est délibéré : tout cela vit dans la
+cible enregistrée. Une URL de catalogue que tu colles, partages ou reçois ne peut donc jamais
+diriger BMM vers une machine de son choix.
+
+Seul BMM lit ces adresses : elles ne veulent rien dire pour un navigateur, ni pour
+BetterCommunity. Quelles clés fonctionnent, et comment la moitié publique arrive sur le
+serveur, c'est dans [Dépôt Serveur](doc-page:features/repo.fr#quelles-cles-ssh-fonctionnent).
+
+## Un catalogue protégé par mot de passe
+
+Un catalogue hébergé sur BetterCommunity peut porter un **mot de passe de téléchargement**,
+défini par son propriétaire depuis le tableau de bord. BMM le demande la première fois que le
+catalogue répond `401`, le retient tant que l'application tourne, et ne l'écrit jamais sur le
+disque — il est donc demandé une fois par session, pas à chaque lecture.
+
+C'est le mécanisme qu'utilise déjà un Dépôt Serveur protégé (`X-Repo-Password`, ou
+`?password=` pour un navigateur), ce qui explique que rien n'ait changé dans la façon de
+s'abonner.
