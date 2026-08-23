@@ -5039,7 +5039,6 @@ function showPresetCatalog(data: { presets: any[]; sources: PresetSource[] }): v
                     <div class="sched-pc-add">
                         <input class="input" id="sched-pc-url" value="${escAttr(addUrl)}" placeholder="${escAttr(t('sched.pc.ask') || 'Address of a preset catalogue')}">
                         <button class="btn btn-sm btn-secondary" id="sched-pc-follow">${esc(t('sched.pc.follow') || 'Follow')}</button>
-                        ${sourceAccessHtml('pc')}
                     </div>
                     <!-- Where following says what happened. A toast was the only feedback, and
                          a toast that has already faded is indistinguishable from no feedback at
@@ -5050,6 +5049,11 @@ function showPresetCatalog(data: { presets: any[]; sources: PresetSource[] }): v
                     ` : ''}</div>
                 </aside>
                 <section class="sched-pc-main">
+                    <!-- The access block belongs in the WIDE column. In the sources rail it was
+                         squeezed into ~230px: labels wrapping mid-word, the key chooser and its
+                         button stacked, the hint a column of two-word lines. A control that has
+                         to explain itself needs room to. -->
+                    ${sourceAccessHtml('pc')}
                     <!-- Refresh lives here, beside the search, exactly where the theme
                          catalogue puts it. It was in the header; moving it kept its id so the
                          existing handler still finds it — a button relocated must not become a

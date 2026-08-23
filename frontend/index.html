@@ -1569,13 +1569,19 @@
                                          that serves it. Separate from the export button on purpose: you
                                          can re-publish an existing folder without regenerating it. -->
                                     <div class="repo-ssh-card" id="repo-ssh-card">
-                                        <div class="repo-ssh-head">
+                                        <button class="repo-ssh-head" id="repo-ssh-toggle" type="button"
+                                            aria-expanded="false" aria-controls="repo-ssh-body">
                                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
                                                 <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
                                             </svg>
                                             <span data-i18n="repo.ssh.title">Publier par SSH</span>
                                             <span class="repo-ssh-badge" id="repo-ssh-status" hidden></span>
-                                        </div>
+                                            <svg class="repo-ssh-chev" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                                                stroke="currentColor" stroke-width="2.4" aria-hidden="true">
+                                                <polyline points="6 9 12 15 18 9"/>
+                                            </svg>
+                                        </button>
+                                        <div id="repo-ssh-body" class="repo-ssh-body" hidden>
                                         <p class="repo-ssh-desc" data-i18n="repo.ssh.desc">
                                             Envoie le dossier exporté vers le serveur qui l’héberge, par SFTP.
                                             BMM lit votre clé privée au moment de l’envoi — elle n’est jamais copiée
@@ -1719,7 +1725,8 @@
                                         </button>
                                         <p style="font-size:10px;color:var(--text-muted);margin:6px 2px 0;line-height:1.4;" data-i18n="repo.hub.openHint">Serve all your repos from one Node server with a web dashboard.</p>
                                     </div>
-                                </div><!-- /repo-card-body (generate) -->
+                                </div><!-- /repo-ssh-body -->
+                                    </div><!-- /repo-card-body (generate) -->
                             </div><!-- /repo-card--cyan -->
 
                             <!-- Card: Serveur HTTP -->
@@ -2497,14 +2504,6 @@
                                         <div class="path-picker">
                                             <input type="text" class="form-input" id="repo-sync-url"
                                                 data-i18n-placeholder="repo.urlPlaceholder" />
-                                            <!-- The SSH source, made visible. `ssh://` in this field means "the target
-                                                 saved in Publish over SSH" — discoverable here rather than only in a
-                                                 note further down the page. -->
-                                            <button class="btn btn-secondary btn-sm" id="btn-sync-use-ssh" type="button"
-                                                data-i18n-title="repo.sync.useSshHint"
-                                                style="padding:0 12px; height:32px; border-radius:6px; font-weight:600; font-size:12px; letter-spacing:.4px;">
-                                                <span data-i18n="repo.sync.useSsh">SSH</span>
-                                            </button>
                                             <button class="btn btn-secondary btn-sm" id="btn-fetch-repo-info"
                                                 data-i18n="repo.fetchBtn"
                                                 style="padding:0 20px; font-weight:600; font-size:13px; letter-spacing:0.5px; border-radius:6px; height:32px;">FETCH</button>
@@ -6771,6 +6770,13 @@
                     <div style="display:flex; gap:8px; margin:6px 0 16px;">
                         <input type="text" id="repo-update-path" class="form-input" readonly placeholder="..." style="flex:1;font-size:12px;">
                         <button class="btn btn-secondary btn-sm" id="btn-pick-repo-update-folder" data-i18n="repo.update.browse">Browse</button>
+                        <!-- WHICH repo to fetch. `ssh://nom` names a target saved in Publier
+                             par SSH; `ssh://` alone means the one called default. Asking for an
+                             address rather than opening a folder dialog: you know the server,
+                             not the folder BMM would like to put it in. -->
+                        <input type="text" id="repo-update-url" class="form-input" spellcheck="false"
+                            data-i18n-placeholder="repo.update.urlPh"
+                            placeholder="ssh://nom/chemin" style="flex:1;min-width:140px;font-size:12px;">
                         <!-- The same repo, fetched from the server it is served from.
                              SSH is a transport, not a step of "generate": an existing repo can
                              be brought down, edited and put back. This does exactly the pull

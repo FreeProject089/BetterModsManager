@@ -307,7 +307,15 @@ async function testConnection(): Promise<void> {
             // "not writable" for four different causes — no permission, a read-only mount, a
             // full disk, a chroot putting the path elsewhere — and the one it named was the
             // only one the reader could not check.
-            const why = r.writeError ? ` — ${r.writeError}` : '';
+            // The server often says the same thing twice ("Permission denied: Permission
+            // denied") because the SFTP layer prefixes its own message with the code's name.
+            // Collapsing a repeated half is not cosmetic: a doubled message reads like two
+            // different failures.
+            const raw = (r.writeError || '').trim();
+            const half = raw.split(':').map((x) => x.trim()).filter(Boolean);
+            const said = half.length === 2 && half[0].toLowerCase() === half[1].toLowerCase()
+                ? half[0] : raw;
+            const why = said ? ` — ${said}` : '';
             status(t('repo.ssh.testNotWritable').replace('{dir}', form.target.remoteDir) + why, 'err');
         } else {
             status(t('repo.ssh.testOkWritable'), 'ok');
@@ -596,8 +604,30 @@ export function initRepoSsh(): void {
     // existed: `inset: 0` produced a 776x3621 overlay against a 1280x720 viewport. Nothing
     // errors, nothing logs — the dimmer is simply the wrong size and the panel is nowhere
     // near the middle of the screen.
+    // Moved to #app-window-outer, NOT to <body>.
+    //
+    // It has to leave `.repo-tab-panel`, which carries a transform for its tab animation — that
+    // part of the original reasoning still holds. But <body> put the dim outside the app: over
+    // the transparent Tauri margins, the rounded corners, and Tasky. The frame's `contain:
+    // paint` clips an absolute child to the window, which is exactly the wanted behaviour.
     const overlay = el('repo-ssh-browser');
-    if (overlay && overlay.parentElement !== document.body) document.body.appendChild(overlay);
+    const frame = document.getElementById('app-window-outer') || document.body;
+    if (overlay && overlay.parentElement !== frame) frame.appendChild(overlay);
+
+    // Collapsed by default: a tall panel about something most people set up once, sitting
+    // between Generate and Update. It opens by itself when a target is already saved — having
+    // configured it is the sign you use it.
+    const sshToggle = el('repo-ssh-toggle');
+    const sshBody = el('repo-ssh-body');
+    if (sshToggle && sshBody) {
+        const setOpen = (open: boolean) => {
+            sshBody.hidden = !open;
+            sshToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+            sshToggle.classList.toggle('is-open', open);
+        };
+        setOpen(sshTargetNames().length > 0);
+        sshToggle.addEventListener('click', () => setOpen(sshBody.hidden));
+    }
 
     el('repo-ssh-remote-pick')?.addEventListener('click', () => { void openBrowser(); });
     el('repo-ssh-browser-close')?.addEventListener('click', closeBrowser);

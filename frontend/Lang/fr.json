@@ -7864,5 +7864,9 @@
   "modpack.cat.dlFailed": "Le téléchargement a échoué. Le catalogue est peut-être protégé — donnez son mot de passe ou sa clé ci-dessus.",
   "modpack.cat.by": "par",
   "modpack.cat.mods": "mods",
-  "modpack.errDownload": "Le modpack n'a pas pu être téléchargé."
+  "modpack.errDownload": "Le modpack n'a pas pu être téléchargé.",
+  "settings.identity.authKeyNoneAtAll": "Aucune clé privée ajoutée",
+  "repo.update.urlPh": "ssh://nom/chemin — quel serveur",
+  "repo.update.urlBad": "Ce n'est pas une adresse ssh://. Utilisez ssh://nom/chemin, ou ssh:// pour la cible nommée default.",
+  "repo.update.urlNoTarget": "Aucune cible SSH nommée « {name} ». Ajoutez-la dans Publier par SSH."
 }

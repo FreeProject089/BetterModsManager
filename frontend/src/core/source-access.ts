@@ -84,7 +84,18 @@ export function wireSourceAccess(
 
     // The ring is edited in ONE place. Sending you there beats a second editor that could
     // disagree with the first about which keys exist.
-    document.getElementById(`${p}-access-manage`)?.addEventListener('click', manageKeys);
+    //
+    // Whatever modal this block sits in is closed FIRST. Navigating out from under an open
+    // overlay left the Settings page behind a dimmer you could not dismiss, because the modal
+    // that owned it belonged to the screen you just left.
+    document.getElementById(`${p}-access-manage`)?.addEventListener('click', () => {
+        const owner = det.closest('.modal-overlay, .mpc-overlay, .sched-pc-overlay, .tc-src-overlay');
+        if (owner) {
+            const close = owner.querySelector('.modal-close, [data-close]') as HTMLElement | null;
+            if (close) close.click(); else owner.remove();
+        }
+        manageKeys();
+    });
 
     document.getElementById(`${p}-access-pw-set`)?.addEventListener('click', async () => {
         const pwEl = document.getElementById(`${p}-access-pw`) as HTMLInputElement | null;

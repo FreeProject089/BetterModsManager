@@ -111,10 +111,14 @@ export async function renderKeyManager(
     if (addBtn && addBtn.dataset.krWired !== '1') {
         addBtn.dataset.krWired = '1';
         addBtn.addEventListener('click', async () => {
-            const name = (nameInput?.value || '').trim();
-            if (!name) { notify?.('settings.identity.authKeyNeedName', 'warning'); nameInput?.focus(); return; }
+            const typed = (nameInput?.value || '').trim();
             const path = await pickFile();
             if (!path) return;
+            // No name typed? Use the FILE's name. Demanding one first turned "add this key"
+            // into a two-step form for a value the file already carries, and `id_ed25519` is
+            // exactly what people call that key anyway. A typed name still wins.
+            const base = path.split(/[\\/]/).pop() || '';
+            const name = typed || base.replace(/\.(pub|ppk|pem|key)$/i, '') || 'key';
             try {
                 paint((await invoke('key_auth_add', { name, path })) as KeyringView);
                 if (nameInput) nameInput.value = '';
@@ -158,11 +162,14 @@ export async function renderKeySelect(
 
         const auto = document.createElement('option');
         auto.value = '';
-        // Names the key that would actually sign, rather than a bare "Automatic" that leaves
-        // the reader to go and look it up on another screen.
-        auto.textContent = view.active
-            ? t('settings.identity.authKeyAuto').replace('{name}', view.active)
-            : t('settings.identity.authKeyAutoNone');
+        // Three different states, three different sentences. "Par défaut (aucune choisie)" on
+        // an EMPTY ring is a lie by omission — it suggests a default exists and was not picked,
+        // when there is nothing to pick. An empty list has to say it is empty.
+        auto.textContent = !view.keys.length
+            ? t('settings.identity.authKeyNoneAtAll')
+            : view.active
+                ? t('settings.identity.authKeyAuto').replace('{name}', view.active)
+                : t('settings.identity.authKeyAutoNone');
         sel.appendChild(auto);
 
         for (const k of view.keys) {

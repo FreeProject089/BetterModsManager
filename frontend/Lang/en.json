@@ -7866,5 +7866,9 @@
   "modpack.cat.dlFailed": "The download failed. The catalogue may be protected — give its password or key above.",
   "modpack.cat.by": "by",
   "modpack.cat.mods": "mods",
-  "modpack.errDownload": "The modpack could not be downloaded."
+  "modpack.errDownload": "The modpack could not be downloaded.",
+  "settings.identity.authKeyNoneAtAll": "No private key added",
+  "repo.update.urlPh": "ssh://name/path — which server",
+  "repo.update.urlBad": "That is not an ssh:// address. Use ssh://name/path, or ssh:// for the target called default.",
+  "repo.update.urlNoTarget": "No SSH target named “{name}”. Add it under Publish over SSH."
 }

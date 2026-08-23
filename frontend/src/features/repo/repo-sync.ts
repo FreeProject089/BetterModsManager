@@ -351,43 +351,10 @@ export function initRepoSync(elements) {
         if (auto) auto.checked = true;
     });
 
-    // The SSH source, one click away.
-    //
-    // `ssh://` is the whole value: everything about WHERE to connect lives in the target
-    // saved in the Publish-over-SSH panel. Typing it is easy to get wrong and impossible to
-    // discover, so the button writes it and immediately fetches — the same two steps the user
-    // would have done, minus the guessing.
-    document.getElementById('btn-sync-use-ssh')?.addEventListener('click', async () => {
-        const input = document.getElementById('repo-sync-url') as HTMLInputElement | null;
-        if (!input) return;
-        const m = await import('./repo-ssh.js');
-        const names = m.sshTargetNames();
-        // Offer every saved target as a suggestion on the field itself, so a second server is
-        // discoverable without a second control.
-        let dl = document.getElementById('repo-sync-ssh-list') as HTMLDataListElement | null;
-        if (!dl) {
-            dl = document.createElement('datalist');
-            dl.id = 'repo-sync-ssh-list';
-            input.parentElement?.appendChild(dl);
-            input.setAttribute('list', dl.id);
-        }
-        dl.textContent = '';
-        for (const n of names) {
-            const o = document.createElement('option');
-            o.value = n === m.DEFAULT_TARGET ? m.SSH_SOURCE_URL : `${m.SSH_SOURCE_URL}${n}`;
-            dl.appendChild(o);
-        }
-        if (!names.length) {
-            // Nothing configured yet. Say where to configure it rather than failing with a
-            // field-validation message about a field the user never filled in.
-            toast(t('repo.sync.useSshNotSet'), 'warning', 7000);
-            return;
-        }
-        const first = names[0];
-        input.value = first === m.DEFAULT_TARGET ? m.SSH_SOURCE_URL : `${m.SSH_SOURCE_URL}${first}`;
-        input.dispatchEvent(new Event('input', { bubbles: true }));
-        (document.getElementById('btn-fetch-repo-info') as HTMLButtonElement | null)?.click();
-    });
+    // The SSH shortcut button used to live here. Removed: it wrote `ssh://` into the field
+    // and fetched, which is one keystroke saved for a value you only ever use when you already
+    // know you want it — and it sat among four buttons that do quite different things. The
+    // server picker below the field covers the same ground and says which server.
 
     // Persisted on change rather than on sync: a user who ticks this and never syncs still
     // meant it, and losing the setting would look like the checkbox does nothing.

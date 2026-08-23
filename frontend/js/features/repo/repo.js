@@ -1938,15 +1938,37 @@ export function initRepo() {
                 toast(t('repo.sync.useSshNotSet'), 'warning', 7000);
                 return;
             }
-            const folder = await pickFolder().catch(() => null);
-            if (!folder)
-                return;
+            // The address names WHICH server. `ssh://nom` picks that target, `ssh://` the one
+            // called default, and an empty field the only one you have.
+            const typed = document.getElementById('repo-update-url')?.value?.trim() || '';
+            let target = names[0];
+            if (typed) {
+                const parsed = m.sshTargetName(typed);
+                if (!parsed) {
+                    toast(t('repo.update.urlBad'), 'warning', 7000);
+                    return;
+                }
+                if (!names.includes(parsed)) {
+                    toast(t('repo.update.urlNoTarget').replace('{name}', parsed), 'warning', 8000);
+                    return;
+                }
+                target = parsed;
+            }
+            // The EXPORT folder, which is where Publier par SSH already sends from — so fetch,
+            // edit and publish all speak about one place. Only asked for when it is not set,
+            // instead of every time.
+            let folder = document.getElementById('repo-export-path')?.value?.trim() || '';
+            if (!folder) {
+                folder = (await pickFolder().catch(() => null)) || '';
+                if (!folder)
+                    return;
+            }
             const btn = document.getElementById('btn-repo-update-pull');
             if (btn)
                 btn.disabled = true;
             try {
                 toast(t('repo.update.pulling'), 'info', 4000);
-                const n = await m.pullStoredTarget(folder, names[0]);
+                const n = await m.pullStoredTarget(folder, target);
                 toast((t('repo.update.pulled') || '').replace('{n}', String(n)), 'success', 5000);
                 await loadRepoFolder(folder);
             }
@@ -1968,16 +1990,20 @@ export function initRepo() {
                 toast(t('repo.sync.useSshNotSet'), 'warning', 7000);
                 return;
             }
+            // Back to the target the address names, so a fetch and its publish cannot end up
+            // on two different servers.
+            const typedP = document.getElementById('repo-update-url')?.value?.trim() || '';
+            const pTarget = (typedP && m.sshTargetName(typedP)) || names[0];
             // Publishing overwrites what people are downloading right now. The confirm says
             // WHAT changes rather than "are you sure".
-            const ok = await window.confirmCustom?.(t('repo.update.publishTitle'), t('repo.update.publishMsg').replace('{name}', names[0]), 'warning').catch(() => false);
+            const ok = await window.confirmCustom?.(t('repo.update.publishTitle'), t('repo.update.publishMsg').replace('{name}', pTarget), 'warning').catch(() => false);
             if (!ok)
                 return;
             const btn = document.getElementById('btn-repo-update-publish');
             if (btn)
                 btn.disabled = true;
             try {
-                const n = await m.publishStoredTarget(repoDir, names[0]);
+                const n = await m.publishStoredTarget(repoDir, pTarget);
                 toast((t('repo.update.published') || '').replace('{n}', String(n)), 'success', 6000);
             }
             catch (e) {

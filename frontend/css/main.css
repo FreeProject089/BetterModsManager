@@ -17190,7 +17190,13 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
        swallowed every click on it — the panel was visible and completely inert, and nothing
        logged anything. 11500 puts it above every modal and still below toasts, so a message
        about the transfer appears over it rather than behind it. */
-    position: fixed; inset: 0; z-index: 11500;
+    /* ABSOLUTE, inside #app-window-outer — not fixed on <body>.
+       The frame carries `contain: paint` (mascot.css), which both clips its children to the
+       rounded window and makes it the containing block for a fixed descendant. On <body> the
+       dim covered the whole OS window: the transparent Tauri margins, the rounded corners,
+       and Tasky, who lives in that margin. Inside the frame it is clipped to the app, and it
+       cannot reach Tasky at all. Same pattern as .tut-unsaved-overlay, for the same reason. */
+    position: absolute; inset: 0; z-index: 11500;
     display: flex; align-items: center; justify-content: center;
     /* The SAME backdrop as .modal-overlay — 0.7 and an 8px blur, not a lighter 0.55 with no
        blur. This overlay is built by hand because it must live outside the app's transformed
@@ -17373,7 +17379,10 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 /* ── "this source is protected": the password + key block, mounted on all four
    catalogue screens (core/source-access.ts). One rule set, because it is one block —
    four copies would drift the moment one screen changed a spacing. ───────────── */
-.src-access { margin-top: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bmm-s03); }
+/* Margin on BOTH sides. It sits between an "add a source" row and the list of sources
+   below, and with only a top margin it touched the first row — which reads as belonging to
+   that row rather than to the field above it. */
+.src-access { margin: 10px 0 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--bmm-s03); }
 .src-access > summary {
     cursor: pointer; padding: 8px 10px; font-size: 12px; font-weight: 600;
     color: var(--text-secondary); list-style: none;
@@ -17391,3 +17400,14 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 .src-access-row { display: flex; gap: 6px; align-items: center; min-width: 0; }
 .src-access-row > .input { flex: 1; min-width: 0; }
 .src-access-hint { font-size: 10px; color: var(--text-muted); line-height: 1.5; }
+
+/* The SSH panel's header is now a button that folds the body away. Styled to still read as a
+   card heading, not as a control: people look for the title, not for something to press. */
+button.repo-ssh-head {
+    width: 100%; background: none; border: none; text-align: left; cursor: pointer;
+    color: inherit; font: inherit; padding: 0;
+}
+button.repo-ssh-head:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
+.repo-ssh-chev { margin-left: auto; flex: 0 0 auto; color: var(--text-muted); transition: transform .18s ease; }
+button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
+.repo-ssh-body[hidden] { display: none; }
