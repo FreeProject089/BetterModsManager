@@ -17411,3 +17411,10 @@ button.repo-ssh-head:focus-visible { outline: 2px solid var(--accent); outline-o
 .repo-ssh-chev { margin-left: auto; flex: 0 0 auto; color: var(--text-muted); transition: transform .18s ease; }
 button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
 .repo-ssh-body[hidden] { display: none; }
+
+/* The modpack-catalogue modal's two views: following one, publishing one. Tabs rather than a
+   second modal, because they are two sides of one object and the person who just followed a
+   catalogue is the likeliest to want to make one. */
+.mpc-tab { opacity: .55; border-bottom: 2px solid transparent; border-radius: 6px 6px 0 0; }
+.mpc-tab.is-on { opacity: 1; border-bottom-color: var(--accent); }
+.mpc-tabs { border-bottom: 1px solid var(--border); }

@@ -7868,5 +7868,19 @@
   "settings.identity.authKeyNoneAtAll": "Aucune clé privée ajoutée",
   "repo.update.urlPh": "ssh://nom/chemin — quel serveur",
   "repo.update.urlBad": "Ce n'est pas une adresse ssh://. Utilisez ssh://nom/chemin, ou ssh:// pour la cible nommée default.",
-  "repo.update.urlNoTarget": "Aucune cible SSH nommée « {name} ». Ajoutez-la dans Publier par SSH."
+  "repo.update.urlNoTarget": "Aucune cible SSH nommée « {name} ». Ajoutez-la dans Publier par SSH.",
+  "modpack.cat.tabFollow": "Suivre",
+  "modpack.cat.tabBuild": "Publier",
+  "modpack.cat.build.desc": "Transformez vos packs locaux en un catalogue que d'autres peuvent suivre. BMM écrit le JSON ; vous déposez celui-ci et les fichiers .bmp là où vous hébergez.",
+  "modpack.cat.build.namePh": "Nom du catalogue",
+  "modpack.cat.build.basePh": "https://… où vivront les fichiers .bmp",
+  "modpack.cat.build.fill": "Remplir les adresses",
+  "modpack.cat.build.baseHint": "« Remplir les adresses » écrit <base>/<nom-du-pack>.bmp dans chaque ligne. Modifiez-les ensuite si besoin — ce qui compte, c'est que chaque adresse soit l'endroit réel du fichier.",
+  "modpack.cat.build.export": "Exporter le catalogue",
+  "modpack.cat.build.noPacks": "Vous n'avez encore aucun modpack local.",
+  "modpack.cat.build.needBase": "Saisissez d'abord l'adresse de base.",
+  "modpack.cat.build.nothing": "Rien à exporter — cochez un pack et donnez-lui une adresse.",
+  "modpack.cat.build.defName": "Mes modpacks",
+  "modpack.cat.build.done": "Catalogue écrit avec {n} pack(s).",
+  "modpack.cat.build.doneSome": "Catalogue écrit avec {n} pack(s). {m} ignoré(s), sans adresse."
 }

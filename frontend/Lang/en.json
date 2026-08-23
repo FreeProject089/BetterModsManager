@@ -7870,5 +7870,19 @@
   "settings.identity.authKeyNoneAtAll": "No private key added",
   "repo.update.urlPh": "ssh://name/path — which server",
   "repo.update.urlBad": "That is not an ssh:// address. Use ssh://name/path, or ssh:// for the target called default.",
-  "repo.update.urlNoTarget": "No SSH target named “{name}”. Add it under Publish over SSH."
+  "repo.update.urlNoTarget": "No SSH target named “{name}”. Add it under Publish over SSH.",
+  "modpack.cat.tabFollow": "Follow",
+  "modpack.cat.tabBuild": "Publish",
+  "modpack.cat.build.desc": "Turn your local packs into a catalogue others can follow. BMM writes the JSON; you upload it and the .bmp files wherever you host them.",
+  "modpack.cat.build.namePh": "Catalogue name",
+  "modpack.cat.build.basePh": "https://… where the .bmp files will live",
+  "modpack.cat.build.fill": "Fill addresses",
+  "modpack.cat.build.baseHint": "Fill addresses writes <base>/<pack-name>.bmp into every row. Change any of them afterwards — what matters is that each address is where that file will actually be.",
+  "modpack.cat.build.export": "Export the catalogue",
+  "modpack.cat.build.noPacks": "You have no local modpack yet.",
+  "modpack.cat.build.needBase": "Enter the base address first.",
+  "modpack.cat.build.nothing": "Nothing to export — tick a pack and give it an address.",
+  "modpack.cat.build.defName": "My modpacks",
+  "modpack.cat.build.done": "Catalogue written with {n} pack(s).",
+  "modpack.cat.build.doneSome": "Catalogue written with {n} pack(s). {m} skipped for having no address."
 }

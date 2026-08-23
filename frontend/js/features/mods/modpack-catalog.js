@@ -81,7 +81,11 @@ export async function openModpackCatalog(notify) {
           <h2 class="modal-title" style="margin:0;font-size:1.1rem">${escHtml(t('modpack.cat.title'))}</h2>
           <button class="modal-close" id="mpc-close">&times;</button>
         </div>
-        <div class="modal-body" style="padding:16px 20px;display:flex;flex-direction:column;gap:12px">
+        <div class="mpc-tabs" style="display:flex;gap:6px;padding:0 20px 10px">
+          <button class="btn btn-sm mpc-tab is-on" id="mpc-tab-follow" type="button">${escHtml(t('modpack.cat.tabFollow'))}</button>
+          <button class="btn btn-sm mpc-tab" id="mpc-tab-build" type="button">${escHtml(t('modpack.cat.tabBuild'))}</button>
+        </div>
+        <div class="modal-body" id="mpc-view-follow" style="padding:16px 20px;display:flex;flex-direction:column;gap:12px">
           <p style="font-size:12px;color:var(--text-muted);margin:0">${escHtml(t('modpack.cat.desc'))}</p>
           <div style="display:flex;gap:6px;align-items:center">
             <input type="text" class="input" id="mpc-src" style="flex:1;min-width:0"
@@ -91,6 +95,23 @@ export async function openModpackCatalog(notify) {
           ${sourceAccessHtml('mpc')}
           <div id="mpc-sources" style="display:flex;flex-direction:column;gap:4px"></div>
           <div id="mpc-list" style="display:flex;flex-direction:column;gap:8px"></div>
+        </div>
+        <div class="modal-body" id="mpc-view-build" hidden style="padding:16px 20px;display:flex;flex-direction:column;gap:12px">
+          <p style="font-size:12px;color:var(--text-muted);margin:0">${escHtml(t('modpack.cat.build.desc'))}</p>
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <input type="text" class="input" id="mpc-b-name" style="flex:1;min-width:160px"
+                   placeholder="${escHtml(t('modpack.cat.build.namePh'))}" spellcheck="false">
+          </div>
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <input type="text" class="input" id="mpc-b-base" style="flex:1;min-width:200px"
+                   placeholder="${escHtml(t('modpack.cat.build.basePh'))}" spellcheck="false">
+            <button class="btn btn-sm btn-secondary" id="mpc-b-fill" type="button">${escHtml(t('modpack.cat.build.fill'))}</button>
+          </div>
+          <div style="font-size:10px;color:var(--text-muted);line-height:1.5">${escHtml(t('modpack.cat.build.baseHint'))}</div>
+          <div id="mpc-b-list" style="display:flex;flex-direction:column;gap:6px"></div>
+          <div style="display:flex;justify-content:flex-end;gap:8px">
+            <button class="btn btn-sm btn-accent" id="mpc-b-export" type="button">${escHtml(t('modpack.cat.build.export'))}</button>
+          </div>
         </div>
       </div>`;
     (document.getElementById('app-window-outer') || document.body).appendChild(ov);
@@ -128,7 +149,106 @@ export async function openModpackCatalog(notify) {
         input.value = '';
         await refresh();
     });
+    const showTab = (build) => {
+        ov.querySelector('#mpc-view-follow').hidden = build;
+        ov.querySelector('#mpc-view-build').hidden = !build;
+        ov.querySelector('#mpc-tab-follow').classList.toggle('is-on', !build);
+        ov.querySelector('#mpc-tab-build').classList.toggle('is-on', build);
+        if (build)
+            void renderBuilder(ov);
+    };
+    ov.querySelector('#mpc-tab-follow')?.addEventListener('click', () => showTab(false));
+    ov.querySelector('#mpc-tab-build')?.addEventListener('click', () => showTab(true));
     await refresh();
+}
+/** `My Great Pack` → `my-great-pack`, so a filled-in URL matches the file you will upload. */
+function slugify(name) {
+    return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'pack';
+}
+/**
+ * The builder: your local packs, each with the address it will be downloaded from.
+ *
+ * The URL is the whole difficulty. A theme catalogue can carry the theme; a modpack is a .bmp
+ * that has to be hosted, and BMM cannot know where you will put it. So it asks — once, with a
+ * base address that fills every row, because eleven URLs differing by a file name is not
+ * something to type by hand.
+ */
+async function renderBuilder(ov) {
+    const listEl = ov.querySelector('#mpc-b-list');
+    let packs = [];
+    try {
+        packs = (await invoke('load_modpacks'));
+    }
+    catch {
+        packs = [];
+    }
+    if (!packs.length) {
+        listEl.innerHTML = `<span style="font-size:12px;color:var(--text-muted)">${escHtml(t('modpack.cat.build.noPacks'))}</span>`;
+        return;
+    }
+    listEl.innerHTML = packs.map((p, i) => `
+      <div style="display:flex;align-items:center;gap:8px;min-width:0">
+        <input type="checkbox" class="mpc-b-pick" data-i="${i}" checked style="flex:0 0 auto">
+        <span style="flex:0 0 auto;font-size:12px;font-weight:600;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(p.name || '')}</span>
+        <input type="text" class="input input-sm mpc-b-url" data-i="${i}" style="flex:1;min-width:0;font-size:11px"
+               placeholder="https://.../${escHtml(slugify(p.name || ''))}.bmp" spellcheck="false">
+      </div>`).join('');
+    ov.querySelector('#mpc-b-fill')?.addEventListener('click', () => {
+        const base = ov.querySelector('#mpc-b-base').value.trim().replace(/\/+$/, '');
+        if (!base) {
+            toast(t('modpack.cat.build.needBase'), 'warning');
+            return;
+        }
+        listEl.querySelectorAll('.mpc-b-url').forEach((inp) => {
+            const p = packs[Number(inp.dataset.i)];
+            inp.value = `${base}/${slugify(p?.name || '')}.bmp`;
+        });
+    });
+    ov.querySelector('#mpc-b-export')?.addEventListener('click', async () => {
+        const name = ov.querySelector('#mpc-b-name').value.trim()
+            || t('modpack.cat.build.defName');
+        const rows = [];
+        let missing = 0;
+        listEl.querySelectorAll('.mpc-b-pick').forEach((box) => {
+            if (!box.checked)
+                return;
+            const i = Number(box.dataset.i);
+            const p = packs[i];
+            const url = listEl.querySelector(`.mpc-b-url[data-i="${i}"]`)?.value?.trim() || '';
+            // A row with no address would export an entry no client can install — a catalogue
+            // that lists things it cannot deliver is worse than a shorter catalogue.
+            if (!url) {
+                missing += 1;
+                return;
+            }
+            rows.push({
+                id: slugify(p.name || ''),
+                name: p.name || '',
+                description: p.description || '',
+                version: p.version || '1.0',
+                download_url: url,
+                mods: Array.isArray(p.mods) ? p.mods.length : undefined,
+            });
+        });
+        if (!rows.length) {
+            toast(t('modpack.cat.build.nothing'), 'warning');
+            return;
+        }
+        const json = JSON.stringify({ version: '1.0', name, modpacks: rows }, null, 2);
+        const { saveFile } = await import('../../core/api.js');
+        const path = await saveFile({ defaultPath: `${slugify(name)}.json`, filters: [{ name: 'JSON', extensions: ['json'] }] });
+        if (!path)
+            return;
+        try {
+            await invoke('write_text_file', { path, content: json });
+            toast(missing
+                ? t('modpack.cat.build.doneSome').replace('{n}', String(rows.length)).replace('{m}', String(missing))
+                : t('modpack.cat.build.done').replace('{n}', String(rows.length)), missing ? 'warning' : 'success', 7000);
+        }
+        catch (e) {
+            toast(String(e), 'error');
+        }
+    });
 }
 function close() {
     _overlay?.remove();
