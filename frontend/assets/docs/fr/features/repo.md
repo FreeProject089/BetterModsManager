@@ -203,3 +203,67 @@ incrémental qui monte les versions et te laisse écrire un changelog par mod (m
 utilisateurs quand la mise à jour est détectée). Il ne réécrit que ce qui a changé, en miroir
 de la synchro delta côté téléchargement. Le pas-à-pas côté auteur vit dans le guide développeur
 *Rendre ton mod actualisable*.
+
+## Déposer le dossier sur le serveur (SSH/SFTP)
+
+L'export écrit un dossier. **Publier par SSH**, sur le même écran, est ce qui dépose ce dossier
+sur la machine qui l'héberge — sans programme de transfert de fichiers entre les deux.
+
+### Ce que tu renseignes
+
+| Champ | Remarques |
+|---|---|
+| **Hôte, port, utilisateur** | Les trois mêmes choses que demande n'importe quel client SSH. Le port vaut 22 par défaut. |
+| **Clé ou mot de passe** | Deux boutons en haut. Le mot de passe est ce que la plupart des comptes ont déjà ; la clé est ce qu'exige un serveur configuré avec `PasswordAuthentication no`. |
+| **Clé privée** | OpenSSH ou PuTTY `.ppk`, les deux lues telles quelles — aucune conversion. |
+| **Dossier distant** | Un chemin absolu. **Parcourir…** ouvre les dossiers du serveur pour le choisir au lieu de le saisir. |
+
+**Tester la connexion** fait tout ce que fait un envoi, sauf envoyer : elle s'authentifie, ouvre
+le dossier, puis y écrit et efface un fichier témoin. « Le dossier existe » et « j'ai le droit
+d'y écrire » sont deux questions différentes, et seule la seconde compte — la version envoi de
+cet échec arrive après avoir tout transféré.
+
+### Récupérer depuis le serveur
+
+**Récupérer depuis le serveur**, c'est la même connexion dans l'autre sens : elle copie le
+dépôt réellement servi vers ton dossier d'export. Utile pour modifier un dépôt depuis une
+deuxième machine, retrouver une copie locale perdue, ou vérifier que ce qui est en ligne est
+bien ce que tu crois.
+
+Les fichiers de même nom sont écrasés par la version du serveur ; ceux que le serveur n'a pas
+sont laissés en place. Les supprimer permettrait à une récupération pointée sur le mauvais
+dossier d'y détruire autre chose.
+
+### Ce qui est enregistré, et ce qui ne l'est pas
+
+Hôte, port, utilisateur, dossier distant, la méthode choisie et le **chemin** de ta clé sont
+conservés. La clé elle-même ne l'est jamais, ni la phrase secrète, ni le mot de passe. Une clé
+copiée dans la configuration de BMM serait une clé dans chaque sauvegarde, chaque export et
+chaque rapport de plantage qui joint les réglages.
+
+L'empreinte du serveur est enregistrée à la première connexion et doit correspondre à toutes
+les suivantes. Une empreinte **qui change** est refusée, pas signalée : le cas contre lequel
+elle protège est précisément celui où l'on clique sur l'avertissement sans le lire.
+
+### Ordre du transfert
+
+Les fichiers partent d'abord et `repo.json` **en dernier**, exprès. Les abonnés lisent le
+manifeste puis récupèrent ce qu'il liste : l'envoyer en premier donnerait à tous ceux qui
+synchronisent pendant l'envoi un manifeste promettant des fichiers qui n'existent pas encore.
+
+### Sans ouvrir l'écran
+
+| Point d'entrée | Publier | Récupérer |
+|---|---|---|
+| Planificateur | *Publier le dépôt par SSH* | *Récupérer le dépôt par SSH* |
+| Lien profond | `bmm://repo/publish-ssh?dir=<dossier>` | `bmm://repo/sync-ssh?dir=<dossier>` |
+| API locale | `POST /api/repo/publish-ssh` | `POST /api/repo/sync-ssh` |
+
+Tous utilisent la cible enregistrée dans Dépôt Serveur. **Aucun ne peut désigner un autre hôte,
+une autre clé ni un mot de passe** — l'appel dit « publie (ou récupère) ce que j'ai déjà
+configuré », et rien de plus. La règle compte surtout pour la récupération, qui écrit sur ton
+propre disque.
+
+Une exécution sans surveillance exige une clé **sans phrase secrète**, et ne peut pas utiliser
+de mot de passe : rien n'est conservé et personne n'est là à 4 h du matin, donc elle échoue
+avec un message plutôt que d'attendre indéfiniment devant une invite que personne ne verra.

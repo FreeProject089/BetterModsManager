@@ -193,3 +193,65 @@ When you update your mods, use **Update an existing repo**: an incremental flow 
 versions and lets you write a per-mod changelog (shown to users when the update is detected).
 It only rewrites what changed, mirroring the delta-sync on the download side. The mod-author
 walkthrough lives in the developer guide *Making your mod updatable*.
+
+## Getting the folder onto the server (SSH/SFTP)
+
+Exporting writes a folder. **Publish over SSH**, on the same screen, is what puts that folder
+on the machine that serves it — no separate file-transfer program in between.
+
+### What you fill in
+
+| Field | Notes |
+|---|---|
+| **Host, port, user** | The same three things any SSH client asks for. Port defaults to 22. |
+| **Key or password** | Two buttons at the top. A password is what most accounts already have; a key is what a server running `PasswordAuthentication no` requires. |
+| **Private key** | OpenSSH or PuTTY `.ppk`, both read as they are — no conversion step. |
+| **Remote folder** | An absolute path. **Browse…** opens the server's folders so you can pick it rather than type it. |
+
+**Test the connection** does everything an upload does except upload: it authenticates, opens
+the folder, and writes-then-deletes a probe file. "The folder exists" and "I may write into
+it" are different questions, and only the second one matters — the upload version of that
+failure happens after transferring everything.
+
+### Fetching it back
+
+**Fetch from the server** is the same connection in the other direction: it copies the repo
+the server is actually serving into your export folder. Use it to edit a repo from a second
+machine, to recover a lost local copy, or to confirm that what is online is what you think.
+
+Files of the same name are overwritten by the server's version; local files the server does
+not have are left alone. Deleting them would let a fetch aimed at the wrong folder destroy
+something unrelated.
+
+### What is stored, and what is not
+
+Host, port, user, remote folder, the chosen method and the **path** to your key are saved. The
+key itself never is, and neither is the passphrase or the password. A key copied into BMM's
+config would be a key in every backup, every export and every crash report that attaches
+settings.
+
+The server's fingerprint is recorded on the first connection and must match on every later
+one. A **changed** fingerprint is refused outright rather than warned about: the case it
+protects against is exactly the one where a warning gets clicked through.
+
+### Order of transfer
+
+Files are sent first and `repo.json` **last**, deliberately. Subscribers read the manifest and
+then fetch what it lists, so sending it first would hand everyone syncing during the upload
+window a manifest promising files that do not exist yet.
+
+### Without opening the screen
+
+| Entry point | Publish | Fetch |
+|---|---|---|
+| Scheduler | *Publish repo over SSH* | *Fetch repo over SSH* |
+| Deeplink | `bmm://repo/publish-ssh?dir=<folder>` | `bmm://repo/sync-ssh?dir=<folder>` |
+| Local API | `POST /api/repo/publish-ssh` | `POST /api/repo/sync-ssh` |
+
+All of them use the target saved in Server Repo. **None can name a different host, key or
+password** — the call says "publish (or fetch) what I already configured", and that is all it
+can say. The rule matters most for fetching, which writes to your own disk.
+
+Unattended runs need a key with **no passphrase**, and cannot use a password at all: nothing
+is stored and there is nobody to ask at 04:00, so they fail with a message rather than waiting
+forever on a prompt no one will see.

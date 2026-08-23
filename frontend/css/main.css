@@ -17182,8 +17182,10 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
     width: min(520px, 92vw); max-height: 70vh;
     display: flex; flex-direction: column;
     /* Opaque on purpose: a translucent surface here would render the remote file names
-       over whatever card sits behind the overlay. */
-    background: var(--bmm-bg-base, var(--bg-solid));
+       over whatever card sits behind the overlay. `--bmm-bg-base` is this app's opaque
+       surface — the fallback originally written here, `--bg-solid`, is BCWEB's token and
+       does not exist in BMM, so it would have painted nothing at all. */
+    background: var(--bmm-bg-base);
     border: 1px solid var(--border); border-radius: 12px;
     box-shadow: 0 18px 48px rgba(0, 0, 0, .45);
 }
