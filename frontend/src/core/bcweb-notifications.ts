@@ -104,8 +104,20 @@ export function stopBcwebNotifications(): void {
 /** Start polling, if a key is stored. Safe to call again — it replaces the timer
  *  rather than adding a second one, which is how a settings screen that re-runs its
  *  init ends up fetching twice as often every time it is opened. */
+/**
+ * Has somebody switched BetterCommunity notifications off?
+ *
+ * Checked HERE rather than by filtering what arrives, because the point is not to hide them:
+ * a poller that keeps calling a server every ten minutes for messages nobody will read is a
+ * request nobody asked for. Off means not fetched.
+ */
+export function bcwebNotificationsOff(): boolean {
+    try { return localStorage.getItem('bmm.muteSources.bcwebPoll') === '1'; } catch { return false; }
+}
+
 export async function startBcwebNotifications(): Promise<void> {
     stopBcwebNotifications();
+    if (bcwebNotificationsOff()) return;
     let ok = false;
     try { ok = await invoke('has_bcweb_api_key') as boolean; } catch { ok = false; }
     if (!ok) return;

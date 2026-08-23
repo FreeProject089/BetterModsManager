@@ -7919,5 +7919,11 @@
   "settings.catIndex.makeExport": "Exporter l'index",
   "settings.catIndex.makeEmpty": "Vous ne suivez encore aucun catalogue — ajoutez-en un ci-dessus.",
   "settings.catIndex.makeNone": "Cochez au moins un catalogue.",
-  "settings.catIndex.makeDone": "Index écrit avec {n} catalogue(s)."
+  "settings.catIndex.makeDone": "Index écrit avec {n} catalogue(s).",
+  "settings.notifBcweb": "Notifications BetterCommunity",
+  "settings.notifBcwebDesc": "Les messages du site, dans le centre de notifications. Désactivé, la vérification s'arrête complètement — rien n'est récupéré plutôt que récupéré puis caché.",
+  "settings.notifBcwebOn": "Notifications BetterCommunity activées.",
+  "settings.notifBcwebOff": "Notifications BetterCommunity désactivées — plus rien ne sera récupéré.",
+  "settings.notifPerSource": "Quelles bulles vous voulez",
+  "settings.notifPerSourceDesc": "Coché signifie affiché. Tout reste dans le centre de notifications dans les deux cas, et une erreur est toujours affichée."
 }

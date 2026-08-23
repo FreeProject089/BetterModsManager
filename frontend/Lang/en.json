@@ -7921,5 +7921,11 @@
   "settings.catIndex.makeExport": "Export the index",
   "settings.catIndex.makeEmpty": "You follow no catalogue yet — add one above first.",
   "settings.catIndex.makeNone": "Tick at least one catalogue.",
-  "settings.catIndex.makeDone": "Index written with {n} catalogue(s)."
+  "settings.catIndex.makeDone": "Index written with {n} catalogue(s).",
+  "settings.notifBcweb": "BetterCommunity notifications",
+  "settings.notifBcwebDesc": "Messages from the site, in the notification centre. Off stops the check entirely — nothing is fetched rather than fetched and hidden.",
+  "settings.notifBcwebOn": "BetterCommunity notifications on.",
+  "settings.notifBcwebOff": "BetterCommunity notifications off — nothing more will be fetched.",
+  "settings.notifPerSource": "Which popups you want",
+  "settings.notifPerSourceDesc": "Ticked means shown. Everything stays in the notification centre either way, and an error is always shown."
 }

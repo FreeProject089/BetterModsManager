@@ -142,18 +142,52 @@ export function toastsMuted(): boolean {
     try { return localStorage.getItem('bmm.muteToasts') === '1'; } catch { return false; }
 }
 
-export function toast(message, type = 'info', duration = 3000, icon = '') {
+/**
+ * The sources a popup can come from.
+ *
+ * Listed here so Settings can offer them without waiting for one to have fired at least once
+ * — a preferences screen that only shows what has already interrupted you is a screen you can
+ * only use after being interrupted.
+ */
+export const NOTIF_SOURCES = ['BMM', 'BCWEB', 'Repo', 'Tasks', 'Updates'] as const;
+export type NotifSource = (typeof NOTIF_SOURCES)[number];
+
+/**
+ * Is this source switched off?
+ *
+ * Read per call, like the global mute above and for the same reason: Settings writes it, and a
+ * cached copy would need a restart to take effect — which is the kind of setting people
+ * conclude is broken.
+ *
+ * DEFAULT ON. An unknown or newly added source is heard until somebody silences it; the other
+ * way round, a source added in an update would be silent for everybody who had ever opened
+ * this screen, and nothing would say why.
+ */
+export function sourceMuted(source: string): boolean {
+    try {
+        const raw = localStorage.getItem('bmm.muteSources');
+        if (!raw) return false;
+        const off = JSON.parse(raw);
+        return Array.isArray(off) && off.includes(source);
+    } catch { return false; }
+}
+
+export function toast(message, type = 'info', duration = 3000, icon = '', source = 'BMM') {
     // Recorded here and ONLY here. A toast is a three-second window onto something
     // that already happened — miss it and the information was simply gone, because
     // there was no second place to look. Hooking the record into toast() rather
     // than into each caller means the notification centre and the toast can never
     // disagree about what the app said. (ui/notification-center.ts)
-    try { recordNotification(String(message ?? ''), type as any); } catch { /* never let history break a message */ }
+    try { recordNotification(String(message ?? ''), type as any, source); } catch { /* never let history break a message */ }
 
     // Muted: the message is still RECORDED above, so the notification centre keeps every
     // word — what is switched off is the popup, not the information. Errors are never muted:
     // an error nobody is shown and nobody looks for is an app that failed silently.
-    if (toastsMuted() && type !== 'error') return () => {};
+    // Two switches, one rule: an ERROR is never silenced. An error nobody is shown and nobody
+    // looks for is an app that failed quietly, and "I muted notifications" is not consent to
+    // that. Everything is still RECORDED above either way — what a mute turns off is the
+    // popup, never the information.
+    if (type !== 'error' && (toastsMuted() || sourceMuted(source))) return () => {};
 
     const container = document.getElementById('toast-container');
     const el = document.createElement('div');
@@ -1453,6 +1487,59 @@ window.applyTaskySettings = function () {
         try { localStorage.setItem('bmm.muteToasts', on ? '0' : '1'); } catch { /* private mode */ }
         if (on) say();
     });
+})();
+
+// ── Notification preferences: per source, and BetterCommunity at the source ──
+//
+// The global mute above is all-or-nothing, which is the right default and was the only
+// control. "Tell me about my repo, not about the site" had no answer.
+(function initNotifPrefs() {
+    const readOff = (): string[] => {
+        try { const v = JSON.parse(localStorage.getItem('bmm.muteSources') || '[]'); return Array.isArray(v) ? v : []; }
+        catch { return []; }
+    };
+    const writeOff = (list: string[]) => {
+        try { localStorage.setItem('bmm.muteSources', JSON.stringify([...new Set(list)])); } catch { /* private mode */ }
+    };
+
+    const host = document.getElementById('notif-source-list');
+    if (host) {
+        const off = readOff();
+        for (const src of NOTIF_SOURCES) {
+            const label = document.createElement('label');
+            label.style.cssText = 'display:inline-flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;'
+                + 'padding:4px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bmm-s04)';
+            const box = document.createElement('input');
+            box.type = 'checkbox';
+            // CHECKED means "show me", which is the way round the sentence above the list
+            // reads. A list of things to switch OFF, ticked, is a control that says the
+            // opposite of what it does.
+            box.checked = !off.includes(src);
+            box.addEventListener('change', () => {
+                const now = readOff().filter((x) => x !== src);
+                if (!box.checked) now.push(src);
+                writeOff(now);
+            });
+            const text = document.createElement('span');
+            text.textContent = src;
+            label.append(box, text);
+            host.appendChild(label);
+        }
+    }
+
+    const bc = document.getElementById('toggle-notif-bcweb') as HTMLInputElement | null;
+    if (bc) {
+        try { bc.checked = localStorage.getItem('bmm.muteSources.bcwebPoll') !== '1'; } catch { /* private mode */ }
+        bc.addEventListener('change', async () => {
+            const on = bc.checked;
+            try { localStorage.setItem('bmm.muteSources.bcwebPoll', on ? '0' : '1'); } catch { /* private mode */ }
+            // Applied NOW, not at the next launch. A preference that needs a restart is one
+            // people conclude does not work.
+            const m = await import('../core/bcweb-notifications.js');
+            if (on) { void m.startBcwebNotifications(); } else { m.stopBcwebNotifications(); }
+            toast(on ? t('settings.notifBcwebOn') : t('settings.notifBcwebOff'), 'info');
+        });
+    }
 })();
 
 // ── Restore Tasky preferences on page load ───────────────

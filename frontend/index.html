@@ -3824,6 +3824,34 @@
                                         <span class="toggle-slider"></span>
                                     </label>
                                 </div>
+                                <!-- BetterCommunity notifications, at the source.
+                                     Switching these off STOPS THE POLL rather than hiding what
+                                     it fetches: a request every ten minutes for messages
+                                     nobody will read is a request nobody asked for. -->
+                                <div
+                                    style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--bmm-s03);border:1px solid var(--border);border-radius:10px">
+                                    <div>
+                                        <div style="font-size:13px;font-weight:600;color:var(--text-primary)"
+                                            data-i18n="settings.notifBcweb">BetterCommunity notifications</div>
+                                        <div style="font-size:11px;color:var(--text-muted);margin-top:2px"
+                                            data-i18n="settings.notifBcwebDesc">...</div>
+                                    </div>
+                                    <label class="toggle-switch" style="flex-shrink:0">
+                                        <input type="checkbox" id="toggle-notif-bcweb" checked />
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
+                                <!-- Per-source popups. One switch for all of them was the only
+                                     control, and "tell me about my repo, not about the site"
+                                     had no answer. -->
+                                <div
+                                    style="padding:10px 14px;background:var(--bmm-s03);border:1px solid var(--border);border-radius:10px">
+                                    <div style="font-size:13px;font-weight:600;color:var(--text-primary)"
+                                        data-i18n="settings.notifPerSource">Which popups you want</div>
+                                    <div style="font-size:11px;color:var(--text-muted);margin:2px 0 8px"
+                                        data-i18n="settings.notifPerSourceDesc">...</div>
+                                    <div id="notif-source-list" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+                                </div>
                                 <!-- Toggle Tasky animation -->
                                 <div
                                     style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--bmm-s03);border:1px solid var(--border);border-radius:10px">
