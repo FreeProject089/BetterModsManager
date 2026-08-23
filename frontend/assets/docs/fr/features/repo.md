@@ -223,6 +223,66 @@ le dossier, puis y écrit et efface un fichier témoin. « Le dossier existe » 
 d'y écrire » sont deux questions différentes, et seule la seconde compte — la version envoi de
 cet échec arrive après avoir tout transféré.
 
+### Quelles clés SSH fonctionnent
+
+Vérifié en décodant un exemplaire de chaque avec la bibliothèque que BMM utilise réellement,
+pas de mémoire.
+
+| Type de clé | Acceptée |
+|---|---|
+| **ed25519** | Oui — le défaut moderne, et celui à préférer |
+| **RSA** (3072, 4096) | Oui |
+| **ECDSA** nistp256 / nistp384 / nistp521 | Oui |
+| **DSA** | Non — OpenSSH l'a retiré ; `ssh-keygen -t dsa` refuse d'en générer |
+
+Le **conteneur** compte autant que l'algorithme. Tous ceux-ci sont lus tels quels :
+
+| En-tête du fichier | Ce qui l'a produit |
+|---|---|
+| `-----BEGIN OPENSSH PRIVATE KEY-----` | `ssh-keygen` aujourd'hui |
+| `PuTTY-User-Key-File-…` | PuTTY / WinSCP (`.ppk`) — aucune conversion nécessaire |
+| `-----BEGIN RSA PRIVATE KEY-----` | `ssh-keygen -m PEM` (PKCS#1) |
+| `-----BEGIN PRIVATE KEY-----`, `-----BEGIN EC PRIVATE KEY-----` | PKCS#8 |
+| `-----BEGIN ENCRYPTED PRIVATE KEY-----` | PKCS#8 protégé par phrase secrète |
+
+Une clé protégée par phrase secrète fonctionne : saisis-la dans le champ voisin. Elle sert à
+cette connexion et n'est jamais conservée — c'est pourquoi une exécution sans surveillance
+(tâche planifiée, lien profond) exige une clé **sans** phrase secrète.
+
+!!! warning "RSA exige un serveur moderne, et BMM le lui demande"
+    L'ancienne signature `ssh-rsa` est en SHA-1, refusée par défaut depuis OpenSSH 8.8. BMM
+    négocie `rsa-sha2-512` / `rsa-sha2-256` avec le serveur. Si le tien est antérieur à 8.8 et
+    n'offre rien d'autre, utilise une clé ed25519.
+
+#### La moitié publique va sur le serveur
+
+BMM ne lit jamais que la clé PRIVÉE. La PUBLIQUE doit se trouver dans
+`~/.ssh/authorized_keys` sur le serveur, et au **format OpenSSH sur une seule ligne** :
+
+```
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA… toi@machine
+```
+
+Le bouton *Save public key* de PuTTY écrit autre chose — le bloc RFC4716 :
+
+```
+---- BEGIN SSH2 PUBLIC KEY ----
+Comment: "256-bit ED25519…"
+AAAAC3NzaC1lZDI1NTE5AAAA…
+---- END SSH2 PUBLIC KEY ----
+```
+
+`authorized_keys` ne sait pas le lire, et le serveur refuse la clé alors que tout a l'air
+correct. Convertis-le, ou dérive la moitié publique depuis la clé privée que tu as déjà :
+
+```bash
+ssh-keygen -i -m RFC4716 -f exportee.pub    # RFC4716 → OpenSSH
+ssh-keygen -y -f ~/.ssh/id_ed25519          # directement depuis la clé privée
+```
+
+Dans PuTTYgen, la même chose est la zone *Public key for pasting into OpenSSH
+authorized_keys* en haut de la fenêtre — pas le bouton **Save public key**.
+
 ### Récupérer depuis le serveur
 
 **Récupérer depuis le serveur**, c'est la même connexion dans l'autre sens : elle copie le

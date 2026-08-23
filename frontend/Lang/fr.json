@@ -7719,6 +7719,7 @@
   "repo.ssh.forgotten": "Empreinte oubliée. La prochaine connexion fera confiance à ce qui répondra.",
   "repo.ssh.errKeyRead": "Impossible de lire le fichier de clé : {detail}",
   "repo.ssh.errKeyPassphrase": "Cette clé est chiffrée — saisissez sa phrase secrète.",
+  "repo.ssh.errKeyBadPassphrase": "Phrase secrète incorrecte : la clé est bien chiffrée, mais elle ne s'ouvre pas avec ce que vous avez saisi.",
   "repo.ssh.errKeyDecode": "Ce fichier n’est pas une clé privée lisible par BMM : {detail}",
   "repo.ssh.errConnect": "Impossible de joindre {host} : {detail}",
   "repo.ssh.errAuth": "Échec de l’authentification : {detail}",

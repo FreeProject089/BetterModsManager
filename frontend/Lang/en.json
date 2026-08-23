@@ -7721,6 +7721,7 @@
   "repo.ssh.forgotten": "Fingerprint forgotten. The next connection will trust whatever answers.",
   "repo.ssh.errKeyRead": "Could not read the key file: {detail}",
   "repo.ssh.errKeyPassphrase": "That key is encrypted — enter its passphrase.",
+  "repo.ssh.errKeyBadPassphrase": "Wrong passphrase: the key is encrypted, but it does not open with what you typed.",
   "repo.ssh.errKeyDecode": "That file is not a private key BMM can read: {detail}",
   "repo.ssh.errConnect": "Could not reach {host}: {detail}",
   "repo.ssh.errAuth": "Authentication failed: {detail}",

@@ -124,11 +124,22 @@ fn read_key(path: &str, passphrase: Option<&str>) -> Result<russh::keys::Private
     let text = std::fs::read_to_string(path)
         .map_err(|e| format!("repo.ssh.errKeyRead|{}|{}", path, e))?;
     decode_secret_key(&text, passphrase).map_err(|e| {
-        // An encrypted key with no passphrase is the common case and deserves its own
-        // message: "invalid key" sends people looking for a corrupt file.
+        // An encrypted key deserves its own message at both ends: "invalid key" sends people
+        // looking for a corrupt file, and "cryptographic error" tells them nothing at all.
+        //
+        // MATCH ON "encrypted", NOT "passphrase". This looked for the word "passphrase" in
+        // russh's message, and russh says "The key is encrypted" — so the dedicated message
+        // could never fire and every passphrase-protected key reported the generic decode
+        // error instead. Found by decoding one and reading what actually came back.
         let s = e.to_string();
-        if passphrase.is_none() && s.to_lowercase().contains("passphrase") {
+        let low = s.to_lowercase();
+        if passphrase.is_none() && (low.contains("encrypted") || low.contains("passphrase")) {
             "repo.ssh.errKeyPassphrase".to_string()
+        } else if passphrase.is_some() {
+            // A passphrase WAS supplied and the key still would not open. russh reports this
+            // as "SshKey: cryptographic error", which reads like a broken key rather than
+            // four mistyped characters.
+            "repo.ssh.errKeyBadPassphrase".to_string()
         } else {
             format!("repo.ssh.errKeyDecode|{}", s)
         }

@@ -213,6 +213,65 @@ the folder, and writes-then-deletes a probe file. "The folder exists" and "I may
 it" are different questions, and only the second one matters — the upload version of that
 failure happens after transferring everything.
 
+### Which SSH keys work
+
+Verified by decoding one of each with the library BMM actually uses, not from memory.
+
+| Key type | Accepted |
+|---|---|
+| **ed25519** | Yes — the modern default, and the one to prefer |
+| **RSA** (3072, 4096) | Yes |
+| **ECDSA** nistp256 / nistp384 / nistp521 | Yes |
+| **DSA** | No — OpenSSH removed it; `ssh-keygen -t dsa` refuses to generate one |
+
+The **container** matters as much as the algorithm. Any of these are read as they are:
+
+| Header in the file | What produced it |
+|---|---|
+| `-----BEGIN OPENSSH PRIVATE KEY-----` | `ssh-keygen` today |
+| `PuTTY-User-Key-File-…` | PuTTY / WinSCP (`.ppk`) — no conversion needed |
+| `-----BEGIN RSA PRIVATE KEY-----` | `ssh-keygen -m PEM` (PKCS#1) |
+| `-----BEGIN PRIVATE KEY-----`, `-----BEGIN EC PRIVATE KEY-----` | PKCS#8 |
+| `-----BEGIN ENCRYPTED PRIVATE KEY-----` | PKCS#8, passphrase-protected |
+
+A passphrase-protected key works: type the passphrase in the field beside the key. It is used
+for that connection and never stored, which is why an unattended run — a scheduled task, a
+deeplink — needs a key with **no** passphrase.
+
+!!! warning "RSA needs a modern server, and BMM now asks for one"
+    The legacy `ssh-rsa` signature is SHA-1, refused by default since OpenSSH 8.8. BMM
+    negotiates `rsa-sha2-512` / `rsa-sha2-256` with the server instead. If yours is older than
+    8.8 and offers nothing else, use an ed25519 key.
+
+#### The public half goes on the server
+
+BMM only ever reads the PRIVATE key. The PUBLIC one has to be in `~/.ssh/authorized_keys` on
+the server, and it must be the **one-line OpenSSH format**:
+
+```
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA… you@machine
+```
+
+PuTTY's *Save public key* writes something else — the RFC4716 block:
+
+```
+---- BEGIN SSH2 PUBLIC KEY ----
+Comment: "256-bit ED25519…"
+AAAAC3NzaC1lZDI1NTE5AAAA…
+---- END SSH2 PUBLIC KEY ----
+```
+
+`authorized_keys` cannot read that, and the server rejects the key while everything looks
+correct. Convert it, or derive the public half from the private key you already have:
+
+```bash
+ssh-keygen -i -m RFC4716 -f exported.pub    # RFC4716 → OpenSSH
+ssh-keygen -y -f ~/.ssh/id_ed25519          # straight from the private key
+```
+
+In PuTTYgen the same thing is the *Public key for pasting into OpenSSH authorized_keys* box at
+the top of the window — not the **Save public key** button.
+
 ### Fetching it back
 
 **Fetch from the server** is the same connection in the other direction: it copies the repo
