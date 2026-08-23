@@ -385,7 +385,16 @@ Paste the **public** half — the `.pub` file, one-line OpenSSH format, the same
 - **A repo hosted on BetterCommunity** → the repo dashboard, *Access* → *Authorised public
   keys*.
 - **A community catalogue** → your catalogue's *Access* panel, same field. This covers every
-  kind: plugin, theme, preset, app, and a catalogue index.
+  kind a catalogue can hold: plugin, theme, preset and app.
+- **A catalogue index you host yourself** → it is just a JSON file on your server, so it is
+  protected by whatever protects that server, and BMM presents both the password and the key
+  when fetching it.
+
+!!! note "BetterCommunity's own index is public on purpose"
+    `/api/catalogs.json` is the platform's directory of listed public catalogues. It has no
+    access gate and is not meant to get one — closing it would hide the catalogues it exists
+    to advertise. Protect the individual catalogues instead; a private one never appears in
+    it in the first place.
 - **A repo you serve yourself** from BMM → the same list, passed to the built-in server.
 
 Adding a key makes it **required for everyone**. It is not one more way onto an allow list —

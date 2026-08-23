@@ -403,7 +403,16 @@ qu'attend `authorized_keys` :
 - **Un dépôt hébergé sur BetterCommunity** → tableau de bord du dépôt, *Accès* → *Clés
   publiques autorisées*.
 - **Un catalogue communautaire** → le panneau *Accès* de ton catalogue, même champ. Cela couvre
-  tous les types : plugin, thème, préréglage, application, et un index de catalogues.
+  tous les types qu'un catalogue peut contenir : plugin, thème, préréglage et application.
+- **Un index de catalogues que tu héberges toi-même** → ce n'est qu'un fichier JSON sur ton
+  serveur : il est protégé par ce qui protège ce serveur, et BMM présente à la fois le mot de
+  passe et la clé en allant le chercher.
+
+!!! note "L'index de BetterCommunity est public exprès"
+    `/api/catalogs.json` est l'annuaire des catalogues publics répertoriés de la plateforme.
+    Il n'a aucune garde d'accès et n'est pas destiné à en recevoir une — le fermer masquerait
+    les catalogues qu'il existe pour faire connaître. Protège plutôt chaque catalogue ; un
+    catalogue privé n'y apparaît de toute façon jamais.
 - **Un dépôt que tu sers toi-même** depuis BMM → la même liste, transmise au serveur intégré.
 
 Ajouter une clé la rend **obligatoire pour tout le monde**. Ce n'est pas une entrée de plus sur
