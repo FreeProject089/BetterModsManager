@@ -7889,5 +7889,21 @@
   "repo.remoteCopyPath": "Copy the path",
   "repo.remotePathCopied": "Path copied.",
   "repo.update.modeLocal": "On this machine",
-  "repo.update.modeRemote": "On a server"
+  "repo.update.modeRemote": "On a server",
+  "sched.preset.apiPing": "Watch a service and say when it breaks",
+  "sched.preset.deeplinkOpen": "Open a BMM screen on a schedule",
+  "sched.preset.pluginNight": "Compare a plugin, then apply it",
+  "sched.preset.sshNightly": "Publish the repo over SSH, nightly",
+  "sched.preset.unattendedSync": "Sync a repo while you sleep",
+  "sched.preset.packBackup": "Export your modpacks every week",
+  "sched.preset.diskThenSync": "Only sync if there is room",
+  "sched.preset.apiChain": "Read a value from an API and keep it",
+  "sched.presetd.apiPing": "Every 15 minutes, call an HTTP endpoint. Notify only when it stops answering.",
+  "sched.presetd.deeplinkOpen": "Fire a bmm:// link — every screen and action the app exposes has one.",
+  "sched.presetd.pluginNight": "See what a plugin would change before it changes it — and only apply if it differs.",
+  "sched.presetd.sshNightly": "Export, then send it to the saved SSH target. Needs a key with no passphrase.",
+  "sched.presetd.unattendedSync": "A real sync, not a screen. Nothing to press at 3am.",
+  "sched.presetd.packBackup": "A .bmp beside your data, so a broken profile is an import away from fixed.",
+  "sched.presetd.diskThenSync": "Check free space first, and stop with a reason rather than filling the disk.",
+  "sched.presetd.apiChain": "Pull one field out of a JSON response into a shared variable other tasks can read."
 }

@@ -2524,6 +2524,135 @@ const PRESETS: { key: string; icon: string; title: string; desc: string; make: (
             ],
         }),
     },
+    // ── the doors that open outward ──────────────────────────────────────────
+    //
+    // Everything above this line is BMM talking to itself. These three — a deeplink, an HTTP
+    // call, a plugin — are how a task reaches anything else, and they are the ones nobody
+    // starts from, because knowing they exist means having read the action list to the end.
+    {
+        key: 'apiPing', icon: '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
+        title: 'Watch a service and say when it breaks',
+        desc: 'Every 15 minutes, call an HTTP endpoint. Notify only when it stops answering.',
+        make: () => ({
+            name: 'Watch a service',
+            trigger: { type: 'interval', everyMinutes: 15 },
+            // `command` because an HTTP call can post a captured variable anywhere — the
+            // runner asks for that permission and refuses without it.
+            permissions: { command: true },
+            steps: [
+                { kind: 'action', action: { type: 'http.request', params: { url: 'https://example.com/health', method: 'GET', timeoutMs: 10000 } } },
+                // http.status is set by the call above under a name a variable cannot collide
+                // with, because dots are not allowed in one.
+                { kind: 'if', condition: { type: 'value', params: { source: 'http.status', op: '!=', value: 200 } },
+                  then: [{ kind: 'action', action: { type: 'notify', params: { message: 'The service answered {http.status}.' } } }],
+                  else: [] },
+            ],
+        }),
+    },
+    {
+        key: 'deeplinkOpen', icon: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+        title: 'Open a BMM screen on a schedule',
+        desc: 'Fire a bmm:// link — every screen and action the app exposes has one.',
+        make: () => ({
+            name: 'Open a screen',
+            trigger: { type: 'dailyAt', time: '18:00' },
+            permissions: { deeplink: true },
+            steps: [
+                { kind: 'action', action: { type: 'deeplink', params: { url: 'bmm://mod/check-updates' } } },
+            ],
+        }),
+    },
+    {
+        key: 'pluginNight', icon: '<path d="M12 2v4"/><path d="M12 18v4"/><path d="m4.93 4.93 2.83 2.83"/><path d="m16.24 16.24 2.83 2.83"/><path d="M2 12h4"/><path d="M18 12h4"/><path d="m4.93 19.07 2.83-2.83"/><path d="m16.24 7.76 2.83-2.83"/>',
+        title: 'Compare a plugin, then apply it',
+        desc: 'See what a plugin would change before it changes it — and only apply if it differs.',
+        make: () => ({
+            name: 'Apply a plugin modlist',
+            trigger: { type: 'weeklyAt', time: '20:00', days: [5] },
+            permissions: { deeplink: true },
+            steps: [
+                // Compare first. Applying blind is how a modlist that was edited upstream
+                // rearranges a profile somebody spent an evening on.
+                { kind: 'action', action: { type: 'plugin.compare', params: { id: '' } } },
+                { kind: 'delay', seconds: 5 },
+                { kind: 'action', action: { type: 'plugin.apply', params: { id: '' } } },
+                { kind: 'action', action: { type: 'notify', params: { message: 'Plugin applied.' } } },
+            ],
+        }),
+    },
+    {
+        key: 'sshNightly', icon: '<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>',
+        title: 'Publish the repo over SSH, nightly',
+        desc: 'Export, then send it to the saved SSH target. Needs a key with no passphrase.',
+        make: () => ({
+            name: 'Nightly publish',
+            trigger: { type: 'dailyAt', time: '04:00' },
+            steps: [
+                { kind: 'action', action: { type: 'repo.gen', params: {} } },
+                { kind: 'action', action: { type: 'repo.publishSsh', params: { dir: '' } } },
+                { kind: 'action', action: { type: 'notify', params: { message: 'Repo published.' } } },
+            ],
+        }),
+    },
+    {
+        key: 'unattendedSync', icon: '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>',
+        title: 'Sync a repo while you sleep',
+        desc: 'A real sync, not a screen. Nothing to press at 3am.',
+        make: () => ({
+            name: 'Unattended sync',
+            trigger: { type: 'dailyAt', time: '03:00' },
+            steps: [
+                { kind: 'action', action: { type: 'repo.syncNow', params: {} } },
+                { kind: 'action', action: { type: 'notify', params: { message: 'Repo synced.' } } },
+            ],
+        }),
+    },
+    {
+        key: 'packBackup', icon: '<path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/>',
+        title: 'Export your modpacks every week',
+        desc: 'A .bmp beside your data, so a broken profile is an import away from fixed.',
+        make: () => ({
+            name: 'Weekly modpack export',
+            trigger: { type: 'weeklyAt', time: '10:00', days: [0] },
+            steps: [
+                { kind: 'action', action: { type: 'mods.exportModpack', params: {} } },
+            ],
+        }),
+    },
+    {
+        key: 'diskThenSync', icon: '<line x1="22" x2="2" y1="12" y2="12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
+        title: 'Only sync if there is room',
+        desc: 'Check free space first, and stop with a reason rather than filling the disk.',
+        make: () => ({
+            name: 'Sync if there is room',
+            trigger: { type: 'dailyAt', time: '02:00' },
+            steps: [
+                { kind: 'action', action: { type: 'perf.diskSpace', params: {} } },
+                // A guard clause, not an if/else: stopping says WHY in the run log, while an
+                // empty else branch looks like the task ran and did nothing.
+                { kind: 'if', condition: { type: 'value', params: { source: 'disk.free_gb', op: '<', value: 5 } },
+                  then: [{ kind: 'action', action: { type: 'task.stop', params: { reason: 'Less than 5 GB free — not syncing.' } } }],
+                  else: [] },
+                { kind: 'action', action: { type: 'repo.syncNow', params: {} } },
+            ],
+        }),
+    },
+    {
+        key: 'apiChain', icon: '<path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/>',
+        title: 'Read a value from an API and keep it',
+        desc: 'Pull one field out of a JSON response into a shared variable other tasks can read.',
+        make: () => ({
+            name: 'Read a value from an API',
+            trigger: { type: 'interval', everyMinutes: 60 },
+            permissions: { command: true },
+            steps: [
+                // jsonPath pulls ONE field out. Without it every task that reads an API needs
+                // a script step just to get at a value, which is the common case.
+                { kind: 'action', action: { type: 'http.request', params: { url: 'https://example.com/api/status.json', method: 'GET', jsonPath: 'version', into: 'apiVersion', timeoutMs: 10000 } } },
+                { kind: 'action', action: { type: 'notify', params: { message: 'Upstream is at {apiVersion}.' } } },
+            ],
+        }),
+    },
 ];
 
 /** Build a full task from a preset. The id and createdAt are minted here, never stored in

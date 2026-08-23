@@ -7887,5 +7887,21 @@
   "repo.remoteCopyPath": "Copier le chemin",
   "repo.remotePathCopied": "Chemin copié.",
   "repo.update.modeLocal": "Sur cette machine",
-  "repo.update.modeRemote": "Sur un serveur"
+  "repo.update.modeRemote": "Sur un serveur",
+  "sched.preset.apiPing": "Surveiller un service et prévenir quand il tombe",
+  "sched.preset.deeplinkOpen": "Ouvrir un écran de BMM à heure fixe",
+  "sched.preset.pluginNight": "Comparer un plugin, puis l'appliquer",
+  "sched.preset.sshNightly": "Publier le dépôt par SSH, chaque nuit",
+  "sched.preset.unattendedSync": "Synchroniser un dépôt pendant que vous dormez",
+  "sched.preset.packBackup": "Exporter vos modpacks chaque semaine",
+  "sched.preset.diskThenSync": "Ne synchroniser que s'il reste de la place",
+  "sched.preset.apiChain": "Lire une valeur d'une API et la conserver",
+  "sched.presetd.apiPing": "Toutes les 15 minutes, appelle une adresse HTTP. Ne prévient que lorsqu'elle cesse de répondre.",
+  "sched.presetd.deeplinkOpen": "Déclenche un lien bmm:// — chaque écran et chaque action de l'application en a un.",
+  "sched.presetd.pluginNight": "Voir ce qu'un plugin changerait avant qu'il ne le change — et ne l'appliquer que si ça diffère.",
+  "sched.presetd.sshNightly": "Exporte, puis envoie vers la cible SSH enregistrée. Exige une clé sans phrase secrète.",
+  "sched.presetd.unattendedSync": "Une vraie synchronisation, pas un écran. Rien à presser à 3 h du matin.",
+  "sched.presetd.packBackup": "Un .bmp à côté de vos données : un profil cassé n'est plus qu'à un import de la réparation.",
+  "sched.presetd.diskThenSync": "Vérifie d'abord l'espace libre, et s'arrête en disant pourquoi plutôt que de remplir le disque.",
+  "sched.presetd.apiChain": "Extrait un champ d'une réponse JSON vers une variable partagée que d'autres tâches peuvent lire."
 }
