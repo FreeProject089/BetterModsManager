@@ -7873,7 +7873,7 @@
   "repo.update.urlNoTarget": "No SSH target named “{name}”. Add it under Publish over SSH.",
   "modpack.cat.tabFollow": "Follow",
   "modpack.cat.tabBuild": "Publish",
-  "modpack.cat.build.desc": "Turn your local packs into a catalogue others can follow. BMM writes the JSON; you upload it and the .bmp files wherever you host them.",
+  "modpack.cat.build.desc": "Tick the packs and get ONE file. A .cbmp holds the packs themselves — nothing to host separately, no addresses to type.",
   "modpack.cat.build.namePh": "Catalogue name",
   "modpack.cat.build.basePh": "https://… where the .bmp files will live",
   "modpack.cat.build.fill": "Fill addresses",
@@ -7905,5 +7905,13 @@
   "sched.presetd.unattendedSync": "A real sync, not a screen. Nothing to press at 3am.",
   "sched.presetd.packBackup": "A .bmp beside your data, so a broken profile is an import away from fixed.",
   "sched.presetd.diskThenSync": "Check free space first, and stop with a reason rather than filling the disk.",
-  "sched.presetd.apiChain": "Pull one field out of a JSON response into a shared variable other tasks can read."
+  "sched.presetd.apiChain": "Pull one field out of a JSON response into a shared variable other tasks can read.",
+  "modpack.cat.openFile": "Open a .cbmp…",
+  "modpack.cat.build.oneFile": "The .cbmp contains the packs. Share the file, or put it on a server and share its address.",
+  "modpack.cat.errNoPacks": "No pack went in — tick at least one that still exists.",
+  "modpack.cat.errNotCbmp": "That file is not a .cbmp.",
+  "modpack.cat.errNoIndex": "That .cbmp has no catalogue index inside it.",
+  "modpack.cat.errBadIndex": "That .cbmp's index could not be read.",
+  "modpack.cat.errNoEntry": "That pack is not inside this catalogue any more.",
+  "modpack.cat.errRead": "That file could not be read."
 }

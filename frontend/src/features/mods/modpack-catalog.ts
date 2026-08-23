@@ -119,6 +119,10 @@ export async function openModpackCatalog(notify: Toast): Promise<void> {
             <input type="text" class="input" id="mpc-src" style="flex:1;min-width:0"
                    placeholder="https://.../catalog.json" spellcheck="false">
             <button class="btn btn-sm btn-accent" id="mpc-add">${escHtml(t('common.add'))}</button>
+            <!-- A .cbmp is one file, so opening one off the disk is as ordinary as following
+                 an address. The first version could only do the latter, which meant a
+                 catalogue somebody sent you had to be uploaded before it could be read. -->
+            <button class="btn btn-sm btn-secondary" id="mpc-open">${escHtml(t('modpack.cat.openFile'))}</button>
           </div>
           ${sourceAccessHtml('mpc')}
           <div id="mpc-sources" style="display:flex;flex-direction:column;gap:4px"></div>
@@ -126,18 +130,11 @@ export async function openModpackCatalog(notify: Toast): Promise<void> {
         </div>
         <div class="modal-body" id="mpc-view-build" hidden style="padding:16px 20px;display:flex;flex-direction:column;gap:12px">
           <p style="font-size:12px;color:var(--text-muted);margin:0">${escHtml(t('modpack.cat.build.desc'))}</p>
-          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-            <input type="text" class="input" id="mpc-b-name" style="flex:1;min-width:160px"
-                   placeholder="${escHtml(t('modpack.cat.build.namePh'))}" spellcheck="false">
-          </div>
-          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-            <input type="text" class="input" id="mpc-b-base" style="flex:1;min-width:200px"
-                   placeholder="${escHtml(t('modpack.cat.build.basePh'))}" spellcheck="false">
-            <button class="btn btn-sm btn-secondary" id="mpc-b-fill" type="button">${escHtml(t('modpack.cat.build.fill'))}</button>
-          </div>
-          <div style="font-size:10px;color:var(--text-muted);line-height:1.5">${escHtml(t('modpack.cat.build.baseHint'))}</div>
-          <div id="mpc-b-list" style="display:flex;flex-direction:column;gap:6px"></div>
-          <div style="display:flex;justify-content:flex-end;gap:8px">
+          <input type="text" class="input" id="mpc-b-name"
+                 placeholder="${escHtml(t('modpack.cat.build.namePh'))}" spellcheck="false">
+          <div id="mpc-b-list" style="display:flex;flex-direction:column;gap:6px;max-height:38vh;overflow:auto"></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+            <span style="font-size:10px;color:var(--text-muted);line-height:1.5;flex:1;min-width:180px">${escHtml(t('modpack.cat.build.oneFile'))}</span>
             <button class="btn btn-sm btn-accent" id="mpc-b-export" type="button">${escHtml(t('modpack.cat.build.export'))}</button>
           </div>
         </div>
@@ -156,16 +153,30 @@ export async function openModpackCatalog(notify: Toast): Promise<void> {
         },
         () => (ov.querySelector('#mpc-src') as HTMLInputElement | null)?.value?.trim() || '');
 
+    ov.querySelector('#mpc-open')?.addEventListener('click', async () => {
+        const { pickFile } = await import('../../core/api.js');
+        const path = await pickFile([{ name: 'BMM modpack catalogue', extensions: ['cbmp'] }]);
+        if (!path) return;
+        writeModpackCatalogs([...readModpackCatalogs(), path]);
+        await refresh();
+    });
+
     ov.querySelector('#mpc-add')?.addEventListener('click', async () => {
         const input = ov.querySelector('#mpc-src') as HTMLInputElement;
         const url = input.value.trim();
-        if (!/^https?:\/\//i.test(url)) { toast(t('modpack.cat.badUrl'), 'warning'); return; }
+        if (!/^https?:\/\//i.test(url) && !/\.cbmp$/i.test(url)) { toast(t('modpack.cat.badUrl'), 'warning'); return; }
         // Checked by SHAPE before it is followed. A URL that answers with a theme catalogue
         // would otherwise be added and then show an empty list, which reads as "the catalogue
         // is empty" rather than "that is not a modpack catalogue".
         try {
-            const doc = JSON.parse(await fetchSourceText(url, true));
-            if (!looksLikeModpackFeed(doc)) { toast(t('modpack.cat.notFeed'), 'warning', 7000); return; }
+            if (/\.cbmp(\?|$)/i.test(url)) {
+                // Reading the index IS the check: a file that is not a .cbmp has no
+                // catalog.json and says so precisely.
+                await invoke('read_modpack_catalog', { source: url });
+            } else {
+                const doc = JSON.parse(await fetchSourceText(url, true));
+                if (!looksLikeModpackFeed(doc)) { toast(t('modpack.cat.notFeed'), 'warning', 7000); return; }
+            }
         } catch (e) {
             toast(t('modpack.cat.unreachable'), 'error', 7000);
             return;
@@ -194,12 +205,15 @@ function slugify(name: string): string {
 }
 
 /**
- * The builder: your local packs, each with the address it will be downloaded from.
+ * The builder: tick the packs, name the catalogue, get ONE file.
  *
- * The URL is the whole difficulty. A theme catalogue can carry the theme; a modpack is a .bmp
- * that has to be hosted, and BMM cannot know where you will put it. So it asks — once, with a
- * base address that fills every row, because eleven URLs differing by a file name is not
- * something to type by hand.
+ * The first version asked for a download address per pack, because a catalogue was a JSON feed
+ * and the packs had to live somewhere else. That is right for themes and plugins, whose
+ * payloads are large; it is wrong here, because a `.bmp` is a small signed JSON document. So a
+ * publisher was made to upload eleven files and type eleven addresses to distribute something
+ * that fits in one — and the screen that asked for it was the screen nobody understood.
+ *
+ * A `.cbmp` holds the packs. There is nothing to host separately and nothing to type.
  */
 async function renderBuilder(ov: HTMLElement): Promise<void> {
     const listEl = ov.querySelector('#mpc-b-list') as HTMLElement;
@@ -210,56 +224,36 @@ async function renderBuilder(ov: HTMLElement): Promise<void> {
         return;
     }
     listEl.innerHTML = packs.map((p, i) => `
-      <div style="display:flex;align-items:center;gap:8px;min-width:0">
+      <label style="display:flex;align-items:center;gap:8px;min-width:0;cursor:pointer">
         <input type="checkbox" class="mpc-b-pick" data-i="${i}" checked style="flex:0 0 auto">
-        <span style="flex:0 0 auto;font-size:12px;font-weight:600;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(p.name || '')}</span>
-        <input type="text" class="input input-sm mpc-b-url" data-i="${i}" style="flex:1;min-width:0;font-size:11px"
-               placeholder="https://.../${escHtml(slugify(p.name || ''))}.bmp" spellcheck="false">
-      </div>`).join('');
+        <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px">${escHtml(p.name || '')}</span>
+        <span style="flex:0 0 auto;font-size:10px;color:var(--text-muted)">${Array.isArray(p.mods) ? p.mods.length : 0} ${escHtml(t('modpack.cat.mods'))}</span>
+      </label>`).join('');
 
-    ov.querySelector('#mpc-b-fill')?.addEventListener('click', () => {
-        const base = (ov.querySelector('#mpc-b-base') as HTMLInputElement).value.trim().replace(/\/+$/, '');
-        if (!base) { toast(t('modpack.cat.build.needBase'), 'warning'); return; }
-        listEl.querySelectorAll<HTMLInputElement>('.mpc-b-url').forEach((inp) => {
-            const p = packs[Number(inp.dataset.i)];
-            inp.value = `${base}/${slugify(p?.name || '')}.bmp`;
-        });
-    });
-
-    ov.querySelector('#mpc-b-export')?.addEventListener('click', async () => {
-        const name = (ov.querySelector('#mpc-b-name') as HTMLInputElement).value.trim()
-            || t('modpack.cat.build.defName');
-        const rows: any[] = [];
-        let missing = 0;
-        listEl.querySelectorAll<HTMLInputElement>('.mpc-b-pick').forEach((box) => {
-            if (!box.checked) return;
-            const i = Number(box.dataset.i);
-            const p = packs[i];
-            const url = (listEl.querySelector(`.mpc-b-url[data-i="${i}"]`) as HTMLInputElement)?.value?.trim() || '';
-            // A row with no address would export an entry no client can install — a catalogue
-            // that lists things it cannot deliver is worse than a shorter catalogue.
-            if (!url) { missing += 1; return; }
-            rows.push({
-                id: slugify(p.name || ''),
-                name: p.name || '',
-                description: p.description || '',
-                version: p.version || '1.0',
-                download_url: url,
-                mods: Array.isArray(p.mods) ? p.mods.length : undefined,
+    const exportBtn = ov.querySelector('#mpc-b-export') as HTMLButtonElement | null;
+    if (exportBtn && exportBtn.dataset.wired !== '1') {
+        exportBtn.dataset.wired = '1';
+        exportBtn.addEventListener('click', async () => {
+            const name = (ov.querySelector('#mpc-b-name') as HTMLInputElement).value.trim()
+                || t('modpack.cat.build.defName');
+            const ids: string[] = [];
+            listEl.querySelectorAll<HTMLInputElement>('.mpc-b-pick').forEach((box) => {
+                if (box.checked) ids.push(packs[Number(box.dataset.i)]?.id);
             });
+            if (!ids.filter(Boolean).length) { toast(t('modpack.cat.build.nothing'), 'warning'); return; }
+            const { saveFile } = await import('../../core/api.js');
+            const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'modpacks';
+            const path = await saveFile({ defaultPath: `${slug}.cbmp`, filters: [{ name: 'BMM modpack catalogue', extensions: ['cbmp'] }] });
+            if (!path) return;
+            exportBtn.disabled = true;
+            try {
+                const n = await invoke('export_modpack_catalog', { name, ids: ids.filter(Boolean), destPath: path }) as number;
+                toast(t('modpack.cat.build.done').replace('{n}', String(n)), 'success', 7000);
+            } catch (e) {
+                toast(String(e).startsWith('modpack.cat.errNoPacks') ? t('modpack.cat.build.nothing') : String(e), 'error', 8000);
+            } finally { exportBtn.disabled = false; }
         });
-        if (!rows.length) { toast(t('modpack.cat.build.nothing'), 'warning'); return; }
-        const json = JSON.stringify({ version: '1.0', name, modpacks: rows }, null, 2);
-        const { saveFile } = await import('../../core/api.js');
-        const path = await saveFile({ defaultPath: `${slugify(name)}.json`, filters: [{ name: 'JSON', extensions: ['json'] }] });
-        if (!path) return;
-        try {
-            await invoke('write_text_file', { path, content: json });
-            toast(missing
-                ? t('modpack.cat.build.doneSome').replace('{n}', String(rows.length)).replace('{m}', String(missing))
-                : t('modpack.cat.build.done').replace('{n}', String(rows.length)), missing ? 'warning' : 'success', 7000);
-        } catch (e) { toast(String(e), 'error'); }
-    });
+    }
 }
 
 function close(): void {
@@ -291,8 +285,25 @@ async function refresh(): Promise<void> {
     // Each source is fetched independently and its own failure stays its own: one unreachable
     // catalogue used to be able to empty the whole list, which looks like everything broke.
     const results = await Promise.all(sources.map(async (u) => {
-        try { return parseModpackFeed(JSON.parse(await fetchSourceText(u, true)), u).packs; }
-        catch { return null; }
+        try {
+            // A .cbmp carries its packs; a .json feed points at them. Told apart by the
+            // suffix rather than by trying one and falling back, because "that was not a zip"
+            // and "that server is down" both arrive as a thrown error and only one of them
+            // is worth retrying differently.
+            if (/\.cbmp(\?|$)/i.test(u)) {
+                const cat = await invoke('read_modpack_catalog', { source: u }) as any;
+                return (cat?.modpacks || []).map((m: any) => ({
+                    id: String(m.id || ''), name: String(m.name || ''),
+                    description: String(m.description || ''), author: '',
+                    version: String(m.version || ''),
+                    // The zip ENTRY, not a URL. install() branches on which it got.
+                    url: String(m.file || ''), tags: [], game: '',
+                    mods: Number.isFinite(m.mods) ? m.mods : undefined,
+                    source: u,
+                }));
+            }
+            return parseModpackFeed(JSON.parse(await fetchSourceText(u, true)), u).packs;
+        } catch { return null; }
     }));
     const failed = results.filter((r) => r === null).length;
     const packs = results.flatMap((r) => r || []);
@@ -329,7 +340,13 @@ async function refresh(): Promise<void> {
         const btn = b as HTMLButtonElement;
         btn.disabled = true;
         try {
-            await invoke('install_modpack_from_url', { downloadUrl: p.url });
+            // From inside the .cbmp when that is where it came from, over the network
+            // otherwise. `source` is the catalogue, `url` the entry inside it.
+            if (/\.cbmp(\?|$)/i.test(p.source || '')) {
+                await invoke('install_from_modpack_catalog', { source: p.source, entry: p.url });
+            } else {
+                await invoke('install_modpack_from_url', { downloadUrl: p.url });
+            }
             toast(t('modpack.cat.installed').replace('{name}', p.name), 'success');
             // The list behind this modal is stale the moment a pack lands.
             window.dispatchEvent(new CustomEvent('bmm://modpacks-updated'));
