@@ -120,3 +120,12 @@ mimalloc = { version = "0.1", default-features = false }
 
 # NB: Tauri v2 dropped the `custom-protocol` cargo feature — the production asset
 # protocol is handled by the bundler/config, so the old `[features]` block is gone.
+
+[dev-dependencies]
+# Tests generate a real key of each kind (ed25519, RSA, ECDSA) rather than committing one:
+# a private key checked into the repository is a private key in the repository, and a
+# signature test is worthless against a fake key. ssh-key builds against rand_core 0.10, so
+# the version is pinned to match — an older one compiles and then fails the trait bound with
+# a message about `CryptoRng` that says nothing about versions.
+rand_core = "0.10"
+getrandom = "0.2"

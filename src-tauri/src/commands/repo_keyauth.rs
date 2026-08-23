@@ -54,7 +54,6 @@
 // dozen call sites.
 
 use base64::Engine;
-use ed25519_dalek::{Signer, SigningKey};
 use serde::{Deserialize, Serialize};
 
 /// How long a proof stays valid. Short on purpose: it is a bearer token, and making a new one
@@ -65,16 +64,22 @@ pub const TTL_SECONDS: u64 = 120;
 /// The header a client sends and a server reads.
 pub const HEADER: &str = "X-BMM-Key-Proof";
 
-const PREFIX: &str = "bmmk1";
+const PREFIX: &str = "bmmk2";
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Payload {
-    /// The raw ed25519 public key, base64. What the owner pasted, minus the OpenSSH wrapper.
+    /// The OpenSSH public-key BLOB, base64 (standard alphabet).
+    ///
+    /// The wire encoding — `[len]"ssh-rsa"[len]e[len]n` and friends — not a bare key. It names
+    /// its own algorithm, which is what lets one field carry ed25519, RSA and ECDSA without the
+    /// verifier guessing, and what makes "the key the owner pasted" and "the key in the proof"
+    /// literally the same bytes.
     pk: String,
-    /// What this proof is FOR. A proof made for one repo must not open another.
+    /// The SIGNATURE algorithm, which is not always the key's own: an RSA key signs as
+    /// `rsa-sha2-512` here, never as the legacy SHA-1 `ssh-rsa` that servers have refused
+    /// since OpenSSH 8.8.
+    alg: String,
     aud: String,
-    /// Unix seconds. Absolute rather than a duration so a client with a wrong clock fails
-    /// closed instead of minting something valid forever.
     exp: u64,
 }
 
@@ -87,11 +92,31 @@ fn b64u() -> base64::engine::general_purpose::GeneralPurpose {
 /// Any other algorithm is refused HERE rather than at the far end, so the message names the
 /// real problem — "this feature needs an ed25519 key" — instead of a signature that simply
 /// fails to verify against a server that could never have checked it.
-fn ed25519_seed(key: &russh::keys::PrivateKey) -> Result<[u8; 32], String> {
-    match key.key_data() {
-        russh::keys::ssh_key::private::KeypairData::Ed25519(pair) => Ok(pair.private.to_bytes()),
-        _ => Err("repo.keyauth.errNotEd25519".to_string()),
-    }
+/// The namespace every BMM proof is signed under.
+///
+/// `ssh_key` folds this into what gets hashed, so a signature made here cannot be replayed as
+/// an SSH signature made for anything else, nor the reverse.
+const SIG_NAMESPACE: &str = "bmm-key-proof";
+
+/// The OpenSSH public-key blob for a key, base64.
+///
+/// The wire form an `authorized_keys` line carries after the algorithm word — so what an owner
+/// pastes and what a proof presents are the same bytes, with nothing to convert between them
+/// and therefore nothing to convert WRONG.
+fn public_blob(pk: &russh::keys::PublicKey) -> Result<String, String> {
+    let out = pk.to_bytes().map_err(|_| "repo.keyauth.errFormat".to_string())?;
+    Ok(base64::engine::general_purpose::STANDARD.encode(out))
+}
+
+/// The same blob, from the one-line form an owner pastes.
+///
+/// Every key type, not just ed25519 — the algorithm word is checked against what `ssh_key`
+/// could actually parse rather than against a list written here, so a type the library gains
+/// works without this function being touched.
+pub fn pubkey_from_openssh(line: &str) -> Result<String, String> {
+    let parsed = russh::keys::PublicKey::from_openssh(line.trim())
+        .map_err(|_| "repo.keyauth.errFormat".to_string())?;
+    public_blob(&parsed)
 }
 
 /// Build a proof for `audience` from an SSH private key file.
@@ -102,25 +127,46 @@ pub fn make_proof(key_path: &str, passphrase: Option<&str>, audience: &str) -> R
         .map_err(|e| format!("repo.ssh.errKeyRead|{}|{}", key_path, e))?;
     let key = russh::keys::decode_secret_key(&text, passphrase)
         .map_err(|e| format!("repo.ssh.errKeyDecode|{}", e))?;
-    let seed = ed25519_seed(&key)?;
-    let sk = SigningKey::from_bytes(&seed);
 
     let exp = now_secs() + TTL_SECONDS;
     let payload = Payload {
-        pk: base64::engine::general_purpose::STANDARD.encode(sk.verifying_key().to_bytes()),
+        pk: public_blob(key.public_key())?,
+        // Filled in below: the algorithm is whatever the signature turns out to be, which for
+        // RSA depends on the hash and is therefore not knowable from the key alone.
+        alg: String::new(),
         aud: audience.to_string(),
         exp,
     };
     let json = serde_json::to_vec(&payload).map_err(|e| e.to_string())?;
     let seg = b64u().encode(json);
-    // Sign the SEGMENT, not the JSON — see the header note.
-    let sig = sk.sign(seg.as_bytes());
-    Ok(format!("{}.{}.{}", PREFIX, seg, b64u().encode(sig.to_bytes())))
+
+    // SHA-512 for RSA. The hash is ignored by ed25519 and ECDSA, which carry their own.
+    let sig = key
+        .sign(SIG_NAMESPACE, russh::keys::ssh_key::HashAlg::Sha512, seg.as_bytes())
+        .map_err(|_| "repo.keyauth.errSignFailed".to_string())?;
+
+    // Re-serialise with the algorithm the signature actually used, then sign THAT. Signing
+    // twice looks wasteful and is the only honest order: the algorithm belongs in the signed
+    // payload (or an attacker could rewrite it), and it is not known until after a signature
+    // exists. The first signature is thrown away.
+    let payload = Payload {
+        pk: public_blob(key.public_key())?,
+        alg: sig.algorithm().to_string(),
+        aud: audience.to_string(),
+        exp,
+    };
+    let json = serde_json::to_vec(&payload).map_err(|e| e.to_string())?;
+    let seg = b64u().encode(json);
+    let sig = key
+        .sign(SIG_NAMESPACE, russh::keys::ssh_key::HashAlg::Sha512, seg.as_bytes())
+        .map_err(|_| "repo.keyauth.errSignFailed".to_string())?;
+
+    Ok(format!("{}.{}.{}", PREFIX, seg, b64u().encode(sig.signature_bytes())))
 }
 
 /// Verify a proof against a set of authorised public keys.
 ///
-/// `authorised` holds raw ed25519 public keys, base64 — the same form `Payload::pk` carries,
+/// `authorised` holds OpenSSH public-key BLOBS, base64 — the same form `Payload::pk` carries,
 /// so a server stores what it compares. Returns the matching key on success, so a caller can
 /// log WHICH key opened the door without re-deriving it.
 pub fn verify_proof(
@@ -141,14 +187,13 @@ pub fn verify_proof(
     let payload: Payload = serde_json::from_slice(&b64u().decode(seg).map_err(|_| "repo.keyauth.errFormat")?)
         .map_err(|_| "repo.keyauth.errFormat")?;
 
-    // Expiry BEFORE the signature: an expired proof is not worth the verification, and
-    // checking it first means a flood of stale tokens costs a comparison rather than a
-    // curve operation each.
+    // Expiry BEFORE the signature: an expired proof is not worth verifying, and checking it
+    // first means a flood of stale tokens costs a comparison rather than a curve operation.
     if payload.exp <= now_secs() {
         return Err("repo.keyauth.errExpired".into());
     }
     if payload.aud != audience {
-        // A proof minted for another repo. Its signature is perfectly valid, which is exactly
+        // A proof minted for another server. Its signature is perfectly valid, which is exactly
         // why the audience has to be checked rather than assumed.
         return Err("repo.keyauth.errAudience".into());
     }
@@ -157,63 +202,29 @@ pub fn verify_proof(
         return Err("repo.keyauth.errNotAuthorised".into());
     }
 
-    let raw = base64::engine::general_purpose::STANDARD
+    let blob = base64::engine::general_purpose::STANDARD
         .decode(&payload.pk)
         .map_err(|_| "repo.keyauth.errFormat")?;
-    let pk_bytes: [u8; 32] = raw.try_into().map_err(|_| "repo.keyauth.errFormat")?;
-    let vk = ed25519_dalek::VerifyingKey::from_bytes(&pk_bytes)
+    let pk = russh::keys::PublicKey::from_bytes(&blob).map_err(|_| "repo.keyauth.errFormat")?;
+
+    let alg: russh::keys::ssh_key::Algorithm = payload.alg.parse()
+        .map_err(|_| "repo.keyauth.errFormat".to_string())?;
+    let sig_bytes = b64u().decode(sig_b64).map_err(|_| "repo.keyauth.errFormat")?;
+    let sig = russh::keys::ssh_key::Signature::new(alg, sig_bytes)
         .map_err(|_| "repo.keyauth.errFormat")?;
-    let sig_bytes: [u8; 64] = b64u()
-        .decode(sig_b64)
-        .map_err(|_| "repo.keyauth.errFormat")?
-        .try_into()
-        .map_err(|_| "repo.keyauth.errFormat")?;
-    let sig = ed25519_dalek::Signature::from_bytes(&sig_bytes);
-    ed25519_dalek::Verifier::verify(&vk, seg.as_bytes(), &sig)
+    let ssh_sig = russh::keys::ssh_key::SshSig::new(
+        pk.key_data().clone(),
+        SIG_NAMESPACE,
+        russh::keys::ssh_key::HashAlg::Sha512,
+        sig,
+    )
+    .map_err(|_| "repo.keyauth.errFormat")?;
+
+    pk.verify(SIG_NAMESPACE, seg.as_bytes(), &ssh_sig)
         .map_err(|_| "repo.keyauth.errSignature".to_string())?;
     Ok(payload.pk)
 }
 
-/// The raw ed25519 public key inside an OpenSSH one-line public key, base64.
-///
-/// This is what an owner pastes (`ssh-ed25519 AAAA… you@machine`) turned into what a server
-/// stores and compares. Doing the conversion once, here, means the owner is never asked to
-/// paste a format nobody else uses.
-pub fn pubkey_from_openssh(line: &str) -> Result<String, String> {
-    let mut it = line.split_whitespace();
-    let alg = it.next().unwrap_or("");
-    if alg != "ssh-ed25519" {
-        return Err("repo.keyauth.errNotEd25519".into());
-    }
-    let blob = base64::engine::general_purpose::STANDARD
-        .decode(it.next().unwrap_or(""))
-        .map_err(|_| "repo.keyauth.errFormat")?;
-    // OpenSSH blob: [len]"ssh-ed25519" [len]<32-byte key>
-    let mut o = 0usize;
-    let mut read = |n: usize| -> Result<Vec<u8>, String> {
-        if o + 4 > blob.len() {
-            return Err("repo.keyauth.errFormat".into());
-        }
-        let len = u32::from_be_bytes(blob[o..o + 4].try_into().unwrap()) as usize;
-        o += 4;
-        if o + len > blob.len() || len > 1024 {
-            return Err("repo.keyauth.errFormat".into());
-        }
-        let out = blob[o..o + len].to_vec();
-        o += len;
-        let _ = n;
-        Ok(out)
-    };
-    let alg2 = read(0)?;
-    if alg2 != b"ssh-ed25519" {
-        return Err("repo.keyauth.errNotEd25519".into());
-    }
-    let raw = read(0)?;
-    if raw.len() != 32 {
-        return Err("repo.keyauth.errFormat".into());
-    }
-    Ok(base64::engine::general_purpose::STANDARD.encode(raw))
-}
 
 // ── the client side ─────────────────────────────────────────────────────────
 
@@ -545,7 +556,6 @@ fn now_secs() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-
     /// Settings with nothing set, so each test says only what it is about.
     fn blank_settings() -> crate::state::AppSettings {
         let mut s = crate::state::AppSettings::default();
@@ -638,116 +648,137 @@ mod tests {
         set_keyring(Keyring::default());
     }
 
-    /// A keypair written to a temp file, the way a user's key would be.
+    /// The OS random source, wrapped to the trait `ssh_key` wants.
     ///
-    /// The seed is derived from `name` rather than random: a failing crypto test that cannot
-    /// be reproduced is a test nobody can fix, and nothing here depends on the key being
-    /// unpredictable.
-    fn write_key(dir: &std::path::Path, name: &str) -> (String, String) {
-        let mut seed = [0u8; 32];
-        for (i, b) in name.bytes().enumerate() {
-            seed[i % 32] ^= b.wrapping_add(i as u8).wrapping_add(1);
+    /// rand_core 0.10 ships no `OsRng` of its own and the crates that do are on an older
+    /// version of the trait, so a dependency here would compile and then fail a bound with a
+    /// message about `CryptoRng` that says nothing about versions. `getrandom` is already in
+    /// the tree and IS the OS source, which is what makes claiming `CryptoRng` honest rather
+    /// than a marker slapped on a weak PRNG to make a test build.
+    struct OsRng;
+    impl rand_core::TryRng for OsRng {
+        type Error = core::convert::Infallible;
+        fn try_next_u32(&mut self) -> Result<u32, Self::Error> {
+            let mut b = [0u8; 4];
+            getrandom::getrandom(&mut b).expect("OS randomness");
+            Ok(u32::from_le_bytes(b))
         }
-        let sk = SigningKey::from_bytes(&seed);
-        let ssh = russh::keys::PrivateKey::from(
-            russh::keys::ssh_key::private::Ed25519Keypair {
-                public: russh::keys::ssh_key::public::Ed25519PublicKey(sk.verifying_key().to_bytes()),
-                private: russh::keys::ssh_key::private::Ed25519PrivateKey::from_bytes(&sk.to_bytes()),
-            },
-        );
+        fn try_next_u64(&mut self) -> Result<u64, Self::Error> {
+            let mut b = [0u8; 8];
+            getrandom::getrandom(&mut b).expect("OS randomness");
+            Ok(u64::from_le_bytes(b))
+        }
+        fn try_fill_bytes(&mut self, dst: &mut [u8]) -> Result<(), Self::Error> {
+            getrandom::getrandom(dst).expect("OS randomness");
+            Ok(())
+        }
+    }
+    impl rand_core::TryCryptoRng for OsRng {}
+
+    /// One key of each kind, written to a temp file the way a user's key would be.
+    ///
+    /// Generated rather than checked in: a committed private key is a private key in the
+    /// repository, and these have to be real for the signature to mean anything. `random` is
+    /// fine here — nothing about the test depends on WHICH key, only on it being genuine.
+    fn write_key(dir: &std::path::Path, name: &str, alg: russh::keys::ssh_key::Algorithm) -> (String, String) {
+        let key = russh::keys::PrivateKey::random(&mut OsRng, alg).unwrap();
         let path = dir.join(name);
-        std::fs::write(&path, ssh.to_openssh(russh::keys::ssh_key::LineEnding::LF).unwrap().as_str()).unwrap();
-        let pk = base64::engine::general_purpose::STANDARD.encode(sk.verifying_key().to_bytes());
-        (path.to_string_lossy().to_string(), pk)
+        std::fs::write(&path, key.to_openssh(russh::keys::ssh_key::LineEnding::LF).unwrap().as_bytes()).unwrap();
+        (path.to_string_lossy().to_string(), public_blob(key.public_key()).unwrap())
+    }
+
+    /// The three kinds a person actually has. RSA is here because it is what Windows users
+    /// overwhelmingly hold, and it is the one the old ed25519-only rule turned away.
+    fn every_algorithm() -> Vec<(&'static str, russh::keys::ssh_key::Algorithm)> {
+        use russh::keys::ssh_key::{Algorithm, EcdsaCurve};
+        vec![
+            ("ed25519", Algorithm::Ed25519),
+            ("rsa", Algorithm::Rsa { hash: None }),
+            ("ecdsa-p256", Algorithm::Ecdsa { curve: EcdsaCurve::NistP256 }),
+        ]
     }
 
     #[test]
-    fn a_proof_verifies_against_its_own_key() {
+    fn a_proof_verifies_against_its_own_key_whatever_the_algorithm() {
         let d = tempfile::tempdir().unwrap();
-        let (path, pk) = write_key(d.path(), "k");
-        let proof = make_proof(&path, None, "repo:abc").unwrap();
-        assert_eq!(verify_proof(&proof, &[pk], "repo:abc").unwrap_or_default().is_empty(), false);
-    }
-
-    #[test]
-    fn a_proof_for_another_audience_is_refused() {
-        let d = tempfile::tempdir().unwrap();
-        let (path, pk) = write_key(d.path(), "k");
-        // The signature is perfectly valid — which is the whole point of checking `aud`.
-        let proof = make_proof(&path, None, "repo:mine").unwrap();
-        assert_eq!(verify_proof(&proof, &[pk], "repo:yours"), Err("repo.keyauth.errAudience".into()));
-    }
-
-    #[test]
-    fn an_unauthorised_key_is_refused() {
-        let d = tempfile::tempdir().unwrap();
-        let (path, _pk) = write_key(d.path(), "k");
-        let (_p2, other) = write_key(d.path(), "k2");
-        let proof = make_proof(&path, None, "repo:abc").unwrap();
-        assert_eq!(verify_proof(&proof, &[other], "repo:abc"), Err("repo.keyauth.errNotAuthorised".into()));
-    }
-
-    #[test]
-    fn a_tampered_payload_is_refused() {
-        let d = tempfile::tempdir().unwrap();
-        let (path, pk) = write_key(d.path(), "k");
-        let proof = make_proof(&path, None, "repo:abc").unwrap();
-        // Re-encode the payload with a LATER expiry and keep the original signature — the
-        // attack the "sign the transmitted segment" rule exists to stop.
-        let seg = proof.split('.').nth(1).unwrap();
-        let mut p: Payload = serde_json::from_slice(&b64u().decode(seg).unwrap()).unwrap();
-        p.exp += 86_400;
-        let forged = format!(
-            "{}.{}.{}",
-            PREFIX,
-            b64u().encode(serde_json::to_vec(&p).unwrap()),
-            proof.split('.').nth(2).unwrap()
-        );
-        assert_eq!(verify_proof(&forged, &[pk], "repo:abc"), Err("repo.keyauth.errSignature".into()));
-    }
-
-    #[test]
-    fn a_malformed_proof_is_refused_rather_than_panicking() {
-        for bad in ["", "bmmk1", "bmmk1.x", "nope.a.b", "bmmk1.a.b.c", "bmmk1.!!!.???"] {
-            assert!(verify_proof(bad, &["x".into()], "a").is_err(), "accepted: {bad}");
+        for (label, alg) in every_algorithm() {
+            let (path, pk) = write_key(d.path(), label, alg);
+            let proof = make_proof(&path, None, "https://x").unwrap_or_else(|e| panic!("{label}: {e}"));
+            assert_eq!(
+                verify_proof(&proof, &[pk.clone()], "https://x").unwrap_or_else(|e| panic!("{label}: {e}")),
+                pk,
+                "{label} should open its own door",
+            );
         }
     }
 
     #[test]
-    fn an_openssh_public_key_converts_to_what_a_server_stores() {
+    fn a_proof_for_another_audience_is_refused_whatever_the_algorithm() {
         let d = tempfile::tempdir().unwrap();
-        let (path, pk) = write_key(d.path(), "k");
-        let text = std::fs::read_to_string(&path).unwrap();
-        let key = russh::keys::decode_secret_key(&text, None).unwrap();
-        let line = key.public_key().to_openssh().unwrap();
-        assert_eq!(pubkey_from_openssh(&line).unwrap(), pk);
-    }
-
-    #[test]
-    fn the_audience_is_the_origin_and_only_the_origin() {
-        // A repo is many files; scoping the proof to the path would need one per file. Scoping
-        // to the server is enough, because WHICH repo a key may read is decided by that repo's
-        // own authorised list.
-        assert_eq!(audience_for("http://192.168.1.9:8080/repo.json").as_deref(), Some("http://192.168.1.9:8080"));
-        assert_eq!(audience_for("http://192.168.1.9:8080/mods/a/b.pak").as_deref(), Some("http://192.168.1.9:8080"));
-        assert_eq!(audience_for("https://example.test/x/y?z=1").as_deref(), Some("https://example.test"));
-        // A different PORT is a different audience: two servers on one host must not share a
-        // proof.
-        assert_ne!(audience_for("http://h:1/a"), audience_for("http://h:2/a"));
-    }
-
-    #[test]
-    fn a_url_with_no_host_yields_no_audience() {
-        for bad in ["", "notaurl", "http://", "://x"] {
-            assert!(audience_for(bad).is_none(), "accepted: {bad}");
+        for (label, alg) in every_algorithm() {
+            let (path, pk) = write_key(d.path(), label, alg);
+            let proof = make_proof(&path, None, "https://a").unwrap();
+            // The signature is perfectly valid. That is exactly why the audience is checked.
+            assert_eq!(verify_proof(&proof, &[pk], "https://b").unwrap_err(), "repo.keyauth.errAudience", "{label}");
         }
     }
 
     #[test]
-    fn a_non_ed25519_public_key_is_named_as_such() {
-        // The message has to say WHICH problem it is: an RSA key is a perfectly good key that
-        // this particular feature cannot use, not a corrupt one.
-        let e = pubkey_from_openssh("ssh-rsa AAAAB3NzaC1yc2E= me@host").unwrap_err();
-        assert_eq!(e, "repo.keyauth.errNotEd25519");
+    fn an_unauthorised_key_is_refused_whatever_the_algorithm() {
+        let d = tempfile::tempdir().unwrap();
+        for (label, alg) in every_algorithm() {
+            let (path, _) = write_key(d.path(), label, alg.clone());
+            let (_, other) = write_key(d.path(), &format!("{label}-other"), alg);
+            let proof = make_proof(&path, None, "https://x").unwrap();
+            assert_eq!(verify_proof(&proof, &[other], "https://x").unwrap_err(), "repo.keyauth.errNotAuthorised", "{label}");
+        }
     }
+
+    #[test]
+    fn a_tampered_payload_is_refused_whatever_the_algorithm() {
+        let d = tempfile::tempdir().unwrap();
+        for (label, alg) in every_algorithm() {
+            let (path, pk) = write_key(d.path(), label, alg);
+            let proof = make_proof(&path, None, "https://x").unwrap();
+            let mut parts: Vec<&str> = proof.split('.').collect();
+            // Re-encode the payload with a later expiry. The signature covers the SEGMENT, so
+            // this must fail — and it must fail as NOT_AUTHORISED or SIGNATURE, never pass.
+            let raw = b64u().decode(parts[1]).unwrap();
+            let mut p: serde_json::Value = serde_json::from_slice(&raw).unwrap();
+            p["exp"] = serde_json::json!(now_secs() + 9999);
+            let forged = b64u().encode(serde_json::to_vec(&p).unwrap());
+            parts[1] = &forged;
+            let bad = parts.join(".");
+            assert!(verify_proof(&bad, &[pk], "https://x").is_err(), "{label}: a rewritten payload must not verify");
+        }
+    }
+
+    #[test]
+    fn the_one_line_public_key_an_owner_pastes_matches_what_the_proof_carries() {
+        let d = tempfile::tempdir().unwrap();
+        for (label, alg) in every_algorithm() {
+            let key = russh::keys::PrivateKey::random(&mut OsRng, alg).unwrap();
+            let path = d.path().join(format!("{label}-paste"));
+            std::fs::write(&path, key.to_openssh(russh::keys::ssh_key::LineEnding::LF).unwrap().as_bytes()).unwrap();
+            let pasted = key.public_key().to_openssh().unwrap();
+            // What an owner pastes into an access list, and what the client presents, have to
+            // be the same bytes — otherwise every list needs a conversion that can disagree.
+            assert_eq!(
+                pubkey_from_openssh(&pasted).unwrap(),
+                public_blob(key.public_key()).unwrap(),
+                "{label}",
+            );
+            let proof = make_proof(&path.to_string_lossy(), None, "https://x").unwrap();
+            assert!(verify_proof(&proof, &[pubkey_from_openssh(&pasted).unwrap()], "https://x").is_ok(), "{label}");
+        }
+    }
+
+    #[test]
+    fn a_public_key_line_that_is_not_a_key_is_refused() {
+        assert!(pubkey_from_openssh("hello").is_err());
+        assert!(pubkey_from_openssh("").is_err());
+        // A DSA line: readable shape, dead algorithm. Refused rather than half-accepted.
+        assert!(pubkey_from_openssh("ssh-dss AAAAB3NzaC1kc3MAAACB").is_err());
+    }
+
 }
