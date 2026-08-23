@@ -37,6 +37,18 @@ fn is_bettercommunity_host(url: &str) -> bool {
 /// Set `.timeout(..)` on the returned builder before sending.
 pub fn catalog_get(handle: &tauri::AppHandle, url: &str) -> reqwest::RequestBuilder {
     let mut req = client().get(url).header(reqwest::header::USER_AGENT, "BetterModsManager/1.0");
+    // Key proof, when this BMM has a key to prove with. Attached to EVERY request rather than
+    // behind a per-source setting: a server that does not require one ignores it, and asking
+    // the user to declare in advance which sources are protected is a setting they would get
+    // wrong once and then not understand. Signing is cached per origin (see repo_keyauth), so
+    // the cost is one signature every two minutes, not one per file.
+    {
+        if let Some((name, value)) = crate::commands::repo_keyauth::header_for(url) {
+            if let Ok(hv) = reqwest::header::HeaderValue::from_str(&value) {
+                req = req.header(name, hv);
+            }
+        }
+    }
     if is_bettercommunity_host(url) {
         if let Ok(cid) = crate::commands::security::get_creator_id(handle.clone()) {
             if let Ok(hv) = reqwest::header::HeaderValue::from_str(&cid) {

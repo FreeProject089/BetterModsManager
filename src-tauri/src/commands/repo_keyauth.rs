@@ -52,7 +52,6 @@
 // Landing it separately is deliberate: this is the part that has to be RIGHT, and it is much
 // easier to review a signature scheme on its own than buried in a diff that also moves a
 // dozen call sites.
-#![allow(dead_code)]
 
 use base64::Engine;
 use ed25519_dalek::{Signer, SigningKey};
@@ -216,6 +215,105 @@ pub fn pubkey_from_openssh(line: &str) -> Result<String, String> {
     Ok(base64::engine::general_purpose::STANDARD.encode(raw))
 }
 
+// ── the client side ─────────────────────────────────────────────────────────
+
+/// A cached proof, so a sync of a thousand files signs once rather than a thousand times.
+///
+/// Keyed by audience. Signing costs about 50µs, which is nothing once and real per file — and
+/// the cache is what makes attaching a proof to EVERY outbound request affordable, which in
+/// turn is what lets this work with no per-source setting at all.
+static PROOF_CACHE: std::sync::Mutex<Option<Vec<(String, String, u64)>>> = std::sync::Mutex::new(None);
+
+/// The audience for a URL: its origin, and nothing else.
+///
+/// Origin rather than the full path because a repo is many files and they would otherwise
+/// need a proof each. Scoping to the server is enough: whether a given key may read a given
+/// repo is decided by that repo's own authorised list, not by the proof.
+pub fn audience_for(url: &str) -> Option<String> {
+    let rest = url.split("://").nth(1)?;
+    let scheme = url.split("://").next()?;
+    let host = rest.split('/').next()?;
+    // BOTH halves, not just the host. `://x` has an empty scheme and produced the audience
+    // `://x`, which a server would never match — a proof that can only ever be rejected, for
+    // a reason nothing would name. Found by testing the malformed cases rather than the
+    // well-formed ones.
+    if scheme.is_empty() || host.is_empty() { return None; }
+    Some(format!("{}://{}", scheme, host))
+}
+
+/// The configured key path, mirrored out of settings.
+///
+/// A static rather than a lookup through AppState because the three request builders that
+/// need it do not all have one: `fetch_repo_info` is a plain async fn with three internal
+/// callers, one of them a test, and threading a handle through all of them to reach a value
+/// that is not even a secret would be three chances for one to forget.
+///
+/// Set once at startup and again whenever the setting changes. A path, never key material.
+static KEY_PATH: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
+/// Mirror the setting into this module. Called at startup and on every change.
+pub fn set_key_path(path: Option<String>) {
+    if let Ok(mut g) = KEY_PATH.lock() {
+        *g = path.map(|p| p.trim().to_string()).filter(|p| !p.is_empty());
+    }
+    // A changed key invalidates every proof made with the old one — they would still verify,
+    // but against a key the owner may have just revoked.
+    if let Ok(mut c) = PROOF_CACHE.lock() {
+        *c = None;
+    }
+}
+
+/// The proof header to attach to a request, if this BMM can make one.
+///
+/// Returns None — silently — when no key is configured or the key is not ed25519. A client
+/// that cannot prove anything simply does not, and a server that does not ask never notices;
+/// making this an error would break every ordinary unprotected repo.
+pub fn header_for(url: &str) -> Option<(&'static str, String)> {
+    let audience = audience_for(url)?;
+    let key_path = KEY_PATH.lock().ok()?.clone()?;
+    if key_path.trim().is_empty() { return None; }
+
+    let now = now_secs();
+    if let Ok(mut guard) = PROOF_CACHE.lock() {
+        let list = guard.get_or_insert_with(Vec::new);
+        // Drop everything expired first, so the list cannot grow without bound on a client
+        // that talks to many servers.
+        list.retain(|(_, _, exp)| *exp > now);
+        if let Some((_, proof, _)) = list.iter().find(|(a, _, _)| a == &audience) {
+            return Some((HEADER, proof.clone()));
+        }
+        // Re-signed a little before expiry, so a proof never goes stale mid-request.
+        let proof = make_proof(&key_path, None, &audience).ok()?;
+        list.push((audience, proof.clone(), now + TTL_SECONDS.saturating_sub(15)));
+        return Some((HEADER, proof));
+    }
+    None
+}
+
+/// Point BMM at the ed25519 private key it should prove identity with, or clear it.
+///
+/// The PATH is stored; the key is read at the moment of use and dropped. Refused up front if
+/// the file is not a usable ed25519 key, so the mistake is reported when it is made rather
+/// than as a silent refusal from somebody else's server later.
+#[tauri::command]
+pub fn set_key_auth_key(
+    state: tauri::State<'_, crate::state::AppState>,
+    path: Option<String>,
+) -> Result<(), String> {
+    let path = path.map(|p| p.trim().to_string()).filter(|p| !p.is_empty());
+    if let Some(p) = path.as_deref() {
+        // Signing against a throwaway audience proves the file opens AND is ed25519.
+        make_proof(p, None, "probe://validate")?;
+    }
+    {
+        let mut data = state.data.lock().map_err(|_| "state lock".to_string())?;
+        data.settings.key_auth_key_path = path.clone();
+    }
+    state.save().map_err(|e| e.to_string())?;
+    set_key_path(path);
+    Ok(())
+}
+
 fn now_secs() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -310,6 +408,26 @@ mod tests {
         let key = russh::keys::decode_secret_key(&text, None).unwrap();
         let line = key.public_key().to_openssh().unwrap();
         assert_eq!(pubkey_from_openssh(&line).unwrap(), pk);
+    }
+
+    #[test]
+    fn the_audience_is_the_origin_and_only_the_origin() {
+        // A repo is many files; scoping the proof to the path would need one per file. Scoping
+        // to the server is enough, because WHICH repo a key may read is decided by that repo's
+        // own authorised list.
+        assert_eq!(audience_for("http://192.168.1.9:8080/repo.json").as_deref(), Some("http://192.168.1.9:8080"));
+        assert_eq!(audience_for("http://192.168.1.9:8080/mods/a/b.pak").as_deref(), Some("http://192.168.1.9:8080"));
+        assert_eq!(audience_for("https://example.test/x/y?z=1").as_deref(), Some("https://example.test"));
+        // A different PORT is a different audience: two servers on one host must not share a
+        // proof.
+        assert_ne!(audience_for("http://h:1/a"), audience_for("http://h:2/a"));
+    }
+
+    #[test]
+    fn a_url_with_no_host_yields_no_audience() {
+        for bad in ["", "notaurl", "http://", "://x"] {
+            assert!(audience_for(bad).is_none(), "accepted: {bad}");
+        }
     }
 
     #[test]

@@ -78,6 +78,19 @@ function loadTarget(name = DEFAULT_TARGET): Partial<SshTarget> {
     return loadTargets()[name] || {};
 }
 
+/**
+ * Tell the backend which private key to prove identity with.
+ *
+ * Best-effort and deliberately silent: the command refuses anything that is not a usable
+ * ed25519 key, and that is a perfectly ordinary state — an RSA key is fine for SSH and simply
+ * cannot be used for this. Reporting it here would be an error message on a screen where
+ * nothing went wrong.
+ */
+function rememberKeyAuthKey(target: SshTarget): void {
+    if (target.auth === 'password' || !target.keyPath) return;
+    void invoke('set_key_auth_key', { path: target.keyPath }).catch(() => {});
+}
+
 /** Save (or replace) a named target. The secret is never part of what gets written. */
 function saveTarget(target: SshTarget, name = DEFAULT_TARGET): void {
     try {
@@ -86,6 +99,7 @@ function saveTarget(target: SshTarget, name = DEFAULT_TARGET): void {
         localStorage.setItem(STORE_MANY, JSON.stringify(all));
         // Keep the legacy key in step for the default, so a downgrade still finds a server.
         if (name === DEFAULT_TARGET) localStorage.setItem(STORE, JSON.stringify(target));
+        rememberKeyAuthKey(target);
     } catch { /* storage full */ }
 }
 

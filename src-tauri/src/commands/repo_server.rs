@@ -219,6 +219,13 @@ pub async fn start_repo_server(
     upload_limit: u32,
     // Optional download password. Empty or absent = open repo, as before.
     download_password: Option<String>,
+    // Owner-pasted PUBLIC keys, one OpenSSH line each (`ssh-ed25519 AAAA… you@machine`).
+    // Empty or absent = no key requirement. `//` and not `///`: a doc comment is not allowed
+    // on a function parameter, which is a compile error rather than a warning.
+    //
+    // Converted below rather than at request time, so a key that cannot be read is reported
+    // when the owner SETS it, not the first time a subscriber is silently refused.
+    authorized_keys: Option<Vec<String>>,
 ) -> Result<StartServerResult, String> {
     // 1. Check if already running
     // 2. Validate path
@@ -300,6 +307,34 @@ pub async fn start_repo_server(
         .map(|p| p.trim().to_string())
         .filter(|p| !p.is_empty());
 
+    // Key authorisation. The owner pastes public keys; a subscriber proves it holds one of the
+    // matching private keys. Unlike the creator-id allow list, this is not something a client
+    // can simply claim — see repo_keyauth.rs.
+    let mut authorized_pubkeys: Vec<String> = Vec::new();
+    for line in authorized_keys.unwrap_or_default() {
+        let line = line.trim().to_string();
+        if line.is_empty() {
+            continue;
+        }
+        authorized_pubkeys.push(crate::commands::repo_keyauth::pubkey_from_openssh(&line)?);
+    }
+    let key_auth_required = !authorized_pubkeys.is_empty();
+
+    // Which audiences this server answers to.
+    //
+    // The client signs the ORIGIN IT DIALLED, which a malicious server cannot change. This
+    // list only has to EXCLUDE other people's addresses, not perfectly enumerate its own: too
+    // narrow costs a false rejection (diagnosable, and the message names both sides), too wide
+    // would cost security — and it cannot accidentally contain somebody else's host.
+    let mut audiences: Vec<String> = vec![
+        format!("http://127.0.0.1:{}", port),
+        format!("http://localhost:{}", port),
+    ];
+    if let Ok(ip) = local_ip() {
+        audiences.push(format!("http://{}:{}", ip, port));
+    }
+    let proof_filter = warp::header::optional::<String>(crate::commands::repo_keyauth::HEADER);
+
     let handle_clone = handle.clone();
     let file_route = warp::get()
         .and(warp::path::tail())
@@ -307,9 +342,12 @@ pub async fn start_repo_server(
         .and(key_filter)
         .and(identity_filter)
         .and(password_filter)
-        .and_then(move |tail: warp::path::Tail, addr: Option<std::net::SocketAddr>, key: Option<String>, attestation: Option<String>, presented: Option<String>| {
+        .and(proof_filter)
+        .and_then(move |tail: warp::path::Tail, addr: Option<std::net::SocketAddr>, key: Option<String>, attestation: Option<String>, presented: Option<String>, key_proof: Option<String>| {
             let handle = handle_clone.clone();
             let required_password = required_password.clone();
+            let authorized_pubkeys = authorized_pubkeys.clone();
+            let audiences = audiences.clone();
             let active_downloads = active_downloads.clone();
             let session_download_started = session_download_started.clone();
             let session_download_completed = session_download_completed.clone();
@@ -340,6 +378,37 @@ pub async fn start_repo_server(
                     if !ok {
                         println!("[Server] Access Denied: wrong or missing download password from {}", ip);
                         return Err(warp::reject::custom(BanError));
+                    }
+                }
+
+                // 0a-bis. Key authorisation, checked in the same place and for the same
+                // reason as the password: gating only /mods/ would hand the whole manifest —
+                // every mod name, every path, the layout — to anyone who asked, which is most
+                // of what a protected repo protects.
+                if key_auth_required {
+                    let proof = key_proof.as_deref().unwrap_or("");
+                    let mut ok = None;
+                    let mut last_err = String::from("repo.keyauth.errFormat");
+                    // Tried against each accepted audience rather than parsed-then-compared,
+                    // so the audience check stays inside verify_proof and there is one rule
+                    // for it instead of two.
+                    for aud in audiences.iter() {
+                        match crate::commands::repo_keyauth::verify_proof(proof, &authorized_pubkeys, aud) {
+                            Ok(pk) => { ok = Some(pk); break; }
+                            Err(e) => last_err = e,
+                        }
+                    }
+                    match ok {
+                        Some(pk) => {
+                            // Log WHICH key opened it: an owner revoking access needs to know
+                            // which line to delete, and a shared key shows up as one identity
+                            // arriving from many addresses.
+                            println!("[Server] Key auth OK ({}…) from {}", &pk[..pk.len().min(12)], ip);
+                        }
+                        None => {
+                            println!("[Server] Access Denied: key proof rejected ({}) from {}", last_err, ip);
+                            return Err(warp::reject::custom(BanError));
+                        }
                     }
                 }
 

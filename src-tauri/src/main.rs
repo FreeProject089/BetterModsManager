@@ -306,6 +306,12 @@ fn main() {
             migrate_legacy_appdata(&app_dir);
             let data_path = app_dir.join("data.json");
             let app_state = AppState::load(data_path);
+            // Mirror the key-auth path into the module that signs with it. Without this
+            // the setting would only take effect after being re-saved, so a restart would
+            // silently stop proving identity to every server that requires it.
+            commands::repo_keyauth::set_key_path(
+                app_state.data.lock().ok().and_then(|d| d.settings.key_auth_key_path.clone()),
+            );
             
             {
                 let mut data = app_state.data.lock().unwrap();
@@ -631,6 +637,7 @@ fn main() {
             commands::repo_ssh::ssh_download_repo,
             commands::repo_ssh::ssh_fetch_repo_info,
             commands::repo_ssh::ssh_read_text,
+            commands::repo_keyauth::set_key_auth_key,
             commands::repo_ssh::ssh_list_dir,
             commands::repo_ssh::ssh_resolve_path,
             commands::repo_ssh::ssh_forget_host,

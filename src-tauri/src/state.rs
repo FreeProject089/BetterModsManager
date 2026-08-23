@@ -69,6 +69,18 @@ pub struct AppSettings {
     /// Fingerprints only: no key material, no passphrase, ever.
     #[serde(default)]
     pub ssh_known_hosts: Option<HashMap<String, String>>,
+    /// PATH to the ed25519 private key used to prove identity to a repo or catalogue that
+    /// requires one (see commands/repo_keyauth.rs).
+    ///
+    /// A path, not a key — the same rule as everywhere else here, and the reason it can live
+    /// in settings at all. The proof is signed at the moment of use and the bytes are dropped.
+    ///
+    /// It lives on the Rust side rather than in the frontend's store because every outbound
+    /// request that might need it is built here: the catalogue fetcher, the repo-info fetcher
+    /// and the per-file sync client. Threading it through three call chains from the frontend
+    /// would be three chances for one of them to forget.
+    #[serde(default)]
+    pub key_auth_key_path: Option<String>,
     #[serde(default)]
     pub discord_rpc_enabled: bool,
     #[serde(default)]
@@ -132,6 +144,7 @@ impl Default for AppSettings {
             auto_fill_metadata: false,
             cloudflared_path: None,
             ssh_known_hosts: None,
+            key_auth_key_path: None,
             discord_rpc_enabled: false,
             fs_security_mode: None,
             require_valid_sha: false,
