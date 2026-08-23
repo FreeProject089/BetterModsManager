@@ -1,5 +1,4 @@
 import { invoke, getSettings, pickFile } from './api.js';
-import { t } from './i18n.js';
 
 // The identity key control, wired ONCE and mounted wherever it is needed.
 //
@@ -37,9 +36,21 @@ export async function identityKeyPath(): Promise<string> {
  * have this control simply gets nothing), and safe to call twice — the guard attribute stops
  * a second listener stacking on the same button, which would fire the picker twice.
  */
-// `toast` is imported lazily on purpose: it lives in ui/app.ts, and a static import from
-// core/ would drag the whole app module into the boot path of anything that touches a key.
-export function wireIdentityKey(ids: IdentityKeyIds, onChange?: (path: string) => void): void {
+/**
+ * How the mounting screen reports what happened.
+ *
+ * `notify` takes an i18n KEY, not a sentence: this module lives in core/ and must not reach
+ * into ui/ for a toast — a dynamic import is still an edge, and core → ui → core is a cycle.
+ * It also happens to be the right split: this knows WHAT happened, the screen knows how to
+ * say it.
+ */
+export type IdentityKeyNotify = (i18nKey: string, kind: 'success' | 'warning') => void;
+
+export function wireIdentityKey(
+    ids: IdentityKeyIds,
+    notify?: IdentityKeyNotify,
+    onChange?: (path: string) => void,
+): void {
     const input = document.getElementById(ids.input) as HTMLInputElement | null;
     const pick = document.getElementById(ids.pick);
     const clear = document.getElementById(ids.clear);
@@ -58,13 +69,13 @@ export function wireIdentityKey(ids: IdentityKeyIds, onChange?: (path: string) =
         try {
             await invoke('set_key_auth_key', { path });
             show(path);
-            (await import('../ui/app.js')).toast(t('settings.identity.authKeySet'), 'success');
+            notify?.('settings.identity.authKeySet', 'success');
         } catch (e) {
             // The backend refuses a file it cannot sign with, so this is "wrong file", not
             // "save failed" — name which, or the same file gets picked again.
-            (await import('../ui/app.js')).toast(t(String(e) === 'repo.ssh.errKeyPassphrase'
+            notify?.(String(e) === 'repo.ssh.errKeyPassphrase'
                 ? 'settings.identity.authKeyLocked'
-                : 'settings.identity.authKeyBad'), 'warning', 6000);
+                : 'settings.identity.authKeyBad', 'warning');
         }
     });
 
@@ -72,7 +83,7 @@ export function wireIdentityKey(ids: IdentityKeyIds, onChange?: (path: string) =
         try {
             await invoke('set_key_auth_key', { path: null });
             show('');
-            (await import('../ui/app.js')).toast(t('settings.identity.authKeyCleared'), 'success');
+            notify?.('settings.identity.authKeyCleared', 'success');
         } catch { /* nothing was set */ }
     });
 }

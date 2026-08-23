@@ -1853,7 +1853,8 @@ async function initSecurityInfoCard() {
         // Empty reads as "None" rather than as a blank line, so "not set" is legible as an
         // answer instead of looking like the row failed to load.
         if (keyEl && !path) keyEl.textContent = t('settings.identity.authKeyNone');
-        idk.wireIdentityKey(IDS, (p) => { if (keyEl && !p) keyEl.textContent = t('settings.identity.authKeyNone'); });
+        idk.wireIdentityKey(IDS, (k, kind) => toast(t(k), kind, kind === 'warning' ? 6000 : 3000),
+            (p) => { if (keyEl && !p) keyEl.textContent = t('settings.identity.authKeyNone'); });
     } catch (_) {}
 
     // Reset API token
@@ -1946,7 +1947,7 @@ async function initCatalogIndexSettings() {
         const idk = await import('../../core/identity-key.js');
         const IDS = { input: 'cat-index-keypath', pick: 'cat-index-key-pick', clear: 'cat-index-key-clear' };
         await idk.refreshIdentityKey(IDS);
-        idk.wireIdentityKey(IDS);
+        idk.wireIdentityKey(IDS, (k, kind) => toast(t(k), kind, kind === 'warning' ? 6000 : 3000));
     })();
 
     // The password is remembered FOR THIS RUN ONLY — the rule already in force everywhere

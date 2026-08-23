@@ -106,7 +106,7 @@ function initSyncKeyAndSshFields() {
     }
     void (async () => {
         const idk = await import('../../core/identity-key.js');
-        idk.wireIdentityKey(KEY_IDS);
+        idk.wireIdentityKey(KEY_IDS, (k, kind) => toast(t(k), kind, kind === 'warning' ? 6000 : 3000));
     })();
     // ── which SSH server an ssh:// source connects to ────────────────────────
     const sshRow = document.getElementById('repo-sync-ssh-row');
