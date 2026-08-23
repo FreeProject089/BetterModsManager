@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { sourceAccessHtml, wireSourceAccess } from '../../core/source-access.js';
 import { invoke, pickFile, saveFile, pickFolder, convertFileSrc, apiBase, apiRunning } from '../../core/api.js';
 import { toast, fetchProfileIconPaths, updateSelectProfileIcon, decorateProfileOptions, toastSaved } from '../../ui/app.js';
 import { t, getLang } from '../../core/i18n.js';
@@ -576,6 +577,7 @@ async function renderCatalog(container: HTMLElement) {
                 <button class="btn btn-sm btn-accent" id="plug-source-add">${IC.plus} ${t('common.add') || 'Add'}</button>
                 <button class="btn btn-sm btn-ghost" id="plug-source-file">${IC.upload} ${t('plugins.importJsonFile') || 'Import .json'}</button>
             </div>
+            ${sourceAccessHtml('plug')}
             <div id="plug-sources-list" class="plug-sources-list"></div>
         </div>
         <div id="plug-catalog-grid" class="plug-grid">
@@ -638,7 +640,10 @@ async function renderCatalog(container: HTMLElement) {
         await reloadCatalog();
     };
     container.querySelector('#plug-source-add')?.addEventListener('click', () => {
-        const inp = container.querySelector('#plug-source-input') as HTMLInputElement;
+        wireSourceAccess('plug', (m, k) => toast(m, k === 'warning' ? 'warning' : 'success'),
+        () => { (document.getElementById('nav-settings') as HTMLElement | null)?.click(); setTimeout(() => document.getElementById('settings-identity-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 250); },
+        () => (container.querySelector('#plug-source-input') as HTMLInputElement | null)?.value?.trim() || '');
+    const inp = container.querySelector('#plug-source-input') as HTMLInputElement;
         addSource(inp.value);
     });
     container.querySelector('#plug-source-input')?.addEventListener('keydown', (e: any) => {

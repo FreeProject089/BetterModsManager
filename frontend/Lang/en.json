@@ -7831,5 +7831,14 @@
   "repo.keyauth.errNoPath": "Choose the key file.",
   "repo.keyauth.errNoSuchKey": "There is no key by that name on the keyring.",
   "repo.keyauth.errBadUrl": "Enter the source's full http(s) address — a key is tied to one server.",
-  "repo.keyauth.errSignFailed": "That key could not sign. It may be of a type this build cannot use."
+  "repo.keyauth.errSignFailed": "That key could not sign. It may be of a type this build cannot use.",
+  "srcacc.title": "This source is protected",
+  "srcacc.url": "Source address",
+  "srcacc.urlPh": "https://… the catalogue's address",
+  "srcacc.key": "Private key",
+  "srcacc.manage": "Manage keys…",
+  "srcacc.keyHint": "Which key signs for that server. Per SERVER, not per catalogue: one request carries one proof, so every catalogue on a host shares this answer. Add or rename keys under Settings → Identity & API.",
+  "srcacc.pw": "Download password",
+  "srcacc.pwSet": "Use it",
+  "srcacc.pwHint": "Kept for this run only, never written to disk. BMM asks anyway when a source refuses — this is for when you already know, so the fetch does not have to fail first."
 }

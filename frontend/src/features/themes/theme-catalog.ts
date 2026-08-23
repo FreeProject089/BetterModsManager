@@ -3,6 +3,7 @@
 // Fetches official / partner / community theme lists (same pattern as app-catalog)
 // and displays a gallery with preview, install & apply buttons.
 
+import { sourceAccessHtml, wireSourceAccess } from '../../core/source-access.js';
 import { invoke, saveFile } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
 import { toast } from '../../ui/app.js';
@@ -458,6 +459,7 @@ function addCommunitySource(): void {
             <div class="modal-body" style="padding:18px 22px;display:flex;flex-direction:column;gap:10px">
                 <p style="font-size:12px;color:var(--bmm-text-muted);margin:0">${escHtml(t('themes.communityAddDesc') || 'Paste the HTTPS/HTTP link to a themes catalog.json. The catalogue\'s themes appear in the gallery to install.')}</p>
                 <input type="text" class="input" id="tc-src-input" placeholder="https://raw.githubusercontent.com/.../catalog.json" style="width:100%">
+                ${sourceAccessHtml('tc')}
             </div>
             <div class="modal-footer" style="display:flex;justify-content:flex-end;gap:10px;padding:14px 22px;border-top:1px solid var(--border)">
                 <button class="btn btn-ghost" id="tc-src-cancel">${escHtml(t('common.cancel') || 'Cancel')}</button>
@@ -466,6 +468,9 @@ function addCommunitySource(): void {
         </div>`;
     (document.getElementById('app-window-outer') || document.body).appendChild(ov);
     const close = () => ov.remove();
+    wireSourceAccess('tc', (m, k) => toast(m, k === 'warning' ? 'warning' : 'success'),
+        () => { (document.getElementById('nav-settings') as HTMLElement | null)?.click(); setTimeout(() => document.getElementById('settings-identity-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 250); },
+        () => (ov.querySelector('#tc-src-input') as HTMLInputElement | null)?.value?.trim() || '');
     const input = ov.querySelector('#tc-src-input') as HTMLInputElement;
     const submit = async () => {
         const url = input.value.trim();

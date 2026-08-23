@@ -17369,3 +17369,25 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
     border-color: var(--bmm-accent, var(--accent));
     color: var(--bmm-on-accent, #fff);
 }
+
+/* ── "this source is protected": the password + key block, mounted on all four
+   catalogue screens (core/source-access.ts). One rule set, because it is one block —
+   four copies would drift the moment one screen changed a spacing. ───────────── */
+.src-access { margin-top: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bmm-s03); }
+.src-access > summary {
+    cursor: pointer; padding: 8px 10px; font-size: 12px; font-weight: 600;
+    color: var(--text-secondary); list-style: none;
+}
+.src-access > summary::-webkit-details-marker { display: none; }
+.src-access > summary::before { content: '▸ '; color: var(--text-muted); }
+.src-access[open] > summary::before { content: '▾ '; }
+.src-access-body { padding: 4px 10px 10px; display: flex; flex-direction: column; gap: 4px; }
+.src-access-label {
+    font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px;
+    color: var(--text-muted); margin-top: 6px;
+}
+/* min-width:0 on the row AND the input: without it a long address makes the flex row
+   refuse to shrink and the whole panel grows sideways past its card. */
+.src-access-row { display: flex; gap: 6px; align-items: center; min-width: 0; }
+.src-access-row > .input { flex: 1; min-width: 0; }
+.src-access-hint { font-size: 10px; color: var(--text-muted); line-height: 1.5; }

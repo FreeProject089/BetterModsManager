@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { sourceAccessHtml, wireSourceAccess } from '../../core/source-access.js';
 import { invoke, pickFolder, pickFile } from '../../core/api.js';
 import { toast } from '../../ui/app.js';
 import { t } from '../../core/i18n.js';
@@ -935,6 +936,7 @@ function renderSources() {
         <input class="apps-source-input" id="apps-source-input" type="text" placeholder="https://raw.githubusercontent.com/.../catalog.json">
         <button class="btn btn-sm btn-accent" id="apps-add-source">${IC.plus} ${t('apps.sources.add')||'Add'}</button>
       </div>
+      ${sourceAccessHtml('apps')}
       <div class="apps-sources-list">
         <div class="apps-source-row apps-source-official">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
@@ -965,6 +967,9 @@ function renderSources() {
     </div>`;
 
     document.getElementById('apps-add-source')?.addEventListener('click', async () => {
+        wireSourceAccess('apps', (m, k) => toast(m, k === 'warning' ? 'warning' : 'success'),
+            () => { (document.getElementById('nav-settings') as HTMLElement | null)?.click(); setTimeout(() => document.getElementById('settings-identity-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 250); },
+            () => (document.getElementById('apps-source-input') as HTMLInputElement | null)?.value?.trim() || '');
         const input = document.getElementById('apps-source-input') as HTMLInputElement;
         const url = input.value.trim();
         if (!url.startsWith('http')) { toast(t('apps.sources.invalidUrl')||'Invalid URL', 'error'); return; }

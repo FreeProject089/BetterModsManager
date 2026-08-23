@@ -9,6 +9,7 @@
 // (commands/scheduler.rs); everything else (timing, conditions, action dispatch)
 // is here so it can reuse every existing invoke() action.
 
+import { sourceAccessHtml, wireSourceAccess } from '../../core/source-access.js';
 import { invoke } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
 import { escHtml, escAttr } from '../../core/utils.js';
@@ -5038,6 +5039,7 @@ function showPresetCatalog(data: { presets: any[]; sources: PresetSource[] }): v
                     <div class="sched-pc-add">
                         <input class="input" id="sched-pc-url" value="${escAttr(addUrl)}" placeholder="${escAttr(t('sched.pc.ask') || 'Address of a preset catalogue')}">
                         <button class="btn btn-sm btn-secondary" id="sched-pc-follow">${esc(t('sched.pc.follow') || 'Follow')}</button>
+                        ${sourceAccessHtml('pc')}
                     </div>
                     <!-- Where following says what happened. A toast was the only feedback, and
                          a toast that has already faded is indistinguishable from no feedback at
@@ -5071,6 +5073,9 @@ function showPresetCatalog(data: { presets: any[]; sources: PresetSource[] }): v
     const reload = async () => { const d = await loadPresetSources(); presets = d.presets; sources = d.sources; paint(); };
 
     function wire(): void {
+        wireSourceAccess('pc', (m, k) => toast(m, k === 'warning' ? 'warning' : 'success'),
+            () => { (document.getElementById('nav-settings') as HTMLElement | null)?.click(); setTimeout(() => document.getElementById('settings-identity-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 250); },
+            () => (document.getElementById('sched-pc-url') as HTMLInputElement | null)?.value?.trim() || '');
         overlay.querySelector('#sched-pc-close')?.addEventListener('click', close);
         overlay.querySelector('#sched-pc-refresh')?.addEventListener('click', () => { void reload(); });
         overlay.querySelector('#sched-pc-retry')?.addEventListener('click', () => { void reload(); });

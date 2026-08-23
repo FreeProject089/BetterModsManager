@@ -7829,5 +7829,14 @@
   "repo.keyauth.errNoPath": "Choisissez le fichier de la clé.",
   "repo.keyauth.errNoSuchKey": "Aucune clé de ce nom sur le trousseau.",
   "repo.keyauth.errBadUrl": "Saisissez l'adresse http(s) complète de la source — une clé est liée à un serveur.",
-  "repo.keyauth.errSignFailed": "Cette clé n'a pas pu signer. Elle est peut-être d'un type que cette version ne sait pas utiliser."
+  "repo.keyauth.errSignFailed": "Cette clé n'a pas pu signer. Elle est peut-être d'un type que cette version ne sait pas utiliser.",
+  "srcacc.title": "Cette source est protégée",
+  "srcacc.url": "Adresse de la source",
+  "srcacc.urlPh": "https://… l'adresse du catalogue",
+  "srcacc.key": "Clé privée",
+  "srcacc.manage": "Gérer les clés…",
+  "srcacc.keyHint": "Quelle clé signe pour ce serveur. Par SERVEUR, pas par catalogue : une requête porte une preuve, donc tous les catalogues d'un hôte partagent cette réponse. Ajoutez ou renommez vos clés dans Paramètres → Identité & API.",
+  "srcacc.pw": "Mot de passe de téléchargement",
+  "srcacc.pwSet": "Utiliser",
+  "srcacc.pwHint": "Conservé pour cette session seulement, jamais écrit sur le disque. BMM le demande de toute façon quand une source refuse — ceci sert quand vous le savez déjà, pour que la récupération n'ait pas à échouer d'abord."
 }
