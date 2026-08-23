@@ -6761,6 +6761,14 @@
                     <div style="display:flex; gap:8px; margin:6px 0 16px;">
                         <input type="text" id="repo-update-path" class="form-input" readonly placeholder="..." style="flex:1;font-size:12px;">
                         <button class="btn btn-secondary btn-sm" id="btn-pick-repo-update-folder" data-i18n="repo.update.browse">Browse</button>
+                        <!-- The same repo, fetched from the server it is served from.
+                             SSH is a transport, not a step of "generate": an existing repo can
+                             be brought down, edited and put back. This does exactly the pull
+                             the SSH panel already does, into the folder above, so there is one
+                             implementation of "fetch a repo over SFTP" and not two. -->
+                        <button class="btn btn-secondary btn-sm" id="btn-repo-update-pull"
+                            data-i18n="repo.update.fromSsh"
+                            data-tasky="repo.update.fromSshTip" data-tasky-icon="icon-download">From the server</button>
                     </div>
                     <div id="repo-update-content" style="display:none;">
                         <!-- Current repo content (remove) -->
@@ -6783,6 +6791,11 @@
                 <div class="modal-footer" style="padding:14px 22px;background:var(--bmm-s03);display:flex;justify-content:flex-end;gap:10px;border-top:1px solid var(--bmm-s08);">
                     <button class="btn btn-ghost" data-close="modal-repo-update" data-i18n="common.close">Close</button>
                     <button class="btn btn-outline-danger" id="btn-cancel-repo-update" style="display:none;color:var(--danger);border-color:rgba(239,68,68,0.3);" data-i18n="repo.update.cancel">Cancel update</button>
+                    <!-- Offered, not automatic. Publishing overwrites what is live; doing
+                         that as a silent consequence of "apply changes" would make a local
+                         edit and a public release the same click. -->
+                    <button class="btn btn-secondary" id="btn-repo-update-publish" style="display:none;"
+                        data-i18n="repo.update.publishSsh">Publish to the server</button>
                     <button class="btn btn-primary" id="btn-apply-repo-update" disabled data-i18n="repo.update.apply">Apply changes</button>
                 </div>
             </div>

@@ -502,6 +502,22 @@ export const loadModpacksForExport = async (modpacksListEl) => {
     }
 };
 
+/**
+ * An SSH error code from the backend, as a sentence.
+ *
+ * The backend reports failures as i18n KEYS, sometimes with `|`-separated detail. t() returns
+ * the key itself on a miss, so printing String(e) puts `repo.ssh.errAuthRejected` in front of
+ * the user — which is what the sync panel used to do before it grew its own explain().
+ */
+function explainSsh(raw: string): string {
+    const [key, ...rest] = String(raw).split('|');
+    const msg = t(key);
+    // t() returning the key unchanged means there is no translation; the raw text is then more
+    // use than the key name.
+    const base = msg === key ? raw : msg;
+    return rest.length ? `${base} — ${rest.join(' ')}` : base;
+}
+
 export function initRepo() {
     // The mode-info banner is a good explanation the first time and a permanent
     // block of text above the controls every time after. Same dismiss/restore
@@ -1911,9 +1927,10 @@ export function initRepo() {
             }
         });
 
-        btnPick?.addEventListener('click', async () => {
-            const folder = await pickFolder().catch(() => null);
-            if (!folder) return;
+        // Load a repo folder into the dialog. Shared by the folder picker and by the pull
+        // below, because "did this folder turn out to hold a repo" is one question and
+        // answering it twice is how the two answers start to differ.
+        const loadRepoFolder = async (folder: string): Promise<boolean> => {
             try {
                 const repo = await invoke('read_local_repo', { repoDir: folder });
                 repoDir = folder;
@@ -1921,8 +1938,79 @@ export function initRepo() {
                 _ru.done = false;
                 progressEl.style.display = 'none';
                 await renderLoaded(repo);
-            } catch (e) {
+                // Publishing back only makes sense once there is something to publish, and
+                // only when a target is configured — otherwise the button is an invitation to
+                // an error message.
+                const m = await import('./repo-ssh.js');
+                const btnPub = document.getElementById('btn-repo-update-publish') as HTMLButtonElement | null;
+                if (btnPub) btnPub.style.display = m.sshTargetNames().length ? 'inline-flex' : 'none';
+                return true;
+            } catch {
                 toast(t('repo.update.errNoRepo') || 'No valid repo.json found in this folder', 'error');
+                return false;
+            }
+        };
+
+        // ── from the server ─────────────────────────────────────────────────
+        //
+        // The repo is fetched into a folder YOU choose, not a hidden working copy: the update
+        // writes into it, and a folder you cannot see is a folder you cannot check before
+        // publishing it back over what is live.
+        document.getElementById('btn-repo-update-pull')?.addEventListener('click', async () => {
+            const m = await import('./repo-ssh.js');
+            const names = m.sshTargetNames();
+            if (!names.length) {
+                // Say where to configure it rather than failing about a field never filled in.
+                toast(t('repo.sync.useSshNotSet'), 'warning', 7000);
+                return;
+            }
+            const folder = await pickFolder().catch(() => null);
+            if (!folder) return;
+            const btn = document.getElementById('btn-repo-update-pull') as HTMLButtonElement | null;
+            if (btn) btn.disabled = true;
+            try {
+                toast(t('repo.update.pulling'), 'info', 4000);
+                const n = await m.pullStoredTarget(folder, names[0]);
+                toast((t('repo.update.pulled') || '').replace('{n}', String(n)), 'success', 5000);
+                await loadRepoFolder(folder);
+            } catch (e) {
+                toast(explainSsh(String(e)), 'error', 9000);
+            } finally {
+                if (btn) btn.disabled = false;
+            }
+        });
+
+        // ── and back again ──────────────────────────────────────────────────
+        document.getElementById('btn-repo-update-publish')?.addEventListener('click', async () => {
+            if (!repoDir) return;
+            const m = await import('./repo-ssh.js');
+            const names = m.sshTargetNames();
+            if (!names.length) { toast(t('repo.sync.useSshNotSet'), 'warning', 7000); return; }
+            // Publishing overwrites what people are downloading right now. The confirm says
+            // WHAT changes rather than "are you sure".
+            const ok = await (window as any).confirmCustom?.(
+                t('repo.update.publishTitle'),
+                t('repo.update.publishMsg').replace('{name}', names[0]),
+                'warning',
+            ).catch(() => false);
+            if (!ok) return;
+            const btn = document.getElementById('btn-repo-update-publish') as HTMLButtonElement | null;
+            if (btn) btn.disabled = true;
+            try {
+                const n = await m.publishStoredTarget(repoDir, names[0]);
+                toast((t('repo.update.published') || '').replace('{n}', String(n)), 'success', 6000);
+            } catch (e) {
+                toast(explainSsh(String(e)), 'error', 9000);
+            } finally {
+                if (btn) btn.disabled = false;
+            }
+        });
+
+        btnPick?.addEventListener('click', async () => {
+            const folder = await pickFolder().catch(() => null);
+            if (!folder) return;
+            {
+                await loadRepoFolder(folder);
             }
         });
 

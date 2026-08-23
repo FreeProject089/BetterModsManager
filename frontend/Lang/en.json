@@ -7840,5 +7840,13 @@
   "srcacc.keyHint": "Which key signs for that server. Per SERVER, not per catalogue: one request carries one proof, so every catalogue on a host shares this answer. Add or rename keys under Settings → Identity & API.",
   "srcacc.pw": "Download password",
   "srcacc.pwSet": "Use it",
-  "srcacc.pwHint": "Kept for this run only, never written to disk. BMM asks anyway when a source refuses — this is for when you already know, so the fetch does not have to fail first."
+  "srcacc.pwHint": "Kept for this run only, never written to disk. BMM asks anyway when a source refuses — this is for when you already know, so the fetch does not have to fail first.",
+  "repo.update.fromSsh": "From the server",
+  "repo.update.fromSshTip": "Fetch the repo from your configured SSH target into a folder you choose, then edit it here. The same connection as Publish over SSH — there is nothing extra to set up.",
+  "repo.update.pulling": "Fetching the repo from the server…",
+  "repo.update.pulled": "{n} file(s) fetched. Edit below, then publish back.",
+  "repo.update.publishSsh": "Publish to the server",
+  "repo.update.publishTitle": "Publish this repo to the server?",
+  "repo.update.publishMsg": "The folder above replaces what “{name}” is serving right now. Anyone syncing gets the new version on their next check.",
+  "repo.update.published": "{n} file(s) published."
 }

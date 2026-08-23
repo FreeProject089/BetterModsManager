@@ -7838,5 +7838,13 @@
   "srcacc.keyHint": "Quelle clé signe pour ce serveur. Par SERVEUR, pas par catalogue : une requête porte une preuve, donc tous les catalogues d'un hôte partagent cette réponse. Ajoutez ou renommez vos clés dans Paramètres → Identité & API.",
   "srcacc.pw": "Mot de passe de téléchargement",
   "srcacc.pwSet": "Utiliser",
-  "srcacc.pwHint": "Conservé pour cette session seulement, jamais écrit sur le disque. BMM le demande de toute façon quand une source refuse — ceci sert quand vous le savez déjà, pour que la récupération n'ait pas à échouer d'abord."
+  "srcacc.pwHint": "Conservé pour cette session seulement, jamais écrit sur le disque. BMM le demande de toute façon quand une source refuse — ceci sert quand vous le savez déjà, pour que la récupération n'ait pas à échouer d'abord.",
+  "repo.update.fromSsh": "Depuis le serveur",
+  "repo.update.fromSshTip": "Récupère le dépôt depuis la cible SSH configurée, dans un dossier que vous choisissez, puis vous le modifiez ici. Même connexion que Publier par SSH — il n'y a rien de plus à régler.",
+  "repo.update.pulling": "Récupération du dépôt depuis le serveur…",
+  "repo.update.pulled": "{n} fichier(s) récupéré(s). Modifiez ci-dessous, puis republiez.",
+  "repo.update.publishSsh": "Publier sur le serveur",
+  "repo.update.publishTitle": "Publier ce dépôt sur le serveur ?",
+  "repo.update.publishMsg": "Le dossier ci-dessus remplace ce que « {name} » sert en ce moment. Toute personne qui synchronise recevra la nouvelle version à sa prochaine vérification.",
+  "repo.update.published": "{n} fichier(s) publié(s)."
 }
