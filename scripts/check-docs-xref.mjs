@@ -31,8 +31,50 @@ if (!existsSync(DOCS)) {
 }
 
 const hub = readFileSync(HUB, 'utf8');
-// Article ids sit at the start of a line; a nested `{ id: … }` (tutorial, media) never does.
-const artIds = new Set([...hub.matchAll(/^\s*id: '([a-z0-9-]+)'/gm)].map((m) => m[1]));
+
+// Article ids come from TWO places, and reading only the first is how 25 of 67 articles went
+// unchecked here for months: their docsPath was never resolved, and a cross-link naming one
+// would have been reported broken.
+//
+//   · literal objects   — `id: 'foo'` at the start of a line
+//   · devArticle(…)     — a positional helper; the id is argument 1, unless argument 7
+//                          overrides it (which it must when one diagram backs two articles)
+//
+// The helper's arguments contain quotes, braces, apostrophes and template literals, so they are
+// scanned with real depth/quote tracking rather than a regex — a regex for this is guesswork.
+function devArticleArgs(src) {
+  const calls = [];
+  for (let i = src.indexOf('devArticle('); i >= 0; i = src.indexOf('devArticle(', i + 1)) {
+    let p = i + 'devArticle('.length;
+    let depth = 0, quote = null, start = p;
+    const args = [];
+    for (; p < src.length; p++) {
+      const ch = src[p];
+      if (quote) {
+        if (ch === '\\') { p++; continue; }
+        if (ch === quote) quote = null;
+        continue;
+      }
+      if (ch === "'" || ch === '"' || ch === '`') { quote = ch; continue; }
+      if (ch === '(' || ch === '{' || ch === '[') { depth++; continue; }
+      if (ch === ')' && depth === 0) { args.push(src.slice(start, p)); break; }
+      if (ch === ')' || ch === '}' || ch === ']') { depth--; continue; }
+      if (ch === ',' && depth === 0) { args.push(src.slice(start, p)); start = p + 1; }
+    }
+    calls.push(args.map((a) => a.trim()));
+  }
+  return calls;
+}
+const literalOf = (a) => {
+  const m = /^'((?:[^'\\]|\\.)*)'$/.exec(a || '');
+  return m ? m[1].replace(/\\(.)/g, '$1') : null;
+};
+
+const devCalls = devArticleArgs(hub);
+// id = argument 7 when given, else argument 1 (the diagram id).
+const devIds = devCalls.map((a) => literalOf(a[6]) || literalOf(a[0])).filter(Boolean);
+const litIds = [...hub.matchAll(/^\s*id: '([a-z0-9-]+)'/gm)].map((m) => m[1]);
+const artIds = new Set([...litIds, ...devIds]);
 
 const pageExists = (p) => {
   const clean = String(p).replace(/^\/+|\/+$/g, '');
@@ -43,8 +85,26 @@ const pageExists = (p) => {
 let failed = 0;
 const fail = (msg) => { console.error('  ✗ ' + msg); failed++; };
 
+// 0 ── article ids must be unique across ALL categories.
+// findArticle() scans every category and returns the first match, so a repeated id does not
+// raise anything — it makes the second article unreachable, and every route to it silently
+// renders the first. `launch-packs` existed twice (a user article and a dev one sharing a
+// diagram) and nothing showed it: both rendered, one was simply never the one you reached.
+const before0 = failed;
+const seenIds = new Map();
+for (const [id, where] of [...litIds.map((i) => [i, 'literal']), ...devIds.map((i) => [i, 'devArticle'])]) {
+  if (seenIds.has(id)) fail(`article id used twice: '${id}' (${seenIds.get(id)} + ${where}) — the second is unreachable`);
+  else seenIds.set(id, where);
+}
+if (failed === before0) console.log(`✓ ${artIds.size} article id(s) unique`);
+
 // 1 ── docsPath → a real page
-const paths = [...new Set([...hub.matchAll(/docsPath:\s*'([^']*)'/g)].map((m) => m[1]))];
+// devArticle takes its docsPath positionally (argument 6), so it never matched `docsPath:`.
+const devPaths = devCalls.map((a) => literalOf(a[5])).filter((p) => p && p !== '#');
+const paths = [...new Set([
+  ...[...hub.matchAll(/docsPath:\s*'([^']*)'/g)].map((m) => m[1]),
+  ...devPaths,
+])];
 for (const p of paths) if (!pageExists(p)) fail(`docsPath has no page: ${JSON.stringify(p)}`);
 if (!failed) console.log(`✓ ${paths.length} docsPath target(s) resolve`);
 
