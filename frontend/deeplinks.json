@@ -216,12 +216,6 @@
     ]
   },
   {
-    "action": "repo/sync-ssh",
-    "params": [
-      "dir"
-    ]
-  },
-  {
     "action": "repo/sync",
     "params": [
       "url",
@@ -231,6 +225,12 @@
       "mods_dir",
       "backup_dir",
       "password"
+    ]
+  },
+  {
+    "action": "repo/sync-ssh",
+    "params": [
+      "dir"
     ]
   },
   {
