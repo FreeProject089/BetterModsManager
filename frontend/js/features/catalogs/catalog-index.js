@@ -9,37 +9,13 @@
 // The parsing half is pure and lives here so it can be tested directly; the applying half
 // takes its stores as arguments for the same reason. Everything that talks to Tauri or
 // localStorage stays in the caller.
-
-/** One catalog named by an index. */
-export interface IndexEntry {
-    /** app · plugin · theme · preset · repo — which subsystem it belongs to. */
-    type: string;
-    /** Which Better* product it is for. Absent means the publisher did not say. */
-    app?: string;
-    url: string;
-    name?: string;
-    description?: string;
-    owner?: string;
-    items?: number;
-    /** What the document CLAIMS. Never trusted — see parseCatalogIndex. */
-    official?: boolean;
-}
-
-export interface CatalogIndex {
-    version?: string;
-    name?: string;
-    description?: string;
-    catalogs: IndexEntry[];
-}
-
 /** Types BMM can actually route. An entry naming anything else is dropped, not guessed. */
 // `repo` and `preset` were missing while the feed already published both, so a perfectly
 // good index entry was thrown away by the reader — and that failure looks like the server
 // not sending it, which is the wrong place to go looking. Keep this in step with what the
 // index can emit; a type accepted here with nowhere to route it is lost by the caller,
 // which is worse than refusing it.
-export const INDEX_TYPES = ['app', 'plugin', 'theme', 'preset', 'modpack', 'repo'] as const;
-
+export const INDEX_TYPES = ['app', 'plugin', 'theme', 'preset', 'modpack', 'repo'];
 /**
  * Parse and sanitise an index document.
  *
@@ -75,32 +51,36 @@ export const INDEX_TYPES = ['app', 'plugin', 'theme', 'preset', 'modpack', 'repo
  * entries — a url and a type. A document merely carrying the word "catalogs" is not one,
  * and misidentifying a real catalog would take a working source away from somebody.
  */
-export function looksLikeIndex(doc: unknown): boolean {
-    if (!doc || typeof doc !== 'object' || Array.isArray(doc)) return false;
-    const d = doc as Record<string, any>;
+export function looksLikeIndex(doc) {
+    if (!doc || typeof doc !== 'object' || Array.isArray(doc))
+        return false;
+    const d = doc;
     // An explicit self-declaration is enough on its own — BCWEB sends kind: 'catalog-index'
     // — but is NOT required, so a hand-written index still works.
-    if (String(d.kind || '').toLowerCase() === 'catalog-index' && Array.isArray(d.catalogs)) return true;
-    if (!Array.isArray(d.catalogs) || d.catalogs.length === 0) return false;
+    if (String(d.kind || '').toLowerCase() === 'catalog-index' && Array.isArray(d.catalogs))
+        return true;
+    if (!Array.isArray(d.catalogs) || d.catalogs.length === 0)
+        return false;
     // A catalog feed never carries a top-level `catalogs` array of {url,type} objects; those
     // carry apps/plugins/themes/presets instead. Requiring BOTH fields keeps a document that
     // happens to list catalog NAMES from being mistaken for one that lists their addresses.
-    return d.catalogs.every((e: any) => e && typeof e === 'object'
+    return d.catalogs.every((e) => e && typeof e === 'object'
         && typeof e.url === 'string' && typeof e.type === 'string');
 }
-
-export function parseCatalogIndex(raw: unknown, forApp = 'bmm'): { index: CatalogIndex; dropped: string[] } {
-    const dropped: string[] = [];
-    const doc = (raw && typeof raw === 'object' ? raw : {}) as Record<string, any>;
+export function parseCatalogIndex(raw, forApp = 'bmm') {
+    const dropped = [];
+    const doc = (raw && typeof raw === 'object' ? raw : {});
     const list = Array.isArray(doc.catalogs) ? doc.catalogs : [];
-    const seen = new Set<string>();
-    const catalogs: IndexEntry[] = [];
-
+    const seen = new Set();
+    const catalogs = [];
     for (const e of list) {
-        if (!e || typeof e !== 'object') { dropped.push('not an object'); continue; }
+        if (!e || typeof e !== 'object') {
+            dropped.push('not an object');
+            continue;
+        }
         const type = String(e.type || '').trim().toLowerCase();
         const url = String(e.url || '').trim();
-        if (!(INDEX_TYPES as readonly string[]).includes(type)) {
+        if (!INDEX_TYPES.includes(type)) {
             dropped.push(`${url || '(no url)'} — unknown type ${JSON.stringify(e.type)}`);
             continue;
         }
@@ -123,7 +103,10 @@ export function parseCatalogIndex(raw: unknown, forApp = 'bmm'): { index: Catalo
             continue;
         }
         const key = url.toLowerCase();
-        if (seen.has(key)) { dropped.push(`${url} — listed twice`); continue; }
+        if (seen.has(key)) {
+            dropped.push(`${url} — listed twice`);
+            continue;
+        }
         seen.add(key);
         catalogs.push({
             type,
@@ -135,7 +118,6 @@ export function parseCatalogIndex(raw: unknown, forApp = 'bmm'): { index: Catalo
             items: Number.isFinite(e.items) ? Number(e.items) : undefined,
         });
     }
-
     return {
         index: {
             version: typeof doc.version === 'string' ? doc.version : undefined,
@@ -146,7 +128,6 @@ export function parseCatalogIndex(raw: unknown, forApp = 'bmm'): { index: Catalo
         dropped,
     };
 }
-
 /**
  * Is this parsed document a catalogue of the asked-for kind?
  *
@@ -157,7 +138,7 @@ export function parseCatalogIndex(raw: unknown, forApp = 'bmm'): { index: Catalo
  *
  * `index` defers to looksLikeIndex rather than repeating its rule.
  */
-export const CATALOG_SHAPES: Record<string, (d: any) => boolean> = {
+export const CATALOG_SHAPES = {
     app: (d) => Array.isArray(d?.apps),
     plugin: (d) => Array.isArray(d?.plugins),
     theme: (d) => Array.isArray(d) || Array.isArray(d?.themes),
@@ -166,15 +147,14 @@ export const CATALOG_SHAPES: Record<string, (d: any) => boolean> = {
     repo: (d) => Array.isArray(d?.repos),
     index: (d) => looksLikeIndex(d),
 };
-
-export function catalogLooksLike(doc: any, kind: string): boolean {
-    if (kind === 'any') return Object.values(CATALOG_SHAPES).some((f) => f(doc));
+export function catalogLooksLike(doc, kind) {
+    if (kind === 'any')
+        return Object.values(CATALOG_SHAPES).some((f) => f(doc));
     const f = CATALOG_SHAPES[kind];
     // An unknown kind is not "anything goes" — it is a question the editor should not have
     // been able to ask, and answering true would hide that.
     return f ? f(doc) : false;
 }
-
 /**
  * Follow the entries of ONE type out of an index.
  *
@@ -190,27 +170,27 @@ export function catalogLooksLike(doc: any, kind: string): boolean {
  * `addApp` exists because app sources live in the Rust backend rather than localStorage; every
  * other type is written here. Passing it is how a caller says "I am the app browser".
  */
-export async function importIndexForType(
-    doc: unknown,
-    type: string,
-    indexUrl: string,
-    addApp?: (url: string) => Promise<void>,
-): Promise<{ added: number; already: number; ofType: number; total: number; kinds: Record<string, number> }> {
+export async function importIndexForType(doc, type, indexUrl, addApp) {
     const { index } = parseCatalogIndex(doc);
     const mine = index.catalogs.filter((e) => e.type === type);
     let added = 0;
     let already = 0;
-
     for (const e of mine) {
         try {
             if (type === 'app') {
-                if (!addApp) continue;
+                if (!addApp)
+                    continue;
                 await addApp(e.url);
-            } else {
+            }
+            else {
                 const key = STORE_KEY[type];
-                if (!key) continue;
+                if (!key)
+                    continue;
                 const list = readSources(key);
-                if (!addSource(list, e.url)) { already += 1; continue; }
+                if (!addSource(list, e.url)) {
+                    already += 1;
+                    continue;
+                }
                 localStorage.setItem(key, JSON.stringify(list));
             }
             // Recorded only after the add succeeded, so a source that failed does not get an
@@ -218,20 +198,21 @@ export async function importIndexForType(
             rememberOrigin(e.url, indexUrl);
             recordHistory({ action: 'add', type, url: e.url, via: indexUrl });
             added += 1;
-        } catch { /* one bad entry must not abandon the rest of the index */ }
+        }
+        catch { /* one bad entry must not abandon the rest of the index */ }
     }
     // What the index DOES hold, by type. "No plugin catalogues here" is a dead end; "no
     // plugin catalogues — it holds 1 app catalogue" is the next step, and it is the difference
     // between somebody thinking the import is broken and somebody opening the right screen.
-    const kinds: Record<string, number> = {};
-    for (const e of index.catalogs) kinds[e.type] = (kinds[e.type] || 0) + 1;
+    const kinds = {};
+    for (const e of index.catalogs)
+        kinds[e.type] = (kinds[e.type] || 0) + 1;
     return { added, already, ofType: mine.length, total: index.catalogs.length, kinds };
 }
-
 /** "1 app catalogue and 2 theme catalogues" — the types an index holds, in the reader's
  *  words. Sorted by count so the biggest thing in it is named first. */
-export function describeKinds(kinds: Record<string, number>): string {
-    const NAME: Record<string, [string, string]> = {
+export function describeKinds(kinds) {
+    const NAME = {
         app: ['app catalogue', 'app catalogues'],
         plugin: ['plugin catalogue', 'plugin catalogues'],
         theme: ['theme catalogue', 'theme catalogues'],
@@ -245,18 +226,19 @@ export function describeKinds(kinds: Record<string, number>): string {
         .map(([k, n]) => `${n} ${(NAME[k] || [k, `${k}s`])[n > 1 ? 1 : 0]}`)
         .join(', ');
 }
-
-const readSources = (key: string): string[] => {
+const readSources = (key) => {
     try {
         const v = JSON.parse(localStorage.getItem(key) || '[]');
         return Array.isArray(v) ? v.filter((x) => typeof x === 'string') : [];
-    } catch { return []; }
+    }
+    catch {
+        return [];
+    }
 };
-
 /** Where each type's community sources are kept. Not a new store — these are the two the
  *  deeplink handler already writes to, so a catalog added by either route lands in one
  *  place and shows up in the same list. */
-export const STORE_KEY: Record<string, string> = {
+export const STORE_KEY = {
     plugin: 'bmm_plugin_catalogs',
     theme: 'bmm_theme_community_sources',
     // New stores, following the existing naming rather than inventing a scheme. `app` is
@@ -266,14 +248,12 @@ export const STORE_KEY: Record<string, string> = {
     modpack: 'bmm_modpack_catalogs',
     repo: 'bmm_repo_catalogs',
 };
-
 /** Every type this module can actually deliver somewhere.
  *
  *  The check that stops INDEX_TYPES and STORE_KEY drifting apart: a type accepted by the
  *  parser with nowhere to put it is accepted and then dropped on the floor by the caller,
  *  which looks exactly like the server never sending it. `app` is the one deliberate
  *  exception — it has a backend command instead of a local store. */
-
 /** Where an imported catalog came from: catalog URL → the index that listed it.
  *
  *  A SEPARATE map rather than a richer entry in the source lists themselves. Those lists
@@ -283,36 +263,41 @@ export const STORE_KEY: Record<string, string> = {
  *  and a missing entry simply means "added by hand", which is the truth.
  */
 const ORIGIN_KEY = 'bmm_catalog_origins';
-
-export function readOrigins(): Record<string, string> {
+export function readOrigins() {
     try {
         const v = JSON.parse(localStorage.getItem(ORIGIN_KEY) || '{}');
         return v && typeof v === 'object' && !Array.isArray(v) ? v : {};
-    } catch { return {}; }
+    }
+    catch {
+        return {};
+    }
 }
-
 /** Record that `catalogUrl` arrived via `indexUrl`. */
-export function rememberOrigin(catalogUrl: string, indexUrl: string): void {
-    if (!catalogUrl || !indexUrl) return;
+export function rememberOrigin(catalogUrl, indexUrl) {
+    if (!catalogUrl || !indexUrl)
+        return;
     try {
         const m = readOrigins();
         m[catalogUrl] = indexUrl;
         localStorage.setItem(ORIGIN_KEY, JSON.stringify(m));
-    } catch { /* ignore */ }
+    }
+    catch { /* ignore */ }
 }
-
 /** The index a catalog came from, or null if nobody recorded one. Null is a real answer —
  *  "added by hand" — not a missing value to paper over. */
-export function originOf(catalogUrl: string): string | null {
+export function originOf(catalogUrl) {
     return readOrigins()[catalogUrl] || null;
 }
-
 /** Just the host, for a compact label. Falls back to the whole string rather than to a
  *  blank: an unparseable origin is still information. */
-export function originLabel(indexUrl: string): string {
-    try { return new URL(indexUrl).host; } catch { return indexUrl; }
+export function originLabel(indexUrl) {
+    try {
+        return new URL(indexUrl).host;
+    }
+    catch {
+        return indexUrl;
+    }
 }
-
 /**
  * A catalogue's own name for a chip: the host, plus whatever distinguishes it from the others
  * on the same host.
@@ -323,32 +308,38 @@ export function originLabel(indexUrl: string): string {
  * identical chips. The distinguishing part is usually the file, or the query that selects a
  * kind — so both are kept, and nothing else is.
  */
-export function catalogLabel(url: string): string {
-    let u: URL;
-    try { u = new URL(url); } catch { return url; }
+export function catalogLabel(url) {
+    let u;
+    try {
+        u = new URL(url);
+    }
+    catch {
+        return url;
+    }
     const file = u.pathname.split('/').filter(Boolean).pop() || '';
     // The query narrows a feed to one project or one kind; those two are what tell two
     // otherwise-identical addresses apart. Anything else is noise on a chip.
     const bits = [];
     for (const k of ['project', 'kind', 'app', 'type', 'scope']) {
         const v = u.searchParams.get(k);
-        if (v) bits.push(v);
+        if (v)
+            bits.push(v);
     }
     const tail = [file, bits.join('/')].filter(Boolean).join(' ');
     return tail ? `${u.host} · ${tail}` : u.host;
 }
-
 /** Forget where a source came from. Called when the source itself goes, so the map does not
  *  accumulate provenance for catalogs nobody follows any more. */
-export function forgetOrigin(catalogUrl: string): void {
+export function forgetOrigin(catalogUrl) {
     try {
         const m = readOrigins();
-        if (!(catalogUrl in m)) return;
+        if (!(catalogUrl in m))
+            return;
         delete m[catalogUrl];
         localStorage.setItem(ORIGIN_KEY, JSON.stringify(m));
-    } catch { /* ignore */ }
+    }
+    catch { /* ignore */ }
 }
-
 // ── Disabled sources ─────────────────────────────────────────────────────────
 //
 // "Follow this index, but not that one catalog in it."
@@ -363,30 +354,34 @@ export function forgetOrigin(catalogUrl: string): void {
 // Disabling is not removing, and the difference is the point: a removed source is forgotten,
 // a disabled one is remembered and not fetched. Removing the only copy of a URL you might
 // want back is what makes people keep catalogs they do not want.
-
 const DISABLED_KEY = 'bmm_catalog_disabled';
-
-export function readDisabled(): string[] {
+export function readDisabled() {
     try {
         const v = JSON.parse(localStorage.getItem(DISABLED_KEY) || '[]');
         return Array.isArray(v) ? v.filter((x) => typeof x === 'string' && x.trim()) : [];
-    } catch { return []; }
+    }
+    catch {
+        return [];
+    }
 }
-
 /** Is this source turned off? Case-insensitive, like every other question asked of a URL here. */
-export const isDisabled = (url: string): boolean => hasSource(readDisabled(), url);
-
+export const isDisabled = (url) => hasSource(readDisabled(), url);
 /** Turn a source off or on. Returns the new disabled list. */
-export function setDisabled(url: string, off: boolean): string[] {
+export function setDisabled(url, off) {
     const next = readDisabled();
-    if (off) addSource(next, url); else return write(removeSource(next, url).list);
+    if (off)
+        addSource(next, url);
+    else
+        return write(removeSource(next, url).list);
     return write(next);
 }
-const write = (list: string[]): string[] => {
-    try { localStorage.setItem(DISABLED_KEY, JSON.stringify(list)); } catch { /* ignore */ }
+const write = (list) => {
+    try {
+        localStorage.setItem(DISABLED_KEY, JSON.stringify(list));
+    }
+    catch { /* ignore */ }
     return list;
 };
-
 /**
  * The sources a fetcher should actually fetch.
  *
@@ -394,13 +389,13 @@ const write = (list: string[]): string[] => {
  * disabled source disabled — the flag is inert until something honours it. Written once here
  * so five fetchers cannot each get the filter subtly wrong.
  */
-export function enabledOnly(urls: string[]): string[] {
+export function enabledOnly(urls) {
     const off = readDisabled();
-    if (!off.length) return urls;   // the common case, and it must not build a Set for nothing
+    if (!off.length)
+        return urls; // the common case, and it must not build a Set for nothing
     const low = new Set(off.map((u) => u.toLowerCase()));
     return urls.filter((u) => !low.has(String(u).toLowerCase()));
 }
-
 // ── History ──────────────────────────────────────────────────────────────────
 //
 // What was followed and unfollowed, and when. It exists because the source lists are plain
@@ -409,42 +404,38 @@ export function enabledOnly(urls: string[]): string[] {
 //
 // Deliberately not a log of everything — only the two events that change what BMM fetches at
 // startup, which is the only question this answers.
-
 const HISTORY_KEY = 'bmm_catalog_history';
 /** Kept small on purpose: this is a convenience, not an audit trail, and localStorage is a
  *  few megabytes shared with everything else the app stores. */
 export const HISTORY_MAX = 200;
-
-export interface HistoryEntry {
-    at: number;
-    action: 'add' | 'remove';
-    type: string;
-    url: string;
-    /** The index it came from, when it came from one. Absent means added by hand. */
-    via?: string;
-}
-
-export function readHistory(): HistoryEntry[] {
+export function readHistory() {
     try {
         const v = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
-        if (!Array.isArray(v)) return [];
+        if (!Array.isArray(v))
+            return [];
         // Newest first, and anything malformed dropped rather than rendered as a blank row.
         return v.filter((e) => e && typeof e.url === 'string' && (e.action === 'add' || e.action === 'remove'));
-    } catch { return []; }
+    }
+    catch {
+        return [];
+    }
 }
-
 /** Record one event. Newest first, capped. Returns the list it wrote, so a caller can render
  *  without reading back. */
-export function recordHistory(entry: Omit<HistoryEntry, 'at'> & { at?: number }): HistoryEntry[] {
-    const next = [{ ...entry, at: entry.at ?? Date.now() } as HistoryEntry, ...readHistory()].slice(0, HISTORY_MAX);
-    try { localStorage.setItem(HISTORY_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+export function recordHistory(entry) {
+    const next = [{ ...entry, at: entry.at ?? Date.now() }, ...readHistory()].slice(0, HISTORY_MAX);
+    try {
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(next));
+    }
+    catch { /* ignore */ }
     return next;
 }
-
-export function clearHistory(): void {
-    try { localStorage.removeItem(HISTORY_KEY); } catch { /* ignore */ }
+export function clearHistory() {
+    try {
+        localStorage.removeItem(HISTORY_KEY);
+    }
+    catch { /* ignore */ }
 }
-
 /**
  * Drop ONE line, by its position in the list `readHistory` returns.
  *
@@ -454,14 +445,17 @@ export function clearHistory(): void {
  * re-rendered since the button was drawn, and silently deleting the wrong row is worse than
  * doing nothing.
  */
-export function forgetHistoryAt(i: number): HistoryEntry[] {
+export function forgetHistoryAt(i) {
     const cur = readHistory();
-    if (!Number.isInteger(i) || i < 0 || i >= cur.length) return cur;
+    if (!Number.isInteger(i) || i < 0 || i >= cur.length)
+        return cur;
     cur.splice(i, 1);
-    try { localStorage.setItem(HISTORY_KEY, JSON.stringify(cur)); } catch { /* ignore */ }
+    try {
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(cur));
+    }
+    catch { /* ignore */ }
     return cur;
 }
-
 /**
  * Remove a source from a list, case-insensitively.
  *
@@ -472,14 +466,12 @@ export function forgetHistoryAt(i: number): HistoryEntry[] {
  * Returns the new list and whether anything went, so the caller can skip the write and the
  * history entry when nothing changed.
  */
-export function removeSource(list: string[], url: string): { list: string[]; removed: boolean } {
+export function removeSource(list, url) {
     const low = String(url).toLowerCase();
     const kept = list.filter((u) => String(u).toLowerCase() !== low);
     return { list: kept, removed: kept.length !== list.length };
 }
-
 export const ROUTABLE = INDEX_TYPES.filter((t) => t === 'app' || !!STORE_KEY[t]);
-
 /**
  * Is this URL already in that list?
  *
@@ -493,19 +485,17 @@ export const ROUTABLE = INDEX_TYPES.filter((t) => t === 'app' || !!STORE_KEY[t])
  * sensitive on most servers, but two entries differing only in the case of a path are a typo
  * far more often than two distinct catalogs, and following one twice is the worse outcome.
  */
-export const hasSource = (list: string[], url: string): boolean =>
-    list.some((u) => String(u).toLowerCase() === String(url).toLowerCase());
-
+export const hasSource = (list, url) => list.some((u) => String(u).toLowerCase() === String(url).toLowerCase());
 /**
  * Append a source unless it is already there. Returns whether the list changed, so a caller
  * can report what it actually did rather than what it was asked to do.
  */
-export function addSource(list: string[], url: string): boolean {
-    if (hasSource(list, url)) return false;
+export function addSource(list, url) {
+    if (hasSource(list, url))
+        return false;
     list.push(url);
     return true;
 }
-
 /**
  * Work out what importing an index would change, without changing anything.
  *
@@ -514,14 +504,12 @@ export function addSource(list: string[], url: string): boolean {
  * holds, keyed by type: a type MISSING from it reads as "follows nothing", so a caller that
  * forgets a type reports everything it already has as new.
  */
-export function planImport(
-    index: CatalogIndex,
-    existing: Record<string, string[]>,
-): { add: IndexEntry[]; already: IndexEntry[] } {
-    const add: IndexEntry[] = [];
-    const already: IndexEntry[] = [];
+export function planImport(index, existing) {
+    const add = [];
+    const already = [];
     for (const e of index.catalogs) {
         (hasSource(existing[e.type] || [], e.url) ? already : add).push(e);
     }
     return { add, already };
 }
+//# sourceMappingURL=catalog-index.js.map

@@ -86,7 +86,7 @@ améliore ce que le lecteur peut t'afficher ; rien d'autre ne change ce qu'il fa
 
 | Champ | Obligatoire | Signification |
 |---|---|---|
-| `type` | **oui** | `app`, `plugin`, `theme`, `preset` ou `repo`. Tout autre est écarté. |
+| `type` | **oui** | `app`, `plugin`, `theme`, `preset`, `modpack` ou `repo`. Tout autre est écarté. |
 | `url` | **oui** | Le catalogue lui-même. `http` ou `https` uniquement. |
 | `app` | non | Pour quel produit Better\* — `bmm`, `bsm`, `installer`. |
 | `name` | non | Affiché dans l'aperçu. |
@@ -143,6 +143,7 @@ une valeur manquante n'en est pas une.
 | `plugin` | Catalogues de plugins |
 | `theme` | Catalogues de thèmes |
 | `preset` | Planificateur → *Depuis un catalogue…* |
+| `modpack` | Modpacks → *Catalogues* |
 | `repo` | Parcourir les Server-Repos |
 
 Un catalogue de repos est un document de la forme `repos.json` — voir le guide Server-Repo.

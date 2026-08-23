@@ -227,6 +227,50 @@ pub async fn export_modpack(
     Ok(())
 }
 
+/// Install a modpack straight from a catalogue.
+///
+/// Downloads the `.bmp` and hands it to `import_modpack`, so a pack that arrives from a
+/// catalogue and one you picked off your disk go through exactly the same importer — the
+/// validation, the id handling and the events all stay in one place. This adds a transport,
+/// not a second way to install.
+///
+/// `catalog_get` carries the download password and the key proof, so a modpack catalogue can
+/// be protected exactly like every other kind. Getting that for free is the whole reason this
+/// does not fetch with its own client.
+#[tauri::command]
+pub async fn install_modpack_from_url(
+    handle: AppHandle,
+    state: State<'_, AppState>,
+    download_url: String,
+) -> Result<LocalModpack, AppError> {
+    let bytes = crate::commands::net::catalog_get(&handle, &download_url)
+        .timeout(std::time::Duration::from_secs(120))
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("modpack.errDownload|{}", e)))?
+        .bytes()
+        .await
+        .map_err(|e| AppError::Internal(format!("modpack.errDownload|{}", e)))?;
+
+    // A temp file rather than an in-memory path into the importer: the importer's contract is
+    // "a file on disk", and widening it to "bytes OR a file" would mean two code paths through
+    // the part that actually validates a pack.
+    let dir = std::env::temp_dir().join("bmm-modpack-dl");
+    std::fs::create_dir_all(&dir).map_err(|e| AppError::Internal(e.to_string()))?;
+    // The name comes from a counter, never from the URL: a download_url ending in
+    // `../../evil.bmp` would otherwise choose where this lands (CWE-22).
+    let file = dir.join(format!("pack-{}.bmp", std::process::id()));
+    std::fs::write(&file, &bytes).map_err(|e| AppError::Internal(e.to_string()))?;
+
+    let _ = &state; // the importer reaches state through the handle; kept for symmetry with the
+                    // other install commands and so a future check has it without a signature change
+    let result = import_modpack(handle, Some(file.to_string_lossy().to_string())).await;
+    // Removed whether the import worked or not: a failed download leaves a half-written pack
+    // in temp, and the next attempt would find it.
+    let _ = std::fs::remove_file(&file);
+    result
+}
+
 /// Imports a modpack from a user-selected path (.bmp).
 /// Optional `path` arg imports that file directly (API callers); otherwise a dialog opens.
 #[tauri::command]

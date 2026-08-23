@@ -1,4 +1,4 @@
-﻿// @ts-nocheck
+// @ts-nocheck
 /**
  * modpack-creator.ts — Modpack Creator UI
  * Allows users to create, edit, and manage Modpacks stored in AppData.
@@ -9,42 +9,43 @@ import { invoke } from '../../core/api.js';
 import { toast, toastSaved } from '../../ui/app.js';
 import { t } from '../../core/i18n.js';
 import { dispatchBmmAction, BMM_ACTIONS } from '../../ui/tutorial-events.js';
-import { formatBytes, escHtml, escAttr } from '../../core/utils.js';
-
+import { escHtml, escAttr } from '../../core/utils.js';
 // ── State ────────────────────────────────────────────────────────────────────
-
 let _modpacks = [];
 let _editingPack = null; // LocalModpack currently being edited
 let _allMods = [];
-
 /**
  * Resolves modpack mref SHA-256 hashes to local mod IDs in a single
  * backend round-trip.  Used by apply/deactivate flows below so we don't
  * have to ship every mod's full file_hashes map to the JS heap.
  */
-async function _resolveHashesToModIds(mrefs: Array<{ sha256?: string }>): Promise<Record<string, string>> {
-    const shas = Array.from(new Set(
-        mrefs.map(m => m.sha256).filter((s): s is string => !!s)
-    ));
-    if (shas.length === 0) return {};
+async function _resolveHashesToModIds(mrefs) {
+    const shas = Array.from(new Set(mrefs.map(m => m.sha256).filter((s) => !!s)));
+    if (shas.length === 0)
+        return {};
     try {
-        const map = await invoke('find_local_mods_by_hashes', { hashes: shas }) as Record<string, string | null>;
-        const out: Record<string, string> = {};
+        const map = await invoke('find_local_mods_by_hashes', { hashes: shas });
+        const out = {};
         for (const [sha, mid] of Object.entries(map)) {
-            if (mid) out[sha] = mid;
+            if (mid)
+                out[sha] = mid;
         }
         return out;
-    } catch { return {}; }
+    }
+    catch {
+        return {};
+    }
 }
-
-function _findLocalByMref(mref: any, shaIndex: Record<string, string>) {
-    if (!mref) return null;
+function _findLocalByMref(mref, shaIndex) {
+    if (!mref)
+        return null;
     if (mref.mod_id) {
-        const byId = _allMods.find((m: any) => m.id === mref.mod_id);
-        if (byId) return byId;
+        const byId = _allMods.find((m) => m.id === mref.mod_id);
+        if (byId)
+            return byId;
     }
     if (mref.sha256 && shaIndex[mref.sha256]) {
-        return _allMods.find((m: any) => m.id === shaIndex[mref.sha256]) || null;
+        return _allMods.find((m) => m.id === shaIndex[mref.sha256]) || null;
     }
     return null;
 }
@@ -56,12 +57,10 @@ let _addCancelled = false; // Set when the user cancels an in-progress add
 let _currentAddingModName = ''; // Name of the mod currently being processed
 let _currentSelectionModalUpdateFn = null; // Ref to update UI from background
 let _currentSelectionModalOverlay = null; // Ref to current modal overlay for auto-close
-
 // ── Public init ──────────────────────────────────────────────────────────────
-
 export async function initModpackCreator(container) {
-    if (!container) return;
-
+    if (!container)
+        return;
     // Bind buttons
     const btnCat = document.getElementById('btn-modpack-catalog');
     if (btnCat && !btnCat.dataset.bound) {
@@ -81,27 +80,26 @@ export async function initModpackCreator(container) {
                 await _loadData();
                 _renderModpackList(container);
                 window.dispatchEvent(new CustomEvent('bmm://modpacks-updated'));
-            } catch (err) {
-                if (String(err) !== 'repo.errCancel') toast(String(err), 'error');
+            }
+            catch (err) {
+                if (String(err) !== 'repo.errCancel')
+                    toast(String(err), 'error');
             }
         });
     }
-
-
     // Listen for language changes
     document.addEventListener('langChanged', () => {
         if (_editingPack) {
             // If editing, re-render the editor
             _openEditor(container, _editingPack);
-        } else {
+        }
+        else {
             // If viewing list, re-render the list
             _renderModpackList(container);
         }
     });
-
     await _loadData();
     _renderModpackList(container);
-
     // Live refresh: update mod/profile lists without requiring a BMM restart
     window.addEventListener('bmm:mods-updated', async () => {
         try {
@@ -113,28 +111,34 @@ export async function initModpackCreator(container) {
             // If editing, refresh the mod selector in the editor
             if (_editingPack) {
                 _refreshModSelectorInEditor();
-            } else {
+            }
+            else {
                 _renderModpackList(container);
             }
-        } catch (e) { console.error('[ModpackCreator] live-refresh error', e); }
+        }
+        catch (e) {
+            console.error('[ModpackCreator] live-refresh error', e);
+        }
     });
-
     // Refresh modpack list when API creates/modifies/deletes a modpack
     window.addEventListener('bmm://modpacks-updated', async () => {
         try {
             await _loadData();
-            if (!_editingPack) _renderModpackList(container);
-        } catch (e) { console.error('[ModpackCreator] modpacks-updated error', e); }
+            if (!_editingPack)
+                _renderModpackList(container);
+        }
+        catch (e) {
+            console.error('[ModpackCreator] modpacks-updated error', e);
+        }
     });
-
     // Open modpack editor via event (from QT / external trigger)
     // detail: { action: 'create'|'update', modpackId?: string, prefill?: {...} }
-    window.addEventListener('bmm:modpack-focus', async (e: any) => {
+    window.addEventListener('bmm:modpack-focus', async (e) => {
         const { action, modpackId, prefill } = e.detail || {};
         try {
             await _loadData();
-        } catch (_) {}
-
+        }
+        catch (_) { }
         if (action === 'create') {
             // Build a fresh pack skeleton pre-seeded from prefill
             const freshPack = {
@@ -143,16 +147,23 @@ export async function initModpackCreator(container) {
                 skip_integrity_check: false,
             };
             if (prefill) {
-                if (prefill.name)                  freshPack.name                  = prefill.name;
-                if (prefill.description != null)   freshPack.description           = prefill.description;
-                if (prefill.game_name != null)     freshPack.game_name             = prefill.game_name;
-                if (prefill.sr_link != null)       freshPack.sr_link               = prefill.sr_link;
-                if (prefill.multi_profile != null) freshPack.multi_profile         = prefill.multi_profile;
-                if (prefill.skip_integrity_check != null) freshPack.skip_integrity_check = prefill.skip_integrity_check;
-                if (prefill.dependency_mode)       freshPack.dependency_mode       = prefill.dependency_mode;
+                if (prefill.name)
+                    freshPack.name = prefill.name;
+                if (prefill.description != null)
+                    freshPack.description = prefill.description;
+                if (prefill.game_name != null)
+                    freshPack.game_name = prefill.game_name;
+                if (prefill.sr_link != null)
+                    freshPack.sr_link = prefill.sr_link;
+                if (prefill.multi_profile != null)
+                    freshPack.multi_profile = prefill.multi_profile;
+                if (prefill.skip_integrity_check != null)
+                    freshPack.skip_integrity_check = prefill.skip_integrity_check;
+                if (prefill.dependency_mode)
+                    freshPack.dependency_mode = prefill.dependency_mode;
                 // Pre-seed mods from mod_ids (stubs — just ids, no metadata yet)
                 if (prefill.mod_ids?.length) {
-                    freshPack.mods = prefill.mod_ids.map((id: string) => {
+                    freshPack.mods = prefill.mod_ids.map((id) => {
                         const found = _allMods.find(m => m.id === id);
                         return { mod_id: id, mod_name: found?.name || id, mod_version: found?.version || '', sha256: '', file_manifest: [] };
                     });
@@ -163,40 +174,48 @@ export async function initModpackCreator(container) {
             // After editor renders, apply all prefill values + pre-seeded mods, then auto-save
             requestAnimationFrame(() => {
                 if (prefill?.name && document.getElementById('mp-name'))
-                    (document.getElementById('mp-name') as HTMLInputElement).value = prefill.name;
+                    document.getElementById('mp-name').value = prefill.name;
                 if (prefill?.description != null && document.getElementById('mp-desc'))
-                    (document.getElementById('mp-desc') as HTMLTextAreaElement).value = prefill.description || '';
+                    document.getElementById('mp-desc').value = prefill.description || '';
                 if (prefill?.game_name != null && document.getElementById('mp-game'))
-                    (document.getElementById('mp-game') as HTMLInputElement).value = prefill.game_name || '';
+                    document.getElementById('mp-game').value = prefill.game_name || '';
                 if (prefill?.sr_link != null && document.getElementById('mp-srlink'))
-                    (document.getElementById('mp-srlink') as HTMLInputElement).value = prefill.sr_link || '';
+                    document.getElementById('mp-srlink').value = prefill.sr_link || '';
                 if (prefill?.dependency_mode && document.getElementById('mp-depmode'))
-                    (document.getElementById('mp-depmode') as HTMLSelectElement).value = prefill.dependency_mode;
+                    document.getElementById('mp-depmode').value = prefill.dependency_mode;
                 if (prefill?.multi_profile != null) {
-                    const cb = document.getElementById('mp-multi') as HTMLInputElement;
-                    if (cb) { cb.checked = !!prefill.multi_profile; _editingPack.multi_profile = !!prefill.multi_profile; }
+                    const cb = document.getElementById('mp-multi');
+                    if (cb) {
+                        cb.checked = !!prefill.multi_profile;
+                        _editingPack.multi_profile = !!prefill.multi_profile;
+                    }
                 }
                 if (prefill?.skip_integrity_check != null) {
-                    const cb = document.getElementById('mp-skip-integrity') as HTMLInputElement;
-                    if (cb) { cb.checked = !!prefill.skip_integrity_check; _editingPack.skip_integrity_check = !!prefill.skip_integrity_check; }
+                    const cb = document.getElementById('mp-skip-integrity');
+                    if (cb) {
+                        cb.checked = !!prefill.skip_integrity_check;
+                        _editingPack.skip_integrity_check = !!prefill.skip_integrity_check;
+                    }
                 }
                 // Populate mods list from prefill.mod_ids
                 if (freshPack.mods.length > 0) {
                     _packMods = [...freshPack.mods];
                     _editingPack.mods = [..._packMods];
                     const modListEl = document.getElementById('mp-modlist');
-                    if (modListEl) _renderPackModList(modListEl);
+                    if (modListEl)
+                        _renderPackModList(modListEl);
                 }
                 // Auto-save if a name was provided (no human interaction required)
                 if (prefill?.name) {
                     setTimeout(() => {
-                        const saveBtn = document.getElementById('editor-save') as HTMLButtonElement | null;
-                        if (saveBtn && !saveBtn.disabled) saveBtn.click();
+                        const saveBtn = document.getElementById('editor-save');
+                        if (saveBtn && !saveBtn.disabled)
+                            saveBtn.click();
                     }, 150);
                 }
             });
-
-        } else if (action === 'update' && modpackId) {
+        }
+        else if (action === 'update' && modpackId) {
             const existing = _modpacks.find(m => m.id === modpackId);
             if (!existing) {
                 console.warn('[ModpackCreator] bmm:modpack-focus update — pack not found:', modpackId);
@@ -205,18 +224,26 @@ export async function initModpackCreator(container) {
             // Merge prefill overrides onto the existing pack before opening
             const merged = JSON.parse(JSON.stringify(existing));
             if (prefill) {
-                if (prefill.name != null)                  merged.name                  = prefill.name;
-                if (prefill.description != null)           merged.description           = prefill.description;
-                if (prefill.game_name != null)             merged.game_name             = prefill.game_name;
-                if (prefill.sr_link != null)               merged.sr_link               = prefill.sr_link;
-                if (prefill.multi_profile != null)         merged.multi_profile         = prefill.multi_profile;
-                if (prefill.skip_integrity_check != null)  merged.skip_integrity_check  = prefill.skip_integrity_check;
-                if (prefill.dependency_mode)               merged.dependency_mode       = prefill.dependency_mode;
+                if (prefill.name != null)
+                    merged.name = prefill.name;
+                if (prefill.description != null)
+                    merged.description = prefill.description;
+                if (prefill.game_name != null)
+                    merged.game_name = prefill.game_name;
+                if (prefill.sr_link != null)
+                    merged.sr_link = prefill.sr_link;
+                if (prefill.multi_profile != null)
+                    merged.multi_profile = prefill.multi_profile;
+                if (prefill.skip_integrity_check != null)
+                    merged.skip_integrity_check = prefill.skip_integrity_check;
+                if (prefill.dependency_mode)
+                    merged.dependency_mode = prefill.dependency_mode;
                 if (prefill.mod_ids?.length) {
                     // Replace mods list with the provided ids, preserving existing metadata where possible
-                    merged.mods = prefill.mod_ids.map((id: string) => {
-                        const existing_ref = merged.mods.find((mr: any) => mr.mod_id === id);
-                        if (existing_ref) return existing_ref;
+                    merged.mods = prefill.mod_ids.map((id) => {
+                        const existing_ref = merged.mods.find((mr) => mr.mod_id === id);
+                        if (existing_ref)
+                            return existing_ref;
                         const found = _allMods.find(m => m.id === id);
                         return { mod_id: id, mod_name: found?.name || id, mod_version: found?.version || '', sha256: '', file_manifest: [] };
                     });
@@ -226,25 +253,23 @@ export async function initModpackCreator(container) {
             // Auto-save after editor renders (no human interaction required)
             requestAnimationFrame(() => {
                 setTimeout(() => {
-                    const saveBtn = document.getElementById('editor-save') as HTMLButtonElement | null;
-                    if (saveBtn && !saveBtn.disabled) saveBtn.click();
+                    const saveBtn = document.getElementById('editor-save');
+                    if (saveBtn && !saveBtn.disabled)
+                        saveBtn.click();
                 }, 150);
             });
         }
     });
 }
-
 /** Refreshes the mod picker list inside an open editor without closing it */
 function _refreshModSelectorInEditor() {
     const availableContainer = document.getElementById('mp-available-mods');
-    if (!availableContainer) return;
-    const existingIds = new Set(
-        Array.from(document.querySelectorAll('#mp-selected-items [data-mod-id]'))
-            .map(el => (el as HTMLElement).dataset.modId || '')
-    );
+    if (!availableContainer)
+        return;
+    const existingIds = new Set(Array.from(document.querySelectorAll('#mp-selected-items [data-mod-id]'))
+        .map(el => el.dataset.modId || ''));
     // Tutorial demo mods float to the top so they're easy to find while following a tutorial.
-    const sortedMods = [..._allMods].sort((a: any, b: any) =>
-        (b.id?.startsWith('__bmm_tutorial_demo_mod_') ? 1 : 0) - (a.id?.startsWith('__bmm_tutorial_demo_mod_') ? 1 : 0));
+    const sortedMods = [..._allMods].sort((a, b) => (b.id?.startsWith('__bmm_tutorial_demo_mod_') ? 1 : 0) - (a.id?.startsWith('__bmm_tutorial_demo_mod_') ? 1 : 0));
     availableContainer.innerHTML = sortedMods.length
         ? sortedMods.map(m => `
             <div class="mp-mod-item${existingIds.has(m.id) ? ' mp-mod-selected' : ''}" data-id="${m.id}" data-name="${m.name || m.id}">
@@ -253,7 +278,6 @@ function _refreshModSelectorInEditor() {
             </div>`).join('')
         : `<div class="plug-mod-empty">Aucun mod disponible</div>`;
 }
-
 async function _loadData() {
     try {
         [_modpacks, _allMods, _profiles, _activeProfileId] = await Promise.all([
@@ -262,16 +286,14 @@ async function _loadData() {
             invoke('get_profiles'),
             invoke('get_active_profile_id'),
         ]);
-    } catch (e) {
+    }
+    catch (e) {
         console.error('[ModpackCreator] load error', e);
     }
 }
-
 // ── List view ────────────────────────────────────────────────────────────────
-
 function _renderModpackList(container) {
     container.innerHTML = '';
-
     const countHeader = document.createElement('div');
     countHeader.style.cssText = 'display:flex; align-items:center; justify-content:space-between; margin-bottom:24px; flex-wrap: wrap; gap: 16px;';
     countHeader.innerHTML = `
@@ -292,17 +314,13 @@ function _renderModpackList(container) {
         </div>
     `;
     container.appendChild(countHeader);
-
     const searchInput = countHeader.querySelector('#modpack-search');
     const searchWrap = countHeader.querySelector('#mp-search-wrap');
     searchWrap.addEventListener('focusin', () => searchWrap.style.borderColor = 'rgba(0,194,255,0.35)');
     searchWrap.addEventListener('focusout', () => searchWrap.style.borderColor = 'var(--bmm-s08)');
-
     const countBadge = countHeader.querySelector('#modpack-count-badge');
-
     const createBtn = countHeader.querySelector('#modpack-create-btn');
     createBtn.addEventListener('click', () => _openEditor(container, null));
-
     if (_modpacks.length === 0) {
         const empty = document.createElement('div');
         empty.style.cssText = 'text-align:center;padding:60px 20px;color:var(--text-muted);display:flex;flex-direction:column;align-items:center;gap:16px;';
@@ -318,32 +336,25 @@ function _renderModpackList(container) {
         container.appendChild(empty);
         return;
     }
-
     const grid = document.createElement('div');
     grid.className = 'modpack-grid';
-
     const cards = [];
-
     _modpacks.forEach(pack => {
         const card = document.createElement('div');
         card.className = 'modpack-card';
-
         const modsCount = pack.mods ? pack.mods.length : 0;
         const lastUpdate = pack.updated_at ? new Date(pack.updated_at).toLocaleDateString() : '—';
         const description = escHtml(pack.description || t('modpack.noDesc'));
-
         const anyEnabled = pack.mods && pack.mods.length > 0 && pack.mods.some(mref => {
             const local = _allMods.find(m => m.id === mref.mod_id || m.sha256 === mref.sha256);
             return local && local.enabled;
         });
-
         const applyIcon = anyEnabled
             ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="9" x2="15" y2="15"/><line x1="15" y1="9" x2="9" y2="15"/></svg>'
             : '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>';
         const applyTitle = anyEnabled ? t('modpack.deactivate') || 'Désactiver le modpack' : t('modpack.apply');
         const applyClass = anyEnabled ? 'btn-apply active' : 'btn-apply';
         const applyColor = anyEnabled ? 'color: var(--success);' : '';
-
         card.innerHTML = `
             <div class="modpack-card-info" style="margin-left: 0; display: flex; flex-direction: column; height: 100%;">
                 <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: 8px; padding-right: 90px;">
@@ -376,19 +387,15 @@ function _renderModpackList(container) {
                 <button class="btn btn-icon btn-ghost btn-delete" style="color:var(--danger)" ><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
             </div>
         `;
-
         card.querySelector('.btn-edit').onclick = (e) => { e.stopPropagation(); _openEditor(container, pack); };
         card.querySelector('.btn-apply').onclick = (e) => { e.stopPropagation(); _applyModpack(container, pack); };
         card.querySelector('.btn-export').onclick = (e) => { e.stopPropagation(); _exportModpack(pack); };
         card.querySelector('.btn-delete').onclick = (e) => { e.stopPropagation(); _deleteModpack(container, pack); };
         card.onclick = () => _openEditor(container, pack);
-
         grid.appendChild(card);
         cards.push({ card, name: pack.name.toLowerCase() });
     });
-
     container.appendChild(grid);
-
     searchInput.addEventListener('input', (e) => {
         const q = e.target.value.toLowerCase().trim();
         let visible = 0;
@@ -396,25 +403,22 @@ function _renderModpackList(container) {
             if (!q || name.includes(q)) {
                 card.style.display = 'flex';
                 visible++;
-            } else {
+            }
+            else {
                 card.style.display = 'none';
             }
         });
         countBadge.textContent = visible.toString();
     });
 }
-
 // ── Editor ───────────────────────────────────────────────────────────────────
-
 async function _openEditor(container, pack) {
     _editingPack = pack ? JSON.parse(JSON.stringify(pack)) : {
         id: '', name: '', description: null, created_at: '', updated_at: '',
         multi_profile: true, dependency_mode: 'manual', mods: [], sr_link: null, game_name: null
     };
     _packMods = _editingPack.mods ? [..._editingPack.mods] : [];
-
     container.innerHTML = '';
-
     // Premium Header / Breadcrumbs
     const header = document.createElement('div');
     header.style.cssText = 'display:flex; align-items:center; justify-content:space-between; margin-bottom:24px;';
@@ -436,16 +440,13 @@ async function _openEditor(container, pack) {
         </div>
     `;
     container.appendChild(header);
-
     const goBack = async () => { await _loadData(); _renderModpackList(container); };
     header.querySelector('#bc-home').onclick = goBack;
     header.querySelector('#editor-cancel').onclick = goBack;
-
     // Split Layout
     const layout = document.createElement('div');
     layout.className = 'modpack-editor-layout';
     container.appendChild(layout);
-
     // LEFT: Meta
     const leftCol = document.createElement('div');
     leftCol.className = 'editor-section-card';
@@ -455,20 +456,16 @@ async function _openEditor(container, pack) {
             ${t('modpack.generalInfo')}
         </div>
     `;
-
     const metaForm = document.createElement('div');
     metaForm.style.cssText = 'display:flex; flex-direction:column; gap:16px;';
-
     metaForm.appendChild(_formField(t('modpack.name'), `<input id="mp-name" type="text" class="form-input" placeholder="${t('modpack.namePlaceholder')}" value="${_editingPack.name || ''}" style="width:100%;">`));
     metaForm.appendChild(_formField(t('modpack.description'), `<textarea id="mp-desc" class="form-input" style="width:100%; height:100px; resize:none;">${_editingPack.description || ''}</textarea>`));
     metaForm.appendChild(_formField(t('modpack.game'), `<input id="mp-game" type="text" class="form-input" placeholder="${t('modpack.gamePlaceholder') || 'e.g. DCS World'}" value="${_editingPack.game_name || ''}" style="width:100%;">`));
-
     // Multi-profile toggle (re-styled)
     const multiRow = document.createElement('label');
     multiRow.style.cssText = 'display:flex; align-items:center; gap:12px; cursor:pointer; padding:16px; border-radius:14px; background:var(--bmm-s03); border:1px solid var(--bmm-s05); transition:all 0.2s;';
     multiRow.onmouseenter = () => multiRow.style.borderColor = 'rgba(var(--accent-rgb), 0.2)';
     multiRow.onmouseleave = () => multiRow.style.borderColor = 'var(--bmm-s05)';
-
     const multiCb = document.createElement('input');
     multiCb.type = 'checkbox';
     multiCb.id = 'mp-multi';
@@ -477,23 +474,19 @@ async function _openEditor(container, pack) {
     multiCb.onchange = () => {
         _editingPack.multi_profile = multiCb.checked;
     };
-
     const multiInfo = document.createElement('div');
     multiInfo.innerHTML = `
         <div style="font-size:13px; font-weight:700; color:var(--text-primary);">${t('modpack.multiProfile')}</div>
         <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">${t('modpack.multiProfileDesc')}</div>
     `;
-
     multiRow.appendChild(multiCb);
     multiRow.appendChild(multiInfo);
     metaForm.appendChild(multiRow);
-
     // Skip Integrity Check toggle
     const skipRow = document.createElement('label');
     skipRow.style.cssText = 'display:flex; align-items:center; gap:12px; cursor:pointer; padding:16px; border-radius:14px; background:rgba(255,136,0,0.05); border:1px solid rgba(255,136,0,0.1); transition:all 0.2s;';
     skipRow.onmouseenter = () => skipRow.style.borderColor = 'rgba(255,136,0,0.3)';
     skipRow.onmouseleave = () => skipRow.style.borderColor = 'rgba(255,136,0,0.1)';
-
     const skipCb = document.createElement('input');
     skipCb.type = 'checkbox';
     skipCb.id = 'mp-skip-integrity';
@@ -502,17 +495,14 @@ async function _openEditor(container, pack) {
     skipCb.onchange = () => {
         _editingPack.skip_integrity_check = skipCb.checked;
     };
-
     const skipInfo = document.createElement('div');
     skipInfo.innerHTML = `
         <div style="font-size:13px; font-weight:700; color:var(--bmm-warning);">${t('modpack.skipIntegrity') || "Ignorer la vérification d'intégrité"}</div>
         <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">${t('modpack.skipIntegrityDesc') || "Disables file verification on launch (faster, but does not repair broken mods)."}</div>
     `;
-
     skipRow.appendChild(skipCb);
     skipRow.appendChild(skipInfo);
     metaForm.appendChild(skipRow);
-
     metaForm.appendChild(_formField(t('modpack.depMode'), `
         <select id="mp-depmode" class="form-input" style="width:100%;">
             <option value="all" ${_editingPack.dependency_mode === 'all' ? 'selected' : ''}>${t('modpack.depModeAll')}</option>
@@ -520,12 +510,9 @@ async function _openEditor(container, pack) {
             <option value="manual" ${_editingPack.dependency_mode === 'manual' ? 'selected' : ''}>${t('modpack.depModeManual')}</option>
         </select>
     `));
-
     metaForm.appendChild(_formField(t('modpack.srLink'), `<input id="mp-srlink" type="text" class="form-input" placeholder="${t('modpack.srLinkPlaceholder')}" value="${_editingPack.sr_link || ''}" style="width:100%;">`));
-
     leftCol.appendChild(metaForm);
     layout.appendChild(leftCol);
-
     // RIGHT: Mods
     const rightCol = document.createElement('div');
     rightCol.className = 'editor-section-card';
@@ -544,23 +531,20 @@ async function _openEditor(container, pack) {
             </button>
         </div>
     `;
-
     const modListEl = document.createElement('div');
     modListEl.id = 'mp-modlist';
     modListEl.style.cssText = 'display:flex; flex-direction:column; gap:10px; margin-top:10px;';
     rightCol.appendChild(modListEl);
     _renderPackModList(modListEl);
-
     rightCol.querySelector('#btn-add-mods-pack').onclick = () => _openMultiSelectModal(modListEl);
-
     layout.appendChild(rightCol);
-
     // Save Logic
     header.querySelector('#editor-save').onclick = async () => {
         const name = document.getElementById('mp-name')?.value.trim();
-        if (!name) return toast(t('modpack.errNoName'), 'warning');
-        if (_packMods.length === 0) return toast(t('modpack.errNoMods'), 'warning');
-
+        if (!name)
+            return toast(t('modpack.errNoName'), 'warning');
+        if (_packMods.length === 0)
+            return toast(t('modpack.errNoMods'), 'warning');
         const payload = {
             ..._editingPack,
             name,
@@ -572,7 +556,6 @@ async function _openEditor(container, pack) {
             sr_link: document.getElementById('mp-srlink')?.value.trim() || null,
             mods: _packMods,
         };
-
         try {
             const btn = header.querySelector('#editor-save');
             btn.disabled = true;
@@ -582,17 +565,16 @@ async function _openEditor(container, pack) {
             dispatchBmmAction(BMM_ACTIONS.MODPACK_CREATED, { name: payload.name });
             await _loadData();
             _renderModpackList(container);
-
             // Notify other components (like Repo page)
             window.dispatchEvent(new CustomEvent('bmm://modpacks-updated'));
-        } catch (err) {
+        }
+        catch (err) {
             toast(String(err), 'error');
             header.querySelector('#editor-save').disabled = false;
             header.querySelector('#editor-save').textContent = t('modpack.save');
         }
     };
 }
-
 function _renderPackModList(listEl) {
     listEl.innerHTML = '';
     if (_packMods.length === 0) {
@@ -607,14 +589,12 @@ function _renderPackModList(listEl) {
         listEl.appendChild(empty);
         return;
     }
-
     _packMods.forEach((pm, idx) => {
         const card = document.createElement('div');
         card.className = 'mod-item-card';
         card.style.display = 'flex';
         card.style.flexDirection = 'column';
         card.style.gap = '12px';
-
         card.innerHTML = `
             <div style="display:flex; align-items:center; gap:12px;">
                 <div style="flex:1; min-width:0;">
@@ -657,24 +637,18 @@ function _renderPackModList(listEl) {
                 <div class="deps-list" style="display:flex; flex-wrap:wrap; gap:4px; opacity:0.6;"></div>
             </div>
         `;
-
         card.querySelector('.btn-remove').onclick = () => {
             _packMods.splice(idx, 1);
             _renderPackModList(listEl);
         };
-
         const dlIn = card.querySelector('.dl-input');
         dlIn.oninput = () => { _packMods[idx].download_link = dlIn.value.trim(); };
-
         const fbIn = card.querySelector('.fb-input');
         fbIn.oninput = () => { _packMods[idx].download_fallback = fbIn.value.trim(); };
-
         const depCb = card.querySelector('.deps-cb');
         depCb.onchange = () => { _packMods[idx].include_dependencies = depCb.checked; };
-
         const fbTypeSelect = card.querySelector('.fb-type-select');
         fbTypeSelect.onchange = () => { _packMods[idx].fallback_type = fbTypeSelect.value; };
-
         // Pre-show dependencies if mod is found locally
         const localMod = _allMods.find(m => m.id === pm.mod_id);
         if (localMod && localMod.dependencies && localMod.dependencies.length > 0) {
@@ -687,13 +661,10 @@ function _renderPackModList(listEl) {
                 dlist.appendChild(tag);
             });
         }
-
         listEl.appendChild(card);
     });
 }
-
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
 function _formField(label, inputHtml) {
     const wrap = document.createElement('div');
     wrap.style.marginBottom = '16px';
@@ -703,7 +674,6 @@ function _formField(label, inputHtml) {
     `;
     return wrap;
 }
-
 function _makeIconBtn(svgHtml, bgColor, color) {
     const btn = document.createElement('button');
     btn.style.cssText = `
@@ -717,18 +687,13 @@ function _makeIconBtn(svgHtml, bgColor, color) {
     btn.addEventListener('mouseleave', () => btn.style.opacity = '1');
     return btn;
 }
-
 function _openMultiSelectModal(listEl) {
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
     overlay.style.cssText = 'position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.85); backdrop-filter:blur(8px); display:flex; align-items:center; justify-content:center; z-index:100000; opacity:0; transition:opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1); pointer-events:auto;';
-
-
-
     const content = document.createElement('div');
     content.className = 'modal-content glass';
     content.style.cssText = 'width:660px; max-width:95vw; height:80vh; max-height:700px; display:flex; flex-direction:column; padding:0; border-radius:16px; overflow:hidden; background:var(--card-bg, #0f172a); border:1px solid var(--border, #1e293b); box-shadow:0 32px 64px rgba(0,0,0,0.7); transform:translateY(20px) scale(0.98); transition:all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); pointer-events:auto;';
-
     // Header with search
     const header = document.createElement('div');
     header.style.cssText = 'padding:20px 24px 0; border-bottom:1px solid var(--bmm-s06); background:var(--bmm-s02); flex-shrink:0;';
@@ -756,21 +721,17 @@ function _openMultiSelectModal(listEl) {
             </div>
         </div>
     `;
-
     // Body
     const body = document.createElement('div');
     body.style.cssText = 'flex:1; overflow-y:auto; padding:12px 16px; display:flex; flex-direction:column; gap:5px;';
-
     // Filter available mods
     // Show all mods, but mark those already in pack
     let availableMods = [..._allMods];
-
     // If multi-profile is OFF, only show mods from the current active profile
     if (!_editingPack.multi_profile) {
         const targetId = _activeProfileId || window.cachedActiveProfileId;
         const activeProfile = _profiles.find(p => String(p.id) === String(targetId));
         console.log('[Modpack] Active Profile detected:', activeProfile?.name, 'ID:', targetId);
-
         if (activeProfile) {
             availableMods = availableMods.filter(m => {
                 // Match by profile_id or by directory path (path is very reliable in BMM)
@@ -779,14 +740,13 @@ function _openMultiSelectModal(listEl) {
                 return matchesId || matchesPath;
             });
             console.log('[Modpack] Available after profile filter:', availableMods.length);
-        } else {
+        }
+        else {
             console.warn('[Modpack] No active profile found, showing all mods.');
         }
     }
-
     const checkboxes = [];
     const rows = [];
-
     if (availableMods.length === 0) {
         body.innerHTML = `<div style="text-align:center;color:var(--text-muted);font-size:13px;padding:60px 20px; display:flex; flex-direction:column; align-items:center; gap:12px;">
             <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.3; margin-bottom: 4px;">
@@ -796,22 +756,19 @@ function _openMultiSelectModal(listEl) {
             <span>${t('modpack.noMoreMods')}</span>
         </div>`;
     }
-
     availableMods.forEach(m => {
         const prof = _profiles.find(p => m.mod_folder_path && (m.mod_folder_path.toString().includes(p.mods_path?.toString()) || p.mods_path?.toString().includes(m.mod_folder_path?.toString())));
         const depCount = m.dependencies ? m.dependencies.length : 0;
         const searchLabel = (m.name + (prof ? prof.name : '')).toLowerCase();
-
         const alreadyInPack = _packMods.some(pm => String(pm.mod_id) === String(m.id));
-
         const row = document.createElement('label');
         row.style.cssText = `display:flex; align-items:center; gap:14px; padding:10px 12px; border-radius:12px; cursor:pointer; transition:all 0.15s; border:1px solid transparent; background:${alreadyInPack ? 'rgba(0,194,255,0.08)' : 'var(--bmm-s02)'};`;
-        if (alreadyInPack) row.style.borderColor = 'rgba(0,194,255,0.25)';
+        if (alreadyInPack)
+            row.style.borderColor = 'rgba(0,194,255,0.25)';
         if (_isAddingMods) {
             row.style.pointerEvents = 'none';
             row.style.opacity = '0.7';
         }
-
         row.addEventListener('mouseenter', () => {
             if (!row.querySelector('input').checked) {
                 row.style.background = 'rgba(0,194,255,0.04)';
@@ -822,37 +779,32 @@ function _openMultiSelectModal(listEl) {
             if (!row.querySelector('input').checked) {
                 row.style.background = 'var(--bmm-s02)';
                 row.style.borderColor = 'transparent';
-            } else if (alreadyInPack) {
+            }
+            else if (alreadyInPack) {
                 row.style.background = 'rgba(0,194,255,0.08)';
                 row.style.borderColor = 'rgba(0,194,255,0.25)';
             }
         });
-
         const switchWrap = document.createElement('label');
         switchWrap.className = 'bmm-switch';
         switchWrap.style.cssText = 'flex-shrink:0;';
-
         const cb = document.createElement('input');
         cb.type = 'checkbox';
         cb.value = m.id;
         cb.checked = alreadyInPack;
         cb.dataset.profId = prof?.id || '';
-
         const track = document.createElement('span');
         track.className = 'bmm-switch-track';
         const thumb = document.createElement('span');
         thumb.className = 'bmm-switch-thumb';
         track.appendChild(thumb);
-
         switchWrap.appendChild(cb);
         switchWrap.appendChild(track);
-
         cb.addEventListener('change', () => {
             row.style.background = cb.checked ? 'rgba(0,194,255,0.08)' : 'var(--bmm-s02)';
             row.style.borderColor = cb.checked ? 'rgba(0,194,255,0.25)' : 'transparent';
             updateSelCount();
         });
-
         const info = document.createElement('div');
         info.style.cssText = 'flex:1; min-width:0;';
         info.innerHTML = `
@@ -864,14 +816,12 @@ function _openMultiSelectModal(listEl) {
                 ${alreadyInPack ? `<span style="font-size:8px; font-weight:800; color:var(--success); background:rgba(16,185,129,0.1); padding:1px 4px; border-radius:3px; text-transform:uppercase;">${t('modpack.alreadyAdded') || 'DÉJÀ AJOUTÉ'}</span>` : ''}
             </div>
         `;
-
         row.appendChild(switchWrap);
         row.appendChild(info);
         body.appendChild(row);
         checkboxes.push(cb);
         rows.push({ row, searchLabel });
     });
-
     // Footer
     const footer = document.createElement('div');
     footer.style.cssText = 'padding:14px 20px; border-top:1px solid var(--bmm-s05); display:flex; align-items:center; justify-content:space-between; gap:12px; background:rgba(0,0,0,0.15); flex-shrink:0;';
@@ -889,11 +839,9 @@ function _openMultiSelectModal(listEl) {
             </button>
         </div>
     `;
-
     const countLabel = header.querySelector('#ms-count-label');
     const footerCount = footer.querySelector('#ms-footer-count');
     const confirmBtn = footer.querySelector('#ms-confirm');
-
     function updateSelCount() {
         if (_isAddingMods) {
             countLabel.textContent = _currentAddingModName ? `${t('modpack.adding')}: ${_currentAddingModName}` : t('modpack.addingInProgress');
@@ -903,12 +851,10 @@ function _openMultiSelectModal(listEl) {
             confirmBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:8px; animation: bmm-loading-spin 1s linear infinite;"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> ${t('common.loading')}`;
             return;
         }
-
         // Restore buttons if we just finished
         confirmBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:6px;"><polyline points="20 6 9 17 4 12"/></svg> ${t('modpack.addMod')}`;
         footer.querySelector('#ms-cancel').disabled = false;
         header.querySelector('#ms-close').disabled = false;
-
         const selCount = checkboxes.filter(c => c.checked).length;
         const total = availableMods.length;
         countLabel.textContent = `${total} ${t('modpack.modsAvailable')}`;
@@ -918,7 +864,6 @@ function _openMultiSelectModal(listEl) {
     }
     _currentSelectionModalUpdateFn = updateSelCount;
     updateSelCount();
-
     // Search
     header.querySelector('#ms-search').addEventListener('input', (e) => {
         const q = e.target.value.toLowerCase().trim();
@@ -932,7 +877,6 @@ function _openMultiSelectModal(listEl) {
     header.querySelector('#ms-search-wrap').addEventListener('focusout', () => {
         header.querySelector('#ms-search-wrap').style.borderColor = 'var(--bmm-s08)';
     });
-
     const close = () => {
         _currentSelectionModalUpdateFn = null;
         _currentSelectionModalOverlay = null;
@@ -940,7 +884,6 @@ function _openMultiSelectModal(listEl) {
         content.style.transform = 'translateY(10px) scale(0.97)';
         setTimeout(() => overlay.remove(), 220);
     };
-
     // Cancel: if mods are still being added, abort the in-progress run; otherwise close.
     const cancelOrAbort = () => {
         if (_isAddingMods) {
@@ -952,48 +895,48 @@ function _openMultiSelectModal(listEl) {
     };
     footer.querySelector('#ms-cancel').addEventListener('click', cancelOrAbort);
     header.querySelector('#ms-close').addEventListener('click', cancelOrAbort);
-
     confirmBtn.addEventListener('click', async () => {
         const checked = checkboxes.filter(cb => cb.checked);
-        if (checked.length === 0) return;
-
+        if (checked.length === 0)
+            return;
         _isAddingMods = true;
         _addCancelled = false;
-        const autoUpdateSrc = !!(footer.querySelector('#ms-auto-update-src') as HTMLInputElement)?.checked;
+        const autoUpdateSrc = !!footer.querySelector('#ms-auto-update-src')?.checked;
         updateSelCount(); // Show loading state in current modal
-
         // No more prevent-close here as per user request
-
         const depMode = document.getElementById('mp-depmode')?.value || 'manual';
         const includeDeps = depMode === 'all';
         let errors = 0;
-
         // Clear current pack mods and rebuild from selection to ensure sync and uniqueness
         // Actually, we should only add the new ones, or rebuild the whole list.
         // The user wants uniqueness, so we filter out what's already there before pushing.
-
         let cancelledDuringAdd = false;
         for (const cb of checked) {
             // Stop early if the user hit Cancel during the run.
-            if (_addCancelled) { cancelledDuringAdd = true; break; }
+            if (_addCancelled) {
+                cancelledDuringAdd = true;
+                break;
+            }
             // Uniqueness check: avoid adding if already in _packMods
             const exists = _packMods.some(pm => String(pm.mod_id) === String(cb.value));
-            if (exists) continue;
-
+            if (exists)
+                continue;
             try {
                 const targetMod = availableMods.find(m => String(m.id) === String(cb.value));
                 _currentAddingModName = targetMod ? targetMod.name : '';
-                if (_currentSelectionModalUpdateFn) _currentSelectionModalUpdateFn();
-
+                if (_currentSelectionModalUpdateFn)
+                    _currentSelectionModalUpdateFn();
                 // If the mod is linked to a repo, optionally seed that repo as a
                 // Server Repo fallback download link so it stays updatable.
                 let fallbackLink = null, fallbackType = 'direct';
                 if (autoUpdateSrc && targetMod) {
                     const repo = targetMod.source_repo || targetMod.update_url
                         || (Array.isArray(targetMod.update_sources) && targetMod.update_sources[0]?.repo_url) || '';
-                    if (repo) { fallbackLink = repo; fallbackType = 'sr'; }
+                    if (repo) {
+                        fallbackLink = repo;
+                        fallbackType = 'sr';
+                    }
                 }
-
                 const ref = await invoke('build_modpack_mod_ref', {
                     modId: cb.value,
                     profileId: cb.dataset.profId || null,
@@ -1003,98 +946,86 @@ function _openMultiSelectModal(listEl) {
                     fallbackType,
                 });
                 _packMods.push(ref);
-            } catch (e) {
+            }
+            catch (e) {
                 console.error(e);
                 errors++;
             }
         }
-
         // Remove mods that were UNCHECKED in the modal — but only when the run
         // completed; on cancel we keep whatever was already added and don't prune.
         if (!cancelledDuringAdd) {
             const selectedIds = checked.map(cb => String(cb.value));
             _packMods = _packMods.filter(pm => selectedIds.includes(String(pm.mod_id)));
         }
-
-        if (cancelledDuringAdd) toast(t('modpack.addStopped') || 'Adding stopped', 'info');
-        if (errors > 0) toast(t('modpack.addModErrors')?.replace('{count}', String(errors)) || `${errors} mods ont échoué.`, 'warning');
+        if (cancelledDuringAdd)
+            toast(t('modpack.addStopped') || 'Adding stopped', 'info');
+        if (errors > 0)
+            toast(t('modpack.addModErrors')?.replace('{count}', String(errors)) || `${errors} mods ont échoué.`, 'warning');
         _renderPackModList(listEl);
-
         _isAddingMods = false;
         _currentAddingModName = '';
-
         if (_currentSelectionModalUpdateFn) {
             _currentSelectionModalUpdateFn();
         }
         // Close the modal if it exists (even if it was reopened)
         if (_currentSelectionModalOverlay && document.body.contains(_currentSelectionModalOverlay)) {
             const closeBtn = _currentSelectionModalOverlay.querySelector('#ms-close') || _currentSelectionModalOverlay.querySelector('#ms-cancel');
-            if (closeBtn) closeBtn.click();
+            if (closeBtn)
+                closeBtn.click();
         }
     });
-
     content.appendChild(header);
     content.appendChild(body);
     content.appendChild(footer);
     overlay.appendChild(content);
-
     // Close on click outside (backdrop)
     overlay.addEventListener('mousedown', (e) => {
-        if (e.target === overlay) close();
+        if (e.target === overlay)
+            close();
     });
-
     const appOuter = document.getElementById('app-window-outer') || document.body;
     appOuter.appendChild(overlay);
     _currentSelectionModalOverlay = overlay;
-
     requestAnimationFrame(() => {
         overlay.style.opacity = '1';
         content.style.transform = 'translateY(0) scale(1)';
         setTimeout(() => header.querySelector('#ms-search').focus(), 100);
     });
 }
-
-
 async function _showRepairModal(container, pack, report, onComplete) {
     const activeProfileId = _activeProfileId || window.cachedActiveProfileId;
     if (!activeProfileId) {
         toast((window.t ? window.t('common.error') : 'No active profile'), "error");
         return;
     }
-
     const modalOverlay = document.createElement('div');
     modalOverlay.className = 'mod-repair-overlay';
     modalOverlay.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.7); backdrop-filter:blur(10px); z-index:9999; display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1);';
-
     const content = document.createElement('div');
     content.className = 'editor-section-card';
     content.style.cssText = 'width:600px; max-width:90vw; max-height:85vh; display:flex; flex-direction:column; padding:24px; border-radius:16px; background:var(--bg-secondary); border:1px solid var(--bmm-s08); box-shadow:0 20px 50px rgba(0,0,0,0.5); transform:scale(0.95); transition:all 0.3s cubic-bezier(0.16, 1, 0.3, 1);';
-
     // Build lists
     let modsHtml = '';
     const problematicMods = [...report.missingMods, ...report.corruptedMods];
-
     let canRepairAny = false;
-
     problematicMods.forEach(m => {
         const isMissing = report.missingMods.some(x => x.mod_id === m.mod_id);
         const statusText = isMissing ? t('modpack.repair.statusMissing') || "Manquant" : t('modpack.repair.statusCorrupted') || "Corrompu";
         const statusColor = isMissing ? "var(--danger)" : "#fbbf24";
         const fallbackType = m.fallback_type || "direct";
-
         // Vérification de la possibilité de réparation :
         // - Corrompu => peut toujours être réparé localement (files déplacés), pas besoin de lien
         // - Manquant  => nécessite un lien de téléchargement
         const hasLink = fallbackType === "sr" ? !!pack.sr_link : !!(m.download_fallback || m.download_link);
         const isCorrupted = !isMissing; // Corrupted = can be fixed locally (moved file)
-        if (hasLink || isCorrupted) canRepairAny = true;
-
+        if (hasLink || isCorrupted)
+            canRepairAny = true;
         const sourceLabel = hasLink
             ? (fallbackType === "sr" ? "ServerRepo" : t('modpack.repair.directLink') || "Lien Direct")
             : isCorrupted
                 ? `<span style="color:var(--bmm-warning); font-weight:800;">${t('modpack.repair.localRecovery') || 'Récupération Locale'}</span>`
                 : `<span style="color:var(--danger); font-weight:800;">${t('modpack.repair.linkMissing') || 'Lien Manquant'}</span>`;
-
         modsHtml += `
             <div style="display:flex; align-items:center; justify-content:space-between; padding:12px; background:var(--bmm-s03); border-radius:12px; border:1px solid var(--bmm-s05); margin-bottom:8px;">
                 <div style="display:flex; flex-direction:column; gap:4px;">
@@ -1108,7 +1039,6 @@ async function _showRepairModal(container, pack, report, onComplete) {
             </div>
         `;
     });
-
     content.innerHTML = `
         <div style="display:flex; align-items:center; gap:14px; margin-bottom:24px;">
             <div style="width:48px; height:48px; border-radius:14px; background:linear-gradient(135deg, rgba(255,136,0,0.2) 0%, rgba(255,85,0,0.05) 100%); color:var(--bmm-warning); display:flex; align-items:center; justify-content:center; border:1px solid rgba(255,136,0,0.2);">
@@ -1141,17 +1071,13 @@ async function _showRepairModal(container, pack, report, onComplete) {
             </button>
         </div>
     `;
-
     modalOverlay.appendChild(content);
-
     const appOuter = document.getElementById('app-window-outer') || document.body;
     appOuter.appendChild(modalOverlay);
-
     requestAnimationFrame(() => {
         modalOverlay.style.opacity = '1';
         content.style.transform = 'scale(1)';
     });
-
     const closeBtn = content.querySelector('#repair-cancel');
     const startBtn = content.querySelector('#repair-start');
     const progressContainer = content.querySelector('#repair-progress-container');
@@ -1159,22 +1085,19 @@ async function _showRepairModal(container, pack, report, onComplete) {
     const statusPct = content.querySelector('#repair-status-pct');
     const progressBar = content.querySelector('#repair-progress-bar');
     const actionsBlock = content.querySelector('#repair-actions');
-
     const closeModal = () => {
         modalOverlay.style.opacity = '0';
         content.style.transform = 'scale(0.95)';
         setTimeout(() => modalOverlay.remove(), 300);
     };
-
     closeBtn.addEventListener('click', closeModal);
     modalOverlay.addEventListener('mousedown', (e) => {
-        if (e.target === modalOverlay) closeModal();
+        if (e.target === modalOverlay)
+            closeModal();
     });
-
     startBtn.addEventListener('click', async () => {
         actionsBlock.style.display = 'none';
         progressContainer.style.display = 'flex';
-
         let unlisten = null;
         try {
             unlisten = await window.__TAURI__.event.listen('bmm://repair-progress', (event) => {
@@ -1183,17 +1106,12 @@ async function _showRepairModal(container, pack, report, onComplete) {
                 statusPct.textContent = `${Math.round(data.progress)}%`;
                 progressBar.style.width = `${data.progress}%`;
             });
-
             const modRepairErrors = [];
-
             for (let i = 0; i < problematicMods.length; i++) {
                 const mref = problematicMods[i];
-
                 const fallbackType = mref.fallback_type || "direct";
                 const hasLink = fallbackType === "sr" ? !!pack.sr_link : !!(mref.download_fallback || mref.download_link);
-
                 const isMissingMref = report.missingMods.some(x => x.mod_id === mref.mod_id);
-
                 // Mods manquants sans lien : impossible à réparer, on notifie et on passe
                 if (!hasLink && isMissingMref) {
                     modRepairErrors.push(t('modpack.repair.noLink', { name: mref.mod_name }) || `${mref.mod_name} : aucun lien fourni`);
@@ -1203,11 +1121,9 @@ async function _showRepairModal(container, pack, report, onComplete) {
                     statusText.style.color = '';
                     continue;
                 }
-
                 statusText.textContent = t('modpack.repair.repairing', { name: mref.mod_name });
                 statusPct.textContent = `0%`;
                 progressBar.style.width = `0%`;
-
                 try {
                     await invoke('repair_modpack_mod', {
                         args: {
@@ -1218,16 +1134,20 @@ async function _showRepairModal(container, pack, report, onComplete) {
                         }
                     });
                     statusText.textContent = `✓ ${mref.mod_name}`;
-                } catch (modErr) {
+                }
+                catch (modErr) {
                     const errStr = String(modErr);
                     let friendlyMsg;
                     if (errStr.includes('aucun lien') || errStr.includes('None lien')) {
                         friendlyMsg = t('modpack.repair.noLink', { name: mref.mod_name }) || `${mref.mod_name} : aucun lien de téléchargement fourni`;
-                    } else if (errStr.includes('non trouvé') || errStr.includes('404')) {
+                    }
+                    else if (errStr.includes('non trouvé') || errStr.includes('404')) {
                         friendlyMsg = t('modpack.repair.notFound', { name: mref.mod_name }) || `${mref.mod_name} : fichier introuvable sur le serveur`;
-                    } else if (errStr.includes('refusé') || errStr.includes('403')) {
+                    }
+                    else if (errStr.includes('refusé') || errStr.includes('403')) {
                         friendlyMsg = t('modpack.repair.denied', { name: mref.mod_name }) || `${mref.mod_name} : accès refusé par le serveur`;
-                    } else {
+                    }
+                    else {
                         friendlyMsg = `${mref.mod_name} : ${errStr}`;
                     }
                     modRepairErrors.push(friendlyMsg);
@@ -1237,49 +1157,48 @@ async function _showRepairModal(container, pack, report, onComplete) {
                     statusText.style.color = '';
                 }
             }
-
             await _loadData();
-
             statusText.textContent = t('modpack.repair.finalCheck') || 'Vérification finale...';
             const finalReport = await invoke('check_modpack_integrity', { modpack: pack });
-
             if (modRepairErrors.length > 0 && (finalReport.missingMods.length > 0 || finalReport.corruptedMods.length > 0)) {
                 toast(t('modpack.repair.incomplete', { errors: modRepairErrors.join('\n• ') }) || `Réparation incomplète :\n• ${modRepairErrors.join('\n• ')}`, 'warning');
                 closeModal();
-            } else if (modRepairErrors.length > 0) {
+            }
+            else if (modRepairErrors.length > 0) {
                 toast(t('modpack.repair.partial', { errors: modRepairErrors.join('\n• ') }) || `Réparé, mais certains mods ont été ignorés :\n• ${modRepairErrors.join('\n• ')}`, 'warning');
                 closeModal();
                 onComplete();
-            } else if (finalReport.missingMods.length > 0 || finalReport.corruptedMods.length > 0) {
+            }
+            else if (finalReport.missingMods.length > 0 || finalReport.corruptedMods.length > 0) {
                 toast(t('modpack.repair.unstable') || "La réparation n'a pas pu tout résoudre.", 'warning');
                 closeModal();
                 onComplete();
-            } else {
+            }
+            else {
                 toast(t('modpack.repair.success') || "Réparation terminée avec succès !", 'success');
                 closeModal();
                 onComplete();
             }
-        } catch (err) {
+        }
+        catch (err) {
             toast((window.t ? window.t('common.error') : 'Error') + ' : ' + err.toString(), 'error');
             actionsBlock.style.display = 'flex';
-        } finally {
-            if (unlisten) unlisten();
+        }
+        finally {
+            if (unlisten)
+                unlisten();
         }
     });
 }
-
 async function _executeApplyModpack(container, pack, isApplying) {
     toast(isApplying ? t('modpack.applying') : t('modpack.deactivating') || 'Désactivation du modpack...', 'info');
-
     let appliedCount = 0;
     let missingCount = 0;
     // Mods the backend refused, kept apart from the ones that were not found at all: "you do
     // not have it" and "it is here and would not turn on" are different problems with different
     // fixes, and reporting them as one number sends people looking in the wrong place.
-    const failed: string[] = [];
-
+    const failed = [];
     const shaIndex = await _resolveHashesToModIds(pack.mods);
-
     // Each toggle is guarded on its own.
     //
     // Every `invoke` below used to be unguarded inside this loop, so the FIRST mod the backend
@@ -1287,12 +1206,13 @@ async function _executeApplyModpack(container, pack, isApplying) {
     // pack was left half applied with a single generic error. `enable_mod` refuses for ordinary
     // reasons: MISSING_SHA when hashes have not been computed yet, an archive that cannot be
     // extracted. One awkward mod should cost you that mod, not the pack.
-    const toggle = async (id: string, on: boolean, label: string) => {
+    const toggle = async (id, on, label) => {
         try {
             await invoke(on ? 'enable_mod' : 'disable_mod', { modId: id });
             appliedCount++;
             return true;
-        } catch (e: any) {
+        }
+        catch (e) {
             const raw = String(e?.message || e || '');
             // The backend encodes this one as `MISSING_SHA|id|name` — shown as the name, since
             // the pipe-delimited form is for the caller, not the reader.
@@ -1300,7 +1220,6 @@ async function _executeApplyModpack(container, pack, isApplying) {
             return false;
         }
     };
-
     for (const mref of pack.mods) {
         // Find local mod by ID or SHA-256
         const local = _findLocalByMref(mref, shaIndex);
@@ -1310,60 +1229,63 @@ async function _executeApplyModpack(container, pack, isApplying) {
                 if (mref.include_dependencies && local.dependencies && local.dependencies.length > 0) {
                     for (const depId of local.dependencies) {
                         const depLocal = _allMods.find(m => m.id === depId);
-                        if (depLocal && !depLocal.enabled) await toggle(depId, true, depLocal.name || depId);
+                        if (depLocal && !depLocal.enabled)
+                            await toggle(depId, true, depLocal.name || depId);
                     }
                 }
-            } else if (!isApplying && local.enabled) {
+            }
+            else if (!isApplying && local.enabled) {
                 await toggle(local.id, false, local.name || local.id);
                 if (mref.include_dependencies && local.dependencies && local.dependencies.length > 0) {
                     for (const depId of local.dependencies) {
                         const depLocal = _allMods.find(m => m.id === depId);
-                        if (depLocal && depLocal.enabled) await toggle(depId, false, depLocal.name || depId);
+                        if (depLocal && depLocal.enabled)
+                            await toggle(depId, false, depLocal.name || depId);
                     }
                 }
             }
-        } else {
-            if (isApplying) missingCount++;
+        }
+        else {
+            if (isApplying)
+                missingCount++;
         }
     }
-
     if (failed.length > 0) {
         // Named, and capped at three: a list of forty names is a wall nobody reads, and the
         // first few are enough to go and look.
         const shown = failed.slice(0, 3).join(', ') + (failed.length > 3 ? ` +${failed.length - 3}` : '');
         toast(`${t('modpack.applyFailed') || 'Could not toggle'}: ${shown}`, 'error');
-    } else if (isApplying && missingCount > 0) {
+    }
+    else if (isApplying && missingCount > 0) {
         toast(t('modpack.applyPartial').replace('{applied}', appliedCount.toString()).replace('{missing}', missingCount.toString()), 'warning');
-    } else {
+    }
+    else {
         toast(isApplying ? t('modpack.applyOk') : t('modpack.deactivateOk') || 'Modpack désactivé avec succès !', 'success');
     }
-    if (isApplying) dispatchBmmAction(BMM_ACTIONS.MODPACK_APPLIED, { name: pack?.name });
-
+    if (isApplying)
+        dispatchBmmAction(BMM_ACTIONS.MODPACK_APPLIED, { name: pack?.name });
     await _loadData();
-    if (container) _renderModpackList(container);
-
+    if (container)
+        _renderModpackList(container);
     if (window._refreshModsFn) {
         window._refreshModsFn(false, true);
-    } else {
+    }
+    else {
         window.dispatchEvent(new CustomEvent('bmm://mods-updated'));
     }
 }
-
 async function _applyModpack(container, pack) {
-    if (!pack || !pack.mods || pack.mods.length === 0) return;
-
+    if (!pack || !pack.mods || pack.mods.length === 0)
+        return;
     try {
         const shaIndex = await _resolveHashesToModIds(pack.mods);
         const anyEnabled = pack.mods.some(mref => {
             const local = _findLocalByMref(mref, shaIndex);
             return local && local.enabled;
         });
-
         const isApplying = !anyEnabled;
-
         if (isApplying && !pack.skip_integrity_check) {
             const report = await invoke('check_modpack_integrity', { modpack: pack });
-
             if (report.missingMods.length > 0 || report.corruptedMods.length > 0) {
                 _showRepairModal(container, pack, report, async () => {
                     await _executeApplyModpack(container, pack, true);
@@ -1371,49 +1293,50 @@ async function _applyModpack(container, pack) {
                 return;
             }
         }
-
         await _executeApplyModpack(container, pack, isApplying);
-    } catch (err) {
+    }
+    catch (err) {
         toast((window.t ? window.t('common.error') : 'Error') + ': ' + err.toString(), 'error');
     }
 }
-
 async function _exportModpack(pack) {
-    if (!pack) return;
+    if (!pack)
+        return;
     try {
         await invoke('export_modpack', { id: pack.id });
         toastSaved(t('modpack.exportSuccess') || 'Modpack exporté !');
-    } catch (err) {
-        if (String(err) !== 'repo.errCancel') toast(String(err), 'error');
+    }
+    catch (err) {
+        if (String(err) !== 'repo.errCancel')
+            toast(String(err), 'error');
     }
 }
-
 async function _deleteModpack(container, pack) {
-    if (!pack) return;
-
+    if (!pack)
+        return;
     const action = await _showDeleteModal(container, pack);
     if (action === 'edit') {
         _openEditor(container, pack);
         return;
     }
-    if (!action) return;
-
+    if (!action)
+        return;
     try {
         await invoke('delete_modpack', { id: pack.id });
         toast(t('modpack.deletedOk') || 'Modpack supprimé.', 'success');
         await _loadData();
         _renderModpackList(container);
         window.dispatchEvent(new CustomEvent('bmm://modpacks-updated'));
-    } catch (err) {
+    }
+    catch (err) {
         toast(String(err), 'error');
     }
 }
-
 /**
  * Premium delete-confirmation modal.
  * Returns:  'delete' → user confirmed,  'edit' → user clicked Edit,  null → cancelled.
  */
-function _showDeleteModal(container: any, pack: any): Promise<'delete' | 'edit' | null> {
+function _showDeleteModal(container, pack) {
     return new Promise((resolve) => {
         const overlay = document.createElement('div');
         overlay.style.cssText = [
@@ -1424,7 +1347,6 @@ function _showDeleteModal(container: any, pack: any): Promise<'delete' | 'edit' 
             'display:flex;align-items:center;justify-content:center;',
             'opacity:0;transition:opacity 0.22s ease;',
         ].join('');
-
         const modal = document.createElement('div');
         modal.style.cssText = [
             'width:460px;max-width:94vw;',
@@ -1435,13 +1357,11 @@ function _showDeleteModal(container: any, pack: any): Promise<'delete' | 'edit' 
             'transform:scale(0.93) translateY(14px);',
             'transition:all 0.3s cubic-bezier(0.34,1.56,0.64,1);',
         ].join('');
-
         const modsCount = pack.mods?.length || 0;
         const gameLine = pack.game_name ? ` · ${escHtml(pack.game_name)}` : '';
         const descBlock = pack.description
             ? `<div style="font-size:11px;color:var(--text-muted);line-height:1.55;padding-top:10px;border-top:1px solid var(--bmm-s05);">${escHtml(pack.description)}</div>`
             : '';
-
         modal.innerHTML = `
             <!-- ── Header ── -->
             <div style="padding:26px 26px 0;display:flex;align-items:flex-start;gap:16px;">
@@ -1484,42 +1404,35 @@ function _showDeleteModal(container: any, pack: any): Promise<'delete' | 'edit' 
                 </button>
             </div>
         `;
-
-        const close = (result: 'delete' | 'edit' | null) => {
+        const close = (result) => {
             overlay.style.opacity = '0';
             modal.style.transform = 'scale(0.93) translateY(14px)';
             setTimeout(() => overlay.remove(), 280);
             resolve(result);
         };
-
         modal.querySelector('#dmod-close').addEventListener('click', () => close(null));
         modal.querySelector('#dmod-cancel').addEventListener('click', () => close(null));
         modal.querySelector('#dmod-confirm').addEventListener('click', () => close('delete'));
         modal.querySelector('#dmod-edit').addEventListener('click', () => close('edit'));
-        overlay.addEventListener('mousedown', (e: MouseEvent) => { if (e.target === overlay) close(null); });
-
+        overlay.addEventListener('mousedown', (e) => { if (e.target === overlay)
+            close(null); });
         overlay.appendChild(modal);
         (document.getElementById('app-window-outer') || document.body).appendChild(overlay);
-
         requestAnimationFrame(() => {
             overlay.style.opacity = '1';
             modal.style.transform = 'scale(1) translateY(0)';
         });
     });
 }
-
 // ── Quick Apply Modal ────────────────────────────────────────────────────────
 export async function openQuickApplyModal() {
     await _loadData();
-
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
     overlay.style.cssText = 'position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.85); backdrop-filter:blur(8px); display:flex; align-items:center; justify-content:center; z-index:100000; opacity:0; transition:opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1); pointer-events:auto;';
-
     const content = document.createElement('div');
     content.className = 'modal-content glass';
     content.style.cssText = 'width:660px; max-width:95vw; height:80vh; max-height:700px; display:flex; flex-direction:column; padding:0; border-radius:16px; overflow:hidden; background:var(--card-bg, #0f172a); border:1px solid var(--border, #1e293b); box-shadow:0 32px 64px rgba(0,0,0,0.7); transform:translateY(20px) scale(0.98); transition:all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); pointer-events:auto;';
-
     // Header
     const header = document.createElement('div');
     header.style.cssText = 'padding:20px 24px 0; border-bottom:1px solid var(--bmm-s06); background:var(--bmm-s02); flex-shrink:0;';
@@ -1550,14 +1463,11 @@ export async function openQuickApplyModal() {
             </select>
         </div>
     `;
-
     // Body
     const body = document.createElement('div');
     body.style.cssText = 'flex:1; overflow-y:auto; padding:12px 16px; display:flex; flex-direction:column; gap:8px;';
     body.className = 'custom-scrollbar';
-
     const cards = [];
-
     if (_modpacks.length === 0) {
         body.innerHTML = `<div style="text-align:center;color:var(--text-muted);font-size:13px;padding:60px 20px; display:flex; flex-direction:column; align-items:center; gap:12px;">
  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -1566,7 +1476,6 @@ export async function openQuickApplyModal() {
                             </svg>            <span>${t('modpack.noModpacks') || 'No modpack found'}</span>
         </div>`;
     }
-
     _modpacks.forEach(pack => {
         const row = document.createElement('div');
         row.style.cssText = 'display:flex; align-items:center; justify-content:space-between; padding:12px 16px; border-radius:12px; background:var(--bmm-s03); border:1px solid var(--bmm-s05); transition:background 0.2s, border-color 0.2s;';
@@ -1578,20 +1487,17 @@ export async function openQuickApplyModal() {
             row.style.background = 'var(--bmm-s03)';
             row.style.borderColor = 'var(--bmm-s05)';
         };
-
         const modsCount = pack.mods ? pack.mods.length : 0;
-
         let anyEnabled = false;
         if (pack.mods) {
             anyEnabled = pack.mods.some(mref => {
                 // Hash matching now lives in the dedicated apply/deactivate flow (resolved
-// in one batch backend call) — for the row toggle indicator we only need
-// mod_id match here, which covers ~all real cases.
-const local = _allMods.find(m => m.id === mref.mod_id);
+                // in one batch backend call) — for the row toggle indicator we only need
+                // mod_id match here, which covers ~all real cases.
+                const local = _allMods.find(m => m.id === mref.mod_id);
                 return local && local.enabled;
             });
         }
-
         row.innerHTML = `
             <div style="flex:1; min-width:0; padding-right:16px;">
                 <div style="font-size:14px; font-weight:700; color:var(--text-primary); margin-bottom:4px; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">${escHtml(pack.name)}</div>
@@ -1607,14 +1513,12 @@ const local = _allMods.find(m => m.id === mref.mod_id);
                 <div class="switch-knob" style="position:absolute; top:3px; ${anyEnabled ? 'right:3px' : 'left:3px'}; width:14px; height:14px; border-radius:50%; background:#fff; transition:all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); box-shadow:0 2px 4px rgba(0,0,0,0.2);"></div>
             </div>
         `;
-
         const applyBtn = row.querySelector('.btn-apply');
         applyBtn.onclick = async () => {
             const wrap = applyBtn.closest('.bmm-switch-wrap');
             wrap.style.opacity = '0.5';
             wrap.style.pointerEvents = 'none';
             await _applyModpack(null, pack);
-
             // Recalculate anyEnabled after apply
             await _loadData();
             let newAnyEnabled = false;
@@ -1622,20 +1526,20 @@ const local = _allMods.find(m => m.id === mref.mod_id);
             if (updatedPack && updatedPack.mods) {
                 newAnyEnabled = updatedPack.mods.some(mref => {
                     // Hash matching now lives in the dedicated apply/deactivate flow (resolved
-// in one batch backend call) — for the row toggle indicator we only need
-// mod_id match here, which covers ~all real cases.
-const local = _allMods.find(m => m.id === mref.mod_id);
+                    // in one batch backend call) — for the row toggle indicator we only need
+                    // mod_id match here, which covers ~all real cases.
+                    const local = _allMods.find(m => m.id === mref.mod_id);
                     return local && local.enabled;
                 });
             }
-
             if (newAnyEnabled) {
                 wrap.classList.add('active');
                 wrap.querySelector('.switch-bg').style.background = 'var(--success)';
                 wrap.querySelector('.switch-bg').style.borderColor = 'rgba(16,185,129,0.3)';
                 wrap.querySelector('.switch-knob').style.left = 'auto';
                 wrap.querySelector('.switch-knob').style.right = '3px';
-            } else {
+            }
+            else {
                 wrap.classList.remove('active');
                 wrap.querySelector('.switch-bg').style.background = 'var(--bmm-s10)';
                 wrap.querySelector('.switch-bg').style.borderColor = 'var(--bmm-s05)';
@@ -1645,56 +1549,49 @@ const local = _allMods.find(m => m.id === mref.mod_id);
             wrap.style.opacity = '1';
             wrap.style.pointerEvents = 'auto';
         };
-
         body.appendChild(row);
         cards.push({ card: row, name: pack.name.toLowerCase(), isMulti: pack.multi_profile });
     });
-
     const searchInput = header.querySelector('#qa-search');
     const filterSelect = header.querySelector('#qa-filter');
     const searchWrap = header.querySelector('#qa-search-wrap');
-
     searchInput.addEventListener('focus', () => { searchWrap.style.borderColor = 'var(--accent)'; });
     searchInput.addEventListener('blur', () => { searchWrap.style.borderColor = 'var(--bmm-s08)'; });
-
     const applyFilters = () => {
         const q = searchInput.value.toLowerCase().trim();
         const f = filterSelect.value;
         cards.forEach(({ card, name, isMulti }) => {
             let match = true;
-            if (q && !name.includes(q)) match = false;
-            if (f === 'single' && isMulti) match = false;
-            if (f === 'multi' && !isMulti) match = false;
+            if (q && !name.includes(q))
+                match = false;
+            if (f === 'single' && isMulti)
+                match = false;
+            if (f === 'multi' && !isMulti)
+                match = false;
             card.style.display = match ? 'flex' : 'none';
         });
     };
-
     searchInput.addEventListener('input', applyFilters);
     filterSelect.addEventListener('change', applyFilters);
-
     content.appendChild(header);
     content.appendChild(body);
     overlay.appendChild(content);
-
     const appOuter = document.getElementById('app-window-outer') || document.body;
     appOuter.appendChild(overlay);
-
     requestAnimationFrame(() => {
         overlay.style.opacity = '1';
         content.style.transform = 'translateY(0) scale(1)';
     });
-
     const closeBtn = header.querySelector('#qa-close');
-
     const closeModal = () => {
         overlay.style.opacity = '0';
         content.style.transform = 'translateY(10px) scale(0.98)';
         setTimeout(() => overlay.remove(), 300);
     };
-
     closeBtn.addEventListener('click', closeModal);
     overlay.addEventListener('mousedown', (e) => {
-        if (e.target === overlay) closeModal();
+        if (e.target === overlay)
+            closeModal();
     });
 }
-
+//# sourceMappingURL=modpack-creator.js.map
