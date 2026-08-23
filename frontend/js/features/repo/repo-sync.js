@@ -81,6 +81,113 @@ function initSyncPasswordField() {
     });
 }
 /**
+ * The collapsed "this repo requires a private key" row, and the SSH-server picker.
+ *
+ * The key field writes `set_key_auth_key` — THE SAME setting the Identity & API card writes.
+ * It is one value with two doors, not two values: BMM presents one identity to every source
+ * that asks, so a per-repo key would be a promise the protocol cannot keep. Both screens read
+ * the stored path back, so whichever one you open shows what is actually in force.
+ */
+function initSyncKeyAndSshFields() {
+    const keyToggle = document.getElementById('btn-sync-key-toggle');
+    const keyRow = document.getElementById('repo-sync-key-row');
+    const keyInput = document.getElementById('repo-sync-keypath');
+    const showKey = async () => {
+        if (!keyInput)
+            return;
+        try {
+            const { getSettings } = await import('../../core/api.js');
+            keyInput.value = ((await getSettings()).key_auth_key_path || '').trim();
+        }
+        catch { /* settings unreadable — leave the field showing its placeholder */ }
+    };
+    if (keyToggle && keyRow) {
+        keyToggle.addEventListener('click', () => {
+            const open = keyRow.style.display !== 'none';
+            keyRow.style.display = open ? 'none' : '';
+            if (!open)
+                void showKey();
+        });
+    }
+    document.getElementById('btn-sync-key-pick')?.addEventListener('click', async () => {
+        const { pickFile } = await import('../../core/api.js');
+        const path = await pickFile();
+        if (!path)
+            return;
+        try {
+            await invoke('set_key_auth_key', { path });
+            if (keyInput)
+                keyInput.value = path;
+            toast(t('settings.identity.authKeySet'), 'success');
+        }
+        catch (e) {
+            // The backend refuses a file it cannot sign with, so this is "wrong file", not
+            // "save failed" — say which, or the same file gets picked again.
+            toast(t(String(e) === 'repo.ssh.errKeyPassphrase'
+                ? 'settings.identity.authKeyLocked'
+                : 'settings.identity.authKeyBad'), 'warning', 6000);
+        }
+    });
+    document.getElementById('btn-sync-key-clear')?.addEventListener('click', async () => {
+        try {
+            await invoke('set_key_auth_key', { path: null });
+            if (keyInput)
+                keyInput.value = '';
+            toast(t('settings.identity.authKeyCleared'), 'success');
+        }
+        catch { /* nothing to clear */ }
+    });
+    // ── which SSH server an ssh:// source connects to ────────────────────────
+    const sshRow = document.getElementById('repo-sync-ssh-row');
+    const sel = document.getElementById('repo-sync-ssh-target');
+    const urlInput = document.getElementById('repo-sync-url');
+    // Only shown for an ssh:// source: on an https:// repo the control would be a question
+    // about something the fetch never touches.
+    const refresh = async () => {
+        if (!sshRow || !sel || !urlInput)
+            return;
+        const isSsh = /^ssh:\/\//i.test(urlInput.value.trim());
+        sshRow.style.display = isSsh ? '' : 'none';
+        if (!isSsh)
+            return;
+        const m = await import('./repo-ssh.js');
+        const names = m.sshTargetNames();
+        const current = m.sshTargetName(urlInput.value.trim()) || m.DEFAULT_TARGET;
+        sel.textContent = '';
+        for (const n of names) {
+            const o = document.createElement('option');
+            o.value = n;
+            o.textContent = n;
+            if (n === current)
+                o.selected = true;
+            sel.appendChild(o);
+        }
+        if (!names.length) {
+            const o = document.createElement('option');
+            o.value = '';
+            o.textContent = t('repo.sync.useSshNotSet');
+            sel.appendChild(o);
+        }
+    };
+    urlInput?.addEventListener('input', () => { void refresh(); });
+    sel?.addEventListener('change', async () => {
+        if (!urlInput || !sel.value)
+            return;
+        const m = await import('./repo-ssh.js');
+        urlInput.value = sel.value === m.DEFAULT_TARGET ? m.SSH_SOURCE_URL : `${m.SSH_SOURCE_URL}${sel.value}`;
+        urlInput.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    // CONFIGURE goes to the one real form rather than opening a second copy of it. A host,
+    // a port, a key and a folder edited in two places would drift, and the copy you edited
+    // would not be the one that connects.
+    document.getElementById('btn-sync-ssh-config')?.addEventListener('click', () => {
+        const panel = document.getElementById('repo-ssh-card') || document.getElementById('repo-ssh-test')?.closest('.repo-card');
+        panel?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        document.getElementById('repo-ssh-host')?.focus();
+    });
+    void refresh();
+}
+/**
  * `{ target, secret }` when this URL means the saved SSH target, null otherwise.
  *
  * Loaded lazily so the sync screen does not pull the SSH panel's module on every open — and
@@ -275,6 +382,7 @@ function _openRepoVerifyDetail(repo, isVerified, reason) {
 }
 export function initRepoSync(elements) {
     initSyncPasswordField();
+    initSyncKeyAndSshFields();
     // Lets the launch-time check hand this screen a repo: the toast says "N mods to
     // update", and the form behind it is already filled in for that repo and mode.
     registerRepoSyncOpener((url, mode) => {

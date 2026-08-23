@@ -17192,7 +17192,13 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
        about the transfer appears over it rather than behind it. */
     position: fixed; inset: 0; z-index: 11500;
     display: flex; align-items: center; justify-content: center;
-    background: rgba(0, 0, 0, .55);
+    /* The SAME backdrop as .modal-overlay — 0.7 and an 8px blur, not a lighter 0.55 with no
+       blur. This overlay is built by hand because it must live outside the app's transformed
+       tree, but "built separately" was never a reason to LOOK separate: against the house
+       modals its darker siblings made this one read as a rendering fault. */
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(8px);
+    padding: 32px;
     /* WITHOUT THIS THE PICKER IS INERT.
        `body` carries `pointer-events: none` for the custom title bar's drag region, and
        #app-window-outer switches it back on for the app. This overlay is appended to <body>
@@ -17210,9 +17216,12 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
        over whatever card sits behind the overlay. `--bmm-bg-base` is this app's opaque
        surface — the fallback originally written here, `--bg-solid`, is BCWEB's token and
        does not exist in BMM, so it would have painted nothing at all. */
-    background: var(--bmm-bg-base);
-    border: 1px solid var(--border); border-radius: 12px;
-    box-shadow: 0 18px 48px rgba(0, 0, 0, .45);
+    background: var(--bmm-bg-elevated);
+    border: 1px solid var(--border); border-radius: 16px;
+    /* Copied from .modal, deliberately, down to the second inset-ring layer: a lone soft
+       48px glow with no ring read as a smudge escaping the panel rather than as a shadow. */
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.7), 0 0 0 1px var(--bmm-s05);
+    animation: modalIn 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 .repo-ssh-browser-head {
     display: flex; align-items: center; justify-content: space-between; gap: 8px;

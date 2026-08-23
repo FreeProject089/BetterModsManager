@@ -35,6 +35,8 @@ interface SshTestResult {
     fingerprint: string;
     remoteDirExists: boolean;
     writable: boolean;
+    /** The server's reason, when the write probe failed and it gave one. */
+    writeError?: string | null;
     entries: number;
 }
 
@@ -293,7 +295,13 @@ async function testConnection(): Promise<void> {
         } else if (!r.writable) {
             // The failure worth catching here: the upload version of it fails after
             // transferring everything.
-            status(t('repo.ssh.testNotWritable').replace('{dir}', form.target.remoteDir), 'err');
+            //
+            // The server's own words are appended when it gave any. Without them this said
+            // "not writable" for four different causes — no permission, a read-only mount, a
+            // full disk, a chroot putting the path elsewhere — and the one it named was the
+            // only one the reader could not check.
+            const why = r.writeError ? ` — ${r.writeError}` : '';
+            status(t('repo.ssh.testNotWritable').replace('{dir}', form.target.remoteDir) + why, 'err');
         } else {
             status(t('repo.ssh.testOkWritable'), 'ok');
         }

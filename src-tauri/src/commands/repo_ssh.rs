@@ -284,6 +284,13 @@ pub struct SshTestResult {
     pub remote_dir_exists: bool,
     /// True when a probe file could be written and removed there.
     pub writable: bool,
+    /// WHY the probe failed, straight from the server, when it did.
+    ///
+    /// This used to be thrown away (`Err(_) => false`), which left one message for four very
+    /// different causes: no write permission, a read-only mount, a full disk, and a chroot
+    /// that puts the path somewhere else entirely. Telling somebody to fix permissions they
+    /// already hold sends them to change the one thing that was never wrong.
+    pub write_error: Option<String>,
     pub entries: usize,
 }
 
@@ -311,14 +318,16 @@ pub async fn ssh_test_connection(
     // Write-and-remove, because "the directory exists" and "I may write into it" are
     // different questions and only the second one matters.
     let probe = format!("{}/.bmm-write-probe", target.remote_dir.trim_end_matches('/'));
-    let writable = match sftp.create(&probe).await {
+    let (writable, write_error) = match sftp.create(&probe).await {
         Ok(mut f) => {
-            let ok = f.write_all(b"bmm").await.is_ok();
+            // Three separate operations, three separate failures. `write_all` is the one that
+            // matters on a full disk or a quota, because `create` succeeds there.
+            let w = f.write_all(b"bmm").await.err().map(|e| e.to_string());
             let _ = f.shutdown().await;
             let _ = sftp.remove_file(&probe).await;
-            ok
+            (w.is_none(), w)
         }
-        Err(_) => false,
+        Err(e) => (false, Some(e.to_string())),
     };
 
     remember_host(&state, &target.host, target.port_or_default(), &fingerprint);
@@ -326,6 +335,7 @@ pub async fn ssh_test_connection(
         fingerprint,
         remote_dir_exists,
         writable,
+        write_error,
         entries,
     })
 }

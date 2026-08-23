@@ -2540,6 +2540,52 @@
                                                 data-i18n-placeholder="repo.syncPassPlaceholder"
                                                 style="height:32px;font-size:12px;" /></form>
                                         </div>
+
+                                        <!-- Private key, the sibling of the password above.
+                                             From the reader's side these are the same kind of thing — something the
+                                             source demands before it answers — so they sit together rather than one
+                                             here and one buried in Settings. The field WRITES THE SAME SETTING the
+                                             Identity & API card does; it is a second door onto one value, never a
+                                             second copy of it. -->
+                                        <button type="button" id="btn-sync-key-toggle"
+                                            style="display:inline-flex;align-items:center;gap:6px;margin-top:8px;margin-left:14px;padding:0;background:none;border:none;cursor:pointer;font-size:11px;color:var(--text-muted);">
+                                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+                                                <circle cx="7.5" cy="15.5" r="4.5"></circle><path d="M10.7 12.3 21 2"></path><path d="m17 6 3 3"></path>
+                                            </svg>
+                                            <span data-i18n="repo.syncKeyToggle">This repo requires a private key</span>
+                                        </button>
+                                        <div id="repo-sync-key-row" style="display:none;margin-top:6px;">
+                                            <div class="path-picker">
+                                                <input type="text" class="form-input" id="repo-sync-keypath" readonly
+                                                    data-i18n-placeholder="repo.syncKeyPlaceholder"
+                                                    style="height:32px;font-size:12px;" />
+                                                <button class="btn btn-secondary btn-sm" type="button" id="btn-sync-key-pick"
+                                                    data-i18n="repo.syncKeyPick"
+                                                    style="padding:0 12px;height:32px;border-radius:6px;font-size:12px;">Browse…</button>
+                                                <button class="btn btn-secondary btn-sm" type="button" id="btn-sync-key-clear"
+                                                    data-i18n="repo.syncKeyClear"
+                                                    style="padding:0 12px;height:32px;border-radius:6px;font-size:12px;">Remove</button>
+                                            </div>
+                                            <span style="display:block;font-size:11px;color:var(--text-muted);margin-top:5px;line-height:1.5;"
+                                                data-i18n="repo.syncKeyHint">...</span>
+                                        </div>
+
+                                        <!-- Which SSH server an `ssh://` source connects to.
+                                             The list is the targets saved in Publish over SSH, and CONFIGURE jumps to
+                                             that panel rather than opening a second copy of its form. One form for a
+                                             host, a port, a key and a folder — two would drift, and the one you edited
+                                             would not be the one that connects. Only shown for an ssh:// source. -->
+                                        <div id="repo-sync-ssh-row" style="display:none;margin-top:8px;">
+                                            <label class="form-label" style="margin-bottom:4px;font-size:11px;"
+                                                data-i18n="repo.syncSshTarget">SSH server</label>
+                                            <div class="path-picker">
+                                                <select class="form-input" id="repo-sync-ssh-target"
+                                                    style="height:32px;font-size:12px;"></select>
+                                                <button class="btn btn-secondary btn-sm" type="button" id="btn-sync-ssh-config"
+                                                    data-i18n="repo.syncSshConfig"
+                                                    style="padding:0 12px;height:32px;border-radius:6px;font-size:12px;">Configure…</button>
+                                            </div>
+                                        </div>
                                     </div>
 
                                     <div id="repo-sync-info-card"
