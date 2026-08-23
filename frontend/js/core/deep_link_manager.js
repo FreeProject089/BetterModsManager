@@ -2,7 +2,7 @@
  * deep_link_manager.ts
  * Handles bmm:// protocol links for one-click mod installation.
  */
-import { invoke, apiBase, pickFolder } from './api.js';
+import { invoke, apiBase, pickFolder, askConfirm } from './api.js';
 import { toast } from '../ui/app.js';
 import { t } from './i18n.js';
 import { refreshMods } from '../features/mods/mods.js';
@@ -394,7 +394,6 @@ async function handleDeepLink(urlStr) {
                 return;
             }
             const { pullStoredTarget } = await import('../features/repo/repo-ssh.js');
-            const { askConfirm } = await import('./api.js');
             const ok = await askConfirm(t('repo.ssh.pullConfirm').replace('{dir}', dir), { title: t('repo.ssh.pull'), type: 'warning' });
             if (!ok)
                 return;
