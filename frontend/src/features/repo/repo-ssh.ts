@@ -121,7 +121,11 @@ function status(text: string, tone: 'ok' | 'warn' | 'err' | '' = ''): void {
  * trace in a place people go when something already went wrong.
  */
 function explain(raw: unknown): string {
-    const s = String(raw ?? '');
+    // Rust hands back a bare string; anything thrown on this side is an Error. `String(err)`
+    // on an Error yields "Error: repo.ssh.errListDir|…", and the leading "Error: " means the
+    // code no longer starts with `repo.ssh.` — every locally-thrown failure would silently
+    // fall through to the generic wrapper instead of resolving to its own sentence.
+    const s = raw instanceof Error ? raw.message : String(raw ?? '');
     const [code, ...args] = s.split('|');
     const named: Record<string, Record<string, string>> = {
         'repo.ssh.errKeyRead': { detail: args[1] || args[0] || '' },
@@ -320,11 +324,17 @@ async function refreshBrowser(): Promise<void> {
     list.textContent = t('repo.ssh.browserLoading');
 
     try {
-        const entries = (await invoke('ssh_list_dir', {
+        const raw = await invoke('ssh_list_dir', {
             target: form.target,
             secret: form.secret || null,
             path: browsePath || null,
-        })) as RemoteEntry[];
+        });
+        // A non-array answer is a failure, not an empty folder, and it must not be allowed
+        // to become a TypeError two lines later: "Cannot read properties of null (reading
+        // 'length')" tells the user nothing about their server. It happens for real outside
+        // the Tauri webview, where invoke() resolves to null.
+        if (!Array.isArray(raw)) throw new Error(`repo.ssh.errListDir|${browsePath}|no response`);
+        const entries = raw as RemoteEntry[];
 
         // The server resolves "wherever I landed" into a real path; show that, so the value
         // written into the field is always absolute.
@@ -413,6 +423,20 @@ export function initRepoSsh(): void {
     });
 
     // ── picker wiring ──
+    //
+    // Move the overlay to <body> first. It is `position: fixed`, and a fixed element is
+    // positioned against the viewport ONLY while no ancestor establishes a containing block
+    // — a transform, filter, perspective, will-change or `contain` does, and then `fixed`
+    // silently behaves like `absolute`.
+    //
+    // Both apply here: `.repo-tab-panel` carries a transform for its tab animation, and
+    // `#app-window-outer` sets `contain: paint`. Measured in the browser before this line
+    // existed: `inset: 0` produced a 776x3621 overlay against a 1280x720 viewport. Nothing
+    // errors, nothing logs — the dimmer is simply the wrong size and the panel is nowhere
+    // near the middle of the screen.
+    const overlay = el('repo-ssh-browser');
+    if (overlay && overlay.parentElement !== document.body) document.body.appendChild(overlay);
+
     el('repo-ssh-remote-pick')?.addEventListener('click', () => { void openBrowser(); });
     el('repo-ssh-browser-close')?.addEventListener('click', closeBrowser);
     el('repo-ssh-browser')?.addEventListener('click', (e) => {

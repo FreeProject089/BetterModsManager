@@ -7745,7 +7745,7 @@
   "repo.ssh.errLocalWrite": "Écriture impossible dans {path} : {detail}",
   "repo.ssh.errUnsafePath": "Le serveur a renvoyé un chemin qui sortirait du dossier de destination ({path}). Transfert interrompu.",
   "repo.ssh.errHeadlessPassword": "Une synchronisation automatique ne peut pas utiliser un mot de passe : rien n’est enregistré et personne n’est là pour le saisir. Configurez une clé privée sans phrase secrète.",
-  "repo.ssh.errGeneric": "Échec de la publication SSH : {detail}",
+  "repo.ssh.errGeneric": "Échec de l'opération SSH : {detail}",
   "sched.sshPullDirPh": "dossier local où récupérer",
   "sched.sshDirPh": "dossier de dépôt exporté à publier",
   "plugins.corsAllowlistTitle": "Origines autorisées à appeler l’API",

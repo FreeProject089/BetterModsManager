@@ -7747,7 +7747,7 @@
   "repo.ssh.errLocalWrite": "Could not write to {path}: {detail}",
   "repo.ssh.errUnsafePath": "The server returned a path that would escape the destination folder ({path}). Transfer stopped.",
   "repo.ssh.errHeadlessPassword": "An unattended sync cannot use a password: nothing is stored and there is nobody to type it. Set up a private key with no passphrase instead.",
-  "repo.ssh.errGeneric": "SSH publish failed: {detail}",
+  "repo.ssh.errGeneric": "SSH operation failed: {detail}",
   "sched.sshPullDirPh": "local folder to fetch INTO",
   "sched.sshDirPh": "exported repo folder to publish",
   "plugins.corsAllowlistTitle": "Origins allowed to call the API",
