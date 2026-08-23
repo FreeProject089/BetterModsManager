@@ -184,8 +184,14 @@ const ICON_DONE = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" s
                     // written into the manifest would ship to every subscriber inside the
                     // very file it is meant to protect.
                     const downloadPassword = (document.getElementById('repo-server-download-password') as HTMLInputElement | null)?.value || '';
+                    // One key per line, blanks dropped. `undefined` rather than [] when the box
+                    // is empty: an EMPTY LIST and NO LIST mean the same thing to the gate, but
+                    // sending [] every time would make a future "did the owner set any?" read
+                    // as yes. Say nothing when there is nothing to say.
+                    const authorizedKeys = ((document.getElementById('repo-server-authorized-keys') as HTMLTextAreaElement | null)?.value || '')
+                        .split('\n').map((l) => l.trim()).filter(Boolean);
 
-                    const result = await invoke('start_repo_server', { path, port, uploadLimit, downloadPassword });
+                    const result = await invoke('start_repo_server', { path, port, uploadLimit, downloadPassword, authorizedKeys: authorizedKeys.length ? authorizedKeys : undefined });
                     isServerRunning = true;
 
                     // Subscribe to host-side notifications

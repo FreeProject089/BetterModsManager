@@ -107,6 +107,8 @@ export interface ActivityEvent {
 
 export interface AppSettings {
   language: string;
+  /** PATH to the ed25519 private key BMM proves identity with, or null. Never key material. */
+  key_auth_key_path?: string | null;
   github_token: string;
   shortcuts: Record<string, string>;
   onboarding_shown: boolean;

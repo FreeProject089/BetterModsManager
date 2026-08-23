@@ -83,48 +83,22 @@ function initSyncPasswordField(): void {
  * the stored path back, so whichever one you open shows what is actually in force.
  */
 function initSyncKeyAndSshFields(): void {
+    const KEY_IDS = { input: 'repo-sync-keypath', pick: 'btn-sync-key-pick', clear: 'btn-sync-key-clear' };
     const keyToggle = document.getElementById('btn-sync-key-toggle');
     const keyRow = document.getElementById('repo-sync-key-row');
-    const keyInput = document.getElementById('repo-sync-keypath') as HTMLInputElement | null;
-
-    const showKey = async () => {
-        if (!keyInput) return;
-        try {
-            const { getSettings } = await import('../../core/api.js');
-            keyInput.value = ((await getSettings() as any).key_auth_key_path || '').trim();
-        } catch { /* settings unreadable — leave the field showing its placeholder */ }
-    };
-
     if (keyToggle && keyRow) {
-        keyToggle.addEventListener('click', () => {
+        keyToggle.addEventListener('click', async () => {
             const open = keyRow.style.display !== 'none';
             keyRow.style.display = open ? 'none' : '';
-            if (!open) void showKey();
+            // Read on open rather than at start-up: the value can have been changed from
+            // either of the other two screens since this panel was built.
+            if (!open) { const idk = await import('../../core/identity-key.js'); await idk.refreshIdentityKey(KEY_IDS); }
         });
     }
-    document.getElementById('btn-sync-key-pick')?.addEventListener('click', async () => {
-        const { pickFile } = await import('../../core/api.js');
-        const path = await pickFile();
-        if (!path) return;
-        try {
-            await invoke('set_key_auth_key', { path });
-            if (keyInput) keyInput.value = path;
-            toast(t('settings.identity.authKeySet'), 'success');
-        } catch (e) {
-            // The backend refuses a file it cannot sign with, so this is "wrong file", not
-            // "save failed" — say which, or the same file gets picked again.
-            toast(t(String(e) === 'repo.ssh.errKeyPassphrase'
-                ? 'settings.identity.authKeyLocked'
-                : 'settings.identity.authKeyBad'), 'warning', 6000);
-        }
-    });
-    document.getElementById('btn-sync-key-clear')?.addEventListener('click', async () => {
-        try {
-            await invoke('set_key_auth_key', { path: null });
-            if (keyInput) keyInput.value = '';
-            toast(t('settings.identity.authKeyCleared'), 'success');
-        } catch { /* nothing to clear */ }
-    });
+    void (async () => {
+        const idk = await import('../../core/identity-key.js');
+        idk.wireIdentityKey(KEY_IDS);
+    })();
 
     // ── which SSH server an ssh:// source connects to ────────────────────────
     const sshRow = document.getElementById('repo-sync-ssh-row');

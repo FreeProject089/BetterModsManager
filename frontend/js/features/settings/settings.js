@@ -1908,51 +1908,25 @@ async function initSecurityInfoCard() {
         });
     }
     catch (_) { }
-    // ── Identity key: the ed25519 key BMM proves with ────────────────────────
+    // ── Identity key: the ed25519 key BMM proves with ───────────────────────
     //
     // A PATH, never key material — the file is read at the moment a proof is signed and the
-    // bytes are dropped. The same key is presented to every repo and catalogue that requires
-    // one, which is why it belongs to the app and not to one SSH target: it used to be set
-    // only as a side effect of configuring an SSH connection, so anyone syncing over plain
-    // HTTPS had no way to hold a key at all.
+    // bytes are dropped. The same key is presented to every repository and catalogue that
+    // requires one, which is why it belongs to the app and not to one SSH target.
+    //
+    // The control itself lives in core/identity-key.ts because three screens mount it: here,
+    // the repo sync panel, and the catalogue access fold. One value, three doors.
     try {
-        const { getSettings, pickFile } = await import('../../core/api.js');
-        const keyEl = document.getElementById('sic-auth-key');
-        const show = (p) => {
-            if (!keyEl)
-                return;
-            const path = (p || '').trim();
-            keyEl.textContent = path || t('settings.identity.authKeyNone');
-            keyEl.title = path;
-        };
-        show((await getSettings()).key_auth_key_path);
-        document.getElementById('btn-sic-pick-authkey')?.addEventListener('click', async () => {
-            const path = await pickFile();
-            if (!path)
-                return;
-            try {
-                await invoke('set_key_auth_key', { path });
-                show(path);
-                toast(t('settings.identity.authKeySet'), 'success');
-            }
-            catch (e) {
-                // The backend refuses a file it cannot sign with, so this is "wrong file",
-                // not "save failed" — say which, or the person retries the same file.
-                // t() returns the KEY on a miss, so a `|| 'fallback'` beside it is dead code —
-                // the gate says so, and both keys exist in en.json and fr.json.
-                toast(t(String(e) === 'repo.ssh.errKeyPassphrase'
-                    ? 'settings.identity.authKeyLocked'
-                    : 'settings.identity.authKeyBad'), 'warning', 5000);
-            }
-        });
-        document.getElementById('btn-sic-clear-authkey')?.addEventListener('click', async () => {
-            try {
-                await invoke('set_key_auth_key', { path: null });
-                show(null);
-                toast(t('settings.identity.authKeyCleared'), 'success');
-            }
-            catch (_) { }
-        });
+        const idk = await import('../../core/identity-key.js');
+        const IDS = { input: 'sic-auth-key', pick: 'btn-sic-pick-authkey', clear: 'btn-sic-clear-authkey' };
+        const keyEl = document.getElementById(IDS.input);
+        const path = await idk.refreshIdentityKey(IDS);
+        // Empty reads as "None" rather than as a blank line, so "not set" is legible as an
+        // answer instead of looking like the row failed to load.
+        if (keyEl && !path)
+            keyEl.textContent = t('settings.identity.authKeyNone');
+        idk.wireIdentityKey(IDS, (p) => { if (keyEl && !p)
+            keyEl.textContent = t('settings.identity.authKeyNone'); });
     }
     catch (_) { }
     // Reset API token
@@ -2040,6 +2014,41 @@ async function initCatalogIndexSettings() {
     //
     // The old key is read once and folded in, so an address already saved is not lost by
     // this change.
+    // ── Access: what a protected catalogue can ask for ──────────────────────
+    //
+    // On this card rather than repeated on the app / plugin / theme / preset screens, because
+    // this is where all five kinds already meet — the same reason the "catalogs you follow"
+    // list lives here.
+    void (async () => {
+        const idk = await import('../../core/identity-key.js');
+        const IDS = { input: 'cat-index-keypath', pick: 'cat-index-key-pick', clear: 'cat-index-key-clear' };
+        await idk.refreshIdentityKey(IDS);
+        idk.wireIdentityKey(IDS);
+    })();
+    // The password is remembered FOR THIS RUN ONLY — the rule already in force everywhere
+    // here, and the reason no field for it existed. What was missing was a way to give it
+    // BEFORE the fetch fails, rather than fetching, failing, and only then being asked.
+    document.getElementById('cat-index-pw-set')?.addEventListener('click', async () => {
+        const urlEl = document.getElementById('cat-index-pw-url');
+        const pwEl = document.getElementById('cat-index-pw');
+        const url = (urlEl?.value || '').trim();
+        const pw = pwEl?.value || '';
+        if (!/^https?:\/\//i.test(url)) {
+            toast(t('settings.catIndex.pwBadUrl'), 'warning');
+            return;
+        }
+        if (!pw) {
+            toast(t('settings.catIndex.pwEmpty'), 'warning');
+            return;
+        }
+        const { rememberSourcePassword } = await import('../../core/source-fetch.js');
+        rememberSourcePassword(url, pw);
+        // Cleared immediately: leaving a password sitting in a visible field is how it ends up
+        // in a screenshot, and it has already been handed to the fetcher by this point.
+        if (pwEl)
+            pwEl.value = '';
+        toast(t('settings.catIndex.pwOk'), 'success');
+    });
     const LIST = 'bmm_catalog_index_urls';
     const LAST = 'bmm_catalog_index_url';
     const readList = () => {

@@ -2009,6 +2009,24 @@
                                              data-i18n="repo.hostDownloadPasswordHelp">Subscribers are asked for it before anything is served — the manifest included.</div>
                                     </div>
 
+                                    <!-- The other half of the same question. A password is a shared secret that
+                                         can be passed on; a key has to be signed for on every request. One line
+                                         per key, the `.pub` file's contents, ed25519 only — the only kind that can
+                                         be verified, so anything else is refused when the server starts rather
+                                         than silently locking every subscriber out. -->
+                                    <div style="margin-bottom:12px;">
+                                        <label class="form-label"
+                                            style="font-size:11px; margin-bottom:4px; display:block;"
+                                            data-i18n="repo.hostAuthorizedKeys">Authorised public keys (optional)</label>
+                                        <textarea id="repo-server-authorized-keys" class="form-input" rows="3"
+                                            spellcheck="false"
+                                            data-i18n-placeholder="repo.hostAuthorizedKeysPlaceholder"
+                                            placeholder="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5… you@machine"
+                                            style="width:100%; font-size:11px; padding:6px; font-family:var(--font-mono); background:var(--bmm-bg-base); border:1px solid var(--border); resize:vertical;"></textarea>
+                                        <div style="font-size:10px; color:var(--text-muted); margin-top:4px;"
+                                             data-i18n="repo.hostAuthorizedKeysHelp">One key per line. Adding any makes a key REQUIRED for everyone — add your own first.</div>
+                                    </div>
+
                                     <label style="display:flex; align-items:center; gap:8px; margin-bottom:12px; font-size:12px; color:var(--text-muted); cursor:pointer;">
                                         <input type="checkbox" id="repo-host-require-login" />
                                         <span data-i18n="repo.requireLogin">Require a BetterCommunity account to download</span>
@@ -3661,6 +3679,46 @@
                             <details class="cat-index-fold" id="cat-index-following-fold">
                                 <summary data-i18n="settings.catIndex.following">Catalogs you follow</summary>
                                 <div id="cat-index-following" class="cat-index-following"></div>
+                            </details>
+
+                            <!-- Access: the two things a protected catalogue can ask for.
+                                 Here rather than repeated on the app / plugin / theme / preset
+                                 screens, because this card is where all five kinds already meet.
+                                 The key is the SAME setting as Settings → Identity & API and the
+                                 repo sync panel — BMM holds one identity and shows it to every
+                                 source that asks, so all three are doors onto one value. -->
+                            <details class="cat-index-fold" id="cat-index-access-fold">
+                                <summary data-i18n="settings.catIndex.access">Protected sources</summary>
+
+                                <label class="form-label" style="font-size:11px;margin:8px 0 4px;display:block;"
+                                    data-i18n="repo.syncKeyToggle">This repo requires a private key</label>
+                                <div style="display:flex; gap:6px; align-items:center;">
+                                    <input type="text" class="input-field" id="cat-index-keypath" readonly
+                                        data-i18n-placeholder="repo.syncKeyPlaceholder"
+                                        style="flex:1; min-width:200px; font-size:12px;">
+                                    <button class="btn btn-secondary btn-sm" type="button" id="cat-index-key-pick"
+                                        data-i18n="repo.syncKeyPick">Browse…</button>
+                                    <button class="btn btn-secondary btn-sm" type="button" id="cat-index-key-clear"
+                                        data-i18n="repo.syncKeyClear">Remove</button>
+                                </div>
+                                <div style="font-size:10px;color:var(--text-muted);margin-top:4px;line-height:1.5;"
+                                     data-i18n="repo.syncKeyHint">...</div>
+
+                                <label class="form-label" style="font-size:11px;margin:14px 0 4px;display:block;"
+                                    data-i18n="settings.catIndex.pwLabel">Download password for a source</label>
+                                <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+                                    <input type="text" class="input-field" id="cat-index-pw-url"
+                                        data-i18n-placeholder="settings.catIndex.pwUrlPh"
+                                        style="flex:1; min-width:220px; font-size:12px;" spellcheck="false">
+                                    <form style="display:contents" autocomplete="off" data-no-submit="1"><input
+                                        type="password" class="input-field" id="cat-index-pw" autocomplete="new-password"
+                                        data-i18n-placeholder="settings.catIndex.pwPh"
+                                        style="width:170px; font-size:12px;"></form>
+                                    <button class="btn btn-secondary btn-sm" type="button" id="cat-index-pw-set"
+                                        data-i18n="settings.catIndex.pwSet">Use it</button>
+                                </div>
+                                <div style="font-size:10px;color:var(--text-muted);margin-top:4px;line-height:1.5;"
+                                     data-i18n="settings.catIndex.pwHint">...</div>
                             </details>
 
                             <details class="cat-index-fold" id="cat-index-history-fold">

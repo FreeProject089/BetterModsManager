@@ -152,7 +152,13 @@ export function initRepoServer(elements) {
                     // written into the manifest would ship to every subscriber inside the
                     // very file it is meant to protect.
                     const downloadPassword = document.getElementById('repo-server-download-password')?.value || '';
-                    const result = await invoke('start_repo_server', { path, port, uploadLimit, downloadPassword });
+                    // One key per line, blanks dropped. `undefined` rather than [] when the box
+                    // is empty: an EMPTY LIST and NO LIST mean the same thing to the gate, but
+                    // sending [] every time would make a future "did the owner set any?" read
+                    // as yes. Say nothing when there is nothing to say.
+                    const authorizedKeys = (document.getElementById('repo-server-authorized-keys')?.value || '')
+                        .split('\n').map((l) => l.trim()).filter(Boolean);
+                    const result = await invoke('start_repo_server', { path, port, uploadLimit, downloadPassword, authorizedKeys: authorizedKeys.length ? authorizedKeys : undefined });
                     isServerRunning = true;
                     // Subscribe to host-side notifications
                     await subscribeServerEvents();
