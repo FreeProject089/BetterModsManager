@@ -264,6 +264,18 @@ export async function initApiActivity(): Promise<void> {
                     .catch((e: unknown) => toast(String((e as Error)?.message || e), 'error', 9000));
                 break;
             }
+            // Fetches FROM the saved target into a local folder. Like publish, the API
+            // cannot name a host; unlike publish, this writes to the user's own disk, so the
+            // path comes from the caller and the target does not.
+            case 'repo/sync-ssh': {
+                const { pullStoredTarget } = await import('../features/repo/repo-ssh.js');
+                pullStoredTarget(String(params?.dir || ''))
+                    .then((bytes: number) => toast(
+                        t('repo.ssh.pulled').replace('{n}', '✓').replace('{size}', String(bytes)),
+                        'success', 7000))
+                    .catch((e: unknown) => toast(String((e as Error)?.message || e), 'error', 9000));
+                break;
+            }
             case 'repo/sync': driveRepo('sync', params); break;
             case 'repo/gen':  driveRepo('gen', params);  break;
             case 'repo/update':

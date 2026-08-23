@@ -216,6 +216,12 @@
     ]
   },
   {
+    "action": "repo/sync-ssh",
+    "params": [
+      "dir"
+    ]
+  },
+  {
     "action": "repo/sync",
     "params": [
       "url",

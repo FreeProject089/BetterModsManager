@@ -23,8 +23,35 @@ import { fileURLToPath } from 'node:url';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const JS_DIR = join(ROOT, 'frontend', 'js');
 
-// `from '…'` and `import('…')`, relative specifiers only — bare ones are not served here.
-const SPEC = /(?:\bfrom\s*|\bimport\s*\(\s*)['"](\.[^'"]+)['"]/g;
+// EVERY specifier, not just the relative ones.
+//
+// This used to match `\.[^'"]+` only, on the reasoning that bare specifiers "are not served
+// here" — true, and exactly why one must never appear. Nothing bundles this frontend: the
+// compiled JS is loaded by the webview as plain ES modules, with no import map. A bare
+// specifier therefore does not 404 and fall back to index.html the way a wrong relative path
+// does; it throws `Failed to resolve module specifier` at parse time, and the whole module —
+// plus whatever called it — dies with it.
+//
+// Not hypothetical: `import('@tauri-apps/api/event')` in repo-ssh.ts took down the entire
+// Server Repo screen, because initRepoSsh threw and initRepo never finished. tsc was happy
+// (the package IS installed, for its types) and this checker skipped the line by design.
+//
+// The fix for a bare Tauri import is never a relative path into node_modules — that sits
+// outside frontendDist and the webview cannot reach it either. Read the API off the global:
+// `withGlobalTauri: true` puts it on `window.__TAURI__`.
+// `[^'"\s]+` and not `[^'"]+`: widening the capture to "anything" made `from '` match text
+// INSIDE template literals (stripComments keeps those, deliberately), and the checker
+// reported nine phantom imports whose "specifier" was half a line of generated HTML. A module
+// specifier never contains whitespace, so excluding it costs nothing and removes the class.
+const SPEC = /(?:\bfrom\s*|\bimport\s*\(\s*)['"]([^'"\s]+)['"]/g;
+
+// Three kinds of specifier, and only one of them is checkable on disk.
+//
+//   remote   https://unpkg.com/…   fetched over the network; nothing local to verify
+//   local    ./x.js, /x.js         must exist under frontend/js
+//   bare     @tauri-apps/api/…     cannot resolve at all, ever
+const isRemote = (s) => /^[a-z][a-z0-9+.-]*:/i.test(s);
+const isLocal = (s) => s.startsWith('.') || s.startsWith('/');
 
 // Comments first, or a code EXAMPLE inside one reads as a real import.
 //
@@ -55,17 +82,49 @@ if (!existsSync(JS_DIR)) {
 
 let checked = 0;
 const missing = [];
+const bare = [];
+let remote = 0;
 for (const file of walk(JS_DIR)) {
   const text = stripComments(readFileSync(file, 'utf8'));
   for (const m of text.matchAll(SPEC)) {
     const spec = m[1];
+    // Is this match INSIDE a string literal rather than a real import?
+    //
+    // Two different false positives, one cause. `getElementById('activity-date-from')` ends
+    // in `from'`, so the pattern matched from inside the id and captured the rest of the
+    // line. And plugins.js is a script GENERATOR: it holds Node source as data, including
+    // "import { execSync } from 'child_process';" — a perfectly real import, for a file the
+    // user downloads and runs outside the app.
+    //
+    // A real import's specifier is the FIRST quote on its line, so the text before it holds
+    // an even number of each quote character. Inside a string literal it is odd. That single
+    // rule removes both classes without a per-file skip list, which would also hide genuine
+    // bare imports in the skipped file.
+    const lineStart = text.lastIndexOf('\n', m.index) + 1;
+    const prefix = text.slice(lineStart, m.index);
+    const odd = (ch) => (prefix.split(ch).length - 1) % 2 === 1;
+    if (odd("'") || odd('"') || odd('`')) continue;
     checked++;
+    if (isRemote(spec)) { remote++; continue; }
+    if (!isLocal(spec)) {
+      const line = text.slice(0, m.index).split('\n').length;
+      bare.push(`${relative(ROOT, file)}:${line} → ${spec}`);
+      continue;
+    }
     const base = dirname(file);
     const candidates = [spec, `${spec}.js`, `${spec}/index.js`].map((s) => resolve(base, s));
     if (candidates.some(existsSync)) continue;
     const line = text.slice(0, m.index).split('\n').length;
     missing.push(`${relative(ROOT, file)}:${line} → ${spec}`);
   }
+}
+
+if (bare.length) {
+  console.error(`✗ ${bare.length} BARE import specifier(s) — nothing resolves these at runtime:`);
+  for (const b of bare) console.error(`  ${b}`);
+  console.error('\n  There is no bundler and no import map here: the browser throws');
+  console.error('  "Failed to resolve module specifier" and the module never loads.');
+  console.error('  For Tauri APIs read the global instead — window.__TAURI__.event.listen, etc.');
 }
 
 if (missing.length) {
@@ -75,4 +134,5 @@ if (missing.length) {
   console.error('  browser reports a MIME type error that looks like a server problem.');
   process.exit(1);
 }
-console.log(`✓ every emitted import resolves (${checked} checked)`);
+if (bare.length) process.exit(1);
+console.log(`✓ every emitted import resolves (${checked} checked, ${remote} remote URL(s) skipped)`);

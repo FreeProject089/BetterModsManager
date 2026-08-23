@@ -378,6 +378,36 @@ async function handleDeepLink(urlStr) {
             }
             return;
         }
+        // ── Fetch a repo back DOWN over SSH ──
+        //
+        // Same rule as publishing: the target comes from Settings, never from the URL.
+        // It matters more here, not less — a link that could name a host would be able to
+        // pull arbitrary files from a machine of its choosing onto the user's disk.
+        //
+        // This one asks first. Publishing overwrites files on a server the user configured;
+        // fetching overwrites files on their own machine, and a link is something you click
+        // before you know what it does.
+        if (action === 'repo/sync-ssh') {
+            const dir = parsedUrl.searchParams.get('dir') || '';
+            if (!dir) {
+                toast(t('repo.ssh.pickExportFirst'), 'error');
+                return;
+            }
+            const { pullStoredTarget } = await import('../features/repo/repo-ssh.js');
+            const { askConfirm } = await import('./api.js');
+            const ok = await askConfirm(t('repo.ssh.pullConfirm').replace('{dir}', dir), { title: t('repo.ssh.pull'), type: 'warning' });
+            if (!ok)
+                return;
+            toast(t('repo.ssh.testing'), 'info');
+            try {
+                const bytes = await pullStoredTarget(dir);
+                toast(t('repo.ssh.pulled').replace('{n}', '✓').replace('{size}', String(bytes)), 'success', 7000);
+            }
+            catch (e) {
+                toast(String(e?.message || e), 'error', 9000);
+            }
+            return;
+        }
         // ── Mod updates: check / apply ────────────────────────────────────
         if (action === 'mod/check-updates') {
             const navBtn = document.querySelector('.nav-item[data-view="repo"], [data-view="repo"]');

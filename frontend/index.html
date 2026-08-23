@@ -1582,6 +1582,14 @@
                                             ni enregistrée.
                                         </p>
 
+                                        <!-- Key or password. Two buttons rather than a dropdown: there are
+                                             exactly two answers, and which one is active must be readable
+                                             without opening anything. -->
+                                        <div class="repo-ssh-auth" role="group" aria-label="Authentification">
+                                            <button class="repo-ssh-authbtn" id="repo-ssh-auth-key" type="button" aria-pressed="true" data-i18n="repo.ssh.authKey">Clé privée</button>
+                                            <button class="repo-ssh-authbtn" id="repo-ssh-auth-pass" type="button" aria-pressed="false" data-i18n="repo.ssh.authPassword">Mot de passe</button>
+                                        </div>
+
                                         <div class="repo-ssh-grid">
                                             <label class="repo-ssh-field" style="grid-column:span 3">
                                                 <span data-i18n="repo.ssh.host">Hôte</span>
@@ -1597,24 +1605,40 @@
                                             </label>
                                             <label class="repo-ssh-field" style="grid-column:span 2">
                                                 <span data-i18n="repo.ssh.remoteDir">Dossier distant</span>
-                                                <input type="text" class="form-input" id="repo-ssh-remote" placeholder="/var/www/repo" spellcheck="false">
+                                                <div class="repo-ssh-keyrow">
+                                                    <input type="text" class="form-input" id="repo-ssh-remote" placeholder="/var/www/repo" spellcheck="false">
+                                                    <button class="btn btn-secondary btn-sm" id="repo-ssh-remote-pick" type="button" data-i18n="repo.ssh.browseRemote">Parcourir…</button>
+                                                </div>
                                             </label>
-                                            <label class="repo-ssh-field" style="grid-column:span 3">
+
+                                            <!-- Key mode -->
+                                            <label class="repo-ssh-field repo-ssh-keyonly" style="grid-column:span 3">
                                                 <span data-i18n="repo.ssh.keyPath">Clé privée</span>
                                                 <div class="repo-ssh-keyrow">
                                                     <input type="text" class="form-input" id="repo-ssh-key" placeholder="id_ed25519 ou .ppk" spellcheck="false">
                                                     <button class="btn btn-secondary btn-sm" id="repo-ssh-key-pick" type="button" data-i18n="repo.ssh.browse">Parcourir…</button>
                                                 </div>
                                             </label>
-                                            <label class="repo-ssh-field">
+                                            <label class="repo-ssh-field repo-ssh-keyonly">
                                                 <span data-i18n="repo.ssh.passphrase">Phrase secrète</span>
                                                 <input type="password" class="form-input" id="repo-ssh-pass" placeholder="—" autocomplete="off">
                                             </label>
+
+                                            <!-- Password mode -->
+                                            <label class="repo-ssh-field repo-ssh-passonly" style="grid-column:span 2" hidden>
+                                                <span data-i18n="repo.ssh.password">Mot de passe</span>
+                                                <input type="password" class="form-input" id="repo-ssh-pw" placeholder="—" autocomplete="off">
+                                            </label>
                                         </div>
 
-                                        <p class="repo-ssh-note" data-i18n="repo.ssh.keyNote">
+                                        <p class="repo-ssh-note repo-ssh-keyonly" data-i18n="repo.ssh.keyNote">
                                             Les clés OpenSSH et PuTTY (.ppk) sont acceptées telles quelles. La phrase
                                             secrète sert à cet envoi et n’est pas conservée.
+                                        </p>
+                                        <p class="repo-ssh-note repo-ssh-passonly" data-i18n="repo.ssh.passwordNote" hidden>
+                                            Le mot de passe sert à cette connexion et n’est jamais enregistré : il faut
+                                            le retaper à chaque session. Certains serveurs refusent l’authentification
+                                            par mot de passe — dans ce cas, utilisez une clé.
                                         </p>
 
                                         <div class="repo-ssh-actions">
@@ -1624,6 +1648,9 @@
                                             <button class="btn btn-primary btn-sm" id="repo-ssh-publish" type="button">
                                                 <span data-i18n="repo.ssh.publish">Publier le dossier exporté</span>
                                             </button>
+                                            <button class="btn btn-secondary btn-sm" id="repo-ssh-pull" type="button">
+                                                <span data-i18n="repo.ssh.pull">Récupérer depuis le serveur</span>
+                                            </button>
                                             <button class="btn btn-ghost btn-sm" id="repo-ssh-forget" type="button" hidden>
                                                 <span data-i18n="repo.ssh.forget">Oublier l’empreinte</span>
                                             </button>
@@ -1632,6 +1659,26 @@
                                         <div class="repo-ssh-progress" id="repo-ssh-progress" hidden>
                                             <div class="repo-ssh-bar"><div class="repo-ssh-bar-fill" id="repo-ssh-bar-fill"></div></div>
                                             <div class="repo-ssh-progress-text" id="repo-ssh-progress-text"></div>
+                                        </div>
+
+                                        <!-- Remote folder picker.
+                                             Deliberately NOT built on the shared modal system: `.modal-body` forces
+                                             a column flex layout on its children, which this list fights, and the
+                                             picker needs nothing the modal system provides. Self-contained overlay,
+                                             hidden until asked for. -->
+                                        <div class="repo-ssh-browser" id="repo-ssh-browser" hidden>
+                                            <div class="repo-ssh-browser-panel">
+                                                <div class="repo-ssh-browser-head">
+                                                    <span data-i18n="repo.ssh.browserTitle">Dossier distant</span>
+                                                    <button class="btn btn-ghost btn-sm" id="repo-ssh-browser-close" type="button" aria-label="Fermer">✕</button>
+                                                </div>
+                                                <div class="repo-ssh-browser-path" id="repo-ssh-browser-path"></div>
+                                                <div class="repo-ssh-browser-list" id="repo-ssh-browser-list"></div>
+                                                <div class="repo-ssh-browser-foot">
+                                                    <button class="btn btn-secondary btn-sm" id="repo-ssh-browser-up" type="button" data-i18n="repo.ssh.browserUp">Dossier parent</button>
+                                                    <button class="btn btn-primary btn-sm" id="repo-ssh-browser-choose" type="button" data-i18n="repo.ssh.browserChoose">Choisir ce dossier</button>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
 

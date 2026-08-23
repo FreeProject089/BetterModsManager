@@ -1,17 +1,26 @@
-// Server Repo → publish over SSH.
+// Server Repo → publish over SSH, and pull back down.
 //
 // The backend does the work (src-tauri/src/commands/repo_ssh.rs); this is the form, the
-// progress bar, and the translation of the backend's error codes.
+// remote folder picker, the progress bar, and the translation of the backend's error codes.
 //
 // ERRORS ARRIVE AS CODES, not sentences. Rust returns `repo.ssh.errAuthRejected` or
 // `repo.ssh.errConnect|host|detail` — a key and its arguments, pipe-separated. The backend
 // has no language, and a message composed there would be English forever. Splitting on '|'
 // here is what lets the same failure read correctly in both.
+//
+// WHAT IS STORED, AND WHAT IS NOT
+//
+// Host, port, user, remote folder, key PATH and the chosen method are remembered. The
+// passphrase and the password are not, ever — they are read from the field at the moment of
+// use. That is why a scheduled sync only works with a key that has no passphrase: there is
+// nobody at 04:00 to type anything, and a prompt nobody answers is a task that silently
+// never runs.
 
-import { invoke } from '../../core/api.js';
+import { invoke, pickFile, askConfirm } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
 import { toast } from '../../ui/app.js';
-import { pickFile } from '../../core/api.js';
+
+type AuthMethod = 'key' | 'password';
 
 interface SshTarget {
     host: string;
@@ -19,6 +28,7 @@ interface SshTarget {
     user: string;
     keyPath: string;
     remoteDir: string;
+    auth?: AuthMethod;
 }
 
 interface SshTestResult {
@@ -28,9 +38,15 @@ interface SshTestResult {
     entries: number;
 }
 
+interface RemoteEntry {
+    name: string;
+    isDir: boolean;
+    size: number;
+}
+
 const el = <T extends HTMLElement>(id: string) => document.getElementById(id) as T | null;
 
-/** Where the settings live. Host/user/folder/key PATH — never the passphrase. */
+/** Where the settings live. Host/user/folder/key PATH/method — never a secret. */
 const STORE = 'bmm.repo.ssh';
 
 function loadTarget(): Partial<SshTarget> {
@@ -38,26 +54,54 @@ function loadTarget(): Partial<SshTarget> {
 }
 
 function saveTarget(target: SshTarget): void {
-    // The passphrase is deliberately absent from what gets written. It is read from the
-    // field at the moment of use and never leaves this function's caller.
+    // The passphrase and password are deliberately absent from what gets written.
     try { localStorage.setItem(STORE, JSON.stringify(target)); } catch { /* storage full */ }
 }
 
+// ── auth method ──────────────────────────────────────────────────────────────
+
+let authMethod: AuthMethod = 'key';
+
+/** Show the fields that belong to the active method, and only those. */
+function applyAuthMethod(m: AuthMethod): void {
+    authMethod = m;
+    const keyBtn = el<HTMLButtonElement>('repo-ssh-auth-key');
+    const passBtn = el<HTMLButtonElement>('repo-ssh-auth-pass');
+    keyBtn?.setAttribute('aria-pressed', String(m === 'key'));
+    passBtn?.setAttribute('aria-pressed', String(m === 'password'));
+    for (const n of Array.from(document.querySelectorAll<HTMLElement>('.repo-ssh-keyonly'))) {
+        n.hidden = m !== 'key';
+    }
+    for (const n of Array.from(document.querySelectorAll<HTMLElement>('.repo-ssh-passonly'))) {
+        n.hidden = m !== 'password';
+    }
+}
+
 /** Read the form. Returns null (and says why) when something required is missing. */
-function readForm(): { target: SshTarget; passphrase: string } | null {
+function readForm(): { target: SshTarget; secret: string } | null {
     const host = el<HTMLInputElement>('repo-ssh-host')?.value.trim() || '';
     const user = el<HTMLInputElement>('repo-ssh-user')?.value.trim() || '';
     const keyPath = el<HTMLInputElement>('repo-ssh-key')?.value.trim() || '';
     const remoteDir = el<HTMLInputElement>('repo-ssh-remote')?.value.trim() || '';
     const portRaw = el<HTMLInputElement>('repo-ssh-port')?.value.trim() || '';
-    if (!host || !user || !keyPath || !remoteDir) {
+
+    // The key path is required for key auth and meaningless for password auth. Demanding it
+    // in both modes was the first thing that made this panel feel obstructive.
+    if (!host || !user || !remoteDir || (authMethod === 'key' && !keyPath)) {
         status(t('repo.ssh.needFields'), 'err');
         return null;
     }
     const port = portRaw ? Number(portRaw) : null;
+    const secret = authMethod === 'key'
+        ? (el<HTMLInputElement>('repo-ssh-pass')?.value || '')
+        : (el<HTMLInputElement>('repo-ssh-pw')?.value || '');
     return {
-        target: { host, user, keyPath, remoteDir, port: Number.isFinite(port) ? port : null },
-        passphrase: el<HTMLInputElement>('repo-ssh-pass')?.value || '',
+        target: {
+            host, user, remoteDir, auth: authMethod,
+            keyPath: authMethod === 'key' ? keyPath : '',
+            port: Number.isFinite(port) ? port : null,
+        },
+        secret,
     };
 }
 
@@ -87,6 +131,12 @@ function explain(raw: unknown): string {
         'repo.ssh.errHostKeyChanged': { fp: args[0] || '' },
         'repo.ssh.errLocalDir': { dir: args[0] || '' },
         'repo.ssh.errSftp': { detail: args[0] || '' },
+        'repo.ssh.errListDir': { dir: args[0] || '', detail: args[1] || '' },
+        'repo.ssh.errRemoteMissing': { dir: args[0] || '' },
+        'repo.ssh.errOpenRemote': { path: args[0] || '', detail: args[1] || '' },
+        'repo.ssh.errReadRemote': { path: args[0] || '', detail: args[1] || '' },
+        'repo.ssh.errLocalWrite': { path: args[0] || '', detail: args[1] || '' },
+        'repo.ssh.errUnsafePath': { path: args[0] || '' },
     };
     // A code we know about resolves; anything else is shown verbatim inside a generic
     // wrapper rather than swallowed — an unrecognised failure is still a failure to report.
@@ -111,11 +161,13 @@ let busy = false;
 
 function setBusy(on: boolean): void {
     busy = on;
-    for (const id of ['repo-ssh-test', 'repo-ssh-publish']) {
+    for (const id of ['repo-ssh-test', 'repo-ssh-publish', 'repo-ssh-pull', 'repo-ssh-remote-pick']) {
         const b = el<HTMLButtonElement>(id);
         if (b) b.disabled = on;
     }
 }
+
+// ── connection test ──────────────────────────────────────────────────────────
 
 async function testConnection(): Promise<void> {
     const form = readForm();
@@ -125,7 +177,7 @@ async function testConnection(): Promise<void> {
     try {
         const r = (await invoke('ssh_test_connection', {
             target: form.target,
-            passphrase: form.passphrase || null,
+            secret: form.secret || null,
         })) as SshTestResult;
         saveTarget(form.target);
         el('repo-ssh-forget')!.hidden = false;
@@ -147,6 +199,16 @@ async function testConnection(): Promise<void> {
     }
 }
 
+// ── transfers ────────────────────────────────────────────────────────────────
+
+function beginTransfer(): void {
+    const wrap = el('repo-ssh-progress');
+    const fill = el('repo-ssh-bar-fill');
+    if (wrap) wrap.hidden = false;
+    if (fill) fill.style.width = '0%';
+    status('');
+}
+
 async function publish(): Promise<void> {
     const form = readForm();
     if (!form || busy) return;
@@ -156,29 +218,163 @@ async function publish(): Promise<void> {
         return;
     }
     setBusy(true);
-    const wrap = el('repo-ssh-progress');
-    const fill = el('repo-ssh-bar-fill');
-    const text = el('repo-ssh-progress-text');
-    if (wrap) wrap.hidden = false;
-    if (fill) fill.style.width = '0%';
-    status('');
+    beginTransfer();
 
     try {
         const bytes = (await invoke('ssh_upload_repo', {
             target: form.target,
-            passphrase: form.passphrase || null,
+            secret: form.secret || null,
             localDir,
         })) as number;
         saveTarget(form.target);
-        const done = text?.dataset.done || '?';
-        status(t('repo.ssh.uploaded').replace('{n}', done).replace('{size}', fmtBytes(bytes)), 'ok');
-        toast(t('repo.ssh.uploaded').replace('{n}', done).replace('{size}', fmtBytes(bytes)), 'success', 7000);
+        const done = el('repo-ssh-progress-text')?.dataset.done || '?';
+        const msg = t('repo.ssh.uploaded').replace('{n}', done).replace('{size}', fmtBytes(bytes));
+        status(msg, 'ok');
+        toast(msg, 'success', 7000);
     } catch (e) {
         status(explain(e), 'err');
         toast(explain(e), 'error', 9000);
     } finally {
         setBusy(false);
-        if (fill) fill.style.width = '100%';
+    }
+}
+
+/**
+ * Pull the repo down from the server into the export folder.
+ *
+ * Asks first. The remote copy overwrites files of the same name, and somebody who exported
+ * locally five minutes ago and has not published yet would lose that work with one click —
+ * the button sits next to "Publish" and the two read alike at a glance.
+ */
+async function pull(): Promise<void> {
+    const form = readForm();
+    if (!form || busy) return;
+    const localDir = (el<HTMLInputElement>('repo-export-path')?.value || '').trim();
+    if (!localDir) {
+        status(t('repo.ssh.pickExportFirst'), 'err');
+        return;
+    }
+    // askConfirm, not window.confirm and not dialog.confirm: tauri-plugin-dialog 2.x ships
+    // no `confirm` command at all, so the webview rejects it as an uncaught promise while
+    // the synchronous call returns undefined. api.ts documents the whole trap and routes to
+    // the in-app modal instead.
+    const ok = await askConfirm(
+        t('repo.ssh.pullConfirm').replace('{dir}', localDir),
+        { title: t('repo.ssh.pull'), type: 'warning' },
+    );
+    if (!ok) return;
+
+    setBusy(true);
+    beginTransfer();
+    try {
+        const bytes = (await invoke('ssh_download_repo', {
+            target: form.target,
+            secret: form.secret || null,
+            localDir,
+        })) as number;
+        saveTarget(form.target);
+        const done = el('repo-ssh-progress-text')?.dataset.done || '?';
+        const msg = t('repo.ssh.pulled').replace('{n}', done).replace('{size}', fmtBytes(bytes));
+        status(msg, 'ok');
+        toast(msg, 'success', 7000);
+    } catch (e) {
+        status(explain(e), 'err');
+        toast(explain(e), 'error', 9000);
+    } finally {
+        setBusy(false);
+    }
+}
+
+// ── remote folder picker ─────────────────────────────────────────────────────
+//
+// The reason this exists: an absolute remote path typed from memory is the single most
+// common way this panel failed. `/var/www/repo` when the account lands in `/home/you`, a
+// trailing slash, a capital letter on a case-sensitive filesystem — and the connection test
+// then says "not writable", which sends people looking at permissions for a path that was
+// never there.
+
+let browsePath = '';
+
+async function openBrowser(): Promise<void> {
+    const form = readForm();
+    if (!form || busy) return;
+    const overlay = el('repo-ssh-browser');
+    if (!overlay) return;
+    overlay.hidden = false;
+    // Start from whatever is typed, or from wherever the account lands when it is empty.
+    browsePath = form.target.remoteDir || '';
+    await refreshBrowser();
+}
+
+function closeBrowser(): void {
+    const overlay = el('repo-ssh-browser');
+    if (overlay) overlay.hidden = true;
+}
+
+async function refreshBrowser(): Promise<void> {
+    const form = readForm();
+    if (!form) return;
+    const list = el('repo-ssh-browser-list');
+    const pathEl = el('repo-ssh-browser-path');
+    if (!list) return;
+    list.textContent = t('repo.ssh.browserLoading');
+
+    try {
+        const entries = (await invoke('ssh_list_dir', {
+            target: form.target,
+            secret: form.secret || null,
+            path: browsePath || null,
+        })) as RemoteEntry[];
+
+        // The server resolves "wherever I landed" into a real path; show that, so the value
+        // written into the field is always absolute.
+        if (!browsePath) {
+            browsePath = (await invoke('ssh_resolve_path', {
+                target: form.target,
+                secret: form.secret || null,
+                path: '.',
+            })) as string;
+        }
+        if (pathEl) pathEl.textContent = browsePath;
+
+        list.textContent = '';
+        if (!entries.length) {
+            const empty = document.createElement('div');
+            empty.className = 'repo-ssh-browser-empty';
+            empty.textContent = t('repo.ssh.browserEmpty');
+            list.appendChild(empty);
+            return;
+        }
+        for (const e of entries) {
+            // Built as DOM, not innerHTML: these names come from a remote machine, and a
+            // directory called `<img onerror=…>` must never become markup.
+            const row = document.createElement('button');
+            row.type = 'button';
+            row.className = 'repo-ssh-browser-row';
+            row.dataset.dir = e.isDir ? '1' : '0';
+            row.dataset.name = e.name;
+            row.disabled = !e.isDir;
+
+            const icon = document.createElement('span');
+            icon.textContent = e.isDir ? '📁' : '📄';
+            const name = document.createElement('span');
+            name.className = 'rb-name';
+            name.textContent = e.name;
+            row.append(icon, name);
+            if (!e.isDir) {
+                const size = document.createElement('span');
+                size.className = 'rb-size';
+                size.textContent = fmtBytes(e.size);
+                row.appendChild(size);
+            }
+            list.appendChild(row);
+        }
+    } catch (err) {
+        list.textContent = '';
+        const bad = document.createElement('div');
+        bad.className = 'repo-ssh-browser-empty';
+        bad.textContent = explain(err);
+        list.appendChild(bad);
     }
 }
 
@@ -198,10 +394,15 @@ export function initRepoSsh(): void {
     set('repo-ssh-user', saved.user);
     set('repo-ssh-key', saved.keyPath);
     set('repo-ssh-remote', saved.remoteDir);
+    applyAuthMethod(saved.auth === 'password' ? 'password' : 'key');
     if (saved.host) el('repo-ssh-forget')!.hidden = false;
+
+    el('repo-ssh-auth-key')?.addEventListener('click', () => applyAuthMethod('key'));
+    el('repo-ssh-auth-pass')?.addEventListener('click', () => applyAuthMethod('password'));
 
     el('repo-ssh-test')?.addEventListener('click', () => { void testConnection(); });
     el('repo-ssh-publish')?.addEventListener('click', () => { void publish(); });
+    el('repo-ssh-pull')?.addEventListener('click', () => { void pull(); });
 
     el('repo-ssh-key-pick')?.addEventListener('click', async () => {
         const p = await pickFile();
@@ -211,50 +412,101 @@ export function initRepoSsh(): void {
         }
     });
 
-    el('repo-ssh-forget')?.addEventListener('click', async () => {
-        const host = el<HTMLInputElement>('repo-ssh-host')?.value.trim();
-        if (!host) return;
-        const portRaw = el<HTMLInputElement>('repo-ssh-port')?.value.trim();
-        await invoke('ssh_forget_host', { host, port: portRaw ? Number(portRaw) : null })
-            .catch(() => {});
-        status(t('repo.ssh.forgotten'), 'warn');
+    // ── picker wiring ──
+    el('repo-ssh-remote-pick')?.addEventListener('click', () => { void openBrowser(); });
+    el('repo-ssh-browser-close')?.addEventListener('click', closeBrowser);
+    el('repo-ssh-browser')?.addEventListener('click', (e) => {
+        // Click on the backdrop only — a click inside the panel must not close it.
+        if (e.target === el('repo-ssh-browser')) closeBrowser();
+    });
+    el('repo-ssh-browser-up')?.addEventListener('click', () => {
+        const cut = browsePath.replace(/\/+$/, '').lastIndexOf('/');
+        browsePath = cut > 0 ? browsePath.slice(0, cut) : '/';
+        void refreshBrowser();
+    });
+    el('repo-ssh-browser-choose')?.addEventListener('click', () => {
+        const input = el<HTMLInputElement>('repo-ssh-remote');
+        if (input) input.value = browsePath;
+        closeBrowser();
+        status(t('repo.ssh.browserPicked').replace('{dir}', browsePath), 'ok');
+    });
+    // Delegated: the rows are rebuilt on every navigation, so binding per row would leak a
+    // listener per directory visited.
+    el('repo-ssh-browser-list')?.addEventListener('click', (e) => {
+        const row = (e.target as HTMLElement)?.closest('.repo-ssh-browser-row') as HTMLElement | null;
+        if (!row || row.dataset.dir !== '1') return;
+        browsePath = `${browsePath.replace(/\/+$/, '')}/${row.dataset.name}`;
+        void refreshBrowser();
     });
 
-    // Progress, emitted per file by the backend.
-    void import('@tauri-apps/api/event').then(({ listen }) => {
-        void listen<{ done: number; total: number; bytes: number; current: string }>(
+    // Progress, emitted per file by the backend, for both directions.
+    //
+    // `listen` is read off the global, NEVER imported. Nothing bundles this frontend — the
+    // compiled JS is loaded by the webview as plain ES modules — so a bare specifier like
+    // '@tauri-apps/api/event' has no import map to resolve it and the browser throws
+    // "Failed to resolve module specifier" at parse time, before any .catch can run. That is
+    // exactly what took the whole Server Repo screen down: initRepoSsh threw, so initRepo
+    // never finished. `withGlobalTauri: true` in tauri.conf.json guarantees the global
+    // exists. check-imports.mjs now fails the build on a bare specifier anywhere.
+    const listen = (window as any).__TAURI__?.event?.listen as
+        | (<T>(e: string, cb: (evt: { payload: T }) => void) => Promise<() => void>)
+        | undefined;
+    if (listen) {
+        void listen<{ done: number; total: number; bytes: number; current: string; direction: string }>(
             'repo-ssh-progress',
             (e) => {
-                const { done, total, bytes, current } = e.payload;
+                const { done, total, bytes, current, direction } = e.payload;
                 const fill = el('repo-ssh-bar-fill');
                 const text = el('repo-ssh-progress-text');
                 if (fill && total > 0) fill.style.width = `${Math.round((done / total) * 100)}%`;
                 if (text) {
                     text.dataset.done = String(done);
-                    text.textContent = t('repo.ssh.uploading')
+                    const key = direction === 'down' ? 'repo.ssh.downloading' : 'repo.ssh.uploading';
+                    text.textContent = t(key)
                         .replace('{done}', String(done))
                         .replace('{total}', String(total))
                         .replace('{file}', current) + ` · ${fmtBytes(bytes)}`;
                 }
             },
         );
-    });
+    }
 }
 
-/** For the deeplink and the scheduler: publish with the STORED target, no UI.
- *
- *  A key with a passphrase cannot be used this way — there is nobody to ask, and prompting
- *  from a scheduled task at 04:00 is a task that silently never runs. It fails with a
- *  message that says so rather than hanging.
- */
-export async function publishStoredTarget(localDir: string): Promise<number> {
+// ── headless entry points (deeplink, scheduler, plugin API) ──────────────────
+
+/** The stored target, or a thrown explanation of what is missing. */
+function storedTargetOrThrow(): SshTarget {
     const saved = loadTarget();
-    if (!saved.host || !saved.user || !saved.keyPath || !saved.remoteDir) {
+    if (!saved.host || !saved.user || !saved.remoteDir) {
         throw new Error(t('repo.ssh.needFields'));
     }
+    // Password auth cannot run unattended: nothing is stored, and there is nobody to ask.
+    // Saying so is the whole point — a task that hangs on an invisible prompt looks like a
+    // task that ran and did nothing.
+    if (saved.auth === 'password') throw new Error(t('repo.ssh.errHeadlessPassword'));
+    if (!saved.keyPath) throw new Error(t('repo.ssh.needFields'));
+    return saved as SshTarget;
+}
+
+/** Publish with the STORED target, no UI. See the note above about passphrases. */
+export async function publishStoredTarget(localDir: string): Promise<number> {
     return (await invoke('ssh_upload_repo', {
-        target: saved as SshTarget,
-        passphrase: null,
+        target: storedTargetOrThrow(),
+        secret: null,
         localDir,
     })) as number;
+}
+
+/** Pull with the STORED target, no UI. */
+export async function pullStoredTarget(localDir: string): Promise<number> {
+    return (await invoke('ssh_download_repo', {
+        target: storedTargetOrThrow(),
+        secret: null,
+        localDir,
+    })) as number;
+}
+
+/** Does a usable headless target exist? Used to enable/disable the scheduler action. */
+export function hasHeadlessSshTarget(): boolean {
+    try { storedTargetOrThrow(); return true; } catch { return false; }
 }

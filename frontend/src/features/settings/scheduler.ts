@@ -1367,6 +1367,15 @@ async function runAction(action: Action, task: Task, ctx: RunCtx): Promise<void>
             _captureOutput(p, String(sent), ctx);
             break;
         }
+        // The mirror of the above: keep a local folder in step with what the server serves.
+        // No confirmation here, unlike the button and the deeplink — a scheduled task IS the
+        // standing consent, and a prompt at 04:00 is a task that never finishes.
+        case 'repo.syncSsh': {
+            const { pullStoredTarget } = await import('../repo/repo-ssh.js');
+            const got = await pullStoredTarget(String(p.dir || ''));
+            _captureOutput(p, String(got), ctx);
+            break;
+        }
         case 'app.install':      dl('app/install', { id: p.id, url: p.url, title: p.title }); break;
         case 'launchpack.run':   await invoke('run_launch_pack', { id: p.id }); break;
         case 'task.run':
@@ -3606,6 +3615,9 @@ const ACTION_TYPES: { v: string; label: string; needs?: string; group: string }[
     // Uses the SSH target saved in Server Repo. A scheduled task cannot answer a passphrase
     // prompt at 04:00, so a key with one fails with a message instead of hanging forever.
     { v: 'repo.publishSsh', label: 'Publish repo over SSH', needs: 'repoSshDir', group: 'repo' },
+    // The other direction: keep a local folder in step with what the server actually serves.
+    // Same target, same passphrase constraint.
+    { v: 'repo.syncSsh', label: 'Fetch repo over SSH', needs: 'repoSshPullDir', group: 'repo' },
     // ── Apps & launch ──
     { v: 'app.launch', label: 'Launch app', needs: 'app', group: 'apps' },
     { v: 'app.stop', label: 'Stop app / process', needs: 'appStop', group: 'apps' },
@@ -4130,7 +4142,11 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
     else if (needs === 'repoSync') host.innerHTML = `<input class="input sched-r-url" placeholder="${escAttr(t('sched.repoUrlPh') || 'repo.json URL')}" value="${escAttr(params.url || '')}" style="min-width:240px"><input class="input sched-r-prof" placeholder="${escAttr(t('sched.repoProfPh') || 'remote profile id')}" value="${escAttr(params.profile || '')}" style="max-width:180px;margin-left:6px">`;
     else if (needs === 'repoUpdate') host.innerHTML = `<input class="input sched-r-dir" placeholder="${escAttr(t('sched.repoDirPh') || 'repo folder')}" value="${escAttr(params.dir || '')}" style="min-width:240px"><button type="button" class="btn btn-sm btn-secondary sched-browse-dir" style="margin-left:6px">${t('sched.choose') || 'Choose…'}</button>`;
     else if (needs === 'repoHost') host.innerHTML = `<input class="input sched-r-dir" placeholder="${escAttr(t('sched.serveDirPh') || 'folder to serve')}" value="${escAttr(params.dir || '')}" style="min-width:220px"><button type="button" class="btn btn-sm btn-secondary sched-browse-dir" style="margin-left:6px">${t('sched.choose') || 'Choose…'}</button><input class="input sched-r-port" type="number" min="1" placeholder="port" value="${escAttr(params.port || '')}" style="max-width:100px;margin-left:6px">`;
-    else if (needs === 'repoSshDir') host.innerHTML = `<input class="input sched-r-dir" placeholder="${escAttr(t('sched.sshDirPh') || 'exported repo folder to publish')}" value="${escAttr(params.dir || '')}" style="min-width:260px">`;
+    else if (needs === 'repoSshDir') host.innerHTML = `<input class="input sched-r-dir" placeholder="${escAttr(t('sched.sshDirPh') || 'exported repo folder to publish')}" value="${escAttr(params.dir || '')}" style="min-width:260px"><button type="button" class="btn btn-sm btn-secondary sched-browse-dir" style="margin-left:6px">${t('sched.choose') || 'Choose…'}</button>`;
+    // Same shape as repoSshDir, different placeholder: this folder is the DESTINATION, and
+    // reusing the "folder to publish" wording here is how somebody points a fetch at the
+    // wrong directory and overwrites an export they had not published yet.
+    else if (needs === 'repoSshPullDir') host.innerHTML = `<input class="input sched-r-dir" placeholder="${escAttr(t('sched.sshPullDirPh') || 'local folder to fetch INTO')}" value="${escAttr(params.dir || '')}" style="min-width:260px"><button type="button" class="btn btn-sm btn-secondary sched-browse-dir" style="margin-left:6px">${t('sched.choose') || 'Choose…'}</button>`;
     else if (needs === 'appInstall') host.innerHTML = `<input class="input sched-a-id" placeholder="${escAttr(t('sched.appIdPh2') || 'app id')}" value="${escAttr(params.id || '')}" style="max-width:140px"><input class="input sched-a-url" placeholder="${escAttr(t('sched.appUrlPh') || 'download URL')}" value="${escAttr(params.url || '')}" style="min-width:220px;margin-left:6px"><input class="input sched-a-title" placeholder="${escAttr(t('sched.appTitlePh') || 'title (optional)')}" value="${escAttr(params.title || '')}" style="max-width:160px;margin-left:6px">`;
     else if (needs === 'mpCreate') host.innerHTML = `
         <div class="sched-field"><label class="sched-flabel">${t('sched.mpNameLbl') || 'Modpack name'}</label>

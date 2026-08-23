@@ -2365,6 +2365,45 @@ pub async fn start_api_server(
             )
         });
 
+    // POST /api/repo/sync-ssh  (auth) — fetch a repo back down from the server.
+    //
+    // The mirror of publish-ssh, with the same rule about the target: it comes from what the
+    // owner saved in Server Repo and cannot be named in the body.
+    //
+    // The rule matters MORE in this direction. Publishing writes to a server the owner chose;
+    // fetching writes to the owner's own disk. A caller able to name a host could pull files
+    // from a machine of its choosing into a folder of its choosing — so only the destination
+    // is a parameter, and even that is confined by the backend, which refuses any remote path
+    // that would escape it (see safe_join in repo_ssh.rs).
+    let tok_repo_pull = token.clone();
+    let handle_repo_pull = app_handle.clone();
+    let repo_sync_ssh = warp::path!("api" / "repo" / "sync-ssh")
+        .and(warp::post())
+        .and(require_token(tok_repo_pull))
+        .and(warp::body::json::<serde_json::Value>())
+        .and(with_app_handle(handle_repo_pull))
+        .map(|body: serde_json::Value, handle: tauri::AppHandle| {
+            let dir = body.get("dir").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            if dir.trim().is_empty() {
+                return warp::reply::with_status(
+                    warp::reply::json(&ApiError { error: "dir is required".into() }),
+                    StatusCode::BAD_REQUEST,
+                );
+            }
+            let _ = handle.emit("bmm://api-exec", serde_json::json!({
+                "action": "repo/sync-ssh",
+                "params": { "dir": dir }
+            }));
+            warp::reply::with_status(
+                warp::reply::json(&serde_json::json!({
+                    "ok": true,
+                    "driven_by": "bmm-ui",
+                    "message": "SSH fetch requested through the BMM interface."
+                })),
+                StatusCode::ACCEPTED,
+            )
+        });
+
     // PUT /api/modpacks/:id  (auth) — update an existing modpack
     let data_mp_update  = data.clone();
     let path_mp_update  = data_path.clone();
@@ -2959,6 +2998,7 @@ pub async fn start_api_server(
         .or(repo_update)        // POST /api/repo/update
         .or(repo_host_stop)     // DELETE /api/repo/host
         .or(repo_publish_ssh)   // POST /api/repo/publish-ssh
+        .or(repo_sync_ssh)      // POST /api/repo/sync-ssh
         .or(repo_host_start)    // POST /api/repo/host
         .or(repo_remove)
         .boxed();
