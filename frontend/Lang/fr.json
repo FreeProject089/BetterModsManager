@@ -7882,5 +7882,8 @@
   "modpack.cat.build.nothing": "Rien à exporter — cochez un pack et donnez-lui une adresse.",
   "modpack.cat.build.defName": "Mes modpacks",
   "modpack.cat.build.done": "Catalogue écrit avec {n} pack(s).",
-  "modpack.cat.build.doneSome": "Catalogue écrit avec {n} pack(s). {m} ignoré(s), sans adresse."
+  "modpack.cat.build.doneSome": "Catalogue écrit avec {n} pack(s). {m} ignoré(s), sans adresse.",
+  "repo.remoteOpenFolder": "Ouvrir le dossier",
+  "repo.remoteCopyPath": "Copier le chemin",
+  "repo.remotePathCopied": "Chemin copié."
 }

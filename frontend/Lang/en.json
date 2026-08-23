@@ -7884,5 +7884,8 @@
   "modpack.cat.build.nothing": "Nothing to export — tick a pack and give it an address.",
   "modpack.cat.build.defName": "My modpacks",
   "modpack.cat.build.done": "Catalogue written with {n} pack(s).",
-  "modpack.cat.build.doneSome": "Catalogue written with {n} pack(s). {m} skipped for having no address."
+  "modpack.cat.build.doneSome": "Catalogue written with {n} pack(s). {m} skipped for having no address.",
+  "repo.remoteOpenFolder": "Open the folder",
+  "repo.remoteCopyPath": "Copy the path",
+  "repo.remotePathCopied": "Path copied."
 }

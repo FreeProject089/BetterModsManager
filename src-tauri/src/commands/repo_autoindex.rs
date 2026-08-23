@@ -469,11 +469,27 @@ pub async fn plan_remote_repo_refresh(
     base_url: String,
     manifest_path: String,
     force_full: bool,
+    // The download password, when the server asks for one. Never stored — it arrives per call
+    // and lives as long as the request, the same contract as every other protected fetch.
+    password: Option<String>,
 ) -> Result<RemotePlanReport, String> {
     use crate::commands::repo_remote::{plan_refresh, FullRehash};
 
+    // Default headers, so EVERY request this client makes carries them — the directory
+    // listing, the manifest and each file it reads to hash. Setting them per-call would be
+    // the mistake the repo sync already made once: a header on some paths and not others
+    // authenticates the first request and 401s halfway through the rest.
+    let mut headers = reqwest::header::HeaderMap::new();
+    if let Some(pw) = password.as_deref().map(str::trim).filter(|p| !p.is_empty()) {
+        if let Ok(hv) = reqwest::header::HeaderValue::from_str(pw) {
+            headers.insert("X-Repo-Password", hv);
+        }
+    }
+    crate::commands::repo_keyauth::add_proof(&mut headers, base_url.trim());
+
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(30))
+        .default_headers(headers)
         .build()
         .map_err(|e| e.to_string())?;
     let listing = crawl(base_url.trim(), &client).await?;
@@ -563,13 +579,26 @@ pub async fn refresh_repo_from_server(
     force_full: bool,
     name: Option<String>,
     game_name: Option<String>,
+    // Same contract as the plan above. The two MUST carry the same credentials, or the
+    // preview succeeds and the run that follows it 401s — the worst possible split, because
+    // the person has already been told it would work.
+    password: Option<String>,
 ) -> Result<RemoteRefreshReport, String> {
     use crate::commands::repo_remote::plan_refresh;
     use crate::models::repo::{RepoFile, RepoMod, RepoProfile, ServerRepo};
     use tauri::Emitter;
 
+    let mut headers = reqwest::header::HeaderMap::new();
+    if let Some(pw) = password.as_deref().map(str::trim).filter(|p| !p.is_empty()) {
+        if let Ok(hv) = reqwest::header::HeaderValue::from_str(pw) {
+            headers.insert("X-Repo-Password", hv);
+        }
+    }
+    crate::commands::repo_keyauth::add_proof(&mut headers, base_url.trim());
+
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(300))
+        .default_headers(headers)
         .build()
         .map_err(|e| e.to_string())?;
     let base = base_url.trim().trim_end_matches('/').to_string();

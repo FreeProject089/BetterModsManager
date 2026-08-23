@@ -10,6 +10,7 @@
 // already use. BMM never needs write access to your server.
 
 import { invoke, pickFolder } from '../../core/api.js';
+import { sourceAccessHtml, wireSourceAccess } from '../../core/source-access.js';
 import { toast } from '../../ui/app.js';
 import { t } from '../../core/i18n.js';
 import { formatBytes } from '../../core/utils.js';
@@ -59,6 +60,9 @@ function inputs(): Record<string, unknown> | null {
     return {
         baseUrl,
         manifestPath,
+        // Read at call time from the shared block. Session-only, like every other download
+        // password here — it is never written anywhere.
+        password: ($('remote-access-pw') as HTMLInputElement | null)?.value?.trim() || null,
         forceFull: ($('remote-force-full') as HTMLInputElement | null)?.checked || false,
         // Only consulted when no manifest exists yet; the backend ignores them otherwise so
         // a stray value here can never rename a repo people already subscribe to.
@@ -87,6 +91,39 @@ function show(lines: Array<[string, string, string?]>, title: string, tone: stri
         row.textContent = `${label}: ${value}`;
         box.append(row);
     }
+}
+
+/// Offer to open the folder holding the file that was just written.
+///
+/// The path was printed and nothing more, so the next step — find it, upload it — started
+/// with reading a long path out of a box and retyping it into a file manager. It is a button.
+function offerToOpen(path: string) {
+    const box = $('remote-result');
+    if (!box || !path) return;
+    const row = document.createElement('div');
+    row.style.cssText = 'margin-top:8px;display:flex;gap:8px;flex-wrap:wrap';
+
+    const open = document.createElement('button');
+    open.className = 'btn btn-sm';
+    open.textContent = t('repo.remoteOpenFolder');
+    open.addEventListener('click', () => {
+        // The FOLDER, not the file: opening a .json launches whatever is registered for it,
+        // which is an editor nobody asked for. The folder is where the next step happens.
+        void invoke('open_folder', { path: path.replace(/[\\/][^\\/]+$/, '') }).catch(() => {});
+    });
+
+    const copy = document.createElement('button');
+    copy.className = 'btn btn-sm';
+    copy.textContent = t('repo.remoteCopyPath');
+    copy.addEventListener('click', () => {
+        void navigator.clipboard?.writeText(path).then(
+            () => toast(t('repo.remotePathCopied'), 'success'),
+            () => {},
+        );
+    });
+
+    row.append(open, copy);
+    box.append(row);
 }
 
 /// A handful of names plus a count, never the whole list — a repo with 400 changed files
@@ -137,6 +174,9 @@ async function run(which: 'plan' | 'refresh') {
                 ? (t('repo.remoteCreated') || 'repo.json created — upload it to your server')
                 : (t('repo.remoteDone') || 'repo.json updated — upload it to your server'),
                 'var(--success)');
+            // The path is written above; this makes it actionable. Reading a long path out of
+            // a box and retyping it into a file manager was the next step for everybody.
+            offerToOpen(r.manifestPath);
 
             // Removals are the one outcome worth interrupting for: a mistyped URL produces a
             // perfectly valid manifest describing an empty server, and it looks like success.
@@ -154,6 +194,20 @@ async function run(which: 'plan' | 'refresh') {
 }
 
 export function initRemoteRefresh() {
+    // The protected-source block, mounted and wired together so the two cannot separate —
+    // markup with no listeners is the failure mode that shipped on two catalogue screens.
+    const mount = $('remote-access-mount');
+    if (mount && !mount.innerHTML) {
+        mount.innerHTML = sourceAccessHtml('remote-access');
+        wireSourceAccess('remote-access', (m, k) => toast(m, k === 'warning' ? 'warning' : 'success'),
+            () => {
+                (document.getElementById('nav-settings') as HTMLElement | null)?.click();
+                setTimeout(() => document.getElementById('settings-identity-card')
+                    ?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 250);
+            },
+            () => ($('remote-base-url') as HTMLInputElement | null)?.value?.trim() || '');
+    }
+
     $('btn-remote-browse')?.addEventListener('click', async () => {
         const dir = await pickFolder();
         if (!dir) return;
