@@ -7938,5 +7938,6 @@
   "modpack.cat.sub": "Follow one, or make one",
   "modpack.cat.followed": "Catalogues you follow",
   "modpack.cat.available": "Packs available",
-  "modpack.cat.build.pick": "Packs to include"
+  "modpack.cat.build.pick": "Packs to include",
+  "settings.identity.authKeyUnavailable": "The keyring could not be read — if BMM was not rebuilt since keys were added, this build does not have them yet."
 }

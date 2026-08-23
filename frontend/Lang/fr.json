@@ -7936,5 +7936,6 @@
   "modpack.cat.sub": "En suivre un, ou en faire un",
   "modpack.cat.followed": "Catalogues suivis",
   "modpack.cat.available": "Packs disponibles",
-  "modpack.cat.build.pick": "Packs à inclure"
+  "modpack.cat.build.pick": "Packs à inclure",
+  "settings.identity.authKeyUnavailable": "Le trousseau n'a pas pu être lu — si BMM n'a pas été reconstruit depuis l'ajout des clés, cette version ne les connaît pas encore."
 }

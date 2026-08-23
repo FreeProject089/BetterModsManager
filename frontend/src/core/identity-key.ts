@@ -24,7 +24,20 @@ export interface KeyringView {
 export type Notify = (i18nKey: string, kind: 'success' | 'warning') => void;
 
 export async function listKeyring(): Promise<KeyringView> {
-    return (await invoke('key_auth_list')) as KeyringView;
+    const v = await invoke('key_auth_list');
+    // CHECKED, not asserted. `as KeyringView` told TypeScript this was a keyring and told the
+    // runtime nothing: a build whose backend does not answer this command hands back null, the
+    // cast waves it through, and the first `.byOrigin` throws deep inside a caller's `fill()` —
+    // where it became an unhandled rejection and the dropdown just sat there empty. Empty is
+    // also what "you own no keys" looks like, so the two were indistinguishable on screen.
+    // Throwing here puts the failure where a caller can catch it and say so.
+    if (!v || typeof v !== 'object' || !Array.isArray((v as KeyringView).keys)) {
+        throw new Error('key_auth_list returned no keyring');
+    }
+    const view = v as KeyringView;
+    // `by_origin` is optional on the wire; a missing map is "no per-source choices", not a fault.
+    if (!view.byOrigin) view.byOrigin = {};
+    return view;
 }
 
 /** The origin a URL's proof would be addressed to — the unit a per-source choice applies to. */
@@ -106,7 +119,16 @@ export async function renderKeyManager(
         }
     };
 
-    paint(await listKeyring());
+    try {
+        paint(await listKeyring());
+    } catch {
+        // Same rule as the chooser: a blank list and a broken backend must not look alike.
+        list.textContent = '';
+        const bad = document.createElement('span');
+        bad.style.cssText = 'font-size:11px;color:var(--bmm-warning);';
+        bad.textContent = t('settings.identity.authKeyUnavailable');
+        list.appendChild(bad);
+    }
 
     if (addBtn && addBtn.dataset.krWired !== '1') {
         addBtn.dataset.krWired = '1';
@@ -154,9 +176,31 @@ export async function renderKeySelect(
     const sel = document.getElementById(selectId) as HTMLSelectElement | null;
     if (!sel) return;
 
+    /** One option that explains itself, for when there is nothing to choose from. */
+    const only = (label: string, broken: boolean) => {
+        sel.textContent = '';
+        const o = document.createElement('option');
+        o.value = '';
+        o.textContent = label;
+        sel.appendChild(o);
+        sel.disabled = true;
+        // The reason travels as a title, so a screenshot of the dropdown carries it.
+        sel.title = broken ? label : '';
+    };
+
     const fill = async () => {
-        const view = await listKeyring();
-        const origin = await originOf(urlOf());
+        let view: KeyringView;
+        try {
+            view = await listKeyring();
+        } catch (e) {
+            // NOT silence. An empty dropdown reads as "you have no keys", which is a
+            // different fact from "this build cannot answer" — and the second one is usually
+            // an app that has not been rebuilt since the keyring existed.
+            only(t('settings.identity.authKeyUnavailable'), true);
+            notify?.('settings.identity.authKeyUnavailable', 'warning');
+            return;
+        }
+        const origin = await originOf(urlOf()).catch(() => null);
         const chosen = origin ? view.byOrigin[origin] : undefined;
         sel.textContent = '';
 

@@ -66,9 +66,16 @@ export function wireSourceAccess(
     const urlOf = () => urlEl.value.trim();
 
     const paint = async () => {
-        const kr = await import('./identity-key.js');
-        await kr.renderKeySelect(`${p}-access-key`, urlOf,
-            (k, kind) => notify(t(k), kind), t);
+        try {
+            const kr = await import('./identity-key.js');
+            await kr.renderKeySelect(`${p}-access-key`, urlOf,
+                (k, kind) => notify(t(k), kind), t);
+        } catch {
+            // The import itself can fail on a partial build. Reported rather than dropped:
+            // `void paint()` used to let this vanish as an unhandled rejection, leaving a fold
+            // that opens onto nothing and explains nothing.
+            notify(t('settings.identity.authKeyUnavailable'), 'warning');
+        }
     };
 
     det.addEventListener('toggle', () => {
