@@ -251,13 +251,43 @@ Les fichiers partent d'abord et `repo.json` **en dernier**, exprès. Les abonné
 manifeste puis récupèrent ce qu'il liste : l'envoyer en premier donnerait à tous ceux qui
 synchronisent pendant l'envoi un manifeste promettant des fichiers qui n'existent pas encore.
 
+### Synchroniser DEPUIS un dépôt SSH
+
+L'autre versant de la même connexion : installer des mods depuis un dépôt qui vit sur un
+serveur SSH plutôt que derrière une URL HTTP.
+
+Saisis **`ssh://`** dans le champ URL de la synchronisation. Cette valeur ne porte ni hôte,
+ni utilisateur, ni clé — tout ce qui concerne la connexion vient de la cible configurée
+ci-dessus. Le reste de l'écran fonctionne exactement comme en HTTP : liste des profils,
+choix, delta par empreinte, case « ajouter comme source de mise à jour ».
+
+Comme ce n'est qu'une URL, tous les points d'entrée existants en héritent sans nouvelle
+action :
+
+| Point d'entrée | Valeur |
+|---|---|
+| Écran de synchro | `ssh://` dans le champ URL |
+| Lien profond | `bmm://repo/sync?url=ssh://` |
+| Planificateur | *Synchroniser un dépôt*, URL `ssh://` |
+| API locale | `POST /api/repo/sync` avec `"url": "ssh://"` |
+
+!!! note "Deux différences avec HTTP"
+    La **reprise par morceaux** repose sur les requêtes Range du HTTP et n'est pas utilisée
+    en SFTP : un fichier à récupérer l'est en entier. Le delta par fichier, celui qui fait
+    gagner du temps, s'applique toujours — la synchro compare les empreintes et ne demande
+    que ce qui a changé.
+
+    Une source authentifiée par **mot de passe** fonctionne tant que le panneau SSH est
+    ouvert et rempli. Une exécution sans surveillance exige une clé sans phrase secrète,
+    pour la même raison que la publication.
+
 ### Sans ouvrir l'écran
 
 | Point d'entrée | Publier | Récupérer |
 |---|---|---|
 | Planificateur | *Publier le dépôt par SSH* | *Récupérer le dépôt par SSH* |
-| Lien profond | `bmm://repo/publish-ssh?dir=<dossier>` | `bmm://repo/sync-ssh?dir=<dossier>` |
-| API locale | `POST /api/repo/publish-ssh` | `POST /api/repo/sync-ssh` |
+| Lien profond | `bmm://repo/publish-ssh?dir=<dossier>` | `bmm://repo/fetch-ssh?dir=<dossier>` |
+| API locale | `POST /api/repo/publish-ssh` | `POST /api/repo/fetch-ssh` |
 
 Tous utilisent la cible enregistrée dans Dépôt Serveur. **Aucun ne peut désigner un autre hôte,
 une autre clé ni un mot de passe** — l'appel dit « publie (ou récupère) ce que j'ai déjà

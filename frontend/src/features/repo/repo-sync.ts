@@ -74,10 +74,31 @@ function initSyncPasswordField(): void {
     });
 }
 
+/**
+ * `{ target, secret }` when this URL means the saved SSH target, null otherwise.
+ *
+ * Loaded lazily so the sync screen does not pull the SSH panel's module on every open — and
+ * so a build with the panel absent simply has no SSH sources rather than failing to load.
+ */
+async function sshSourceOrNull(url: string): Promise<{ target: unknown; secret: string | null } | null> {
+    const m = await import('./repo-ssh.js');
+    if (!m.isSshSourceUrl(url)) return null;
+    const target = m.storedSshTarget();
+    if (!target) throw new Error(t('repo.ssh.needFields'));
+    return { target, secret: m.currentSshSecret() };
+}
+
 // fetch_repo_info, but transparently handling a password-protected repo: on the
 // `repo.errPasswordRequired` signal from the backend, ask the user once, remember it
 // for this session, and retry. Cancelling re-throws so the caller's normal error path runs.
 async function fetchRepoInfoWithPassword(url: string, creatorId: string | null) {
+    // An `ssh://` source is read over SFTP instead. The value carries no host on purpose:
+    // everything about WHERE to connect comes from the target saved in the SSH panel, so a
+    // deeplink, a scheduled task or an API call can no more point BMM at an arbitrary machine
+    // for reading than the publish path lets one point it somewhere for writing.
+    const ssh = await sshSourceOrNull(url);
+    if (ssh) return await invoke('ssh_fetch_repo_info', ssh);
+
     try {
         return await invoke('fetch_repo_info', { url, creatorId, password: lastRepoPassword });
     } catch (e) {
@@ -737,9 +758,13 @@ export function initRepoSync(elements) {
                 const addRepoSourceEl = document.getElementById('repo-sync-add-repo-source') as HTMLInputElement | null;
                 const addRepoSource = addRepoSourceEl ? addRepoSourceEl.checked : true;
 
+                // The same resolution as the manifest fetch above: one rule, so the
+                // profile list and the files it installs can never come from two places.
+                const sshSource = await sshSourceOrNull(url);
                 const summary = await invoke('sync_server_repo', {
                     args: {
                         url, creatorId: finalCreatorId, gameDir, modsDir, backupDir, choices,
+                        ...(sshSource ? { ssh: sshSource } : {}),
                         overwriteAll: syncMode === 'all', deleteExtra: cleanExtra, downloadLimit,
                         unzipArchives: !keepZipped, password: lastRepoPassword,
                         addRepoAsUpdateSource: addRepoSource

@@ -240,13 +240,40 @@ Files are sent first and `repo.json` **last**, deliberately. Subscribers read th
 then fetch what it lists, so sending it first would hand everyone syncing during the upload
 window a manifest promising files that do not exist yet.
 
+### Syncing FROM an SSH repo
+
+The other side of the same connection: installing mods from a repo that lives on an SSH
+server rather than behind an HTTP URL.
+
+Put **`ssh://`** in the sync URL field. That value carries no host, user or key — everything
+about where to connect comes from the target configured above. The rest of the sync screen
+works exactly as it does over HTTP: the profile list, the choices, delta by hash, the
+"add as update source" checkbox.
+
+Because it is only a URL, every existing entry point inherits it with no new action:
+
+| Entry point | Value |
+|---|---|
+| Sync screen | `ssh://` in the URL field |
+| Deeplink | `bmm://repo/sync?url=ssh://` |
+| Scheduler | *Sync repo*, URL `ssh://` |
+| Local API | `POST /api/repo/sync` with `"url": "ssh://"` |
+
+!!! note "Two differences from HTTP"
+    Chunk-level **resume** is an HTTP Range feature and is not used over SFTP — a file that
+    needs fetching is fetched whole. The per-file delta that saves the real time still
+    applies: the sync compares hashes and only asks for what changed.
+
+    A **password**-authenticated source works while the SSH panel is open and filled in.
+    Unattended runs need a key with no passphrase, for the same reason publishing does.
+
 ### Without opening the screen
 
 | Entry point | Publish | Fetch |
 |---|---|---|
 | Scheduler | *Publish repo over SSH* | *Fetch repo over SSH* |
-| Deeplink | `bmm://repo/publish-ssh?dir=<folder>` | `bmm://repo/sync-ssh?dir=<folder>` |
-| Local API | `POST /api/repo/publish-ssh` | `POST /api/repo/sync-ssh` |
+| Deeplink | `bmm://repo/publish-ssh?dir=<folder>` | `bmm://repo/fetch-ssh?dir=<folder>` |
+| Local API | `POST /api/repo/publish-ssh` | `POST /api/repo/fetch-ssh` |
 
 All of them use the target saved in Server Repo. **None can name a different host, key or
 password** — the call says "publish (or fetch) what I already configured", and that is all it

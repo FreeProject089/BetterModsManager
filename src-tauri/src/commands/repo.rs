@@ -104,6 +104,16 @@ pub(crate) fn mod_file_url(
         .filter(|b| !b.is_empty())
         .map(|b| format!("{}/", b.trim_end_matches('/')))
         .unwrap_or_else(|| base_url.to_string());
+    format!("{}{}", base, mod_file_tail(files_layout, mod_id, relative_path))
+}
+
+/// Where a mod's file sits UNDER the repo root, as a '/'-separated relative path.
+///
+/// Split out of mod_file_url so that a second transport can reuse it. Syncing over SFTP
+/// needs the same answer as syncing over HTTP — the layout template is a property of the
+/// REPO, not of how you reach it — and writing that mapping a second time is how the two
+/// quietly disagree the day somebody changes `files_layout`.
+pub(crate) fn mod_file_tail(files_layout: Option<&str>, mod_id: &str, relative_path: &str) -> String {
     let path = relative_path.replace('\\', "/");
     let layout = files_layout
         .map(str::trim)
@@ -111,11 +121,10 @@ pub(crate) fn mod_file_url(
         .unwrap_or("mods/{id}/{path}");
     // A leading slash in the template would read as "root of the host" once joined, silently
     // dropping any path already in the base URL.
-    let tail = layout
+    layout
         .trim_start_matches('/')
         .replace("{id}", mod_id)
-        .replace("{path}", &path);
-    format!("{}{}", base, tail)
+        .replace("{path}", &path)
 }
 
 pub(crate) fn compute_file_hash_and_chunks(path: &Path, need_chunks: bool) -> Result<(String, Option<Vec<RepoChunk>>), String> {
@@ -2163,6 +2172,15 @@ pub(crate) fn push_repo_source(
 #[serde(rename_all = "camelCase")]
 pub struct SyncArgs {
     pub url: String,
+    /// Read the repo over SFTP instead of HTTP.
+    ///
+    /// When this is set, `url` is only an identifier -- what the mod records as the repo it
+    /// came from -- and every byte arrives over the SSH connection instead. It is a separate
+    /// field rather than an `ssh://` scheme in `url` because the target carries a user, a
+    /// port, a key path and an auth method, and squeezing those into a URL is how credentials
+    /// end up in logs and in update-source lists.
+    #[serde(default)]
+    pub ssh: Option<crate::commands::repo_ssh::SshSource>,
     pub creator_id: Option<String>,
     /// Optional download password for a password-protected repo (sent as X-Repo-Password).
     #[serde(default)]
@@ -2199,6 +2217,17 @@ pub async fn sync_server_repo(
     state: State<'_, AppState>,
     args: SyncArgs,
 ) -> Result<SyncSummary, String> {
+    // One session for the whole sync. Opening one per file would re-authenticate hundreds of
+    // times and, on a server with any rate limiting in front of sshd, get the user blocked
+    // part-way through an install.
+    let ssh_conn = match args.ssh.as_ref() {
+        Some(src) => Some(
+            crate::commands::repo_ssh::open_for_sync(&state, &src.target, src.secret.as_deref())
+                .await?,
+        ),
+        None => None,
+    };
+
     let url = args.url;
     let game_dir = args.game_dir;
     let mods_dir = args.mods_dir;
@@ -2505,7 +2534,10 @@ pub async fn sync_server_repo(
 
                     // Differential Sync Logic
                     let mut partial_success = false;
-                    if local_path.exists() {
+                    // Chunk-level resume is HTTP Range and nothing else. Over SFTP the whole
+                    // file is read; the sync's own hash comparison already decided this file
+                    // needs fetching, which is the delta that saves real time.
+                    if ssh_conn.is_none() && local_path.exists() {
                         if let Some(remote_chunks) = file.chunks.as_ref() {
                             if let Ok(local_chunks) = compute_local_chunk_hashes(&local_path) {
                                 let mut file_to_patch = fs::OpenOptions::new().read(true).write(true).open(&local_path).map_err(|e| e.to_string())?;
@@ -2561,6 +2593,27 @@ pub async fn sync_server_repo(
                 }
 
                 if !partial_success {
+                    if let Some(conn) = ssh_conn.as_ref() {
+                        // The SAME layout mapping the URL builder uses -- mod_file_tail is
+                        // shared, so the two transports cannot drift apart the day somebody
+                        // changes `files_layout` on their repo.
+                        let tail = mod_file_tail(
+                            repo.files_layout.as_deref(),
+                            &repo_mod.id,
+                            &file.relative_path,
+                        );
+                        let bytes = conn.read(&tail).await?;
+                        fs::write(&local_path, &bytes)
+                            .map_err(|e| format!("repo.errWriteFile: {}", e))?;
+                        if args.download_limit > 0 {
+                            // Same throttle as the HTTP path, applied once for the whole file
+                            // because SFTP handed it over in one read.
+                            let sleep_ms = (bytes.len() as u64 * 1000) / (args.download_limit as u64 * 1024);
+                            if sleep_ms > 0 {
+                                sleep(Duration::from_millis(sleep_ms)).await;
+                            }
+                        }
+                    } else {
                         let res = client.get(&file_url).send().await.map_err(|e| format!("Network error ({}): {}", file.relative_path, e))?;
                         if !res.status().is_success() {
                             if res.status() == 403 {
@@ -2584,6 +2637,7 @@ pub async fn sync_server_repo(
                                 }
                             }
                         }
+                    }
                     }
                     prof_summary.files_downloaded += 1;
                     prof_summary.bytes_downloaded += file.size;

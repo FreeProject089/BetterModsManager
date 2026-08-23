@@ -251,7 +251,11 @@ async function handleDeepLink(urlStr: string): Promise<void> {
                 toast(t('plugins.deepLinkMissingUrl') || 'URL manquante dans le deep link.', 'error');
                 return;
             }
-            if (!/^https?:\/\//i.test(repoUrl)) {
+            // `ssh://` is allowed here and means ONE thing: the SSH target saved in Server
+            // Repo. It deliberately carries no host, user or key -- a link able to name those
+            // could decide which machine BMM reads mods from and which private key it opens to
+            // do it. Everything else must still be http(s).
+            if (!/^https?:\/\//i.test(repoUrl) && repoUrl.trim().toLowerCase() !== 'ssh://') {
                 toast(t('toast.deeplinkInvalidPath') || 'Deep link: invalid path', 'error');
                 return;
             }
@@ -371,7 +375,7 @@ async function handleDeepLink(urlStr: string): Promise<void> {
         // This one asks first. Publishing overwrites files on a server the user configured;
         // fetching overwrites files on their own machine, and a link is something you click
         // before you know what it does.
-        if (action === 'repo/sync-ssh') {
+        if (action === 'repo/fetch-ssh') {
             const dir = parsedUrl.searchParams.get('dir') || '';
             if (!dir) { toast(t('repo.ssh.pickExportFirst'), 'error'); return; }
             const { pullStoredTarget } = await import('../features/repo/repo-ssh.js');

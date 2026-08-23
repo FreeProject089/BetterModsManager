@@ -2365,7 +2365,7 @@ pub async fn start_api_server(
             )
         });
 
-    // POST /api/repo/sync-ssh  (auth) — fetch a repo back down from the server.
+    // POST /api/repo/fetch-ssh  (auth) — fetch a repo back down from the server.
     //
     // The mirror of publish-ssh, with the same rule about the target: it comes from what the
     // owner saved in Server Repo and cannot be named in the body.
@@ -2377,7 +2377,7 @@ pub async fn start_api_server(
     // that would escape it (see safe_join in repo_ssh.rs).
     let tok_repo_pull = token.clone();
     let handle_repo_pull = app_handle.clone();
-    let repo_sync_ssh = warp::path!("api" / "repo" / "sync-ssh")
+    let repo_fetch_ssh = warp::path!("api" / "repo" / "fetch-ssh")
         .and(warp::post())
         .and(require_token(tok_repo_pull))
         .and(warp::body::json::<serde_json::Value>())
@@ -2391,7 +2391,7 @@ pub async fn start_api_server(
                 );
             }
             let _ = handle.emit("bmm://api-exec", serde_json::json!({
-                "action": "repo/sync-ssh",
+                "action": "repo/fetch-ssh",
                 "params": { "dir": dir }
             }));
             warp::reply::with_status(
@@ -2998,7 +2998,7 @@ pub async fn start_api_server(
         .or(repo_update)        // POST /api/repo/update
         .or(repo_host_stop)     // DELETE /api/repo/host
         .or(repo_publish_ssh)   // POST /api/repo/publish-ssh
-        .or(repo_sync_ssh)      // POST /api/repo/sync-ssh
+        .or(repo_fetch_ssh)      // POST /api/repo/fetch-ssh
         .or(repo_host_start)    // POST /api/repo/host
         .or(repo_remove)
         .boxed();

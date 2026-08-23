@@ -1370,7 +1370,7 @@ async function runAction(action: Action, task: Task, ctx: RunCtx): Promise<void>
         // The mirror of the above: keep a local folder in step with what the server serves.
         // No confirmation here, unlike the button and the deeplink — a scheduled task IS the
         // standing consent, and a prompt at 04:00 is a task that never finishes.
-        case 'repo.syncSsh': {
+        case 'repo.fetchSsh': {
             const { pullStoredTarget } = await import('../repo/repo-ssh.js');
             const got = await pullStoredTarget(String(p.dir || ''));
             _captureOutput(p, String(got), ctx);
@@ -3617,7 +3617,7 @@ const ACTION_TYPES: { v: string; label: string; needs?: string; group: string }[
     { v: 'repo.publishSsh', label: 'Publish repo over SSH', needs: 'repoSshDir', group: 'repo' },
     // The other direction: keep a local folder in step with what the server actually serves.
     // Same target, same passphrase constraint.
-    { v: 'repo.syncSsh', label: 'Fetch repo over SSH', needs: 'repoSshPullDir', group: 'repo' },
+    { v: 'repo.fetchSsh', label: 'Fetch repo over SSH', needs: 'repoSshPullDir', group: 'repo' },
     // ── Apps & launch ──
     { v: 'app.launch', label: 'Launch app', needs: 'app', group: 'apps' },
     { v: 'app.stop', label: 'Stop app / process', needs: 'appStop', group: 'apps' },

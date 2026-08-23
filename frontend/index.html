@@ -1635,6 +1635,13 @@
                                             Les clés OpenSSH et PuTTY (.ppk) sont acceptées telles quelles. La phrase
                                             secrète sert à cet envoi et n’est pas conservée.
                                         </p>
+                                        <!-- The subscriber side is discoverable from here, because this is where
+                                             the target is configured. Typing ssh:// in the sync URL field means
+                                             "use the target above" — the field never carries a host. -->
+                                        <p class="repo-ssh-note" data-i18n="repo.ssh.syncHint">
+                                            Pour synchroniser DEPUIS ce dépôt, saisissez ssh:// comme URL dans la
+                                            synchronisation : BMM utilisera la cible ci-dessus.
+                                        </p>
                                         <p class="repo-ssh-note repo-ssh-passonly" data-i18n="repo.ssh.passwordNote" hidden>
                                             Le mot de passe sert à cette connexion et n’est jamais enregistré : il faut
                                             le retaper à chaque session. Certains serveurs refusent l’authentification

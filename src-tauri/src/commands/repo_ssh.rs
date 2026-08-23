@@ -667,6 +667,102 @@ pub fn ssh_forget_host(state: State<'_, AppState>, host: String, port: Option<u1
     state.save().map_err(|e| e.to_string())
 }
 
+// ── syncing FROM a repo that lives on an SSH server ──────────────────────────
+//
+// Publishing and fetching (above) move the whole export folder, because the publisher owns
+// it and wants all of it. A SUBSCRIBER wants the opposite: the manifest, and then only the
+// files the sync decides are missing or stale.
+//
+// So this does NOT mirror the tree. It opens one session, hands the sync a way to read a
+// single file by its path under the repo root, and lets the existing sync logic decide what
+// to ask for. The layout mapping comes from `mod_file_tail`, shared with the HTTP path — the
+// template is a property of the repo, not of how you reach it.
+
+/// A repo reachable over SFTP, as the frontend describes it.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SshSource {
+    pub target: SshTarget,
+    /// Key passphrase or account password. Never stored; sent per call, like everywhere else.
+    #[serde(default)]
+    pub secret: Option<String>,
+}
+
+/// An open SFTP connection, kept alive for the length of a sync.
+///
+/// The russh `Handle` is held even though nothing reads it: dropping it closes the channel
+/// underneath the SftpSession, and every subsequent read fails with an error that looks like
+/// a server problem.
+pub(crate) struct SshConn {
+    _session: client::Handle<KnownHostClient>,
+    pub(crate) sftp: SftpSession,
+    /// The repo root on the server, without a trailing slash.
+    pub(crate) base: String,
+}
+
+/// Open one session for a sync, verifying the host key the same way every other path does.
+///
+/// A subscriber connection is the one that matters most for host-key checking: it runs
+/// unattended from a scheduled task, and it writes files into the user's game folder.
+pub(crate) async fn open_for_sync(
+    state: &State<'_, AppState>,
+    target: &SshTarget,
+    secret: Option<&str>,
+) -> Result<SshConn, String> {
+    let expected = known_host(state, &target.host, target.port_or_default());
+    let (session, fingerprint) = connect(target, secret, expected).await?;
+    remember_host(state, &target.host, target.port_or_default(), &fingerprint);
+    let sftp = open_sftp(&session).await?;
+    Ok(SshConn {
+        _session: session,
+        sftp,
+        base: target.remote_dir.trim_end_matches('/').to_string(),
+    })
+}
+
+impl SshConn {
+    /// Read one file under the repo root. `tail` is '/'-separated and comes from
+    /// `mod_file_tail`, so it cannot disagree with what the HTTP transport would have asked
+    /// for.
+    pub(crate) async fn read(&self, tail: &str) -> Result<Vec<u8>, String> {
+        let path = format!("{}/{}", self.base, tail.trim_start_matches('/'));
+        let mut f = self
+            .sftp
+            .open(&path)
+            .await
+            .map_err(|e| format!("repo.ssh.errOpenRemote|{}|{}", path, e))?;
+        let mut buf = Vec::new();
+        tokio::io::AsyncReadExt::read_to_end(&mut f, &mut buf)
+            .await
+            .map_err(|e| format!("repo.ssh.errReadRemote|{}|{}", path, e))?;
+        Ok(buf)
+    }
+}
+
+/// Read `repo.json` from an SSH repo and parse it.
+///
+/// The SFTP twin of fetch_repo_info, which forces an `http://` prefix onto whatever it is
+/// given and can therefore never reach one of these.
+#[tauri::command]
+pub async fn ssh_fetch_repo_info(
+    state: State<'_, AppState>,
+    target: SshTarget,
+    secret: Option<String>,
+) -> Result<crate::models::repo::ServerRepo, String> {
+    let conn = open_for_sync(&state, &target, secret.as_deref()).await?;
+    let bytes = conn.read("repo.json").await.map_err(|e| {
+        // A repo with no manifest is the single most likely mistake here: the remote folder
+        // points one level too high, or at the export's parent. Say that, rather than
+        // repeating a file-not-found the user cannot act on.
+        if e.contains("errOpenRemote") {
+            format!("repo.ssh.errNoManifest|{}", conn.base)
+        } else {
+            e
+        }
+    })?;
+    serde_json::from_slice(&bytes).map_err(|e| format!("repo.ssh.errBadManifest|{}", e))
+}
+
 // ── tests ────────────────────────────────────────────────────────────────────
 //
 // Two kinds, deliberately separated.

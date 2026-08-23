@@ -141,6 +141,8 @@ function explain(raw: unknown): string {
         'repo.ssh.errReadRemote': { path: args[0] || '', detail: args[1] || '' },
         'repo.ssh.errLocalWrite': { path: args[0] || '', detail: args[1] || '' },
         'repo.ssh.errUnsafePath': { path: args[0] || '' },
+        'repo.ssh.errNoManifest': { dir: args[0] || '' },
+        'repo.ssh.errBadManifest': { detail: args[0] || '' },
     };
     // A code we know about resolves; anything else is shown verbatim inside a generic
     // wrapper rather than swallowed — an unrecognised failure is still a failure to report.
@@ -494,6 +496,41 @@ export function initRepoSsh(): void {
             },
         );
     }
+}
+
+// ── the stored target, for the SUBSCRIBER side ───────────────────────────────
+//
+// Syncing FROM an SSH repo reuses the whole existing sync screen; it only needs a different
+// transport. The URL field carries `ssh://` and nothing else — the host, port, user, folder
+// and method come from what is saved here, never from the field, so a link or a scheduled
+// task can no more point BMM at an arbitrary machine for reading than it can for writing.
+
+/** The URL-field value that means "use the SSH target saved in this panel". */
+export const SSH_SOURCE_URL = 'ssh://';
+
+/** True when a sync URL means the stored SSH target. */
+export const isSshSourceUrl = (url: string): boolean =>
+    url.trim().toLowerCase().startsWith('ssh://');
+
+/** The saved target, or null when nothing usable is configured. */
+export function storedSshTarget(): SshTarget | null {
+    const saved = loadTarget();
+    if (!saved.host || !saved.user || !saved.remoteDir) return null;
+    if (saved.auth !== 'password' && !saved.keyPath) return null;
+    return saved as SshTarget;
+}
+
+/**
+ * The secret currently TYPED in the panel, if any.
+ *
+ * Read from the field at the moment of use, exactly like the publish path — nothing is
+ * stored. A password-authenticated source therefore works while the panel is filled in and
+ * fails with a clear message from a scheduled task, which is the honest behaviour.
+ */
+export function currentSshSecret(): string | null {
+    const saved = loadTarget();
+    const id = saved.auth === 'password' ? 'repo-ssh-pw' : 'repo-ssh-pass';
+    return el<HTMLInputElement>(id)?.value || null;
 }
 
 // ── headless entry points (deeplink, scheduler, plugin API) ──────────────────
