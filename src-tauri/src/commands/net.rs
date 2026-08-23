@@ -54,16 +54,33 @@ pub fn catalog_get(handle: &tauri::AppHandle, url: &str) -> reqwest::RequestBuil
 /// policy"). Going through the backend sidesteps CORS entirely and reuses the pooled client + BC
 /// identity header. Only http(s) URLs are accepted; local bundled fallbacks stay webview fetches.
 #[tauri::command]
-pub async fn fetch_remote_json(handle: tauri::AppHandle, url: String) -> Result<String, String> {
+///
+/// `password` is the optional download password for a protected source. It is sent as
+/// `X-Repo-Password` — BMM's existing contract with a password-protected repo, reused for
+/// catalogs rather than inventing a second header, so a server implements one check and a
+/// client speaks one language.
+pub async fn fetch_remote_json(
+    handle: tauri::AppHandle,
+    url: String,
+    password: Option<String>,
+) -> Result<String, String> {
     if !(url.starts_with("https://") || url.starts_with("http://")) {
         return Err("only http(s) URLs are supported".into());
     }
-    let resp = catalog_get(&handle, &url)
-        .timeout(std::time::Duration::from_secs(10))
-        .send()
-        .await
-        .map_err(|e| e.to_string())?;
+    let mut req = catalog_get(&handle, &url).timeout(std::time::Duration::from_secs(10));
+    if let Some(pw) = password.as_deref().map(str::trim).filter(|p| !p.is_empty()) {
+        if let Ok(hv) = reqwest::header::HeaderValue::from_str(pw) {
+            req = req.header("X-Repo-Password", hv);
+        }
+    }
+    let resp = req.send().await.map_err(|e| e.to_string())?;
     if !resp.status().is_success() {
+        // 401 is "this source needs a download password (or the one given is wrong)". The
+        // SAME code fetch_repo_info returns, so the frontend has one rule for both: prompt
+        // once, remember for the session, retry.
+        if resp.status().as_u16() == 401 {
+            return Err("repo.errPasswordRequired".to_string());
+        }
         return Err(format!("HTTP {}", resp.status().as_u16()));
     }
     resp.text().await.map_err(|e| e.to_string())

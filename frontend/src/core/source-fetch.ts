@@ -24,7 +24,7 @@ export async function fetchSourceText(url: string, quiet = false): Promise<strin
     // import would drag the panel into the boot path of anything that reads a catalog.
     const m = await import('../features/repo/repo-ssh.js');
     const src = m.parseSshSource(url);
-    if (!src) return await invoke('fetch_remote_json', { url }, { quiet }) as string;
+    if (!src) return await fetchHttp(url, quiet);
 
     const target = m.storedSshTarget(src.name);
     if (!target) {
@@ -37,6 +37,45 @@ export async function fetchSourceText(url: string, quiet = false): Promise<strin
         secret: m.currentSshSecret(src.name),
         path: src.path,
     }) as string;
+}
+
+// ── download passwords, for the session only ────────────────────────────────
+//
+// A protected source answers 401, the user is asked once, and the answer is remembered for
+// as long as the app runs — never written to disk, which is the same rule the SSH panel
+// follows and for the same reason: settings end up in backups and crash reports.
+//
+// Keyed by origin + path, with the query string dropped: catalog URLs carry a cache-busting
+// `?t=` that changes on every fetch, so keying by the whole URL would ask for the password
+// again every single time.
+const _sessionPasswords: Record<string, string> = {};
+
+function passwordKey(url: string): string {
+    try { const u = new URL(url); return u.origin + u.pathname; } catch { return url.split('?')[0]; }
+}
+
+/** Remember a password for a source, for this run only. */
+export function rememberSourcePassword(url: string, password: string): void {
+    _sessionPasswords[passwordKey(url)] = password;
+}
+
+async function fetchHttp(url: string, quiet: boolean): Promise<string> {
+    const key = passwordKey(url);
+    const known = _sessionPasswords[key] ?? null;
+    try {
+        return await invoke('fetch_remote_json', { url, password: known }, { quiet }) as string;
+    } catch (e) {
+        // The one code both fetch_repo_info and fetch_remote_json return for this, so there
+        // is a single rule rather than one per transport.
+        if (String((e as Error)?.message ?? e) !== 'repo.errPasswordRequired') throw e;
+        const { promptRepoPassword } = await import('../features/repo/repo-sync.js');
+        const pw = await promptRepoPassword();
+        // Cancelled: re-throw the original, so the caller's normal error path runs and the
+        // user is not told something different from what actually happened.
+        if (pw == null) throw e;
+        _sessionPasswords[key] = pw;
+        return await invoke('fetch_remote_json', { url, password: pw }, { quiet }) as string;
+    }
 }
 
 /** True when this source is read over SSH rather than HTTP. */

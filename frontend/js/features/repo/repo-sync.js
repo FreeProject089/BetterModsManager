@@ -15,7 +15,7 @@ let lastFetchedRepoSaltedId = null;
 let lastRepoPassword = null;
 // Small themed modal that asks the subscriber for the repo's download password.
 // Resolves to the entered string, or null if the user cancels.
-function promptRepoPassword() {
+export function promptRepoPassword() {
     return new Promise((resolve) => {
         const overlay = document.createElement('div');
         overlay.style.cssText = 'position:fixed;inset:0;z-index:2147483647;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.55);backdrop-filter:blur(2px);';
