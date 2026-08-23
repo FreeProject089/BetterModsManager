@@ -357,3 +357,75 @@ propre disque.
 Une exécution sans surveillance exige une clé **sans phrase secrète**, et ne peut pas utiliser
 de mot de passe : rien n'est conservé et personne n'est là à 4 h du matin, donc elle échoue
 avec un message plutôt que d'attendre indéfiniment devant une invite que personne ne verra.
+
+## Protéger un dépôt : mot de passe, ou clé publique
+
+Deux garanties différentes, et elles se combinent.
+
+Un **mot de passe de téléchargement** est un secret partagé. Quiconque l'a peut synchroniser,
+et quiconque l'a peut le transmettre — ce qui est précisément l'intérêt quand tu veux ouvrir
+l'accès à un groupe, et le problème quand tu veux l'ouvrir à une seule machine.
+
+Une **clé publique** ne se transmet pas aussi facilement. Tu colles la moitié publique dans la
+liste d'accès du dépôt ; le client doit détenir la moitié privée et *signer* à chaque requête.
+Rien de ce qui circule ne peut être rejoué ailleurs, et révoquer une clé revient à supprimer
+une ligne.
+
+!!! warning "Ce n'est pas la clé SSH ci-dessus"
+    La clé SSH sert à ouvrir une session sur un *serveur* pour y déplacer des fichiers. Cette
+    clé-ci sert à prouver *qui tu es* à un dépôt ou un catalogue que BMM récupère en HTTPS. Ce
+    sont deux réglages distincts, qui peuvent viser deux clés différentes — même si la plupart
+    des gens pointent les deux vers le même fichier.
+
+### Côté client (BMM)
+
+La clé se règle une fois, dans **Paramètres → Identité & API → Clé d'identité**. C'est une
+identité pour toute l'application : la même clé est présentée à chaque dépôt et chaque
+catalogue qui en demande une, il n'y a donc rien à configurer par source.
+
+Seul le **chemin** est conservé. Le fichier est lu au moment de signer et les octets sont
+oubliés — BMM n'écrit jamais de matière cryptographique sur le disque, exactement comme pour la
+phrase secrète SSH.
+
+Il faut une **clé privée ed25519 non chiffrée**. BMM refuse le fichier au moment où tu le
+choisis plutôt que d'échouer plus tard face au serveur de quelqu'un d'autre : une erreur de
+fichier est signalée comme une erreur de fichier.
+
+```bash
+ssh-keygen -t ed25519 -N "" -f ~/.ssh/bmm_identity
+```
+
+### Côté serveur
+
+Colle la moitié **publique** — le fichier `.pub`, format OpenSSH sur une ligne, celui-là même
+qu'attend `authorized_keys` :
+
+- **Un dépôt hébergé sur BetterCommunity** → tableau de bord du dépôt, *Accès* → *Clés
+  publiques autorisées*.
+- **Un catalogue communautaire** → le panneau *Accès* de ton catalogue, même champ. Cela couvre
+  tous les types : plugin, thème, préréglage, application, et un index de catalogues.
+- **Un dépôt que tu sers toi-même** depuis BMM → la même liste, transmise au serveur intégré.
+
+Ajouter une clé la rend **obligatoire pour tout le monde**. Ce n'est pas une entrée de plus sur
+une liste blanche, c'est une condition sur chaque requête : ajoute donc ta propre clé avant
+celle des autres.
+
+Seul **ed25519** est accepté, et le refus tombe au moment où tu colles. C'est voulu : une clé
+invérifiable enregistrerait une exigence que rien ne pourrait jamais satisfaire, et mettrait
+tous les clients dehors, toi compris.
+
+### Ce que le client envoie
+
+Une attestation signée à durée de vie courte, pas la clé :
+
+```
+X-BMM-Key-Proof: bmmk1.<charge>.<signature>
+```
+
+La charge nomme la clé publique, l'**origine à laquelle elle s'adresse**, et une expiration à
+deux minutes. C'est cette adresse qui empêche une preuve captée par un serveur d'en ouvrir un
+autre — une signature pour `https://a.example` est refusée par `https://b.example`, et le
+serveur la compare à sa propre adresse configurée, jamais à celle que la requête prétend viser.
+
+La signature est mise en cache par origine : synchroniser mille fichiers coûte une signature
+toutes les deux minutes, pas mille.

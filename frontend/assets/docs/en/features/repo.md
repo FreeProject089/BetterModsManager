@@ -341,3 +341,73 @@ can say. The rule matters most for fetching, which writes to your own disk.
 Unattended runs need a key with **no passphrase**, and cannot use a password at all: nothing
 is stored and there is nobody to ask at 04:00, so they fail with a message rather than waiting
 forever on a prompt no one will see.
+
+## Protecting a repo: password, or a public key
+
+Two different guarantees, and they can be used together.
+
+A **download password** is a shared secret. Anyone who has it can sync, and anyone who has it
+can pass it on — which is the point when you want to hand access to a group, and the problem
+when you want to hand it to one machine.
+
+A **public key** cannot be handed on so easily. You paste the public half into the repo's
+access list; the client has to hold the matching private half and *sign* for it on every
+request. Nothing that travels over the wire can be replayed elsewhere, and revoking a key is
+deleting one line.
+
+!!! warning "This is not the same thing as the SSH key above"
+    The SSH key is how BMM logs in to a *server* to move files. This key is how BMM proves
+    *who it is* to a repository or catalogue it fetches over HTTPS. They are separate settings
+    and can be different keys — though most people point both at the same file.
+
+### On the client (BMM)
+
+Set the key once, in **Settings → Identity & API → Identity key**. It is one identity for the
+whole app: the same key is presented to every repository and catalogue that asks for one, so
+there is nothing to configure per source.
+
+Only the **path** is stored. The file is read at the moment a proof is signed and the bytes
+are dropped — BMM never writes key material to disk, exactly as with the SSH passphrase.
+
+It must be an **unencrypted ed25519 private key**. BMM refuses the file when you pick it
+rather than failing later against someone else's server, so a wrong file is reported as a
+wrong file.
+
+```bash
+ssh-keygen -t ed25519 -N "" -f ~/.ssh/bmm_identity
+```
+
+### On the server
+
+Paste the **public** half — the `.pub` file, one-line OpenSSH format, the same form
+`authorized_keys` wants:
+
+- **A repo hosted on BetterCommunity** → the repo dashboard, *Access* → *Authorised public
+  keys*.
+- **A community catalogue** → your catalogue's *Access* panel, same field. This covers every
+  kind: plugin, theme, preset, app, and a catalogue index.
+- **A repo you serve yourself** from BMM → the same list, passed to the built-in server.
+
+Adding a key makes it **required for everyone**. It is not one more way onto an allow list —
+it is a condition on every request, so add your own key before you add anybody else's.
+
+Only **ed25519** is accepted, and it is refused at the moment you paste it. That is deliberate:
+a key that cannot be verified would store a requirement nothing could ever satisfy, and would
+lock out every client including you.
+
+### What the client sends
+
+A short-lived signed statement, not the key:
+
+```
+X-BMM-Key-Proof: bmmk1.<payload>.<signature>
+```
+
+The payload names the public key, the **origin it is addressed to**, and an expiry two minutes
+out. Being addressed to one origin is what stops a proof captured by one server from opening
+another — a signature for `https://a.example` is refused by `https://b.example`, and the
+server checks that against its own configured address, never against the address the request
+claims to be for.
+
+Signing is cached per origin, so a sync of a thousand files costs one signature every two
+minutes rather than a thousand.
