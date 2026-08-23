@@ -7925,5 +7925,11 @@
   "settings.notifBcwebOn": "Notifications BetterCommunity activées.",
   "settings.notifBcwebOff": "Notifications BetterCommunity désactivées — plus rien ne sera récupéré.",
   "settings.notifPerSource": "Quelles bulles vous voulez",
-  "settings.notifPerSourceDesc": "Coché signifie affiché. Tout reste dans le centre de notifications dans les deux cas, et une erreur est toujours affichée."
+  "settings.notifPerSourceDesc": "Coché signifie affiché. Tout reste dans le centre de notifications dans les deux cas, et une erreur est toujours affichée.",
+  "flappy.title": "Flappy Tasky",
+  "flappy.hint": "Tasky attendait que quelqu'un clique ici.",
+  "flappy.start": "Clic, espace ou ↑ pour battre des ailes.",
+  "flappy.dead": "Tombé. Cliquez pour recommencer — record : {best}",
+  "flappy.rpcPlaying": "En vol — {n} points",
+  "flappy.rpcDead": "Score de {n} (record {best})"
 }

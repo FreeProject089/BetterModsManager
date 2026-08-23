@@ -1521,6 +1521,13 @@ window.applyTaskySettings = function () {
         });
     }
 })();
+// ── Flappy Tasky, behind the logo ────────────────────────
+//
+// Loaded lazily: a mini game nobody has opened should not be in the boot path of an app whose
+// job is managing mods.
+(function initFlappy() {
+    void import('../features/misc/flappy-tasky.js').then((m) => m.initFlappyTasky()).catch(() => { });
+})();
 // ── Restore Tasky preferences on page load ───────────────
 (function initTaskyPrefs() {
     const container = document.getElementById('app-mascot-container');

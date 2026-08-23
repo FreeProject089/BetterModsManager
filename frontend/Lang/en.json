@@ -7927,5 +7927,11 @@
   "settings.notifBcwebOn": "BetterCommunity notifications on.",
   "settings.notifBcwebOff": "BetterCommunity notifications off — nothing more will be fetched.",
   "settings.notifPerSource": "Which popups you want",
-  "settings.notifPerSourceDesc": "Ticked means shown. Everything stays in the notification centre either way, and an error is always shown."
+  "settings.notifPerSourceDesc": "Ticked means shown. Everything stays in the notification centre either way, and an error is always shown.",
+  "flappy.title": "Flappy Tasky",
+  "flappy.hint": "Tasky has been waiting for somebody to click this.",
+  "flappy.start": "Click, space or ↑ to flap.",
+  "flappy.dead": "Down. Click to try again — best: {best}",
+  "flappy.rpcPlaying": "Flapping — {n} points",
+  "flappy.rpcDead": "Scored {n} (best {best})"
 }

@@ -253,7 +253,11 @@
                 <!-- Brand -->
                 <div class="sidebar-brand">
                     <div class="brand">
-                        <div class="brand-text-logo">
+                        <!-- The way into Flappy Tasky. A button, not a div with a click
+                             handler: it is reachable by keyboard and announces itself, and a
+                             thing you can activate ought to say so. -->
+                        <div class="brand-text-logo" id="sidebar-brand" role="button" tabindex="0"
+                             data-tasky="flappy.hint" data-tasky-icon="package">
                             <span class="brand-better">Better</span><br>
                             <span class="brand-modmanager">Mod.Manager</span>
                         </div>
