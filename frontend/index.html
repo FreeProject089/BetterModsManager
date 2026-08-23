@@ -1590,8 +1590,17 @@
                                             <button class="repo-ssh-authbtn" id="repo-ssh-auth-pass" type="button" aria-pressed="false" data-i18n="repo.ssh.authPassword">Mot de passe</button>
                                         </div>
 
+                                        <!-- Saved targets. One SSH server was enough until a second repo or a
+                                             catalog needed its own; each is named, and the name is what a source
+                                             URL refers to (ssh://prod). Clicking a chip loads it. -->
+                                        <div class="repo-ssh-saved" id="repo-ssh-saved" hidden></div>
+
                                         <div class="repo-ssh-grid">
-                                            <label class="repo-ssh-field" style="grid-column:span 3">
+                                            <label class="repo-ssh-field">
+                                                <span data-i18n="repo.ssh.targetName">Nom</span>
+                                                <input type="text" class="form-input" id="repo-ssh-name" placeholder="default" spellcheck="false">
+                                            </label>
+                                            <label class="repo-ssh-field" style="grid-column:span 2">
                                                 <span data-i18n="repo.ssh.host">Hôte</span>
                                                 <input type="text" class="form-input" id="repo-ssh-host" placeholder="exemple.com" spellcheck="false">
                                             </label>

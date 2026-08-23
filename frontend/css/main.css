@@ -17344,3 +17344,19 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 .csp-msg { font-size: 11px; margin-top: 8px; min-height: 16px; line-height: 1.5; }
 .csp-actions { display: flex; gap: 8px; margin-top: 4px; }
 .csp-foot { font-size: 10px; color: var(--text-muted); margin: 12px 0 0; line-height: 1.5; }
+
+/* Saved SSH targets. Hidden entirely while there is only one — a picker with a single
+   option is furniture, not a control. */
+.repo-ssh-saved { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
+.repo-ssh-saved[hidden] { display: none; }
+.repo-ssh-chip {
+    appearance: none; cursor: pointer; font-family: var(--font-mono); font-size: 11px;
+    padding: 3px 9px; border-radius: 999px;
+    border: 1px solid var(--border); background: transparent; color: var(--text-muted);
+}
+.repo-ssh-chip:hover { color: var(--text); border-color: var(--bmm-accent, var(--accent)); }
+.repo-ssh-chip.is-active {
+    background: var(--bmm-accent, var(--accent));
+    border-color: var(--bmm-accent, var(--accent));
+    color: var(--bmm-on-accent, #fff);
+}

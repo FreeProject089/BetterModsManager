@@ -28,6 +28,7 @@ async function fetchModpacks(init?: RequestInit): Promise<any[]> {
 
 import { dispatchBmmAction, BMM_ACTIONS } from '../../ui/tutorial-events.js';
 import { getLinks } from '../../core/links-config.js';
+import { fetchSourceText } from '../../core/source-fetch.js';
 
 // ── SVG Icons (no unicode emoji) ───────────────────────────────────────────
 
@@ -607,7 +608,7 @@ async function renderCatalog(container: HTMLElement) {
         // PLUGIN entries and leave its other four types alone.
         if (isUrlSource(src)) {
             try {
-                const probe: string = await invoke('fetch_remote_json', { url: src }, { quiet: true }) as string;
+                const probe: string = await fetchSourceText(src, true);
                 const doc = JSON.parse(probe);
                 if (looksLikeIndex(doc)) {
                     const r = await importIndexForType(doc, 'plugin', src);

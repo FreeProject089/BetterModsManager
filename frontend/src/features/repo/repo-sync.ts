@@ -82,10 +82,14 @@ function initSyncPasswordField(): void {
  */
 async function sshSourceOrNull(url: string): Promise<{ target: unknown; secret: string | null } | null> {
     const m = await import('./repo-ssh.js');
-    if (!m.isSshSourceUrl(url)) return null;
-    const target = m.storedSshTarget();
-    if (!target) throw new Error(t('repo.ssh.needFields'));
-    return { target, secret: m.currentSshSecret() };
+    // The NAME lives in the URL: `ssh://` is the one called "default", `ssh://prod` is the
+    // one called prod. That is what lets several repos — and every catalog, whose sources are
+    // a plain list of strings — each point at a different server without a model change.
+    const name = m.sshTargetName(url);
+    if (!name) return null;
+    const target = m.storedSshTarget(name);
+    if (!target) throw new Error(t('repo.ssh.errNoSuchTarget').replace('{name}', name));
+    return { target, secret: m.currentSshSecret(name) };
 }
 
 // fetch_repo_info, but transparently handling a password-protected repo: on the
@@ -277,13 +281,30 @@ export function initRepoSync(elements) {
         const input = document.getElementById('repo-sync-url') as HTMLInputElement | null;
         if (!input) return;
         const m = await import('./repo-ssh.js');
-        if (!m.storedSshTarget()) {
+        const names = m.sshTargetNames();
+        // Offer every saved target as a suggestion on the field itself, so a second server is
+        // discoverable without a second control.
+        let dl = document.getElementById('repo-sync-ssh-list') as HTMLDataListElement | null;
+        if (!dl) {
+            dl = document.createElement('datalist');
+            dl.id = 'repo-sync-ssh-list';
+            input.parentElement?.appendChild(dl);
+            input.setAttribute('list', dl.id);
+        }
+        dl.textContent = '';
+        for (const n of names) {
+            const o = document.createElement('option');
+            o.value = n === m.DEFAULT_TARGET ? m.SSH_SOURCE_URL : `${m.SSH_SOURCE_URL}${n}`;
+            dl.appendChild(o);
+        }
+        if (!names.length) {
             // Nothing configured yet. Say where to configure it rather than failing with a
             // field-validation message about a field the user never filled in.
             toast(t('repo.sync.useSshNotSet'), 'warning', 7000);
             return;
         }
-        input.value = m.SSH_SOURCE_URL;
+        const first = names[0];
+        input.value = first === m.DEFAULT_TARGET ? m.SSH_SOURCE_URL : `${m.SSH_SOURCE_URL}${first}`;
         input.dispatchEvent(new Event('input', { bubbles: true }));
         (document.getElementById('btn-fetch-repo-info') as HTMLButtonElement | null)?.click();
     });

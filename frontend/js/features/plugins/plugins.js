@@ -28,6 +28,7 @@ async function fetchModpacks(init) {
 }
 import { dispatchBmmAction, BMM_ACTIONS } from '../../ui/tutorial-events.js';
 import { getLinks } from '../../core/links-config.js';
+import { fetchSourceText } from '../../core/source-fetch.js';
 // ── SVG Icons (no unicode emoji) ───────────────────────────────────────────
 const IC = {
     puzzle: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>`,
@@ -639,7 +640,7 @@ async function renderCatalog(container) {
         // PLUGIN entries and leave its other four types alone.
         if (isUrlSource(src)) {
             try {
-                const probe = await invoke('fetch_remote_json', { url: src }, { quiet: true });
+                const probe = await fetchSourceText(src, true);
                 const doc = JSON.parse(probe);
                 if (looksLikeIndex(doc)) {
                     const r = await importIndexForType(doc, 'plugin', src);

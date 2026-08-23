@@ -47,15 +47,100 @@ interface RemoteEntry {
 const el = <T extends HTMLElement>(id: string) => document.getElementById(id) as T | null;
 
 /** Where the settings live. Host/user/folder/key PATH/method — never a secret. */
-const STORE = 'bmm.repo.ssh';
+const STORE = 'bmm.repo.ssh';        // legacy: ONE target, migrated on first read
+const STORE_MANY = 'bmm.ssh.targets'; // { [name]: SshTarget }
 
-function loadTarget(): Partial<SshTarget> {
-    try { return JSON.parse(localStorage.getItem(STORE) || '{}'); } catch { return {}; }
+/** The name `ssh://` with nothing after it refers to. */
+export const DEFAULT_TARGET = 'default';
+
+/**
+ * Every saved target, by name.
+ *
+ * Migrates the old single-target key on first read: it becomes "default", so `ssh://` keeps
+ * meaning exactly what it meant and an upgrade never loses somebody's server.
+ */
+export function loadTargets(): Record<string, SshTarget> {
+    let all: Record<string, SshTarget> = {};
+    try { all = JSON.parse(localStorage.getItem(STORE_MANY) || '{}') || {}; } catch { all = {}; }
+    if (Object.keys(all).length) return all;
+    try {
+        const legacy = JSON.parse(localStorage.getItem(STORE) || '{}');
+        if (legacy && legacy.host) {
+            all = { [DEFAULT_TARGET]: legacy as SshTarget };
+            localStorage.setItem(STORE_MANY, JSON.stringify(all));
+        }
+    } catch { /* nothing to migrate */ }
+    return all;
 }
 
-function saveTarget(target: SshTarget): void {
-    // The passphrase and password are deliberately absent from what gets written.
-    try { localStorage.setItem(STORE, JSON.stringify(target)); } catch { /* storage full */ }
+/** One target by name, or an empty object. */
+function loadTarget(name = DEFAULT_TARGET): Partial<SshTarget> {
+    return loadTargets()[name] || {};
+}
+
+/** Save (or replace) a named target. The secret is never part of what gets written. */
+function saveTarget(target: SshTarget, name = DEFAULT_TARGET): void {
+    try {
+        const all = loadTargets();
+        all[name] = target;
+        localStorage.setItem(STORE_MANY, JSON.stringify(all));
+        // Keep the legacy key in step for the default, so a downgrade still finds a server.
+        if (name === DEFAULT_TARGET) localStorage.setItem(STORE, JSON.stringify(target));
+    } catch { /* storage full */ }
+}
+
+/** Forget a named target. */
+export function deleteTarget(name: string): void {
+    try {
+        const all = loadTargets();
+        delete all[name];
+        localStorage.setItem(STORE_MANY, JSON.stringify(all));
+        if (name === DEFAULT_TARGET) localStorage.removeItem(STORE);
+    } catch { /* ignore */ }
+}
+
+/**
+ * The target name inside a source URL.
+ *
+ *   ssh://          → "default"
+ *   ssh://prod      → "prod"
+ *   ssh://prod/     → "prod"
+ *
+ * Anything that is not an `ssh://` URL yields null, so callers can use this as the test.
+ */
+export function sshTargetName(url: string): string | null {
+    return parseSshSource(url)?.name ?? null;
+}
+
+/**
+ * An `ssh://` source, split into the target NAME and the path under it.
+ *
+ *   ssh://                       → { name: 'default', path: '' }
+ *   ssh://prod                   → { name: 'prod',    path: '' }
+ *   ssh://prod/catalogs/app.json → { name: 'prod',    path: 'catalogs/app.json' }
+ *
+ * The first segment is the name and the rest is the path, which is what lets a catalog of any
+ * kind name a file on a server without inventing a second setting to hold the server.
+ */
+export function parseSshSource(url: string): { name: string; path: string } | null {
+    const u = (url || '').trim();
+    if (!/^ssh:\/\//i.test(u)) return null;
+    const rest = u.slice('ssh://'.length);
+    // `ssh:///a/b.json` — three slashes, so the authority is EMPTY and the rest is a path on
+    // the default target. Stripping the leading slashes first read `a` as the target name and
+    // silently looked for a server nobody had configured.
+    if (rest.startsWith('/')) return { name: DEFAULT_TARGET, path: rest.replace(/^\/+/, '') };
+    const cut = rest.indexOf('/');
+    if (cut < 0) return { name: rest.replace(/\/+$/, '').trim() || DEFAULT_TARGET, path: '' };
+    return {
+        name: rest.slice(0, cut).trim() || DEFAULT_TARGET,
+        path: rest.slice(cut + 1).replace(/^\/+/, ''),
+    };
+}
+
+/** The name currently typed in the panel's name field, or "default". */
+function currentName(): string {
+    return (el<HTMLInputElement>('repo-ssh-name')?.value || '').trim() || DEFAULT_TARGET;
 }
 
 // ── auth method ──────────────────────────────────────────────────────────────
@@ -142,6 +227,7 @@ function explain(raw: unknown): string {
         'repo.ssh.errLocalWrite': { path: args[0] || '', detail: args[1] || '' },
         'repo.ssh.errUnsafePath': { path: args[0] || '' },
         'repo.ssh.errNoManifest': { dir: args[0] || '' },
+        'repo.ssh.errNoSuchTarget': { name: args[0] || '' },
         'repo.ssh.errBadManifest': { detail: args[0] || '' },
     };
     // A code we know about resolves; anything else is shown verbatim inside a generic
@@ -185,7 +271,8 @@ async function testConnection(): Promise<void> {
             target: form.target,
             secret: form.secret || null,
         })) as SshTestResult;
-        saveTarget(form.target);
+        saveTarget(form.target, currentName());
+        renderSavedTargets();
         el('repo-ssh-forget')!.hidden = false;
         if (!r.remoteDirExists) {
             status(t('repo.ssh.testNoDir').replace('{dir}', form.target.remoteDir), 'warn');
@@ -232,7 +319,8 @@ async function publish(): Promise<void> {
             secret: form.secret || null,
             localDir,
         })) as number;
-        saveTarget(form.target);
+        saveTarget(form.target, currentName());
+        renderSavedTargets();
         const done = el('repo-ssh-progress-text')?.dataset.done || '?';
         const msg = t('repo.ssh.uploaded').replace('{n}', done).replace('{size}', fmtBytes(bytes));
         status(msg, 'ok');
@@ -278,7 +366,8 @@ async function pull(): Promise<void> {
             secret: form.secret || null,
             localDir,
         })) as number;
-        saveTarget(form.target);
+        saveTarget(form.target, currentName());
+        renderSavedTargets();
         const done = el('repo-ssh-progress-text')?.dataset.done || '?';
         const msg = t('repo.ssh.pulled').replace('{n}', done).replace('{size}', fmtBytes(bytes));
         status(msg, 'ok');
@@ -390,24 +479,66 @@ async function refreshBrowser(): Promise<void> {
     }
 }
 
+/** Put a named target into the form. */
+function fillForm(name: string): void {
+    const saved = loadTarget(name);
+    const set = (id: string, v: unknown) => {
+        const input = el<HTMLInputElement>(id);
+        if (input) input.value = v == null ? '' : String(v);
+    };
+    set('repo-ssh-name', name);
+    set('repo-ssh-host', saved.host);
+    set('repo-ssh-port', saved.port);
+    set('repo-ssh-user', saved.user);
+    set('repo-ssh-key', saved.keyPath);
+    set('repo-ssh-remote', saved.remoteDir);
+    // The secrets are not stored, so their fields are cleared rather than left holding
+    // whatever the previous target's field contained — which would silently be sent.
+    set('repo-ssh-pass', '');
+    set('repo-ssh-pw', '');
+    applyAuthMethod(saved.auth === 'password' ? 'password' : 'key');
+    el('repo-ssh-forget')!.hidden = !saved.host;
+}
+
+/** One chip per saved target; the active one is marked. */
+function renderSavedTargets(): void {
+    const host = el('repo-ssh-saved');
+    if (!host) return;
+    const names = sshTargetNames();
+    host.hidden = names.length < 2;   // one target needs no picker
+    host.textContent = '';
+    const active = currentName();
+    for (const n of names) {
+        // Built as DOM: a target name is user input, and innerHTML here would make
+        // `<img onerror=…>` a working name.
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'repo-ssh-chip' + (n === active ? ' is-active' : '');
+        b.dataset.target = n;
+        b.textContent = n;
+        host.appendChild(b);
+    }
+}
+
 /** Wire the panel. Idempotent — a second call attaches nothing twice. */
 export function initRepoSsh(): void {
     const card = el('repo-ssh-card');
     if (!card || card.dataset.bound) return;
     card.dataset.bound = '1';
 
-    const saved = loadTarget();
-    const set = (id: string, v: unknown) => {
-        const input = el<HTMLInputElement>(id);
-        if (input && v != null && v !== '') input.value = String(v);
-    };
-    set('repo-ssh-host', saved.host);
-    set('repo-ssh-port', saved.port);
-    set('repo-ssh-user', saved.user);
-    set('repo-ssh-key', saved.keyPath);
-    set('repo-ssh-remote', saved.remoteDir);
-    applyAuthMethod(saved.auth === 'password' ? 'password' : 'key');
-    if (saved.host) el('repo-ssh-forget')!.hidden = false;
+    // Open on the first saved target, or an empty "default".
+    fillForm(sshTargetNames()[0] || DEFAULT_TARGET);
+    renderSavedTargets();
+
+    // Switching target: delegated, because the chips are rebuilt on every save.
+    el('repo-ssh-saved')?.addEventListener('click', (e) => {
+        const n = (e.target as HTMLElement)?.closest('.repo-ssh-chip') as HTMLElement | null;
+        if (!n?.dataset.target) return;
+        fillForm(n.dataset.target);
+        renderSavedTargets();
+        status('');
+    });
+    el('repo-ssh-name')?.addEventListener('input', renderSavedTargets);
 
     el('repo-ssh-auth-key')?.addEventListener('click', () => applyAuthMethod('key'));
     el('repo-ssh-auth-pass')?.addEventListener('click', () => applyAuthMethod('password'));
@@ -508,16 +639,26 @@ export function initRepoSsh(): void {
 /** The URL-field value that means "use the SSH target saved in this panel". */
 export const SSH_SOURCE_URL = 'ssh://';
 
-/** True when a sync URL means the stored SSH target. */
-export const isSshSourceUrl = (url: string): boolean =>
-    url.trim().toLowerCase().startsWith('ssh://');
+/** True when a sync URL names an SSH target. */
+export const isSshSourceUrl = (url: string): boolean => sshTargetName(url) !== null;
 
-/** The saved target, or null when nothing usable is configured. */
-export function storedSshTarget(): SshTarget | null {
-    const saved = loadTarget();
+/**
+ * A saved target, or null when nothing usable is configured under that name.
+ *
+ * "Usable" is checked here rather than at the point of use, so a half-filled entry reads as
+ * absent instead of failing later with a field-validation message about a panel the caller
+ * never opened.
+ */
+export function storedSshTarget(name = DEFAULT_TARGET): SshTarget | null {
+    const saved = loadTarget(name);
     if (!saved.host || !saved.user || !saved.remoteDir) return null;
     if (saved.auth !== 'password' && !saved.keyPath) return null;
     return saved as SshTarget;
+}
+
+/** The names of every usable saved target, for a picker. */
+export function sshTargetNames(): string[] {
+    return Object.keys(loadTargets()).filter((n) => storedSshTarget(n)).sort();
 }
 
 /**
@@ -527,8 +668,8 @@ export function storedSshTarget(): SshTarget | null {
  * stored. A password-authenticated source therefore works while the panel is filled in and
  * fails with a clear message from a scheduled task, which is the honest behaviour.
  */
-export function currentSshSecret(): string | null {
-    const saved = loadTarget();
+export function currentSshSecret(name = DEFAULT_TARGET): string | null {
+    const saved = loadTarget(name);
     const id = saved.auth === 'password' ? 'repo-ssh-pw' : 'repo-ssh-pass';
     return el<HTMLInputElement>(id)?.value || null;
 }
@@ -536,8 +677,8 @@ export function currentSshSecret(): string | null {
 // ── headless entry points (deeplink, scheduler, plugin API) ──────────────────
 
 /** The stored target, or a thrown explanation of what is missing. */
-function storedTargetOrThrow(): SshTarget {
-    const saved = loadTarget();
+function storedTargetOrThrow(name = DEFAULT_TARGET): SshTarget {
+    const saved = loadTarget(name);
     if (!saved.host || !saved.user || !saved.remoteDir) {
         throw new Error(t('repo.ssh.needFields'));
     }
@@ -550,24 +691,24 @@ function storedTargetOrThrow(): SshTarget {
 }
 
 /** Publish with the STORED target, no UI. See the note above about passphrases. */
-export async function publishStoredTarget(localDir: string): Promise<number> {
+export async function publishStoredTarget(localDir: string, name = DEFAULT_TARGET): Promise<number> {
     return (await invoke('ssh_upload_repo', {
-        target: storedTargetOrThrow(),
+        target: storedTargetOrThrow(name),
         secret: null,
         localDir,
     })) as number;
 }
 
 /** Pull with the STORED target, no UI. */
-export async function pullStoredTarget(localDir: string): Promise<number> {
+export async function pullStoredTarget(localDir: string, name = DEFAULT_TARGET): Promise<number> {
     return (await invoke('ssh_download_repo', {
-        target: storedTargetOrThrow(),
+        target: storedTargetOrThrow(name),
         secret: null,
         localDir,
     })) as number;
 }
 
 /** Does a usable headless target exist? Used to enable/disable the scheduler action. */
-export function hasHeadlessSshTarget(): boolean {
-    try { storedTargetOrThrow(); return true; } catch { return false; }
+export function hasHeadlessSshTarget(name = DEFAULT_TARGET): boolean {
+    try { storedTargetOrThrow(name); return true; } catch { return false; }
 }

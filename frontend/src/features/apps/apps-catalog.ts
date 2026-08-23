@@ -7,6 +7,7 @@ import {
     looksLikeIndex, importIndexForType, describeKinds } from '../catalogs/catalog-index.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { getLinks } from '../../core/links-config.js';
+import { fetchSourceText } from '../../core/source-fetch.js';
 
 // Renders a labelled, fully-visible (wrapping) + copyable hash block for the
 // checksum warning modals. Inline styles so it works inside the generic confirm
@@ -978,7 +979,7 @@ function renderSources() {
             // anything. Fetched through the backend so the same TLS and identity handling
             // every other catalog fetch gets applies here too.
             try {
-                const probe: string = await invoke('fetch_remote_json', { url }, { quiet: true }) as string;
+                const probe: string = await fetchSourceText(url, true);
                 const doc = JSON.parse(probe);
                 if (looksLikeIndex(doc)) {
                     // Imported HERE, and only its app entries. This used to refuse and point at

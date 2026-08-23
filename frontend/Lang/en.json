@@ -7696,6 +7696,8 @@
   "repo.sync.useSsh": "SSH",
   "repo.sync.useSshHint": "Use the SSH target saved in \"Publish over SSH\" as the source",
   "repo.sync.useSshNotSet": "No SSH target saved yet. Set one up in \"Publish over SSH\", further down this page.",
+  "repo.ssh.targetName": "Name",
+  "repo.ssh.errNoSuchTarget": "No SSH target saved under the name \"{name}\". Check the name in \"Publish over SSH\".",
   "repo.ssh.title": "Publish over SSH",
   "repo.ssh.desc": "Sends the exported folder to the machine that serves it, over SFTP. BMM reads your private key at the moment of upload — it is never copied or stored.",
   "repo.ssh.host": "Host",

@@ -779,6 +779,38 @@ impl SshConn {
     }
 }
 
+/// Read one text file from an SSH source.
+///
+/// The SFTP twin of `fetch_remote_json`, so a catalog — of any kind — can live on a server
+/// reachable only over SSH. `path` is relative to the target's remote folder; an absolute
+/// path is taken as-is, because a catalog and a repo do not have to share a root.
+#[tauri::command]
+pub async fn ssh_read_text(
+    state: State<'_, AppState>,
+    target: SshTarget,
+    secret: Option<String>,
+    path: String,
+) -> Result<String, String> {
+    let conn = open_for_sync(&state, &target, secret.as_deref()).await?;
+    let bytes = if path.starts_with('/') {
+        // Absolute: read it directly rather than gluing it under remote_dir, which would
+        // produce `/srv/repo//etc/passwd`-shaped nonsense and fail confusingly.
+        let mut f = conn
+            .sftp
+            .open(&path)
+            .await
+            .map_err(|e| format!("repo.ssh.errOpenRemote|{}|{}", path, e))?;
+        let mut buf = Vec::new();
+        tokio::io::AsyncReadExt::read_to_end(&mut f, &mut buf)
+            .await
+            .map_err(|e| format!("repo.ssh.errReadRemote|{}|{}", path, e))?;
+        buf
+    } else {
+        conn.read(&path).await?
+    };
+    String::from_utf8(bytes).map_err(|e| format!("repo.ssh.errBadManifest|{}", e))
+}
+
 /// Read `repo.json` from an SSH repo and parse it.
 ///
 /// The SFTP twin of fetch_repo_info, which forces an `http://` prefix onto whatever it is

@@ -22,6 +22,7 @@ import { initManifestOnly } from './manifest-only.js';
 import { initRemoteRefresh } from './remote-refresh.js';
 import { initDiscover } from './discover.js';
 import { initModpackCreator } from '../mods/modpack-creator.js';
+import { fetchSourceText } from '../../core/source-fetch.js';
 
 // Normalise a repo URL so map lookups match regardless of trailing slash / repo.json
 /** Accept both feed shapes without caring which is which.
@@ -1296,7 +1297,9 @@ export function initRepo() {
                         // JSON host sends the header. Followed catalogues would have failed
                         // for most people, silently, since one unreachable catalogue is
                         // swallowed on purpose here.
-                        const raw: string = await invoke('fetch_remote_json', { url: `${catUrl}${sep}t=${Date.now()}` });
+                        // A catalog source may be an ssh:// one; fetchSourceText picks the
+                        // transport so this call site does not have to know about either.
+                        const raw: string = await fetchSourceText(`${catUrl}${sep}t=${Date.now()}`);
                         for (const entry of normaliseRepoFeed(JSON.parse(raw))) {
                             // A repo already in the official list wins. The same address in
                             // both is one repo, and showing it twice with two badges makes

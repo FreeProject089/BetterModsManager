@@ -7694,6 +7694,8 @@
   "repo.sync.useSsh": "SSH",
   "repo.sync.useSshHint": "Utiliser la cible SSH enregistrée dans « Publier par SSH » comme source",
   "repo.sync.useSshNotSet": "Aucune cible SSH enregistrée. Configurez-la d'abord dans « Publier par SSH », plus bas sur cette page.",
+  "repo.ssh.targetName": "Nom",
+  "repo.ssh.errNoSuchTarget": "Aucune cible SSH enregistrée sous le nom « {name} ». Vérifiez le nom dans « Publier par SSH ».",
   "repo.ssh.title": "Publier par SSH",
   "repo.ssh.desc": "Envoie le dossier exporté vers le serveur qui l’héberge, par SFTP. BMM lit votre clé privée au moment de l’envoi — elle n’est jamais copiée ni enregistrée.",
   "repo.ssh.host": "Hôte",
