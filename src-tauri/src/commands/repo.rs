@@ -1644,11 +1644,37 @@ pub async fn set_mod_update_config(
 
 /// Read an existing repo.json and return its current profiles + mods so the UI
 /// can show what's inside before updating.
+/// The folder's own name, as a first guess at a repo name. Better than "Repo" and better
+/// than empty: somebody who points at `DCS-Winter-2026` meant that.
+fn repo_dir_name(dir: &str) -> String {
+    PathBuf::from(dir)
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .filter(|n| !n.trim().is_empty())
+        .unwrap_or_else(|| "Repo".to_string())
+}
+
 #[tauri::command]
 pub fn read_local_repo(repo_dir: String) -> Result<ServerRepo, String> {
     let manifest_path = PathBuf::from(&repo_dir).join("repo.json");
     if !manifest_path.exists() {
-        return Err("repo.errNoExistingRepo".to_string());
+        // An EMPTY repo rather than an error.
+        //
+        // "There is no manifest here" and "this folder is not a repo" are different facts,
+        // and only the caller can tell them apart — the update screen's whole purpose is to
+        // put mods into a folder and write a manifest describing them. Refusing here made the
+        // one starting point that needs no manifest the one case that could not begin.
+        //
+        // The folder is checked for existence first, so a mistyped path is still an error.
+        if !PathBuf::from(&repo_dir).is_dir() {
+            return Err("repo.errNoExistingRepo".to_string());
+        }
+        // Built by deserialising an EMPTY object, so every field takes the serde default
+        // declared beside it rather than a second set written here that could disagree.
+        let mut empty: ServerRepo = serde_json::from_str("{}")
+            .map_err(|e| format!("repo.errReadManifest|{}", e))?;
+        empty.name = repo_dir_name(&repo_dir);
+        return Ok(empty);
     }
     let content = fs::read_to_string(&manifest_path).map_err(|_| "repo.errReadManifest".to_string())?;
     serde_json::from_str(&content).map_err(|e| format!("repo.json parse error: {}", e))

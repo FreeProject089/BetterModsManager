@@ -1,14 +1,32 @@
 use serde::{Deserialize, Serialize};
 
+/// Fallbacks for a manifest written before a field existed. See ServerRepo.
+fn default_repo_name() -> String { "Repo".to_string() }
+fn default_repo_version() -> String { "1.0".to_string() }
+/// Now, not the epoch: a repo whose creation date is unknown was not created in 1970, and a
+/// date that far out sorts and displays as an obvious bug in every list that shows it.
+fn default_created_at() -> String { chrono::Utc::now().to_rfc3339() }
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ServerRepo {
+    // Defaults on the four required fields, so a manifest written by an older BMM still
+    // loads. Without them serde refuses the whole document over one absent key and reports a
+    // field name, which reads as a corrupt file rather than an old one — and the repo it
+    // describes is perfectly fine.
+    //
+    // NOT empty strings: a default that round-trips as "" would quietly rename a repo to
+    // nothing the next time it is written. Each falls back to something true.
+    #[serde(default = "default_repo_name")]
     pub name: String,
     pub description: Option<String>,
     pub author: Option<String>,
     pub author_id: Option<String>,
     pub signature: Option<String>,
+    #[serde(default = "default_repo_version")]
     pub version: String,
+    #[serde(default)]
     pub game_name: String,
+    #[serde(default = "default_created_at")]
     pub created_at: String,
     pub seed: Option<String>,
     pub upload_limit: Option<u32>, // KB/s
@@ -37,6 +55,11 @@ pub struct ServerRepo {
     // nothing on it moves. Absent from older manifests, which keep the default.
     #[serde(default, alias = "filesLayout", skip_serializing_if = "Option::is_none")]
     pub files_layout: Option<String>,
+    // Defaulted for the same reason as the fields above, and for one more: a repo with no
+    // profiles yet is a real state — it is what an empty folder about to become a repo
+    // looks like. Requiring the key made "nothing here yet" indistinguishable from a
+    // corrupt manifest.
+    #[serde(default)]
     pub profiles: Vec<RepoProfile>,
     pub modpacks: Option<Vec<RepoModpackShare>>,
 }
@@ -202,5 +225,39 @@ mod bcweb_manifest_tests {
         // wrong one. BMM then re-hashes that single file, which is the correct outcome.
         let other = mods.iter().find(|m| m.name == "other-mod").unwrap();
         assert_eq!(other.files[0].sha256_hash, "");
+    }
+}
+
+#[cfg(test)]
+mod manifest_tolerance_tests {
+    use super::*;
+
+    #[test]
+    fn an_empty_document_becomes_a_usable_manifest() {
+        // What read_local_repo relies on for a folder with no repo.json. If any field stops
+        // being defaulted this fails here rather than as "no existing repo" in front of
+        // somebody pointing at a perfectly good folder.
+        let r: ServerRepo = serde_json::from_str("{}").expect("an empty object must deserialise");
+        assert_eq!(r.version, "1.0");
+        assert!(!r.created_at.is_empty(), "a date is invented rather than left blank");
+        assert!(!r.created_at.starts_with("1970"), "and it is now, not the epoch");
+    }
+
+    #[test]
+    fn a_manifest_from_an_older_bmm_still_loads() {
+        // No createdAt, no gameName, no version — the shape before those fields existed. It
+        // used to fail with a parse error naming a field, which reads as a corrupt file.
+        let old = r#"{"name":"My repo","mods":[],"profiles":[]}"#;
+        let r: ServerRepo = serde_json::from_str(old).expect("an old manifest must still load");
+        assert_eq!(r.name, "My repo", "and it keeps what it DID say");
+        assert_eq!(r.version, "1.0");
+    }
+
+    #[test]
+    fn a_name_is_never_defaulted_to_nothing() {
+        // A default that round-trips as "" would rename a repo to nothing the next time the
+        // manifest is written — silently, on somebody else's subscribers.
+        let r: ServerRepo = serde_json::from_str("{}").unwrap();
+        assert!(!r.name.trim().is_empty());
     }
 }
