@@ -2244,9 +2244,13 @@ async function initCatalogIndexSettings() {
         }
         out.textContent = t('settings.catIndex.loading') || 'Fetching…';
         try {
-            // Through the backend, so the same TLS + identity handling every other catalog
-            // fetch gets applies here too.
-            const text = await invoke('fetch_remote_json', { url });
+            // Through fetchSourceText, so an index gets exactly what every other source gets:
+            // the backend's TLS + identity handling, the key proof, AND the password prompt on
+            // a 401. Calling fetch_remote_json directly — as this did — skipped only the last
+            // one, so a password-protected index failed with "could not be read" and never
+            // asked for the password that would have opened it.
+            const { fetchSourceText } = await import('../../core/source-fetch.js');
+            const text = await fetchSourceText(url);
             const parsed = parseCatalogIndex(JSON.parse(text));
             // Kept only once it has actually answered. Saving on every keystroke would fill
             // the list with half-typed addresses, and saving a URL that failed would keep a
