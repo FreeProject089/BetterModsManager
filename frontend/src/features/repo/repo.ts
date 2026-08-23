@@ -1951,6 +1951,32 @@ export function initRepo() {
             }
         };
 
+        // ── the two modes ───────────────────────────────────────────────────
+        //
+        // Local starts from a folder and can publish nowhere; a server address is fetched and
+        // published back. Both end in the same editor below, which is why they are a switch
+        // rather than two screens — what changes is only where the repo comes from.
+        const setMode = (remote: boolean) => {
+            const url = document.getElementById('repo-update-url') as HTMLElement | null;
+            const pull = document.getElementById('btn-repo-update-pull') as HTMLElement | null;
+            const browse = document.getElementById('btn-pick-repo-update-folder') as HTMLElement | null;
+            if (url) url.style.display = remote ? '' : 'none';
+            if (pull) pull.style.display = remote ? '' : 'none';
+            if (browse) browse.style.display = remote ? 'none' : '';
+            for (const [id, on] of [['repo-update-mode-local', !remote], ['repo-update-mode-remote', remote]] as const) {
+                const b = document.getElementById(id);
+                b?.classList.toggle('is-on', on);
+                b?.setAttribute('aria-pressed', on ? 'true' : 'false');
+            }
+            // The publish button belongs to the remote mode. Shown in local mode it would
+            // offer to push a folder to a server nobody named.
+            const pub = document.getElementById('btn-repo-update-publish') as HTMLElement | null;
+            if (pub && !remote) pub.style.display = 'none';
+        };
+        document.getElementById('repo-update-mode-local')?.addEventListener('click', () => setMode(false));
+        document.getElementById('repo-update-mode-remote')?.addEventListener('click', () => setMode(true));
+        setMode(false);
+
         // ── from the server ─────────────────────────────────────────────────
         //
         // The repo is fetched into a folder YOU choose, not a hidden working copy: the update

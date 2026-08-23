@@ -17418,3 +17418,16 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
 .mpc-tab { opacity: .55; border-bottom: 2px solid transparent; border-radius: 6px 6px 0 0; }
 .mpc-tab.is-on { opacity: 1; border-bottom-color: var(--accent); }
 .mpc-tabs { border-bottom: 1px solid var(--border); }
+
+/* The update dialog's two starting points. Segmented rather than a dropdown: there are two
+   answers and which one is active must be readable without opening anything — the same
+   reasoning as the SSH panel's key/password pair. */
+.repo-update-modes { display: flex; gap: 6px; margin-bottom: 10px; }
+.repo-update-mode {
+    flex: 1; padding: 7px 10px; font-size: 12px; font-weight: 600; cursor: pointer;
+    background: var(--bmm-s03); color: var(--text-muted);
+    border: 1px solid var(--border); border-radius: 8px; transition: all .15s ease;
+}
+.repo-update-mode:hover { color: var(--text-primary); }
+.repo-update-mode.is-on { background: var(--bmm-s06); color: var(--text-primary); border-color: var(--accent); }
+.repo-update-mode:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

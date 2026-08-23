@@ -6773,6 +6773,18 @@
                 </div>
                 <div class="modal-body" style="padding:18px 22px; overflow-y:auto; flex:1;">
                     <!-- Step 1: pick folder -->
+                    <!-- TWO MODES, said out loud.
+                         The folder and the address are different starting points that end in
+                         the same editor, and mixing them in one row made a Browse button sit
+                         beside an address field as if you needed both. Local can publish
+                         nowhere; a server address can be fetched AND published back. Saying
+                         which is which here saves finding out by pressing something. -->
+                    <div class="repo-update-modes" role="group" aria-label="Source">
+                        <button type="button" class="repo-update-mode is-on" id="repo-update-mode-local"
+                            aria-pressed="true" data-i18n="repo.update.modeLocal">On this machine</button>
+                        <button type="button" class="repo-update-mode" id="repo-update-mode-remote"
+                            aria-pressed="false" data-i18n="repo.update.modeRemote">On a server</button>
+                    </div>
                     <label class="form-label" style="font-size:12px;font-weight:700;" data-i18n="repo.update.folder">Existing repo folder</label>
                     <div style="display:flex; gap:8px; margin:6px 0 16px;">
                         <input type="text" id="repo-update-path" class="form-input" readonly placeholder="..." style="flex:1;font-size:12px;">

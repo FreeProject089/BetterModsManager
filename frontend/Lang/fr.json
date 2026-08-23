@@ -7885,5 +7885,7 @@
   "modpack.cat.build.doneSome": "Catalogue écrit avec {n} pack(s). {m} ignoré(s), sans adresse.",
   "repo.remoteOpenFolder": "Ouvrir le dossier",
   "repo.remoteCopyPath": "Copier le chemin",
-  "repo.remotePathCopied": "Chemin copié."
+  "repo.remotePathCopied": "Chemin copié.",
+  "repo.update.modeLocal": "Sur cette machine",
+  "repo.update.modeRemote": "Sur un serveur"
 }
