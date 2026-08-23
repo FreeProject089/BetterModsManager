@@ -17397,8 +17397,14 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 }
 /* min-width:0 on the row AND the input: without it a long address makes the flex row
    refuse to shrink and the whole panel grows sideways past its card. */
-.src-access-row { display: flex; gap: 6px; align-items: center; min-width: 0; }
-.src-access-row > .input { flex: 1; min-width: 0; }
+/* WRAPS, and the select keeps a floor.
+   `flex:1; min-width:0` let the chooser shrink to its chevron in a narrow column: the name of
+   the key that signs — the one thing the control exists to show — disappeared entirely, while
+   the button beside it kept its full width. A control that can shrink to nothing will, on
+   somebody's screen. */
+.src-access-row { display: flex; gap: 6px; align-items: center; min-width: 0; flex-wrap: wrap; }
+.src-access-row > .input { flex: 1 1 160px; min-width: 140px; }
+.src-access-row > .btn { flex: 0 0 auto; }
 .src-access-hint { font-size: 10px; color: var(--text-muted); line-height: 1.5; }
 
 /* The SSH panel's header is now a button that folds the body away. Styled to still read as a
@@ -17470,3 +17476,65 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
     border-top: 1px solid var(--border); min-height: 30px; text-align: center;
 }
 #sidebar-brand:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 6px; }
+
+
+/* `hidden` beats a layout.
+   `.modal-body { display: flex }` overrides the user-agent rule for [hidden], so a modal body
+   marked hidden stayed on screen — which is why the modpack catalogue drew its Follow view and
+   its Publish view stacked on top of each other. The attribute means "not here"; no layout
+   rule gets to disagree with it. */
+[hidden] { display: none !important; }
+
+/* ── Modpack catalogues ──────────────────────────────────────────────────────
+   Its own class names rather than the shared .modal-body, which forces a column flex that
+   overrode `hidden` and drew both views at once. A window with two places in it needs the two
+   to be able to hide. */
+.mpc-panel {
+    width: min(680px, 94vw); max-height: 84vh;
+    display: flex; flex-direction: column; overflow: hidden;
+    background: var(--bmm-bg-elevated); border: 1px solid var(--border); border-radius: 16px;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.7), 0 0 0 1px var(--bmm-s05);
+    animation: modalIn 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.mpc-head {
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+    padding: 16px 20px 12px;
+}
+.mpc-h1 { margin: 0; font-size: 16px; font-weight: 700; }
+.mpc-sub { margin: 2px 0 0; font-size: 11px; color: var(--text-muted); }
+.mpc-x {
+    background: none; border: none; color: var(--text-muted); font-size: 22px; line-height: 1;
+    cursor: pointer; padding: 0 4px;
+}
+.mpc-x:hover { color: var(--text-primary); }
+.mpc-x:focus-visible, .mpc-mode:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* The same segmented pair the update dialog uses. Two answers, and which one is active has to
+   be readable without opening anything. */
+.mpc-modes { display: flex; gap: 6px; padding: 0 20px 12px; }
+.mpc-mode {
+    flex: 1; padding: 7px 10px; font-size: 12px; font-weight: 600; cursor: pointer;
+    background: var(--bmm-s03); color: var(--text-muted);
+    border: 1px solid var(--border); border-radius: 8px; transition: all .15s ease;
+}
+.mpc-mode:hover { color: var(--text-primary); }
+.mpc-mode.is-on { background: var(--bmm-s06); color: var(--text-primary); border-color: var(--accent); }
+.mpc-view {
+    padding: 0 20px 18px; overflow-y: auto;
+    display: flex; flex-direction: column; gap: 10px;
+}
+.mpc-lede { margin: 0; font-size: 12px; color: var(--text-muted); line-height: 1.55; }
+/* min-width:0 on the row and the input: an address is one unbreakable string, and without it
+   a long one pushes the buttons off the panel. */
+.mpc-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; min-width: 0; }
+.mpc-row > .input { flex: 1 1 200px; min-width: 0; }
+.mpc-label {
+    font-size: 10px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase;
+    color: var(--text-muted); margin-top: 4px;
+}
+.mpc-sources { display: flex; flex-direction: column; gap: 4px; }
+.mpc-list { display: flex; flex-direction: column; gap: 6px; }
+.mpc-foot {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    flex-wrap: wrap; margin-top: 6px; padding-top: 12px; border-top: 1px solid var(--border);
+}
+.mpc-note { font-size: 10px; color: var(--text-muted); line-height: 1.5; flex: 1; min-width: 180px; }

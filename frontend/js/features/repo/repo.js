@@ -1938,8 +1938,13 @@ export function initRepo() {
                 url.style.display = remote ? '' : 'none';
             if (pull)
                 pull.style.display = remote ? '' : 'none';
+            // Browse stays in BOTH modes. In remote it is the DESTINATION rather than the
+            // source, and hiding it left the folder field read-only with no way to change
+            // where a fetch would land.
             if (browse)
-                browse.style.display = remote ? 'none' : '';
+                browse.style.display = '';
+            if (pathInput)
+                pathInput.readOnly = false;
             for (const [id, on] of [['repo-update-mode-local', !remote], ['repo-update-mode-remote', remote]]) {
                 const b = document.getElementById(id);
                 b?.classList.toggle('is-on', on);
@@ -1983,14 +1988,27 @@ export function initRepo() {
                 }
                 target = parsed;
             }
-            // The EXPORT folder, which is where Publier par SSH already sends from — so fetch,
-            // edit and publish all speak about one place. Only asked for when it is not set,
-            // instead of every time.
-            let folder = document.getElementById('repo-export-path')?.value?.trim() || '';
+            // Where it LANDS, decided without asking.
+            //
+            // A button labelled "from the server" that opens a local file explorer is the
+            // opposite of what it says, and that is what this did whenever the export folder
+            // was empty. Order: the export folder if there is one — it is where Publier par
+            // SSH already sends from, so fetch, edit and publish speak about one place — then
+            // whatever is already typed in the field, then a folder BMM keeps for this.
+            // Never a dialog: the field shows where it went and stays editable.
+            let folder = document.getElementById('repo-export-path')?.value?.trim()
+                || pathInput?.value?.trim() || '';
             if (!folder) {
-                folder = (await pickFolder().catch(() => null)) || '';
-                if (!folder)
-                    return;
+                try {
+                    folder = await invoke('default_remote_repo_dir');
+                }
+                catch {
+                    folder = '';
+                }
+            }
+            if (!folder) {
+                toast(t('repo.update.noFolder'), 'warning', 7000);
+                return;
             }
             const btn = document.getElementById('btn-repo-update-pull');
             if (btn)

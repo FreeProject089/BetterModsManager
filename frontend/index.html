@@ -1913,17 +1913,16 @@
 
                                     <label class="checkbox-container"
                                         style="font-size:11px; color:var(--text-secondary); margin-bottom:12px;">
-                                        <!-- The same protected-source block as every catalogue screen.
-                                             This card built its own HTTP client with no headers, so a repo
-                                             behind a download password or a required key answered 401 and the
-                                             card reported it as unreachable. Mounted rather than rebuilt: what
-                                             a protected source asks for does not change with the screen. -->
-                                        <div id="remote-access-mount"></div>
-
                                         <input type="checkbox" id="remote-force-full" />
                                         <span class="checkmark"></span>
                                         <span data-i18n="repo.remoteForce">Tout reverifier (re-hasher chaque fichier)</span>
                                     </label>
+
+                                        <!-- On its OWN line, full width. Sharing a row with the
+                                             re-verify checkbox squeezed it into half the card and
+                                             pushed the checkbox into the margin — two controls
+                                             fighting for a row neither needed to share. -->
+                                        <div id="remote-access-mount" style="margin-top:12px"></div>
 
                                     <div id="remote-result"
                                         style="display:none; font-size:11px; line-height:1.6; background:var(--bmm-bg-base); border:1px solid var(--bmm-s08); border-radius:6px; padding:8px; margin-bottom:10px;"></div>

@@ -104,40 +104,45 @@ export async function openModpackCatalog(notify: Toast): Promise<void> {
     const ov = document.createElement('div');
     ov.className = 'modal-overlay open mpc-overlay';
     ov.innerHTML = `
-      <div class="modal" style="max-width:760px;width:92vw">
-        <div class="modal-header">
-          <h2 class="modal-title" style="margin:0;font-size:1.1rem">${escHtml(t('modpack.cat.title'))}</h2>
-          <button class="modal-close" id="mpc-close">&times;</button>
+      <div class="mpc-panel">
+        <header class="mpc-head">
+          <div>
+            <h2 class="mpc-h1">${escHtml(t('modpack.cat.title'))}</h2>
+            <p class="mpc-sub">${escHtml(t('modpack.cat.sub'))}</p>
+          </div>
+          <button class="mpc-x" id="mpc-close" aria-label="${escHtml(t('common.close'))}">&times;</button>
+        </header>
+
+        <div class="mpc-modes" role="group">
+          <button type="button" class="mpc-mode is-on" id="mpc-tab-follow" aria-pressed="true">${escHtml(t('modpack.cat.tabFollow'))}</button>
+          <button type="button" class="mpc-mode" id="mpc-tab-build" aria-pressed="false">${escHtml(t('modpack.cat.tabBuild'))}</button>
         </div>
-        <div class="mpc-tabs" style="display:flex;gap:6px;padding:0 20px 10px">
-          <button class="btn btn-sm mpc-tab is-on" id="mpc-tab-follow" type="button">${escHtml(t('modpack.cat.tabFollow'))}</button>
-          <button class="btn btn-sm mpc-tab" id="mpc-tab-build" type="button">${escHtml(t('modpack.cat.tabBuild'))}</button>
-        </div>
-        <div class="modal-body" id="mpc-view-follow" style="padding:16px 20px;display:flex;flex-direction:column;gap:12px">
-          <p style="font-size:12px;color:var(--text-muted);margin:0">${escHtml(t('modpack.cat.desc'))}</p>
-          <div style="display:flex;gap:6px;align-items:center">
-            <input type="text" class="input" id="mpc-src" style="flex:1;min-width:0"
-                   placeholder="https://.../catalog.json" spellcheck="false">
+
+        <section class="mpc-view" id="mpc-view-follow">
+          <p class="mpc-lede">${escHtml(t('modpack.cat.desc'))}</p>
+          <div class="mpc-row">
+            <input type="text" class="input" id="mpc-src" placeholder="https://.../catalogue.cbmp" spellcheck="false">
             <button class="btn btn-sm btn-accent" id="mpc-add">${escHtml(t('common.add'))}</button>
-            <!-- A .cbmp is one file, so opening one off the disk is as ordinary as following
-                 an address. The first version could only do the latter, which meant a
-                 catalogue somebody sent you had to be uploaded before it could be read. -->
             <button class="btn btn-sm btn-secondary" id="mpc-open">${escHtml(t('modpack.cat.openFile'))}</button>
           </div>
           ${sourceAccessHtml('mpc')}
-          <div id="mpc-sources" style="display:flex;flex-direction:column;gap:4px"></div>
-          <div id="mpc-list" style="display:flex;flex-direction:column;gap:8px"></div>
-        </div>
-        <div class="modal-body" id="mpc-view-build" hidden style="padding:16px 20px;display:flex;flex-direction:column;gap:12px">
-          <p style="font-size:12px;color:var(--text-muted);margin:0">${escHtml(t('modpack.cat.build.desc'))}</p>
+          <div class="mpc-label">${escHtml(t('modpack.cat.followed'))}</div>
+          <div id="mpc-sources" class="mpc-sources"></div>
+          <div class="mpc-label">${escHtml(t('modpack.cat.available'))}</div>
+          <div id="mpc-list" class="mpc-list"></div>
+        </section>
+
+        <section class="mpc-view" id="mpc-view-build" hidden>
+          <p class="mpc-lede">${escHtml(t('modpack.cat.build.desc'))}</p>
           <input type="text" class="input" id="mpc-b-name"
                  placeholder="${escHtml(t('modpack.cat.build.namePh'))}" spellcheck="false">
-          <div id="mpc-b-list" style="display:flex;flex-direction:column;gap:6px;max-height:38vh;overflow:auto"></div>
-          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
-            <span style="font-size:10px;color:var(--text-muted);line-height:1.5;flex:1;min-width:180px">${escHtml(t('modpack.cat.build.oneFile'))}</span>
-            <button class="btn btn-sm btn-accent" id="mpc-b-export" type="button">${escHtml(t('modpack.cat.build.export'))}</button>
-          </div>
-        </div>
+          <div class="mpc-label">${escHtml(t('modpack.cat.build.pick'))}</div>
+          <div id="mpc-b-list" class="mpc-list"></div>
+          <footer class="mpc-foot">
+            <span class="mpc-note">${escHtml(t('modpack.cat.build.oneFile'))}</span>
+            <button class="btn btn-sm btn-accent" id="mpc-b-export">${escHtml(t('modpack.cat.build.export'))}</button>
+          </footer>
+        </section>
       </div>`;
     (document.getElementById('app-window-outer') || document.body).appendChild(ov);
     _overlay = ov;
@@ -189,8 +194,11 @@ export async function openModpackCatalog(notify: Toast): Promise<void> {
     const showTab = (build: boolean) => {
         (ov.querySelector('#mpc-view-follow') as HTMLElement).hidden = build;
         (ov.querySelector('#mpc-view-build') as HTMLElement).hidden = !build;
-        ov.querySelector('#mpc-tab-follow')!.classList.toggle('is-on', !build);
-        ov.querySelector('#mpc-tab-build')!.classList.toggle('is-on', build);
+        for (const [id, on] of [['mpc-tab-follow', !build], ['mpc-tab-build', build]] as const) {
+            const b = ov.querySelector(`#${id}`)!;
+            b.classList.toggle('is-on', on);
+            b.setAttribute('aria-pressed', on ? 'true' : 'false');
+        }
         if (build) void renderBuilder(ov);
     };
     ov.querySelector('#mpc-tab-follow')?.addEventListener('click', () => showTab(false));

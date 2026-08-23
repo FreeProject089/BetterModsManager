@@ -7933,5 +7933,10 @@
   "flappy.start": "Click, space or ↑ to flap.",
   "flappy.dead": "Down. Click to try again — best: {best}",
   "flappy.rpcPlaying": "Flapping — {n} points",
-  "flappy.rpcDead": "Scored {n} (best {best})"
+  "flappy.rpcDead": "Scored {n} (best {best})",
+  "repo.update.noFolder": "No folder to fetch into — set the export folder above, or type one here.",
+  "modpack.cat.sub": "Follow one, or make one",
+  "modpack.cat.followed": "Catalogues you follow",
+  "modpack.cat.available": "Packs available",
+  "modpack.cat.build.pick": "Packs to include"
 }

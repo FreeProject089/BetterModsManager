@@ -463,6 +463,20 @@ pub struct RemotePlanReport {
 /// Reads only: it fetches listings, never files, and writes nothing. Separated from the
 /// refresh itself on purpose — the first thing an author wants to know is "how much will
 /// this cost and what did it notice", and answering that must not commit them to anything.
+/// Where a repo fetched from a server lands when nobody has said otherwise.
+///
+/// The update dialog used to open a FOLDER PICKER for this, from a button labelled "from the
+/// server" — so pressing it showed a local file explorer, which is the opposite of what it
+/// says. A default that exists means the happy path asks nothing, and the field still shows
+/// where it went so it can be changed.
+#[tauri::command]
+pub fn default_remote_repo_dir(handle: tauri::AppHandle) -> Result<String, String> {
+    use tauri::Manager;
+    let dir = handle.path().app_data_dir().map_err(|e| e.to_string())?.join("RemoteRepos");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    Ok(dir.to_string_lossy().to_string())
+}
+
 #[tauri::command]
 pub async fn plan_remote_repo_refresh(
     handle: tauri::AppHandle,

@@ -7931,5 +7931,10 @@
   "flappy.start": "Clic, espace ou ↑ pour battre des ailes.",
   "flappy.dead": "Tombé. Cliquez pour recommencer — record : {best}",
   "flappy.rpcPlaying": "En vol — {n} points",
-  "flappy.rpcDead": "Score de {n} (record {best})"
+  "flappy.rpcDead": "Score de {n} (record {best})",
+  "repo.update.noFolder": "Aucun dossier où récupérer — renseignez le dossier d'export ci-dessus, ou tapez-en un ici.",
+  "modpack.cat.sub": "En suivre un, ou en faire un",
+  "modpack.cat.followed": "Catalogues suivis",
+  "modpack.cat.available": "Packs disponibles",
+  "modpack.cat.build.pick": "Packs à inclure"
 }

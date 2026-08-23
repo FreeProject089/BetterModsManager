@@ -600,6 +600,7 @@ fn main() {
             commands::doc_sign::verify_bmm_document,
             commands::doc_sign::write_signed_document,
             commands::repo::get_auto_sync_repos,
+            commands::repo_autoindex::default_remote_repo_dir,
             commands::repo_autoindex::plan_remote_repo_refresh,
             commands::repo_discover::discover_server_repo,
             commands::repo_autoindex::refresh_repo_from_server,
