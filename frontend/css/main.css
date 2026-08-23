@@ -17159,6 +17159,17 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
     .repo-ssh-field { grid-column: span 1 !important; }
 }
 
+/* An author that resolves to a BetterCommunity profile. Only decorated when a link was
+   actually found, so the affordance never promises something that does not exist. */
+.repo-author-linked {
+    cursor: pointer;
+    color: var(--bmm-accent, var(--accent));
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    text-decoration-thickness: 1px;
+}
+.repo-author-linked:hover { filter: brightness(1.15); }
+
 /* Auth method: two buttons, one visibly active. `aria-pressed` carries the state so the
    styling and the accessibility tree cannot drift apart — there is no second source. */
 .repo-ssh-auth { display: inline-flex; margin: 0 0 10px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
@@ -17272,3 +17283,64 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
     font-size: 11px; color: var(--warning); margin: 0 0 8px;
     display: flex; align-items: flex-start; gap: 6px; line-height: 1.45;
 }
+
+/* ── Content Security Policy panel (Settings → Security) ─────────────────────
+   Was one long string of inline styles: a 16px/150px/1fr grid per directive, a hard-coded
+   220px scroller, and the whole shipped policy expanded on arrival. Spacing now comes from
+   one scale instead of eleven hand-written numbers, and the reference list is behind a
+   disclosure — a settings screen should not open as a debug dump. */
+.csp-card {
+    border: 1px solid var(--bmm-danger);
+    border-radius: 10px;
+    padding: 16px;
+    margin-top: 14px;
+}
+.csp-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.csp-title { font-size: 13px; font-weight: 700; color: var(--text-primary); }
+.csp-badge {
+    font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--bmm-danger); border: 1px solid var(--bmm-danger);
+    border-radius: 4px; padding: 2px 6px; white-space: nowrap;
+}
+.csp-intro { font-size: 12px; color: var(--text-secondary); line-height: 1.6; margin: 0 0 14px; }
+
+.csp-details { margin: 0 0 16px; }
+.csp-summary {
+    cursor: pointer; list-style: none;
+    font-size: 10px; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--text-muted); padding: 7px 0; user-select: none;
+}
+.csp-summary::-webkit-details-marker { display: none; }
+/* The disclosure triangle is drawn rather than inherited, so it reads at this size and
+   turns with the state. */
+.csp-summary::before {
+    content: '▸'; display: inline-block; margin-right: 7px;
+    transition: transform .15s ease; color: var(--text-muted);
+}
+.csp-details[open] > .csp-summary::before { transform: rotate(90deg); }
+.csp-severe-count { color: var(--bmm-danger); }
+
+.csp-directives { max-height: 300px; overflow: auto; padding: 2px 0 0 18px; }
+/* Name ABOVE its sources, not beside them in a 150px column that truncated everything
+   longer than `default-src`. */
+.csp-row { display: flex; gap: 9px; padding: 9px 0; border-top: 1px solid var(--bmm-s06); align-items: flex-start; }
+.csp-row:first-child { border-top: 0; }
+.csp-row-mark { font-weight: 700; font-family: var(--font-mono); line-height: 1.5; }
+.csp-row-body { min-width: 0; flex: 1; }
+.csp-row-name { font-size: 12px; color: var(--text-primary); font-family: var(--font-mono); }
+.csp-row-sources { font-size: 11px; color: var(--text-secondary); word-break: break-all; margin-top: 3px; line-height: 1.5; }
+.csp-row-risk { font-size: 10px; margin-top: 4px; line-height: 1.45; }
+
+.csp-section-label {
+    font-size: 10px; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--text-muted); margin-bottom: 7px;
+}
+.csp-presets { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.csp-extra {
+    width: 100%; font-family: var(--font-mono); font-size: 11px; line-height: 1.6;
+    padding: 10px; border-radius: 6px;
+    border: 1px solid var(--border); background: var(--bmm-bg-base); color: var(--text-primary);
+}
+.csp-msg { font-size: 11px; margin-top: 8px; min-height: 16px; line-height: 1.5; }
+.csp-actions { display: flex; gap: 8px; margin-top: 4px; }
+.csp-foot { font-size: 10px; color: var(--text-muted); margin: 12px 0 0; line-height: 1.5; }

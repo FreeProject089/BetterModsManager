@@ -128,12 +128,12 @@ function directiveRow(d: Directive): string {
     const tone = d.severe ? 'var(--bmm-danger)' : d.risks.length ? 'var(--bmm-warning, #f59e0b)' : 'var(--text-muted)';
     const mark = d.severe ? '!' : d.risks.length ? '~' : '';
     return `
-        <div style="display:grid;grid-template-columns:16px 150px 1fr;gap:8px;padding:6px 0;border-top:1px solid var(--border-subtle,rgba(255,255,255,0.06));align-items:start">
-            <span style="color:${tone};font-weight:700;font-family:monospace">${mark}</span>
-            <code style="font-size:11px;color:var(--text-primary)">${escHtml(d.name)}</code>
-            <div>
-                <div style="font-size:11px;color:var(--text-secondary);word-break:break-all">${d.sources.map((sv) => escHtml(sv)).join(' ') || `<em>${escHtml(t('csp.empty'))}</em>`}</div>
-                ${d.risks.map((r) => `<div style="font-size:10px;color:${tone};margin-top:2px">${escHtml(r.source)} — ${escHtml(r.why)}</div>`).join('')}
+        <div class="csp-row${d.severe ? ' is-severe' : ''}">
+            <span class="csp-row-mark" style="color:${tone}">${mark}</span>
+            <div class="csp-row-body">
+                <code class="csp-row-name">${escHtml(d.name)}</code>
+                <div class="csp-row-sources">${d.sources.map((sv) => escHtml(sv)).join(' ') || `<em>${escHtml(t('csp.empty'))}</em>`}</div>
+                ${d.risks.map((r) => `<div class="csp-row-risk" style="color:${tone}">${escHtml(r.source)} — ${escHtml(r.why)}</div>`).join('')}
             </div>
         </div>`;
 }
@@ -144,34 +144,37 @@ export function renderCspEditor(): string {
     const severe = shipped.filter((d) => d.severe).length;
     const extra = savedExtra();
 
+    // The shipped policy opens COLLAPSED. It is reference material — thirty-odd directives
+    // nobody reads line by line — and expanding it by default was most of what made this
+    // screen feel like a debug dump. The summary keeps the two numbers that matter.
+    const summary = escHtml(t('csp.shippedPolicy').replace('{n}', String(shipped.length)))
+        + (severe ? ` <span class="csp-severe-count">${escHtml(t('csp.executeWarning').replace('{n}', String(severe)))}</span>` : '');
+
     return `
-    <div class="setting-card" style="border:1px solid var(--bmm-danger);border-radius:10px;padding:14px;margin-top:12px">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-            <span style="font-size:13px;font-weight:700;color:var(--text-primary)">${escHtml(t('csp.title'))}</span>
-            <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--bmm-danger);border:1px solid var(--bmm-danger);border-radius:4px;padding:1px 5px">${escHtml(t('csp.notRecommended'))}</span>
+    <div class="setting-card csp-card">
+        <div class="csp-head">
+            <span class="csp-title">${escHtml(t('csp.title'))}</span>
+            <span class="csp-badge">${escHtml(t('csp.notRecommended'))}</span>
         </div>
-        <p style="font-size:11px;color:var(--text-secondary);line-height:1.5;margin:0 0 10px">${escHtml(t('csp.intro'))}</p>
+        <p class="csp-intro">${escHtml(t('csp.intro'))}</p>
 
-        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:2px">
-            ${escHtml(t('csp.shippedPolicy').replace('{n}', String(shipped.length)))}${severe ? `, <span style="color:var(--bmm-danger)">${escHtml(t('csp.executeWarning').replace('{n}', String(severe)))}</span>` : ''}
-        </div>
-        <div id="csp-directives" style="max-height:220px;overflow:auto;margin-bottom:12px">
-            ${shipped.map(directiveRow).join('')}
-        </div>
+        <details class="csp-details">
+            <summary class="csp-summary">${summary}</summary>
+            <div id="csp-directives" class="csp-directives">${shipped.map(directiveRow).join('')}</div>
+        </details>
 
-        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:4px">${escHtml(t('csp.addPolicy'))}</div>
-        <div id="csp-presets" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">
+        <div class="csp-section-label">${escHtml(t('csp.addPolicy'))}</div>
+        <div id="csp-presets" class="csp-presets">
             ${PRESETS.map((p) => `<button type="button" class="btn btn-xs" data-csp-preset="${escHtml(p.id)}" title="${escHtml(t(p.note))}">${escHtml(t(p.label))}</button>`).join('')}
         </div>
-        <textarea id="csp-extra" rows="4" spellcheck="false"
-            placeholder="${escHtml(t('csp.placeholder'))}"
-            style="width:100%;font-family:monospace;font-size:11px;padding:8px;border-radius:6px;border:1px solid var(--border-subtle,rgba(255,255,255,0.12));background:var(--bg-input,rgba(0,0,0,0.25));color:var(--text-primary)">${escHtml(extra)}</textarea>
-        <div id="csp-msg" style="font-size:11px;margin-top:6px;min-height:16px"></div>
-        <div style="display:flex;gap:6px;margin-top:6px">
+        <textarea id="csp-extra" class="csp-extra" rows="4" spellcheck="false"
+            placeholder="${escHtml(t('csp.placeholder'))}">${escHtml(extra)}</textarea>
+        <div id="csp-msg" class="csp-msg"></div>
+        <div class="csp-actions">
             <button type="button" id="csp-save" class="btn btn-xs btn-primary">${escHtml(t('csp.save'))}</button>
             <button type="button" id="csp-clear" class="btn btn-xs">${escHtml(t('csp.clear'))}</button>
         </div>
-        <p style="font-size:10px;color:var(--text-muted);margin:8px 0 0">${escHtml(t('csp.appliesNextLaunch'))}</p>
+        <p class="csp-foot">${escHtml(t('csp.appliesNextLaunch'))}</p>
     </div>`;
 }
 

@@ -2470,6 +2470,14 @@
                                         <div class="path-picker">
                                             <input type="text" class="form-input" id="repo-sync-url"
                                                 data-i18n-placeholder="repo.urlPlaceholder" />
+                                            <!-- The SSH source, made visible. `ssh://` in this field means "the target
+                                                 saved in Publish over SSH" — discoverable here rather than only in a
+                                                 note further down the page. -->
+                                            <button class="btn btn-secondary btn-sm" id="btn-sync-use-ssh" type="button"
+                                                data-i18n-title="repo.sync.useSshHint"
+                                                style="padding:0 12px; height:32px; border-radius:6px; font-weight:600; font-size:12px; letter-spacing:.4px;">
+                                                <span data-i18n="repo.sync.useSsh">SSH</span>
+                                            </button>
                                             <button class="btn btn-secondary btn-sm" id="btn-fetch-repo-info"
                                                 data-i18n="repo.fetchBtn"
                                                 style="padding:0 20px; font-weight:600; font-size:13px; letter-spacing:0.5px; border-radius:6px; height:32px;">FETCH</button>

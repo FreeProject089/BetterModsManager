@@ -596,3 +596,24 @@
     background: var(--bmm-bg-base, #0f1420); border: 1px solid var(--bmm-border, #2a3242);
     box-shadow: 0 1px 0 var(--bmm-border, #2a3242);
 }
+
+/* ── header layout, revisited ────────────────────────────────────────────────
+   The hub opened with three stacked full-width bands — actions, then the User/Dev pill on a
+   row of its own, then search — so the first category card started a third of the way down
+   the page. The pill and the search answer the same question ("narrow what I am looking
+   at"), so they share a row; the pill is already inline-flex and keeps its natural width. */
+.dh-controls {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  margin-bottom: 22px;
+}
+.dh-controls > .dh-parts { margin-bottom: 0; }
+.dh-controls > .dh-searchbar {
+  /* Takes the rest of the row, and wraps to its own line before it gets too narrow to type
+     in — 260px is about where the placeholder starts being clipped. */
+  flex: 1 1 260px; min-width: 260px; margin-bottom: 0;
+}
+
+/* The diagrams card is not a seventh category — it is a different kind of destination, and
+   with six categories above it, it was left as an orphan on the last row. Spanning the full
+   width makes that deliberate instead of ragged, and reads as "and also: 41 diagrams". */
+.dh-cat-diagram { grid-column: 1 / -1; align-items: center; }

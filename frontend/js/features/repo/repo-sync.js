@@ -120,6 +120,59 @@ async function fetchRepoInfoWithPassword(url, creatorId) {
         throw e;
     }
 }
+// ── the author, as a person ──────────────────────────────────────────────────
+//
+// A repo's manifest carries `author_id`: the creator id that SIGNED it. When the BMM that
+// generated it was linked to a BetterCommunity account, that id resolves to a real profile —
+// so the author line becomes something you can click through to, instead of a name with
+// nothing behind it.
+//
+// Resolution is public but not unconditional: BCWEB's /users/search only returns accounts
+// with a public profile, and never banned or closed ones. An unlinked creator id, or one
+// whose owner keeps their profile private, simply yields no link and the name stays plain
+// text — which is the correct outcome, not a failure to report.
+/** BCWEB profile URL for a repo's signing creator id, or null when it leads nowhere. */
+async function bcwebProfileForAuthor(authorId) {
+    if (!authorId)
+        return null;
+    try {
+        const base = (getLinks()?.bettercommunity || 'https://bettercommunity.ch/').replace(/\/+$/, '');
+        // Through the native process, never a webview fetch: the webview is a cross-origin
+        // client (tauri.localhost) and bettercommunity.ch sends no CORS headers, so a direct
+        // fetch fails — and reports a permissions error even when the real problem was a 503.
+        const txt = await invoke('bc_api_get', {
+            url: `${base}/api/users/search?q=${encodeURIComponent(authorId)}`,
+        });
+        const hit = (JSON.parse(txt)?.users || []).find((u) => u?.matchedById && !u?.private);
+        return hit?.id ? `${base}/u/${encodeURIComponent(hit.id)}` : null;
+    }
+    catch {
+        // Offline, or BCWEB down. A missing link is not worth a message here.
+        return null;
+    }
+}
+/** Turn an author element into a link to its BetterCommunity profile, when there is one. */
+async function decorateAuthorLink(el, authorId) {
+    if (!el)
+        return;
+    el.classList.remove('repo-author-linked');
+    delete el.dataset.bcwebUrl;
+    el.removeAttribute('title');
+    const url = await bcwebProfileForAuthor(authorId);
+    if (!url)
+        return;
+    el.classList.add('repo-author-linked');
+    el.dataset.bcwebUrl = url;
+    el.title = t('repo.authorOpenProfile');
+}
+// One delegated listener rather than one per render: these two elements are rewritten on
+// every fetch, and binding per render leaks a listener per repo the user looks at.
+document.addEventListener('click', (e) => {
+    const el = e.target?.closest('.repo-author-linked');
+    const url = el?.dataset.bcwebUrl;
+    if (url)
+        invoke('open_external_url', { url }).catch(() => { });
+});
 // Is this BMM signed in to a BetterCommunity account? Verifies the (raw) creator id
 // against BCWEB's link-status, falling back to the cached `bc_linked` flag offline.
 async function isBcLinked() {
@@ -177,6 +230,7 @@ function _openRepoVerifyDetail(repo, isVerified, reason) {
         el.textContent = val || '—'; };
     set('repo-vd-name', repo.name || '—');
     set('repo-vd-author', repo.author || t('common.unknown') || 'Inconnu');
+    void decorateAuthorLink(document.getElementById('repo-vd-author'), repo.author_id);
     // t() first: an OvGME-imported profile stores its game as an i18n KEY (so every
     // language renders its own text), and a repo generated from it carries that key in
     // game_name. Line ~845 below always did this; these two sites forgot, and the sync
@@ -229,6 +283,27 @@ export function initRepoSync(elements) {
         const auto = document.getElementById('repo-sync-auto-check');
         if (auto)
             auto.checked = true;
+    });
+    // The SSH source, one click away.
+    //
+    // `ssh://` is the whole value: everything about WHERE to connect lives in the target
+    // saved in the Publish-over-SSH panel. Typing it is easy to get wrong and impossible to
+    // discover, so the button writes it and immediately fetches — the same two steps the user
+    // would have done, minus the guessing.
+    document.getElementById('btn-sync-use-ssh')?.addEventListener('click', async () => {
+        const input = document.getElementById('repo-sync-url');
+        if (!input)
+            return;
+        const m = await import('./repo-ssh.js');
+        if (!m.storedSshTarget()) {
+            // Nothing configured yet. Say where to configure it rather than failing with a
+            // field-validation message about a field the user never filled in.
+            toast(t('repo.sync.useSshNotSet'), 'warning', 7000);
+            return;
+        }
+        input.value = m.SSH_SOURCE_URL;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        document.getElementById('btn-fetch-repo-info')?.click();
     });
     // Persisted on change rather than on sync: a user who ticks this and never syncs still
     // meant it, and losing the setting would look like the checkbox does nothing.
@@ -338,6 +413,7 @@ export function initRepoSync(elements) {
                 syncInfoCard.style.display = 'block';
                 syncNameDisplay.textContent = repo.name;
                 syncAuthorDisplay.textContent = (t('repo.authorShort') || "Auteur :") + " " + (repo.author || "Inconnu");
+                void decorateAuthorLink(syncAuthorDisplay, repo.author_id);
                 // A manifest synthesised from the server's directory listing (no repo.json
                 // found — fetch_repo_info built one from what it saw). The card must SAY so,
                 // not just carry the generic Unverified badge: the badge also covers "signed

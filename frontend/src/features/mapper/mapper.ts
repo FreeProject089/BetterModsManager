@@ -159,8 +159,23 @@ export async function initMapper(): Promise<void> {
     setupContextMenu();
     setupInputModal();
 
-    // 4. Initial Game Tree
-    await refreshGameTree();
+    // 4. Initial data — BOTH halves of it.
+    //
+    // This called refreshGameTree() alone, and that function reads `activeProfile`, which
+    // ONLY refreshMapperData() ever sets. Both of its other call sites are inside event
+    // listeners (the profile dropdown and the Refresh button), so on a fresh start nothing
+    // had ever set it: the tree rendered "load a profile to view the game folder" and stayed
+    // that way until you pressed Refresh by hand, every single time.
+    //
+    // The events-first ordering above is preserved — this is still the last thing the
+    // function does — and the catch keeps the lesson that comment records: a data failure
+    // costs the data, not the interface.
+    try {
+        await refreshMapperData();
+        await refreshGameTree();
+    } catch (e) {
+        console.error('[MAPPER] initial load failed; the interface is still bound', e);
+    }
     
     // Auto-refresh when entering view — only if profile changed
     document.querySelector('.nav-item[data-view="mapper"]')?.addEventListener('click', async () => {

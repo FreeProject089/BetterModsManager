@@ -2272,6 +2272,10 @@ function chrome() {
         <button class="dh-btn" data-ext="${DOCS_SITE}">${svg('ext', 16)} ${tr({ en: 'On the website', fr: 'Sur le site' })}</button>
       </div>
     </div>
+    <!-- The part toggle and the search sit on ONE row: both answer "narrow what I am
+         looking at", and stacking them cost a full-width band for a small pill, pushing the
+         actual content a third of the way down the page. -->
+    <div class="dh-controls">
     <div class="dh-parts">
       ${seg('user', { en: 'User guide', fr: 'Guide utilisateur' }, { en: 'Use every feature', fr: 'Utiliser chaque fonction' })}
       ${seg('dev', { en: 'Developer', fr: 'Développeur' }, { en: 'How it works inside', fr: 'Comment ça marche' })}
@@ -2284,6 +2288,7 @@ function chrome() {
         <button class="dh-mode ${route.mode === 'semantic' ? 'on' : ''}" data-mode="semantic" data-tooltip="${tr({ en: 'Match meaning & synonyms', fr: 'Sens et synonymes' })}">${tr({ en: 'Semantic', fr: 'Sémantique' })}</button>
       </div>
       <kbd class="dh-kbd">Ctrl K</kbd>
+    </div>
     </div>
     <div class="dh-crumbs"></div>
     <div class="dh-body"></div>
