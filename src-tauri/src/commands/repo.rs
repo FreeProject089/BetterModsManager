@@ -1968,6 +1968,7 @@ pub async fn fetch_repo_info(url: String, creator_id: Option<String>, password: 
             if let Ok(hv) = reqwest::header::HeaderValue::from_str(pw) { headers.insert("X-Repo-Password", hv); }
         }
     }
+    crate::commands::repo_keyauth::add_proof(&mut headers, &target_url);
     if !headers.is_empty() {
         client_builder = client_builder.default_headers(headers);
     }
@@ -2423,6 +2424,7 @@ pub async fn sync_server_repo(
                     if let Some(ref pw) = args.password { if !pw.is_empty() {
                         if let Ok(hv) = reqwest::header::HeaderValue::from_str(pw) { headers.insert("X-Repo-Password", hv); }
                     } }
+                    crate::commands::repo_keyauth::add_proof(&mut headers, &zip_url);
                     if !headers.is_empty() { cb = cb.default_headers(headers); }
                 }
                 let client = cb.build().map_err(|e| e.to_string())?;
@@ -2528,6 +2530,7 @@ pub async fn sync_server_repo(
                         if let Some(ref pw) = args.password { if !pw.is_empty() {
                             if let Ok(hv) = reqwest::header::HeaderValue::from_str(pw) { headers.insert("X-Repo-Password", hv); }
                         } }
+                        crate::commands::repo_keyauth::add_proof(&mut headers, &file_url);
                         if !headers.is_empty() { client_builder = client_builder.default_headers(headers); }
                     }
                     let client = client_builder.build().map_err(|e| e.to_string())?;

@@ -4560,6 +4560,22 @@
                                 </div>
                             </div>
 
+                            <!-- Identity key row — the ed25519 key BMM proves with.
+                                 A PATH is stored, never the key: the file is read at the moment
+                                 a proof is signed and the bytes are dropped. It sits here rather
+                                 than inside the SSH panel because it is one identity for the whole
+                                 app, presented to every repo and catalogue that asks — not a
+                                 property of one SSH target. -->
+                            <div class="sic-row">
+                                <span class="sic-label" data-i18n="settings.identity.authKey">Clé d'identité</span>
+                                <div class="sic-value revealed" id="sic-auth-key" style="filter:none;pointer-events:auto;color:var(--text-secondary);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">…</div>
+                                <div class="sic-actions">
+                                    <button class="sic-btn" id="btn-sic-pick-authkey" data-i18n="settings.identity.authKeyPick"
+                                        data-tasky="settings.identity.authKeyTip" data-tasky-icon="icon-lock">Choisir…</button>
+                                    <button class="sic-btn danger" id="btn-sic-clear-authkey" data-i18n="settings.identity.authKeyClear">Retirer</button>
+                                </div>
+                            </div>
+
                             <!-- BMM Version row -->
                             <div class="sic-row">
                                 <span class="sic-label" data-i18n="settings.identity.version">Version</span>

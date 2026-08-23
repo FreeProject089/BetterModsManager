@@ -314,6 +314,21 @@ pub fn set_key_auth_key(
     Ok(())
 }
 
+/// Attach the key proof for `url` to a header map, when this BMM has a key to prove with.
+///
+/// The repo sync builds its own `HeaderMap`s inline in three places (manifest fetch, archive
+/// download, chunked resume) rather than going through `net::catalog_get`. Adding the proof
+/// at each site by hand would be the same rule written three more times, and a header that
+/// exists on two of the three paths is worse than none: a sync would authenticate its
+/// manifest and then 401 halfway through the files.
+pub fn add_proof(headers: &mut reqwest::header::HeaderMap, url: &str) {
+    if let Some((name, value)) = header_for(url) {
+        if let Ok(hv) = reqwest::header::HeaderValue::from_str(&value) {
+            headers.insert(name, hv);
+        }
+    }
+}
+
 fn now_secs() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)

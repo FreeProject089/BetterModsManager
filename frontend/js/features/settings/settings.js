@@ -1908,6 +1908,53 @@ async function initSecurityInfoCard() {
         });
     }
     catch (_) { }
+    // ── Identity key: the ed25519 key BMM proves with ────────────────────────
+    //
+    // A PATH, never key material — the file is read at the moment a proof is signed and the
+    // bytes are dropped. The same key is presented to every repo and catalogue that requires
+    // one, which is why it belongs to the app and not to one SSH target: it used to be set
+    // only as a side effect of configuring an SSH connection, so anyone syncing over plain
+    // HTTPS had no way to hold a key at all.
+    try {
+        const { getSettings, pickFile } = await import('../../core/api.js');
+        const keyEl = document.getElementById('sic-auth-key');
+        const show = (p) => {
+            if (!keyEl)
+                return;
+            const path = (p || '').trim();
+            keyEl.textContent = path || t('settings.identity.authKeyNone');
+            keyEl.title = path;
+        };
+        show((await getSettings()).key_auth_key_path);
+        document.getElementById('btn-sic-pick-authkey')?.addEventListener('click', async () => {
+            const path = await pickFile();
+            if (!path)
+                return;
+            try {
+                await invoke('set_key_auth_key', { path });
+                show(path);
+                toast(t('settings.identity.authKeySet'), 'success');
+            }
+            catch (e) {
+                // The backend refuses a file it cannot sign with, so this is "wrong file",
+                // not "save failed" — say which, or the person retries the same file.
+                // t() returns the KEY on a miss, so a `|| 'fallback'` beside it is dead code —
+                // the gate says so, and both keys exist in en.json and fr.json.
+                toast(t(String(e) === 'repo.ssh.errKeyPassphrase'
+                    ? 'settings.identity.authKeyLocked'
+                    : 'settings.identity.authKeyBad'), 'warning', 5000);
+            }
+        });
+        document.getElementById('btn-sic-clear-authkey')?.addEventListener('click', async () => {
+            try {
+                await invoke('set_key_auth_key', { path: null });
+                show(null);
+                toast(t('settings.identity.authKeyCleared'), 'success');
+            }
+            catch (_) { }
+        });
+    }
+    catch (_) { }
     // Reset API token
     document.getElementById('btn-sic-reset-token')?.addEventListener('click', async () => {
         const ok = await window.confirmCustom(t('settings.identity.resetTokenTitle') || 'Régénérer le token ?', t('settings.identity.resetTokenDesc') || 'L\'ancien token sera immédiatement révoqué. Tous les plugins utilisant ce token devront être mis à jour.', 'danger').catch(() => false);
