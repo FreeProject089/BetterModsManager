@@ -83,22 +83,28 @@ function initSyncPasswordField(): void {
  * the stored path back, so whichever one you open shows what is actually in force.
  */
 function initSyncKeyAndSshFields(): void {
-    const KEY_IDS = { input: 'repo-sync-keypath', pick: 'btn-sync-key-pick', clear: 'btn-sync-key-clear' };
+    // Which key signs for THIS repo's server. MANAGE goes to Settings rather than opening a
+    // second copy of the ring: a key list edited in two places would drift, and the copy you
+    // edited would not be the one that signs.
     const keyToggle = document.getElementById('btn-sync-key-toggle');
     const keyRow = document.getElementById('repo-sync-key-row');
+    const syncUrl = () => (document.getElementById('repo-sync-url') as HTMLInputElement | null)?.value?.trim() || '';
     if (keyToggle && keyRow) {
         keyToggle.addEventListener('click', async () => {
             const open = keyRow.style.display !== 'none';
             keyRow.style.display = open ? 'none' : '';
-            // Read on open rather than at start-up: the value can have been changed from
-            // either of the other two screens since this panel was built.
-            if (!open) { const idk = await import('../../core/identity-key.js'); await idk.refreshIdentityKey(KEY_IDS); }
+            // Read on open rather than at start-up: the ring can have changed from either of
+            // the other two screens since this panel was built.
+            if (!open) {
+                const kr = await import('../../core/identity-key.js');
+                await kr.renderKeySelect('repo-sync-key-sel', syncUrl,
+                    (k, kind) => toast(t(k), kind, kind === 'warning' ? 6000 : 3000), t);
+            }
         });
     }
-    void (async () => {
-        const idk = await import('../../core/identity-key.js');
-        idk.wireIdentityKey(KEY_IDS, (k, kind) => toast(t(k), kind, kind === 'warning' ? 6000 : 3000));
-    })();
+    document.getElementById('btn-sync-key-manage')?.addEventListener('click', () => {
+        document.getElementById('settings-identity-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
 
     // ── which SSH server an ssh:// source connects to ────────────────────────
     const sshRow = document.getElementById('repo-sync-ssh-row');

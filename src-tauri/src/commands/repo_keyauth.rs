@@ -241,26 +241,52 @@ pub fn audience_for(url: &str) -> Option<String> {
     Some(format!("{}://{}", scheme, host))
 }
 
-/// The configured key path, mirrored out of settings.
+/// The keyring, mirrored out of settings.
 ///
-/// A static rather than a lookup through AppState because the three request builders that
-/// need it do not all have one: `fetch_repo_info` is a plain async fn with three internal
-/// callers, one of them a test, and threading a handle through all of them to reach a value
-/// that is not even a secret would be three chances for one to forget.
+/// Statics rather than a lookup through AppState because the three request builders that need
+/// them do not all have one: `fetch_repo_info` is a plain async fn with three internal callers,
+/// one of them a test, and threading a handle through all of them to reach values that are not
+/// even secrets would be three chances for one to forget.
 ///
-/// Set once at startup and again whenever the setting changes. A path, never key material.
-static KEY_PATH: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+/// Paths and names, never key material.
+static KEYRING: std::sync::Mutex<Option<Keyring>> = std::sync::Mutex::new(None);
 
-/// Mirror the setting into this module. Called at startup and on every change.
-pub fn set_key_path(path: Option<String>) {
-    if let Ok(mut g) = KEY_PATH.lock() {
-        *g = path.map(|p| p.trim().to_string()).filter(|p| !p.is_empty());
+/// What signs, and for whom.
+#[derive(Debug, Clone, Default)]
+pub struct Keyring {
+    /// name → path.
+    pub keys: std::collections::HashMap<String, String>,
+    /// The key that signs when no origin override applies.
+    pub active: Option<String>,
+    /// origin (`scheme://host`) → key name.
+    pub by_origin: std::collections::HashMap<String, String>,
+}
+
+/// Mirror the settings into this module. Called at startup and on every change.
+pub fn set_keyring(ring: Keyring) {
+    if let Ok(mut g) = KEYRING.lock() {
+        *g = Some(ring);
     }
-    // A changed key invalidates every proof made with the old one — they would still verify,
-    // but against a key the owner may have just revoked.
+    // A changed keyring invalidates every cached proof. They would still VERIFY — that is the
+    // problem: a proof made with a key the owner has just removed would keep opening doors for
+    // the rest of its two minutes.
     if let Ok(mut c) = PROOF_CACHE.lock() {
         *c = None;
     }
+}
+
+/// The path that should sign for this audience, if any.
+///
+/// An origin override wins over the active key. A name that no longer resolves to a key on the
+/// ring returns None rather than silently falling back to the active one: the owner pointed
+/// this origin at a specific identity, and quietly using a different one is worse than not
+/// signing — the server would see the wrong person rather than nobody.
+fn key_path_for(audience: &str) -> Option<String> {
+    let g = KEYRING.lock().ok()?;
+    let ring = g.as_ref()?;
+    let name = ring.by_origin.get(audience).or(ring.active.as_ref())?;
+    let path = ring.keys.get(name)?.trim().to_string();
+    if path.is_empty() { None } else { Some(path) }
 }
 
 /// The proof header to attach to a request, if this BMM can make one.
@@ -270,8 +296,7 @@ pub fn set_key_path(path: Option<String>) {
 /// making this an error would break every ordinary unprotected repo.
 pub fn header_for(url: &str) -> Option<(&'static str, String)> {
     let audience = audience_for(url)?;
-    let key_path = KEY_PATH.lock().ok()?.clone()?;
-    if key_path.trim().is_empty() { return None; }
+    let key_path = key_path_for(&audience)?;
 
     let now = now_secs();
     if let Ok(mut guard) = PROOF_CACHE.lock() {
@@ -290,27 +315,208 @@ pub fn header_for(url: &str) -> Option<(&'static str, String)> {
     None
 }
 
-/// Point BMM at the ed25519 private key it should prove identity with, or clear it.
+/// Build the in-memory keyring from settings, migrating the single legacy value.
 ///
-/// The PATH is stored; the key is read at the moment of use and dropped. Refused up front if
-/// the file is not a usable ed25519 key, so the mistake is reported when it is made rather
-/// than as a silent refusal from somebody else's server later.
+/// `key_auth_key_path` held one path before the ring existed. Folding it in as an entry named
+/// "default" is what keeps an upgrade from silently un-configuring a key somebody set: the old
+/// field is never written again, but it is still read, once, when the ring is empty.
+pub fn keyring_from_settings(settings: &mut crate::state::AppSettings) -> Keyring {
+    if settings.key_auth_keys.is_empty() {
+        if let Some(p) = settings.key_auth_key_path.clone().filter(|p| !p.trim().is_empty()) {
+            settings.key_auth_keys.push(crate::state::KeyAuthEntry {
+                name: "default".to_string(),
+                path: p,
+            });
+            if settings.key_auth_active.is_none() {
+                settings.key_auth_active = Some("default".to_string());
+            }
+        }
+    }
+    // Did the owner have a choice recorded BEFORE we touched anything? The auto-pick below
+    // must not fire when we are about to clear a stale one — a test caught exactly that:
+    // "active = a key that was removed" plus one surviving key silently became "active = the
+    // survivor", which is the app changing who you are on your behalf.
+    let had_choice = settings.key_auth_active.is_some();
+
+    // An active name that no longer exists is the same as none: the owner removed that key.
+    let names: std::collections::HashSet<&str> =
+        settings.key_auth_keys.iter().map(|e| e.name.as_str()).collect();
+    if settings.key_auth_active.as_deref().map(|n| !names.contains(n)).unwrap_or(false) {
+        settings.key_auth_active = None;
+    }
+    // With exactly one key and nothing EVER chosen, that key is the choice. Making somebody
+    // pick from a list of one is a question with no information in it.
+    if !had_choice && settings.key_auth_active.is_none() && settings.key_auth_keys.len() == 1 {
+        settings.key_auth_active = Some(settings.key_auth_keys[0].name.clone());
+    }
+    Keyring {
+        keys: settings.key_auth_keys.iter().map(|e| (e.name.clone(), e.path.clone())).collect(),
+        active: settings.key_auth_active.clone(),
+        by_origin: settings.key_auth_by_origin.clone(),
+    }
+}
+
+/// Re-read settings into the module and save. Every command below ends here, so "what is on
+/// disk" and "what signs" cannot drift apart.
+fn commit(state: &tauri::State<'_, crate::state::AppState>) -> Result<(), String> {
+    let ring = {
+        let mut data = state.data.lock().map_err(|_| "state lock".to_string())?;
+        keyring_from_settings(&mut data.settings)
+    };
+    state.save().map_err(|e| e.to_string())?;
+    set_keyring(ring);
+    Ok(())
+}
+
+/// What the screens show: the ring, what is active, and the per-origin choices.
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KeyringView {
+    pub keys: Vec<crate::state::KeyAuthEntry>,
+    pub active: Option<String>,
+    pub by_origin: std::collections::HashMap<String, String>,
+}
+
+#[tauri::command]
+pub fn key_auth_list(
+    state: tauri::State<'_, crate::state::AppState>,
+) -> Result<KeyringView, String> {
+    let data = state.data.lock().map_err(|_| "state lock".to_string())?;
+    Ok(KeyringView {
+        keys: data.settings.key_auth_keys.clone(),
+        active: data.settings.key_auth_active.clone(),
+        by_origin: data.settings.key_auth_by_origin.clone(),
+    })
+}
+
+/// Add a key to the ring, or repoint an existing name at a new file.
+///
+/// Refused up front when the file is not a usable ed25519 key, so the mistake is reported
+/// while the person is still looking at the picker rather than as a silent refusal from
+/// somebody else's server a week later.
+#[tauri::command]
+pub fn key_auth_add(
+    state: tauri::State<'_, crate::state::AppState>,
+    name: String,
+    path: String,
+) -> Result<KeyringView, String> {
+    let name = name.trim().to_string();
+    let path = path.trim().to_string();
+    if name.is_empty() {
+        return Err("repo.keyauth.errNoName".into());
+    }
+    if path.is_empty() {
+        return Err("repo.keyauth.errNoPath".into());
+    }
+    // Signing against a throwaway audience proves the file opens AND is ed25519.
+    make_proof(&path, None, "probe://validate")?;
+    {
+        let mut data = state.data.lock().map_err(|_| "state lock".to_string())?;
+        match data.settings.key_auth_keys.iter_mut().find(|e| e.name == name) {
+            Some(e) => e.path = path,
+            None => data.settings.key_auth_keys.push(crate::state::KeyAuthEntry { name: name.clone(), path }),
+        }
+        if data.settings.key_auth_active.is_none() {
+            data.settings.key_auth_active = Some(name);
+        }
+    }
+    commit(&state)?;
+    key_auth_list(state)
+}
+
+/// Take a key off the ring.
+///
+/// Every origin pointed at it is cleared too. Leaving those behind would leave origins naming
+/// a key that does not exist, which `key_path_for` reads as "sign nothing" — correct, and
+/// impossible to understand from the screen.
+#[tauri::command]
+pub fn key_auth_remove(
+    state: tauri::State<'_, crate::state::AppState>,
+    name: String,
+) -> Result<KeyringView, String> {
+    {
+        let mut data = state.data.lock().map_err(|_| "state lock".to_string())?;
+        data.settings.key_auth_keys.retain(|e| e.name != name);
+        data.settings.key_auth_by_origin.retain(|_, v| v != &name);
+        if data.settings.key_auth_active.as_deref() == Some(name.as_str()) {
+            data.settings.key_auth_active = None;
+        }
+    }
+    commit(&state)?;
+    key_auth_list(state)
+}
+
+/// Choose which key signs by default. `None` means "prove nothing unless an origin says so".
+#[tauri::command]
+pub fn key_auth_set_active(
+    state: tauri::State<'_, crate::state::AppState>,
+    name: Option<String>,
+) -> Result<KeyringView, String> {
+    {
+        let mut data = state.data.lock().map_err(|_| "state lock".to_string())?;
+        let name = name.map(|n| n.trim().to_string()).filter(|n| !n.is_empty());
+        if let Some(n) = name.as_deref() {
+            if !data.settings.key_auth_keys.iter().any(|e| e.name == n) {
+                return Err("repo.keyauth.errNoSuchKey".into());
+            }
+        }
+        data.settings.key_auth_active = name;
+    }
+    commit(&state)?;
+    key_auth_list(state)
+}
+
+/// Point one origin at one key, or clear it back to the active key.
+///
+/// `url` is any address on that server; the origin is derived here so a caller can pass the
+/// catalogue address it already has rather than assembling `scheme://host` itself — which is
+/// the kind of small duplication that ends up disagreeing with `audience_for`.
+#[tauri::command]
+pub fn key_auth_set_for_url(
+    state: tauri::State<'_, crate::state::AppState>,
+    url: String,
+    name: Option<String>,
+) -> Result<KeyringView, String> {
+    let origin = audience_for(&url).ok_or_else(|| "repo.keyauth.errBadUrl".to_string())?;
+    {
+        let mut data = state.data.lock().map_err(|_| "state lock".to_string())?;
+        let name = name.map(|n| n.trim().to_string()).filter(|n| !n.is_empty());
+        match name {
+            Some(n) => {
+                if !data.settings.key_auth_keys.iter().any(|e| e.name == n) {
+                    return Err("repo.keyauth.errNoSuchKey".into());
+                }
+                data.settings.key_auth_by_origin.insert(origin, n);
+            }
+            None => { data.settings.key_auth_by_origin.remove(&origin); }
+        }
+    }
+    commit(&state)?;
+    key_auth_list(state)
+}
+
+/// The origin a URL's proof would be addressed to — so a screen can show WHICH server a
+/// per-source choice applies to, in the same words the gate uses.
+#[tauri::command]
+pub fn key_auth_origin_of(url: String) -> Option<String> {
+    audience_for(&url)
+}
+
+/// Point BMM at one key, keeping the pre-keyring call working.
+///
+/// It writes the entry named "default" and makes it active. Kept because it is a registered
+/// command: the local API and the deeplinks can reach it, and breaking a published entry point
+/// to tidy an internal model is a cost paid by somebody else's script.
 #[tauri::command]
 pub fn set_key_auth_key(
     state: tauri::State<'_, crate::state::AppState>,
     path: Option<String>,
 ) -> Result<(), String> {
     let path = path.map(|p| p.trim().to_string()).filter(|p| !p.is_empty());
-    if let Some(p) = path.as_deref() {
-        // Signing against a throwaway audience proves the file opens AND is ed25519.
-        make_proof(p, None, "probe://validate")?;
+    match path {
+        Some(p) => { key_auth_add(state, "default".to_string(), p)?; }
+        None => { key_auth_remove(state, "default".to_string())?; }
     }
-    {
-        let mut data = state.data.lock().map_err(|_| "state lock".to_string())?;
-        data.settings.key_auth_key_path = path.clone();
-    }
-    state.save().map_err(|e| e.to_string())?;
-    set_key_path(path);
     Ok(())
 }
 
@@ -339,6 +545,98 @@ fn now_secs() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Settings with nothing set, so each test says only what it is about.
+    fn blank_settings() -> crate::state::AppSettings {
+        let mut s = crate::state::AppSettings::default();
+        s.key_auth_keys.clear();
+        s.key_auth_active = None;
+        s.key_auth_by_origin.clear();
+        s.key_auth_key_path = None;
+        s
+    }
+
+    #[test]
+    fn the_pre_keyring_value_is_migrated_once() {
+        let mut s = blank_settings();
+        s.key_auth_key_path = Some("  /home/me/id_ed25519  ".to_string());
+        let ring = keyring_from_settings(&mut s);
+        assert_eq!(s.key_auth_keys.len(), 1, "the old single value becomes one entry");
+        assert_eq!(s.key_auth_keys[0].name, "default");
+        assert_eq!(s.key_auth_active.as_deref(), Some("default"), "and it is what signs");
+        assert_eq!(ring.keys.get("default").map(String::as_str), Some("  /home/me/id_ed25519  "));
+
+        // Run again: the ring is no longer empty, so the legacy field must be ignored rather
+        // than re-added. Without this an upgrade would grow a duplicate on every launch.
+        s.key_auth_keys[0].path = "/somewhere/else".to_string();
+        keyring_from_settings(&mut s);
+        assert_eq!(s.key_auth_keys.len(), 1, "not re-migrated");
+        assert_eq!(s.key_auth_keys[0].path, "/somewhere/else", "and not overwritten");
+    }
+
+    #[test]
+    fn an_empty_legacy_value_migrates_nothing() {
+        let mut s = blank_settings();
+        s.key_auth_key_path = Some("   ".to_string());
+        keyring_from_settings(&mut s);
+        assert!(s.key_auth_keys.is_empty(), "whitespace is not a key path");
+        assert!(s.key_auth_active.is_none());
+    }
+
+    #[test]
+    fn an_active_name_that_no_longer_exists_is_dropped() {
+        let mut s = blank_settings();
+        s.key_auth_keys.push(crate::state::KeyAuthEntry { name: "work".into(), path: "/w".into() });
+        s.key_auth_active = Some("gone".to_string());
+        keyring_from_settings(&mut s);
+        // NOT silently repointed at "work": the owner chose a key that is no longer there, and
+        // signing as somebody else is worse than not signing.
+        assert_eq!(s.key_auth_active, None);
+    }
+
+    #[test]
+    fn one_key_and_no_choice_means_that_key() {
+        let mut s = blank_settings();
+        s.key_auth_keys.push(crate::state::KeyAuthEntry { name: "only".into(), path: "/o".into() });
+        keyring_from_settings(&mut s);
+        assert_eq!(s.key_auth_active.as_deref(), Some("only"));
+    }
+
+    #[test]
+    fn two_keys_and_no_choice_stays_no_choice() {
+        let mut s = blank_settings();
+        s.key_auth_keys.push(crate::state::KeyAuthEntry { name: "a".into(), path: "/a".into() });
+        s.key_auth_keys.push(crate::state::KeyAuthEntry { name: "b".into(), path: "/b".into() });
+        keyring_from_settings(&mut s);
+        // Picking one for them would be picking an identity for them.
+        assert_eq!(s.key_auth_active, None);
+    }
+
+    #[test]
+    fn an_origin_override_wins_over_the_active_key() {
+        set_keyring(Keyring {
+            keys: [("work".to_string(), "/w".to_string()), ("home".to_string(), "/h".to_string())]
+                .into_iter().collect(),
+            active: Some("home".to_string()),
+            by_origin: [("https://work.example".to_string(), "work".to_string())]
+                .into_iter().collect(),
+        });
+        assert_eq!(key_path_for("https://work.example").as_deref(), Some("/w"));
+        assert_eq!(key_path_for("https://other.example").as_deref(), Some("/h"));
+
+        // An override naming a key that is gone signs NOTHING rather than falling back: the
+        // owner said this server knows me as "work", and turning up as "home" is a different
+        // person, not a graceful degradation.
+        set_keyring(Keyring {
+            keys: [("home".to_string(), "/h".to_string())].into_iter().collect(),
+            active: Some("home".to_string()),
+            by_origin: [("https://work.example".to_string(), "work".to_string())]
+                .into_iter().collect(),
+        });
+        assert_eq!(key_path_for("https://work.example"), None);
+        assert_eq!(key_path_for("https://other.example").as_deref(), Some("/h"));
+        set_keyring(Keyring::default());
+    }
 
     /// A keypair written to a temp file, the way a user's key would be.
     ///

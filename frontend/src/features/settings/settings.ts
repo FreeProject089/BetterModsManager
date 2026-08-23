@@ -1837,24 +1837,15 @@ async function initSecurityInfoCard() {
         });
     } catch (_) {}
 
-    // ── Identity key: the ed25519 key BMM proves with ───────────────────────
+    // ── Identity keys: the ed25519 keys BMM proves with ─────────────────────
     //
-    // A PATH, never key material — the file is read at the moment a proof is signed and the
-    // bytes are dropped. The same key is presented to every repository and catalogue that
-    // requires one, which is why it belongs to the app and not to one SSH target.
-    //
-    // The control itself lives in core/identity-key.ts because three screens mount it: here,
-    // the repo sync panel, and the catalogue access fold. One value, three doors.
+    // PATHS are stored, never key material. The manager itself lives in core/identity-key.ts
+    // because three screens mount it: here, the repo sync panel, and the catalogue access
+    // fold. One ring, three doors.
     try {
-        const idk = await import('../../core/identity-key.js');
-        const IDS = { input: 'sic-auth-key', pick: 'btn-sic-pick-authkey', clear: 'btn-sic-clear-authkey' };
-        const keyEl = document.getElementById(IDS.input);
-        const path = await idk.refreshIdentityKey(IDS);
-        // Empty reads as "None" rather than as a blank line, so "not set" is legible as an
-        // answer instead of looking like the row failed to load.
-        if (keyEl && !path) keyEl.textContent = t('settings.identity.authKeyNone');
-        idk.wireIdentityKey(IDS, (k, kind) => toast(t(k), kind, kind === 'warning' ? 6000 : 3000),
-            (p) => { if (keyEl && !p) keyEl.textContent = t('settings.identity.authKeyNone'); });
+        const kr = await import('../../core/identity-key.js');
+        await kr.renderKeyManager('sic-keyring-list', 'sic-key-name', 'btn-sic-key-add',
+            (k, kind) => toast(t(k), kind, kind === 'warning' ? 6000 : 3000), t);
     } catch (_) {}
 
     // Reset API token
@@ -1944,10 +1935,14 @@ async function initCatalogIndexSettings() {
     // this is where all five kinds already meet — the same reason the "catalogs you follow"
     // list lives here.
     void (async () => {
-        const idk = await import('../../core/identity-key.js');
-        const IDS = { input: 'cat-index-keypath', pick: 'cat-index-key-pick', clear: 'cat-index-key-clear' };
-        await idk.refreshIdentityKey(IDS);
-        idk.wireIdentityKey(IDS, (k, kind) => toast(t(k), kind, kind === 'warning' ? 6000 : 3000));
+        const kr = await import('../../core/identity-key.js');
+        const urlOf = () => (document.getElementById('cat-index-key-url') as HTMLInputElement | null)?.value?.trim() || '';
+        await kr.renderKeySelect('cat-index-key-sel', urlOf, (k, kind) => toast(t(k), kind, kind === 'warning' ? 6000 : 3000), t);
+        // Repaint when the address changes: the chooser shows what is stored FOR THAT SERVER,
+        // so leaving a stale answer under a new address would be a confident wrong reading.
+        document.getElementById('cat-index-key-url')?.addEventListener('change', () => {
+            void kr.refreshKeySelect('cat-index-key-sel', urlOf, t);
+        });
     })();
 
     // The password is remembered FOR THIS RUN ONLY — the rule already in force everywhere

@@ -90,7 +90,14 @@ function loadTarget(name = DEFAULT_TARGET): Partial<SshTarget> {
  */
 function rememberKeyAuthKey(target: SshTarget): void {
     if (target.auth === 'password' || !target.keyPath) return;
-    void invoke('set_key_auth_key', { path: target.keyPath }).catch(() => {});
+    // Deliberately NOT pointing the identity keyring at this target's key any more.
+    //
+    // It used to, because that was the only way to set one. Now that the ring has real screens,
+    // silently repointing the app's identity because somebody configured an SFTP target is a
+    // surprise: the key that opens a shell and the key a catalogue knows you by are different
+    // questions, and answering one by changing the other is how you end up presenting the
+    // wrong identity without ever choosing to.
+
 }
 
 /** Save (or replace) a named target. The secret is never part of what gets written. */

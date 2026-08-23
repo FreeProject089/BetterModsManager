@@ -1602,7 +1602,7 @@
                                             </label>
                                             <label class="repo-ssh-field" style="grid-column:span 2">
                                                 <span data-i18n="repo.ssh.host">Hôte</span>
-                                                <input type="text" class="form-input" id="repo-ssh-host" placeholder="exemple.com" spellcheck="false">
+                                                <input type="text" class="form-input" id="repo-ssh-host" data-i18n-placeholder="repo.ssh.hostPh" placeholder="repo.example.com or 203.0.113.4" spellcheck="false">
                                             </label>
                                             <label class="repo-ssh-field">
                                                 <span data-i18n="repo.ssh.port">Port</span>
@@ -1610,12 +1610,12 @@
                                             </label>
                                             <label class="repo-ssh-field" style="grid-column:span 2">
                                                 <span data-i18n="repo.ssh.user">Utilisateur</span>
-                                                <input type="text" class="form-input" id="repo-ssh-user" placeholder="freeproject" spellcheck="false">
+                                                <input type="text" class="form-input" id="repo-ssh-user" data-i18n-placeholder="repo.ssh.userPh" placeholder="your login on the server" spellcheck="false">
                                             </label>
                                             <label class="repo-ssh-field" style="grid-column:span 2">
                                                 <span data-i18n="repo.ssh.remoteDir">Dossier distant</span>
                                                 <div class="repo-ssh-keyrow">
-                                                    <input type="text" class="form-input" id="repo-ssh-remote" placeholder="/var/www/repo" spellcheck="false">
+                                                    <input type="text" class="form-input" id="repo-ssh-remote" data-i18n-placeholder="repo.ssh.remotePh" placeholder="/var/www/repo — an absolute path" spellcheck="false">
                                                     <button class="btn btn-secondary btn-sm" id="repo-ssh-remote-pick" type="button" data-i18n="repo.ssh.browseRemote">Parcourir…</button>
                                                 </div>
                                             </label>
@@ -1624,7 +1624,7 @@
                                             <label class="repo-ssh-field repo-ssh-keyonly" style="grid-column:span 3">
                                                 <span data-i18n="repo.ssh.keyPath">Clé privée</span>
                                                 <div class="repo-ssh-keyrow">
-                                                    <input type="text" class="form-input" id="repo-ssh-key" placeholder="id_ed25519 ou .ppk" spellcheck="false">
+                                                    <input type="text" class="form-input" id="repo-ssh-key" data-i18n-placeholder="repo.ssh.keyPh" placeholder="id_ed25519, or a PuTTY .ppk" spellcheck="false">
                                                     <button class="btn btn-secondary btn-sm" id="repo-ssh-key-pick" type="button" data-i18n="repo.ssh.browse">Parcourir…</button>
                                                 </div>
                                             </label>
@@ -2573,16 +2573,15 @@
                                             <span data-i18n="repo.syncKeyToggle">This repo requires a private key</span>
                                         </button>
                                         <div id="repo-sync-key-row" style="display:none;margin-top:6px;">
+                                            <!-- Which key signs for THIS repo's server. The list is the
+                                                 keyring from Settings; MANAGE goes there rather than
+                                                 opening a second copy of it. -->
                                             <div class="path-picker">
-                                                <input type="text" class="form-input" id="repo-sync-keypath" readonly
-                                                    data-i18n-placeholder="repo.syncKeyPlaceholder"
-                                                    style="height:32px;font-size:12px;" />
-                                                <button class="btn btn-secondary btn-sm" type="button" id="btn-sync-key-pick"
-                                                    data-i18n="repo.syncKeyPick"
-                                                    style="padding:0 12px;height:32px;border-radius:6px;font-size:12px;">Browse…</button>
-                                                <button class="btn btn-secondary btn-sm" type="button" id="btn-sync-key-clear"
-                                                    data-i18n="repo.syncKeyClear"
-                                                    style="padding:0 12px;height:32px;border-radius:6px;font-size:12px;">Remove</button>
+                                                <select class="form-input" id="repo-sync-key-sel"
+                                                    style="height:32px;font-size:12px;"></select>
+                                                <button class="btn btn-secondary btn-sm" type="button" id="btn-sync-key-manage"
+                                                    data-i18n="repo.syncKeyManage"
+                                                    style="padding:0 12px;height:32px;border-radius:6px;font-size:12px;">Manage…</button>
                                             </div>
                                             <span style="display:block;font-size:11px;color:var(--text-muted);margin-top:5px;line-height:1.5;"
                                                 data-i18n="repo.syncKeyHint">...</span>
@@ -3690,19 +3689,22 @@
                             <details class="cat-index-fold" id="cat-index-access-fold">
                                 <summary data-i18n="settings.catIndex.access">Protected sources</summary>
 
+                                <!-- WHICH key this source uses. Per SERVER, not per catalogue: a
+                                     proof is addressed to one origin, so that is the unit the choice
+                                     can honestly apply to — anything finer would be a promise the
+                                     protocol cannot keep. Every catalogue kind on that server is
+                                     covered by one entry here. -->
                                 <label class="form-label" style="font-size:11px;margin:8px 0 4px;display:block;"
-                                    data-i18n="repo.syncKeyToggle">This repo requires a private key</label>
-                                <div style="display:flex; gap:6px; align-items:center;">
-                                    <input type="text" class="input-field" id="cat-index-keypath" readonly
-                                        data-i18n-placeholder="repo.syncKeyPlaceholder"
-                                        style="flex:1; min-width:200px; font-size:12px;">
-                                    <button class="btn btn-secondary btn-sm" type="button" id="cat-index-key-pick"
-                                        data-i18n="repo.syncKeyPick">Browse…</button>
-                                    <button class="btn btn-secondary btn-sm" type="button" id="cat-index-key-clear"
-                                        data-i18n="repo.syncKeyClear">Remove</button>
+                                    data-i18n="settings.catIndex.keyFor">Key for a source</label>
+                                <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+                                    <input type="text" class="input-field" id="cat-index-key-url"
+                                        data-i18n-placeholder="settings.catIndex.pwUrlPh"
+                                        style="flex:1; min-width:220px; font-size:12px;" spellcheck="false">
+                                    <select class="input-field" id="cat-index-key-sel"
+                                        style="width:170px; font-size:12px;"></select>
                                 </div>
                                 <div style="font-size:10px;color:var(--text-muted);margin-top:4px;line-height:1.5;"
-                                     data-i18n="repo.syncKeyHint">...</div>
+                                     data-i18n="settings.catIndex.keyHint">...</div>
 
                                 <label class="form-label" style="font-size:11px;margin:14px 0 4px;display:block;"
                                     data-i18n="settings.catIndex.pwLabel">Download password for a source</label>
@@ -4664,19 +4666,25 @@
                                 </div>
                             </div>
 
-                            <!-- Identity key row — the ed25519 key BMM proves with.
-                                 A PATH is stored, never the key: the file is read at the moment
-                                 a proof is signed and the bytes are dropped. It sits here rather
-                                 than inside the SSH panel because it is one identity for the whole
-                                 app, presented to every repo and catalogue that asks — not a
-                                 property of one SSH target. -->
-                            <div class="sic-row">
-                                <span class="sic-label" data-i18n="settings.identity.authKey">Clé d'identité</span>
-                                <div class="sic-value revealed" id="sic-auth-key" style="filter:none;pointer-events:auto;color:var(--text-secondary);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">…</div>
-                                <div class="sic-actions">
-                                    <button class="sic-btn" id="btn-sic-pick-authkey" data-i18n="settings.identity.authKeyPick"
-                                        data-tasky="settings.identity.authKeyTip" data-tasky-icon="icon-lock">Choisir…</button>
-                                    <button class="sic-btn danger" id="btn-sic-clear-authkey" data-i18n="settings.identity.authKeyClear">Retirer</button>
+                            <!-- Identity keys — the ed25519 keys BMM proves with.
+                                 PATHS are stored, never key material: a file is read at the moment
+                                 a proof is signed and the bytes are dropped. A NAME per key,
+                                 because a column of absolute paths is not something anyone
+                                 recognises at a glance, and choosing between them is the whole
+                                 reason for holding more than one. -->
+                            <div class="sic-row" style="align-items:flex-start;">
+                                <span class="sic-label" data-i18n="settings.identity.authKeys">Clés d'identité</span>
+                                <div class="sic-value revealed" style="filter:none;pointer-events:auto;flex:1;min-width:0;">
+                                    <div id="sic-keyring-list" style="display:flex;flex-direction:column;gap:6px;"></div>
+                                    <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
+                                        <input type="text" id="sic-key-name" class="form-input"
+                                            data-i18n-placeholder="settings.identity.authKeyNamePh"
+                                            placeholder="Name — e.g. work"
+                                            spellcheck="false" style="flex:1;min-width:120px;height:28px;font-size:11px;">
+                                        <button class="sic-btn" id="btn-sic-key-add"
+                                            data-i18n="settings.identity.authKeyAdd"
+                                            data-tasky="settings.identity.authKeyTip" data-tasky-icon="icon-lock">Add…</button>
+                                    </div>
                                 </div>
                             </div>
 

@@ -27,6 +27,16 @@ pub struct ConnectedServerRepo {
     pub auto_sync_mode: Option<String>,
 }
 
+/// One key on the keyring: a name a person chose, and where the file is.
+///
+/// Never the key itself. The file is opened at the moment a proof is signed and the bytes are
+/// dropped, which is what lets this live in settings at all.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KeyAuthEntry {
+    pub name: String,
+    pub path: String,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AppSettings {
     #[serde(default = "default_lang")]
@@ -79,8 +89,30 @@ pub struct AppSettings {
     /// request that might need it is built here: the catalogue fetcher, the repo-info fetcher
     /// and the per-file sync client. Threading it through three call chains from the frontend
     /// would be three chances for one of them to forget.
+    ///
+    /// LEGACY. Read once at startup and folded into `key_auth_keys` as an entry named
+    /// "default"; nothing writes it any more. Kept in the struct so an existing data.json
+    /// still parses and an upgrade does not silently lose the key somebody configured.
     #[serde(default)]
     pub key_auth_key_path: Option<String>,
+    /// The keyring: named ed25519 private keys BMM can prove identity with.
+    ///
+    /// Paths, never key material — the same rule as the single value this replaces. A NAME
+    /// per key because a list of absolute paths is not something a person recognises at a
+    /// glance, and choosing between them is the whole point of holding more than one.
+    #[serde(default)]
+    pub key_auth_keys: Vec<KeyAuthEntry>,
+    /// Which key signs when nothing more specific applies, by name.
+    #[serde(default)]
+    pub key_auth_active: Option<String>,
+    /// Per-ORIGIN overrides: `scheme://host` → key name.
+    ///
+    /// Keyed by origin rather than by full URL because that is exactly what a proof is
+    /// addressed to (see `audience_for`), so the lookup needs nothing threaded through the
+    /// three request builders that sign. One server, one identity — which is also how a
+    /// person thinks about it: this key is the one that community knows me by.
+    #[serde(default)]
+    pub key_auth_by_origin: HashMap<String, String>,
     #[serde(default)]
     pub discord_rpc_enabled: bool,
     #[serde(default)]
@@ -145,6 +177,9 @@ impl Default for AppSettings {
             cloudflared_path: None,
             ssh_known_hosts: None,
             key_auth_key_path: None,
+            key_auth_keys: Vec::new(),
+            key_auth_active: None,
+            key_auth_by_origin: HashMap::new(),
             discord_rpc_enabled: false,
             fs_security_mode: None,
             require_valid_sha: false,

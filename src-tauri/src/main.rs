@@ -309,9 +309,13 @@ fn main() {
             // Mirror the key-auth path into the module that signs with it. Without this
             // the setting would only take effect after being re-saved, so a restart would
             // silently stop proving identity to every server that requires it.
-            commands::repo_keyauth::set_key_path(
-                app_state.data.lock().ok().and_then(|d| d.settings.key_auth_key_path.clone()),
-            );
+            // Migrates the pre-keyring single value on the way through, so an upgrade keeps
+            // the key somebody had configured instead of silently proving nothing.
+            {
+                let ring = app_state.data.lock().ok()
+                    .map(|mut d| commands::repo_keyauth::keyring_from_settings(&mut d.settings));
+                if let Some(r) = ring { commands::repo_keyauth::set_keyring(r); }
+            }
             
             {
                 let mut data = app_state.data.lock().unwrap();
@@ -638,6 +642,12 @@ fn main() {
             commands::repo_ssh::ssh_fetch_repo_info,
             commands::repo_ssh::ssh_read_text,
             commands::repo_keyauth::set_key_auth_key,
+            commands::repo_keyauth::key_auth_list,
+            commands::repo_keyauth::key_auth_add,
+            commands::repo_keyauth::key_auth_remove,
+            commands::repo_keyauth::key_auth_set_active,
+            commands::repo_keyauth::key_auth_set_for_url,
+            commands::repo_keyauth::key_auth_origin_of,
             commands::repo_ssh::ssh_list_dir,
             commands::repo_ssh::ssh_resolve_path,
             commands::repo_ssh::ssh_forget_host,
