@@ -1929,6 +1929,60 @@ async function initCatalogIndexSettings() {
     //
     // The old key is read once and folded in, so an address already saved is not lost by
     // this change.
+    // ── Publish an index ───────────────────────────────────────
+    //
+    // This card could read an index and never write one, so publishing a list of your
+    // catalogues meant hand-writing JSON against a format guide. The list is already here:
+    // "catalogues you follow" is exactly what an index holds, types attached.
+    const makeFold = document.getElementById('cat-index-make-fold') as HTMLDetailsElement | null;
+    if (makeFold) {
+        const listEl = document.getElementById('cat-index-make-list') as HTMLElement | null;
+        const paint = async () => {
+            if (!listEl) return;
+            const all = await readAllSources();
+            const rows: string[] = [];
+            for (const type of Object.keys(all)) {
+                for (const u of all[type]) {
+                    rows.push(`
+                      <label style="display:flex;align-items:center;gap:8px;min-width:0;cursor:pointer">
+                        <input type="checkbox" class="cix-pick" data-t="${escAttr(type)}" data-u="${escAttr(u)}" checked style="flex:0 0 auto">
+                        <span class="cat-index-type" style="flex:0 0 auto">${escHtml(t(`settings.catIndex.type.${type}`))}</span>
+                        <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--text-muted)">${escHtml(u)}</span>
+                      </label>`);
+                }
+            }
+            listEl.innerHTML = rows.length ? rows.join('')
+                : `<span style="font-size:11px;color:var(--text-muted)">${escHtml(t('settings.catIndex.makeEmpty'))}</span>`;
+        };
+        // Painted on OPEN: the followed list changes while this page is up, and a snapshot
+        // taken when the card was built would offer catalogues you have since removed.
+        makeFold.addEventListener('toggle', () => { if (makeFold.open) void paint(); });
+
+        document.getElementById('cat-index-make-export')?.addEventListener('click', async () => {
+            const name = (document.getElementById('cat-index-make-name') as HTMLInputElement | null)?.value?.trim()
+                || t('settings.catIndex.makeDefName');
+            const picks = [...document.querySelectorAll<HTMLInputElement>('.cix-pick')].filter((b) => b.checked);
+            if (!picks.length) { toast(t('settings.catIndex.makeNone'), 'warning'); return; }
+            // `app: 'bmm'` on every entry, said rather than left out. An absent app means
+            // "nobody said" and is kept by every reader — which is right for old documents
+            // and wrong for one being written now, where silence would put BMM catalogues in
+            // front of BSM users.
+            const doc = {
+                version: '1.0',
+                name,
+                catalogs: picks.map((b) => ({ type: b.dataset.t, url: b.dataset.u, app: 'bmm' })),
+            };
+            const { saveFile } = await import('../../core/api.js');
+            const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'catalogs';
+            const path = await saveFile({ defaultPath: `${slug}.json`, filters: [{ name: 'JSON', extensions: ['json'] }] });
+            if (!path) return;
+            try {
+                await invoke('write_text_file', { path, content: JSON.stringify(doc, null, 2) });
+                toast(t('settings.catIndex.makeDone').replace('{n}', String(picks.length)), 'success', 7000);
+            } catch (e) { toast(String(e), 'error'); }
+        });
+    }
+
     // ── Access: what a protected catalogue can ask for ──────────────────────
     //
     // On this card rather than repeated on the app / plugin / theme / preset screens, because

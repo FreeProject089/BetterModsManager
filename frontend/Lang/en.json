@@ -7913,5 +7913,13 @@
   "modpack.cat.errNoIndex": "That .cbmp has no catalogue index inside it.",
   "modpack.cat.errBadIndex": "That .cbmp's index could not be read.",
   "modpack.cat.errNoEntry": "That pack is not inside this catalogue any more.",
-  "modpack.cat.errRead": "That file could not be read."
+  "modpack.cat.errRead": "That file could not be read.",
+  "settings.catIndex.make": "Publish an index",
+  "settings.catIndex.makeDesc": "Turn the catalogues you follow into one address other people can follow. BMM writes the JSON; you host it wherever you like.",
+  "settings.catIndex.makeNamePh": "Index name",
+  "settings.catIndex.makeDefName": "My catalogues",
+  "settings.catIndex.makeExport": "Export the index",
+  "settings.catIndex.makeEmpty": "You follow no catalogue yet — add one above first.",
+  "settings.catIndex.makeNone": "Tick at least one catalogue.",
+  "settings.catIndex.makeDone": "Index written with {n} catalogue(s)."
 }

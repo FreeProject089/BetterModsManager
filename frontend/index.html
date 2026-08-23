@@ -3729,6 +3729,23 @@
                                      data-i18n="settings.catIndex.pwHint">...</div>
                             </details>
 
+                            <!-- Publish one. The list an index holds IS the fold above, with
+                                 the type already attached to each entry — so this asks for a
+                                 name and a set of ticks, and nothing that is already known. -->
+                            <details class="cat-index-fold" id="cat-index-make-fold">
+                                <summary data-i18n="settings.catIndex.make">Publish an index</summary>
+                                <p style="font-size:11px;color:var(--text-muted);margin:6px 0 8px;line-height:1.5"
+                                   data-i18n="settings.catIndex.makeDesc">...</p>
+                                <input type="text" class="input-field" id="cat-index-make-name"
+                                    data-i18n-placeholder="settings.catIndex.makeNamePh"
+                                    style="width:100%;font-size:12px;margin-bottom:8px" spellcheck="false">
+                                <div id="cat-index-make-list" style="display:flex;flex-direction:column;gap:4px;max-height:34vh;overflow:auto"></div>
+                                <div style="display:flex;justify-content:flex-end;margin-top:10px">
+                                    <button class="btn btn-primary btn-sm" id="cat-index-make-export"
+                                        data-i18n="settings.catIndex.makeExport">Export the index</button>
+                                </div>
+                            </details>
+
                             <details class="cat-index-fold" id="cat-index-history-fold">
                                 <summary data-i18n="settings.catIndex.history">History</summary>
                                 <!-- The history is the one list here that grows without bound (200 lines),
