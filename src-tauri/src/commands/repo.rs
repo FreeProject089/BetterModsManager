@@ -4459,12 +4459,32 @@ mod live_fallback_tests {
 
     use super::fetch_repo_info;
 
+    /// Is the TEST server up — not merely "is something listening on 8777".
+    ///
+    /// A bare TCP connect was not enough. Any process holding that port made this answer
+    /// true, the test then ran against a stranger and failed with
+    /// `the fallback must synthesise a repo from the listing: "repo.errInvalidRepo"` — which
+    /// reads exactly like the bug it was written to catch. Measured on a machine where
+    /// something else owned 8777 and answered 404 to /mods/.
+    ///
+    /// A test that goes red for environmental reasons teaches people to ignore red, which is
+    /// the thing the module comment above says it is avoiding. So the probe asks for the
+    /// resource the test needs and requires a 200.
     fn server_up() -> bool {
-        std::net::TcpStream::connect_timeout(
+        use std::io::{Read, Write};
+        let Ok(mut s) = std::net::TcpStream::connect_timeout(
             &"127.0.0.1:8777".parse().unwrap(),
             std::time::Duration::from_millis(300),
-        )
-        .is_ok()
+        ) else {
+            return false;
+        };
+        let _ = s.set_read_timeout(Some(std::time::Duration::from_millis(500)));
+        if s.write_all(b"GET /mods/ HTTP/1.0\r\nHost: 127.0.0.1\r\n\r\n").is_err() {
+            return false;
+        }
+        let mut head = [0u8; 32];
+        let n = s.read(&mut head).unwrap_or(0);
+        String::from_utf8_lossy(&head[..n]).contains(" 200")
     }
 
     /// The exact reproduction from the field: the URL the user pasted, verbatim.
