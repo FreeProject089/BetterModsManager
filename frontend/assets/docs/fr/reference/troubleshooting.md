@@ -19,8 +19,8 @@ structure**, et vérifie le chemin final *avant* d'appliquer.
 
 ### Un mod que j'ai désactivé est toujours actif
 
-Deux profils pointent sur le même dossier de jeu. BMM prévient à la configuration — c'est *une source
-majeure d'erreur humaine*. Note que les profils partageant **à la fois** le dossier de jeu et le dossier
+Deux profils pointent sur le même dossier de destination. BMM prévient à la configuration — c'est *une source
+majeure d'erreur humaine*. Note que les profils partageant **à la fois** le dossier de destination et le dossier
 mods gardent leurs listes actives synchronisées, mais pas ceux qui ne partagent que le dossier de *jeu* :
 chacun déploie au même endroit et aucun ne sait ce que l'autre a laissé. Donne à chaque profil son propre
 dossier mods. Voir [Profils & activation](doc-page:how-it-works/profiles-activation).
@@ -45,7 +45,7 @@ contrôle pour voir quels fichiers sont `missing`, `modified` ou `added`. Note q
 d'un mod n'échoue jamais — il établit la baseline — donc un échec signifie que quelque chose a changé
 depuis. Voir [Intégrité & hachage](doc-page:how-it-works/integrity-hashing).
 
-### J'ai annulé une activation — mon dossier de jeu est à moitié moddé ?
+### J'ai annulé une activation — mon dossier de destination est à moitié moddé ?
 
 Non. Annuler tue le worker puis lance une passe d'annulation en opération inverse : les écritures
 partielles sont reverties. Un **kill de force ou une coupure de courant**, c'est différent : il n'y a pas
@@ -85,7 +85,7 @@ tel nom, renomme le dossier du mod — BMM le ré-identifiera par son contenu, i
 tes disques et cadence les copies. Si ça saccade encore, pose un **plafond Mo/s** explicite pour ce
 disque.
 
-À savoir : si le dossier du jeu ou de sauvegarde est sur ton **disque système**, BMM réduit déjà les
+À savoir : si le dossier de destination ou de sauvegarde est sur ton **disque système**, BMM réduit déjà les
 copies à un seul thread quel que soit ton réglage, parce que Windows lui-même a besoin de la marge.
 Déplacer le dossier mods hors de `C:` est le plus gros gain disponible.
 

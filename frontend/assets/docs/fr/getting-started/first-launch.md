@@ -23,7 +23,7 @@ que c'est comme ça qu'on finit par déboguer un mod qu'on croyait désactivé.
 > Ton premier profil est prêt ! Tout ce que tu actives désormais est enregistré ici — à
 > l'abri des mises à jour et des réinstallations.
 
-Le contrat tient en une phrase. Tes mods vivent dans BMM, pas dans le jeu. Le dossier du jeu
+Le contrat tient en une phrase. Tes mods vivent dans BMM, pas dans le jeu. Le dossier de destination
 devient une cible d'écriture pour BMM, pas quelque chose que tu maintiens à la main.
 
 ## 3. Ajouter un mod et l'activer

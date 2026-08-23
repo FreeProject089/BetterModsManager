@@ -37,7 +37,7 @@ ever *read* here — shown on the right so you have something to aim at. Nothing
 the game until you later [sync](doc-page:features/library) the profile, exactly as normal.
 
 That's why the Mapper is safe to experiment in: the worst case is a mis-shaped mod, which you
-can reshape again — never a game folder full of stray files.
+can reshape again — never a destination folder full of stray files.
 
 One thing to know about collisions, since the Mapper won't stop to ask. Move a folder onto a
 place where a folder of the same name already exists and the two are **merged**, the way
@@ -56,7 +56,7 @@ place without scrolling through hundreds of textures.
 
 ## Remapping
 
-Pick an item in the mod tree and point it at the game folder it belongs in. BMM moves it there
+Pick an item in the mod tree and point it at the destination folder it belongs in. BMM moves it there
 *within the mod*, creating any missing parent folders along the way. A few supporting
 operations round it out:
 

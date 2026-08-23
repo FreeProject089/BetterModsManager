@@ -14,7 +14,7 @@ Its real job is stated on the empty screen:
 | | | |
 |---|---|---|
 | **1** | **Profile card** | Click to make it active. Everything you enable lands here. |
-| **2** | **Game folder** | Where this profile deploys. See the warning below. |
+| **2** | **Destination folder** | Where this profile deploys. See the warning below. |
 | **3** | **New profile** | One per *setup*, not one per game — you can have several. |
 
 <div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/profiles.bmmreplay" data-page="features/profiles" data-title="Creating a profile and switching to it"></div>
@@ -37,7 +37,7 @@ Switching profiles doesn't re-download anything: the mods already live in the
 
 BMM warns about this explicitly, and it's worth repeating.
 
-!!! danger "Two profiles, one game folder"
+!!! danger "Two profiles, one destination folder"
 
     From BMM's own warning: sharing the same folder between multiple profiles is *a major
     source of human error*.

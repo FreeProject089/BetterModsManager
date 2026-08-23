@@ -29,30 +29,30 @@ worth knowing up front:
 Two actions are easy to confuse, and only one of them touches your files:
 
 - **Switching the active profile** just changes *which profile you're working in*. It moves **no
-  files** — whatever is already deployed in the game folder stays exactly where it is. The active
+  files** — whatever is already deployed in the destination folder stays exactly where it is. The active
   profile is a single selection pointer, nothing more.
-- **Enabling or disabling a mod** is the only thing that touches the game folder.
+- **Enabling or disabling a mod** is the only thing that touches the destination folder.
 
 ```mermaid
 flowchart TB
     SW([Switch active profile]) --> PTR["Selection changes — no file I/O,<br/>deployed mods stay put"]
-    EN([Enable a mod]) --> DEPLOY["Copy its files into the game folder<br/>(back up whatever real game file it replaces)"]
+    EN([Enable a mod]) --> DEPLOY["Copy its files into the destination folder<br/>(back up whatever real game file it replaces)"]
     DIS([Disable a mod]) --> REMOVE["Remove its files — restore from the next<br/>mod that has them, or from _original/"]
 ```
 
 !!! warning "This is the single biggest source of confusion"
 
     Switching profiles does **not** swap your loadout. If profile A had ten mods deployed and you
-    switch to profile B, those ten files are still in the game folder. What changes is which list BMM
+    switch to profile B, those ten files are still in the destination folder. What changes is which list BMM
     is now editing. To actually change what the game sees, you enable and disable.
 
 ---
 
 ## Profiles that share folders mirror each other
 
-Enabled state is reconciled across profiles that point at the **same game folder and the same mods
+Enabled state is reconciled across profiles that point at the **same destination folder and the same mods
 folder**: enabling or disabling in one updates the others' active lists too. A mod cannot be enabled
-in two of them at once, because there is only one game folder underneath and only one file can be at a
+in two of them at once, because there is only one destination folder underneath and only one file can be at a
 given path.
 
 ```mermaid
@@ -64,12 +64,12 @@ flowchart TB
         P3["Profile C"]
         P4["Profile D"]
     end
-    Same --> NOTE["active lists stay in sync —<br/>one physical game folder"]
+    Same --> NOTE["active lists stay in sync —<br/>one physical destination folder"]
     Sep --> NOTE2["fully independent setups"]
 ```
 
 There is a related detail in the backup logic: when deciding whether a file it is about to overwrite
-is a *genuine game file*, BMM looks at the mods enabled in **every profile sharing that game folder** —
+is a *genuine game file*, BMM looks at the mods enabled in **every profile sharing that destination folder** —
 not just the active one. Otherwise switching profiles could make it mistake another profile's mod file
 for an original and back it up as one. See [Conflicts](doc-page:how-it-works/conflicts) for the full backup rule.
 
@@ -80,7 +80,7 @@ supported, but it is one setup with several views, not two setups.
 
 ## Non-destructive by construction
 
-Deploying never *moves* your originals out of the mods folder — it copies them into the game folder.
+Deploying never *moves* your originals out of the mods folder — it copies them into the destination folder.
 Your library keeps its pristine copy, always.
 
 ```mermaid
@@ -94,7 +94,7 @@ flowchart LR
 
     Some managers deploy by linking. BMM does not — every deployed file is a **real copy**. So a
     deploy costs real disk space, and "disable" is a real delete-and-restore, not an unlink. The
-    upside is that the game folder is plain files: it works with tools that don't understand links,
+    upside is that the destination folder is plain files: it works with tools that don't understand links,
     it survives the mods folder living on another drive, and it stays intact if you uninstall BMM.
 
 "Uninstall from a profile" is therefore "remove the deployed copies and put back what was underneath"
@@ -110,7 +110,7 @@ Be precise here, because it matters:
 | Interruption | What happens |
 |---|---|
 | **You click cancel** | The worker process is killed with `taskkill /T`, then BMM spawns *"an inverse-op undo subprocess so any partial writes are reverted"*. A cancelled deploy does not leave half a mod behind |
-| **BMM is force-quit, or the machine loses power mid-copy** | There is **no journal, so there is no automatic rollback.** The game folder can hold a partial deploy |
+| **BMM is force-quit, or the machine loses power mid-copy** | There is **no journal, so there is no automatic rollback.** The destination folder can hold a partial deploy |
 
 The second case is survivable rather than transactional, and the reason is the backup rule: the
 `_original/` copies are written **before** the game file is overwritten. So your game's own files are
@@ -119,7 +119,7 @@ copy (every copy force-overwrites), and disabling it cleans up using the union o
 *currently present* files, so the partial state is fully removed either way.
 
 One more guard: a single global lock means **one mod operation at a time**. Two applies can never race
-on the same game folder, so a partial state can only ever come from one interrupted operation, never
+on the same destination folder, so a partial state can only ever come from one interrupted operation, never
 from two half-finished ones interleaved.
 
 ---

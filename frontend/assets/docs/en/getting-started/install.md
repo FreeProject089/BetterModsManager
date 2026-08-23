@@ -17,7 +17,7 @@ BMM picks them up on first launch, so you land in a configured app rather than a
 
     Install BMM somewhere you own (your user folder, a games drive), not deep inside `Program Files`
     if you'd rather avoid Windows' permission prompts when it updates itself. BMM never touches your
-    game folders until *you* activate a mod.
+    destination folders until *you* activate a mod.
 
 ---
 
@@ -27,7 +27,7 @@ BMM picks them up on first launch, so you land in a configured app rather than a
 |---|---|
 | **OS** | Windows 10 or 11 |
 | **WebView2** | Required by BMM itself. Present on Windows 11 and on up-to-date Windows 10. If it is missing, install the [Evergreen Runtime](https://developer.microsoft.com/microsoft-edge/webview2/) — the installer does not bundle it (the installer's own window is native and needs nothing) |
-| **Disk** | The app itself is small. Plan for your **mods**, and remember that BMM deploys by **copying** — an enabled mod exists twice, once in your mods folder and once in the game folder |
+| **Disk** | The app itself is small. Plan for your **mods**, and remember that BMM deploys by **copying** — an enabled mod exists twice, once in your mods folder and once in the destination folder |
 | **Admin rights** | Only if you install into a protected location |
 
 BMM ships as a native app around the OS webview, not a bundled browser, so the download and the
@@ -110,10 +110,10 @@ of being deleted.
 Uninstalling removes the application. It does **not** touch:
 
 - your mods, games or backups — those live in your own folders,
-- anything BMM already deployed into a game folder.
+- anything BMM already deployed into a destination folder.
 
 That second point matters: because BMM deploys real copies rather than links, a mod that was enabled
-when you uninstalled **stays enabled** in the game. If you want a clean game folder, disable your
+when you uninstalled **stays enabled** in the game. If you want a clean destination folder, disable your
 mods *before* uninstalling — BMM will restore each original file from `_original/` as it goes. See
 [Conflicts](doc-page:how-it-works/conflicts).
 

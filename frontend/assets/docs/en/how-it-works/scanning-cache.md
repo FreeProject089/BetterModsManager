@@ -102,7 +102,7 @@ edited by hand.
 
 A scan is strictly **read-only**. It builds knowledge; it never modifies, moves, or deletes a mod.
 Unrecognised files are listed for you to name or [map](doc-page:how-it-works/mapper), not touched. Nothing in the
-scanning path writes to your game folder — that only happens when you enable something.
+scanning path writes to your destination folder — that only happens when you enable something.
 
 !!! info "See it in the app"
     Help & other → Developer → **mtime cache** and **Mod sync**; the **Scan** tutorial.

@@ -88,7 +88,7 @@ flowchart TB
     EACH --> HAVE{"already in<br/>_original/ ?"}
     HAVE -- yes --> COPY
     HAVE -- no --> WHOSE{"is the file currently<br/>there another mod's?"}
-    WHOSE -- yes --> COPY["copy the mod file<br/>into the game folder"]
+    WHOSE -- yes --> COPY["copy the mod file<br/>into the destination folder"]
     WHOSE -- no --> BK["back it up to _original/"] --> COPY
 ```
 
@@ -123,7 +123,7 @@ Two safety details in that cleanup:
   a file added to the mod folder after enabling still gets cleaned up.
 - Emptied directories are removed deepest-first with `fs::remove_dir`, which *"only removes EMPTY
   dirs (errors → no-op on non-empty), so this can never delete data"*, and the paths are relative to
-  the game folder *"so they can never escape it"*.
+  the destination folder *"so they can never escape it"*.
 
 ---
 

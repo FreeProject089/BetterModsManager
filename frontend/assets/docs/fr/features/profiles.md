@@ -15,7 +15,7 @@ Son vrai rôle est écrit sur l'écran vide :
 | | | |
 |---|---|---|
 | **1** | **Carte de profil** | Clique pour l'activer. Tout ce que tu actives atterrit ici. |
-| **2** | **Dossier du jeu** | Là où ce profil se déploie. Voir l'avertissement ci-dessous. |
+| **2** | **Dossier de destination** | Là où ce profil se déploie. Voir l'avertissement ci-dessous. |
 | **3** | **Nouveau profil** | Un par *configuration*, pas un par jeu — tu peux en avoir plusieurs. |
 
 <div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/profiles.bmmreplay" data-page="features/profiles" data-title="Créer un profil et basculer dessus"></div>
@@ -39,7 +39,7 @@ Changer de profil ne retélécharge rien : les mods vivent déjà dans la
 
 BMM prévient explicitement, et ça mérite d'être répété.
 
-!!! danger "Deux profils, un seul dossier de jeu"
+!!! danger "Deux profils, un seul dossier de destination"
 
     D'après l'avertissement de BMM lui-même : partager le même dossier entre plusieurs
     profils est *une source majeure d'erreur humaine*.

@@ -27,7 +27,7 @@ The Smart I/O numbers were measured, not guessed. The code says so:
 
     Some managers deploy by linking files instead of copying them. BMM does **not** — there is no
     `hard_link` or symlink anywhere in the deploy path. Every enabled file is a real copy in your
-    game folder. That costs disk space, and it is what makes a BMM-managed game folder work with any
+    destination folder. That costs disk space, and it is what makes a BMM-managed destination folder work with any
     tool that doesn't understand links, survive a mods folder living on another drive, and stay
     intact if BMM is uninstalled.
 
@@ -47,7 +47,7 @@ flowchart TB
 ```
 
 Parallelism is capped at **2 threads** — *"so file copies never saturate every CPU core (which is
-what causes the 'Ne répond pas' UI freeze)"*. And if either the game folder or the backup folder
+what causes the 'Ne répond pas' UI freeze)"*. And if either the destination folder or the backup folder
 lives on the OS drive, it drops to **one thread regardless of your settings**:
 
 > *"Returns true if `path` lives on the same drive as the OS (typically C:). Used to dial parallel
@@ -86,11 +86,11 @@ WebView2, or anything else"*. Three things follow:
 - Cancelling is a `taskkill /T` of the worker PID — *"instant and reliable, no matter how stuck the
   IO is"* — instead of waiting for a blocking call to return.
 - Cancelling a cancellable worker also spawns *"an inverse-op undo subprocess so any partial writes
-  are reverted"*. A cancelled deploy does not leave half a mod in your game folder.
+  are reverted"*. A cancelled deploy does not leave half a mod in your destination folder.
 
 Inside the app, every copy loop polls a cancel flag *"so that the user's cancel click can interrupt
 big mod copies almost instantly instead of waiting for the whole file to finish"*, and one global
-lock means **one mod operation at a time** — no two applies racing on the same game folder.
+lock means **one mod operation at a time** — no two applies racing on the same destination folder.
 
 ---
 

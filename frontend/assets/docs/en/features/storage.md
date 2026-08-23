@@ -32,7 +32,7 @@ Each disk on your system gets a card:
 | **Kind badge** | SSD / HDD / Unknown, plus **Cloud** or **Network** when detected (Drive, OneDrive, Dropbox, MEGA, iCloud, NAS). |
 | **USED bar** | Used vs. total, coloured blue → amber (>70%) → red (>90%). |
 | **PROFILES bar** | Total size of the profile mods living on this disk vs. free space — coloured by your alert thresholds. |
-| **Profile pills** | Which [profiles](doc-page:features/profiles) use the disk, and how (game folder / mod folder / backup). |
+| **Profile pills** | Which [profiles](doc-page:features/profiles) use the disk, and how (destination folder / mod folder / backup). |
 
 !!! note "Cloud/Network badges are heuristic"
 

@@ -24,7 +24,7 @@ doivent atterrir. Les noms de dossiers ici (`Data`, `Textures`, …) sont un exe
 que **ton** jeu lit réellement.
 
 Le déploiement est une simple recopie : pour chaque fichier du dossier du mod, le copier au même chemin
-relatif sous le dossier du jeu. Il n'y a aucune étape de correspondance intelligente. C'est pour ça que
+relatif sous le dossier de destination. Il n'y a aucune étape de correspondance intelligente. C'est pour ça que
 la forme doit être correcte *dans le dossier du mod*, et c'est exactement à ça que sert le mappeur.
 
 ---
@@ -99,7 +99,7 @@ supprimer quelque chose dont un déplacement en attente a encore besoin).
 
 - **Sélectionne** des éléments à gauche — sélection multiple, plus une action « sélectionner la racine
   du mod » qui prend tous les éléments de premier niveau, pour verser d'un coup un mod mal empaqueté
-  dans un dossier du jeu.
+  dans un dossier de destination.
 - **Déplace** en choisissant un dossier cible à droite. Sans rien de sélectionné, l'action retombe sur
   le déplacement de la racine du mod — c'est le cas courant : « mets tout ça sous `Data/Textures/` ».
 - **Filtre** l'un ou l'autre arbre par nom quand un mod a des centaines de fichiers.

@@ -32,30 +32,30 @@ connaître d'emblée :
 Deux actions faciles à confondre, et une seule touche tes fichiers :
 
 - **Changer le profil actif** change juste *dans quel profil tu travailles*. Ça ne déplace **aucun
-  fichier** — ce qui est déjà déployé dans le dossier du jeu reste exactement où il est. Le profil actif
+  fichier** — ce qui est déjà déployé dans le dossier de destination reste exactement où il est. Le profil actif
   est un simple pointeur de sélection, rien de plus.
-- **Activer ou désactiver un mod** est la seule chose qui touche au dossier du jeu.
+- **Activer ou désactiver un mod** est la seule chose qui touche au dossier de destination.
 
 ```mermaid
 flowchart TB
     SW([Changer de profil actif]) --> PTR["La sélection change — aucune I/O,<br/>les mods déployés restent en place"]
-    EN([Activer un mod]) --> DEPLOY["Copier ses fichiers dans le dossier du jeu<br/>(sauvegarder le vrai fichier de jeu remplacé)"]
+    EN([Activer un mod]) --> DEPLOY["Copier ses fichiers dans le dossier de destination<br/>(sauvegarder le vrai fichier de jeu remplacé)"]
     DIS([Désactiver un mod]) --> REMOVE["Retirer ses fichiers — restaurer depuis le mod<br/>suivant qui les a, ou depuis _original/"]
 ```
 
 !!! warning "C'est la plus grosse source de confusion"
 
     Changer de profil ne **permute pas** ton loadout. Si le profil A avait dix mods déployés et que tu
-    passes au profil B, ces dix fichiers sont toujours dans le dossier du jeu. Ce qui change, c'est la
+    passes au profil B, ces dix fichiers sont toujours dans le dossier de destination. Ce qui change, c'est la
     liste que BMM édite désormais. Pour changer réellement ce que le jeu voit, tu actives et désactives.
 
 ---
 
 ## Les profils qui partagent des dossiers se synchronisent
 
-L'état d'activation est réconcilié entre les profils qui pointent sur le **même dossier de jeu et le
+L'état d'activation est réconcilié entre les profils qui pointent sur le **même dossier de destination et le
 même dossier mods** : activer ou désactiver dans l'un met aussi à jour les listes actives des autres. Un
-mod ne peut pas être activé dans deux d'entre eux à la fois, parce qu'il n'y a qu'un seul dossier de jeu
+mod ne peut pas être activé dans deux d'entre eux à la fois, parce qu'il n'y a qu'un seul dossier de destination
 en dessous et qu'un seul fichier peut occuper un chemin donné.
 
 ```mermaid
@@ -67,7 +67,7 @@ flowchart TB
         P3["Profil C"]
         P4["Profil D"]
     end
-    Same --> NOTE["listes actives synchronisées —<br/>un seul dossier de jeu physique"]
+    Same --> NOTE["listes actives synchronisées —<br/>un seul dossier de destination physique"]
     Sep --> NOTE2["installations totalement indépendantes"]
 ```
 
@@ -99,7 +99,7 @@ flowchart LR
 
     Certains gestionnaires déploient en liant. BMM non — chaque fichier déployé est une **vraie copie**.
     Un déploiement coûte donc du vrai espace disque, et « désactiver » est une vraie suppression suivie
-    d'une restauration, pas un délien. L'avantage : le dossier du jeu ne contient que des fichiers
+    d'une restauration, pas un délien. L'avantage : le dossier de destination ne contient que des fichiers
     ordinaires — ça marche avec les outils qui ne comprennent pas les liens, ça survit à un dossier mods
     sur un autre disque, et ça reste intact si tu désinstalles BMM.
 
@@ -116,7 +116,7 @@ Soyons précis, parce que ça compte :
 | Interruption | Ce qui se passe |
 |---|---|
 | **Tu cliques sur annuler** | Le processus worker est tué par `taskkill /T`, puis BMM lance *« un sous-processus d'annulation en opération inverse pour que toute écriture partielle soit revertie »*. Un déploiement annulé ne laisse pas la moitié d'un mod |
-| **BMM est tué de force, ou la machine perd le courant en pleine copie** | Il n'y a **aucun journal, donc aucun rollback automatique.** Le dossier du jeu peut contenir un déploiement partiel |
+| **BMM est tué de force, ou la machine perd le courant en pleine copie** | Il n'y a **aucun journal, donc aucun rollback automatique.** Le dossier de destination peut contenir un déploiement partiel |
 
 Le second cas est survivable plutôt que transactionnel, et la raison est la règle de sauvegarde : les
 copies `_original/` sont écrites **avant** que le fichier de jeu soit écrasé. Les fichiers propres du jeu
@@ -125,7 +125,7 @@ la copie (chaque copie écrase de force), et le désactiver nettoie en utilisant
 *enregistrés* et *présents*, l'état partiel est donc entièrement retiré dans les deux cas.
 
 Une garde de plus : un verrou global signifie **une seule opération de mod à la fois**. Deux
-activations ne peuvent jamais courir sur le même dossier de jeu, un état partiel ne peut donc venir que
+activations ne peuvent jamais courir sur le même dossier de destination, un état partiel ne peut donc venir que
 d'une seule opération interrompue, jamais de deux inachevées entrelacées.
 
 ---

@@ -677,8 +677,9 @@ async function renderCatalog(container) {
         toast(t('plugins.sourceAdded') || 'Catalog added', 'success');
         await reloadCatalog();
     };
+    // After the markup, not inside the Add handler — see the note in apps-catalog.ts.
+    wireSourceAccess('plug', (m, k) => toast(m, k === 'warning' ? 'warning' : 'success'), () => { document.getElementById('nav-settings')?.click(); setTimeout(() => document.getElementById('settings-identity-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 250); }, () => container.querySelector('#plug-source-input')?.value?.trim() || '');
     container.querySelector('#plug-source-add')?.addEventListener('click', () => {
-        wireSourceAccess('plug', (m, k) => toast(m, k === 'warning' ? 'warning' : 'success'), () => { document.getElementById('nav-settings')?.click(); setTimeout(() => document.getElementById('settings-identity-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 250); }, () => container.querySelector('#plug-source-input')?.value?.trim() || '');
         const inp = container.querySelector('#plug-source-input');
         addSource(inp.value);
     });

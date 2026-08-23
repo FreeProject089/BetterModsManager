@@ -67,13 +67,13 @@ Oui, sous deux formes — choisissez celle qui correspond à votre infrastructur
 De façon moins magique qu'on a pu vous le dire, et la réponse honnête vaut mieux que l'argumentaire.
 
 **BMM n'utilise ni système de fichiers virtuel, ni liens symboliques, ni jonctions.** Il copie de
-vrais fichiers dans le dossier du jeu et sauvegarde le fichier de jeu remplacé dans le magasin
+vrais fichiers dans le dossier de destination et sauvegarde le fichier de jeu remplacé dans le magasin
 `_original/` du profil. C'est fondamentalement l'approche d'OMM.
 
 La différence est dans tout ce qui entoure la copie :
 
 - **La conscience des conflits.** BMM indexe quels mods livrent les mêmes fichiers — au sein d'un
-  profil, et entre profils partageant un dossier de jeu — et sait montrer tous les recouvrements
+  profil, et entre profils partageant un dossier de destination — et sait montrer tous les recouvrements
   d'un coup au lieu d'un par un. Voir [Conflits](doc-page:how-it-works/conflicts).
 - **Un ordre d'activation explicite.** L'ordre fait partie du profil : c'est quelque chose que
   vous définissez et partagez, pas le hasard de votre dernier clic.

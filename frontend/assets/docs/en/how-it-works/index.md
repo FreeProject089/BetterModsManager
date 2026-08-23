@@ -10,7 +10,7 @@ squadron in sync, the answers are here — with diagrams.
 
 ## The one guarantee everything is built on
 
-BMM is **non-destructive**. Your downloaded mods are the source of truth; the game folder is
+BMM is **non-destructive**. Your downloaded mods are the source of truth; the destination folder is
 disposable output that BMM can rebuild at any time. Every design decision below falls out of
 holding that line.
 
@@ -25,7 +25,7 @@ flowchart LR
         HASH["Integrity<br/>(BLAKE3)"]
         DEPLOY["Deploy<br/>(link / copy)"]
     end
-    GAME["Game folder<br/>(disposable output)"]
+    GAME["Destination folder<br/>(disposable output)"]
 
     LIB --> SCAN --> HASH
     PROF --> DEPLOY
@@ -33,11 +33,11 @@ flowchart LR
     GAME -. "rebuilt any time" .-> DEPLOY
 ```
 
-Because the game folder is output, a game update, a reinstall, or a bad mod can wipe it and
+Because the destination folder is output, a game update, a reinstall, or a bad mod can wipe it and
 lose nothing. You switch a profile back on; you never re-download.
 
 :::tip[The whole app in one sentence]
-Your mods are the source of truth; the game folder is disposable output BMM can rebuild — so
+Your mods are the source of truth; the destination folder is disposable output BMM can rebuild — so
 nothing you do to the game can cost you a mod.
 :::
 

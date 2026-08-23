@@ -19,7 +19,7 @@ Diagnostic**, and check the final path *before* applying.
 
 ### A mod I disabled is still active
 
-Two profiles pointing at the same game folder. BMM warns about this when you set it up — it is *a major
+Two profiles pointing at the same destination folder. BMM warns about this when you set it up — it is *a major
 source of human error*. Note that profiles sharing **both** the game and mods folders keep their active
 lists in sync, but profiles sharing only the *game* folder do not: each deploys into the same place and
 neither knows what the other left behind. Give each profile its own mods folder. See
@@ -45,7 +45,7 @@ files are `missing`, `modified` or `added`. Note that the *first* check on a mod
 establishes the baseline — so a failure means something changed since then. See
 [Integrity & hashing](doc-page:how-it-works/integrity-hashing).
 
-### I cancelled an activation — is my game folder half-modded?
+### I cancelled an activation — is my destination folder half-modded?
 
 No. Cancelling kills the worker and then runs an inverse-op undo pass, so partial writes are reverted.
 A **force-quit or power cut** is different: there is no journal, so a partial deploy can survive. It is

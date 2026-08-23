@@ -639,11 +639,13 @@ async function renderCatalog(container: HTMLElement) {
         toast(t('plugins.sourceAdded') || 'Catalog added', 'success');
         await reloadCatalog();
     };
-    container.querySelector('#plug-source-add')?.addEventListener('click', () => {
-        wireSourceAccess('plug', (m, k) => toast(m, k === 'warning' ? 'warning' : 'success'),
+    // After the markup, not inside the Add handler — see the note in apps-catalog.ts.
+    wireSourceAccess('plug', (m, k) => toast(m, k === 'warning' ? 'warning' : 'success'),
         () => { (document.getElementById('nav-settings') as HTMLElement | null)?.click(); setTimeout(() => document.getElementById('settings-identity-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 250); },
         () => (container.querySelector('#plug-source-input') as HTMLInputElement | null)?.value?.trim() || '');
-    const inp = container.querySelector('#plug-source-input') as HTMLInputElement;
+
+    container.querySelector('#plug-source-add')?.addEventListener('click', () => {
+        const inp = container.querySelector('#plug-source-input') as HTMLInputElement;
         addSource(inp.value);
     });
     container.querySelector('#plug-source-input')?.addEventListener('keydown', (e: any) => {

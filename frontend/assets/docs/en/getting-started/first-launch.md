@@ -10,7 +10,7 @@ BMM opens on an empty [Profiles](doc-page:features/profiles) screen and says:
 > No active profile — create your first profile so a game update or a reinstall never wipes
 > your setup again — or import your existing OvGME configs in one click.
 
-The form asks for a name and **three folders**, all required: the **game folder** (where
+The form asks for a name and **three folders**, all required: the **destination folder** (where
 BMM deploys), a **mods folder** (where this profile's mods are stored), and a **backup
 folder** (originals and the activity log). Optionally a game name, a colour and an icon.
 
@@ -22,7 +22,7 @@ that is how you end up debugging a mod you thought was off.
 > Your first profile is ready! Everything you enable from now on is saved right here — safe
 > from game updates and reinstalls.
 
-That's the deal in one sentence. Your mods live in BMM, not in the game. The game folder
+That's the deal in one sentence. Your mods live in BMM, not in the game. The destination folder
 becomes something BMM *writes to*, not something you maintain by hand.
 
 ## 3. Add a mod and turn it on

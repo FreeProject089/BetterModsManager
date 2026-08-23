@@ -27,7 +27,7 @@ reprend au premier lancement : tu arrives donc dans une app déjà réglée plut
 |---|---|
 | **OS** | Windows 10 ou 11 |
 | **WebView2** | Requis par BMM lui-même. Présent sur Windows 11 et sur un Windows 10 à jour. S'il manque, installe le [Evergreen Runtime](https://developer.microsoft.com/microsoft-edge/webview2/) — l'installeur ne l'embarque pas (sa propre fenêtre est native, elle n'a besoin de rien) |
-| **Disque** | L'app elle-même est petite. Prévois pour tes **mods**, et souviens-toi que BMM déploie en **copiant** — un mod activé existe deux fois, une dans ton dossier mods et une dans le dossier du jeu |
+| **Disque** | L'app elle-même est petite. Prévois pour tes **mods**, et souviens-toi que BMM déploie en **copiant** — un mod activé existe deux fois, une dans ton dossier mods et une dans le dossier de destination |
 | **Droits admin** | Seulement si tu installes dans un emplacement protégé |
 
 BMM est une app native autour du webview de l'OS, pas un navigateur embarqué : le téléchargement et
@@ -111,10 +111,10 @@ la sauvegarde plutôt que de réinitialiser ; un fichier corrompu est conservé 
 Désinstaller retire l'application. Ça ne touche **pas** :
 
 - tes mods, tes jeux ni tes sauvegardes — ils vivent dans tes propres dossiers,
-- ce que BMM a déjà déployé dans un dossier de jeu.
+- ce que BMM a déjà déployé dans un dossier de destination.
 
 Ce second point compte : parce que BMM déploie de vraies copies et non des liens, un mod activé au
-moment de la désinstallation **reste activé** dans le jeu. Si tu veux un dossier de jeu propre,
+moment de la désinstallation **reste activé** dans le jeu. Si tu veux un dossier de destination propre,
 désactive tes mods *avant* de désinstaller — BMM restaurera chaque fichier d'origine depuis
 `_original/` au passage. Voir [Conflits](doc-page:how-it-works/conflicts).
 

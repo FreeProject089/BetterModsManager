@@ -66,13 +66,13 @@ Yes, in two different shapes — pick whichever fits your infrastructure.
 Less magically than you may have been told, and the honest answer is worth more than the pitch.
 
 **BMM does not use a virtual filesystem, symlinks or junctions.** It copies real files into the
-game folder and backs up whatever real game file it replaced into the profile's `_original/`
+destination folder and backs up whatever real game file it replaced into the profile's `_original/`
 store. That is fundamentally the same approach OMM takes.
 
 The difference is everything around the copy:
 
 - **Conflict awareness.** BMM indexes which mods ship the same files — inside a profile, and
-  across profiles that share a game folder — and can show every overlap at once instead of one
+  across profiles that share a destination folder — and can show every overlap at once instead of one
   at a time. See [Conflicts](doc-page:how-it-works/conflicts).
 - **Explicit activation order.** The order is stored as part of the profile, so it is something
   you set and share, not an accident of what you clicked last.

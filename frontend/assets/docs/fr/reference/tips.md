@@ -88,8 +88,8 @@ rapide pour répondre à « comment je change *ce* bouton ».
     [profil](doc-page:features/profiles) dédié au lieu de le mélanger à ta config actuelle — ce
     qui est presque toujours ce qu'on veut en essayant la configuration de quelqu'un d'autre.
 
-!!! tip "Un dossier de jeu par profil"
+!!! tip "Un dossier de destination par profil"
 
-    Deux profils pointant vers le même dossier de jeu, c'est la première cause de « un mod que
+    Deux profils pointant vers le même dossier de destination, c'est la première cause de « un mod que
     j'ai désactivé est toujours actif ». Donne à chaque profil son propre dossier et toute
     cette catégorie de problème disparaît.

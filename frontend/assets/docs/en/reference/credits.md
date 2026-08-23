@@ -105,7 +105,7 @@ never read it:
 - **Publish your changes under the GPL too**, if you distribute a modified BMM, and say what
   you changed. Keeping a private fork to yourself is fine; shipping one without its source is
   not.
-- **No warranty.** BMM writes to your game folders. It keeps your mods out of harm's way by
+- **No warranty.** BMM writes to your destination folders. It keeps your mods out of harm's way by
   design, but the licence disclaims liability and you should still have backups.
 
 ### Third-party components

@@ -11,7 +11,7 @@ diagrammes.
 
 ## La garantie sur laquelle tout repose
 
-BMM est **non destructif**. Vos mods téléchargés sont la source de vérité ; le dossier du jeu est une
+BMM est **non destructif**. Vos mods téléchargés sont la source de vérité ; le dossier de destination est une
 sortie jetable que BMM peut reconstruire à tout moment. Chaque décision de conception ci-dessous
 découle de cette règle.
 
@@ -26,7 +26,7 @@ flowchart LR
         HASH["Intégrité<br/>(BLAKE3)"]
         DEPLOY["Déploiement<br/>(lien / copie)"]
     end
-    GAME["Dossier du jeu<br/>(sortie jetable)"]
+    GAME["Dossier de destination<br/>(sortie jetable)"]
 
     LIB --> SCAN --> HASH
     PROF --> DEPLOY
@@ -34,7 +34,7 @@ flowchart LR
     GAME -. "reconstruit à volonté" .-> DEPLOY
 ```
 
-Comme le dossier du jeu est une sortie, une mise à jour du jeu, une réinstallation ou un mauvais mod
+Comme le dossier de destination est une sortie, une mise à jour du jeu, une réinstallation ou un mauvais mod
 peut l'effacer sans rien perdre. Vous réactivez un profil ; vous ne re-téléchargez jamais.
 
 ## Plan de cette section

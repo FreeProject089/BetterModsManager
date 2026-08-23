@@ -79,7 +79,7 @@ Avant qu'un mod écrase un fichier, BMM copie le **fichier de jeu d'origine** da
 l'intérieur du dossier de sauvegarde du profil. Le détail important est la garde qui décide de ce qui
 compte comme « original » :
 
-> *« CRITIQUE : vérifier si le fichier actuellement dans le dossier du jeu vient en fait d'un autre
+> *« CRITIQUE : vérifier si le fichier actuellement dans le dossier de destination vient en fait d'un autre
 > mod … C'est un fichier de mod, PAS un original du jeu. Ne pas sauvegarder. »*
 
 Un fichier n'est donc sauvegardé **que la première fois où BMM remplace un véritable fichier de jeu**
@@ -94,7 +94,7 @@ flowchart TB
     EACH --> HAVE{"déjà dans<br/>_original/ ?"}
     HAVE -- oui --> COPY
     HAVE -- non --> WHOSE{"le fichier présent est-il<br/>celui d'un autre mod ?"}
-    WHOSE -- oui --> COPY["copier le fichier du mod<br/>dans le dossier du jeu"]
+    WHOSE -- oui --> COPY["copier le fichier du mod<br/>dans le dossier de destination"]
     WHOSE -- non --> BK["le sauvegarder dans _original/"] --> COPY
 ```
 
@@ -131,7 +131,7 @@ Deux détails de sûreté dans ce nettoyage :
   quand même nettoyé.
 - Les dossiers vidés sont retirés du plus profond au plus superficiel avec `fs::remove_dir`, qui *« ne
   retire que les dossiers VIDES (erreur → sans effet si non vide), donc ça ne peut jamais supprimer de
-  données »*, et les chemins sont relatifs au dossier du jeu *« donc ils ne peuvent jamais en
+  données »*, et les chemins sont relatifs au dossier de destination *« donc ils ne peuvent jamais en
   sortir »*.
 
 ---

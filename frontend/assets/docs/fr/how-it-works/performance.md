@@ -29,7 +29,7 @@ Les chiffres de Smart I/O ont été mesurés, pas devinés. Le code le dit :
 
     Certains gestionnaires déploient en liant les fichiers au lieu de les copier. BMM **non** — il n'y
     a aucun `hard_link` ni symlink dans le chemin de déploiement. Chaque fichier activé est une vraie
-    copie dans ton dossier de jeu. Ça coûte de l'espace disque, et c'est ce qui fait qu'un dossier de
+    copie dans ton dossier de destination. Ça coûte de l'espace disque, et c'est ce qui fait qu'un dossier de
     jeu géré par BMM fonctionne avec n'importe quel outil qui ne comprend pas les liens, survit à un
     dossier mods sur un autre disque, et reste intact si BMM est désinstallé.
 
@@ -49,7 +49,7 @@ flowchart TB
 ```
 
 Le parallélisme est plafonné à **2 threads** — *« pour que les copies de fichiers ne saturent jamais
-tous les cœurs CPU (ce qui est la cause du gel "Ne répond pas" de l'UI) »*. Et si le dossier du jeu
+tous les cœurs CPU (ce qui est la cause du gel "Ne répond pas" de l'UI) »*. Et si le dossier de destination
 ou le dossier de sauvegarde vit sur le disque système, ça descend à **un seul thread, quel que soit
 ton réglage** :
 
@@ -91,12 +91,12 @@ Les grosses applications et désapplications ne tournent pas du tout dans l'app.
   blocage des I/O »* — au lieu d'attendre le retour d'un appel bloquant.
 - Annuler un worker annulable lance aussi *« un sous-processus d'annulation en opération inverse pour
   que toute écriture partielle soit revertie »*. Un déploiement annulé ne laisse pas la moitié d'un
-  mod dans ton dossier de jeu.
+  mod dans ton dossier de destination.
 
 Dans l'app, chaque boucle de copie interroge un drapeau d'annulation *« pour que le clic d'annulation
 de l'utilisateur puisse interrompre les grosses copies de mods presque instantanément au lieu
 d'attendre la fin du fichier entier »*, et un verrou global signifie **une seule opération de mod à la
-fois** — jamais deux applications en course sur le même dossier de jeu.
+fois** — jamais deux applications en course sur le même dossier de destination.
 
 ---
 

@@ -86,8 +86,8 @@ to answer "how do I change *that* button".
     [profile](doc-page:features/profiles) for it instead of mixing it into your current setup —
     which is almost always what you want when trying someone else's configuration.
 
-!!! tip "One game folder per profile"
+!!! tip "One destination folder per profile"
 
-    Two profiles pointing at the same game folder is the single biggest source of "a mod I
+    Two profiles pointing at the same destination folder is the single biggest source of "a mod I
     disabled is still active". Give each profile its own folder and the whole class of problem
     disappears.

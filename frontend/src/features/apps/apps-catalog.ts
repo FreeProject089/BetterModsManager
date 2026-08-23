@@ -966,10 +966,17 @@ function renderSources() {
       </div>
     </div>`;
 
+    // Wired HERE, right after the markup is in the DOM — not inside a click handler.
+    //
+    // It was inside the "Add" handler, so nothing about the protected-source block existed
+    // until you pressed a button that has nothing to do with it: the key list never filled and
+    // MANAGE KEYS did nothing. A wire call that runs at the wrong moment fails exactly like a
+    // wire call that was never written, and neither says anything.
+    wireSourceAccess('apps', (m, k) => toast(m, k === 'warning' ? 'warning' : 'success'),
+        () => { (document.getElementById('nav-settings') as HTMLElement | null)?.click(); setTimeout(() => document.getElementById('settings-identity-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 250); },
+        () => (document.getElementById('apps-source-input') as HTMLInputElement | null)?.value?.trim() || '');
+
     document.getElementById('apps-add-source')?.addEventListener('click', async () => {
-        wireSourceAccess('apps', (m, k) => toast(m, k === 'warning' ? 'warning' : 'success'),
-            () => { (document.getElementById('nav-settings') as HTMLElement | null)?.click(); setTimeout(() => document.getElementById('settings-identity-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 250); },
-            () => (document.getElementById('apps-source-input') as HTMLInputElement | null)?.value?.trim() || '');
         const input = document.getElementById('apps-source-input') as HTMLInputElement;
         const url = input.value.trim();
         if (!url.startsWith('http')) { toast(t('apps.sources.invalidUrl')||'Invalid URL', 'error'); return; }

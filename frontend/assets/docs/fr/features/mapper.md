@@ -37,7 +37,7 @@ seulement *lu* ici — affiché à droite pour te donner une cible. Rien n'est �
 tant que tu ne [synchronises](doc-page:features/library) pas le profil ensuite, exactement comme d'habitude.
 
 C'est pour ça que le Mapper est sûr pour expérimenter : le pire des cas est un mod mal formé,
-que tu peux reformer à nouveau — jamais un dossier de jeu rempli de fichiers perdus.
+que tu peux reformer à nouveau — jamais un dossier de destination rempli de fichiers perdus.
 
 Une chose à savoir sur les collisions, parce que le Mapper ne s'arrête pas pour demander.
 Déplace un dossier là où un dossier du même nom existe déjà et les deux sont **fusionnés**,
@@ -56,7 +56,7 @@ placé sans faire défiler des centaines de textures.
 
 ## Remapper
 
-Choisis un élément dans l'arbre du mod et pointe-le vers le dossier du jeu auquel il
+Choisis un élément dans l'arbre du mod et pointe-le vers le dossier de destination auquel il
 appartient. BMM l'y déplace *dans le mod*, en créant au passage les dossiers parents
 manquants. Quelques opérations complémentaires complètent le tout :
 

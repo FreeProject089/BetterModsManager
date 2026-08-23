@@ -22,7 +22,7 @@ A stored mod must contain the full path the game expects, starting from the game
 names here (`Data`, `Textures`, …) are just an example — use whatever path **your** game reads from.
 
 Deployment is a plain mirror: for every file in the mod folder, copy it to the same relative path under
-the game folder. There is no clever matching step. That is why the shape has to be right *in the mod
+the destination folder. There is no clever matching step. That is why the shape has to be right *in the mod
 folder*, and it is exactly what the mapper is for.
 
 ---
@@ -94,7 +94,7 @@ The commit order matters and is fixed: **new folders first** (so a move can targ
 | **Right** | the game's tree, so you can see the destination you're aiming at |
 
 - **Select** items on the left — multi-select, plus a "select the mod root" action that grabs every
-  top-level item so you can dump a whole badly-packed mod into one game folder at once.
+  top-level item so you can dump a whole badly-packed mod into one destination folder at once.
 - **Move** by choosing a target folder on the right. With nothing selected, the action falls back to
   moving the mod root — which is the common case: "put all of this under `Data/Textures/`".
 - **Filter** either tree by name when a mod has hundreds of files.

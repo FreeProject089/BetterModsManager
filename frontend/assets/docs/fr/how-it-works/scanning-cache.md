@@ -106,7 +106,7 @@ une **lettre de lecteur qui change** — les profils stockent des chemins absolu
 
 Un scan est strictement **en lecture seule**. Il construit de la connaissance ; il ne modifie, ne
 déplace et ne supprime jamais un mod. Les fichiers non reconnus sont listés pour que tu les nommes ou
-les [mappes](doc-page:how-it-works/mapper), pas touchés. Rien dans le chemin de scan n'écrit dans ton dossier de jeu —
+les [mappes](doc-page:how-it-works/mapper), pas touchés. Rien dans le chemin de scan n'écrit dans ton dossier de destination —
 ça n'arrive que quand tu actives quelque chose.
 
 !!! info "À voir dans l'app"
