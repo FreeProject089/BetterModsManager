@@ -193,13 +193,42 @@ async fn connect(
     }
 
     let auth = match key {
-        Some(k) => session
-            .authenticate_publickey(
-                target.user.clone(),
-                PrivateKeyWithHashAlg::new(Arc::new(k), None),
-            )
-            .await
-            .map_err(|e| format!("repo.ssh.errAuth|{}", e))?,
+        Some(k) => {
+            // FOR AN RSA KEY THE HASH ALGORITHM IS NOT A DETAIL.
+            //
+            // `None` here means the legacy `ssh-rsa` signature, which is SHA-1 — and OpenSSH
+            // has refused it BY DEFAULT since 8.8. The server answers "no" exactly as it
+            // would for a key that is not in authorized_keys, so the failure reads as
+            // "your key is not authorised" when the key is perfectly fine and only the
+            // signature algorithm is too old.
+            //
+            // russh's own docs say to ask the server (`best_supported_rsa_hash`), which reads
+            // the `server-sig-algs` extension and returns rsa-sha2-512 / rsa-sha2-256 in
+            // preference order.
+            //
+            // This was invisible to the test suite because the test key is an ed25519, where
+            // no such choice exists: the tests were green while every RSA user was locked
+            // out. Found on a real key named RSABCWPRIVATE.ppk.
+            let hash_alg = if matches!(k.algorithm(), russh::keys::Algorithm::Rsa { .. }) {
+                session
+                    .best_supported_rsa_hash()
+                    .await
+                    .ok()
+                    .flatten()
+                    .flatten()
+            } else {
+                // ed25519 / ecdsa carry their hash in the algorithm itself; passing one here
+                // would be wrong rather than merely useless.
+                None
+            };
+            session
+                .authenticate_publickey(
+                    target.user.clone(),
+                    PrivateKeyWithHashAlg::new(Arc::new(k), hash_alg),
+                )
+                .await
+                .map_err(|e| format!("repo.ssh.errAuth|{}", e))?
+        }
         None => session
             .authenticate_password(target.user.clone(), secret.unwrap_or_default())
             .await
@@ -915,6 +944,27 @@ mod tests {
         };
         let target = SshTarget { key_path: key, auth: Some("key".into()), ..l.target.clone() };
         let (session, _fp) = connect(&target, None, None).await.expect("key auth should succeed");
+        open_sftp(&session).await.expect("sftp subsystem should open");
+    }
+
+    /// An RSA key must authenticate too.
+    ///
+    /// Its own test, separate from key_auth_connects, because the ed25519 there cannot fail
+    /// the way RSA does: `PrivateKeyWithHashAlg::new(key, None)` signs with the legacy
+    /// `ssh-rsa` (SHA-1) algorithm, which OpenSSH has refused BY DEFAULT since 8.8 — and the
+    /// server answers exactly as it would for a key that is not authorised at all. So the
+    /// suite was green while every RSA user got "your key was rejected".
+    #[tokio::test]
+    async fn an_rsa_key_connects_too() {
+        let l = skip_unless_live!();
+        let Ok(key) = std::env::var("BMM_SSH_TEST_RSA_KEY") else {
+            eprintln!("SKIPPED: set BMM_SSH_TEST_RSA_KEY to exercise RSA auth");
+            return;
+        };
+        let target = SshTarget { key_path: key, auth: Some("key".into()), ..l.target.clone() };
+        let (session, _fp) = connect(&target, None, None)
+            .await
+            .expect("an RSA key must authenticate: the hash algorithm has to be negotiated");
         open_sftp(&session).await.expect("sftp subsystem should open");
     }
 

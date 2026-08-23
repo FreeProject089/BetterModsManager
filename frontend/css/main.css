@@ -17173,9 +17173,23 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 
 /* Remote folder picker. Its own overlay, not the shared modal system (see the markup). */
 .repo-ssh-browser {
-    position: fixed; inset: 0; z-index: 4000;
+    /* z-index measured, not guessed. The app's modal layer runs to 11000 (.modal-overlay),
+       with .modal-backdrop at 10500; toasts sit at 100000 and context menus at 99999.
+       At the original 4000 this overlay rendered UNDER any open modal backdrop, which
+       swallowed every click on it — the panel was visible and completely inert, and nothing
+       logged anything. 11500 puts it above every modal and still below toasts, so a message
+       about the transfer appears over it rather than behind it. */
+    position: fixed; inset: 0; z-index: 11500;
     display: flex; align-items: center; justify-content: center;
     background: rgba(0, 0, 0, .55);
+    /* WITHOUT THIS THE PICKER IS INERT.
+       `body` carries `pointer-events: none` for the custom title bar's drag region, and
+       #app-window-outer switches it back on for the app. This overlay is appended to <body>
+       (it has to be — a transformed ancestor would break `position: fixed`), so it INHERITS
+       none and swallows nothing: visible, correctly laid out, and completely unclickable.
+       Measured — getComputedStyle said pointerEvents: "none" while every rect was right,
+       which is why raising the z-index changed nothing at all. */
+    pointer-events: auto;
 }
 .repo-ssh-browser[hidden] { display: none; }
 .repo-ssh-browser-panel {
