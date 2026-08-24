@@ -28,6 +28,7 @@ import { t } from '../core/i18n.js';
 import { toast } from './app.js';
 import { getCustomDoc, type CustomTutorialDoc } from './tutorial-custom.js';
 import { BMM_ACTIONS } from './tutorial-events.js';
+import { pickElement } from './tutorial-pick.js';
 
 const VIEWS = ['library', 'profiles', 'modlist', 'repo', 'mapper', 'plugins', 'apps', 'community', 'modpacks', 'docs', 'settings'];
 
@@ -169,9 +170,12 @@ export function openTutorialCreator(editId: string | null, onSaved: () => void):
         panel.append(foot);
     };
 
-    paint();
+    // Same order as the catalogue beside it: attached, then painted. Nothing here looks
+    // itself up by id today, but the two dialogs are read together and one of them having the
+    // safe order is not a property worth relying on.
     overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
     (document.getElementById('app-window-outer') || document.body).append(overlay);
+    paint();
 }
 
 function labelled(label: string, field: HTMLElement): HTMLElement {
@@ -221,6 +225,28 @@ function stepEditor(part: Doc['parts'][0], st: Doc['parts'][0]['steps'][0], si: 
 
     const sel = input(st.selector || '', t('tutc.selectorPh'), (v) => { st.selector = v || undefined; });
     row.append(sel);
+
+    // Point at the thing instead of describing it. The panel hides while picking — the
+    // element being pointed at is usually behind this dialog, and a picker you have to close
+    // the editor to use is a picker nobody reaches for.
+    const pick = el('button', 'btn btn-ghost btn-sm', t('tutc.pick'));
+    pick.setAttribute('type', 'button');
+    pick.title = t('tutc.pickTip');
+    pick.addEventListener('click', async () => {
+        const overlay = box.closest('.tutc-overlay') as HTMLElement | null;
+        if (overlay) overlay.style.visibility = 'hidden';
+        const res = await pickElement(t('tutc.pickHint'), t('tutc.pickCancel'));
+        if (overlay) overlay.style.visibility = '';
+        if (!res) return;
+        sel.value = res.selector;
+        st.selector = res.selector;
+        // A positional path is not refused — sometimes it is the only handle there is — but
+        // the one weak answer says so, because it is the one that breaks on someone else's
+        // screen and the author is the only person who can judge that.
+        toast(res.quality === 'positional' ? t('tutc.pickWeak') : t('tutc.pickOk'),
+            res.quality === 'positional' ? 'warning' : 'success');
+    });
+    row.append(pick);
     const test = el('button', 'btn btn-ghost btn-sm', t('tutc.test'));
     test.setAttribute('type', 'button');
     test.title = t('tutc.testTip');
@@ -240,24 +266,89 @@ function stepEditor(part: Doc['parts'][0], st: Doc['parts'][0]['steps'][0], si: 
     row.append(test);
     box.append(row);
 
-    // The action the step waits for, from the same registry the official tutorials use.
-    // "None" makes an informational step; anything else gates Next on the reader doing it.
-    const act = document.createElement('select');
-    act.className = 'input input-sm tutc-act';
-    const none = document.createElement('option');
-    none.value = ''; none.textContent = t('tutc.actNone');
-    act.append(none);
-    for (const [name, event] of Object.entries(BMM_ACTIONS)) {
+    // ── what the step waits for ──
+    //
+    // Five kinds, not one. The app's own announced moments are a short list that only grows
+    // by editing the feature being taught; the other four are OBSERVED — a click, an element
+    // appearing or going away, a view opening — so a lesson can gate on anything visible
+    // without anybody instrumenting it first.
+    const w = st.wait || (st.action?.event ? { kind: 'action' as const, event: st.action.event, desc: st.action.desc } : null);
+    const kindSel = document.createElement('select');
+    kindSel.className = 'input input-sm';
+    for (const [v, label] of [
+        ['', t('tutc.wait.none')],
+        ['action', t('tutc.wait.action')],
+        ['click', t('tutc.wait.click')],
+        ['appear', t('tutc.wait.appear')],
+        ['disappear', t('tutc.wait.disappear')],
+        ['view', t('tutc.wait.view')],
+    ] as const) {
         const o = document.createElement('option');
-        o.value = event as string;
-        o.textContent = name.toLowerCase().replace(/_/g, ' ');
-        if (st.action?.event === event) o.selected = true;
-        act.append(o);
+        o.value = v; o.textContent = label;
+        if ((w?.kind || '') === v) o.selected = true;
+        kindSel.append(o);
     }
-    act.addEventListener('change', () => {
-        st.action = act.value ? { event: act.value, desc: st.action?.desc || { en: '' } } : undefined;
+    kindSel.addEventListener('change', () => {
+        const k = kindSel.value;
+        // The old `action` field is cleared whenever `wait` takes over, so a document never
+        // carries two answers to one question — the reader would have to guess which wins.
+        st.action = undefined;
+        st.wait = k ? { kind: k as never, desc: w?.desc } : undefined;
+        repaint();
     });
-    box.append(labelled(t('tutc.actLabel'), act));
+    box.append(labelled(t('tutc.actLabel'), kindSel));
+
+    if (w?.kind === 'action') {
+        const act = document.createElement('select');
+        act.className = 'input input-sm';
+        for (const [name, event] of Object.entries(BMM_ACTIONS)) {
+            const o = document.createElement('option');
+            o.value = event as string;
+            o.textContent = name.toLowerCase().replace(/_/g, ' ');
+            if (w.event === event) o.selected = true;
+            act.append(o);
+        }
+        // A select with nothing chosen still SHOWS its first option, so a step left untouched
+        // would silently wait on whatever happened to be first in the registry.
+        if (!w.event) st.wait = { ...w, event: act.value };
+        act.addEventListener('change', () => { st.wait = { ...(st.wait || { kind: 'action' }), event: act.value }; });
+        box.append(labelled(t('tutc.wait.which'), act));
+    }
+
+    if (w && (w.kind === 'click' || w.kind === 'appear' || w.kind === 'disappear')) {
+        const wrow = el('div', 'tutc-step-row');
+        const wsel = input(w.selector || '', t('tutc.selectorPh'), (v) => {
+            st.wait = { ...(st.wait || { kind: w.kind }), selector: v || undefined };
+        });
+        wrow.append(wsel);
+        const wpick = el('button', 'btn btn-ghost btn-sm', t('tutc.pick'));
+        wpick.setAttribute('type', 'button');
+        wpick.addEventListener('click', async () => {
+            const overlay = box.closest('.tutc-overlay') as HTMLElement | null;
+            if (overlay) overlay.style.visibility = 'hidden';
+            const res = await pickElement(t('tutc.pickHint'), t('tutc.pickCancel'));
+            if (overlay) overlay.style.visibility = '';
+            if (!res) return;
+            wsel.value = res.selector;
+            st.wait = { ...(st.wait || { kind: w.kind }), selector: res.selector };
+        });
+        wrow.append(wpick);
+        box.append(labelled(t('tutc.wait.selector'), wrow));
+    }
+
+    if (w?.kind === 'view') {
+        const vs = document.createElement('select');
+        vs.className = 'input input-sm';
+        for (const v of VIEWS) {
+            const o = document.createElement('option');
+            o.value = v; o.textContent = v;
+            if (w.view === v) o.selected = true;
+            vs.append(o);
+        }
+        if (!w.view) st.wait = { ...w, view: vs.value };
+        vs.addEventListener('change', () => { st.wait = { ...(st.wait || { kind: 'view' }), view: vs.value }; });
+        box.append(labelled(t('tutc.wait.which'), vs));
+    }
 
     return box;
 }

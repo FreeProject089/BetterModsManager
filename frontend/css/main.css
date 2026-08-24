@@ -17620,6 +17620,13 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
 
 /* ── Tutorial creator & catalogues ──
    One family: both are children of the hub, and both borrow .modal-overlay for the dim. */
+/* ABOVE the tutorial hub.
+   The hub overlay sits at z-index 2000000 so a lesson's spotlight can cover the whole app.
+   These two are opened FROM it and inherit .modal-overlay's 11000 — which put them behind
+   the thing that opened them: visible as a dim, unreachable, and looking like nothing
+   happened. Measured, not guessed: 2000000 is what .tut-hub-overlay declares. */
+.tutc-overlay, .tutcat-overlay { z-index: 2000100; }
+
 .tutc-panel, .tutcat-panel {
     width: min(760px, 92vw); max-height: 84vh; overflow-y: auto;
     background: var(--bmm-bg-elevated); border: 1px solid var(--border);
@@ -17678,3 +17685,30 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
 .tutcat-item-mid { flex: 1; min-width: 0; }
 .tutcat-item-name { font-size: 13px; font-weight: 600; color: var(--text-primary); }
 .tutcat-item-desc { font-size: 11px; color: var(--text-muted); }
+
+
+/* ── Element picker (tutorial creator) ──
+   Absolute inside the app frame, above everything the creator itself draws. */
+#tut-pick-layer { position: absolute; inset: 0; z-index: 2000200; pointer-events: none; }
+.tut-pick-box {
+    position: absolute; border: 2px solid var(--accent);
+    background: rgba(var(--accent-rgb, 59, 130, 246), 0.14);
+    border-radius: 3px; transition: all .06s linear;
+}
+.tut-pick-tip {
+    position: absolute; font-family: var(--font-mono, monospace); font-size: 11px;
+    padding: 2px 7px; border-radius: 4px; white-space: nowrap; max-width: 60vw;
+    overflow: hidden; text-overflow: ellipsis;
+    background: var(--accent); color: #fff;
+}
+/* The weak answer looks different. A positional path is the one that breaks on somebody
+   else's screen, and the moment to notice is while pointing, not after shipping. */
+.tut-pick-tip[data-quality="positional"] { background: var(--warning); color: #1a1205; }
+.tut-pick-bar {
+    position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 12px;
+    padding: 8px 16px; border-radius: 999px; font-size: 12.5px;
+    background: var(--bmm-bg-elevated); color: var(--text-primary);
+    border: 1px solid var(--border); box-shadow: 0 8px 30px rgba(0,0,0,.45);
+}
+.tut-pick-esc { font-size: 11px; color: var(--text-muted); }

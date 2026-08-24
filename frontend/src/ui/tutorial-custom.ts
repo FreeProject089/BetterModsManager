@@ -43,6 +43,15 @@ export interface CustomTutorialDoc {
             selectors?: string[];
             optional?: boolean;
             action?: { event: string; desc?: LText };
+            /** A condition to satisfy before Next unlocks. `kind:'action'` names one of the
+             *  app's own moments; the others are watched here. */
+            wait?: {
+                kind: 'action' | 'click' | 'appear' | 'disappear' | 'view';
+                event?: string;      // kind 'action'
+                selector?: string;   // kind click | appear | disappear
+                view?: string;       // kind 'view'
+                desc?: LText;
+            };
         }>;
     }>;
     bmm_signature?: unknown;
@@ -128,15 +137,114 @@ export function toDef(doc: CustomTutorialDoc): TutorialDef {
                 ...(st.selector ? { selector: st.selector } : {}),
                 ...(st.selectors?.length ? { selectors: st.selectors } : {}),
                 ...(st.optional ? { optional: true } : {}),
-                ...(st.action?.event ? {
-                    action: { event: st.action.event, desc_key: put(`p${pi}.s${si}.action`, st.action.desc) },
-                } : {}),
+                // `wait` first, `action` as the older spelling. A watched condition is handed
+                // to the engine as an ordinary event name — it cannot tell the difference, and
+                // that is what keeps one engine running both kinds of tutorial.
+                ...(st.wait && (st.wait.kind !== 'action' || st.wait.event)
+                    ? {
+                        action: {
+                            event: st.wait.kind === 'action'
+                                ? (st.wait.event as string)
+                                : `ctut:${doc.id}:${pi}:${si}`,
+                            desc_key: put(`p${pi}.s${si}.action`, st.wait.desc),
+                        },
+                    }
+                    : st.action?.event
+                        ? { action: { event: st.action.event, desc_key: put(`p${pi}.s${si}.action`, st.action.desc) } }
+                        : {}),
             })),
         })),
     };
     registerRuntimeTexts('en', texts.en);
     registerRuntimeTexts('fr', texts.fr);
     return def;
+}
+
+// ── watched conditions ───────────────────────────────────────────────────────
+
+/** One armed watcher, and how to take it back down. */
+type Disarm = () => void;
+let _armed: Disarm[] = [];
+
+/** Take every watcher down. Called before arming a tutorial and when one ends. */
+export function disarmWatchers(): void {
+    for (const off of _armed) { try { off(); } catch { /* already gone */ } }
+    _armed = [];
+}
+
+/** The synthetic event a watched condition fires. Unique per step, so two steps watching the
+ *  same selector never satisfy each other. */
+const watchEvent = (docId: string, pi: number, si: number) => `ctut:${docId}:${pi}:${si}`;
+
+/**
+ * Arm the watchers a stored tutorial needs.
+ *
+ * Armed when a tutorial STARTS rather than when its definition is built: a MutationObserver
+ * per step, running for every custom tutorial the hub has ever listed, would be a standing
+ * cost for a feature nobody is using at that moment. Firing early is harmless — the engine
+ * only listens while the step is on screen.
+ */
+export function armWatchers(doc: CustomTutorialDoc): void {
+    disarmWatchers();
+    doc.parts.forEach((p, pi) => p.steps.forEach((st, si) => {
+        const w = st.wait;
+        if (!w || w.kind === 'action') return;
+        const name = watchEvent(doc.id, pi, si);
+        const fire = () => document.dispatchEvent(new CustomEvent(name));
+
+        if (w.kind === 'click' && w.selector) {
+            const sel = w.selector;
+            const onClick = (e: Event) => {
+                const target = e.target as Element | null;
+                // `closest`, not `matches`: a reader clicks the label or the icon inside a
+                // button far more often than the button's own box.
+                if (target?.closest?.(sel)) fire();
+            };
+            document.addEventListener('click', onClick, true);
+            _armed.push(() => document.removeEventListener('click', onClick, true));
+            return;
+        }
+
+        if ((w.kind === 'appear' || w.kind === 'disappear') && w.selector) {
+            const sel = w.selector;
+            const want = w.kind === 'appear';
+            // Visibility, not mere presence: this app keeps its modals in the DOM and hides
+            // them, so "does it exist" answers yes for every dialog in the application.
+            const there = () => {
+                const n = document.querySelector(sel) as HTMLElement | null;
+                if (!n) return false;
+                const cs = getComputedStyle(n);
+                return cs.display !== 'none' && cs.visibility !== 'hidden';
+            };
+            let last = there();
+            const obs = new MutationObserver(() => {
+                const now = there();
+                if (now === last) return;
+                last = now;
+                if (now === want) fire();
+            });
+            obs.observe(document.body, { childList: true, subtree: true, attributes: true,
+                attributeFilter: ['class', 'style', 'hidden'] });
+            _armed.push(() => obs.disconnect());
+            return;
+        }
+
+        if (w.kind === 'view' && w.view) {
+            const id = `view-${w.view}`;
+            const shown = () => {
+                const n = document.getElementById(id);
+                return !!n && getComputedStyle(n).display !== 'none';
+            };
+            let last = shown();
+            const obs = new MutationObserver(() => {
+                const now = shown();
+                if (now && !last) fire();
+                last = now;
+            });
+            obs.observe(document.body, { subtree: true, attributes: true, attributeFilter: ['class', 'style'] });
+            _armed.push(() => obs.disconnect());
+        }
+    }));
 }
 
 // ── store front ──────────────────────────────────────────────────────────────

@@ -8003,5 +8003,19 @@
   "tutcat.unfollow": "Stop following this catalogue",
   "tutcat.noSources": "No catalogue followed yet.",
   "tutcat.empty": "no tutorials listed",
-  "tutcat.install": "Install"
+  "tutcat.install": "Install",
+  "tutc.pick": "Pick…",
+  "tutc.pickTip": "Point at an element in the app and take its selector.",
+  "tutc.pickHint": "Click the element this step should highlight.",
+  "tutc.pickCancel": "Esc to cancel",
+  "tutc.pickOk": "Selector captured.",
+  "tutc.pickWeak": "Captured — but it is a positional path. That element has no id or stable class, so this may not match on another install.",
+  "tutc.wait.none": "Nothing — informational step",
+  "tutc.wait.action": "…do something BMM announces",
+  "tutc.wait.click": "…click an element",
+  "tutc.wait.appear": "…make an element appear",
+  "tutc.wait.disappear": "…make an element go away",
+  "tutc.wait.view": "…open a page",
+  "tutc.wait.which": "Which one",
+  "tutc.wait.selector": "Element"
 }

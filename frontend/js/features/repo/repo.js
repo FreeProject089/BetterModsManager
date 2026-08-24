@@ -165,7 +165,10 @@ async function openCatalogBuilder(onScreen) {
             const key = normRepoUrl(r?.url || '');
             if (!key || rows.has(key))
                 continue;
-            rows.set(key, { repo: r, from, on: true });
+            // OFF by default. Pre-ticking everything made "build a catalogue" mean "publish
+            // every repo I happen to be looking at", and the only way to publish three was to
+            // untick thirty. The list is a source to choose FROM, not a draft to prune.
+            rows.set(key, { repo: r, from, on: false });
             added += 1;
         }
         return added;
@@ -174,8 +177,16 @@ async function openCatalogBuilder(onScreen) {
     const ov = document.createElement('div');
     ov.className = 'modal-overlay open';
     ov.id = 'repo-cat-build';
-    ov.style.zIndex = '10000';
-    document.body.appendChild(ov);
+    // INSIDE the app frame, not on <body>, and above the modal layer rather than below it.
+    //
+    // Two faults in three lines. `#app-window-outer` carries `contain: paint`, so an overlay
+    // on <body> escapes the rounded window entirely: its dim covered the transparent Tauri
+    // margins and the desktop behind them, which is the shadow bleeding past the app in the
+    // report. And z-index 10000 is UNDER .modal-overlay's 11000 — the panel drew, and every
+    // click landed on whatever owned the stacking context above it, which reads exactly like
+    // "the modal is not clickable, clicks pass through".
+    ov.style.zIndex = '11200';
+    (document.getElementById('app-window-outer') || document.body).appendChild(ov);
     // A modal that does not lock the page scrolls it under itself: the wheel over the dim
     // area moves the list behind, which is the "it interacts with what is behind" everybody
     // reports and nobody can quite name. Restored on close, and restored exactly — an empty

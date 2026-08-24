@@ -153,8 +153,13 @@ export function openTutorialCatalog(onInstalled: () => void): void {
         }));
     }
 
-    paint();
+    // ATTACH FIRST. paint() ends in wire(), and wire() calls wireSourceAccess('tutcat'),
+    // which finds its controls with document.getElementById — on a detached overlay those ids
+    // are not in the document yet, wiring bails out, and the protected-source fold ships with
+    // an unfilled key list and a dead "manage keys" button. The exact bug the automations
+    // catalogue had, reproduced here by writing the same two lines in the same wrong order.
     overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
     (document.getElementById('app-window-outer') || document.body).append(overlay);
+    paint();
     if (sources().length) void refresh();
 }

@@ -8001,5 +8001,19 @@
   "tutcat.unfollow": "Ne plus suivre ce catalogue",
   "tutcat.noSources": "Aucun catalogue suivi pour le moment.",
   "tutcat.empty": "aucun tutoriel listé",
-  "tutcat.install": "Installer"
+  "tutcat.install": "Installer",
+  "tutc.pick": "Pointer…",
+  "tutc.pickTip": "Désigne un élément dans l'application et récupère son sélecteur.",
+  "tutc.pickHint": "Clique l'élément que cette étape doit surligner.",
+  "tutc.pickCancel": "Échap pour annuler",
+  "tutc.pickOk": "Sélecteur capturé.",
+  "tutc.pickWeak": "Capturé — mais c'est un chemin positionnel. Cet élément n'a ni id ni classe stable : ça peut ne rien trouver sur une autre installation.",
+  "tutc.wait.none": "Rien — étape informative",
+  "tutc.wait.action": "…fasse une action que BMM annonce",
+  "tutc.wait.click": "…clique un élément",
+  "tutc.wait.appear": "…fasse apparaître un élément",
+  "tutc.wait.disappear": "…fasse disparaître un élément",
+  "tutc.wait.view": "…ouvre une page",
+  "tutc.wait.which": "Laquelle",
+  "tutc.wait.selector": "Élément"
 }
