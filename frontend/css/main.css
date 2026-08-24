@@ -17568,8 +17568,8 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
     color: var(--text-secondary); list-style: none;
 }
 .ssh-src > summary::-webkit-details-marker { display: none; }
-.ssh-src > summary::before { content: 'B8'; margin-right: 6px; font-size: 10px; }
-.ssh-src[open] > summary::before { content: 'BE'; }
+.ssh-src > summary::before { content: '▸ '; color: var(--text-muted); }
+.ssh-src[open] > summary::before { content: '▾ '; }
 .ssh-src-body { padding: 0 12px 12px; display: flex; flex-direction: column; gap: 6px; }
 .ssh-src-label {
     font-size: 10px; text-transform: uppercase; letter-spacing: .05em;

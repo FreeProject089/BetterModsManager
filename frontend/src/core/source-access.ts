@@ -51,6 +51,35 @@ export function sourceAccessHtml(p: string): string {
  * currently holds, so the common case — paste an address, discover it is protected — does not
  * make you type it a second time.
  */
+/**
+ * Close whatever modal `el` is sitting in, on the way somewhere else.
+ *
+ * Exported because it is needed by more than one block, and a rule written twice diverges —
+ * which is exactly what happened: the protected-source fold closed its modal before
+ * navigating to Settings, the SSH fold did not, and the second one left a dialog covering
+ * the page it had just sent the reader to. Whoever adds the third fold gets this for free.
+ *
+ * Matched on "the class contains overlay" rather than on a list of known class names. The old
+ * list (`.modal-overlay, .mpc-overlay, .sched-pc-overlay, .tc-src-overlay`) had to be edited
+ * every time a screen invented its own marker class, and forgetting to is silent: the button
+ * still navigates, so it looks like it worked.
+ *
+ * Prefers the modal's own close button, because that is what runs whatever cleanup the screen
+ * attached to closing — removing the node behind its back skips it.
+ */
+export function closeOwningOverlay(el: Element): void {
+    let node: Element | null = el;
+    while (node && node !== document.body) {
+        const cls = typeof node.className === 'string' ? node.className : '';
+        if (/overlay/.test(cls)) {
+            const close = node.querySelector('.modal-close, [data-close]') as HTMLElement | null;
+            if (close) close.click(); else node.remove();
+            return;
+        }
+        node = node.parentElement;
+    }
+}
+
 export function wireSourceAccess(
     p: string,
     notify: (msg: string, kind: 'success' | 'warning') => void,
@@ -108,11 +137,7 @@ export function wireSourceAccess(
     // overlay left the Settings page behind a dimmer you could not dismiss, because the modal
     // that owned it belonged to the screen you just left.
     document.getElementById(`${p}-access-manage`)?.addEventListener('click', () => {
-        const owner = det.closest('.modal-overlay, .mpc-overlay, .sched-pc-overlay, .tc-src-overlay');
-        if (owner) {
-            const close = owner.querySelector('.modal-close, [data-close]') as HTMLElement | null;
-            if (close) close.click(); else owner.remove();
-        }
+        closeOwningOverlay(det);
         manageKeys();
     });
 

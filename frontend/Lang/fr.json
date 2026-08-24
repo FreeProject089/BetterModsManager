@@ -7455,7 +7455,7 @@
   "sched.bl.del": "Supprimer ce bloc",
   "sched.bl.inuse": "Cette tâche appelle encore ce bloc.",
   "sched.bl.nosteps": "Ajoutez d’abord des étapes.",
-  "sched.pc.sub": "Publiées par d autres — rien n est importé sans votre accord",
+  "sched.pc.sub": "Publiées par d’autres — rien n’est importé sans votre accord",
   "settings.catIndex.holds": "Cet index liste {n} catalogue(s).",
   "settings.catIndex.addOne": "Ajouter",
   "settings.catIndex.followed": "Suivi",

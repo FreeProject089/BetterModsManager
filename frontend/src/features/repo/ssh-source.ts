@@ -24,6 +24,7 @@
 import { t } from '../../core/i18n.js';
 import { pickFile } from '../../core/api.js';
 import { loadTargets, type SshTarget } from './repo-ssh.js';
+import { closeOwningOverlay } from '../../core/source-access.js';
 
 /** What a caller passes straight through to `plan_remote_repo_refresh` / `refresh_repo_from_server`. */
 export interface SshSourceArgs {
@@ -179,7 +180,13 @@ export function wireSshSource(p: string, manageKeys: () => void): void {
         if (input) input.value = f;
     });
 
-    document.getElementById(`${p}-ssh-manage`)?.addEventListener('click', () => manageKeys());
+    document.getElementById(`${p}-ssh-manage`)?.addEventListener('click', () => {
+        // Leave the dialog before navigating. Without this the button did exactly half its
+        // job: Settings loaded underneath, and the modal stayed on top of the page it had
+        // just taken you to.
+        closeOwningOverlay(det);
+        manageKeys();
+    });
     document.getElementById(`${p}-ssh-config`)?.addEventListener('click', () => {
         // The servers live in one place. Sending people there beats a second, drifting copy
         // of host/port/user/dir on this screen.
