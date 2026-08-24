@@ -8106,5 +8106,10 @@
   "tutcat.b.none": "Vous n’avez pas encore de tutoriel à vous.",
   "tutcat.b.write": "Écrire catalog.json ({n})",
   "tutcat.b.needbase": "Indiquez l’adresse depuis laquelle les fichiers seront servis.",
-  "tutcat.b.saved": "{n} tutoriel(s) écrit(s)."
+  "tutcat.b.saved": "{n} tutoriel(s) écrit(s).",
+  "navedit.tplChecklist": "Liste à cocher (conservée)",
+  "navedit.tplSystem": "Infos système",
+  "navedit.tplFetch": "Récupérer une URL",
+  "navedit.tplClipboard": "Presse-papiers",
+  "navedit.tplMulti": "Deux documents"
 }

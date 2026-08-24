@@ -7467,5 +7467,10 @@
   "tutcat.b.none": "You have no tutorials of your own yet.",
   "tutcat.b.write": "Write catalog.json ({n})",
   "tutcat.b.needbase": "Give the address the files will be served from.",
-  "tutcat.b.saved": "Wrote {n} tutorial(s)."
+  "tutcat.b.saved": "Wrote {n} tutorial(s).",
+  "navedit.tplChecklist": "Checklist (persisted)",
+  "navedit.tplSystem": "System info",
+  "navedit.tplFetch": "Fetch a URL",
+  "navedit.tplClipboard": "Clipboard",
+  "navedit.tplMulti": "Two documents"
 }

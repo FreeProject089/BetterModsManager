@@ -132,6 +132,188 @@ refresh();`,
     // starting point rather than a one-line demo. The remaining three each leave you
     // with something to build ON. bmm.notify is documented with the rest of the
     // sandbox API; it does not need a page of its own to advertise it.
+    {
+        label: 'Checklist (persisted)', labelKey: 'navedit.tplChecklist',
+        html: `<h1>Checklist</h1>
+<p class="sub">A real list, kept with the <b>storage</b> permission.</p>
+<div style="display:flex;gap:8px;margin-bottom:14px">
+  <input id="what" placeholder="Add something\u2026" style="flex:1;padding:9px 12px;border-radius:8px;background:#131b2b;color:#e6edf3;border:1px solid #232d42;font-family:inherit">
+  <button id="add">Add</button>
+</div>
+<div id="list"></div>`,
+        css: TPL_CSS_BASE + `
+.row { display: flex; align-items: center; gap: 10px; padding: 7px 2px; border-bottom: 1px solid #1b2435; }
+.row:last-child { border-bottom: 0; }
+.row span { flex: 1; font-size: 14px; }
+.x { background: none; border: 0; color: #64748b; font-size: 17px; cursor: pointer; padding: 0 4px; }
+.x:hover { color: #ef4444; }`,
+        js: `// Needs the "storage" permission.
+//
+// The list is re-read from storage on every change rather than kept only in a variable:
+// two windows of the same page would otherwise each hold their own copy and the last one
+// to save would win silently.
+const KEY = 'items';
+const listEl = document.getElementById('list');
+const input = document.getElementById('what');
+
+async function load() { try { return JSON.parse(await bmm.storage.get(KEY) || '[]'); } catch (e) { return []; } }
+async function save(items) { await bmm.storage.set(KEY, JSON.stringify(items)); }
+
+async function draw() {
+  const items = await load();
+  listEl.innerHTML = '';
+  if (!items.length) { listEl.innerHTML = '<div class="sub">Nothing yet.</div>'; return; }
+  items.forEach((it, i) => {
+    const row = document.createElement('label');
+    row.className = 'row';
+    const box = document.createElement('input');
+    box.type = 'checkbox'; box.checked = !!it.done;
+    box.addEventListener('change', async () => {
+      const cur = await load(); cur[i].done = box.checked; await save(cur); draw();
+    });
+    const txt = document.createElement('span');
+    txt.textContent = it.text;
+    if (it.done) txt.style.textDecoration = 'line-through';
+    if (it.done) txt.style.opacity = '.55';
+    const del = document.createElement('button');
+    del.textContent = '\u00d7';
+    del.className = 'x';
+    del.addEventListener('click', async (e) => {
+      e.preventDefault();
+      const cur = await load(); cur.splice(i, 1); await save(cur); draw();
+    });
+    row.append(box, txt, del);
+    listEl.append(row);
+  });
+}
+
+document.getElementById('add').addEventListener('click', async () => {
+  const text = input.value.trim();
+  if (!text) return;
+  const items = await load();
+  items.push({ text: text, done: false });
+  await save(items);
+  input.value = '';
+  draw();
+});
+input.addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('add').click(); });
+
+draw();`,
+    },
+    {
+        label: 'System info', labelKey: 'navedit.tplSystem',
+        html: `<h1>This machine</h1>
+<p class="sub">Read-only values BMM chooses to expose \u2014 needs the <b>system info</b> permission.</p>
+<button id="go">Read</button>
+<div class="out" id="out">Press Read.</div>`,
+        css: TPL_CSS_BASE + `
+.kv { display: flex; justify-content: space-between; gap: 16px; padding: 5px 0; border-bottom: 1px solid #1b2435; }
+.kv:last-child { border-bottom: 0; }
+.kv span { color: #8b95a7; }`,
+        js: `// Needs the "system info" permission.
+//
+// Every value here is read-only and chosen by BMM — there is no file access and no shell.
+// A missing permission rejects rather than returning nothing, so the error is shown as
+// itself instead of an empty table that looks like a bug.
+const out = document.getElementById('out');
+
+function row(k, v) { return '<div class="kv"><span>' + k + '</span><b>' + v + '</b></div>'; }
+
+document.getElementById('go').addEventListener('click', async () => {
+  out.textContent = 'Reading\u2026';
+  try {
+    const s = await bmm.system.info();
+    const gb = (mb) => (mb / 1024).toFixed(1) + ' GB';
+    out.innerHTML = row('OS', s.os + ' ' + (s.osVersion || ''))
+      + row('Architecture', s.arch)
+      + row('Kernel', s.kernelVersion || '\u2014')
+      + row('CPU cores', s.cpuCount)
+      + row('Memory', gb(s.memAvailableMb) + ' free of ' + gb(s.memTotalMb))
+      + row('Up for', Math.round(s.uptimeSec / 3600) + ' h');
+  } catch (e) {
+    out.textContent = String(e);
+  }
+});`,
+    },
+    {
+        label: 'Fetch a URL', labelKey: 'navedit.tplFetch',
+        html: `<h1>Fetch</h1>
+<p class="sub">Needs the <b>network</b> permission, and the origin on this page\u2019s allow-list.</p>
+<div style="display:flex;gap:8px;margin-bottom:12px">
+  <input id="url" value="https://api.github.com/repos/rust-lang/rust" style="flex:1;padding:9px 12px;border-radius:8px;background:#131b2b;color:#e6edf3;border:1px solid #232d42;font-family:inherit">
+  <button id="go">Go</button>
+</div>
+<div class="out" id="out">Nothing yet.</div>`,
+        css: TPL_CSS_BASE,
+        js: `// Needs the "network" permission AND the origin on this page's allow-list.
+//
+// bmm.fetch, not window.fetch: the page runs at an opaque origin and the policy only
+// relaxes for the hosts you named. An origin you forgot to add rejects here, which is the
+// error you want \u2014 not a request that quietly goes nowhere.
+const out = document.getElementById('out');
+const url = document.getElementById('url');
+
+document.getElementById('go').addEventListener('click', async () => {
+  out.textContent = 'Fetching\u2026';
+  try {
+    const text = await bmm.fetch(url.value.trim());
+    // Show it as text. Parsing is the page's job and depends on what you asked for.
+    out.textContent = text.slice(0, 4000);
+  } catch (e) {
+    out.textContent = 'Refused or failed: ' + String(e)
+      + '\n\nAdd the origin under this page\u2019s Network permission.';
+  }
+});`,
+    },
+    {
+        label: 'Clipboard', labelKey: 'navedit.tplClipboard',
+        html: `<h1>Clipboard</h1>
+<p class="sub">Copy out and paste in \u2014 needs the <b>clipboard</b> permission.</p>
+<textarea id="what" rows="5" style="width:100%;box-sizing:border-box;padding:10px;border-radius:8px;background:#131b2b;color:#e6edf3;border:1px solid #232d42;font-family:inherit"></textarea>
+<div style="margin-top:12px;display:flex;gap:8px">
+  <button id="copy">Copy</button>
+  <button id="paste">Paste</button>
+</div>
+<div class="out" id="out">Ready.</div>`,
+        css: TPL_CSS_BASE,
+        js: `// Needs the "clipboard" permission.
+//
+// Reading the clipboard is a real capability, so it is a separate grant from writing in
+// most systems' minds \u2014 here one grant covers both, and the page says which it is using.
+const out = document.getElementById('out');
+
+document.getElementById('copy').addEventListener('click', async () => {
+  const text = document.getElementById('what').value;
+  try { await bmm.clipboard.write(text); out.textContent = 'Copied ' + text.length + ' characters.'; }
+  catch (e) { out.textContent = String(e); }
+});
+
+document.getElementById('paste').addEventListener('click', async () => {
+  try {
+    const text = await bmm.clipboard.read();
+    document.getElementById('what').value = text;
+    out.textContent = 'Pasted ' + text.length + ' characters.';
+  } catch (e) { out.textContent = String(e); }
+});`,
+    },
+    {
+        label: 'Two documents', labelKey: 'navedit.tplMulti',
+        html: `<h1>Home</h1>
+<p class="sub">A page can hold several documents. This one links to a second.</p>
+<p><a href="about.html">About this page \u2192</a></p>
+<div class="out">Add <b>about</b> under \u201cDocuments in this page\u201d, then reload.
+Files you import (images, fonts) work the same way: <code>src="assets/logo.png"</code>.</div>
+<p class="sub" style="margin-top:22px">\u00a9 <span id="year"></span></p>`,
+        css: TPL_CSS_BASE + `
+a { color: #60a5fa; }
+code { background: #131b2b; padding: 1px 5px; border-radius: 4px; }`,
+        js: `// No permissions needed.
+//
+// The link below is an ORDINARY relative link. The page bundle is served as a folder, so
+// about.html sits beside index.html and <a href="about.html"> just works \u2014 add the second
+// document from "Documents in this page" in the editor.
+document.getElementById('year').textContent = new Date().getFullYear();`,
+    },
 ];
 
 interface CustomNavItem {
