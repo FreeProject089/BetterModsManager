@@ -1637,6 +1637,17 @@
                                                     <input type="text" class="form-input" id="repo-ssh-key" data-i18n-placeholder="repo.ssh.keyPh" placeholder="id_ed25519, or a PuTTY .ppk" spellcheck="false">
                                                     <button class="btn btn-secondary btn-sm" id="repo-ssh-key-pick" type="button" data-i18n="repo.ssh.browse">Parcourir…</button>
                                                 </div>
+                                                <!-- The keys already configured under Identity & API.
+                                                     A key is a PATH on this machine, which is exactly what
+                                                     SFTP needs, so the ring that a catalogue knows you by can
+                                                     open a shell too. Typing the same path a second time — and
+                                                     getting it subtly wrong — was the only way to reuse one.
+                                                     Picking one FILLS the field above rather than replacing it:
+                                                     what will be read at send time stays visible and editable. -->
+                                                <div class="repo-ssh-keyrow" style="margin-top:6px">
+                                                    <select class="form-input" id="repo-ssh-key-ring"></select>
+                                                    <button class="btn btn-ghost btn-sm" id="repo-ssh-key-manage" type="button" data-i18n="repo.ssh.manageKeys">Gérer les clés</button>
+                                                </div>
                                             </label>
                                             <label class="repo-ssh-field repo-ssh-keyonly">
                                                 <span data-i18n="repo.ssh.passphrase">Phrase secrète</span>
@@ -1681,6 +1692,13 @@
                                                 <span data-i18n="repo.ssh.forget">Oublier l’empreinte</span>
                                             </button>
                                         </div>
+
+                                        <!-- The diagnosis, when there is one.
+                                             The verdict lives in the pill beside the title, which is 10px and
+                                             round: a sentence explaining WHY a directory refused a write does
+                                             not fit in it, and stuffing one in produced an unreadable oval.
+                                             This is the block that answers "but I have the rights". -->
+                                        <div class="repo-ssh-why" id="repo-ssh-why" hidden></div>
 
                                         <div class="repo-ssh-progress" id="repo-ssh-progress" hidden>
                                             <div class="repo-ssh-bar"><div class="repo-ssh-bar-fill" id="repo-ssh-bar-fill"></div></div>
@@ -6853,6 +6871,13 @@
                             data-i18n="repo.update.fromSsh"
                             data-tasky="repo.update.fromSshTip" data-tasky-icon="icon-download">From the server</button>
                     </div>
+                    <!-- The SSH credentials for the address above.
+                         "ssh://nom" named a saved target and nothing else: a target that
+                         authenticates by PASSWORD was refused outright here, because nothing
+                         about a password is stored and a scheduled run has nobody to ask. In
+                         front of this dialog there IS somebody to ask. Mounted by repo.ts so
+                         the markup and its listeners cannot separate. -->
+                    <div id="repo-update-ssh-mount" style="margin:10px 0"></div>
                     <div id="repo-update-content" style="display:none;">
                         <!-- Current repo content (remove) -->
                         <div style="font-size:12px;font-weight:700;color:var(--text-secondary);margin-bottom:8px;" data-i18n="repo.update.current">Current content — uncheck to remove</div>

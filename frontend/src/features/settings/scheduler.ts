@@ -5342,8 +5342,19 @@ function showPresetCatalog(data: { presets: any[]; sources: PresetSource[] }): v
     }
 
     overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
-    paint();
+    // ATTACH FIRST, then paint.
+    //
+    // paint() ends by calling wire(), and wire() calls wireSourceAccess('pc', ...), which
+    // finds its controls with document.getElementById. Painting into a DETACHED overlay meant
+    // those ids were not in the document yet: the lookup returned null, wiring bailed out
+    // silently, and the protected-source block on this one screen opened onto a dropdown
+    // nothing ever filled and a "manage keys" button with no listener. Every other screen
+    // mounts into markup that is already on the page, which is why only this one was broken.
+    //
+    // It repaired itself on any later repaint — following a source, an error message, a
+    // refresh — which is exactly what made it look intermittent rather than broken.
     (document.getElementById('app-window-outer') || document.body).appendChild(overlay);
+    paint();
 }
 
 export async function inspectTasksFile(): Promise<void> {

@@ -1981,6 +1981,20 @@ export function initRepo() {
         document.getElementById('repo-update-mode-remote')?.addEventListener('click', () => setMode(true));
         setMode(false);
 
+        // The SSH credentials block, mounted and wired in one place so markup with no
+        // listeners cannot ship — the failure that has now bitten three separate screens.
+        const sshMount = document.getElementById('repo-update-ssh-mount');
+        if (sshMount && !sshMount.innerHTML) {
+            void import('./ssh-source.js').then((m) => {
+                sshMount.innerHTML = m.sshSourceHtml('repo-update');
+                m.wireSshSource('repo-update', () => {
+                    (document.getElementById('nav-settings') as HTMLElement | null)?.click();
+                    setTimeout(() => document.getElementById('settings-identity-card')
+                        ?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 250);
+                });
+            });
+        }
+
         // ── from the server ─────────────────────────────────────────────────
         //
         // The repo is fetched into a folder YOU choose, not a hidden working copy: the update
@@ -1988,12 +2002,18 @@ export function initRepo() {
         // publishing it back over what is live.
         document.getElementById('btn-repo-update-pull')?.addEventListener('click', async () => {
             const m = await import('./repo-ssh.js');
+            const src = await import('./ssh-source.js');
             const names = m.sshTargetNames();
             if (!names.length) {
                 // Say where to configure it rather than failing about a field never filled in.
                 toast(t('repo.sync.useSshNotSet'), 'warning', 7000);
                 return;
             }
+            // Credentials typed into the block below, when there are any. This is the path
+            // that makes a PASSWORD server usable from here at all: the stored-target helpers
+            // refuse one on purpose, because nothing about a password is written down and an
+            // unattended run has nobody to ask. Somebody is looking at this dialog.
+            const typedCreds = src.readSshSource('repo-update');
             // The address names WHICH server. `ssh://nom` picks that target, `ssh://` the one
             // called default, and an empty field the only one you have.
             const typed = (document.getElementById('repo-update-url') as HTMLInputElement | null)?.value?.trim() || '';
@@ -2022,7 +2042,9 @@ export function initRepo() {
             if (btn) btn.disabled = true;
             try {
                 toast(t('repo.update.pulling'), 'info', 4000);
-                const n = await m.pullStoredTarget(folder, target);
+                const n = typedCreds.ssh
+                    ? await m.pullWithTarget(folder, typedCreds.ssh, typedCreds.sshSecret)
+                    : await m.pullStoredTarget(folder, target);
                 toast((t('repo.update.pulled') || '').replace('{n}', String(n)), 'success', 5000);
                 await loadRepoFolder(folder);
             } catch (e) {
@@ -2036,8 +2058,13 @@ export function initRepo() {
         document.getElementById('btn-repo-update-publish')?.addEventListener('click', async () => {
             if (!repoDir) return;
             const m = await import('./repo-ssh.js');
+            const src = await import('./ssh-source.js');
             const names = m.sshTargetNames();
             if (!names.length) { toast(t('repo.sync.useSshNotSet'), 'warning', 7000); return; }
+            // Read here too. A fetch that used typed credentials and a publish that fell back
+            // to the stored target would put the edited repo on a DIFFERENT server from the
+            // one it came from, and report success for doing it.
+            const pubCreds = src.readSshSource('repo-update');
             // Back to the target the address names, so a fetch and its publish cannot end up
             // on two different servers.
             const typedP = (document.getElementById('repo-update-url') as HTMLInputElement | null)?.value?.trim() || '';
@@ -2053,7 +2080,9 @@ export function initRepo() {
             const btn = document.getElementById('btn-repo-update-publish') as HTMLButtonElement | null;
             if (btn) btn.disabled = true;
             try {
-                const n = await m.publishStoredTarget(repoDir, pTarget);
+                const n = pubCreds.ssh
+                    ? await m.publishWithTarget(repoDir, pubCreds.ssh, pubCreds.sshSecret)
+                    : await m.publishStoredTarget(repoDir, pTarget);
                 toast((t('repo.update.published') || '').replace('{n}', String(n)), 'success', 6000);
             } catch (e) {
                 toast(explainSsh(String(e)), 'error', 9000);

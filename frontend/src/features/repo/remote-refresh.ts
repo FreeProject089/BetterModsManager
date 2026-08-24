@@ -11,6 +11,7 @@
 
 import { invoke, pickFolder } from '../../core/api.js';
 import { sourceAccessHtml, wireSourceAccess } from '../../core/source-access.js';
+import { sshSourceHtml, wireSshSource, readSshSource } from './ssh-source.js';
 import { toast } from '../../ui/app.js';
 import { t } from '../../core/i18n.js';
 import { formatBytes } from '../../core/utils.js';
@@ -48,7 +49,10 @@ const $ = (id: string) => document.getElementById(id);
 function inputs(): Record<string, unknown> | null {
     const baseUrl = ($('remote-base-url') as HTMLInputElement | null)?.value?.trim() || '';
     const manifestPath = ($('remote-manifest-path') as HTMLInputElement | null)?.value?.trim() || '';
-    if (!baseUrl) {
+    // An SSH server carries its own directory, so the URL above is not needed in that case —
+    // demanding one would be asking for an address nobody is going to use.
+    const viaSsh = readSshSource('remote').ssh !== null;
+    if (!baseUrl && !viaSsh) {
         toast(t('repo.remoteNeedUrl') || 'Enter the URL of the mods folder', 'error');
         return null;
     }
@@ -68,6 +72,10 @@ function inputs(): Record<string, unknown> | null {
         // a stray value here can never rename a repo people already subscribe to.
         name: ($('remote-repo-name') as HTMLInputElement | null)?.value?.trim() || null,
         gameName: ($('remote-game-name') as HTMLInputElement | null)?.value?.trim() || null,
+        // When a server is chosen here the backend reads the listing over SFTP instead of an
+        // HTTP autoindex. Both go through the SAME inputs() so preview and run cannot end up
+        // on different transports — the split that makes a preview succeed and the run fail.
+        ...readSshSource('remote'),
     };
 }
 
@@ -206,6 +214,20 @@ export function initRemoteRefresh() {
                     ?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 250);
             },
             () => ($('remote-base-url') as HTMLInputElement | null)?.value?.trim() || '');
+
+        // The SSH block goes BESIDE the protected-source one, not inside it.
+        //
+        // They answer different questions and were being confused for each other: the fold
+        // above carries what a SUBSCRIBER presents to a protected HTTP repo — a download
+        // password and an identity key. This one carries what an AUTHOR needs to reach their
+        // own machine: an account and either a password or a private key. Merging them would
+        // make one control mean two things depending on the address typed above it.
+        mount.insertAdjacentHTML('beforeend', sshSourceHtml('remote'));
+        wireSshSource('remote', () => {
+            (document.getElementById('nav-settings') as HTMLElement | null)?.click();
+            setTimeout(() => document.getElementById('settings-identity-card')
+                ?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 250);
+        });
     }
 
     $('btn-remote-browse')?.addEventListener('click', async () => {

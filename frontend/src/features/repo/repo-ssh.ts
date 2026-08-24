@@ -22,7 +22,7 @@ import { toast } from '../../ui/app.js';
 
 type AuthMethod = 'key' | 'password';
 
-interface SshTarget {
+export interface SshTarget {
     host: string;
     port?: number | null;
     user: string;
@@ -38,6 +38,40 @@ interface SshTestResult {
     /** The server's reason, when the write probe failed and it gave one. */
     writeError?: string | null;
     entries: number;
+    /** Who owns the remote directory, and its mode — the answer to "but I have the rights". */
+    dirUid?: number | null;
+    dirGid?: number | null;
+    dirMode?: number | null;
+    /** The account BMM authenticated as. */
+    user?: string;
+}
+
+/** 0o755 → "rwxr-xr-x". A mode is checkable at a glance in letters and not in octal. */
+function modeLetters(mode: number): string {
+    const bit = (n: number, chars: string) =>
+        [4, 2, 1].map((b, i) => (n & b ? chars[i] : '-')).join('');
+    return bit((mode >> 6) & 7, 'rwx') + bit((mode >> 3) & 7, 'rwx') + bit(mode & 7, 'rwx');
+}
+
+/**
+ * Why the write was refused, in terms the reader can check on their own server.
+ *
+ * "Permission denied" alone sent people to verify permissions they already held, on an
+ * account that was already right. The usual truth is duller and invisible from here: /srv,
+ * /var/www and /opt are root-owned and mode 755, so every account may LIST them and only
+ * root may create a file in one. Naming the owner, the mode and the account BMM used turns
+ * an argument into an observation.
+ */
+function whyNotWritable(r: SshTestResult, dir: string): string {
+    if (r.dirUid === null || r.dirUid === undefined || !r.user) return '';
+    const mode = typeof r.dirMode === 'number' ? modeLetters(r.dirMode) : '';
+    const owner = `${r.dirUid}:${r.dirGid ?? '?'}`;
+    const why = t('repo.ssh.testWhyOwner')
+        .replace('{dir}', dir).replace('{owner}', owner)
+        .replace('{mode}', mode).replace('{user}', r.user);
+    const fix = t('repo.ssh.testWhyFix')
+        .replace('{dir}', dir.replace(/\/+$/, '')).replace('{user}', r.user);
+    return `${why} ${fix}`;
 }
 
 interface RemoteEntry {
@@ -213,6 +247,20 @@ function readForm(): { target: SshTarget; secret: string } | null {
     };
 }
 
+/**
+ * The block under the buttons that says WHY, when there is a why.
+ *
+ * Separate from `status` on purpose: that one writes into a 10px round pill beside the
+ * title, which is the right shape for a verdict and the wrong shape for a sentence.
+ */
+function why(text: string, tone: 'ok' | 'warn' | 'err' | '' = ''): void {
+    const b = el('repo-ssh-why');
+    if (!b) return;
+    b.textContent = text;
+    b.hidden = !text;
+    if (tone) b.dataset.tone = tone; else delete b.dataset.tone;
+}
+
 function status(text: string, tone: 'ok' | 'warn' | 'err' | '' = ''): void {
     const b = el('repo-ssh-status');
     if (!b) return;
@@ -298,7 +346,8 @@ async function testConnection(): Promise<void> {
         renderSavedTargets();
         el('repo-ssh-forget')!.hidden = false;
         if (!r.remoteDirExists) {
-            status(t('repo.ssh.testNoDir').replace('{dir}', form.target.remoteDir), 'warn');
+            status(t('repo.ssh.testNoDirShort'), 'warn');
+            why(t('repo.ssh.testNoDir').replace('{dir}', form.target.remoteDir), 'warn');
         } else if (!r.writable) {
             // The failure worth catching here: the upload version of it fails after
             // transferring everything.
@@ -315,14 +364,36 @@ async function testConnection(): Promise<void> {
             const half = raw.split(':').map((x) => x.trim()).filter(Boolean);
             const said = half.length === 2 && half[0].toLowerCase() === half[1].toLowerCase()
                 ? half[0] : raw;
-            const why = said ? ` — ${said}` : '';
-            status(t('repo.ssh.testNotWritable').replace('{dir}', form.target.remoteDir) + why, 'err');
+            const said2 = said ? ` — ${said}` : '';
+            status(t('repo.ssh.testNotWritableShort'), 'err');
+            why(t('repo.ssh.testNotWritable').replace('{dir}', form.target.remoteDir) + said2
+                + (whyNotWritable(r, form.target.remoteDir)
+                    ? `
+${whyNotWritable(r, form.target.remoteDir)}` : ''),
+                'err');
         } else {
             status(t('repo.ssh.testOkWritable'), 'ok');
+            why('');
         }
-        toast(t('repo.ssh.testOk').replace('{fp}', r.fingerprint), 'success', 6000);
+        // The toast AGREES with the verdict.
+        //
+        // It used to announce success unconditionally, so a directory BMM had just refused to
+        // write into produced "Connected. Fingerprint …" in green beside "connected, but /srv
+        // is not writable" in red. Two messages, one test, opposite tones — the reader is left
+        // to work out which one is the result. The fingerprint is worth showing either way, so
+        // it stays; only the claim of success is conditional.
+        const ok = r.remoteDirExists && r.writable;
+        toast(
+            (ok ? t('repo.ssh.testOk') : t('repo.ssh.testOkButNot')).replace('{fp}', r.fingerprint),
+            ok ? 'success' : 'warning',
+            ok ? 6000 : 9000,
+        );
     } catch (e) {
-        status(explain(e), 'err');
+        status(t('repo.ssh.testFailedShort'), 'err');
+        // Cleared and rewritten, never left behind: an explanation from the PREVIOUS run
+        // sitting under a new failure describes a server that is no longer the one being
+        // talked about.
+        why(explain(e), 'err');
         toast(explain(e), 'error', 8000);
     } finally {
         setBusy(false);
@@ -557,6 +628,51 @@ function renderSavedTargets(): void {
     }
 }
 
+/**
+ * Offer the keys configured under Identity & API as the private key for SFTP.
+ *
+ * A keyring entry is a NAME and a PATH on this machine, which is exactly what russh needs to
+ * open a session — so the key a catalogue knows you by can also be the key that publishes to
+ * it. Until now the only way to reuse one was to retype its path, which is a path people get
+ * subtly wrong and then debug as an authentication problem.
+ *
+ * Picking one FILLS the path field rather than replacing it. What gets read at send time
+ * stays visible and editable, and a target already pointing at a key outside the ring is not
+ * quietly repointed.
+ *
+ * The reverse direction is deliberately NOT wired: configuring an SFTP target must not
+ * silently change which identity BMM presents to catalogues. Two different questions.
+ */
+async function fillKeyRing(): Promise<void> {
+    const sel = el<HTMLSelectElement>('repo-ssh-key-ring');
+    if (!sel) return;
+    const put = (label: string, disabled: boolean) => {
+        sel.textContent = '';
+        const o = document.createElement('option');
+        o.value = ''; o.textContent = label;
+        sel.appendChild(o);
+        sel.disabled = disabled;
+    };
+    try {
+        const { listKeyring } = await import('../../core/identity-key.js');
+        const view = await listKeyring();
+        if (!view.keys.length) { put(t('repo.ssh.ringEmpty'), true); return; }
+        put(t('repo.ssh.ringPick'), false);
+        for (const k of view.keys) {
+            const o = document.createElement('option');
+            // The PATH is the value, because that is what the form needs; the name is what
+            // the reader recognises.
+            o.value = k.path;
+            o.textContent = k.name;
+            sel.appendChild(o);
+        }
+    } catch {
+        // Same rule as every other key control: a backend that cannot answer says so rather
+        // than presenting an empty list, which is indistinguishable from "you have no keys".
+        put(t('settings.identity.authKeyUnavailable'), true);
+    }
+}
+
 /** Wire the panel. Idempotent — a second call attaches nothing twice. */
 export function initRepoSsh(): void {
     const card = el('repo-ssh-card');
@@ -576,6 +692,19 @@ export function initRepoSsh(): void {
         status('');
     });
     el('repo-ssh-name')?.addEventListener('input', renderSavedTargets);
+
+    void fillKeyRing();
+    el<HTMLSelectElement>('repo-ssh-key-ring')?.addEventListener('change', (e) => {
+        const path = (e.target as HTMLSelectElement).value;
+        if (!path) return;
+        const input = el<HTMLInputElement>('repo-ssh-key');
+        if (input) { input.value = path; input.dispatchEvent(new Event('input')); }
+    });
+    el('repo-ssh-key-manage')?.addEventListener('click', () => {
+        (document.getElementById('nav-settings') as HTMLElement | null)?.click();
+        setTimeout(() => document.getElementById('settings-identity-card')
+            ?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 250);
+    });
 
     el('repo-ssh-auth-key')?.addEventListener('click', () => applyAuthMethod('key'));
     el('repo-ssh-auth-pass')?.addEventListener('click', () => applyAuthMethod('password'));
@@ -750,6 +879,21 @@ function storedTargetOrThrow(name = DEFAULT_TARGET): SshTarget {
 }
 
 /** Publish with the STORED target, no UI. See the note above about passphrases. */
+/**
+ * Transfer using a target and secret handed in, rather than one read from storage.
+ *
+ * `publishStoredTarget` / `pullStoredTarget` refuse a password target outright: nothing about
+ * a password is stored, so a scheduled run has nobody to ask. That refusal is right for the
+ * scheduler and wrong for a person sitting in front of the update dialog, who can simply type
+ * it. These two exist for that case — the caller has the secret in hand and passes it.
+ */
+export async function publishWithTarget(localDir: string, target: SshTarget, secret: string | null): Promise<number> {
+    return (await invoke('ssh_upload_repo', { target, secret, localDir })) as number;
+}
+export async function pullWithTarget(localDir: string, target: SshTarget, secret: string | null): Promise<number> {
+    return (await invoke('ssh_download_repo', { target, secret, localDir })) as number;
+}
+
 export async function publishStoredTarget(localDir: string, name = DEFAULT_TARGET): Promise<number> {
     return (await invoke('ssh_upload_repo', {
         target: storedTargetOrThrow(name),

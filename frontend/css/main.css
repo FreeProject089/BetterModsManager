@@ -17150,6 +17150,24 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 .repo-ssh-keyrow { display: flex; gap: 6px; align-items: center; }
 .repo-ssh-keyrow > .form-input { flex: 1; min-width: 0; }
 .repo-ssh-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+/* The diagnosis block. Left rule + tone colour, like a callout, because it is one:
+   it appears only when something needs explaining and must not read as chrome. */
+.repo-ssh-why {
+    margin-top: 10px; padding: 8px 10px;
+    font-size: 11px; line-height: 1.6; color: var(--text-secondary);
+    background: var(--bmm-s03); border: 1px solid var(--border);
+    border-left: 3px solid var(--border); border-radius: 8px;
+    /* The message is built from two sentences joined by a newline. */
+    white-space: pre-line;
+    /* A server path or a chown line must not push the card wide. */
+    overflow-wrap: anywhere;
+}
+.repo-ssh-why[data-tone="err"]  { border-left-color: var(--danger); }
+.repo-ssh-why[data-tone="warn"] { border-left-color: var(--warning); }
+.repo-ssh-why[data-tone="ok"]   { border-left-color: var(--success); }
+/* The ring chooser shares the key row, and must not shrink to its chevron the way the
+   catalogue one did — same floor, same reason. */
+#repo-ssh-key-ring { flex: 1 1 160px; min-width: 140px; }
 .repo-ssh-progress { margin-top: 10px; }
 .repo-ssh-bar { height: 4px; border-radius: 999px; background: var(--border); overflow: hidden; }
 .repo-ssh-bar-fill { height: 100%; width: 0; background: var(--bmm-accent, var(--accent)); transition: width .15s linear; }
@@ -17538,3 +17556,32 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
     flex-wrap: wrap; margin-top: 6px; padding-top: 12px; border-top: 1px solid var(--border);
 }
 .mpc-note { font-size: 10px; color: var(--text-muted); line-height: 1.5; flex: 1; min-width: 180px; }
+
+
+/* ── "This repo lives on an SSH machine" ──
+   Deliberately the same shape as .src-access: they sit next to each other on the update
+   screens and answering two different questions is no reason to look like two different
+   apps. */
+.ssh-src { border: 1px solid var(--border); border-radius: 10px; background: var(--bmm-s03); }
+.ssh-src > summary {
+    cursor: pointer; padding: 8px 12px; font-size: 12px; font-weight: 600;
+    color: var(--text-secondary); list-style: none;
+}
+.ssh-src > summary::-webkit-details-marker { display: none; }
+.ssh-src > summary::before { content: 'B8'; margin-right: 6px; font-size: 10px; }
+.ssh-src[open] > summary::before { content: 'BE'; }
+.ssh-src-body { padding: 0 12px 12px; display: flex; flex-direction: column; gap: 6px; }
+.ssh-src-label {
+    font-size: 10px; text-transform: uppercase; letter-spacing: .05em;
+    color: var(--text-muted); margin-top: 4px;
+}
+/* Wraps, and the select keeps a floor — the same rule the key chooser needed after it
+   shrank to its chevron in a narrow column. */
+.ssh-src-row { display: flex; gap: 6px; align-items: center; min-width: 0; flex-wrap: wrap; }
+.ssh-src-row > .input { flex: 1 1 160px; min-width: 140px; }
+.ssh-src-row > .btn { flex: 0 0 auto; }
+.ssh-src-sum {
+    font-size: 11px; color: var(--text-muted); font-family: var(--font-mono, monospace);
+    overflow-wrap: anywhere;
+}
+.ssh-src-hint { font-size: 11px; color: var(--text-muted); line-height: 1.55; margin: 2px 0 0; }

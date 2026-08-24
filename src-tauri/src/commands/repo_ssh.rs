@@ -292,6 +292,19 @@ pub struct SshTestResult {
     /// already hold sends them to change the one thing that was never wrong.
     pub write_error: Option<String>,
     pub entries: usize,
+    /// Who owns the remote directory, and what its mode is — the answer to "why not?".
+    ///
+    /// "Permission denied" on a directory the user is sure they own is almost always
+    /// /srv, /var/www or /opt: root-owned, mode 755, so everybody may LIST it and nobody
+    /// but root may create a file in it. Reporting the refusal without reporting the
+    /// ownership sends people to check the permissions they already hold, on the account
+    /// they are already using. The numbers make it checkable in one glance.
+    pub dir_uid: Option<u32>,
+    pub dir_gid: Option<u32>,
+    /// Unix mode bits, e.g. 0o755 — the frontend renders it as `rwxr-xr-x`.
+    pub dir_mode: Option<u32>,
+    /// The account BMM authenticated as, echoed back so the message can name it.
+    pub user: String,
 }
 
 /// Try everything an upload needs, and change nothing.
@@ -313,7 +326,11 @@ pub async fn ssh_test_connection(
         .await
         .map(|d| d.count())
         .unwrap_or(0);
-    let remote_dir_exists = sftp.metadata(&target.remote_dir).await.is_ok();
+    // Kept, rather than reduced to a bool: the attributes are the diagnosis when the write
+    // probe below fails, and asking for them twice would be a second round trip for data we
+    // already have in hand.
+    let dir_meta = sftp.metadata(&target.remote_dir).await.ok();
+    let remote_dir_exists = dir_meta.is_some();
 
     // Write-and-remove, because "the directory exists" and "I may write into it" are
     // different questions and only the second one matters.
@@ -337,6 +354,12 @@ pub async fn ssh_test_connection(
         writable,
         write_error,
         entries,
+        dir_uid: dir_meta.as_ref().and_then(|m| m.uid),
+        dir_gid: dir_meta.as_ref().and_then(|m| m.gid),
+        // Only the permission bits. `permissions` also carries the file-type bits (0o40000
+        // for a directory), and printing 40755 as a mode is a number nobody recognises.
+        dir_mode: dir_meta.as_ref().and_then(|m| m.permissions).map(|p| p & 0o7777),
+        user: target.user.clone(),
     })
 }
 
@@ -561,6 +584,85 @@ async fn walk_remote(sftp: &SftpSession, root: &str) -> Result<Vec<(String, u64)
     }
     out.sort_by(|a, b| a.0.cmp(&b.0));
     Ok(out)
+}
+
+// ── SFTP as a source for the refresh planner ────────────────────────────────
+//
+// "Update from the server" grew up over HTTP: it reads an autoindex listing, downloads what
+// changed, and rewrites repo.json. That assumes the server publishes a browsable index, which
+// a machine reachable only over SSH does not — and an SSH machine is exactly the case where
+// the mods live nowhere else. These three functions give that planner the same two operations
+// it already has over HTTP (list, read a file) so the rest of it does not need to know which
+// transport it is on.
+
+/// Open a session and hand back the SFTP channel, remembering the host key like every other
+/// entry point here. The caller keeps the channel for the whole run: a listing followed by a
+/// hundred file reads is one connection, not a hundred handshakes.
+pub async fn sftp_open(
+    state: &State<'_, AppState>,
+    target: &SshTarget,
+    secret: Option<&str>,
+) -> Result<SftpSession, String> {
+    let expected = known_host(state, &target.host, target.port_or_default());
+    let (session, fingerprint) = connect(target, secret, expected).await?;
+    remember_host(state, &target.host, target.port_or_default(), &fingerprint);
+    open_sftp(&session).await
+}
+
+/// Every file under `base`, in the shape the refresh planner consumes.
+///
+/// The mtime is carried through because the planner uses it to decide what changed; dropping
+/// it would be read as "unknown", which forces a re-hash of the entire repo on every run —
+/// the exact cost the planner exists to avoid.
+pub async fn sftp_entries(
+    sftp: &SftpSession,
+    base: &str,
+) -> Result<Vec<crate::commands::repo_remote::RemoteEntry>, String> {
+    let root = base.trim_end_matches('/');
+    let mut out = Vec::new();
+    let mut stack = vec![String::new()];
+    while let Some(rel) = stack.pop() {
+        let abs = if rel.is_empty() { root.to_string() } else { format!("{}/{}", root, rel) };
+        let entries = sftp
+            .read_dir(&abs)
+            .await
+            .map_err(|e| format!("repo.ssh.errListDir|{}|{}", abs, e))?;
+        for e in entries {
+            let name = e.file_name();
+            let child = if rel.is_empty() { name.clone() } else { format!("{}/{}", rel, name) };
+            if e.file_type().is_dir() {
+                stack.push(child);
+            } else if e.file_type().is_file() {
+                // Symlinks skipped, same reason as walk_remote: one pointing at its own
+                // parent never terminates, and one pointing outside the repo would put
+                // arbitrary server files into a manifest that vouches for them.
+                let meta = e.metadata();
+                out.push(crate::commands::repo_remote::RemoteEntry {
+                    rel_path: child,
+                    size: meta.size.unwrap_or(0),
+                    mtime: meta.mtime.map(|m| m as i64),
+                });
+            }
+        }
+    }
+    out.sort_by(|a, b| a.rel_path.cmp(&b.rel_path));
+    Ok(out)
+}
+
+/// Read one remote file whole.
+///
+/// Whole, deliberately: the caller hashes it and throws it away, and a streaming read would
+/// buy nothing while making the chunking path a second implementation to keep correct.
+pub async fn sftp_read_bytes(sftp: &SftpSession, path: &str) -> Result<Vec<u8>, String> {
+    let mut f = sftp
+        .open(path)
+        .await
+        .map_err(|e| format!("repo.ssh.errOpenRemote|{}|{}", path, e))?;
+    let mut buf = Vec::new();
+    tokio::io::AsyncReadExt::read_to_end(&mut f, &mut buf)
+        .await
+        .map_err(|e| format!("repo.ssh.errReadRemote|{}|{}", path, e))?;
+    Ok(buf)
 }
 
 /// Pull a repo DOWN from the server into `local_dir`.
@@ -1019,6 +1121,55 @@ mod tests {
             .await
             .expect("an RSA key must authenticate: the hash algorithm has to be negotiated");
         open_sftp(&session).await.expect("sftp subsystem should open");
+    }
+
+    /// The listing the refresh planner will consume, and one file read back byte for byte.
+    ///
+    /// Worth a live test rather than a unit one: what the planner needs from a listing is the
+    /// SIZE and the MTIME of every file, and both come from the server's own attributes. A
+    /// missing mtime is silently read as "unknown", which makes the planner re-hash the whole
+    /// repo on every single run — the exact cost it exists to avoid, and a failure that looks
+    /// like nothing but slowness.
+    #[tokio::test]
+    async fn the_sftp_source_lists_sizes_and_mtimes_and_reads_a_file() {
+        let l = skip_unless_live!();
+        let (session, _fp) = connect(&l.target, Some(&l.secret), None).await.expect("connect");
+        let sftp = open_sftp(&session).await.expect("sftp");
+
+        let base = format!("{}/bmm-sftpsource", l.target.remote_dir.trim_end_matches('/'));
+        let _ = sftp.create_dir(&base).await;
+
+        let src = tempfile::tempdir().expect("tempdir");
+        std::fs::create_dir_all(src.path().join("alpha").join("deep")).unwrap();
+        std::fs::write(src.path().join("alpha").join("deep").join("a.bin"), vec![3u8; 1234]).unwrap();
+        std::fs::write(src.path().join("alpha").join("b.txt"), b"beta").unwrap();
+        let files = walk(src.path()).expect("walk");
+        upload_tree(&sftp, &base, &files, |_| {}).await.expect("upload");
+
+        let mut entries = sftp_entries(&sftp, &base).await.expect("entries");
+        entries.sort_by(|a, b| a.rel_path.cmp(&b.rel_path));
+        let paths: Vec<&str> = entries.iter().map(|e| e.rel_path.as_str()).collect();
+        assert_eq!(
+            paths,
+            vec!["alpha/b.txt", "alpha/deep/a.bin"],
+            "nested files must arrive as relative paths with forward slashes"
+        );
+        assert_eq!(entries[1].size, 1234, "the size the planner compares against");
+        assert!(
+            entries.iter().all(|e| e.mtime.is_some()),
+            "a listing without mtimes forces a full re-hash on every refresh"
+        );
+
+        let bytes = sftp_read_bytes(&sftp, &format!("{}/alpha/b.txt", base))
+            .await
+            .expect("read");
+        assert_eq!(bytes, b"beta", "the bytes the hasher will see");
+
+        let _ = sftp.remove_file(&format!("{}/alpha/b.txt", base)).await;
+        let _ = sftp.remove_file(&format!("{}/alpha/deep/a.bin", base)).await;
+        let _ = sftp.remove_dir(&format!("{}/alpha/deep", base)).await;
+        let _ = sftp.remove_dir(&format!("{}/alpha", base)).await;
+        let _ = sftp.remove_dir(&base).await;
     }
 
     /// Upload a nested tree, list it back, download it, and compare the bytes.

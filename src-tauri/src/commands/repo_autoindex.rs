@@ -376,6 +376,123 @@ pub async fn crawl(base_url: &str, client: &reqwest::Client) -> Result<Vec<Remot
     Ok(out)
 }
 
+/// Where a refresh reads from: an HTTP autoindex, or an SSH machine over SFTP.
+///
+/// The planner needs exactly two operations — list everything, read one file — and had them
+/// hard-wired to reqwest. A server reachable only over SSH publishes no browsable index, and
+/// that is precisely the case where the mods exist nowhere but the server. One enum with two
+/// implementations keeps the ~200 lines of planning, hashing and manifest-writing below
+/// ignorant of which transport it is on; the alternative was a second copy of all of it.
+pub enum Source {
+    Http { client: reqwest::Client, base: String },
+    Sftp { sftp: russh_sftp::client::SftpSession, base: String },
+}
+
+impl Source {
+    /// Everything under the root, as the planner's entries.
+    pub async fn list(&self) -> Result<Vec<RemoteEntry>, String> {
+        match self {
+            Source::Http { client, base } => crawl(base, client).await,
+            Source::Sftp { sftp, base } => {
+                let out = crate::commands::repo_ssh::sftp_entries(sftp, base).await?;
+                if out.is_empty() {
+                    return Err(format!("repo.remote.errEmptyDir|{}", base));
+                }
+                Ok(out)
+            }
+        }
+    }
+
+    /// One file, by its path relative to the root.
+    pub async fn read(&self, rel: &str) -> Result<Vec<u8>, String> {
+        match self {
+            Source::Http { client, base } => {
+                // Each segment encoded separately: encoding the whole path would turn its
+                // slashes into %2F and ask the server for one long filename.
+                let encoded: Vec<String> = rel.split('/').map(encode_segment).collect();
+                let url = format!("{}/{}", base, encoded.join("/"));
+                let resp = client.get(&url).send().await.map_err(|e| format!("{rel}: {e}"))?;
+                if !resp.status().is_success() {
+                    return Err(format!("{rel}: HTTP {}", resp.status()));
+                }
+                Ok(resp.bytes().await.map_err(|e| format!("{rel}: {e}"))?.to_vec())
+            }
+            Source::Sftp { sftp, base } => {
+                let path = format!("{}/{}", base.trim_end_matches('/'), rel);
+                crate::commands::repo_ssh::sftp_read_bytes(sftp, &path).await
+            }
+        }
+    }
+
+    /// The manifest already published beside the mods, if there is one.
+    ///
+    /// Two places, because there are two layouts in the wild: inside the mods folder, and
+    /// beside it. Failure is None at every step — a missing repo.json is the ordinary state
+    /// for a repo being created, not an error to report.
+    pub async fn read_manifest(&self) -> Option<(String, String)> {
+        match self {
+            Source::Http { client, base } => {
+                let up = base.rsplit_once('/').map(|(p, _)| p.to_string());
+                for url in [Some(format!("{}/repo.json", base)),
+                            up.map(|p| format!("{}/repo.json", p))].into_iter().flatten() {
+                    let Ok(resp) = client.get(&url).send().await else { continue };
+                    if !resp.status().is_success() { continue; }
+                    if let Ok(text) = resp.text().await { return Some((url, text)); }
+                }
+                None
+            }
+            Source::Sftp { sftp, base } => {
+                let root = base.trim_end_matches('/');
+                let up = root.rsplit_once('/').map(|(p, _)| p.to_string());
+                for path in [Some(format!("{}/repo.json", root)),
+                             up.map(|p| format!("{}/repo.json", p))].into_iter().flatten() {
+                    if let Ok(bytes) = crate::commands::repo_ssh::sftp_read_bytes(sftp, &path).await {
+                        if let Ok(text) = String::from_utf8(bytes) { return Some((path, text)); }
+                    }
+                }
+                None
+            }
+        }
+    }
+}
+
+/// Build the source a request asked for.
+///
+/// An SSH target present means SFTP; anything else is HTTP with the download password and the
+/// identity proof attached as DEFAULT headers, so every request the client makes carries them
+/// — the listing, the manifest and each file read for hashing alike. Setting them per call is
+/// the mistake repo sync already made once: the first request authenticates and the rest 401
+/// halfway through.
+pub async fn build_source(
+    state: &tauri::State<'_, crate::state::AppState>,
+    base_url: &str,
+    password: Option<&str>,
+    ssh: Option<&crate::commands::repo_ssh::SshTarget>,
+    ssh_secret: Option<&str>,
+    timeout_secs: u64,
+) -> Result<Source, String> {
+    if let Some(target) = ssh {
+        let sftp = crate::commands::repo_ssh::sftp_open(state, target, ssh_secret).await?;
+        return Ok(Source::Sftp {
+            sftp,
+            base: target.remote_dir.trim_end_matches('/').to_string(),
+        });
+    }
+    let mut headers = reqwest::header::HeaderMap::new();
+    if let Some(pw) = password.map(str::trim).filter(|p| !p.is_empty()) {
+        if let Ok(hv) = reqwest::header::HeaderValue::from_str(pw) {
+            headers.insert("X-Repo-Password", hv);
+        }
+    }
+    crate::commands::repo_keyauth::add_proof(&mut headers, base_url.trim());
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(timeout_secs))
+        .default_headers(headers)
+        .build()
+        .map_err(|e| e.to_string())?;
+    Ok(Source::Http { client, base: base_url.trim().trim_end_matches('/').to_string() })
+}
+
 /// Recursion is written as an explicit stack: an `async fn` that awaits itself needs boxing,
 /// and the boxed future is easy to get subtly wrong for no gain at this depth.
 async fn walk_into(
@@ -480,33 +597,25 @@ pub fn default_remote_repo_dir(handle: tauri::AppHandle) -> Result<String, Strin
 #[tauri::command]
 pub async fn plan_remote_repo_refresh(
     handle: tauri::AppHandle,
+    state: tauri::State<'_, crate::state::AppState>,
     base_url: String,
     manifest_path: String,
     force_full: bool,
     // The download password, when the server asks for one. Never stored — it arrives per call
     // and lives as long as the request, the same contract as every other protected fetch.
     password: Option<String>,
+    // Present when the mods live on a machine reachable only over SSH. The target carries a
+    // key PATH, never key material; the secret below is the passphrase or the account
+    // password and, like the download password, exists for the length of this call.
+    ssh: Option<crate::commands::repo_ssh::SshTarget>,
+    ssh_secret: Option<String>,
 ) -> Result<RemotePlanReport, String> {
     use crate::commands::repo_remote::{plan_refresh, FullRehash};
 
-    // Default headers, so EVERY request this client makes carries them — the directory
-    // listing, the manifest and each file it reads to hash. Setting them per-call would be
-    // the mistake the repo sync already made once: a header on some paths and not others
-    // authenticates the first request and 401s halfway through the rest.
-    let mut headers = reqwest::header::HeaderMap::new();
-    if let Some(pw) = password.as_deref().map(str::trim).filter(|p| !p.is_empty()) {
-        if let Ok(hv) = reqwest::header::HeaderValue::from_str(pw) {
-            headers.insert("X-Repo-Password", hv);
-        }
-    }
-    crate::commands::repo_keyauth::add_proof(&mut headers, base_url.trim());
-
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(30))
-        .default_headers(headers)
-        .build()
-        .map_err(|e| e.to_string())?;
-    let listing = crawl(base_url.trim(), &client).await?;
+    let source = build_source(
+        &state, &base_url, password.as_deref(), ssh.as_ref(), ssh_secret.as_deref(), 30,
+    ).await?;
+    let listing = source.list().await?;
 
     // Read from disk rather than over HTTP: this is the author's own copy, the one they
     // signed. Fetching the server's would ask the server to vouch for itself.
@@ -588,6 +697,7 @@ pub struct RemoteRefreshReport {
 pub async fn refresh_repo_from_server(
     handle: tauri::AppHandle,
     window: tauri::Window,
+    state: tauri::State<'_, crate::state::AppState>,
     base_url: String,
     manifest_path: String,
     force_full: bool,
@@ -597,30 +707,21 @@ pub async fn refresh_repo_from_server(
     // preview succeeds and the run that follows it 401s — the worst possible split, because
     // the person has already been told it would work.
     password: Option<String>,
+    ssh: Option<crate::commands::repo_ssh::SshTarget>,
+    ssh_secret: Option<String>,
 ) -> Result<RemoteRefreshReport, String> {
     use crate::commands::repo_remote::plan_refresh;
     use crate::models::repo::{RepoFile, RepoMod, RepoProfile, ServerRepo};
     use tauri::Emitter;
 
-    let mut headers = reqwest::header::HeaderMap::new();
-    if let Some(pw) = password.as_deref().map(str::trim).filter(|p| !p.is_empty()) {
-        if let Ok(hv) = reqwest::header::HeaderValue::from_str(pw) {
-            headers.insert("X-Repo-Password", hv);
-        }
-    }
-    crate::commands::repo_keyauth::add_proof(&mut headers, base_url.trim());
-
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(300))
-        .default_headers(headers)
-        .build()
-        .map_err(|e| e.to_string())?;
-    let base = base_url.trim().trim_end_matches('/').to_string();
+    let source = build_source(
+        &state, &base_url, password.as_deref(), ssh.as_ref(), ssh_secret.as_deref(), 300,
+    ).await?;
 
     let _ = window.emit("bmm://repo-export-progress", serde_json::json!({
         "step": "Reading the server listing", "progress": 2.0, "current_file": "",
     }));
-    let listing = crawl(&base, &client).await?;
+    let listing = source.list().await?;
 
     // The previous manifest, from disk — or FROM THE SERVER when there is no local copy.
     //
@@ -638,21 +739,16 @@ pub async fn refresh_repo_from_server(
         .and_then(|s| serde_json::from_str(&s).ok());
     let mut previous_from_server = false;
     if previous.is_none() {
-        // `<base>/repo.json` and one level up, which is where the two layouts put it: beside
-        // the mods folder, or inside it.
-        for url in [format!("{}/repo.json", base), base.rsplit_once('/').map(|(p, _)| format!("{}/repo.json", p)).unwrap_or_default()] {
-            if url.is_empty() { continue; }
-            let Ok(resp) = client.get(&url).send().await else { continue };
-            if !resp.status().is_success() { continue; }
-            let Ok(text) = resp.text().await else { continue };
+        // `<root>/repo.json` and one level up, which is where the two layouts put it: beside
+        // the mods folder, or inside it. The source knows how to look on either transport.
+        if let Some((where_, text)) = source.read_manifest().await {
             if let Ok(doc) = serde_json::from_str::<ServerRepo>(&text) {
                 previous = Some(doc);
                 previous_from_server = true;
                 let _ = window.emit("bmm://repo-export-progress", serde_json::json!({
-                    "step": format!("Found the repo.json already on the server ({url})"),
+                    "step": format!("Found the repo.json already on the server ({where_})"),
                     "progress": 6.0, "current_file": "",
                 }));
-                break;
             }
         }
     }
@@ -702,13 +798,7 @@ pub async fn refresh_repo_from_server(
             "current_file": path,
         }));
 
-        let encoded: Vec<String> = path.split('/').map(encode_segment).collect();
-        let url = format!("{}/{}", base, encoded.join("/"));
-        let resp = client.get(&url).send().await.map_err(|e| format!("{path}: {e}"))?;
-        if !resp.status().is_success() {
-            return Err(format!("{path}: HTTP {}", resp.status()));
-        }
-        let bytes = resp.bytes().await.map_err(|e| format!("{path}: {e}"))?;
+        let bytes = source.read(path).await?;
         downloaded_bytes += bytes.len() as u64;
 
         // Staged to a file so the existing, tested chunking path is reused verbatim rather

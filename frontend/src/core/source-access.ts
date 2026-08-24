@@ -62,7 +62,19 @@ export function wireSourceAccess(
 ): void {
     const urlEl = document.getElementById(`${p}-access-url`) as HTMLInputElement | null;
     const det = document.getElementById(`${p}-access`) as HTMLDetailsElement | null;
-    if (!urlEl || !det) return;
+    if (!urlEl || !det) {
+        // LOUD. A silent return here is how the scheduler's catalogue shipped with a dead
+        // block: its overlay was painted before being attached, so these ids were not in the
+        // document, wiring gave up without a word, and the screen looked finished. The
+        // caller made a real mistake — the markup is not on the page when it said it was —
+        // and the only cheap way to notice is to say so.
+        console.error(
+            `[source-access] "${p}" was wired before its markup was in the document `
+            + '(paint into a detached node? mounted after wiring?). The key chooser and the '
+            + 'manage button on that screen will do nothing.',
+        );
+        return;
+    }
     const urlOf = () => urlEl.value.trim();
 
     const paint = async () => {
