@@ -362,8 +362,9 @@ enum Commands {
         id: String,
     },
 
-    /// Scaffold a plugin draft (plugin.json + README) in <app-data>/plugin-drafts/<id>/.
-    /// Authoring only — zip the draft and install it through BMM's normal flow.
+    /// Scaffold a plugin draft (plugin.json + README + bundled scripts) in
+    /// <app-data>/plugin-drafts/<id>/. Authoring only — zip the draft and install it
+    /// through BMM's normal flow; scripts only run behind the unsafe-plugins permission.
     CreatePlugin {
         /// Path to a plugin.json manifest, or '-' for stdin
         #[arg(long, conflicts_with = "json")]
@@ -371,7 +372,16 @@ enum Commands {
         /// Inline manifest JSON
         #[arg(long)]
         json: Option<String>,
+        /// Script file(s) to bundle under scripts/ (repeatable). The file NAME is kept;
+        /// the manifest's scripts list and has_scripts are derived from what is written.
+        #[arg(long = "script")]
+        scripts: Vec<String>,
     },
+
+    /// List every action type a scheduler task step may use — the same registry the
+    /// in-app builder shows. Use with `create-schedule`: a step is
+    /// {kind:'action', action:{type:<one of these>, params:{...}}}.
+    Actions,
 
     /// Launch a benchmark (running app)
     Benchmark {
@@ -808,13 +818,41 @@ async fn run_cli_command(cmd: Commands) -> anyhow::Result<()> {
                 res.get("remaining").and_then(|v| v.as_u64()).unwrap_or(0));
         }
 
-        Commands::CreatePlugin { file, json } => {
+        Commands::CreatePlugin { file, json, scripts } => {
             let raw = read_json_arg(file, json, "plugin.json")?;
             let manifest: serde_json::Value = serde_json::from_str(&raw)?;
-            let res = state_bridge::create_plugin_scaffold(manifest)?;
+            // The file NAME travels, the content is read here: the bridge only accepts plain
+            // names (the name becomes a path inside the draft), so a caller cannot smuggle a
+            // directory component through the CLI either.
+            let mut bundled: Vec<(String, String)> = Vec::new();
+            for p in &scripts {
+                let path = std::path::Path::new(p);
+                let name = path.file_name()
+                    .and_then(|n| n.to_str())
+                    .ok_or_else(|| anyhow::anyhow!("--script {p}: not a file path"))?
+                    .to_string();
+                let content = std::fs::read_to_string(path)
+                    .map_err(|e| anyhow::anyhow!("--script {p}: {e}"))?;
+                bundled.push((name, content));
+            }
+            let res = state_bridge::create_plugin_scaffold(manifest, bundled)?;
             println!("  {} plugin draft at {}", "OK".green().bold(),
                 res.get("path").and_then(|v| v.as_str()).unwrap_or("?").cyan());
             println!("  zip its contents and install via Plugins & API -> Install from file");
+        }
+
+        Commands::Actions => {
+            let v = state_bridge::list_schedule_actions();
+            let list = v.get("actions").and_then(|a| a.as_array()).cloned().unwrap_or_default();
+            println!("  {} action types
+", list.len().to_string().cyan().bold());
+            let mut group = String::new();
+            for a in &list {
+                let g = a.get("group").and_then(|x| x.as_str()).unwrap_or("");
+                if g != group { println!("  {}", g.to_uppercase().bold()); group = g.to_string(); }
+                println!("    {:<28} {}", a.get("type").and_then(|x| x.as_str()).unwrap_or("").green(),
+                    a.get("label").and_then(|x| x.as_str()).unwrap_or(""));
+            }
         }
 
         Commands::RunSchedule { id } => {

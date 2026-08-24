@@ -1,0 +1,442 @@
+{
+  "actions": [
+    {
+      "type": "profile.activate",
+      "label": "Activate profile",
+      "needs": "profile",
+      "group": "mods"
+    },
+    {
+      "type": "mod.enable",
+      "label": "Enable mod",
+      "needs": "mod",
+      "group": "mods"
+    },
+    {
+      "type": "mod.disable",
+      "label": "Disable mod",
+      "needs": "mod",
+      "group": "mods"
+    },
+    {
+      "type": "modpack.enable",
+      "label": "Enable modpack",
+      "needs": "modpack",
+      "group": "mods"
+    },
+    {
+      "type": "modpack.disable",
+      "label": "Disable modpack",
+      "needs": "modpack",
+      "group": "mods"
+    },
+    {
+      "type": "modpack.create",
+      "label": "Create modpack",
+      "needs": "mpCreate",
+      "group": "mods"
+    },
+    {
+      "type": "mod.add",
+      "label": "Add a mod (from URL)",
+      "needs": "modAdd",
+      "group": "mods"
+    },
+    {
+      "type": "modlist.export",
+      "label": "Export a mod list (.mmlist)",
+      "needs": null,
+      "group": "mods"
+    },
+    {
+      "type": "modlist.import",
+      "label": "Import a mod list (.mmlist)",
+      "needs": null,
+      "group": "mods"
+    },
+    {
+      "type": "mods.enableAll",
+      "label": "Enable all mods",
+      "needs": null,
+      "group": "mods"
+    },
+    {
+      "type": "mods.disableAll",
+      "label": "Disable all mods",
+      "needs": null,
+      "group": "mods"
+    },
+    {
+      "type": "mods.scan",
+      "label": "Scan mods folder",
+      "needs": null,
+      "group": "mods"
+    },
+    {
+      "type": "plugin.apply",
+      "label": "Apply plugin modlist",
+      "needs": "pluginId",
+      "group": "mods"
+    },
+    {
+      "type": "plugin.compare",
+      "label": "Compare plugin",
+      "needs": "pluginId",
+      "group": "mods"
+    },
+    {
+      "type": "plugin.delete",
+      "label": "Delete plugin",
+      "needs": "pluginId",
+      "group": "mods"
+    },
+    {
+      "type": "mods.checkUpdates",
+      "label": "Check mod updates",
+      "needs": null,
+      "group": "mods"
+    },
+    {
+      "type": "mods.autoImportOmm",
+      "label": "Auto-import Open Mod Manager mods",
+      "needs": null,
+      "group": "mods"
+    },
+    {
+      "type": "mods.clearHistory",
+      "label": "Clear profile activity history",
+      "needs": "profile",
+      "group": "mods"
+    },
+    {
+      "type": "mods.exportModpack",
+      "label": "Export modpack (.bmp)",
+      "needs": "modpackExport",
+      "group": "mods"
+    },
+    {
+      "type": "repo.connect",
+      "label": "Connect repo",
+      "needs": "repoConnect",
+      "group": "repo"
+    },
+    {
+      "type": "repo.sync",
+      "label": "Sync repo",
+      "needs": "repoSync",
+      "group": "repo"
+    },
+    {
+      "type": "repo.gen",
+      "label": "Generate repo",
+      "needs": null,
+      "group": "repo"
+    },
+    {
+      "type": "repo.update",
+      "label": "Update repo",
+      "needs": "repoUpdate",
+      "group": "repo"
+    },
+    {
+      "type": "repo.host",
+      "label": "Host repo (HTTP)",
+      "needs": "repoHost",
+      "group": "repo"
+    },
+    {
+      "type": "repo.publishSsh",
+      "label": "Publish repo over SSH",
+      "needs": "repoSshDir",
+      "group": "repo"
+    },
+    {
+      "type": "repo.fetchSsh",
+      "label": "Fetch repo over SSH",
+      "needs": "repoSshPullDir",
+      "group": "repo"
+    },
+    {
+      "type": "app.launch",
+      "label": "Launch app",
+      "needs": "app",
+      "group": "apps"
+    },
+    {
+      "type": "app.stop",
+      "label": "Stop app / process",
+      "needs": "appStop",
+      "group": "apps"
+    },
+    {
+      "type": "file.open",
+      "label": "Open / launch a file or program",
+      "needs": "pathFile",
+      "group": "apps"
+    },
+    {
+      "type": "folder.open",
+      "label": "Open a folder",
+      "needs": "pathFolder",
+      "group": "apps"
+    },
+    {
+      "type": "app.install",
+      "label": "Install app",
+      "needs": "appInstall",
+      "group": "apps"
+    },
+    {
+      "type": "launchpack.run",
+      "label": "Run launch pack",
+      "needs": "lpId",
+      "group": "apps"
+    },
+    {
+      "type": "theme.set",
+      "label": "Set theme",
+      "needs": "theme",
+      "group": "look"
+    },
+    {
+      "type": "benchmark.run",
+      "label": "Run benchmark",
+      "needs": "benchmark",
+      "group": "perf"
+    },
+    {
+      "type": "storage.diskBenchmark",
+      "label": "Storage: benchmark a disk",
+      "needs": "disk",
+      "group": "perf"
+    },
+    {
+      "type": "storage.applyLimit",
+      "label": "Storage: apply disk speed limit",
+      "needs": "applyLimit",
+      "group": "perf"
+    },
+    {
+      "type": "storage.calibration",
+      "label": "Storage: Performance Auto-Calibration",
+      "needs": "toggle",
+      "group": "perf"
+    },
+    {
+      "type": "storage.smartIo",
+      "label": "Storage: Smart I/O",
+      "needs": "toggle",
+      "group": "perf"
+    },
+    {
+      "type": "storage.flag",
+      "label": "Storage: toggle a setting (advanced)",
+      "needs": "flag",
+      "group": "perf"
+    },
+    {
+      "type": "perf.diskSpace",
+      "label": "Check free disk space",
+      "needs": "disk",
+      "group": "perf"
+    },
+    {
+      "type": "telemetry.consent",
+      "label": "Telemetry consent",
+      "needs": "toggle",
+      "group": "privacy"
+    },
+    {
+      "type": "telemetry.set",
+      "label": "Telemetry options",
+      "needs": "telemetry",
+      "group": "privacy"
+    },
+    {
+      "type": "recorder.set",
+      "label": "Session recorder",
+      "needs": "recorder",
+      "group": "privacy"
+    },
+    {
+      "type": "replay.export",
+      "label": "Export replay",
+      "needs": null,
+      "group": "privacy"
+    },
+    {
+      "type": "replay.import",
+      "label": "Import replay",
+      "needs": "replayImport",
+      "group": "privacy"
+    },
+    {
+      "type": "notify",
+      "label": "Show notification",
+      "needs": "message",
+      "group": "system"
+    },
+    {
+      "type": "discord.rpc",
+      "label": "Discord Rich Presence",
+      "needs": "toggle",
+      "group": "system"
+    },
+    {
+      "type": "data.exportAuto",
+      "label": "Export data (backup)",
+      "needs": "exportAuto",
+      "group": "system"
+    },
+    {
+      "type": "var.set",
+      "label": "Set a variable",
+      "needs": "varSet",
+      "group": "logic"
+    },
+    {
+      "type": "app.checkUpdate",
+      "label": "Check for BMM update",
+      "needs": "checkUpdate",
+      "group": "system"
+    },
+    {
+      "type": "system.clearApiLog",
+      "label": "Clear API log",
+      "needs": null,
+      "group": "system"
+    },
+    {
+      "type": "system.clearResourceRecords",
+      "label": "Clear resource monitor records",
+      "needs": null,
+      "group": "system"
+    },
+    {
+      "type": "math.set",
+      "label": "Math: compute into a variable",
+      "needs": "mathSet",
+      "group": "logic"
+    },
+    {
+      "type": "var.ternary",
+      "label": "Ternary: var = cond ? a : b",
+      "needs": "ternary",
+      "group": "logic"
+    },
+    {
+      "type": "rule.table",
+      "label": "Rule table (decision table)",
+      "needs": "ruleTable",
+      "group": "logic"
+    },
+    {
+      "type": "task.stop",
+      "label": "Stop the task (guard clause)",
+      "needs": "stopReason",
+      "group": "logic"
+    },
+    {
+      "type": "task.run",
+      "label": "Run another scheduled task",
+      "needs": "taskId",
+      "group": "system"
+    },
+    {
+      "type": "task.spawn",
+      "label": "Start another task WITHOUT waiting (async)",
+      "needs": "taskId",
+      "group": "system"
+    },
+    {
+      "type": "restart",
+      "label": "Restart BMM",
+      "needs": null,
+      "group": "system"
+    },
+    {
+      "type": "open.url",
+      "label": "Open a URL / link",
+      "needs": "url",
+      "group": "system"
+    },
+    {
+      "type": "custom.command",
+      "label": "Run custom command",
+      "needs": "command",
+      "group": "system"
+    },
+    {
+      "type": "custom.script",
+      "label": "Run a script",
+      "needs": "script",
+      "group": "system"
+    },
+    {
+      "type": "folder.create",
+      "label": "Create a folder (BMM data)",
+      "needs": "bmmfolder",
+      "group": "system"
+    },
+    {
+      "type": "repo.syncNow",
+      "label": "Sync a server repo (unattended)",
+      "needs": "reposync",
+      "group": "repo"
+    },
+    {
+      "type": "deeplink",
+      "label": "Run bmm:// deeplink",
+      "needs": "url",
+      "group": "system"
+    },
+    {
+      "type": "list.set",
+      "label": "List — set it (JSON array or a, b, c)",
+      "needs": "listSet",
+      "group": "logic"
+    },
+    {
+      "type": "list.push",
+      "label": "List — add one item",
+      "needs": "listPush",
+      "group": "logic"
+    },
+    {
+      "type": "list.clear",
+      "label": "List — empty it",
+      "needs": "listName",
+      "group": "logic"
+    },
+    {
+      "type": "map.set",
+      "label": "Map — set a key",
+      "needs": "mapSet",
+      "group": "logic"
+    },
+    {
+      "type": "map.get",
+      "label": "Map — read a key into a variable",
+      "needs": "mapGet",
+      "group": "logic"
+    },
+    {
+      "type": "map.clear",
+      "label": "Map — empty it",
+      "needs": "mapName",
+      "group": "logic"
+    },
+    {
+      "type": "var.clear",
+      "label": "Clear a shared variable",
+      "needs": "varClear",
+      "group": "logic"
+    },
+    {
+      "type": "http.request",
+      "label": "Call an HTTP API",
+      "needs": "http",
+      "group": "system"
+    }
+  ]
+}

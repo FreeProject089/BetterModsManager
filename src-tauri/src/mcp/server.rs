@@ -336,8 +336,8 @@ impl BmmMcpServer {
         }
     }
 
-    fn tool_create_plugin_scaffold(&self, manifest: serde_json::Value) -> Result<CallToolResult, rmcp::ErrorData> {
-        match state_bridge::create_plugin_scaffold(manifest) {
+    fn tool_create_plugin_scaffold(&self, manifest: serde_json::Value, scripts: Vec<(String, String)>) -> Result<CallToolResult, rmcp::ErrorData> {
+        match state_bridge::create_plugin_scaffold(manifest, scripts) {
             Ok(v) => ok_json(&v),
             Err(e) => err_result(&e.to_string()),
         }
@@ -510,14 +510,20 @@ impl ServerHandler for BmmMcpServer {
             ),
             Tool::new(
                 "bmm_create_plugin_scaffold",
-                "Scaffold a BMM plugin DRAFT: writes plugin.json (+ README) into <app-data>/plugin-drafts/<id>/. This is authoring, NOT installation — plugins can carry scripts, so the user zips the draft and installs it through the app's normal permission-gated flow. `manifest` needs at least { id, name }; optional: version, author, description, game, permissions[], tags[], website, modlist. Returns the draft folder path.",
+                "Scaffold a COMPLETE BMM plugin DRAFT: writes plugin.json (+ README, + bundled scripts) into <app-data>/plugin-drafts/<id>/. This is authoring, NOT installation — the user zips the draft and installs it through the app's normal permission-gated flow, and scripts only ever run behind the unsafe-plugins permission. `manifest` needs at least { id, name }; optional: version, author, description, game, permissions[], tags[], website, modlist ({ required_mods:[{id,name?,optional?}], strict? }), apply_mode ('modlist'|'script'|'both'). `scripts` is an array of { name, content } written under scripts/ and auto-declared in the manifest (has_scripts is derived, never trusted). To COUPLE a plugin to an automation, create it here and then bmm_create_schedule a task whose step is { kind:'action', action:{ type:'plugin.apply', params:{ plugin:'<id>' } } } — see bmm_list_actions for everything a step can do.",
                 std::sync::Arc::new(serde_json::from_value(json!({
                     "type": "object",
                     "properties": {
-                        "manifest": { "type": "object", "description": "The plugin.json content ({ id, name, version?, author?, description?, game?, permissions?, tags?, website?, modlist? })." }
+                        "manifest": { "type": "object", "description": "The plugin.json content ({ id, name, version?, author?, description?, game?, permissions?, tags?, website?, modlist?, apply_mode? })." },
+                        "scripts": { "type": "array", "items": { "type": "object", "properties": { "name": { "type": "string" }, "content": { "type": "string" } }, "required": ["name", "content"] }, "description": "Script files to bundle (plain filenames; written under scripts/)." }
                     },
                     "required": ["manifest"]
                 })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_list_actions",
+                "List every action type a scheduler task step may use ({ type, label, needs, group }) — the same registry the in-app builder shows. Generated from the app's source at build time. Use with bmm_create_schedule: a step is { kind:'action', action:{ type:<one of these>, params:{...} } }. Notable groups: mods/profiles, repo (sync, publish over SSH), plugins (plugin.apply couples a plugin to an automation), system (deeplink, http.request, custom.script — the escape hatches into everything else BMM exposes).",
+                std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": {} })).unwrap()),
             ),
 
             Tool::new(
@@ -1134,8 +1140,16 @@ impl ServerHandler for BmmMcpServer {
                 "bmm_create_plugin_scaffold" => {
                     let manifest = args.get("manifest").cloned().unwrap_or(serde_json::Value::Null);
                     if !manifest.is_object() { return err_result("`manifest` must be a JSON object"); }
-                    self.tool_create_plugin_scaffold(manifest)
+                    let scripts: Vec<(String, String)> = args.get("scripts")
+                        .and_then(|v| v.as_array())
+                        .map(|arr| arr.iter().filter_map(|it| Some((
+                            it.get("name")?.as_str()?.to_string(),
+                            it.get("content")?.as_str()?.to_string(),
+                        ))).collect())
+                        .unwrap_or_default();
+                    self.tool_create_plugin_scaffold(manifest, scripts)
                 }
+                "bmm_list_actions" => ok_json(&state_bridge::list_schedule_actions()),
                 "bmm_run_schedule" => {
                     let id = args.get("id").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing id", None))?;
                     self.tool_api_call("POST", "/api/schedule/run", Some(json!({ "id": id }))).await
