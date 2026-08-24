@@ -3,6 +3,7 @@
 // and rename. State is persisted in localStorage. No third-party code execution here.
 
 import { t } from '../core/i18n.js';
+import { attachHighlight, type CodeEditorHandle } from './code-editor.js';
 import { invoke, pickFile, saveFile } from '../core/api.js';
 import { initPageBroker, refreshGrants } from './custom-page-broker.js';
 import { showConfirm } from './confirm.js';
@@ -846,6 +847,7 @@ export function openNavbarEditor(): void {
                     pageField('#nbe-page-html').value = src.html;
                     pageField('#nbe-page-css').value = src.css;
                     pageField('#nbe-page-js').value = src.js;
+                    repaintCode();
                     editingPageId = id;
                     pageCreateBtn.textContent = t('navedit.save') || 'Save changes';
                     pageCreateBtn.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -879,7 +881,22 @@ export function openNavbarEditor(): void {
         (overlay.querySelector('#nbe-page-html') as HTMLTextAreaElement).value = tpl.html;
         (overlay.querySelector('#nbe-page-css') as HTMLTextAreaElement).value = tpl.css;
         (overlay.querySelector('#nbe-page-js') as HTMLTextAreaElement).value = tpl.js;
+        repaintCode();
     });
+
+    // Syntax colours on the three code boxes. Attached AFTER the overlay is in the DOM,
+    // because the mirror copies its metrics from the live textarea — computed styles on a
+    // detached node are the browser's defaults, not this app's, and every colour would land
+    // a few pixels off the character it belongs to.
+    const hl: Record<string, CodeEditorHandle | null> = {
+        html: attachHighlight(overlay.querySelector('#nbe-page-html'), 'markup'),
+        css: attachHighlight(overlay.querySelector('#nbe-page-css'), 'css'),
+        js: attachHighlight(overlay.querySelector('#nbe-page-js'), 'javascript'),
+    };
+    // Assigning to `.value` fires no `input` event, so every place that fills these boxes in
+    // code has to say so. Missing one leaves the previous document's colours behind the new
+    // text, which looks like a rendering bug and is a missing call.
+    const repaintCode = () => { hl.html?.refresh(); hl.css?.refresh(); hl.js?.refresh(); };
 
     loadPages().then(() => { renderPagesList(); if (kindSel.value === 'page') renderTarget(); });
     overlay.querySelector('#nbe-page-create')?.addEventListener('click', async () => {
@@ -906,6 +923,7 @@ export function openNavbarEditor(): void {
             pageField('#nbe-page-html').value = '';
             pageField('#nbe-page-css').value = '';
             pageField('#nbe-page-js').value = '';
+            repaintCode();
         } catch (e) { (window as any).toast?.(String(e), 'error'); }
     });
 

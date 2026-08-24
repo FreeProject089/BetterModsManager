@@ -5772,6 +5772,45 @@ body.tut-docked.tut-min .app-shell {
 
 .nbe-code { font-family: var(--font-mono, monospace); font-size: 12px; resize: vertical; min-height: 56px; tab-size: 4; }
 
+/* Highlighted code editors (ui/code-editor.ts).
+
+   The mirror wears the SAME classes as the textarea it sits behind, so the same rules give
+   both the same font, padding, line-height and tab-size — there is nothing to keep in sync.
+   Nothing below may set any of those, or the colours slide off the words. */
+.code-hl-wrap { position: relative; display: block; }
+.code-hl-wrap > textarea {
+    position: relative;
+    z-index: 1;
+    /* A textarea is inline by default, so the wrapper reserved 3px of baseline gap under it
+       and the mirror — sized to the wrapper — hung that much below the box it is mirroring. */
+    display: block;
+    background: transparent;
+    /* .input sets `color: var(--text-primary) !important`, so this needs the same weight —
+       without it the plain text sits on top of the coloured mirror and everything is bold
+       and slightly blurred, which reads as a font bug. */
+    color: transparent !important;
+    caret-color: var(--text-primary, #e6edf3);   /* or the caret vanishes with the text */
+}
+.code-hl-wrap > textarea::selection { background: var(--accent-soft, rgba(59, 130, 246, .35)); color: transparent; }
+.code-hl-mirror {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    overflow: hidden;             /* scrolled in step with the textarea, never on its own */
+    pointer-events: none;
+    /* A textarea soft-wraps; a div does not. This is the ONE metric the shared classes do
+       not equalise, so it is corrected here where it can be seen. */
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    /* The mirror carries .input, which draws a border and a background of its own. The
+       textarea on top draws them too, so the mirror must not double them. */
+    border-color: transparent !important;
+    background: var(--bg-input, var(--bg-secondary, #0f1523));
+    resize: none;
+    min-height: 0;
+}
+.code-hl-mirror > code { font: inherit; background: none; padding: 0; display: block; }
+
 /* The Share/Import menu in the editor's actions bar — opens UPWARD (the bar is the
    modal's bottom edge). Opaque surface: a translucent menu renders its labels over
    whatever the modal shows behind it. */
