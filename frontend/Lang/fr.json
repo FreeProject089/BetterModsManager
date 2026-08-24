@@ -8090,5 +8090,10 @@
   "tutc.wait.exprLbl": "Condition (JavaScript)",
   "tutc.wait.exprPh": "count('.mod-row') > 3",
   "tutc.wait.exprHelp": "count / text / value / exists / visible / enabled, avec and · or · not · contains. ex. visible('#modal-x') and count('.row') > 2",
-  "tutc.wait.exprOk": "Se lit correctement."
+  "tutc.wait.exprOk": "Se lit correctement.",
+  "tutc.icon": "Icône",
+  "tutc.iconPick": "Choisir une icône",
+  "tutc.iconChange": "Changer",
+  "tuthub.fork": "En faire une copie modifiable",
+  "tuthub.forked": "Copié — c’est le vôtre maintenant, avec vos tutoriels."
 }

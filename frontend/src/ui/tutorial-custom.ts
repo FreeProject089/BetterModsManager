@@ -19,7 +19,8 @@
 
 import { invoke, pickFile, saveFile } from '../core/api.js';
 import { compileCondition } from './tutorial-expr.js';
-import { registerRuntimeTexts, getLang, t } from '../core/i18n.js';
+import { isPackIcon, renderPackIcon, ensurePacksFor } from './icon-pack.js';
+import { registerRuntimeTexts, getLang, t, tIn } from '../core/i18n.js';
 import type { TutorialDef } from './tutorial-types.js';
 
 /** One language's text, with English as the always-present base. */
@@ -32,6 +33,11 @@ export interface CustomTutorialDoc {
     title: LText;
     desc?: LText;
     color?: string;
+    /** A pack ref (`lucide:rocket`, `si:discord`, or an uploaded data URL) — NOT markup.
+     *  Custom tutorials all drew one fixed glyph because a document's own SVG would have to
+     *  be sanitised before it could go near innerHTML; a name the app resolves itself has
+     *  nothing to sanitise. */
+    icon?: string;
     parts: Array<{
         id: string;
         title?: LText;
@@ -129,9 +135,12 @@ export function toDef(doc: CustomTutorialDoc): TutorialDef {
         id: `custom:${doc.id}`,
         title_key: put('title', doc.title, doc.id),
         desc_key: put('desc', doc.desc),
-        // A fixed glyph. The document's own SVG would need real sanitising to be safe in
-        // innerHTML, and a wrong icon is a smaller cost than a right exploit.
-        icon: '<path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>',
+        // A pack ref resolves to markup the app itself produced; anything else falls back
+        // to the fixed glyph. The document never supplies SVG, which is what makes this
+        // safe to hand to the hub's DOMParser.
+        icon: isPackIcon(doc.icon)
+            ? renderPackIcon(doc.icon as string, 22)
+            : '<path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>',
         color: /^#[0-9a-fA-F]{3,8}$/.test(doc.color || '') ? (doc.color as string) : 'var(--accent)',
         parts: doc.parts.map((p, pi) => ({
             id: p.id || `p${pi}`,
@@ -331,17 +340,84 @@ export function armWatchers(doc: CustomTutorialDoc): void {
 
 let _docs: CustomTutorialDoc[] = [];
 
+
+/**
+ * A built-in tutorial, as an editable document.
+ *
+ * The inverse of `toDef`. A TutorialDef holds i18n KEYS; a CustomTutorialDoc holds the words.
+ * Resolving them here is the point: a copy that kept the keys would look right until the
+ * app's dictionary moved, and could not be edited at all — there is nothing to type over in
+ * `tut.basics.profiles.s1.text`.
+ *
+ * Both languages are read. Half a bilingual lesson is a loss nobody would notice until a
+ * French reader opened it.
+ */
+export function forkBuiltin(def: TutorialDef, newId: string): CustomTutorialDoc {
+    // t() answers in the CURRENT language, so the other one is read directly from the
+    // dictionary. A key with no French entry falls back to the English, which is what the
+    // engine would have shown anyway.
+    const both = (key: string | undefined): LText | undefined => {
+        if (!key) return undefined;
+        const en = tIn('en', key);
+        const fr = tIn('fr', key);
+        if (!en && !fr) return undefined;
+        return { en: en || fr, ...(fr && fr !== en ? { fr } : {}) };
+    };
+
+    return {
+        format: 'bmmtut',
+        version: 1,
+        id: newId,
+        title: both(def.title_key) || { en: newId },
+        desc: both(def.desc_key),
+        color: /^#/.test(def.color) ? def.color : undefined,
+        parts: def.parts.map((p) => ({
+            id: p.id,
+            title: both(p.title_key),
+            steps: p.steps.map((st) => ({
+                id: st.id,
+                title: both(st.title_key),
+                text: both(st.text_key),
+                nav: st.nav,
+                selector: st.selector,
+                optional: (st as { optional?: boolean }).optional,
+                // The built-in's action becomes a `wait` of kind 'action' — the same
+                // vocabulary a hand-written step uses, so the copy is editable in the
+                // creator rather than carrying a shape only the engine understands.
+                ...(st.action
+                    ? { wait: { kind: 'action' as const, event: st.action.event, desc: both(st.action.desc_key) } }
+                    : {}),
+            })),
+        })),
+    };
+}
+
 export async function loadCustomTutorials(): Promise<TutorialDef[]> {
     try {
         _docs = ((await invoke('tutorial_custom_list')) as CustomTutorialDoc[]) || [];
     } catch {
         _docs = [];
     }
+    // renderPackIcon is synchronous and returns '' for a pack that has not loaded, so the
+    // packs every stored icon needs are warmed BEFORE any document is converted. Skipping
+    // this renders an empty icon on the first paint and a correct one on the next
+    // re-render, which reads as a flicker nobody can explain.
+    try { await ensurePacksFor(_docs.map((d) => d.icon)); } catch { /* icons are optional */ }
     return _docs.map(toDef);
 }
 
 export function getCustomDoc(id: string): CustomTutorialDoc | null {
     return _docs.find((d) => d.id === id) || null;
+}
+
+/** Write one document. The creator did this with a raw invoke; the hub's copy button made
+ *  it two places, which is one more than a persistence call should ever live in. */
+export async function saveCustomTutorial(doc: CustomTutorialDoc): Promise<void> {
+    await invoke('tutorial_custom_save', { doc });
+    // The in-memory list is what getCustomDoc and the hub read, so it is updated here
+    // rather than left for the next full reload — the creator opens on the new document
+    // immediately after this returns.
+    _docs = [..._docs.filter((d) => d.id !== doc.id), doc];
 }
 
 export async function deleteCustomTutorial(id: string): Promise<void> {

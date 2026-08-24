@@ -322,6 +322,34 @@ function detail(): HTMLElement {
             }).catch((e) => toast(String(e), 'error'));
         });
         box.append(own);
+    } else {
+        // A BUILT-IN one. It is still not yours to change — but it can be COPIED, and the
+        // copy is an ordinary custom tutorial: same steps, same waits, a new id, and every
+        // string materialised so it no longer depends on the app's dictionary. That is the
+        // difference between "read only" and "no starting point".
+        const own = el('div', 'tut-hub-actions');
+        const b = el('button', 'btn btn-ghost btn-sm', t('tuthub.fork') || 'Make a copy I can edit');
+        b.setAttribute('type', 'button');
+        b.addEventListener('click', () => {
+            void (async () => {
+                try {
+                    const { forkBuiltin, saveCustomTutorial } = await import('./tutorial-custom.js');
+                    // A new id, and one that does not collide: the id is the filename and
+                    // the progress key, so reusing the built-in's would fork the reader's
+                    // progress along with the lesson.
+                    const base = `${tut.id}-copy`;
+                    let id = base;
+                    for (let n = 2; TUTORIALS.some((x) => x.id === `custom:${id}`); n++) id = `${base}-${n}`;
+                    const doc = forkBuiltin(tut, id);
+                    await saveCustomTutorial(doc);
+                    toast(t('tuthub.forked') || 'Copied — open it under your own tutorials.', 'success');
+                    refreshHub();
+                    void import('./tutorial-creator.js').then((m) => m.openTutorialCreator(id, refreshHub));
+                } catch (e) { toast(String(e), 'error'); }
+            })();
+        });
+        own.append(b);
+        box.append(own);
     }
 
     const foot = el('div', 'tut-hub-foot', t('hub.footer') || '');

@@ -66,6 +66,24 @@ const _runtimeTexts = {};
 export function registerRuntimeTexts(lang, map) {
     _runtimeTexts[lang] = { ...(_runtimeTexts[lang] || {}), ...map };
 }
+/**
+ * One key, in ONE named language, with no fallback chain and no placeholder substitution.
+ *
+ * `t()` answers in whatever language is current, which is the right behaviour for drawing a
+ * screen and the wrong one for COPYING a bilingual document: forking a built-in tutorial has
+ * to read both halves, and reading the other one by switching the app's language and back is
+ * not a thing a copy operation should do.
+ *
+ * Returns '' rather than the key when there is no entry, so a caller can tell "not
+ * translated" from "translated to something that looks like a key".
+ */
+export function tIn(lang, key) {
+    const dict = translations[lang] || {};
+    if (dict[key] !== undefined)
+        return dict[key];
+    const rt = _runtimeTexts[lang];
+    return rt && rt[key] !== undefined ? rt[key] : '';
+}
 export function t(key, params = {}) {
     const dict = translations[currentLang] || translations.fr || {};
     let str = dict[key] || (translations.fr && translations.fr[key]) || key;

@@ -24,10 +24,11 @@
 // says which.
 
 import { invoke } from '../core/api.js';
+import { openIconPicker, isPackIcon, renderPackIcon } from './icon-pack.js';
 import { checkCondition } from './tutorial-expr.js';
 import { t } from '../core/i18n.js';
 import { toast } from './app.js';
-import { getCustomDoc, type CustomTutorialDoc } from './tutorial-custom.js';
+import { getCustomDoc, type CustomTutorialDoc, saveCustomTutorial } from './tutorial-custom.js';
 import { BMM_ACTIONS } from './tutorial-events.js';
 import { pickElement } from './tutorial-pick.js';
 
@@ -108,6 +109,25 @@ export function openTutorialCreator(editId: string | null, onSaved: () => void):
         color.value = /^#/.test(doc.color || '') ? (doc.color as string) : '#8b5cf6';
         color.addEventListener('input', () => { doc.color = color.value; });
         meta.append(labelled(t('tutc.color'), color));
+
+        // The hub card's glyph. A pack REF, never markup — see toDef for why.
+        const iconBtn = el('button', 'btn btn-ghost btn-sm tutc-iconbtn', '');
+        iconBtn.setAttribute('type', 'button');
+        const paintIcon = () => {
+            iconBtn.innerHTML = isPackIcon(doc.icon)
+                ? renderPackIcon(doc.icon as string, 16)
+                : '<span class="tutc-iconempty">+</span>';
+            iconBtn.append(document.createTextNode(' ' + (doc.icon ? t('tutc.iconChange') : t('tutc.iconPick'))));
+        };
+        iconBtn.addEventListener('click', async () => {
+            // The picker loads its packs eagerly, so the ref it returns renders immediately.
+            const ref = await openIconPicker({ current: doc.icon });
+            if (ref == null) return;
+            doc.icon = ref || undefined;
+            paintIcon();
+        });
+        paintIcon();
+        meta.append(labelled(t('tutc.icon'), iconBtn));
         panel.append(meta);
 
         // ── parts rail ──
@@ -159,7 +179,7 @@ export function openTutorialCreator(editId: string | null, onSaved: () => void):
         save.addEventListener('click', async () => {
             if (!doc.title.en.trim()) { toast(t('tutc.needName'), 'warning'); return; }
             try {
-                await invoke('tutorial_custom_save', { doc });
+                await saveCustomTutorial(doc);
                 toast(t('tutc.saved'), 'success');
                 overlay.remove();
                 onSaved();

@@ -17836,6 +17836,11 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
 .tutc-hint { font-size: 11px; color: var(--text-muted); margin: 3px 2px 0; line-height: 1.4; }
 .tutc-hint.is-bad { color: var(--danger, #ef4444); }
 
+/* The icon button shows the chosen glyph, or a placeholder that reads as an invitation
+   rather than as a missing image. */
+.tutc-iconbtn { display: inline-flex; align-items: center; gap: 6px; }
+.tutc-iconempty { display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 4px; border: 1px dashed var(--border-color, #232d42); color: var(--text-muted, #64748b); font-size: 12px; line-height: 1; }
+
 
 /* A quiet footer inside a mapper panel: the one fact the screen does not show by itself,
    placed where it applies rather than in a banner across the top. */
