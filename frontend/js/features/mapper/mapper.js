@@ -427,7 +427,7 @@ async function refreshGameTree(force = false) {
     if (!container)
         return;
     if (!activeProfile) {
-        container.innerHTML = `<div class="empty-hint">${t('mapper.loadProfileHint') || 'Load a profile to view the game folder'}</div>`;
+        container.innerHTML = `<div class="empty-hint">${t('mapper.loadProfileHint') || 'Load a profile to view the destination folder'}</div>`;
         return;
     }
     if (!force && activeProfile.game_path === lastGamePath && gameTreeData.length > 0) {
@@ -1122,7 +1122,7 @@ function selectModRoot() {
     updateSelectionCounter();
     updateLiveMappingHighlight();
     toast(t('mapper.modRootSelected', { count: topLevel.length.toString() })
-        || `Whole mod root selected (${topLevel.length} items) — double-click a game folder to map it there`, 'info', 3500);
+        || `Whole mod root selected (${topLevel.length} items) — double-click a destination folder to map it there`, 'info', 3500);
 }
 /** Move the current selection to `targetPath`. If nothing is selected, move the
  *  ENTIRE mod root (all top-level mod items) — "dump the whole mod here". */

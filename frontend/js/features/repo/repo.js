@@ -1,6 +1,5 @@
 // @ts-nocheck
 import { invoke, pickFolder } from '../../core/api.js';
-import { wireDismissibleTip } from '../../ui/dismissible-tip.js';
 import { toast, toastSaved } from '../../ui/app.js';
 import { escHtml, escAttr, formatBytes } from '../../core/utils.js';
 import { originLabel, originOf, forgetOrigin, enabledOnly, isDisabled, setDisabled, recordHistory, hasSource, catalogLabel } from '../catalogs/catalog-index.js';
@@ -519,15 +518,10 @@ function explainSsh(raw) {
     return rest.length ? `${base} — ${rest.join(' ')}` : base;
 }
 export function initRepo() {
-    // The mode-info banner is a good explanation the first time and a permanent
-    // block of text above the controls every time after. Same dismiss/restore
-    // affordance the mapper has, from the same place — ui/dismissible-tip.ts.
-    wireDismissibleTip({
-        bannerId: 'repo-info-banner',
-        closeId: 'btn-repo-hint-close',
-        showId: 'btn-repo-hint-show',
-        storageKey: 'bmm_repo_hint_hidden',
-    });
+    // The mode-info banner is gone, and so is its dismiss/restore wiring. It explained that
+    // hosting works "like a classic web server" above the very controls that do it — a
+    // paragraph everybody read once and then dismissed, which is the definition of a banner
+    // that should not have been permanent.
     const elements = {
         // --- Export elements ---
         btnPickExport: document.getElementById('btn-pick-repo-export'),
@@ -1251,6 +1245,19 @@ export function initRepo() {
     const initRepoBrowser = () => {
         const btnBrowse = document.getElementById('btn-browse-repos');
         const modal = document.getElementById('modal-repo-browser');
+        // The protected-source fold, mounted and wired together — markup with no listeners is
+        // the failure that has now shipped on three separate screens.
+        const rbMount = document.getElementById('rb-access-mount');
+        if (rbMount && !rbMount.innerHTML) {
+            void import('../../core/source-access.js').then((sa) => {
+                rbMount.innerHTML = sa.sourceAccessHtml('rb');
+                sa.wireSourceAccess('rb', (m, k) => toast(m, k === 'warning' ? 'warning' : 'success'), () => {
+                    document.getElementById('nav-settings')?.click();
+                    setTimeout(() => document.getElementById('settings-identity-card')
+                        ?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 250);
+                }, () => document.getElementById('rb-access-url')?.value?.trim() || '');
+            });
+        }
         const loadingEl = document.getElementById('repo-browser-loading');
         const contentEl = document.getElementById('repo-browser-content');
         const errorEl = document.getElementById('repo-browser-error');
@@ -1543,6 +1550,18 @@ export function initRepo() {
                     const url = item.dataset.url;
                     if (elements.inputSyncUrl) {
                         elements.inputSyncUrl.value = url;
+                    }
+                    // Credentials from the fold, handed to the sync that is about to run.
+                    // The password seeds the session so the fetch below does not have to 401
+                    // first and prompt; the key was already saved per-origin by the fold
+                    // itself. Also seed the fold's URL field so opening it after picking a
+                    // repo talks about THAT repo, not a blank.
+                    const rbUrl = document.getElementById('rb-access-url');
+                    if (rbUrl && !rbUrl.value.trim())
+                        rbUrl.value = url || '';
+                    const rbPw = document.getElementById('rb-access-pw')?.value?.trim();
+                    if (rbPw) {
+                        void import('./repo-sync.js').then((m) => m.setRepoPassword(rbPw));
                     }
                     if (elements.btnFetchInfo) {
                         elements.btnFetchInfo.click();
@@ -1959,6 +1978,19 @@ export function initRepo() {
         document.getElementById('repo-update-mode-local')?.addEventListener('click', () => setMode(false));
         document.getElementById('repo-update-mode-remote')?.addEventListener('click', () => setMode(true));
         setMode(false);
+        // The SSH credentials block, mounted and wired in one place so markup with no
+        // listeners cannot ship — the failure that has now bitten three separate screens.
+        const sshMount = document.getElementById('repo-update-ssh-mount');
+        if (sshMount && !sshMount.innerHTML) {
+            void import('./ssh-source.js').then((m) => {
+                sshMount.innerHTML = m.sshSourceHtml('repo-update');
+                m.wireSshSource('repo-update', () => {
+                    document.getElementById('nav-settings')?.click();
+                    setTimeout(() => document.getElementById('settings-identity-card')
+                        ?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 250);
+                });
+            });
+        }
         // ── from the server ─────────────────────────────────────────────────
         //
         // The repo is fetched into a folder YOU choose, not a hidden working copy: the update
@@ -1966,12 +1998,18 @@ export function initRepo() {
         // publishing it back over what is live.
         document.getElementById('btn-repo-update-pull')?.addEventListener('click', async () => {
             const m = await import('./repo-ssh.js');
+            const src = await import('./ssh-source.js');
             const names = m.sshTargetNames();
             if (!names.length) {
                 // Say where to configure it rather than failing about a field never filled in.
                 toast(t('repo.sync.useSshNotSet'), 'warning', 7000);
                 return;
             }
+            // Credentials typed into the block below, when there are any. This is the path
+            // that makes a PASSWORD server usable from here at all: the stored-target helpers
+            // refuse one on purpose, because nothing about a password is written down and an
+            // unattended run has nobody to ask. Somebody is looking at this dialog.
+            const typedCreds = src.readSshSource('repo-update');
             // The address names WHICH server. `ssh://nom` picks that target, `ssh://` the one
             // called default, and an empty field the only one you have.
             const typed = document.getElementById('repo-update-url')?.value?.trim() || '';
@@ -2015,7 +2053,9 @@ export function initRepo() {
                 btn.disabled = true;
             try {
                 toast(t('repo.update.pulling'), 'info', 4000);
-                const n = await m.pullStoredTarget(folder, target);
+                const n = typedCreds.ssh
+                    ? await m.pullWithTarget(folder, typedCreds.ssh, typedCreds.sshSecret)
+                    : await m.pullStoredTarget(folder, target);
                 toast((t('repo.update.pulled') || '').replace('{n}', String(n)), 'success', 5000);
                 await loadRepoFolder(folder);
             }
@@ -2032,11 +2072,16 @@ export function initRepo() {
             if (!repoDir)
                 return;
             const m = await import('./repo-ssh.js');
+            const src = await import('./ssh-source.js');
             const names = m.sshTargetNames();
             if (!names.length) {
                 toast(t('repo.sync.useSshNotSet'), 'warning', 7000);
                 return;
             }
+            // Read here too. A fetch that used typed credentials and a publish that fell back
+            // to the stored target would put the edited repo on a DIFFERENT server from the
+            // one it came from, and report success for doing it.
+            const pubCreds = src.readSshSource('repo-update');
             // Back to the target the address names, so a fetch and its publish cannot end up
             // on two different servers.
             const typedP = document.getElementById('repo-update-url')?.value?.trim() || '';
@@ -2050,7 +2095,9 @@ export function initRepo() {
             if (btn)
                 btn.disabled = true;
             try {
-                const n = await m.publishStoredTarget(repoDir, pTarget);
+                const n = pubCreds.ssh
+                    ? await m.publishWithTarget(repoDir, pubCreds.ssh, pubCreds.sshSecret)
+                    : await m.publishStoredTarget(repoDir, pTarget);
                 toast((t('repo.update.published') || '').replace('{n}', String(n)), 'success', 6000);
             }
             catch (e) {

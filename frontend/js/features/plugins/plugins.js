@@ -3893,14 +3893,23 @@ function renderCreate(container) {
     });
     // Click a mod id (available or selected list) to copy it — handy when hand-editing
     // a catalog or debugging a mod-list match.
-    container.addEventListener('click', (e) => {
-        const idBtn = e.target.closest?.('.plug-mod-id[data-copy-id]');
-        if (!idBtn)
-            return;
-        e.preventDefault();
-        e.stopPropagation();
-        navigator.clipboard?.writeText(idBtn.dataset.copyId).then(() => toast(t('plugins.idCopied') || 'Mod id copied', 'success'), () => toast(`${t('common.error')}`, 'error'));
-    });
+    //
+    // ONCE PER CONTAINER. renderCreate() replaces the container's innerHTML but the container
+    // itself survives, so attaching a delegated listener to it on every visit stacked them:
+    // the fourth time you opened the Create tab, one click fired four handlers and put four
+    // identical "id copied" toasts on screen. The children are rebuilt and their listeners go
+    // with them; a listener on the element that OUTLIVES the render has to be guarded.
+    if (!container.dataset.pcIdCopyBound) {
+        container.dataset.pcIdCopyBound = '1';
+        container.addEventListener('click', (e) => {
+            const idBtn = e.target.closest?.('.plug-mod-id[data-copy-id]');
+            if (!idBtn)
+                return;
+            e.preventDefault();
+            e.stopPropagation();
+            navigator.clipboard?.writeText(idBtn.dataset.copyId).then(() => toast(t('plugins.idCopied') || 'Mod id copied', 'success'), () => toast(`${t('common.error')}`, 'error'));
+        });
+    }
     function buildManifest() {
         const id = document.getElementById('pc-id')?.value.trim();
         const name = document.getElementById('pc-name')?.value.trim();
@@ -5709,7 +5718,7 @@ function getEndpointDefs() {
                 { name: 'name', type: 'string', required: false, desc: 'Nouveau nom d\'affichage.' },
                 { name: 'color', type: 'string', required: false, desc: 'Nouvelle couleur d\'accentuation hex, ex : "#ef4444".' },
                 { name: 'icon', type: 'string', required: false, desc: 'Nouvel identifiant d\'icône.' },
-                { name: 'game_path', type: 'string', required: false, desc: 'Nouveau chemin absolu vers le dossier du jeu.' },
+                { name: 'game_path', type: 'string', required: false, desc: 'Nouveau chemin absolu vers le dossier de destination.' },
                 { name: 'mods_path', type: 'string', required: false, desc: 'Nouveau chemin absolu vers le dossier des mods.' },
                 { name: 'backup_path', type: 'string', required: false, desc: 'Nouveau chemin absolu vers le dossier de backup.' },
             ],
