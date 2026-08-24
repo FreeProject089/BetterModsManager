@@ -9,6 +9,7 @@ import { toast, updateLibraryProfileSelector } from '../../ui/app.js';
 import { pickFile, convertFileSrc } from '../../core/api.js';
 import { refreshMods } from '../mods/mods.js';
 import { t, applyTranslations } from '../../core/i18n.js';
+import { escHtml } from '../../core/utils.js';
 import { dispatchBmmAction, BMM_ACTIONS } from '../../ui/tutorial-events.js';
 
 window.pendingBgState = { action: null, tmpPath: null }; // Tracks 'apply', 'remove', or null
@@ -434,25 +435,41 @@ function renderIconPicker(gridId, hiddenInputId) {
     // The door to the FULL icon library (2000+ Lucide, 3400+ brands, uploads).
     // A picked ref is stored in the same hidden input — profile.icon is already a
     // free string, so it travels through every export/share unchanged.
-    const more = document.createElement('div');
-    more.className = 'icon-option icon-option-more';
-    more.title = t('iconpack.title') || 'Choose an icon';
-    const setMorePreview = () => {
-        if (input && isPackIcon(input.value)) {
-            void ensurePackFor(input.value).then(() => { more.innerHTML = renderPackIcon(input.value, 18) || '…'; });
-            more.classList.add('selected');
+    //
+    // Two SEPARATE tiles, deliberately. This used to be one "…" tile that turned into
+    // whatever icon was picked — which erased the button. Once a library icon was chosen,
+    // nothing on the screen said "there are more icons here" any more: the door had become
+    // the thing behind it. The picked icon now gets its own selected tile, and the button
+    // keeps its face whatever happens.
+    const packed = document.createElement('div');
+    packed.className = 'icon-option icon-option-packed';
+    const paintPacked = () => {
+        const v = input?.value || '';
+        if (isPackIcon(v)) {
+            packed.hidden = false;
+            packed.classList.add('selected');
+            void ensurePackFor(v).then(() => { packed.innerHTML = renderPackIcon(v, 18) || '…'; });
         } else {
-            more.textContent = '…';
+            packed.hidden = true;
+            packed.classList.remove('selected');
         }
     };
-    setMorePreview();
+    paintPacked();
+    grid.appendChild(packed);
+
+    const more = document.createElement('button');
+    more.type = 'button';
+    more.className = 'icon-option icon-option-more';
+    more.title = t('iconpack.title') || 'Choose an icon';
+    // A face that says what it is — a grid glyph and a word, not an ellipsis. The old "…"
+    // read as "truncated", which is a statement about the list, not an action.
+    more.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>${escHtml(t('iconpack.more') || 'More…')}</span>`;
     more.addEventListener('click', async () => {
         const ref = await openIconPicker({ current: input?.value || '' });
         if (ref === null || !input) return;
         input.value = ref;
         grid.querySelectorAll('.icon-option').forEach(el => el.classList.remove('selected'));
-        more.classList.add('selected');
-        more.innerHTML = renderPackIcon(ref, 18) || '…';
+        paintPacked();
     });
     grid.appendChild(more);
 }

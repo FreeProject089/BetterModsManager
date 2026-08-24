@@ -17,12 +17,14 @@
   display: flex; align-items: flex-end; justify-content: space-between; gap: 20px;
   flex-wrap: wrap; margin-bottom: 20px;
 }
+/* The one page heading in the app that wore a gradient, at 30px/800 while every other nav
+   page sits at 22px/700 plain. One page dressed differently reads as a different product,
+   not as emphasis — same values as .view-title / .view-subtitle now. */
 .dh-heading h1 {
-  font-size: 30px; font-weight: 800; letter-spacing: -0.02em; margin: 0 0 6px;
-  background: linear-gradient(100deg, var(--bmm-text-primary, #e6edf3), var(--bmm-accent, #3b82f6));
-  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  font-size: 22px; font-weight: 700; margin: 0 0 6px;
+  color: var(--bmm-text-primary, #e6edf3); line-height: 1.2;
 }
-.dh-heading p { margin: 0; color: var(--bmm-text-secondary, #a3adba); font-size: 14.5px; max-width: 60ch; line-height: 1.5; }
+.dh-heading p { margin: 0; color: var(--bmm-text-muted, #8b949e); font-size: 13px; max-width: 60ch; line-height: 1.5; }
 .dh-actions { display: flex; gap: 10px; flex-wrap: wrap; }
 
 .dh-btn {

@@ -91,19 +91,23 @@ export function openFlappyTasky(): void {
     /** Eases the start further: the first few pipes are nearly flat, then it picks up. */
     const ease = () => { const r = ramp(); return r * r * (3 - 2 * r); };
 
-    const GAP_START = 205, GAP_END = 150;
-    const SPEED_START = 1.35, SPEED_END = 2.35;
-    const STEP_START = 34, STEP_END = 96;
-    const SPACING_START = 265, SPACING_END = 205;
+    const GAP_START = 215, GAP_END = 150;
+    const SPEED_START = 1.05, SPEED_END = 2.3;
+    const STEP_START = 30, STEP_END = 96;
+    const SPACING_START = 280, SPACING_END = 205;
+    // On the ramp too, and this is the second attempt at this exact complaint. The last
+    // tuning ramped everything EXCEPT gravity and the flap — the two numbers that decide how
+    // fast Tasky falls between taps — and "it falls too much at the start" survived the whole
+    // rework. What the ramp does not cover, the ramp does not fix.
+    const GRAVITY_START = 0.20, GRAVITY_END = 0.36;
+    const FLAP_START = -5.0, FLAP_END = -6.6;
 
     const gapNow = () => GAP_START + (GAP_END - GAP_START) * ease();
     const speedNow = () => SPEED_START + (SPEED_END - SPEED_START) * ease();
     const stepNow = () => STEP_START + (STEP_END - STEP_START) * ease();
     const spacingNow = () => SPACING_START + (SPACING_END - SPACING_START) * ease();
-
-    // Lighter than before at every score. Falling fast is what made the opening feel like a
-    // reflex test rather than a game you are learning.
-    const GRAVITY = 0.29, FLAP = -6.1;
+    const gravityNow = () => GRAVITY_START + (GRAVITY_END - GRAVITY_START) * ease();
+    const flapNow = () => FLAP_START + (FLAP_END - FLAP_START) * ease();
 
     /** Keeps a gap centre off the very top and bottom, where it needs a perfect flap. */
     const marginNow = () => gapNow() / 2 + 26;
@@ -140,7 +144,7 @@ export function openFlappyTasky(): void {
             footEl.textContent = '';
             presence(t('flappy.title'), t('flappy.rpcPlaying').replace('{n}', '0'));
         }
-        vy = FLAP;
+        vy = flapNow();
     };
 
     const step = () => {
@@ -153,7 +157,7 @@ export function openFlappyTasky(): void {
         ctx.fillRect(0, 0, W, H);
 
         if (state === 'playing') {
-            vy += GRAVITY;
+            vy += gravityNow();
             y += vy;
             const speed = speedNow();
             for (const p of pipes) p.x -= speed;

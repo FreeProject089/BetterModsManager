@@ -19,8 +19,12 @@
     flex-shrink: 0;
 }
 .apps-header-left { display: flex; align-items: center; gap: 14px; color: var(--accent); }
-.apps-title { font-size: 18px; font-weight: 700; color: var(--text-primary); margin: 0; }
-.apps-subtitle { font-size: 12px; color: var(--text-muted); margin: 2px 0 0; }
+/* Same values as .view-title / .view-subtitle. Every other nav page's heading is 22px/700
+   with a 13px muted line under it; this one was 18px/12px for no reason anyone chose — it
+   was simply written on a different day. Values copied rather than the classes reused
+   because this header's layout hangs off .apps-*. */
+.apps-title { font-size: 22px; font-weight: 700; color: var(--text-primary); margin: 0; line-height: 1.2; }
+.apps-subtitle { font-size: 13px; color: var(--text-muted); margin: 4px 0 0; }
 
 /* ── Tabs ── */
 .apps-tabs {
