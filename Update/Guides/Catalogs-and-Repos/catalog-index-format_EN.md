@@ -83,7 +83,7 @@ improves what the reader can show you; nothing else changes what it does.
 
 | Field | Required | What it means |
 |---|---|---|
-| `type` | **yes** | `app`, `plugin`, `theme`, `preset`, `modpack` or `repo`. Anything else is dropped. |
+| `type` | **yes** | `app`, `plugin`, `theme`, `preset`, `modpack`, `repo` or `tutorial`. Anything else is dropped. |
 | `url` | **yes** | The catalog itself. `http` or `https` only. |
 | `app` | no | Which Better\* product it is for — `bmm`, `bsm`, `installer`. |
 | `name` | no | Shown in the preview. |
@@ -139,6 +139,7 @@ missing value is not.
 | `preset` | Scheduler → *From a catalog…* |
 | `modpack` | Modpacks → *Catalogues* |
 | `repo` | Browse Server-Repos |
+| `tutorial` | Tutorial hub → *Catalogues…* |
 
 A repo catalog is a `repos.json`-shaped document — see the Server-Repo guide. Entries it
 brings in are tagged **community** by BMM, whatever the file claims.

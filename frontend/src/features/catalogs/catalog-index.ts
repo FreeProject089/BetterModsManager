@@ -38,7 +38,7 @@ export interface CatalogIndex {
 // not sending it, which is the wrong place to go looking. Keep this in step with what the
 // index can emit; a type accepted here with nowhere to route it is lost by the caller,
 // which is worse than refusing it.
-export const INDEX_TYPES = ['app', 'plugin', 'theme', 'preset', 'modpack', 'repo'] as const;
+export const INDEX_TYPES = ['app', 'plugin', 'theme', 'preset', 'modpack', 'repo', 'tutorial'] as const;
 
 /**
  * Parse and sanitise an index document.
@@ -265,6 +265,11 @@ export const STORE_KEY: Record<string, string> = {
     preset: 'bmm_preset_catalogs',
     modpack: 'bmm_modpack_catalogs',
     repo: 'bmm_repo_catalogs',
+    // The tutorial catalogue client reads this exact key (ui/tutorial-catalog.ts), so an
+    // index can now deliver one. A type accepted by the parser with nowhere to put it is
+    // dropped by the caller and looks like the server never sent it — which is what the
+    // check below exists to prevent.
+    tutorial: 'bmm.tutorialCatalogs',
 };
 
 /** Every type this module can actually deliver somewhere.
