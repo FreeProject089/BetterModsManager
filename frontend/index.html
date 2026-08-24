@@ -1707,6 +1707,11 @@
                                             </div>
                                         </div>
                                     </div>
+                                    </div><!-- /repo-ssh-card — closes HERE.
+                                         The export progress bar and the two buttons below belong to
+                                         generation, not to publishing over SSH. They used to sit inside
+                                         this card, so its border drew around them and the collapse read
+                                         as if it owned them. -->
 
                                     <div id="repo-export-progress-container" class="bmm-progress" style="display:none;--bmm-progress-ink:var(--cyan);">
                                         <div class="bmm-progress-head">
@@ -1729,7 +1734,6 @@
                                         </button>
                                         <p style="font-size:10px;color:var(--text-muted);margin:6px 2px 0;line-height:1.4;" data-i18n="repo.hub.openHint">Serve all your repos from one Node server with a web dashboard.</p>
                                     </div>
-                                </div><!-- /repo-ssh-body -->
                                     </div><!-- /repo-card-body (generate) -->
                             </div><!-- /repo-card--cyan -->
 

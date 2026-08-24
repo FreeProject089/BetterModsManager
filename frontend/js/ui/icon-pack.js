@@ -151,6 +151,111 @@ export function renderPackIcon(ref, size = 16, color) {
 const PAGE = 240; // grid cells rendered per "show more" — 5000 nodes at once is jank
 /** Open the icon picker. Resolves to a ref ("lucide:x" | "si:x" | "data:...") or
  *  null (cancelled). `current` pre-fills the search with the current ref's name. */
+/** Words people type for icons that are filed under a different name.
+ *
+ *  Not a thesaurus — only the cases where the Lucide name is a word the searcher would not
+ *  reach for. Every entry here is a search that returned NOTHING before. */
+const ICON_SYNONYMS = {
+    delete: ['trash'], bin: ['trash'], remove: ['trash', 'x'],
+    settings: ['cog', 'settings', 'sliders'], preferences: ['sliders', 'settings'],
+    picture: ['image'], photo: ['image', 'camera'], tick: ['check'], done: ['check'],
+    cancel: ['x'], close: ['x'], add: ['plus'], new: ['plus'],
+    edit: ['pencil', 'pen'], write: ['pencil', 'pen'],
+    person: ['user'], people: ['users'], account: ['user'], profile: ['user'],
+    folder: ['folder'], directory: ['folder'], save: ['save', 'download'],
+    warning: ['triangle-alert', 'alert'], error: ['circle-x', 'octagon-alert'],
+    back: ['arrow-left'], forward: ['arrow-right'], up: ['arrow-up'], down: ['arrow-down'],
+    speed: ['gauge', 'zap'], fast: ['zap'], time: ['clock'], calendar: ['calendar'],
+    lock: ['lock'], secure: ['lock', 'shield'], key: ['key'],
+    game: ['gamepad', 'joystick'], music: ['music'], sound: ['volume'],
+    graph: ['chart'], stats: ['chart'], money: ['coins', 'wallet', 'banknote'],
+};
+/**
+ * Score one icon name against a query. Higher is better; 0 means "not a match".
+ *
+ * Ranking is the whole point. Every token must appear somewhere, so "arrow up" matches
+ * `arrow-up` and `circle-arrow-up` and nothing else — but an exact name has to come FIRST,
+ * or searching `star` buries `star` under `sparkle-star` and the search looks broken.
+ */
+function scoreIcon(name, label, tokens) {
+    const n = name.toLowerCase();
+    const l = (label || '').toLowerCase();
+    let score = 0;
+    for (const tok of tokens) {
+        const alts = [tok, ...(ICON_SYNONYMS[tok] || [])];
+        let best = 0;
+        for (let i = 0; i < alts.length; i++) {
+            const a = alts[i];
+            // The word actually typed beats a synonym at the same quality of match. Without
+            // this, searching `settings` put `cog` first — a correct answer, ranked above
+            // the icon literally named `settings`, which reads as the search being confused.
+            const own = i === 0 ? 6 : 0;
+            if (n === a)
+                best = Math.max(best, 100 + own);
+            else if (n.startsWith(a + '-') || n.startsWith(a))
+                best = Math.max(best, 60 + own);
+            // A whole word inside a hyphenated name — `arrow` in `circle-arrow-up`.
+            else if (n.split('-').includes(a))
+                best = Math.max(best, 45 + own);
+            else if (n.includes(a))
+                best = Math.max(best, 20 + own);
+            else if (l.includes(a))
+                best = Math.max(best, 15 + own); // brand titles
+        }
+        if (!best)
+            return 0; // every token must hit, or it is not this icon
+        score += best;
+    }
+    // A short name that matched is a closer answer than a long one that also matched.
+    return score * 1000 - n.length;
+}
+// ── Your own icons ───────────────────────────────────────────────────────────
+//
+// An uploaded image used to be handed straight back and forgotten, so using the same icon
+// on a second button meant finding the file and uploading it again. They are kept here
+// instead, and become a third source in the picker.
+//
+// localStorage, not a file: an icon is already stored INSIDE whatever uses it (a data URL on
+// the tag, the profile, the nav item), so this is a convenience list, not the copy of record.
+// Losing it costs a re-upload and breaks nothing that already uses one.
+const MINE_KEY = 'bmm_icon_library';
+const MINE_MAX = 40; // a picker, not an asset manager
+const MINE_MAX_BYTES = 2_000_000; // localStorage is small and shared with the whole app
+export function savedIcons() {
+    try {
+        const raw = JSON.parse(localStorage.getItem(MINE_KEY) || '[]');
+        return Array.isArray(raw) ? raw.filter((x) => x && typeof x.data === 'string') : [];
+    }
+    catch {
+        return [];
+    } // corrupt storage must not take the picker down
+}
+/** Remember one uploaded icon. Returns the ref the caller should use. */
+export function saveIcon(name, dataUrl) {
+    const list = savedIcons();
+    // Same bytes twice is the same icon — uploading a file you already have should not
+    // fill the list with copies of it.
+    const existing = list.find((x) => x.data === dataUrl);
+    if (existing)
+        return existing.data;
+    const entry = { id: dataUrl, name: name.replace(/\.[a-z0-9]+$/i, '').slice(0, 40) || 'icon', data: dataUrl, at: Date.now() };
+    let next = [entry, ...list].slice(0, MINE_MAX);
+    // And a hard byte ceiling, because one 128 KB icon times forty is a quota error that
+    // would surface as some unrelated setting failing to save.
+    while (next.length > 1 && next.reduce((n, x) => n + x.data.length, 0) > MINE_MAX_BYTES)
+        next.pop();
+    try {
+        localStorage.setItem(MINE_KEY, JSON.stringify(next));
+    }
+    catch { /* full — the icon still works, it just is not remembered */ }
+    return dataUrl;
+}
+export function forgetIcon(id) {
+    try {
+        localStorage.setItem(MINE_KEY, JSON.stringify(savedIcons().filter((x) => x.id !== id)));
+    }
+    catch { /* ignore */ }
+}
 export function openIconPicker(opts = {}) {
     return new Promise((resolve) => {
         document.getElementById('bmm-icon-picker')?.remove();
@@ -164,6 +269,7 @@ export function openIconPicker(opts = {}) {
                     <div class="ipk-tabs">
                         <button class="ipk-tab active" data-src="lucide">Lucide</button>
                         <button class="ipk-tab" data-src="si">${t('iconpack.brands') || 'Brands'}</button>
+                        <button class="ipk-tab" data-src="mine">${t('iconpack.mine') || 'Yours'}</button>
                         <label class="ipk-tab ipk-tab-upload" for="ipk-upload">
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M5 20h14"/></svg>
                             ${t('iconpack.upload') || 'Upload…'}
@@ -204,14 +310,40 @@ export function openIconPicker(opts = {}) {
         overlay.addEventListener('mousedown', (e) => { if (e.target === overlay)
             done(null); });
         const names = () => {
+            if (src === 'mine') {
+                const q = search.value.trim().toLowerCase();
+                const mine = savedIcons();
+                return q ? mine.filter((x) => x.name.toLowerCase().includes(q)).map((x) => x.id) : mine.map((x) => x.id);
+            }
             const pool = src === 'lucide' ? Object.keys(_lucide || {}) : Object.keys(_simple || {});
             const q = search.value.trim().toLowerCase();
             if (!q)
                 return pool;
-            return pool.filter(n => n.includes(q)
-                || (src === 'si' && (_simple?.[n]?.t || '').toLowerCase().includes(q)));
+            // Split on spaces AND hyphens, so "arrow up" and "arrow-up" are the same query.
+            const tokens = q.split(/[\s-]+/).filter(Boolean);
+            if (!tokens.length)
+                return pool;
+            const scored = [];
+            for (const n of pool) {
+                const sc = scoreIcon(n, src === 'si' ? (_simple?.[n]?.t || '') : '', tokens);
+                if (sc > 0)
+                    scored.push([n, sc]);
+            }
+            scored.sort((a, b) => b[1] - a[1]);
+            return scored.map(([n]) => n);
         };
         const cellHtml = (n) => {
+            if (src === 'mine') {
+                // `n` IS the data URL — a saved icon has no pack prefix, because what the
+                // caller stores is the image itself. Colour does not apply: tinting somebody
+                // else's PNG is not something this can honestly offer.
+                const meta = savedIcons().find((x) => x.id === n);
+                const label = meta?.name || 'icon';
+                return `<button type="button" class="ipk-cell ipk-cell-mine" data-ref="${escAttr(n)}" title="${escAttr(label)}">`
+                    + `<img src="${escAttr(n)}" width="20" height="20" alt="">`
+                    + `<span class="ipk-name">${escHtml(label)}</span>`
+                    + `<span class="ipk-forget" data-forget="${escAttr(n)}" title="${escAttr(t('iconpack.forget') || 'Remove from your icons')}">\u00d7</span></button>`;
+            }
             const ref = withIconColour(`${src}:${n}`, chosenColour());
             const label = src === 'si' ? (_simple?.[n]?.t || n) : n;
             return `<button type="button" class="ipk-cell" data-ref="${escAttr(`${src}:${n}`)}" title="${escAttr(label)}">${renderPackIcon(ref, 20)}<span class="ipk-name">${escHtml(label)}</span></button>`;
@@ -235,6 +367,7 @@ export function openIconPicker(opts = {}) {
         const syncColourUi = () => {
             tint.disabled = !tintOn.checked;
             overlay.querySelector('#ipk-auto-wrap').style.display = src === 'si' ? '' : 'none';
+            overlay.querySelector('.ipk-colour').style.display = src === 'mine' ? 'none' : '';
             if (src === 'si' && autoBox.checked) {
                 tintOn.checked = false;
                 tint.disabled = true;
@@ -246,9 +379,21 @@ export function openIconPicker(opts = {}) {
             autoBox.checked = false; syncColourUi(); });
         tint.addEventListener('input', () => render());
         grid.addEventListener('click', (e) => {
+            // The remove affordance sits INSIDE the cell, so it has to be checked first or
+            // removing an icon would also choose it and close the picker.
+            const forget = e.target.closest('[data-forget]');
+            if (forget) {
+                e.stopPropagation();
+                forgetIcon(forget.dataset.forget);
+                shown = PAGE;
+                render();
+                return;
+            }
             const cell = e.target.closest('.ipk-cell');
-            if (cell?.dataset.ref)
-                done(withIconColour(cell.dataset.ref, chosenColour()));
+            if (!cell?.dataset.ref)
+                return;
+            // A saved icon is already a complete answer; only pack refs take a colour.
+            done(src === 'mine' ? cell.dataset.ref : withIconColour(cell.dataset.ref, chosenColour()));
         });
         // Append the new page instead of re-rendering everything: a full rebuild
         // made each successive click slower (quadratic over 15 pages of brands).
@@ -271,6 +416,11 @@ export function openIconPicker(opts = {}) {
                 await _loadSimpleAll();
             }
             syncColourUi();
+            // Colour controls are meaningless over an uploaded image, and an empty
+            // "Yours" tab needs to say why rather than look broken.
+            if (src === 'mine' && !savedIcons().length) {
+                grid.innerHTML = `<div class="ipk-loading">${escHtml(t('iconpack.mineEmpty') || 'Nothing here yet — upload an icon and it stays in this tab.')}</div>`;
+            }
         }));
         overlay.querySelector('#ipk-upload').addEventListener('change', (e) => {
             const file = e.target.files?.[0];
@@ -282,8 +432,13 @@ export function openIconPicker(opts = {}) {
                 return;
             }
             const reader = new FileReader();
-            reader.onload = () => { if (typeof reader.result === 'string')
-                done(reader.result); };
+            reader.onload = () => {
+                if (typeof reader.result !== 'string')
+                    return;
+                // Remembered before it is returned, so the same icon is one click away next
+                // time instead of another trip through the file dialog.
+                done(saveIcon(file.name, reader.result));
+            };
             reader.readAsDataURL(file);
         });
         if (opts.current?.startsWith('si:')) {

@@ -8066,5 +8066,8 @@
   "docs.diagram.deeplinks.node.TOKEN": "Same auth as the API",
   "docs.diagram.deeplinks.node.TOKEN.desc": "The bridge does not bypass anything: the call goes through the same token and permission checks a direct HTTP request would face.",
   "docs.diagram.deeplinks.node.TOAST": "It says what it did",
-  "docs.diagram.deeplinks.node.TOAST.desc": "Every route ends in a visible result — a toast, a screen, or an error naming what was wrong. A link that quietly did nothing is the failure this avoids."
+  "docs.diagram.deeplinks.node.TOAST.desc": "Every route ends in a visible result — a toast, a screen, or an error naming what was wrong. A link that quietly did nothing is the failure this avoids.",
+  "iconpack.mine": "Yours",
+  "iconpack.mineEmpty": "Nothing here yet — upload an icon and it stays in this tab.",
+  "iconpack.forget": "Remove from your icons"
 }

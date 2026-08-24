@@ -15997,6 +15997,19 @@ body.i18nsb-docked #modal-i18n-sandbox .i18nsb-dock-resize { display: block; }
     background: var(--bmm-bg-hover);
 }
 .ipk-cell svg, .ipk-cell img { flex-shrink: 0; }
+
+/* A saved icon carries a remove affordance INSIDE its own cell, so it has to stay out of
+   the way until the cell is hovered — otherwise every icon in the tab wears a little cross
+   and the grid reads as a list of errors. */
+.ipk-cell-mine { position: relative; }
+.ipk-forget {
+    position: absolute; top: 2px; right: 3px;
+    opacity: 0; transition: opacity .12s;
+    color: var(--text-muted, #64748b); font-size: 13px; line-height: 1;
+    padding: 0 3px; border-radius: 4px;
+}
+.ipk-cell-mine:hover .ipk-forget { opacity: 1; }
+.ipk-forget:hover { color: var(--danger, #ef4444); background: var(--bg-secondary, #131b2b); }
 .ipk-name {
     font-size: 10px; line-height: 1.2; max-width: 100%;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;

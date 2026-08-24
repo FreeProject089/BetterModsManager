@@ -8064,5 +8064,8 @@
   "docs.diagram.deeplinks.node.TOKEN": "Même authentification que l’API",
   "docs.diagram.deeplinks.node.TOKEN.desc": "Le pont ne contourne rien : l’appel passe par les mêmes vérifications de jeton et de permission qu’une requête HTTP directe.",
   "docs.diagram.deeplinks.node.TOAST": "Il dit ce qu’il a fait",
-  "docs.diagram.deeplinks.node.TOAST.desc": "Chaque route se termine par un résultat visible — une notification, un écran, ou une erreur nommant le problème. Un lien qui n’aurait rien fait en silence est précisément ce que cela évite."
+  "docs.diagram.deeplinks.node.TOAST.desc": "Chaque route se termine par un résultat visible — une notification, un écran, ou une erreur nommant le problème. Un lien qui n’aurait rien fait en silence est précisément ce que cela évite.",
+  "iconpack.mine": "Les vôtres",
+  "iconpack.mineEmpty": "Rien ici pour l’instant — envoyez une icône et elle restera dans cet onglet.",
+  "iconpack.forget": "Retirer de vos icônes"
 }
