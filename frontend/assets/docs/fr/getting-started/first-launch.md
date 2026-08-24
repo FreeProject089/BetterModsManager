@@ -10,8 +10,7 @@ BMM s'ouvre sur un écran [Profils](doc-page:features/profiles) vide et annonce 
 > réinstallation du jeu n'efface plus jamais votre setup — ou importez vos configs OvGME
 > existantes en un clic.
 
-Le formulaire demande un nom et **trois dossiers**, tous obligatoires : le **dossier du
-jeu** (là où BMM déploie), un **dossier mods** (où les mods de ce profil sont stockés) et un
+Le formulaire demande un nom et **trois dossiers**, tous obligatoires : le **dossier de destination** (là où BMM déploie), un **dossier mods** (où les mods de ce profil sont stockés) et un
 **dossier backup** (les originaux et le journal d'activité). En option : un nom de jeu, une
 couleur, une icône.
 

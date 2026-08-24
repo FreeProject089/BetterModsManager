@@ -4,7 +4,7 @@
 Some mods are packaged wrong. The files are fine; the folders around them aren't. The Mapper
 fixes that without you unzipping anything by hand.
 
-> Reorganize your mod structure to match the game directory.
+> Reorganize your mod structure to match the destination folder.
 
 ![The Mod Mapper](assets/docs/media/screens/mapper.annotated.png)
 
@@ -32,7 +32,7 @@ single archive.
 
 This is the thing to understand before you touch anything: **the Mapper edits the mod, not
 the game.** When you remap an item, BMM moves that file or folder *inside the mod's own
-folder* so the mod's layout mirrors where the game expects it. The game directory is only
+folder* so the mod's layout mirrors where the game expects it. The destination folder is only
 ever *read* here — shown on the right so you have something to aim at. Nothing is written into
 the game until you later [sync](doc-page:features/library) the profile, exactly as normal.
 

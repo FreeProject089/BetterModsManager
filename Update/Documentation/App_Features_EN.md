@@ -857,3 +857,117 @@ first launch, so BMM opens already set up rather than asking you the same questi
 
 Every one of these is optional, and BMM's own defaults apply unchanged to an installation
 that never ran the installer.
+
+
+---
+
+## 67. Write your own interactive tutorial (v1.0.0+)
+
+The tutorial hub has **Create…**, **Import…** and **Catalogues…** at the bottom of its list.
+
+A tutorial you write is made of **parts** and **steps**, and a step can do everything an
+official step does: open a view, highlight an element, wait for you to actually perform an
+action before Next unlocks, or simply explain something. The **Test** button beside the
+selector field flashes whatever it matches right now — useful for catching a typo, and it
+tells you plainly that it cannot prove the tutorial on somebody else's screen.
+
+**Share it.** *Share (.bmmtut)* writes a single file, signed with your creator key. Whoever
+imports it is told whether the signature is valid, absent, or **invalid** — a file edited
+after signing is labelled rather than quietly accepted as your work.
+
+**Follow a catalogue.** *Catalogues…* takes the address of a tutorial catalogue and lists
+what it offers; installing is one click. A protected catalogue asks for its download password
+or your identity key in the same fold every other catalogue screen uses.
+
+Custom tutorials run on the same engine as the built-in ones, so they behave identically. What
+they cannot do is run code: a tutorial displays text and highlights parts of the interface,
+and shared text is stripped to formatting tags.
+
+---
+
+## 68. Close a server you generated (v1.0.0+)
+
+Every server BMM generates — the Multi-Repo Hub, the Express standalone, and the lightweight
+`.bat` / `.sh` pair in both versions — now reads an **`access.json`** sitting next to it:
+
+```json
+{
+  "password": "",
+  "pubkeys": ["ssh-ed25519 AAAAC3Nza… you@machine"],
+  "audience": "http://repo.example.com:3000"
+}
+```
+
+- Leave it empty and the server is open, exactly as before.
+- A **password** is asked of every content request.
+- **Authorised keys** require a signed proof — and the first key you list makes it required
+  for *everyone*, so add your own before anybody else's.
+- **`audience`** is the address your subscribers type, exactly as they type it. BMM signs the
+  address it dialled, so this is what stops a proof captured elsewhere being replayed here —
+  and it is the one value that will refuse everybody if it is wrong.
+
+The file is read **when a request arrives**, so adding a subscriber's key takes effect
+immediately: no regenerating, no re-uploading. In the Multi-Repo Hub each repo folder has its
+own file, so one hub can hold an open repo beside a locked one.
+
+A **static** hub export has no server process and cannot enforce any of this; it ships a
+README saying so.
+
+---
+
+## 69. Reach a repo that only exists over SSH (v1.0.0+)
+
+**Update from the server** now reads over SFTP as well as HTTP. That matters because an HTTP
+server has to publish a directory index for BMM to read it, and a machine you reach by SSH
+usually publishes none — which is exactly the case where the mods exist nowhere else.
+
+Open **This repo is on an SSH machine** and pick one of the servers you already configured
+under *Publish over SSH*. Host, port, account and folder come from there; you supply the two
+things BMM never stores — the **account password** and the **key passphrase**. The same block
+sits in *Update the Server Repo*, where it also makes a password-authenticated server usable
+for the first time.
+
+**Publish over SSH** can now take its private key from your **identity keys**: the chooser
+under the path field lists them by name. Picking one fills the path — configuring a server
+never changes which identity BMM presents to catalogues.
+
+And when *Test the connection* refuses a write, it tells you why: the remote folder's owner
+and mode, the account BMM connected as, and the command that fixes it. `/srv`, `/var/www` and
+`/opt` are owned by root on most systems — everyone may list them, only root may create a
+file in one — and nothing about your account or your key is wrong.
+
+---
+
+## 70. Several identity keys, not one (v1.0.0+)
+
+**Settings → Identity & API → Identity keys** holds as many keys as you like, each under a
+name you choose. One is the default, presented to anything that asks; any individual server
+can be pointed at a different one. A work identity and a personal one coexist without
+swapping files between runs.
+
+**ed25519, RSA and ECDSA** are all accepted, in OpenSSH format or as a PuTTY `.ppk`. Only the
+**path** is stored — the file is read at the moment a proof is signed, and what travels is a
+short-lived signed statement, never the key.
+
+Every key chooser in the app lists these same keys, and a choice you make for one server is
+remembered for that server.
+
+---
+
+## 71. Publish a list, not just a catalogue (v1.0.0+)
+
+On BetterCommunity, **Submit content → Host my own catalog** can now host two things that are
+documents rather than collections of items:
+
+- a **Server-Repo list** — the file BMM's *Browse Server Repositories* reads, so you can
+  publish your own selection of repos;
+- a **catalogue index** — a catalogue of catalogues, which hands somebody a single address
+  that brings in app, plugin, theme, automation, modpack, tutorial and repo catalogues at
+  once.
+
+Both are exported from BMM (the repo-catalogue builder, and the catalogue-index builder in
+Settings), uploaded as one JSON file, and served at a stable address with the same access
+control every catalogue has. There is nothing to host per entry, so these are free.
+
+Submit content also links to **Host a Server-Repo** now — the mods themselves, which is a
+different thing from a catalogue and previously had no signpost on that page.

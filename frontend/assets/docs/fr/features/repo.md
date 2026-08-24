@@ -85,7 +85,7 @@ déjà.
 |---|---|---|
 | **Export complet** | Copie chaque mod dans un dossier de sortie, à côté du manifeste. | Tu pars de zéro ; les mods sont sur cette machine. |
 | **Manifeste seul** | Écrit seulement `repo.json` pour des dossiers que BMM peut lire ici — un, plusieurs, ou un ensemble de profils. **Rien n'est copié.** | Les mods sont déjà là où tu les veux. |
-| **Mettre à jour depuis le serveur** | Lit l'index de ton serveur et écrit le manifeste sans rapatrier le dépôt. | Les mods n'existent que sur le serveur. |
+| **Mettre à jour depuis le serveur** | Lit ce que contient ton serveur — en HTTP, ou en SFTP sur une machine SSH — et écrit le manifeste sans rapatrier le dépôt. | Les mods n'existent que sur le serveur. |
 
 Quelle que soit la voie, le manifeste liste chaque mod, sa version, les hachages SHA-256 par
 fichier (plus des hachages de blocs de 4 Mo sur les gros fichiers) et le changelog éventuel,
@@ -131,9 +131,34 @@ machine reste donc mettable à jour, et une machine qui n'a jamais vu le dépôt
 un correct. Sans chemin local, le résultat est écrit dans `RemoteRepos/` plutôt qu'à côté de
 fichiers que tu n'as pas choisis.
 
-!!! note "Nécessite l'index de répertoire"
-    *Mettre à jour depuis le serveur* lit l'index de ton serveur : `autoindex on` (nginx) ou
-    l'équivalent doit être activé. Sans lui, BMM ne peut pas voir ce que le serveur contient.
+!!! note "En HTTP, il faut l'index de répertoire"
+    Lire un serveur HTTP, c'est lire son propre index : `autoindex on` (nginx) ou l'équivalent
+    doit être activé. Sans lui, BMM ne peut pas voir ce que le serveur contient.
+
+    **En SSH, non.** SFTP liste les dossiers lui-même, et c'est tout l'intérêt de la route
+    ci-dessous : une machine que tu atteins en SSH ne publie généralement aucun index, et c'est
+    exactement le cas où les mods n'existent nulle part ailleurs.
+
+### Lire une machine SSH à la place
+
+Ouvre **Ce dépôt est sur une machine SSH** sur le même écran et choisis un des serveurs que tu
+as configurés dans *Publier par SSH*. L'hôte, le port, le compte et le dossier viennent de là :
+les redemander serait une seconde copie des mêmes informations, libre de diverger, et une
+empreinte de confiance connue d'un côté et inconnue de l'autre.
+
+Deux champs te reviennent, parce que ce sont les deux choses que BMM n'enregistre jamais :
+
+| Champ | Remarques |
+|---|---|
+| **Mot de passe du compte** | Le remplir signifie « authentifier cette exécution par mot de passe », et cela l'emporte sur la clé. |
+| **Clé privée** | Facultatif. Vide = la clé déjà enregistrée sur le serveur choisi ; remplis-le — ou prends une clé du trousseau d'identité — pour utiliser une autre clé le temps d'une exécution, sans modifier le serveur. |
+| **Phrase secrète** | Pour la clé, si elle en a une. |
+
+Le même bloc figure dans **Mettre à jour le Server Repo**, où il fait une chose de plus : un
+serveur qui s'authentifie par *mot de passe* n'y était pas utilisable du tout auparavant. Les
+raccourcis vers les cibles enregistrées le refusent volontairement — rien du mot de passe n'est
+écrit quelque part, donc une tâche planifiée n'a personne à qui le demander. Devant une boîte
+de dialogue, il y a quelqu'un à qui le demander.
 
 **Héberger.** Sers le dépôt généré via le serveur HTTP intégré de BMM pour que d'autres y
 accèdent. Des options facultatives le rendent public sans gymnastique de port-forwarding :
@@ -216,12 +241,27 @@ sur la machine qui l'héberge — sans programme de transfert de fichiers entre 
 | **Hôte, port, utilisateur** | Les trois mêmes choses que demande n'importe quel client SSH. Le port vaut 22 par défaut. |
 | **Clé ou mot de passe** | Deux boutons en haut. Le mot de passe est ce que la plupart des comptes ont déjà ; la clé est ce qu'exige un serveur configuré avec `PasswordAuthentication no`. |
 | **Clé privée** | OpenSSH ou PuTTY `.ppk`, les deux lues telles quelles — aucune conversion. |
+| **Clé d'identité** | Le sélecteur sous le champ du chemin liste les clés de *Paramètres → Identité & API*. Une entrée du trousseau est un nom et un chemin, exactement ce dont SFTP a besoin : la clé sous laquelle un catalogue te connaît peut aussi ouvrir une session. En choisir une **remplit** le champ du chemin plutôt que d'en changer le sens, et l'inverse n'est volontairement pas câblé : configurer un serveur ne doit pas modifier en douce l'identité que BMM présente aux catalogues. |
 | **Dossier distant** | Un chemin absolu. **Parcourir…** ouvre les dossiers du serveur pour le choisir au lieu de le saisir. |
 
 **Tester la connexion** fait tout ce que fait un envoi, sauf envoyer : elle s'authentifie, ouvre
 le dossier, puis y écrit et efface un fichier témoin. « Le dossier existe » et « j'ai le droit
 d'y écrire » sont deux questions différentes, et seule la seconde compte — la version envoi de
 cet échec arrive après avoir tout transféré.
+
+Quand le témoin est refusé, le rapport dit **pourquoi** et pas seulement qu'il l'a été : le
+propriétaire et le mode du dossier distant, et le compte utilisé par BMM. C'est presque
+toujours toute l'explication, et elle est invisible depuis ton côté de la connexion :
+
+```text
+/srv appartient à l'uid 0:0 avec le mode rwxr-xr-x, et BMM s'est connecté en tant que « bob ».
+Sur le serveur : sudo chown bob /srv — ou publie dans un sous-dossier qui t'appartient, par ex. /srv/bmm.
+```
+
+`/srv`, `/var/www` et `/opt` appartiennent à root en mode 755 sur la plupart des distributions :
+**tout le monde peut les lister, seul root peut y créer un fichier.** Ni ton compte ni ta clé
+n'ont de problème — c'est bien pour ça que « permission denied » tout seul envoie les gens
+vérifier la seule chose qui n'a jamais été en cause.
 
 ### Quelles clés SSH fonctionnent
 
@@ -371,25 +411,37 @@ liste d'accès du dépôt ; le client doit détenir la moitié privée et *signe
 Rien de ce qui circule ne peut être rejoué ailleurs, et révoquer une clé revient à supprimer
 une ligne.
 
-!!! warning "Ce n'est pas la clé SSH ci-dessus"
+!!! warning "Parente de la clé SSH ci-dessus, mais pas le même rôle"
     La clé SSH sert à ouvrir une session sur un *serveur* pour y déplacer des fichiers. Cette
-    clé-ci sert à prouver *qui tu es* à un dépôt ou un catalogue que BMM récupère en HTTPS. Ce
-    sont deux réglages distincts, qui peuvent viser deux clés différentes — même si la plupart
-    des gens pointent les deux vers le même fichier.
+    clé-ci sert à prouver *qui tu es* à un dépôt ou un catalogue que BMM récupère en HTTPS.
+
+    Le même **fichier** peut faire les deux, et le panneau SSH te propose justement ce trousseau.
+    Ce qui n'est pas partagé, c'est le *choix* : désigner une clé pour une cible SFTP ne change
+    pas l'identité que BMM présente aux catalogues. L'une dit « laisse-moi entrer », l'autre dit
+    « voici qui je suis » — et répondre à l'une en modifiant l'autre, c'est finir par présenter
+    la mauvaise identité sans l'avoir jamais décidé.
 
 ### Côté client (BMM)
 
-La clé se règle une fois, dans **Paramètres → Identité & API → Clé d'identité**. C'est une
-identité pour toute l'application : la même clé est présentée à chaque dépôt et chaque
-catalogue qui en demande une, il n'y a donc rien à configurer par source.
+Les clés vivent dans **Paramètres → Identité & API → Clés d'identité**. Ajoutes-en autant que
+tu veux, chacune sous un nom que tu choisis. L'une est la clé **par défaut** — celle présentée
+à tout ce qui en demande une — et n'importe quel serveur peut être dirigé vers une autre : une
+identité professionnelle et une personnelle cohabitent sans échanger de fichiers entre deux
+exécutions.
+
+Partout où un sélecteur de clé apparaît dans BMM — un catalogue protégé, un dépôt, le panneau
+SSH — ce sont ces mêmes clés qui sont listées par leur nom. Le choix fait pour une source est
+retenu pour l'origine de ce serveur.
 
 Seul le **chemin** est conservé. Le fichier est lu au moment de signer et les octets sont
 oubliés — BMM n'écrit jamais de matière cryptographique sur le disque, exactement comme pour la
 phrase secrète SSH.
 
-Il faut une **clé privée ed25519 non chiffrée**. BMM refuse le fichier au moment où tu le
-choisis plutôt que d'échouer plus tard face au serveur de quelqu'un d'autre : une erreur de
-fichier est signalée comme une erreur de fichier.
+Il faut une **clé privée non chiffrée** — **ed25519, RSA ou ECDSA**, au format OpenSSH ou
+PuTTY `.ppk`. Un fichier protégé par une phrase secrète est refusé : BMM n'a nulle part où la
+garder, ni personne à qui la demander au moment de signer. BMM vérifie le fichier au moment où
+tu le choisis plutôt que d'échouer plus tard face au serveur de quelqu'un d'autre : une erreur
+de fichier est signalée comme une erreur de fichier.
 
 ```bash
 ssh-keygen -t ed25519 -N "" -f ~/.ssh/bmm_identity
@@ -419,16 +471,20 @@ Ajouter une clé la rend **obligatoire pour tout le monde**. Ce n'est pas une en
 une liste blanche, c'est une condition sur chaque requête : ajoute donc ta propre clé avant
 celle des autres.
 
-Seul **ed25519** est accepté, et le refus tombe au moment où tu colles. C'est voulu : une clé
-invérifiable enregistrerait une exigence que rien ne pourrait jamais satisfaire, et mettrait
-tous les clients dehors, toi compris.
+**ed25519, RSA et ECDSA** sont acceptés, et tout ce qui ne se lit pas est refusé au moment où
+tu colles. Ce refus est voulu : une clé invérifiable enregistrerait une exigence que rien ne
+pourrait jamais satisfaire, et mettrait tous les clients dehors, toi compris.
+
+Le format précédent n'acceptait qu'ed25519. Le compromis se tenait jusqu'à rencontrer le cas
+courant : quelqu'un dont la seule clé est une `.ppk` RSA de PuTTY, à qui l'on demande de
+régénérer son identité parce que sa clé, parfaitement valide, n'a pas la bonne forme.
 
 ### Ce que le client envoie
 
 Une attestation signée à durée de vie courte, pas la clé :
 
 ```
-X-BMM-Key-Proof: bmmk1.<charge>.<signature>
+X-BMM-Key-Proof: bmmk2.<charge>.<signature>
 ```
 
 La charge nomme la clé publique, l'**origine à laquelle elle s'adresse**, et une expiration à

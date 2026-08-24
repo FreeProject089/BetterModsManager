@@ -85,8 +85,7 @@ installations.
 
 ## Non destructif par construction
 
-Le déploiement ne *déplace* jamais tes originaux hors du dossier mods — il les copie dans le dossier du
-jeu. Ta bibliothèque garde toujours sa copie intacte.
+Le déploiement ne *déplace* jamais tes originaux hors du dossier mods — il les copie dans le dossier de destination. Ta bibliothèque garde toujours sa copie intacte.
 
 ```mermaid
 flowchart LR

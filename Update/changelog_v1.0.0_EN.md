@@ -429,3 +429,97 @@ above tracks the ecosystem/customization work layered on top of it.*
   the spinner bug actually lived, and nothing had reported it.
 - The *Notifier* custom-page template is gone; it demonstrated one call the app already
   makes everywhere.
+
+## [MAJOR] Interactive tutorials you can write, share and publish
+
+- **A tutorial creator**, in the tutorial hub. Parts, steps, the view each step opens, the
+  element it highlights, and the action it waits for — the whole engine vocabulary, from a
+  form. A **Test** button flashes the element a selector matches right now; it says plainly
+  that it catches typos rather than proving the tutorial on somebody else's screen.
+- **`.bmmtut` documents.** A tutorial you write is a file: signed with your creator key,
+  shareable, importable. The import reports whether the signature is **valid**, **unsigned**
+  or **invalid** — a file edited after signing is labelled, not silently accepted as its
+  author's work.
+- **Tutorial catalogues.** Follow a catalogue URL and install the tutorials it lists, with
+  the same protected-source block every other catalogue screen has: a download password and
+  an identity key, remembered per server.
+- Custom tutorials run on the **same engine** as the official ones. Their text is carried as
+  literal strings and materialised into runtime translation keys, so nothing in the engine
+  changed and the two kinds cannot drift apart. Shared text is **sanitised** to formatting
+  tags — a tutorial displays and highlights, it never runs code.
+- `tutorial` is a routable **catalogue-index type**, and a hostable kind on BetterCommunity.
+
+## [MAJOR] Generated servers can be closed
+
+Every server BMM generates — the Multi-Repo Hub, the Express standalone, and the lightweight
+v1 and v2 in both `.bat` and `.sh` — now reads an **`access.json`** from the folder it serves.
+
+- **A download password, authorised public keys, or both**, read at REQUEST time. Authorising
+  a subscriber is editing one small file: no regenerating, no re-uploading.
+- In the hub the file is **per repo folder**, which is what per-node access actually needs.
+- The verifier is the same file BetterCommunity runs, copied byte for byte, with a build check
+  that fails if the two ever drift — two implementations of "does this client hold the key"
+  are two chances to disagree, and they disagree by refusing a key that works elsewhere.
+- The gate sits after bans and the whitelist and **before** anything is streamed. Your own
+  dashboard and admin routes stay reachable: listing a key must not lock you out of your
+  server.
+- A **static** hub export cannot enforce any of this — there is no process — and now ships a
+  README saying so instead of letting you assume otherwise.
+
+## [NEW] SSH, everywhere it was missing
+
+- **Update from the server** reads over **SFTP** as well as HTTP. An HTTP server needs
+  `autoindex`; an SSH machine publishes no index at all, and that is exactly the case where
+  the mods exist nowhere else.
+- Both update screens carry an **SSH credentials block**: pick a server already configured
+  under *Publish over SSH*, then supply the two things BMM never stores — the account
+  password and the key passphrase. This is also what makes a **password**-authenticated
+  server usable from the update dialog at all.
+- **Publish over SSH can use your identity keys.** A keyring entry is a name and a path,
+  which is what SFTP needs. Picking one fills the path field; the reverse is deliberately not
+  wired, because configuring a server must not change which identity BMM presents elsewhere.
+- When the connection test refuses a write, it says **why**: the remote folder's owner and
+  mode, the account BMM connected as, and the `chown` line that fixes it. `/srv`, `/var/www`
+  and `/opt` are root-owned on most distributions — everyone may list, only root may create —
+  and that is invisible from the client side.
+
+## [NEW] Identity keys are a keyring
+
+- **Several named keys**, one default, and a per-server override. A work identity and a
+  personal one coexist without swapping files between runs.
+- **ed25519, RSA and ECDSA** are all accepted, on both sides of the proof. The earlier format
+  was ed25519-only, which told somebody whose only key is an RSA `.ppk` that their perfectly
+  good key was the wrong shape.
+- Every key chooser in the app lists the same keys by name, and a choice made for one source
+  is remembered for that server's origin.
+
+## [NEW] MCP & CLI: automations and complete plugins
+
+- **`bmm_list_actions`** (and `bmm-mcp-server actions`) lists every action type a scheduler
+  step may use — generated from the app's own registry, with a build check so it cannot go
+  stale. It was already referenced by another tool's description and did not exist.
+- **Plugin scaffolds carry scripts.** `bmm_create_plugin_scaffold` (and `create-plugin
+  --script`) writes script files into the draft and derives the manifest's `scripts`,
+  `has_scripts` and `apply_mode` from what was actually written — a manifest listing a script
+  that does not exist installs a plugin that fails on first apply.
+- Coupling a plugin to an automation needed no new machinery: `plugin.apply`, `deeplink`,
+  `http.request` and `custom.script` were already there. It needed the registry to be
+  discoverable.
+
+## [IMPROVED] Fixes worth naming
+
+- **Modpack cards** no longer flicker at their edge. The hover changes no geometry at all
+  now: a scale is stable in theory and the flicker was still reported, and the only hover
+  effect that cannot loop is one that moves nothing.
+- **Flappy Tasky** eases in. Every value now follows a curve over the first ~22 points —
+  including gravity and the flap, which the previous pass had left constant and which are the
+  two numbers that decide how fast Tasky falls.
+- **Modal-in-a-modal**: "Manage keys" closes both. A modal opened from another is a DOM
+  sibling, not a child, so walking up the ancestor chain could never have reached the outer
+  one.
+- The **key chooser** says why it is empty. A backend that cannot answer used to look exactly
+  like "you own no keys".
+- **Page headings** are uniform across every nav view — one page wore a gradient at 30px
+  while the rest sat at 22px plain.
+- **"Game directory" is "destination folder"** everywhere: app, docs, tutorials and error
+  messages.

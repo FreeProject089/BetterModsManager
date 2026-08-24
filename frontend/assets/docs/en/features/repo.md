@@ -81,7 +81,7 @@ They are alternatives — pick the one that matches where your mods already are.
 |---|---|---|
 | **Full export** | Copies every mod into an output folder alongside the manifest. | Starting from scratch; the mods are on this machine. |
 | **Manifest only** | Writes just `repo.json` for folders BMM can read here — one, several, or a set of profiles. **Nothing is copied.** | The mods are already where you want them. |
-| **Update from the server** | Reads your server's directory listing and writes the manifest without pulling the repo back. | The mods live only on the server. |
+| **Update from the server** | Reads what your server holds — over HTTP, or over SFTP on an SSH machine — and writes the manifest without pulling the repo back. | The mods live only on the server. |
 
 Whichever you use, the manifest lists every mod, its version, per-file SHA-256 hashes (plus
 4 MB block hashes on large files) and any changelog, and is **signed with your creator key** —
@@ -125,9 +125,33 @@ updated, and a machine that has never seen the repo can produce a correct one. W
 path given, the result is written under `RemoteRepos/` rather than next to files you did not
 choose.
 
-!!! note "Requires directory listing"
-    *Update from the server* reads your server's own index, so `autoindex on` (nginx) or the
+!!! note "Over HTTP, this needs directory listing"
+    Reading an HTTP server means reading its own index, so `autoindex on` (nginx) or the
     equivalent must be enabled. Without it BMM cannot see what the server holds.
+
+    **Over SSH it does not.** SFTP lists directories itself, which is the whole point of the
+    route below: a machine you reach by SSH usually publishes no index at all, and is exactly
+    the case where the mods exist nowhere else.
+
+### Reading an SSH machine instead
+
+Open **This repo is on an SSH machine** on the same screen and pick one of the servers you
+configured under *Publish over SSH*. Host, port, account and folder come from there — asking
+for them twice would be a second copy of the same facts, free to drift, and a fingerprint
+trusted in one place and unknown in the other.
+
+Two fields are yours to fill in, because they are the two things BMM never stores:
+
+| Field | Notes |
+|---|---|
+| **Account password** | Filling it in means "authenticate this run by password", and it takes precedence over the key. |
+| **Private key** | Optional. Empty means the key already saved on the chosen server; fill it — or pick one from the identity keyring — to use a different key for this run without editing the server. |
+| **Passphrase** | For the key, if it has one. |
+
+The same block sits in **Update the Server Repo**, where it does one more thing: a server that
+authenticates by *password* could not be used there at all before. The stored-target helpers
+refuse one on purpose — nothing about a password is written down, so a scheduled run has
+nobody to ask. In front of a dialog there is somebody to ask.
 
 **Host.** Serve the generated repo over BMM's built-in HTTP server so others can reach it.
 Optional switches make it public without port-forwarding gymnastics:
@@ -206,12 +230,27 @@ on the machine that serves it — no separate file-transfer program in between.
 | **Host, port, user** | The same three things any SSH client asks for. Port defaults to 22. |
 | **Key or password** | Two buttons at the top. A password is what most accounts already have; a key is what a server running `PasswordAuthentication no` requires. |
 | **Private key** | OpenSSH or PuTTY `.ppk`, both read as they are — no conversion step. |
+| **Identity key** | The chooser under the path field lists the keys from *Settings → Identity & API*. A keyring entry is a name and a path, which is exactly what SFTP needs, so the key a catalogue knows you by can open a shell too. Picking one **fills** the path field rather than replacing what it means, and the reverse is deliberately not wired: configuring a server must not silently change which identity BMM presents to catalogues. |
 | **Remote folder** | An absolute path. **Browse…** opens the server's folders so you can pick it rather than type it. |
 
 **Test the connection** does everything an upload does except upload: it authenticates, opens
 the folder, and writes-then-deletes a probe file. "The folder exists" and "I may write into
 it" are different questions, and only the second one matters — the upload version of that
 failure happens after transferring everything.
+
+When the probe is refused, the report says **why** rather than only that it was: the remote
+folder's owner and mode, and the account BMM connected as. That is almost always the whole
+story and it is invisible from your side of the connection:
+
+```text
+/srv belongs to uid 0:0 with mode rwxr-xr-x, and BMM connected as "bob".
+On the server: sudo chown bob /srv — or publish into a subfolder you own, e.g. /srv/bmm.
+```
+
+`/srv`, `/var/www` and `/opt` are root-owned and mode 755 on most distributions: **everyone
+may list them and only root may create a file in one.** Nothing is wrong with your account or
+your key, which is why "permission denied" on its own sends people to check the one thing that
+was never the problem.
 
 ### Which SSH keys work
 
@@ -355,23 +394,34 @@ access list; the client has to hold the matching private half and *sign* for it 
 request. Nothing that travels over the wire can be replayed elsewhere, and revoking a key is
 deleting one line.
 
-!!! warning "This is not the same thing as the SSH key above"
+!!! warning "Related to the SSH key above, but not the same job"
     The SSH key is how BMM logs in to a *server* to move files. This key is how BMM proves
-    *who it is* to a repository or catalogue it fetches over HTTPS. They are separate settings
-    and can be different keys — though most people point both at the same file.
+    *who it is* to a repository or catalogue it fetches over HTTPS.
+
+    The same **file** can do both, and the SSH panel will offer you this keyring to pick from.
+    What is not shared is the *choice*: picking a key for an SFTP target does not change which
+    identity BMM presents to catalogues. One is "let me in", the other is "this is who I am",
+    and answering one by changing the other is how you end up presenting the wrong identity
+    without ever deciding to.
 
 ### On the client (BMM)
 
-Set the key once, in **Settings → Identity & API → Identity key**. It is one identity for the
-whole app: the same key is presented to every repository and catalogue that asks for one, so
-there is nothing to configure per source.
+Keys live in **Settings → Identity & API → Identity keys**. Add as many as you like, each
+under a name you choose. One is the **default** — the one presented to anything that asks —
+and any individual server can be pointed at a different one, so a work identity and a personal
+one can coexist without swapping files between runs.
+
+Where a key chooser appears elsewhere in BMM — a protected catalogue, a repo, the SSH panel —
+it lists these same keys by name. Choosing one for a source is remembered for that server's
+origin.
 
 Only the **path** is stored. The file is read at the moment a proof is signed and the bytes
 are dropped — BMM never writes key material to disk, exactly as with the SSH passphrase.
 
-It must be an **unencrypted ed25519 private key**. BMM refuses the file when you pick it
-rather than failing later against someone else's server, so a wrong file is reported as a
-wrong file.
+It must be an **unencrypted private key** — **ed25519, RSA or ECDSA**, OpenSSH format or
+PuTTY `.ppk`. A passphrase-protected file is refused, because BMM has nowhere to keep the
+passphrase and nobody to ask for it while signing. BMM checks the file when you pick it rather
+than failing later against someone else's server, so a wrong file is reported as a wrong file.
 
 ```bash
 ssh-keygen -t ed25519 -N "" -f ~/.ssh/bmm_identity
@@ -400,16 +450,20 @@ Paste the **public** half — the `.pub` file, one-line OpenSSH format, the same
 Adding a key makes it **required for everyone**. It is not one more way onto an allow list —
 it is a condition on every request, so add your own key before you add anybody else's.
 
-Only **ed25519** is accepted, and it is refused at the moment you paste it. That is deliberate:
-a key that cannot be verified would store a requirement nothing could ever satisfy, and would
-lock out every client including you.
+**ed25519, RSA and ECDSA** are accepted, and anything unparseable is refused at the moment you
+paste it. That refusal is deliberate: a key that cannot be verified would store a requirement
+nothing could ever satisfy, and would lock out every client including you.
+
+The earlier wire format accepted ed25519 only. That was a defensible trade until it met the
+common case — somebody whose only key is an RSA `.ppk` from PuTTY, being told to regenerate
+their identity because their perfectly good key was the wrong shape.
 
 ### What the client sends
 
 A short-lived signed statement, not the key:
 
 ```
-X-BMM-Key-Proof: bmmk1.<payload>.<signature>
+X-BMM-Key-Proof: bmmk2.<payload>.<signature>
 ```
 
 The payload names the public key, the **origin it is addressed to**, and an expiry two minutes

@@ -136,6 +136,12 @@ Cette version marque la transition vers l'étape 1.0, en se concentrant sur l'ut
 - **Authentification par token** : `get_api_token` / `reset_api_token` gèrent un token d'API par installation ; le helper `generate_script` construit des extraits de requêtes authentifiées.
 - Alimente l'explorateur d'API intégré et l'automatisation externe (ex : Stream Deck, scripts compagnons).
 
+## [NOUVEAU] Serveur API REST local
+- Ajout d'un serveur HTTP embarqué basé sur **Warp** sur `127.0.0.1:51274`, permettant aux outils externes et aux plugins de piloter BMM par programme.
+- **~40 endpoints** sous `/api/` couvrant : santé/statut, mods (lister, actifs, activer, désactiver, obtenir/supprimer par id), profils (lister, obtenir, créer, modifier, supprimer, activer), plugins (lister, comparer, appliquer), modpacks (lister, créer, activer, désactiver, importer, obtenir/supprimer), dépôt (info, connexion, liste, synchronisation, génération, hébergement), export & import de données/mod-lists, `creator-id`, `check-update` et `restart`.
+- **Authentification par token** : `get_api_token` / `reset_api_token` gèrent un token d'API par installation ; l'assistant `generate_script` construit des extraits de requêtes authentifiées.
+- Alimente l'explorateur d'API intégré et l'automatisation externe (Stream Deck, scripts compagnons…).
+
 ## [NOUVEAU] ContentID — Identité de mod déterministe
 - Implémentation d'un système d'identité de contenu déterministe : `derive_content_id()` et `content_id_from_file_hashes()` produisent un `content_id` stable à partir des hash réels des fichiers d'un mod — les **mêmes fichiers sur n'importe quelle machine donnent le même ID**.
 - Permet une reconnaissance fiable des mods entre machines (correspondance par contenu plutôt que par nom de dossier), alimentant la correspondance précise `.MM` / modpack / dépôt et la détection "déjà présent" dans le flux d'import.
@@ -426,3 +432,105 @@ section ci-dessus suit le travail d'écosystème/personnalisation ajouté par-de
   rapportait.
 - Le modèle de page personnalisée *Notifier* est retiré ; il démontrait un appel que l'app
   fait déjà partout.
+
+## [MAJEUR] Des tutoriels interactifs que tu écris, partages et publies
+
+- **Un créateur de tutoriels**, dans le hub. Parties, étapes, la vue que chaque étape ouvre,
+  l'élément qu'elle surligne, l'action qu'elle attend — tout le vocabulaire du moteur, depuis
+  un formulaire. Un bouton **Tester** fait clignoter l'élément que le sélecteur trouve
+  maintenant ; il dit clairement qu'il attrape les fautes de frappe, pas qu'il valide le
+  tutoriel sur l'écran de quelqu'un d'autre.
+- **Des documents `.bmmtut`.** Un tutoriel que tu écris est un fichier : signé avec ta clé de
+  créateur, partageable, importable. L'import indique si la signature est **valide**, **non
+  signée** ou **invalide** — un fichier modifié après signature est signalé, pas accepté en
+  silence comme l'œuvre de son auteur.
+- **Des catalogues de tutoriels.** Suis une adresse et installe les tutoriels qu'elle liste,
+  avec le même bloc « source protégée » que les autres catalogues : mot de passe et clé
+  d'identité, retenus par serveur.
+- Les tutoriels personnalisés tournent sur le **même moteur** que les officiels. Leur texte
+  est porté en clair puis matérialisé en clés de traduction à l'exécution : rien n'a changé
+  dans le moteur, et les deux sortes ne peuvent pas diverger. Le texte partagé est
+  **assaini** aux balises de mise en forme — un tutoriel affiche et surligne, il n'exécute
+  jamais de code.
+- `tutorial` est un **type d'index de catalogues** routable, et un type hébergeable sur
+  BetterCommunity.
+
+## [MAJEUR] Les serveurs générés peuvent être fermés
+
+Chaque serveur généré par BMM — le Multi-Repo Hub, le standalone Express, et les légers v1 et
+v2 en `.bat` **et** `.sh` — lit désormais un **`access.json`** dans le dossier qu'il sert.
+
+- **Mot de passe de téléchargement, clés publiques autorisées, ou les deux**, lus au moment
+  de la requête. Autoriser un abonné, c'est éditer un petit fichier : ni régénération ni
+  réenvoi.
+- Dans le hub, ce fichier est **par dossier de dépôt**, ce qu'exige réellement un accès par
+  nœud.
+- Le vérificateur est le fichier que fait tourner BetterCommunity, copié octet pour octet,
+  avec un contrôle de build qui échoue s'ils divergent — deux implémentations de « ce client
+  détient-il la clé » sont deux occasions de se contredire, et elles se contredisent en
+  refusant une clé qui marche ailleurs.
+- La porte se place après les bannissements et la liste blanche, et **avant** tout envoi. Ton
+  tableau de bord et tes routes admin restent accessibles : lister une clé ne doit pas
+  t'enfermer hors de ton propre serveur.
+- Un export de hub **statique** ne peut rien appliquer — il n'y a aucun processus — et
+  embarque maintenant un README qui le dit plutôt que de laisser supposer le contraire.
+
+## [NOUVEAU] SSH, partout où il manquait
+
+- **Mettre à jour depuis le serveur** lit aussi en **SFTP**, pas seulement en HTTP. Un
+  serveur HTTP exige `autoindex` ; une machine SSH ne publie aucun index, et c'est justement
+  le cas où les mods n'existent nulle part ailleurs.
+- Les deux écrans de mise à jour portent un **bloc d'identifiants SSH** : choisis un serveur
+  déjà configuré dans *Publier par SSH*, puis fournis les deux choses que BMM n'enregistre
+  jamais — le mot de passe du compte et la phrase secrète de la clé. C'est aussi ce qui rend
+  enfin utilisable un serveur authentifié par **mot de passe** depuis la boîte de dialogue.
+- **Publier par SSH peut utiliser tes clés d'identité.** Une entrée du trousseau est un nom
+  et un chemin, exactement ce dont SFTP a besoin. En choisir une remplit le champ ; l'inverse
+  n'est volontairement pas câblé, car configurer un serveur ne doit pas changer l'identité
+  que BMM présente ailleurs.
+- Quand le test de connexion refuse une écriture, il dit **pourquoi** : le propriétaire et le
+  mode du dossier distant, le compte utilisé, et la ligne `chown` qui corrige. `/srv`,
+  `/var/www` et `/opt` appartiennent à root sur la plupart des distributions — tout le monde
+  peut lister, seul root peut créer — et c'est invisible côté client.
+
+## [NOUVEAU] Les clés d'identité forment un trousseau
+
+- **Plusieurs clés nommées**, une par défaut, et une exception par serveur. Une identité
+  professionnelle et une personnelle cohabitent sans échanger de fichiers.
+- **ed25519, RSA et ECDSA** sont acceptés, des deux côtés de la preuve. Le format précédent
+  n'acceptait qu'ed25519, ce qui revenait à dire à quelqu'un dont la seule clé est une `.ppk`
+  RSA que sa clé, parfaitement valide, avait la mauvaise forme.
+- Tous les sélecteurs de clé de l'application listent les mêmes clés par leur nom, et un
+  choix fait pour une source est retenu pour l'origine de ce serveur.
+
+## [NOUVEAU] MCP & CLI : automatisations et plugins complets
+
+- **`bmm_list_actions`** (et `bmm-mcp-server actions`) liste tous les types d'action
+  utilisables dans une étape du planificateur — généré depuis le registre de l'application,
+  avec un contrôle de build pour qu'il ne périme pas. Il était déjà cité dans la description
+  d'un autre outil et n'existait pas.
+- **Les squelettes de plugin embarquent des scripts.** `bmm_create_plugin_scaffold` (et
+  `create-plugin --script`) écrit les fichiers dans le brouillon et **dérive** `scripts`,
+  `has_scripts` et `apply_mode` de ce qui a réellement été écrit — un manifeste qui déclare
+  un script absent installe un plugin qui échoue à la première application.
+- Coupler un plugin à une automatisation ne demandait aucune mécanique nouvelle :
+  `plugin.apply`, `deeplink`, `http.request` et `custom.script` existaient déjà. Il fallait
+  rendre le registre découvrable.
+
+## [AMÉLIORÉ] Des correctifs qui méritent d'être nommés
+
+- **Les cartes de modpack** ne clignotent plus au bord. Le survol ne change plus aucune
+  géométrie : un scale est stable en théorie et le scintillement était toujours signalé — le
+  seul effet de survol qui ne peut pas boucler est celui qui ne bouge rien.
+- **Flappy Tasky** monte en difficulté. Chaque valeur suit une courbe sur les ~22 premiers
+  points — y compris la gravité et l'impulsion, laissées constantes par la passe précédente
+  alors que ce sont les deux nombres qui décident de la vitesse de chute.
+- **Modale dans une modale** : « Gérer les clés » ferme les deux. Une modale ouverte depuis
+  une autre est un frère dans le DOM, pas un enfant : remonter la chaîne des ancêtres ne
+  pouvait structurellement pas atteindre l'extérieure.
+- **Le sélecteur de clé** dit pourquoi il est vide. Un backend incapable de répondre
+  ressemblait exactement à « vous n'avez aucune clé ».
+- **Les titres de page** sont uniformes sur toutes les vues — une page portait un dégradé en
+  30px quand les autres étaient en 22px sans dégradé.
+- **« Dossier du jeu » devient « dossier de destination »** partout : application,
+  documentation, tutoriels et messages d'erreur.

@@ -762,3 +762,123 @@ les mêmes questions.
 
 Chacun de ces choix est facultatif, et les valeurs par défaut de BMM s'appliquent
 inchangées à une installation qui n'est jamais passée par l'installateur.
+
+
+---
+
+## 67. Écrire ton propre tutoriel interactif (v1.0.0+)
+
+Le hub des tutoriels propose **Créer…**, **Importer…** et **Catalogues…** au bas de sa liste.
+
+Un tutoriel que tu écris est fait de **parties** et d'**étapes**, et une étape peut tout ce
+que fait une étape officielle : ouvrir une vue, surligner un élément, attendre que tu réalises
+réellement une action avant de débloquer Suivant, ou simplement expliquer. Le bouton
+**Tester**, à côté du champ de sélecteur, fait clignoter ce qu'il trouve maintenant — pratique
+pour attraper une faute de frappe, et il te dit franchement qu'il ne peut pas valider le
+tutoriel sur l'écran de quelqu'un d'autre.
+
+**Partage-le.** *Partager (.bmmtut)* écrit un fichier unique, signé avec ta clé de créateur.
+Celui qui l'importe est informé si la signature est valide, absente ou **invalide** — un
+fichier modifié après signature est signalé plutôt qu'accepté en silence comme ton travail.
+
+**Suis un catalogue.** *Catalogues…* prend l'adresse d'un catalogue de tutoriels et liste ce
+qu'il propose ; installer tient en un clic. Un catalogue protégé demande son mot de passe ou
+ta clé d'identité dans le même bloc que tous les autres écrans de catalogue.
+
+Les tutoriels personnalisés tournent sur le même moteur que ceux d'origine : ils se comportent
+à l'identique. Ce qu'ils ne peuvent pas faire, c'est exécuter du code — un tutoriel affiche du
+texte et surligne des parties de l'interface, et le texte partagé est réduit aux balises de
+mise en forme.
+
+---
+
+## 68. Fermer un serveur que tu as généré (v1.0.0+)
+
+Chaque serveur généré par BMM — le Multi-Repo Hub, le standalone Express, et le couple
+`.bat` / `.sh` léger dans ses deux versions — lit désormais un **`access.json`** posé à côté
+de lui :
+
+```json
+{
+  "password": "",
+  "pubkeys": ["ssh-ed25519 AAAAC3Nza… toi@machine"],
+  "audience": "http://depot.exemple.com:3000"
+}
+```
+
+- Laisse-le vide et le serveur reste ouvert, exactement comme avant.
+- Un **mot de passe** est demandé à chaque requête de contenu.
+- Les **clés autorisées** exigent une preuve signée — et la première clé listée la rend
+  obligatoire pour *tout le monde* : ajoute la tienne avant celle des autres.
+- **`audience`** est l'adresse que tapent tes abonnés, exactement telle qu'ils la tapent. BMM
+  signe l'adresse qu'il a composée : c'est ce qui empêche de rejouer ici une preuve captée
+  ailleurs — et c'est la seule valeur qui, mal réglée, refuse tout le monde.
+
+Le fichier est lu **à l'arrivée d'une requête** : ajouter la clé d'un abonné prend effet
+immédiatement, sans régénérer ni réenvoyer quoi que ce soit. Dans le Multi-Repo Hub, chaque
+dossier de dépôt a son propre fichier : un même hub peut donc porter un dépôt ouvert à côté
+d'un dépôt fermé.
+
+Un export de hub **statique** n'a aucun processus et ne peut rien appliquer ; il embarque un
+README qui le dit.
+
+---
+
+## 69. Atteindre un dépôt qui n'existe qu'en SSH (v1.0.0+)
+
+**Mettre à jour depuis le serveur** lit maintenant en SFTP autant qu'en HTTP. C'est important
+parce qu'un serveur HTTP doit publier un index de répertoire pour que BMM le lise, et qu'une
+machine atteinte en SSH n'en publie généralement aucun — précisément le cas où les mods
+n'existent nulle part ailleurs.
+
+Ouvre **Ce dépôt est sur une machine SSH** et choisis un des serveurs déjà configurés dans
+*Publier par SSH*. L'hôte, le port, le compte et le dossier viennent de là ; tu fournis les
+deux choses que BMM n'enregistre jamais — le **mot de passe du compte** et la **phrase secrète
+de la clé**. Le même bloc figure dans *Mettre à jour le Server Repo*, où il rend en plus
+utilisable, pour la première fois, un serveur authentifié par mot de passe.
+
+**Publier par SSH** peut désormais prendre sa clé privée dans tes **clés d'identité** : le
+sélecteur sous le champ du chemin les liste par leur nom. En choisir une remplit le chemin —
+configurer un serveur ne change jamais l'identité que BMM présente aux catalogues.
+
+Et quand *Tester la connexion* refuse une écriture, il dit pourquoi : le propriétaire et le
+mode du dossier distant, le compte utilisé, et la commande qui corrige. `/srv`, `/var/www` et
+`/opt` appartiennent à root sur la plupart des systèmes — tout le monde peut les lister, seul
+root peut y créer un fichier — et ni ton compte ni ta clé n'ont de problème.
+
+---
+
+## 70. Plusieurs clés d'identité, pas une seule (v1.0.0+)
+
+**Paramètres → Identité & API → Clés d'identité** contient autant de clés que tu veux, chacune
+sous un nom que tu choisis. L'une est celle par défaut, présentée à tout ce qui en demande une ;
+n'importe quel serveur peut être dirigé vers une autre. Une identité professionnelle et une
+personnelle cohabitent sans échanger de fichiers entre deux exécutions.
+
+**ed25519, RSA et ECDSA** sont tous acceptés, au format OpenSSH ou en `.ppk` PuTTY. Seul le
+**chemin** est conservé — le fichier est lu au moment de signer, et ce qui circule est une
+attestation signée à durée de vie courte, jamais la clé.
+
+Tous les sélecteurs de clé de l'application listent ces mêmes clés, et un choix fait pour un
+serveur est retenu pour ce serveur.
+
+---
+
+## 71. Publier une liste, pas seulement un catalogue (v1.0.0+)
+
+Sur BetterCommunity, **Proposer du contenu → Héberger mon propre catalogue** peut maintenant
+héberger deux choses qui sont des documents plutôt que des collections d'items :
+
+- une **liste de Server-Repos** — le fichier que lit *Parcourir les Server-Repos* dans BMM,
+  pour publier ta propre sélection de dépôts ;
+- un **index de catalogues** — un catalogue de catalogues, qui donne à quelqu'un une seule
+  adresse ramenant d'un coup des catalogues d'applications, de plugins, de thèmes,
+  d'automatisations, de modpacks, de tutoriels et de dépôts.
+
+Les deux s'exportent depuis BMM (le constructeur de catalogue de dépôts, et celui d'index de
+catalogues dans les Paramètres), s'envoient comme un fichier JSON unique, et sont servis à une
+adresse stable avec le même contrôle d'accès que n'importe quel catalogue. Il n'y a rien à
+héberger par entrée : c'est donc gratuit.
+
+La page propose aussi désormais **Héberger un Server-Repo** — les mods eux-mêmes, qui sont
+autre chose qu'un catalogue et n'avaient jusque-là aucun panneau indicateur ici.

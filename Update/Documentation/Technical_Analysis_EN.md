@@ -1003,3 +1003,113 @@ pair does nothing. Test the round trip, not the halves. And a `try`/`catch` writ
 protect a critical path will hide your own mistakes inside it just as willingly as the
 failure it was meant for — which is exactly why the fix was verified by reading rows back
 out of the database rather than by watching the login succeed.
+
+
+---
+
+## 64. One engine, two kinds of tutorial
+
+The official tutorials are TypeScript objects whose every string is an i18n key. That is the
+right shape for content shipped with the app and the wrong shape for content a person makes:
+a user cannot add keys to `Lang/*.json`, and a tutorial whose text lives in a translation
+file only works on the machine that has it.
+
+The obvious answer — a second, simpler runner for custom tutorials — was the wrong one. Two
+runners is two behaviours, and the second one is always the one that lags: a spotlight fix
+lands in the official engine and the shared tutorials keep the old bug.
+
+So a `.bmmtut` document carries **literal text**, per language, and the loader materialises
+**runtime translation keys** (`ctut.<id>.<path>`) into an additive overlay before handing the
+engine a definition made of keys. The engine calls `t()` exactly as it always did and never
+learns the difference. The overlay is consulted only on a `t()` miss whose key starts with
+`ctut.` — `t()` runs hundreds of times per render, and a feature must not tax the calls that
+do not use it.
+
+The part that is not negotiable: the engine interpolates step text as **HTML**, because
+official steps use `<b>` and `<ul>` deliberately. A shared file is therefore an XSS vector,
+and the text is sanitised where the definition is built — a DOM rebuild that keeps a small
+whitelist of formatting tags, drops attributes wholesale, and swallows `<script>` and
+`<style>` **with their content**. The icon is a fixed glyph rather than the document's own
+SVG: sanitising arbitrary SVG safely is a project, and a wrong icon is a smaller cost than a
+right exploit.
+
+**The lesson:** when two kinds of content must behave identically, make them the same
+*data*, not two engines that promise to agree.
+
+---
+
+## 65. A gate that lives in a file, not in the build
+
+The servers BMM generates could be given an admin password, and one of the five could be
+given a download password. None could be locked to a key, and every credential was baked in
+at generation time — so authorising one more subscriber meant regenerating the server and
+re-uploading it.
+
+They now read an `access.json` from the folder they serve, at **request** time: a password,
+a list of authorised public keys, and the audience those keys sign for. Adding a key is
+editing one small file. In the Multi-Repo Hub that file lives **per repo folder**, because
+"per node" is what per-node access means and a single hub-wide list would have been a
+different feature wearing the same words.
+
+Three decisions are worth recording.
+
+**The verifier is copied, not ported.** It is byte-for-byte the file BetterCommunity runs,
+with a build check that fails when the two differ. Two implementations of "does this client
+hold the key" are two chances to disagree, and the way they disagree is that a key works
+against one server and not the other — which reads, to the person holding it, as "my key is
+broken".
+
+**The gate sits after bans and the whitelist, inside the non-local branch.** Putting it at
+the top of the handler would have been simpler and wrong: `/dashboard`, `/monitoring.json`
+and `/admin/*` are answered above that point, so listing your own key would have locked you
+out of your own server the moment you saved the file.
+
+**A static export enforces nothing, and says so.** There is no process; whatever web server
+you point at the folder decides who may read it. The export ships a README stating that,
+because the alternative is somebody assuming the access controls they configured came along
+with the files.
+
+---
+
+## 66. The sawtooth that was two machines
+
+The server-performance chart oscillated every tick between two coherent sets of values, and
+the tiles above it gave the game away: twenty-four CPU cores and a one-terabyte disk over
+history that matched a four-vCPU VPS.
+
+Every number in a metric sample is *the host as its writer sees it* — `os.cpus()`,
+`os.totalmem()`, the disk under the process. Nothing recorded **which** host, so two
+processes sharing one database (a development machine pointed at production, an old container
+beside a new one) interleaved into a single series. The chart was not glitching; it was
+faithfully drawing two real machines.
+
+Samples now carry `host`, the endpoint charts only the answering host's rows, and the other
+writers are **named** in the page rather than filtered out silently — a second writer is a
+fact an administrator needs, not a rendering problem to suppress.
+
+**The lesson:** a metric is meaningless without its subject. If a table records a measurement
+and not who measured it, the day a second measurer appears it produces data that is wrong in
+a way no validation can catch, because every individual row is correct.
+
+---
+
+## 67. Documents that are not items
+
+BetterCommunity can host a catalogue of plugins, themes, apps, automations, modpacks and now
+tutorials. Two things it could not host were a **list of Server-Repos** and a **catalogue
+index** — the documents BMM's repo browser and catalogue-index reader consume.
+
+The tempting move was to add them to `CatalogKind`. That enum drives the item machinery:
+moderation queues, per-item payload uploads, storage quotas, and a `feedField()` that answers
+"the plural of the kind". Neither document has items — each is one JSON file listing addresses
+somebody else serves — so the enum would have produced a moderation queue for a thing nobody
+can submit and a feed field called `repo_indexs`.
+
+They live in the `kinds String[]` column instead, which needed no migration at all, and their
+"raw mode only" invariant is enforced at the API boundary where every other catalogue rule
+already lives. Managed mode is refused **by name** rather than silently coerced: a caller who
+asked for hosted storage should learn they got none.
+
+**The lesson:** an enum is a promise about what the rest of the system may assume. Adding a
+value that breaks those assumptions is more expensive than adding a second, smaller vocabulary
+beside it.

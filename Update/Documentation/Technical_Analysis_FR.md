@@ -946,3 +946,120 @@ correcte pendant que la paire ne fait rien. Testez l'aller-retour, pas les moiti
 autant de bonne volonté que la panne qu'il visait — ce qui est exactement pourquoi le
 correctif a été vérifié en relisant les lignes en base, et non en regardant la connexion
 réussir.
+
+
+---
+
+## 64. Un seul moteur, deux sortes de tutoriels
+
+Les tutoriels officiels sont des objets TypeScript dont chaque chaîne est une clé i18n. C'est
+la bonne forme pour du contenu livré avec l'application et la mauvaise pour du contenu qu'une
+personne fabrique : un utilisateur ne peut pas ajouter de clés dans `Lang/*.json`, et un
+tutoriel dont le texte vit dans un fichier de traduction ne fonctionne que sur la machine qui
+l'a.
+
+La réponse évidente — un second exécuteur, plus simple, pour les tutoriels personnalisés —
+était la mauvaise. Deux exécuteurs, ce sont deux comportements, et le second est toujours
+celui qui retarde : une correction du spotlight atterrit dans le moteur officiel et les
+tutoriels partagés gardent l'ancien bug.
+
+Un document `.bmmtut` porte donc du **texte littéral**, par langue, et le chargeur
+matérialise des **clés de traduction à l'exécution** (`ctut.<id>.<chemin>`) dans une couche
+additive avant de remettre au moteur une définition faite de clés. Le moteur appelle `t()`
+exactement comme avant et n'apprend jamais la différence. La couche n'est consultée que sur
+un `t()` manquant dont la clé commence par `ctut.` — `t()` tourne des centaines de fois par
+rendu, et une fonctionnalité ne doit pas taxer les appels qui ne s'en servent pas.
+
+La part non négociable : le moteur interpole le texte des étapes en **HTML**, parce que les
+étapes officielles utilisent `<b>` et `<ul>` à dessein. Un fichier partagé est donc un vecteur
+XSS, et le texte est assaini là où la définition est construite — une reconstruction DOM qui
+garde une petite liste blanche de balises de mise en forme, supprime les attributs en bloc, et
+avale `<script>` et `<style>` **avec leur contenu**. L'icône est un glyphe fixe plutôt que le
+SVG du document : assainir du SVG arbitraire est un projet, et une mauvaise icône coûte moins
+cher qu'un bon exploit.
+
+**La leçon :** quand deux sortes de contenu doivent se comporter identiquement, faites-en la
+même *donnée*, pas deux moteurs qui promettent d'être d'accord.
+
+---
+
+## 65. Une porte qui vit dans un fichier, pas dans la génération
+
+Les serveurs générés par BMM pouvaient recevoir un mot de passe admin, et un des cinq un mot
+de passe de téléchargement. Aucun ne pouvait être verrouillé par clé, et chaque identifiant
+était gravé à la génération — autoriser un abonné de plus voulait dire régénérer le serveur
+et le réenvoyer.
+
+Ils lisent maintenant un `access.json` dans le dossier qu'ils servent, **au moment de la
+requête** : un mot de passe, une liste de clés publiques autorisées, et l'audience pour
+laquelle ces clés signent. Ajouter une clé, c'est éditer un petit fichier. Dans le Multi-Repo
+Hub, ce fichier est **par dossier de dépôt**, parce que « par nœud » veut dire ça, et qu'une
+liste unique pour tout le hub aurait été une autre fonctionnalité portant les mêmes mots.
+
+Trois décisions méritent d'être consignées.
+
+**Le vérificateur est copié, pas porté.** C'est octet pour octet le fichier que fait tourner
+BetterCommunity, avec un contrôle de build qui échoue s'ils diffèrent. Deux implémentations de
+« ce client détient-il la clé » sont deux occasions de se contredire, et la façon dont elles
+se contredisent, c'est qu'une clé marche contre un serveur et pas l'autre — ce qui se lit,
+pour celui qui la détient, comme « ma clé est cassée ».
+
+**La porte se place après les bannissements et la liste blanche, dans la branche non
+locale.** La mettre en tête du handler aurait été plus simple et faux : `/dashboard`,
+`/monitoring.json` et `/admin/*` sont servis avant ce point, donc lister ta propre clé
+t'aurait enfermé hors de ton propre serveur dès l'enregistrement du fichier.
+
+**Un export statique n'applique rien, et le dit.** Il n'y a aucun processus ; c'est le serveur
+web que tu places devant le dossier qui décide qui peut lire. L'export embarque un README qui
+l'énonce, parce que l'alternative est que quelqu'un suppose que les contrôles d'accès
+configurés ont suivi les fichiers.
+
+---
+
+## 66. La dent de scie qui était deux machines
+
+Le graphique de performance serveur oscillait à chaque tick entre deux jeux de valeurs
+cohérents, et les tuiles au-dessus vendaient la mèche : vingt-quatre cœurs et un disque d'un
+téraoctet au-dessus d'un historique correspondant à un VPS à quatre vCPU.
+
+Chaque nombre d'un échantillon est *l'hôte tel que son écrivain le voit* — `os.cpus()`,
+`os.totalmem()`, le disque sous le processus. Rien n'enregistrait **quel** hôte, donc deux
+processus partageant une base (une machine de développement pointée sur la production, un
+ancien conteneur à côté d'un neuf) s'entrelaçaient en une seule série. Le graphique ne
+buguait pas ; il dessinait fidèlement deux machines réelles.
+
+Les échantillons portent désormais `host`, l'endpoint ne trace que les lignes de l'hôte qui
+répond, et les autres écrivains sont **nommés** dans la page plutôt que filtrés en silence —
+un second écrivain est un fait dont l'administrateur a besoin, pas un problème d'affichage à
+masquer.
+
+**La leçon :** une mesure n'a pas de sens sans son sujet. Si une table enregistre une mesure
+et pas qui l'a prise, le jour où un second mesureur apparaît elle produit des données fausses
+d'une façon qu'aucune validation ne peut attraper, puisque chaque ligne prise isolément est
+correcte.
+
+---
+
+## 67. Des documents qui ne sont pas des items
+
+BetterCommunity peut héberger un catalogue de plugins, de thèmes, d'applications,
+d'automatisations, de modpacks et désormais de tutoriels. Deux choses qu'il ne pouvait pas
+héberger : une **liste de Server-Repos** et un **index de catalogues** — les documents que
+consomment le navigateur de dépôts et le lecteur d'index de BMM.
+
+Le geste tentant était de les ajouter à `CatalogKind`. Cet enum pilote la mécanique des items
+: files de modération, envoi de charge utile par item, quotas de stockage, et un `feedField()`
+qui répond « le pluriel du kind ». Aucun de ces documents n'a d'items — chacun est un fichier
+JSON listant des adresses servies par quelqu'un d'autre — donc l'enum aurait produit une file
+de modération pour une chose que personne ne peut soumettre et un champ de flux nommé
+`repo_indexs`.
+
+Ils vivent dans la colonne `kinds String[]`, qui n'a demandé aucune migration, et leur
+invariant « mode brut uniquement » est appliqué à la frontière de l'API, là où vivent déjà
+toutes les autres règles de catalogue. Le mode hébergé est refusé **par son nom** plutôt que
+silencieusement corrigé : un appelant qui a demandé du stockage doit apprendre qu'il n'en a
+pas eu.
+
+**La leçon :** un enum est une promesse sur ce que le reste du système a le droit de
+supposer. Y ajouter une valeur qui casse ces suppositions coûte plus cher qu'ajouter à côté un
+second vocabulaire, plus petit.
