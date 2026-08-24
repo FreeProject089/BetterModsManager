@@ -5190,7 +5190,11 @@ function getDeepLinkDefs() {
             params: [
                 { name: 'url', required: true, desc: 'URL vers le repo.json distant.' },
                 { name: 'profile', required: true, desc: 'ID du profil dans le repo distant (visible dans repo.json).' },
-                { name: 'game_dir', required: false, desc: 'Chemin du dossier jeu (requis si nouveau profil).' },
+                // The PARAMETER keeps its name. `game_dir` is the wire contract every
+                // existing script, deeplink and scheduled task already sends; renaming it
+                // to match a UI label would break all of them, silently. Only the prose
+                // follows the app.
+                { name: 'game_dir', required: false, desc: t('plugins.apiGameDirDesc') },
                 { name: 'mods_dir', required: false, desc: 'Dossier des mods (requis si nouveau profil).' },
                 { name: 'backup_dir', required: false, desc: 'Dossier de backup (requis si nouveau profil).' },
                 { name: 'local_profile', required: false, desc: 'UUID d\'un profil local existant à mettre à jour (omis = crée un nouveau profil).' },
@@ -5852,7 +5856,7 @@ function getEndpointDefs() {
                 { name: 'choices[].repoProfileId', type: 'string', required: true, desc: 'ID du profil dans le repo distant (visible via GET /api/repo/info).' },
                 { name: 'choices[].targetLocalProfileId', type: 'string', required: false, desc: 'UUID d\'un profil local existant à mettre à jour. Omis = crée un nouveau profil.' },
                 { name: 'choices[].selectedModIds', type: 'array', required: false, desc: 'IDs de mods à télécharger (null = tous les mods du profil).' },
-                { name: 'gameDir', type: 'string', required: false, desc: 'Chemin du dossier jeu (requis si création d\'un nouveau profil).' },
+                { name: 'gameDir', type: 'string', required: false, desc: t('plugins.apiGameDirDesc') },
                 { name: 'modsDir', type: 'string', required: false, desc: 'Dossier racine des mods (requis si création d\'un nouveau profil).' },
                 { name: 'backupDir', type: 'string', required: false, desc: 'Dossier de backup (requis si création d\'un nouveau profil).' },
                 { name: 'creatorId', type: 'string', required: false, desc: 'Creator ID à envoyer en header X-Creator-ID (pour repos privés).' },

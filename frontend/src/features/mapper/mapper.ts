@@ -4,7 +4,6 @@
  */
 
 import { invoke } from '../../core/api.js';
-import { wireDismissibleTip } from '../../ui/dismissible-tip.js';
 import { toast, fetchProfileIconPaths, updateSelectProfileIcon, decorateProfileOptions } from '../../ui/app.js';
 import { t } from '../../core/i18n.js';
 import { dispatchBmmAction, BMM_ACTIONS, onBmmAction } from '../../ui/tutorial-events.js';
@@ -429,7 +428,7 @@ async function refreshGameTree(force = false): Promise<void> {
     const container = document.getElementById('mapper-game-tree');
     if (!container) return;
     if (!activeProfile) {
-        container.innerHTML = `<div class="empty-hint">${t('mapper.loadProfileHint') || 'Load a profile to view the game folder'}</div>`;
+        container.innerHTML = `<div class="empty-hint">${t('mapper.loadProfileHint') || 'Load a profile to view the destination folder'}</div>`;
         return;
     }
 
@@ -472,13 +471,9 @@ function setupFilters(): void {
     document.getElementById('btn-mapper-game-expand')?.addEventListener('click', () => toggleAll('mapper-game-tree', true));
     document.getElementById('btn-mapper-game-collapse')?.addEventListener('click', () => toggleAll('mapper-game-tree', false));
 
-    // Shared with the server repo's banner — ui/dismissible-tip.ts.
-    wireDismissibleTip({
-        bannerId: 'mapper-help-banner',
-        closeId: 'btn-mapper-hint-close',
-        showId: 'btn-mapper-hint-show',
-        storageKey: 'bmm_mapper_hint_hidden',
-    });
+    // The dismissible banner is gone; its sentence lives under the mod tree now, where the
+    // multi-select it describes actually happens. Nothing to wire — a footer that is always
+    // there needs no show, no hide and no stored preference.
 }
 
 function toggleAll(containerId: string, expand: boolean): void {
@@ -1140,7 +1135,7 @@ function selectModRoot(): void {
     updateSelectionCounter();
     updateLiveMappingHighlight();
     toast(t('mapper.modRootSelected', { count: topLevel.length.toString() })
-        || `Whole mod root selected (${topLevel.length} items) — double-click a game folder to map it there`, 'info', 3500);
+        || `Whole mod root selected (${topLevel.length} items) — double-click a destination folder to map it there`, 'info', 3500);
 }
 
 /** Move the current selection to `targetPath`. If nothing is selected, move the

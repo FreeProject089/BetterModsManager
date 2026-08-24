@@ -2902,44 +2902,6 @@
                         </div>
                     </div>
 
-                    <div class="mapper-help-banner bmm-tip" id="mapper-help-banner">
-                        <span class="mhb-icon" aria-hidden="true">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
-                                <path
-                                    d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A5 5 0 0 0 8 8c0 1.3.5 2.6 1.5 3.5.8.8 1.3 1.5 1.5 2.5" />
-                                <path d="M9 18h6" />
-                                <path d="M10 22h4" />
-                            </svg>
-                        </span>
-                        <!-- The shortcut, and nothing else.
-                             The two numbered steps described what the screen already shows: a mod
-                             tree on the left, a game tree on the right, and a Save button that is
-                             visibly disabled until something changes. A tip that narrates the
-                             interface is a tip people close. The Ctrl shortcut is the one thing
-                             here that is NOT visible, so it is the one thing that stays. -->
-                        <div class="mhb-body">
-                            <span class="mhb-tip">
-                                <kbd>Ctrl</kbd>
-                                <span data-i18n="mapper.multiSelectHint">Hold Ctrl to select multiple files or
-                                    folders.</span>
-                            </span>
-                        </div>
-                        <button class="mapper-hint-close" id="btn-mapper-hint-close" data-i18n-tooltip="mapper.hideTips"
-                            data-tooltip="Hide tips" aria-label="Hide tips">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2.4" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
-                        </button>
-                    </div>
-                    <button class="mapper-hint-show" id="btn-mapper-hint-show" data-i18n-tooltip="mapper.showTips"
-                        data-tooltip="Show tips" aria-label="Show tips" hidden>
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2.2"><path
-                                d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A5 5 0 0 0 8 8c0 1.3.5 2.6 1.5 3.5.8.8 1.3 1.5 1.5 2.5" />
-                            <path d="M9 18h6" /><path d="M10 22h4" /></svg>
-                        <span data-i18n="mapper.showTips">Show tips</span>
-                    </button>
-
                     <div class="mapper-container">
                         <!-- Left Panel: Mods -->
                         <div class="mapper-panel glass-card" id="mapper-mods-panel">
@@ -2981,6 +2943,14 @@
                                     <div class="empty-hint" data-i18n="mapper.selectModHint">Sélectionnez un mod pour
                                         voir son contenu</div>
                                 </div>
+                            </div>
+                            <!-- The one fact this screen does not show by itself, put where it
+                                 applies. It replaces a dismissible banner across the top of the
+                                 page: a banner is a thing to close, and the show/hide pair it
+                                 needed was more chrome than the sentence it carried. -->
+                            <div class="panel-foot-hint">
+                                <kbd>Ctrl</kbd>
+                                <span data-i18n="mapper.multiSelectHint">Hold Ctrl to select multiple files or folders.</span>
                             </div>
                         </div>
 

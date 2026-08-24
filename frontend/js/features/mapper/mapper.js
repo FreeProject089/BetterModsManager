@@ -3,7 +3,6 @@
  * Handles file restructuration by mapping mod files to game directory structure
  */
 import { invoke } from '../../core/api.js';
-import { wireDismissibleTip } from '../../ui/dismissible-tip.js';
 import { toast, fetchProfileIconPaths, updateSelectProfileIcon, decorateProfileOptions } from '../../ui/app.js';
 import { t } from '../../core/i18n.js';
 import { dispatchBmmAction, BMM_ACTIONS, onBmmAction } from '../../ui/tutorial-events.js';
@@ -464,13 +463,9 @@ function setupFilters() {
     document.getElementById('btn-mapper-mod-collapse')?.addEventListener('click', () => toggleAll('mapper-mod-tree', false));
     document.getElementById('btn-mapper-game-expand')?.addEventListener('click', () => toggleAll('mapper-game-tree', true));
     document.getElementById('btn-mapper-game-collapse')?.addEventListener('click', () => toggleAll('mapper-game-tree', false));
-    // Shared with the server repo's banner — ui/dismissible-tip.ts.
-    wireDismissibleTip({
-        bannerId: 'mapper-help-banner',
-        closeId: 'btn-mapper-hint-close',
-        showId: 'btn-mapper-hint-show',
-        storageKey: 'bmm_mapper_hint_hidden',
-    });
+    // The dismissible banner is gone; its sentence lives under the mod tree now, where the
+    // multi-select it describes actually happens. Nothing to wire — a footer that is always
+    // there needs no show, no hide and no stored preference.
 }
 function toggleAll(containerId, expand) {
     const container = document.getElementById(containerId);

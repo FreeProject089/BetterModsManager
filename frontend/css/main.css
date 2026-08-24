@@ -219,13 +219,20 @@ body.is-maximized .titlebar-spacer {
 
 .titlebar-controls {
     display: flex;
-    gap: 4px;
-
+    /* Measured against the frame, not chosen by feel. The window has a 16px corner radius,
+       and the close button sat 13px from the right edge with 4px between buttons — inside the
+       curve and tighter than the gap between the icons themselves, which is what makes the
+       cluster read as crammed into the corner. 6px apart, and the row clears the radius. */
+    gap: 6px;
+    padding-right: 4px;
+    align-items: center;
 }
 
 .tb-btn {
+    /* A touch larger, and square-ish: 30x26 gave the hover a letterbox shape that reads as
+       a mis-sized button rather than a control. */
     width: 30px;
-    height: 26px;
+    height: 28px;
     border: none;
     background: transparent;
     color: var(--text-muted);
@@ -17712,3 +17719,18 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
     border: 1px solid var(--border); box-shadow: 0 8px 30px rgba(0,0,0,.45);
 }
 .tut-pick-esc { font-size: 11px; color: var(--text-muted); }
+
+
+/* A quiet footer inside a mapper panel: the one fact the screen does not show by itself,
+   placed where it applies rather than in a banner across the top. */
+.panel-foot-hint {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 14px; margin-top: auto;
+    border-top: 1px solid var(--border);
+    font-size: 11.5px; color: var(--text-muted); line-height: 1.45;
+}
+.panel-foot-hint kbd {
+    font-family: var(--font-mono, monospace); font-size: 10.5px;
+    padding: 2px 6px; border-radius: 4px; flex-shrink: 0;
+    background: var(--bmm-s05); border: 1px solid var(--border); color: var(--text-secondary);
+}

@@ -4899,7 +4899,7 @@
   "plugins.fldRepoUrl": "URL du repo",
   "plugins.fldModsFolder": "Dossier des mods",
   "plugins.fldBackupFolder": "Dossier de sauvegarde",
-  "plugins.fldGameRootOpt": "Racine du jeu (opt)",
+  "plugins.fldGameRootOpt": "Dossier de destination (opt)",
   "plugins.fldDlLimit": "Limite DL (Ko/s)",
   "plugins.fldRepoPassword": "Mot de passe de téléchargement",
   "plugins.fldOverwriteAll": "Tout écraser",
@@ -8015,5 +8015,6 @@
   "tutc.wait.disappear": "…fasse disparaître un élément",
   "tutc.wait.view": "…ouvre une page",
   "tutc.wait.which": "Laquelle",
-  "tutc.wait.selector": "Élément"
+  "tutc.wait.selector": "Élément",
+  "plugins.apiGameDirDesc": "Chemin du dossier de destination où les mods se déploient (requis à la création d'un nouveau profil)."
 }
