@@ -24,8 +24,16 @@
 .modpack-card:hover {
     background: rgba(255, 255, 255, 0.03);
     border-color: rgba(var(--accent-rgb), 0.4);
-    transform: translateY(-4px) scale(1.01);
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4), 0 0 20px rgba(var(--accent-rgb), 0.1);
+    /* SCALE ONLY, never translate.
+       `translateY(-4px)` moved the card out from under the pointer: hovering near the bottom
+       edge lifted the card by 4px, the cursor was then outside it, :hover dropped, the card
+       fell back under the cursor, and it hovered again — a flicker loop several times a
+       second, and only in a 4px band at the edge, which is why it reads as "the card is
+       glitching" rather than as a hover effect.
+       A scale from the centre can only GROW the hit box, so the pointer can never fall out of
+       it. The lift is carried by the shadow instead, which is what actually conveyed it. */
+    transform: scale(1.012);
+    box-shadow: 0 22px 44px rgba(0, 0, 0, 0.45), 0 0 20px rgba(var(--accent-rgb), 0.1);
 }
 
 .modpack-card::before {

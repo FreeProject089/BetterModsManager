@@ -1229,24 +1229,6 @@
                         <div class="view-actions"></div>
                     </div>
 
-                    <div class="repo-info-banner bmm-tip" id="repo-info-banner">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)"
-                            stroke-width="2" style="flex-shrink:0;margin-top:1px">
-                            <circle cx="12" cy="12" r="10" />
-                            <path d="M12 16v-4" />
-                            <path d="M12 8h.01" />
-                        </svg>
-                        <p data-i18n="repo.modeInfo">...</p>
-                                            <button class="mapper-hint-close" id="btn-repo-hint-close" data-i18n-tooltip="mapper.hideTips"
-                            data-tooltip="Hide tips" aria-label="Hide tips">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M18 6L6 18M6 6l12 12"/></svg>
-                        </button>
-                    </div>
-                    <button class="mapper-hint-show" id="btn-repo-hint-show" data-i18n-tooltip="mapper.showTips"
-                        data-tooltip="Show tips" aria-label="Show tips" hidden>
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
-                    </button>
-
                     <!-- ══ TABS : SYNC / HOSTING ══ -->
                     <div class="repo-tabs" role="tablist">
                         <button class="repo-tab-btn active" id="btn-repo-tab-sync" data-repo-tab="sync" role="tab">
@@ -2930,30 +2912,18 @@
                                 <path d="M10 22h4" />
                             </svg>
                         </span>
+                        <!-- The shortcut, and nothing else.
+                             The two numbered steps described what the screen already shows: a mod
+                             tree on the left, a game tree on the right, and a Save button that is
+                             visibly disabled until something changes. A tip that narrates the
+                             interface is a tip people close. The Ctrl shortcut is the one thing
+                             here that is NOT visible, so it is the one thing that stays. -->
                         <div class="mhb-body">
-                            <div class="mhb-head">
-                                <span class="mhb-title" data-i18n="mapper.helpTitle">How mapping works</span>
-                                <span class="mhb-badge" data-i18n="mapper.helpDraft">Nothing moves until you save</span>
-                            </div>
-                            <ol class="mhb-steps">
-                                <li>
-                                    <span class="mhb-num">1</span>
-                                    <span data-i18n="mapper.helpStep1">Select what you want to move in the mod tree on
-                                        the left.</span>
-                                </li>
-                                <li>
-                                    <span class="mhb-num">2</span>
-                                    <span data-i18n="mapper.helpStep2">Double-click the target folder in the game tree on
-                                        the right.</span>
-                                </li>
-                            </ol>
-                            <div class="mhb-foot">
-                                <span class="mhb-tip">
-                                    <kbd>Ctrl</kbd>
-                                    <span data-i18n="mapper.multiSelectHint">Hold Ctrl to select multiple files or
-                                        folders.</span>
-                                </span>
-                            </div>
+                            <span class="mhb-tip">
+                                <kbd>Ctrl</kbd>
+                                <span data-i18n="mapper.multiSelectHint">Hold Ctrl to select multiple files or
+                                    folders.</span>
+                            </span>
                         </div>
                         <button class="mapper-hint-close" id="btn-mapper-hint-close" data-i18n-tooltip="mapper.hideTips"
                             data-tooltip="Hide tips" aria-label="Hide tips">

@@ -1,6 +1,5 @@
 // @ts-nocheck
 import { invoke, pickFolder } from '../../core/api.js';
-import { wireDismissibleTip } from '../../ui/dismissible-tip.js';
 import { toast, updateLibraryProfileSelector, toastSaved } from '../../ui/app.js';
 import { escHtml, escAttr, formatBytes } from '../../core/utils.js';
 import {
@@ -519,15 +518,10 @@ function explainSsh(raw: string): string {
 }
 
 export function initRepo() {
-    // The mode-info banner is a good explanation the first time and a permanent
-    // block of text above the controls every time after. Same dismiss/restore
-    // affordance the mapper has, from the same place — ui/dismissible-tip.ts.
-    wireDismissibleTip({
-        bannerId: 'repo-info-banner',
-        closeId: 'btn-repo-hint-close',
-        showId: 'btn-repo-hint-show',
-        storageKey: 'bmm_repo_hint_hidden',
-    });
+    // The mode-info banner is gone, and so is its dismiss/restore wiring. It explained that
+    // hosting works "like a classic web server" above the very controls that do it — a
+    // paragraph everybody read once and then dismissed, which is the definition of a banner
+    // that should not have been permanent.
 
     const elements = {
         // --- Export elements ---

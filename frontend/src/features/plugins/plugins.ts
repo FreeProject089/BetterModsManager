@@ -3588,6 +3588,14 @@ function renderCreate(container: HTMLElement) {
 
     // Click a mod id (available or selected list) to copy it — handy when hand-editing
     // a catalog or debugging a mod-list match.
+    //
+    // ONCE PER CONTAINER. renderCreate() replaces the container's innerHTML but the container
+    // itself survives, so attaching a delegated listener to it on every visit stacked them:
+    // the fourth time you opened the Create tab, one click fired four handlers and put four
+    // identical "id copied" toasts on screen. The children are rebuilt and their listeners go
+    // with them; a listener on the element that OUTLIVES the render has to be guarded.
+    if (!container.dataset.pcIdCopyBound) {
+    container.dataset.pcIdCopyBound = '1';
     container.addEventListener('click', (e) => {
         const idBtn = (e.target as HTMLElement).closest?.('.plug-mod-id[data-copy-id]') as HTMLElement | null;
         if (!idBtn) return;
@@ -3598,6 +3606,7 @@ function renderCreate(container: HTMLElement) {
             () => toast(`${t('common.error')}`, 'error'),
         );
     });
+    }
 
     function buildManifest() {
         const id = (document.getElementById('pc-id') as HTMLInputElement)?.value.trim();

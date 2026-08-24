@@ -17,7 +17,7 @@ import { t } from '../../core/i18n.js';
 
 const BEST_KEY = 'bmm.flappy.best';
 
-interface Pipe { x: number; gapY: number; scored: boolean }
+interface Pipe { x: number; gapY: number; scored: boolean; gap: number }
 
 let _open = false;
 
@@ -71,20 +71,43 @@ export function openFlappyTasky(): void {
     bird.src = live?.src || 'assets/Tasky_Happy.png';
 
     const W = canvas.width, H = canvas.height;
-    // Easier, and mostly in one place: the gap between consecutive gaps.
+    const SIZE = 38, PIPE_W = 54;
+
+    // ── difficulty ────────────────────────────────────────────────────────────
     //
-    // The numbers below were the small part of the problem. The big part was that each new
-    // gap was placed anywhere in `90 + random * (H - 180)`, so two pipes in a row could sit
-    // 300px apart vertically with ~90 frames between them — a jump nothing can clear, arriving
-    // at random. That is not difficulty, it is a coin flip, and it is what made the game feel
-    // unfair rather than hard. MAX_STEP bounds it; the rest is a wider gap and gentler physics.
-    const SIZE = 38, GAP = 172, PIPE_W = 54, SPACING = 225;
-    const GRAVITY = 0.34, FLAP = -6.4, SPEED = 1.75;
-    /** How far the gap centre may move from one pipe to the next. */
-    const MAX_STEP = 78;
+    // A RAMP, not a setting. Every number here used to be constant, which meant one value had
+    // to be forgiving enough for pipe one and interesting by pipe forty — and no single value
+    // is both. It was tuned for the second and felt hostile in the first ten seconds.
+    //
+    // `ramp` goes 0 → 1 over the first RAMP_OVER pipes and stays there. Nothing steps: every
+    // curve is continuous, so the game never gets suddenly harder at a threshold, which is the
+    // version of progression people notice and resent.
+    //
+    // The vertical step between consecutive gaps is ramped too, and it is the one that matters
+    // most: it decides whether the next gap is reachable from this one, and an unreachable gap
+    // is not difficulty at any score.
+    const RAMP_OVER = 22;
+    const ramp = () => Math.min(1, score / RAMP_OVER);
+    /** Eases the start further: the first few pipes are nearly flat, then it picks up. */
+    const ease = () => { const r = ramp(); return r * r * (3 - 2 * r); };
+
+    const GAP_START = 205, GAP_END = 150;
+    const SPEED_START = 1.35, SPEED_END = 2.35;
+    const STEP_START = 34, STEP_END = 96;
+    const SPACING_START = 265, SPACING_END = 205;
+
+    const gapNow = () => GAP_START + (GAP_END - GAP_START) * ease();
+    const speedNow = () => SPEED_START + (SPEED_END - SPEED_START) * ease();
+    const stepNow = () => STEP_START + (STEP_END - STEP_START) * ease();
+    const spacingNow = () => SPACING_START + (SPACING_END - SPACING_START) * ease();
+
+    // Lighter than before at every score. Falling fast is what made the opening feel like a
+    // reflex test rather than a game you are learning.
+    const GRAVITY = 0.29, FLAP = -6.1;
+
     /** Keeps a gap centre off the very top and bottom, where it needs a perfect flap. */
-    const MARGIN = GAP / 2 + 26;
-    const clampGap = (v: number) => Math.max(MARGIN, Math.min(H - MARGIN, v));
+    const marginNow = () => gapNow() / 2 + 26;
+    const clampGap = (v: number) => Math.max(marginNow(), Math.min(H - marginNow(), v));
 
     let y = H / 2, vy = 0, score = 0, best = readBest();
     let pipes: Pipe[] = [];
@@ -97,7 +120,7 @@ export function openFlappyTasky(): void {
         // not a difficulty curve, it is a bug report.
         // The first pipe is centred and a full screen away: dying before the game has been
         // seen is a bug report, not a difficulty curve.
-        pipes = [{ x: W + 60, gapY: H / 2, scored: false }];
+        pipes = [{ x: W + 60, gapY: H / 2, scored: false, gap: GAP_START }];
         scoreEl.textContent = '0';
         state = 'ready';
         footEl.textContent = t('flappy.start');
@@ -132,24 +155,28 @@ export function openFlappyTasky(): void {
         if (state === 'playing') {
             vy += GRAVITY;
             y += vy;
-            for (const p of pipes) p.x -= SPEED;
-            if (pipes.length && pipes[pipes.length - 1].x < W - SPACING) {
+            const speed = speedNow();
+            for (const p of pipes) p.x -= speed;
+            if (pipes.length && pipes[pipes.length - 1].x < W - spacingNow()) {
                 // Relative to the previous gap, not absolute: the next one is always reachable
                 // from where this one leaves you.
                 const prev = pipes[pipes.length - 1].gapY;
-                const next = clampGap(prev + (Math.random() * 2 - 1) * MAX_STEP);
-                pipes.push({ x: W, gapY: next, scored: false });
+                const next = clampGap(prev + (Math.random() * 2 - 1) * stepNow());
+                // The gap this pipe was BORN with. Reading gapNow() at draw time instead
+                // would silently resize pipes already on screen the moment you scored,
+                // which looks like the game cheating.
+                pipes.push({ x: W, gapY: next, scored: false, gap: gapNow() });
             }
             pipes = pipes.filter((p) => p.x > -PIPE_W);
         }
 
         for (const p of pipes) {
             ctx.fillStyle = pipe;
-            ctx.fillRect(p.x, 0, PIPE_W, p.gapY - GAP / 2);
-            ctx.fillRect(p.x, p.gapY + GAP / 2, PIPE_W, H - (p.gapY + GAP / 2));
+            ctx.fillRect(p.x, 0, PIPE_W, p.gapY - p.gap / 2);
+            ctx.fillRect(p.x, p.gapY + p.gap / 2, PIPE_W, H - (p.gapY + p.gap / 2));
             ctx.strokeStyle = line;
-            ctx.strokeRect(p.x, 0, PIPE_W, p.gapY - GAP / 2);
-            ctx.strokeRect(p.x, p.gapY + GAP / 2, PIPE_W, H - (p.gapY + GAP / 2));
+            ctx.strokeRect(p.x, 0, PIPE_W, p.gapY - p.gap / 2);
+            ctx.strokeRect(p.x, p.gapY + p.gap / 2, PIPE_W, H - (p.gapY + p.gap / 2));
 
             if (state === 'playing') {
                 const bx = 60;
@@ -157,7 +184,7 @@ export function openFlappyTasky(): void {
                 // transparent corner of a PNG is a death nobody believes.
                 const pad = 6;
                 const hitX = bx + SIZE - pad > p.x && bx + pad < p.x + PIPE_W;
-                const hitY = y + pad < p.gapY - GAP / 2 || y + SIZE - pad > p.gapY + GAP / 2;
+                const hitY = y + pad < p.gapY - p.gap / 2 || y + SIZE - pad > p.gapY + p.gap / 2;
                 if (hitX && hitY) die();
                 if (!p.scored && p.x + PIPE_W < bx) {
                     p.scored = true;

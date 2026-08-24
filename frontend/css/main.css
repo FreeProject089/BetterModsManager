@@ -10534,7 +10534,9 @@ body.tasky-hidden .titlebar-left .titlebar-version {
 .contributors-title { font-size: 0.9rem; font-weight: 700; letter-spacing: 3px; color: var(--bmm-text-muted); margin: 50px 0 20px; text-align: center; text-transform: uppercase; }
 .contributors-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 20px; margin-bottom: 50px; }
 .contributor-card { display: flex; flex-direction: column; align-items: center; padding: 20px; text-align: center; transition: all 0.3s ease; cursor: pointer; }
-.contributor-card:hover { transform: translateY(-5px); border-color: rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.4) !important; background: rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.05); }
+/* scale, not translate — see .modpack-card:hover. At -5px this had the widest flicker
+   band of any card in the app. */
+.contributor-card:hover { transform: scale(1.015); border-color: rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.4) !important; background: rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.05); }
 .contributor-pfp-box { width: 80px; height: 80px; border-radius: 50%; overflow: hidden; margin-bottom: 15px; border: 2px solid var(--bmm-s10); box-shadow: 0 5px 15px rgba(0,0,0,0.2); }
 .contributor-pfp { width: 100%; height: 100%; object-fit: cover; }
 .contributor-name { font-size: 1.1rem; font-weight: 700; color: var(--bmm-text-primary); margin-bottom: 4px; }
