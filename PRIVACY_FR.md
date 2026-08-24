@@ -142,6 +142,32 @@ l'équipe BMM — contrôle ce serveur. Hors‑ligne, rien de tout ceci n'arrive
 Si **vous** hébergez un repo, ceux qui se connectent exposent **leur** IP et Creator ID à **votre**
 machine (pour gérer bans/liste blanche). Vous devenez responsable de ces journaux.
 
+### 3.1.b Dépôts et catalogues protégés (mot de passe / clés d'identité)
+Certains dépôts et catalogues exigent un **mot de passe de téléchargement** et/ou une **clé
+d'identité** signée. Un mot de passe saisi est envoyé à **ce serveur-là** avec tes requêtes,
+pour la session, et n'est **jamais écrit sur le disque** par BMM. Les clés d'identité
+fonctionnent par **chemin** : BMM ne conserve que le chemin du fichier de ta clé privée, lit
+le fichier au moment de signer une preuve, et envoie une **attestation signée à durée de vie
+courte** — jamais la clé elle-même. Le choix de la clé par serveur (par origine) est
+conservé dans tes réglages locaux.
+
+### 3.2.b Publication par SSH
+Quand tu publies ou récupères un dépôt par SSH, BMM se connecte au serveur **que tu as
+configuré**. Hôte, port, utilisateur, dossier distant et le **chemin** de ta clé privée sont
+enregistrés localement ; la **phrase secrète** de la clé et un éventuel **mot de passe** de
+compte sont lus à l'écran au moment de l'envoi et jamais conservés. L'empreinte du serveur
+est enregistrée à la première connexion : un serveur qui change est refusé. Si tu listes des
+**clés publiques autorisées** sur un serveur généré, elles vivent dans l'`access.json` de ce
+serveur — chez toi, sous ton contrôle.
+
+### 3.2.c Les documents partagés portent ton id d'auteur
+Les modpacks (`.bmp`), catalogues de modpacks (`.cbmp`) et tutoriels personnalisés
+(`.bmmtut`) que tu exportes sont **signés avec ta clé de créateur** : le fichier porte ton
+**id d'auteur** (une clé publique, pas ton nom) pour que d'autres installations vérifient
+qu'il n'a pas été modifié. Quiconque reçoit le fichier voit cet id. Les documents importés
+sont vérifiés de la même façon ; un fichier non signé ou altéré est signalé comme tel, pas
+refusé.
+
 ### 3.3 Rapports BetaHub (bugs & retours)
 Quand vous envoyez volontairement un **rapport de bug** ou un **retour**, les informations **que vous
 saisissez** (plus les journaux/captures joints) sont envoyées au service BetaHub. Rien n'est envoyé

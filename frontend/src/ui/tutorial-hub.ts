@@ -23,6 +23,17 @@ import {
 } from './tutorial-store.js';
 import { startTutorialEngine } from './tutorial-engine.js';
 import type { TutorialDef } from './tutorial-types.js';
+import {
+    loadCustomTutorials, importCustomTutorialFromFile, exportCustomTutorial,
+    deleteCustomTutorial, signatureLabel,
+} from './tutorial-custom.js';
+import { toast } from './app.js';
+
+// Custom tutorials, loaded when the hub opens. Kept beside TUTORIALS rather than merged
+// into it: the official array is a constant other modules import, and pushing into it from
+// here would make "which tutorials exist" depend on whether this screen ever opened.
+let _customDefs: TutorialDef[] = [];
+const allTutorials = (): TutorialDef[] => [...TUTORIALS, ..._customDefs];
 
 let _langListener: ((e: Event) => void) | null = null;
 let _selected: string | null = null;
@@ -81,8 +92,15 @@ export function openTutorialHub(): void {
     }
     overlay.classList.remove('closing');
     // Open on the lesson you were last in, not on the first one in the file.
-    if (!_selected) _selected = TUTORIALS.find((x) => getLastPosition(x.id).partId)?.id ?? TUTORIALS[0]?.id ?? null;
+    if (!_selected) _selected = allTutorials().find((x) => getLastPosition(x.id).partId)?.id ?? TUTORIALS[0]?.id ?? null;
     render(overlay);
+    // Custom tutorials arrive async; repaint when they do. First paint shows the official
+    // ones immediately — the hub must not wait on a backend call to open.
+    void loadCustomTutorials().then((defs) => {
+        _customDefs = defs;
+        const o = document.getElementById('tut-hub-overlay');
+        if (o) render(o);
+    });
 
     if (_langListener) document.removeEventListener('langChanged', _langListener);
     _langListener = () => { const o = document.getElementById('tut-hub-overlay'); if (o) render(o); };
@@ -136,7 +154,7 @@ function rail(): HTMLElement {
     box.append(head);
 
     const list = el('div', 'tut-hub-list');
-    for (const tut of TUTORIALS) {
+    for (const tut of allTutorials()) {
         const keys = getAllStepKeys(tut);
         const { done, total } = getTutorialCompletion(tut.id, keys);
         const complete = isTutorialComplete(tut.id, keys);
@@ -167,13 +185,48 @@ function rail(): HTMLElement {
         list.append(row);
     }
     box.append(list);
+
+    // ── yours ──
+    // Create / import / catalogues, at the bottom of the rail: authoring is a rail-level
+    // concern (it changes what the rail lists), not a property of any one lesson.
+    const tools = el('div', 'tut-hub-tools');
+    const mk = (label: string, onClick: () => void) => {
+        const b = el('button', 'btn btn-ghost btn-sm', label);
+        b.setAttribute('type', 'button');
+        b.addEventListener('click', onClick);
+        tools.append(b);
+    };
+    mk(t('tuthub.create'), () => {
+        void import('./tutorial-creator.js').then((m) => m.openTutorialCreator(null, refreshHub));
+    });
+    mk(t('tuthub.import'), () => {
+        void importCustomTutorialFromFile().then((res) => {
+            if (!res) return;
+            const sig = signatureLabel(res.signature);
+            toast(`${t('tuthub.imported')} — ${sig.text}`, sig.tone === 'err' ? 'warning' : 'success');
+            refreshHub();
+        }).catch((e) => toast(String(e), 'error'));
+    });
+    mk(t('tuthub.catalogs'), () => {
+        void import('./tutorial-catalog.js').then((m) => m.openTutorialCatalog(refreshHub));
+    });
+    box.append(tools);
     return box;
+}
+
+/** Reload the custom list and repaint — after a create, an import, a delete. */
+function refreshHub(): void {
+    void loadCustomTutorials().then((defs) => {
+        _customDefs = defs;
+        const o = document.getElementById('tut-hub-overlay');
+        if (o) render(o);
+    });
 }
 
 /** Right: the selected lesson, its parts, and the one button that matters. */
 function detail(): HTMLElement {
     const box = el('div', 'tut-hub-detail');
-    const tut = TUTORIALS.find((x) => x.id === _selected);
+    const tut = allTutorials().find((x) => x.id === _selected);
     if (!tut) {
         box.append(el('div', 'tut-hub-empty', t('hub.subtitle') || ''));
         return box;
@@ -242,6 +295,34 @@ function detail(): HTMLElement {
         list.append(row);
     });
     box.append(list);
+
+    // A custom tutorial is a document you own: edit, share, delete. Official ones have no
+    // such rows, and the absence is the statement — they are not yours to change.
+    if (tut.id.startsWith('custom:')) {
+        const docId = tut.id.slice('custom:'.length);
+        const own = el('div', 'tut-hub-actions');
+        const mk = (label: string, cls: string, onClick: () => void) => {
+            const b = el('button', `btn ${cls} btn-sm`, label);
+            b.setAttribute('type', 'button');
+            b.addEventListener('click', onClick);
+            own.append(b);
+        };
+        mk(t('tuthub.edit'), 'btn-ghost', () => {
+            void import('./tutorial-creator.js').then((m) => m.openTutorialCreator(docId, refreshHub));
+        });
+        mk(t('tuthub.export'), 'btn-ghost', () => {
+            void exportCustomTutorial(docId).then((p) => { if (p) toast(t('tuthub.exported'), 'success'); })
+                .catch((e) => toast(String(e), 'error'));
+        });
+        mk(t('tuthub.delete'), 'btn-ghost', () => {
+            void deleteCustomTutorial(docId).then(() => {
+                if (_selected === tut.id) _selected = TUTORIALS[0]?.id ?? null;
+                toast(t('tuthub.deleted'), 'success');
+                refreshHub();
+            }).catch((e) => toast(String(e), 'error'));
+        });
+        box.append(own);
+    }
 
     const foot = el('div', 'tut-hub-foot', t('hub.footer') || '');
     box.append(foot);

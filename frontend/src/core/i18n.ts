@@ -80,9 +80,30 @@ export function setSandboxOverlay(map: Record<string, string> | null): void {
     applyTranslations();   // repaint the static half so both halves agree
 }
 
+// Runtime texts for CUSTOM tutorials (`ctut.*` keys), per language. Additive and
+// session-only, like the sandbox overlay above but never cleared by closing anything:
+// a custom tutorial's texts exist as long as its definition does. Never persisted —
+// the .bmmtut document on disk is the source of truth, and these are derived from it
+// on every load.
+const _runtimeTexts: Record<string, Record<string, string>> = {};
+
+export function registerRuntimeTexts(lang: string, map: Record<string, string>): void {
+    _runtimeTexts[lang] = { ...(_runtimeTexts[lang] || {}), ...map };
+}
+
 export function t(key: string, params: Record<string, string> = {}): string {
     const dict = translations[currentLang] || translations.fr || {};
     let str: string = dict[key] || (translations.fr && translations.fr[key]) || key;
+    // Checked only on a miss: t() runs hundreds of times per render and real keys must not
+    // pay for a feature they do not use. A ctut.* key can never collide with a Lang file key.
+    if (str === key && key.startsWith('ctut.')) {
+        const rt = _runtimeTexts[currentLang] || _runtimeTexts.en || {};
+        if (rt[key] !== undefined) str = rt[key];
+        else {
+            const en = _runtimeTexts.en || {};
+            if (en[key] !== undefined) str = en[key];
+        }
+    }
     if (_sandboxOverlay) {
         const ov = _sandboxOverlay[key];
         if (ov !== undefined) str = ov;

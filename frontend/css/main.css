@@ -17616,3 +17616,65 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
     overflow-wrap: anywhere;
 }
 .ssh-src-hint { font-size: 11px; color: var(--text-muted); line-height: 1.55; margin: 2px 0 0; }
+
+
+/* ── Tutorial creator & catalogues ──
+   One family: both are children of the hub, and both borrow .modal-overlay for the dim. */
+.tutc-panel, .tutcat-panel {
+    width: min(760px, 92vw); max-height: 84vh; overflow-y: auto;
+    background: var(--bmm-bg-elevated); border: 1px solid var(--border);
+    border-radius: 16px; padding: 18px 20px;
+    display: flex; flex-direction: column; gap: 12px;
+}
+.tutc-head { display: flex; align-items: center; justify-content: space-between; }
+.tutc-title { margin: 0; font-size: 16px; font-weight: 700; color: var(--text-primary); }
+.tutc-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px 12px; }
+.tutc-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.tutc-label { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); }
+.tutc-color { height: 32px; padding: 0; border: 1px solid var(--border); border-radius: 8px; background: none; cursor: pointer; }
+.tutc-parts { display: flex; gap: 6px; flex-wrap: wrap; }
+.tutc-part-chip {
+    padding: 4px 12px; border-radius: 999px; font-size: 12px; cursor: pointer;
+    border: 1px solid var(--border); background: var(--bmm-s03); color: var(--text-secondary);
+}
+.tutc-part-chip.on { border-color: var(--accent); color: var(--text-primary); background: var(--bmm-s05); }
+.tutc-part-chip.tutc-add { border-style: dashed; }
+.tutc-part-head { display: flex; align-items: flex-end; gap: 10px; }
+.tutc-steps { display: flex; flex-direction: column; gap: 10px; }
+.tutc-step { border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; background: var(--bmm-s02); }
+.tutc-step-head { display: flex; align-items: center; gap: 8px; }
+.tutc-step-n {
+    width: 20px; height: 20px; border-radius: 50%; flex: 0 0 auto;
+    display: grid; place-items: center; font-size: 11px; font-weight: 700;
+    background: var(--bmm-s05); color: var(--text-secondary);
+}
+.tutc-step-title { flex: 1; min-width: 0; }
+.tutc-step-del { border: none; background: none; color: var(--text-muted); cursor: pointer; font-size: 15px; }
+.tutc-step-del:hover { color: var(--danger); }
+.tutc-step-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.tutc-step-row > .input { flex: 1 1 150px; min-width: 130px; }
+.tutc-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.tutc-hint { font-size: 11px; color: var(--text-muted); }
+.tut-hub-tools { display: flex; gap: 6px; flex-wrap: wrap; padding: 10px 12px; border-top: 1px solid var(--border); }
+
+.tutcat-lede { margin: 0; font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+.tutcat-addrow { display: flex; gap: 6px; }
+.tutcat-addrow > .input { flex: 1; min-width: 0; }
+.tutcat-sources { display: flex; gap: 6px; flex-wrap: wrap; }
+.tutcat-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 3px 10px; border-radius: 999px; font-size: 11px;
+    border: 1px solid var(--border); background: var(--bmm-s03); color: var(--text-secondary);
+}
+.tutcat-drop { border: none; background: none; color: var(--text-muted); cursor: pointer; }
+.tutcat-drop:hover { color: var(--danger); }
+.tutcat-none { font-size: 11px; color: var(--text-muted); }
+.tutcat-err { font-size: 11px; color: var(--danger); overflow-wrap: anywhere; }
+.tutcat-list { display: flex; flex-direction: column; gap: 8px; }
+.tutcat-item {
+    display: flex; align-items: center; gap: 10px;
+    border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; background: var(--bmm-s02);
+}
+.tutcat-item-mid { flex: 1; min-width: 0; }
+.tutcat-item-name { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.tutcat-item-desc { font-size: 11px; color: var(--text-muted); }

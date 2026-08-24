@@ -82,6 +82,12 @@ BetterCommunity:
 - You confirm you have the right to distribute it. **Do not redistribute paid or licensed
   third-party content you do not have permission to share.**
 - You grant what is necessary to host, display and deliver it to users who request it — no more.
+- **Shared documents** (modpacks `.bmp`, modpack catalogues `.cbmp`, custom tutorials
+  `.bmmtut`, automations `.bmmpa`) are content you publish once you share them. They are
+  signed with your creator key so recipients can verify authorship; a document whose
+  signature does not verify is labelled as such. Importing one from someone else is at your
+  own judgement — tutorials display text and highlight interface elements but cannot run
+  code; automations and plugins CAN, and their own sections above apply.
 - Content may be removed or unlisted if it is illegal, infringing, malicious, or breaks a
   platform limit. Moderation decisions can be appealed through the support channels.
 

@@ -134,6 +134,29 @@ controls that server. If you only use BMM offline, none of this happens.
 If **you** host a repo, people who connect expose **their** IP and Creator ID to **your** machine
 (so you can manage bans/whitelist). You become the data controller for those logs.
 
+### 3.1.b Protected repos & catalogues (password / identity keys)
+Some repos and catalogues require a **download password** and/or a signed **identity key**.
+A password you type is sent to **that server** with your requests for the session and is
+**never written to disk** by BMM. Identity keys work by **path**: BMM stores only the file
+path of your private key, reads the file at the moment a proof is signed, and sends a
+**short-lived signed statement** — never the key itself. Which key answers which server
+(by origin) is stored in your local settings.
+
+### 3.2.b Publishing over SSH
+When you publish or fetch a repo over SSH, BMM connects to the server **you configured**.
+Host, port, user, remote folder and your private-key **path** are saved locally; the key
+**passphrase** and any account **password** are read from the screen at the moment of use
+and never stored. The server's fingerprint is recorded on first connection so a changed
+server is refused. If you list **authorised public keys** on a server you generate, those
+public keys live in that server's `access.json` — on your server, under your control.
+
+### 3.2.c Documents you share carry your author id
+Modpacks (`.bmp`), modpack catalogues (`.cbmp`) and custom tutorials (`.bmmtut`) you export
+are **signed with your creator key**: the file carries your **author id** (a public key,
+not your name) so other installs can verify it was not modified. Anyone you share the file
+with can see that id. Documents you import are checked the same way; an unsigned or
+tampered file is labelled as such, not refused.
+
 ### 3.3 BetaHub reports (bug reports & feedback)
 When you voluntarily submit a **bug report** or **feedback**, the information **you type** (plus
 any logs/screenshots you attach) is sent to the BetaHub service. Nothing is sent unless you submit.

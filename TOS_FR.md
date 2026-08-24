@@ -86,6 +86,13 @@ via BetterCommunity :
   sous licence que vous n'avez pas l'autorisation de partager.**
 - Vous accordez ce qui est nécessaire pour l'héberger, l'afficher et le livrer aux utilisateurs qui
   le demandent — rien de plus.
+- **Les documents partagés** (modpacks `.bmp`, catalogues de modpacks `.cbmp`, tutoriels
+  personnalisés `.bmmtut`, automatisations `.bmmpa`) sont du contenu publié dès que tu les
+  partages. Ils sont signés avec ta clé de créateur pour que les destinataires vérifient
+  l'auteur ; un document dont la signature ne se vérifie pas est signalé comme tel. En
+  importer un venu d'autrui relève de ton jugement — un tutoriel affiche du texte et
+  surligne des éléments de l'interface mais ne peut pas exécuter de code ; les
+  automatisations et plugins LE PEUVENT, et leurs sections ci-dessus s'appliquent.
 - Un contenu peut être retiré ou délisté s'il est illégal, contrefaisant, malveillant, ou s'il
   dépasse une limite de la plateforme. Les décisions de modération sont contestables via les
   canaux de support.

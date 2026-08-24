@@ -148,7 +148,7 @@ pub fn read_file_text(path: String) -> Result<String, String> {
     if path.contains("..") {
         return Err("Refused: path traversal".to_string());
     }
-    const OK_EXT: &[&str] = &["csv", "json", "txt", "md", "log", "ini", "cfg", "xml", "yml", "yaml", "html", "bmmpa", "bmmreplay"];
+    const OK_EXT: &[&str] = &["csv", "json", "txt", "md", "log", "ini", "cfg", "xml", "yml", "yaml", "html", "bmmpa", "bmmreplay", "bmmtut"];
     let ext = std::path::Path::new(&path)
         .extension()
         .and_then(|e| e.to_str())
