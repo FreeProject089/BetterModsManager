@@ -42,8 +42,12 @@ import { updateSystem } from './diagrams/update-system.js';
 import { offlineMode } from './diagrams/offline-mode.js';
 import { telemetryPipeline } from './diagrams/telemetry-pipeline.js';
 import { i18nSystem } from './diagrams/i18n-system.js';
+import { customPages } from './diagrams/custom-pages.js';
+import { deeplinks } from './diagrams/deeplinks.js';
 // Diagram Registry
 export const diagrams = {
+    'custom-pages': customPages,
+    'deeplinks': deeplinks,
     'resumable-downloads': resumableDownloads,
     'mod-sync': modSync,
     'profile-system': profileSystem,

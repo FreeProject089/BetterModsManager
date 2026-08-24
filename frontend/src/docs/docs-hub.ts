@@ -513,7 +513,7 @@ ce qu'il remplace, ou les retire). Vos mods téléchargés ne sont jamais modifi
         },
       },
       {
-        id: 'links-and-updates', docsPath: 'reference/links-and-updates', view: 'settings',
+        id: 'links-and-updates', docsPath: 'reference/links-and-updates', diagram: 'deeplinks', view: 'settings',
         title: { en: 'Links and updates', fr: 'Liens et mises à jour' },
         summary: {
           en: 'Where every address BMM uses comes from, and why the update check has a second source.',
@@ -662,7 +662,7 @@ La référence complète champ par champ, avec chaque clé optionnelle et un tab
         },
       },
       {
-        id: 'custom-pages', docsPath: 'features/plugins/',
+        id: 'custom-pages', docsPath: 'features/plugins/', diagram: 'custom-pages',
         title: { en: 'Custom pages', fr: 'Pages personnalisées' },
         summary: { en: 'Add your own sandboxed pages to the navbar.', fr: 'Ajoutez vos propres pages sandbox à la barre de navigation.' },
         keywords: 'custom pages navbar bmmpage sandbox pages personnalisées',
