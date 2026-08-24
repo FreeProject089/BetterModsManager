@@ -353,6 +353,88 @@ pub fn get_privacy_text(app_handle: tauri::AppHandle, lang: String) -> Result<St
 }
 
 
+/// A fingerprint of the legal documents as they are on this machine, right now.
+///
+/// The problem this solves: acceptance used to be a bare `true` in localStorage, so terms
+/// accepted in 2024 counted as accepted for every version that followed, including ones
+/// with different terms.
+///
+/// The simple answer is to record WHAT was accepted rather than THAT something was. A hash
+/// of the document text is that record, and it is simpler than a version field: nobody has
+/// to remember to bump it, and it changes exactly when — and only when — the text changes.
+///
+/// Two details that would otherwise make it fire when nothing changed:
+///
+///  - The CANONICAL files only, never `TOS_FR.md`. The per-language copies say the same
+///    thing in another language; hashing the one currently displayed would mean switching
+///    language re-opened the terms, which is nonsense.
+///  - Line endings are normalised and trailing whitespace trimmed. The installer hashes the
+///    document inside the package (LF) while this reads it back off disk, where a checkout
+///    or an editor may have made it CRLF. Same words, different bytes, and the user would be
+///    asked to re-accept a document that never changed.
+///
+/// Missing file → `None` for that document, which the caller reads as "cannot verify" and
+/// leaves the existing acceptance alone rather than nagging about a file we failed to find.
+pub fn fingerprint_text(text: &str) -> String {
+    use sha2::{Digest, Sha256};
+    let normalized: String = text
+        .replace("\r\n", "\n")
+        .lines()
+        .map(|l| l.trim_end())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let mut h = Sha256::new();
+    h.update(normalized.trim().as_bytes());
+    // 16 hex characters. This is a change detector, not a security boundary — the document
+    // sits next to the binary, and anyone who can rewrite it can rewrite this code too.
+    hex::encode(h.finalize())[..16].to_string()
+}
+
+fn hash_doc(app_handle: &tauri::AppHandle, name: &str) -> Option<String> {
+    let path = resolve_path(app_handle, name)?;
+    let text = std::fs::read_to_string(&path).ok()?;
+    Some(fingerprint_text(&text))
+}
+
+#[cfg(test)]
+mod legal_fingerprint_tests {
+    use super::fingerprint_text;
+
+    /// The trap this guards: the installer hashes the document inside the package (LF) and
+    /// BMM hashes it back off disk, where a checkout may have made it CRLF. Same words,
+    /// different bytes — without normalising, every user would be asked to re-accept terms
+    /// that never changed.
+    #[test]
+    fn line_endings_and_trailing_space_do_not_count_as_a_change() {
+        let lf = "# Terms\n\nYou agree.\n";
+        assert_eq!(fingerprint_text(lf), fingerprint_text("# Terms\r\n\r\nYou agree.\r\n"));
+        assert_eq!(fingerprint_text(lf), fingerprint_text("# Terms  \n\nYou agree.   \n\n\n"));
+    }
+
+    /// And the thing it must still catch.
+    #[test]
+    fn changed_words_change_the_fingerprint() {
+        assert_ne!(fingerprint_text("You agree."), fingerprint_text("You also agree."));
+        // One character, deep in the text.
+        assert_ne!(fingerprint_text("Retention is 30 days."), fingerprint_text("Retention is 90 days."));
+    }
+
+    #[test]
+    fn it_is_short_and_hex() {
+        let f = fingerprint_text("anything");
+        assert_eq!(f.len(), 16);
+        assert!(f.chars().all(|c| c.is_ascii_hexdigit()));
+    }
+}
+
+#[tauri::command]
+pub fn legal_fingerprint(app_handle: tauri::AppHandle) -> serde_json::Value {
+    serde_json::json!({
+        "tos": hash_doc(&app_handle, "TOS.md").or_else(|| hash_doc(&app_handle, "EULA.md")),
+        "privacy": hash_doc(&app_handle, "PRIVACY.md"),
+    })
+}
+
 #[tauri::command]
 pub fn is_ptb_mode(app_handle: tauri::AppHandle) -> bool {
     if let Some(path) = resolve_path(&app_handle, "app.cfg") {

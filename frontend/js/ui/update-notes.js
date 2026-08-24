@@ -1337,10 +1337,49 @@ window.openPrivacyModal = openPrivacyModal;
 window.checkPtbMode = checkPtbMode;
 // ── Auto EULA on First Start ────────────────────────────────
 const EULA_ACCEPTED_KEY = 'bmm_eula_accepted';
+/** WHICH terms were accepted, not merely that some were. See `legal_fingerprint` in Rust. */
+const EULA_HASH_KEY = 'bmm_eula_accepted_hash';
+const PRIVACY_HASH_KEY = 'bmm_privacy_seen_hash';
+/** The fingerprint of the documents currently installed, or nulls if they cannot be read. */
+async function legalHashes() {
+    try {
+        const r = await invoke('legal_fingerprint');
+        return { tos: r?.tos ?? null, privacy: r?.privacy ?? null };
+    }
+    catch {
+        // An old build without the command, or an install missing the documents. Either way
+        // we cannot tell whether the terms changed, and guessing "they did" would re-open the
+        // modal on every launch forever.
+        return { tos: null, privacy: null };
+    }
+}
+/**
+ * Whether the reader has already accepted THIS text.
+ *
+ * Migration: an install from before fingerprints exists carries the bare `true` and no hash.
+ * That flag is adopted rather than ignored, and adopting is the CORRECT answer, not just the
+ * kind one — at the moment of migration the documents on disk are the ones that shipped with
+ * the build they accepted, because they have not updated yet. Re-prompting there would be
+ * asking somebody to re-read a document that did not change.
+ */
+function acceptedCurrent(key, hashKey, current) {
+    const legacy = localStorage.getItem(key) === 'true';
+    const stored = localStorage.getItem(hashKey);
+    if (!current)
+        return legacy || !!stored; // cannot verify → do not nag
+    if (stored)
+        return stored === current;
+    if (legacy) {
+        localStorage.setItem(hashKey, current);
+        return true;
+    }
+    return false;
+}
 export async function checkAutoEula() {
     try {
         const isEnabled = await invoke('is_auto_eula_enabled');
-        const isAccepted = localStorage.getItem(EULA_ACCEPTED_KEY) === 'true';
+        const { tos } = await legalHashes();
+        const isAccepted = acceptedCurrent(EULA_ACCEPTED_KEY, EULA_HASH_KEY, tos);
         if (isEnabled && !isAccepted) {
             // Show EULA modal with mandatory buttons
             await openEulaModal(true);
@@ -1352,14 +1391,18 @@ export async function checkAutoEula() {
     }
     return false;
 }
-// Show the Privacy Policy once, right after the TOS on first start.
+// Show the Privacy Policy once, right after the TOS on first start — and again whenever
+// its text changes, which is the whole point of the fingerprint.
 const PRIVACY_SEEN_KEY = 'bmm_privacy_seen';
 export async function checkAutoPrivacy() {
     try {
-        if (localStorage.getItem(PRIVACY_SEEN_KEY) === 'true')
+        const { privacy } = await legalHashes();
+        if (acceptedCurrent(PRIVACY_SEEN_KEY, PRIVACY_HASH_KEY, privacy))
             return;
         await openPrivacyModal();
         localStorage.setItem(PRIVACY_SEEN_KEY, 'true');
+        if (privacy)
+            localStorage.setItem(PRIVACY_HASH_KEY, privacy);
     }
     catch (e) {
         console.warn('[BMM] Auto privacy check failed:', e);
@@ -1382,6 +1425,10 @@ export async function checkShowReleaseNotes() {
 }
 export function markEulaAccepted() {
     localStorage.setItem(EULA_ACCEPTED_KEY, 'true');
+    // Record WHAT was accepted. Fire-and-forget: the bool above is already written, so a
+    // failure here costs one extra prompt on the next launch, never a lost acceptance.
+    legalHashes().then(({ tos }) => { if (tos)
+        localStorage.setItem(EULA_HASH_KEY, tos); });
 }
 window.markEulaAccepted = markEulaAccepted;
 // ── Language Selection on First Start ──────────────────────
