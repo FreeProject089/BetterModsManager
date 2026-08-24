@@ -88,6 +88,265 @@ fn unique_id() -> String {
     format!("p{:x}", n)
 }
 
+/// The wrapper every document in a page bundle gets: the shared stylesheet, the SDK, and the
+/// page's own script when it has one.
+///
+/// Built by concatenation rather than one big format string so the pieces stay readable, and
+/// extracted because index.html and every sub-page MUST be produced the same way. The head
+/// existed twice already (create and update); a sub-page generated from a third copy would
+/// have been a page that quietly lost its styling the first time somebody edited one of them.
+fn page_document(has_js: bool, title: Option<&str>, html: &str) -> String {
+    let mut doc = String::from("<!doctype html>\n<html>\n<head>\n<meta charset=\"utf-8\">\n");
+    if let Some(t) = title {
+        doc.push_str("<title>");
+        doc.push_str(&html_escape_title(t));
+        doc.push_str("</title>\n");
+    }
+    doc.push_str("<link rel=\"stylesheet\" href=\"style.css\">\n");
+    doc.push_str("<script src=\"bmm.js\" defer></script>\n");
+    if has_js {
+        doc.push_str("<script src=\"app.js\" defer></script>\n");
+    }
+    doc.push_str("</head>\n<body>\n");
+    doc.push_str(html);
+    doc.push_str("\n</body>\n</html>\n");
+    doc
+}
+
+/// A title is written into markup, so the characters that could close the element or open an
+/// attribute are escaped. The page is sandboxed and same-bundle, but a title that silently
+/// truncates the document at a stray `<` is a bug whatever the threat model says.
+fn html_escape_title(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+}
+
+/// A sub-page's file name, from a slug somebody typed.
+///
+/// Deliberately narrower than `sanitize_id`: this becomes a FILE NAME. The protocol handler
+/// already refuses `..` and canonicalises against the page root, but a slug is user input and
+/// the check belongs where the name is minted, not only where it is served. Lowercase ASCII,
+/// digits and hyphens. `index` is refused because that is the page's own entry document and
+/// overwriting it from here would replace the page with one of its sub-pages.
+fn sanitize_slug(slug: &str) -> Option<String> {
+    let s = slug.trim().to_ascii_lowercase();
+    if s.is_empty() || s.len() > 40 || s == "index" {
+        return None;
+    }
+    if s
+        .chars()
+        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+    {
+        Some(s)
+    } else {
+        None
+    }
+}
+
+/// One extra document in a page bundle.
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
+pub struct PageDoc {
+    pub slug: String,
+    pub title: String,
+}
+
+/// The same, plus the markup inside <body> — what the editor loads.
+#[derive(serde::Serialize)]
+pub struct PageDocSource {
+    pub slug: String,
+    pub title: String,
+    pub html: String,
+}
+
+fn read_title(doc: &str, fallback: &str) -> String {
+    let open = "<title>";
+    match doc.find(open) {
+        Some(a) => {
+            let a = a + open.len();
+            match doc[a..].find("</title>") {
+                Some(b) => doc[a..a + b].trim().to_string(),
+                None => fallback.to_string(),
+            }
+        }
+        None => fallback.to_string(),
+    }
+}
+
+/// Every document in a page's bundle except its entry.
+#[tauri::command]
+pub fn list_page_docs<R: Runtime>(app: AppHandle<R>, id: String) -> Vec<PageDoc> {
+    let id = match sanitize_id(&id) {
+        Some(i) => i,
+        None => return Vec::new(),
+    };
+    let dir = pages_root(&app).join(&id);
+    let mut out = Vec::new();
+    if let Ok(rd) = std::fs::read_dir(&dir) {
+        for e in rd.flatten() {
+            let name = e.file_name().to_string_lossy().to_string();
+            if !name.ends_with(".html") || name == "index.html" {
+                continue;
+            }
+            let slug = name.trim_end_matches(".html").to_string();
+            if sanitize_slug(&slug).is_none() {
+                continue;
+            }
+            // The title is read back OUT of the document rather than mirrored in the
+            // manifest: one place to change it, and a file edited by hand outside the app
+            // still lists correctly instead of showing a name nothing on disk agrees with.
+            let title = std::fs::read_to_string(e.path())
+                .map(|t| read_title(&t, &slug))
+                .unwrap_or_else(|_| slug.clone());
+            out.push(PageDoc { slug, title });
+        }
+    }
+    out.sort_by(|a, b| a.slug.cmp(&b.slug));
+    out
+}
+
+/// Read one sub-page back for editing.
+#[tauri::command]
+pub fn get_page_doc<R: Runtime>(
+    app: AppHandle<R>,
+    id: String,
+    slug: String,
+) -> Result<PageDocSource, String> {
+    let id = sanitize_id(&id).ok_or("invalid id")?;
+    let slug = sanitize_slug(&slug).ok_or("invalid name")?;
+    let path = pages_root(&app).join(&id).join(format!("{}.html", slug));
+    let doc = std::fs::read_to_string(&path).map_err(|_| "sub-page not found".to_string())?;
+    let html = match (doc.find("<body>"), doc.rfind("</body>")) {
+        (Some(a), Some(b)) if b > a => doc[a + "<body>".len()..b].trim().to_string(),
+        _ => String::new(),
+    };
+    let title = read_title(&doc, &slug);
+    Ok(PageDocSource { slug, title, html })
+}
+
+/// Create or overwrite one sub-page.
+#[tauri::command]
+pub fn save_page_doc<R: Runtime>(
+    app: AppHandle<R>,
+    id: String,
+    slug: String,
+    title: String,
+    html: String,
+) -> Result<PageDoc, String> {
+    let id = sanitize_id(&id).ok_or("invalid id")?;
+    let slug = sanitize_slug(&slug)
+        .ok_or("a name may use lowercase letters, digits and hyphens, and cannot be \"index\"")?;
+    let dir = pages_root(&app).join(&id);
+    if !dir.exists() {
+        return Err("page not found".into());
+    }
+    // The sub-page loads app.js exactly when the index does, so one script runs across the
+    // whole bundle — an author should not discover that their code stopped working at the
+    // first link they followed.
+    let has_js = dir.join("app.js").exists();
+    let trimmed = title.trim();
+    let title = if trimmed.is_empty() { slug.clone() } else { trimmed.to_string() };
+    let doc = page_document(has_js, Some(&title), &html);
+    std::fs::write(dir.join(format!("{}.html", slug)), doc).map_err(|e| e.to_string())?;
+    Ok(PageDoc { slug, title })
+}
+
+#[tauri::command]
+pub fn delete_page_doc<R: Runtime>(
+    app: AppHandle<R>,
+    id: String,
+    slug: String,
+) -> Result<(), String> {
+    let id = sanitize_id(&id).ok_or("invalid id")?;
+    let slug = sanitize_slug(&slug).ok_or("invalid name")?;
+    let path = pages_root(&app).join(&id).join(format!("{}.html", slug));
+    if path.exists() {
+        std::fs::remove_file(&path).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod subpage_roundtrip {
+    use super::{page_document, read_title};
+
+    /// The parsing half of the round trip: what save writes, get_page_doc must read back.
+    /// Both sides are exercised here against a real string rather than a real AppHandle,
+    /// because the only Tauri-specific part is which directory it lands in.
+    #[test]
+    fn a_saved_document_reads_back_exactly() {
+        let body = "<p><a href=\"index.html\">Back</a></p>
+<h1>About</h1>";
+        let doc = page_document(true, Some("About us"), body);
+
+        // get_page_doc's extraction, verbatim.
+        let html = match (doc.find("<body>"), doc.rfind("</body>")) {
+            (Some(a), Some(b)) if b > a => doc[a + "<body>".len()..b].trim().to_string(),
+            _ => String::new(),
+        };
+        assert_eq!(html, body, "the body must survive the round trip unchanged");
+        assert_eq!(read_title(&doc, "fallback"), "About us");
+    }
+
+    /// A body containing the literal text "</body>" must not truncate the read-back. rfind
+    /// is what makes this work, and a later edit to `find` would break it silently.
+    #[test]
+    fn a_body_mentioning_its_own_closing_tag_still_round_trips() {
+        let body = "<pre>write &lt;/body&gt; here</pre>";
+        let doc = page_document(false, Some("Docs"), body);
+        let html = match (doc.find("<body>"), doc.rfind("</body>")) {
+            (Some(a), Some(b)) if b > a => doc[a + "<body>".len()..b].trim().to_string(),
+            _ => String::new(),
+        };
+        assert_eq!(html, body);
+    }
+}
+
+#[cfg(test)]
+mod subpage_tests {
+    use super::{page_document, sanitize_slug, html_escape_title, read_title};
+
+    #[test]
+    fn a_slug_is_a_file_name_and_is_treated_as_one() {
+        assert_eq!(sanitize_slug("About Us"), None); // a space is not a file name here
+        assert_eq!(sanitize_slug("../../etc/passwd"), None);
+        assert_eq!(sanitize_slug("index"), None); // that is the page's own entry
+        assert_eq!(sanitize_slug(""), None);
+        assert_eq!(sanitize_slug("a".repeat(41).as_str()), None);
+        assert_eq!(sanitize_slug("  About  "), Some("about".to_string()));
+        assert_eq!(sanitize_slug("part-2"), Some("part-2".to_string()));
+    }
+
+    /// Every document must carry the stylesheet and the SDK, or a sub-page renders unstyled
+    /// and its bmm.* calls are undefined — the failure this shares one builder to avoid.
+    #[test]
+    fn every_document_carries_the_shared_bundle() {
+        let d = page_document(true, Some("About"), "<p>hi</p>");
+        assert!(d.contains("href=\"style.css\""));
+        assert!(d.contains("src=\"bmm.js\""));
+        assert!(d.contains("src=\"app.js\""));
+        assert!(d.contains("<title>About</title>"));
+        assert!(d.contains("<p>hi</p>"));
+        // No app.js when the page has none, or the browser logs a 404 on every sub-page.
+        assert!(!page_document(false, None, "x").contains("app.js"));
+    }
+
+    #[test]
+    fn a_title_cannot_close_its_own_element() {
+        let d = page_document(false, Some("</title><script>bad()</script>"), "");
+        assert!(!d.contains("<script>bad()"));
+        assert_eq!(html_escape_title("a<b>&\"c\""), "a&lt;b&gt;&amp;&quot;c&quot;");
+    }
+
+    #[test]
+    fn the_title_survives_a_round_trip() {
+        let d = page_document(false, Some("Getting started"), "<p>x</p>");
+        assert_eq!(read_title(&d, "fallback"), "Getting started");
+        assert_eq!(read_title("<html><head></head></html>", "fallback"), "fallback");
+    }
+}
+
 #[tauri::command]
 pub fn list_custom_pages<R: Runtime>(app: AppHandle<R>) -> Vec<PageMeta> {
     let root = pages_root(&app);
@@ -135,16 +394,8 @@ pub fn create_custom_page<R: Runtime>(
     let js = js.unwrap_or_default();
     let has_js = !js.trim().is_empty();
     let runtime = if has_js { "js" } else { "html" };
-    let js_tag = if has_js {
-        "<script src=\"app.js\" defer></script>\n"
-    } else {
-        ""
-    };
 
-    let doc = format!(
-        "<!doctype html>\n<html>\n<head>\n<meta charset=\"utf-8\">\n<link rel=\"stylesheet\" href=\"style.css\">\n<script src=\"bmm.js\" defer></script>\n{}</head>\n<body>\n{}\n</body>\n</html>\n",
-        js_tag, html
-    );
+    let doc = page_document(has_js, None, &html);
     std::fs::write(dir.join("index.html"), doc).map_err(|e| e.to_string())?;
     std::fs::write(dir.join("style.css"), css).map_err(|e| e.to_string())?;
     std::fs::write(dir.join("bmm.js"), PAGE_SDK_JS).map_err(|e| e.to_string())?;
@@ -278,15 +529,7 @@ pub fn update_custom_page<R: Runtime>(
     }
     let js = js.unwrap_or_default();
     let has_js = !js.trim().is_empty();
-    let js_tag = if has_js {
-        "<script src=\"app.js\" defer></script>\n"
-    } else {
-        ""
-    };
-    let doc = format!(
-        "<!doctype html>\n<html>\n<head>\n<meta charset=\"utf-8\">\n<link rel=\"stylesheet\" href=\"style.css\">\n<script src=\"bmm.js\" defer></script>\n{}</head>\n<body>\n{}\n</body>\n</html>\n",
-        js_tag, html
-    );
+    let doc = page_document(has_js, None, &html);
     std::fs::write(dir.join("index.html"), doc).map_err(|e| e.to_string())?;
     std::fs::write(dir.join("style.css"), css).map_err(|e| e.to_string())?;
     std::fs::write(dir.join("bmm.js"), PAGE_SDK_JS).map_err(|e| e.to_string())?; // refresh SDK

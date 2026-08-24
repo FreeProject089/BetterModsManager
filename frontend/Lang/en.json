@@ -8018,5 +8018,13 @@
   "tutc.wait.view": "…open a page",
   "tutc.wait.which": "Which one",
   "tutc.wait.selector": "Element",
-  "plugins.apiGameDirDesc": "Path of the destination folder mods deploy into (required when creating a new profile)."
+  "plugins.apiGameDirDesc": "Path of the destination folder mods deploy into (required when creating a new profile).",
+  "navedit.subpages": "Documents in this page",
+  "navedit.subpagesHint": "Link between them with an ordinary relative link, e.g. <a href=\"about.html\">. Each one shares this page’s CSS, script, permissions and storage.",
+  "navedit.subpageSlug": "file name (about)",
+  "navedit.subpageTitle": "Title",
+  "navedit.mainDoc": "Main page",
+  "navedit.backToMain": "Back",
+  "navedit.subpageDelT": "Delete this document?",
+  "navedit.subpageDelD": "Any link pointing at it will stop working."
 }

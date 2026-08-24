@@ -630,6 +630,19 @@ export function openNavbarEditor(): void {
                     <textarea class="input nbe-code" id="nbe-page-css" rows="6" placeholder="body { color: white }"></textarea>
                     <label class="nbe-flbl">JS ${`<span class="nbe-jsnote">${t('navedit.jsNote') || '(use addEventListener — inline onclick is blocked; bmm.* available)'}</span>`}</label>
                     <textarea class="input nbe-code" id="nbe-page-js" rows="8" placeholder="document.querySelector('button')?.addEventListener('click', () =&gt; bmm.notify('hi'))"></textarea>
+                    <!-- Sub-pages. Hidden until a page is being EDITED, because a document
+                         has to belong to something: there is no folder to write into until
+                         the page itself exists. -->
+                    <div id="nbe-subpages" class="nbe-subpages" style="display:none">
+                        <label class="nbe-flbl">${t('navedit.subpages') || 'Documents in this page'}</label>
+                        <p class="nbe-sub">${t('navedit.subpagesHint') || 'Link between them with an ordinary relative link, e.g. <a href="about.html">. Each one shares this page\u2019s CSS, script, permissions and storage.'}</p>
+                        <div id="nbe-subpages-list" class="nbe-subpages-list"></div>
+                        <div class="nbe-subpage-add">
+                            <input class="input" id="nbe-subpage-slug" placeholder="${t('navedit.subpageSlug') || 'file name (about)'}">
+                            <input class="input" id="nbe-subpage-title" placeholder="${t('navedit.subpageTitle') || 'Title'}">
+                            <button class="btn btn-xs" id="nbe-subpage-add">${t('common.add') || 'Add'}</button>
+                        </div>
+                    </div>
                     <button class="btn btn-secondary" id="nbe-page-create">${t('navedit.createPage') || 'Create page'}</button>
                 </div>
             </details>
@@ -849,6 +862,8 @@ export function openNavbarEditor(): void {
                     pageField('#nbe-page-js').value = src.js;
                     repaintCode();
                     editingPageId = id;
+                    editingDoc = null;
+                    renderSubpages();
                     pageCreateBtn.textContent = t('navedit.save') || 'Save changes';
                     pageCreateBtn.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
                 } catch (err) { (window as any).toast?.(String(err), 'error'); }
@@ -898,6 +913,102 @@ export function openNavbarEditor(): void {
     // text, which looks like a rendering bug and is a missing call.
     const repaintCode = () => { hl.html?.refresh(); hl.css?.refresh(); hl.js?.refresh(); };
 
+    // ── sub-pages ───────────────────────────────────────────────────────────
+    //
+    // Editing a sub-page reuses the SAME html box as the index — one editor, one place to
+    // look. `editingDoc` says which document that box currently holds: null is the page's
+    // own index, a slug is one of its sub-pages. The CSS and JS boxes stay bound to the
+    // bundle, because that is what they are: shared across every document in it.
+    let editingDoc: string | null = null;
+    const subWrap = overlay.querySelector('#nbe-subpages') as HTMLElement;
+    const subList = overlay.querySelector('#nbe-subpages-list') as HTMLElement;
+
+    const renderSubpages = async () => {
+        subWrap.style.display = editingPageId ? '' : 'none';
+        if (!editingPageId) { subList.innerHTML = ''; editingDoc = null; return; }
+        let docs: { slug: string; title: string }[] = [];
+        try { docs = await invoke('list_page_docs', { id: editingPageId }) as typeof docs; } catch { docs = []; }
+        const chip = (slug: string | null, label: string) =>
+            `<button class="nbe-subpage${editingDoc === slug ? ' is-current' : ''}" data-doc="${slug === null ? '' : escAttr(slug)}">${escAttr(label)}</button>`;
+        subList.innerHTML = chip(null, t('navedit.mainDoc') || 'Main page')
+            + docs.map(d => chip(d.slug, d.title) + `<button class="nbe-subpage-del" data-deldoc="${escAttr(d.slug)}" title="${escAttr(t('common.delete') || 'Delete')}">\u00d7</button>`).join('');
+
+        subList.querySelectorAll('[data-doc]').forEach(b => b.addEventListener('click', async () => {
+            const slug = (b as HTMLElement).dataset.doc || null;
+            if (slug === editingDoc) return;
+            try {
+                // Save what is on screen before switching, or the edit is silently lost —
+                // this is a tab strip, and nobody expects a tab to discard their typing.
+                await persistCurrentDoc();
+                if (slug) {
+                    const d = await invoke('get_page_doc', { id: editingPageId, slug }) as { html: string };
+                    pageField('#nbe-page-html').value = d.html;
+                } else {
+                    const src = await invoke('get_custom_page_source', { id: editingPageId }) as { html: string };
+                    pageField('#nbe-page-html').value = src.html;
+                }
+                editingDoc = slug;
+                repaintCode();
+                renderSubpages();
+            } catch (err) { (window as any).toast?.(String(err), 'error'); }
+        }));
+
+        subList.querySelectorAll('[data-deldoc]').forEach(b => b.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const slug = (b as HTMLElement).dataset.deldoc!;
+            const ok = await (window as any).confirmCustom?.(
+                (t('navedit.subpageDelT') || 'Delete this document?'),
+                (t('navedit.subpageDelD') || 'Any link pointing at it will stop working.'), 'warning');
+            if (!ok) return;
+            try {
+                await invoke('delete_page_doc', { id: editingPageId, slug });
+                if (editingDoc === slug) {
+                    const src = await invoke('get_custom_page_source', { id: editingPageId }) as { html: string };
+                    pageField('#nbe-page-html').value = src.html;
+                    editingDoc = null;
+                    repaintCode();
+                }
+                renderSubpages();
+            } catch (err) { (window as any).toast?.(String(err), 'error'); }
+        }));
+    };
+
+    /** Write whatever the HTML box currently holds back to the document it came from. */
+    const persistCurrentDoc = async () => {
+        if (!editingPageId || !editingDoc) return;   // the index is saved by the Save button
+        const cur = (await invoke('list_page_docs', { id: editingPageId }) as { slug: string; title: string }[])
+            .find(d => d.slug === editingDoc);
+        await invoke('save_page_doc', {
+            id: editingPageId, slug: editingDoc,
+            title: cur?.title || editingDoc,
+            html: pageField('#nbe-page-html').value,
+        });
+    };
+
+    overlay.querySelector('#nbe-subpage-add')?.addEventListener('click', async () => {
+        if (!editingPageId) return;
+        const slugEl = overlay.querySelector('#nbe-subpage-slug') as HTMLInputElement;
+        const titleEl = overlay.querySelector('#nbe-subpage-title') as HTMLInputElement;
+        const slug = slugEl.value.trim();
+        if (!slug) { (window as any).toast?.(t('navedit.subpageSlug') || 'file name', 'warning'); return; }
+        try {
+            await persistCurrentDoc();
+            const title = titleEl.value.trim() || slug;
+            // A starting document rather than a blank one: the link back is the part an
+            // author only misses after they have navigated away and cannot get home.
+            await invoke('save_page_doc', {
+                id: editingPageId, slug, title,
+                html: `<p><a href="index.html">\u2190 ${escAttr(t('navedit.backToMain') || 'Back')}</a></p>\n<h1>${escAttr(title)}</h1>`,
+            });
+            slugEl.value = ''; titleEl.value = '';
+            const d = await invoke('get_page_doc', { id: editingPageId, slug }) as { html: string; slug: string };
+            pageField('#nbe-page-html').value = d.html;
+            editingDoc = d.slug;
+            repaintCode();
+            renderSubpages();
+        } catch (err) { (window as any).toast?.(String(err), 'error'); }
+    });
+
     loadPages().then(() => { renderPagesList(); if (kindSel.value === 'page') renderTarget(); });
     overlay.querySelector('#nbe-page-create')?.addEventListener('click', async () => {
         const name = (overlay.querySelector('#nbe-page-name') as HTMLInputElement).value.trim();
@@ -906,7 +1017,16 @@ export function openNavbarEditor(): void {
         const js = (overlay.querySelector('#nbe-page-js') as HTMLTextAreaElement).value;
         if (!name) { (window as any).toast?.(t('navedit.pageName') || 'Page name', 'warning'); return; }
         try {
-            if (editingPageId) {
+            if (editingPageId && editingDoc) {
+                // The HTML box is showing a sub-page. Its markup belongs to that document;
+                // the name, CSS and JS still belong to the bundle, so both are written.
+                await persistCurrentDoc();
+                await invoke('update_custom_page', {
+                    id: editingPageId, name,
+                    html: (await invoke('get_custom_page_source', { id: editingPageId }) as { html: string }).html,
+                    css, js,
+                });
+            } else if (editingPageId) {
                 await invoke('update_custom_page', { id: editingPageId, name, html, css, js });
                 // The page view caches its bundle; drop any open view for this page so it
                 // reloads the new source next time it's opened.
@@ -917,6 +1037,8 @@ export function openNavbarEditor(): void {
                 (window as any).toast?.(t('navedit.pageCreated') || 'Page created', 'success');
             }
             editingPageId = null;
+            editingDoc = null;
+            renderSubpages();
             pageCreateBtn.textContent = t('navedit.createPage') || 'Create page';
             await loadPages(); renderPagesList(); if (kindSel.value === 'page') renderTarget();
             pageField('#nbe-page-name').value = '';

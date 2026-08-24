@@ -8016,5 +8016,13 @@
   "tutc.wait.view": "…ouvre une page",
   "tutc.wait.which": "Laquelle",
   "tutc.wait.selector": "Élément",
-  "plugins.apiGameDirDesc": "Chemin du dossier de destination où les mods se déploient (requis à la création d'un nouveau profil)."
+  "plugins.apiGameDirDesc": "Chemin du dossier de destination où les mods se déploient (requis à la création d'un nouveau profil).",
+  "navedit.subpages": "Documents de cette page",
+  "navedit.subpagesHint": "Reliez-les par un lien relatif ordinaire, par exemple <a href=\"about.html\">. Chacun partage le CSS, le script, les permissions et le stockage de cette page.",
+  "navedit.subpageSlug": "nom de fichier (about)",
+  "navedit.subpageTitle": "Titre",
+  "navedit.mainDoc": "Page principale",
+  "navedit.backToMain": "Retour",
+  "navedit.subpageDelT": "Supprimer ce document ?",
+  "navedit.subpageDelD": "Tout lien qui pointe vers lui cessera de fonctionner."
 }
