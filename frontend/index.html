@@ -2991,7 +2991,7 @@
                         <div class="mapper-panel glass-card" id="mapper-game-panel">
                             <div class="panel-header">
                                 <div class="panel-header-top">
-                                    <h3 class="panel-title" data-i18n="mapper.gameSide">Dossier du Jeu</h3>
+                                    <h3 class="panel-title" data-i18n="mapper.gameSide">Dossier de destination</h3>
                                     <div class="tree-controls">
                                         <button class="btn-icon-small" id="btn-mapper-game-expand"
                                             data-i18n-tooltip="mapper.expandAll">
@@ -6018,7 +6018,7 @@
                         </div>
                     </div>
                     <div class="form-group">
-                        <label class="form-label" data-i18n="prof.gameDir">Répertoire du jeu <span
+                        <label class="form-label" data-i18n="prof.gameDir">Dossier de destination <span
                                 class="required">*</span></label>
                         <div class="path-picker">
                             <input type="text" class="form-input" id="prof-game-path" placeholder="C:\Games\..."
@@ -6111,7 +6111,7 @@
                         </div>
                     </div>
                     <div class="form-group">
-                        <label class="form-label" data-i18n="prof.gameDir">Répertoire du jeu <span
+                        <label class="form-label" data-i18n="prof.gameDir">Dossier de destination <span
                                 class="required">*</span></label>
                         <div class="path-picker">
                             <input type="text" class="form-input" id="edit-prof-game-path" placeholder="C:\Games\..."
@@ -6702,6 +6702,13 @@
                             <button class="repo-browser-filter" data-filter="official">Official</button>
                             <button class="repo-browser-filter" data-filter="partner">Partner</button>
                         </div>
+                                <!-- The protected-source block, shared with every catalogue screen.
+                                     A repo listed here can require a download password or a signed key;
+                                     without this fold the first anyone learned of it was a 401 AFTER
+                                     clicking, from a prompt with no room for the key half at all. The
+                                     password typed here seeds the sync session; the key choice is saved
+                                     for the repo's origin like everywhere else. -->
+                                <div id="rb-access-mount" style="margin:0 0 12px;"></div>
                         <div id="repo-browser-list" style="display:flex;flex-direction:column;gap:10px;">
                             <!-- Repos will be injected by JS -->
                         </div>

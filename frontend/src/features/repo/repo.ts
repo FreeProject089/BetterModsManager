@@ -1257,6 +1257,21 @@ export function initRepo() {
     const initRepoBrowser = () => {
         const btnBrowse = document.getElementById('btn-browse-repos');
         const modal = document.getElementById('modal-repo-browser');
+        // The protected-source fold, mounted and wired together — markup with no listeners is
+        // the failure that has now shipped on three separate screens.
+        const rbMount = document.getElementById('rb-access-mount');
+        if (rbMount && !rbMount.innerHTML) {
+            void import('../../core/source-access.js').then((sa) => {
+                rbMount.innerHTML = sa.sourceAccessHtml('rb');
+                sa.wireSourceAccess('rb', (m, k) => toast(m, k === 'warning' ? 'warning' : 'success'),
+                    () => {
+                        (document.getElementById('nav-settings') as HTMLElement | null)?.click();
+                        setTimeout(() => document.getElementById('settings-identity-card')
+                            ?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 250);
+                    },
+                    () => (document.getElementById('rb-access-url') as HTMLInputElement | null)?.value?.trim() || '');
+            });
+        }
         const loadingEl = document.getElementById('repo-browser-loading');
         const contentEl = document.getElementById('repo-browser-content');
         const errorEl = document.getElementById('repo-browser-error');
@@ -1559,6 +1574,17 @@ export function initRepo() {
                     const url = item.dataset.url;
                     if (elements.inputSyncUrl) {
                         elements.inputSyncUrl.value = url;
+                    }
+                    // Credentials from the fold, handed to the sync that is about to run.
+                    // The password seeds the session so the fetch below does not have to 401
+                    // first and prompt; the key was already saved per-origin by the fold
+                    // itself. Also seed the fold's URL field so opening it after picking a
+                    // repo talks about THAT repo, not a blank.
+                    const rbUrl = document.getElementById('rb-access-url') as HTMLInputElement | null;
+                    if (rbUrl && !rbUrl.value.trim()) rbUrl.value = url || '';
+                    const rbPw = (document.getElementById('rb-access-pw') as HTMLInputElement | null)?.value?.trim();
+                    if (rbPw) {
+                        void import('./repo-sync.js').then((m) => m.setRepoPassword(rbPw));
                     }
                     if (elements.btnFetchInfo) {
                         elements.btnFetchInfo.click();
