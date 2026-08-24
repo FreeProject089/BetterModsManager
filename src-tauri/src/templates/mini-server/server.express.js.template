@@ -3,6 +3,11 @@ const fs = require('fs');
 const path = require('path');
 const cors = require('cors');
 const crypto = require('crypto');
+// The password and the authorised public keys, read from access.json beside this file at
+// request time. A key added there takes effect on the next request — no regeneration, no
+// re-upload. The download password below stays as a fallback so an existing generated server
+// keeps behaving exactly as it did.
+const { checkAccess } = require('./access-gate.js');
 
 // Constant-time string compare (CWE-208) — used for both password gates below.
 function safeEqual(a, b) {
@@ -17,6 +22,11 @@ const ADMIN_PASSWORD = "{{ADMIN_PASSWORD}}";
 // Optional download password. When non-empty, every content request (repo.json + mod files)
 // must carry it in the `x-repo-password` header (or ?pw=). Empty = the repo stays open.
 const DOWNLOAD_PASSWORD = "{{DOWNLOAD_PASSWORD}}";
+// The origin your subscribers dial — scheme, host and port, exactly as they type it. BMM
+// signs the address it dialled, so a proof addressed elsewhere is refused; that is what stops
+// a proof captured on one server being replayed against another. Override without editing
+// this file by setting "audience" in access.json, or the BMM_PUBLIC_ORIGIN env var.
+const PUBLIC_ORIGIN = process.env.BMM_PUBLIC_ORIGIN || "{{PUBLIC_ORIGIN}}";
 const UPLOAD_LIMIT = {{UPLOAD_LIMIT}}; // KB/s
 
 // State
@@ -83,7 +93,7 @@ app.use(cors());
 app.use(express.json());
 
 // Session Tracking Middleware
-app.use((req, res, next) => {
+app.use(async (req, res, next) => {
     const ip = req.ip.replace('::ffff:', '') || '127.0.0.1';
     const queryKey = req.query.key || req.query.id || req.query.creatorid;
     const headerKey = req.headers['x-creator-id'] || req.headers['x-creator-key'] || req.headers['x-bmm-id'] || req.headers['authorization'];
@@ -122,13 +132,24 @@ app.use((req, res, next) => {
             addToHistory(ip, key, "REJECTED", "Access denied (whitelist)");
             return res.status(403).send('Not Whitelisted');
         }
-        // Optional download password — gates content only. The host's own dashboard/monitoring
-        // and the separately-authed admin panel are exempt (as is local access, above).
-        if (DOWNLOAD_PASSWORD && !req.path.startsWith('/admin') && req.path !== '/dashboard' && req.path !== '/monitoring.json') {
-            const given = req.headers['x-repo-password'] || req.query.pw || '';
-            if (!safeEqual(given, DOWNLOAD_PASSWORD)) {
-                addToHistory(ip, key, "REJECTED", "Wrong or missing repo password");
-                return res.status(401).send('Repo password required');
+        // Content only. The host's own dashboard/monitoring and the separately-authed admin
+        // panel are exempt (as is local access, above).
+        const isContent = !req.path.startsWith('/admin') && req.path !== '/dashboard' && req.path !== '/monitoring.json';
+        if (isContent) {
+            // The baked-in password first, so a server generated before access.json existed
+            // behaves exactly as it always did.
+            if (DOWNLOAD_PASSWORD) {
+                const given = req.headers['x-repo-password'] || req.query.pw || '';
+                if (!safeEqual(given, DOWNLOAD_PASSWORD)) {
+                    addToHistory(ip, key, "REJECTED", "Wrong or missing repo password");
+                    return res.status(401).send('Repo password required');
+                }
+            }
+            // Then access.json: its own password (if it sets one) and the authorised keys.
+            const gate = await checkAccess(__dirname, req, PUBLIC_ORIGIN);
+            if (!gate.ok) {
+                addToHistory(ip, key, "REJECTED", gate.reason);
+                return res.status(gate.status).send(gate.reason);
             }
         }
     }

@@ -68,15 +68,43 @@ export function sourceAccessHtml(p: string): string {
  * attached to closing — removing the node behind its back skips it.
  */
 export function closeOwningOverlay(el: Element): void {
-    let node: Element | null = el;
-    while (node && node !== document.body) {
-        const cls = typeof node.className === 'string' ? node.className : '';
-        if (/overlay/.test(cls)) {
-            const close = node.querySelector('.modal-close, [data-close]') as HTMLElement | null;
-            if (close) close.click(); else node.remove();
-            return;
-        }
-        node = node.parentElement;
+    // EVERY open overlay, not just the one this element sits in.
+    //
+    // A modal opened from another modal is not nested in the DOM: both are appended to
+    // #app-window-outer, so the second is a SIBLING of the first. Walking up the ancestor
+    // chain therefore reaches the inner one and stops — which is exactly what people saw,
+    // one of the two modals closing and the other left sitting over the page they had just
+    // been sent to. No amount of care with the ancestor walk can fix that; the relationship
+    // it is looking for does not exist.
+    //
+    // The element is still used, but only for ORDER: its own overlay closes first, so a
+    // parent that repaints on close does not repaint a child that is about to vanish.
+    const mine: Element[] = [];
+    for (let n: Element | null = el; n && n !== document.body; n = n.parentElement) {
+        if (/overlay/.test(typeof n.className === 'string' ? n.className : '')) mine.push(n);
+    }
+    // VISIBILITY is what tells an open overlay from a closed one here, and only visibility.
+    //
+    // Measured in the running app, because the obvious guesses are all wrong: every modal in
+    // BMM computes `display: flex` whether it is open or shut, `.open` is on some markers and
+    // not others, and `opacity` is 0 mid-fade on a modal that is genuinely open. A predicate
+    // built on any of those matches every closed modal in the app — and since this function
+    // CLICKS THEIR CLOSE BUTTONS, that is not a cosmetic mistake.
+    const open = Array.from(document.querySelectorAll('[class*="overlay"]'))
+        .filter((n) => !n.hasAttribute('hidden'))
+        .filter((n) => {
+            const cs = getComputedStyle(n);
+            return cs.visibility !== 'hidden' && cs.display !== 'none';
+        });
+
+    const seen = new Set<Element>();
+    for (const node of [...mine, ...open]) {
+        if (seen.has(node) || !node.isConnected) continue;
+        seen.add(node);
+        // The modal's own close button when it has one: that is what runs whatever cleanup
+        // the screen attached to closing. Removing the node behind its back skips it.
+        const close = node.querySelector('.modal-close, [data-close]') as HTMLElement | null;
+        if (close) close.click(); else node.remove();
     }
 }
 

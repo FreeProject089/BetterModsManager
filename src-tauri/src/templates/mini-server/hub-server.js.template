@@ -8,6 +8,7 @@
  *   • Modpack toggle (per repo)
  *   • Rate limiting per client
  *   • Single admin password for the whole hub
+ *   • PER-REPO download password and authorised public keys (each repo's access.json)
  *
  * Routes:
  *   GET  /                          → hub dashboard
@@ -26,6 +27,9 @@ const fs      = require('fs');
 const path    = require('path');
 const cors    = require('cors');
 const crypto  = require('crypto');
+// Per-repo credentials, read from each repo folder's access.json at request time. Kept out of
+// this file on purpose: adding a subscriber's key must not mean regenerating the server.
+const { checkAccess, isRestricted } = require('./access-gate.js');
 
 // Constant-time string compare (CWE-208) — used for the admin-password gate.
 function safeEqual(a, b) {
@@ -38,6 +42,10 @@ const PORT           = {{PORT}};
 const UPLOAD_LIMIT   = {{UPLOAD_LIMIT}}; // KB/s per client, 0 = unlimited
 const ADMIN_PASSWORD = "{{ADMIN_PASSWORD}}";
 const ROOT           = __dirname;
+// The origin subscribers dial, used to check key proofs when a repo's access.json does not
+// name its own. BMM signs the address it dialled, so this must match it exactly — scheme,
+// host and port. A repo can override it per folder.
+const PUBLIC_ORIGIN  = process.env.BMM_PUBLIC_ORIGIN || "{{PUBLIC_ORIGIN}}";
 const startTime      = Date.now();
 
 // ── Per-repo state ────────────────────────────────────────────────────────────
@@ -250,7 +258,8 @@ app.get('/:folder', (req, res, next) => {
 });
 
 // ── File serving per repo (with session tracking + rate limiting) ──────────────
-app.use('/', (req, res, next) => {
+// async: the key verifier is an ES module loaded on demand, so the check returns a promise.
+app.use('/', async (req, res, next) => {
     // Strip leading slashes and join safely — do NOT replace '/' with path.sep
     // before joining because a leading backslash creates an absolute path on Windows.
     const stripped = decodeURIComponent(req.path).replace(/^\/+/, '');
@@ -268,6 +277,14 @@ app.use('/', (req, res, next) => {
     const key = (req.headers['x-creator-id'] || req.headers['x-bmm-id'] || req.query.key || req.query.creatorid || 'UNKNOWN').toString().replace('Bearer ', '').trim();
 
     if (!repoSecurityCheck(folder, ip, key, res)) return;
+
+    // This repo's own password / authorised keys, from its access.json. Checked AFTER bans and
+    // the whitelist — those are local and cheap — and before a single byte is streamed.
+    const gate = await checkAccess(path.join(ROOT, folder), req, PUBLIC_ORIGIN);
+    if (!gate.ok) {
+        logLine(folder, `${ip} | ID: ${key} | ${gate.reason}`, 'REJECTED');
+        return res.status(gate.status).send(gate.reason);
+    }
 
     if (!repoSessions[folder].has(ip)) {
         repoSessions[folder].set(ip, { creatorId: key, bytes: 0, lastSeen: Date.now(), files: [] });
@@ -326,6 +343,13 @@ const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`  ${b}${g}[STATUS]${r}  ONLINE  |  ${b}${c}[PORT]${r}  ${PORT}  |  ${b}${g}[REPOS]${r}  ${repos.length}`);
     repos.forEach(rp => console.log(`            • ${rp.name}  →  /${rp.folder}/repo.json`));
     console.log(`\n  ${b}${c}[DASH]${r}    http://127.0.0.1:${PORT}/\n`);
+    // Which repos are closed, named at startup. A gate nobody can see is a gate people
+    // forget they set, and then debug as "my repo is broken".
+    try {
+        const shut = repos.map(x => x.folder).filter(x => x && isRestricted(path.join(ROOT, x)));
+        if (shut.length) console.log(`  ${b}[ACCESS]${r}  Restricted: ${shut.join(', ')}`);
+        else console.log(`  ${b}[ACCESS]${r}  All repos open (drop an access.json in a repo folder to close it)`);
+    } catch (_) {}
     if (ADMIN_PASSWORD) console.log(`  ${b}[ADMIN]${r}   Password protected\n`);
     else console.log(`  ${b}[ADMIN]${r}   No password (open)\n`);
 });

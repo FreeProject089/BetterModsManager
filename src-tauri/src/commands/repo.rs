@@ -969,6 +969,60 @@ pub fn scan_repo_hub(hub_dir: String) -> Result<Vec<HubRepoSummary>, String> {
     Ok(out)
 }
 
+/// Write the access gate beside a generated server: the module, the verifier, and a starter
+/// `access.json` explaining itself.
+///
+/// The verifier is the SAME FILE BetterCommunity runs, copied without edits, so a proof one
+/// accepts the other accepts. `scripts/check-keyauth-copy.mjs` fails the build if the two ever
+/// drift, because two implementations of "does this client hold the key" is two chances to
+/// disagree — and they disagree by refusing a key that works elsewhere, which reads to its
+/// owner as "my key is broken".
+///
+/// An EXISTING access.json is never overwritten. Regenerating a server must not silently drop
+/// the keys somebody authorised since the last time.
+fn write_access_gate(dir: &Path) -> Result<(), String> {
+    fs::write(
+        dir.join("access-gate.js"),
+        include_str!("../templates/mini-server/access-gate.js.template"),
+    ).map_err(|_| "repo.errWriteServerJs".to_string())?;
+    fs::write(
+        dir.join("keyauth.mjs"),
+        include_str!("../templates/mini-server/keyauth.mjs.template"),
+    ).map_err(|_| "repo.errWriteServerJs".to_string())?;
+
+    Ok(())
+}
+
+/// Drop a self-explaining, empty `access.json` into a folder that has none.
+///
+/// Separate from the modules above because they live at the SERVER root and this lives with
+/// the thing it protects — per repo folder in a hub, beside the server in a standalone.
+fn write_access_starter(dir: &Path) -> Result<(), String> {
+    if !dir.join("access.json").exists() {
+        // Empty, and therefore open — the same meaning a blank password has everywhere else in
+        // BMM. It exists so the shape is in front of the reader rather than in a document they
+        // have to find, and so adding a key is editing a file that is already there.
+        let starter = serde_json::json!({
+            "_comment": [
+                "Leave everything empty to keep this repo open.",
+                "password: subscribers must send it as X-Repo-Password (or ?password=).",
+                "pubkeys: one-line OpenSSH PUBLIC keys (ssh-ed25519/ssh-rsa/ecdsa-sha2-...).",
+                "  Listing even one makes a signed proof REQUIRED for everyone - add your own first.",
+                "audience: the address your subscribers type, scheme + host + port, exactly.",
+                "  BMM signs the address it dialled, so a wrong value here refuses everybody."
+            ],
+            "password": "",
+            "pubkeys": [],
+            "audience": "",
+        });
+        fs::write(
+            dir.join("access.json"),
+            serde_json::to_string_pretty(&starter).unwrap_or_default(),
+        ).map_err(|_| "repo.errWriteServerJs".to_string())?;
+    }
+    Ok(())
+}
+
 /// Generate a multi-repo hub into `hub_dir`.
 /// `serve = true`  → a Node/Express server that hosts all repos + dashboards.
 /// `serve = false` → a static directory (index.html + hub-repos.json) you can
@@ -997,7 +1051,12 @@ pub fn generate_repo_hub(
         let server_js = include_str!("../templates/mini-server/hub-server.js.template")
             .replace("{{PORT}}", &port.to_string())
             .replace("{{UPLOAD_LIMIT}}", &upload_limit.to_string())
-            .replace("{{ADMIN_PASSWORD}}", &pw);
+            .replace("{{ADMIN_PASSWORD}}", &pw)
+            // Left blank deliberately: only the owner knows the address subscribers type, and
+            // guessing it would produce a server that refuses every proof for a reason nothing
+            // names. With no keys listed it is never consulted; the moment one is, the server
+            // says exactly what to set.
+            .replace("{{PUBLIC_ORIGIN}}", "");
         let dashboard = include_str!("../templates/mini-server/hub-dashboard.html.template")
             .replace("{{LOGO_B64}}", &logo_b64);
         let repo_page = include_str!("../templates/mini-server/hub-repo.html.template");
@@ -1010,6 +1069,13 @@ pub fn generate_repo_hub(
         fs::write(public_dir.join("hub-dashboard.html"), dashboard).map_err(|_| "repo.errWriteDashboardHtml".to_string())?;
         fs::write(public_dir.join("hub-repo.html"), repo_page).map_err(|_| "repo.errWriteDashboardHtml".to_string())?;
         fs::write(root.join("package.json"), package).map_err(|_| "repo.errWritePackageJson".to_string())?;
+        // The gate itself at the hub root, and a starter access.json inside EACH repo folder:
+        // credentials here are per node, so that is where the file has to be.
+        write_access_gate(&root)?;
+        for s in scan_repo_hub(hub_dir.clone()).unwrap_or_default() {
+            let folder = root.join(&s.folder);
+            if folder.is_dir() { write_access_starter(&folder).ok(); }
+        }
 
         let bat = "@echo off\r\ntitle BMM Repo Hub\r\ncd /d \"%~dp0\"\r\nwhere node >nul 2>nul || (echo Node.js is required: https://nodejs.org && pause && exit /b)\r\nif not exist node_modules (echo Installing dependencies... && npm install)\r\nnode hub-server.js\r\npause\r\n";
         fs::write(root.join("Start-Hub.bat"), bat).map_err(|_| "repo.errWriteScript".to_string())?;
@@ -1023,6 +1089,23 @@ pub fn generate_repo_hub(
         let index = include_str!("../templates/mini-server/hub-static.html.template")
             .replace("{{LOGO_B64}}", &logo_b64_s);
         fs::write(root.join("index.html"), index).map_err(|_| "repo.errWriteDashboardHtml".to_string())?;
+        // A static export has NO SERVER PROCESS, so BMM cannot enforce a password or a key
+        // here: whatever web server you point at this folder decides who may read it. Saying
+        // so in a file beside the export beats leaving somebody to assume the access controls
+        // they configured elsewhere came along with it.
+        let note = "Static hub export
+                    =================
+
+                    This folder is plain files. There is no BMM process serving it, so a
+                    download password and authorised public keys CANNOT be enforced here --
+                    whatever web server you put in front of this folder decides who may read
+                    it (nginx auth_basic, a Caddy directive, your host's own controls).
+
+                    If you want BMM to enforce them, generate the hub with the Node server
+                    instead: each repo folder then gets an access.json, and the server checks
+                    it on every request.
+";
+        let _ = fs::write(root.join("README-access.txt"), note);
 
         // Build hub-repos.json by scanning sub-folders (url left empty to fill)
         let summaries = scan_repo_hub(hub_dir.clone()).unwrap_or_default();
@@ -1759,6 +1842,9 @@ fn generate_mini_server_files(
         server_js_content = server_js_content.replace("{{UPLOAD_LIMIT}}", &upload_limit.to_string());
         server_js_content = server_js_content.replace("{{ADMIN_PASSWORD}}", admin_password);
         server_js_content = server_js_content.replace("{{DOWNLOAD_PASSWORD}}", download_password);
+        // Blank on purpose — see write_access_gate. Only the owner knows the address their
+        // subscribers type, and a guess would refuse every proof for a reason nothing names.
+        server_js_content = server_js_content.replace("{{PUBLIC_ORIGIN}}", "");
 
         let public_dir = output_path.join("public");
         if !public_dir.exists() {
@@ -1767,6 +1853,8 @@ fn generate_mini_server_files(
 
         fs::write(output_path.join("package.json"), package_template).map_err(|_| "repo.errWritePackageJson".to_string())?;
         fs::write(output_path.join("server.js"), server_js_content).map_err(|_| "repo.errWriteServerJs".to_string())?;
+        write_access_gate(output_path)?;
+        write_access_starter(output_path)?;
         fs::write(public_dir.join("dashboard.html"), dashboard_template).map_err(|_| "repo.errWriteDashboardHtml".to_string())?;
         
         let bat_path = output_path.join("BMM-Standalone-Server.bat");
@@ -1788,6 +1876,11 @@ fn generate_mini_server_files(
         hybrid_content = hybrid_content.replace("CLOUDFLARE_BINARY_PLACEHOLDER", &cf_path.replace("\\", "/"));
         hybrid_content = hybrid_content.replace("UPLOAD_LIMIT_PLACEHOLDER", &upload_limit.to_string());
         hybrid_content = hybrid_content.replace("ADMIN_PASSWORD_PLACEHOLDER", admin_password);
+        hybrid_content = hybrid_content.replace("PUBLIC_ORIGIN_PLACEHOLDER", "");
+        // Both scripts read the same access.json beside them, so a folder generated for
+        // Windows and run on Linux (or the reverse) enforces the same thing.
+        write_access_gate(output_path)?;
+        write_access_starter(output_path)?;
 
         // 3. Write Windows Batch File
         let bat_path = output_path.join("BMM-Standalone-Server.bat");
@@ -1807,6 +1900,7 @@ fn generate_mini_server_files(
         linux_content = linux_content.replace("CLOUDFLARE_BINARY_PLACEHOLDER", &cf_path.replace("\\", "/"));
         linux_content = linux_content.replace("UPLOAD_LIMIT_PLACEHOLDER", &upload_limit.to_string());
         linux_content = linux_content.replace("ADMIN_PASSWORD_PLACEHOLDER", admin_password);
+        linux_content = linux_content.replace("PUBLIC_ORIGIN_PLACEHOLDER", "");
 
         let main_sh_path = output_path.join("BMM-Standalone-Server.sh");
         fs::write(&main_sh_path, linux_content).map_err(|_| "repo.errWriteScript".to_string())?;

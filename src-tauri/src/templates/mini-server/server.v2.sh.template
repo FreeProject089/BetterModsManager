@@ -7,6 +7,17 @@
  */
 
 const http = require('http');
+// The download password and the authorised public keys, read from access.json beside this
+// file at request time. Same module the Express edition uses, so a proof accepted by one
+// generated server is accepted by all of them. Loaded defensively: an older generated folder
+// with no access-gate.js keeps working exactly as it did.
+let checkAccess = null;
+try { ({ checkAccess } = require('./access-gate.js')); } catch (_) {}
+// The origin your subscribers dial — scheme, host and port, exactly as they type it. BMM
+// signs the address it dialled, so a proof addressed elsewhere is refused. Override with
+// "audience" in access.json, or the BMM_PUBLIC_ORIGIN environment variable.
+const PUBLIC_ORIGIN = process.env.BMM_PUBLIC_ORIGIN || 'PUBLIC_ORIGIN_PLACEHOLDER';
+
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
@@ -520,7 +531,7 @@ const DASHBOARD_HTML = `
 // ────────────────────────────────────────────────────────────
 //  SERVER CORE
 // ────────────────────────────────────────────────────────────
-const server = http.createServer((req, res) => {
+const server = http.createServer(async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Range, x-creator-key, x-creator-id, Authorization');
@@ -598,6 +609,21 @@ const server = http.createServer((req, res) => {
             res.statusCode = 403; res.end('Not Whitelisted'); 
             addToHistory(ip, key, "REJECTED", "Access denied (whitelist)");
             return; 
+        }
+
+        // Password / authorised keys. Last of the non-local checks: bans and the whitelist
+        // above are local file reads, this one may verify a signature.
+        if (checkAccess) {
+            const _q = {};
+            try {
+                new URL(req.url, 'http://x').searchParams.forEach((v, k) => { _q[k] = v; });
+            } catch (_) {}
+            const _gate = await checkAccess(__dirname, { headers: req.headers, query: _q }, PUBLIC_ORIGIN);
+            if (!_gate.ok) {
+                res.statusCode = _gate.status;
+                res.end(_gate.reason);
+                return;
+            }
         }
     }
 

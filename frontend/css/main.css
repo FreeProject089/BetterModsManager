@@ -16641,6 +16641,17 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
    a property of the CARD, so it is set once here rather than by each block deciding for
    itself. A hidden (:empty) block still occupies a DOM slot, so the gaps below it stay
    correct. */
+/* A class that was written and never styled.
+   `.card-desc` exists exactly once in the whole app — the catalogue-index card — and had no
+   rule at all, so it inherited and landed on --text-primary: the one description in Settings
+   rendered in near-white while every other card's sits in the muted tone. Nothing declared
+   that; it is what "no rule" happens to look like. Same values as .info-card-desc, which is
+   the house style for exactly this piece of text. */
+.card-desc {
+    font-size: 12.5px;
+    color: var(--text-muted);
+    line-height: 1.5;
+}
 #settings-catalog-index-card > * + * { margin-top: 14px; }
 #settings-catalog-index-card > .card-drag-handle { margin-top: 0; }
 

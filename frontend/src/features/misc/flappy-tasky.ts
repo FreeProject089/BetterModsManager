@@ -71,8 +71,20 @@ export function openFlappyTasky(): void {
     bird.src = live?.src || 'assets/Tasky_Happy.png';
 
     const W = canvas.width, H = canvas.height;
-    const SIZE = 38, GAP = 138, PIPE_W = 54, SPACING = 190;
-    const GRAVITY = 0.42, FLAP = -7.2, SPEED = 2.1;
+    // Easier, and mostly in one place: the gap between consecutive gaps.
+    //
+    // The numbers below were the small part of the problem. The big part was that each new
+    // gap was placed anywhere in `90 + random * (H - 180)`, so two pipes in a row could sit
+    // 300px apart vertically with ~90 frames between them — a jump nothing can clear, arriving
+    // at random. That is not difficulty, it is a coin flip, and it is what made the game feel
+    // unfair rather than hard. MAX_STEP bounds it; the rest is a wider gap and gentler physics.
+    const SIZE = 38, GAP = 172, PIPE_W = 54, SPACING = 225;
+    const GRAVITY = 0.34, FLAP = -6.4, SPEED = 1.75;
+    /** How far the gap centre may move from one pipe to the next. */
+    const MAX_STEP = 78;
+    /** Keeps a gap centre off the very top and bottom, where it needs a perfect flap. */
+    const MARGIN = GAP / 2 + 26;
+    const clampGap = (v: number) => Math.max(MARGIN, Math.min(H - MARGIN, v));
 
     let y = H / 2, vy = 0, score = 0, best = readBest();
     let pipes: Pipe[] = [];
@@ -83,6 +95,8 @@ export function openFlappyTasky(): void {
         y = H / 2; vy = 0; score = 0;
         // The first pipe starts a full screen away: dying before the game has been seen is
         // not a difficulty curve, it is a bug report.
+        // The first pipe is centred and a full screen away: dying before the game has been
+        // seen is a bug report, not a difficulty curve.
         pipes = [{ x: W + 60, gapY: H / 2, scored: false }];
         scoreEl.textContent = '0';
         state = 'ready';
@@ -120,7 +134,11 @@ export function openFlappyTasky(): void {
             y += vy;
             for (const p of pipes) p.x -= SPEED;
             if (pipes.length && pipes[pipes.length - 1].x < W - SPACING) {
-                pipes.push({ x: W, gapY: 90 + Math.random() * (H - 180), scored: false });
+                // Relative to the previous gap, not absolute: the next one is always reachable
+                // from where this one leaves you.
+                const prev = pipes[pipes.length - 1].gapY;
+                const next = clampGap(prev + (Math.random() * 2 - 1) * MAX_STEP);
+                pipes.push({ x: W, gapY: next, scored: false });
             }
             pipes = pipes.filter((p) => p.x > -PIPE_W);
         }
