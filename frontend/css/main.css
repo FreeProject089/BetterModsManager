@@ -17806,7 +17806,13 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
     position: absolute; border: 2px solid var(--accent);
     background: rgba(var(--accent-rgb, 59, 130, 246), 0.14);
     border-radius: 3px; transition: all .06s linear;
+    /* Hidden until the modifier is held. Without the modifier the app is being USED, and an
+       outline chasing the cursor over a screen you are navigating is noise. */
+    opacity: 0;
 }
+/* The bar stays visible the whole time — it is the only thing telling you the picker is
+   still open while you click around normally. */
+#tut-pick-layer:not(.is-armed) .tut-pick-tip { opacity: 0; }
 .tut-pick-tip {
     position: absolute; font-family: var(--font-mono, monospace); font-size: 11px;
     padding: 2px 7px; border-radius: 4px; white-space: nowrap; max-width: 60vw;
@@ -17824,6 +17830,11 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
     border: 1px solid var(--border); box-shadow: 0 8px 30px rgba(0,0,0,.45);
 }
 .tut-pick-esc { font-size: 11px; color: var(--text-muted); }
+
+/* The condition editor answers as you type. Bad reads red; good and the help line read
+   quiet — a green message for "this parses" would be louder than the fact deserves. */
+.tutc-hint { font-size: 11px; color: var(--text-muted); margin: 3px 2px 0; line-height: 1.4; }
+.tutc-hint.is-bad { color: var(--danger, #ef4444); }
 
 
 /* A quiet footer inside a mapper panel: the one fact the screen does not show by itself,

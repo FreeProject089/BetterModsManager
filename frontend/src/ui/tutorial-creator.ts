@@ -24,6 +24,7 @@
 // says which.
 
 import { invoke } from '../core/api.js';
+import { checkCondition } from './tutorial-expr.js';
 import { t } from '../core/i18n.js';
 import { toast } from './app.js';
 import { getCustomDoc, type CustomTutorialDoc } from './tutorial-custom.js';
@@ -282,6 +283,10 @@ function stepEditor(part: Doc['parts'][0], st: Doc['parts'][0]['steps'][0], si: 
         ['appear', t('tutc.wait.appear')],
         ['disappear', t('tutc.wait.disappear')],
         ['view', t('tutc.wait.view')],
+        ['text', t('tutc.wait.text')],
+        ['value', t('tutc.wait.value')],
+        ['enabled', t('tutc.wait.enabled')],
+        ['custom', t('tutc.wait.custom')],
     ] as const) {
         const o = document.createElement('option');
         o.value = v; o.textContent = label;
@@ -315,7 +320,8 @@ function stepEditor(part: Doc['parts'][0], st: Doc['parts'][0]['steps'][0], si: 
         box.append(labelled(t('tutc.wait.which'), act));
     }
 
-    if (w && (w.kind === 'click' || w.kind === 'appear' || w.kind === 'disappear')) {
+    if (w && (w.kind === 'click' || w.kind === 'appear' || w.kind === 'disappear'
+        || w.kind === 'text' || w.kind === 'value' || w.kind === 'enabled')) {
         const wrow = el('div', 'tutc-step-row');
         const wsel = input(w.selector || '', t('tutc.selectorPh'), (v) => {
             st.wait = { ...(st.wait || { kind: w.kind }), selector: v || undefined };
@@ -334,6 +340,35 @@ function stepEditor(part: Doc['parts'][0], st: Doc['parts'][0]['steps'][0], si: 
         });
         wrow.append(wpick);
         box.append(labelled(t('tutc.wait.selector'), wrow));
+    }
+
+    // The text to wait for. Empty is meaningful and the hint says so: for a value it means
+    // "anything at all", which is what "until the box is filled in" actually is.
+    if (w && (w.kind === 'text' || w.kind === 'value')) {
+        const ti = input(w.text || '', t('tutc.wait.textPh'), (v) => {
+            st.wait = { ...(st.wait || { kind: w.kind }), text: v || undefined };
+        });
+        box.append(labelled(t(w.kind === 'value' ? 'tutc.wait.valueLbl' : 'tutc.wait.textLbl'), ti));
+    }
+
+    if (w?.kind === 'custom') {
+        // Checked as it is typed. The condition is parsed, not eval'd, so the parser can say
+        // exactly what is wrong — and an author finding out at authoring time beats a reader
+        // finding out by pressing Next on a step that never unlocks.
+        const msg = el('div', 'tutc-hint', '');
+        const validate = (v: string) => {
+            if (!v.trim()) { msg.textContent = t('tutc.wait.exprHelp'); msg.classList.remove('is-bad'); return; }
+            const r = checkCondition(v);
+            msg.textContent = r.ok ? t('tutc.wait.exprOk') : r.error;
+            msg.classList.toggle('is-bad', !r.ok);
+        };
+        const ex = input(w.expr || '', t('tutc.wait.exprPh'), (v) => {
+            st.wait = { ...(st.wait || { kind: 'custom' }), expr: v || undefined };
+            validate(v);
+        });
+        validate(w.expr || '');
+        box.append(labelled(t('tutc.wait.exprLbl'), ex));
+        box.append(msg);
     }
 
     if (w?.kind === 'view') {

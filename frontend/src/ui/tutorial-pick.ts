@@ -106,19 +106,39 @@ export function pickElement(hint: string, cancelLabel: string): Promise<PickResu
         frame.append(layer);
 
         let current: Element | null = null;
+        // Whether the modifier is down RIGHT NOW. Tracked rather than read off the click,
+        // because the outline has to appear while moving the mouse — before there is a click
+        // to read it from.
+        let armed = false;
 
         const finish = (r: PickResult | null) => {
             document.removeEventListener('mousemove', onMove, true);
             document.removeEventListener('click', onClick, true);
             document.removeEventListener('keydown', onKey, true);
+            document.removeEventListener('keyup', onKeyUp, true);
+            window.removeEventListener('blur', onBlur);
             document.removeEventListener('contextmenu', onCancel, true);
             layer.remove();
             resolve(r);
         };
 
+        /** Show or hide the outline. Hidden means the app is being used normally. */
+        const setArmed = (on: boolean) => {
+            if (armed === on) return;
+            armed = on;
+            layer.classList.toggle('is-armed', on);
+            if (!on) { box.style.opacity = '0'; tip.style.opacity = '0'; current = null; }
+            else { box.style.opacity = ''; tip.style.opacity = ''; }
+        };
+
         const onMove = (e: MouseEvent) => {
             // The layer must not find ITSELF under the cursor.
             layer.style.pointerEvents = 'none';
+            // Ctrl (or Cmd) tracked from the move as well as from key events: entering the
+            // window with the key already held fires no keydown, and the outline would stay
+            // hidden until you let go and pressed it again.
+            setArmed(e.ctrlKey || e.metaKey);
+            if (!armed) return;
             const el = document.elementFromPoint(e.clientX, e.clientY);
             if (!el || el === current || layer.contains(el)) return;
             current = el;
@@ -132,19 +152,34 @@ export function pickElement(hint: string, cancelLabel: string): Promise<PickResu
         };
 
         const onClick = (e: MouseEvent) => {
+            // WITHOUT the modifier the click is none of our business. Not prevented, not
+            // stopped — it reaches the app and opens the panel the author is trying to get
+            // to. Swallowing it is what made the picker useless for anything not already on
+            // screen.
+            if (!(e.ctrlKey || e.metaKey)) return;
             e.preventDefault();
             e.stopPropagation();
             const el = document.elementFromPoint(e.clientX, e.clientY);
             finish(el && !layer.contains(el) ? selectorFor(el) : null);
         };
-        const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finish(null); } };
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finish(null); return; }
+            if (e.key === 'Control' || e.key === 'Meta') setArmed(true);
+        };
+        const onKeyUp = (e: KeyboardEvent) => { if (e.key === 'Control' || e.key === 'Meta') setArmed(false); };
+        // The window losing focus while the key is held leaves `armed` true for ever — the
+        // keyup lands in whatever took focus, not here.
+        const onBlur = () => setArmed(false);
         const onCancel = (e: Event) => { e.preventDefault(); finish(null); };
 
         // Capture phase throughout: the app is full of its own click handlers, and a pick
-        // must never also press the button it is pointing at.
+        // must never also press the button it is pointing at. The click handler bails out
+        // early when the modifier is up, so this costs the app nothing the rest of the time.
         document.addEventListener('mousemove', onMove, true);
         document.addEventListener('click', onClick, true);
         document.addEventListener('keydown', onKey, true);
+        document.addEventListener('keyup', onKeyUp, true);
+        window.addEventListener('blur', onBlur);
         document.addEventListener('contextmenu', onCancel, true);
     });
 }

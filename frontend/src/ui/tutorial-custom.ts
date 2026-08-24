@@ -18,6 +18,7 @@
 // project, not a line.
 
 import { invoke, pickFile, saveFile } from '../core/api.js';
+import { compileCondition } from './tutorial-expr.js';
 import { registerRuntimeTexts, getLang, t } from '../core/i18n.js';
 import type { TutorialDef } from './tutorial-types.js';
 
@@ -46,10 +47,16 @@ export interface CustomTutorialDoc {
             /** A condition to satisfy before Next unlocks. `kind:'action'` names one of the
              *  app's own moments; the others are watched here. */
             wait?: {
-                kind: 'action' | 'click' | 'appear' | 'disappear' | 'view';
+                kind: 'action' | 'click' | 'appear' | 'disappear' | 'view'
+                    | 'text' | 'value' | 'enabled' | 'custom';
                 event?: string;      // kind 'action'
-                selector?: string;   // kind click | appear | disappear
+                selector?: string;   // click | appear | disappear | text | value | enabled
                 view?: string;       // kind 'view'
+                /** kind 'text' | 'value': what to wait for. Empty means "anything at all",
+                 *  which is what "until the box is filled in" means. */
+                text?: string;
+                /** kind 'custom': a JS expression, true when the step is done. */
+                expr?: string;
                 desc?: LText;
             };
         }>;
@@ -226,6 +233,79 @@ export function armWatchers(doc: CustomTutorialDoc): void {
             obs.observe(document.body, { childList: true, subtree: true, attributes: true,
                 attributeFilter: ['class', 'style', 'hidden'] });
             _armed.push(() => obs.disconnect());
+            return;
+        }
+
+        // ── content conditions ──
+        //
+        // All three watch the same way: a MutationObserver over the document, and a
+        // predicate re-evaluated whenever anything changes. `characterData` is in the filter
+        // because a counter that goes 11 -> 12 changes no element and no attribute — only
+        // the text node — and without it the most obvious of these would never fire.
+        if ((w.kind === 'text' || w.kind === 'value' || w.kind === 'enabled') && w.selector) {
+            const sel = w.selector;
+            const want = (w.text || '').trim().toLowerCase();
+            const test = (): boolean => {
+                const n = document.querySelector(sel) as HTMLElement | null;
+                if (!n) return false;
+                if (w.kind === 'enabled') {
+                    return !(n as HTMLButtonElement).disabled
+                        && n.getAttribute('aria-disabled') !== 'true'
+                        && !n.classList.contains('disabled');
+                }
+                const got = (w.kind === 'value'
+                    ? String((n as HTMLInputElement).value ?? '')
+                    : (n.textContent || '')).trim().toLowerCase();
+                // No target text means "anything non-empty" — the form-filling case.
+                return want ? got.includes(want) : got.length > 0;
+            };
+            let last = test();
+            const obs = new MutationObserver(() => {
+                const now = test();
+                if (now && !last) fire();
+                last = now;
+            });
+            obs.observe(document.body, {
+                childList: true, subtree: true, attributes: true, characterData: true,
+            });
+            // An <input> fires no mutation when a person types into it — its `value` is a
+            // property, not an attribute — so the same predicate is also polled from input
+            // events. Both paths, because a value can also be set by code.
+            const onInput = () => { const now = test(); if (now && !last) fire(); last = now; };
+            if (w.kind === 'value') document.addEventListener('input', onInput, true);
+            _armed.push(() => { obs.disconnect(); document.removeEventListener('input', onInput, true); });
+            return;
+        }
+
+        if (w.kind === 'custom' && w.expr) {
+            // Parsed, not eval'd. `new Function` is blocked by BMM's own CSP — the first
+            // version of this failed silently in the app while working in a devtools probe,
+            // because devtools is exempt from the page policy and the page is not. Adding
+            // 'unsafe-eval' to ship a tutorial convenience would have been a bad trade.
+            let fn: (() => boolean) | null = null;
+            try { fn = compileCondition(w.expr); }
+            catch (e) {
+                console.warn('[tutorial] condition did not parse:', (e as Error).message);
+                return;
+            }
+            const test = fn;
+            let last = test();
+            const obs = new MutationObserver(() => {
+                const now = test();
+                if (now && !last) fire();
+                last = now;
+            });
+            obs.observe(document.body, { childList: true, subtree: true, attributes: true, characterData: true });
+            // A typed value changes no attribute and no text node, so input events are
+            // watched too; clicks because a condition can turn on as a side effect of one.
+            const onAny = () => { const now = test(); if (now && !last) fire(); last = now; };
+            document.addEventListener('input', onAny, true);
+            document.addEventListener('click', onAny, true);
+            _armed.push(() => {
+                obs.disconnect();
+                document.removeEventListener('input', onAny, true);
+                document.removeEventListener('click', onAny, true);
+            });
             return;
         }
 

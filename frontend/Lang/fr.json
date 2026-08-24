@@ -8004,7 +8004,7 @@
   "tutcat.install": "Installer",
   "tutc.pick": "Pointer…",
   "tutc.pickTip": "Désigne un élément dans l'application et récupère son sélecteur.",
-  "tutc.pickHint": "Clique l'élément que cette étape doit surligner.",
+  "tutc.pickHint": "Ctrl+clic sur l’élément pour le choisir — cliquez normalement pour naviguer d’abord dans l’application.",
   "tutc.pickCancel": "Échap pour annuler",
   "tutc.pickOk": "Sélecteur capturé.",
   "tutc.pickWeak": "Capturé — mais c'est un chemin positionnel. Cet élément n'a ni id ni classe stable : ça peut ne rien trouver sur une autre installation.",
@@ -8079,5 +8079,16 @@
   "navedit.pagefileDelT": "Supprimer ce fichier ?",
   "navedit.pagefileDelD": "tout ce qui le référence cessera de fonctionner.",
   "navedit.imported": "importé(s)",
-  "navedit.skipped": "ignoré(s)"
+  "navedit.skipped": "ignoré(s)",
+  "tutc.wait.text": "le texte devient…",
+  "tutc.wait.value": "un champ est rempli",
+  "tutc.wait.enabled": "un contrôle devient utilisable",
+  "tutc.wait.custom": "ma propre condition",
+  "tutc.wait.textLbl": "Texte attendu",
+  "tutc.wait.valueLbl": "Valeur attendue (vide = n’importe laquelle)",
+  "tutc.wait.textPh": "laissez vide pour « n’importe quoi »",
+  "tutc.wait.exprLbl": "Condition (JavaScript)",
+  "tutc.wait.exprPh": "count('.mod-row') > 3",
+  "tutc.wait.exprHelp": "count / text / value / exists / visible / enabled, avec and · or · not · contains. ex. visible('#modal-x') and count('.row') > 2",
+  "tutc.wait.exprOk": "Se lit correctement."
 }

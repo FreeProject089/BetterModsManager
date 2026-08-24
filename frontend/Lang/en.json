@@ -8006,7 +8006,7 @@
   "tutcat.install": "Install",
   "tutc.pick": "Pick…",
   "tutc.pickTip": "Point at an element in the app and take its selector.",
-  "tutc.pickHint": "Click the element this step should highlight.",
+  "tutc.pickHint": "Ctrl+click the element to pick it — click normally to move around the app first.",
   "tutc.pickCancel": "Esc to cancel",
   "tutc.pickOk": "Selector captured.",
   "tutc.pickWeak": "Captured — but it is a positional path. That element has no id or stable class, so this may not match on another install.",
@@ -8081,5 +8081,16 @@
   "navedit.pagefileDelT": "Delete this file?",
   "navedit.pagefileDelD": "anything referencing it stops working.",
   "navedit.imported": "imported",
-  "navedit.skipped": "skipped"
+  "navedit.skipped": "skipped",
+  "tutc.wait.text": "text becomes…",
+  "tutc.wait.value": "a field is filled in",
+  "tutc.wait.enabled": "a control becomes usable",
+  "tutc.wait.custom": "my own condition",
+  "tutc.wait.textLbl": "Text to wait for",
+  "tutc.wait.valueLbl": "Value to wait for (empty = anything)",
+  "tutc.wait.textPh": "leave empty for “anything”",
+  "tutc.wait.exprLbl": "Condition (JavaScript)",
+  "tutc.wait.exprPh": "count('.mod-row') > 3",
+  "tutc.wait.exprHelp": "count / text / value / exists / visible / enabled, with and · or · not · contains. e.g. visible('#modal-x') and count('.row') > 2",
+  "tutc.wait.exprOk": "Reads correctly."
 }
