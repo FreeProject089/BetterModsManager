@@ -5811,6 +5811,17 @@ body.tut-docked.tut-min .app-shell {
 }
 .code-hl-mirror > code { font: inherit; background: none; padding: 0; display: block; }
 
+/* Past the size ceiling the mirror is removed and the textarea has to show its own text
+   again — otherwise it stays transparent over nothing and the editor looks empty. */
+.code-hl-wrap > textarea.code-hl-off {
+    color: var(--text-primary, #e6edf3) !important;
+    background: var(--bg-input, var(--bg-secondary, #0f1523));
+}
+.code-hl-note {
+    font-size: 11px; color: var(--text-muted, #64748b);
+    margin: 4px 2px 0; display: flex; align-items: center; gap: 5px;
+}
+
 /* The document strip inside a custom page's editor. Reads as tabs because that is what it
    is: one HTML box showing whichever document is selected. */
 .nbe-subpages { margin: 10px 0 4px; }
@@ -5832,6 +5843,26 @@ body.tut-docked.tut-min .app-shell {
 .nbe-subpage-del:hover { color: var(--danger, #ef4444); }
 .nbe-subpage-add { display: flex; gap: 6px; align-items: center; }
 .nbe-subpage-add .input { flex: 1; min-width: 0; }
+
+/* The bundle's own files. A list, not a tree: a page holds tens of files, not thousands,
+   and a relative path reads faster than a folder you have to open. */
+.nbe-pagefiles { margin: 10px 0 4px; }
+.nbe-pagefiles-list { max-height: 190px; overflow-y: auto; margin: 6px 0 8px; }
+.nbe-pagefile {
+    display: flex; align-items: center; gap: 8px; font-size: 12px;
+    padding: 3px 6px; border-radius: 6px;
+}
+.nbe-pagefile:hover { background: var(--bg-secondary, #131b2b); }
+.nbe-pagefile-path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono, monospace); }
+.nbe-pagefile-size { color: var(--text-muted, #64748b); font-variant-numeric: tabular-nums; }
+/* The page's own files are dimmed rather than hidden: knowing bmm.js is there is the
+   difference between "where did my SDK go" and "that one is not mine to delete". */
+.nbe-pagefile.is-reserved .nbe-pagefile-path { color: var(--text-muted, #64748b); }
+.nbe-pagefile-lock { color: var(--text-muted, #64748b); font-size: 8px; padding: 0 6px; }
+.nbe-pagefile-del { background: none; border: none; cursor: pointer; color: var(--text-muted, #64748b); font-size: 14px; line-height: 1; padding: 0 4px; }
+.nbe-pagefile-del:hover { color: var(--danger, #ef4444); }
+.nbe-pagefile-add { display: flex; gap: 6px; align-items: center; }
+.nbe-pagefile-add .input { flex: 1; min-width: 0; }
 
 /* The Share/Import menu in the editor's actions bar — opens UPWARD (the bar is the
    modal's bottom edge). Opaque surface: a translucent menu renders its labels over

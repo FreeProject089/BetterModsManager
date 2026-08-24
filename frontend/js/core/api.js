@@ -201,6 +201,23 @@ export async function pickFolder() {
         return null;
     }
 }
+/**
+ * Several files at once.
+ *
+ * A separate function rather than an option on `pickFile`: widening that one's return type
+ * to `string | string[]` broke three existing call sites that reasonably assume a string,
+ * and every one of them would have had to grow a check for a case it can never see. The
+ * compiler caught it, which is the argument for not doing it.
+ */
+export async function pickFiles(filters) {
+    try {
+        const r = await _dialog.open({ multiple: true, ...(filters?.length ? { filters } : {}) });
+        return Array.isArray(r) ? r : (r ? [r] : []);
+    }
+    catch {
+        return [];
+    }
+}
 export async function pickFile(options = []) {
     try {
         let dialogOptions = { multiple: false };

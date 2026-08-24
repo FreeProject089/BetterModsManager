@@ -8069,5 +8069,17 @@
   "docs.diagram.deeplinks.node.TOAST.desc": "Every route ends in a visible result — a toast, a screen, or an error naming what was wrong. A link that quietly did nothing is the failure this avoids.",
   "iconpack.mine": "Yours",
   "iconpack.mineEmpty": "Nothing here yet — upload an icon and it stays in this tab.",
-  "iconpack.forget": "Remove from your icons"
+  "iconpack.forget": "Remove from your icons",
+  "navedit.hlOff": "Syntax colours are off above ~100 KB — editing stays fast.",
+  "navedit.pagefiles": "Files in this page",
+  "navedit.pagefilesHint": "Reference them with a relative path — src=\"assets/logo.png\". Folders are kept as they are.",
+  "navedit.pagefilesNone": "Nothing but the page itself.",
+  "navedit.pagefileDest": "folder (assets)",
+  "navedit.addFiles": "Add files…",
+  "navedit.addFolder": "Add a folder…",
+  "navedit.pagefileOwn": "Part of the page itself",
+  "navedit.pagefileDelT": "Delete this file?",
+  "navedit.pagefileDelD": "anything referencing it stops working.",
+  "navedit.imported": "imported",
+  "navedit.skipped": "skipped"
 }

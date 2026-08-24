@@ -39,6 +39,27 @@ export interface CodeEditorHandle {
 }
 
 /**
+ * Above this many characters the mirror is not worth what it costs.
+ *
+ * MEASURED, not guessed. Prism tokenising this document and building its markup:
+ *
+ *      1 000 lines /  85 KB ->  46 ms, 1.1 MB of HTML
+ *      3 000 lines / 255 KB -> 116 ms, 3.2 MB
+ *      6 000 lines / 510 KB -> 299 ms, 6.5 MB
+ *     10 000 lines / 850 KB -> 475 ms, 10.8 MB
+ *
+ * And that is before the browser turns the markup into tens of thousands of DOM nodes,
+ * which costs more than the tokenising did. It runs 90 ms after every pause in typing, so a
+ * three-thousand-line page would stutter on every keystroke and six thousand would be
+ * unusable.
+ *
+ * 100 KB is roughly 1200 lines of this kind of code, where the whole cycle is still around
+ * 50 ms. Past it the textarea goes back to being a plain textarea — which is fast at any
+ * size, because that is what a textarea is for.
+ */
+export const HIGHLIGHT_MAX_CHARS = 100_000;
+
+/**
  * Give one textarea a highlighted backdrop.
  *
  * Degrades to an ordinary textarea if anything is missing — no Prism, not a textarea, already
@@ -70,7 +91,22 @@ export function attachHighlight(ta: HTMLTextAreaElement | null, language: string
         mirror.scrollTop = ta.scrollTop;
         mirror.scrollLeft = ta.scrollLeft;
     };
+    // Whether the mirror is doing anything at all. A document can cross the ceiling
+    // mid-edit — pasting three thousand lines in is the normal way to get there — so this
+    // is re-decided on every paint rather than once at attach.
+    let tooBig = false;
     const paint = () => {
+        const big = ta.value.length > HIGHLIGHT_MAX_CHARS;
+        if (big !== tooBig) {
+            tooBig = big;
+            // Emptied, not just left stale: a hidden 3 MB subtree still costs memory and
+            // is still walked by anything that queries the document.
+            if (big) code.textContent = '';
+            mirror.style.display = big ? 'none' : '';
+            ta.classList.toggle('code-hl-off', big);
+            ta.dispatchEvent(new CustomEvent('bmm:highlight-limit', { bubbles: true, detail: { off: big, chars: ta.value.length } }));
+        }
+        if (big) return;
         // The trailing space is load-bearing: a value ending in a newline leaves the mirror's
         // last line empty, an empty last line has no height, and the mirror ends up one line
         // shorter than the textarea — so the last line drifts out of alignment when scrolled.

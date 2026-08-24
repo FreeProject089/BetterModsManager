@@ -427,6 +427,282 @@ pub fn create_custom_page<R: Runtime>(
 /// Copy a picked file (e.g. a `.wasm` module, image, or `.js`) into a page's
 /// bundle so the page can load it (`fetch('module.wasm')`, `<img src>`, …).
 /// Validates the destination name and extension, and caps the size.
+/// A relative path inside a page bundle, validated as a path rather than as a name.
+///
+/// `import_page_file` only ever accepted a bare filename, which is why a bundle could not
+/// have folders. This accepts `assets/img/logo.png` and refuses everything that is not that:
+/// an absolute path, a Windows drive, a `..` segment, an empty or dot-leading segment, and
+/// anything over eight levels deep or 200 characters.
+///
+/// It is the FIRST of two checks. The second is on the resolved path — a symlink pointing
+/// out of the bundle contains no `..` and would sail through this one.
+fn sanitize_rel(rel: &str) -> Option<String> {
+    let r = rel.trim().replace('\\', "/");
+    if r.is_empty() || r.len() > 200 || r.starts_with('/') || r.contains(':') {
+        return None;
+    }
+    let parts: Vec<&str> = r.split('/').filter(|p| !p.is_empty()).collect();
+    if parts.is_empty() || parts.len() > 8 {
+        return None;
+    }
+    for p in &parts {
+        if *p == ".." || p.starts_with('.') || p.len() > 64 {
+            return None;
+        }
+    }
+    Some(parts.join("/"))
+}
+
+/// Extensions a page bundle may hold. Shared by the single-file and whole-folder imports so
+/// they cannot drift — a type refused one way and accepted the other is the kind of gap
+/// nobody finds on purpose.
+fn page_ext_ok(name: &str) -> bool {
+    let n = name.to_ascii_lowercase();
+    [
+        ".wasm", ".js", ".mjs", ".json", ".css", ".html", ".png", ".jpg", ".jpeg", ".gif",
+        ".svg", ".webp", ".avif", ".woff", ".woff2", ".ttf", ".otf", ".txt", ".csv", ".md",
+        ".mp3", ".ogg", ".wav", ".mp4", ".webm",
+    ]
+    .iter()
+    .any(|e| n.ends_with(e))
+}
+
+/// Never overwritable, whatever the path says: the SDK and the entry document.
+fn page_reserved(rel: &str) -> bool {
+    matches!(rel, "bmm.js" | "index.html" | "manifest.json")
+}
+
+/// The whole bundle, biggest first, as a flat list of relative paths.
+#[derive(serde::Serialize)]
+pub struct PageFile {
+    pub path: String,
+    pub bytes: u64,
+    pub reserved: bool,
+}
+
+/// What is actually in a page's folder.
+///
+/// The bundle used to be write-only — you could import a file and never see it again. This
+/// is what makes it a folder you can work in rather than a place things disappear into.
+#[tauri::command]
+pub fn list_page_files<R: Runtime>(app: AppHandle<R>, id: String) -> Vec<PageFile> {
+    let id = match sanitize_id(&id) {
+        Some(i) => i,
+        None => return Vec::new(),
+    };
+    let root = pages_root(&app).join(&id);
+    let mut out = Vec::new();
+    fn walk(dir: &std::path::Path, root: &std::path::Path, out: &mut Vec<PageFile>, depth: usize) {
+        if depth > 8 || out.len() > 2000 {
+            return;
+        }
+        if let Ok(rd) = std::fs::read_dir(dir) {
+            for e in rd.flatten() {
+                let p = e.path();
+                if p.is_dir() {
+                    walk(&p, root, out, depth + 1);
+                } else if let Ok(rel) = p.strip_prefix(root) {
+                    let rel = rel.to_string_lossy().replace('\\', "/");
+                    let bytes = std::fs::metadata(&p).map(|m| m.len()).unwrap_or(0);
+                    let reserved = page_reserved(&rel);
+                    out.push(PageFile { path: rel, bytes, reserved });
+                }
+            }
+        }
+    }
+    walk(&root, &root, &mut out, 0);
+    out.sort_by(|a, b| b.bytes.cmp(&a.bytes));
+    out
+}
+
+/// Copy one file in, anywhere in the bundle.
+#[tauri::command]
+pub fn import_page_path<R: Runtime>(
+    app: AppHandle<R>,
+    id: String,
+    src_path: String,
+    dest_rel: String,
+) -> Result<String, String> {
+    let id = sanitize_id(&id).ok_or("invalid id")?;
+    let rel = sanitize_rel(&dest_rel).ok_or("invalid destination path")?;
+    if page_reserved(&rel) {
+        return Err("reserved name".into());
+    }
+    if !page_ext_ok(&rel) {
+        return Err("unsupported file type".into());
+    }
+    let root = pages_root(&app).join(&id);
+    if !root.exists() {
+        return Err("page not found".into());
+    }
+    let meta = std::fs::metadata(&src_path).map_err(|e| e.to_string())?;
+    if meta.len() > 16 * 1024 * 1024 {
+        return Err("file too large (max 16 MB)".into());
+    }
+    let dest = root.join(&rel);
+    if let Some(parent) = dest.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    // The second check, on the RESOLVED path. Canonicalising the parent (the file may not
+    // exist yet) and confirming it is still inside the bundle is what a `..`-free symlink
+    // cannot get past.
+    let (cr, cd) = (
+        std::fs::canonicalize(&root).map_err(|e| e.to_string())?,
+        std::fs::canonicalize(dest.parent().unwrap_or(&root)).map_err(|e| e.to_string())?,
+    );
+    if !cd.starts_with(&cr) {
+        return Err("destination escapes the page folder".into());
+    }
+    std::fs::copy(&src_path, &dest).map_err(|e| e.to_string())?;
+    Ok(rel)
+}
+
+/// Copy a whole folder in, keeping its shape.
+///
+/// Returns what it took and what it skipped, because a silent partial copy is worse than a
+/// refusal: an author whose fonts folder half-arrived would debug their CSS.
+#[derive(serde::Serialize)]
+pub struct ImportReport {
+    pub copied: Vec<String>,
+    pub skipped: Vec<String>,
+    pub bytes: u64,
+}
+
+#[tauri::command]
+pub fn import_page_dir<R: Runtime>(
+    app: AppHandle<R>,
+    id: String,
+    src_dir: String,
+    dest_rel: String,
+) -> Result<ImportReport, String> {
+    let id = sanitize_id(&id).ok_or("invalid id")?;
+    // An empty destination means the bundle root; otherwise a validated sub-path.
+    let base = if dest_rel.trim().is_empty() {
+        String::new()
+    } else {
+        sanitize_rel(&dest_rel).ok_or("invalid destination path")?
+    };
+    let root = pages_root(&app).join(&id);
+    if !root.exists() {
+        return Err("page not found".into());
+    }
+    let src = std::path::Path::new(&src_dir);
+    if !src.is_dir() {
+        return Err("not a folder".into());
+    }
+
+    let mut rep = ImportReport { copied: Vec::new(), skipped: Vec::new(), bytes: 0 };
+
+    // Bounded on all three axes a runaway copy could blow: depth, file count, total bytes.
+    // A page bundle is a page, not a backup target.
+    fn walk(
+        dir: &std::path::Path,
+        srcroot: &std::path::Path,
+        root: &std::path::Path,
+        base: &str,
+        rep: &mut ImportReport,
+        depth: usize,
+    ) {
+        if depth > 6 || rep.copied.len() >= 500 || rep.bytes >= 64 * 1024 * 1024 {
+            return;
+        }
+        let rd = match std::fs::read_dir(dir) { Ok(r) => r, Err(_) => return };
+        for e in rd.flatten() {
+            let p = e.path();
+            let rel_src = match p.strip_prefix(srcroot) { Ok(r) => r, Err(_) => continue };
+            let rel = rel_src.to_string_lossy().replace('\\', "/");
+            let target = if base.is_empty() { rel.clone() } else { format!("{}/{}", base, rel) };
+            if p.is_dir() {
+                walk(&p, srcroot, root, base, rep, depth + 1);
+                continue;
+            }
+            let clean = match sanitize_rel(&target) { Some(c) => c, None => { rep.skipped.push(rel); continue } };
+            if page_reserved(&clean) || !page_ext_ok(&clean) {
+                rep.skipped.push(rel);
+                continue;
+            }
+            let size = std::fs::metadata(&p).map(|m| m.len()).unwrap_or(0);
+            if size > 16 * 1024 * 1024 || rep.bytes + size > 64 * 1024 * 1024 {
+                rep.skipped.push(rel);
+                continue;
+            }
+            let dest = root.join(&clean);
+            if let Some(parent) = dest.parent() {
+                if std::fs::create_dir_all(parent).is_err() { rep.skipped.push(rel); continue; }
+            }
+            match (std::fs::canonicalize(root), std::fs::canonicalize(dest.parent().unwrap_or(root))) {
+                (Ok(cr), Ok(cd)) if cd.starts_with(&cr) => {}
+                _ => { rep.skipped.push(rel); continue }
+            }
+            if std::fs::copy(&p, &dest).is_ok() {
+                rep.bytes += size;
+                rep.copied.push(clean);
+            } else {
+                rep.skipped.push(rel);
+            }
+        }
+    }
+    walk(src, src, &root, &base, &mut rep, 0);
+    Ok(rep)
+}
+
+/// Remove one file from a bundle. Never the SDK, the entry, or the manifest.
+#[tauri::command]
+pub fn delete_page_file<R: Runtime>(app: AppHandle<R>, id: String, rel: String) -> Result<(), String> {
+    let id = sanitize_id(&id).ok_or("invalid id")?;
+    let rel = sanitize_rel(&rel).ok_or("invalid path")?;
+    if page_reserved(&rel) {
+        return Err("that file belongs to the page itself".into());
+    }
+    let root = pages_root(&app).join(&id);
+    let target = root.join(&rel);
+    match (std::fs::canonicalize(&root), std::fs::canonicalize(&target)) {
+        (Ok(cr), Ok(ct)) if ct.starts_with(&cr) => {
+            std::fs::remove_file(&ct).map_err(|e| e.to_string())?;
+            Ok(())
+        }
+        _ => Err("not in this page".into()),
+    }
+}
+
+#[cfg(test)]
+mod page_asset_tests {
+    use super::{sanitize_rel, page_ext_ok, page_reserved};
+
+    /// The string check. It cannot see symlinks — that is what the canonicalise in each
+    /// command is for — but everything spelled as an escape has to die here.
+    #[test]
+    fn a_destination_path_is_validated_as_a_path() {
+        assert_eq!(sanitize_rel("assets/img/logo.png"), Some("assets/img/logo.png".to_string()));
+        assert_eq!(sanitize_rel("assets\\img\\logo.png"), Some("assets/img/logo.png".to_string()));
+        assert_eq!(sanitize_rel("a//b/c.png"), Some("a/b/c.png".to_string()));
+        assert_eq!(sanitize_rel("../../etc/passwd"), None);
+        assert_eq!(sanitize_rel("a/../../b.png"), None);
+        assert_eq!(sanitize_rel("/etc/passwd"), None);
+        assert_eq!(sanitize_rel("C:/Windows/system32"), None);
+        assert_eq!(sanitize_rel(".hidden/x.png"), None);
+        assert_eq!(sanitize_rel(""), None);
+        assert_eq!(sanitize_rel("a/b/c/d/e/f/g/h/i/j.png"), None); // deeper than 8
+    }
+
+    #[test]
+    fn the_page_cannot_be_overwritten_by_its_own_assets() {
+        assert!(page_reserved("bmm.js"));
+        assert!(page_reserved("index.html"));
+        assert!(page_reserved("manifest.json"));
+        assert!(!page_reserved("assets/bmm.js")); // a copy in a folder is not the SDK
+    }
+
+    #[test]
+    fn only_the_types_a_page_can_use() {
+        assert!(page_ext_ok("a/b/logo.PNG"));
+        assert!(page_ext_ok("font.woff2"));
+        assert!(!page_ext_ok("payload.exe"));
+        assert!(!page_ext_ok("script.bat"));
+        assert!(!page_ext_ok("noextension"));
+    }
+}
+
 #[tauri::command]
 pub fn import_page_file<R: Runtime>(
     app: AppHandle<R>,

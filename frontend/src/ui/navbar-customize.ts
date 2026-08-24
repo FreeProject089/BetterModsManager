@@ -4,7 +4,7 @@
 
 import { t } from '../core/i18n.js';
 import { attachHighlight, type CodeEditorHandle } from './code-editor.js';
-import { invoke, pickFile, saveFile } from '../core/api.js';
+import { invoke, pickFile, pickFiles, pickFolder, saveFile } from '../core/api.js';
 import { initPageBroker, refreshGrants } from './custom-page-broker.js';
 import { showConfirm } from './confirm.js';
 
@@ -643,6 +643,18 @@ export function openNavbarEditor(): void {
                             <button class="btn btn-xs" id="nbe-subpage-add">${t('common.add') || 'Add'}</button>
                         </div>
                     </div>
+                    <!-- The bundle's own files. Same rule as the document strip: it needs a
+                         page to belong to, so it appears only while one is being edited. -->
+                    <div id="nbe-pagefiles" class="nbe-pagefiles" style="display:none">
+                        <label class="nbe-flbl">${t('navedit.pagefiles') || 'Files in this page'}</label>
+                        <p class="nbe-sub">${t('navedit.pagefilesHint') || 'Reference them with a relative path — src="assets/logo.png". Folders are kept as they are.'}</p>
+                        <div id="nbe-pagefiles-list" class="nbe-pagefiles-list"></div>
+                        <div class="nbe-pagefile-add">
+                            <input class="input" id="nbe-pagefile-dest" placeholder="${t('navedit.pagefileDest') || 'folder (assets)'}">
+                            <button class="btn btn-xs" id="nbe-pagefile-add">${t('navedit.addFiles') || 'Add files…'}</button>
+                            <button class="btn btn-xs" id="nbe-pagedir-add">${t('navedit.addFolder') || 'Add a folder…'}</button>
+                        </div>
+                    </div>
                     <button class="btn btn-secondary" id="nbe-page-create">${t('navedit.createPage') || 'Create page'}</button>
                 </div>
             </details>
@@ -864,6 +876,7 @@ export function openNavbarEditor(): void {
                     editingPageId = id;
                     editingDoc = null;
                     renderSubpages();
+                    renderPageFiles();
                     pageCreateBtn.textContent = t('navedit.save') || 'Save changes';
                     pageCreateBtn.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
                 } catch (err) { (window as any).toast?.(String(err), 'error'); }
@@ -912,6 +925,22 @@ export function openNavbarEditor(): void {
     // code has to say so. Missing one leaves the previous document's colours behind the new
     // text, which looks like a rendering bug and is a missing call.
     const repaintCode = () => { hl.html?.refresh(); hl.css?.refresh(); hl.js?.refresh(); };
+
+    // A page can outgrow the highlighter. Saying so beats a reader concluding the colours
+    // broke — the editor still works, it is just a plain textarea again, which is what makes
+    // a several-thousand-line page usable at all.
+    overlay.addEventListener('bmm:highlight-limit', (e: Event) => {
+        const d = (e as CustomEvent).detail || {};
+        const ta = e.target as HTMLElement;
+        const wrap = ta.closest('.code-hl-wrap');
+        wrap?.parentElement?.querySelectorAll(':scope > .code-hl-note').forEach(n => n.remove());
+        if (!d.off || !wrap) return;
+        const note = document.createElement('div');
+        note.className = 'code-hl-note';
+        note.textContent = (t('navedit.hlOff') || 'Syntax colours are off above ~100 KB — editing stays fast.')
+            + ` (${Math.round((d.chars || 0) / 1024)} KB)`;
+        wrap.insertAdjacentElement('afterend', note);
+    });
 
     // ── sub-pages ───────────────────────────────────────────────────────────
     //
@@ -1009,6 +1038,75 @@ export function openNavbarEditor(): void {
         } catch (err) { (window as any).toast?.(String(err), 'error'); }
     });
 
+    // ── the bundle's files ──────────────────────────────────────────────────
+    const filesWrap = overlay.querySelector('#nbe-pagefiles') as HTMLElement;
+    const filesList = overlay.querySelector('#nbe-pagefiles-list') as HTMLElement;
+    const kb = (n: number) => (n >= 1024 * 1024 ? (n / 1024 / 1024).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB');
+
+    const renderPageFiles = async () => {
+        filesWrap.style.display = editingPageId ? '' : 'none';
+        if (!editingPageId) { filesList.innerHTML = ''; return; }
+        let files: { path: string; bytes: number; reserved: boolean }[] = [];
+        try { files = await invoke('list_page_files', { id: editingPageId }) as typeof files; } catch { files = []; }
+        if (!files.length) { filesList.innerHTML = `<div class="nbe-sub">${escAttr(t('navedit.pagefilesNone') || 'Nothing but the page itself.')}</div>`; return; }
+        filesList.innerHTML = files.map(f2 => `
+            <div class="nbe-pagefile${f2.reserved ? ' is-reserved' : ''}">
+                <span class="nbe-pagefile-path" title="${escAttr(f2.path)}">${escAttr(f2.path)}</span>
+                <span class="nbe-pagefile-size">${escAttr(kb(f2.bytes))}</span>
+                ${f2.reserved
+                    ? `<span class="nbe-pagefile-lock" title="${escAttr(t('navedit.pagefileOwn') || 'Part of the page itself')}">\u25cf</span>`
+                    : `<button class="nbe-pagefile-del" data-delfile="${escAttr(f2.path)}" title="${escAttr(t('common.delete') || 'Delete')}">\u00d7</button>`}
+            </div>`).join('');
+        filesList.querySelectorAll('[data-delfile]').forEach(b => b.addEventListener('click', async () => {
+            const rel = (b as HTMLElement).dataset.delfile!;
+            const ok = await (window as any).confirmCustom?.(
+                (t('navedit.pagefileDelT') || 'Delete this file?'),
+                rel + ' \u2014 ' + (t('navedit.pagefileDelD') || 'anything referencing it stops working.'), 'warning');
+            if (!ok) return;
+            try { await invoke('delete_page_file', { id: editingPageId, rel }); renderPageFiles(); }
+            catch (err) { (window as any).toast?.(String(err), 'error'); }
+        }));
+    };
+
+    overlay.querySelector('#nbe-pagefile-add')?.addEventListener('click', async () => {
+        if (!editingPageId) return;
+        const dest = (overlay.querySelector('#nbe-pagefile-dest') as HTMLInputElement).value.trim();
+        try {
+            // Several at once: adding twenty images one dialog at a time is not a workflow.
+            const paths = await pickFiles();
+            if (!paths.length) return;
+            let ok = 0; const failed: string[] = [];
+            for (const p of paths) {
+                const base = String(p).split(/[\\/]/).pop() || 'asset';
+                try { await invoke('import_page_path', { id: editingPageId, srcPath: p, destRel: dest ? `${dest}/${base}` : base }); ok++; }
+                catch (err) { failed.push(base + ': ' + String(err)); }
+            }
+            // Reported per file. A silent partial import is what sends somebody debugging
+            // their CSS for a picture that was never copied.
+            (window as any).toast?.(
+                failed.length
+                    ? `${ok} ${t('navedit.imported') || 'imported'}, ${failed.length} ${t('navedit.skipped') || 'skipped'} \u2014 ${failed[0]}`
+                    : `${ok} ${t('navedit.imported') || 'imported'}`,
+                failed.length ? 'warning' : 'success');
+            renderPageFiles();
+        } catch (err) { (window as any).toast?.(String(err), 'error'); }
+    });
+
+    overlay.querySelector('#nbe-pagedir-add')?.addEventListener('click', async () => {
+        if (!editingPageId) return;
+        const dest = (overlay.querySelector('#nbe-pagefile-dest') as HTMLInputElement).value.trim();
+        try {
+            const dir = await pickFolder();
+            if (!dir) return;
+            const rep = await invoke('import_page_dir', { id: editingPageId, srcDir: dir, destRel: dest }) as { copied: string[]; skipped: string[]; bytes: number };
+            (window as any).toast?.(
+                `${rep.copied.length} ${t('navedit.imported') || 'imported'} (${kb(rep.bytes)})`
+                + (rep.skipped.length ? `, ${rep.skipped.length} ${t('navedit.skipped') || 'skipped'}` : ''),
+                rep.skipped.length ? 'warning' : 'success');
+            renderPageFiles();
+        } catch (err) { (window as any).toast?.(String(err), 'error'); }
+    });
+
     loadPages().then(() => { renderPagesList(); if (kindSel.value === 'page') renderTarget(); });
     overlay.querySelector('#nbe-page-create')?.addEventListener('click', async () => {
         const name = (overlay.querySelector('#nbe-page-name') as HTMLInputElement).value.trim();
@@ -1039,6 +1137,7 @@ export function openNavbarEditor(): void {
             editingPageId = null;
             editingDoc = null;
             renderSubpages();
+            renderPageFiles();
             pageCreateBtn.textContent = t('navedit.createPage') || 'Create page';
             await loadPages(); renderPagesList(); if (kindSel.value === 'page') renderTarget();
             pageField('#nbe-page-name').value = '';

@@ -8067,5 +8067,17 @@
   "docs.diagram.deeplinks.node.TOAST.desc": "Chaque route se termine par un résultat visible — une notification, un écran, ou une erreur nommant le problème. Un lien qui n’aurait rien fait en silence est précisément ce que cela évite.",
   "iconpack.mine": "Les vôtres",
   "iconpack.mineEmpty": "Rien ici pour l’instant — envoyez une icône et elle restera dans cet onglet.",
-  "iconpack.forget": "Retirer de vos icônes"
+  "iconpack.forget": "Retirer de vos icônes",
+  "navedit.hlOff": "Les couleurs sont désactivées au-delà de ~100 Ko — l’édition reste fluide.",
+  "navedit.pagefiles": "Fichiers de cette page",
+  "navedit.pagefilesHint": "Référencez-les par un chemin relatif — src=\"assets/logo.png\". Les dossiers sont conservés tels quels.",
+  "navedit.pagefilesNone": "Rien d’autre que la page elle-même.",
+  "navedit.pagefileDest": "dossier (assets)",
+  "navedit.addFiles": "Ajouter des fichiers…",
+  "navedit.addFolder": "Ajouter un dossier…",
+  "navedit.pagefileOwn": "Fait partie de la page elle-même",
+  "navedit.pagefileDelT": "Supprimer ce fichier ?",
+  "navedit.pagefileDelD": "tout ce qui le référence cessera de fonctionner.",
+  "navedit.imported": "importé(s)",
+  "navedit.skipped": "ignoré(s)"
 }
