@@ -406,6 +406,12 @@ export async function loadCustomTutorials(): Promise<TutorialDef[]> {
     return _docs.map(toDef);
 }
 
+/** Every stored document, as loaded. A copy, not the live array — a caller that sorts or
+ *  filters it must not be able to reorder what the hub reads. */
+export function listCustomDocs(): CustomTutorialDoc[] {
+    return [..._docs];
+}
+
 export function getCustomDoc(id: string): CustomTutorialDoc | null {
     return _docs.find((d) => d.id === id) || null;
 }

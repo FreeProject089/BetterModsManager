@@ -8097,5 +8097,16 @@
   "tutc.iconPick": "Pick an icon",
   "tutc.iconChange": "Change",
   "tuthub.fork": "Make a copy I can edit",
-  "tuthub.forked": "Copied — it is yours now, under your own tutorials."
+  "tuthub.forked": "Copied — it is yours now, under your own tutorials.",
+  "tuthub.buildcat": "Publish a catalogue",
+  "tutcat.b.title": "Build a tutorial catalogue",
+  "tutcat.b.defname": "My tutorials",
+  "tutcat.b.name": "Catalogue name",
+  "tutcat.b.base": "Where the files will live",
+  "tutcat.b.baseHint": "Each entry becomes <base>/<id>.bmmtut. Export the tutorials themselves and upload them there — this writes the list, not the files.",
+  "tutcat.b.pick": "Tutorials to include",
+  "tutcat.b.none": "You have no tutorials of your own yet.",
+  "tutcat.b.write": "Write catalog.json ({n})",
+  "tutcat.b.needbase": "Give the address the files will be served from.",
+  "tutcat.b.saved": "Wrote {n} tutorial(s)."
 }

@@ -210,6 +210,12 @@ function rail(): HTMLElement {
     mk(t('tuthub.catalogs'), () => {
         void import('./tutorial-catalog.js').then((m) => m.openTutorialCatalog(refreshHub));
     });
+    // The writing half. Next to Follow rather than tucked inside it: publishing and
+    // subscribing are opposite jobs, and burying one under the other is how a feature ends
+    // up existing and never being found.
+    mk(t('tuthub.buildcat') || 'Publish a catalogue', () => {
+        void import('./tutorial-catalog.js').then((m) => m.openTutorialCatalogBuilder());
+    });
     box.append(tools);
     return box;
 }
