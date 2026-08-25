@@ -13,6 +13,7 @@
 // time; nothing here interpolates user strings into markup unescaped.
 
 import { t } from '../core/i18n.js';
+import { raiseAboveAll } from './layer.js';
 import { escAttr, escHtml } from '../core/utils.js';
 
 type LucideNode = [string, Record<string, string>];
@@ -301,6 +302,11 @@ export function openIconPicker(opts: { current?: string } = {}): Promise<string 
                     <button class="btn btn-ghost btn-sm" id="ipk-more" style="display:none">${t('iconpack.more') || 'Show more'}</button>
                 </div>
             </div>`;
+        // Measured, not fixed: this picker is opened from ordinary modals (11000) and from
+        // the tutorial creator (2000100). A single number is wrong for one of them, and the
+        // symptom there is not "it looks wrong" but "the button does nothing" — you see the
+        // dim of a panel painted underneath the thing that opened it.
+        raiseAboveAll(overlay, 10000);
         (document.getElementById('app-window-outer') || document.body).appendChild(overlay);
 
         const grid = overlay.querySelector('#ipk-grid') as HTMLElement;

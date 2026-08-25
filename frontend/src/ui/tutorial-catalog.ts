@@ -13,6 +13,7 @@
 // secrets, the same storage decision every other catalogue screen already made.
 
 import { t } from '../core/i18n.js';
+import { raiseAboveAll } from './layer.js';
 import { invoke } from '../core/api.js';
 import { toast } from './app.js';
 import { sourceAccessHtml, wireSourceAccess, closeOwningOverlay } from '../core/source-access.js';
@@ -64,7 +65,7 @@ function entriesOf(doc: unknown): CatalogEntry[] {
 export async function openTutorialCatalogBuilder(): Promise<void> {
     document.getElementById('tutcat-build')?.remove();
 
-    const { listCustomDocs } = await import('./tutorial-custom.js');
+    const { listCustomDocs, getCustomDoc } = await import('./tutorial-custom.js');
     type Row = { id: string; name: string; desc: string; on: boolean };
     // OFF by default. Pre-ticking everything made "build a catalogue" mean "publish every
     // lesson I happen to have", and the only way to publish two was to untick twenty.
@@ -78,10 +79,12 @@ export async function openTutorialCatalogBuilder(): Promise<void> {
     const ov = document.createElement('div');
     ov.className = 'modal-overlay open';
     ov.id = 'tutcat-build';
-    // Inside the app frame and above the modal layer — the same two faults the repo
-    // builder had: `contain: paint` on the frame means an overlay on <body> dims the
-    // desktop, and a z-index under .modal-overlay's 11000 reads as "clicks pass through".
-    ov.style.zIndex = '11200';
+    // Inside the app frame and above whatever opened it. It used to be a flat 11200,
+    // which is above ordinary modals and far BELOW the tutorial hub (2000000) this is
+    // always opened from — so it painted its dim underneath the hub and looked like the
+    // button did nothing. `contain: paint` on the frame is the other half: an overlay on
+    // <body> dims the desktop instead of the app.
+    raiseAboveAll(ov, 11200);
     (document.getElementById('app-window-outer') || document.body).appendChild(ov);
 
     const prevOverflow = document.body.style.overflow;
@@ -109,10 +112,10 @@ export async function openTutorialCatalogBuilder(): Promise<void> {
                 <label class="repo-cat-b-lbl">${escHtml(t('tutcat.b.name') || 'Catalogue name')}</label>
                 <input class="input" id="tutcat-b-name" value="${escAttr(name)}" style="margin-bottom:14px;">
 
-                <label class="repo-cat-b-lbl">${escHtml(t('tutcat.b.base') || 'Where the files will live')}</label>
-                <input class="input" id="tutcat-b-base" value="${escAttr(base)}" placeholder="https://example.com/tutorials" style="margin-bottom:4px;">
+                <label class="repo-cat-b-lbl">${escHtml(t('tutcat.b.base') || 'Address the files will be served from (optional)')}</label>
+                <input class="input" id="tutcat-b-base" value="${escAttr(base)}" placeholder="${escAttr(t('tutcat.b.basePh') || 'leave empty — they sit beside the catalogue')}" style="margin-bottom:4px;">
                 <div class="cat-index-empty" style="margin-bottom:14px;">${escHtml(t('tutcat.b.baseHint')
-                    || 'Each entry becomes <base>/<id>.bmmtut. Export the tutorials themselves and upload them there — this writes the list, not the files.')}</div>
+                    || 'Leave it empty and the tutorials are written next to catalog.json, so you can upload the folder anywhere. Fill it in only if the files will live somewhere else.')}</div>
 
                 <label class="repo-cat-b-lbl">${escHtml(t('tutcat.b.pick') || 'Tutorials to include')}</label>
                 ${rows.length ? '' : `<div class="cat-index-empty">${escHtml(t('tutcat.b.none') || 'You have no tutorials of your own yet.')}</div>`}
@@ -130,7 +133,7 @@ export async function openTutorialCatalogBuilder(): Promise<void> {
                 <button class="btn btn-xs" data-none>${escHtml(t('repo.cat.b.none') || 'None')}</button>
                 <span style="flex:1"></span>
                 <button class="btn btn-primary" data-go ${on ? '' : 'disabled'}>
-                    ${escHtml((t('tutcat.b.write') || 'Write catalog.json ({n})').replace('{n}', String(on)))}
+                    ${escHtml((t('tutcat.b.write') || 'Export the catalogue ({n})').replace('{n}', String(on)))}
                 </button>
             </div>
         </div>`;
@@ -150,29 +153,56 @@ export async function openTutorialCatalogBuilder(): Promise<void> {
 
         ov.querySelector('[data-go]')?.addEventListener('click', async () => {
             const b = base.trim().replace(/\/+$/, '');
-            if (!b) { toast(t('tutcat.b.needbase') || 'Give the address the files will be served from.', 'warning'); return; }
             const chosen = rows.filter((r) => r.on);
-            // BOTH shapes, on purpose: `tutorials` is what this app's own reader prefers and
-            // `items` with a kind is what BCWEB's pooled catalogues emit. Writing one and not
-            // the other makes a catalogue that half the readers cannot see.
+            if (!chosen.length) return;
+
+            // A FOLDER, not a filename: this writes catalog.json and one .bmmtut per
+            // tutorial, and asking for "catalog.json" would leave the files nowhere.
+            const { pickFolder } = await import('../core/api.js');
+            const dir = await pickFolder().catch(() => null);
+            if (!dir) return;
+
+            // Relative when no address was given. The reader resolves an entry URL against
+            // the catalogue's own address, so a folder uploaded as-is works from any host —
+            // which is the whole reason the field is optional now.
             const entries = chosen.map((r) => ({
                 id: r.id,
                 name: r.name,
                 description: r.desc,
-                url: `${b}/${r.id}.bmmtut`,
+                url: b ? `${b}/${r.id}.bmmtut` : `${r.id}.bmmtut`,
             }));
+            // BOTH shapes, on purpose: `tutorials` is what this app's own reader prefers and
+            // `items` with a kind is what BCWEB's pooled catalogues emit. Writing one and not
+            // the other makes a catalogue that half the readers cannot see.
             const doc = JSON.stringify({
                 name: name.trim() || 'My tutorials',
                 generatedAt: new Date().toISOString(),
                 tutorials: entries,
                 items: entries.map((e) => ({ ...e, kind: 'tutorial' })),
             }, null, 2);
-            const { saveFile } = await import('../core/api.js');
-            const path = await saveFile({ defaultPath: 'catalog.json', filters: [{ name: 'Catalog', extensions: ['json'] }] }).catch(() => null);
-            if (!path) return;
+
             try {
-                await invoke('write_text_file', { path, content: doc });
-                toast((t('tutcat.b.saved') || 'Wrote {n} tutorial(s).').replace('{n}', String(entries.length)), 'success');
+                // The lessons first. A catalog.json listing files that failed to write is
+                // the one outcome worth avoiding — it looks finished and installs nothing.
+                const failed: string[] = [];
+                for (const r of chosen) {
+                    const tut = getCustomDoc(r.id);
+                    if (!tut) { failed.push(r.name); continue; }
+                    try {
+                        await invoke('write_text_file', { path: `${dir}/${r.id}.bmmtut`, content: JSON.stringify(tut, null, 2) });
+                    } catch { failed.push(r.name); }
+                }
+                if (failed.length === chosen.length) { toast(t('tutcat.b.failAll') || 'Could not write the tutorials.', 'error'); return; }
+
+                await invoke('write_text_file', { path: `${dir}/catalog.json`, content: doc });
+                // Named, not counted: "wrote 4 of 5" leaves you hunting for which one.
+                if (failed.length) {
+                    toast((t('tutcat.b.savedPartial') || 'Wrote the catalogue, but these could not be exported: {names}')
+                        .replace('{names}', failed.join(', ')), 'warning');
+                } else {
+                    toast((t('tutcat.b.saved') || 'Wrote catalog.json and {n} tutorial file(s) — upload the folder as it is.')
+                        .replace('{n}', String(entries.length)), 'success');
+                }
                 close();   // NOT ov.remove(): the page would stay locked with the modal gone
             } catch (e) { toast(String(e), 'error'); }
         });
