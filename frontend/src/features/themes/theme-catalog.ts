@@ -14,6 +14,7 @@ import { escHtml, escAttr } from '../../core/utils.js';
 import { installTheme, activateTheme, getInstalledThemes, BmmTheme } from './theme-engine.js';
 import { fetchSourceText } from '../../core/source-fetch.js';
 import { resolveEntryUrl } from '../../core/catalog-url.js';
+import { planPublish } from '../../core/catalog-publish.js';
 
 const OFFICIAL_CATALOG = 'https://raw.githubusercontent.com/BetterDCS/BMM_Themes/main/catalog.json';
 const COMMUNITY_SRC_KEY = 'bmm_theme_community_sources';
@@ -114,15 +115,36 @@ function openThemeCatalogBuilder(): void {
     // Optionally include built-in presets that are still installed (not hidden).
     const builtins = (_builtins || []).filter((b: any) => !b._hidden);
     const picked = new Set<string>();
+    // Where each theme's BODY goes. Themes have three answers where the other catalogues
+    // have two, and hiding one of them would be worse than an extra option:
+    //
+    //   inline — the whole theme sits in catalog.json. The default, and what every
+    //            catalogue published so far contains, so it must stay the default.
+    //   file   — written as <name>.bmmtheme beside the catalogue, referenced relatively.
+    //            Needs a FOLDER, so choosing it changes what the export button asks for.
+    //   link   — an address you already host.
+    const modes = new Map<string, { mode: 'inline' | 'file' | 'link'; url: string }>();
+    const modeOf = (id: string) => modes.get(id) || { mode: 'inline' as const, url: '' };
 
     const themeRow = (th: any, isBuiltin: boolean) => {
         const accent = th.vars?.['--bmm-accent'] || '#3b82f6';
+        const m = modeOf(th.id);
+        const on = picked.has(th.id);
         return `
-            <label class="tcb-row">
-                <input type="checkbox" class="tcb-cb" data-id="${escAttr(th.id)}" data-builtin="${isBuiltin ? '1' : '0'}">
-                <span class="tcb-swatch" style="background:${accent}"></span>
-                <span class="tcb-name">${escHtml(th.name || th.id)}${isBuiltin ? ` <span class="tcb-tag">${t('themes.builtin') || 'Default'}</span>` : ''}</span>
-            </label>`;
+            <div class="tcb-row cat-pub-row" data-row="${escAttr(th.id)}">
+                <label class="cat-pub-pick">
+                    <input type="checkbox" class="tcb-cb" data-id="${escAttr(th.id)}" data-builtin="${isBuiltin ? '1' : '0'}"${on ? ' checked' : ''}>
+                    <span class="tcb-swatch" style="background:${accent}"></span>
+                    <span class="tcb-name">${escHtml(th.name || th.id)}${isBuiltin ? ` <span class="tcb-tag">${t('themes.builtin') || 'Default'}</span>` : ''}</span>
+                </label>
+                <select class="input cat-pub-mode tcb-mode" data-id="${escAttr(th.id)}"${on ? '' : ' disabled'}>
+                    <option value="inline"${m.mode === 'inline' ? ' selected' : ''}>${escHtml(t('catpub.inline'))}</option>
+                    <option value="file"${m.mode === 'file' ? ' selected' : ''}>${escHtml(t('catpub.embed'))}</option>
+                    <option value="link"${m.mode === 'link' ? ' selected' : ''}>${escHtml(t('catpub.link'))}</option>
+                </select>
+                <input class="input cat-pub-url tcb-url" data-id="${escAttr(th.id)}"${on && m.mode === 'link' ? '' : ' hidden'}
+                       spellcheck="false" value="${escAttr(m.url)}" placeholder="${escAttr(t('catpub.urlPh'))}">
+            </div>`;
     };
 
     builder.innerHTML = `
@@ -154,25 +176,102 @@ function openThemeCatalogBuilder(): void {
     builder.querySelector('#tcb-close')!.addEventListener('click', close);
     builder.addEventListener('click', e => { if (e.target === builder) close(); });
     const countEl = builder.querySelector('#tcb-count') as HTMLElement;
+    const syncRow = (id: string) => {
+        const on = picked.has(id);
+        const sel = builder.querySelector(`.tcb-mode[data-id="${CSS.escape(id)}"]`) as HTMLSelectElement | null;
+        const box = builder.querySelector(`.tcb-url[data-id="${CSS.escape(id)}"]`) as HTMLInputElement | null;
+        if (sel) { sel.disabled = !on; sel.value = modeOf(id).mode; }
+        if (box) box.hidden = !on || modeOf(id).mode !== 'link';
+    };
+    const recount = () => {
+        const linked = [...picked].filter((id) => modeOf(id).mode === 'link').length;
+        const filed = [...picked].filter((id) => modeOf(id).mode === 'file').length;
+        countEl.textContent = `${picked.size} ${t('themes.themes') || 'theme(s)'}`
+            + (filed || linked ? ` — ${t('catpub.split').replace('{f}', String(filed)).replace('{l}', String(linked))}` : '');
+    };
     builder.querySelectorAll('.tcb-cb').forEach(cb => cb.addEventListener('change', (e) => {
         const el = e.target as HTMLInputElement;
         if (el.checked) picked.add(el.dataset.id!); else picked.delete(el.dataset.id!);
-        countEl.textContent = `${picked.size} ${t('themes.themes') || 'theme(s)'}`;
+        syncRow(el.dataset.id!);
+        recount();
+    }));
+    builder.querySelectorAll('.tcb-mode').forEach(sel => sel.addEventListener('change', (e) => {
+        const el = e.target as HTMLSelectElement;
+        modes.set(el.dataset.id!, { ...modeOf(el.dataset.id!), mode: el.value as any });
+        syncRow(el.dataset.id!);
+        recount();
+    }));
+    builder.querySelectorAll('.tcb-url').forEach(box => box.addEventListener('input', (e) => {
+        const el = e.target as HTMLInputElement;
+        modes.set(el.dataset.id!, { ...modeOf(el.dataset.id!), url: el.value });
     }));
 
+    /**
+     * The document, plus whatever has to be written beside it.
+     *
+     * An INLINE theme keeps the shape this builder has always produced — the whole object
+     * in the array — so every catalogue published so far still round-trips. A FILE entry is
+     * reduced to its metadata plus a relative `download_url`, and a LINK to its metadata
+     * plus the address given. `resolveThemeBody` already knows how to read both of the
+     * latter: an entry carrying no `vars` is fetched from its address.
+     */
     const buildCatalog = () => {
         const name = (builder.querySelector('#tcb-name') as HTMLInputElement).value.trim() || 'My theme catalog';
         const all = [...themes, ...builtins];
         const chosen = all.filter((th: any) => picked.has(th.id));
-        return { name, json: JSON.stringify({ version: '1.0', name, themes: chosen }, null, 2) };
+        const plan = planPublish(
+            chosen as any,
+            (th: any) => (modeOf(th.id).mode === 'link' ? { mode: 'link', url: modeOf(th.id).url } : { mode: 'embed' }),
+            { ext: 'bmmtheme', fallback: 'theme' },
+        );
+        const files: { file: string; content: string }[] = [];
+        const entries = plan.rows.map((p) => {
+            const th: any = p.item;
+            if (modeOf(th.id).mode === 'inline') return th;
+            // Metadata only. Keeping `vars` beside a download_url would mean the body never
+            // gets fetched (resolveThemeBody short-circuits on vars) — the file would be
+            // written, referenced, and silently ignored.
+            const { vars, ...meta } = th;
+            if (p.embed) files.push({ file: p.file, content: JSON.stringify(th, null, 2) });
+            return { ...meta, download_url: p.address };
+        });
+        return {
+            name, files, errors: plan.errors,
+            json: JSON.stringify({ version: '1.0', name, themes: entries }, null, 2),
+        };
     };
+
     const doExport = async (): Promise<string | null> => {
         if (picked.size === 0) { toast(t('themes.pickAtLeastOne') || 'Pick at least one theme', 'warning'); return null; }
-        const { name, json } = buildCatalog();
-        const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'themes';
+        const built = buildCatalog();
+        if (built.errors.length) {
+            toast(t('catpub.dropped').replace('{n}', String(built.errors.length))
+                + ' — ' + built.errors.slice(0, 3).join(' · '), 'warning', 8000);
+        }
+        const slug = built.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'themes';
+
+        // A catalogue with files beside it needs a FOLDER; one that is entirely inline or
+        // linked is a single document, and asking for a folder to write one file would be a
+        // worse question. The choice on screen decides which is asked.
+        if (built.files.length) {
+            const { pickFolder } = await import('../../core/api.js');
+            const dir = await pickFolder().catch(() => null);
+            if (!dir) return null;
+            const sep = dir.includes('\\') ? '\\' : '/';
+            try {
+                for (const f of built.files) {
+                    await invoke('write_text_file', { path: `${dir}${sep}${f.file}`, content: f.content });
+                }
+                await invoke('write_text_file', { path: `${dir}${sep}catalog.json`, content: built.json });
+                toast((t('themes.catalogExportedFolder'))
+                    .replace('{n}', String(built.files.length)), 'success');
+                return `${dir}${sep}catalog.json`;
+            } catch (e) { toast(`${t('common.error')}: ${e}`, 'error'); return null; }
+        }
+
         const path = await saveFile({ defaultPath: `${slug}.json`, filters: [{ name: 'JSON catalog', extensions: ['json'] }] });
         if (!path) return null;
-        try { await invoke('write_text_file', { path, content: json }); toast(t('themes.catalogExported') || 'Catalog exported', 'success'); return path; }
+        try { await invoke('write_text_file', { path, content: built.json }); toast(t('themes.catalogExported') || 'Catalog exported', 'success'); return path; }
         catch (e) { toast(`${t('common.error')}: ${e}`, 'error'); return null; }
     };
     builder.querySelector('#tcb-export')!.addEventListener('click', doExport);

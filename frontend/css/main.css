@@ -16581,6 +16581,15 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 .sched-tcb-mode:disabled { opacity: 0.45; }
 .sched-tcb-url { flex-basis: 100%; font-size: 11px; padding: 4px 8px; font-family: var(--font-mono); }
 .sched-tcb-url[hidden] { display: none; }
+
+/* The same row, in every other builder that gained the per-entry choice. One set of rules
+   so the control looks and behaves identically wherever it turns up — a picker that is
+   30px wider in the tutorial builder than in the automation one reads as two features. */
+.cat-pub-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cat-pub-pick { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; cursor: pointer; }
+.cat-pub-mode { flex: none; width: 130px; font-size: 11px; padding: 3px 6px; }
+.cat-pub-mode:disabled { opacity: 0.45; }
+.cat-pub-url { flex-basis: 100%; font-size: 11px; padding: 4px 8px; font-family: var(--font-mono); }
 .sched-tcb-foot { display: flex; align-items: center; gap: 8px; }
 .sched-tcb-count { font-size: 11px; color: var(--text-muted); }
 .sched-pc-publish { width: 100%; justify-content: center; margin-top: 6px; }

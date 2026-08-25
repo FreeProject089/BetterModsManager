@@ -13,6 +13,7 @@
 // secrets, the same storage decision every other catalogue screen already made.
 
 import { t } from '../core/i18n.js';
+import { planPublish } from '../core/catalog-publish.js';
 import { raiseAboveAll } from './layer.js';
 import { invoke } from '../core/api.js';
 import { toast } from './app.js';
@@ -66,7 +67,9 @@ export async function openTutorialCatalogBuilder(): Promise<void> {
     document.getElementById('tutcat-build')?.remove();
 
     const { listCustomDocs, getCustomDoc } = await import('./tutorial-custom.js');
-    type Row = { id: string; name: string; desc: string; on: boolean };
+    // `mode`/`url`: where each lesson's file comes from. Per ENTRY, so one catalogue can
+    // carry the small lessons and point at a big one somebody already hosts.
+    type Row = { id: string; name: string; desc: string; on: boolean; mode: 'embed' | 'link'; url: string };
     // OFF by default. Pre-ticking everything made "build a catalogue" mean "publish every
     // lesson I happen to have", and the only way to publish two was to untick twenty.
     const rows: Row[] = listCustomDocs().map((d) => ({
@@ -74,6 +77,8 @@ export async function openTutorialCatalogBuilder(): Promise<void> {
         name: d.title?.en || d.id,
         desc: d.desc?.en || '',
         on: false,
+        mode: 'embed',
+        url: '',
     }));
 
     const ov = document.createElement('div');
@@ -121,11 +126,19 @@ export async function openTutorialCatalogBuilder(): Promise<void> {
                 ${rows.length ? '' : `<div class="cat-index-empty">${escHtml(t('tutcat.b.none') || 'You have no tutorials of your own yet.')}</div>`}
                 <div class="repo-cat-b-list">
                     ${rows.map((r, i) => `
-                        <label class="repo-cat-b-row">
-                            <input type="checkbox" data-i="${i}" ${r.on ? 'checked' : ''}>
-                            <span class="repo-cat-b-name">${escHtml(r.name)}</span>
-                            <span class="repo-cat-b-url" title="${escAttr(r.id)}">${escHtml(r.id)}.bmmtut</span>
-                        </label>`).join('')}
+                        <div class="repo-cat-b-row cat-pub-row">
+                            <label class="cat-pub-pick">
+                                <input type="checkbox" data-i="${i}" ${r.on ? 'checked' : ''}>
+                                <span class="repo-cat-b-name">${escHtml(r.name)}</span>
+                                <span class="repo-cat-b-url" title="${escAttr(r.id)}">${escHtml(r.mode === 'link' ? t('catpub.linked') : `${r.id}.bmmtut`)}</span>
+                            </label>
+                            <select class="input cat-pub-mode" data-m="${i}" ${r.on ? '' : 'disabled'}>
+                                <option value="embed"${r.mode === 'embed' ? ' selected' : ''}>${escHtml(t('catpub.embed'))}</option>
+                                <option value="link"${r.mode === 'link' ? ' selected' : ''}>${escHtml(t('catpub.link'))}</option>
+                            </select>
+                            ${r.on && r.mode === 'link' ? `<input class="input cat-pub-url" data-u="${i}" spellcheck="false"
+                                   value="${escAttr(r.url)}" placeholder="${escAttr(t('catpub.urlPh'))}">` : ''}
+                        </div>`).join('')}
                 </div>
             </div>
             <div class="modal-footer" style="flex-shrink:0;">
@@ -148,6 +161,17 @@ export async function openTutorialCatalogBuilder(): Promise<void> {
             rows[Number((e.target as HTMLElement).dataset.i)].on = (e.target as HTMLInputElement).checked;
             paint();
         }));
+        ov.querySelectorAll('[data-m]').forEach((c) => c.addEventListener('change', (e) => {
+            const el = e.target as HTMLSelectElement;
+            rows[Number(el.dataset.m)].mode = el.value === 'link' ? 'link' : 'embed';
+            paint();
+        }));
+        // NOT repainted on input: the whole modal is rebuilt by paint(), which would take
+        // the caret out of the box on every keystroke.
+        ov.querySelectorAll('[data-u]').forEach((c) => c.addEventListener('input', (e) => {
+            const el = e.target as HTMLInputElement;
+            rows[Number(el.dataset.u)].url = el.value;
+        }));
         ov.querySelector('[data-all]')?.addEventListener('click', () => { rows.forEach((r) => { r.on = true; }); paint(); });
         ov.querySelector('[data-none]')?.addEventListener('click', () => { rows.forEach((r) => { r.on = false; }); paint(); });
 
@@ -162,14 +186,26 @@ export async function openTutorialCatalogBuilder(): Promise<void> {
             const dir = await pickFolder().catch(() => null);
             if (!dir) return;
 
-            // Relative when no address was given. The reader resolves an entry URL against
-            // the catalogue's own address, so a folder uploaded as-is works from any host —
-            // which is the whole reason the field is optional now.
-            const entries = chosen.map((r) => ({
-                id: r.id,
-                name: r.name,
-                description: r.desc,
-                url: b ? `${b}/${r.id}.bmmtut` : `${r.id}.bmmtut`,
+            // Per entry: packed beside the catalogue, or an address you gave. The shared
+            // planner owns both decisions — the filename a name collapses to, and the
+            // address written for it — because every catalogue builder in BMM asks them and
+            // three different answers is three different sets of bugs.
+            //
+            // The file is named after the ID here, not the title: a tutorial's id is already
+            // a slug and is what its entry has always been called, so renaming them after
+            // their titles would break every catalogue already pointing at the old names.
+            const plan = planPublish(chosen, (r) => (r.mode === 'link' ? { mode: 'link', url: r.url } : { mode: 'embed' }),
+                { ext: 'bmmtut', base: b, nameOf: (r) => r.id });
+            if (plan.errors.length) {
+                toast(t('catpub.dropped').replace('{n}', String(plan.errors.length))
+                    + ' — ' + plan.errors.slice(0, 3).join(' · '), 'warning', 8000);
+            }
+            if (!plan.rows.length) { toast(t('catpub.nothing'), 'error'); return; }
+            const entries = plan.rows.map((p) => ({
+                id: p.item.id,
+                name: p.item.name,
+                description: p.item.desc,
+                url: p.address,
             }));
             // BOTH shapes, on purpose: `tutorials` is what this app's own reader prefers and
             // `items` with a kind is what BCWEB's pooled catalogues emit. Writing one and not
@@ -185,14 +221,16 @@ export async function openTutorialCatalogBuilder(): Promise<void> {
                 // The lessons first. A catalog.json listing files that failed to write is
                 // the one outcome worth avoiding — it looks finished and installs nothing.
                 const failed: string[] = [];
-                for (const r of chosen) {
-                    const tut = getCustomDoc(r.id);
-                    if (!tut) { failed.push(r.name); continue; }
+                // Only the PACKED ones. A linked entry already lives somewhere.
+                const toWrite = plan.rows.filter((p) => p.embed);
+                for (const p of toWrite) {
+                    const tut = getCustomDoc(p.item.id);
+                    if (!tut) { failed.push(p.item.name); continue; }
                     try {
-                        await invoke('write_text_file', { path: `${dir}/${r.id}.bmmtut`, content: JSON.stringify(tut, null, 2) });
-                    } catch { failed.push(r.name); }
+                        await invoke('write_text_file', { path: `${dir}/${p.file}`, content: JSON.stringify(tut, null, 2) });
+                    } catch { failed.push(p.item.name); }
                 }
-                if (failed.length === chosen.length) { toast(t('tutcat.b.failAll') || 'Could not write the tutorials.', 'error'); return; }
+                if (toWrite.length && failed.length === toWrite.length) { toast(t('tutcat.b.failAll') || 'Could not write the tutorials.', 'error'); return; }
 
                 await invoke('write_text_file', { path: `${dir}/catalog.json`, content: doc });
                 // Named, not counted: "wrote 4 of 5" leaves you hunting for which one.
@@ -201,7 +239,8 @@ export async function openTutorialCatalogBuilder(): Promise<void> {
                         .replace('{names}', failed.join(', ')), 'warning');
                 } else {
                     toast((t('tutcat.b.saved') || 'Wrote catalog.json and {n} tutorial file(s) — upload the folder as it is.')
-                        .replace('{n}', String(entries.length)), 'success');
+                        .replace('{n}', String(toWrite.length))
+                        + (plan.linked ? ` — ${t('catpub.plusLinked').replace('{l}', String(plan.linked))}` : ''), 'success');
                 }
                 close();   // NOT ov.remove(): the page would stay locked with the modal gone
             } catch (e) { toast(String(e), 'error'); }
