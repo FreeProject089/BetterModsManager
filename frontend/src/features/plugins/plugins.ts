@@ -8801,6 +8801,12 @@ async function renderPerms(container: HTMLElement) {
                         <span class="plug-toggle-slider"></span>
                     </label>
                 </div>
+                <!-- Shown only while it is ON, and it says what is ACTUALLY exposed.
+                     The description above used to claim any website could read your API
+                     responses — which is false for the seventy routes behind the token, and
+                     a warning that overstates is a warning people learn to ignore. Two
+                     routes answer without one, and what they return is worth naming. -->
+                ${corsAllowAny ? `<p class="plug-perm-global-warn">${IC.alert} ${escHtml(t('plugins.corsAnyWarn'))}</p>` : ''}
             </div>
 
             <div id="plug-cors-specific" class="plug-cors-allowlist" data-superseded="${corsAllowAny ? '1' : '0'}">
