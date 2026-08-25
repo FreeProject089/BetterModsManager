@@ -8117,5 +8117,17 @@
   "repo.cat.b.none": "None",
   "tutcat.b.basePh": "leave empty — they sit beside the catalogue",
   "tutcat.b.savedPartial": "Wrote the catalogue, but these could not be exported: {names}",
-  "tutcat.b.failAll": "Could not write the tutorials."
+  "tutcat.b.failAll": "Could not write the tutorials.",
+  "sched.catKindLbl": "What to publish",
+  "sched.catKindTut": "My tutorials",
+  "sched.catKindTheme": "My themes",
+  "sched.catKindPlugin": "My plugins",
+  "sched.catDirLbl": "Destination folder",
+  "sched.catNameLbl": "Catalogue name",
+  "sched.catNamePh": "My catalogue",
+  "sched.catBaseLbl": "Address the files will be served from (optional)",
+  "sched.catBasePh": "leave empty — they sit beside the catalogue",
+  "sched.catHint": "Writes catalog.json into the folder, plus the files it points at when the kind has any. Themes are embedded in the index and have no separate files.",
+  "sched.catNeedDir": "This step needs a destination folder.",
+  "sched.catDone": "Published {n} entry(ies)."
 }

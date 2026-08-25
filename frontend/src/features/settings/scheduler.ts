@@ -1100,6 +1100,17 @@ async function runAction(action: Action, task: Task, ctx: RunCtx): Promise<void>
             _captureOutput(p, out, ctx);
             break;
         }
+        case 'catalog.create': {
+            const dir = String(p.dir || '').trim();
+            if (!dir) throw new Error(t('sched.catNeedDir') || 'This step needs a destination folder.');
+            const kind = String(p.kind || 'tutorial');
+            const title = String(p.name || '').trim() || 'My catalogue';
+            // Trailing slash stripped once, here, so neither branch has to think about it.
+            const base = String(p.base || '').trim().replace(/\/+$/, '');
+            const wrote = await buildCatalogueInto(kind, dir, title, base);
+            toast(`${task.name}: ${(t('sched.catDone') || 'Published {n} entry(ies).').replace('{n}', String(wrote))}`, 'success');
+            break;
+        }
         case 'folder.create': {
             // No permission gate on purpose. A task can already make folders through
             // custom.script, but only once it has been trusted with "run scripts" —
@@ -3716,6 +3727,85 @@ function _wireFold(block: HTMLElement, step: any): void {
     });
 }
 
+/**
+ * Write a catalogue of the user's own things into `dir`, and return how many entries it has.
+ *
+ * Deliberately NOT one generic path with three flags. The kinds disagree about the one
+ * thing that matters — whether the index points at files or contains them — and a shape
+ * that hid that would have to invent a file for a theme, or drop the .bmmtut for a
+ * tutorial. Each branch is short and says which it is.
+ *
+ * Everything is a parameter. Nothing here opens a picker: this runs from a task, and a task
+ * that fires at 03:00 has nobody to answer a dialog.
+ */
+async function buildCatalogueInto(kind: string, dir: string, title: string, base: string): Promise<number> {
+    const stamp = new Date().toISOString();
+    const write = (file: string, content: string) => invoke('write_text_file', { path: `${dir}/${file}`, content });
+
+    if (kind === 'theme') {
+        // Embedded, not linked — this is the shape the theme catalogue reader already
+        // expects, so a published folder can be followed without any other file.
+        const themes: any[] = JSON.parse((await invoke('list_installed_themes') as string) || '[]');
+        await write('catalog.json', JSON.stringify({ version: '1.0', name: title, generatedAt: stamp, themes }, null, 2));
+        return themes.length;
+    }
+
+    if (kind === 'plugin') {
+        // Linked, and the link is the author's own download URL: BMM holds an installed
+        // plugin as an extracted folder, not as the package it arrived in, so there is no
+        // file here to copy. A plugin with no URL is skipped rather than written as an
+        // entry that cannot be installed.
+        const installed: any[] = (await invoke('get_installed_plugins').catch(() => [])) as any[];
+        const plugins = installed
+            .map((ip) => ({ m: ip?.manifest || {}, url: ip?.manifest?.download_url || ip?.manifest?.downloadUrl || '' }))
+            .filter((x) => x.m.id && (x.url || base))
+            .map(({ m, url }) => ({
+                id: m.id,
+                name: m.name || m.id,
+                version: m.version || '1.0.0',
+                author: m.author || '',
+                description: m.description || '',
+                game: m.game || '',
+                official: false,
+                download_url: url || `${base}/${m.id}.bmmplug`,
+                tags: Array.isArray(m.tags) ? m.tags : [],
+            }));
+        await write('catalog.json', JSON.stringify({ version: '1.0', name: title, generatedAt: stamp, plugins }, null, 2));
+        return plugins.length;
+    }
+
+    // tutorial — the index points at files, and this writes them too. Same rule as the
+    // hub's own builder: the lessons go down BEFORE the index, because a catalog.json
+    // listing files that failed to write looks finished and installs nothing.
+    const { listCustomDocs, getCustomDoc } = await import('../../ui/tutorial-custom.js');
+    const docs = listCustomDocs();
+    const written: { id: string; name: string; desc: string }[] = [];
+    for (const d of docs) {
+        const full = getCustomDoc(d.id);
+        if (!full) continue;
+        await write(`${d.id}.bmmtut`, JSON.stringify(full, null, 2));
+        written.push({ id: d.id, name: d.title?.en || d.id, desc: d.desc?.en || '' });
+    }
+    const entries = written.map((w) => ({
+        id: w.id,
+        name: w.name,
+        description: w.desc,
+        // Relative unless an address was given — the reader resolves an entry URL against
+        // the catalogue's own address, so the folder works from wherever it is uploaded.
+        url: base ? `${base}/${w.id}.bmmtut` : `${w.id}.bmmtut`,
+    }));
+    await write('catalog.json', JSON.stringify({
+        name: title,
+        generatedAt: stamp,
+        tutorials: entries,
+        // Both shapes: `tutorials` is what this app's reader prefers, `items` with a kind is
+        // what BCWEB's pooled catalogues emit. One without the other is invisible to half
+        // the readers.
+        items: entries.map((e) => ({ ...e, kind: 'tutorial' })),
+    }, null, 2));
+    return entries.length;
+}
+
 const ACTION_TYPES: { v: string; label: string; needs?: string; group: string }[] = [
     // ── Mods & profiles ──
     { v: 'profile.activate', label: 'Activate profile', needs: 'profile', group: 'mods' },
@@ -3792,6 +3882,7 @@ const ACTION_TYPES: { v: string; label: string; needs?: string; group: string }[
     { v: 'custom.command', label: 'Run custom command', needs: 'command', group: 'system' },
     { v: 'custom.script', label: 'Run a script', needs: 'script', group: 'system' },
     { v: 'folder.create', label: 'Create a folder (BMM data)', needs: 'bmmfolder', group: 'system' },
+    { v: 'catalog.create', label: 'Publish a catalogue', needs: 'catCreate', group: 'system' },
     { v: 'repo.syncNow', label: 'Sync a server repo (unattended)', needs: 'reposync', group: 'repo' },
     { v: 'deeplink', label: 'Run bmm:// deeplink', needs: 'url', group: 'system' },
     { v: 'list.set', label: 'List — set it (JSON array or a, b, c)', needs: 'listSet', group: 'logic' },
@@ -4298,6 +4389,21 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
     else if (needs === 'recorder') host.innerHTML = `<label class="sched-tg"><input type="checkbox" class="sched-rc-on" ${params.on ? 'checked' : ''}> ${t('sched.rcOn') || 'Record'}</label><label class="sched-tg"><input type="checkbox" class="sched-rc-full" ${params.full ? 'checked' : ''}> ${t('sched.rcFull') || 'Full'}</label><label class="sched-tg"><input type="checkbox" class="sched-rc-rust" ${params.rust ? 'checked' : ''}> ${t('sched.rcRust') || 'Rust log'}</label><label class="sched-tg"><input type="checkbox" class="sched-rc-js" ${params.js ? 'checked' : ''}> ${t('sched.rcJs') || 'JS log'}</label>`;
     else if (needs === 'replayImport') host.innerHTML = `<input class="input sched-ri-path" placeholder="${escAttr(t('sched.replayPathPh') || 'local .bmmreplay path')}" value="${escAttr(params.path || '')}" style="min-width:220px"><input class="input sched-ri-url" placeholder="${escAttr(t('sched.replayUrlPh') || 'or URL')}" value="${escAttr(params.url || '')}" style="max-width:200px;margin-left:6px">`;
     else if (needs === 'exportAuto') host.innerHTML = `<input class="input sched-ea-dir" placeholder="${escAttr(t('sched.backupDirPh') || 'backup folder')}" value="${escAttr(params.dir || '')}" style="min-width:200px"><button type="button" class="btn btn-sm btn-secondary sched-browse-dir" style="margin-left:6px">${t('sched.choose') || 'Choose…'}</button><input class="input sched-ea-name" placeholder="bmm-backup-{date}" value="${escAttr(params.name || '')}" style="max-width:180px;margin-left:6px"><select class="input sched-ea-inc" style="max-width:170px;margin-left:6px">${['paren', 'underscore', 'timestamp', 'overwrite'].map(o => `<option value="${o}"${(params.increment || 'paren') === o ? ' selected' : ''}>${escHtml(t('sched.inc_' + o) || o)}</option>`).join('')}</select>`;
+    else if (needs === 'catCreate') host.innerHTML = `
+        <div class="sched-field"><label class="sched-flabel">${t('sched.catKindLbl') || 'What to publish'}</label>
+            <select class="input sched-cat-kind" style="min-width:170px">${
+                ([['tutorial', t('sched.catKindTut') || 'My tutorials'],
+                  ['theme', t('sched.catKindTheme') || 'My themes'],
+                  ['plugin', t('sched.catKindPlugin') || 'My plugins']] as [string, string][])
+                    .map(([v, l]) => `<option value="${v}"${(params.kind || 'tutorial') === v ? ' selected' : ''}>${escHtml(l)}</option>`).join('')
+            }</select></div>
+        <div class="sched-field" style="flex:1;min-width:220px"><label class="sched-flabel">${t('sched.catDirLbl') || 'Destination folder'}</label>
+            <span style="display:flex;gap:6px"><input class="input sched-ea-dir" placeholder="${escAttr(t('sched.backupDirPh') || 'folder')}" value="${escAttr(params.dir || '')}" style="flex:1"><button type="button" class="btn btn-sm btn-secondary sched-browse-dir">${t('sched.choose') || 'Choose…'}</button></span></div>
+        <div class="sched-field"><label class="sched-flabel">${t('sched.catNameLbl') || 'Catalogue name'}</label>
+            <input class="input sched-cat-name" placeholder="${escAttr(t('sched.catNamePh') || 'My catalogue')}" value="${escAttr(params.name || '')}" style="min-width:170px"></div>
+        <div class="sched-field" style="flex:1;min-width:220px"><label class="sched-flabel">${t('sched.catBaseLbl') || 'Address the files will be served from (optional)'}</label>
+            <input class="input sched-cat-base" placeholder="${escAttr(t('sched.catBasePh') || 'leave empty — they sit beside the catalogue')}" value="${escAttr(params.base || '')}"></div>
+        <span class="sched-cmd-hint">${t('sched.catHint') || 'Writes catalog.json into the folder, plus the files it points at when the kind has any. Themes are embedded in the index and have no separate files.'}</span>`;
     else if (needs === 'checkUpdate') host.innerHTML = `<label class="sched-tg"><input type="checkbox" class="sched-en" ${params.enabled ? 'checked' : ''}> ${t('sched.includePrerelease') || 'Include pre-releases'}</label>`;
     else if (needs === 'modpackExport') host.innerHTML = `
         <div class="sched-field"><label class="sched-flabel">${t('sched.mpNameLbl') || 'Modpack'}</label>
@@ -4435,6 +4541,9 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
     host.querySelector('.sched-ri-url')?.addEventListener('input', (e) => { params.url = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-ea-dir')?.addEventListener('input', (e) => { params.dir = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-ea-name')?.addEventListener('input', (e) => { params.name = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-cat-kind')?.addEventListener('change', (e) => { params.kind = (e.target as HTMLSelectElement).value; });
+    host.querySelector('.sched-cat-name')?.addEventListener('input', (e) => { params.name = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-cat-base')?.addEventListener('input', (e) => { params.base = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-ea-inc')?.addEventListener('change', (e) => { params.increment = (e.target as HTMLSelectElement).value; });
     host.querySelector('.sched-browse-dir')?.addEventListener('click', async () => {
         const { pickFolder } = await import('../../core/api.js');

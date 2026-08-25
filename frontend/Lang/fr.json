@@ -8115,5 +8115,17 @@
   "repo.cat.b.none": "Aucun",
   "tutcat.b.basePh": "laissez vide — ils seront à côté du catalogue",
   "tutcat.b.savedPartial": "Catalogue écrit, mais ceux-ci n’ont pas pu être exportés : {names}",
-  "tutcat.b.failAll": "Impossible d’écrire les tutoriels."
+  "tutcat.b.failAll": "Impossible d’écrire les tutoriels.",
+  "sched.catKindLbl": "À publier",
+  "sched.catKindTut": "Mes tutoriels",
+  "sched.catKindTheme": "Mes thèmes",
+  "sched.catKindPlugin": "Mes plugins",
+  "sched.catDirLbl": "Dossier de destination",
+  "sched.catNameLbl": "Nom du catalogue",
+  "sched.catNamePh": "Mon catalogue",
+  "sched.catBaseLbl": "Adresse depuis laquelle les fichiers seront servis (optionnel)",
+  "sched.catBasePh": "laissez vide — ils seront à côté du catalogue",
+  "sched.catHint": "Écrit catalog.json dans le dossier, ainsi que les fichiers pointés quand le type en a. Les thèmes sont intégrés à l’index et n’ont pas de fichiers séparés.",
+  "sched.catNeedDir": "Cette étape a besoin d’un dossier de destination.",
+  "sched.catDone": "{n} entrée(s) publiée(s)."
 }
