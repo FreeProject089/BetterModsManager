@@ -1810,6 +1810,64 @@ if online {
     }
 
     #[test]
+    fn the_body_of_a_printed_task_is_a_valid_snippet() {
+        // What the editor's Code mode relies on. It prints the task, strips the wrapper and
+        // the header lines the sidebar owns, and shows the rest — and it must be able to
+        // compile that rest back when you switch to Blocks. The strip lives in TypeScript;
+        // the PROPERTY belongs to the printer, so it is asserted here where the printer is.
+        let task = json!({
+            "name": "T",
+            "trigger": { "type": "weeklyAt", "time": "09:00", "days": [1] },
+            "description": "d",
+            "enabled": false,
+            "perms": { "script": true },
+            "steps": [
+                { "kind": "action", "action": { "type": "mods.scan", "params": {} } },
+                { "kind": "if", "condition": { "type": "online", "params": {} },
+                  "then": [ { "kind": "stop" } ], "else": [] }
+            ]
+        });
+        let printed = bmms_decompile(task.clone());
+
+        // The same rules stripTaskWrapper applies, restated here so a change to either side
+        // that breaks the agreement fails a test rather than a user.
+        let open = printed.find('{').unwrap();
+        let close = printed.rfind('}').unwrap();
+        let mut body: Vec<&str> = printed[open + 1..close].lines().collect();
+        while body.first().is_some_and(|l| {
+            let t = l.trim_start();
+            t.is_empty()
+                || [
+                    "every", "once", "manual", "on ", "describe", "disabled", "allow",
+                ]
+                .iter()
+                .any(|k| t.starts_with(k))
+        }) {
+            body.remove(0);
+        }
+        let snippet = body.join(
+            "
+",
+        );
+
+        let r = compile_inner(&snippet, true);
+        assert!(
+            r.ok,
+            "the body of a printed task must compile as a snippet: {:?}
+--- body ---
+{}",
+            r.errors, snippet
+        );
+        assert_eq!(
+            r.steps.unwrap().len(),
+            2,
+            "and it must be the same steps
+{}",
+            snippet
+        );
+    }
+
+    #[test]
     fn a_windows_path_keeps_its_backslashes() {
         // The most common string in this language, and the one a naive escape handler eats.
         let t = compile(r#"task "T" { do folder.open(path: "C:\mods\Skyrim") }"#);

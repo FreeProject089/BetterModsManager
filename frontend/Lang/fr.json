@@ -8139,5 +8139,8 @@
   "sched.act.catalog.create": "Publier un catalogue",
   "sched.act.code.run": "Exécuter du BMMScript (avancé)",
   "sched.actd.catalog.create": "Écrit un catalog.json dans un dossier, avec les fichiers qu’il référence. Tutoriels et plugins sont liés ; les thèmes sont intégrés.",
-  "sched.actd.code.run": "Exécute un extrait BMMScript dans cette tâche — mêmes variables, mêmes permissions."
+  "sched.actd.code.run": "Exécute un extrait BMMScript dans cette tâche — mêmes variables, mêmes permissions.",
+  "sched.modeBricks": "Blocs",
+  "sched.modeCode": "Code",
+  "sched.modeCodeTip": "Écrire cette tâche en texte. Tout ce que vous y construisez se rouvre en blocs."
 }

@@ -16571,6 +16571,22 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 
 /* The script body. Monospace because it is code, and `tab-size` because a pasted
    script indented with tabs is otherwise unreadable at the browser default of 8. */
+/* ── Blocks ⇄ Code, in the task editor ──────────────────────────────────────
+   The pane replaces the timeline rather than sitting beside it: two editable views of the
+   same steps, visible at once, would raise the question of which one is being edited. */
+.sched-mode-switch { display: inline-flex; gap: 2px; margin-left: auto; }
+.sched-mode-btn { opacity: 0.6; }
+.sched-mode-btn.on {
+    opacity: 1;
+    background: var(--bmm-bg-active);
+    border-color: var(--border);
+}
+.sched-codepane { display: flex; flex-direction: column; gap: 6px; min-height: 0; }
+.sched-codepane .sched-code { width: 100%; min-height: 320px; resize: vertical; }
+.sched-code-status { font-size: 11px; color: var(--text-muted); min-height: 15px; }
+/* Not colour alone: the message says what is wrong, and the colour only emphasises it. */
+.sched-code-status.is-bad { color: var(--danger); }
+
 .sched-code {
     font-family: var(--font-mono, ui-monospace, "Cascadia Code", Consolas, monospace);
     font-size: 12px;

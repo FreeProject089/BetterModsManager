@@ -3072,6 +3072,12 @@ function renderModal(modal: HTMLElement): void {
             <main class="modal-body sched-body sched-flow">
                 <div class="sched-flow-head">
                     <span class="sched-flow-start">${t('sched.flowStart') || 'START'}</span>
+                    <!-- Two views of ONE draft. There is no third state where the code and
+                         the bricks disagree, because there is only ever one tree. -->
+                    <span class="sched-mode-switch">
+                        <button type="button" class="btn btn-xs sched-mode-btn on" data-mode="bricks">${t('sched.modeBricks') || 'Blocks'}</button>
+                        <button type="button" class="btn btn-xs sched-mode-btn" data-mode="code" data-tooltip="${escAttr(t('sched.modeCodeTip') || 'Write this task as text. Anything you build here opens back up as blocks.')}">${t('sched.modeCode') || 'Code'}</button>
+                    </span>
                     <span class="sched-flow-hint">${t('sched.fStepsHint') || 'WHAT it does, top to bottom'} — <span class="sched-flow-hint-drag">${t('sched.dragHint') || 'drag any block into an IF/LOOP branch to nest it'}</span></span>
                     <!-- The legend must list what the language actually has. It still
                          showed four blocks after For-Each, Switch, Try and the loop
@@ -3092,6 +3098,10 @@ function renderModal(modal: HTMLElement): void {
                 <div class="sched-timeline">
                     <div id="sched-steps" class="sched-steps"></div>
                     <div class="sched-add-row" id="sched-root-add"></div>
+                </div>
+                <div class="sched-codepane" id="sched-codepane" hidden>
+                    <textarea class="input sched-code" id="sched-code-ta" rows="20" spellcheck="false"></textarea>
+                    <div class="sched-code-status" id="sched-code-status"></div>
                 </div>
             </main>
         </div>
@@ -3193,6 +3203,7 @@ function renderModal(modal: HTMLElement): void {
     });
 
     renderTriggerEditor(modal.querySelector('#sched-trigger') as HTMLElement);
+    wireCodeMode(modal);
     renderStepsEditor(modal.querySelector('#sched-steps') as HTMLElement, _draft.steps);
     renderAddRow(modal.querySelector('#sched-root-add') as HTMLElement, _draft.steps);
 }
@@ -3363,6 +3374,128 @@ function _startStepDrag(ev: MouseEvent, steps: Step[], fromIdx: number, block: H
     };
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp);
+}
+
+/**
+ * Blocks ⇄ Code, over the same draft.
+ *
+ * Going TO code prints `_draft.steps`; coming BACK compiles the text and replaces them. The
+ * one rule that matters: leaving code mode with code that does not compile is refused. The
+ * alternative is a switch that quietly keeps the old bricks while the text on screen says
+ * something else — you would go back to blocks, see your previous work, and never learn
+ * that the edit was dropped.
+ *
+ * Only the STEPS travel. The name, trigger and permissions have their own controls in the
+ * sidebar and stay in charge of themselves; printing them into the text would give every
+ * one of them two places to be edited and a rule about which wins.
+ */
+function wireCodeMode(modal: HTMLElement): void {
+    const pane = modal.querySelector('#sched-codepane') as HTMLElement | null;
+    const timeline = modal.querySelector('.sched-timeline') as HTMLElement | null;
+    const ta = modal.querySelector('#sched-code-ta') as HTMLTextAreaElement | null;
+    const status = modal.querySelector('#sched-code-status') as HTMLElement | null;
+    const btns = Array.from(modal.querySelectorAll('.sched-mode-btn')) as HTMLElement[];
+    if (!pane || !timeline || !ta || !status || !btns.length) return;
+
+    let mode: 'bricks' | 'code' = 'bricks';
+
+    const say = (msg: string, bad: boolean) => {
+        status.textContent = msg;
+        status.classList.toggle('is-bad', bad);
+    };
+
+    /** Compile what is in the box. Returns the steps, or null after reporting why not. */
+    const readCode = async (): Promise<Step[] | null> => {
+        const src = ta.value.trim();
+        // Empty is a legitimate task with no steps, not an error.
+        if (!src) return [];
+        try {
+            const r: any = await invoke('bmms_compile_steps', { source: src });
+            if (r?.ok) return (r.steps || []) as Step[];
+            const e = (r.errors || [])[0];
+            say(e ? `${t('sched.bmms.line') || 'Line'} ${e.line}:${e.col} — ${e.message}` : (t('common.error') || 'Error'), true);
+            // The cursor, on the line that is wrong. Hunting for line 34 by counting is the
+            // difference between an editor and a text box that judges you.
+            if (e?.line) {
+                const upto = ta.value.split('\n').slice(0, e.line - 1).join('\n').length + (e.line > 1 ? 1 : 0);
+                ta.focus();
+                ta.setSelectionRange(upto, upto);
+            }
+            return null;
+        } catch {
+            say(t('sched.bmms.badcode') || 'This BMMScript did not compile.', true);
+            return null;
+        }
+    };
+
+    const show = (next: 'bricks' | 'code') => {
+        mode = next;
+        timeline.hidden = next === 'code';
+        pane.hidden = next !== 'code';
+        for (const b of btns) b.classList.toggle('on', b.dataset.mode === next);
+    };
+
+    for (const b of btns) {
+        b.addEventListener('click', async () => {
+            const next = (b.dataset.mode === 'code' ? 'code' : 'bricks') as 'bricks' | 'code';
+            if (next === mode) return;
+            if (next === 'code') {
+                // Printed fresh from the draft every time, so the text can never be a stale
+                // copy of steps edited in the other view since.
+                try {
+                    ta.value = await invoke('bmms_decompile', { task: { name: _draft.name, trigger: _draft.trigger, steps: _draft.steps } }) as string;
+                    // Only the body: the header is the sidebar's business, and showing it
+                    // here would invite editing it in two places.
+                    ta.value = stripTaskWrapper(ta.value);
+                } catch { ta.value = ''; }
+                say((t('sched.bmms.ok') || '{n} step(s)').replace('{n}', String(stepCount(_draft.steps))), false);
+                show('code');
+                return;
+            }
+            const steps = await readCode();
+            if (steps === null) return;   // refused — stay here, the message says why
+            _draft.steps = steps;
+            show('bricks');
+            renderStepsEditor(modal.querySelector('#sched-steps') as HTMLElement, _draft.steps);
+            renderAddRow(modal.querySelector('#sched-root-add') as HTMLElement, _draft.steps);
+        });
+    }
+
+    // Checked as you stop typing, so the Blocks button is never the first thing to tell you
+    // there is a mistake.
+    let timer: any = null;
+    ta.addEventListener('input', () => {
+        clearTimeout(timer);
+        timer = setTimeout(async () => {
+            const steps = await readCode();
+            if (steps) say((t('sched.bmms.ok') || '{n} step(s)').replace('{n}', String(stepCount(steps))), false);
+        }, 350);
+    });
+
+    // Saving from code mode must save the CODE, not the steps it replaced. Without this a
+    // task edited entirely in text and saved without switching back would keep whatever the
+    // blocks held — the worst possible outcome and a silent one.
+    modal.querySelector('#sched-save')?.addEventListener('click', async (e) => {
+        if (mode !== 'code') return;
+        const steps = await readCode();
+        if (steps === null) { e.preventDefault(); e.stopImmediatePropagation(); return; }
+        _draft.steps = steps;
+    }, true);   // capture, so this runs BEFORE the save handler reads _draft
+}
+
+/** The body of a printed task, without its `task "…" { … }` wrapper and header lines. */
+function stripTaskWrapper(src: string): string {
+    const open = src.indexOf('{');
+    const close = src.lastIndexOf('}');
+    if (open < 0 || close <= open) return src;
+    const body = src.slice(open + 1, close).split('\n');
+    // The header lines the sidebar owns. Dropped by NAME rather than by counting lines,
+    // because how many there are depends on the task.
+    const HEADER = /^\s*(every|once|manual|on\s+app|describe|disabled|allow)\b/;
+    while (body.length && (!body[0].trim() || HEADER.test(body[0]))) body.shift();
+    while (body.length && !body[body.length - 1].trim()) body.pop();
+    // One indent level removed, so the text starts at the left margin like an editor's does.
+    return body.map((l) => (l.startsWith('    ') ? l.slice(4) : l)).join('\n');
 }
 
 function renderStepsEditor(host: HTMLElement, steps: Step[], depth = 0): void {
