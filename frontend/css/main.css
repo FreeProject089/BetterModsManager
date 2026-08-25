@@ -6943,64 +6943,6 @@ select:focus {
     letter-spacing: 0.04em;
 }
 
-/* ── diagram-reco-ctx Legend Tooltip ── */
-#docs-ctx-legend {
-    position: fixed;
-    z-index: 9999;
-    background: var(--bg-elevated, #1e2235);
-    border: 1px solid var(--bmm-s12);
-    border-radius: 10px;
-    padding: 10px 13px;
-    font-size: 11px;
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity 0.15s;
-    min-width: 230px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
-}
-
-#docs-ctx-legend.visible {
-    opacity: 1;
-}
-
-.docs-ctx-legend-title {
-    font-size: 9.5px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--text-muted);
-    margin-bottom: 7px;
-    padding-bottom: 5px;
-    border-bottom: 1px solid var(--bmm-s07);
-}
-
-.docs-ctx-legend-item {
-    display: flex;
-    align-items: flex-start;
-    gap: 7px;
-    padding: 3px 0;
-    color: var(--text-secondary);
-    transition: color 0.1s;
-}
-
-.docs-ctx-legend-item.active {
-    color: var(--text-primary);
-    font-weight: 600;
-}
-
-.docs-ctx-legend-item .ctx-sym {
-    font-size: 12px;
-    width: 14px;
-    text-align: center;
-    flex-shrink: 0;
-    margin-top: 0;
-}
-
-.docs-ctx-legend-item .ctx-sym.ctx-title     { color: var(--success); }
-.docs-ctx-legend-item .ctx-sym.ctx-main      { color: var(--accent); }
-.docs-ctx-legend-item .ctx-sym.ctx-secondary { color: var(--text-muted); }
-.docs-ctx-legend-item .ctx-sym.ctx-edge      { color: var(--text-muted); }
-
 /* ── Improved no-results state ── */
 .docs-search-no-results {
     padding: 18px 16px;
@@ -14650,21 +14592,6 @@ body.bmm-theme-light .nav-item:hover .nav-label { color: var(--bmm-accent) !impo
 .plug-doc-code-copy { cursor: pointer; transition: background 0.14s ease, color 0.14s ease; }
 .plug-doc-code-copy:hover { background: rgba(96,165,250,0.18) !important; color: var(--cyan) !important; }
 .plug-doc-code-copy.just-copied { background: rgba(16,185,129,0.22) !important; color: color-mix(in srgb, var(--bmm-success) 55%, var(--bmm-text-primary)) !important; }
-/* Docs-tab code blocks get a standalone styled box */
-#docs-tab-plugins-api .plug-code-pre {
-    font-family: var(--font-mono, monospace);
-    font-size: 11px;
-    background: rgba(0,0,0,0.25);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 12px 14px;
-    overflow-x: auto;
-    line-height: 1.6;
-    margin: 0;
-    color: var(--text-secondary);
-    white-space: pre;
-    word-break: normal;
-}
 /* info/tip callout */
 .plug-doc-tip {
     display: flex;
