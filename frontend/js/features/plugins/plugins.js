@@ -4,6 +4,7 @@ import { invoke, pickFile, saveFile, pickFolder, convertFileSrc, apiBase, apiRun
 import { toast, fetchProfileIconPaths, updateSelectProfileIcon, decorateProfileOptions, toastSaved } from '../../ui/app.js';
 import { t, getLang } from '../../core/i18n.js';
 import { escHtml, escAttr } from '../../core/utils.js';
+import { bundleEntryKind, resolveBundleEntry } from '../../core/catalog-bundle.js';
 // NOTE: this file is @ts-nocheck, so a wrong name here is a runtime ReferenceError and not a
 // build error. Checked against the exports in catalog-index.ts by hand.
 import { enabledOnly, isDisabled, setDisabled, originOf, originLabel, forgetOrigin, recordHistory, looksLikeIndex, importIndexForType, describeKinds } from '../catalogs/catalog-index.js';
@@ -28,6 +29,7 @@ async function fetchModpacks(init) {
     }
 }
 import { dispatchBmmAction, BMM_ACTIONS } from '../../ui/tutorial-events.js';
+import { showConfirm } from '../../ui/confirm.js';
 import { getLinks } from '../../core/links-config.js';
 import { fetchSourceText } from '../../core/source-fetch.js';
 // ── SVG Icons (no unicode emoji) ───────────────────────────────────────────
@@ -462,6 +464,7 @@ function buildPluginCard(plugin, source) {
             ` : `
                 <button class="btn btn-sm btn-accent plug-btn-install"
                     data-url="${escHtml(manifest.download_url || '')}"
+                    data-local="${manifest._local ? '1' : ''}"
                     data-name="${escHtml(manifest.name)}">
                     ${IC.download} ${t('plugins.install')}
                 </button>
@@ -515,7 +518,7 @@ function buildPluginCard(plugin, source) {
     }
     card.querySelector('.plug-btn-install')?.addEventListener('click', (e) => {
         const btn = e.target.closest('.plug-btn-install');
-        handleInstall(btn?.dataset.url, btn?.dataset.name);
+        handleInstall(btn?.dataset.url, btn?.dataset.name, btn?.dataset.local === '1');
     });
     return card;
 }
@@ -537,10 +540,23 @@ function setPluginCatalogSources(list) {
 function isUrlSource(src) {
     return /^https?:\/\//i.test(src.trim());
 }
-// Fetch one community source (URL → fetch_plugin_catalog ; local path → read+parse).
+// Fetch one community source.
+//
+//   https://…        → fetch_plugin_catalog
+//   bundle:<path>    → a single file holding the catalogue AND the .bmmplug files
+//   any other path   → a local catalog.json, read and parsed
+//
+// The `bundle:` prefix is explicit rather than sniffed: guessing that a source is a bundle
+// because it ends in .zip would make a mistyped URL into a file read.
 async function fetchCommunityCatalog(src) {
     let cat;
-    if (isUrlSource(src)) {
+    let dir = '';
+    if (src.startsWith('bundle:')) {
+        const res = await invoke('catalog_bundle_open', { path: src.slice('bundle:'.length) });
+        dir = String(res?.dir || '');
+        cat = JSON.parse(String(res?.catalog || ''));
+    }
+    else if (isUrlSource(src)) {
         cat = await invoke('fetch_plugin_catalog', { catalogUrl: src });
     }
     else {
@@ -549,7 +565,20 @@ async function fetchCommunityCatalog(src) {
     }
     const plugins = (cat?.plugins || []);
     // Community sources are never "official" — force the community badge/warning.
-    return plugins.map(p => ({ ...p, official: false, _source: src }));
+    return plugins.map((p) => {
+        // Inside a bundle an entry may name a file that travelled with it, or still point
+        // at a URL — both are legal in the same catalogue, and the kind is decided per
+        // entry. `_local` says which, so the installer reaches for the disk or the network
+        // deliberately instead of sniffing the string later.
+        const inside = dir && bundleEntryKind(p?.download_url) === 'inside';
+        const resolved = inside ? resolveBundleEntry(p.download_url, dir) : '';
+        return {
+            ...p,
+            official: false,
+            _source: src,
+            ...(resolved ? { download_url: resolved, _local: true } : {}),
+        };
+    });
 }
 // Merge official catalog + all community sources, de-duped by id (official wins).
 async function fetchMergedPluginCatalog() {
@@ -606,6 +635,8 @@ async function renderCatalog(container) {
                 <input type="text" id="plug-source-input" class="input" placeholder="https://.../catalog.json">
                 <button class="btn btn-sm btn-accent" id="plug-source-add">${IC.plus} ${t('common.add') || 'Add'}</button>
                 <button class="btn btn-sm btn-ghost" id="plug-source-file">${IC.upload} ${t('plugins.importJsonFile') || 'Import .json'}</button>
+                <button class="btn btn-sm btn-ghost" id="plug-source-bundle"
+                        title="${escAttr(t('plugins.openBundleTip'))}">${IC.upload} ${t('plugins.openBundle')}</button>
             </div>
             ${sourceAccessHtml('plug')}
             <div id="plug-sources-list" class="plug-sources-list"></div>
@@ -694,6 +725,26 @@ async function renderCatalog(container) {
         if (path)
             await addSource(path);
     });
+    // A catalogue that came as one file, plugins included. Opened before it is added, so a
+    // file that is not one fails HERE with the reason rather than becoming a source that
+    // errors every time this tab is drawn.
+    container.querySelector('#plug-source-bundle')?.addEventListener('click', async () => {
+        const path = await pickFile({ filters: [{ name: 'Catalogue bundle', extensions: ['zip'] }] });
+        if (!path)
+            return;
+        try {
+            const res = await invoke('catalog_bundle_open', { path });
+            const doc = JSON.parse(String(res?.catalog || ''));
+            if (!Array.isArray(doc?.plugins)) {
+                toast(t('plugins.bundleNotPluginCat'), 'error');
+                return;
+            }
+            await addSource(`bundle:${path}`);
+        }
+        catch (e) {
+            toast(`${t('plugins.bundleBad')}: ${e}`, 'error');
+        }
+    });
     renderSourcesList(container);
     try {
         if (!_catalog) {
@@ -772,6 +823,8 @@ function openPluginCatalogBuilder(onSourcesChanged) {
                         </div>
                         <button class="btn btn-xs btn-secondary plug-cat-edit" data-id="${escAttr(d.id)}">${t('plugins.edit') || 'Edit'}</button>
                         <button class="btn btn-xs btn-ghost plug-cat-export" data-id="${escAttr(d.id)}">${IC.exportIcon} ${t('plugins.export') || 'Export'}</button>
+                        <button class="btn btn-xs btn-ghost plug-cat-publish" data-id="${escAttr(d.id)}"
+                                title="${escAttr(t('plugins.catPublishTip') || 'Write a folder holding the catalogue AND the plugins — optionally as one file, so it can be sent with no host at all')}">${IC.upload || IC.exportIcon} ${t('plugins.catPublish') || 'Publish…'}</button>
                         <button class="btn btn-xs btn-ghost plug-cat-del" data-id="${escAttr(d.id)}" style="color:var(--danger)">${IC.trash || IC.x}</button>
                     </div>`).join('') : `<p class="plug-sources-empty">${t('plugins.noMyCatalogs') || 'No catalog yet — create your first one.'}</p>`}
             </div>
@@ -791,6 +844,17 @@ function openPluginCatalogBuilder(onSourcesChanged) {
             const d = drafts.find(x => x.id === b.dataset.id);
             if (d)
                 exportDraft(d);
+        }));
+        panel.querySelectorAll('.plug-cat-publish').forEach(b => b.addEventListener('click', async () => {
+            const d = drafts.find(x => x.id === b.dataset.id);
+            if (!d)
+                return;
+            // Asked, not assumed: the folder is the host-it-on-GitHub shape and the single
+            // file is the send-it-to-one-person shape, and neither is the obvious default.
+            // The shared confirm only has yes and no, so the question is phrased to fit that
+            // rather than pretending there are two equal buttons.
+            const one = await showConfirm(t('plugins.catPublishTitle'), t('plugins.catPublishAsk'), false);
+            await publishDraft(d, one === true);
         }));
         panel.querySelectorAll('.plug-cat-del').forEach(b => b.addEventListener('click', async () => {
             const ok = await window.confirmCustom(t('plugins.deleteCatalog') || 'Delete catalog?', t('plugins.deleteCatalogDesc') || 'This removes the draft from this device. Exported files are not affected.', 'danger', { yesLabel: t('common.delete') || 'Delete', noLabel: t('common.cancel') || 'Cancel' });
@@ -815,6 +879,74 @@ function openPluginCatalogBuilder(onSourcesChanged) {
             toast(`${t('common.error')}: ${e}`, 'error');
             return null;
         }
+    };
+    /**
+     * Write the catalogue as a FOLDER, with the plugins in it.
+     *
+     * `exportDraft` above writes the catalog.json on its own, which is the right thing when
+     * the plugins are already hosted somewhere — the entry carries a URL and BMM downloads
+     * it. This is the other case: the plugins travel WITH the catalogue.
+     *
+     * Every entry whose id matches an installed plugin is exported beside the catalogue as
+     * `<id>.bmmplug`, through the same `export_plugin` a hand-export uses — signed, whole
+     * folder, nothing thinner than what you would have sent by hand. Its address becomes
+     * the bare filename, which is relative, so the folder keeps working when it is moved or
+     * forked.
+     *
+     * An entry that is NOT installed keeps whatever address it had. That is the mixed case
+     * and it is deliberate: a catalogue can carry the three small plugins and still point
+     * at the 90 MB one on a CDN.
+     */
+    const publishDraft = async (d, bundle) => {
+        const dir = await pickFolder().catch(() => null);
+        if (!dir)
+            return;
+        const sep = dir.includes('\\') ? '\\' : '/';
+        const slug = (d.name || 'catalog').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'catalog';
+        const out = JSON.parse(JSON.stringify(d));
+        let packed = 0;
+        let kept = 0;
+        for (const entry of out.plugins) {
+            const installed = _installedPlugins.find((p) => p.manifest.id === entry.id);
+            if (!installed) {
+                kept++;
+                continue;
+            }
+            const file = `${entry.id}.bmmplug`;
+            try {
+                await invoke('export_plugin', { pluginId: entry.id, destPath: `${dir}${sep}${file}` });
+                entry.download_url = file;
+                packed++;
+            }
+            catch (e) {
+                // Named, and the entry keeps its old address: a catalogue that silently lost
+                // one plugin is worse than one that says which.
+                toast(`${t('plugins.catPackFailed') || 'Could not pack'} ${entry.id}: ${e}`, 'warning');
+                kept++;
+            }
+        }
+        try {
+            await invoke('write_text_file', { path: `${dir}${sep}catalog.json`, content: draftToCatalogJson(out) });
+        }
+        catch (e) {
+            toast(`${t('common.error')}: ${e}`, 'error');
+            return;
+        }
+        let bundleNote = '';
+        if (bundle) {
+            const res = await invoke('catalog_bundle_pack', { dir, out: `${dir}${sep}${slug}.zip` })
+                .catch((e) => { toast(`${t('common.error')}: ${e}`, 'error'); return null; });
+            if (res) {
+                bundleNote = ` — ${(t('plugins.catPacked') || 'packed into {f}').replace('{f}', `${slug}.zip`)}`;
+                if (res.missing?.length) {
+                    toast((t('plugins.catPackMissing') || 'The catalogue names {n} file(s) that are not in the folder: {list}')
+                        .replace('{n}', String(res.missing.length))
+                        .replace('{list}', res.missing.slice(0, 5).join(', ')), 'warning', 7000);
+                }
+            }
+        }
+        toast((t('plugins.catPublished') || 'Published — {n} plugin(s) packed, {k} left pointing at their address')
+            .replace('{n}', String(packed)).replace('{k}', String(kept)) + bundleNote, 'success');
     };
     // ── Editor view ──
     const renderEditor = () => {
@@ -9407,21 +9539,31 @@ function handlePluginChecksumModal(manifest, installDir, hash) {
     });
 }
 // ── Action Handlers ────────────────────────────────────────────────────────
-async function handleInstall(downloadUrl, name) {
+async function handleInstall(downloadUrl, name, local = false) {
     if (!downloadUrl) {
         toast(t('plugins.noDownloadUrl'), 'error');
         return;
     }
     try {
         toast(`${IC.download} ${t('plugins.installing')} ${name}...`, 'info');
-        const plugin = await invoke('install_plugin', { downloadUrl });
+        // From a bundle it is a file BMM extracted itself, so it is read rather than
+        // fetched — handing a path to the downloader produces an error that names neither
+        // the file nor the reason.
+        const plugin = local
+            ? await invoke('install_plugin_from_file', { filePath: downloadUrl })
+            : await invoke('install_plugin', { downloadUrl });
         _installedPlugins = _installedPlugins.filter(p => p.manifest.id !== plugin.manifest.id);
         _installedPlugins.push(plugin);
-        // Remember the catalog source so this plugin can be auto-updated later.
-        try {
-            localStorage.setItem('bmm_plugin_src_' + plugin.manifest.id, downloadUrl);
+        // Remember the catalog source so this plugin can be auto-updated later — but only
+        // when it IS a source. A bundle entry resolves to a path in an extraction cache
+        // that BMM is free to delete, so storing it would leave auto-update pointing at a
+        // file that stops existing, and pointing at a stale copy until it does.
+        if (!local) {
+            try {
+                localStorage.setItem('bmm_plugin_src_' + plugin.manifest.id, downloadUrl);
+            }
+            catch { /* ignore */ }
         }
-        catch { /* ignore */ }
         toast(t('plugins.installSuccess', { name }), 'success');
         dispatchBmmAction(BMM_ACTIONS.PLUGIN_INSTALLED, { name });
         renderTab(_tab);
