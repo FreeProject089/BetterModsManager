@@ -114,7 +114,9 @@
     --bmm-radius-input: 9px;
     --bmm-radius-chip:  20px;
     --bmm-sidebar-w:    240px;
-    --bmm-titlebar-h:   38px;
+    /* 38px left 5px above a 28px button, which reads as glued to the frame. 42 gives 7px
+       above and below — the buttons stay centred, so the spacing cannot go lopsided. */
+    --bmm-titlebar-h:   42px;
 
     /* ── Shadows / Glows ──────────────────────────────────────────────────── */
     --bmm-shadow-card: 0 4px 24px rgba(0, 0, 0, 0.4);

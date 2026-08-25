@@ -122,7 +122,11 @@ img {
     padding: 0 12px 0 16px;
     position: fixed;
     top: 0;
-    left: 0;
+    /* Stops at the sidebar's edge rather than crossing it. The sidebar runs the full height
+       of the window now, so a bar spanning the whole width would sit ON its first 38px —
+       covering the top of the brand block, which is what made the rail look like it started
+       part-way down. The offline banner already anchors here for the same reason. */
+    left: var(--sidebar-w);
     right: 0;
     z-index: 1000;
     backdrop-filter: blur(var(--bmm-titlebar-blur));
@@ -274,6 +278,12 @@ body.is-maximized .titlebar-spacer {
     flex-direction: column;
     flex-shrink: 0;
     overflow: hidden;
+    /* Out through the shell's top padding, so the rail runs from the very top of the window
+       to the very bottom. Done here rather than by dropping the shell's padding: that padding
+       is what keeps the CONTENT clear of the fixed title bar, and moving it onto .content-area
+       would put it inside the scroll box the virtual mod list measures against. */
+    margin-top: calc(-1 * var(--titlebar-h));
+    height: calc(100% + var(--titlebar-h));
 }
 
 /* Brand */
@@ -16690,6 +16700,66 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 .sched-tcb-foot { display: flex; align-items: center; gap: 8px; }
 .sched-tcb-count { font-size: 11px; color: var(--text-muted); }
 .sched-pc-publish { width: 100%; justify-content: center; margin-top: 6px; }
+
+/* ── Compact grid: the DETAIL panel too ─────────────────────────────
+   Compact used to mean "shorter cards", and the moment you opened one you got the full-size
+   panel — a 635px form dropped into a list whose rows are 54px. The setting says how much
+   room you want the library to take, and the panel is part of the library.
+   The panel is a CHILD of its card, so `.mod-list.compact` reaches it with no JS at all.
+
+   `!important` appears where the markup carries inline styles. It is not laziness: those
+   sizes are written on the elements themselves, and a stylesheet cannot outrank them any
+   other way. Each one is a specific element, never a blanket rule. */
+.mod-list.compact .mod-detail-panel.inline-panel {
+    margin-top: 8px;
+    padding: 10px;
+}
+.mod-list.compact .mod-detail-panel .detail-header { padding-bottom: 8px; }
+/* The number that actually decides how much screen the panel eats.
+   The body carries `max-height: calc(100vh - 180px)` inline and already scrolls, so its
+   height is pinned to the VIEWPORT rather than to its content — which is why shrinking every
+   field inside it moved the panel by 22px and nothing more. Compact means "give the library
+   back its room", and this is the room. */
+.mod-list.compact .mod-detail-panel .detail-body {
+    max-height: calc(52vh - 40px) !important;
+    gap: 5px !important;
+    margin-top: 8px !important;
+}
+.mod-list.compact .mod-detail-panel .detail-label {
+    font-size: 10px;
+    margin-bottom: 3px;
+}
+.mod-list.compact .mod-detail-panel .input-field {
+    font-size: 12px;
+    padding: 5px 8px;
+}
+/* The description box carries `min-height:80px;padding:10px` inline. Left alone it is the
+   single tallest thing in the panel and compact mode would barely show. */
+.mod-list.compact .mod-detail-panel #detail-desc {
+    min-height: 46px !important;
+    padding: 6px 8px !important;
+    line-height: 1.4 !important;
+}
+.mod-list.compact .mod-detail-panel .collapsible-header { padding: 7px 10px; }
+.mod-list.compact .mod-detail-panel .collapsible-content { padding: 0 10px 10px; }
+.mod-list.compact .mod-detail-panel .collapsible-header h4 { font-size: 10px; }
+/* Inline `margin-top:10px` on each row of the form, and an inline grid gap. */
+.mod-list.compact .mod-detail-panel .detail-section[style*="margin-top"],
+.mod-list.compact .mod-detail-panel > div[style*="margin-top"] { margin-top: 6px !important; }
+.mod-list.compact .mod-detail-panel [style*="grid-template-columns"] { gap: 6px !important; }
+/* A scroll box sized for the standard panel keeps the compact one tall for no reason — it
+   scrolls either way, so the only thing the larger value buys is height. */
+.mod-list.compact .mod-detail-panel #detail-conflicts-list { max-height: 120px !important; }
+.mod-list.compact .mod-detail-panel #detail-tags-list { margin-bottom: 5px !important; }
+/* The card holds the panel, and its compact rule caps what the row shows. Opening one has to
+   let it grow, or the panel is drawn and then clipped to 54px — present, invisible, and
+   impossible to tell apart from "clicking the card does nothing". */
+.mod-list.compact .mod-card.selected {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    flex-wrap: wrap;
+}
 
 /* ── BMMScript completion ───────────────────────────────────────────────────
    On <body>, not inside the modal: a panel clipped by the code pane's overflow would be

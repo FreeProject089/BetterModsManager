@@ -159,7 +159,11 @@ body.is-maximized #app-mascot-container {
 #app-window-outer .titlebar {
     position: absolute; /* Relative to #app-window-outer */
     top: 0;
-    left: 0;
+    /* The sidebar runs the full height of the window, so the bar stops at its edge — the
+       same value main.css sets. This rule only exists to re-anchor `position` to the wrapper,
+       and repeating `left: 0` here quietly beat that: higher specificity, and the bar drew
+       over the top of the rail with nothing to say it had. */
+    left: var(--sidebar-w);
     right: 0;
 }
 
