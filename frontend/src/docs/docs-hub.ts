@@ -744,7 +744,7 @@ La référence complète champ par champ, avec chaque clé optionnelle et un tab
       {
         id: 'scheduler', view: 'settings', diagram: 'scheduler', docsPath: 'features/scheduler/',
         title: { en: 'Scheduling & automation', fr: 'Planification & automatisation' },
-        summary: { en: 'A real automation builder — triggers, conditions, loops and ~60 actions.', fr: 'Un vrai constructeur d’automatisations — déclencheurs, conditions, boucles et ~60 actions.' },
+        summary: { en: 'A real automation builder — triggers, conditions, loops and 75 actions.', fr: 'Un vrai constructeur d’automatisations — déclencheurs, conditions, boucles et 75 actions.' },
         keywords: 'scheduler cron automate task timer trigger loop condition bmmpa planificateur automatiser boucle',
         body: {
           en: `The **Scheduler** turns BMM into an automation tool: a task pairs a **trigger** (when) with a **workflow** (what) — and workflows can branch, loop and wait, not just run a flat list.
@@ -754,7 +754,7 @@ La référence complète champ par champ, avec chaque clé optionnelle et un tab
 Every N minutes/hours, daily/weekly/monthly at a time, once, on app start, or manual (you run it).
 :::
 :::step[Build the workflow]
-Add actions (~60 — activate a profile, enable a modpack, sync a repo, benchmark a disk, launch an app…), plus the full control-flow set: **IF/ELSE**, **LOOP** (while / until / do-while / N times), **FOR EACH** (over every enabled mod, profile, modpack or theme, with \`{item.name}\` in the body), **SWITCH**, **WAIT UNTIL**, and **TRY / ON ERROR** with **BREAK**, **CONTINUE** and **STOP**. Per-run variables let a measured value drive a later branch.
+Add actions (75 — activate a profile, enable a modpack, sync a repo, benchmark a disk, launch an app…), plus the full control-flow set: **IF/ELSE**, **LOOP** (while / until / do-while / N times), **FOR EACH** (over every enabled mod, profile, modpack or theme, with \`{item.name}\` in the body), **SWITCH**, **WAIT UNTIL**, and **TRY / ON ERROR** with **BREAK**, **CONTINUE** and **STOP**. Per-run variables let a measured value drive a later branch.
 :::
 :::step[Let it run]
 While BMM is open a timer fires due tasks. Hit :kbd[▶] **Run now** any time, or **Test run** the unsaved draft.
@@ -772,7 +772,9 @@ A step can **Run a script** — PowerShell, CMD, Bash, Python, JavaScript (Node)
 There is also **Run external program** for the simpler case of launching something with arguments.
 
 :::tip[Permissions are per task, and each names what it unlocks]
-A task grants three capabilities separately: **Run external programs**, **Run scripts**, and **Fire deeplinks**. Each is off until you turn it on, and a step whose permission is missing fails with a message naming the one to grant — it never runs quietly.
+A task grants four capabilities separately: **Run external programs**, **Run scripts**, **Fire deeplinks**, and **Stop a program**. Each is off until you turn it on, and a step whose permission is missing fails with a message naming the one to grant — it never runs quietly.
+
+**A task that arrives in a FILE gets none of the four.** Importing a \`.bmmpa\`, or adding a shared \`.bmmscript\`, removes every grant and leaves the task **disabled** — then says what the file had asked for. The automation is intact and one toggle away; what it cannot do is arrive already holding permission to run programs on a timer.
 
 **Fire deeplinks** deserves a moment: a \`bmm://\` link reaches anything the app exposes, including actions with no step of their own, so it is the widest of the three. Tasks made before permissions were split keep what they already had, but none gains *Run scripts* — that capability did not exist when you agreed to the old single checkbox.
 :::
@@ -785,7 +787,7 @@ It can drive [Launch Packs](doc:launch-packs), your [storage](doc:storage-manage
 Toutes les N minutes/heures, chaque jour/semaine/mois à une heure, une fois, au démarrage de l’app, ou manuel (tu le lances).
 :::
 :::step[Construis le workflow]
-Ajoute des actions (~60 — activer un profil, appliquer un modpack, synchroniser un dépôt, benchmarker un disque, lancer une app…), plus des blocs **SI/SINON**, **BOUCLE** et **ATTENDRE**, avec des variables par exécution pour qu’une valeur mesurée pilote une branche suivante, plus tout le contrôle de flux : **SI/SINON**, **BOUCLE** (tant que / jusqu'à / do-while / N fois), **POUR CHAQUE** (sur chaque mod activé, profil, modpack ou thème, avec \`{item.name}\` dans le corps), **SWITCH**, **ATTENDRE**, et **ESSAYER / EN CAS D'ERREUR** avec **SORTIR**, **CONTINUER** et **ARRÊTER**.
+Ajoute des actions (75 — activer un profil, appliquer un modpack, synchroniser un dépôt, benchmarker un disque, lancer une app…), plus des blocs **SI/SINON**, **BOUCLE** et **ATTENDRE**, avec des variables par exécution pour qu’une valeur mesurée pilote une branche suivante, plus tout le contrôle de flux : **SI/SINON**, **BOUCLE** (tant que / jusqu'à / do-while / N fois), **POUR CHAQUE** (sur chaque mod activé, profil, modpack ou thème, avec \`{item.name}\` dans le corps), **SWITCH**, **ATTENDRE**, et **ESSAYER / EN CAS D'ERREUR** avec **SORTIR**, **CONTINUER** et **ARRÊTER**.
 :::
 :::step[Laisse-le tourner]
 Tant que BMM est ouvert, une minuterie déclenche les tâches dues. Fais :kbd[▶] **Lancer maintenant** à tout moment, ou **Test** sur le brouillon non enregistré.
@@ -803,7 +805,9 @@ Une étape peut **Exécuter un script** — PowerShell, CMD, Bash, Python, JavaS
 Il existe aussi **Lancer un programme externe** pour le cas plus simple d’un exécutable avec des arguments.
 
 :::tip[Les permissions sont par tâche, et chacune dit ce qu’elle débloque]
-Une tâche accorde trois capacités séparément : **Lancer des programmes externes**, **Exécuter des scripts** et **Déclencher des deeplinks**. Chacune est désactivée tant que tu ne l’actives pas, et une étape dont la permission manque échoue avec un message indiquant laquelle accorder — elle ne s’exécute jamais en silence.
+Une tâche accorde quatre capacités séparément : **Lancer des programmes externes**, **Exécuter des scripts**, **Déclencher des deeplinks** et **Arrêter un programme**. Chacune est désactivée tant que tu ne l’actives pas, et une étape dont la permission manque échoue avec un message indiquant laquelle accorder — elle ne s’exécute jamais en silence.
+
+**Une tâche qui arrive dans un FICHIER n’en reçoit aucune.** Importer un \`.bmmpa\`, ou ajouter un \`.bmmscript\` partagé, retire les quatre autorisations et laisse la tâche **désactivée** — puis dit ce que le fichier demandait. L’automatisation est intacte et à un interrupteur de fonctionner ; ce qu’elle ne peut pas faire, c’est arriver en tenant déjà le droit de lancer des programmes à intervalle régulier.
 
 **Déclencher des deeplinks** mérite une seconde d’attention : un lien \`bmm://\` atteint tout ce que l’app expose, y compris des actions sans étape dédiée — c’est la plus large des trois. Les tâches créées avant la séparation gardent ce qu’elles avaient déjà, mais aucune ne gagne *Exécuter des scripts* : cette capacité n’existait pas quand tu as coché l’ancienne case unique.
 :::
