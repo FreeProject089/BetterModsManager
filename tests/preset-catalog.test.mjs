@@ -10,7 +10,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const { parsePresetFeed, looksLikePresetFeed } = await import(
+const { parsePresetFeed, looksLikePresetFeed, resolveEntryUrl } = await import(
   pathToFileURL(join(ROOT, 'frontend/js/features/settings/preset-catalog.js')).href
 );
 
@@ -88,5 +88,56 @@ describe('looksLikePresetFeed', () => {
     assert.equal(looksLikePresetFeed({ plugins: [] }), false);
     assert.equal(looksLikePresetFeed({ apps: [] }), false);
     assert.equal(looksLikePresetFeed(null), false);
+  });
+});
+
+
+describe('resolveEntryUrl — a catalog that ships its files beside it', () => {
+  const CAT = 'https://raw.githubusercontent.com/me/tasks/main/catalog.json';
+
+  test('a bare filename resolves against the catalog', () => {
+    assert.equal(resolveEntryUrl('nightly.bmmpa', CAT),
+      'https://raw.githubusercontent.com/me/tasks/main/nightly.bmmpa');
+  });
+
+  test('a subfolder resolves too', () => {
+    assert.equal(resolveEntryUrl('packs/nightly.bmmpa', CAT),
+      'https://raw.githubusercontent.com/me/tasks/main/packs/nightly.bmmpa');
+  });
+
+  test('an absolute address is left exactly as it is', () => {
+    assert.equal(resolveEntryUrl('https://elsewhere.example/x.bmmpa', CAT),
+      'https://elsewhere.example/x.bmmpa');
+  });
+
+  test('javascript: is refused even though resolving it "succeeds"', () => {
+    // The trap: `new URL` gives an absolute URL its own scheme regardless of the base, so
+    // this comes OUT of resolution unchanged. Checking the input and trusting the output
+    // would pass it straight to the fetcher.
+    assert.equal(resolveEntryUrl('javascript:alert(1)', CAT), '');
+    assert.equal(resolveEntryUrl('file:///C:/windows/system32/x', CAT), '');
+    assert.equal(resolveEntryUrl('data:text/plain,hi', CAT), '');
+  });
+
+  test('a relative name in a catalog read off disk resolves to nothing', () => {
+    // There is no base. Inventing one would turn a name in a downloaded document into a
+    // path on this machine.
+    assert.equal(resolveEntryUrl('nightly.bmmpa', 'C:/Users/me/catalog.json'), '');
+    assert.equal(resolveEntryUrl('nightly.bmmpa', ''), '');
+  });
+
+  test('the feed parser uses it, so a relative entry survives', () => {
+    const { presets, dropped } = parsePresetFeed(
+      { presets: [{ id: 'p1', name: 'Nightly', download_url: 'nightly.bmmpa' }] }, CAT);
+    assert.equal(dropped.length, 0);
+    assert.equal(presets[0].downloadUrl,
+      'https://raw.githubusercontent.com/me/tasks/main/nightly.bmmpa');
+  });
+
+  test('…and a relative entry with no base is still dropped, not shown', () => {
+    const { presets, dropped } = parsePresetFeed(
+      { presets: [{ id: 'p1', name: 'Nightly', download_url: 'nightly.bmmpa' }] }, '');
+    assert.equal(presets.length, 0);
+    assert.equal(dropped.length, 1);
   });
 });

@@ -20,6 +20,8 @@ import { parseHeaderLines, readJsonPath, statusIsFailure } from './http-action.j
 import { inspectBmmpa } from './bmmpa-inspect.js';
 import { parsePresetFeed, looksLikePresetFeed, readPresetCatalogs, writePresetCatalogs } from './preset-catalog.js';
 import { mountCompletions } from './bmms-complete.js';
+import { raiseAboveAll } from '../../ui/layer.js';
+import { safeFileStem, planTaskCatalog } from './task-catalog.js';
 import {
     originLabel, originOf, forgetOrigin, isDisabled, setDisabled, recordHistory,
     hasSource, looksLikeIndex, catalogLooksLike, importIndexForType,
@@ -5373,11 +5375,7 @@ export async function exportTasksFile(): Promise<void> {
 export async function exportOneTask(id: string): Promise<void> {
     const task = _tasks.find((x) => x.id === id);
     if (!task) { toast(t('sched.noTasks') || 'No tasks to export', 'info'); return; }
-    // A task name becomes a filename here, so anything a filesystem treats specially has
-    // to go — including the path separators, or the save dialog opens somewhere else.
-    const safe = String(task.name || 'automation')
-        .replace(/[<>:"/\\|?*\x00-\x1f]/g, '-').replace(/\s+/g, '-')
-        .replace(/^[.\s-]+|[.\s-]+$/g, '').slice(0, 60) || 'automation';
+    const safe = safeFileStem(task.name);
     // Everything it calls, transitively. Sharing a task that runs two other tasks used
     // to share one third of an automation: it imported, the step was there, and it failed
     // at run time on an id that means nothing on the other machine.
@@ -5489,6 +5487,169 @@ async function loadPresetSources(): Promise<{ presets: any[]; sources: PresetSou
 /// Which open of the catalogue panel is current. Bumped on every open, cleared on close, so
 /// a slow load that finishes after the reader walked away knows it is stale.
 let _catalogOpenToken = 0;
+
+/**
+ * Publish a catalog of your own automations.
+ *
+ * BMM could READ a preset catalog and had no way to make one, so publishing meant writing
+ * catalog.json by hand and getting the field names right from a document nobody had — the
+ * asymmetry that makes a format feel closed even when it is not.
+ *
+ * It writes a FOLDER, not a file: one signed `.bmmpa` per automation, plus a `catalog.json`
+ * beside them. That shape is the whole point — drop the folder on GitHub, GitHub Pages, or
+ * any static host, point BMM at the catalog.json, and it works.
+ *
+ * The addresses it writes are RELATIVE by default (`nightly.bmmpa`, not
+ * `https://…/nightly.bmmpa`), because a catalog that names its own host stops working the
+ * moment it is moved, mirrored or forked — and being forked is the normal life of a folder
+ * on GitHub. The reader resolves them against wherever it fetched the catalog from. An
+ * absolute base is offered for the case where the files really do live somewhere else.
+ */
+export async function openTaskCatalogBuilder(): Promise<void> {
+    if (!_tasks.length) { toast(t('sched.tcb.noTasks') || 'You have no automations to publish yet', 'info'); return; }
+
+    const picked = new Set<string>();
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-generic-overlay sched-tcb-overlay open';
+    raiseAboveAll(overlay, 11000);
+
+    const row = (task: Task) => `
+        <label class="sched-tcb-row">
+            <input type="checkbox" class="sched-tcb-cb" data-id="${escAttr(task.id)}">
+            <span class="sched-tcb-name">${escHtml(task.name || task.id)}</span>
+            <span class="sched-tcb-n">${stepCount(task.steps)} ${escHtml(t('sched.tcb.steps') || 'steps')}</span>
+        </label>`;
+
+    overlay.innerHTML = `
+        <div class="modal sched-tcb-modal">
+            <div class="modal-header">
+                <div style="display:flex;align-items:center;gap:12px;">
+                    <div class="sched-tcb-icon">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--bmm-accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21V11"/><path d="m8 15 4-4 4 4"/><path d="M4.4 15.3A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.4 8.3"/></svg>
+                    </div>
+                    <div>
+                        <h2 style="margin:0;font-size:16px;">${escHtml(t('sched.tcb.title') || 'Publish a catalogue of automations')}</h2>
+                        <p style="margin:0;font-size:11px;color:var(--bmm-text-muted);">${escHtml(t('sched.tcb.sub') || 'A folder you can drop on GitHub or any static host')}</p>
+                    </div>
+                </div>
+                <button class="modal-close" id="sched-tcb-close" data-tooltip="${escAttr(t('common.close') || 'Close')}">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </div>
+            <div class="sched-tcb-body">
+                <div class="sched-tcb-fields">
+                    <label class="sched-label">${escHtml(t('sched.tcb.name') || 'Catalogue name')}</label>
+                    <input class="input" id="sched-tcb-name" placeholder="${escAttr(t('sched.tcb.namePh') || 'My automations')}">
+                    <label class="sched-label" style="margin-top:10px">${escHtml(t('sched.tcb.base') || 'Where the files will live (optional)')}</label>
+                    <input class="input" id="sched-tcb-base" placeholder="${escAttr(t('sched.tcb.basePh') || 'leave empty — addresses stay relative')}" spellcheck="false">
+                    <p class="sched-tcb-hint">${escHtml(t('sched.tcb.baseHint') || 'Empty is the right answer almost always: the addresses stay relative, so the folder keeps working when it is moved, mirrored or forked. Fill this in only when the .bmmpa files will sit somewhere other than beside the catalogue.')}</p>
+                </div>
+                <div class="sched-tcb-listh">
+                    <span>${escHtml(t('sched.tcb.pick') || 'What goes in it')}</span>
+                    <button type="button" class="btn btn-xs btn-ghost" id="sched-tcb-all">${escHtml(t('common.selectAll') || 'All')}</button>
+                    <button type="button" class="btn btn-xs btn-ghost" id="sched-tcb-none">${escHtml(t('common.selectNone') || 'None')}</button>
+                </div>
+                <div class="sched-tcb-list">${_tasks.map(row).join('')}</div>
+            </div>
+            <div class="modal-footer sched-tcb-foot">
+                <span class="sched-tcb-count" id="sched-tcb-count"></span>
+                <div style="flex:1"></div>
+                <button class="btn btn-sm btn-ghost" id="sched-tcb-cancel">${escHtml(t('common.cancel') || 'Cancel')}</button>
+                <button class="btn btn-sm btn-accent" id="sched-tcb-go" disabled>${escHtml(t('sched.tcb.export') || 'Choose a folder…')}</button>
+            </div>
+        </div>`;
+    (document.getElementById('app-window-outer') || document.body).appendChild(overlay);
+
+    const close = () => overlay.remove();
+    const goBtn = overlay.querySelector('#sched-tcb-go') as HTMLButtonElement;
+    const countEl = overlay.querySelector('#sched-tcb-count') as HTMLElement;
+    const refresh = () => {
+        countEl.textContent = (t('sched.tcb.count') || '{n} selected').replace('{n}', String(picked.size));
+        goBtn.disabled = picked.size === 0;
+    };
+    refresh();
+
+    overlay.querySelectorAll('.sched-tcb-cb').forEach((cb) => cb.addEventListener('change', (e) => {
+        const el = e.target as HTMLInputElement;
+        if (el.checked) picked.add(el.dataset.id!); else picked.delete(el.dataset.id!);
+        refresh();
+    }));
+    const setAll = (on: boolean) => {
+        overlay.querySelectorAll('.sched-tcb-cb').forEach((cb) => {
+            (cb as HTMLInputElement).checked = on;
+            if (on) picked.add((cb as HTMLElement).dataset.id!); else picked.delete((cb as HTMLElement).dataset.id!);
+        });
+        refresh();
+    };
+    overlay.querySelector('#sched-tcb-all')?.addEventListener('click', () => setAll(true));
+    overlay.querySelector('#sched-tcb-none')?.addEventListener('click', () => setAll(false));
+    overlay.querySelector('#sched-tcb-close')?.addEventListener('click', close);
+    overlay.querySelector('#sched-tcb-cancel')?.addEventListener('click', close);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+
+    goBtn.addEventListener('click', async () => {
+        const chosen = _tasks.filter((x) => picked.has(x.id));
+        if (!chosen.length) return;
+        const name = (overlay.querySelector('#sched-tcb-name') as HTMLInputElement).value.trim()
+            || (t('sched.tcb.namePh') || 'My automations');
+        let base = (overlay.querySelector('#sched-tcb-base') as HTMLInputElement).value.trim();
+        if (base && !/^https?:\/\//i.test(base)) {
+            toast(t('sched.tcb.badBase') || 'The address must start with http:// or https:// — or leave it empty', 'warning');
+            return;
+        }
+        base = base.replace(/\/+$/, '');
+
+        const { pickFolder } = await import('../../core/api.js');
+        const dir = await pickFolder().catch(() => null);
+        if (!dir) return;
+
+        goBtn.disabled = true;
+        try {
+            await writeTaskCatalog(dir, name, base, chosen);
+            close();
+        } catch (e) {
+            toast(`${t('common.error') || 'Error'}: ${e}`, 'error');
+            goBtn.disabled = false;
+        }
+    });
+}
+
+/**
+ * Write the folder: one .bmmpa per automation, and the catalog.json that lists them.
+ *
+ * Separate from the modal so the part that can go wrong is the part that can be read. Each
+ * file is written through `write_signed_document`, the same path a normal export takes — a
+ * catalog whose files were unsigned while a hand-export was signed would be a quieter file
+ * for no reason anybody chose.
+ */
+async function writeTaskCatalog(dir: string, name: string, base: string, tasks: Task[]): Promise<void> {
+    const sep = dir.includes('\\') ? '\\' : '/';
+    const plan = planTaskCatalog(tasks, base);
+    let unsigned = 0;
+
+    for (const { task, stem } of plan) {
+        // Everything it calls, transitively — sub-tasks, blocks, launch packs, plugins. The
+        // same collector a hand-export uses, so a published automation is not a thinner
+        // thing than a shared one.
+        const includes = await collectIncludes([task]);
+        const payload = JSON.stringify({
+            magic: BMMPA_MAGIC, version: 1, exported: new Date().toISOString(), tasks: [task],
+            ...(Object.keys(includes).length ? { includes } : {}),
+        }, null, 2);
+        const signed = await invoke('write_signed_document', {
+            path: `${dir}${sep}${stem}.bmmpa`, json: payload, format: 'bmmpa',
+        });
+        if (!signed) unsigned += 1;
+    }
+
+    const entries = plan.map((x) => x.entry);
+    const doc = JSON.stringify({ version: '1.0', name, presets: entries }, null, 2);
+    await invoke('write_text_file', { path: `${dir}${sep}catalog.json`, content: doc });
+
+    toast((t('sched.tcb.done') || 'Catalogue written — {n} automation(s) plus catalog.json')
+        .replace('{n}', String(entries.length))
+        + (unsigned ? ` — ${t('sched.exportUnsigned') || 'written unsigned'}` : ''), 'success');
+}
 
 export async function browsePresetCatalogs(): Promise<void> {
     // The modal opens FIRST, then fills in.
@@ -5708,6 +5869,14 @@ function showPresetCatalog(data: { presets: any[]; sources: PresetSource[] }): v
                         <input class="input" id="sched-pc-url" value="${escAttr(addUrl)}" placeholder="${escAttr(t('sched.pc.ask') || 'Address of a preset catalogue')}">
                         <button class="btn btn-sm btn-secondary" id="sched-pc-follow">${esc(t('sched.pc.follow') || 'Follow')}</button>
                     </div>
+                    <!-- Publishing lives beside following, because they are the two halves of
+                         the same idea and BMM only ever had one of them. A reader with no
+                         writer makes a format look closed even when it is not. -->
+                    <button class="btn btn-sm btn-ghost sched-pc-publish" id="sched-pc-publish"
+                            data-tooltip="${escAttr(t('sched.tcb.tip') || 'Write a folder of your own automations plus a catalog.json — drop it on GitHub and follow it from anywhere')}">
+                        ${SVG16('<path d="M12 21V11"/><path d="m8 15 4-4 4 4"/><path d="M4.4 15.3A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.4 8.3"/>')}
+                        <span>${esc(t('sched.tcb.open') || 'Publish my own…')}</span>
+                    </button>
                     <!-- Where following says what happened. A toast was the only feedback, and
                          a toast that has already faded is indistinguishable from no feedback at
                          all — which is what "it just does nothing" means. -->
@@ -5832,6 +6001,7 @@ function showPresetCatalog(data: { presets: any[]; sources: PresetSource[] }): v
             }
         };
         overlay.querySelector('#sched-pc-follow')?.addEventListener('click', () => { void follow(); });
+        overlay.querySelector('#sched-pc-publish')?.addEventListener('click', () => { void openTaskCatalogBuilder(); });
         urlBox?.addEventListener('keydown', (e) => { if ((e as KeyboardEvent).key === 'Enter') void follow(); });
 
         overlay.querySelectorAll<HTMLElement>('.sched-pc-toggle').forEach((b) => b.addEventListener('click', () => {

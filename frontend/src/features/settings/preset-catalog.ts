@@ -34,14 +34,43 @@ const str = (v: unknown, max = 300): string => (typeof v === 'string' ? v.trim()
  * A catalog is a document from whichever server somebody pasted, so every field is
  * untrusted:
  *
- *  - http(s) only. The download_url is handed to a fetcher; a `file://` entry in a list
- *    that gets downloaded is the obvious attack, and "it would probably fail" is not a
- *    reason to pass it on.
+ *  - http(s) only, checked AFTER resolving, never before. A relative name resolves against
+ *    the catalog's own address; an absolute one with a scheme wins over the base, so
+ *    `javascript:…` survives resolution untouched and only a check on the RESULT catches
+ *    it. Handing that to a fetcher is the obvious attack, and "it would probably fail" is
+ *    not a reason to pass it on.
+ *  - A relative name is allowed, and is the point: a folder of .bmmpa files with a
+ *    catalog.json beside them, dropped on GitHub Pages or into a repo, works with no
+ *    address written in it anywhere — so it keeps working when it is moved or forked.
  *  - An entry with no download_url is dropped rather than shown as an un-installable row.
  *    A row you cannot act on is a row that makes the list look broken.
  *  - Duplicate ids collapse, first wins, so a catalog listing something twice does not
  *    offer it twice.
  */
+/**
+ * An entry's address, resolved against the catalog it came from.
+ *
+ * Returns '' for anything that must not be fetched, so the caller has one thing to test.
+ *
+ * The ORDER is the security property. Resolution is not a narrowing operation: `new URL`
+ * gives an absolute URL its own scheme regardless of the base, so `javascript:…` comes out
+ * of it unchanged. Checking the input and trusting the output would therefore let exactly
+ * the thing this guards against straight through — the check is on the result.
+ */
+export function resolveEntryUrl(raw: string, source: string): string {
+    const v = String(raw || '').trim();
+    if (!v) return '';
+    if (/^https?:\/\//i.test(v)) return v;
+    // Relative, and only meaningful against an http(s) catalog. A catalog read from a local
+    // file has no base to resolve against, and inventing one would turn a relative name into
+    // a path on the user's disk.
+    if (!/^https?:\/\//i.test(source)) return '';
+    try {
+        const out = new URL(v, source).toString();
+        return /^https?:\/\//i.test(out) ? out : '';
+    } catch { return ''; }
+}
+
 export function parsePresetFeed(raw: unknown, source = ''): { presets: PresetEntry[]; dropped: string[] } {
     const dropped: string[] = [];
     const doc = (raw && typeof raw === 'object' ? raw : {}) as Record<string, any>;
@@ -51,10 +80,11 @@ export function parsePresetFeed(raw: unknown, source = ''): { presets: PresetEnt
 
     for (const e of list) {
         if (!e || typeof e !== 'object') { dropped.push('not an object'); continue; }
-        const url = str(e.download_url ?? e.downloadUrl, 600);
+        const raw = str(e.download_url ?? e.downloadUrl, 600);
         const id = str(e.id ?? e.slug, 120);
         const name = str(e.name ?? e.title, 200) || id;
-        if (!/^https?:\/\//i.test(url)) {
+        const url = resolveEntryUrl(raw, source);
+        if (!url) {
             dropped.push(`${name || id || '(unnamed)'} — no usable download address`);
             continue;
         }

@@ -16634,6 +16634,63 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 @media (prefers-reduced-motion: reduce) {
     .sched-mode-glider { transition: none; }
 }
+/* ── Publishing a catalogue of automations ─────────────────────────
+   A column, and the LIST is the part that scrolls. Letting the whole body scroll pushes the
+   footer off a short window, and the footer holds the only button that does anything. */
+.sched-tcb-modal {
+    display: flex;
+    flex-direction: column;
+    width: min(560px, 94vw);
+    max-height: 84vh;
+}
+.sched-tcb-icon {
+    width: 36px; height: 36px; border-radius: 9px;
+    background: var(--bmm-bg-active);
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.sched-tcb-body { display: flex; flex-direction: column; min-height: 0; padding: 14px 18px 0; }
+.sched-tcb-fields { flex-shrink: 0; }
+.sched-tcb-hint {
+    margin: 6px 0 0;
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--bmm-text-secondary);
+}
+.sched-tcb-listh {
+    display: flex; align-items: center; gap: 6px;
+    margin: 14px 0 6px;
+    font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+    color: var(--text-muted);
+}
+.sched-tcb-listh > span { flex: 1; }
+.sched-tcb-list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding-bottom: 12px;
+}
+.sched-tcb-row {
+    display: flex; align-items: center; gap: 9px;
+    padding: 6px 8px;
+    border-radius: 7px;
+    cursor: pointer;
+}
+.sched-tcb-row:hover { background: var(--bmm-bg-hover); }
+.sched-tcb-name {
+    flex: 1;
+    font-size: 13px;
+    /* min-width:0 or a long automation name pushes the step count off the row entirely. */
+    min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sched-tcb-n { font-size: 11px; color: var(--text-muted); flex-shrink: 0; }
+.sched-tcb-foot { display: flex; align-items: center; gap: 8px; }
+.sched-tcb-count { font-size: 11px; color: var(--text-muted); }
+.sched-pc-publish { width: 100%; justify-content: center; margin-top: 6px; }
+
 /* ── BMMScript completion ───────────────────────────────────────────────────
    On <body>, not inside the modal: a panel clipped by the code pane's overflow would be
    half a list, and the pane is the one element guaranteed to scroll.
