@@ -16570,6 +16570,17 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .sched-tcb-n { font-size: 11px; color: var(--text-muted); flex-shrink: 0; }
+
+/* One row of the publish picker: tick it, then say where its file comes from.
+   The URL box is `hidden` rather than dimmed when the row is set to pack — a field that
+   is meaningless for the current choice is a field people fill in anyway, and then wonder
+   why it did nothing. */
+.sched-tcb-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sched-tcb-pick { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; cursor: pointer; }
+.sched-tcb-mode { flex: none; width: 130px; font-size: 11px; padding: 3px 6px; }
+.sched-tcb-mode:disabled { opacity: 0.45; }
+.sched-tcb-url { flex-basis: 100%; font-size: 11px; padding: 4px 8px; font-family: var(--font-mono); }
+.sched-tcb-url[hidden] { display: none; }
 .sched-tcb-foot { display: flex; align-items: center; gap: 8px; }
 .sched-tcb-count { font-size: 11px; color: var(--text-muted); }
 .sched-pc-publish { width: 100%; justify-content: center; margin-top: 6px; }

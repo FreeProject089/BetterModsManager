@@ -23,7 +23,8 @@ import { mountCompletions } from './bmms-complete.js';
 import { attachHighlight } from '../../ui/code-editor.js';
 import { registerBmmsLanguage } from './bmms-prism.js';
 import { raiseAboveAll } from '../../ui/layer.js';
-import { safeFileStem, planTaskCatalog } from './task-catalog.js';
+import { safeFileStem, planTaskCatalog, lastPlanErrors } from './task-catalog.js';
+import type { EntryChoice } from '../../core/catalog-publish.js';
 import {
     originLabel, originOf, forgetOrigin, isDisabled, setDisabled, recordHistory,
     hasSource, looksLikeIndex, catalogLooksLike, importIndexForType,
@@ -5586,12 +5587,24 @@ export async function openTaskCatalogBuilder(): Promise<void> {
     overlay.className = 'modal-generic-overlay sched-tcb-overlay open';
     raiseAboveAll(overlay, 11000);
 
+    // Per ENTRY, not per catalogue. The two shapes people want are "pack the three small
+    // ones" and "link the 90 MB one", and until now a catalogue had to be entirely one or
+    // entirely the other. The address box only appears once an entry is set to link, because
+    // a field that is meaningless for the current choice is a field people fill in anyway.
     const row = (task: Task) => `
-        <label class="sched-tcb-row">
-            <input type="checkbox" class="sched-tcb-cb" data-id="${escAttr(task.id)}">
-            <span class="sched-tcb-name">${escHtml(task.name || task.id)}</span>
-            <span class="sched-tcb-n">${stepCount(task.steps)} ${escHtml(t('sched.tcb.steps') || 'steps')}</span>
-        </label>`;
+        <div class="sched-tcb-row" data-row="${escAttr(task.id)}">
+            <label class="sched-tcb-pick">
+                <input type="checkbox" class="sched-tcb-cb" data-id="${escAttr(task.id)}">
+                <span class="sched-tcb-name">${escHtml(task.name || task.id)}</span>
+                <span class="sched-tcb-n">${stepCount(task.steps)} ${escHtml(t('sched.tcb.steps') || 'steps')}</span>
+            </label>
+            <select class="input sched-tcb-mode" data-id="${escAttr(task.id)}" disabled>
+                <option value="embed">${escHtml(t('sched.tcb.modeEmbed'))}</option>
+                <option value="link">${escHtml(t('sched.tcb.modeLink'))}</option>
+            </select>
+            <input class="input sched-tcb-url" data-id="${escAttr(task.id)}" hidden spellcheck="false"
+                   placeholder="${escAttr(t('sched.tcb.urlPh'))}">
+        </div>`;
 
     overlay.innerHTML = `
         <div class="modal sched-tcb-modal">
@@ -5641,20 +5654,62 @@ export async function openTaskCatalogBuilder(): Promise<void> {
     const goBtn = overlay.querySelector('#sched-tcb-go') as HTMLButtonElement;
     const countEl = overlay.querySelector('#sched-tcb-count') as HTMLElement;
     const refresh = () => {
-        countEl.textContent = (t('sched.tcb.count') || '{n} selected').replace('{n}', String(picked.size));
+        const chosen = _tasks.filter((x) => picked.has(x.id));
+        const linked = chosen.filter((x) => modeOf(x.id).mode === 'link').length;
+        // The split, not just the total: "6 selected" does not tell you that four of them
+        // are links you have not filled in yet.
+        countEl.textContent = linked
+            ? t('sched.tcb.countMix').replace('{n}', String(picked.size)).replace('{e}', String(picked.size - linked)).replace('{l}', String(linked))
+            : t('sched.tcb.count').replace('{n}', String(picked.size));
         goBtn.disabled = picked.size === 0;
+        // A catalogue of nothing but links has no files to pack, and a zip holding one
+        // catalog.json is not a bundle.
+        const bundleBox = overlay.querySelector('#sched-tcb-bundle') as HTMLInputElement | null;
+        if (bundleBox) {
+            const anyEmbed = picked.size > linked;
+            bundleBox.disabled = !anyEmbed;
+            if (!anyEmbed) bundleBox.checked = false;
+        }
     };
     refresh();
+
+    // Where each entry's file comes from. Only entries that are actually being published
+    // matter, so the controls are dead until the row is ticked — a mode picker on a row
+    // nobody selected is a decision about nothing.
+    const modes = new Map<string, { mode: 'embed' | 'link'; url: string }>();
+    const modeOf = (id: string) => modes.get(id) || { mode: 'embed' as const, url: '' };
+    const syncRow = (id: string) => {
+        const on = picked.has(id);
+        const sel = overlay.querySelector(`.sched-tcb-mode[data-id="${CSS.escape(id)}"]`) as HTMLSelectElement | null;
+        const box = overlay.querySelector(`.sched-tcb-url[data-id="${CSS.escape(id)}"]`) as HTMLInputElement | null;
+        if (sel) { sel.disabled = !on; sel.value = modeOf(id).mode; }
+        if (box) { box.hidden = !on || modeOf(id).mode !== 'link'; box.value = modeOf(id).url; }
+    };
 
     overlay.querySelectorAll('.sched-tcb-cb').forEach((cb) => cb.addEventListener('change', (e) => {
         const el = e.target as HTMLInputElement;
         if (el.checked) picked.add(el.dataset.id!); else picked.delete(el.dataset.id!);
+        syncRow(el.dataset.id!);
+        refresh();
+    }));
+    overlay.querySelectorAll('.sched-tcb-mode').forEach((sel) => sel.addEventListener('change', (e) => {
+        const el = e.target as HTMLSelectElement;
+        const id = el.dataset.id!;
+        modes.set(id, { ...modeOf(id), mode: el.value === 'link' ? 'link' : 'embed' });
+        syncRow(id);
+        refresh();
+    }));
+    overlay.querySelectorAll('.sched-tcb-url').forEach((box) => box.addEventListener('input', (e) => {
+        const el = e.target as HTMLInputElement;
+        modes.set(el.dataset.id!, { ...modeOf(el.dataset.id!), url: el.value });
         refresh();
     }));
     const setAll = (on: boolean) => {
         overlay.querySelectorAll('.sched-tcb-cb').forEach((cb) => {
             (cb as HTMLInputElement).checked = on;
-            if (on) picked.add((cb as HTMLElement).dataset.id!); else picked.delete((cb as HTMLElement).dataset.id!);
+            const id = (cb as HTMLElement).dataset.id!;
+            if (on) picked.add(id); else picked.delete(id);
+            syncRow(id);
         });
         refresh();
     };
@@ -5707,12 +5762,24 @@ export async function openTaskCatalogBuilder(): Promise<void> {
  * catalog whose files were unsigned while a hand-export was signed would be a quieter file
  * for no reason anybody chose.
  */
-async function writeTaskCatalog(dir: string, name: string, base: string, tasks: Task[], bundle = false): Promise<void> {
+async function writeTaskCatalog(
+    dir: string, name: string, base: string, tasks: Task[], bundle = false,
+    choose: (task: Task) => EntryChoice = () => ({ mode: 'embed' }),
+): Promise<void> {
     const sep = dir.includes('\\') ? '\\' : '/';
-    const plan = planTaskCatalog(tasks, base);
+    const plan = planTaskCatalog(tasks, base, choose);
+    // An entry that could not be published is NAMED. Dropping it quietly writes a
+    // shorter catalogue than the list somebody was looking at, and nothing says so.
+    const problems = lastPlanErrors();
+    if (problems.length) {
+        toast(t('sched.tcb.dropped').replace('{n}', String(problems.length))
+            + ' — ' + problems.slice(0, 3).join(' · '), 'warning', 8000);
+    }
     let unsigned = 0;
 
-    for (const { task, stem } of plan) {
+    // Only the EMBEDDED ones are written. A linked entry already lives somewhere.
+    for (const { task, stem, embed } of plan) {
+        if (!embed) continue;
         // Everything it calls, transitively — sub-tasks, blocks, launch packs, plugins. The
         // same collector a hand-export uses, so a published automation is not a thinner
         // thing than a shared one.
@@ -5728,6 +5795,7 @@ async function writeTaskCatalog(dir: string, name: string, base: string, tasks: 
     }
 
     const entries = plan.map((x) => x.entry);
+    const embedded = plan.filter((x) => x.embed).length;
     const doc = JSON.stringify({ version: '1.0', name, presets: entries }, null, 2);
     await invoke('write_text_file', { path: `${dir}${sep}catalog.json`, content: doc });
 
@@ -5735,7 +5803,9 @@ async function writeTaskCatalog(dir: string, name: string, base: string, tasks: 
     // assembled separately — so the two shapes cannot diverge, and the zip is by
     // construction the folder somebody could have made by hand.
     let packed = '';
-    if (bundle) {
+    // Nothing embedded means nothing to pack — the control is disabled for that case, and
+    // this is the guard for the case where it was not.
+    if (bundle && embedded > 0) {
         const stem = safeFileStem(name, 'catalog');
         const res: any = await invoke('catalog_bundle_pack', {
             dir, out: `${dir}${sep}${stem}.zip`,
@@ -5751,8 +5821,10 @@ async function writeTaskCatalog(dir: string, name: string, base: string, tasks: 
         }
     }
 
-    toast((t('sched.tcb.done') || 'Catalogue written — {n} automation(s) plus catalog.json')
+    toast((embedded === entries.length ? t('sched.tcb.done') : t('sched.tcb.doneMix'))
         .replace('{n}', String(entries.length))
+        .replace('{e}', String(embedded))
+        .replace('{l}', String(entries.length - embedded))
         + packed
         + (unsigned ? ` — ${t('sched.exportUnsigned') || 'written unsigned'}` : ''), 'success');
 }

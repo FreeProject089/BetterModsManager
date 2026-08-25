@@ -843,15 +843,19 @@ function openPluginCatalogBuilder(onSourcesChanged: () => void) {
      * the plugins are already hosted somewhere — the entry carries a URL and BMM downloads
      * it. This is the other case: the plugins travel WITH the catalogue.
      *
-     * Every entry whose id matches an installed plugin is exported beside the catalogue as
-     * `<id>.bmmplug`, through the same `export_plugin` a hand-export uses — signed, whole
-     * folder, nothing thinner than what you would have sent by hand. Its address becomes
-     * the bare filename, which is relative, so the folder keeps working when it is moved or
-     * forked.
+     * **The per-entry choice is the address field you already fill in.** An entry with a
+     * download_url is LINKED and left completely alone; an entry with an empty one is
+     * PACKED, if its plugin is installed. No new control, and the rule reads off the screen:
+     * fill the address in and it stays where you put it, leave it blank and it travels with
+     * the catalogue.
      *
-     * An entry that is NOT installed keeps whatever address it had. That is the mixed case
-     * and it is deliberate: a catalogue can carry the three small plugins and still point
-     * at the 90 MB one on a CDN.
+     * A packed entry is exported beside the catalogue as `<id>.bmmplug`, through the same
+     * `export_plugin` a hand-export uses — signed, whole folder, nothing thinner than what
+     * you would have sent by hand — and its address becomes the bare filename, which is
+     * relative, so the folder keeps working when it is moved or forked.
+     *
+     * So one catalogue can carry the three small plugins and still point at the 90 MB one
+     * on a CDN, which is the whole point.
      */
     const publishDraft = async (d: PlugCatDraft, bundle: boolean): Promise<void> => {
         const dir = await pickFolder().catch(() => null);
@@ -863,8 +867,16 @@ function openPluginCatalogBuilder(onSourcesChanged: () => void) {
         let packed = 0;
         let kept = 0;
         for (const entry of out.plugins) {
+            // An address already given is a decision already made.
+            if ((entry.download_url || '').trim()) { kept++; continue; }
             const installed = _installedPlugins.find((p) => p.manifest.id === entry.id);
-            if (!installed) { kept++; continue; }
+            if (!installed) {
+                // Blank address AND not installed: there is nothing to pack and nothing to
+                // point at, so the entry would publish as unfollowable. Named, not dropped.
+                toast((t('plugins.catNoSource')).replace('{id}', entry.id), 'warning');
+                kept++;
+                continue;
+            }
             const file = `${entry.id}.bmmplug`;
             try {
                 await invoke('export_plugin', { pluginId: entry.id, destPath: `${dir}${sep}${file}` });
