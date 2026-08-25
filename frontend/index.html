@@ -2742,7 +2742,7 @@
                                             style="display:none; margin-top:8px; font-size:11px; line-height:1.6; background:var(--bmm-bg-base); border:1px solid var(--bmm-s08); border-radius:6px; padding:8px;"></div>
                                     </div>
 
-                                    <div id="repo-sync-paths-existing-hint" class="kit-callout kit-callout-info bmm-tip" style="display:none;margin-top:10px;">
+                                    <div id="repo-sync-paths-existing-hint" class="kit-callout kit-callout-info bmm-tip" data-tip-id="reposyncpaths" style="display:none;margin-top:10px;">
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
                                         <span data-i18n="repo.syncUsesProfilePaths">Mods will be downloaded to the selected profile's own game / mods / backup folders.</span>
                                     </div>
@@ -3559,7 +3559,7 @@
                                 <span data-i18n="settings.autoUpdateTitle">Auto Update</span>
                             </h3>
 
-                            <div class="kit-callout kit-callout-success bmm-tip" style="margin-bottom:16px"><span class="kit-callout-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span><div class="kit-callout-body"><span data-i18n="settings.autoUpdateDesc">When enabled, BMM will automatically check for new versions each time the app starts
+                            <div class="kit-callout kit-callout-success bmm-tip" data-tip-id="autoupdate" style="margin-bottom:16px"><span class="kit-callout-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span><div class="kit-callout-body"><span data-i18n="settings.autoUpdateDesc">When enabled, BMM will automatically check for new versions each time the app starts
                                     and when it's closed. You will be notified if a new version is available.</span></div></div>
 
                             <div
@@ -3860,11 +3860,15 @@
                                             data-i18n="settings.tipsVisibleDesc">Les encadrés d'explication dans les
                                             pages et réglages. Les masquer ne masque jamais les avertissements.</div>
                                     </div>
-                                    <label class="toggle-switch" style="flex-shrink:0">
-                                        <input type="checkbox" id="toggle-bmm-tips" checked
-                                            data-act-change="applyTaskySettings" />
-                                        <span class="toggle-slider"></span>
-                                    </label>
+                                    <div style="display:flex;align-items:center;gap:10px;flex-shrink:0">
+                                        <button type="button" class="btn btn-ghost btn-sm" id="btn-restore-tips"
+                                                data-i18n="settings.tipsRestore">Rappeler les astuces masquées</button>
+                                        <label class="toggle-switch">
+                                            <input type="checkbox" id="toggle-bmm-tips" checked
+                                                data-act-change="applyTaskySettings" />
+                                            <span class="toggle-slider"></span>
+                                        </label>
+                                    </div>
                                 </div>
                                 <!-- Tasky tooltip opacity -->
                                 <div
@@ -3985,7 +3989,7 @@
                                 <span data-i18n="settings.shaTitle">Hashes / SHA & Integrity</span>
                             </h3>
 
-                            <div class="kit-callout kit-callout-accent bmm-tip" style="margin-bottom:16px"><span class="kit-callout-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span><div class="kit-callout-body"><span data-i18n="settings.shaDesc">Manage file integrity verification. Hashing ensures your mod files are not corrupted
+                            <div class="kit-callout kit-callout-accent bmm-tip" data-tip-id="sha" style="margin-bottom:16px"><span class="kit-callout-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span><div class="kit-callout-body"><span data-i18n="settings.shaDesc">Manage file integrity verification. Hashing ensures your mod files are not corrupted
                                     or tampered with.</span></div></div>
 
                             <!-- Strict mode toggle -->
@@ -4117,7 +4121,7 @@
                                 <span data-i18n="settings.discordRpcTitle">Discord Rich Presence</span>
                             </h3>
 
-                            <div class="kit-callout kit-callout-info bmm-tip" style="margin-bottom:16px"><span class="kit-callout-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span><div class="kit-callout-body"><span data-i18n="settings.discordRpcDesc">Affiche votre activité BMM sur Discord (profil actif et nombre de mods activés).</span></div></div>
+                            <div class="kit-callout kit-callout-info bmm-tip" data-tip-id="discordrpc" style="margin-bottom:16px"><span class="kit-callout-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span><div class="kit-callout-body"><span data-i18n="settings.discordRpcDesc">Affiche votre activité BMM sur Discord (profil actif et nombre de mods activés).</span></div></div>
 
                             <div
                                 style="display:flex;align-items:center;gap:10px;padding:12px;background:var(--bmm-s02);border-radius:10px;border:1px solid var(--border)">
@@ -4155,7 +4159,7 @@
                             </h3>
 
                             <!-- Explanation Banner -->
-                            <div class="kit-callout kit-callout-info bmm-tip" style="margin-bottom:16px"><span class="kit-callout-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span><div class="kit-callout-body"><span data-i18n="settings.githubPatDesc">GitHub limits unauthenticated downloads to 60
+                            <div class="kit-callout kit-callout-info bmm-tip" data-tip-id="githubpat" style="margin-bottom:16px"><span class="kit-callout-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span><div class="kit-callout-body"><span data-i18n="settings.githubPatDesc">GitHub limits unauthenticated downloads to 60
                                     requests/hour. Adding your Personal Access Token (PAT) raises this limit to 5 000
                                     req/hour. This is completely optional — BMM works without it, but helps when
                                     downloading
@@ -7142,13 +7146,6 @@
                             <option value="all" data-i18n="conflict.allProfiles">Tous les profils</option>
                         </select>
                     </label>
-                    <label class="cflt-field">
-                        <span class="cflt-flabel" data-i18n="conflict.fSort">Ordre d'activation</span>
-                        <select id="global-conflict-sort-order" class="input-field">
-                            <option value="asc" data-i18n="conflict.sortOldest">Plus vieux (#0...)</option>
-                            <option value="desc" data-i18n="conflict.sortNewest">Plus récent (#9...)</option>
-                        </select>
-                    </label>
                     <button type="button" class="btn btn-ghost btn-sm cflt-reset" id="global-conflict-reset"
                             data-i18n="conflict.reset">Tout afficher</button>
                 </div>
@@ -7157,7 +7154,13 @@
                      happening now, the other only bites when you switch profile. The badges
                      are the same shape as the ones in the list, so the list becomes readable
                      rather than merely colourful. -->
-                <div class="cflt-legend" id="global-conflict-legend">
+                <button type="button" class="cflt-legend-show" id="global-conflict-legend-show" hidden data-tip-restore
+                        data-i18n="conflict.showLegend">Que veulent dire ces badges ?</button>
+                <div class="cflt-legend" id="global-conflict-legend" data-tip-banner>
+                    <button type="button" class="cflt-legend-close" id="global-conflict-legend-close"
+                            data-i18n-tooltip="conflict.hideLegend" data-tooltip="Hide this help" aria-label="Hide this help">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
                     <div class="cflt-legend-row">
                         <span class="cflt-badge cflt-intra">INTRA</span>
                         <span data-i18n="conflict.legendIntra">Un autre mod du <b>même profil</b> touche les mêmes fichiers. Les deux peuvent être activés ensemble — c'est le conflit qui compte tout de suite.</span>

@@ -188,18 +188,27 @@ export async function renderModDetail(modId) {
                     badgeContainer.innerHTML = `<span class="badge badge-warning" style="font-size:10px">${t('mod.conflictsFound', { n: conflicts.length })}</span>`;
                 const listContainer = panel.querySelector('#detail-conflicts-list');
                 if (listContainer) {
+                    // The whole card opens the conflict view, not the 40px badge in its corner.
+                    //
+                    // It looked like a card and behaved like a link hidden inside one: the only place
+                    // that did anything was the INTRA tag, so the obvious gesture — click the mod you
+                    // are worried about — did nothing at all. A <button> rather than a div with a
+                    // handler, so it is reachable by keyboard and announced as something you can press.
                     listContainer.innerHTML = conflicts.map(c => `
-            <div style="background:rgba(0,0,0,0.2);padding:8px 10px;border-radius:8px;border:1px solid ${c.status === 'Active' ? 'rgba(239,68,68,0.3)' : 'rgba(245,158,11,0.3)'}">
-              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-                <span class="tag-conflict tag-${c.category.toLowerCase()}-conflict ${c.status.toLowerCase()}" style="cursor:pointer" ${actAttrs('openGlobalConflictModal', mod.id)}>
+            <button type="button" class="mdc-card ${c.status === 'Active' ? 'is-active' : 'is-potential'}"
+                    ${actAttrs('openGlobalConflictModal', mod.id)}
+                    data-tooltip="${escAttr(t('conflict.openFor') || 'Open the conflict view for this mod')}">
+              <span class="mdc-top">
+                <span class="tag-conflict tag-${c.category.toLowerCase()}-conflict ${c.status.toLowerCase()}">
                    ${c.category === 'Intra' ? '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="margin-right:4px"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>' : '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="margin-right:4px"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>'}
                    ${c.category}
                 </span>
-                <span style="font-size:10px;font-family:var(--font-mono);color:var(--text-muted)">${c.file_count} f.</span>
-              </div>
-              <div style="font-size:11px;color:var(--text-primary);font-weight:600" data-tooltip="${escAttr(c.other_mod_name)}">${escHtml(c.other_mod_name)}</div>
-              <div style="font-size:10px;color:var(--text-muted)">${t('mod.profilLabel')}${escHtml(c.other_profile_name)}</div>
-            </div>
+                <span class="mdc-files">${c.file_count} f.</span>
+                <svg class="mdc-chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="9 18 15 12 9 6"/></svg>
+              </span>
+              <span class="mdc-name">${escHtml(c.other_mod_name)}</span>
+              <span class="mdc-profile">${escHtml(t('mod.profilLabel'))}${escHtml(c.other_profile_name)}</span>
+            </button>
           `).join('');
                 }
             }

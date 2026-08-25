@@ -16720,6 +16720,208 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 .cflt-files-btn .cflt-files-chev { transition: transform 0.15s ease; opacity: 0.7; }
 .cflt-files-btn:hover .cflt-files-chev { transform: translateX(2px); opacity: 1; }
 
+/* The list itself.
+   #global-conflicts-list is a flex COLUMN with a fixed height and its own scrollbar, and the
+   cards were flex items at the default flex-shrink: 1 — so once their total height passed
+   the container's, the browser did what flex is for and shrank every one of them to fit.
+   Measured in the app: five cards holding 155px of content each rendered at 25px, and the
+   list reported scrollHeight === clientHeight, so there was nothing to scroll either. Rows
+   were cut off mid-line and the next card sat on top of them.
+   flex-shrink: 0 is the whole fix — A/B'd on the same container: 1 gives 35px and no
+   scrollbar, 0 gives the full 147px and a list that scrolls. (overflow: hidden below is for
+   the rounded corners; it changes nothing here either way.) */
+.cflt-card {
+    flex-shrink: 0;
+    background: var(--bmm-s02, rgba(255, 255, 255, 0.02));
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+}
+.cflt-card-head {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    width: 100%;
+    padding: 9px 13px;
+    background: transparent;
+    border: 0;
+    border-bottom: 1px solid transparent;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.14s ease;
+}
+.cflt-card-head:hover { background: var(--bmm-s04, rgba(255, 255, 255, 0.04)); }
+.cflt-card-head:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.cflt-card.is-open .cflt-card-head { border-bottom-color: var(--border); }
+.cflt-card-chev {
+    flex-shrink: 0;
+    color: var(--text-muted);
+    transition: transform 0.16s ease;
+}
+.cflt-card.is-open .cflt-card-chev { transform: rotate(90deg); }
+.cflt-card-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.cflt-card-name {
+    flex: 1;
+    min-width: 0;
+    font-weight: 700;
+    font-size: 12.5px;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+/* The body is display:none when folded rather than height:0 — a collapsed card must not
+   keep its rows in the tab order or in the accessibility tree. */
+.cflt-card-body { display: none; padding: 10px 13px; }
+.cflt-card.is-open .cflt-card-body { display: block; }
+
+/* Badge, inline version: the legend's colours without its fixed-width grid cell. */
+.cflt-tag {
+    flex-shrink: 0;
+    font-size: 9px;
+    font-weight: 800;
+    padding: 1px 6px;
+    border-radius: 10px;
+    letter-spacing: 0.04em;
+    border: 1px solid;
+}
+.cflt-count {
+    flex-shrink: 0;
+    font-size: 9px;
+    font-weight: 800;
+    padding: 2px 7px;
+    border-radius: 10px;
+    border: 1px solid;
+}
+.cflt-count-active { color: var(--danger); border-color: var(--danger); background: rgba(239, 68, 68, 0.1); }
+.cflt-count-potential { color: var(--warning); border-color: var(--warning); background: rgba(245, 158, 11, 0.1); }
+
+.cflt-target-group { margin-bottom: 8px; }
+.cflt-target-group:last-child { margin-bottom: 0; }
+.cflt-target-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+    padding: 4px 8px;
+    background: var(--bmm-s03, rgba(255, 255, 255, 0.03));
+    border-radius: 6px;
+}
+.cflt-target-name {
+    font-size: 10px;
+    color: var(--text-secondary);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.cflt-target-count {
+    font-size: 9px;
+    color: var(--text-muted);
+    background: var(--bmm-s05, rgba(255, 255, 255, 0.05));
+    padding: 1px 5px;
+    border-radius: 4px;
+    margin-left: auto;
+}
+.cflt-target-rows { display: flex; flex-direction: column; gap: 3px; padding-left: 4px; }
+.cflt-row-status {
+    flex-shrink: 0;
+    font-size: 9px;
+    font-weight: 900;
+    padding: 2px 7px;
+    border-radius: 10px;
+    text-transform: uppercase;
+    border: 1px solid;
+}
+
+.cflt-summary {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bmm-s02, rgba(255, 255, 255, 0.02));
+}
+.cflt-summary-main { font-size: 12px; font-weight: 700; color: var(--text-primary); }
+.cflt-summary-active { font-size: 11px; color: var(--danger); font-weight: 600; }
+.cflt-summary-potential { font-size: 11px; color: var(--warning); font-weight: 600; }
+.cflt-foldall { margin-left: auto; font-size: 11.5px; }
+
+/* The legend's own put-it-away control, and the pill that brings it back. */
+.cflt-legend { position: relative; padding-right: 34px; }
+.cflt-legend-close {
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    display: flex;
+    padding: 4px;
+    background: none;
+    border: 0;
+    border-radius: 6px;
+    color: var(--text-muted);
+    cursor: pointer;
+}
+.cflt-legend-close:hover { color: var(--text-primary); background: var(--bmm-s08, rgba(255, 255, 255, 0.08)); }
+.cflt-legend-show {
+    align-self: flex-start;
+    margin: 12px 24px 0;
+    padding: 4px 11px;
+    border: 1px dashed var(--border);
+    border-radius: 999px;
+    background: none;
+    color: var(--text-muted);
+    font: inherit;
+    font-size: 11px;
+    cursor: pointer;
+}
+.cflt-legend-show:hover { color: var(--accent); border-color: var(--accent); }
+
+@media (prefers-reduced-motion: reduce) {
+    .cflt-card-head, .cflt-card-chev { transition: none; }
+}
+
+/* Mod detail → Conflicts: the card IS the control. */
+.mdc-card {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    width: 100%;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: var(--bmm-s03, rgba(255, 255, 255, 0.03));
+    border: 1px solid var(--border);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: border-color 0.14s ease, background 0.14s ease;
+}
+.mdc-card.is-active { border-color: rgba(239, 68, 68, 0.3); }
+.mdc-card.is-potential { border-color: rgba(245, 158, 11, 0.3); }
+.mdc-card:hover { background: var(--bmm-s06, rgba(255, 255, 255, 0.06)); }
+.mdc-card.is-active:hover { border-color: var(--danger); }
+.mdc-card.is-potential:hover { border-color: var(--warning); }
+.mdc-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.mdc-top { display: flex; align-items: center; gap: 8px; }
+.mdc-files { font-size: 10px; font-family: var(--font-mono); color: var(--text-muted); margin-left: auto; }
+/* The chevron is what says "this opens something" — the one thing the old card never said. */
+.mdc-chev { flex-shrink: 0; color: var(--text-muted); transition: transform 0.15s ease, color 0.15s ease; }
+.mdc-card:hover .mdc-chev { color: var(--accent); transform: translateX(2px); }
+.mdc-name {
+    font-size: 11px;
+    color: var(--text-primary);
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.mdc-profile { font-size: 10px; color: var(--text-muted); }
+
+@media (prefers-reduced-motion: reduce) {
+    .mdc-card, .mdc-chev { transition: none; }
+}
+
 .cflt-hidden-note {
     display: flex;
     align-items: center;

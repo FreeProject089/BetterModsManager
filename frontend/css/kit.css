@@ -168,3 +168,32 @@
    half-obey. Only .bmm-tip callouts hide; warning/danger callouts never carry that
    class, so nothing load-bearing can be silenced from a comfort setting. */
 body.bmm-tips-hidden .bmm-tip { display: none; }
+
+/* Per-tip dismissal. The switch above is all-or-nothing; this is the × on ONE box.
+   A class rather than display:none inline, because some callouts already drive their own
+   display (the repo-sync hint starts hidden and shows itself), and a dismissal must not be
+   able to fight that — or to reveal something the app meant to keep hidden. */
+.bmm-tip[data-tip-id] { position: relative; padding-right: 30px; }
+.bmm-tip.tip-dismissed { display: none; }
+.bmm-tip-close {
+    position: absolute;
+    top: 5px;
+    right: 6px;
+    display: flex;
+    padding: 4px;
+    background: none;
+    border: 0;
+    border-radius: 6px;
+    color: var(--bmm-text-muted, var(--text-muted));
+    cursor: pointer;
+    opacity: 0.55;
+    transition: opacity 0.14s ease, color 0.14s ease, background 0.14s ease;
+}
+.bmm-tip-close:hover {
+    opacity: 1;
+    color: var(--bmm-text-primary, var(--text-primary));
+    background: var(--bmm-s08, rgba(255, 255, 255, 0.08));
+}
+.bmm-tip-close:focus-visible { outline: 2px solid var(--bmm-accent, var(--accent)); outline-offset: 1px; opacity: 1; }
+
+@media (prefers-reduced-motion: reduce) { .bmm-tip-close { transition: none; } }

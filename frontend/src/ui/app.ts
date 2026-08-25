@@ -24,6 +24,7 @@ import { initApiActivity } from '../core/api_activity.js';
 import { initTitlebar } from './titlebar.js';
 import { initSettings, runAutoBenchmarks } from '../features/settings/settings.js';
 import { initModals } from './modals.js';
+import { wireTipDismissal, restoreAllTips } from './dismissible-tip.js';
 import { initNavbarVersion, initUpdateNotes, initAutoUpdate, checkPtbMode, checkAutoEula, checkAutoPrivacy, checkShowReleaseNotes, checkLangSelect } from './update-notes.js';
 
 // New Modularized Imports
@@ -1081,6 +1082,22 @@ async function main() {
 
     applyTranslations();
 
+    // Per-tip dismissal. The Settings switch is all-or-nothing, which is the wrong
+    // granularity for what people actually want: THIS box gone, the tips on screens they
+    // have not learnt yet kept. Every .bmm-tip[data-tip-id] gets its own × here.
+    // After applyTranslations on purpose — the button's accessible name goes through t(),
+    // and t() before initI18n returns the key, so an earlier call would have labelled it
+    // "settings.tipHide" in every language.
+    try {
+        wireTipDismissal(document);
+        document.getElementById('btn-restore-tips')?.addEventListener('click', () => {
+            const n = restoreAllTips();
+            toast(n > 0
+                ? t('settings.tipsRestored').replace('{n}', String(n))
+                : t('settings.tipsNoneHidden'), n > 0 ? 'success' : 'info');
+        });
+    } catch { /* the tips are a comfort, never a blocker */ }
+
     // Call this after translations to ensure it's not overwritten and elements are ready
     await initVersionDisplay();
 
@@ -1327,6 +1344,7 @@ try {
         if (cb) cb.checked = false;
     }
 } catch { /* default: visible */ }
+
 
 window.applyTaskySettings = function () {
     const visibleToggle = document.getElementById('toggle-tasky-visible') as HTMLInputElement;
