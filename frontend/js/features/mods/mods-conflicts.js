@@ -88,6 +88,8 @@ export async function openGlobalConflictModal(preselectModId = null) {
     const searchInput = document.getElementById('global-conflict-search');
     const profileFilter = document.getElementById('global-conflict-profile-filter');
     const typeFilter = document.getElementById('global-conflict-type-filter');
+    const statusFilter = document.getElementById('global-conflict-status-filter');
+    const resetBtn = document.getElementById('global-conflict-reset');
     const sortSelect = document.getElementById('global-conflict-sort-order');
     const closeBtn = document.getElementById('btn-close-global-conflicts');
     if (!modal || !container)
@@ -122,6 +124,7 @@ export async function openGlobalConflictModal(preselectModId = null) {
             const q = searchInput.value.toLowerCase();
             const p = profileFilter.value;
             const tFilter = typeFilter.value;
+            const sFilter = statusFilter ? statusFilter.value : 'all';
             const sortBy = sortSelect.value;
             if (!respectPrioritization || !preselectModId) {
                 allConflicts.sort((a, b) => {
@@ -134,6 +137,11 @@ export async function openGlobalConflictModal(preselectModId = null) {
             let totalActive = 0;
             let totalPotential = 0;
             const rendered = [];
+            // Every mod that has a conflict at all, so "0 shown" can say whether the profile is
+            // clean or the filters are simply hiding everything — two very different answers, and
+            // the panel used to give the reassuring one for both.
+            const totalModsWithConflicts = allConflicts.length;
+            const anyFilterOn = !!q || p !== 'all' || tFilter !== 'all' || sFilter !== 'all';
             allConflicts.forEach(item => {
                 let filteredReports = item.reports;
                 if (tFilter !== 'all') {
@@ -142,6 +150,10 @@ export async function openGlobalConflictModal(preselectModId = null) {
                 if (p !== 'all') {
                     const pName = profiles.find(pr => pr.id === p)?.name || '';
                     filteredReports = filteredReports.filter(r => r.other_profile_name === pName);
+                }
+                if (sFilter !== 'all') {
+                    const want = sFilter === 'active' ? 'Active' : 'Potential';
+                    filteredReports = filteredReports.filter(r => r.status === want);
                 }
                 if (q) {
                     const sourceMatch = item.sourceModName.toLowerCase().includes(q);
@@ -183,13 +195,18 @@ export async function openGlobalConflictModal(preselectModId = null) {
                         const statusColor = isActive ? 'var(--danger)' : 'var(--warning)';
                         const statusBg = isActive ? 'rgba(239,68,68,0.08)' : 'rgba(245,158,11,0.08)';
                         return `
-                   <div style="display:flex;align-items:center;background:${statusBg};padding:7px 10px;border-radius:6px;border-left:2px solid ${statusColor};gap:8px">
+                   <div class="cflt-row" style="background:${statusBg};border-left:2px solid ${statusColor}">
                      <span style="font-size:11.5px;font-weight:600;color:var(--text-primary);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:help"
                            data-tooltip="${escAttr(r.other_mod_name)}"
                            data-tasky="${escAttr(escJs(r.other_mod_name))}" data-tasky-icon="package" data-tasky-literal="1"
                           >${escHtml(r.other_mod_name)}</span>
                      ${isActive ? `<span style="font-size:10px;background:rgba(255,255,255,0.08);color:var(--text-secondary);padding:1px 6px;border-radius:4px;font-family:var(--font-mono);flex-shrink:0" data-tooltip="${t('conflict.activationOrder') || 'Activation order'}">#${r.activation_order}</span>` : ''}
-                     <button style="font-size:10px;font-family:var(--font-mono);color:var(--accent);background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.2);padding:2px 7px;border-radius:5px;cursor:pointer;flex-shrink:0" ${actAttrs('showConflictContextMenu', item.sourceModId, r.other_mod_id)} data-act-with="event">${r.file_count} ${t('conflict.files') || 'files'}</button>
+                     <button class="cflt-files-btn" ${actAttrs('showConflictContextMenu', item.sourceModId, r.other_mod_id)} data-act-with="event"
+                             data-tooltip="${escAttr(t('conflict.filesTip') || 'See which files overlap, and choose which mod wins')}">
+                       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                       <span>${r.file_count} ${t('conflict.files') || 'files'}</span>
+                       <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="cflt-files-chev"><polyline points="9 18 15 12 9 6"/></svg>
+                     </button>
                      <span style="font-size:9px;font-weight:900;padding:2px 7px;border-radius:10px;text-transform:uppercase;color:${statusColor};border:1px solid ${statusColor};background:${statusBg};flex-shrink:0">${isActive ? (t('conflict.active') || 'ACTIVE') : (t('conflict.potential') || 'POTENTIAL')}</span>
                    </div>`;
                     }).join('')}
@@ -222,16 +239,40 @@ export async function openGlobalConflictModal(preselectModId = null) {
           ${totalActive > 0 ? `<span style="font-size:11px;color:var(--danger);font-weight:600">— ${totalActive} ${t('conflict.active') || 'active'}</span>` : ''}
           ${totalPotential > 0 ? `<span style="font-size:11px;color:var(--warning);font-weight:600">— ${totalPotential} ${t('conflict.potential') || 'potential'}</span>` : ''}
         </div>`;
-                container.innerHTML = summaryBar + rendered.join('');
+                const hidden = totalModsWithConflicts - rendered.length;
+                const filterNote = hidden > 0
+                    ? `<div class="cflt-hidden-note">${escHtml((t('conflict.hiddenNote') || '{n} more mod(s) have conflicts, hidden by the filters above.').replace('{n}', String(hidden)))}
+               <button class="cflt-linkbtn" id="cflt-note-reset">${escHtml(t('conflict.reset') || 'Show everything')}</button></div>`
+                    : '';
+                container.innerHTML = summaryBar + filterNote + rendered.join('');
+                container.querySelector('#cflt-note-reset')?.addEventListener('click', () => resetFilters());
             }
             else {
+                // "No conflicts" and "your filters hid all of them" look identical and mean opposite
+                // things. Saying the reassuring one while four filters are on is the panel lying.
+                const hiddenByFilters = anyFilterOn && totalModsWithConflicts > 0;
                 container.innerHTML = `<div style="padding:48px;text-align:center;color:var(--text-muted)">
           <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:0.25;margin-bottom:12px"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
-          <div>${t('conflict.empty') || 'No conflicts detected.'}</div>
+          <div>${hiddenByFilters
+                    ? escHtml((t('conflict.allFiltered') || 'Nothing matches these filters — {n} mod(s) do have conflicts.').replace('{n}', String(totalModsWithConflicts)))
+                    : escHtml(t('conflict.empty') || 'No conflicts detected.')}</div>
+          ${hiddenByFilters ? `<button class="btn btn-sm btn-secondary" id="cflt-empty-reset" style="margin-top:14px">${escHtml(t('conflict.reset') || 'Show everything')}</button>` : ''}
         </div>`;
+                container.querySelector('#cflt-empty-reset')?.addEventListener('click', () => resetFilters());
             }
         };
+        const resetFilters = () => {
+            searchInput.value = '';
+            profileFilter.value = 'all';
+            typeFilter.value = 'all';
+            if (statusFilter)
+                statusFilter.value = 'all';
+            renderList(false);
+        };
         renderList(true);
+        resetBtn?.addEventListener('click', resetFilters);
+        if (statusFilter)
+            statusFilter.onchange = () => renderList(false);
         searchInput.oninput = () => renderList(false);
         profileFilter.onchange = () => renderList(false);
         typeFilter.onchange = () => renderList(false);

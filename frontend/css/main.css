@@ -16701,6 +16701,120 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 .sched-tcb-count { font-size: 11px; color: var(--text-muted); }
 .sched-pc-publish { width: 100%; justify-content: center; margin-top: 6px; }
 
+/* ── Global conflicts: filters, legend, and what you can press ────────────── */
+.cflt-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 10px;
+    padding: 12px 24px 0;
+}
+.cflt-field { display: flex; flex-direction: column; gap: 3px; }
+.cflt-flabel {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+}
+.cflt-field .input-field { font-size: 12px; padding: 5px 8px; min-width: 140px; }
+.cflt-reset { margin-left: auto; }
+
+/* The legend. Intra and Inter were coloured words with no explanation anywhere in the app,
+   and they are not the same KIND of problem — which is the single thing somebody opening
+   this panel needs to know. The badges repeat the list's own shapes so the list becomes
+   readable rather than merely colourful. */
+.cflt-legend {
+    display: grid;
+    gap: 6px;
+    margin: 12px 24px 0;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bmm-s02, rgba(255, 255, 255, 0.02));
+    font-size: 11.5px;
+    line-height: 1.5;
+    color: var(--text-secondary);
+}
+.cflt-legend-row { display: grid; grid-template-columns: 74px 1fr; gap: 10px; align-items: start; }
+.cflt-legend b { color: var(--text-primary); font-weight: 700; }
+.cflt-badge {
+    font-size: 9px;
+    font-weight: 800;
+    padding: 2px 0;
+    border-radius: 10px;
+    text-align: center;
+    letter-spacing: 0.04em;
+    border: 1px solid;
+}
+.cflt-intra { color: var(--bmm-purple); border-color: var(--bmm-purple); background: rgba(139, 92, 246, 0.12); }
+.cflt-inter { color: var(--accent); border-color: var(--accent); background: var(--bmm-bg-active); }
+.cflt-active { color: var(--danger); border-color: var(--danger); background: rgba(239, 68, 68, 0.1); }
+.cflt-potential { color: var(--warning); border-color: var(--warning); background: rgba(245, 158, 11, 0.1); }
+
+/* One row of the list. Everything in it is text except ONE control, and that control used to
+   be styled like the badges beside it — so the only thing you could press looked exactly
+   like the three things you could not. */
+.cflt-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 10px;
+    border-radius: 6px;
+}
+.cflt-files-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    flex-shrink: 0;
+    font-family: var(--font-sans);
+    font-size: 10.5px;
+    font-weight: 600;
+    color: var(--accent);
+    background: var(--bmm-bg-active);
+    border: 1px solid var(--border-accent);
+    padding: 3px 6px 3px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: var(--transition-fast);
+}
+.cflt-files-btn:hover {
+    background: var(--accent);
+    color: var(--bmm-text-on-accent);
+    border-color: var(--accent);
+}
+.cflt-files-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* The chevron is the part that says "this opens something", so it moves on hover. */
+.cflt-files-btn .cflt-files-chev { transition: transform 0.15s ease; opacity: 0.7; }
+.cflt-files-btn:hover .cflt-files-chev { transform: translateX(2px); opacity: 1; }
+
+.cflt-hidden-note {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+    padding: 7px 12px;
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+    font-size: 11.5px;
+    color: var(--text-secondary);
+}
+.cflt-linkbtn {
+    background: none;
+    border: 0;
+    padding: 0;
+    font: inherit;
+    font-weight: 700;
+    color: var(--accent);
+    cursor: pointer;
+    text-decoration: underline;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .cflt-files-btn, .cflt-files-btn .cflt-files-chev { transition: none; }
+}
+
 /* ── Compact grid: the DETAIL panel too ─────────────────────────────
    Compact used to mean "shorter cards", and the moment you opened one you got the full-size
    panel — a 635px form dropped into a list whose rows are 54px. The setting says how much

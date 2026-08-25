@@ -7109,25 +7109,70 @@
                         </svg>
                         <span data-i18n="conflict.globalTitle">Vue Globale des Conflits</span>
                     </h3>
-                    <div style="display:flex; gap:10px; align-items:center;">
-                        <input type="text" id="global-conflict-search" class="input-field"
-                            data-i18n-placeholder="conflict.searchPlaceholder" placeholder="Rechercher un mod..."
-                            style="width:180px; font-size:12px;">
-                        <select id="global-conflict-profile-filter" class="input-field"
-                            style="width:140px; font-size:12px;">
-                            <option value="all" data-i18n="conflict.allProfiles">Tous les profils</option>
-                        </select>
-                        <select id="global-conflict-type-filter" class="input-field"
-                            style="width:110px; font-size:12px;">
+                    <input type="text" id="global-conflict-search" class="input-field"
+                        data-i18n-placeholder="conflict.searchPlaceholder" placeholder="Rechercher un mod..."
+                        style="width:200px; font-size:12px;">
+                </div>
+                <!-- The filters moved OUT of the title row. Four controls crammed beside the
+                     heading had no room for labels, so every one of them was a bare word:
+                     "Tous types" next to "Plus vieux (#0...)" reads as two settings of the
+                     same unnamed thing. -->
+                <div class="cflt-bar">
+                    <label class="cflt-field">
+                        <span class="cflt-flabel" data-i18n="conflict.fType">Type</span>
+                        <select id="global-conflict-type-filter" class="input-field">
                             <option value="all" data-i18n="conflict.allTypes">Tous types</option>
                             <option value="intra" data-i18n="conflict.intraProfile">Intra-Profil</option>
                             <option value="inter" data-i18n="conflict.interProfile">Inter-Profil</option>
                         </select>
-                        <select id="global-conflict-sort-order" class="input-field"
-                            style="width:130px; font-size:12px;">
+                    </label>
+                    <!-- The axis that was missing, and the one that decides whether something
+                         is happening NOW or only if you change something. -->
+                    <label class="cflt-field">
+                        <span class="cflt-flabel" data-i18n="conflict.fStatus">État</span>
+                        <select id="global-conflict-status-filter" class="input-field">
+                            <option value="all" data-i18n="conflict.allStatuses">Tous états</option>
+                            <option value="active" data-i18n="conflict.onlyActive">Actifs seulement</option>
+                            <option value="potential" data-i18n="conflict.onlyPotential">Potentiels seulement</option>
+                        </select>
+                    </label>
+                    <label class="cflt-field">
+                        <span class="cflt-flabel" data-i18n="conflict.fProfile">Profil</span>
+                        <select id="global-conflict-profile-filter" class="input-field">
+                            <option value="all" data-i18n="conflict.allProfiles">Tous les profils</option>
+                        </select>
+                    </label>
+                    <label class="cflt-field">
+                        <span class="cflt-flabel" data-i18n="conflict.fSort">Ordre d'activation</span>
+                        <select id="global-conflict-sort-order" class="input-field">
                             <option value="asc" data-i18n="conflict.sortOldest">Plus vieux (#0...)</option>
                             <option value="desc" data-i18n="conflict.sortNewest">Plus récent (#9...)</option>
                         </select>
+                    </label>
+                    <button type="button" class="btn btn-ghost btn-sm cflt-reset" id="global-conflict-reset"
+                            data-i18n="conflict.reset">Tout afficher</button>
+                </div>
+                <!-- The legend. Intra and Inter were coloured words with no explanation
+                     anywhere in the app, and they are not the same KIND of problem: one is
+                     happening now, the other only bites when you switch profile. The badges
+                     are the same shape as the ones in the list, so the list becomes readable
+                     rather than merely colourful. -->
+                <div class="cflt-legend" id="global-conflict-legend">
+                    <div class="cflt-legend-row">
+                        <span class="cflt-badge cflt-intra">INTRA</span>
+                        <span data-i18n="conflict.legendIntra">Un autre mod du <b>même profil</b> touche les mêmes fichiers. Les deux peuvent être activés ensemble — c'est le conflit qui compte tout de suite.</span>
+                    </div>
+                    <div class="cflt-legend-row">
+                        <span class="cflt-badge cflt-inter">INTER</span>
+                        <span data-i18n="conflict.legendInter">Un mod d'un <b>autre profil</b> installé dans le même dossier de jeu. Ils ne peuvent pas être actifs en même temps : ça ne mord qu'au changement de profil.</span>
+                    </div>
+                    <div class="cflt-legend-row">
+                        <span class="cflt-badge cflt-active">ACTIF</span>
+                        <span data-i18n="conflict.legendActive">Les deux mods sont activés : le recouvrement existe <b>sur le disque, maintenant</b>. Le dernier activé (numéro #) gagne.</span>
+                    </div>
+                    <div class="cflt-legend-row">
+                        <span class="cflt-badge cflt-potential">POTENTIEL</span>
+                        <span data-i18n="conflict.legendPotential">Les fichiers se recouvrent mais l'autre mod est désactivé. Rien ne se passe tant que vous ne l'activez pas.</span>
                     </div>
                 </div>
                 <div class="modal-body" id="global-conflicts-list"
