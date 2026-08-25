@@ -1,11 +1,12 @@
-// Help & Other — the rebuilt documentation hub (replaces the old ~4700-line #view-docs markup
-// + docs-ui.ts). A professional, data-driven hub that owns #view-docs. Features:
+// Help & Other — the rebuilt documentation hub. It replaced the old ~4700-line #view-docs
+// markup and docs/docs-ui.ts, both of which are now deleted. A data-driven hub that owns
+// #view-docs. Features:
 //   • TWO parts — "User" (learn every feature) and "Dev" (how BMM works under the hood).
 //   • Breadcrumb navigation + a route the LANGUAGE switch preserves (you stay on the same page).
 //   • Article media: embed a .bmmreplay (rrweb), an image, or inline SVG to illustrate a point.
 //   • Search with TWO modes — classic (substring) and semantic (synonym/keyword expansion),
 //     Algolia-style, focusable app-wide with Ctrl/⌘+K.
-//   • Deep links INTO the interactive tutorial at the right part+step, INTO any of the 44
+//   • Deep links INTO the interactive tutorial at the right part+step, INTO any of the 43
 //     Mermaid diagrams (reused as-is via window.openDiagram), and OUT to the full mkdocs site.
 //   • Rebuilt FAQ; the Settings help buttons (PAT/GitHub, disk I/O) relink here.
 //
