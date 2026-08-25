@@ -817,7 +817,31 @@ task "Nightly tidy" {
 Three things follow from it, and they are the whole reason. **It is never behind the bricks** — an action is \`do <name>(…)\` and the language holds no list of names, so an action added tomorrow is writable today. **You can switch modes** — code opens as bricks, bricks print as code. **It cannot do more than a brick can** — permissions, variables and loop caps are the runner's, unchanged.
 :::
 
-It deliberately has no expressions, no functions of your own and no recursion. Arithmetic stays where it already is, in the \`math.set\` action.
+It computes, too: \`set count = count + 1\`, \`if count >= 3\`, and \`set n: number = 0\` checked as you type. The only things deliberately out are functions of your own and recursion.
+
+### Doing several things at once
+
+\`\`\`
+parallel settle {
+    branch { do repo.sync() }
+    branch { do benchmark.run() }
+}
+\`\`\`
+
+Branches start together. \`parallel\` stops as soon as one fails; \`parallel settle\` lets them all finish and says how many did not. They share the task's variables, so use them for work that does not depend on each other.
+
+\`run "Other task"\` waits for it; \`spawn "Other task"\` starts it and carries on.
+
+### Real code, without escaping it
+
+\`\`\`
+script python {
+    import os
+    print(os.getcwd())
+}
+\`\`\`
+
+PowerShell, CMD, Bash, Python, JavaScript (Node) or Rust, body taken exactly as written. As an action parameter this needed every quote and newline escaped, which is why nobody used it.
 
 You do not have to choose between the two. The action **Run BMMScript (advanced)** takes a snippet with no \`task\` wrapper and runs it inside the surrounding task — same variables, same permissions. The editor compiles it as you type and names the line of the first error.
 
@@ -849,7 +873,31 @@ task "Ménage nocturne" {
 Trois conséquences, et c’est toute la raison. **Il n’est jamais en retard sur les briques** — une action s’écrit \`do <nom>(…)\` et le langage ne contient aucune liste de noms, donc une action ajoutée demain s’écrit déjà. **Vous pouvez changer de mode** — le code s’ouvre en briques, les briques s’impriment en code. **Il ne peut pas faire plus qu’une brique** — permissions, variables et limites de boucle sont celles de l’exécuteur, inchangées.
 :::
 
-Il n’a volontairement ni expressions, ni fonctions à vous, ni récursion. L’arithmétique reste où elle est déjà, dans l’action \`math.set\`.
+Il calcule aussi : \`set count = count + 1\`, \`if count >= 3\`, et \`set n: number = 0\` vérifié pendant que vous tapez. Les seules choses volontairement hors périmètre sont vos propres fonctions et la récursion.
+
+### Faire plusieurs choses à la fois
+
+\`\`\`
+parallel settle {
+    branch { do repo.sync() }
+    branch { do benchmark.run() }
+}
+\`\`\`
+
+Les branches démarrent ensemble. \`parallel\` s’arrête dès qu’une échoue ; \`parallel settle\` les laisse toutes finir et dit combien ont échoué. Elles partagent les variables de la tâche — servez-vous en pour du travail indépendant.
+
+\`run "Autre tâche"\` attend ; \`spawn "Autre tâche"\` la démarre et continue.
+
+### Du vrai code, sans rien échapper
+
+\`\`\`
+script python {
+    import os
+    print(os.getcwd())
+}
+\`\`\`
+
+PowerShell, CMD, Bash, Python, JavaScript (Node) ou Rust, corps pris exactement tel qu’écrit. En paramètre d’action il fallait échapper chaque guillemet et chaque retour à la ligne, et c’est pour ça que personne ne s’en servait.
 
 Vous n’avez pas à choisir entre les deux modes. L’action **Exécuter du BMMScript (avancé)** prend un extrait sans enveloppe \`task\` et l’exécute dans la tâche qui l’entoure — mêmes variables, mêmes permissions. L’éditeur le compile pendant que vous tapez et nomme la ligne de la première erreur.
 

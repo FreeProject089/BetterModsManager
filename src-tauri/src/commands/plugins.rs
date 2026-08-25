@@ -1,13 +1,12 @@
+use crate::commands::crash::log_line;
+use crate::models::plugin::{CatalogResponse, InstalledPlugin, ModCompareResult, PluginManifest};
+use crate::state::AppState;
+use std::path::PathBuf;
 use tauri::Manager;
 use tauri::State;
-use std::path::PathBuf;
-use crate::state::AppState;
-use crate::models::plugin::{
-    InstalledPlugin, PluginManifest, CatalogResponse, ModCompareResult
-};
-use crate::commands::crash::log_line;
 
-const CATALOG_URL: &str = "https://raw.githubusercontent.com/BetterDCS/BetterModsManager_Plugins/main/catalog.json";
+const CATALOG_URL: &str =
+    "https://raw.githubusercontent.com/BetterDCS/BetterModsManager_Plugins/main/catalog.json";
 
 /// Recursively copy a directory tree from `src` to `dst`.
 fn copy_dir_recursive(src: &std::path::Path, dst: &std::path::Path) -> std::io::Result<()> {
@@ -28,7 +27,10 @@ fn copy_dir_recursive(src: &std::path::Path, dst: &std::path::Path) -> std::io::
 // ── Catalog ────────────────────────────────────────────────────────────────
 
 #[tauri::command]
-pub async fn fetch_plugin_catalog(app: tauri::AppHandle, catalog_url: Option<String>) -> Result<CatalogResponse, String> {
+pub async fn fetch_plugin_catalog(
+    app: tauri::AppHandle,
+    catalog_url: Option<String>,
+) -> Result<CatalogResponse, String> {
     let url = catalog_url.as_deref().unwrap_or(CATALOG_URL);
     // catalog_get carries the site identity header for first-party (BetterCommunity)
     // URLs so PRIVATE community catalogs gate correctly; a third-party feed gets none.
@@ -40,7 +42,10 @@ pub async fn fetch_plugin_catalog(app: tauri::AppHandle, catalog_url: Option<Str
 
     if resp.status().as_u16() == 404 {
         // Catalog not published yet — return empty gracefully
-        return Ok(CatalogResponse { version: String::new(), plugins: vec![] });
+        return Ok(CatalogResponse {
+            version: String::new(),
+            plugins: vec![],
+        });
     }
     // A private catalog the caller isn't allowed to see — surface it distinctly so the
     // UI can show a "private / access denied" state instead of a generic fetch error.
@@ -51,10 +56,15 @@ pub async fn fetch_plugin_catalog(app: tauri::AppHandle, catalog_url: Option<Str
         return Err(format!("Catalog fetch failed (HTTP {})", resp.status()));
     }
 
-    let catalog: CatalogResponse = resp.json().await
+    let catalog: CatalogResponse = resp
+        .json()
+        .await
         .map_err(|e| format!("Parse error: {}", e))?;
 
-    log_line(format!("[PLUGINS] Fetched catalog: {} plugins", catalog.plugins.len()));
+    log_line(format!(
+        "[PLUGINS] Fetched catalog: {} plugins",
+        catalog.plugins.len()
+    ));
     Ok(catalog)
 }
 
@@ -73,10 +83,17 @@ pub async fn install_plugin(
     // storage; third-party download URLs get no header.
     let bytes = crate::commands::net::catalog_get(&handle, &download_url)
         .timeout(std::time::Duration::from_secs(60))
-        .send().await.map_err(|e| format!("Download error: {}", e))?
-        .bytes().await.map_err(|e| format!("Read error: {}", e))?;
+        .send()
+        .await
+        .map_err(|e| format!("Download error: {}", e))?
+        .bytes()
+        .await
+        .map_err(|e| format!("Read error: {}", e))?;
 
-    let app_dir = handle.path().app_data_dir().ok()
+    let app_dir = handle
+        .path()
+        .app_data_dir()
+        .ok()
         .ok_or("Cannot resolve app data dir")?;
     let plugins_dir = app_dir.join("plugins");
     std::fs::create_dir_all(&plugins_dir).map_err(|e| e.to_string())?;
@@ -87,7 +104,11 @@ pub async fn install_plugin(
         install_dir: plugins_dir.join(&manifest.id).to_string_lossy().to_string(),
         icon_path: {
             let icon = plugins_dir.join(&manifest.id).join("icon.png");
-            if icon.exists() { Some(icon.to_string_lossy().to_string()) } else { None }
+            if icon.exists() {
+                Some(icon.to_string_lossy().to_string())
+            } else {
+                None
+            }
         },
         installed_at: chrono::Utc::now().to_rfc3339(),
         enabled: true,
@@ -96,7 +117,8 @@ pub async fn install_plugin(
 
     {
         let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
-        data.installed_plugins.retain(|p| p.manifest.id != manifest.id);
+        data.installed_plugins
+            .retain(|p| p.manifest.id != manifest.id);
         data.installed_plugins.push(installed.clone());
     }
     let _ = state.save();
@@ -114,7 +136,10 @@ pub async fn install_plugin_from_file(
 
     let bytes = std::fs::read(&file_path).map_err(|e| format!("Read error: {}", e))?;
 
-    let app_dir = handle.path().app_data_dir().ok()
+    let app_dir = handle
+        .path()
+        .app_data_dir()
+        .ok()
         .ok_or("Cannot resolve app data dir")?;
     let plugins_dir = app_dir.join("plugins");
     std::fs::create_dir_all(&plugins_dir).map_err(|e| e.to_string())?;
@@ -125,7 +150,11 @@ pub async fn install_plugin_from_file(
         install_dir: plugins_dir.join(&manifest.id).to_string_lossy().to_string(),
         icon_path: {
             let icon = plugins_dir.join(&manifest.id).join("icon.png");
-            if icon.exists() { Some(icon.to_string_lossy().to_string()) } else { None }
+            if icon.exists() {
+                Some(icon.to_string_lossy().to_string())
+            } else {
+                None
+            }
         },
         installed_at: chrono::Utc::now().to_rfc3339(),
         enabled: true,
@@ -134,7 +163,8 @@ pub async fn install_plugin_from_file(
 
     {
         let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
-        data.installed_plugins.retain(|p| p.manifest.id != manifest.id);
+        data.installed_plugins
+            .retain(|p| p.manifest.id != manifest.id);
         data.installed_plugins.push(installed.clone());
     }
     let _ = state.save();
@@ -157,13 +187,18 @@ fn extract_plugin_zip(bytes: &[u8], plugins_dir: &PathBuf) -> Result<PluginManif
                 let mut s = String::new();
                 std::io::Read::read_to_string(&mut file, &mut s).ok()?;
                 Some(s)
-            } else { None }
+            } else {
+                None
+            }
         })
         .ok_or_else(|| {
             if file_names.is_empty() {
                 "plugin.json not found in archive (archive appears empty)".to_string()
             } else {
-                format!("plugin.json not found in archive. Files found: {}", file_names.join(", "))
+                format!(
+                    "plugin.json not found in archive. Files found: {}",
+                    file_names.join(", ")
+                )
             }
         })?;
 
@@ -184,17 +219,30 @@ fn extract_plugin_zip(bytes: &[u8], plugins_dir: &PathBuf) -> Result<PluginManif
     for i in 0..archive2.len() {
         let mut file = archive2.by_index(i).map_err(|e| e.to_string())?;
         let name = file.name().to_string();
-        if name.ends_with('/') { continue; }
+        if name.ends_with('/') {
+            continue;
+        }
 
         // CWE-22 Zip Slip: resolve a CONTAINED relative path (None ⇒ the entry uses
         // `..`/absolute to escape → skip). The old `name[after first '/']` slice kept
         // any `..` in the remainder, so a crafted .bmmplug could write outside the dir.
-        let safe = match file.enclosed_name() { Some(p) => p.to_path_buf(), None => continue };
+        let safe = match file.enclosed_name() {
+            Some(p) => p.to_path_buf(),
+            None => continue,
+        };
         // Strip the top-level folder (plugins are zipped inside a root dir), keep the rest.
         let mut stripped = std::path::PathBuf::new();
-        for c in safe.components().skip(1) { stripped.push(c.as_os_str()); }
-        let rel = if stripped.as_os_str().is_empty() { safe.clone() } else { stripped };
-        if rel.as_os_str().is_empty() { continue; }
+        for c in safe.components().skip(1) {
+            stripped.push(c.as_os_str());
+        }
+        let rel = if stripped.as_os_str().is_empty() {
+            safe.clone()
+        } else {
+            stripped
+        };
+        if rel.as_os_str().is_empty() {
+            continue;
+        }
 
         let dest = plugin_dir.join(&rel);
         if let Some(parent) = dest.parent() {
@@ -211,14 +259,16 @@ fn extract_plugin_zip(bytes: &[u8], plugins_dir: &PathBuf) -> Result<PluginManif
 pub fn uninstall_plugin(state: State<'_, AppState>, plugin_id: String) -> Result<(), String> {
     let install_dir = {
         let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
-        data.installed_plugins.iter()
+        data.installed_plugins
+            .iter()
             .find(|p| p.manifest.id == plugin_id)
             .map(|p| p.install_dir.clone())
     };
 
     {
         let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
-        data.installed_plugins.retain(|p| p.manifest.id != plugin_id);
+        data.installed_plugins
+            .retain(|p| p.manifest.id != plugin_id);
         data.plugin_permissions.remove(&plugin_id);
     }
 
@@ -235,9 +285,17 @@ pub fn uninstall_plugin(state: State<'_, AppState>, plugin_id: String) -> Result
 }
 
 #[tauri::command]
-pub fn toggle_plugin(state: State<'_, AppState>, plugin_id: String, enabled: bool) -> Result<(), String> {
+pub fn toggle_plugin(
+    state: State<'_, AppState>,
+    plugin_id: String,
+    enabled: bool,
+) -> Result<(), String> {
     let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
-    if let Some(p) = data.installed_plugins.iter_mut().find(|p| p.manifest.id == plugin_id) {
+    if let Some(p) = data
+        .installed_plugins
+        .iter_mut()
+        .find(|p| p.manifest.id == plugin_id)
+    {
         p.enabled = enabled;
     } else {
         return Err(format!("Plugin '{}' not found", plugin_id));
@@ -261,18 +319,26 @@ pub fn compare_plugin_mods(
     plugin_id: String,
 ) -> Result<ModCompareResult, String> {
     let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
-    let plugin = data.installed_plugins.iter()
+    let plugin = data
+        .installed_plugins
+        .iter()
         .find(|p| p.manifest.id == plugin_id)
         .ok_or_else(|| format!("Plugin '{}' not found", plugin_id))?
         .clone();
 
     let active_id = data.active_profile_id.clone().unwrap_or_default();
-    let active_mods: Vec<String> = data.profiles.iter()
+    let active_mods: Vec<String> = data
+        .profiles
+        .iter()
         .find(|p| p.id == active_id)
         .map(|p| p.active_mods.clone())
         .unwrap_or_default();
 
-    Ok(crate::api::compute_compare(&plugin, &data.mods, &active_mods))
+    Ok(crate::api::compute_compare(
+        &plugin,
+        &data.mods,
+        &active_mods,
+    ))
 }
 
 #[tauri::command]
@@ -283,16 +349,19 @@ pub async fn apply_plugin_modlist(
 ) -> Result<serde_json::Value, String> {
     let (plugin, active_id) = {
         let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
-        let plugin = data.installed_plugins.iter()
+        let plugin = data
+            .installed_plugins
+            .iter()
             .find(|p| p.manifest.id == plugin_id)
             .ok_or_else(|| format!("Plugin '{}' not found", plugin_id))?
             .clone();
-        let active_id = data.active_profile_id.clone()
-            .ok_or("No active profile")?;
+        let active_id = data.active_profile_id.clone().ok_or("No active profile")?;
         (plugin, active_id)
     };
 
-    let modlist = plugin.manifest.modlist
+    let modlist = plugin
+        .manifest
+        .modlist
         .as_ref()
         .ok_or("Plugin has no modlist")?
         .clone();
@@ -306,9 +375,15 @@ pub async fn apply_plugin_modlist(
         for req in &modlist.required_mods {
             // Prefer the stable id when the manifest carries one (survives renames);
             // fall back to a case-insensitive name match for older manifests.
-            let found = req.id.as_ref()
+            let found = req
+                .id
+                .as_ref()
                 .and_then(|id| data.mods.iter().find(|m| &m.id == id))
-                .or_else(|| data.mods.iter().find(|m| m.name.to_lowercase() == req.name.to_lowercase()));
+                .or_else(|| {
+                    data.mods
+                        .iter()
+                        .find(|m| m.name.to_lowercase() == req.name.to_lowercase())
+                });
             if let Some(m) = found {
                 enabled_ids.push(m.id.clone());
             } else if !req.optional {
@@ -369,7 +444,11 @@ pub fn get_plugin_permissions(
     plugin_id: String,
 ) -> Result<Vec<String>, String> {
     let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
-    Ok(data.plugin_permissions.get(&plugin_id).cloned().unwrap_or_default())
+    Ok(data
+        .plugin_permissions
+        .get(&plugin_id)
+        .cloned()
+        .unwrap_or_default())
 }
 
 // ── API Token ──────────────────────────────────────────────────────────────
@@ -417,16 +496,24 @@ pub async fn restart_api_server(
 ) -> Result<u16, String> {
     // Signal the current server to stop (graceful shutdown), snapshot what the
     // server needs, and register the new shutdown channel — all before awaiting.
-    if let Some(tx) = state.api_shutdown_tx.lock().unwrap_or_else(|p| p.into_inner()).take() {
+    if let Some(tx) = state
+        .api_shutdown_tx
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .take()
+    {
         let _ = tx.send(());
     }
     let data_arc = state.data.clone();
     let data_path = state.data_path.clone();
     let creator_id = std::sync::Arc::new(
-        crate::commands::security::get_creator_id(app.clone()).unwrap_or_default()
+        crate::commands::security::get_creator_id(app.clone()).unwrap_or_default(),
     );
     let (tx, rx) = tokio::sync::oneshot::channel::<()>();
-    *state.api_shutdown_tx.lock().unwrap_or_else(|p| p.into_inner()) = Some(tx);
+    *state
+        .api_shutdown_tx
+        .lock()
+        .unwrap_or_else(|p| p.into_inner()) = Some(tx);
 
     // Let the OS release the old port before rebinding.
     tokio::time::sleep(std::time::Duration::from_millis(350)).await;
@@ -460,17 +547,29 @@ pub fn reset_api_token(state: State<'_, AppState>) -> Result<String, String> {
 
 /// Issue (or replace) the per-plugin API token bound to `plugin_id`. Returns it.
 #[tauri::command]
-pub fn create_plugin_token(state: State<'_, AppState>, plugin_id: String) -> Result<String, String> {
-    if plugin_id.trim().is_empty() { return Err("plugin_id required".to_string()); }
+pub fn create_plugin_token(
+    state: State<'_, AppState>,
+    plugin_id: String,
+) -> Result<String, String> {
+    if plugin_id.trim().is_empty() {
+        return Err("plugin_id required".to_string());
+    }
     let token = uuid::Uuid::new_v4().to_string();
     {
         let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         // One token per plugin: drop any previous token for this plugin first.
-        data.settings.plugin_tokens.retain(|_, pid| pid != &plugin_id);
-        data.settings.plugin_tokens.insert(token.clone(), plugin_id.clone());
+        data.settings
+            .plugin_tokens
+            .retain(|_, pid| pid != &plugin_id);
+        data.settings
+            .plugin_tokens
+            .insert(token.clone(), plugin_id.clone());
     }
     let _ = state.save();
-    log_line(format!("[PLUGINS] Issued API token for plugin '{}'", plugin_id));
+    log_line(format!(
+        "[PLUGINS] Issued API token for plugin '{}'",
+        plugin_id
+    ));
     Ok(token)
 }
 
@@ -480,12 +579,17 @@ pub fn revoke_plugin_token(state: State<'_, AppState>, plugin_id: String) -> Res
     let removed = {
         let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         let before = data.settings.plugin_tokens.len();
-        data.settings.plugin_tokens.retain(|_, pid| pid != &plugin_id);
+        data.settings
+            .plugin_tokens
+            .retain(|_, pid| pid != &plugin_id);
         before != data.settings.plugin_tokens.len()
     };
     if removed {
         let _ = state.save();
-        log_line(format!("[PLUGINS] Revoked API token for plugin '{}'", plugin_id));
+        log_line(format!(
+            "[PLUGINS] Revoked API token for plugin '{}'",
+            plugin_id
+        ));
     }
     Ok(removed)
 }
@@ -527,6 +631,7 @@ pub fn generate_script(req: GenerateScriptRequest) -> Result<String, String> {
         "bat" => Ok(gen_bat(&req)),
         "ps1" => Ok(gen_ps1(&req)),
         "vbs" => Ok(gen_vbs(&req)),
+        "bmms" => Ok(gen_bmms(&req)),
         _ => Err(format!("Unknown format: {}", req.format)),
     }
 }
@@ -539,6 +644,188 @@ fn extra_u64(v: &serde_json::Value, k: &str) -> u64 {
 }
 fn extra_bool(v: &serde_json::Value, k: &str) -> bool {
     v.get(k).and_then(|x| x.as_bool()).unwrap_or(false)
+}
+
+/// BMMScript — the one output that runs INSIDE BMM rather than poking it from outside.
+///
+/// No action-name table: `action_to_deeplink` already knows every action with a native
+/// link, and `action_to_api_call` covers the rest. Emitting those two as `do deeplink(...)`
+/// and `do http.request(...)` keeps this correct as both grow, and avoids a third copy of a
+/// correspondence the repository already keeps twice.
+fn gen_bmms(req: &GenerateScriptRequest) -> String {
+    let mut steps: Vec<String> = Vec::new();
+    let mut needs_http = false;
+
+    for a in &req.actions {
+        let dl = action_to_deeplink(a);
+        // NOT `is_empty`: action_to_deeplink never returns one. Its fallback is the sentinel
+        // `bmm://unknown?id=…`, so an emptiness check silently turned every unrecognised
+        // action into a link that goes nowhere.
+        if !dl.starts_with("bmm://unknown") {
+            steps.push(format!("    do deeplink(url: {})", quote_bmms(&dl)));
+            continue;
+        }
+        if let Some((method, path, body)) = action_to_api_call(a) {
+            needs_http = true;
+            let mut call = format!(
+                "    do http.request(url: {}, method: {}",
+                quote_bmms(&format!("http://127.0.0.1:5173{}", path)),
+                method.to_uppercase()
+            );
+            if !body.is_empty() {
+                call.push_str(&format!(", body: {}", quote_bmms(&body)));
+            }
+            if req.token.is_some() {
+                call.push_str(&format!(
+                    ", headers: {}",
+                    quote_bmms("Authorization: Bearer {bmm.token}")
+                ));
+            }
+            call.push(')');
+            steps.push(call);
+            continue;
+        }
+        // Named rather than dropped. A generated file that is quietly missing a step is
+        // worse than one that says which step it could not write.
+        steps.push(format!(
+            "    // no BMM action for `{}` — nothing was generated for it",
+            a.action_type
+        ));
+    }
+
+    let mut perms = vec!["deeplink"];
+    if needs_http {
+        // http.request runs under the same permission as launching a program: it can post a
+        // captured value anywhere.
+        perms.push("command");
+    }
+
+    let mut out = String::new();
+    out.push_str("// Generated by BetterModsManager\n");
+    out.push_str("// Open this in the Scheduler (Code mode) or import it as a task.\n\n");
+    out.push_str("task \"Generated\" {\n");
+    out.push_str("    manual\n");
+    out.push_str(&format!("    allow {}\n\n", perms.join(", ")));
+    if steps.is_empty() {
+        out.push_str("    // nothing selected\n");
+    } else {
+        out.push_str(&steps.join("\n"));
+        out.push('\n');
+    }
+    out.push_str("}\n");
+    out
+}
+
+/// A BMMScript string literal. Only the two escapes the lexer recognises — anything else it
+/// keeps BOTH characters of, so a Windows path must NOT have its backslashes doubled.
+fn quote_bmms(v: &str) -> String {
+    format!("\"{}\"", v.replace('\\', "\\\\").replace('"', "\\\""))
+}
+
+#[cfg(test)]
+mod bmms_gen_tests {
+    use super::*;
+
+    fn act(t: &str, id: &str) -> ScriptAction {
+        ScriptAction {
+            action_type: t.into(),
+            target_id: id.into(),
+            extra: serde_json::json!({}),
+        }
+    }
+
+    /// A generator that emits text the compiler refuses is worse than no generator: it looks
+    /// like it worked and fails when somebody tries to use the file. So the output goes
+    /// straight through the real parser.
+    #[test]
+    fn what_it_generates_actually_compiles() {
+        let req = GenerateScriptRequest {
+            format: "bmms".into(),
+            actions: vec![
+                act("activate_profile", "prof-1"),
+                act("enable_mod", "some mod"),
+                act("apply_plugin", "my-plugin"),
+                // No native deeplink — takes the HTTP path.
+                act("list_mods", ""),
+            ],
+            use_deeplink: true,
+            token: Some("tok".into()),
+            launch_bmm: false,
+            exe_path: String::new(),
+        };
+        let src = gen_bmms(&req);
+        let r = crate::commands::bmms::bmms_compile(src.clone());
+        assert!(
+            r.ok,
+            "generated BMMScript does not compile: {:?}
+---
+{}",
+            r.errors, src
+        );
+        let task = r.task.unwrap();
+        assert_eq!(task["trigger"]["type"], "manual");
+        assert_eq!(task["perms"]["deeplink"], true);
+        let steps = task["steps"].as_array().unwrap();
+        assert_eq!(
+            steps.len(),
+            4,
+            "every action must produce a step:
+{}",
+            src
+        );
+        assert_eq!(steps[0]["action"]["type"], "deeplink");
+        assert!(steps[0]["action"]["params"]["url"]
+            .as_str()
+            .unwrap()
+            .contains("profile/activate"));
+    }
+
+    #[test]
+    fn an_action_with_no_bmm_equivalent_is_named_not_dropped() {
+        let req = GenerateScriptRequest {
+            format: "bmms".into(),
+            actions: vec![act("something_invented", "x")],
+            use_deeplink: true,
+            token: None,
+            launch_bmm: false,
+            exe_path: String::new(),
+        };
+        let src = gen_bmms(&req);
+        // A generated file quietly missing a step is worse than one that says so.
+        assert!(
+            src.contains("something_invented"),
+            "got:
+{}",
+            src
+        );
+        assert!(
+            crate::commands::bmms::bmms_compile(src.clone()).ok,
+            "the comment must still compile:
+{}",
+            src
+        );
+    }
+
+    #[test]
+    fn a_backslash_in_a_value_survives_the_quoting() {
+        // Asserted by ROUND TRIP rather than against a literal: the expected string needs
+        // four levels of escaping to write down, and I got it wrong twice. What actually
+        // matters is that the path arrives intact on the other side of the parser.
+        let path = r"C:\mods\Skyrim";
+        let src = format!(
+            "task {} {{ do folder.open(path: {}) }}",
+            quote_bmms("T"),
+            quote_bmms(path)
+        );
+        let r = crate::commands::bmms::bmms_compile(src.clone());
+        assert!(r.ok, "{:?} for {}", r.errors, src);
+        assert_eq!(
+            r.task.unwrap()["steps"][0]["action"]["params"]["path"],
+            path,
+            "the path must survive quoting and parsing: {}",
+            src
+        );
+    }
 }
 
 fn gen_bat(req: &GenerateScriptRequest) -> String {
@@ -636,21 +923,36 @@ fn bat_action(action: &ScriptAction, use_deeplink: bool) -> Vec<String> {
             let cond = extra_str(&action.extra, "cond");
             let parts: Vec<&str> = cond.splitn(2, '=').collect();
             if parts.len() == 2 {
-                out.push(format!("if \"%{}%\"==\"{}\" (", parts[0].trim(), parts[1].trim()));
+                out.push(format!(
+                    "if \"%{}%\"==\"{}\" (",
+                    parts[0].trim(),
+                    parts[1].trim()
+                ));
             }
         }
         "if_var_neq" => {
             let cond = extra_str(&action.extra, "cond");
             let parts: Vec<&str> = cond.splitn(2, '=').collect();
             if parts.len() == 2 {
-                out.push(format!("if not \"%{}%\"==\"{}\" (", parts[0].trim(), parts[1].trim()));
+                out.push(format!(
+                    "if not \"%{}%\"==\"{}\" (",
+                    parts[0].trim(),
+                    parts[1].trim()
+                ));
             }
         }
         "if_api_ok" => {
             // Optionally run a linked API call first, then branch on its result.
             let linked = extra_str(&action.extra, "api_action");
             if !linked.is_empty() {
-                out.extend(bat_action(&ScriptAction { action_type: linked.to_string(), target_id: String::new(), extra: serde_json::Value::Null }, false));
+                out.extend(bat_action(
+                    &ScriptAction {
+                        action_type: linked.to_string(),
+                        target_id: String::new(),
+                        extra: serde_json::Value::Null,
+                    },
+                    false,
+                ));
             }
             // curl uses -f below, so a failed HTTP call sets ERRORLEVEL != 0.
             out.push("if %ERRORLEVEL% EQU 0 (".to_string());
@@ -658,7 +960,14 @@ fn bat_action(action: &ScriptAction, use_deeplink: bool) -> Vec<String> {
         "if_api_err" => {
             let linked = extra_str(&action.extra, "api_action");
             if !linked.is_empty() {
-                out.extend(bat_action(&ScriptAction { action_type: linked.to_string(), target_id: String::new(), extra: serde_json::Value::Null }, false));
+                out.extend(bat_action(
+                    &ScriptAction {
+                        action_type: linked.to_string(),
+                        target_id: String::new(),
+                        extra: serde_json::Value::Null,
+                    },
+                    false,
+                ));
             }
             out.push("if %ERRORLEVEL% NEQ 0 (".to_string());
         }
@@ -676,10 +985,15 @@ fn bat_action(action: &ScriptAction, use_deeplink: bool) -> Vec<String> {
         }
         "raw_code" => {
             let code = extra_str(&action.extra, "code");
-            if !code.is_empty() { out.push(code.to_string()); }
+            if !code.is_empty() {
+                out.push(code.to_string());
+            }
         }
         "loop_start" => {
-            let n = extra_str(&action.extra, "count").parse::<u32>().unwrap_or(1).max(1);
+            let n = extra_str(&action.extra, "count")
+                .parse::<u32>()
+                .unwrap_or(1)
+                .max(1);
             out.push(format!("for /L %%i in (1,1,{}) do (", n));
         }
         "loop_end" => {
@@ -687,7 +1001,14 @@ fn bat_action(action: &ScriptAction, use_deeplink: bool) -> Vec<String> {
         }
         "verify_file" => {
             let p = extra_str(&action.extra, "path");
-            let vn = { let v = extra_str(&action.extra, "var_name"); if v.is_empty() { "FILE_HASH" } else { v } };
+            let vn = {
+                let v = extra_str(&action.extra, "var_name");
+                if v.is_empty() {
+                    "FILE_HASH"
+                } else {
+                    v
+                }
+            };
             // certutil prints the hash on the 2nd line; capture the first hash line.
             out.push(format!("set \"{vn}=\" & for /f \"skip=1 tokens=* delims=\" %%H in ('certutil -hashfile \"{p}\" SHA256') do if not defined {vn} set \"{vn}=%%H\""));
         }
@@ -701,18 +1022,42 @@ fn bat_action(action: &ScriptAction, use_deeplink: bool) -> Vec<String> {
             out.push(format!("for /L %%w in (1,1,{loops}) do (if not exist \"{p}\" timeout /t {pl} /nobreak >nul)"));
         }
         "math_set" => {
-            let v = { let s = extra_str(&action.extra, "var_name"); if s.is_empty() { "RESULT" } else { s } };
-            out.push(format!("set /a \"{v}={}\"", extra_str(&action.extra, "expr")));
+            let v = {
+                let s = extra_str(&action.extra, "var_name");
+                if s.is_empty() {
+                    "RESULT"
+                } else {
+                    s
+                }
+            };
+            out.push(format!(
+                "set /a \"{v}={}\"",
+                extra_str(&action.extra, "expr")
+            ));
         }
         "ternary" => {
-            let v = { let s = extra_str(&action.extra, "var_name"); if s.is_empty() { "RESULT" } else { s } };
-            let (c, tt, ff) = (extra_str(&action.extra, "cond"), extra_str(&action.extra, "val_true"), extra_str(&action.extra, "val_false"));
+            let v = {
+                let s = extra_str(&action.extra, "var_name");
+                if s.is_empty() {
+                    "RESULT"
+                } else {
+                    s
+                }
+            };
+            let (c, tt, ff) = (
+                extra_str(&action.extra, "cond"),
+                extra_str(&action.extra, "val_true"),
+                extra_str(&action.extra, "val_false"),
+            );
             out.push(format!("if {c} (set \"{v}={tt}\") else (set \"{v}={ff}\")"));
         }
         "guard_stop" => {
             out.push(format!("if {} exit /b 0", extra_str(&action.extra, "cond")));
         }
-        _ if use_deeplink && action_to_deeplink(action).starts_with("bmm://") && !action_to_deeplink(action).contains("unknown") => {
+        _ if use_deeplink
+            && action_to_deeplink(action).starts_with("bmm://")
+            && !action_to_deeplink(action).contains("unknown") =>
+        {
             out.push(format!("start \"\" \"{}\"", action_to_deeplink(action)));
             out.push("timeout /t 1 /nobreak >nul".to_string());
         }
@@ -729,7 +1074,8 @@ fn bat_action(action: &ScriptAction, use_deeplink: bool) -> Vec<String> {
                 } else {
                     out.push(format!(
                         "{} -H \"Content-Type: application/json\" -d \"{}\"",
-                        base, body.replace('"', "\\\"")
+                        base,
+                        body.replace('"', "\\\"")
                     ));
                 }
             } else {
@@ -759,7 +1105,9 @@ fn gen_ps1(req: &GenerateScriptRequest) -> String {
     if !req.use_deeplink || actions_need_api(req) {
         lines.push(format!("$bmmToken = \"{}\"", token));
         lines.push("$bmmHeaders = @{ Authorization = \"Bearer $bmmToken\"; \"Content-Type\" = \"application/json\" }".to_string());
-        lines.push("$bmmOk = $true  # set after each API call for if_api_ok / if_api_err".to_string());
+        lines.push(
+            "$bmmOk = $true  # set after each API call for if_api_ok / if_api_err".to_string(),
+        );
         lines.push(String::new());
     }
 
@@ -780,9 +1128,14 @@ fn ps1_action(action: &ScriptAction, use_deeplink: bool) -> Vec<String> {
             out.push(format!("Start-Sleep -Milliseconds {}", ms));
         }
         "close_process" => {
-            let name = extra_str(&action.extra, "process_name").trim_end_matches(".exe").to_string();
+            let name = extra_str(&action.extra, "process_name")
+                .trim_end_matches(".exe")
+                .to_string();
             if !name.is_empty() {
-                out.push(format!("Stop-Process -Name \"{}\" -Force -ErrorAction SilentlyContinue", name));
+                out.push(format!(
+                    "Stop-Process -Name \"{}\" -Force -ErrorAction SilentlyContinue",
+                    name
+                ));
             }
         }
         "open_url" => {
@@ -838,27 +1191,49 @@ fn ps1_action(action: &ScriptAction, use_deeplink: bool) -> Vec<String> {
             let cond = extra_str(&action.extra, "cond");
             let parts: Vec<&str> = cond.splitn(2, '=').collect();
             if parts.len() == 2 {
-                out.push(format!("if (${} -eq \"{}\") {{", parts[0].trim(), parts[1].trim()));
+                out.push(format!(
+                    "if (${} -eq \"{}\") {{",
+                    parts[0].trim(),
+                    parts[1].trim()
+                ));
             }
         }
         "if_var_neq" => {
             let cond = extra_str(&action.extra, "cond");
             let parts: Vec<&str> = cond.splitn(2, '=').collect();
             if parts.len() == 2 {
-                out.push(format!("if (${} -ne \"{}\") {{", parts[0].trim(), parts[1].trim()));
+                out.push(format!(
+                    "if (${} -ne \"{}\") {{",
+                    parts[0].trim(),
+                    parts[1].trim()
+                ));
             }
         }
         "if_api_ok" => {
             let linked = extra_str(&action.extra, "api_action");
             if !linked.is_empty() {
-                out.extend(ps1_action(&ScriptAction { action_type: linked.to_string(), target_id: String::new(), extra: serde_json::Value::Null }, false));
+                out.extend(ps1_action(
+                    &ScriptAction {
+                        action_type: linked.to_string(),
+                        target_id: String::new(),
+                        extra: serde_json::Value::Null,
+                    },
+                    false,
+                ));
             }
             out.push("if ($bmmOk) {".to_string());
         }
         "if_api_err" => {
             let linked = extra_str(&action.extra, "api_action");
             if !linked.is_empty() {
-                out.extend(ps1_action(&ScriptAction { action_type: linked.to_string(), target_id: String::new(), extra: serde_json::Value::Null }, false));
+                out.extend(ps1_action(
+                    &ScriptAction {
+                        action_type: linked.to_string(),
+                        target_id: String::new(),
+                        extra: serde_json::Value::Null,
+                    },
+                    false,
+                ));
             }
             out.push("if (-not $bmmOk) {".to_string());
         }
@@ -876,10 +1251,15 @@ fn ps1_action(action: &ScriptAction, use_deeplink: bool) -> Vec<String> {
         }
         "raw_code" => {
             let code = extra_str(&action.extra, "code");
-            if !code.is_empty() { out.push(code.to_string()); }
+            if !code.is_empty() {
+                out.push(code.to_string());
+            }
         }
         "loop_start" => {
-            let n = extra_str(&action.extra, "count").parse::<u32>().unwrap_or(1).max(1);
+            let n = extra_str(&action.extra, "count")
+                .parse::<u32>()
+                .unwrap_or(1)
+                .max(1);
             out.push(format!("1..{} | ForEach-Object {{", n));
         }
         "loop_end" => {
@@ -887,8 +1267,17 @@ fn ps1_action(action: &ScriptAction, use_deeplink: bool) -> Vec<String> {
         }
         "verify_file" => {
             let p = extra_str(&action.extra, "path");
-            let vn = { let v = extra_str(&action.extra, "var_name"); if v.is_empty() { "FILE_HASH" } else { v } };
-            out.push(format!("${vn} = (Get-FileHash -Path \"{p}\" -Algorithm SHA256).Hash.ToLower()"));
+            let vn = {
+                let v = extra_str(&action.extra, "var_name");
+                if v.is_empty() {
+                    "FILE_HASH"
+                } else {
+                    v
+                }
+            };
+            out.push(format!(
+                "${vn} = (Get-FileHash -Path \"{p}\" -Algorithm SHA256).Hash.ToLower()"
+            ));
         }
         "wait_until" => {
             let p = extra_str(&action.extra, "path");
@@ -897,18 +1286,42 @@ fn ps1_action(action: &ScriptAction, use_deeplink: bool) -> Vec<String> {
             out.push(format!("$_end = (Get-Date).AddSeconds({to}); while (-not (Test-Path \"{p}\") -and (Get-Date) -lt $_end) {{ Start-Sleep -Seconds {pl} }}"));
         }
         "math_set" => {
-            let v = { let s = extra_str(&action.extra, "var_name"); if s.is_empty() { "RESULT" } else { s } };
+            let v = {
+                let s = extra_str(&action.extra, "var_name");
+                if s.is_empty() {
+                    "RESULT"
+                } else {
+                    s
+                }
+            };
             out.push(format!("${v} = ({})", extra_str(&action.extra, "expr")));
         }
         "ternary" => {
-            let v = { let s = extra_str(&action.extra, "var_name"); if s.is_empty() { "RESULT" } else { s } };
-            let (c, tt, ff) = (extra_str(&action.extra, "cond"), extra_str(&action.extra, "val_true"), extra_str(&action.extra, "val_false"));
+            let v = {
+                let s = extra_str(&action.extra, "var_name");
+                if s.is_empty() {
+                    "RESULT"
+                } else {
+                    s
+                }
+            };
+            let (c, tt, ff) = (
+                extra_str(&action.extra, "cond"),
+                extra_str(&action.extra, "val_true"),
+                extra_str(&action.extra, "val_false"),
+            );
             out.push(format!("${v} = if ({c}) {{ {tt} }} else {{ {ff} }}"));
         }
         "guard_stop" => {
-            out.push(format!("if ({}) {{ exit 0 }}", extra_str(&action.extra, "cond")));
+            out.push(format!(
+                "if ({}) {{ exit 0 }}",
+                extra_str(&action.extra, "cond")
+            ));
         }
-        _ if use_deeplink && action_to_deeplink(action).starts_with("bmm://") && !action_to_deeplink(action).contains("unknown") => {
+        _ if use_deeplink
+            && action_to_deeplink(action).starts_with("bmm://")
+            && !action_to_deeplink(action).contains("unknown") =>
+        {
             out.push(format!("Start-Process \"{}\"", action_to_deeplink(action)));
             out.push("Start-Sleep -Seconds 1".to_string());
         }
@@ -949,27 +1362,43 @@ fn gen_vbs(req: &GenerateScriptRequest) -> String {
     ];
 
     if req.launch_bmm && !req.exe_path.is_empty() {
-        lines.push(format!("Dim bmmExe : bmmExe = \"{}\"", req.exe_path.replace('"', "\"\"")));
+        lines.push(format!(
+            "Dim bmmExe : bmmExe = \"{}\"",
+            req.exe_path.replace('"', "\"\"")
+        ));
         lines.push("shell.Run Chr(34) & bmmExe & Chr(34)".to_string());
         lines.push("WScript.Sleep 3000".to_string());
         lines.push(String::new());
     }
 
     if need_api {
-        lines.push(format!("Dim bmmToken : bmmToken = \"{}\"", token.replace('"', "\"\"")));
+        lines.push(format!(
+            "Dim bmmToken : bmmToken = \"{}\"",
+            token.replace('"', "\"\"")
+        ));
         lines.push("Dim bmmLastStatus : bmmLastStatus = 0  ' set after each API call for if_api_ok / if_api_err".to_string());
         lines.push("Sub BmmApi(method, path, body)".to_string());
         lines.push("    Dim http : Set http = CreateObject(\"MSXML2.XMLHTTP\")".to_string());
-        lines.push(format!("    http.open method, \"http://127.0.0.1:{}\" & path, False", crate::api::api_port()));
-        lines.push("    http.setRequestHeader \"Authorization\", \"Bearer \" & bmmToken".to_string());
+        lines.push(format!(
+            "    http.open method, \"http://127.0.0.1:{}\" & path, False",
+            crate::api::api_port()
+        ));
+        lines.push(
+            "    http.setRequestHeader \"Authorization\", \"Bearer \" & bmmToken".to_string(),
+        );
         lines.push("    On Error Resume Next".to_string());
         lines.push("    If Len(body) > 0 Then".to_string());
-        lines.push("        http.setRequestHeader \"Content-Type\", \"application/json\"".to_string());
+        lines.push(
+            "        http.setRequestHeader \"Content-Type\", \"application/json\"".to_string(),
+        );
         lines.push("        http.send body".to_string());
         lines.push("    Else".to_string());
         lines.push("        http.send".to_string());
         lines.push("    End If".to_string());
-        lines.push("    If Err.Number <> 0 Then bmmLastStatus = 0 Else bmmLastStatus = http.status".to_string());
+        lines.push(
+            "    If Err.Number <> 0 Then bmmLastStatus = 0 Else bmmLastStatus = http.status"
+                .to_string(),
+        );
         lines.push("    On Error Goto 0".to_string());
         lines.push("End Sub".to_string());
         lines.push(String::new());
@@ -1018,7 +1447,10 @@ fn vbs_action(action: &ScriptAction, use_deeplink: bool) -> Vec<String> {
         }
         "log" => {
             let msg = extra_str(&action.extra, "message");
-            out.push(format!("WScript.Echo \"{}\"", msg.replace('"', "\" & Chr(34) & \"")));
+            out.push(format!(
+                "WScript.Echo \"{}\"",
+                msg.replace('"', "\" & Chr(34) & \"")
+            ));
         }
         "comment" => {
             let text = extra_str(&action.extra, "text");
@@ -1029,21 +1461,30 @@ fn vbs_action(action: &ScriptAction, use_deeplink: bool) -> Vec<String> {
             if !expr.is_empty() {
                 let parts: Vec<&str> = expr.splitn(2, '=').collect();
                 if parts.len() == 2 {
-                    out.push(format!("Dim {} : {} = \"{}\"", parts[0].trim(), parts[0].trim(), parts[1].trim()));
+                    out.push(format!(
+                        "Dim {} : {} = \"{}\"",
+                        parts[0].trim(),
+                        parts[0].trim(),
+                        parts[1].trim()
+                    ));
                 }
             }
         }
         "if_file_exists" => {
             let path = extra_str(&action.extra, "path");
             if !path.is_empty() {
-                out.push("Dim fso : Set fso = CreateObject(\"Scripting.FileSystemObject\")".to_string());
+                out.push(
+                    "Dim fso : Set fso = CreateObject(\"Scripting.FileSystemObject\")".to_string(),
+                );
                 out.push(format!("If fso.FileExists(\"{}\") Then", path));
             }
         }
         "if_file_not_exists" => {
             let path = extra_str(&action.extra, "path");
             if !path.is_empty() {
-                out.push("Dim fso : Set fso = CreateObject(\"Scripting.FileSystemObject\")".to_string());
+                out.push(
+                    "Dim fso : Set fso = CreateObject(\"Scripting.FileSystemObject\")".to_string(),
+                );
                 out.push(format!("If Not fso.FileExists(\"{}\") Then", path));
             }
         }
@@ -1051,27 +1492,49 @@ fn vbs_action(action: &ScriptAction, use_deeplink: bool) -> Vec<String> {
             let cond = extra_str(&action.extra, "cond");
             let parts: Vec<&str> = cond.splitn(2, '=').collect();
             if parts.len() == 2 {
-                out.push(format!("If {} = \"{}\" Then", parts[0].trim(), parts[1].trim()));
+                out.push(format!(
+                    "If {} = \"{}\" Then",
+                    parts[0].trim(),
+                    parts[1].trim()
+                ));
             }
         }
         "if_var_neq" => {
             let cond = extra_str(&action.extra, "cond");
             let parts: Vec<&str> = cond.splitn(2, '=').collect();
             if parts.len() == 2 {
-                out.push(format!("If {} <> \"{}\" Then", parts[0].trim(), parts[1].trim()));
+                out.push(format!(
+                    "If {} <> \"{}\" Then",
+                    parts[0].trim(),
+                    parts[1].trim()
+                ));
             }
         }
         "if_api_ok" => {
             let linked = extra_str(&action.extra, "api_action");
             if !linked.is_empty() {
-                out.extend(vbs_action(&ScriptAction { action_type: linked.to_string(), target_id: String::new(), extra: serde_json::Value::Null }, false));
+                out.extend(vbs_action(
+                    &ScriptAction {
+                        action_type: linked.to_string(),
+                        target_id: String::new(),
+                        extra: serde_json::Value::Null,
+                    },
+                    false,
+                ));
             }
             out.push("If bmmLastStatus >= 200 And bmmLastStatus < 400 Then".to_string());
         }
         "if_api_err" => {
             let linked = extra_str(&action.extra, "api_action");
             if !linked.is_empty() {
-                out.extend(vbs_action(&ScriptAction { action_type: linked.to_string(), target_id: String::new(), extra: serde_json::Value::Null }, false));
+                out.extend(vbs_action(
+                    &ScriptAction {
+                        action_type: linked.to_string(),
+                        target_id: String::new(),
+                        extra: serde_json::Value::Null,
+                    },
+                    false,
+                ));
             }
             out.push("If bmmLastStatus >= 400 Or bmmLastStatus = 0 Then".to_string());
         }
@@ -1089,10 +1552,15 @@ fn vbs_action(action: &ScriptAction, use_deeplink: bool) -> Vec<String> {
         }
         "raw_code" => {
             let code = extra_str(&action.extra, "code");
-            if !code.is_empty() { out.push(code.to_string()); }
+            if !code.is_empty() {
+                out.push(code.to_string());
+            }
         }
         "loop_start" => {
-            let n = extra_str(&action.extra, "count").parse::<u32>().unwrap_or(1).max(1);
+            let n = extra_str(&action.extra, "count")
+                .parse::<u32>()
+                .unwrap_or(1)
+                .max(1);
             out.push(format!("For _i = 1 To {}", n));
         }
         "loop_end" => {
@@ -1110,16 +1578,39 @@ fn vbs_action(action: &ScriptAction, use_deeplink: bool) -> Vec<String> {
             out.push(format!("_waited = 0\nDo While (Not _fso.FileExists(\"{p}\")) And _waited < {to}\n  WScript.Sleep {}\n  _waited = _waited + {pl}\nLoop", pl * 1000));
         }
         "math_set" => {
-            let v = { let s = extra_str(&action.extra, "var_name"); if s.is_empty() { "RESULT" } else { s } };
+            let v = {
+                let s = extra_str(&action.extra, "var_name");
+                if s.is_empty() {
+                    "RESULT"
+                } else {
+                    s
+                }
+            };
             out.push(format!("{v} = ({})", extra_str(&action.extra, "expr")));
         }
         "ternary" => {
-            let v = { let s = extra_str(&action.extra, "var_name"); if s.is_empty() { "RESULT" } else { s } };
-            let (c, tt, ff) = (extra_str(&action.extra, "cond"), extra_str(&action.extra, "val_true"), extra_str(&action.extra, "val_false"));
-            out.push(format!("If {c} Then\n  {v} = {tt}\nElse\n  {v} = {ff}\nEnd If"));
+            let v = {
+                let s = extra_str(&action.extra, "var_name");
+                if s.is_empty() {
+                    "RESULT"
+                } else {
+                    s
+                }
+            };
+            let (c, tt, ff) = (
+                extra_str(&action.extra, "cond"),
+                extra_str(&action.extra, "val_true"),
+                extra_str(&action.extra, "val_false"),
+            );
+            out.push(format!(
+                "If {c} Then\n  {v} = {tt}\nElse\n  {v} = {ff}\nEnd If"
+            ));
         }
         "guard_stop" => {
-            out.push(format!("If {} Then WScript.Quit 0", extra_str(&action.extra, "cond")));
+            out.push(format!(
+                "If {} Then WScript.Quit 0",
+                extra_str(&action.extra, "cond")
+            ));
         }
         _ => {
             let dl = action_to_deeplink(action);
@@ -1128,7 +1619,10 @@ fn vbs_action(action: &ScriptAction, use_deeplink: bool) -> Vec<String> {
                 out.push("WScript.Sleep 1000".to_string());
             } else if let Some((method, path, body)) = action_to_api_call(action) {
                 let body_esc = body.replace('"', "\"\"");
-                out.push(format!("BmmApi \"{}\", \"{}\", \"{}\"", method, path, body_esc));
+                out.push(format!(
+                    "BmmApi \"{}\", \"{}\", \"{}\"",
+                    method, path, body_esc
+                ));
                 out.push("WScript.Sleep 500".to_string());
             } else {
                 out.push(format!("' [WARN] Unknown action: {}", action.action_type));
@@ -1156,44 +1650,123 @@ fn actions_need_api(req: &GenerateScriptRequest) -> bool {
 
 fn action_to_deeplink(action: &ScriptAction) -> String {
     match action.action_type.as_str() {
-        "enable_mod"       => format!("bmm://mod/enable?id={}", action.target_id),
-        "disable_mod"      => format!("bmm://mod/disable?id={}", action.target_id),
+        "enable_mod" => format!("bmm://mod/enable?id={}", action.target_id),
+        "disable_mod" => format!("bmm://mod/disable?id={}", action.target_id),
         "activate_profile" => format!("bmm://profile/activate?id={}", action.target_id),
-        "apply_plugin"     => format!("bmm://plugin/activate?id={}", action.target_id),
-        "compare_plugin"   => format!("bmm://plugin/compare?id={}", action.target_id),
-        "enable_modpack"   => format!("bmm://modpack/enable?id={}", action.target_id),
-        "disable_modpack"  => format!("bmm://modpack/disable?id={}", action.target_id),
-        "telemetry_consent"  => format!("bmm://telemetry/consent?enabled={}", if extra_bool(&action.extra, "enabled") { "1" } else { "0" }),
-        "telemetry_settings" => format!("bmm://telemetry/set?replay={}&full={}&bench={}",
-            if extra_bool(&action.extra, "replay") { "1" } else { "0" },
-            if extra_bool(&action.extra, "full") { "1" } else { "0" },
-            if extra_bool(&action.extra, "bench") { "1" } else { "0" }),
-        "recorder_set"       => format!("bmm://recorder/set?on={}&full={}&rust={}&js={}",
-            if extra_bool(&action.extra, "on") { "1" } else { "0" },
-            if extra_bool(&action.extra, "full") { "1" } else { "0" },
-            if extra_bool(&action.extra, "rust") { "1" } else { "0" },
-            if extra_bool(&action.extra, "js") { "1" } else { "0" }),
-        "check_mod_updates"  => "bmm://mod/check-updates".to_string(),
-        "run_launchpack"     => format!("bmm://launchpack/run?id={}", action.target_id),
-        "run_task"           => format!("bmm://schedule/run?id={}", action.target_id),
-        "run_benchmark"      => {
+        "apply_plugin" => format!("bmm://plugin/activate?id={}", action.target_id),
+        "compare_plugin" => format!("bmm://plugin/compare?id={}", action.target_id),
+        "enable_modpack" => format!("bmm://modpack/enable?id={}", action.target_id),
+        "disable_modpack" => format!("bmm://modpack/disable?id={}", action.target_id),
+        "telemetry_consent" => format!(
+            "bmm://telemetry/consent?enabled={}",
+            if extra_bool(&action.extra, "enabled") {
+                "1"
+            } else {
+                "0"
+            }
+        ),
+        "telemetry_settings" => format!(
+            "bmm://telemetry/set?replay={}&full={}&bench={}",
+            if extra_bool(&action.extra, "replay") {
+                "1"
+            } else {
+                "0"
+            },
+            if extra_bool(&action.extra, "full") {
+                "1"
+            } else {
+                "0"
+            },
+            if extra_bool(&action.extra, "bench") {
+                "1"
+            } else {
+                "0"
+            }
+        ),
+        "recorder_set" => format!(
+            "bmm://recorder/set?on={}&full={}&rust={}&js={}",
+            if extra_bool(&action.extra, "on") {
+                "1"
+            } else {
+                "0"
+            },
+            if extra_bool(&action.extra, "full") {
+                "1"
+            } else {
+                "0"
+            },
+            if extra_bool(&action.extra, "rust") {
+                "1"
+            } else {
+                "0"
+            },
+            if extra_bool(&action.extra, "js") {
+                "1"
+            } else {
+                "0"
+            }
+        ),
+        "check_mod_updates" => "bmm://mod/check-updates".to_string(),
+        "run_launchpack" => format!("bmm://launchpack/run?id={}", action.target_id),
+        "run_task" => format!("bmm://schedule/run?id={}", action.target_id),
+        "run_benchmark" => {
             let sources = extra_str(&action.extra, "sources");
-            let dataset = if extra_str(&action.extra, "dataset") == "real" || !sources.is_empty() { "real" } else { "sandbox" };
-            let size = { let s = extra_str(&action.extra, "size"); if s.is_empty() { "M" } else { s } };
-            format!("bmm://benchmark/run?dataset={}&size={}&mode=auto&sources={}",
-                dataset, size,
-                percent_encoding::utf8_percent_encode(sources, percent_encoding::NON_ALPHANUMERIC))
+            let dataset = if extra_str(&action.extra, "dataset") == "real" || !sources.is_empty() {
+                "real"
+            } else {
+                "sandbox"
+            };
+            let size = {
+                let s = extra_str(&action.extra, "size");
+                if s.is_empty() {
+                    "M"
+                } else {
+                    s
+                }
+            };
+            format!(
+                "bmm://benchmark/run?dataset={}&size={}&mode=auto&sources={}",
+                dataset,
+                size,
+                percent_encoding::utf8_percent_encode(sources, percent_encoding::NON_ALPHANUMERIC)
+            )
         }
-        "discord_rpc"        => format!("bmm://discord/rpc?enabled={}", if extra_bool(&action.extra, "enabled") { "1" } else { "0" }),
-        "export_data"        => format!("bmm://data/export-auto?dir={}&name={}&increment={}",
-            percent_encoding::utf8_percent_encode(extra_str(&action.extra, "dir"), percent_encoding::NON_ALPHANUMERIC),
-            percent_encoding::utf8_percent_encode(extra_str(&action.extra, "name"), percent_encoding::NON_ALPHANUMERIC),
-            percent_encoding::utf8_percent_encode(extra_str(&action.extra, "increment"), percent_encoding::NON_ALPHANUMERIC)),
-        "replay_export"      => "bmm://replay/export".to_string(),
-        "replay_import"      => format!("bmm://replay/import?path={}&url={}",
-            percent_encoding::utf8_percent_encode(extra_str(&action.extra, "path"), percent_encoding::NON_ALPHANUMERIC),
-            percent_encoding::utf8_percent_encode(extra_str(&action.extra, "url"), percent_encoding::NON_ALPHANUMERIC)),
-        _                  => format!("bmm://unknown?id={}", action.target_id),
+        "discord_rpc" => format!(
+            "bmm://discord/rpc?enabled={}",
+            if extra_bool(&action.extra, "enabled") {
+                "1"
+            } else {
+                "0"
+            }
+        ),
+        "export_data" => format!(
+            "bmm://data/export-auto?dir={}&name={}&increment={}",
+            percent_encoding::utf8_percent_encode(
+                extra_str(&action.extra, "dir"),
+                percent_encoding::NON_ALPHANUMERIC
+            ),
+            percent_encoding::utf8_percent_encode(
+                extra_str(&action.extra, "name"),
+                percent_encoding::NON_ALPHANUMERIC
+            ),
+            percent_encoding::utf8_percent_encode(
+                extra_str(&action.extra, "increment"),
+                percent_encoding::NON_ALPHANUMERIC
+            )
+        ),
+        "replay_export" => "bmm://replay/export".to_string(),
+        "replay_import" => format!(
+            "bmm://replay/import?path={}&url={}",
+            percent_encoding::utf8_percent_encode(
+                extra_str(&action.extra, "path"),
+                percent_encoding::NON_ALPHANUMERIC
+            ),
+            percent_encoding::utf8_percent_encode(
+                extra_str(&action.extra, "url"),
+                percent_encoding::NON_ALPHANUMERIC
+            )
+        ),
+        _ => format!("bmm://unknown?id={}", action.target_id),
     }
 }
 
@@ -1207,11 +1780,19 @@ fn action_to_api_call(action: &ScriptAction) -> Option<(String, String, String)>
 
     let opt_str = |k: &str, default: &str| -> String {
         let v = extra_str(ex, k);
-        if v.is_empty() { default.to_string() } else { v.to_string() }
+        if v.is_empty() {
+            default.to_string()
+        } else {
+            v.to_string()
+        }
     };
     let port_or = |default: u64| -> u64 {
         let p = extra_u64(ex, "port");
-        if p == 0 { default } else { p }
+        if p == 0 {
+            default
+        } else {
+            p
+        }
     };
     // Build a JSON object body, dropping empty-string values so PUT/update
     // calls don't blank out fields. Mirrors _prune() in the TS generator.
@@ -1219,7 +1800,10 @@ fn action_to_api_call(action: &ScriptAction) -> Option<(String, String, String)>
         let mut m = serde_json::Map::new();
         for (k, v) in pairs {
             if !v.is_empty() {
-                m.insert((*k).to_string(), serde_json::Value::String((*v).to_string()));
+                m.insert(
+                    (*k).to_string(),
+                    serde_json::Value::String((*v).to_string()),
+                );
             }
         }
         serde_json::Value::Object(m).to_string()
@@ -1384,7 +1968,8 @@ pub async fn export_plugin(
 ) -> Result<(), String> {
     let plugin = {
         let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
-        data.installed_plugins.iter()
+        data.installed_plugins
+            .iter()
             .find(|p| p.manifest.id == plugin_id)
             .ok_or_else(|| format!("Plugin '{}' not found", plugin_id))?
             .clone()
@@ -1405,7 +1990,9 @@ pub async fn export_plugin(
             if path.is_file() {
                 let rel = path.strip_prefix(&plugin_dir).map_err(|e| e.to_string())?;
                 let rel_str = rel.to_string_lossy().replace(char::from(92), "/");
-                if rel_str == "plugin.json" { has_manifest = true; }
+                if rel_str == "plugin.json" {
+                    has_manifest = true;
+                }
                 let data = std::fs::read(path).map_err(|e| e.to_string())?;
                 entries.push((format!("{}/{}", plugin_id, rel_str), data));
             }
@@ -1413,9 +2000,12 @@ pub async fn export_plugin(
     }
     // Always ensure plugin.json is present (fallback from in-memory manifest)
     if !has_manifest {
-        let manifest_json = serde_json::to_string_pretty(&plugin.manifest)
-            .map_err(|e| e.to_string())?;
-        entries.push((format!("{}/plugin.json", plugin_id), manifest_json.into_bytes()));
+        let manifest_json =
+            serde_json::to_string_pretty(&plugin.manifest).map_err(|e| e.to_string())?;
+        entries.push((
+            format!("{}/plugin.json", plugin_id),
+            manifest_json.into_bytes(),
+        ));
     }
 
     let signed = crate::commands::doc_sign::archive_manifest(&app_handle, "bmmplug", &entries);
@@ -1426,14 +2016,18 @@ pub async fn export_plugin(
 
     let file = std::fs::File::create(&dest).map_err(|e| e.to_string())?;
     let mut zip = zip::ZipWriter::new(file);
-    let options = zip::write::FileOptions::default()
-        .compression_method(zip::CompressionMethod::Deflated);
+    let options =
+        zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
     for (name, data) in &entries {
-        zip.start_file(name.clone(), options).map_err(|e| e.to_string())?;
+        zip.start_file(name.clone(), options)
+            .map_err(|e| e.to_string())?;
         std::io::Write::write_all(&mut zip, data).map_err(|e| e.to_string())?;
     }
     zip.finish().map_err(|e| e.to_string())?;
-    log_line(format!("[PLUGINS] Exported plugin '{}' to {:?}", plugin_id, dest));
+    log_line(format!(
+        "[PLUGINS] Exported plugin '{}' to {:?}",
+        plugin_id, dest
+    ));
     Ok(())
 }
 
@@ -1453,9 +2047,32 @@ pub fn write_text_file(path: String, content: String) -> Result<(), String> {
     }
     // Extension allowlist: scripts the generator emits + textual report formats.
     const ALLOWED_WRITE_EXT: &[&str] = &[
-        "ps1", "bat", "cmd", "sh", "py", "js", "mjs", "ts", "vbs", "lua", "rb", "pl",
-        "txt", "csv", "json", "md", "log", "yaml", "yml", "ini", "conf", "xml", "bmmpa",
-        "bmmreplay", "bmmnav", "bmmtut",
+        "ps1",
+        "bat",
+        "cmd",
+        "sh",
+        "py",
+        "js",
+        "mjs",
+        "ts",
+        "vbs",
+        "lua",
+        "rb",
+        "pl",
+        "txt",
+        "csv",
+        "json",
+        "md",
+        "log",
+        "yaml",
+        "yml",
+        "ini",
+        "conf",
+        "xml",
+        "bmmpa",
+        "bmmreplay",
+        "bmmnav",
+        "bmmtut",
     ];
     let ext = std::path::Path::new(&path)
         .extension()
@@ -1513,14 +2130,19 @@ pub struct ZipFileEntry {
 pub fn write_zip_files(dest_path: String, files: Vec<ZipFileEntry>) -> Result<(), String> {
     let file = std::fs::File::create(&dest_path).map_err(|e| e.to_string())?;
     let mut zip = zip::ZipWriter::new(file);
-    let options = zip::write::FileOptions::default()
-        .compression_method(zip::CompressionMethod::Deflated);
+    let options =
+        zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
     for entry in &files {
-        zip.start_file(&entry.name, options).map_err(|e| e.to_string())?;
+        zip.start_file(&entry.name, options)
+            .map_err(|e| e.to_string())?;
         std::io::Write::write_all(&mut zip, entry.content.as_bytes()).map_err(|e| e.to_string())?;
     }
     zip.finish().map_err(|e| e.to_string())?;
-    log_line(format!("[PLUGINS] Wrote ZIP with {} files to {}", files.len(), dest_path));
+    log_line(format!(
+        "[PLUGINS] Wrote ZIP with {} files to {}",
+        files.len(),
+        dest_path
+    ));
     Ok(())
 }
 
@@ -1549,12 +2171,20 @@ pub struct RemovedBundled {
 /// INSIDE the plugin folder, or None if it doesn't fit that exact shape. Guards against
 /// path traversal: exactly two components, the first must equal `subdir`, the second a
 /// single non-empty name with no separators or "..".
-fn safe_bundled_path(plugin_dir: &std::path::Path, rel: &str, subdir: &str) -> Option<std::path::PathBuf> {
+fn safe_bundled_path(
+    plugin_dir: &std::path::Path,
+    rel: &str,
+    subdir: &str,
+) -> Option<std::path::PathBuf> {
     let rel = rel.trim().replace('\\', "/");
     let parts: Vec<&str> = rel.split('/').filter(|s| !s.is_empty()).collect();
-    if parts.len() != 2 || parts[0] != subdir { return None; }
+    if parts.len() != 2 || parts[0] != subdir {
+        return None;
+    }
     let name = parts[1];
-    if name == ".." || name.contains('/') || name.contains('\\') { return None; }
+    if name == ".." || name.contains('/') || name.contains('\\') {
+        return None;
+    }
     Some(plugin_dir.join(subdir).join(name))
 }
 
@@ -1574,7 +2204,10 @@ pub fn create_local_plugin(
         return Err("Plugin id and name are required".to_string());
     }
 
-    let app_dir = handle.path().app_data_dir().ok()
+    let app_dir = handle
+        .path()
+        .app_data_dir()
+        .ok()
         .ok_or_else(|| "Cannot resolve app data dir".to_string())?;
     let plugin_dir = app_dir.join("plugins").join(&manifest.id);
     std::fs::create_dir_all(&plugin_dir).map_err(|e| e.to_string())?;
@@ -1609,7 +2242,9 @@ pub fn create_local_plugin(
                     // replacing it, so adding a folder while editing doesn't drop the
                     // bundled ones the user kept.
                     let rel = format!("bundle/{}", fname);
-                    if !manifest.folders.contains(&rel) { manifest.folders.push(rel); }
+                    if !manifest.folders.contains(&rel) {
+                        manifest.folders.push(rel);
+                    }
                 }
             }
         }
@@ -1626,31 +2261,47 @@ pub fn create_local_plugin(
                 let dest = scripts_dir.join(fname);
                 if std::fs::copy(src_path, &dest).is_ok() {
                     let rel = format!("scripts/{}", fname);
-                    if !manifest.scripts.contains(&rel) { manifest.scripts.push(rel); }
+                    if !manifest.scripts.contains(&rel) {
+                        manifest.scripts.push(rel);
+                    }
                 }
             }
         }
     }
-    if !manifest.scripts.is_empty() { manifest.has_scripts = true; }
+    if !manifest.scripts.is_empty() {
+        manifest.has_scripts = true;
+    }
 
     // Determine icon path: prefer file copy, fall back to SVG, then existing
     let icon_path = if let Some(ref src) = icon_src_path {
         // User picked a file → copy as icon.png
         let dest = plugin_dir.join("icon.png");
         let _ = std::fs::copy(src, &dest);
-        if dest.exists() { Some(dest.to_string_lossy().to_string()) } else { None }
+        if dest.exists() {
+            Some(dest.to_string_lossy().to_string())
+        } else {
+            None
+        }
     } else if let Some(ref svg) = icon_svg {
         // User picked a builtin SVG → save as icon.svg
         let dest = plugin_dir.join("icon.svg");
         let _ = std::fs::write(&dest, svg.as_bytes());
-        if dest.exists() { Some(dest.to_string_lossy().to_string()) } else { None }
+        if dest.exists() {
+            Some(dest.to_string_lossy().to_string())
+        } else {
+            None
+        }
     } else {
         // Preserve existing icon (png or svg)
         let png = plugin_dir.join("icon.png");
         let svg_f = plugin_dir.join("icon.svg");
-        if png.exists() { Some(png.to_string_lossy().to_string()) }
-        else if svg_f.exists() { Some(svg_f.to_string_lossy().to_string()) }
-        else { None }
+        if png.exists() {
+            Some(png.to_string_lossy().to_string())
+        } else if svg_f.exists() {
+            Some(svg_f.to_string_lossy().to_string())
+        } else {
+            None
+        }
     };
 
     let installed = InstalledPlugin {
@@ -1667,7 +2318,8 @@ pub fn create_local_plugin(
 
     {
         let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
-        data.installed_plugins.retain(|p| p.manifest.id != manifest.id);
+        data.installed_plugins
+            .retain(|p| p.manifest.id != manifest.id);
         data.installed_plugins.push(installed.clone());
     }
     let _ = state.save();
@@ -1681,7 +2333,8 @@ pub fn create_local_plugin(
 pub fn open_plugin_folder(state: State<'_, AppState>, plugin_id: String) -> Result<(), String> {
     let install_dir = {
         let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
-        data.installed_plugins.iter()
+        data.installed_plugins
+            .iter()
             .find(|p| p.manifest.id == plugin_id)
             .map(|p| p.install_dir.clone())
     };
@@ -1707,7 +2360,9 @@ pub fn run_plugin_scripts(
 ) -> Result<Vec<String>, String> {
     let (install_dir, scripts) = {
         let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
-        let p = data.installed_plugins.iter()
+        let p = data
+            .installed_plugins
+            .iter()
             .find(|p| p.manifest.id == plugin_id)
             .ok_or_else(|| format!("Plugin '{}' not found", plugin_id))?;
         (p.install_dir.clone(), p.manifest.scripts.clone())
@@ -1732,9 +2387,16 @@ pub fn run_plugin_scripts(
     let mut launched: Vec<String> = Vec::new();
     for rel in &to_run {
         let path = base.join(rel);
-        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+        let ext = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_lowercase();
         if !is_runnable_script(&ext) {
-            log_line(format!("[PLUGINS] Skipped non-runnable script (only .bat/.ps1/.vbs run): {}", rel));
+            log_line(format!(
+                "[PLUGINS] Skipped non-runnable script (only .bat/.ps1/.vbs run): {}",
+                rel
+            ));
             continue;
         }
         if !path.exists() {
@@ -1746,16 +2408,31 @@ pub fn run_plugin_scripts(
         #[cfg(target_os = "windows")]
         let spawn = match ext.as_str() {
             "ps1" => crate::commands::proc::hidden_command("powershell")
-                .args(["-ExecutionPolicy", "Bypass", "-File", &p_str]).spawn(),
-            "vbs" => crate::commands::proc::hidden_command("wscript").arg(&p_str).spawn(),
-            _      => crate::commands::proc::hidden_command("cmd").args(["/C", "start", "", &p_str]).spawn(),
+                .args(["-ExecutionPolicy", "Bypass", "-File", &p_str])
+                .spawn(),
+            "vbs" => crate::commands::proc::hidden_command("wscript")
+                .arg(&p_str)
+                .spawn(),
+            _ => crate::commands::proc::hidden_command("cmd")
+                .args(["/C", "start", "", &p_str])
+                .spawn(),
         };
         #[cfg(not(target_os = "windows"))]
-        let spawn = crate::commands::proc::hidden_command("sh").arg(&p_str).spawn();
+        let spawn = crate::commands::proc::hidden_command("sh")
+            .arg(&p_str)
+            .spawn();
 
         match spawn {
-            Ok(_) => { launched.push(rel.clone()); log_line(format!("[PLUGINS] Ran script '{}' for plugin '{}'", rel, plugin_id)); }
-            Err(e) => { log_line(format!("[PLUGINS] Failed to run script '{}': {}", rel, e)); }
+            Ok(_) => {
+                launched.push(rel.clone());
+                log_line(format!(
+                    "[PLUGINS] Ran script '{}' for plugin '{}'",
+                    rel, plugin_id
+                ));
+            }
+            Err(e) => {
+                log_line(format!("[PLUGINS] Failed to run script '{}': {}", rel, e));
+            }
         }
     }
     Ok(launched)
@@ -1764,10 +2441,14 @@ pub fn run_plugin_scripts(
 // ── Compute SHA-256 of all files in plugin directory ─────────────────────
 
 #[tauri::command]
-pub fn compute_plugin_checksum(state: State<'_, AppState>, plugin_id: String) -> Result<String, String> {
+pub fn compute_plugin_checksum(
+    state: State<'_, AppState>,
+    plugin_id: String,
+) -> Result<String, String> {
     let install_dir = {
         let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
-        data.installed_plugins.iter()
+        data.installed_plugins
+            .iter()
             .find(|p| p.manifest.id == plugin_id)
             .map(|p| p.install_dir.clone())
     };
@@ -1782,14 +2463,17 @@ pub fn compute_plugin_checksum(state: State<'_, AppState>, plugin_id: String) ->
             sorted.sort_by_key(|e| e.path());
             for entry in sorted {
                 let path = entry.path();
-                if path.is_dir() { collect_files(&path, out); }
-                else { out.push(path); }
+                if path.is_dir() {
+                    collect_files(&path, out);
+                } else {
+                    out.push(path);
+                }
             }
         }
     }
     collect_files(&dir_path, &mut files);
 
-    use sha2::{Sha256, Digest};
+    use sha2::{Digest, Sha256};
     let mut hasher = Sha256::new();
     for file_path in &files {
         let data = std::fs::read(file_path).map_err(|e| e.to_string())?;
