@@ -90,7 +90,7 @@ export interface TaskSummary {
 
 export interface InspectResult {
     /** How many launch packs / modpacks the file carries alongside its tasks. */
-    includes?: { launchpacks: number; modpacks: number };
+    includes?: { launchpacks: number; modpacks: number; plugins: number };
     /** References the file makes but does not satisfy. These import cleanly and fail later. */
     unresolved?: { kind: string; id: string }[];
     ok: boolean;
@@ -128,6 +128,11 @@ const REF_ACTIONS: Record<string, string> = {
     'modpack.enable': 'modpack',
     'modpack.disable': 'modpack',
     'profile.activate': 'profile',
+    // A plugin is a dependency like a launch pack: the exporter carries its manifest in
+    // `includes.plugins`, so a reviewer sees the plugin's name instead of an opaque id.
+    // `plugin.delete` is absent on purpose — nothing is carried for something removed.
+    'plugin.apply': 'plugin',
+    'plugin.compare': 'plugin',
 };
 
 /**
@@ -259,6 +264,7 @@ export function inspectBmmpa(doc: unknown): InspectResult {
     const included: Record<string, Set<string>> = {
         launchpack: new Set(asArray(d.includes?.launchpacks).map((x: any) => String(x?.id ?? ''))),
         modpack: new Set(asArray(d.includes?.modpacks).map((x: any) => String(x?.id ?? x?.name ?? ''))),
+        plugin: new Set(asArray(d.includes?.plugins).map((x: any) => String(x?.id ?? ''))),
     };
     const unresolved: { kind: string; id: string }[] = [];
     const resolve = (nodes: StepSummary[]): void => {
@@ -285,6 +291,7 @@ export function inspectBmmpa(doc: unknown): InspectResult {
         includes: {
             launchpacks: asArray(d.includes?.launchpacks).length,
             modpacks: asArray(d.includes?.modpacks).length,
+            plugins: asArray(d.includes?.plugins).length,
         },
         unresolved,
         needsReview: out.some((t) => t.perms.length > 0 || t.reaching.length > 0),

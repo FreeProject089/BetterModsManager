@@ -68,6 +68,31 @@ cmp('reaching actions', reaching(ts, TS), reaching(mjs, MJS));
 cmp('actions carrying code', bodied(ts), bodied(mjs));
 cmp('id references', refs(ts, TS), refs(mjs, MJS));
 
+// The THIRD copy, and the one that decides what a file actually contains.
+//
+// The two readers above agreed with each other and were both wrong: the scheduler had
+// learned that `plugin.apply` names a plugin and was collecting the manifest into
+// `includes.plugins`, while neither inspector knew such a reference existed. The file
+// carried the plugin; both reviewers showed an opaque id and no way to resolve it.
+//
+// Comparing readers to each other cannot catch that. This compares them to the WRITER.
+const SCHED = 'frontend/src/features/settings/scheduler.ts';
+if (fs.existsSync(SCHED)) {
+  const schedRefs = refs(read(SCHED), SCHED);
+  const inspRefs = refs(ts, TS);
+  const onlyWriter = [...schedRefs].filter((x) => !inspRefs.has(x));
+  const onlyReader = [...inspRefs].filter((x) => !schedRefs.has(x));
+  if (onlyWriter.length) {
+    problems.push(`id references: the scheduler collects ${onlyWriter.join(', ')} but neither inspector resolves it — the file carries the thing and every reviewer sees a bare id`);
+  }
+  if (onlyReader.length) {
+    problems.push(`id references: the inspectors expect ${onlyReader.join(', ')} but the scheduler never collects it — the reference can only ever read as unresolved`);
+  }
+} else {
+  console.error(`✗ ${SCHED} is missing — refusing to report success on a comparison that did not run`);
+  process.exit(2);
+}
+
 // RISK_KEYS drives the permission badges. Both readers emit these codes and the two UIs
 // translate them, so a code added on one side renders as a bare identifier on the other.
 const riskTs = new Set([...(read(TS).match(/RISK_KEYS\s*=\s*\[([\s\S]*?)\]/)?.[1] || '').matchAll(/'([^']+)'/g)].map((x) => x[1]));
@@ -75,7 +100,7 @@ const riskWeb = new Set([...(read(MJS).match(/RISK_KEYS\s*=\s*\[([\s\S]*?)\]/)?.
 if (riskTs.size && riskWeb.size) cmp('permission codes', riskTs, riskWeb);
 
 if (!problems.length) {
-  console.log('✓ .bmmpa inspectors agree (reaching actions, code-bearing actions, id references, permission codes)');
+  console.log('✓ .bmmpa readers agree with each other AND with the scheduler that writes the file');
   process.exit(0);
 }
 for (const p of problems) console.error(`✗ ${p}`);

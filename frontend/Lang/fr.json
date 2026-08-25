@@ -8127,5 +8127,6 @@
   "sched.catBasePh": "laissez vide — ils seront à côté du catalogue",
   "sched.catHint": "Écrit catalog.json dans le dossier, ainsi que les fichiers pointés quand le type en a. Les thèmes sont intégrés à l’index et n’ont pas de fichiers séparés.",
   "sched.catNeedDir": "Cette étape a besoin d’un dossier de destination.",
-  "sched.catDone": "{n} entrée(s) publiée(s)."
+  "sched.catDone": "{n} entrée(s) publiée(s).",
+  "sched.importedIncl": "{n} élément(s) nécessaire(s) également restauré(s)"
 }

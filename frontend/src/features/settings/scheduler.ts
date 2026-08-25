@@ -4810,12 +4810,18 @@ const BMMPA_MAGIC = 'BMMPA';
  * nothing else, and a future `foo.run` should not be treated as a reference by accident.
  * Every one of these keeps its target in `params.id`.
  */
-const REF_ACTIONS: Record<string, 'task' | 'launchpack' | 'modpack' | 'profile'> = {
+const REF_ACTIONS: Record<string, 'task' | 'launchpack' | 'modpack' | 'profile' | 'plugin'> = {
     'task.run': 'task',
     'launchpack.run': 'launchpack',
     'modpack.enable': 'modpack',
     'modpack.disable': 'modpack',
     'profile.activate': 'profile',
+    // A plugin is the same kind of dependency as a launch pack: small self-describing JSON
+    // that means nothing by id alone on another machine. `plugin.delete` is deliberately
+    // NOT here — exporting the definition of something the task removes would ship the very
+    // thing it exists to get rid of.
+    'plugin.apply': 'plugin',
+    'plugin.compare': 'plugin',
 };
 
 /** Every id a task names, by kind. Walks the whole tree — a sub-task called from inside a
@@ -4899,6 +4905,20 @@ async function collectIncludes(tasks: Task[]): Promise<Record<string, any[]>> {
             const packs = await invoke('load_modpacks') as any[];
             const want = refs.modpack;
             includes.modpacks = (packs || []).filter((p: any) => want.has(String(p?.id ?? p?.name)));
+        } catch { /* see above */ }
+    }
+    if (refs.plugin?.size) {
+        try {
+            const installed = await invoke('get_installed_plugins') as any[];
+            const want = refs.plugin;
+            // The MANIFEST, which is the whole definition: id, version, permissions, and the
+            // modlist that says what applying it actually does. Not the plugin's script files
+            // — those live in its folder, and a .bmmpa is a text document somebody reads
+            // before trusting it. `has_scripts` still travels, so the inspector can say the
+            // original had them and this copy does not.
+            includes.plugins = (installed || [])
+                .filter((ip: any) => want.has(String(ip?.manifest?.id)))
+                .map((ip: any) => ip.manifest);
         } catch { /* see above */ }
     }
     return includes;
@@ -5642,6 +5662,98 @@ function showBmmpaReport(report: ReturnType<typeof inspectBmmpa>, path: string):
     (document.getElementById('app-window-outer') || document.body).appendChild(overlay);
 }
 
+/**
+ * Put back what an imported automation needs, and ONLY what is missing.
+ *
+ * An id that already exists here is left exactly as it was. Importing somebody's automation
+ * must never quietly rewrite a plugin or a modpack you already had — a merge nobody asked
+ * for is far worse than a step that fails loudly, because it is discovered much later and
+ * by then the original is gone.
+ *
+ * Per kind and per item, so one unrestorable thing costs only itself.
+ *
+ * Returns the count that actually landed AND a remap, because two of the three kinds keep
+ * the id they arrived with and one does not: create_launch_pack mints a fresh UUID. Without
+ * the remap a restored launch pack is a pack nobody references — the step still names the
+ * exporter's id, still fails, and now there is an orphan pack as well. Plugins and modpacks
+ * keep their ids (both commands preserve a non-empty one), so neither needs remapping.
+ */
+async function restoreIncludes(includes: any): Promise<{ count: number; remap: Record<string, string> }> {
+    const remap: Record<string, string> = {};
+    if (!includes || typeof includes !== 'object') return { count: 0, remap };
+    let n = 0;
+
+    const plugins = Array.isArray(includes.plugins) ? includes.plugins : [];
+    if (plugins.length) {
+        const have = new Set(((await invoke('get_installed_plugins').catch(() => [])) as any[])
+            .map((ip: any) => String(ip?.manifest?.id)));
+        for (const manifest of plugins) {
+            const id = String(manifest?.id || '');
+            if (!id || have.has(id)) continue;
+            try {
+                // Rebuilt from the manifest, WITHOUT scripts: the file never carried them,
+                // and inventing paths that do not exist would produce a plugin that fails
+                // the moment it is applied. has_scripts is cleared for the same reason —
+                // a plugin that claims scripts it does not have prompts for nothing.
+                await invoke('create_local_plugin', {
+                    manifest: { ...manifest, scripts: [], has_scripts: false, folders: [] },
+                    iconSrcPath: null, iconSvg: null, scriptSrcPaths: null, folderSrcPaths: null, removedBundled: null,
+                });
+                n++;
+            } catch { /* one plugin that will not rebuild must not cost the others */ }
+        }
+    }
+
+    const packs = Array.isArray(includes.launchpacks) ? includes.launchpacks : [];
+    if (packs.length) {
+        const have = new Set(((await invoke('get_launch_packs').catch(() => [])) as any[]).map((p: any) => String(p?.id)));
+        for (const pk of packs) {
+            if (!pk?.id || have.has(String(pk.id))) continue;
+            try {
+                const made: any = await invoke('create_launch_pack', {
+                    name: String(pk.name || pk.id),
+                    exePaths: (pk.executable_paths || pk.executablePaths || []).map((x: any) => String(x)),
+                    // The icon is a path on the machine that exported it, so it means
+                    // nothing here. The pack arrives without one rather than with a
+                    // broken reference.
+                    iconSourcePath: null,
+                });
+                if (made?.id) remap[String(pk.id)] = String(made.id);
+                n++;
+            } catch { /* as above */ }
+        }
+    }
+
+    const mps = Array.isArray(includes.modpacks) ? includes.modpacks : [];
+    if (mps.length) {
+        const have = new Set(((await invoke('load_modpacks').catch(() => [])) as any[]).map((m: any) => String(m?.id ?? m?.name)));
+        for (const mp of mps) {
+            const key = String(mp?.id ?? mp?.name ?? '');
+            if (!key || have.has(key)) continue;
+            try { await invoke('save_modpack', { modpack: mp }); n++; } catch { /* as above */ }
+        }
+    }
+    return { count: n, remap };
+}
+
+/** Point every step at the id the thing actually got. Walks the same branches collectRefs
+ *  does — a step inside a loop inside an if is still a step. */
+function remapRefs(steps: Step[], remap: Record<string, string>): void {
+    for (const st of steps || []) {
+        const a = (st as any).action;
+        if ((st as any).kind === 'action' && REF_ACTIONS[String(a?.type || '')] === 'launchpack') {
+            const was = String(a?.params?.id || '');
+            if (was && remap[was]) a.params.id = remap[was];
+        }
+        for (const key of ['steps', 'then', 'else', 'onError', 'default'] as const) {
+            if (Array.isArray((st as any)[key])) remapRefs((st as any)[key], remap);
+        }
+        if (Array.isArray((st as any).cases)) {
+            for (const c of (st as any).cases) if (Array.isArray(c?.steps)) remapRefs(c.steps, remap);
+        }
+    }
+}
+
 export async function importTasksFile(): Promise<void> {
     const { pickFile } = await import('../../core/api.js');
     const path = await pickFile({ filters: [{ name: 'BMM Automation', extensions: ['bmmpa', 'json'] }] }).catch(() => null);
@@ -5659,7 +5771,18 @@ export async function importTasksFile(): Promise<void> {
                 _tasks.push(tk); added++;
             }
         }
+        // What the file carried WITH the tasks. Until now this was collected on export,
+        // shown by the inspector, and then dropped — so every launch pack and modpack ever
+        // exported in one of these files failed to arrive, silently, and the step that
+        // needed it failed later on an id nobody recognised.
+        //
+        // BEFORE saveTasks, because a restored launch pack gets a new id and the steps that
+        // name the old one have to be repointed while they are still in hand.
+        const { count: restored, remap } = await restoreIncludes(doc?.includes);
+        if (Object.keys(remap).length) for (const tk of arr) if (Array.isArray(tk?.steps)) remapRefs(tk.steps, remap);
         await saveTasks(); renderScheduleList();
-        toast(`${added} ${t('sched.imported') || 'automation(s) imported'}`, 'success');
+        toast(`${added} ${t('sched.imported') || 'automation(s) imported'}`
+            + (restored ? ` — ${(t('sched.importedIncl') || 'also restored {n} item(s) it needed').replace('{n}', String(restored))}` : ''),
+            'success');
     } catch (e) { toast(`${t('common.error') || 'Error'}: ${e}`, 'error'); }
 }

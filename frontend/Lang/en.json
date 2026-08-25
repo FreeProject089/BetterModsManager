@@ -8129,5 +8129,6 @@
   "sched.catBasePh": "leave empty — they sit beside the catalogue",
   "sched.catHint": "Writes catalog.json into the folder, plus the files it points at when the kind has any. Themes are embedded in the index and have no separate files.",
   "sched.catNeedDir": "This step needs a destination folder.",
-  "sched.catDone": "Published {n} entry(ies)."
+  "sched.catDone": "Published {n} entry(ies).",
+  "sched.importedIncl": "also restored {n} item(s) it needed"
 }
