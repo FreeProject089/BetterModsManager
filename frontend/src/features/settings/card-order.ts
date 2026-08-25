@@ -9,6 +9,60 @@ import { t } from '../../core/i18n.js';
 import { toast } from '../../ui/app.js';
 
 const ORDER_KEY = 'bmm_settings_card_order';
+
+/**
+ * The order the settings page opens in when nobody has rearranged it.
+ *
+ * The page grew a card at a time and read like it: Language, then auto-update, then a
+ * catalogue index, then themes — four unrelated things before anything you came for. Twenty
+ * four cards in the order they happened to be written is a list you scroll rather than read.
+ *
+ * Grouped by what you are DOING, most-reached-for first: how it looks, how it handles your
+ * library, automation, performance, the accounts it talks to, privacy and security, then the
+ * app's own housekeeping. Debug stays last because it always should.
+ *
+ * A key here that no longer exists is skipped, and a card missing from this list keeps its
+ * place at the end — so adding a card without touching this file leaves it visible rather
+ * than hidden, which is the failure mode worth designing against.
+ *
+ * This is the DEFAULT, not a lock: the page has been reorderable by drag for a while, and a
+ * saved order still wins.
+ */
+const DEFAULT_ORDER: string[] = [
+    // ─ How it looks and reads ─
+    'k:settings.language',
+    'k:themes.settingsTitle',
+    'k:settings.taskyTitle',
+    'k:settings.shortcutsTitle',
+    // ─ The library itself ─
+    'settings-scan-updates-card',
+    'settings-sha-card',
+    'k:settings.tagsTitle',
+    'settings-catalog-index-card',
+    // ─ Automation ─
+    'settings-scheduler-section',
+    'settings-launchpack-section',
+    'settings-identity-card',
+    // ─ Performance ─
+    'settings-storage-section',
+    'settings-benchmark-section',
+    // ─ Accounts it talks to ─
+    'k:settings.githubPatTitle',
+    'settings-discord-rpc-card',
+    // ─ Privacy and security. The two security cards sit together on purpose: one is system
+    //   access, the other is the app's own, and split across the page they read as a
+    //   duplicate rather than as two halves of one subject.
+    'settings-privacy-section',
+    'settings-watcher-section',
+    'settings-security-section',
+    'settings-security-card',
+    // ─ The app looking after itself ─
+    'settings-auto-update-card',
+    'k:settings.dataTitle',
+    'k:settings.crashTitle',
+    'k:betahub.cardTitle',
+    'debug-menu-card',
+];
 const CODE_PREFIX = 'BMMUI1.';
 
 function container(): HTMLElement | null {
@@ -199,14 +253,24 @@ export function initCardReorder(): void {
     if (!c) return;
     // Capture the pristine (HTML-defined) order ONCE, before applying anything,
     // so Reset can restore it instantly without a refresh.
-    if (!_originalOrder.length) _originalOrder = cards().map((card, i) => cardKey(card, i));
+    // Reset goes back to the DEFAULT, not to the order the HTML happens to be written in —
+    // otherwise the button labelled "reset" hands you the jumble the default exists to fix.
+    // Filtered to cards that are really there, then followed by anything the list does not
+    // name, so a new card is never dropped.
+    if (!_originalOrder.length) {
+        const present = new Set(cards().map((card, i) => cardKey(card, i)));
+        const known = DEFAULT_ORDER.filter((k) => present.has(k));
+        const rest = cards().map((card, i) => cardKey(card, i)).filter((k) => !known.includes(k));
+        _originalOrder = [...known, ...rest];
+    }
     renderToolbar();
     cards().forEach((card, i) => makeDraggable(card, i));
     if (!_wired) {
         _wired = true;
         try {
             const saved = JSON.parse(localStorage.getItem(ORDER_KEY) || 'null');
-            if (Array.isArray(saved)) applyOrder(saved);
+            // A saved order always wins; the default only decides what a fresh install sees.
+            applyOrder(Array.isArray(saved) && saved.length ? saved : _originalOrder);
         } catch {}
         // Re-translate the toolbar live when the language changes (no refresh).
         document.addEventListener('langChanged', () => {
