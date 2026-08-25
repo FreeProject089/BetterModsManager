@@ -14,6 +14,7 @@
 import { getLang, t, getSynonyms } from '../core/i18n.js';
 import { diagrams } from './interactive-docs.js';
 import { renderDocMarkdown } from './md-lite.js';
+import { BMMS_REFERENCE } from './bmms-reference.gen.js';
 import { ensureMermaid } from '../ui/lazy-vendor.js';
 
 // The published mkdocs documentation site (see BMM Docs/mkdocs.yml site_url).
@@ -940,6 +941,23 @@ Un \`.bmmscript\` est un simple fichier texte. Double-cliquez dessus et BMM l’
 
 La référence complète — chaque déclencheur, instruction et condition — est sur le site de documentation.`,
         },
+      },
+      {
+        // GENERATED body. The one article in this hub whose text is not written here, because
+        // it is the one whose text can be WRONG the moment somebody adds an action — and the
+        // article beside it, 'actions-reference', is exactly what that looks like: 32,000
+        // characters describing the categories, naming two of the seventy-five actions.
+        //
+        // Both are kept. That one explains what the two action catalogues are FOR; this one
+        // is the lookup table, and neither does the other's job.
+        id: 'bmmscript-reference', view: 'settings', docsPath: 'features/bmmscript-reference/', wide: true,
+        title: { en: 'BMMScript — every action, condition and value', fr: 'BMMScript — toutes les actions, conditions et valeurs' },
+        summary: {
+          en: 'The complete list, generated from BMM’s own registry so it cannot describe a version that does not exist.',
+          fr: 'La liste complète, générée depuis le registre de BMM pour qu’elle ne puisse pas décrire une version qui n’existe pas.',
+        },
+        keywords: 'bmmscript reference list actions conditions values sources parameters référence liste actions conditions valeurs paramètres complete complète',
+        body: { en: BMMS_REFERENCE.en, fr: BMMS_REFERENCE.fr },
       },
       {
         id: 'actions-reference', view: 'plugins', docsPath: 'reference/actions/', wide: true,

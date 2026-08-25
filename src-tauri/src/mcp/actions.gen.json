@@ -379,6 +379,18 @@
       "group": "system"
     },
     {
+      "type": "catalog.create",
+      "label": "Publish a catalogue",
+      "needs": "catCreate",
+      "group": "system"
+    },
+    {
+      "type": "code.run",
+      "label": "Run BMMScript (advanced)",
+      "needs": "bmms",
+      "group": "logic"
+    },
+    {
       "type": "repo.syncNow",
       "label": "Sync a server repo (unattended)",
       "needs": "reposync",
