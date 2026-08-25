@@ -27,11 +27,19 @@ use tracing::info;
 
 lazy_static::lazy_static! {
     static ref PENDING_DEEP_LINK: Mutex<Option<String>> = Mutex::new(None);
+    /// A .bmmscript double-clicked while BMM was closed. Same reason as the deep link
+    /// above: emitting before the window exists loses the event.
+    static ref PENDING_SCRIPT_FILE: Mutex<Option<String>> = Mutex::new(None);
 }
 
 #[tauri::command]
 fn get_pending_deep_link() -> Option<String> {
     PENDING_DEEP_LINK.lock().unwrap().take()
+}
+
+#[tauri::command]
+fn get_pending_script_file() -> Option<String> {
+    PENDING_SCRIPT_FILE.lock().unwrap().take()
 }
 
 /// Open the native WebView2 DevTools on demand (only when the user asks).
@@ -128,6 +136,64 @@ fn register_bmm_protocol() -> Result<(), Box<dyn std::error::Error>> {
         }
     ));
 
+    Ok(())
+}
+
+/// Make `.bmmscript` open in BMM.
+///
+/// Mirrors register_bmm_protocol, guards included: a copy running from a temp directory
+/// leaves a real install's association alone, and a registration pointing at an exe that no
+/// longer exists is replaced. Failure is never fatal — an association is a convenience, and
+/// refusing to start over one would be absurd.
+fn register_bmmscript_association() -> Result<(), Box<dyn std::error::Error>> {
+    let exe_path = std::env::current_exe()?;
+    let in_temp = std::env::temp_dir()
+        .canonicalize()
+        .ok()
+        .and_then(|tmp| exe_path.canonicalize().ok().map(|exe| exe.starts_with(&tmp)))
+        .unwrap_or(false);
+
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let prog_id = "Software\\Classes\\BetterModsManager.bmmscript";
+
+    let current: Option<String> = hkcu
+        .open_subkey(format!("{prog_id}\\shell\\open\\command"))
+        .ok()
+        .and_then(|k| k.get_value::<String, _>("").ok());
+    let current_target_missing = match &current {
+        Some(cmd) => cmd
+            .split('"')
+            .nth(1)
+            .map(|p| !std::path::Path::new(p).exists())
+            .unwrap_or(true),
+        None => true,
+    };
+    if in_temp && !current_target_missing {
+        commands::crash::log_line(
+            "[BMMSCRIPT] running from a temp directory — leaving the .bmmscript association alone",
+        );
+        return Ok(());
+    }
+
+    let exe_str = exe_path.to_string_lossy();
+    let command = format!("\"{}\" \"%1\"", exe_str);
+    if current.as_deref() == Some(command.as_str()) {
+        return Ok(());
+    }
+
+    let (key, _) = hkcu.create_subkey(prog_id)?;
+    key.set_value("", &"BMM automation script")?;
+    let (icon, _) = key.create_subkey("DefaultIcon")?;
+    icon.set_value("", &format!("\"{}\",0", exe_str))?;
+    let (shell_key, _) = key.create_subkey("shell\\open\\command")?;
+    shell_key.set_value("", &command)?;
+
+    // The extension points at the ProgId. Written second on purpose: an extension pointing
+    // at a ProgId that does not exist yet is a file type Windows cannot open at all.
+    let (ext, _) = hkcu.create_subkey("Software\\Classes\\.bmmscript")?;
+    ext.set_value("", &"BetterModsManager.bmmscript")?;
+
+    commands::crash::log_line(&format!("[BMMSCRIPT] .bmmscript now opens {exe_str}"));
     Ok(())
 }
 
@@ -256,10 +322,21 @@ fn main() {
     commands::crash::setup_panic_hook();
     commands::crash::init_session();
     let _ = register_bmm_protocol();
+    let _ = register_bmmscript_association();
 
     let args: Vec<String> = std::env::args().collect();
     if let Some(link) = args.iter().find(|arg| arg.starts_with("bmm://")).cloned() {
         *PENDING_DEEP_LINK.lock().unwrap() = Some(link);
+    }
+    // A double-clicked .bmmscript arrives as a plain path argument. Held like a pending
+    // deeplink and handed over once the window exists — emitting before there is anything
+    // listening loses it, which is the bug PENDING_DEEP_LINK was written for.
+    if let Some(file) = args
+        .iter()
+        .find(|a| a.to_lowercase().ends_with(".bmmscript"))
+        .cloned()
+    {
+        *PENDING_SCRIPT_FILE.lock().unwrap() = Some(file);
     }
 
     tauri::Builder::default()
@@ -286,6 +363,13 @@ fn main() {
         .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
             if let Some(link) = args.iter().find(|arg| arg.starts_with("bmm://")).cloned() {
                 let _ = app.emit("deep-link-received", link);
+            }
+            if let Some(file) = args
+                .iter()
+                .find(|a| a.to_lowercase().ends_with(".bmmscript"))
+                .cloned()
+            {
+                let _ = app.emit("bmmscript-file-opened", file);
             }
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.set_focus();
@@ -360,6 +444,12 @@ fn main() {
 
             if let Some(link) = PENDING_DEEP_LINK.lock().unwrap().clone() {
                 let _ = app.emit("deep-link-received", link);
+            }
+            // NOT taken here: the frontend drains it with get_pending_script_file once it is
+            // ready to show the review screen. Emitting AND clearing would drop the file if
+            // the listener is not attached yet, which is the whole failure this mirrors.
+            if let Some(file) = PENDING_SCRIPT_FILE.lock().unwrap().clone() {
+                let _ = app.emit("bmmscript-file-opened", file);
             }
 
             apply_fs_security_mode(app.handle().clone());
@@ -705,6 +795,7 @@ fn main() {
             commands::discord::init_discord_rpc,
             commands::discord::set_discord_presence,
             get_pending_deep_link,
+            get_pending_script_file,
             open_devtools,
             close_devtools,
             is_devtools_open,

@@ -481,6 +481,38 @@ export async function getTasks(): Promise<Task[]> {
 }
 
 /** Runs one task by id — used by the bmm://schedule/run deeplink (Windows Task Scheduler). */
+/**
+ * Run a task object that is NOT in the store — a `.bmmscript` somebody opened.
+ *
+ * It gets a temporary id so the running panel can show and cancel it, and `osSchedule` is
+ * forced off: a file that is being run once must not register a Windows scheduled task on
+ * the way past.
+ */
+export async function runTaskOnce(task: Partial<Task>): Promise<void> {
+    const one = {
+        ...task,
+        id: `bmms-${Date.now()}`,
+        enabled: true,
+        osSchedule: false,
+        steps: Array.isArray(task.steps) ? task.steps : [],
+    } as Task;
+    await runTask(one);
+}
+
+/** Add a task object to the store — the same path importTasksFile uses for one task. */
+export async function importTaskObject(task: Partial<Task>): Promise<void> {
+    const one = {
+        ...task,
+        id: `sched-${Date.now()}`,
+        // Never inherited from a file: registering an OS-level scheduled task is a decision
+        // for the person importing, not for whoever wrote it.
+        osSchedule: false,
+    } as Task;
+    _tasks.push(one);
+    await saveTasks();
+    renderScheduleList();
+}
+
 export async function runTaskById(id: string): Promise<void> {
     if (!_tasks.length) await loadTasks();
     const task = _tasks.find(t => t.id === id);

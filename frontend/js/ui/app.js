@@ -989,6 +989,9 @@ async function main() {
     initDocsHub(); // the rebuilt Help & documentation hub (owns #view-docs)
     initCommands(); // command registry + Ctrl+K palette + global shortcut dispatcher
     initDeepLinks();
+    // A double-clicked .bmmscript arrives the same two ways a bmm:// link does. Imported
+    // lazily so the compiler and the review screen cost nothing on a normal launch.
+    void import('../features/settings/bmmscript-open.js').then((m) => m.initBmmScriptOpen()).catch(() => { });
     initApiActivity();
     initAnalytics().catch(() => { });
     // Local session recorder (user-controlled, separate from telemetry). Wire the
