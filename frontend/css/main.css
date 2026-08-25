@@ -159,32 +159,6 @@ body.is-maximized .titlebar-left {
     text-transform: uppercase;
 }
 
-.titlebar-text-logo {
-    font-weight: 800;
-    font-size: 13px;
-    letter-spacing: 0.05em;
-    opacity: 0;
-    max-width: 0;
-    overflow: hidden;
-    white-space: nowrap;
-    transform: translateX(-15px);
-    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    margin-right: 33px;
-}
-
-body.is-maximized .titlebar-text-logo {
-    opacity: 1;
-    max-width: 200px;
-    transform: translateX(0);
-    margin-right: -4px;
-}
-
-body.is-maximized .titlebar-version {
-    margin-left: 0;
-}
 
 .titlebar-spacer {
     width: 60px;
@@ -195,31 +169,6 @@ body.is-maximized .titlebar-spacer {
     width: 0;
 }
 
-.titlebar-version {
-    font-family: var(--font-mono);
-    font-size: 10px;
-    font-weight: 700;
-    color: var(--accent);
-    background: var(--accent-dim);
-    border: 1px solid var(--border-accent);
-    padding: 2px 8px;
-    border-radius: 4px;
-    margin-left: 0;
-    cursor: pointer;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    outline: none;
-}
-
-.titlebar-version:hover {
-    background: var(--accent);
-    color: var(--bmm-text-on-accent);
-    box-shadow: 0 0 10px var(--accent-glow);
-    transform: scale(1.05);
-}
-
-.titlebar-version:active {
-    transform: scale(0.95);
-}
 
 .titlebar-controls {
     display: flex;
@@ -278,12 +227,12 @@ body.is-maximized .titlebar-spacer {
     flex-direction: column;
     flex-shrink: 0;
     overflow: hidden;
-    /* Out through the shell's top padding, so the rail runs from the very top of the window
-       to the very bottom. Done here rather than by dropping the shell's padding: that padding
-       is what keeps the CONTENT clear of the fixed title bar, and moving it onto .content-area
-       would put it inside the scroll box the virtual mod list measures against. */
-    margin-top: calc(-1 * var(--titlebar-h));
-    height: calc(100% + var(--titlebar-h));
+    /* It stops at the title bar, and that is deliberate.
+       Running it up through the shell's top padding to y=0 looked tidier in a screenshot and
+       cost the window its drag handle: the rail then covers the left end of the title bar,
+       which is the widest piece of [data-tauri-drag-region] there is, so that strip stopped
+       moving the window while still looking exactly like title bar. It already reaches the
+       bottom of the window from here, which was the point of the change. */
 }
 
 /* Brand */
@@ -10338,14 +10287,6 @@ body.tasky-hidden #app-mascot-container {
     gap: 5px !important;
 }
 
-body.tasky-hidden .titlebar-left {
-    flex-direction: row-reverse;
-    justify-content: flex-end;
-    gap: 8px !important;
-}
-body.tasky-hidden .titlebar-left .titlebar-version {
-    margin-left: 0;
-}
 
 .tree-item.pending-delete { opacity: 0.6; }
 .tree-item.pending-delete .tree-item-label { text-decoration: line-through; }

@@ -24,6 +24,7 @@ import { initSettings, runAutoBenchmarks } from '../features/settings/settings.j
 import { initModals } from './modals.js';
 import { wireTipDismissal, restoreAllTips } from './dismissible-tip.js';
 import { registerBmmsLanguage } from '../features/settings/bmms-prism.js';
+import { initTaskyDrag } from './tasky-drag.js';
 import { initNavbarVersion, initUpdateNotes, initAutoUpdate, checkPtbMode, checkAutoEula, checkAutoPrivacy, checkShowReleaseNotes, checkLangSelect } from './update-notes.js';
 // New Modularized Imports
 import { initModlist } from '../features/mods/modlist.js';
@@ -870,7 +871,6 @@ async function main() {
                 console.log("[BMM] Updated credits subtitle.");
             }
             // Exhaustive sync for all version labels
-            document.querySelectorAll('.titlebar-version').forEach(el => el.textContent = 'V' + version);
             document.querySelectorAll('.footer-version-pill').forEach(el => el.textContent = 'v' + version);
             document.querySelectorAll('.about-version').forEach(el => el.textContent = 'v' + version);
         }
@@ -1068,6 +1068,10 @@ async function main() {
     // the 14 ```bmms fences in the bundled documentation, which nobody would think to
     // blame on the scheduler not having been opened yet.
     registerBmmsLanguage();
+    // Tasky can be moved. It sits over the title bar's left corner, which is also where the
+    // window logo and the first navbar item are — the app should not be the one deciding
+    // which of those you would rather see.
+    initTaskyDrag();
     // Per-tip dismissal. The Settings switch is all-or-nothing, which is the wrong
     // granularity for what people actually want: THIS box gone, the tips on screens they
     // have not learnt yet kept. Every .bmm-tip[data-tip-id] gets its own × here.
@@ -1391,53 +1395,76 @@ window.applyTaskySettings = function () {
         opacityLabel.textContent = opacity + '%';
 };
 // ── Tasky tooltip mouse-follow ───────────────────────────
+//
+// This ran on every `mousemove`, and each run READ `container.offsetWidth` /
+// `offsetHeight` and then WROTE eight inline styles. A read forces the browser to flush
+// layout; the writes invalidate it again; the next mouse event a millisecond later reads
+// once more. That is layout thrashing, and at the several hundred events a second a moving
+// mouse produces it is exactly what the stutter was — the bubble juddering along behind the
+// cursor while the rest of the frame waited for the reflow.
+//
+// Two changes fix it, and neither changes what you see:
+//
+//   · **One placement per animation frame.** Mouse events are recorded and coalesced; the
+//     work happens in a rAF. 60 placements a second instead of 500, and the read now
+//     happens once per frame, before that frame's writes, so nothing is measured against a
+//     layout the same frame already dirtied.
+//   · **Only write what changed.** Dragging the mouse along a wall pins the bubble at the
+//     same clamped coordinate for hundreds of events; re-assigning the identical `left`
+//     invalidates layout for nothing.
+//
+// The listener is passive: it never calls preventDefault, and saying so lets the browser
+// stop waiting to find out.
 (function initTaskyMouseFollow() {
     let lastX = 0;
     let lastY = 0;
-    window.updateTaskyPosition = (e) => {
+    let lastTarget = null;
+    let frame = 0;
+    // Last values actually written, so an unchanged frame writes nothing at all.
+    let wroteX = NaN;
+    let wroteY = NaN;
+    let wroteRow = '';
+    const place = () => {
+        frame = 0;
         const bubble = document.querySelector('.tasky-speech-bubble');
         const container = document.getElementById('tasky-bubble-docs');
         if (!bubble || !container)
             return;
-        // If e is null, use last coordinates (for manual calls)
-        const clientX = e ? e.clientX : lastX;
-        const clientY = e ? e.clientY : lastY;
-        if (e && e.clientX !== undefined) {
-            lastX = e.clientX;
-            lastY = e.clientY;
-        }
-        // Only update if visible or active to save some cycles, 
-        // but we need it to be positioned correctly THE INSTANT it's shown.
-        // showTaskyHelp calls this manually.
+        // Nothing on screen: no measuring, no writing. This is the common case — the
+        // pointer spends most of its life not over anything with a tooltip.
         if (container.style.display === 'none' && !bubble.classList.contains('active'))
             return;
         const vw = window.innerWidth;
         const vh = window.innerHeight;
+        // The one forced layout, once per frame, before this frame writes anything.
         const tw = container.offsetWidth || 350;
         const th = container.offsetHeight || 100;
-        const target = (e && e.target) ? e.target : document.elementFromPoint(lastX, lastY);
-        const isDropdown = target && !!target.closest('#global-dropdown-portal, .mod-actions-dropdown-content, .dropdown-menu, .dropdown-item, .btn-open-folder, .btn-open-active-folder, .btn-open-backup-folder, .btn-edit-mod, .btn-remove-mod, .btn-open-source-folder');
+        const target = lastTarget;
+        const isDropdown = !!target?.closest?.('#global-dropdown-portal, .mod-actions-dropdown-content, .dropdown-menu, .dropdown-item, .btn-open-folder, .btn-open-active-folder, .btn-open-backup-folder, .btn-edit-mod, .btn-remove-mod, .btn-open-source-folder');
         const OFFSET = 20;
         const MARGIN = 15;
-        let targetX = clientX + OFFSET;
-        let targetY = clientY + OFFSET;
+        let targetX = lastX + OFFSET;
+        let targetY = lastY + OFFSET;
         let isFlippedX = false;
-        let isFlippedY = false;
-        if (isDropdown) {
-            targetY = clientY - th - OFFSET;
-            isFlippedY = true;
-        }
+        // Over a dropdown the bubble goes ABOVE the cursor, or it covers the item you are
+        // about to click.
+        if (isDropdown)
+            targetY = lastY - th - OFFSET;
         if (targetX + tw > vw - MARGIN) {
-            targetX = clientX - tw - OFFSET;
+            targetX = lastX - tw - OFFSET;
             isFlippedX = true;
         }
-        if (targetY + th > vh - MARGIN) {
-            targetY = clientY - th - OFFSET;
-            isFlippedY = true;
-        }
-        let finalX = Math.max(MARGIN, Math.min(targetX, vw - tw - MARGIN));
-        let finalY = Math.max(MARGIN, Math.min(targetY, vh - th - MARGIN));
-        container.style.flexDirection = isFlippedX ? 'row-reverse' : 'row';
+        if (targetY + th > vh - MARGIN)
+            targetY = lastY - th - OFFSET;
+        const finalX = Math.max(MARGIN, Math.min(targetX, vw - tw - MARGIN));
+        const finalY = Math.max(MARGIN, Math.min(targetY, vh - th - MARGIN));
+        const row = isFlippedX ? 'row-reverse' : 'row';
+        if (finalX === wroteX && finalY === wroteY && row === wroteRow)
+            return;
+        wroteX = finalX;
+        wroteY = finalY;
+        wroteRow = row;
+        container.style.flexDirection = row;
         container.style.position = 'fixed';
         container.style.left = finalX + 'px';
         container.style.top = finalY + 'px';
@@ -1446,7 +1473,26 @@ window.applyTaskySettings = function () {
         container.style.transform = 'none';
         container.style.zIndex = '999999999';
     };
-    document.addEventListener('mousemove', (e) => window.updateTaskyPosition(e));
+    // `null` means "place it now, at the last known point" — showTaskyHelp calls it that way
+    // so the bubble is never painted once at the previous position and again at this one.
+    window.updateTaskyPosition = (e) => {
+        if (e && e.clientX !== undefined) {
+            lastX = e.clientX;
+            lastY = e.clientY;
+            lastTarget = e.target ?? null;
+            if (!frame)
+                frame = requestAnimationFrame(place);
+            return;
+        }
+        if (!lastTarget)
+            lastTarget = document.elementFromPoint(lastX, lastY);
+        if (frame) {
+            cancelAnimationFrame(frame);
+            frame = 0;
+        }
+        place();
+    };
+    document.addEventListener('mousemove', (e) => window.updateTaskyPosition(e), { passive: true });
 })();
 // ── The popup switch ─────────────────────────────────────
 //
@@ -1587,9 +1633,6 @@ window.applyTaskySettings = function () {
         document.body.classList.add('tasky-hidden');
     else
         document.body.classList.remove('tasky-hidden');
-    // The titlebar version badge duplicates the corner Tasky's role; when the
-    // corner Tasky is hidden, hide the lone badge too (cleaner titlebar).
-    document.querySelectorAll('.titlebar-version').forEach(el => { el.style.display = isVisible ? '' : 'none'; });
     if (mascotImg) {
         if (isAnimated) {
             mascotImg.style.filter = 'drop-shadow(2px 4px 12px rgba(0,0,0,0.6))';

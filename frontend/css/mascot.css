@@ -125,6 +125,18 @@ body.is-maximized #app-mascot-container {
     transform: scale(0.6) translateY(-20px);
 }
 
+/* While being dragged.
+   The idle bounce and the 0.4s `transition: all` both animate the very properties the drag
+   is setting, so left alone the mascot lags a few pixels behind the cursor and drifts
+   vertically the whole time. Both are off for the duration and back the moment it lands. */
+#app-mascot-container.is-dragging {
+    animation: none !important;
+    transition: none !important;
+}
+#app-mascot-container.is-dragging #app-mascot {
+    filter: drop-shadow(2px 8px 18px rgba(0, 0, 0, 0.75));
+}
+
 #app-mascot {
     width: var(--bmm-mascot-w, 110px);
     height: auto;

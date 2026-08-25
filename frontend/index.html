@@ -206,13 +206,12 @@
 
         <!-- Custom Titlebar -->
         <div class="titlebar" data-tauri-drag-region>
-            <div class="titlebar-left" data-tauri-drag-region>
-                <div class="titlebar-text-logo" data-tauri-drag-region>
-                    <span style="color:var(--bmm-text-primary)">Better</span> <span
-                        style="background:linear-gradient(135deg, #fbbf24, var(--bmm-warning)); background-clip:text; -webkit-background-clip:text; -webkit-text-fill-color:transparent;">Mod.Manager</span>
-                </div>
-                <button class="titlebar-version" data-act="checkPtbMode" data-act-args='[true]'>V1.0.0</button>
-            </div>
+            <!-- Left half: nothing but drag surface.
+                 The wordmark and the version pill both lived here and both were duplicates —
+                 the sidebar already carries the logo, and the version pill in the sidebar
+                 footer (#nav-version-btn) opens the very same guide this one did. What they
+                 cost was the only part of the title bar wide enough to grab. -->
+            <div class="titlebar-left" data-tauri-drag-region></div>
             <div class="titlebar-controls">
                 <button class="tb-btn" id="tb-min" data-tasky="common.minimize" data-tasky-icon="minimize"
                    >
