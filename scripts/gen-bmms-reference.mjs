@@ -326,7 +326,32 @@ export const BMMS_REFERENCE: { en: string; fr: string } = {
 };
 `;
 
-const want = { [OUT_EN]: page('en'), [OUT_FR]: page('fr'), [OUT_APP]: appModule };
+// The machine-readable vocabulary, for anything OUTSIDE BMM that needs to know what a
+// BMMScript may say — today, BCWEB's `.bmmscript` checker in /dev/tools.
+//
+// Published as a file rather than reimplemented over there, because the alternative is a
+// second list of 75 action names living in another repository, and that list is wrong the
+// day somebody adds an action here. An admin uploads this as the `bmms-vocabulary.json`
+// platform asset; the checker says the vocabulary has not been published rather than
+// pretending every name it cannot recognise is a typo.
+//
+// It is a VOCABULARY, not a grammar. Nothing outside BMM compiles BMMScript — there is one
+// compiler, in Rust, and a second one is exactly the thing this language was designed to
+// avoid needing.
+const OUT_VOCAB = 'dist-assets/bmms-vocabulary.json';
+const vocabulary = JSON.stringify({
+  generatedFrom: 'frontend/src/features/settings/scheduler.ts',
+  actions: actions.map((a) => ({ type: a.type, group: a.group, params: paramsFor(a.type) })),
+  conditions,
+  values: sources,
+  loopSources: loops,
+  // The four capabilities a task can grant itself. Hard-coded because they are the runner's
+  // permission model rather than a registry — the same four the review screen names.
+  permissions: ['command', 'script', 'deeplink', 'stopProcess'],
+  scriptEngines: ['powershell', 'cmd', 'bash', 'python', 'node', 'rust'],
+}, null, 2) + '\n';
+
+const want = { [OUT_EN]: page('en'), [OUT_FR]: page('fr'), [OUT_APP]: appModule, [OUT_VOCAB]: vocabulary };
 
 if (process.argv.includes('--check')) {
   let bad = 0;
@@ -341,6 +366,9 @@ if (process.argv.includes('--check')) {
   }
   console.log(`✓ BMMScript reference is current (${actions.length} actions, ${conditions.length} conditions, ${sources.length} values)`);
 } else {
-  for (const [file, text] of Object.entries(want)) fs.writeFileSync(file, text, 'utf8');
+  for (const [file, text] of Object.entries(want)) {
+    fs.mkdirSync(file.slice(0, file.lastIndexOf('/')), { recursive: true });
+    fs.writeFileSync(file, text, 'utf8');
+  }
   console.log(`✓ wrote the BMMScript reference — ${actions.length} actions, ${conditions.length} conditions, ${sources.length} values, ${loops.length} loop sources`);
 }

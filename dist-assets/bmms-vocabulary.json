@@ -1,0 +1,638 @@
+{
+  "generatedFrom": "frontend/src/features/settings/scheduler.ts",
+  "actions": [
+    {
+      "type": "profile.activate",
+      "group": "mods",
+      "params": [
+        "id"
+      ]
+    },
+    {
+      "type": "mod.enable",
+      "group": "mods",
+      "params": [
+        "id"
+      ]
+    },
+    {
+      "type": "mod.disable",
+      "group": "mods",
+      "params": [
+        "id"
+      ]
+    },
+    {
+      "type": "modpack.enable",
+      "group": "mods",
+      "params": [
+        "id"
+      ]
+    },
+    {
+      "type": "modpack.disable",
+      "group": "mods",
+      "params": [
+        "id"
+      ]
+    },
+    {
+      "type": "modpack.create",
+      "group": "mods",
+      "params": [
+        "name",
+        "profile"
+      ]
+    },
+    {
+      "type": "mod.add",
+      "group": "mods",
+      "params": [
+        "url",
+        "name"
+      ]
+    },
+    {
+      "type": "modlist.export",
+      "group": "mods",
+      "params": []
+    },
+    {
+      "type": "modlist.import",
+      "group": "mods",
+      "params": []
+    },
+    {
+      "type": "mods.enableAll",
+      "group": "mods",
+      "params": []
+    },
+    {
+      "type": "mods.disableAll",
+      "group": "mods",
+      "params": []
+    },
+    {
+      "type": "mods.scan",
+      "group": "mods",
+      "params": []
+    },
+    {
+      "type": "plugin.apply",
+      "group": "mods",
+      "params": [
+        "id"
+      ]
+    },
+    {
+      "type": "plugin.compare",
+      "group": "mods",
+      "params": [
+        "id"
+      ]
+    },
+    {
+      "type": "plugin.delete",
+      "group": "mods",
+      "params": [
+        "id"
+      ]
+    },
+    {
+      "type": "mods.checkUpdates",
+      "group": "mods",
+      "params": []
+    },
+    {
+      "type": "mods.autoImportOmm",
+      "group": "mods",
+      "params": []
+    },
+    {
+      "type": "mods.clearHistory",
+      "group": "mods",
+      "params": [
+        "id"
+      ]
+    },
+    {
+      "type": "mods.exportModpack",
+      "group": "mods",
+      "params": [
+        "id",
+        "dir"
+      ]
+    },
+    {
+      "type": "repo.connect",
+      "group": "repo",
+      "params": [
+        "url",
+        "name"
+      ]
+    },
+    {
+      "type": "repo.sync",
+      "group": "repo",
+      "params": [
+        "url",
+        "profile"
+      ]
+    },
+    {
+      "type": "repo.gen",
+      "group": "repo",
+      "params": []
+    },
+    {
+      "type": "repo.update",
+      "group": "repo",
+      "params": [
+        "dir"
+      ]
+    },
+    {
+      "type": "repo.host",
+      "group": "repo",
+      "params": [
+        "dir",
+        "port"
+      ]
+    },
+    {
+      "type": "repo.publishSsh",
+      "group": "repo",
+      "params": [
+        "dir"
+      ]
+    },
+    {
+      "type": "repo.fetchSsh",
+      "group": "repo",
+      "params": [
+        "dir"
+      ]
+    },
+    {
+      "type": "app.launch",
+      "group": "apps",
+      "params": [
+        "id",
+        "exePath"
+      ]
+    },
+    {
+      "type": "app.stop",
+      "group": "apps",
+      "params": [
+        "name",
+        "pid"
+      ]
+    },
+    {
+      "type": "file.open",
+      "group": "apps",
+      "params": [
+        "path"
+      ]
+    },
+    {
+      "type": "folder.open",
+      "group": "apps",
+      "params": [
+        "path"
+      ]
+    },
+    {
+      "type": "app.install",
+      "group": "apps",
+      "params": [
+        "id",
+        "url",
+        "title"
+      ]
+    },
+    {
+      "type": "launchpack.run",
+      "group": "apps",
+      "params": [
+        "id"
+      ]
+    },
+    {
+      "type": "theme.set",
+      "group": "look",
+      "params": [
+        "id"
+      ]
+    },
+    {
+      "type": "benchmark.run",
+      "group": "perf",
+      "params": [
+        "dataset",
+        "size",
+        "customMb",
+        "sources"
+      ]
+    },
+    {
+      "type": "storage.diskBenchmark",
+      "group": "perf",
+      "params": [
+        "mountPoint"
+      ]
+    },
+    {
+      "type": "storage.applyLimit",
+      "group": "perf",
+      "params": [
+        "mountPoint",
+        "limitMbS"
+      ]
+    },
+    {
+      "type": "storage.calibration",
+      "group": "perf",
+      "params": [
+        "enabled"
+      ]
+    },
+    {
+      "type": "storage.smartIo",
+      "group": "perf",
+      "params": [
+        "enabled"
+      ]
+    },
+    {
+      "type": "storage.flag",
+      "group": "perf",
+      "params": [
+        "key",
+        "enabled"
+      ]
+    },
+    {
+      "type": "perf.diskSpace",
+      "group": "perf",
+      "params": [
+        "mountPoint"
+      ]
+    },
+    {
+      "type": "telemetry.consent",
+      "group": "privacy",
+      "params": [
+        "enabled"
+      ]
+    },
+    {
+      "type": "telemetry.set",
+      "group": "privacy",
+      "params": [
+        "replay",
+        "full",
+        "bench"
+      ]
+    },
+    {
+      "type": "recorder.set",
+      "group": "privacy",
+      "params": [
+        "on",
+        "full",
+        "rust",
+        "js"
+      ]
+    },
+    {
+      "type": "replay.export",
+      "group": "privacy",
+      "params": []
+    },
+    {
+      "type": "replay.import",
+      "group": "privacy",
+      "params": [
+        "path",
+        "url"
+      ]
+    },
+    {
+      "type": "notify",
+      "group": "system",
+      "params": [
+        "message"
+      ]
+    },
+    {
+      "type": "discord.rpc",
+      "group": "system",
+      "params": [
+        "enabled"
+      ]
+    },
+    {
+      "type": "data.exportAuto",
+      "group": "system",
+      "params": [
+        "dir",
+        "name",
+        "increment"
+      ]
+    },
+    {
+      "type": "var.set",
+      "group": "logic",
+      "params": [
+        "name",
+        "value",
+        "scope"
+      ]
+    },
+    {
+      "type": "app.checkUpdate",
+      "group": "system",
+      "params": [
+        "enabled"
+      ]
+    },
+    {
+      "type": "system.clearApiLog",
+      "group": "system",
+      "params": []
+    },
+    {
+      "type": "system.clearResourceRecords",
+      "group": "system",
+      "params": []
+    },
+    {
+      "type": "math.set",
+      "group": "logic",
+      "params": [
+        "target",
+        "expr"
+      ]
+    },
+    {
+      "type": "var.ternary",
+      "group": "logic",
+      "params": [
+        "condition",
+        "target",
+        "ifTrue",
+        "ifFalse"
+      ]
+    },
+    {
+      "type": "rule.table",
+      "group": "logic",
+      "params": [
+        "source",
+        "target",
+        "rows"
+      ]
+    },
+    {
+      "type": "task.stop",
+      "group": "logic",
+      "params": [
+        "reason"
+      ]
+    },
+    {
+      "type": "task.run",
+      "group": "system",
+      "params": [
+        "id"
+      ]
+    },
+    {
+      "type": "task.spawn",
+      "group": "system",
+      "params": [
+        "id"
+      ]
+    },
+    {
+      "type": "restart",
+      "group": "system",
+      "params": []
+    },
+    {
+      "type": "open.url",
+      "group": "system",
+      "params": [
+        "url"
+      ]
+    },
+    {
+      "type": "custom.command",
+      "group": "system",
+      "params": [
+        "args",
+        "program",
+        "workingDir"
+      ]
+    },
+    {
+      "type": "custom.script",
+      "group": "system",
+      "params": [
+        "engine",
+        "code",
+        "workingDir"
+      ]
+    },
+    {
+      "type": "folder.create",
+      "group": "system",
+      "params": [
+        "path"
+      ]
+    },
+    {
+      "type": "catalog.create",
+      "group": "system",
+      "params": [
+        "dir",
+        "kind",
+        "name",
+        "base"
+      ]
+    },
+    {
+      "type": "code.run",
+      "group": "logic",
+      "params": [
+        "code"
+      ]
+    },
+    {
+      "type": "repo.syncNow",
+      "group": "repo",
+      "params": [
+        "url",
+        "gameDir",
+        "modsDir",
+        "password",
+        "repoProfile",
+        "backupDir",
+        "targetProfile",
+        "overwriteAll",
+        "deleteExtra",
+        "downloadLimit",
+        "keepZipped"
+      ]
+    },
+    {
+      "type": "deeplink",
+      "group": "system",
+      "params": [
+        "url"
+      ]
+    },
+    {
+      "type": "list.set",
+      "group": "logic",
+      "params": [
+        "name",
+        "value",
+        "sep"
+      ]
+    },
+    {
+      "type": "list.push",
+      "group": "logic",
+      "params": [
+        "name",
+        "value"
+      ]
+    },
+    {
+      "type": "list.clear",
+      "group": "logic",
+      "params": [
+        "name"
+      ]
+    },
+    {
+      "type": "map.set",
+      "group": "logic",
+      "params": [
+        "name",
+        "key",
+        "value"
+      ]
+    },
+    {
+      "type": "map.get",
+      "group": "logic",
+      "params": [
+        "name",
+        "key",
+        "into"
+      ]
+    },
+    {
+      "type": "map.clear",
+      "group": "logic",
+      "params": [
+        "name"
+      ]
+    },
+    {
+      "type": "var.clear",
+      "group": "logic",
+      "params": [
+        "name"
+      ]
+    },
+    {
+      "type": "http.request",
+      "group": "system",
+      "params": [
+        "url",
+        "headers",
+        "method",
+        "body",
+        "timeoutMs",
+        "jsonPath",
+        "allowAnyStatus"
+      ]
+    }
+  ],
+  "conditions": [
+    "always",
+    "all",
+    "any",
+    "value",
+    "enumIs",
+    "profileActive",
+    "modEnabled",
+    "modDisabled",
+    "modpackActive",
+    "modpackInactive",
+    "allModsActive",
+    "appRunning",
+    "appNotRunning",
+    "fileExists",
+    "pathIsDir",
+    "fileHash",
+    "filesMatch",
+    "fileSize",
+    "fileType",
+    "fileName",
+    "fileNewer",
+    "online",
+    "catalogOk",
+    "repoOk",
+    "timeReached",
+    "dayOfWeek",
+    "timeRange",
+    "commandSucceeds"
+  ],
+  "values": [
+    "disk.read_mbps",
+    "disk.write_mbps",
+    "disk.suggested_limit",
+    "disk.free_gb",
+    "disk.free_percent",
+    "disk.total_gb",
+    "benchmark.mbps",
+    "benchmark.total_ms",
+    "update.available",
+    "lasttask.ok",
+    "lasttask.spawned",
+    "list.length",
+    "http.status",
+    "map.size",
+    "map.hit"
+  ],
+  "loopSources": [
+    "enabledMods",
+    "disabledMods",
+    "mods",
+    "profiles",
+    "modpacks",
+    "themes",
+    "list",
+    "mapKeys"
+  ],
+  "permissions": [
+    "command",
+    "script",
+    "deeplink",
+    "stopProcess"
+  ],
+  "scriptEngines": [
+    "powershell",
+    "cmd",
+    "bash",
+    "python",
+    "node",
+    "rust"
+  ]
+}
