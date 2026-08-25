@@ -68,6 +68,21 @@ cmp('reaching actions', reaching(ts, TS), reaching(mjs, MJS));
 cmp('actions carrying code', bodied(ts), bodied(mjs));
 cmp('id references', refs(ts, TS), refs(mjs, MJS));
 
+// Which reference kinds each reader can RESOLVE against what the file carries.
+//
+// Separate from the map above, and it had to be: BCWEB knew `plugin.apply` names a plugin
+// and still had no way to resolve one, because the two live in different places. So a
+// moderator saw the id and never the name, and every existing check was green — the readers
+// agreed about the QUESTION and disagreed about the ANSWER.
+function resolvable(src, file) {
+  const m = src.match(new RegExp('const included[^=]*=\\s*\\{([\\s\\S]*?)\\n\\s*};'));
+  if (!m) { console.error(`✗ could not find the resolution set in ${file} — the gate cannot compare what it cannot read`); process.exit(2); }
+  return new Set([...m[1].matchAll(/^\s*([a-z]+):/gm)].map((x) => x[1]));
+}
+cmp('resolvable references', resolvable(ts, TS), resolvable(mjs, MJS));
+
+
+
 // The THIRD copy, and the one that decides what a file actually contains.
 //
 // The two readers above agreed with each other and were both wrong: the scheduler had
@@ -93,6 +108,25 @@ if (fs.existsSync(SCHED)) {
   process.exit(2);
 }
 
+// And the KEYS. A reader that resolves `block` against `includes.blocks` is useless if the
+// writer never fills that key in, and the reverse is a payload nobody reads. `block` is not
+// in REF_ACTIONS at all — it comes from a `call` STEP, not an action — so the comparison
+// above cannot see it, and this is the only thing that can.
+if (fs.existsSync(SCHED)) {
+  const schedSrc = read(SCHED);
+  const written = new Set([...schedSrc.matchAll(/includes\.([a-z]+)\s*=/g)].map((m) => m[1]));
+  const readKeys = new Set([...ts.matchAll(/includes\?\.([a-z]+)/g)].map((m) => m[1]));
+  if (!written.size || !readKeys.size) {
+    console.error('✗ could not read the includes keys from one side — refusing to report success');
+    process.exit(2);
+  }
+  for (const k of written) {
+    if (!readKeys.has(k)) problems.push(`includes: the scheduler writes \`includes.${k}\` and no inspector reads it — the payload travels and nobody sees it`);
+  }
+  for (const k of readKeys) {
+    if (!written.has(k)) problems.push(`includes: the inspectors read \`includes.${k}\` and the scheduler never writes it — it can only ever read as unresolved`);
+  }
+}
 // RISK_KEYS drives the permission badges. Both readers emit these codes and the two UIs
 // translate them, so a code added on one side renders as a bare identifier on the other.
 const riskTs = new Set([...(read(TS).match(/RISK_KEYS\s*=\s*\[([\s\S]*?)\]/)?.[1] || '').matchAll(/'([^']+)'/g)].map((x) => x[1]));

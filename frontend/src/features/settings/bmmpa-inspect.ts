@@ -90,7 +90,7 @@ export interface TaskSummary {
 
 export interface InspectResult {
     /** How many launch packs / modpacks the file carries alongside its tasks. */
-    includes?: { launchpacks: number; modpacks: number; plugins: number };
+    includes?: { launchpacks: number; modpacks: number; plugins: number; blocks: number };
     /** References the file makes but does not satisfy. These import cleanly and fail later. */
     unresolved?: { kind: string; id: string }[];
     ok: boolean;
@@ -195,8 +195,20 @@ function walkSteps(steps: any[], out: TaskSummary): StepSummary[] {
             }
         }
 
+        // A `call` names a BLOCK. It is a step KIND rather than an action, so REF_ACTIONS
+        // could never have found it — and the runner ABORTS on a missing block, so an
+        // unresolved one is a task that stops dead rather than one that does less.
+        if (kind === 'call' && st?.block) {
+          node.refKind = 'block';
+          node.refId = String(st.block);
+        }
+
         for (const key of ['steps', 'then', 'else', 'onError', 'default']) {
             if (Array.isArray(st?.[key])) node.children.push(...walkSteps(st[key], out));
+        }
+        // Parallel branches too, or every step inside one is invisible to a reviewer.
+        if (Array.isArray(st?.branches)) {
+            for (const b of st.branches) if (Array.isArray(b)) node.children.push(...walkSteps(b, out));
         }
         if (Array.isArray(st?.cases)) {
             for (const c of st.cases) if (Array.isArray(c?.steps)) node.children.push(...walkSteps(c.steps, out));
@@ -265,6 +277,9 @@ export function inspectBmmpa(doc: unknown): InspectResult {
         launchpack: new Set(asArray(d.includes?.launchpacks).map((x: any) => String(x?.id ?? ''))),
         modpack: new Set(asArray(d.includes?.modpacks).map((x: any) => String(x?.id ?? x?.name ?? ''))),
         plugin: new Set(asArray(d.includes?.plugins).map((x: any) => String(x?.id ?? ''))),
+        // Blocks arrive as ONE object of name → steps, not a list of rows — so the keys are
+        // the ids, and asArray()[0] is the object rather than an entry.
+        block: new Set(Object.keys(asArray(d.includes?.blocks)[0] || {})),
     };
     const unresolved: { kind: string; id: string }[] = [];
     const resolve = (nodes: StepSummary[]): void => {
@@ -292,6 +307,7 @@ export function inspectBmmpa(doc: unknown): InspectResult {
             launchpacks: asArray(d.includes?.launchpacks).length,
             modpacks: asArray(d.includes?.modpacks).length,
             plugins: asArray(d.includes?.plugins).length,
+            blocks: Object.keys(asArray(d.includes?.blocks)[0] || {}).length,
         },
         unresolved,
         needsReview: out.some((t) => t.perms.length > 0 || t.reaching.length > 0),

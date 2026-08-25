@@ -2935,10 +2935,7 @@ function renderBlocksPanel(modal: HTMLElement): void {
         // the worst moment to find out.
         const used = _draft.steps.some(function seek(s: any): boolean {
             if (s.kind === 'call' && s.block === name) return true;
-            for (const k of ['steps', 'then', 'else', 'onError', 'default'] as const) {
-                if (Array.isArray(s[k]) && s[k].some(seek)) return true;
-            }
-            return Array.isArray(s.cases) && s.cases.some((c: any) => (c.steps || []).some(seek));
+            return stepBodies(s).some((body) => body.some(seek));
         });
         if (used) { toast(t('sched.bl.inuse') || 'This task still calls that block.', 'warning'); return; }
         const store = readBlocks();
@@ -5155,6 +5152,25 @@ const REF_ACTIONS: Record<string, 'task' | 'launchpack' | 'modpack' | 'profile' 
 /** Every id a task names, by kind. Walks the whole tree — a sub-task called from inside a
  *  loop inside an if is still a dependency, and a collector that reads only the top level
  *  produces a file that is missing exactly the parts that were hardest to find. */
+/**
+ * The fields a step can hold other steps in.
+ *
+ * ONE list, because three walkers had their own copy and none of them learned about
+ * `branches` when the parallel kind arrived — so a reference inside a parallel branch was
+ * invisible to the exporter, the id remapper and the substituter at once. `cases` is not
+ * here: it holds objects with their own `steps`, so every caller handles it separately.
+ */
+const STEP_BODIES = ['steps', 'then', 'else', 'onError', 'default'] as const;
+
+/** Every array of steps hanging off this step, `branches` included. */
+function stepBodies(st: any): Step[][] {
+    const out: Step[][] = [];
+    for (const k of STEP_BODIES) if (Array.isArray(st?.[k])) out.push(st[k]);
+    if (Array.isArray(st?.branches)) for (const b of st.branches) if (Array.isArray(b)) out.push(b);
+    if (Array.isArray(st?.cases)) for (const c of st.cases) if (Array.isArray(c?.steps)) out.push(c.steps);
+    return out;
+}
+
 function collectRefs(steps: Step[], out: Record<string, Set<string>> = {}): Record<string, Set<string>> {
     for (const st of steps || []) {
         if ((st as any).kind === 'action') {
@@ -5162,12 +5178,13 @@ function collectRefs(steps: Step[], out: Record<string, Set<string>> = {}): Reco
             const id = String((st as any).action?.params?.id || '').trim();
             if (kind && id) (out[kind] = out[kind] || new Set()).add(id);
         }
-        for (const key of ['steps', 'then', 'else', 'onError', 'default'] as const) {
-            if (Array.isArray((st as any)[key])) collectRefs((st as any)[key], out);
+        // A `call` names a BLOCK, and a block is a kind of its own rather than an action —
+        // so REF_ACTIONS could never have found it, however many actions were added.
+        if ((st as any).kind === 'call') {
+            const name = String((st as any).block || '').trim();
+            if (name) (out.block = out.block || new Set()).add(name);
         }
-        if (Array.isArray((st as any).cases)) {
-            for (const c of (st as any).cases) if (Array.isArray(c?.steps)) collectRefs(c.steps, out);
-        }
+        for (const body of stepBodies(st)) collectRefs(body, out);
     }
     return out;
 }
@@ -5234,6 +5251,17 @@ async function collectIncludes(tasks: Task[]): Promise<Record<string, any[]>> {
             const want = refs.modpack;
             includes.modpacks = (packs || []).filter((p: any) => want.has(String(p?.id ?? p?.name)));
         } catch { /* see above */ }
+    }
+    if (refs.block?.size) {
+        // The bodies, from the local store. Blocks are plain step arrays with no identity of
+        // their own, so there is nothing to fetch and nothing that can fail — a named block
+        // that does not exist here simply is not carried, and the inspector reports the
+        // reference as unresolved, which is the truth.
+        const store = readBlocks();
+        const want = refs.block;
+        const picked: Record<string, Step[]> = {};
+        for (const name of want) if (store[name]) picked[name] = store[name];
+        if (Object.keys(picked).length) includes.blocks = [picked];
     }
     if (refs.plugin?.size) {
         try {
@@ -6032,6 +6060,22 @@ async function restoreIncludes(includes: any): Promise<{ count: number; remap: R
         }
     }
 
+    // Blocks arrive as a single object of name → steps. Only the missing ones are written:
+    // a block name is chosen by a person and collisions are likely, and silently replacing
+    // the body of a block somebody else's task also calls would break that task instead.
+    const blockMap = Array.isArray(includes.blocks) ? (includes.blocks[0] || {}) : {};
+    if (blockMap && typeof blockMap === 'object' && Object.keys(blockMap).length) {
+        const store = readBlocks();
+        let touched = false;
+        for (const [name, body] of Object.entries(blockMap)) {
+            if (store[name] || !Array.isArray(body)) continue;
+            store[name] = body as Step[];
+            touched = true;
+            n++;
+        }
+        if (touched) writeBlocks(store);
+    }
+
     const packs = Array.isArray(includes.launchpacks) ? includes.launchpacks : [];
     if (packs.length) {
         const have = new Set(((await invoke('get_launch_packs').catch(() => [])) as any[]).map((p: any) => String(p?.id)));
@@ -6073,12 +6117,7 @@ function remapRefs(steps: Step[], remap: Record<string, string>): void {
             const was = String(a?.params?.id || '');
             if (was && remap[was]) a.params.id = remap[was];
         }
-        for (const key of ['steps', 'then', 'else', 'onError', 'default'] as const) {
-            if (Array.isArray((st as any)[key])) remapRefs((st as any)[key], remap);
-        }
-        if (Array.isArray((st as any).cases)) {
-            for (const c of (st as any).cases) if (Array.isArray(c?.steps)) remapRefs(c.steps, remap);
-        }
+        for (const body of stepBodies(st)) remapRefs(body, remap);
     }
 }
 
