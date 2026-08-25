@@ -330,6 +330,9 @@ Two shapes sit outside that rule:
 | `POST` | `/api/repo/update` | token | `repoDir`*, `authorName`, `removeModIds[]`, `removeProfileIds[]`, `addProfiles[]`, `modChangelogs{}` → `202` | ✓ |
 | `POST` | `/api/repo/host` | token | `serveDir`*, `port`, `uploadLimit` → `202`, `409` if already serving | ✓ |
 | `DELETE` | `/api/repo/host` | token | — | |
+| `POST` | `/api/repo/manifest` | `repo.write` | `dir`*, `authorName` · writes `repo.json` for a folder that is ALREADY hosted. Needs no profile and copies nothing — it reads the directory, writes one file, and returns the diff. Synchronous, so a publish script can act on the result | |
+| `POST` | `/api/repo/publish-ssh` | token | `dir`* · uploads over SSH **using the connection already saved in the app**. The host, the user and the key are deliberately NOT parameters: a caller able to name them could make BMM read a private key of its choosing and ship a repo to a machine of its choosing. Driven through the UI, so the upload is visible and cancellable → `202` | |
+| `POST` | `/api/repo/fetch-ssh` | token | `dir`* · the same rule, and it matters more in this direction: publishing writes to a server the owner chose, fetching writes to the owner's own disk. Only the destination is a parameter, and the backend refuses any remote path that would escape it → `202` | |
 | `POST` | `/api/mod/check-updates` | token | — → `202` | ✓ |
 | `POST` | `/api/mod/update` | token | `repoUrl` → `202` | ✓ |
 
@@ -378,6 +381,7 @@ is `data/export-auto`.
 | `POST` | `/api/replay/import` | token | `path`, `url` | ✓ |
 | `POST` | `/api/discord/rpc` | token | `enabled`* | ✓ |
 | `POST` | `/api/restart` | token | — · the API is briefly unavailable | ✓ |
+| `POST` | `/api/view` | token | `id`* · show a screen. The id is the sidebar's own `data-view` value (`mapper`, `library`, …); an unknown one is a no-op that says so in the app console, exactly like the `bmm://view/open` deeplink | ✓ |
 
 ---
 

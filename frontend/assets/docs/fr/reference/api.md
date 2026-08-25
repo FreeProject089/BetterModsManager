@@ -337,6 +337,9 @@ Deux formes échappent à la règle :
 | `POST` | `/api/repo/update` | token | `repoDir`*, `authorName`, `removeModIds[]`, `removeProfileIds[]`, `addProfiles[]`, `modChangelogs{}` → `202` | ✓ |
 | `POST` | `/api/repo/host` | token | `serveDir`*, `port`, `uploadLimit` → `202`, `409` si déjà en service | ✓ |
 | `DELETE` | `/api/repo/host` | token | — | |
+| `POST` | `/api/repo/manifest` | `repo.write` | `dir`*, `authorName` · écrit `repo.json` pour un dossier DÉJÀ hébergé. N'a besoin d'aucun profil et ne copie rien — il lit le dossier, écrit un fichier et renvoie le diff. Synchrone, pour qu'un script de publication puisse agir sur le résultat | |
+| `POST` | `/api/repo/publish-ssh` | token | `dir`* · envoie par SSH **en utilisant la connexion déjà enregistrée dans l'app**. L'hôte, l'utilisateur et la clé ne sont volontairement PAS des paramètres : un appelant capable de les nommer pourrait faire lire à BMM une clé privée de son choix et expédier un dépôt vers une machine de son choix. Piloté par l'UI, donc l'envoi est visible et annulable → `202` | |
+| `POST` | `/api/repo/fetch-ssh` | token | `dir`* · même règle, et elle compte davantage dans ce sens : publier écrit sur un serveur choisi par le propriétaire, récupérer écrit sur son propre disque. Seule la destination est un paramètre, et le backend refuse tout chemin distant qui en sortirait → `202` | |
 | `POST` | `/api/mod/check-updates` | token | — → `202` | ✓ |
 | `POST` | `/api/mod/update` | token | `repoUrl` → `202` | ✓ |
 
@@ -385,6 +388,7 @@ exception est `data/export-auto`.
 | `POST` | `/api/replay/import` | token | `path`, `url` | ✓ |
 | `POST` | `/api/discord/rpc` | token | `enabled`* | ✓ |
 | `POST` | `/api/restart` | token | — · l'API est brièvement indisponible | ✓ |
+| `POST` | `/api/view` | token | `id`* · affiche un écran. L'id est la valeur `data-view` de la barre latérale (`mapper`, `library`, …) ; un id inconnu ne fait rien et le dit dans la console de l'app, exactement comme le deeplink `bmm://view/open` | ✓ |
 
 ---
 

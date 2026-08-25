@@ -12,6 +12,7 @@
     "features/repo",
     "features/plugins",
     "features/scheduler",
+    "features/bmmscript",
     "features/apps",
     "features/mapper",
     "features/community",
@@ -219,6 +220,21 @@
         "fr": "Planifiez des actions BMM (ponctuelles ou récurrentes) — activer un mod, un modpack, un profil… avec conditions (si/sinon), tes propres scripts et des…"
       },
       "words": 2196,
+      "diagrams": 0,
+      "fr": true
+    },
+    {
+      "path": "features/bmmscript",
+      "section": "features",
+      "title": {
+        "en": "BMMScript — automations as code",
+        "fr": "BMMScript — les automatisations en code"
+      },
+      "summary": {
+        "en": "The same automations as the scheduler's bricks, written as text. Anything you can build by clicking, you can type — and anything you type, you can open back…",
+        "fr": "Les mêmes automatisations que les briques du planificateur, écrites en texte."
+      },
+      "words": 719,
       "diagrams": 0,
       "fr": true
     },

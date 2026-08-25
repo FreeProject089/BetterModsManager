@@ -766,7 +766,7 @@ Flip this and the task registers with your OS scheduler, so it fires on time whe
 
 ### Running your own code
 
-A step can **Run a script** — PowerShell, CMD, Bash or Python — written straight into the task. BMM saves it to a temp file and hands the interpreter the file, so nothing you write is ever pasted into a command line: there is no quoting or escaping to get right, and no stray quote can change what runs. Inside a **FOR EACH**, \`{item.name}\` and \`{item.id}\` are substituted before the script starts. Name a variable under *Advanced* and the script's first output line becomes a value later steps can test — otherwise a script can only pass or fail.
+A step can **Run a script** — PowerShell, CMD, Bash, Python, JavaScript (Node) or Rust — written straight into the task. BMM saves it to a temp file and hands the interpreter the file, so nothing you write is ever pasted into a command line: there is no quoting or escaping to get right, and no stray quote can change what runs. Inside a **FOR EACH**, \`{item.name}\` and \`{item.id}\` are substituted before the script starts. Name a variable under *Advanced* and the script's first output line becomes a value later steps can test — otherwise a script can only pass or fail.
 
 There is also **Run external program** for the simpler case of launching something with arguments.
 
@@ -797,7 +797,7 @@ Active ça et la tâche s’enregistre auprès du planificateur de l’OS : elle
 
 ### Exécuter ton propre code
 
-Une étape peut **Exécuter un script** — PowerShell, CMD, Bash ou Python — écrit directement dans la tâche. BMM l’enregistre dans un fichier temporaire et donne ce fichier à l’interpréteur : rien de ce que tu écris n’est collé dans une ligne de commande, il n’y a donc aucun échappement à réussir, et aucun guillemet égaré ne peut changer ce qui s’exécute. Dans un **POUR CHAQUE**, \`{item.name}\` et \`{item.id}\` sont remplacés avant le démarrage du script. Nomme une variable dans *Avancé* et la première ligne de sortie devient une valeur testable par les étapes suivantes — sinon un script ne peut que réussir ou échouer.
+Une étape peut **Exécuter un script** — PowerShell, CMD, Bash, Python, JavaScript (Node) ou Rust — écrit directement dans la tâche. BMM l’enregistre dans un fichier temporaire et donne ce fichier à l’interpréteur : rien de ce que tu écris n’est collé dans une ligne de commande, il n’y a donc aucun échappement à réussir, et aucun guillemet égaré ne peut changer ce qui s’exécute. Dans un **POUR CHAQUE**, \`{item.name}\` et \`{item.id}\` sont remplacés avant le démarrage du script. Nomme une variable dans *Avancé* et la première ligne de sortie devient une valeur testable par les étapes suivantes — sinon un script ne peut que réussir ou échouer.
 
 Il existe aussi **Lancer un programme externe** pour le cas plus simple d’un exécutable avec des arguments.
 
@@ -808,6 +808,81 @@ Une tâche accorde trois capacités séparément : **Lancer des programmes exter
 :::
 
 Il peut piloter les [Launch Packs](doc:launch-packs), tes limites de [stockage](doc:storage-manager) et les [benchmarks](doc:benchmarks). Partage tout un jeu avec **Exporter/Importer .BMMPA** — les imports arrivent désactivés et n’enregistrent jamais de tâches OS tout seuls. Dans **Réglages → Planificateur**.`,
+        },
+      },
+      {
+        id: 'bmmscript', view: 'settings', docsPath: 'features/bmmscript/',
+        title: { en: 'BMMScript — automations as code', fr: 'BMMScript — les automatisations en code' },
+        summary: {
+          en: 'Write a task as text instead of bricks — and open it back up as bricks.',
+          fr: 'Écrire une tâche en texte plutôt qu’en briques — et la rouvrir en briques.',
+        },
+        keywords: 'bmmscript code advanced language script compile task automation avancé langage compiler texte',
+        body: {
+          en: `The scheduler has a second way to write the same thing: **BMMScript**, the automation as text.
+
+It is not a separate language with its own actions. It **compiles to the bricks** — the text becomes exactly the steps the brick editor produces, and the same runner executes them.
+
+\`\`\`
+task "Nightly tidy" {
+    every day at 03:00
+    allow script
+
+    do mods.scan()
+    if online and not modEnabled(id: "keep-me") {
+        do notify(message: "Scanning…")
+        wait 30s
+    }
+    for item in enabledMods {
+        try { do mod.disable(id: "{item.id}") }
+        catch { do notify(message: "Could not disable {item.name}") }
+    }
+}
+\`\`\`
+
+:::tip[Why compiled and not interpreted]
+Three things follow from it, and they are the whole reason. **It is never behind the bricks** — an action is \`do <name>(…)\` and the language holds no list of names, so an action added tomorrow is writable today. **You can switch modes** — code opens as bricks, bricks print as code. **It cannot do more than a brick can** — permissions, variables and loop caps are the runner's, unchanged.
+:::
+
+It deliberately has no expressions, no functions of your own and no recursion. Arithmetic stays where it already is, in the \`math.set\` action.
+
+You do not have to choose between the two. The action **Run BMMScript (advanced)** takes a snippet with no \`task\` wrapper and runs it inside the surrounding task — same variables, same permissions. The editor compiles it as you type and names the line of the first error.
+
+One thing an round trip does not keep: **comments and blank lines**. They are yours, not the task's, and the brick tree has nowhere to put them.
+
+The full reference — every trigger, statement and condition — is on the docs site.`,
+          fr: `Le planificateur offre une seconde façon d’écrire la même chose : **BMMScript**, l’automatisation en texte.
+
+Ce n’est pas un langage à part avec ses propres actions. Il **se compile vers les briques** — le texte devient exactement les étapes que produit l’éditeur de briques, et c’est le même exécuteur qui les fait tourner.
+
+\`\`\`
+task "Ménage nocturne" {
+    every day at 03:00
+    allow script
+
+    do mods.scan()
+    if online and not modEnabled(id: "garde-moi") {
+        do notify(message: "Analyse…")
+        wait 30s
+    }
+    for item in enabledMods {
+        try { do mod.disable(id: "{item.id}") }
+        catch { do notify(message: "Impossible de désactiver {item.name}") }
+    }
+}
+\`\`\`
+
+:::tip[Pourquoi compilé et non interprété]
+Trois conséquences, et c’est toute la raison. **Il n’est jamais en retard sur les briques** — une action s’écrit \`do <nom>(…)\` et le langage ne contient aucune liste de noms, donc une action ajoutée demain s’écrit déjà. **Vous pouvez changer de mode** — le code s’ouvre en briques, les briques s’impriment en code. **Il ne peut pas faire plus qu’une brique** — permissions, variables et limites de boucle sont celles de l’exécuteur, inchangées.
+:::
+
+Il n’a volontairement ni expressions, ni fonctions à vous, ni récursion. L’arithmétique reste où elle est déjà, dans l’action \`math.set\`.
+
+Vous n’avez pas à choisir entre les deux modes. L’action **Exécuter du BMMScript (avancé)** prend un extrait sans enveloppe \`task\` et l’exécute dans la tâche qui l’entoure — mêmes variables, mêmes permissions. L’éditeur le compile pendant que vous tapez et nomme la ligne de la première erreur.
+
+Une chose que l’aller-retour ne garde pas : **les commentaires et les lignes vides**. Ils sont à vous, pas à la tâche, et l’arbre de briques n’a nulle part où les mettre.
+
+La référence complète — chaque déclencheur, instruction et condition — est sur le site de documentation.`,
         },
       },
       {

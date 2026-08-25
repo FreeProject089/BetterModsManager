@@ -603,7 +603,7 @@ async function runSteps(steps: Step[], task: Task, ctx: RunCtx, depth = 0): Prom
             renderRunningPanel();
         }
         if (step.kind === 'action') {
-            await runAction(step.action, task, ctx);
+            await runAction(step.action, task, ctx, depth);
         } else if (step.kind === 'delay') {
             await interruptibleSleep(Math.max(0, step.seconds) * 1000, state);
         } else if (step.kind === 'waitFor') {
@@ -1037,7 +1037,7 @@ function _captureOutput(p: Record<string, any>, out: any, ctx: RunCtx): void {
 }
 
 
-async function runAction(action: Action, task: Task, ctx: RunCtx): Promise<void> {
+async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Promise<void> {
     // Substituted once, here, so every action sees resolved parameters without each case
     // having to remember to ask. `action.params` itself is left alone — it is the saved
     // task, and rewriting it would bake one run's values into the stored definition.
@@ -1098,6 +1098,32 @@ async function runAction(action: Action, task: Task, ctx: RunCtx): Promise<void>
                 program: p.program, args, workingDir: p.workingDir || null, allow: true,
             });
             _captureOutput(p, out, ctx);
+            break;
+        }
+        case 'code.run': {
+            // Compiled at RUN time, not stored as steps. The source is the truth: storing the
+            // compiled tree would mean a snippet silently kept running an old compilation
+            // after somebody edited the text, which is the worst kind of stale.
+            const src = String(p.code || '').trim();
+            if (!src) break;
+            const r: any = await invoke('bmms_compile_steps', { source: src });
+            if (!r?.ok) {
+                const e = (r?.errors || [])[0];
+                // The position, in the message. A task that fails at 03:00 leaves only this
+                // line in the log, and "syntax error" with no line is not something anybody
+                // can act on the next morning.
+                throw new Error(e
+                    ? `${t('sched.bmms.line') || 'Line'} ${e.line}:${e.col} — ${e.message}`
+                    : (t('sched.bmms.badcode') || 'This BMMScript did not compile.'));
+            }
+            // INSIDE this task: same ctx, same `task`, so every permission check in runAction
+            // reads the caller's permissions. Same decision as `call` — permissions attached
+            // to a snippet would be granted in one place and spent in another.
+            // Bounded like `call`: a snippet whose code.run runs another snippet is
+            // legitimate once and a stack overflow forever, and only the nesting tells them
+            // apart. runSteps already carries `depth` for the loop guards; this rides on it.
+            if (depth >= 20) throw new Error(t('sched.bmms.deep') || 'BMMScript is nested too deeply — a snippet is probably running itself.');
+            await runSteps((r.steps || []) as Step[], task, ctx, depth + 1);
             break;
         }
         case 'catalog.create': {
@@ -3883,6 +3909,7 @@ const ACTION_TYPES: { v: string; label: string; needs?: string; group: string }[
     { v: 'custom.script', label: 'Run a script', needs: 'script', group: 'system' },
     { v: 'folder.create', label: 'Create a folder (BMM data)', needs: 'bmmfolder', group: 'system' },
     { v: 'catalog.create', label: 'Publish a catalogue', needs: 'catCreate', group: 'system' },
+    { v: 'code.run', label: 'Run BMMScript (advanced)', needs: 'bmms', group: 'logic' },
     { v: 'repo.syncNow', label: 'Sync a server repo (unattended)', needs: 'reposync', group: 'repo' },
     { v: 'deeplink', label: 'Run bmm:// deeplink', needs: 'url', group: 'system' },
     { v: 'list.set', label: 'List — set it (JSON array or a, b, c)', needs: 'listSet', group: 'logic' },
@@ -4389,6 +4416,46 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
     else if (needs === 'recorder') host.innerHTML = `<label class="sched-tg"><input type="checkbox" class="sched-rc-on" ${params.on ? 'checked' : ''}> ${t('sched.rcOn') || 'Record'}</label><label class="sched-tg"><input type="checkbox" class="sched-rc-full" ${params.full ? 'checked' : ''}> ${t('sched.rcFull') || 'Full'}</label><label class="sched-tg"><input type="checkbox" class="sched-rc-rust" ${params.rust ? 'checked' : ''}> ${t('sched.rcRust') || 'Rust log'}</label><label class="sched-tg"><input type="checkbox" class="sched-rc-js" ${params.js ? 'checked' : ''}> ${t('sched.rcJs') || 'JS log'}</label>`;
     else if (needs === 'replayImport') host.innerHTML = `<input class="input sched-ri-path" placeholder="${escAttr(t('sched.replayPathPh') || 'local .bmmreplay path')}" value="${escAttr(params.path || '')}" style="min-width:220px"><input class="input sched-ri-url" placeholder="${escAttr(t('sched.replayUrlPh') || 'or URL')}" value="${escAttr(params.url || '')}" style="max-width:200px;margin-left:6px">`;
     else if (needs === 'exportAuto') host.innerHTML = `<input class="input sched-ea-dir" placeholder="${escAttr(t('sched.backupDirPh') || 'backup folder')}" value="${escAttr(params.dir || '')}" style="min-width:200px"><button type="button" class="btn btn-sm btn-secondary sched-browse-dir" style="margin-left:6px">${t('sched.choose') || 'Choose…'}</button><input class="input sched-ea-name" placeholder="bmm-backup-{date}" value="${escAttr(params.name || '')}" style="max-width:180px;margin-left:6px"><select class="input sched-ea-inc" style="max-width:170px;margin-left:6px">${['paren', 'underscore', 'timestamp', 'overwrite'].map(o => `<option value="${o}"${(params.increment || 'paren') === o ? ' selected' : ''}>${escHtml(t('sched.inc_' + o) || o)}</option>`).join('')}</select>`;
+    else if (needs === 'bmms') {
+        host.innerHTML = `
+        <div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${t('sched.bmms.codeLbl') || 'BMMScript'}</label>
+            <textarea class="input sched-bmms-code sched-code" rows="9" spellcheck="false"
+                placeholder="${escAttr(t('sched.bmms.codePh') || 'do mods.scan()\nif online {\n    do notify(message: "hello")\n}')}">${escHtml(params.code || '')}</textarea>
+            <!-- Compiled as you stop typing, so a syntax error is found here rather than at
+                 whatever hour the task runs. Filled in by the checker below. -->
+            <span class="sched-cmd-hint sched-bmms-status"></span>
+            <span class="sched-cmd-hint">${t('sched.bmms.hint') || 'The same steps as the bricks, written as text. It runs inside this task — same permissions, same variables.'}</span>
+        </div>`;
+        const ta = host.querySelector('.sched-bmms-code') as HTMLTextAreaElement | null;
+        const status = host.querySelector('.sched-bmms-status') as HTMLElement | null;
+        // Debounced: the compiler is a Tauri round trip and running it per keystroke would
+        // queue one call per character on a fast typist.
+        let timer: any = null;
+        const check = async () => {
+            if (!status || !ta) return;
+            const src = ta.value.trim();
+            if (!src) { status.textContent = ''; status.classList.remove('sched-engine-missing'); return; }
+            try {
+                const r: any = await invoke('bmms_compile_steps', { source: src });
+                if (!status.isConnected) return;   // panel changed while we were away
+                if (r?.ok) {
+                    status.classList.remove('sched-engine-missing');
+                    status.textContent = (t('sched.bmms.ok') || '{n} step(s)').replace('{n}', String((r.steps || []).length));
+                } else {
+                    const e = (r?.errors || [])[0];
+                    status.classList.add('sched-engine-missing');
+                    status.textContent = e ? `${t('sched.bmms.line') || 'Line'} ${e.line}: ${e.message}` : (t('common.error') || 'Error');
+                }
+            } catch { /* the checker is a courtesy; its failure must not block editing */ }
+        };
+        ta?.addEventListener('input', () => {
+            params.code = ta.value;
+            clearTimeout(timer);
+            timer = setTimeout(() => { void check(); }, 300);
+        });
+        void check();
+    }
     else if (needs === 'catCreate') host.innerHTML = `
         <div class="sched-field"><label class="sched-flabel">${t('sched.catKindLbl') || 'What to publish'}</label>
             <select class="input sched-cat-kind" style="min-width:170px">${

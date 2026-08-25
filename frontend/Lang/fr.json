@@ -8128,5 +8128,16 @@
   "sched.catHint": "Écrit catalog.json dans le dossier, ainsi que les fichiers pointés quand le type en a. Les thèmes sont intégrés à l’index et n’ont pas de fichiers séparés.",
   "sched.catNeedDir": "Cette étape a besoin d’un dossier de destination.",
   "sched.catDone": "{n} entrée(s) publiée(s).",
-  "sched.importedIncl": "{n} élément(s) nécessaire(s) également restauré(s)"
+  "sched.importedIncl": "{n} élément(s) nécessaire(s) également restauré(s)",
+  "sched.bmms.codeLbl": "BMMScript",
+  "sched.bmms.codePh": "do mods.scan()",
+  "sched.bmms.hint": "Les mêmes étapes que les briques, écrites en texte. Cela s’exécute dans cette tâche — mêmes permissions, mêmes variables.",
+  "sched.bmms.ok": "{n} étape(s)",
+  "sched.bmms.line": "Ligne",
+  "sched.bmms.badcode": "Ce BMMScript n’a pas compilé.",
+  "sched.bmms.deep": "BMMScript est imbriqué trop profondément — un extrait s’exécute probablement lui-même.",
+  "sched.act.catalog.create": "Publier un catalogue",
+  "sched.act.code.run": "Exécuter du BMMScript (avancé)",
+  "sched.actd.catalog.create": "Écrit un catalog.json dans un dossier, avec les fichiers qu’il référence. Tutoriels et plugins sont liés ; les thèmes sont intégrés.",
+  "sched.actd.code.run": "Exécute un extrait BMMScript dans cette tâche — mêmes variables, mêmes permissions."
 }
