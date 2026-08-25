@@ -43,9 +43,14 @@ if (entries.length !== declared) {
 
 const json = JSON.stringify({ actions: entries }, null, 2) + '\n';
 
+// Content, not bytes. Git checks these files out with CRLF on Windows while the generator
+// writes LF, so a byte comparison reports "stale" on a clean tree with nothing wrong — and a
+// gate that cries wolf on checkout is one people learn to re-run until it agrees.
+const sameText = (a, b) => a.replace(/\r\n/g, '\n') === b.replace(/\r\n/g, '\n');
+
 if (process.argv.includes('--check')) {
   const cur = fs.existsSync(OUT) ? fs.readFileSync(OUT, 'utf8') : '';
-  if (cur !== json) {
+  if (!sameText(cur, json)) {
     console.error('✗ src-tauri/src/mcp/actions.gen.json is stale — run: node scripts/gen-mcp-actions.mjs');
     process.exit(1);
   }

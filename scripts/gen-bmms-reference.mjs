@@ -353,11 +353,16 @@ const vocabulary = JSON.stringify({
 
 const want = { [OUT_EN]: page('en'), [OUT_FR]: page('fr'), [OUT_APP]: appModule, [OUT_VOCAB]: vocabulary };
 
+// Content, not bytes. Git checks these files out with CRLF on Windows while the generator
+// writes LF, so a byte comparison reports "stale" on a clean tree with nothing wrong — and a
+// gate that cries wolf on checkout is one people learn to re-run until it agrees.
+const sameText = (a, b) => a.replace(/\r\n/g, '\n') === b.replace(/\r\n/g, '\n');
+
 if (process.argv.includes('--check')) {
   let bad = 0;
   for (const [file, text] of Object.entries(want)) {
     const cur = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
-    if (cur !== text) { console.error(`✗ ${file} is stale`); bad++; }
+    if (!sameText(cur, text)) { console.error(`✗ ${file} is stale`); bad++; }
   }
   if (bad) {
     console.error('\n  The reference lists every action, condition and value BMM has. Regenerate:');
