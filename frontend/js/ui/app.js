@@ -23,6 +23,7 @@ import { initTitlebar } from './titlebar.js';
 import { initSettings, runAutoBenchmarks } from '../features/settings/settings.js';
 import { initModals } from './modals.js';
 import { wireTipDismissal, restoreAllTips } from './dismissible-tip.js';
+import { registerBmmsLanguage } from '../features/settings/bmms-prism.js';
 import { initNavbarVersion, initUpdateNotes, initAutoUpdate, checkPtbMode, checkAutoEula, checkAutoPrivacy, checkShowReleaseNotes, checkLangSelect } from './update-notes.js';
 // New Modularized Imports
 import { initModlist } from '../features/mods/modlist.js';
@@ -1062,6 +1063,11 @@ async function main() {
         openTutorialHub();
     });
     applyTranslations();
+    // BMMScript's colours, registered once for the whole app rather than by whichever
+    // screen happens to open first: the scheduler's two code boxes need it, and so do
+    // the 14 ```bmms fences in the bundled documentation, which nobody would think to
+    // blame on the scheduler not having been opened yet.
+    registerBmmsLanguage();
     // Per-tip dismissal. The Settings switch is all-or-nothing, which is the wrong
     // granularity for what people actually want: THIS box gone, the tips on screens they
     // have not learnt yet kept. Every .bmm-tip[data-tip-id] gets its own × here.

@@ -20,6 +20,8 @@ import { parseHeaderLines, readJsonPath, statusIsFailure } from './http-action.j
 import { inspectBmmpa } from './bmmpa-inspect.js';
 import { parsePresetFeed, looksLikePresetFeed, readPresetCatalogs, writePresetCatalogs } from './preset-catalog.js';
 import { mountCompletions } from './bmms-complete.js';
+import { attachHighlight } from '../../ui/code-editor.js';
+import { registerBmmsLanguage } from './bmms-prism.js';
 import { raiseAboveAll } from '../../ui/layer.js';
 import { safeFileStem, planTaskCatalog } from './task-catalog.js';
 import {
@@ -3619,6 +3621,9 @@ function wireCodeMode(modal: HTMLElement): void {
                     // here would invite editing it in two places.
                     ta.value = stripTaskWrapper(ta.value);
                 } catch { ta.value = ''; }
+                // Assigning .value fires no input event, so nothing would repaint and the
+                // mirror would keep showing the previous task.
+                hl?.refresh();
                 say((t('sched.bmms.ok') || '{n} step(s)').replace('{n}', String(stepCount(_draft.steps))), false);
                 show('code');
                 return;
@@ -3636,6 +3641,10 @@ function wireCodeMode(modal: HTMLElement): void {
     // there is a mistake.
     let timer: any = null;
     mountCompletions(ta, codeVocabulary());
+    // Colour, through the same mirror every other code box in BMM uses. It decides
+    // nothing — the live compile below is the thing that judges the code.
+    registerBmmsLanguage();
+    const hl = attachHighlight(ta, 'bmms');
 
     ta.addEventListener('input', () => {
         clearTimeout(timer);
@@ -4804,6 +4813,10 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
                 }
             } catch { /* the checker is a courtesy; its failure must not block editing */ }
         };
+        // Same language, smaller window — so the same colours. attachHighlight is
+        // idempotent and degrades to a plain textarea when Prism is missing.
+        registerBmmsLanguage();
+        if (ta) attachHighlight(ta, 'bmms');
         ta?.addEventListener('input', () => {
             params.code = ta.value;
             clearTimeout(timer);
