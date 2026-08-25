@@ -11,7 +11,10 @@
 //     for one kind only, and it looks like the task misbehaving rather than a missing case.
 //
 // Container kinds are derived, not listed: a union member carrying `steps:`, `then:`,
-// `onError:` or `cases:` holds other steps and therefore has to be walked. So adding a kind
+// `onError:`, `cases:` or `branches:` holds other steps and therefore has to be walked.
+// `branches` joined that list with the parallel kind, and it is worth saying why the
+// derivation still needs maintaining: the field NAME is the signal, so a container that
+// invents a new one stays invisible here until somebody adds it. So adding a kind
 // with a body wires itself into this check without anyone remembering to.
 //
 // Run as part of `npm run ci`.
@@ -34,7 +37,7 @@ const kinds = [];
 for (const line of stepDecl[1].split('\n')) {
     const m = /kind:\s*'([^']+)'/.exec(line);
     if (!m) continue;
-    kinds.push({ kind: m[1], container: /\b(steps|then|onError|cases)\s*:/.test(line) });
+    kinds.push({ kind: m[1], container: /\b(steps|then|onError|cases|branches)\s*:/.test(line) });
 }
 if (kinds.length < 5) {
     console.error(`✗ only ${kinds.length} kinds found — the parser is broken, not the code`);

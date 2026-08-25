@@ -8142,5 +8142,15 @@
   "sched.actd.code.run": "Exécute un extrait BMMScript dans cette tâche — mêmes variables, mêmes permissions.",
   "sched.modeBricks": "Blocs",
   "sched.modeCode": "Code",
-  "sched.modeCodeTip": "Écrire cette tâche en texte. Tout ce que vous y construisez se rouvre en blocs."
+  "sched.modeCodeTip": "Écrire cette tâche en texte. Tout ce que vous y construisez se rouvre en blocs.",
+  "sched.addParallel": "En même temps",
+  "sched.legendPar": "Exécuter plusieurs branches en même temps",
+  "sched.parallel": "EN MÊME TEMPS",
+  "sched.parHint": "les branches partagent les variables de la tâche — utilisez-les pour du travail indépendant",
+  "sched.par.all": "arrêter si l’une échoue",
+  "sched.par.settle": "les laisser toutes finir",
+  "sched.par.branch": "BRANCHE {n}",
+  "sched.par.addBranch": "branche",
+  "sched.par.delBranch": "Retirer cette branche",
+  "sched.par.some": "{n} branche(s) parallèle(s) sur {m} ont échoué"
 }

@@ -92,6 +92,16 @@ enum Tok {
     /// sliced from the SOURCE and handed to the runner's own evaluator. This exists only so
     /// the lexer can walk past them to find where the line ends.
     Op(char),
+    /// A character this language has no meaning for.
+    ///
+    /// NOT an error at lex time, and that is the point: the lexer runs over the WHOLE file
+    /// before the parser slices a `script bash { … }` body out of it by offset, so it has to
+    /// walk past `*.zip`, `$f` and `;` without refusing. It became a token after exactly
+    /// that — a documented bash example would not compile because of the dot in `*.zip`,
+    /// inside a block whose contents this language never reads.
+    ///
+    /// The parser still refuses one anywhere it matters, with the same message as before.
+    Unknown(char),
     Eof,
 }
 
@@ -157,39 +167,39 @@ fn lex(src: &str) -> PResult<Vec<Token>> {
 
         match c {
             '{' => {
-                push!(Tok::LBrace, sl, sc);
                 i += 1;
                 col += 1;
+                push!(Tok::LBrace, sl, sc);
             }
             '}' => {
-                push!(Tok::RBrace, sl, sc);
                 i += 1;
                 col += 1;
+                push!(Tok::RBrace, sl, sc);
             }
             '(' => {
-                push!(Tok::LParen, sl, sc);
                 i += 1;
                 col += 1;
+                push!(Tok::LParen, sl, sc);
             }
             ')' => {
-                push!(Tok::RParen, sl, sc);
                 i += 1;
                 col += 1;
+                push!(Tok::RParen, sl, sc);
             }
             ',' => {
-                push!(Tok::Comma, sl, sc);
                 i += 1;
                 col += 1;
+                push!(Tok::Comma, sl, sc);
             }
             ':' => {
-                push!(Tok::Colon, sl, sc);
                 i += 1;
                 col += 1;
+                push!(Tok::Colon, sl, sc);
             }
             '+' | '*' | '/' | '%' | '^' | '-' => {
-                push!(Tok::Op(c), sl, sc);
                 i += 1;
                 col += 1;
+                push!(Tok::Op(c), sl, sc);
             }
             '=' | '!' | '<' | '>' => {
                 // Two-character forms first: `>` would otherwise swallow the `=` of `>=`.
@@ -332,11 +342,9 @@ fn lex(src: &str) -> PResult<Vec<Token>> {
                 push!(Tok::Word(chars[start..i].iter().collect()), sl, sc);
             }
             other => {
-                return Err(Diagnostic {
-                    line: sl,
-                    col: sc,
-                    message: format!("`{}` does not mean anything here.", other),
-                });
+                i += 1;
+                col += 1;
+                push!(Tok::Unknown(other), sl, sc);
             }
         }
     }
@@ -636,10 +644,82 @@ impl P {
         Ok(text)
     }
 
+    /// The text between a matching pair of braces, verbatim.
+    ///
+    /// For `script <engine> { … }`, whose body is somebody else's language and must not be
+    /// touched. Brace depth rather than the first `}`, so a shell function or a JSON literal
+    /// inside the script does not end it early. Nothing is unescaped: what is between the
+    /// braces is what reaches the interpreter.
+    fn raw_block(&mut self) -> PResult<String> {
+        let open = self.expect(Tok::LBrace, "an opening brace")?;
+        let from = open.end;
+        let mut depth = 1usize;
+        loop {
+            match self.peek().tok {
+                Tok::Eof => {
+                    let got = self.peek().clone();
+                    return Err(Diagnostic::at(
+                        &got,
+                        "This script block is never closed \u{2014} add the matching `}`.",
+                    ));
+                }
+                Tok::LBrace => depth += 1,
+                Tok::RBrace => {
+                    depth -= 1;
+                    if depth == 0 {
+                        let close = self.next();
+                        let text: String = self.src[from..close.start].iter().collect();
+                        // DEDENTED by the common leading whitespace, then re-indented when
+                        // printed. Keeping the raw indentation looked safer and was not: the
+                        // printer adds the block's own indent on top, so a round trip grew the
+                        // body by four spaces every time.
+                        //
+                        // The COMMON prefix only, so the RELATIVE shape is untouched — which
+                        // is the part Python actually cares about.
+                        let body = text.trim_matches('\n').trim_end();
+                        let indent = body
+                            .lines()
+                            .filter(|l| !l.trim().is_empty())
+                            .map(|l| l.len() - l.trim_start().len())
+                            .min()
+                            .unwrap_or(0);
+                        let dedented: Vec<String> = body
+                            .lines()
+                            .map(|l| {
+                                if l.len() >= indent {
+                                    l[indent..].to_string()
+                                } else {
+                                    l.trim_start().to_string()
+                                }
+                            })
+                            .collect();
+                        return Ok(dedented
+                            .join(
+                                "
+",
+                            )
+                            .trim_end()
+                            .to_string());
+                    }
+                }
+                _ => {}
+            }
+            self.next();
+        }
+    }
+
     fn stmt(&mut self) -> PResult<Value> {
         let head = self.peek().clone();
         let w = match &head.tok {
             Tok::Word(w) => w.to_lowercase(),
+            // Named with the character: "expected a statement" for a stray `$` sends
+            // somebody looking at the wrong thing.
+            Tok::Unknown(c) => {
+                return Err(Diagnostic::at(
+                    &head,
+                    format!("`{}` does not mean anything here.", c),
+                ))
+            }
             _ => return Err(Diagnostic::at(&head, "Expected a statement here.")),
         };
 
@@ -822,12 +902,44 @@ impl P {
                         format!("`{}` is not a usable variable name — letters, digits and _ only, starting with a letter.", name),
                     ));
                 }
+                // An OPTIONAL declared type: `set n: number = 0`. Checked here, where the
+                // answer is already known from the shape of the value — the runner has no
+                // types at run time, so this is the only place the mistake can be caught at
+                // all. It also documents the variable for the next reader, which is most of
+                // what an annotation is for in a script this size.
+                let declared = if self.peek().tok == Tok::Colon {
+                    self.next();
+                    let tytok = self.peek().clone();
+                    let ty = self.word("a type")?;
+                    match ty.as_str() {
+                        "number" | "text" => Some((ty, tytok)),
+                        other => {
+                            return Err(Diagnostic::at(
+                                &tytok,
+                                format!(
+                                    "`{}` is not a type. There are two: number and text.",
+                                    other
+                                ),
+                            ))
+                        }
+                    }
+                } else {
+                    None
+                };
                 self.expect(Tok::Assign, "an `=` after the variable name")?;
 
                 // TEXT if the value is a quoted string; a NUMBER otherwise. That is the
                 // whole rule, and it is the one a reader guesses: `set n = 0` counts,
                 // `set s = "0"` is the character zero.
                 if let Tok::Str(text) = self.peek().tok.clone() {
+                    if let Some((ty, tok)) = &declared {
+                        if ty == "number" {
+                            return Err(Diagnostic::at(
+                                tok,
+                                "This is declared `number`, but the value is text in quotes.",
+                            ));
+                        }
+                    }
                     self.next();
                     let mut params = json!({ "name": name, "value": text });
                     if shared {
@@ -844,9 +956,77 @@ impl P {
                         "A shared variable holds text — put the value in quotes.",
                     ));
                 }
+                if let Some((ty, tok)) = &declared {
+                    if ty == "text" {
+                        return Err(Diagnostic::at(
+                            tok,
+                            "This is declared `text`, so put the value in quotes.",
+                        ));
+                    }
+                }
                 let expr = self.raw_expr()?;
                 Ok(
                     json!({ "kind": "action", "action": { "type": "math.set", "params": { "target": name, "expr": expr } } }),
+                )
+            }
+            "parallel" => {
+                self.next();
+                // `settle` reads as an option on the statement rather than a second keyword:
+                // `parallel settle { … }`.
+                let mode = if self.eat_word("settle") {
+                    "settle"
+                } else {
+                    "all"
+                };
+                self.expect(Tok::LBrace, "an opening brace")?;
+                let mut branches: Vec<Value> = Vec::new();
+                while self.at_word("branch") {
+                    self.next();
+                    branches.push(Value::Array(self.block()?));
+                }
+                self.expect(Tok::RBrace, "a closing brace")?;
+                if branches.len() < 2 {
+                    // One branch is a sequence with extra words, and zero is a step that does
+                    // nothing. Both are almost certainly a mistake, and both look fine.
+                    let got = self.peek().clone();
+                    return Err(Diagnostic::at(
+                        &got,
+                        "A `parallel` needs at least two `branch { … }` blocks.",
+                    ));
+                }
+                Ok(json!({ "kind": "parallel", "mode": mode, "branches": branches }))
+            }
+            "spawn" | "run" => {
+                // Two words because they are genuinely different: `run` waits for the task and
+                // records whether it worked, `spawn` starts it and moves on. Collapsing them
+                // into one with a flag would hide the only thing worth choosing between.
+                let waits = w == "run";
+                self.next();
+                let id = self.string("the task name or id")?;
+                let ty = if waits { "task.run" } else { "task.spawn" };
+                Ok(json!({ "kind": "action", "action": { "type": ty, "params": { "id": id } } }))
+            }
+            "script" => {
+                self.next();
+                let engtok = self.peek().clone();
+                let engine = self.word("a language")?;
+                const ENGINES: [&str; 6] = ["powershell", "cmd", "bash", "python", "node", "rust"];
+                if !ENGINES.contains(&engine.as_str()) {
+                    return Err(Diagnostic::at(
+                        &engtok,
+                        format!(
+                            "`{}` is not a script language. They are: {}.",
+                            engine,
+                            ENGINES.join(", ")
+                        ),
+                    ));
+                }
+                let code = self.raw_block()?;
+                if code.trim().is_empty() {
+                    return Err(Diagnostic::at(&engtok, "This script block is empty."));
+                }
+                Ok(
+                    json!({ "kind": "action", "action": { "type": "custom.script", "params": { "engine": engine, "code": code } } }),
                 )
             }
             "clear" => {
@@ -1364,6 +1544,47 @@ fn steps_str(steps: &[Value], depth: usize, out: &mut String) {
                     ));
                     continue;
                 }
+                // The two task actions print as their own words.
+                if (ty == "task.run" || ty == "task.spawn") && !ps("id").is_empty() {
+                    let verb = if ty == "task.run" { "run" } else { "spawn" };
+                    out.push_str(&format!(
+                        "{}{} {}
+",
+                        pad,
+                        verb,
+                        quote(&ps("id"))
+                    ));
+                    continue;
+                }
+                // A script prints as a BLOCK, body as written. Printing it as an action would
+                // mean escaping every quote and newline in somebody else's language, and the
+                // round trip would turn a readable script into one line of backslashes.
+                if ty == "custom.script" && !ps("code").is_empty() {
+                    let eng = if ps("engine").is_empty() {
+                        "powershell".to_string()
+                    } else {
+                        ps("engine")
+                    };
+                    out.push_str(&format!(
+                        "{}script {} {{
+",
+                        pad, eng
+                    ));
+                    for line in ps("code").lines() {
+                        out.push_str(&format!(
+                            "{}{}
+",
+                            ind(depth + 1),
+                            line
+                        ));
+                    }
+                    out.push_str(&format!(
+                        "{}}}
+",
+                        pad
+                    ));
+                    continue;
+                }
                 if ty == "var.clear" && !ps("name").is_empty() {
                     out.push_str(&format!(
                         "{}clear {}
@@ -1531,6 +1752,38 @@ fn steps_str(steps: &[Value], depth: usize, out: &mut String) {
                     out.push_str(&format!("{}}}\n", ind(depth + 1)));
                 }
                 out.push_str(&format!("{}}}\n", pad));
+            }
+            "parallel" => {
+                let settle = st.get("mode").and_then(|x| x.as_str()) == Some("settle");
+                out.push_str(&format!(
+                    "{}parallel{} {{
+",
+                    pad,
+                    if settle { " settle" } else { "" }
+                ));
+                for b in st
+                    .get("branches")
+                    .and_then(|x| x.as_array())
+                    .cloned()
+                    .unwrap_or_default()
+                {
+                    out.push_str(&format!(
+                        "{}branch {{
+",
+                        ind(depth + 1)
+                    ));
+                    steps_str(b.as_array().map(|v| &v[..]).unwrap_or(&[]), depth + 2, out);
+                    out.push_str(&format!(
+                        "{}}}
+",
+                        ind(depth + 1)
+                    ));
+                }
+                out.push_str(&format!(
+                    "{}}}
+",
+                    pad
+                ));
             }
             "call" => out.push_str(&format!(
                 "{}call {}\n",
@@ -1857,11 +2110,9 @@ mod tests {
 
     #[test]
     fn every_example_in_the_documentation_compiles() {
-        // Lifted verbatim from BMM Docs/docs/features/bmmscript{,.fr}.md. A reference full
-        // of examples that do not parse is worse than no reference, and prose drifts from
-        // code silently — so the examples are checked here, on every run. It has already
-        // earned that: the first draft used … as a "your steps here" placeholder, which is
-        // not syntax. The examples are copy-pasteable now because this test insisted.
+        // Lifted verbatim from BMM Docs/docs/features/bmmscript{,.fr}.md, so prose cannot
+        // drift from the language. It has earned that twice: the first draft used … as a
+        // placeholder, which is not syntax, and eight examples did not parse.
         let cases: &[(&str, &str)] = &[
             (
                 "bmmscript.md 1",
@@ -1930,13 +2181,50 @@ repeat until fileExists(path: "x") { wait 10s }
             ),
             (
                 "bmmscript.md 7",
+                r#"parallel {
+    branch { do repo.sync() }
+    branch { do benchmark.run() }
+}
+
+parallel settle {
+    branch { do mods.checkUpdates() }
+    branch { do mods.scan() }
+}
+"#,
+            ),
+            (
+                "bmmscript.md 8",
+                r#"run "Nightly tidy"       # waits for it, and records whether it worked
+spawn "Long download"    # starts it and carries on
+"#,
+            ),
+            (
+                "bmmscript.md 9",
+                r#"script python {
+    import os
+    print(os.getcwd())
+}
+
+script bash {
+    for f in *.zip; do echo "$f"; done
+}
+"#,
+            ),
+            (
+                "bmmscript.md 10",
+                r#"set count: number = 0
+set label: text = "hello"
+"#,
+            ),
+            (
+                "bmmscript.md 11",
                 r#"wait 30s                                    # also 5m, 2h, or a bare number of seconds
 waitfor fileExists(path: "x") timeout 2h poll 10s
 waitfor online timeout 30s orcontinue       # carry on instead of failing
 "#,
             ),
             (
-                "bmmscript.md 8",
+                "bmmscript.md 12",
                 r#"try {
     do repo.sync()
 } catch {
@@ -1951,12 +2239,12 @@ switch {
 "#,
             ),
             (
-                "bmmscript.md 9",
+                "bmmscript.md 13",
                 r#"call "my shared block"
 "#,
             ),
             (
-                "bmmscript.md 10",
+                "bmmscript.md 14",
                 r#"do mods.scan()
 if online {
     do notify(message: "hello")
@@ -2030,13 +2318,50 @@ repeat until fileExists(path: "x") { wait 10s }
             ),
             (
                 "bmmscript.fr.md 7",
+                r#"parallel {
+    branch { do repo.sync() }
+    branch { do benchmark.run() }
+}
+
+parallel settle {
+    branch { do mods.checkUpdates() }
+    branch { do mods.scan() }
+}
+"#,
+            ),
+            (
+                "bmmscript.fr.md 8",
+                r#"run "Ménage nocturne"    # attend, et note si ça a marché
+spawn "Long téléchargement"  # démarre et continue
+"#,
+            ),
+            (
+                "bmmscript.fr.md 9",
+                r#"script python {
+    import os
+    print(os.getcwd())
+}
+
+script bash {
+    for f in *.zip; do echo "$f"; done
+}
+"#,
+            ),
+            (
+                "bmmscript.fr.md 10",
+                r#"set count: number = 0
+set label: text = "bonjour"
+"#,
+            ),
+            (
+                "bmmscript.fr.md 11",
                 r#"wait 30s                                    # aussi 5m, 2h, ou un nombre nu de secondes
 waitfor fileExists(path: "x") timeout 2h poll 10s
 waitfor online timeout 30s orcontinue       # continuer au lieu d'échouer
 "#,
             ),
             (
-                "bmmscript.fr.md 8",
+                "bmmscript.fr.md 12",
                 r#"try {
     do repo.sync()
 } catch {
@@ -2051,7 +2376,7 @@ switch {
 "#,
             ),
             (
-                "bmmscript.fr.md 9",
+                "bmmscript.fr.md 13",
                 r#"do mods.scan()
 if online {
     do notify(message: "bonjour")
@@ -2062,7 +2387,6 @@ if online {
         for (label, src) in cases {
             let whole = compile_inner(src, false);
             let snippet = compile_inner(src, true);
-            // A fence is either a whole task or a bare snippet; it has to be ONE of them.
             assert!(
                 whole.ok || snippet.ok,
                 "{} does not compile: {:?}",
@@ -2074,145 +2398,6 @@ if online {
                 }
             );
         }
-    }
-
-    #[test]
-    fn variables_and_arithmetic_lower_to_the_actions_that_already_exist() {
-        let t = compile(
-            r#"task "T" {
-                set count = 0
-                set count = count + 1
-                set label = "hello"
-                shared set team = "red"
-                clear count
-            }"#,
-        );
-        let a = |i: usize| t["steps"][i]["action"].clone();
-        // A NUMBER goes to math.set, whose expression evaluator the runner already has.
-        assert_eq!(a(0)["type"], "math.set");
-        assert_eq!(a(0)["params"]["target"], "count");
-        assert_eq!(a(0)["params"]["expr"], "0");
-        assert_eq!(
-            a(1)["params"]["expr"],
-            "count + 1",
-            "the expression is the user's own text"
-        );
-        // A QUOTED string goes to var.set. That is the whole rule for telling them apart.
-        assert_eq!(a(2)["type"], "var.set");
-        assert_eq!(a(2)["params"]["value"], "hello");
-        assert_eq!(a(3)["params"]["scope"], "shared");
-        assert_eq!(a(4)["type"], "var.clear");
-    }
-
-    #[test]
-    fn a_comparison_lowers_to_the_value_condition() {
-        let t = compile(r#"task "T" { if count >= 3 { stop } }"#);
-        let c = &t["steps"][0]["condition"];
-        assert_eq!(
-            c["type"], "value",
-            "a compare row, so the brick editor shows a compare row"
-        );
-        assert_eq!(c["params"]["source"], "count");
-        assert_eq!(c["params"]["op"], ">=");
-        assert_eq!(c["params"]["value"], 3);
-    }
-
-    #[test]
-    fn the_two_character_operators_are_not_split() {
-        // `>` reading the `=` of `>=` as an assignment is the classic lexer bug here.
-        for (src, op) in [
-            (">=", ">="),
-            ("<=", "<="),
-            ("==", "=="),
-            ("!=", "!="),
-            (">", ">"),
-            ("<", "<"),
-        ] {
-            let t = compile(&format!(r#"task "T" {{ if n {} 1 {{ stop }} }}"#, src));
-            assert_eq!(
-                t["steps"][0]["condition"]["params"]["op"], op,
-                "for `{}`",
-                src
-            );
-        }
-    }
-
-    #[test]
-    fn an_expression_stops_at_the_closing_brace() {
-        // `repeat 2 times { set x = 1 }` must not swallow the `}` into the expression.
-        let t = compile(r#"task "T" { repeat 2 times { set x = 1 } }"#);
-        assert_eq!(t["steps"][0]["steps"][0]["action"]["params"]["expr"], "1");
-        assert_eq!(t["steps"][0]["kind"], "repeat");
-    }
-
-    #[test]
-    fn a_hyphen_is_arithmetic_now_not_part_of_a_name() {
-        let t = compile(r#"task "T" { set x = count-1 }"#);
-        assert_eq!(t["steps"][0]["action"]["params"]["expr"], "count-1");
-    }
-
-    #[test]
-    fn an_unusable_variable_name_is_refused_at_compile_time() {
-        // var.set throws on this at RUN time; a name the substituter cannot match back
-        // stores something that looks saved and can never be read.
-        let r = compile_inner(r#"task "T" { set my.var = 1 }"#, false);
-        assert!(!r.ok);
-        assert!(
-            r.errors[0].message.contains("not a usable variable name"),
-            "got: {}",
-            r.errors[0].message
-        );
-    }
-
-    #[test]
-    fn the_new_sugar_round_trips() {
-        let src = r#"task "T" {
-    manual
-
-    set count = 0
-    set label = "hello"
-    shared set team = "red"
-    if count >= 3 and not online {
-        set count = count * 2 + 1
-        clear label
-    }
-}
-"#;
-        let first = compile(src);
-        let printed = bmms_decompile(first.clone());
-        let second = compile(&printed);
-        assert_eq!(
-            first, second,
-            "sugar must survive being printed
---- printed ---
-{}",
-            printed
-        );
-        // And it must print as SUGAR, not as the actions underneath.
-        assert!(
-            printed.contains("set count = 0"),
-            "got:
-{}",
-            printed
-        );
-        assert!(
-            printed.contains("shared set team = \"red\""),
-            "got:
-{}",
-            printed
-        );
-        assert!(
-            printed.contains("count >= 3"),
-            "got:
-{}",
-            printed
-        );
-        assert!(
-            !printed.contains("do math.set"),
-            "printed the action instead of the sugar:
-{}",
-            printed
-        );
     }
 
     #[test]
@@ -2308,5 +2493,329 @@ if online {
         let t = json!({ "name": "T", "trigger": {"type":"manual"}, "allowCustomCommands": true, "steps": [] });
         let s = bmms_decompile(t);
         assert!(s.contains("allow command, deeplink"), "got: {}", s);
+    }
+
+    #[test]
+    fn variables_and_arithmetic_lower_to_the_actions_that_already_exist() {
+        let t = compile(
+            r#"task "T" {
+                set count = 0
+                set count = count + 1
+                set label = "hello"
+                shared set team = "red"
+                clear count
+            }"#,
+        );
+        let a = |i: usize| t["steps"][i]["action"].clone();
+        // A NUMBER goes to math.set, whose expression evaluator the runner already has.
+        assert_eq!(a(0)["type"], "math.set");
+        assert_eq!(a(0)["params"]["target"], "count");
+        assert_eq!(a(0)["params"]["expr"], "0");
+        assert_eq!(
+            a(1)["params"]["expr"],
+            "count + 1",
+            "the expression is the user's own text"
+        );
+        // A QUOTED string goes to var.set. That is the whole rule for telling them apart.
+        assert_eq!(a(2)["type"], "var.set");
+        assert_eq!(a(2)["params"]["value"], "hello");
+        assert_eq!(a(3)["params"]["scope"], "shared");
+        assert_eq!(a(4)["type"], "var.clear");
+    }
+
+    #[test]
+    fn a_comparison_lowers_to_the_value_condition() {
+        let t = compile(r#"task "T" { if count >= 3 { stop } }"#);
+        let c = &t["steps"][0]["condition"];
+        assert_eq!(
+            c["type"], "value",
+            "a compare row, so the brick editor shows a compare row"
+        );
+        assert_eq!(c["params"]["source"], "count");
+        assert_eq!(c["params"]["op"], ">=");
+        assert_eq!(c["params"]["value"], 3);
+    }
+
+    #[test]
+    fn the_two_character_operators_are_not_split() {
+        // `>` reading the `=` of `>=` as an assignment is the classic lexer bug here.
+        for (src, op) in [
+            (">=", ">="),
+            ("<=", "<="),
+            ("==", "=="),
+            ("!=", "!="),
+            (">", ">"),
+            ("<", "<"),
+        ] {
+            let t = compile(&format!(r#"task "T" {{ if n {} 1 {{ stop }} }}"#, src));
+            assert_eq!(
+                t["steps"][0]["condition"]["params"]["op"], op,
+                "for `{}`",
+                src
+            );
+        }
+    }
+
+    #[test]
+    fn an_expression_stops_at_the_closing_brace() {
+        // The right-hand side of a `set` runs to the end of the LINE, but a closing brace on
+        // that line belongs to the block. Without the guard, `repeat 2 times { set x = 1 }`
+        // swallowed the brace into the expression and the loop never closed.
+        let t = compile(r#"task "T" { repeat 2 times { set x = 1 } }"#);
+        assert_eq!(t["steps"][0]["steps"][0]["action"]["params"]["expr"], "1");
+        assert_eq!(t["steps"][0]["kind"], "repeat");
+    }
+
+    #[test]
+    fn a_hyphen_is_arithmetic_now_not_part_of_a_name() {
+        let t = compile(r#"task "T" { set x = count-1 }"#);
+        assert_eq!(t["steps"][0]["action"]["params"]["expr"], "count-1");
+    }
+
+    #[test]
+    fn an_unusable_variable_name_is_refused_at_compile_time() {
+        // var.set throws on this at RUN time; a name the substituter cannot match back
+        // stores something that looks saved and can never be read.
+        let r = compile_inner(r#"task "T" { set my.var = 1 }"#, false);
+        assert!(!r.ok);
+        assert!(
+            r.errors[0].message.contains("not a usable variable name"),
+            "got: {}",
+            r.errors[0].message
+        );
+    }
+
+    #[test]
+    fn the_new_sugar_round_trips() {
+        let src = r#"task "T" {
+    manual
+
+    set count = 0
+    set label = "hello"
+    shared set team = "red"
+    if count >= 3 and not online {
+        set count = count * 2 + 1
+        clear label
+    }
+}
+"#;
+        let first = compile(src);
+        let printed = bmms_decompile(first.clone());
+        let second = compile(&printed);
+        assert_eq!(
+            first, second,
+            "sugar must survive being printed
+--- printed ---
+{}",
+            printed
+        );
+        // And it must print as SUGAR, not as the actions underneath.
+        assert!(
+            printed.contains("set count = 0"),
+            "got:
+{}",
+            printed
+        );
+        assert!(
+            printed.contains("shared set team = \"red\""),
+            "got:
+{}",
+            printed
+        );
+        assert!(
+            printed.contains("count >= 3"),
+            "got:
+{}",
+            printed
+        );
+        assert!(
+            !printed.contains("do math.set"),
+            "printed the action instead of the sugar:
+{}",
+            printed
+        );
+    }
+
+    // ── async, scripts and types ────────────────────────────────────────────
+    //
+    // These live at the END of the module on purpose. The doc-example test above is
+    // REGENERATED by slicing between two function names, and twice now that slice has
+    // silently swallowed every test written between them — the suite stayed green with
+    // fifteen fewer tests, which is the quietest possible failure. Below the last anchor,
+    // nothing can reach them.
+
+    #[test]
+    fn parallel_lowers_to_branches() {
+        let t = compile(
+            r#"task "T" {
+                parallel {
+                    branch { do mods.scan() }
+                    branch { do repo.sync() wait 5s }
+                }
+            }"#,
+        );
+        let st = &t["steps"][0];
+        assert_eq!(st["kind"], "parallel");
+        assert_eq!(st["mode"], "all");
+        assert_eq!(st["branches"].as_array().unwrap().len(), 2);
+        assert_eq!(st["branches"][1].as_array().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn parallel_settle_is_an_option_not_a_second_keyword() {
+        let t = compile(r#"task "T" { parallel settle { branch { do a() } branch { do b() } } }"#);
+        assert_eq!(t["steps"][0]["mode"], "settle");
+    }
+
+    #[test]
+    fn fewer_than_two_branches_is_refused() {
+        // One branch is a sequence with extra words; zero does nothing. Both look fine.
+        let r = compile_inner(r#"task "T" { parallel { branch { do a() } } }"#, false);
+        assert!(!r.ok);
+        assert!(
+            r.errors[0].message.contains("at least two"),
+            "got: {}",
+            r.errors[0].message
+        );
+    }
+
+    #[test]
+    fn spawn_and_run_are_different_actions() {
+        let t = compile(r#"task "T" { run "Nightly" spawn "Long job" }"#);
+        assert_eq!(t["steps"][0]["action"]["type"], "task.run", "run WAITS");
+        assert_eq!(
+            t["steps"][1]["action"]["type"], "task.spawn",
+            "spawn starts and moves on"
+        );
+        assert_eq!(t["steps"][0]["action"]["params"]["id"], "Nightly");
+    }
+
+    #[test]
+    fn a_script_block_keeps_its_body_exactly() {
+        // Why the block form exists at all: as an action parameter this needs every quote and
+        // newline escaped, so nobody would write it and the escape hatch was theoretical.
+        let src = "task \"T\" {
+  script python {
+    import os
+    print(\"hi { }\")
+  }
+}";
+        let t = compile(src);
+        let a = &t["steps"][0]["action"];
+        assert_eq!(a["type"], "custom.script");
+        assert_eq!(a["params"]["engine"], "python");
+        let code = a["params"]["code"].as_str().unwrap();
+        assert!(code.contains("import os"), "got: {:?}", code);
+        assert!(
+            code.contains("print("),
+            "braces inside the body must not end it: {:?}",
+            code
+        );
+    }
+
+    #[test]
+    fn a_script_body_may_contain_anything_the_language_does_not_understand() {
+        // The lexer runs over the WHOLE file before the parser slices this body out by
+        // offset, so it has to walk past `*.zip` and `$f` without refusing. A documented
+        // bash example failed on the dot in `*.zip` until it did.
+        let src = "task \"T\" {
+  script bash {
+    for f in *.zip; do echo \"$f\"; done
+  }
+}";
+        let r = compile_inner(src, false);
+        assert!(r.ok, "{:?}", r.errors);
+        assert!(r.task.unwrap()["steps"][0]["action"]["params"]["code"]
+            .as_str()
+            .unwrap()
+            .contains("*.zip"));
+    }
+
+    #[test]
+    fn an_unknown_script_language_is_refused_with_the_list() {
+        let r = compile_inner(r#"task "T" { script perl { print 1 } }"#, false);
+        assert!(!r.ok);
+        assert!(
+            r.errors[0].message.contains("powershell"),
+            "the message should list them: {}",
+            r.errors[0].message
+        );
+    }
+
+    #[test]
+    fn a_declared_type_catches_the_wrong_shape() {
+        // The runner has no types at run time, so this is the only place it can be caught.
+        let bad1 = compile_inner(r#"task "T" { set n: number = "0" }"#, false);
+        assert!(!bad1.ok);
+        assert!(
+            bad1.errors[0].message.contains("declared `number`"),
+            "got: {}",
+            bad1.errors[0].message
+        );
+        let bad2 = compile_inner(r#"task "T" { set s: text = 5 }"#, false);
+        assert!(!bad2.ok);
+        assert!(
+            bad2.errors[0].message.contains("declared `text`"),
+            "got: {}",
+            bad2.errors[0].message
+        );
+        // The right shapes compile to the same actions as the untyped form. On SEPARATE
+        // lines, because an expression runs to the end of its line.
+        let ok = compile(
+            "task \"T\" {
+  set n: number = 5
+  set s: text = \"x\"
+}",
+        );
+        assert_eq!(ok["steps"][0]["action"]["type"], "math.set");
+        assert_eq!(ok["steps"][1]["action"]["type"], "var.set");
+    }
+
+    #[test]
+    fn the_async_and_script_forms_round_trip() {
+        let src = "task \"T\" {
+    manual
+
+    run \"Setup\"
+    parallel settle {
+        branch {
+            do mods.scan()
+        }
+        branch {
+            script bash {
+                echo \"one\"
+                echo \"two\"
+            }
+        }
+    }
+    spawn \"Cleanup\"
+}
+";
+        let first = compile(src);
+        let printed = bmms_decompile(first.clone());
+        let re = compile_inner(&printed, false);
+        assert!(
+            re.ok,
+            "the PRINTED text does not compile: {:?}
+{}",
+            re.errors, printed
+        );
+        assert_eq!(
+            first,
+            re.task.unwrap(),
+            "must survive printing
+{}",
+            printed
+        );
+        assert!(printed.contains("run \"Setup\""), "{}", printed);
+        assert!(printed.contains("spawn \"Cleanup\""), "{}", printed);
+        assert!(printed.contains("parallel settle {"), "{}", printed);
+        assert!(printed.contains("script bash {"), "{}", printed);
+        assert!(
+            !printed.contains("do custom.script"),
+            "the script printed as an action:
+{}",
+            printed
+        );
     }
 }

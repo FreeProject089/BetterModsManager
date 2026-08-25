@@ -106,6 +106,14 @@ type Step = (
     // aborting the whole task. Without it, one unreachable path or one missing file
     // killed an eight-step automation on step two.
     | { kind: 'try'; steps: Step[]; onError: Step[] }
+    // Run every branch AT THE SAME TIME and carry on when all have settled. For the case a
+    // sequence gets wrong: three independent downloads, or a sync and a benchmark that have
+    // nothing to say to each other, where doing them in order only costs time.
+    //
+    // `mode` is what happens when one branch throws. 'all' aborts the step (the default,
+    // and what a sequence would have done); 'settle' lets the others finish and reports the
+    // failures afterwards — the honest choice for "do these five, tell me which failed".
+    | { kind: 'parallel'; mode?: 'all' | 'settle'; branches: Step[][] }
     // Loop signals, and a clean end for the whole task. These are what make forEach
     // usable in practice: "for each mod, try to verify; on error notify and continue".
     // Run a named block of steps defined once and shared by every task. It carries no `steps`
@@ -665,6 +673,38 @@ async function runSteps(steps: Step[], task: Task, ctx: RunCtx, depth = 0): Prom
                 if (e instanceof FlowSignal) throw e;      // signals pass through
                 await runSteps(step.onError, task, ctx, depth + 1);
             }
+        } else if (step.kind === 'parallel') {
+            // Each branch is its own runSteps, started together. They share `ctx`, which is
+            // deliberate and worth knowing: two branches writing the same variable race and
+            // the last write wins. Branches are for INDEPENDENT work; anything that has to
+            // agree about a value belongs in a sequence.
+            const branches = (step.branches || []).filter((b) => Array.isArray(b) && b.length);
+            if (branches.length) {
+                const runs = branches.map((b) => runSteps(b, task, ctx, depth + 1));
+                if (step.mode === 'settle') {
+                    const results = await Promise.allSettled(runs);
+                    const failed = results.filter((r) => r.status === 'rejected');
+                    // A cancel or a `stop` is not "one branch failed", it is the task ending.
+                    // Swallowing those here would let a cancelled task keep running.
+                    const fatal = failed.find((r) => r.reason instanceof _CancelledTask || r.reason instanceof _StopTask);
+                    if (fatal) throw fatal.reason;
+                    if (failed.length) {
+                        toast((t('sched.par.some') || '{n} of {m} parallel branch(es) failed')
+                            .replace('{n}', String(failed.length)).replace('{m}', String(branches.length)), 'warning');
+                    }
+                } else {
+                    // Promise.all rejects on the FIRST failure, but the others are already
+                    // running and cannot be un-started. Settling them before rethrowing keeps
+                    // the step from returning while work is still in flight — an unhandled
+                    // rejection from a branch nobody awaits is the usual bug here.
+                    try {
+                        await Promise.all(runs);
+                    } catch (e) {
+                        await Promise.allSettled(runs);
+                        throw e;
+                    }
+                }
+            }
         } else if (step.kind === 'call') {
             // A named block of steps, written once and run from anywhere.
             //
@@ -766,6 +806,11 @@ function substituteItem(steps: Step[], item: any): Step[] {
             if (st.steps) copy.steps = walk(st.steps);
             if (st.onError) copy.onError = walk(st.onError);
             return copy;
+        }
+        if (st && st.kind === 'parallel') {
+            // Every branch, or {item.x} silently stops resolving inside a parallel nested in
+            // a for-each — the exact bug this walk exists to prevent, for one kind only.
+            return { ...rep({ ...st, branches: [] }), branches: (st.branches || []).map((b: any) => walk(b)) };
         }
         if (st && st.kind === 'switch') {
             return {
@@ -2256,6 +2301,7 @@ function stepCount(steps: Step[]): number {
         else if (s.kind === 'repeat' || s.kind === 'forEach') n += stepCount(s.steps);
         else if (s.kind === 'switch') n += stepCount(s.default) + (s.cases || []).reduce((acc, c) => acc + stepCount(c.steps), 0);
         else if (s.kind === 'try') n += stepCount(s.steps) + stepCount(s.onError);
+        else if (s.kind === 'parallel') n += (s.branches || []).reduce((acc, b) => acc + stepCount(b), 0);
     }
     return n;
 }
@@ -2355,6 +2401,7 @@ function _stepHasContent(step: Step): boolean {
     if (step.kind === 'repeat' || step.kind === 'forEach') return (step.steps?.length || 0) > 0;
     if (step.kind === 'switch') return ((step.default?.length || 0) + (step.cases || []).reduce((a, c) => a + (c.steps?.length || 0), 0)) > 0;
     if (step.kind === 'try') return ((step.steps?.length || 0) + (step.onError?.length || 0)) > 0;
+    if (step.kind === 'parallel') return (step.branches || []).some((b) => b.length > 0);
     return false;
 }
 /** Delete a step — confirms first if it contains inner steps, snapshots for undo. */
@@ -3601,6 +3648,48 @@ function renderStepsEditor(host: HTMLElement, steps: Step[], depth = 0): void {
             renderStepsEditor(block.querySelector('.sched-fe-body') as HTMLElement, step.steps, depth + 1);
             renderAddRow(block.querySelector('.sched-fe-add') as HTMLElement, step.steps, depth + 1, host, steps, depth);
             _wireFold(block, step);
+        } else if (step.kind === 'parallel') {
+            if (!Array.isArray(step.branches) || !step.branches.length) step.branches = [[], []];
+            const modeSel = ([['all', t('sched.par.all') || 'stop if one fails'], ['settle', t('sched.par.settle') || 'let them all finish']] as [string, string][])
+                .map(([v, l]) => `<option value="${v}"${(step.mode || 'all') === v ? ' selected' : ''}>${escHtml(l)}</option>`).join('');
+            block.innerHTML = `<div class="sched-step-head">${_foldBtn(step)}${_kindTile('parallel')}
+                    <span class="sched-step-tag sched-repeat">${t('sched.parallel') || 'AT THE SAME TIME'}</span>
+                    <select class="input sched-par-mode" style="max-width:190px">${modeSel}</select>
+                    <span style="font-size:11px;color:var(--text-muted);flex:1">${t('sched.parHint') || 'branches share the task\u2019s variables \u2014 use them for work that does not depend on each other'}</span>
+                    <button type="button" class="btn btn-xs sched-par-add-branch">+ ${escHtml(t('sched.par.addBranch') || 'branch')}</button>
+                </div>
+                ${step.branches.map((_b, bi) => `
+                <div class="sched-branch">
+                    <div class="sched-branch-label">
+                        ${escHtml((t('sched.par.branch') || 'BRANCH {n}').replace('{n}', String(bi + 1)))}
+                        ${step.branches.length > 1 ? `<button type="button" class="btn btn-xs btn-ghost sched-par-del" data-b="${bi}" title="${escAttr(t('sched.par.delBranch') || 'Remove this branch')}">\u00d7</button>` : ''}
+                    </div>
+                    <div class="sched-par-body" data-b="${bi}"></div>
+                    <div class="sched-par-add" data-b="${bi}"></div>
+                </div>`).join('')}`;
+            block.querySelector('.sched-par-mode')?.addEventListener('change', (e) => {
+                _snapshot(); step.mode = (e.target as HTMLSelectElement).value as 'all' | 'settle';
+            });
+            block.querySelector('.sched-par-add-branch')?.addEventListener('click', () => {
+                _snapshot(); step.branches.push([]); renderStepsEditor(host, steps, depth);
+            });
+            block.querySelectorAll('.sched-par-del').forEach((b) => b.addEventListener('click', (e) => {
+                _snapshot();
+                // A floor of one: removing the last branch leaves a step that renders as an
+                // empty box with no way to put anything back in it.
+                const bi = Number((e.currentTarget as HTMLElement).dataset.b);
+                if (step.branches.length > 1) step.branches.splice(bi, 1);
+                renderStepsEditor(host, steps, depth);
+            }));
+            block.querySelectorAll('.sched-par-body').forEach((el) => {
+                const bi = Number((el as HTMLElement).dataset.b);
+                renderStepsEditor(el as HTMLElement, step.branches[bi], depth + 1);
+            });
+            block.querySelectorAll('.sched-par-add').forEach((el) => {
+                const bi = Number((el as HTMLElement).dataset.b);
+                renderAddRow(el as HTMLElement, step.branches[bi], depth + 1, host, steps, depth);
+            });
+            _wireFold(block, step);
         } else if (step.kind === 'try') {
             block.innerHTML = `<div class="sched-step-head">${_foldBtn(step)}${_kindTile('try')}
                     <span class="sched-step-tag sched-if">${t('sched.try') || 'TRY'}</span>
@@ -3779,6 +3868,7 @@ function renderAddRow(host: HTMLElement, steps: Step[], depth = 0, rerenderHost?
         <button class="btn btn-xs sched-chip sched-add-delay" data-add="delay" data-tooltip="${escAttr(t('sched.legendDelay') || '')}">${KIND_ICON.delay} ${t('sched.addDelay') || 'Pause'}</button>
         <button class="btn btn-xs sched-chip sched-add-foreach" data-add="forEach" data-tooltip="${escAttr(t('sched.legendForEach') || '')}">${KIND_ICON.forEach} ${t('sched.addForEach') || 'For each'}</button>
         <button class="btn btn-xs sched-chip sched-add-switch" data-add="switch" data-tooltip="${escAttr(t('sched.legendSwitch') || '')}">${KIND_ICON.switch} ${t('sched.addSwitch') || 'Switch'}</button>
+        <button class="btn btn-xs sched-chip sched-add-try" data-add="parallel" data-tooltip="${escAttr(t('sched.legendPar') || 'Run several branches at the same time')}">${KIND_ICON.parallel} ${t('sched.addParallel') || 'At the same time'}</button>
         <button class="btn btn-xs sched-chip sched-add-try" data-add="try" data-tooltip="${escAttr(t('sched.legendTry') || '')}">${KIND_ICON.try} ${t('sched.addTry') || 'Try / on error'}</button>
         <button class="btn btn-xs sched-chip sched-add-call" data-add="call" data-tooltip="${escAttr(t('sched.legendCall') || '')}">${KIND_ICON.call} ${t('sched.addCall') || 'Run a block'}</button>
         <button class="btn btn-xs sched-chip sched-add-break" data-add="break" data-tooltip="${escAttr(t('sched.legendBreak') || '')}">${KIND_ICON.signal} ${t('sched.addBreak') || 'Break'}</button>
@@ -3807,6 +3897,9 @@ function _makeStep(kind: string): Step {
     if (kind === 'forEach') return { kind: 'forEach', source: 'enabledMods', maxIters: 100, everySec: 0, steps: [] } as Step;
     if (kind === 'switch') return { kind: 'switch', cases: [{ condition: { type: 'always', params: {} }, steps: [] }], default: [] } as Step;
     if (kind === 'try') return { kind: 'try', steps: [], onError: [] } as Step;
+    // TWO empty branches, not one: a parallel with a single branch is a sequence with extra
+    // words, and the shape has to show what the step is for the moment it is added.
+    if (kind === 'parallel') return { kind: 'parallel', mode: 'all', branches: [[], []] } as Step;
     // Empty block name on purpose: the editor's picker fills it, and a default pointing at
     // somebody's first block would run a real block the moment the step was added.
     if (kind === 'call') return { kind: 'call', block: '' } as Step;
@@ -3855,6 +3948,8 @@ const KIND_ICON: Record<string, string> = {
     forEach: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="7" height="5" rx="1"/><rect x="3" y="15" width="7" height="5" rx="1"/><path d="M14 6.5h7M14 17.5h7M14 12h7"/></svg>',
     switch:  '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v5"/><path d="M12 8 5 13v8M12 8l7 5v8"/></svg>',
     try:     '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>',
+    // Two lines running side by side, then meeting: the whole idea of the step.
+    parallel: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3"/><path d="M12 6H6v6"/><path d="M12 6h6v6"/><path d="M6 12v3"/><path d="M18 12v3"/><path d="M6 15h12"/><path d="M12 15v6"/></svg>',
     signal:  '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="14" height="14" rx="2"/></svg>',
     // A box with an arrow going into it — the body lives elsewhere and is brought in here.
     call:    '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5V16"/><path d="M13 12H2M6 8.5 2.5 12 6 15.5"/></svg>',
@@ -3874,6 +3969,7 @@ function _foldBtn(step: any): string {
     else if (step.kind === 'repeat' || step.kind === 'forEach') sum = `${step.steps?.length || 0} ${t('sched.stepsInside') || 'inside'}`;
     else if (step.kind === 'switch') sum = `${(step.cases?.length || 0)} cases`;
     else if (step.kind === 'try') sum = `${(step.steps?.length || 0)} + ${(step.onError?.length || 0)}`;
+    else if (step.kind === 'parallel') sum = (step.branches || []).map((b: Step[]) => b.length).join(' | ');
     else if (step.kind === 'delay') sum = `${step.seconds || 0}${t('sched.unitSec') || 's'}`;
     const sumHtml = sum ? `<span class="sched-fold-sum">${sum}</span>` : '';
     return `<button class="btn btn-xs btn-ghost sched-fold" data-tooltip="${escAttr(t('sched.foldTip') || 'Collapse / expand')}" aria-label="fold">${SCHED_CHEV}</button>${sumHtml}`;

@@ -154,6 +154,70 @@ repeat until fileExists(path: "x") { wait 10s }
 Dans une boucle, `{item.id}` et `{item.name}` sont remplacés dans chaque valeur texte.
 `break` quitte la boucle, `continue` passe à l'élément suivant, `stop` termine la tâche.
 
+### En même temps
+
+```bmms
+parallel {
+    branch { do repo.sync() }
+    branch { do benchmark.run() }
+}
+
+parallel settle {
+    branch { do mods.checkUpdates() }
+    branch { do mods.scan() }
+}
+```
+
+Chaque branche démarre en même temps et l'étape se termine quand toutes ont fini.
+
+`parallel` seul arrête l'étape dès qu'une branche échoue — ce qu'aurait fait une séquence.
+`parallel settle` les laisse toutes finir puis indique combien ont échoué, ce qui est le
+choix honnête pour « fais ces cinq-là, dis-moi lesquelles n'ont pas marché ».
+
+Les branches partagent les variables de la tâche. Deux branches qui écrivent la même se font
+la course, et la dernière écriture gagne — servez-vous en pour du travail indépendant.
+
+### Les autres tâches
+
+```bmms
+run "Ménage nocturne"    # attend, et note si ça a marché
+spawn "Long téléchargement"  # démarre et continue
+```
+
+`run` attend ; un `if lasttask.ok == 1` derrière peut brancher sur le résultat. `spawn`
+n'attend pas, et refuse une tâche déjà en cours — y compris elle-même.
+
+### Du vrai code, sur place
+
+```bmms
+script python {
+    import os
+    print(os.getcwd())
+}
+
+script bash {
+    for f in *.zip; do echo "$f"; done
+}
+```
+
+`powershell`, `cmd`, `bash`, `python`, `node`, `rust`. Le corps est pris **exactement tel
+qu'écrit** — pas d'échappement, pas de guillemets à doubler, les accolades à l'intérieur ne
+posent pas de problème. Il faut `allow script`, comme pour la forme en briques.
+
+L'indentation est désindentée de la marge commune et restaurée quand le fichier est
+réimprimé, donc Python garde sa forme à travers un aller-retour.
+
+### Les types
+
+```bmms
+set count: number = 0
+set label: text = "bonjour"
+```
+
+Optionnels, et vérifiés à l'écriture : `set n: number = "0"` est refusé, `set s: text = 5`
+aussi. L'exécuteur n'a pas de types à l'exécution, donc c'est le seul endroit où l'erreur
+peut être attrapée — et ça dit au lecteur suivant à quoi sert la variable.
+
 ### Attendre
 
 ```bmms

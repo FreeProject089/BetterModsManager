@@ -150,6 +150,70 @@ repeat until fileExists(path: "x") { wait 10s }
 Inside a loop, `{item.id}` and `{item.name}` are replaced in every text value.
 `break` leaves the loop, `continue` skips to the next item, `stop` ends the whole task.
 
+### At the same time
+
+```bmms
+parallel {
+    branch { do repo.sync() }
+    branch { do benchmark.run() }
+}
+
+parallel settle {
+    branch { do mods.checkUpdates() }
+    branch { do mods.scan() }
+}
+```
+
+Every branch starts together and the step finishes when they all have.
+
+`parallel` on its own stops the step as soon as one branch fails — what a sequence would
+have done. `parallel settle` lets them all finish and then tells you how many failed, which
+is the honest choice for "do these five, tell me which ones did not work".
+
+Branches share the task's variables. Two branches writing the same one race, and the last
+write wins — so use them for work that does not depend on each other.
+
+### Other tasks
+
+```bmms
+run "Nightly tidy"       # waits for it, and records whether it worked
+spawn "Long download"    # starts it and carries on
+```
+
+`run` waits; a following `if lasttask.ok == 1` can branch on the result. `spawn` does not
+wait, and refuses a task that is already running — including itself.
+
+### Real code, inline
+
+```bmms
+script python {
+    import os
+    print(os.getcwd())
+}
+
+script bash {
+    for f in *.zip; do echo "$f"; done
+}
+```
+
+`powershell`, `cmd`, `bash`, `python`, `node`, `rust`. The body is taken **exactly as
+written** — no escaping, no quoting, braces inside it are fine. It needs `allow script`, the
+same as the block form.
+
+Indentation is dedented by the common margin and restored when the file is printed back, so
+Python keeps its shape through a round trip.
+
+### Types
+
+```bmms
+set count: number = 0
+set label: text = "hello"
+```
+
+Optional, and checked when you write it: `set n: number = "0"` is refused, so is
+`set s: text = 5`. The runner has no types at run time, so this is the only place the
+mistake can be caught at all — and it says what the variable is for the next reader.
+
 ### Waiting
 
 ```bmms

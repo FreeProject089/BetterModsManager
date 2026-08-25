@@ -8144,5 +8144,15 @@
   "sched.actd.code.run": "Run a BMMScript snippet as part of this task — same variables, same permissions.",
   "sched.modeBricks": "Blocks",
   "sched.modeCode": "Code",
-  "sched.modeCodeTip": "Write this task as text. Anything you build here opens back up as blocks."
+  "sched.modeCodeTip": "Write this task as text. Anything you build here opens back up as blocks.",
+  "sched.addParallel": "At the same time",
+  "sched.legendPar": "Run several branches at the same time",
+  "sched.parallel": "AT THE SAME TIME",
+  "sched.parHint": "branches share the task’s variables — use them for work that does not depend on each other",
+  "sched.par.all": "stop if one fails",
+  "sched.par.settle": "let them all finish",
+  "sched.par.branch": "BRANCH {n}",
+  "sched.par.addBranch": "branch",
+  "sched.par.delBranch": "Remove this branch",
+  "sched.par.some": "{n} of {m} parallel branch(es) failed"
 }
