@@ -1083,9 +1083,23 @@ processes sharing one database (a development machine pointed at production, an 
 beside a new one) interleaved into a single series. The chart was not glitching; it was
 faithfully drawing two real machines.
 
-Samples now carry `host`, the endpoint charts only the answering host's rows, and the other
-writers are **named** in the page rather than filtered out silently — a second writer is a
-fact an administrator needs, not a rendering problem to suppress.
+Samples now carry `host`, and the other writers are **named** in the page rather than
+filtered out silently — a second writer is a fact an administrator needs, not a rendering
+problem to suppress.
+
+**And then replicas made the first half of that fix wrong.** "Chart the host that answered
+this request" is correct while there is one API container. The sampler runs from the sweeper,
+the sweeper is leader-elected with a 9.5-minute lock on a 10-minute tick — so the lock lapses
+before every tick and the WRITER rotates; Caddy round-robins, so the READER rotates too,
+independently. At three replicas the chart drew whichever third of the samples matched
+whoever answered, a different third on each refresh, and the "another instance is recording"
+banner fired permanently against the operator's own containers.
+
+Which host to chart is a **choice** now, defaulting to the old behaviour so a single-container
+install is unchanged. "All hosts" is offered and is deliberately not the default: averaging a
+four-vCPU server with a twenty-four-core development box is this same sawtooth wearing a
+different hat, and only the person looking at the screen knows whether the hosts are
+comparable.
 
 **The lesson:** a metric is meaningless without its subject. If a table records a measurement
 and not who measured it, the day a second measurer appears it produces data that is wrong in
@@ -1113,3 +1127,88 @@ asked for hosted storage should learn they got none.
 **The lesson:** an enum is a promise about what the rest of the system may assume. Adding a
 value that breaks those assumptions is more expensive than adding a second, smaller vocabulary
 beside it.
+
+
+---
+
+## 68. A language with no vocabulary of its own
+
+BMMScript is a compiler, not an interpreter, and the distinction is the entire design.
+
+The obvious way to add "write your automation as text" is a second engine: a parser, a list of
+the actions it understands, and an executor. That engine is behind the block editor the day it
+ships, and stays behind it for ever — every action added to the app is one the language does
+not know until somebody remembers to add it twice.
+
+So the parser emits **the exact `Step` JSON the block editor produces**, and the existing
+runner executes it. `do <name>(k: v)` is not validated against a list of action names, because
+there is no list: the name is copied through, and an action added to BMM is writable in script
+the same day with no change to the compiler.
+
+Three properties fall out of that, none of them designed for separately:
+
+- **Round trip.** A task written in code opens as blocks and prints back as code, because both
+  are views of one tree rather than two representations kept in step.
+- **No second permission model.** A script cannot do more than a block, because it *is* blocks
+  by the time anything runs.
+- **A reference that cannot lie** — provided it is generated. Which brings the one part that
+  can go stale.
+
+The reference page is extracted from `ACTION_TYPES`, `COND_TYPES` and `VALUE_SOURCES`, and CI
+fails when it drifts. The parameter names were the trap: they look like they belong to the
+editor's forms, and `needs` is a form SHAPE shared by several actions — `list.push`, `list.set`
+and `list.clear` share one, so a form-derived table gave all three the union of all three, and
+`open.url` came out with forty-six parameters. They come from the RUNNER's switch, one case per
+action, where `p.<name>` reads are the parameters by definition. The form version agreed with
+the runner on 49 of 59 actions: exactly the hit rate that survives spot-checking and fails
+diffing.
+
+**The lesson:** when a feature must never fall behind another, do not synchronise them —
+make one of them the other's output.
+
+---
+
+## 69. The permissions that arrived with the file
+
+A `.bmmpa` carries its own `enabled`, its own `perms` and its own trigger. Both import paths
+cleared exactly one field — `osSchedule` — and kept the rest.
+
+So a shared automation could arrive enabled, holding `command` and `script`, on a one-minute
+interval, and start running arbitrary programs a minute after import with nothing asked and
+nothing shown. Every check worked: `requirePerm` refused a step whose permission was missing,
+the review screen for `.bmmscript` blocked a run until the grants had been read. The file
+simply arrived already holding the permissions, so no check had anything to refuse.
+
+The reasoning was already in the file, applied to the wrong thing. The **duplicate** button
+says: *"Deliberately created DISABLED and without the OS mirror so saving the copy can't
+double-fire anything"* — about a copy of the user's own task. A file from a stranger got less
+care than a copy of your own work.
+
+One sanitiser now serves both paths, and it reports what it removed: silently stripping a
+permission and leaving somebody to work out why their imported task fails is a worse
+experience than the hole was.
+
+**The lesson:** a permission model protects the moment of USE. Ask separately how a subject
+acquires its permissions in the first place — that path may have no checks on it at all,
+precisely because the checks downstream look so thorough.
+
+---
+
+## 70. Two vocabularies in one column
+
+`AnalyticsEvent.region` held ISO 3166-2 subdivision codes in production and full names in
+development — `VD` on one machine, `Vaud` on the other — because the geo resolver's real path
+returns what geoip-lite gives it while the dev fallback used a hand-written sample table.
+
+Nothing failed. Both are strings, both group, both render. But `GROUP BY region` counts them as
+two places, and a dashboard built on a development database looks correct in a way that does
+not survive deployment.
+
+The sample table speaks the production vocabulary now. The display gained the other half of
+the fix: a bare `MN` is not a region anybody can read, and worse, it is ambiguous — Minnesota
+in that column, Mongolia's country code one tab over, with nothing on screen to say which. The
+code is shown as a code with the country named beside it.
+
+**The lesson:** a fallback is not just a value, it is a value in a FORMAT. A fallback that
+returns a different shape from the thing it stands in for produces data that is individually
+valid and collectively meaningless.

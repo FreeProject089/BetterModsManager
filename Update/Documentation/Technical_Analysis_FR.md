@@ -1028,10 +1028,24 @@ processus partageant une base (une machine de développement pointée sur la pro
 ancien conteneur à côté d'un neuf) s'entrelaçaient en une seule série. Le graphique ne
 buguait pas ; il dessinait fidèlement deux machines réelles.
 
-Les échantillons portent désormais `host`, l'endpoint ne trace que les lignes de l'hôte qui
-répond, et les autres écrivains sont **nommés** dans la page plutôt que filtrés en silence —
-un second écrivain est un fait dont l'administrateur a besoin, pas un problème d'affichage à
-masquer.
+Les échantillons portent désormais `host`, et les autres écrivains sont **nommés** dans la
+page plutôt que filtrés en silence — un second écrivain est un fait dont l'administrateur a
+besoin, pas un problème d'affichage à masquer.
+
+**Puis les réplicas ont rendu la première moitié de ce correctif fausse.** « Tracer l'hôte qui
+a répondu à cette requête » est correct tant qu'il n'y a qu'un conteneur API. L'échantillonneur
+tourne depuis le sweeper, le sweeper est élu par un verrou de 9,5 min sur un tick de 10 min —
+le verrou expire donc avant chaque tick et l'ÉCRIVAIN tourne ; Caddy fait du round-robin, donc
+le LECTEUR tourne aussi, indépendamment. À trois réplicas, le graphique traçait le tiers des
+échantillons correspondant à celui qui répondait, un tiers différent à chaque rafraîchissement,
+et la bannière « une autre instance enregistre » se déclenchait en permanence contre les
+propres conteneurs de l'opérateur.
+
+Quel hôte tracer est désormais un **choix**, avec l'ancien comportement par défaut pour qu'une
+installation à un conteneur ne change pas. « Tous les hôtes » est proposé et délibérément pas
+par défaut : moyenner un serveur à quatre vCPU avec une machine de dev à vingt-quatre cœurs,
+c'est la même dent de scie sous un autre chapeau, et seule la personne devant l'écran sait si
+les hôtes sont comparables.
 
 **La leçon :** une mesure n'a pas de sens sans son sujet. Si une table enregistre une mesure
 et pas qui l'a prise, le jour où un second mesureur apparaît elle produit des données fausses
@@ -1063,3 +1077,91 @@ pas eu.
 **La leçon :** un enum est une promesse sur ce que le reste du système a le droit de
 supposer. Y ajouter une valeur qui casse ces suppositions coûte plus cher qu'ajouter à côté un
 second vocabulaire, plus petit.
+
+
+---
+
+## 68. Un langage sans vocabulaire propre
+
+BMMScript est un compilateur, pas un interpréteur, et cette distinction est tout le principe.
+
+La façon évidente d'ajouter « écrivez votre automatisation en texte » est un second moteur :
+un analyseur, une liste des actions qu'il comprend, et un exécuteur. Ce moteur est en retard
+sur l'éditeur de blocs le jour de sa sortie, et le reste pour toujours — chaque action ajoutée
+à l'app est une action que le langage ignore jusqu'à ce que quelqu'un pense à l'ajouter deux
+fois.
+
+L'analyseur émet donc **exactement le JSON `Step` que produit l'éditeur de blocs**, et
+l'exécuteur existant le lance. `do <nom>(k: v)` n'est pas validé contre une liste de noms
+d'actions, parce qu'il n'y a pas de liste : le nom est recopié, et une action ajoutée à BMM
+est écrivable en script le jour même sans toucher au compilateur.
+
+Trois propriétés en découlent, aucune conçue séparément :
+
+- **L'aller-retour.** Une tâche écrite en code s'ouvre en blocs et se réimprime en code, parce
+  que les deux sont des vues d'un seul arbre plutôt que deux représentations tenues à jour.
+- **Aucun second modèle de permissions.** Un script ne peut pas faire plus qu'un bloc, parce
+  qu'il *est* des blocs au moment où quoi que ce soit s'exécute.
+- **Une référence qui ne peut pas mentir** — à condition d'être générée. Ce qui amène la seule
+  partie qui puisse vieillir.
+
+La page de référence est extraite de `ACTION_TYPES`, `COND_TYPES` et `VALUE_SOURCES`, et la CI
+échoue quand elle dérive. Les noms de paramètres étaient le piège : ils ont l'air d'appartenir
+aux formulaires de l'éditeur, or `needs` est une FORME de formulaire partagée par plusieurs
+actions — `list.push`, `list.set` et `list.clear` en partagent une, donc une table dérivée du
+formulaire donnait aux trois l'union des trois, et `open.url` sortait avec quarante-six
+paramètres. Ils viennent du `switch` de l'EXÉCUTEUR, un cas par action, où les lectures
+`p.<nom>` sont les paramètres par définition. La version formulaire concordait avec l'exécuteur
+sur 49 actions sur 59 : exactement le taux qui survit à un sondage et échoue à une comparaison.
+
+**La leçon :** quand une fonctionnalité ne doit jamais prendre de retard sur une autre, ne les
+synchronisez pas — faites de l'une la sortie de l'autre.
+
+---
+
+## 69. Les permissions qui arrivaient avec le fichier
+
+Un `.bmmpa` porte son propre `enabled`, ses propres `perms` et son propre déclencheur. Les deux
+chemins d'import n'effaçaient qu'un seul champ — `osSchedule` — et gardaient le reste.
+
+Une automatisation partagée pouvait donc arriver activée, tenant `command` et `script`, sur un
+intervalle d'une minute, et lancer des programmes arbitraires une minute après l'import sans
+rien demander ni rien montrer. Tous les contrôles fonctionnaient : `requirePerm` refusait une
+étape dont la permission manquait, l'écran de revue d'un `.bmmscript` bloquait l'exécution tant
+que les autorisations n'étaient pas lues. Le fichier arrivait simplement en les tenant déjà :
+aucun contrôle n'avait quoi que ce soit à refuser.
+
+Le raisonnement était déjà dans le fichier, appliqué à la mauvaise chose. Le bouton
+**Dupliquer** dit : *« Créé DÉSACTIVÉ et sans le miroir OS pour que l'enregistrement de la copie
+ne puisse rien double-déclencher »* — à propos d'une copie de la propre tâche de l'utilisateur.
+Un fichier venu d'un inconnu recevait moins de soin qu'une copie de son propre travail.
+
+Un seul assainisseur sert désormais les deux chemins, et il annonce ce qu'il a retiré : retirer
+une permission en silence et laisser quelqu'un chercher pourquoi sa tâche importée échoue est
+une pire expérience que ne l'était le trou.
+
+**La leçon :** un modèle de permissions protège le moment de l'USAGE. Demandez séparément
+comment un sujet acquiert ses permissions au départ — ce chemin-là peut n'avoir aucun contrôle,
+précisément parce que ceux d'en aval ont l'air si complets.
+
+---
+
+## 70. Deux vocabulaires dans une colonne
+
+`AnalyticsEvent.region` contenait des codes de subdivision ISO 3166-2 en production et des noms
+complets en développement — `VD` sur une machine, `Vaud` sur l'autre — parce que le chemin
+réel du résolveur géo renvoie ce que geoip-lite lui donne, tandis que le repli de développement
+utilisait une table d'exemples écrite à la main.
+
+Rien n'échouait. Ce sont deux chaînes, elles se groupent, elles s'affichent. Mais
+`GROUP BY region` les compte comme deux endroits, et un tableau de bord construit sur une base
+de développement a l'air correct d'une façon qui ne survit pas au déploiement.
+
+La table d'exemples parle désormais le vocabulaire de la production. L'affichage a reçu l'autre
+moitié du correctif : un `MN` nu n'est pas une région lisible, et pire, il est ambigu — le
+Minnesota dans cette colonne, le code pays de la Mongolie un onglet plus loin, sans rien à
+l'écran pour dire lequel. Le code est affiché comme un code, avec le pays nommé à côté.
+
+**La leçon :** un repli n'est pas seulement une valeur, c'est une valeur dans un FORMAT. Un
+repli qui renvoie une forme différente de ce qu'il remplace produit des données individuellement
+valides et collectivement dépourvues de sens.

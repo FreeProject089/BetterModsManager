@@ -534,3 +534,80 @@ v2 en `.bat` **et** `.sh` — lit désormais un **`access.json`** dans le dossie
   30px quand les autres étaient en 22px sans dégradé.
 - **« Dossier du jeu » devient « dossier de destination »** partout : application,
   documentation, tutoriels et messages d'erreur.
+
+
+## [MAJEUR] BMMScript — les automatisations en texte
+
+- **Un langage qui ne peut pas prendre de retard sur l'app.** BMMScript compile vers les
+  BLOCS : le texte devient exactement les étapes que produit l'éditeur de blocs, et le même
+  exécuteur les lance. Il ne contient aucune liste de noms d'actions, donc une action ajoutée à
+  BMM est écrivable le jour même.
+- **Dans les deux sens.** Une tâche écrite en code s'ouvre en blocs ; une tâche construite en
+  blocs s'imprime en code. Aucune direction ne perd rien, sauf les commentaires et lignes vides.
+- Grammaire complète : conditions avec groupes booléens, quatre sortes de boucles, branches
+  `parallel`, `try`/`catch`, `switch`, variables typées, arithmétique, comparaisons, blocs
+  partagés, sous-tâches en attendant ou non, et corps `script` bruts dans six moteurs, pris
+  exactement tels qu'écrits.
+- **Plusieurs tâches dans un fichier**, pour qu'un partage puisse emporter les deux qu'il
+  appelle.
+- **Une référence générée** — 75 actions avec leurs vrais noms de paramètres, 28 conditions,
+  les valeurs lisibles — extraite du registre de BMM vers BMM Docs ET Aide & autres. La CI
+  échoue si elle vieillit. Les noms de paramètres viennent de l'EXÉCUTEUR, pas des formulaires :
+  `needs` est une forme de formulaire partagée par plusieurs actions, et en dériver donnait à
+  trois actions de liste l'union des trois.
+- **Une autocomplétion qui s'efface** : fermée dans les chaînes et les corps `script`, deux
+  caractères avant de s'ouvrir, et **Entrée n'accepte jamais** — Entrée est un retour à la
+  ligne, Tab accepte.
+- La vérification en direct ne **projette plus le curseur à l'autre bout du fichier** pendant
+  que vous tapez. Une demi-ligne est une erreur de syntaxe : elle se déclenchait à presque
+  chaque pause.
+- Les fichiers `.bmmscript` ouvrent un **écran de revue** au lieu de s'exécuter : compilés
+  d'abord, chaque étape listée, chaque corps de script affiché en entier.
+
+## [MAJEUR] Publier un catalogue d'automatisations
+
+- **Paramètres → Planificateur → Depuis un catalogue… → Publier les miennes…** écrit un
+  dossier : un `.bmmpa` signé par automatisation, plus un `catalog.json`. Déposez-le sur GitHub
+  ou n'importe quel hébergement statique.
+- Les adresses sont **relatives** par défaut, pour que le dossier continue de fonctionner s'il
+  est déplacé, copié ou forké — la vie normale d'un dossier sur GitHub. Le lecteur refusait
+  les adresses relatives : la façon naturelle de publier était donc la seule illisible.
+- Deux automatisations du même nom reçoivent des fichiers différents : sans cela, une entrée
+  servirait en silence le contenu d'une autre.
+- **Les catalogues de thèmes** peuvent aussi pointer vers un fichier, ce que tous les autres
+  types savaient déjà faire. L'inline fonctionne toujours et reste ce qu'écrit le constructeur.
+
+## [SÉCURITÉ] Une automatisation partagée pouvait s'accorder le droit d'exécuter des programmes
+
+Les deux chemins d'import n'effaçaient qu'un seul champ — `osSchedule` — et gardaient le
+reste. Un `.bmmpa` partagé pouvait donc arriver `enabled: true`, tenant `command` et `script`,
+sur un intervalle d'une minute, et lancer des programmes une minute après l'import sans rien
+demander ni rien montrer. Le modèle de permissions fonctionne parfaitement à l'exécution : le
+fichier arrivait simplement en les tenant déjà.
+
+Ça compte d'autant plus que les automatisations peuvent désormais être publiées en catalogue —
+ces fichiers sont faits pour circuler entre inconnus.
+
+Une tâche importée arrive maintenant **désactivée**, avec les quatre autorisations retirées, et
+BMM dit ce que le fichier demandait. Tout le reste est conservé : l'automatisation est intacte
+et à un interrupteur de fonctionner.
+
+## [AMÉLIORÉ] Le reste
+
+- **Les includes d'un `.bmmpa` emportent les blocs partagés.** Une étape `call "bloc"` est un
+  TYPE d'étape, pas une action : l'exportateur ne la voyait pas, et partager une tâche qui
+  appelait un bloc livrait une tâche qui S'ARRÊTE au premier appel. Trois parcoureurs ont aussi
+  appris les branches `parallel`.
+- **La vue compacte s'étend au panneau de détail.** La hauteur du panneau est accrochée à
+  l'écran : resserrer ses champs seuls ne l'a déplacé que de 22 px ; la boîte rétrécit aussi.
+- **Conflits : une légende.** Intra et Inter étaient des mots colorés sans explication nulle
+  part, et ce ne sont pas le même genre de problème. Plus un filtre **état**, et une liste vide
+  qui distingue « aucun conflit » de « vos filtres ont tout masqué ».
+- **La barre latérale court sur toute la hauteur de la fenêtre**, et les boutons de fenêtre
+  sont à 7 px du cadre au lieu de 5.
+- **Les réglages sont groupés par ce que vous faites** plutôt que par ordre d'écriture, et
+  **Listes .MM** est à côté de **Modpacks**.
+- L'avertissement CORS **« autoriser toute origine »** dit ce qu'il expose vraiment. Il
+  affirmait que n'importe quel site pouvait lire vos réponses d'API — faux pour les
+  soixante-dix routes derrière le jeton. Deux routes répondent sans jeton, et l'une d'elles
+  renvoie le nom et le jeu de votre profil actif.

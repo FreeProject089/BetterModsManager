@@ -523,3 +523,73 @@ v1 and v2 in both `.bat` and `.sh` — now reads an **`access.json`** from the f
   while the rest sat at 22px plain.
 - **"Game directory" is "destination folder"** everywhere: app, docs, tutorials and error
   messages.
+
+
+## [MAJOR] BMMScript — automations as text
+
+- **A language that cannot fall behind the app.** BMMScript compiles to the BLOCKS: the text
+  becomes exactly the steps the block editor produces, and the same runner executes them. It
+  holds no list of action names, so an action added to BMM is writable in script the same day.
+- **Both directions.** A task written in code opens as blocks; a task built from blocks prints
+  as code. Neither loses anything but comments and blank lines.
+- Full grammar: conditions with boolean groups, four kinds of loop, `parallel` branches,
+  `try`/`catch`, `switch`, typed variables, arithmetic, comparisons, shared blocks, sub-tasks
+  waiting or not, and raw `script` bodies in six engines taken exactly as written.
+- **Several tasks in one file**, so sharing an automation can carry the two it calls.
+- **A generated reference** — 75 actions with their real parameter names, 28 conditions, the
+  values a comparison can read — extracted from BMM's own registry into BMM Docs AND Help &
+  other. CI fails if it goes stale. The parameter names come from the RUNNER, not the editor's
+  forms: `needs` is a form shape shared by several actions, and deriving from it gave three
+  list actions the union of all three.
+- **Completion that gets out of the way**: shut inside strings and `script` bodies, two
+  characters before it opens, and **Enter never accepts** — Enter is a newline, Tab accepts.
+- The live syntax check no longer **throws the caret across the file** while you type. Half a
+  line is a syntax error, so it fired on nearly every pause.
+- `.bmmscript` files open a **review screen** rather than running: compiled first, every step
+  listed, every script body printed in full.
+
+## [MAJOR] Publish a catalogue of automations
+
+- **Settings → Scheduler → From a catalogue… → Publish my own…** writes a folder: one signed
+  `.bmmpa` per automation plus a `catalog.json`. Drop it on GitHub or any static host.
+- Addresses are **relative** by default, so the folder keeps working when it is moved,
+  mirrored or forked — which is the normal life of a folder on GitHub. The reader refused
+  relative addresses before, so the natural way to publish was the one way that could not be
+  read back.
+- Two automations with the same name get different files: without that, one entry would
+  silently serve another's contents.
+- **Theme catalogues** can point at a file too, which every other catalogue kind already
+  could. Inline still works and is still what the builder writes.
+
+## [SECURITY] A shared automation could grant itself the right to run programs
+
+Both import paths cleared exactly one field — `osSchedule` — and kept the rest. So a shared
+`.bmmpa` could arrive `enabled: true`, holding `command` and `script`, on a one-minute
+interval, and start running programs a minute after import with nothing asked and nothing
+shown. The permission model worked perfectly at run time; the file simply arrived already
+holding the permissions.
+
+It matters more now that automations can be published as a catalogue — these files are meant
+to travel between strangers.
+
+An imported task now arrives **disabled**, with all four capability grants removed, and BMM
+says what the file had asked for. Everything else is kept: the automation is intact and one
+toggle away from working.
+
+## [IMPROVED] The rest
+
+- **`.bmmpa` includes now carry shared blocks.** A `call "block"` step is a step KIND, not an
+  action, so the exporter never saw it — sharing a task that called a block shipped one that
+  ABORTS on the first call. Three walkers also learned about `parallel` branches.
+- **Compact view extends to the details panel.** The panel's height is pinned to the viewport,
+  so shrinking its fields alone moved it by 22px; the box shrinks too now.
+- **Conflicts: a legend.** Intra and Inter were coloured words with no explanation anywhere,
+  and they are not the same kind of problem. Plus a **state** filter, and an empty list that
+  tells "no conflicts" apart from "your filters hid all of them".
+- **The sidebar runs the full height of the window**, and the window buttons sit 7px from the
+  frame instead of 5.
+- **Settings are grouped by what you are doing** rather than by the order they were written,
+  and **Listes .MM** sits beside **Modpacks**.
+- The **"allow any origin" CORS warning** says what it actually exposes. It claimed any site
+  could read your API responses — false for the seventy routes behind the token. Two routes
+  answer without one, and one of them returns your active profile's name and game.

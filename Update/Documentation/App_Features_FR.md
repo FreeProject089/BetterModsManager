@@ -713,13 +713,26 @@ Une tâche portait un unique interrupteur « autoriser les commandes personnalis
 annonçait qu'une permission était accordée sans dire laquelle, et il ne couvrait pas du tout
 les deeplinks — alors qu'un lien `bmm://` atteint tout ce que l'app expose.
 
-Il y a maintenant trois autorisations distinctes, chacune nommant ce qu'elle débloque :
-**lancer des programmes externes**, **exécuter des scripts** et **déclencher des deeplinks**.
-Chacune est désactivée tant que vous ne l'activez pas, et une étape dont la permission
-manque échoue avec un message indiquant laquelle accorder, au lieu de s'exécuter en silence.
+Il y a maintenant quatre autorisations distinctes, chacune nommant ce qu'elle débloque :
+**lancer des programmes externes**, **exécuter des scripts**, **déclencher des deeplinks** et
+**arrêter un programme en cours**. Chacune est désactivée tant que vous ne l'activez pas, et
+une étape dont la permission manque échoue avec un message indiquant laquelle accorder, au
+lieu de s'exécuter en silence.
+
+Arrêter un programme est séparé de le lancer parce que le risque est d'une autre nature :
+démarrer quelque chose s'annule, tuer quelque chose peut perdre un travail non enregistré
+sans rien pour revenir en arrière.
+
 Les tâches construites avant la séparation gardent tout ce qu'elles avaient — sauf *exécuter
-des scripts*, qu'aucune tâche existante ne reçoit : cette capacité n'existait pas quand vous
-avez coché l'ancienne case.
+des scripts* et *arrêter un programme*, qu'aucune tâche existante ne reçoit : ces capacités
+n'existaient pas quand vous avez coché l'ancienne case.
+
+**Une tâche qui arrive dans un fichier n'en reçoit aucune.** Importer un `.bmmpa`, ou ajouter
+un `.bmmscript` partagé à vos tâches, retire les quatre et laisse la tâche **désactivée** —
+puis vous dit ce que le fichier demandait, pour que vous accordiez ce que vous voulez
+vraiment. L'automatisation est intacte et à un interrupteur de fonctionner ; ce qu'elle ne
+peut pas faire, c'est arriver en tenant déjà le droit de lancer des programmes à intervalle
+régulier.
 
 ## 64. Centre de notifications (v1.0.0+)
 
@@ -882,3 +895,97 @@ héberger par entrée : c'est donc gratuit.
 
 La page propose aussi désormais **Héberger un Server-Repo** — les mods eux-mêmes, qui sont
 autre chose qu'un catalogue et n'avaient jusque-là aucun panneau indicateur ici.
+
+
+## 72. BMMScript — les automatisations en texte (v1.0.0+)
+
+Le planificateur a une seconde façon d'écrire la même chose : l'automatisation en texte, dans
+l'onglet **Code** de l'éditeur de tâche.
+
+Ce n'est pas un langage séparé avec ses propres actions. Il **compile vers les blocs** — le
+texte devient exactement les étapes que produit l'éditeur de blocs, et le même exécuteur les
+lance. Trois conséquences, et c'est tout le principe :
+
+- **Il n'est jamais en retard sur l'app.** Une action s'écrit `do <nom>(…)` et le langage ne
+  contient aucune liste de noms d'actions : une action ajoutée à BMM est écrivable le jour même.
+- **Dans les deux sens.** Le code s'ouvre en blocs ; les blocs s'impriment en code. Aucune
+  direction ne perd quoi que ce soit, sauf vos commentaires et lignes vides, que l'arbre de
+  blocs n'a nulle part où ranger.
+- **Il ne peut pas faire plus qu'un bloc.** Permissions, substitution de variables, limites de
+  boucle et gestion d'erreur restent celles de l'exécuteur. Le code est une façon d'*écrire*
+  une automatisation, pas de contourner ses règles.
+
+Il a les conditions et les groupes booléens, quatre sortes de boucles, les branches
+`parallel`, `try`/`catch`, `switch`, les variables avec typage optionnel, l'arithmétique, les
+comparaisons, les blocs partagés, les sous-tâches (en attendant ou non), et des corps `script`
+bruts en PowerShell, CMD, Bash, Python, Node ou Rust — pris exactement tels qu'écrits,
+accolades comprises.
+
+Ce qu'il n'a délibérément **pas** : vos propres fonctions, et la récursivité.
+
+L'éditeur compile pendant que vous tapez et place le curseur sur la première erreur quand vous
+le demandez — jamais pendant que vous êtes encore sur la ligne. L'autocomplétion propose ce
+qui va à cet endroit (actions après `do`, moteurs après `script`, conditions dans un
+emplacement de condition) et **Entrée n'accepte jamais une suggestion** : Entrée est un retour
+à la ligne, Tab accepte.
+
+La liste complète de tout ce qui s'écrit est générée depuis le registre de BMM, elle ne peut
+donc pas décrire une version qui n'existe pas : **Aide & autres → BMMScript — toutes les
+actions, conditions et valeurs**, et la même page sur le site de documentation.
+
+## 73. Publier un catalogue d'automatisations (v1.0.0+)
+
+BMM savait suivre un catalogue d'automatisations et n'avait aucun moyen d'en fabriquer un.
+Publier voulait dire écrire `catalog.json` à la main en devinant les noms de champs.
+
+**Paramètres → Planificateur → Depuis un catalogue… → Publier les miennes…** choisit vos
+automatisations et écrit un dossier : un `.bmmpa` signé par automatisation, plus un
+`catalog.json` à côté. Déposez le dossier sur GitHub, GitHub Pages ou n'importe quel
+hébergement statique, pointez BMM sur le `catalog.json`, c'est fait.
+
+Les adresses écrites sont **relatives** — `nightly.bmmpa`, pas une URL complète — parce qu'un
+catalogue qui nomme son propre hébergeur cesse de fonctionner dès qu'il est déplacé, copié ou
+forké, et être forké est la vie normale d'un dossier sur GitHub. BMM les résout par rapport à
+l'endroit d'où il a récupéré le catalogue.
+
+Tout ce qu'une automatisation appelle voyage avec elle : sous-tâches, blocs partagés, launch
+packs et plugins. Deux automatisations du même nom reçoivent des fichiers différents, pour
+qu'une entrée ne serve jamais en silence le contenu d'une autre.
+
+## 74. Les catalogues de thèmes peuvent pointer vers un fichier (v1.0.0+)
+
+Tous les autres types de catalogue listent une *adresse* et récupèrent le fichier. Un catalogue
+de thèmes devait porter le thème entier en ligne : la façon évidente de publier — un dossier
+de `.bmmtheme` avec un `catalog.json` à côté — était donc la seule qui ne marchait pas. Il
+fallait coller le corps complet de chaque thème dans le flux à la main, et le recoller pour
+publier un correctif.
+
+Une entrée avec un `download_url` et sans `vars` est désormais récupérée à l'installation.
+L'inline fonctionne toujours et reste ce qu'écrit le constructeur : rien de déjà publié ne
+change. Les adresses relatives se résolvent comme pour les automatisations.
+
+## 75. La vue compacte s'étend au panneau de détail (v1.0.0+)
+
+Compact voulait dire des cartes plus courtes, et en ouvrir une donnait le panneau pleine
+taille — un long formulaire lâché dans une liste dont les lignes font 54 pixels. Le panneau
+suit le réglage maintenant : champs resserrés et boîte plus courte, parce que ce réglage porte
+sur la place que prend la bibliothèque et que le panneau en fait partie. Tout défile toujours,
+donc rien n'est masqué.
+
+## 76. Conflits : ce que Intra et Inter veulent dire (v1.0.0+)
+
+Le panneau des conflits affichait des mots colorés et permettait de les trier. Il n'a jamais
+dit ce que les mots signifiaient, et ce ne sont pas le même genre de problème :
+
+- **Intra** — l'autre mod est dans le **même profil**. Les deux peuvent être activés ensemble :
+  c'est le conflit qui compte tout de suite.
+- **Inter** — l'autre mod est dans un **autre profil** partageant le même dossier de jeu. Ils
+  ne peuvent jamais être actifs en même temps ; ça ne mord qu'au changement de profil.
+- **Actif** — les deux activés : le recouvrement est sur le disque maintenant, et le mod
+  activé en dernier (le numéro `#` de la ligne) gagne.
+- **Potentiel** — les fichiers se recouvrent mais l'autre mod est désactivé.
+
+Ces quatre définitions sont une légende en haut du panneau, toujours visible. Les filtres ont
+gagné un axe **état** — est-ce que ça se produit maintenant, ou seulement si vous changez
+quelque chose — et une liste vide distingue enfin « aucun conflit » de « vos filtres ont tout
+masqué », qui se ressemblent et veulent dire le contraire.

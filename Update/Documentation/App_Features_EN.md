@@ -813,12 +813,23 @@ A task used to carry a single switch called "allow custom commands". It told you
 permission was being granted but not what it covered, and it did not cover deeplinks at
 all — even though a `bmm://` link reaches anything the app exposes.
 
-There are now three separate grants, each naming what it unlocks: **run external programs**,
-**run scripts**, and **fire deeplinks**. Each is off until you turn it on, and a step whose
-permission is missing fails with a message naming the one to grant, rather than running
-quietly. Tasks you built before the split keep everything they already had — except *run
-scripts*, which no existing task receives, because that capability did not exist when you
+There are now four separate grants, each naming what it unlocks: **run external programs**,
+**run scripts**, **fire deeplinks** and **stop a running program**. Each is off until you turn
+it on, and a step whose permission is missing fails with a message naming the one to grant,
+rather than running quietly.
+
+Stopping a program is separate from launching one because the risk differs in kind: starting
+something is undoable, killing something can lose unsaved work with nothing to undo.
+
+Tasks you built before the split keep everything they already had — except *run scripts* and
+*stop a program*, which no existing task receives, because neither capability existed when you
 agreed to the old checkbox.
+
+**A task that arrives in a file gets none of them.** Importing a `.bmmpa`, or adding a shared
+`.bmmscript` to your tasks, strips every one of the four and leaves the task **disabled** —
+then tells you what the file had asked for, so you can grant what you actually want. The
+automation is intact and one toggle away from working; what it cannot do is arrive already
+holding permission to run programs on a timer.
 
 ## 64. Notification centre (v1.0.0+)
 
@@ -971,3 +982,91 @@ control every catalogue has. There is nothing to host per entry, so these are fr
 
 Submit content also links to **Host a Server-Repo** now — the mods themselves, which is a
 different thing from a catalogue and previously had no signpost on that page.
+
+
+## 72. BMMScript — automations as text (v1.0.0+)
+
+The scheduler has a second way to write the same thing: an automation as text, in the task
+editor's **Code** tab.
+
+It is not a separate language with its own actions. It **compiles to the blocks** — the text
+becomes exactly the steps the block editor produces, and the same runner executes them. Three
+things follow, and they are the whole design:
+
+- **It is never behind the app.** An action is written `do <name>(…)` and the language holds
+  no list of action names, so an action added to BMM is writable in script the same day.
+- **Either direction.** Code opens as blocks; blocks print as code. Neither loses anything
+  except your comments and blank lines, which the block tree has nowhere to put.
+- **It cannot do more than a block can.** Permissions, variable substitution, loop limits and
+  error handling are the runner's, unchanged. Code is a way to *write* an automation, not a
+  way around its rules.
+
+It has conditions and boolean groups, loops of four kinds, `parallel` branches, `try`/`catch`,
+`switch`, variables with optional types, arithmetic, comparisons, shared blocks, sub-tasks
+(waiting or not), and raw `script` bodies in PowerShell, CMD, Bash, Python, Node or Rust —
+taken exactly as written, braces and all.
+
+What it deliberately has **no** support for: your own functions, and recursion.
+
+The editor compiles as you type and puts the caret on the first error when you ask for it —
+never while you are still typing a line. Completion offers what fits where the caret is
+(actions after `do`, engines after `script`, conditions in a condition slot) and **Enter never
+accepts a suggestion**: Enter is a newline, Tab accepts.
+
+The full list of everything you can write is generated from BMM's own registry, so it cannot
+describe a version that does not exist: **Help & other → BMMScript — every action, condition
+and value**, and the same page on the documentation site.
+
+## 73. Publish a catalogue of automations (v1.0.0+)
+
+BMM could follow a catalogue of automations and had no way to make one. Publishing meant
+writing `catalog.json` by hand and guessing the field names.
+
+**Settings → Scheduler → From a catalogue… → Publish my own…** picks your automations and
+writes a folder: one signed `.bmmpa` per automation plus a `catalog.json` beside them. Drop
+the folder on GitHub, GitHub Pages or any static host, point BMM at the `catalog.json`, done.
+
+The addresses it writes are **relative** — `nightly.bmmpa`, not a full URL — because a
+catalogue that names its own host stops working the moment it is moved, mirrored or forked,
+and being forked is the normal life of a folder on GitHub. BMM resolves them against wherever
+it fetched the catalogue from.
+
+Everything an automation calls travels with it: sub-tasks, shared blocks, launch packs and
+plugins. Two automations with the same name get different files, so one entry can never
+quietly serve another's contents.
+
+## 74. Theme catalogues can point at a file (v1.0.0+)
+
+Every other catalogue kind lists an *address* and fetches the file. A theme catalogue had to
+carry the whole theme inline, so the obvious way to publish — a folder of `.bmmtheme` files
+with a `catalog.json` beside them — was the one way that did not work: you pasted each theme's
+full body into the feed by hand, and re-pasted it to publish a fix.
+
+An entry with a `download_url` and no `vars` is now fetched when you install it. Inline still
+works and is still what the builder writes, so nothing published so far changes. Relative
+addresses resolve against the catalogue, exactly as they do for automations.
+
+## 75. Compact view now includes the details panel (v1.0.0+)
+
+Compact used to mean shorter cards, and opening one gave you the full-size panel — a tall form
+dropped into a list whose rows are 54 pixels. The panel follows the setting now: tighter
+fields, and a shorter box, because the setting is about how much room the library takes and
+the panel is part of the library. Everything still scrolls, so nothing is hidden.
+
+## 76. Conflicts: what Intra and Inter actually mean (v1.0.0+)
+
+The conflicts panel showed coloured words and let you sort them. It never said what the words
+meant, and the two are not the same kind of problem:
+
+- **Intra** — the other mod is in the **same profile**. Both can be enabled together, so this
+  is the conflict that matters right now.
+- **Inter** — the other mod is in a **different profile** sharing the same game folder. They
+  can never be active at once; it only bites when you switch profile.
+- **Active** — both enabled, so the overlap is on disk now, and the mod activated last (the
+  `#` number in the row) wins.
+- **Potential** — the files overlap but the other mod is disabled.
+
+Those four are a legend at the top of the panel, always visible. The filters gained a **state**
+axis — whether something is happening now or only if you change something — and an empty list
+now tells "no conflicts" apart from "your filters hid all of them", which look identical and
+mean opposite things.
