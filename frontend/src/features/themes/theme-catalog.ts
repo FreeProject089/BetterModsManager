@@ -13,6 +13,7 @@ import { enabledOnly, looksLikeIndex, importIndexForType, describeKinds } from '
 import { escHtml, escAttr } from '../../core/utils.js';
 import { installTheme, activateTheme, getInstalledThemes, BmmTheme } from './theme-engine.js';
 import { fetchSourceText } from '../../core/source-fetch.js';
+import { resolveEntryUrl } from '../../core/catalog-url.js';
 
 const OFFICIAL_CATALOG = 'https://raw.githubusercontent.com/BetterDCS/BMM_Themes/main/catalog.json';
 const COMMUNITY_SRC_KEY = 'bmm_theme_community_sources';
@@ -187,6 +188,45 @@ function openThemeCatalogBuilder(): void {
         await fetchCatalog(true);
         renderCatalog();
     });
+}
+
+/**
+ * The theme itself, whether the catalogue carried it or only pointed at it.
+ *
+ * A theme catalogue used to be the ONE kind in BMM whose entries had to contain the whole
+ * thing inline — apps, plugins, modpacks, tutorials and automations all list an address and
+ * fetch the file. So the obvious way to publish themes, a folder of `.bmmtheme` files with a
+ * catalog.json beside them, was the one way that did not work; you had to paste every
+ * theme's full body into the feed by hand, and re-paste it to publish a fix.
+ *
+ * Inline still works and is still the default the builder writes — nothing published so far
+ * changes. This is the other half.
+ *
+ * A relative address resolves against the catalogue it came from, so the folder survives
+ * being moved or forked. `resolveEntryUrl` decides what may be fetched, and it checks the
+ * RESULT rather than the input, because an absolute `javascript:` URL passes through
+ * resolution untouched.
+ */
+async function resolveThemeBody(entry: BmmTheme): Promise<BmmTheme> {
+    // Carrying its own body: nothing to fetch, and no reason to touch the network.
+    if (entry.vars && Object.keys(entry.vars).length) return entry;
+    if (!entry.download_url) return entry;
+
+    const url = resolveEntryUrl(entry.download_url, entry._src || '');
+    if (!url) throw new Error(t('themes.badThemeUrl') || 'that address cannot be fetched');
+
+    const raw = await fetchSourceText(url);
+    let doc: any;
+    try { doc = JSON.parse(raw); } catch { throw new Error(t('themes.notATheme') || 'that file is not a theme'); }
+    // A document with no vars is not a theme, and installing one would register an entry that
+    // changes nothing and cannot be told from a theme that failed to apply.
+    if (!doc || typeof doc !== 'object' || !doc.vars || typeof doc.vars !== 'object') {
+        throw new Error(t('themes.notATheme') || 'that file is not a theme');
+    }
+    // The catalogue's id and name win. A fetched file that calls itself something else would
+    // otherwise install under a different id from the one the gallery just showed — so the
+    // row stays on screen as un-installed while the theme sits in the list under another name.
+    return { ...doc, id: entry.id, name: entry.name || doc.name };
 }
 
 // ── Fetch ─────────────────────────────────────────────────────────────────────
@@ -427,12 +467,17 @@ function renderCatalog(): void {
     listEl.querySelectorAll('.btc-install').forEach(btn => {
         btn.addEventListener('click', async () => {
             const id = (btn as HTMLElement).dataset.id!;
-            const theme = _catalog.find(th => th.id === id);
-            if (!theme) return;
+            const entry = _catalog.find(th => th.id === id);
+            if (!entry) return;
             (btn as HTMLButtonElement).textContent = t('common.loading') || 'Installing…';
             (btn as HTMLButtonElement).disabled = true;
-            await installTheme(theme);
-            toast(`${t('themes.installed') || 'Installed'}: ${theme.name}`, 'success');
+            try {
+                const theme = await resolveThemeBody(entry);
+                await installTheme(theme);
+                toast(`${t('themes.installed') || 'Installed'}: ${theme.name}`, 'success');
+            } catch (e) {
+                toast(`${t('themes.fetchFailed') || 'Could not fetch that theme'}: ${e}`, 'error');
+            }
             renderCatalog();
         });
     });

@@ -384,7 +384,17 @@ pub async fn fetch_theme_catalogs(
         // front-end's own fetch of the same URL just gets an empty 403 and is ignored).
         if let Ok(resp) = crate::commands::net::catalog_get(&app, &url).timeout(std::time::Duration::from_secs(8)).send().await {
             if let Ok(json) = resp.json::<serde_json::Value>().await {
-                all.extend(themes_in(&json));
+                // Where each entry came from, stamped on it before the documents are merged.
+                // After this loop there is one flat list and no way to tell which catalog any
+                // row belongs to — so an entry that points at a file BESIDE its catalog
+                // (`aurora.bmmtheme` rather than a full address) would have nothing to
+                // resolve against. That relative form is the one that survives a fork.
+                all.extend(themes_in(&json).into_iter().map(|mut v| {
+                    if let Some(o) = v.as_object_mut() {
+                        o.insert("_src".into(), serde_json::Value::String(url.clone()));
+                    }
+                    v
+                }));
             }
         }
     }

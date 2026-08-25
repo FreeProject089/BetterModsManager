@@ -9,6 +9,8 @@
 // Pure: parsing only. Fetching, downloading and importing are the caller's, so this can be
 // tested without a network and cannot accidentally do any of them.
 
+import { resolveEntryUrl } from '../../core/catalog-url.js';
+
 export interface PresetEntry {
     id: string;
     name: string;
@@ -47,30 +49,6 @@ const str = (v: unknown, max = 300): string => (typeof v === 'string' ? v.trim()
  *  - Duplicate ids collapse, first wins, so a catalog listing something twice does not
  *    offer it twice.
  */
-/**
- * An entry's address, resolved against the catalog it came from.
- *
- * Returns '' for anything that must not be fetched, so the caller has one thing to test.
- *
- * The ORDER is the security property. Resolution is not a narrowing operation: `new URL`
- * gives an absolute URL its own scheme regardless of the base, so `javascript:…` comes out
- * of it unchanged. Checking the input and trusting the output would therefore let exactly
- * the thing this guards against straight through — the check is on the result.
- */
-export function resolveEntryUrl(raw: string, source: string): string {
-    const v = String(raw || '').trim();
-    if (!v) return '';
-    if (/^https?:\/\//i.test(v)) return v;
-    // Relative, and only meaningful against an http(s) catalog. A catalog read from a local
-    // file has no base to resolve against, and inventing one would turn a relative name into
-    // a path on the user's disk.
-    if (!/^https?:\/\//i.test(source)) return '';
-    try {
-        const out = new URL(v, source).toString();
-        return /^https?:\/\//i.test(out) ? out : '';
-    } catch { return ''; }
-}
-
 export function parsePresetFeed(raw: unknown, source = ''): { presets: PresetEntry[]; dropped: string[] } {
     const dropped: string[] = [];
     const doc = (raw && typeof raw === 'object' ? raw : {}) as Record<string, any>;

@@ -10,8 +10,11 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const { parsePresetFeed, looksLikePresetFeed, resolveEntryUrl } = await import(
+const { parsePresetFeed, looksLikePresetFeed } = await import(
   pathToFileURL(join(ROOT, 'frontend/js/features/settings/preset-catalog.js')).href
+);
+const { resolveEntryUrl } = await import(
+  pathToFileURL(join(ROOT, 'frontend/js/core/catalog-url.js')).href
 );
 
 const feed = (presets) => ({ version: '1.0', name: 'idx', presets });

@@ -27,6 +27,12 @@ export interface BmmTheme {
     html_swaps?: HtmlSwap[];    // replace matching elements' innerHTML (e.g. icon SVG)
     mode?: 'dark' | 'light';    // triggers contrast patches for light themes
     catalog_url?: string;       // origin catalog (for attribution)
+    /** Where the theme itself lives, when the catalog entry only POINTS at it rather than
+     *  carrying it. Absolute, or relative to `_src`. See theme-catalog's resolveThemeBody. */
+    download_url?: string;
+    /** The catalog this row came from, stamped by fetch_theme_catalogs before the documents
+     *  are merged — it is the base a relative `download_url` resolves against. */
+    _src?: string;
     bmm_min_version?: string;
 }
 
