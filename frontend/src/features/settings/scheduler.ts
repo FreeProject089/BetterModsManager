@@ -19,6 +19,7 @@ import { substituteVars, VAR_NAME_RE, parseList, readNum, readVar, renderVar, ty
 import { parseHeaderLines, readJsonPath, statusIsFailure } from './http-action.js';
 import { inspectBmmpa } from './bmmpa-inspect.js';
 import { parsePresetFeed, looksLikePresetFeed, readPresetCatalogs, writePresetCatalogs } from './preset-catalog.js';
+import { mountCompletions } from './bmms-complete.js';
 import {
     originLabel, originOf, forgetOrigin, isDisabled, setDisabled, recordHistory,
     hasSource, looksLikeIndex, catalogLooksLike, importIndexForType,
@@ -3150,9 +3151,18 @@ function renderModal(modal: HTMLElement): void {
                     <span class="sched-flow-start">${t('sched.flowStart') || 'START'}</span>
                     <!-- Two views of ONE draft. There is no third state where the code and
                          the bricks disagree, because there is only ever one tree. -->
-                    <span class="sched-mode-switch">
-                        <button type="button" class="btn btn-xs sched-mode-btn on" data-mode="bricks">${t('sched.modeBricks') || 'Blocks'}</button>
-                        <button type="button" class="btn btn-xs sched-mode-btn" data-mode="code" data-tooltip="${escAttr(t('sched.modeCodeTip') || 'Write this task as text. Anything you build here opens back up as blocks.')}">${t('sched.modeCode') || 'Code'}</button>
+                    <span class="sched-mode-switch" role="tablist" aria-label="${escAttr(t('sched.modeAria') || 'How to edit this task')}">
+                        <span class="sched-mode-glider" aria-hidden="true"></span>
+                        <button type="button" class="sched-mode-btn on" data-mode="bricks" role="tab" aria-selected="true"
+                                data-tooltip="${escAttr(t('sched.modeBricksTip') || 'Build this task by clicking. Everything the language has is here.')}">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+                            <span>${t('sched.modeBricks') || 'Blocks'}</span>
+                        </button>
+                        <button type="button" class="sched-mode-btn" data-mode="code" role="tab" aria-selected="false"
+                                data-tooltip="${escAttr(t('sched.modeCodeTip') || 'Write this task as text. Anything you build here opens back up as blocks.')}">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                            <span>${t('sched.modeCode') || 'Code'}</span>
+                        </button>
                     </span>
                     <span class="sched-flow-hint">${t('sched.fStepsHint') || 'WHAT it does, top to bottom'} — <span class="sched-flow-hint-drag">${t('sched.dragHint') || 'drag any block into an IF/LOOP branch to nest it'}</span></span>
                     <!-- The legend must list what the language actually has. It still
@@ -3465,6 +3475,22 @@ function _startStepDrag(ev: MouseEvent, steps: Step[], fromIdx: number, block: H
  * sidebar and stay in charge of themselves; printing them into the text would give every
  * one of them two places to be edited and a rule about which wins.
  */
+/**
+ * What the code box offers as suggestions.
+ *
+ * Read from the SAME arrays the brick editor renders from, so an action added tomorrow is
+ * suggested tomorrow. A hand-kept copy of 75 names is a list that goes stale the first time
+ * somebody adds an action and does not think of this file.
+ */
+function codeVocabulary() {
+    return {
+        actions: ACTION_TYPES.map((a) => a.v),
+        conditions: COND_TYPES.slice(),
+        sources: VALUE_SOURCES.slice(),
+        loops: LOOP_SOURCES.slice(),
+    };
+}
+
 function wireCodeMode(modal: HTMLElement): void {
     const pane = modal.querySelector('#sched-codepane') as HTMLElement | null;
     const timeline = modal.querySelector('.sched-timeline') as HTMLElement | null;
@@ -3480,8 +3506,16 @@ function wireCodeMode(modal: HTMLElement): void {
         status.classList.toggle('is-bad', bad);
     };
 
-    /** Compile what is in the box. Returns the steps, or null after reporting why not. */
-    const readCode = async (): Promise<Step[] | null> => {
+    /**
+     * Compile what is in the box. Returns the steps, or null after reporting why not.
+     *
+     * `jump` moves the caret to the error, and defaults to OFF. It is the right thing to do
+     * when somebody pressed Blocks or Save — they asked, and hunting for line 34 by
+     * counting is the difference between an editor and a text box that judges you. It is the
+     * wrong thing to do while they are typing: half a line is a syntax error, so the live
+     * check fired on nearly every pause and threw the caret across the file mid-sentence.
+     */
+    const readCode = async (jump = false, hushCaretLine = false): Promise<Step[] | null> => {
         const src = ta.value.trim();
         // Empty is a legitimate task with no steps, not an error.
         if (!src) return [];
@@ -3489,10 +3523,14 @@ function wireCodeMode(modal: HTMLElement): void {
             const r: any = await invoke('bmms_compile_steps', { source: src });
             if (r?.ok) return (r.steps || []) as Step[];
             const e = (r.errors || [])[0];
-            say(e ? `${t('sched.bmms.line') || 'Line'} ${e.line}:${e.col} — ${e.message}` : (t('common.error') || 'Error'), true);
-            // The cursor, on the line that is wrong. Hunting for line 34 by counting is the
-            // difference between an editor and a text box that judges you.
-            if (e?.line) {
+            // Half a line is a syntax error. Complaining about the line somebody is still
+            // typing is complaining about every keystroke, so the live check stays quiet
+            // about THAT line and reports everything else — move away and the error appears.
+            const caretLine = ta.value.slice(0, ta.selectionStart).split('\n').length;
+            if (!(hushCaretLine && e?.line === caretLine)) {
+                say(e ? `${t('sched.bmms.line') || 'Line'} ${e.line}:${e.col} — ${e.message}` : (t('common.error') || 'Error'), true);
+            }
+            if (jump && e?.line) {
                 const upto = ta.value.split('\n').slice(0, e.line - 1).join('\n').length + (e.line > 1 ? 1 : 0);
                 ta.focus();
                 ta.setSelectionRange(upto, upto);
@@ -3508,7 +3546,14 @@ function wireCodeMode(modal: HTMLElement): void {
         mode = next;
         timeline.hidden = next === 'code';
         pane.hidden = next !== 'code';
-        for (const b of btns) b.classList.toggle('on', b.dataset.mode === next);
+        for (const b of btns) {
+            const on = b.dataset.mode === next;
+            b.classList.toggle('on', on);
+            b.setAttribute('aria-selected', on ? 'true' : 'false');
+        }
+        // The glider is moved by a class rather than by measuring, so it cannot drift out of
+        // step with the buttons when the labels are translated to different widths.
+        modal.querySelector('.sched-mode-switch')?.classList.toggle('at-code', next === 'code');
     };
 
     for (const b of btns) {
@@ -3528,7 +3573,7 @@ function wireCodeMode(modal: HTMLElement): void {
                 show('code');
                 return;
             }
-            const steps = await readCode();
+            const steps = await readCode(true);
             if (steps === null) return;   // refused — stay here, the message says why
             _draft.steps = steps;
             show('bricks');
@@ -3540,10 +3585,12 @@ function wireCodeMode(modal: HTMLElement): void {
     // Checked as you stop typing, so the Blocks button is never the first thing to tell you
     // there is a mistake.
     let timer: any = null;
+    mountCompletions(ta, codeVocabulary());
+
     ta.addEventListener('input', () => {
         clearTimeout(timer);
         timer = setTimeout(async () => {
-            const steps = await readCode();
+            const steps = await readCode(false, true);
             if (steps) say((t('sched.bmms.ok') || '{n} step(s)').replace('{n}', String(stepCount(steps))), false);
         }, 350);
     });
@@ -3553,7 +3600,7 @@ function wireCodeMode(modal: HTMLElement): void {
     // blocks held — the worst possible outcome and a silent one.
     modal.querySelector('#sched-save')?.addEventListener('click', async (e) => {
         if (mode !== 'code') return;
-        const steps = await readCode();
+        const steps = await readCode(true);
         if (steps === null) { e.preventDefault(); e.stopImmediatePropagation(); return; }
         _draft.steps = steps;
     }, true);   // capture, so this runs BEFORE the save handler reads _draft
@@ -3652,7 +3699,7 @@ function renderStepsEditor(host: HTMLElement, steps: Step[], depth = 0): void {
             // list source the whole time and the type has allowed it, so `for each` over a
             // list the task built itself worked and could not be chosen — the same gap that
             // left the list ACTIONS without a form.
-            const srcSel = (['enabledMods', 'disabledMods', 'mods', 'profiles', 'modpacks', 'themes', 'list', 'mapKeys'] as const).map(m =>
+            const srcSel = LOOP_SOURCES.map(m =>
                 `<option value="${m}"${step.source === m ? ' selected' : ''}>${escHtml(t('sched.fe.' + m) || m)}</option>`).join('');
             const ownSource = step.source === 'list' || step.source === 'mapKeys';
             const nameBox = ownSource ? `<input class="input sched-fe-name" spellcheck="false" style="max-width:150px"
@@ -4893,6 +4940,8 @@ function diskOptions(selected: string): string {
         _disks.map((d: any) => `<option value="${escAttr(d.mount_point)}"${d.mount_point === selected ? ' selected' : ''}>${escHtml(d.mount_point)}${d.name ? ' · ' + escHtml(d.name) : ''}</option>`).join('');
 }
 
+/** What `for each` can walk. One list: the editor's dropdown and the code box's suggestions. */
+const LOOP_SOURCES = ['enabledMods', 'disabledMods', 'mods', 'profiles', 'modpacks', 'themes', 'list', 'mapKeys'] as const;
 const COND_TYPES = ['always', 'all', 'any', 'value', 'enumIs', 'profileActive', 'modEnabled', 'modDisabled', 'modpackActive', 'modpackInactive', 'allModsActive', 'appRunning', 'appNotRunning', 'fileExists', 'pathIsDir', 'fileHash', 'filesMatch', 'fileSize', 'fileType', 'fileName', 'fileNewer', 'online', 'catalogOk', 'repoOk', 'timeReached', 'dayOfWeek', 'timeRange', 'commandSucceeds'];
 // Values a preceding action can capture (used by the `value` condition).
 // Every variable an action writes into `ctx`, so a `value` condition can read all of

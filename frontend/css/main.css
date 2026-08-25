@@ -16574,13 +16574,112 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 /* ── Blocks ⇄ Code, in the task editor ──────────────────────────────────────
    The pane replaces the timeline rather than sitting beside it: two editable views of the
    same steps, visible at once, would raise the question of which one is being edited. */
-.sched-mode-switch { display: inline-flex; gap: 2px; margin-left: auto; }
-.sched-mode-btn { opacity: 0.6; }
-.sched-mode-btn.on {
-    opacity: 1;
-    background: var(--bmm-bg-active);
-    border-color: var(--border);
+/* A segmented control, not two buttons.
+   Two buttons at 0.6 opacity read as one enabled and one DISABLED — the shape the app
+   uses everywhere else for "you cannot press this". A track with a moving pill reads as
+   what it is: one thing, currently on the left. */
+.sched-mode-switch {
+    position: relative;
+    display: inline-flex;
+    margin-left: auto;
+    padding: 2px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--bmm-bg-elevated);
 }
+/* Half the track, moved by a class. Measuring the buttons would drift the moment a
+   translation made one label wider than the other. */
+.sched-mode-glider {
+    position: absolute;
+    top: 2px; bottom: 2px; left: 2px;
+    width: calc(50% - 2px);
+    border-radius: 999px;
+    background: var(--bmm-accent);
+    transition: transform 0.18s ease;
+    pointer-events: none;
+}
+.sched-mode-switch.at-code .sched-mode-glider { transform: translateX(100%); }
+
+.sched-mode-btn {
+    position: relative;   /* above the glider */
+    z-index: 1;
+    flex: 1 1 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    min-width: 76px;
+    padding: 4px 12px;
+    border: 0;
+    border-radius: 999px;
+    background: none;
+    font: inherit;
+    font-size: 11px;
+    font-weight: 600;
+    /* SECONDARY, not muted. Measured on the track: muted (#475569) lands at 2.1:1, and the
+       unselected half of a segmented control is still a label somebody has to read to know
+       what they are switching to. Secondary is 5.5:1 on the same background. */
+    color: var(--bmm-text-secondary);
+    cursor: pointer;
+    transition: color 0.18s ease;
+}
+.sched-mode-btn:hover { color: var(--text); }
+/* On the accent pill. `--bmm-text-on-accent` is the token the whole app uses for text over
+   a coloured fill — it is white by default and a light-accent theme overrides it, which is
+   exactly the case a hard-coded #fff here would get wrong. */
+.sched-mode-btn.on { color: var(--bmm-text-on-accent); }
+.sched-mode-btn svg { flex-shrink: 0; }
+.sched-mode-btn:focus-visible { outline: 2px solid var(--bmm-accent); outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+    .sched-mode-glider { transition: none; }
+}
+/* ── BMMScript completion ───────────────────────────────────────────────────
+   On <body>, not inside the modal: a panel clipped by the code pane's overflow would be
+   half a list, and the pane is the one element guaranteed to scroll.
+   Opaque, never translucent — a see-through suggestion list draws its own text over the
+   code behind it, which is the one thing it must not do. */
+.bmms-ac {
+    position: fixed;
+    z-index: 12000;
+    min-width: 190px;
+    max-width: 320px;
+    padding: 4px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bmm-bg-elevated);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    font-size: 12px;
+}
+.bmms-ac-row {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    padding: 3px 8px;
+    border-radius: 5px;
+    cursor: pointer;
+}
+.bmms-ac-row.on { background: var(--bmm-bg-active); }
+.bmms-ac-text {
+    flex: 1;
+    font-family: var(--bmm-font-mono);
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.bmms-ac-kind { font-size: 10px; color: var(--text-muted); flex-shrink: 0; }
+/* The one key that accepts, written down. Otherwise the only way to learn it is to press
+   Enter, get a newline, and conclude the list is broken. */
+.bmms-ac-foot {
+    margin-top: 3px;
+    padding: 3px 8px 1px;
+    border-top: 1px solid var(--border);
+    font-size: 10px;
+    color: var(--text-muted);
+    text-align: right;
+}
+
 .sched-codepane { display: flex; flex-direction: column; gap: 6px; min-height: 0; }
 .sched-codepane .sched-code { width: 100%; min-height: 320px; resize: vertical; }
 .sched-code-status { font-size: 11px; color: var(--text-muted); min-height: 15px; }

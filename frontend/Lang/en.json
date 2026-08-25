@@ -8145,6 +8145,8 @@
   "sched.modeBricks": "Blocks",
   "sched.modeCode": "Code",
   "sched.modeCodeTip": "Write this task as text. Anything you build here opens back up as blocks.",
+  "sched.modeAria": "How to edit this task",
+  "sched.modeBricksTip": "Build this task by clicking. Everything the language has is here.",
   "sched.addParallel": "At the same time",
   "sched.legendPar": "Run several branches at the same time",
   "sched.parallel": "AT THE SAME TIME",

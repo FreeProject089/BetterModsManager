@@ -8143,6 +8143,8 @@
   "sched.modeBricks": "Blocs",
   "sched.modeCode": "Code",
   "sched.modeCodeTip": "Écrire cette tâche en texte. Tout ce que vous y construisez se rouvre en blocs.",
+  "sched.modeAria": "Comment modifier cette tâche",
+  "sched.modeBricksTip": "Construire la tâche en cliquant. Tout ce que le langage sait faire est ici.",
   "sched.addParallel": "En même temps",
   "sched.legendPar": "Exécuter plusieurs branches en même temps",
   "sched.parallel": "EN MÊME TEMPS",
