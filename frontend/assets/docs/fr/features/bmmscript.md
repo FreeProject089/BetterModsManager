@@ -276,6 +276,31 @@ Rust est compilé avant de s'exécuter, donc il démarre bien plus lentement que
 pour une tâche qui se déclenche toutes les quelques minutes, un moteur interprété est
 généralement le meilleur choix.
 
+## Partager un script
+
+Un `.bmmscript` est un simple fichier texte, il se partage comme n'importe quel autre.
+Double-cliquez dessus et BMM l'ouvre — il ne l'**exécute pas**.
+
+Ce que vous obtenez est un écran de relecture : le fichier est compilé d'abord (s'il est
+cassé, il nomme la ligne au lieu de s'exécuter à moitié), chaque étape est listée, et chaque
+corps de `script` est imprimé en entier plutôt que résumé en « exécute un script ».
+
+Ensuite, deux cas :
+
+- **Il ne demande rien** — un clic pour l'exécuter. Tout ce qu'il peut faire, vous pourriez
+  le faire à la main avec les boutons déjà présents ; l'exécuter n'ajoute aucune capacité.
+- **Il s'accorde quelque chose** — `command`, `script`, `deeplink` ou `stopProcess` — et le
+  bouton reste désactivé tant que vous n'avez pas coché *J'ai lu ce qu'il fait*. Ces quatre
+  capacités sont les seules qu'une tâche peut avoir et que les boutons de l'app n'ont pas.
+
+**Exécuter maintenant** et **Ajouter à mes tâches** sont deux boutons distincts : exécuter
+un fichier une fois et le garder pour toujours sont deux intentions différentes. Ni l'un ni
+l'autre n'hérite d'`osSchedule` : enregistrer une tâche planifiée Windows est votre
+décision, jamais celle de l'auteur du fichier.
+
+Un fichier écrit par un BMM plus ancien, qui ne porte que l'ancien drapeau de permission,
+est lu correctement — il annonce ce qu'il accorde vraiment, pas rien.
+
 ## Les erreurs
 
 Chaque erreur nomme une ligne et une colonne. Deux méritent d'être connues parce qu'elles

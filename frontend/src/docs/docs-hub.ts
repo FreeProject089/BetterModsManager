@@ -874,6 +874,10 @@ You do not have to choose between the two. The action **Run BMMScript (advanced)
 
 One thing an round trip does not keep: **comments and blank lines**. They are yours, not the task's, and the brick tree has nowhere to put them.
 
+### Sharing one
+
+A \`.bmmscript\` is a plain text file. Double-click one and BMM opens it — it does NOT run it. You get the compiled steps, every script body in full, and then one of two things: a script that asks for nothing runs on one click, and one that grants itself \`command\`, \`script\`, \`deeplink\` or \`stopProcess\` stays disabled until you tick that you have read it. Those four are the only things a task can do that the app's own buttons cannot.
+
 The full reference — every trigger, statement and condition — is on the docs site.`,
           fr: `Le planificateur offre une seconde façon d’écrire la même chose : **BMMScript**, l’automatisation en texte.
 
@@ -929,6 +933,10 @@ PowerShell, CMD, Bash, Python, JavaScript (Node) ou Rust, corps pris exactement 
 Vous n’avez pas à choisir entre les deux modes. L’action **Exécuter du BMMScript (avancé)** prend un extrait sans enveloppe \`task\` et l’exécute dans la tâche qui l’entoure — mêmes variables, mêmes permissions. L’éditeur le compile pendant que vous tapez et nomme la ligne de la première erreur.
 
 Une chose que l’aller-retour ne garde pas : **les commentaires et les lignes vides**. Ils sont à vous, pas à la tâche, et l’arbre de briques n’a nulle part où les mettre.
+
+### En partager un
+
+Un \`.bmmscript\` est un simple fichier texte. Double-cliquez dessus et BMM l’ouvre — il ne l’exécute PAS. Vous voyez les étapes compilées, chaque corps de script en entier, puis deux cas : un script qui ne demande rien s’exécute en un clic, et un qui s’accorde \`command\`, \`script\`, \`deeplink\` ou \`stopProcess\` reste bloqué tant que vous n’avez pas coché que vous l’avez lu. Ces quatre capacités sont les seules qu’une tâche peut avoir et que les boutons de l’app n’ont pas.
 
 La référence complète — chaque déclencheur, instruction et condition — est sur le site de documentation.`,
         },

@@ -279,6 +279,30 @@ found, before you save the task.
 Rust is compiled before it runs, so it starts far more slowly than the others; for a task
 that fires every few minutes, one of the interpreted engines is usually the better answer.
 
+## Sharing a script
+
+A `.bmmscript` is a plain text file, so it shares like any other. Double-click one and BMM
+opens it — it does **not** run it.
+
+What you get is a review screen: the file is compiled first (a broken one names the line
+rather than half running), every step is listed, and every `script` body is printed in full
+rather than summarised as "runs a script".
+
+Then one of two things:
+
+- **It asks for nothing** — one click to run. Everything it can do, you could do by hand
+  with the buttons already in the app, so running it adds no capability.
+- **It grants itself something** — `command`, `script`, `deeplink` or `stopProcess` — and
+  Run stays disabled until you tick *I have read what it does*. Those four are the only
+  things a task can do that the app's own buttons cannot.
+
+**Run it now** and **Add to my tasks** are separate buttons, because running a file once and
+keeping it forever are different intentions. Neither inherits `osSchedule`: registering a
+Windows scheduled task is your decision, never the file author's.
+
+A file written by an older BMM that carries only the legacy permission flag is read
+correctly — it reports what it really grants, not nothing.
+
 ## Errors
 
 Every error names a line and a column. Two are worth knowing about because they look like

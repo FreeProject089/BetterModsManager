@@ -1301,8 +1301,15 @@ fn num(n: f64) -> Value {
 #[derive(Debug, Serialize)]
 pub struct CompileOut {
     pub ok: bool,
+    /// The FIRST task, kept so every existing caller reads the field it always did.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub task: Option<Value>,
+    /// Every task in the file. One file used to mean one task; a shared `.bmmscript` is far
+    /// more useful when it can carry the automation AND the two it calls — which is what
+    /// sharing one actually requires. The .bmmpa exporter follows sub-task references for
+    /// exactly this reason.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tasks: Option<Vec<Value>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub steps: Option<Vec<Value>>,
     pub errors: Vec<Diagnostic>,
@@ -1315,6 +1322,7 @@ fn compile_inner(source: &str, snippet: bool) -> CompileOut {
             return CompileOut {
                 ok: false,
                 task: None,
+                tasks: None,
                 steps: None,
                 errors: vec![e],
             }
@@ -1335,6 +1343,7 @@ fn compile_inner(source: &str, snippet: bool) -> CompileOut {
                     return CompileOut {
                         ok: false,
                         task: None,
+                        tasks: None,
                         steps: None,
                         errors: vec![e],
                     }
@@ -1344,38 +1353,62 @@ fn compile_inner(source: &str, snippet: bool) -> CompileOut {
         return CompileOut {
             ok: true,
             task: None,
+            tasks: None,
             steps: Some(steps),
             errors: vec![],
         };
     }
 
-    match p.task() {
-        Ok(t) => {
-            // Trailing text is an error rather than something to ignore: it is almost
-            // always a brace closed one line too early, and silently dropping the rest of
-            // somebody's automation is the worst possible response to that.
-            if p.peek().tok != Tok::Eof {
-                let got = p.peek().clone();
+    // Every task in the file, not just the first. Trailing text is still caught: anything
+    // that is not the start of another task fails to parse as one, and a brace closed a line
+    // early is what that looks like.
+    let mut tasks: Vec<Value> = Vec::new();
+    while p.peek().tok != Tok::Eof {
+        // Trailing junk after a task that parsed keeps its OWN message. Falling through to
+        // "a file starts with task" would be true and useless: the file plainly does start
+        // with one, and the real cause is almost always a brace closed a line too early.
+        if !tasks.is_empty() && !p.at_word("task") {
+            let got = p.peek().clone();
+            return CompileOut {
+                ok: false,
+                task: None,
+                tasks: None,
+                steps: None,
+                errors: vec![Diagnostic::at(
+                    &got,
+                    "There is more text after the task ended \u{2014} check for a `}` that closes too early.",
+                )],
+            };
+        }
+        match p.task() {
+            Ok(t) => tasks.push(t),
+            Err(e) => {
                 return CompileOut {
                     ok: false,
                     task: None,
+                    tasks: None,
                     steps: None,
-                    errors: vec![Diagnostic::at(&got, "There is more text after the task ended — check for a `}` that closes too early.")],
-                };
-            }
-            CompileOut {
-                ok: true,
-                task: Some(t),
-                steps: None,
-                errors: vec![],
+                    errors: vec![e],
+                }
             }
         }
-        Err(e) => CompileOut {
+    }
+    if tasks.is_empty() {
+        let got = p.peek().clone();
+        return CompileOut {
             ok: false,
             task: None,
+            tasks: None,
             steps: None,
-            errors: vec![e],
-        },
+            errors: vec![Diagnostic::at(&got, "This file has no task in it.")],
+        };
+    }
+    CompileOut {
+        ok: true,
+        task: Some(tasks[0].clone()),
+        tasks: Some(tasks),
+        steps: None,
+        errors: vec![],
     }
 }
 
@@ -2111,8 +2144,9 @@ mod tests {
     #[test]
     fn every_example_in_the_documentation_compiles() {
         // Lifted verbatim from BMM Docs/docs/features/bmmscript{,.fr}.md, so prose cannot
-        // drift from the language. It has earned that twice: the first draft used … as a
-        // placeholder, which is not syntax, and eight examples did not parse.
+        // drift from the language. NOTHING ELSE may be written between this function and
+        // a_windows_path_keeps_its_backslashes: the regeneration replaces that whole span,
+        // and it has silently eaten fifteen tests doing exactly that.
         let cases: &[(&str, &str)] = &[
             (
                 "bmmscript.md 1",
@@ -2817,5 +2851,80 @@ if online {
 {}",
             printed
         );
+    }
+
+    #[test]
+    fn a_file_may_hold_several_tasks() {
+        // Sharing a task that runs two others used to share one third of an automation — the
+        // same reason the .bmmpa exporter follows sub-task references.
+        let r = compile_inner(
+            "task \"Main\" {
+  manual
+  run \"Helper\"
+}
+
+task \"Helper\" {
+  manual
+  do mods.scan()
+}
+",
+            false,
+        );
+        assert!(r.ok, "{:?}", r.errors);
+        let all = r.tasks.unwrap();
+        assert_eq!(all.len(), 2);
+        assert_eq!(all[0]["name"], "Main");
+        assert_eq!(all[1]["name"], "Helper");
+        // `task` still holds the first, so every caller that read it keeps working.
+        assert_eq!(r.task.unwrap()["name"], "Main");
+    }
+
+    #[test]
+    fn trailing_junk_still_keeps_its_own_message() {
+        // Falling through to "a file starts with task" would be true and useless: the file
+        // plainly does, and the real cause is a brace closed a line early.
+        let r = compile_inner(
+            "task \"T\" { do a() }
+do b()",
+            false,
+        );
+        assert!(!r.ok);
+        assert!(
+            r.errors[0].message.contains("after the task ended"),
+            "got: {}",
+            r.errors[0].message
+        );
+    }
+
+    #[test]
+    fn a_file_with_no_task_says_so() {
+        // Statements at the top level get the BETTER message: p.task() refuses first and
+        // names the shape a file should have. The is_empty() guard covers the EMPTY file,
+        // which is not the case I assumed when I wrote it.
+        let stmts = compile_inner("do mods.scan()", false);
+        assert!(!stmts.ok);
+        assert!(
+            stmts.errors[0].message.contains("A file starts with"),
+            "got: {}",
+            stmts.errors[0].message
+        );
+
+        for src in [
+            "",
+            "   
+
+  ",
+            "// just a comment
+",
+        ] {
+            let r = compile_inner(src, false);
+            assert!(!r.ok, "an empty file is not a valid one: {:?}", src);
+            assert!(
+                r.errors[0].message.contains("no task"),
+                "for {:?} got: {}",
+                src,
+                r.errors[0].message
+            );
+        }
     }
 }
