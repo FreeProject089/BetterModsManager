@@ -503,17 +503,65 @@ export async function runTaskOnce(task: Partial<Task>): Promise<void> {
 }
 
 /** Add a task object to the store — the same path importTasksFile uses for one task. */
+/**
+ * A task arriving from a FILE, made safe to sit in the list.
+ *
+ * A `.bmmpa` is somebody else's automation, and it carries its own `enabled`, its own
+ * `perms` and its own trigger. Importing one used to keep all three: only `osSchedule` was
+ * cleared. So a shared file could arrive enabled, granted `command` and `script`, on a
+ * one-minute interval — and start running programs a minute later with nothing asked and
+ * nothing shown.
+ *
+ * That is the exact thing the `.bmmscript` review screen exists to prevent, and the .bmmpa
+ * path went around it. It matters more since automations can be published as a CATALOGUE:
+ * these files are meant to travel between strangers now.
+ *
+ * The duplicate button already reasoned this way about a copy of your OWN task — "created
+ * DISABLED so saving the copy can't double-fire anything". A file from a stranger deserves at
+ * least that.
+ *
+ * Three things are taken away, and the person is told which:
+ *   · **enabled** — nothing from a file runs before somebody looks at it;
+ *   · **perms / allowCustomCommands** — the four capabilities that reach OUTSIDE BMM are
+ *     granted by the person who will live with them, never by the file's author;
+ *   · **osSchedule** — registering a Windows scheduled task is not a file's decision.
+ *
+ * Everything else is kept, so the automation is intact and one toggle away from working.
+ * Returns what it removed, so the toast can say so rather than leaving somebody wondering
+ * why the imported task does nothing.
+ */
+export function sanitiseImportedTask(task: any): { task: any; strippedPerms: string[]; wasEnabled: boolean } {
+    const RISKY = ['command', 'script', 'deeplink', 'stopProcess'] as const;
+    const asked: string[] = [];
+    for (const k of RISKY) if (task?.perms?.[k] === true) asked.push(k);
+    // The legacy single flag means command + deeplink; a file written by an older BMM carries
+    // only that, and reading `perms` alone would report it as asking for nothing.
+    if (task?.allowCustomCommands === true) for (const k of ['command', 'deeplink']) if (!asked.includes(k)) asked.push(k);
+
+    const wasEnabled = task?.enabled === true;
+    return {
+        task: {
+            ...task,
+            enabled: false,
+            osSchedule: false,
+            allowCustomCommands: false,
+            perms: { command: false, script: false, deeplink: false, stopProcess: false },
+        },
+        strippedPerms: asked,
+        wasEnabled,
+    };
+}
+
 export async function importTaskObject(task: Partial<Task>): Promise<void> {
-    const one = {
-        ...task,
-        id: `sched-${Date.now()}`,
-        // Never inherited from a file: registering an OS-level scheduled task is a decision
-        // for the person importing, not for whoever wrote it.
-        osSchedule: false,
-    } as Task;
-    _tasks.push(one);
+    const { task: safe, strippedPerms } = sanitiseImportedTask(task);
+    safe.id = `sched-${Date.now()}`;
+    _tasks.push(safe as Task);
     await saveTasks();
     renderScheduleList();
+    if (strippedPerms.length) {
+        toast((t('sched.importStripped') || 'Imported disabled. It asked for: {p} — grant what you want in its permissions.')
+            .replace('{p}', strippedPerms.join(', ')), 'warning', 8000);
+    }
 }
 
 export async function runTaskById(id: string): Promise<void> {
@@ -6350,11 +6398,15 @@ export async function importTasksFile(): Promise<void> {
         const arr: any[] = Array.isArray(doc) ? doc : (doc.magic === BMMPA_MAGIC ? doc.tasks : doc.tasks);
         if (!Array.isArray(arr)) throw new Error('Not a valid .bmmpa file');
         let added = 0;
+        // Every task in the file goes through the same door. Sanitising one import path and
+        // not the other is the shape this bug already had.
+        const askedAll = new Set<string>();
         for (const tk of arr) {
             if (tk && tk.name) {
-                tk.id = `sched-${Date.now()}-${added}`;
-                tk.osSchedule = false; // don't auto-register OS tasks on import
-                _tasks.push(tk); added++;
+                const { task: safe, strippedPerms } = sanitiseImportedTask(tk);
+                safe.id = `sched-${Date.now()}-${added}`;
+                strippedPerms.forEach((x) => askedAll.add(x));
+                _tasks.push(safe as Task); added++;
             }
         }
         // What the file carried WITH the tasks. Until now this was collected on export,
@@ -6370,5 +6422,9 @@ export async function importTasksFile(): Promise<void> {
         toast(`${added} ${t('sched.imported') || 'automation(s) imported'}`
             + (restored ? ` — ${(t('sched.importedIncl') || 'also restored {n} item(s) it needed').replace('{n}', String(restored))}` : ''),
             'success');
+        if (askedAll.size) {
+            toast((t('sched.importStripped') || 'Imported disabled. It asked for: {p} — grant what you want in its permissions.')
+                .replace('{p}', [...askedAll].join(', ')), 'warning', 8000);
+        }
     } catch (e) { toast(`${t('common.error') || 'Error'}: ${e}`, 'error'); }
 }

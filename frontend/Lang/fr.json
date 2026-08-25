@@ -5827,6 +5827,7 @@
   "sched.importBmmpa": "Importer .BMMPA",
   "sched.exported": "Automatisations exportées",
   "sched.imported": "automatisation(s) importée(s)",
+  "sched.importStripped": "Importé désactivé. Il demandait : {p} — accordez ce que vous voulez dans ses permissions.",
   "sched.noTasks": "Aucune tâche à exporter",
   "sched.appIdPh": "id de l’app (installez une app d’abord)",
   "sched.programPh": "programme — ex. notepad.exe ou C:\\Tools\\run.bat",
