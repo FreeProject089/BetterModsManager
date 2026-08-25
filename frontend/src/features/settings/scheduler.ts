@@ -1306,7 +1306,7 @@ async function runAction(action: Action, task: Task, ctx: RunCtx): Promise<void>
             // guess in front of `deleteExtra`. Same values, chosen by the same human,
             // once, when the task is written.
             if (!p.url || !p.gameDir || !p.modsDir) {
-                throw new Error(t('sched.syncMissing') || 'This sync step needs a repo URL, a game folder and a mods folder.');
+                throw new Error(t('sched.syncMissing') || 'This sync step needs a repo URL, a destination folder and a mods folder.');
             }
 
             // Resolve which profile INSIDE the repo to install. Fetching first also
@@ -4041,6 +4041,11 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
         const eng = params.engine || 'powershell';
         const engines: [string, string][] = [
             ['powershell', 'PowerShell'], ['cmd', 'CMD / Batch'], ['bash', 'Bash'], ['python', 'Python'],
+            ['node', 'JavaScript (Node)'],
+            // Compiled, not interpreted: a Rust step pays rustc's startup before it runs.
+            // Fine for a nightly job, wrong for one that fires every minute — the status
+            // line below says so when this is selected.
+            ['rust', 'Rust'],
         ];
         host.innerHTML = `
         <div class="sched-cmd-builder">

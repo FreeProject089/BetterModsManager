@@ -143,6 +143,10 @@ pub fn run_scheduled_script(
         "cmd" => ("bat", |f: &str| vec!["/c".into(), f.to_string()]),
         "bash" => ("sh", |f: &str| vec![f.to_string()]),
         "python" => ("py", |f: &str| vec![f.to_string()]),
+        "node" => ("js", |f: &str| vec![f.to_string()]),
+        // Rust has no interpreter. Compiled below, in its own path, because the
+        // (write file, spawn interpreter) shape this table describes does not fit it.
+        "rust" => ("rs", |f: &str| vec![f.to_string()]),
         other => return Err(format!("Unknown script engine: {}", other)),
     };
 
@@ -177,6 +181,14 @@ pub fn run_scheduled_script(
     ));
 
     let file = path.to_string_lossy().to_string();
+
+    // Rust: compile, then run the binary. Both artefacts are removed on every path.
+    if engine == "rust" {
+        let out = compile_and_run_rust(&program, &path, working_dir.as_deref());
+        let _ = std::fs::remove_file(&path);
+        return out;
+    }
+
     let mut cmd = crate::commands::proc::hidden_command(&program);
     cmd.args(argv(&file));
     if let Some(dir) = working_dir.as_ref().filter(|d| !d.trim().is_empty()) {
@@ -202,6 +214,73 @@ pub fn run_scheduled_script(
     }
 }
 
+/// Compile a single-file Rust program and run it.
+///
+/// Two processes, and the difference between them is the point: a compile error is a
+/// mistake in the code the person just wrote, and a run failure is what their code did.
+/// Reporting both as "script failed" would send them to the wrong place, so the compiler's
+/// own diagnostics are returned as-is when it is the compiler that refused.
+///
+/// `-O` is deliberately NOT passed. A scheduled step is usually a few seconds of work and
+/// optimising costs more time than it saves; the debug profile also keeps the overflow
+/// checks, which is the right default for code nobody profiled.
+fn compile_and_run_rust(
+    rustc: &str,
+    src: &std::path::Path,
+    working_dir: Option<&str>,
+) -> Result<String, String> {
+    let exe_path = src.with_extension(if cfg!(windows) { "exe" } else { "bin" });
+
+    let compile = crate::commands::proc::hidden_command(rustc)
+        .arg(src)
+        .arg("-o")
+        .arg(&exe_path)
+        // Warnings are not failures, and a wall of them buries the error that is.
+        .arg("--edition=2021")
+        .arg("-Awarnings")
+        .output()
+        .map_err(|e| format!("Could not start {}: {}", rustc, e))?;
+
+    if !compile.status.success() {
+        let _ = std::fs::remove_file(&exe_path);
+        let msg = String::from_utf8_lossy(&compile.stderr).to_string();
+        // Named as a COMPILE failure. The same text under "script exited with 1" reads as
+        // the program having run and gone wrong, which is a different thing to go and fix.
+        return Err(format!(
+            "The Rust step did not compile:\n{}",
+            if msg.trim().is_empty() {
+                "rustc gave no output".to_string()
+            } else {
+                msg
+            }
+        ));
+    }
+
+    // Bound to a String first: hidden_command takes &str, and a Cow does not coerce.
+    let exe = exe_path.to_string_lossy().to_string();
+    let mut run = crate::commands::proc::hidden_command(&exe);
+    if let Some(dir) = working_dir.filter(|d| !d.trim().is_empty()) {
+        run.current_dir(dir);
+    }
+    let result = run.output();
+    // Before the early returns below: a compiled binary left in the temp directory is the
+    // one artefact here that is executable.
+    let _ = std::fs::remove_file(&exe_path);
+
+    let output = result.map_err(|e| format!("Could not run the compiled Rust step: {}", e))?;
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    if output.status.success() {
+        Ok(stdout)
+    } else {
+        Err(format!(
+            "The Rust step exited with {}: {}",
+            output.status.code().map(|c| c.to_string()).unwrap_or_else(|| "signal".into()),
+            if stderr.trim().is_empty() { stdout } else { stderr }
+        ))
+    }
+}
+
 /// The executables that can provide each script engine, in preference order.
 ///
 /// Hard-coded per engine, so this stays the same closed set the spawn always used —
@@ -218,6 +297,10 @@ fn engine_candidates(engine: &str) -> &'static [&'static str] {
         "cmd" => &["cmd"],
         "bash" => &["bash"],
         "python" => &["py", "python3", "python"],
+        "node" => &["node"],
+        // rustc, not cargo: a single file with a main() is what this runs, and cargo
+        // would want a manifest and a project directory that do not exist here.
+        "rust" => &["rustc"],
         _ => &[],
     }
 }
@@ -322,6 +405,16 @@ fn missing_engine_message(engine: &str) -> String {
             "No bash found (tried: {tried}). BMM does not bundle one — on Windows it comes \
              with Git for Windows or WSL. PowerShell and cmd are always available."
         ),
+        "node" => format!(
+            "No Node.js found (tried: {tried}). BMM does not bundle one \u{2014} install it from \
+             nodejs.org and make sure `node` is on your PATH."
+        ),
+        "rust" => format!(
+            "No Rust compiler found (tried: {tried}). BMM does not bundle one \u{2014} install it \
+             from rustup.rs. Note that a Rust step COMPILES before it runs, so it is far \
+             slower to start than the other engines: for a task that fires every few minutes, \
+             one of the interpreted engines is usually the better answer."
+        ),
         other => format!("No interpreter found for {other} (tried: {tried})."),
     }
 }
@@ -332,7 +425,7 @@ fn missing_engine_message(engine: &str) -> String {
 /// found, which is also the honest answer to "which Python is this going to use".
 #[tauri::command(async)]
 pub fn scheduler_script_engines() -> Vec<serde_json::Value> {
-    ["powershell", "cmd", "bash", "python"]
+    ["powershell", "cmd", "bash", "python", "node", "rust"]
         .iter()
         .map(|e| {
             let found = engine_candidates(e)
