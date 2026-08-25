@@ -24,6 +24,7 @@ pub mod repo;
 pub mod repo_server;
 pub mod repo_ssh;
 pub mod modpack_catalog;
+pub mod catalog_bundle;
 pub mod tutorial_custom;
 pub mod repo_keyauth;
 pub mod ban_manager;

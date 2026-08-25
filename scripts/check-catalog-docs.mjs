@@ -59,7 +59,12 @@ for (const p of indexDocs) {
 
 // The preset guide's field table must match PresetEntry, allowing the feed's snake_case
 // spelling for the one field that differs between wire and model.
-const WIRE = { downloadUrl: 'download_url', source: null };
+//
+// `null` means "not part of the published shape" — a field the PARSER sets from where it
+// read the catalogue, never one a publisher writes. Documenting those in the field table
+// would invite somebody to set them, which is exactly backwards: `local` in a document is
+// a claim that a remote entry is a local file, and it is ignored for that reason.
+const WIRE = { downloadUrl: 'download_url', source: null, local: null };
 for (const p of presetDocs) {
   const doc = read(p);
   for (const f of presetFields) {

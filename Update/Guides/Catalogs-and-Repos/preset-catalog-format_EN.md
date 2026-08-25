@@ -59,6 +59,35 @@ did not say" and "it contains nothing" are different claims about somebody else'
 
 ---
 
+## A catalogue that carries its own files
+
+Everything above assumes the `.bmmpa` files sit somewhere a URL can reach. They do not have
+to. **Publish my own…** has a *pack it into one file* option: BMM writes the folder as
+usual and then a single `.zip` of it beside them, holding `catalog.json` and every
+automation it names.
+
+Send that one file to somebody. In the automation catalogue panel, **Open a bundle
+file…** follows it — no host, no address, nothing to keep alive.
+
+The format is deliberately not a new one. It is the folder, zipped: `catalog.json` at the
+root and the payloads next to it. Anyone with a zip tool can look inside without BMM, and
+unzipping it gives back exactly the folder that would have been published.
+
+Two things worth knowing:
+
+- **An entry inside a bundle may still point outward.** A `download_url` of
+  `https://…/big.bmmpa` works in a bundle exactly as it does in a hosted catalogue, so the
+  small automations can travel with the file while a large one stays on a CDN.
+- **A bundle cannot have a base address.** The option is refused if you filled the base
+  address in, because a catalogue whose files live somewhere else has nothing to pack —
+  and silently packing an empty zip would be worse than saying so.
+
+Packing tells you if the catalogue names a file that is not in the folder, by name. A
+catalogue promising three automations and carrying two is a thing to hear about while you
+still have the folder open, not from the person you sent it to.
+
+---
+
 ## Nothing installs without being read first
 
 Every row in the browser ends in **Inspect**, never in *Install*. Choosing it downloads

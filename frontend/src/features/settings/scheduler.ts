@@ -5513,10 +5513,22 @@ async function loadPresetSources(): Promise<{ presets: any[]; sources: PresetSou
         // that switches it back on — still exists.
         if (!isOff && isDisabled(url)) { sources.push({ url, official: false, state: 'off', count: 0 }); continue; }
         try {
-            // A preset source may be an ssh:// one; fetchSourceText picks the transport
-            // and handles a password-protected HTTP source, so this call site knows
-            // about neither.
-            const text: string = await fetchSourceText(url);
+            // A BUNDLE is a file on this machine, not an address to fetch. The `bundle:`
+            // prefix is explicit rather than sniffed from the string: guessing that a
+            // source is local because it does not look like a URL is how a typo'd address
+            // becomes a file read.
+            let bundleDir = '';
+            let text: string;
+            if (url.startsWith('bundle:')) {
+                const res: any = await invoke('catalog_bundle_open', { path: url.slice('bundle:'.length) });
+                bundleDir = String(res?.dir || '');
+                text = String(res?.catalog || '');
+            } else {
+                // A preset source may be an ssh:// one; fetchSourceText picks the transport
+                // and handles a password-protected HTTP source, so this call site knows
+                // about neither.
+                text = await fetchSourceText(url);
+            }
             const doc = JSON.parse(text);
             if (!looksLikePresetFeed(doc)) {
                 // Told apart from "empty" on purpose: a plugin catalog reported as an empty
@@ -5524,7 +5536,7 @@ async function loadPresetSources(): Promise<{ presets: any[]; sources: PresetSou
                 sources.push({ url, official: isOff, state: 'notfeed', count: 0 });
                 continue;
             }
-            const parsed = parsePresetFeed(doc, url);
+            const parsed = parsePresetFeed(doc, url, bundleDir);
             // Trust follows the address, not the document — the rule apply_trust enforces
             // for app catalogs. A community feed cannot call its own entries official by
             // saying so in JSON.
@@ -5605,6 +5617,10 @@ export async function openTaskCatalogBuilder(): Promise<void> {
                     <input class="input" id="sched-tcb-base" placeholder="${escAttr(t('sched.tcb.basePh') || 'leave empty — addresses stay relative')}" spellcheck="false">
                     <p class="sched-tcb-hint">${escHtml(t('sched.tcb.baseHint') || 'Empty is the right answer almost always: the addresses stay relative, so the folder keeps working when it is moved, mirrored or forked. Fill this in only when the .bmmpa files will sit somewhere other than beside the catalogue.')}</p>
                 </div>
+                <div class="sched-tcb-field">
+                    <label class="sched-tg"><input type="checkbox" id="sched-tcb-bundle"> ${escHtml(t('sched.tcb.bundle') || 'Also pack it into one file')}</label>
+                    <p class="sched-tcb-hint">${escHtml(t('sched.tcb.bundleHint') || 'The folder is written either way — this adds a single .zip of it beside the folder, holding the catalogue and every automation. Send that one file to somebody and they can follow the catalogue with no host and no link. A base address above turns this off: a catalogue whose files live elsewhere has nothing to pack.')}</p>
+                </div>
                 <div class="sched-tcb-listh">
                     <span>${escHtml(t('sched.tcb.pick') || 'What goes in it')}</span>
                     <button type="button" class="btn btn-xs btn-ghost" id="sched-tcb-all">${escHtml(t('common.selectAll') || 'All')}</button>
@@ -5664,9 +5680,17 @@ export async function openTaskCatalogBuilder(): Promise<void> {
         const dir = await pickFolder().catch(() => null);
         if (!dir) return;
 
+        // A base address means the files live somewhere else, so there is nothing to pack.
+        // Refused rather than quietly ignored: the checkbox is on screen saying otherwise.
+        const wantBundle = !!(overlay.querySelector('#sched-tcb-bundle') as HTMLInputElement)?.checked;
+        if (wantBundle && base) {
+            toast(t('sched.tcb.bundleVsBase') || 'A catalogue with its own address elsewhere has nothing to pack — clear the address, or untick the single-file option', 'warning');
+            return;
+        }
+
         goBtn.disabled = true;
         try {
-            await writeTaskCatalog(dir, name, base, chosen);
+            await writeTaskCatalog(dir, name, base, chosen, wantBundle);
             close();
         } catch (e) {
             toast(`${t('common.error') || 'Error'}: ${e}`, 'error');
@@ -5683,7 +5707,7 @@ export async function openTaskCatalogBuilder(): Promise<void> {
  * catalog whose files were unsigned while a hand-export was signed would be a quieter file
  * for no reason anybody chose.
  */
-async function writeTaskCatalog(dir: string, name: string, base: string, tasks: Task[]): Promise<void> {
+async function writeTaskCatalog(dir: string, name: string, base: string, tasks: Task[], bundle = false): Promise<void> {
     const sep = dir.includes('\\') ? '\\' : '/';
     const plan = planTaskCatalog(tasks, base);
     let unsigned = 0;
@@ -5707,8 +5731,29 @@ async function writeTaskCatalog(dir: string, name: string, base: string, tasks: 
     const doc = JSON.stringify({ version: '1.0', name, presets: entries }, null, 2);
     await invoke('write_text_file', { path: `${dir}${sep}catalog.json`, content: doc });
 
+    // The single-file form, packed FROM the folder that was just written rather than
+    // assembled separately — so the two shapes cannot diverge, and the zip is by
+    // construction the folder somebody could have made by hand.
+    let packed = '';
+    if (bundle) {
+        const stem = safeFileStem(name, 'catalog');
+        const res: any = await invoke('catalog_bundle_pack', {
+            dir, out: `${dir}${sep}${stem}.zip`,
+        }).catch((e: any) => { toast(`${t('common.error') || 'Error'}: ${e}`, 'error'); return null; });
+        if (res) {
+            packed = ` — ${(t('sched.tcb.packed') || 'packed into {f}').replace('{f}', `${stem}.zip`)}`;
+            // Named, not counted: "3 missing" is a number somebody has to go and diff.
+            if (res.missing?.length) {
+                toast((t('sched.tcb.packMissing') || 'The catalogue names {n} file(s) that are not in the folder: {list}')
+                    .replace('{n}', String(res.missing.length))
+                    .replace('{list}', res.missing.slice(0, 5).join(', ')), 'warning', 7000);
+            }
+        }
+    }
+
     toast((t('sched.tcb.done') || 'Catalogue written — {n} automation(s) plus catalog.json')
         .replace('{n}', String(entries.length))
+        + packed
         + (unsigned ? ` — ${t('sched.exportUnsigned') || 'written unsigned'}` : ''), 'success');
 }
 
@@ -5930,6 +5975,14 @@ function showPresetCatalog(data: { presets: any[]; sources: PresetSource[] }): v
                         <input class="input" id="sched-pc-url" value="${escAttr(addUrl)}" placeholder="${escAttr(t('sched.pc.ask') || 'Address of a preset catalogue')}">
                         <button class="btn btn-sm btn-secondary" id="sched-pc-follow">${esc(t('sched.pc.follow') || 'Follow')}</button>
                     </div>
+                    <!-- A catalogue does not have to be somewhere. A bundle is one file
+                         holding the catalogue and its automations, so somebody can send you
+                         one and there is nothing to host and no address to keep alive. -->
+                    <button class="btn btn-sm btn-ghost sched-pc-publish" id="sched-pc-openbundle"
+                            data-tooltip="${escAttr(t('sched.pc.bundleTip') || 'Follow a catalogue that came as a single file — it carries its own automations')}">
+                        ${SVG16('<path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/>')}
+                        <span>${esc(t('sched.pc.openBundle') || 'Open a bundle file…')}</span>
+                    </button>
                     <!-- Publishing lives beside following, because they are the two halves of
                          the same idea and BMM only ever had one of them. A reader with no
                          writer makes a format look closed even when it is not. -->
@@ -6009,10 +6062,14 @@ function showPresetCatalog(data: { presets: any[]; sources: PresetSource[] }): v
          */
         urlBox?.addEventListener('input', () => { addUrl = urlBox.value; });
 
+        // Where following says what happened. Hoisted out of `follow` because opening a
+        // bundle reports into the same place, and two copies of one line is two chances
+        // for the panel to answer one action and not the other.
+        const say = (kind: 'ok' | 'bad', text: string, raw?: string) => { addOut = { kind, text, raw }; paint(); };
+
         const follow = async () => {
             const url = (urlBox?.value || '').trim();
             addUrl = url;
-            const say = (kind: 'ok' | 'bad', text: string, raw?: string) => { addOut = { kind, text, raw }; paint(); };
 
             if (!/^https?:\/\//i.test(url)) { say('bad', t('sched.pc.badUrl') || 'That is not an http(s) address.'); return; }
             // Case-insensitively, and against the official row too — the same question the
@@ -6063,6 +6120,31 @@ function showPresetCatalog(data: { presets: any[]; sources: PresetSource[] }): v
         };
         overlay.querySelector('#sched-pc-follow')?.addEventListener('click', () => { void follow(); });
         overlay.querySelector('#sched-pc-publish')?.addEventListener('click', () => { void openTaskCatalogBuilder(); });
+        overlay.querySelector('#sched-pc-openbundle')?.addEventListener('click', async () => {
+            const { pickFile } = await import('../../core/api.js');
+            const path = await pickFile([{ name: 'Catalogue bundle', extensions: ['zip'] }]).catch(() => null);
+            if (!path) return;
+            try {
+                // Opened before it is followed: a file that is not a catalogue must fail
+                // HERE, with the reason, rather than becoming a source that errors on every
+                // future open of this panel.
+                const res: any = await invoke('catalog_bundle_open', { path });
+                const doc = JSON.parse(String(res?.catalog || ''));
+                if (!looksLikePresetFeed(doc)) {
+                    say('bad', t('sched.pc.bundleNotFeed') || 'That bundle opened, but the catalogue inside it is not an automation catalogue.');
+                    return;
+                }
+                const src = `bundle:${path}`;
+                if (readPresetCatalogs().includes(src)) { say('bad', t('sched.pc.already') || 'You already follow that one.'); return; }
+                writePresetCatalogs([...readPresetCatalogs(), src]);
+                recordHistory({ action: 'add', type: 'preset', url: src });
+                say('ok', (t('sched.pc.followedBundle') || 'Following that bundle — {n} automation(s), no host needed.')
+                    .replace('{n}', String((doc.presets || []).length || 0)));
+                await reload();
+            } catch (e) {
+                say('bad', t('sched.pc.bundleBad') || 'That file is not a catalogue bundle.', String(e).slice(0, 200));
+            }
+        });
         urlBox?.addEventListener('keydown', (e) => { if ((e as KeyboardEvent).key === 'Enter') void follow(); });
 
         overlay.querySelectorAll<HTMLElement>('.sched-pc-toggle').forEach((b) => b.addEventListener('click', () => {
@@ -6099,7 +6181,12 @@ function showPresetCatalog(data: { presets: any[]; sources: PresetSource[] }): v
             const p = presets[Number(b.dataset.i)];
             b.textContent = t('sched.pc.loading') || 'Fetching…';
             try {
-                const text: string = await invoke('fetch_remote_json', { url: p.downloadUrl }) as string;
+                // Inside a bundle it is a file BMM extracted itself, so it is read rather
+                // than fetched. Reaching for the network with a path produces an error that
+                // names neither the file nor the reason.
+                const text: string = p.local
+                    ? await invoke('read_file_text', { path: p.downloadUrl }) as string
+                    : await invoke('fetch_remote_json', { url: p.downloadUrl }) as string;
                 const report = inspectBmmpa(JSON.parse(text));
                 if (!report.ok) { toast(report.error || t('sched.inspectFailed') || 'Could not read that file', 'error'); return; }
                 close();

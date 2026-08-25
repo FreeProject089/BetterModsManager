@@ -10,6 +10,7 @@
 // tested without a network and cannot accidentally do any of them.
 
 import { resolveEntryUrl } from '../../core/catalog-url.js';
+import { bundleEntryKind, resolveBundleEntry } from '../../core/catalog-bundle.js';
 
 export interface PresetEntry {
     id: string;
@@ -17,8 +18,13 @@ export interface PresetEntry {
     description: string;
     author: string;
     version: string;
-    /** Where the .bmmpa lives. http(s) only — see below. */
+    /** Where the .bmmpa lives: an http(s) URL, or — when `local` — a path inside an
+     *  extracted bundle. */
     downloadUrl: string;
+    /** The address is a file on this machine, inside a bundle BMM extracted itself.
+     *  Never set from the document: the parser decides it, from where it read the
+     *  catalogue. */
+    local?: boolean;
     tags: string[];
     /** How many automations are inside, when the publisher said. Undefined is "not stated",
      *  which is different from zero and must not be shown as it. */
@@ -49,7 +55,14 @@ const str = (v: unknown, max = 300): string => (typeof v === 'string' ? v.trim()
  *  - Duplicate ids collapse, first wins, so a catalog listing something twice does not
  *    offer it twice.
  */
-export function parsePresetFeed(raw: unknown, source = ''): { presets: PresetEntry[]; dropped: string[] } {
+/**
+ * @param bundleDir  When the catalogue came out of a BUNDLE, the folder it was extracted
+ *                   into. Entries that name a file rather than a URL then resolve to a path
+ *                   inside that folder — through `resolveBundleEntry`, which refuses every
+ *                   shape that could leave it. Empty for a catalogue fetched over the
+ *                   network, where a relative name resolves against the URL as before.
+ */
+export function parsePresetFeed(raw: unknown, source = '', bundleDir = ''): { presets: PresetEntry[]; dropped: string[] } {
     const dropped: string[] = [];
     const doc = (raw && typeof raw === 'object' ? raw : {}) as Record<string, any>;
     const list = Array.isArray(doc.presets) ? doc.presets : [];
@@ -61,7 +74,11 @@ export function parsePresetFeed(raw: unknown, source = ''): { presets: PresetEnt
         const raw = str(e.download_url ?? e.downloadUrl, 600);
         const id = str(e.id ?? e.slug, 120);
         const name = str(e.name ?? e.title, 200) || id;
-        const url = resolveEntryUrl(raw, source);
+        // A bundle may still point outward — the small automations travel with it, a big
+        // one stays on a CDN — so BOTH kinds of address are legal in the same document and
+        // the kind is decided per entry, not per catalogue.
+        const inBundle = !!bundleDir && bundleEntryKind(raw) === 'inside';
+        const url = inBundle ? resolveBundleEntry(raw, bundleDir) : resolveEntryUrl(raw, source);
         if (!url) {
             dropped.push(`${name || id || '(unnamed)'} — no usable download address`);
             continue;
@@ -76,6 +93,9 @@ export function parsePresetFeed(raw: unknown, source = ''): { presets: PresetEnt
             author: str(e.author, 120),
             version: str(e.version, 40),
             downloadUrl: url,
+            // Says which it is, so the thing that opens it reaches for the disk or for the
+            // network deliberately rather than by sniffing the string later.
+            ...(inBundle ? { local: true } : {}),
             tags: Array.isArray(e.tags) ? e.tags.filter((x: unknown) => typeof x === 'string').slice(0, 8) : [],
             // Only when it is a real count. A publisher who said nothing has not said zero.
             tasks: Number.isFinite(e.tasks) && e.tasks >= 0 ? Number(e.tasks) : undefined,
