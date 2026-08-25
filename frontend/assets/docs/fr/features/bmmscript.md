@@ -22,9 +22,10 @@ Trois conséquences, et c'est toute la raison de ce choix.
   limites de boucle et gestion d'erreur sont celles de l'exécuteur, inchangées. Le code est
   une façon d'*écrire* une automatisation, pas de contourner ses règles.
 
-Ce qu'il ne gère volontairement **pas** : les expressions, vos propres fonctions, la
-récursion. L'arithmétique reste où elle est déjà — l'action `math.set`. Ce sont des
-extensions à ajouter par-dessus plus tard, pas des raisons de bâtir un second moteur.
+Ce qu'il ne gère volontairement **pas** : vos propres fonctions, et la récursion. Tout ce
+qu'une brique sait faire, il sait le faire — y compris les variables, l'arithmétique et
+les comparaisons, qui sont de la syntaxe au-dessus des briques `var.set`, `math.set` et
+`value` plutôt qu'un second évaluateur.
 
 ## Une tâche complète
 
@@ -102,6 +103,43 @@ if online and modEnabled(id: "x") { do mods.scan() } else if always { stop }
 Les conditions s'écrivent comme les actions. `and` / `or` les combinent, `not` en inverse
 une, les parenthèses regroupent. `a and b and c` fait un seul groupe de trois, ce qui est
 ce qu'affiche l'éditeur de briques.
+
+### Variables et arithmétique
+
+```bmms
+set count = 0
+set count = count + 1
+set moyenne = (a + b) / 2
+set label = "bonjour"
+shared set equipe = "rouge"
+clear count
+```
+
+La règle pour distinguer les deux est celle que vous devineriez : **une valeur entre
+guillemets est du texte, une valeur sans guillemets est un nombre**. `set n = 0` compte ;
+`set s = "0"` est le caractère zéro.
+
+Les nombres passent par le même évaluateur d'expressions que l'action `math.set` —
+parenthèses, `+ - * / % ^`, et ses fonctions. Le texte va dans `var.set`, et `shared set`
+écrit la variable que toutes les tâches peuvent lire. `clear` en supprime une.
+
+Un nom doit être fait de lettres, chiffres et `_`, en commençant par une lettre. Tout le
+reste est refusé pendant que vous tapez plutôt qu'à l'exécution : un nom que le
+substituteur ne sait pas retrouver stockerait quelque chose qui a l'air enregistré et ne
+pourra jamais être relu.
+
+Une expression s'arrête en fin de ligne. Il n'y a pas de continuation — l'alternative
+serait de deviner où s'arrête une instruction.
+
+### Comparer
+
+```bmms
+if count >= 3 { stop }
+if disk.write_mbps < 50 { do notify(message: "disque lent") }
+```
+
+`== != > >= < <=` contre un nombre ou un nom. C'est la ligne de comparaison de l'éditeur de
+briques, donc une comparaison écrite ici s'y ouvre comme telle.
 
 ### Boucles
 

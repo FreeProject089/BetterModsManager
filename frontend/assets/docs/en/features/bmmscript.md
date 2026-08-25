@@ -21,9 +21,10 @@ Three things follow, and they are the whole reason for the design.
   and error handling are the runner's, unchanged. Code is a way to *write* an automation,
   not a way to get past its rules.
 
-What it deliberately has **no** support for: expressions, your own functions, recursion.
-Arithmetic lives where it already lives — the `math.set` action. Those are extensions to add
-on top later, not reasons to build a second engine.
+What it deliberately has **no** support for: your own functions, and recursion. Everything
+else a brick can do, it can do — including variables, arithmetic and comparisons, which are
+surface syntax over the `var.set`, `math.set` and `value` bricks rather than a second
+evaluator.
 
 ## A whole task
 
@@ -100,6 +101,41 @@ if online and modEnabled(id: "x") { do mods.scan() } else if always { stop }
 
 Conditions are written like actions. `and` / `or` combine them, `not` inverts one, and
 brackets group. `a and b and c` is one group of three, which is what the brick editor shows.
+
+### Variables and arithmetic
+
+```bmms
+set count = 0
+set count = count + 1
+set average = (a + b) / 2
+set label = "hello"
+shared set team = "red"
+clear count
+```
+
+The rule for telling the two apart is the one you would guess: **a quoted value is text, an
+unquoted one is a number**. `set n = 0` counts; `set s = "0"` is the character zero.
+
+Numbers go through the same expression evaluator the `math.set` action uses — brackets,
+`+ - * / % ^`, and its functions. Text goes to `var.set`, and `shared set` writes the
+variable every task can read. `clear` removes one.
+
+A name must be letters, digits and `_`, starting with a letter. Anything else is refused
+while you type rather than at run time: a name the substituter cannot match back would store
+something that looks saved and can never be read.
+
+An expression ends at the end of the line. There is no line continuation — the alternative
+is guessing where a statement stops.
+
+### Comparing
+
+```bmms
+if count >= 3 { stop }
+if disk.write_mbps < 50 { do notify(message: "slow disk") }
+```
+
+`== != > >= < <=` against a number or a name. This is the brick editor's compare row, so a
+comparison written here opens there as one.
 
 ### Loops
 

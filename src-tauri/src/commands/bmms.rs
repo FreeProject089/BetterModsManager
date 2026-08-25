@@ -84,6 +84,14 @@ enum Tok {
     RParen,
     Colon,
     Comma,
+    /// `=`, for `set x = …`.
+    Assign,
+    /// A comparison: `==` `!=` `>` `>=` `<` `<=`. Lowered to the `value` condition.
+    Cmp(String),
+    /// An arithmetic character. Never interpreted here — the right-hand side of a `set` is
+    /// sliced from the SOURCE and handed to the runner's own evaluator. This exists only so
+    /// the lexer can walk past them to find where the line ends.
+    Op(char),
     Eof,
 }
 
@@ -92,12 +100,22 @@ struct Token {
     tok: Tok,
     line: usize,
     col: usize,
+    /// Character offset of the token's FIRST char, and one past its last.
+    ///
+    /// Carried so the right-hand side of `set x = …` can be taken as raw source instead of
+    /// re-serialised from tokens. evalExpr in the runner has its own tokenizer; handing it
+    /// the user's exact text is the only way the two cannot disagree about precedence.
+    start: usize,
+    end: usize,
 }
 
 fn lex(src: &str) -> PResult<Vec<Token>> {
     let chars: Vec<char> = src.chars().collect();
     let mut out = Vec::new();
     let (mut i, mut line, mut col) = (0usize, 1usize, 1usize);
+    // The current token's start offset. Outside the loop because the macro is also used for
+    // the final Eof push, where there is no iteration to scope it to.
+    let mut si = 0usize;
 
     macro_rules! push {
         ($t:expr, $l:expr, $c:expr) => {
@@ -105,6 +123,8 @@ fn lex(src: &str) -> PResult<Vec<Token>> {
                 tok: $t,
                 line: $l,
                 col: $c,
+                start: si,
+                end: i,
             })
         };
     }
@@ -112,6 +132,7 @@ fn lex(src: &str) -> PResult<Vec<Token>> {
     while i < chars.len() {
         let c = chars[i];
         let (sl, sc) = (line, col);
+        si = i;
 
         // whitespace
         if c == '\n' {
@@ -164,6 +185,38 @@ fn lex(src: &str) -> PResult<Vec<Token>> {
                 push!(Tok::Colon, sl, sc);
                 i += 1;
                 col += 1;
+            }
+            '+' | '*' | '/' | '%' | '^' | '-' => {
+                push!(Tok::Op(c), sl, sc);
+                i += 1;
+                col += 1;
+            }
+            '=' | '!' | '<' | '>' => {
+                // Two-character forms first: `>` would otherwise swallow the `=` of `>=`.
+                let two = chars.get(i + 1) == Some(&'=');
+                if two {
+                    let op: String = chars[i..i + 2].iter().collect();
+                    i += 2;
+                    col += 2;
+                    push!(Tok::Cmp(op), sl, sc);
+                } else if c == '=' {
+                    i += 1;
+                    col += 1;
+                    push!(Tok::Assign, sl, sc);
+                } else if c == '!' {
+                    return Err(Diagnostic {
+                        line: sl,
+                        col: sc,
+                        message:
+                            "`!` on its own means nothing \u{2014} did you mean `!=`, or `not`?"
+                                .into(),
+                    });
+                } else {
+                    let op = c.to_string();
+                    i += 1;
+                    col += 1;
+                    push!(Tok::Cmp(op), sl, sc);
+                }
             }
             '"' | '\'' => {
                 let quote = c;
@@ -268,11 +321,10 @@ fn lex(src: &str) -> PResult<Vec<Token>> {
                 let start = i;
                 // A dot is part of the word: action names ARE dotted (`mod.enable`), and
                 // splitting them would make every action a three-token sequence.
+                // NOT '-': it is arithmetic now. No action or condition among the 103
+                // that exist has a hyphen, and allowing it made `count-1` one word.
                 while i < chars.len()
-                    && (chars[i].is_alphanumeric()
-                        || chars[i] == '_'
-                        || chars[i] == '.'
-                        || chars[i] == '-')
+                    && (chars[i].is_alphanumeric() || chars[i] == '_' || chars[i] == '.')
                 {
                     i += 1;
                     col += 1;
@@ -299,6 +351,8 @@ fn lex(src: &str) -> PResult<Vec<Token>> {
 struct P {
     toks: Vec<Token>,
     i: usize,
+    /// The original text, so `set x = …` can take its right-hand side verbatim.
+    src: Vec<char>,
 }
 
 impl P {
@@ -463,12 +517,45 @@ impl P {
             inner
         } else {
             let name = self.word("a condition")?;
-            let params = if self.peek().tok == Tok::LParen {
-                self.args()?
+            // `count > 3` — a comparison, not a condition called `count`. Lowered to the
+            // `value` condition, which is exactly what the brick editor's compare row
+            // produces, so it opens there as a compare row rather than as something odd.
+            if let Tok::Cmp(op) = self.peek().tok.clone() {
+                self.next();
+                let rhs = match self.peek().tok.clone() {
+                    Tok::Num(n) => {
+                        self.next();
+                        num(n)
+                    }
+                    Tok::Dur(d) => {
+                        self.next();
+                        num(d)
+                    }
+                    Tok::Str(t) => {
+                        self.next();
+                        Value::String(t)
+                    }
+                    Tok::Word(w) => {
+                        self.next();
+                        Value::String(w)
+                    }
+                    _ => {
+                        let got = self.peek().clone();
+                        return Err(Diagnostic::at(
+                            &got,
+                            "Expected something to compare against.",
+                        ));
+                    }
+                };
+                json!({ "type": "value", "params": { "source": name, "op": op, "value": rhs } })
             } else {
-                Map::new()
-            };
-            json!({ "type": name, "params": Value::Object(params) })
+                let params = if self.peek().tok == Tok::LParen {
+                    self.args()?
+                } else {
+                    Map::new()
+                };
+                json!({ "type": name, "params": Value::Object(params) })
+            }
         };
         if negate {
             // Set on the node itself, which is what the editor's "not" checkbox writes.
@@ -518,6 +605,35 @@ impl P {
                 ))
             }
         }
+    }
+
+    /// The right-hand side of `set x = …`, as the user typed it.
+    ///
+    /// Taken from the SOURCE, not rebuilt from tokens. The runner's evalExpr has its own
+    /// tokenizer; handing it the original text is the only way the two cannot disagree
+    /// about precedence or about what a name is. Ends at the newline, which is also why
+    /// an expression cannot be wrapped across lines — a deliberate limit, since the
+    /// alternative is guessing where a statement ends.
+    fn raw_expr(&mut self) -> PResult<String> {
+        let start_tok = self.peek().clone();
+        let line = start_tok.line;
+        let from = start_tok.start;
+        let mut to = from;
+        while self.peek().tok != Tok::Eof && self.peek().line == line {
+            // A closing brace on the same line belongs to the block, not to the expression:
+            // `repeat 2 times { set x = 1 }` must not swallow the `}`.
+            if matches!(self.peek().tok, Tok::RBrace) {
+                break;
+            }
+            to = self.peek().end;
+            self.next();
+        }
+        let text: String = self.src[from..to].iter().collect();
+        let text = text.trim().to_string();
+        if text.is_empty() {
+            return Err(Diagnostic::at(&start_tok, "This `set` has no value."));
+        }
+        Ok(text)
     }
 
     fn stmt(&mut self) -> PResult<Value> {
@@ -681,6 +797,64 @@ impl P {
                 self.next();
                 let block = self.string("the block name")?;
                 Ok(json!({ "kind": "call", "block": block }))
+            }
+            "set" | "shared" => {
+                // `shared set x = "…"` writes the variable every task can read.
+                let shared = w == "shared";
+                self.next();
+                if shared && !self.eat_word("set") {
+                    let got = self.peek().clone();
+                    return Err(Diagnostic::at(&got, "Expected `set` after `shared`."));
+                }
+                let nametok = self.peek().clone();
+                let name = self.word("a variable name")?;
+                if !name
+                    .chars()
+                    .next()
+                    .is_some_and(|c| c.is_alphabetic() || c == '_')
+                    || !name.chars().all(|c| c.is_alphanumeric() || c == '_')
+                {
+                    // Refused here rather than at run time, where var.set throws. A name the
+                    // substituter cannot match back would store something permanently
+                    // unreadable — it looks saved and can never be read.
+                    return Err(Diagnostic::at(
+                        &nametok,
+                        format!("`{}` is not a usable variable name — letters, digits and _ only, starting with a letter.", name),
+                    ));
+                }
+                self.expect(Tok::Assign, "an `=` after the variable name")?;
+
+                // TEXT if the value is a quoted string; a NUMBER otherwise. That is the
+                // whole rule, and it is the one a reader guesses: `set n = 0` counts,
+                // `set s = "0"` is the character zero.
+                if let Tok::Str(text) = self.peek().tok.clone() {
+                    self.next();
+                    let mut params = json!({ "name": name, "value": text });
+                    if shared {
+                        params["scope"] = Value::String("shared".into());
+                    }
+                    return Ok(
+                        json!({ "kind": "action", "action": { "type": "var.set", "params": params } }),
+                    );
+                }
+                if shared {
+                    let got = self.peek().clone();
+                    return Err(Diagnostic::at(
+                        &got,
+                        "A shared variable holds text — put the value in quotes.",
+                    ));
+                }
+                let expr = self.raw_expr()?;
+                Ok(
+                    json!({ "kind": "action", "action": { "type": "math.set", "params": { "target": name, "expr": expr } } }),
+                )
+            }
+            "clear" => {
+                self.next();
+                let name = self.word("a variable name")?;
+                Ok(
+                    json!({ "kind": "action", "action": { "type": "var.clear", "params": { "name": name } } }),
+                )
             }
             "break" => {
                 self.next();
@@ -966,7 +1140,11 @@ fn compile_inner(source: &str, snippet: bool) -> CompileOut {
             }
         }
     };
-    let mut p = P { toks, i: 0 };
+    let mut p = P {
+        toks,
+        i: 0,
+        src: source.chars().collect(),
+    };
 
     if snippet {
         let mut steps = Vec::new();
@@ -1103,6 +1281,23 @@ fn cond_str(c: &Value) -> String {
         } else {
             format!("({})", parts.join(joiner))
         }
+    } else if ty == "value"
+        && params
+            .get("source")
+            .and_then(|x| x.as_str())
+            .is_some_and(|s| !s.is_empty())
+    {
+        // `count > 3`, not `value(op: ">", source: "count", value: 3)`.
+        let src = params["source"].as_str().unwrap_or("");
+        let op = params.get("op").and_then(|x| x.as_str()).unwrap_or("==");
+        let v = params.get("value").cloned().unwrap_or(Value::Null);
+        // A number stays bare; anything else is quoted, so it reads back as the same thing.
+        let rhs = match &v {
+            Value::Number(n) => n.to_string(),
+            Value::String(t) if t.parse::<f64>().is_ok() => quote(t),
+            other => val(other),
+        };
+        format!("{} {} {}", src, op, rhs)
     } else {
         let a = args_str(&params);
         if a.is_empty() {
@@ -1138,6 +1333,46 @@ fn steps_str(steps: &[Value], depth: usize, out: &mut String) {
             "action" => {
                 let a = st.get("action").cloned().unwrap_or_else(|| json!({}));
                 let ty = a.get("type").and_then(|x| x.as_str()).unwrap_or("");
+                // The three actions with surface syntax print as that syntax. A `set` that
+                // came back as `do math.set(expr: "n + 1", target: "n")` would still be
+                // correct and would still make the round trip a downgrade every time.
+                let pr = a.get("params").cloned().unwrap_or_else(|| json!({}));
+                let ps = |k: &str| pr.get(k).and_then(|x| x.as_str()).unwrap_or("").to_string();
+                if ty == "math.set" && !ps("target").is_empty() {
+                    out.push_str(&format!(
+                        "{}set {} = {}
+",
+                        pad,
+                        ps("target"),
+                        ps("expr")
+                    ));
+                    continue;
+                }
+                if ty == "var.set" && !ps("name").is_empty() {
+                    let sh = if ps("scope") == "shared" {
+                        "shared "
+                    } else {
+                        ""
+                    };
+                    out.push_str(&format!(
+                        "{}{}set {} = {}
+",
+                        pad,
+                        sh,
+                        ps("name"),
+                        quote(&ps("value"))
+                    ));
+                    continue;
+                }
+                if ty == "var.clear" && !ps("name").is_empty() {
+                    out.push_str(&format!(
+                        "{}clear {}
+",
+                        pad,
+                        ps("name")
+                    ));
+                    continue;
+                }
                 out.push_str(&format!(
                     "{}do {}({})\n",
                     pad,
@@ -1670,6 +1905,22 @@ if online and modEnabled(id: "x") { do mods.scan() } else if always { stop }
             ),
             (
                 "bmmscript.md 4",
+                r#"set count = 0
+set count = count + 1
+set average = (a + b) / 2
+set label = "hello"
+shared set team = "red"
+clear count
+"#,
+            ),
+            (
+                "bmmscript.md 5",
+                r#"if count >= 3 { stop }
+if disk.write_mbps < 50 { do notify(message: "slow disk") }
+"#,
+            ),
+            (
+                "bmmscript.md 6",
                 r#"for item in enabledMods { do mod.disable(id: "{item.id}") }   # mods, enabledMods, disabledMods, profiles, modpacks, themes
 for item in list "queue" { do notify(message: "{item.name}") } # a list you built with list.push
 repeat 3 times { do mods.scan() }
@@ -1678,14 +1929,14 @@ repeat until fileExists(path: "x") { wait 10s }
 "#,
             ),
             (
-                "bmmscript.md 5",
+                "bmmscript.md 7",
                 r#"wait 30s                                    # also 5m, 2h, or a bare number of seconds
 waitfor fileExists(path: "x") timeout 2h poll 10s
 waitfor online timeout 30s orcontinue       # carry on instead of failing
 "#,
             ),
             (
-                "bmmscript.md 6",
+                "bmmscript.md 8",
                 r#"try {
     do repo.sync()
 } catch {
@@ -1700,12 +1951,12 @@ switch {
 "#,
             ),
             (
-                "bmmscript.md 7",
+                "bmmscript.md 9",
                 r#"call "my shared block"
 "#,
             ),
             (
-                "bmmscript.md 8",
+                "bmmscript.md 10",
                 r#"do mods.scan()
 if online {
     do notify(message: "hello")
@@ -1754,6 +2005,22 @@ if online and modEnabled(id: "x") { do mods.scan() } else if always { stop }
             ),
             (
                 "bmmscript.fr.md 4",
+                r#"set count = 0
+set count = count + 1
+set moyenne = (a + b) / 2
+set label = "bonjour"
+shared set equipe = "rouge"
+clear count
+"#,
+            ),
+            (
+                "bmmscript.fr.md 5",
+                r#"if count >= 3 { stop }
+if disk.write_mbps < 50 { do notify(message: "disque lent") }
+"#,
+            ),
+            (
+                "bmmscript.fr.md 6",
                 r#"for item in enabledMods { do mod.disable(id: "{item.id}") }   # mods, enabledMods, disabledMods, profiles, modpacks, themes
 for item in list "file" { do notify(message: "{item.name}") }  # une liste construite avec list.push
 repeat 3 times { do mods.scan() }
@@ -1762,14 +2029,14 @@ repeat until fileExists(path: "x") { wait 10s }
 "#,
             ),
             (
-                "bmmscript.fr.md 5",
+                "bmmscript.fr.md 7",
                 r#"wait 30s                                    # aussi 5m, 2h, ou un nombre nu de secondes
 waitfor fileExists(path: "x") timeout 2h poll 10s
 waitfor online timeout 30s orcontinue       # continuer au lieu d'échouer
 "#,
             ),
             (
-                "bmmscript.fr.md 6",
+                "bmmscript.fr.md 8",
                 r#"try {
     do repo.sync()
 } catch {
@@ -1784,7 +2051,7 @@ switch {
 "#,
             ),
             (
-                "bmmscript.fr.md 7",
+                "bmmscript.fr.md 9",
                 r#"do mods.scan()
 if online {
     do notify(message: "bonjour")
@@ -1810,60 +2077,141 @@ if online {
     }
 
     #[test]
-    fn the_body_of_a_printed_task_is_a_valid_snippet() {
-        // What the editor's Code mode relies on. It prints the task, strips the wrapper and
-        // the header lines the sidebar owns, and shows the rest — and it must be able to
-        // compile that rest back when you switch to Blocks. The strip lives in TypeScript;
-        // the PROPERTY belongs to the printer, so it is asserted here where the printer is.
-        let task = json!({
-            "name": "T",
-            "trigger": { "type": "weeklyAt", "time": "09:00", "days": [1] },
-            "description": "d",
-            "enabled": false,
-            "perms": { "script": true },
-            "steps": [
-                { "kind": "action", "action": { "type": "mods.scan", "params": {} } },
-                { "kind": "if", "condition": { "type": "online", "params": {} },
-                  "then": [ { "kind": "stop" } ], "else": [] }
-            ]
-        });
-        let printed = bmms_decompile(task.clone());
-
-        // The same rules stripTaskWrapper applies, restated here so a change to either side
-        // that breaks the agreement fails a test rather than a user.
-        let open = printed.find('{').unwrap();
-        let close = printed.rfind('}').unwrap();
-        let mut body: Vec<&str> = printed[open + 1..close].lines().collect();
-        while body.first().is_some_and(|l| {
-            let t = l.trim_start();
-            t.is_empty()
-                || [
-                    "every", "once", "manual", "on ", "describe", "disabled", "allow",
-                ]
-                .iter()
-                .any(|k| t.starts_with(k))
-        }) {
-            body.remove(0);
-        }
-        let snippet = body.join(
-            "
-",
+    fn variables_and_arithmetic_lower_to_the_actions_that_already_exist() {
+        let t = compile(
+            r#"task "T" {
+                set count = 0
+                set count = count + 1
+                set label = "hello"
+                shared set team = "red"
+                clear count
+            }"#,
         );
-
-        let r = compile_inner(&snippet, true);
-        assert!(
-            r.ok,
-            "the body of a printed task must compile as a snippet: {:?}
---- body ---
-{}",
-            r.errors, snippet
-        );
+        let a = |i: usize| t["steps"][i]["action"].clone();
+        // A NUMBER goes to math.set, whose expression evaluator the runner already has.
+        assert_eq!(a(0)["type"], "math.set");
+        assert_eq!(a(0)["params"]["target"], "count");
+        assert_eq!(a(0)["params"]["expr"], "0");
         assert_eq!(
-            r.steps.unwrap().len(),
-            2,
-            "and it must be the same steps
+            a(1)["params"]["expr"],
+            "count + 1",
+            "the expression is the user's own text"
+        );
+        // A QUOTED string goes to var.set. That is the whole rule for telling them apart.
+        assert_eq!(a(2)["type"], "var.set");
+        assert_eq!(a(2)["params"]["value"], "hello");
+        assert_eq!(a(3)["params"]["scope"], "shared");
+        assert_eq!(a(4)["type"], "var.clear");
+    }
+
+    #[test]
+    fn a_comparison_lowers_to_the_value_condition() {
+        let t = compile(r#"task "T" { if count >= 3 { stop } }"#);
+        let c = &t["steps"][0]["condition"];
+        assert_eq!(
+            c["type"], "value",
+            "a compare row, so the brick editor shows a compare row"
+        );
+        assert_eq!(c["params"]["source"], "count");
+        assert_eq!(c["params"]["op"], ">=");
+        assert_eq!(c["params"]["value"], 3);
+    }
+
+    #[test]
+    fn the_two_character_operators_are_not_split() {
+        // `>` reading the `=` of `>=` as an assignment is the classic lexer bug here.
+        for (src, op) in [
+            (">=", ">="),
+            ("<=", "<="),
+            ("==", "=="),
+            ("!=", "!="),
+            (">", ">"),
+            ("<", "<"),
+        ] {
+            let t = compile(&format!(r#"task "T" {{ if n {} 1 {{ stop }} }}"#, src));
+            assert_eq!(
+                t["steps"][0]["condition"]["params"]["op"], op,
+                "for `{}`",
+                src
+            );
+        }
+    }
+
+    #[test]
+    fn an_expression_stops_at_the_closing_brace() {
+        // `repeat 2 times { set x = 1 }` must not swallow the `}` into the expression.
+        let t = compile(r#"task "T" { repeat 2 times { set x = 1 } }"#);
+        assert_eq!(t["steps"][0]["steps"][0]["action"]["params"]["expr"], "1");
+        assert_eq!(t["steps"][0]["kind"], "repeat");
+    }
+
+    #[test]
+    fn a_hyphen_is_arithmetic_now_not_part_of_a_name() {
+        let t = compile(r#"task "T" { set x = count-1 }"#);
+        assert_eq!(t["steps"][0]["action"]["params"]["expr"], "count-1");
+    }
+
+    #[test]
+    fn an_unusable_variable_name_is_refused_at_compile_time() {
+        // var.set throws on this at RUN time; a name the substituter cannot match back
+        // stores something that looks saved and can never be read.
+        let r = compile_inner(r#"task "T" { set my.var = 1 }"#, false);
+        assert!(!r.ok);
+        assert!(
+            r.errors[0].message.contains("not a usable variable name"),
+            "got: {}",
+            r.errors[0].message
+        );
+    }
+
+    #[test]
+    fn the_new_sugar_round_trips() {
+        let src = r#"task "T" {
+    manual
+
+    set count = 0
+    set label = "hello"
+    shared set team = "red"
+    if count >= 3 and not online {
+        set count = count * 2 + 1
+        clear label
+    }
+}
+"#;
+        let first = compile(src);
+        let printed = bmms_decompile(first.clone());
+        let second = compile(&printed);
+        assert_eq!(
+            first, second,
+            "sugar must survive being printed
+--- printed ---
 {}",
-            snippet
+            printed
+        );
+        // And it must print as SUGAR, not as the actions underneath.
+        assert!(
+            printed.contains("set count = 0"),
+            "got:
+{}",
+            printed
+        );
+        assert!(
+            printed.contains("shared set team = \"red\""),
+            "got:
+{}",
+            printed
+        );
+        assert!(
+            printed.contains("count >= 3"),
+            "got:
+{}",
+            printed
+        );
+        assert!(
+            !printed.contains("do math.set"),
+            "printed the action instead of the sugar:
+{}",
+            printed
         );
     }
 
