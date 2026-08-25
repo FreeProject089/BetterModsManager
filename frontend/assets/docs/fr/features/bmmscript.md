@@ -5,6 +5,9 @@
 > texte. Tout ce que vous pouvez construire en cliquant, vous pouvez le taper — et tout ce
 > que vous tapez, vous pouvez le rouvrir en briques.
 
+
+**[Toutes les actions, conditions et valeurs](doc-page:features/bmmscript-reference.fr)** — la liste complète, générée depuis le registre de BMM pour qu'elle ne puisse pas devenir fausse.
+
 ## Pourquoi ce n'est pas un langage à part
 
 BMMScript **se compile vers les briques**. Ce n'est pas un second moteur avec ses propres

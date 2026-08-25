@@ -10,7 +10,7 @@ flowchart TD
     NAV["<div class='node-content'><i class='icon-nav'></i> {{docs.diagram.customPages.node.NAV}}</div>"]
     FRAME["<div class='node-content'><i class='icon-window'></i> {{docs.diagram.customPages.node.FRAME}}</div>"]
 
-    subgraph BUNDLE ["The bundle (one folder)"]
+    subgraph BUNDLE ["<div class='group-label' data-cluster-id='BUNDLE'><i class='icon-folder'></i> {{docs.diagram.customPages.cluster.BUNDLE}}</div>"]
         INDEX["<div class='node-content'><i class='icon-file'></i> {{docs.diagram.customPages.node.INDEX}}</div>"]
         SUBS["<div class='node-content'><i class='icon-files'></i> {{docs.diagram.customPages.node.SUBS}}</div>"]
         ASSETS["<div class='node-content'><i class='icon-box'></i> {{docs.diagram.customPages.node.ASSETS}}</div>"]
@@ -20,7 +20,7 @@ flowchart TD
     PROTO["<div class='node-content'><i class='icon-shield'></i> {{docs.diagram.customPages.node.PROTO}}</div>"]
     CSP["<div class='node-content'><i class='icon-lock'></i> {{docs.diagram.customPages.node.CSP}}</div>"]
 
-    subgraph GRANTS ["Only what was granted"]
+    subgraph GRANTS ["<div class='group-label' data-cluster-id='GRANTS'><i class='icon-shield'></i> {{docs.diagram.customPages.cluster.GRANTS}}</div>"]
         STORE["<div class='node-content'><i class='icon-database'></i> {{docs.diagram.customPages.node.STORE}}</div>"]
         NET["<div class='node-content'><i class='icon-globe'></i> {{docs.diagram.customPages.node.NET}}</div>"]
         DENY["<div class='node-content'><i class='icon-ban'></i> {{docs.diagram.customPages.node.DENY}}</div>"]

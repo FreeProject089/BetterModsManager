@@ -134,18 +134,22 @@ had no way to be expressed.
 
 ## Permissions
 
-Each task grants three things separately, and each says what it unlocks:
+Each task grants four things separately, and each says what it unlocks:
 
 | Grant | What it allows |
 |---|---|
 | **Run external programs** | Launch a program with arguments |
 | **Run scripts** | Run PowerShell / CMD / Bash / Python you wrote |
 | **Fire deeplinks** | Trigger `bmm://` links |
+| **Stop a program** | Terminate a running process |
 
-All three are off until you turn them on, and a step whose permission is missing fails with a
+All four are off until you turn them on, and a step whose permission is missing fails with a
 message naming the one to grant — it never runs quietly.
 
-!!! warning "Deeplinks are the widest of the three"
+Stopping a program is separate from launching one because the risk differs in kind: starting
+something is undoable, killing something can lose unsaved work with nothing to undo.
+
+!!! warning "Deeplinks are the widest of the four"
 
     A `bmm://` link reaches anything the app exposes, including actions that have no scheduler
     step of their own. It used to be gated by nothing at all.
@@ -153,8 +157,18 @@ message naming the one to grant — it never runs quietly.
 !!! note "Upgrading from the old single checkbox"
 
     A task you built before the split keeps everything it already had — but none gains **Run
-    scripts**. That capability didn't exist when you ticked *Allow custom commands*, so
-    granting it now would be inventing your consent rather than honouring it.
+    scripts** or **Stop a program**. Neither capability existed when you ticked *Allow custom
+    commands*, so granting them now would be inventing your consent rather than honouring it.
+
+!!! danger "A task that arrives in a FILE gets none of them"
+
+    Importing a `.bmmpa`, or adding a shared `.bmmscript` to your tasks, removes all four
+    grants and leaves the task **disabled** — then tells you what the file had asked for.
+
+    The automation is intact and one toggle away from working. What it cannot do is arrive
+    already holding permission to run programs on a timer, which is what used to happen: only
+    *Run even when BMM is closed* was cleared, and everything else came through as the author
+    had set it.
 
 ## Example
 
@@ -299,9 +313,26 @@ reads either.
 
 !!! note "Imports never fire on their own"
 
-    Imported tasks get fresh ids and *Run even when BMM is closed* is forced **off**, so importing a
-    file can't silently register OS-level scheduled tasks on your machine. Review and enable them
-    yourself. **Load example** drops in a ready-made (disabled) task you can dissect.
+    An imported task gets a fresh id, arrives **disabled**, has all four permission grants
+    removed, and never registers an OS-level scheduled task. BMM then says what the file had
+    asked for, so you can grant what you actually want rather than working out why an imported
+    task does nothing. **Load example** drops in a ready-made (disabled) task you can dissect.
+
+## Publish a catalogue of your own
+
+**From a catalogue… → Publish my own…** picks your automations and writes a folder: one signed
+`.bmmpa` per automation plus a `catalog.json` beside them. Upload the folder anywhere static —
+a GitHub repository, GitHub Pages, your own server — and give people the address of the
+`catalog.json`.
+
+The addresses it writes are **relative** (`nightly.bmmpa`, not a full URL). A catalogue that
+names its own host stops working the moment it is moved, mirrored or forked — which is the
+normal life of a folder on GitHub — so BMM resolves them against wherever it fetched the
+catalogue from. An absolute base is offered for files that genuinely live somewhere else.
+
+Everything an automation calls travels with it: sub-tasks, shared blocks, launch packs and
+plugins. Two automations with the same name get different filenames, so one entry can never
+quietly serve another's contents.
 
 
 ## Carrying values around

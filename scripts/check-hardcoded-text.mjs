@@ -40,6 +40,7 @@ const ALLOW = new Map([
     ['A11y Warning: Button has no visible text and no aria-label', 'the developer a11y overlay, dev-only'],
     ['A11y Warning: Form field has no associated label or aria-label', 'the developer a11y overlay, dev-only'],
     ["Saved at ", 'source code inside a page TEMPLATE the user edits — translating it would translate their code'],
+    ['Refused or failed: ', 'same — the network template’s catch block, code the user is handed to edit'],
     // The theme editor's custom-element starter snippets. Same reason: the user is handed
     // this markup to edit, so the words are a placeholder in THEIR document, not our chrome.
     ['My button', 'starter snippet the user edits, in the theme editor'],

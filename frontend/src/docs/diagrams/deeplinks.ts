@@ -13,15 +13,15 @@ flowchart TD
     OS["<div class='node-content'><i class='icon-window'></i> {{docs.diagram.deeplinks.node.OS}}</div>"]
     ROUTER["<div class='node-content'><i class='icon-flow'></i> {{docs.diagram.deeplinks.node.ROUTER}}</div>"]
 
-    subgraph ACTS ["Acts straight away"]
+    subgraph ACTS ["<div class='group-label' data-cluster-id='ACTS'><i class='icon-bolt'></i> {{docs.diagram.deeplinks.cluster.ACTS}}</div>"]
         DIRECT["<div class='node-content'><i class='icon-bolt'></i> {{docs.diagram.deeplinks.node.DIRECT}}</div>"]
     end
 
-    subgraph ASKS ["Opens a screen and waits"]
+    subgraph ASKS ["<div class='group-label' data-cluster-id='ASKS'><i class='icon-window'></i> {{docs.diagram.deeplinks.cluster.ASKS}}</div>"]
         UI["<div class='node-content'><i class='icon-window'></i> {{docs.diagram.deeplinks.node.UI}}</div>"]
     end
 
-    subgraph BRIDGE ["Onto the local API"]
+    subgraph BRIDGE ["<div class='group-label' data-cluster-id='BRIDGE'><i class='icon-code'></i> {{docs.diagram.deeplinks.cluster.BRIDGE}}</div>"]
         APIL["<div class='node-content'><i class='icon-code'></i> {{docs.diagram.deeplinks.node.APIL}}</div>"]
         TOKEN["<div class='node-content'><i class='icon-lock'></i> {{docs.diagram.deeplinks.node.TOKEN}}</div>"]
     end

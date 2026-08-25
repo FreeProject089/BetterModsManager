@@ -140,19 +140,24 @@ alors… » n'avait aucun moyen d'être exprimé.
 
 ## Les permissions
 
-Chaque tâche accorde trois choses séparément, et chacune dit ce qu'elle débloque :
+Chaque tâche accorde quatre choses séparément, et chacune dit ce qu'elle débloque :
 
 | Autorisation | Ce qu'elle permet |
 |---|---|
 | **Lancer des programmes externes** | Démarrer un programme avec des arguments |
 | **Exécuter des scripts** | Exécuter du PowerShell / CMD / Bash / Python que tu as écrit |
 | **Déclencher des deeplinks** | Déclencher des liens `bmm://` |
+| **Arrêter un programme** | Terminer un processus en cours |
 
-Les trois sont désactivées tant que tu ne les actives pas, et une étape dont la permission
+Les quatre sont désactivées tant que tu ne les actives pas, et une étape dont la permission
 manque échoue avec un message indiquant laquelle accorder — elle ne s'exécute jamais en
 silence.
 
-!!! warning "Les deeplinks sont la plus large des trois"
+Arrêter un programme est séparé de le lancer parce que le risque est d'une autre nature :
+démarrer quelque chose s'annule, tuer quelque chose peut perdre un travail non enregistré sans
+rien pour revenir en arrière.
+
+!!! warning "Les deeplinks sont la plus large des quatre"
 
     Un lien `bmm://` atteint tout ce que l'app expose, y compris des actions sans étape dédiée
     dans le planificateur. Auparavant, rien ne les gardait.
@@ -160,9 +165,19 @@ silence.
 !!! note "Migration depuis l'ancienne case unique"
 
     Une tâche construite avant la séparation garde tout ce qu'elle avait — mais aucune ne gagne
-    **Exécuter des scripts**. Cette capacité n'existait pas quand tu as coché *Autoriser les
-    commandes personnalisées* : te l'accorder maintenant reviendrait à inventer ton
-    consentement plutôt qu'à l'honorer.
+    **Exécuter des scripts** ni **Arrêter un programme**. Ces capacités n'existaient pas quand
+    tu as coché *Autoriser les commandes personnalisées* : te les accorder maintenant
+    reviendrait à inventer ton consentement plutôt qu'à l'honorer.
+
+!!! danger "Une tâche qui arrive dans un FICHIER n'en reçoit aucune"
+
+    Importer un `.bmmpa`, ou ajouter un `.bmmscript` partagé à tes tâches, retire les quatre
+    autorisations et laisse la tâche **désactivée** — puis te dit ce que le fichier demandait.
+
+    L'automatisation est intacte et à un interrupteur de fonctionner. Ce qu'elle ne peut pas
+    faire, c'est arriver en tenant déjà le droit de lancer des programmes à intervalle
+    régulier — ce qui était le cas avant : seul *Exécuter même quand BMM est fermé* était
+    effacé, et tout le reste passait tel que l'auteur l'avait réglé.
 
 ## Un exemple
 
@@ -201,6 +216,58 @@ Deux comportements à connaître, parce que ce sont ceux qu'on devine mal :
   en premier.
 - Un `all` **vide est vrai** ; un `any` vide est faux. Ajouter un groupe sans le remplir tout
   de suite ne bloque pas la tâche que tu es en train d'écrire.
+
+## Les conditions — *si*
+
+Une tâche peut porter des conditions pour n'agir que quand l'état est le bon. Chaque condition
+peut être **niée** (« *pas* connecté »), et elles servent de deux façons : pour conditionner une
+action (`if`), ou pour patienter jusqu'à ce que quelque chose devienne vrai (`waitFor`,
+plus bas).
+
+| Condition | Vraie quand |
+|---|---|
+| `always` | Toujours — le défaut, aucune barrière. |
+| `profileActive` | Un profil précis est le profil actif. |
+| `modEnabled` · `modDisabled` | Un mod précis est activé / désactivé. |
+| `modpackActive` · `modpackInactive` | Tous les mods d'un modpack sont activés / désactivés. |
+| `allModsActive` | Tous les mods du profil actif sont activés. |
+| `appRunning` · `appNotRunning` | Un processus (par nom) tourne / ne tourne pas. |
+| `online` | La machine a une connexion Internet. |
+| `dayOfWeek` | Aujourd'hui fait partie des jours choisis. |
+| `timeRange` · `timeReached` | L'heure est dans une plage / a dépassé une heure. |
+| `fileExists` · `fileHash` · `fileSize` · `fileType` | Vérifications de fichier — un chemin existe, ou son hash (blake3/sha256), sa taille ou son type correspond. |
+| `commandSucceeds` | Une commande externe s'exécute et sort avec `0`. |
+| `value` | Un nombre capturé se compare à un seuil (plus bas). |
+| `all` · `any` | Toutes / au moins une des conditions qu'elle contient sont vraies (plus bas). |
+
+### Les groupes — `all` et `any`
+
+`all` et `any` contiennent une **liste d'autres conditions**, pour qu'une barrière puisse poser
+plus d'une question sans un escalier de `if` imbriqués. « Quand le jeu est fermé **et** qu'il
+est après 18:00 **et** qu'une sauvegarde existe », c'est un seul `all` ; mets un `any` à la
+place pour un *ou*. Ce sont elles-mêmes des conditions, donc elles s'imbriquent, et `negate` —
+que chaque condition avait déjà — te donne le *non*.
+
+Deux comportements à connaître, parce que ce sont ceux qu'on se trompe :
+
+- Un groupe **s'arrête à la première réponse qui tranche**. `all` s'arrête au premier faux,
+  `any` au premier vrai — les conditions suivantes ne s'exécutent donc pas. Ça compte parce
+  qu'une condition peut lancer une commande ou atteindre le réseau : mets la vérification la
+  moins coûteuse en premier.
+- Un **`all` vide est vrai** ; un `any` vide est faux. Ajouter un groupe sans l'avoir encore
+  rempli ne bloque pas la tâche que tu es en train d'écrire.
+
+### La condition `value`
+
+`value` compare un nombre que BMM a capturé plus tôt dans l'exécution — par exemple la vitesse
+d'écriture mesurée d'un disque (`disk.write_mbps`) ou un résultat de benchmark
+(`benchmark.mbps`) — à un seuil que tu définis, avec l'un de six opérateurs :
+
+`>` · `<` · `>=` · `<=` · `==` · `!=`
+
+« *si `disk.write_mbps` `<` 50, afficher un avertissement* » devient donc une vraie règle. Si la
+valeur source n'a jamais été capturée, la condition est simplement fausse — elle ne se
+déclenchera pas sur une donnée absente.
 
 ## Boucles & attente
 
@@ -293,10 +360,28 @@ seule — donc tout ce qui lit un .bmmpa lit l'un comme l'autre.
 
 !!! note "Les imports ne partent jamais tout seuls"
 
-    Les tâches importées reçoivent de nouveaux ids et *Exécuter même quand BMM est fermé* est forcé à
-    **off**, pour qu'importer un fichier n'enregistre pas silencieusement des tâches au niveau du
-    système. Relis-les et active-les toi-même. **Charger l'exemple** dépose une tâche prête (et
-    désactivée) que tu peux décortiquer.
+    Une tâche importée reçoit un nouvel id, arrive **désactivée**, perd ses quatre autorisations,
+    et n'enregistre jamais de tâche au niveau du système. BMM te dit ensuite ce que le fichier
+    demandait, pour que tu accordes ce que tu veux vraiment plutôt que de chercher pourquoi une
+    tâche importée ne fait rien. **Charger l'exemple** dépose une tâche prête (et désactivée)
+    que tu peux décortiquer.
+
+## Publier ton propre catalogue
+
+**Depuis un catalogue… → Publier les miennes…** choisit tes automatisations et écrit un dossier :
+un `.bmmpa` signé par automatisation, plus un `catalog.json` à côté. Téléverse le dossier sur
+n'importe quel hébergement statique — un dépôt GitHub, GitHub Pages, ton propre serveur — et
+donne aux gens l'adresse du `catalog.json`.
+
+Les adresses écrites sont **relatives** (`nightly.bmmpa`, pas une URL complète). Un catalogue
+qui nomme son propre hébergeur cesse de fonctionner dès qu'il est déplacé, copié ou forké — la
+vie normale d'un dossier sur GitHub — donc BMM les résout par rapport à l'endroit d'où il a
+récupéré le catalogue. Une base absolue est proposée pour les fichiers qui vivent vraiment
+ailleurs.
+
+Tout ce qu'une automatisation appelle voyage avec elle : sous-tâches, blocs partagés, launch
+packs et plugins. Deux automatisations du même nom reçoivent des noms de fichier différents,
+pour qu'une entrée ne serve jamais en silence le contenu d'une autre.
 
 
 ## Transporter des valeurs

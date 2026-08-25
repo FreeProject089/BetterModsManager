@@ -13,6 +13,7 @@
     "features/plugins",
     "features/scheduler",
     "features/bmmscript",
+    "features/bmmscript-reference",
     "features/apps",
     "features/mapper",
     "features/community",
@@ -219,7 +220,7 @@
         "en": "Schedule BMM actions (one-time or recurring) — activate a mod, modpack, profile… with conditions (if/else), your own scripts and external programs.",
         "fr": "Planifiez des actions BMM (ponctuelles ou récurrentes) — activer un mod, un modpack, un profil… avec conditions (si/sinon), tes propres scripts et des…"
       },
-      "words": 2196,
+      "words": 2481,
       "diagrams": 0,
       "fr": true
     },
@@ -234,7 +235,22 @@
         "en": "The same automations as the scheduler's bricks, written as text. Anything you can build by clicking, you can type — and anything you type, you can open back…",
         "fr": "Les mêmes automatisations que les briques du planificateur, écrites en texte."
       },
-      "words": 1324,
+      "words": 1345,
+      "diagrams": 0,
+      "fr": true
+    },
+    {
+      "path": "features/bmmscript-reference",
+      "section": "features",
+      "title": {
+        "en": "BMMScript — every action, condition and value",
+        "fr": "BMMScript — toutes les actions, conditions et valeurs"
+      },
+      "summary": {
+        "en": "75 actions · 28 conditions · 15 values · 8 loop sources",
+        "fr": "75 actions · 28 conditions · 15 valeurs · 8 sources de boucle"
+      },
+      "words": 413,
       "diagrams": 0,
       "fr": true
     },
