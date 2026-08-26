@@ -31,6 +31,11 @@ mod mcp;
 mod commands {
     #[path = "../../commands/proc.rs"]
     pub mod proc;
+    // Reading a plugin's shipped files, and the path guard that keeps a `..` from leaving
+    // the folder. Mounted rather than reimplemented: the CLI reads the same archives the app
+    // does, and a second guard is the one that gets forgotten.
+    #[path = "../../commands/plugin_assets_core.rs"]
+    pub mod plugin_assets_core;
 }
 
 use clap::{Parser, Subcommand};
@@ -300,6 +305,22 @@ enum Commands {
     },
 
     // ── What a repo carries besides mods ──────────────────────────
+
+    /// List the files a plugin ships in its assets/ folder
+    #[command(name = "plugin-assets")]
+    PluginAssets {
+        /// Plugin id
+        plugin_id: String,
+    },
+
+    /// Print one of a plugin's shipped files. Text only; nothing is executed.
+    #[command(name = "plugin-asset")]
+    PluginAsset {
+        /// Plugin id
+        plugin_id: String,
+        /// Path relative to assets/, e.g. README.md
+        path: String,
+    },
 
     /// List the catalogues this BMM follows, by type.
     Catalogs,
@@ -799,6 +820,47 @@ async fn run_cli_command(cmd: Commands) -> anyhow::Result<()> {
 
         // ── Live app bridge ──────────────────────────────────────────
         // ── Catalogues ───────────────────────────────────────
+        // ── What a plugin ships ──────────────────────────────────
+        //
+        // Offline, like most of this file: data.json says where the plugin is and the folder
+        // says what is in it. That matters more here than elsewhere — the reason to ask what
+        // a plugin ships is usually that you are deciding whether to install it, which is not
+        // a moment when the app is open on that screen.
+        Commands::PluginAssets { plugin_id } => {
+            let v = state_bridge::plugin_assets(&plugin_id)?;
+            let list = v.get("assets").and_then(|a| a.as_array()).cloned().unwrap_or_default();
+            if list.is_empty() {
+                println!("  {}", "This plugin ships no extra files.".dimmed());
+            } else {
+                let mut table = Table::new();
+                table.load_preset(UTF8_FULL_CONDENSED);
+                table.set_content_arrangement(ContentArrangement::Dynamic);
+                table.set_header(vec!["File", "Kind", "Size"]);
+                for a in &list {
+                    let s = |k: &str| a.get(k).and_then(|v| v.as_str()).unwrap_or("").to_string();
+                    let size = a.get("size").and_then(|v| v.as_u64()).unwrap_or(0);
+                    // A shipped script is not a problem and it is also not a README.
+                    // Coloured so nobody scanning eleven rows has to read extensions to
+                    // notice there is a program in the list.
+                    let kind = if s("kind") == "script" {
+                        s("kind").yellow().bold().to_string()
+                    } else {
+                        s("kind")
+                    };
+                    table.add_row(vec![s("path"), kind, format!("{} KB", std::cmp::max(1, size / 1024))]);
+                }
+                println!("{table}");
+                println!("  {} {}", list.len().to_string().cyan().bold(), "file(s)".dimmed());
+            }
+        }
+        Commands::PluginAsset { plugin_id, path } => {
+            let v = state_bridge::plugin_asset(&plugin_id, &path)?;
+            // The text on stdout and nothing else, so
+            // `bmm plugin-asset x README.md > out.md` is a file rather than a file with a
+            // banner in it.
+            print!("{}", v.get("text").and_then(|t| t.as_str()).unwrap_or(""));
+        }
+
         Commands::Catalogs => {
             let res = state_bridge::api_call("GET", "/api/catalogs", None).await?;
             let body = res.get("body").cloned().unwrap_or(serde_json::Value::Null);

@@ -186,3 +186,25 @@ that value being typed into the task, where it drifts the first time the plugin 
 
     The engine comes from the extension unless you say otherwise. Nobody ships `setup.ps1`
     and means "run this with Python".
+
+
+### From a script, the CLI or an assistant
+
+```bash
+bmm plugin-assets dcs-helper
+bmm plugin-asset dcs-helper README.md
+```
+
+Both work with **BMM closed** — `data.json` says where the plugin is and the folder says what
+is in it. That matters here: the reason to ask what a plugin ships is usually that you are
+deciding whether to install it, which is not a moment when the app is open on that screen.
+
+`GET /api/plugins/assets?id=…` does the same over HTTP (`plugins.read`), and `&path=…`
+returns one file's text. The MCP tools are `bmm_plugin_assets` and `bmm_read_plugin_asset`.
+
+!!! note "Copying one OUT is not exposed"
+
+    A caller that named both the source and the destination would be a file-copy primitive
+    with BMM's privileges. Anything able to call these can already read the bytes and write
+    them wherever it likes with its own hands, so the endpoint would add reach without adding
+    ability.

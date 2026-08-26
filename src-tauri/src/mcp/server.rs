@@ -538,6 +538,28 @@ impl ServerHandler for BmmMcpServer {
             "required": ["name", "mod_ids"]
         })).unwrap()),
     ),
+    // What a plugin ships besides its code.
+    Tool::new(
+        "bmm_plugin_assets",
+        "List the files a plugin ships in its `assets/` folder — a README, config templates, sample lists, tools, sometimes a script. Each is { path, kind, size, readable } where kind is doc/script/image/data/archive/other. Reads the FOLDER, not the manifest, so a file the manifest never mentioned still appears. Works with BMM closed.",
+        std::sync::Arc::new(serde_json::from_value(json!({
+            "type": "object",
+            "properties": { "plugin_id": { "type": "string" } },
+            "required": ["plugin_id"]
+        })).unwrap()),
+    ),
+    Tool::new(
+        "bmm_read_plugin_asset",
+        "Read one of a plugin's shipped files as text — use bmm_plugin_assets first for the paths. Only text kinds (doc, data, script) can be read; an image or an archive is refused by kind rather than returned as noise. Nothing is executed: reading a shipped script shows you what it would do. Works with BMM closed.",
+        std::sync::Arc::new(serde_json::from_value(json!({
+            "type": "object",
+            "properties": {
+                "plugin_id": { "type": "string" },
+                "path": { "type": "string", "description": "Relative to assets/, e.g. \"README.md\" or \"docs/codes.csv\"." }
+            },
+            "required": ["plugin_id", "path"]
+        })).unwrap()),
+    ),
     // Catalogues.
     Tool::new(
         "bmm_list_catalogs",
@@ -1039,6 +1061,24 @@ impl ServerHandler for BmmMcpServer {
             match mods::generate_repo(name, ids_vec) {
                 Ok(msg) => Ok(CallToolResult::success(vec![Content::text(msg)])),
                 Err(e) => err_result(&e),
+            }
+        }
+        "bmm_plugin_assets" => {
+            let id = args.get("plugin_id").and_then(|v| v.as_str())
+                .ok_or_else(|| rmcp::ErrorData::invalid_params("Missing plugin_id", None))?;
+            match state_bridge::plugin_assets(id) {
+                Ok(v) => ok_json(&v),
+                Err(e) => err_result(&e.to_string()),
+            }
+        }
+        "bmm_read_plugin_asset" => {
+            let id = args.get("plugin_id").and_then(|v| v.as_str())
+                .ok_or_else(|| rmcp::ErrorData::invalid_params("Missing plugin_id", None))?;
+            let path = args.get("path").and_then(|v| v.as_str())
+                .ok_or_else(|| rmcp::ErrorData::invalid_params("Missing path", None))?;
+            match state_bridge::plugin_asset(id, path) {
+                Ok(v) => ok_json(&v),
+                Err(e) => err_result(&e.to_string()),
             }
         }
         "bmm_list_catalogs" => self.tool_api_call("GET", "/api/catalogs", None).await,

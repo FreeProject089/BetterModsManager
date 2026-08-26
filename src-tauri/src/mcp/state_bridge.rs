@@ -1170,6 +1170,41 @@ pub fn get_plugin(plugin_id: &str) -> anyhow::Result<serde_json::Value> {
         .ok_or_else(|| anyhow::anyhow!("Plugin not found: {}", plugin_id))
 }
 
+/// Where a plugin is installed, from `data.json`.
+fn plugin_install_dir(plugin_id: &str) -> anyhow::Result<String> {
+    let p = get_plugin(plugin_id)?;
+    p.get("install_dir")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
+        .ok_or_else(|| anyhow::anyhow!("Plugin '{}' has no install directory on record", plugin_id))
+}
+
+/// The files a plugin ships under `assets/`.
+///
+/// OFFLINE, like most of this file: `data.json` says where the plugin is and the folder says
+/// what is in it, so this answers whether or not BMM is running. That matters more here than
+/// elsewhere — the reason to ask what a plugin ships is usually that you are deciding
+/// whether to install it, which is not a moment when the app is open on that screen.
+///
+/// The walk and the path guard come from the app's own module rather than a copy: two path
+/// guards is one path guard plus a bug waiting for whichever copy somebody forgets.
+pub fn plugin_assets(plugin_id: &str) -> anyhow::Result<serde_json::Value> {
+    let dir = std::path::PathBuf::from(plugin_install_dir(plugin_id)?).join("assets");
+    Ok(serde_json::json!({
+        "id": plugin_id,
+        "assets": crate::commands::plugin_assets_core::list_dir(&dir),
+    }))
+}
+
+/// Read one of them, through the same guard and the same size cap the app uses.
+pub fn plugin_asset(plugin_id: &str, path: &str) -> anyhow::Result<serde_json::Value> {
+    let dir = plugin_install_dir(plugin_id)?;
+    let text = crate::commands::plugin_assets_core::read_text(&dir, path)
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
+    Ok(serde_json::json!({ "id": plugin_id, "path": path, "text": text }))
+}
+
 /// Verify a mod's on-disk files against its stored SHA-256 hashes.
 pub fn get_mod_by_id(mod_id: &str) -> anyhow::Result<BmmModEntry> {
     read_app_data()?.mods.into_iter().find(|m| m.id == mod_id)

@@ -3030,6 +3030,49 @@ pub async fn start_api_server(
         .boxed();
 
     // group_c: repo routes (cancel routes BEFORE the main route they override)
+    // ── What a plugin ships ─────────────────────────────────────────
+    //
+    // Read only, and that is the whole decision. Copying one OUT is not exposed: a caller
+    // that named both the source and the destination would be a file-copy primitive with
+    // BMM's privileges, and anything able to call this endpoint can already read the bytes
+    // and write them wherever it likes with its own hands.
+    let tok_pa_list = token.clone();
+    let handle_pa_list = app_handle.clone();
+    let plugin_assets = warp::path!("api" / "plugins" / "assets")
+        .and(warp::get())
+        .and(require_token(tok_pa_list))
+        .and(require_permission(token.clone(), "plugins.read"))
+        .and(warp::query::<std::collections::HashMap<String, String>>())
+        .and(with_app_handle(handle_pa_list))
+        .map(|q: std::collections::HashMap<String, String>, handle: tauri::AppHandle| {
+            let Some(id) = q.get("id").filter(|v| !v.is_empty()) else {
+                return warp::reply::with_status(
+                    warp::reply::json(&ApiError { error: "id query param required".into() }),
+                    StatusCode::BAD_REQUEST);
+            };
+            let state = handle.state::<crate::state::AppState>();
+            // With `path`, the FILE. Without it, the list. One route rather than two,
+            // because the second differs from the first only in what it returns.
+            match q.get("path").filter(|v| !v.is_empty()) {
+                Some(p) => match crate::commands::plugin_assets::plugin_asset_read(
+                    state, id.clone(), p.clone(),
+                ) {
+                    Ok(text) => warp::reply::with_status(
+                        warp::reply::json(&serde_json::json!({ "path": p, "text": text })),
+                        StatusCode::OK),
+                    Err(e) => warp::reply::with_status(
+                        warp::reply::json(&ApiError { error: e }), StatusCode::BAD_REQUEST),
+                },
+                None => match crate::commands::plugin_assets::plugin_assets_list(state, id.clone()) {
+                    Ok(v) => warp::reply::with_status(
+                        warp::reply::json(&serde_json::json!({ "id": id, "assets": v })),
+                        StatusCode::OK),
+                    Err(e) => warp::reply::with_status(
+                        warp::reply::json(&ApiError { error: e }), StatusCode::NOT_FOUND),
+                },
+            }
+        });
+
     // ── Catalogues ─────────────────────────────────────────────────────
     //
     // The source lists live in the webview's localStorage, which this side cannot read — so
@@ -3157,7 +3200,8 @@ pub async fn start_api_server(
             }
         });
 
-    let group_c = catalogs_get
+    let group_c = plugin_assets
+        .or(catalogs_get)
         .or(catalogs_set)
         .or(repo_extra_take)
         .or(keys_new)

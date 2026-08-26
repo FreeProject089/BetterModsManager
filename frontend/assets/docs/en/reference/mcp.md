@@ -56,7 +56,7 @@ connection error if the BMM window is not open.
 
 ## The tools
 
-61 of them. `*` marks a required parameter; a slash-separated list is the set of accepted
+63 of them. `*` marks a required parameter; a slash-separated list is the set of accepted
 values.
 
 ### Finding things
@@ -106,6 +106,8 @@ values.
 | `bmm_list_connected_repos` | — |  | List the Server-Repos this BMM is connected to (name, url, sync state) |
 | `bmm_generate_repo` | `name`\*, `mod_ids`\* |  | Generate a repository from a list of mods |
 | `bmm_start_repo_server` | `path`\*, `port`\* | app | Start the repository server |
+| `bmm_plugin_assets` | `plugin_id`\* |  | The files a plugin ships in `assets/` — `{ path, kind, size, readable }`. Reads the FOLDER, so a file the manifest never mentioned still appears. Works with BMM closed |
+| `bmm_read_plugin_asset` | `plugin_id`\*, `path`\* |  | Read one as text. Text kinds only; nothing is executed — reading a shipped script shows you what it would do. Works with BMM closed |
 | `bmm_list_catalogs` | — | app | The catalogues this BMM follows, by type, plus `written_at` — absent means the app has not pushed its list yet, which is not the same as following nothing |
 | `bmm_follow_catalog` | `type`\*, `url`\*, `follow` | app | Follow one, or stop. Goes through the app's own screens, so it appears in the following list with an origin |
 | `bmm_repo_extras` | `url`\*, `password` | app | List what a repo carries besides mods — plugins, automations, themes, mod lists, catalogues to follow. Reads the manifest; downloads nothing. `locked: true` on a list means its contents are encrypted |
@@ -209,12 +211,12 @@ pointed at another host.
 
 The tables above are generated from the `Tool::new(...)` declarations in
 `src-tauri/src/mcp/server.rs` — the same ones the server registers at startup — rather than
-written by hand, because 61 tools with their parameters is exactly the list that rots the
+written by hand, because 63 tools with their parameters is exactly the list that rots the
 first time someone adds one.
 
 One cross-check is worth repeating after any change: every tool the server **declares** must
 also be **dispatched**, or a client sees a tool that errors when called. At the time of
-writing both sets are 61 and identical.
+writing both sets are 63 and identical.
 
 ---
 

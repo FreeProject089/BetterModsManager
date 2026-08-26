@@ -58,7 +58,7 @@ l'API locale et échouent sur une erreur de connexion si la fenêtre de BMM n'es
 
 ## Les outils
 
-61 au total. `*` marque un paramètre obligatoire ; une liste séparée par des barres obliques
+63 au total. `*` marque un paramètre obligatoire ; une liste séparée par des barres obliques
 donne les valeurs acceptées.
 
 ### Recherche
@@ -107,6 +107,8 @@ donne les valeurs acceptées.
 |---|---|---|---|
 | `bmm_list_connected_repos` | — |  | Liste les Dépôts Serveur connectés (nom, url, état de synchro) |
 | `bmm_generate_repo` | `name`\*, `mod_ids`\* |  | Génère un dépôt depuis une liste de mods |
+| `bmm_plugin_assets` | `plugin_id`\* |  | Les fichiers qu'un plugin livre dans `assets/` — `{ path, kind, size, readable }`. Lit le DOSSIER : un fichier que le manifeste n'a jamais mentionné apparaît quand même. Marche BMM fermé |
+| `bmm_read_plugin_asset` | `plugin_id`\*, `path`\* |  | En lire un en texte. Types texte uniquement ; rien n'est exécuté — lire un script livré montre ce qu'il ferait. Marche BMM fermé |
 | `bmm_list_catalogs` | — | app | Les catalogues que ce BMM suit, par type, avec `written_at` — absent veut dire que l'app n'a pas encore poussé sa liste, ce qui n'est pas la même chose que n'en suivre aucun |
 | `bmm_follow_catalog` | `type`\*, `url`\*, `follow` | app | En suivre un, ou arrêter. Passe par les écrans de l'app, donc il apparaît dans la liste des suivis avec son origine |
 | `bmm_repo_extras` | `url`\*, `password` | app | Liste ce qu'un dépôt transporte en plus des mods — plugins, automatisations, thèmes, listes de mods, catalogues à suivre. Lit le manifeste ; ne télécharge rien. `locked: true` sur une liste signifie que son contenu est chiffré |
@@ -211,12 +213,12 @@ Il est volontairement étroit : seulement `GET` et `POST`, et seulement vers
 
 Les tableaux ci-dessus sont générés depuis les déclarations `Tool::new(...)` de
 `src-tauri/src/mcp/server.rs` — celles-là mêmes que le serveur enregistre au démarrage —
-plutôt qu'écrits à la main, parce que 61 outils avec leurs paramètres, c'est exactement le
+plutôt qu'écrits à la main, parce que 63 outils avec leurs paramètres, c'est exactement le
 genre de liste qui pourrit dès qu'on en ajoute un.
 
 Une vérification vaut le coup après chaque changement : tout outil **déclaré** par le serveur
 doit aussi être **dispatché**, sinon un client voit un outil qui échoue à l'appel. À l'heure
-où ces lignes sont écrites, les deux ensembles font 61 et sont identiques.
+où ces lignes sont écrites, les deux ensembles font 63 et sont identiques.
 
 ---
 

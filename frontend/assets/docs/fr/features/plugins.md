@@ -197,3 +197,27 @@ plugin.
 
     Le moteur vient de l'extension sauf indication contraire. Personne ne livre `setup.ps1`
     en voulant dire « lance ça avec Python ».
+
+
+### Depuis un script, la CLI ou un assistant
+
+```bash
+bmm plugin-assets dcs-helper
+bmm plugin-asset dcs-helper README.md
+```
+
+Les deux marchent **BMM fermé** — `data.json` dit où est le plugin et le dossier dit ce
+qu'il contient. Ça compte ici : la raison de demander ce qu'un plugin livre est en général
+qu'on décide s'il faut l'installer, ce qui n'est pas un moment où l'app est ouverte sur cet
+écran.
+
+`GET /api/plugins/assets?id=…` fait la même chose en HTTP (`plugins.read`), et `&path=…`
+renvoie le texte d'un fichier. Les outils MCP sont `bmm_plugin_assets` et
+`bmm_read_plugin_asset`.
+
+!!! note "En copier un vers l'extérieur n'est pas exposé"
+
+    Un appelant qui nommerait à la fois la source et la destination serait une primitive de
+    copie de fichier avec les privilèges de BMM. Tout ce qui peut appeler ces endpoints peut
+    déjà lire les octets et les écrire où il veut de ses propres mains : l'endpoint
+    ajouterait de la portée sans ajouter de capacité.
