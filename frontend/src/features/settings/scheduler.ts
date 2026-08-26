@@ -3633,6 +3633,13 @@ function renderModal(modal: HTMLElement): void {
                     <div class="sched-add-row" id="sched-root-add"></div>
                 </div>
                 <div class="sched-codepane" id="sched-codepane" hidden>
+                    <div class="sched-code-bar">
+                        <span class="sched-code-bar-hint">${escHtml(t('sched.bmms.barHint'))}</span>
+                        <button type="button" class="btn btn-xs btn-ghost" id="sched-code-docs">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+                            ${escHtml(t('sched.bmms.openDocs'))}
+                        </button>
+                    </div>
                     <textarea class="input sched-code" id="sched-code-ta" rows="20" spellcheck="false"></textarea>
                     <div class="sched-code-status" id="sched-code-status"></div>
                 </div>
@@ -3984,6 +3991,19 @@ function wireCodeMode(modal: HTMLElement): void {
     const timeline = modal.querySelector('.sched-timeline') as HTMLElement | null;
     const ta = modal.querySelector('#sched-code-ta') as HTMLTextAreaElement | null;
     const status = modal.querySelector('#sched-code-status') as HTMLElement | null;
+
+    // The reference, one click from the editor.
+    //
+    // Writing BMMScript by hand means knowing eighty-two action names and their parameters,
+    // and the page that lists them was three screens away behind a modal you had to close
+    // first. It opens the generated reference — the one built from the registry, so it can
+    // never list an action this build does not have.
+    modal.querySelector('#sched-code-docs')?.addEventListener('click', () => {
+        // Through the deeplink, so it does the same two things clicking Help & other does:
+        // switch view and open the article. The modal closes because the docs are behind it.
+        modal.classList.remove('open');
+        void runDeepLink('bmm://docs/open?article=bmmscript-reference');
+    });
     const btns = Array.from(modal.querySelectorAll('.sched-mode-btn')) as HTMLElement[];
     if (!pane || !timeline || !ta || !status || !btns.length) return;
 

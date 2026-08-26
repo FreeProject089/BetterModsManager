@@ -18773,3 +18773,6 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
 /* The one section whose loss is not "set BMM up again". */
 .sched-bk-danger span { color: var(--warning); font-weight: 600; }
 .sched-bk-passhint.is-required { color: var(--warning); font-weight: 600; }
+/* The bar above the BMMScript editor: what this is, and the way to the reference. */
+.sched-code-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.sched-code-bar-hint { flex: 1; min-width: 0; font-size: 10.5px; color: var(--text-muted); }

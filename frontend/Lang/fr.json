@@ -8684,5 +8684,7 @@
   "sched.cat.t.modpack": "Modpacks",
   "sched.cat.t.repo": "Dépôts",
   "sched.cat.t.tutorial": "Tutoriels",
-  "sched.cat.t.list": "Listes de mods"
+  "sched.cat.t.list": "Listes de mods",
+  "sched.bmms.barHint": "BMMScript — la même tâche que les briques, écrite.",
+  "sched.bmms.openDocs": "Référence"
 }
