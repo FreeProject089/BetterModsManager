@@ -17656,6 +17656,28 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 .repo-cat-chev { flex: none; transition: transform .15s ease; }
 .repo-cat-fold.is-folded .repo-cat-chev { transform: rotate(-90deg); }
 @media (prefers-reduced-motion: reduce) { .repo-cat-chev { transition: none; } }
+/* The two folds under the sync address. They were borderless, padding-free, muted grey text
+   with an icon — which is what a caption looks like, so the controls that open the password
+   and the key field went unclicked. A border, a hover, and a chevron that says which way it
+   goes. They sit on one row and wrap together rather than being nudged apart by a
+   margin-left on the second. */
+.sync-fold {
+    display: inline-flex; align-items: center; gap: 6px; margin: 8px 8px 0 0;
+    padding: 4px 10px; font-size: 11px; font-family: inherit; cursor: pointer;
+    color: var(--text-secondary); background: var(--bmm-s03);
+    border: 1px solid var(--border); border-radius: 999px;
+}
+.sync-fold:hover { color: var(--text-primary); border-color: var(--border-accent); }
+.sync-fold.is-open { color: var(--text-primary); border-color: var(--accent); background: var(--bmm-bg-active); }
+.sync-fold-chev { flex: none; transition: transform .15s ease; transform: rotate(-90deg); }
+.sync-fold.is-open .sync-fold-chev { transform: rotate(0deg); }
+@media (prefers-reduced-motion: reduce) { .sync-fold-chev { transition: none; } }
+
+/* Finding one mod among two hundred, in the repo-update chooser. */
+.ru-mods-head { display: flex; align-items: center; gap: 8px; margin: 4px 0 6px; }
+.ru-mods-find { flex: 1; min-width: 0; font-size: 11px; height: 26px; }
+.ru-mods-count { flex: none; font-size: 10px; color: var(--text-muted); font-family: var(--font-mono); }
+
 .repo-cat-srcs { display: flex; flex-direction: column; gap: 4px; }
 
 /* Taking a repo out of your own list, and the way back. The note is quiet but always there

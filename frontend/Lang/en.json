@@ -8405,5 +8405,10 @@
   "repo.cat.followedN": "{n} catalogue(s) followed",
   "repo.hideOne": "Take it out of my list",
   "repo.hiddenN": "{n} hidden by you",
-  "repo.unhideAll": "Show them again"
+  "repo.unhideAll": "Show them again",
+  "repo.discoverMakeOne": "Make one — take me to Host",
+  "repo.update.findMod": "Find a mod…",
+  "repo.update.modN": "{n} mods",
+  "repo.update.matchN": "{n} of {m}",
+  "repo.update.showMore": "Show {n} more"
 }

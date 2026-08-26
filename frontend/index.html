@@ -2567,13 +2567,17 @@
                                              already knows the repo is protected and does not want to fetch, fail,
                                              then type. Collapsed by default: most repos are open, and a permanent
                                              password field teaches people that one is expected. -->
-                                        <button type="button" id="btn-sync-pass-toggle"
-                                            style="display:inline-flex;align-items:center;gap:6px;margin-top:8px;padding:0;background:none;border:none;cursor:pointer;font-size:11px;color:var(--text-muted);">
+                                        <!-- A BUTTON that looks like one. These were borderless,
+                                             padding-free, muted grey text with an icon, so the two
+                                             controls that open the password and the key read as
+                                             captions and went unclicked. -->
+                                        <button type="button" id="btn-sync-pass-toggle" class="sync-fold">
                                             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
                                                 <rect x="3" y="11" width="18" height="11" rx="2"></rect>
                                                 <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
                                             </svg>
                                             <span data-i18n="repo.syncPassToggle">This repo has a download password</span>
+                                            <svg class="sync-fold-chev" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
                                         </button>
                                         <div id="repo-sync-pass-row" style="display:none;margin-top:6px;">
                                             <form style="display:contents" autocomplete="off" data-no-submit="1"><input
@@ -2589,12 +2593,12 @@
                                              here and one buried in Settings. The field WRITES THE SAME SETTING the
                                              Identity & API card does; it is a second door onto one value, never a
                                              second copy of it. -->
-                                        <button type="button" id="btn-sync-key-toggle"
-                                            style="display:inline-flex;align-items:center;gap:6px;margin-top:8px;margin-left:14px;padding:0;background:none;border:none;cursor:pointer;font-size:11px;color:var(--text-muted);">
+                                        <button type="button" id="btn-sync-key-toggle" class="sync-fold">
                                             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
                                                 <circle cx="7.5" cy="15.5" r="4.5"></circle><path d="M10.7 12.3 21 2"></path><path d="m17 6 3 3"></path>
                                             </svg>
                                             <span data-i18n="repo.syncKeyToggle">This repo requires a private key</span>
+                                            <svg class="sync-fold-chev" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
                                         </button>
                                         <div id="repo-sync-key-row" style="display:none;margin-top:6px;">
                                             <!-- Which key signs for THIS repo's server. The list is the
@@ -2752,8 +2756,12 @@
                                     <!-- Fallback when FETCH finds no repo.json: read the
                                          server's listing and show what it offers anyway. -->
                                     <div style="margin:0 0 10px;">
-                                        <button class="btn btn-ghost btn-sm" id="btn-discover-server"
-                                            style="font-size:11px; height:26px; padding:0 10px;"
+                                        <!-- btn-secondary, not ghost: a ghost button at 11px beside
+                                             two folds reads as a third caption. This one starts a
+                                             network request and is the way out of "the address is
+                                             right and there is no repo.json". -->
+                                        <button class="btn btn-secondary btn-sm" id="btn-discover-server"
+                                            style="font-size:11.5px; height:28px; padding:0 12px;"
                                             data-i18n="repo.discoverBtn">Pas de repo.json ? Inspecter le serveur</button>
                                         <div id="discover-result"
                                             style="display:none; margin-top:8px; font-size:11px; line-height:1.6; background:var(--bmm-bg-base); border:1px solid var(--bmm-s08); border-radius:6px; padding:8px;"></div>

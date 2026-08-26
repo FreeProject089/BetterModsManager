@@ -91,6 +91,28 @@ async function discover() {
         if (!r.manifestUrl) {
             box.append(line(t('repo.discoverNoManifest') || 'No manifest found — everything below is unverified',
                 'color:var(--warning);font-weight:700;margin-bottom:6px'));
+
+            // A verdict with nowhere to go.
+            //
+            // "There is no repo.json" is the answer to the question, and it left you holding
+            // it: the way to MAKE one is on the Host tab, two clicks away, and nothing here
+            // said so. Offered rather than done — the person inspecting a server is not
+            // always the person who can publish to it.
+            const make = document.createElement('button');
+            make.className = 'btn btn-secondary btn-sm';
+            make.style.cssText = 'margin:2px 0 8px;font-size:11px;height:26px;padding:0 10px';
+            make.textContent = t('repo.discoverMakeOne');
+            make.addEventListener('click', () => {
+                (document.getElementById('btn-repo-tab-host') as HTMLElement | null)?.click();
+                // After the tab has drawn: the panel is hidden until then, and scrolling to
+                // something in a hidden subtree moves nothing — the same fault that made the
+                // sync screen's Manage button do nothing at all.
+                setTimeout(() => {
+                    (document.getElementById('btn-open-repo-update') as HTMLElement | null)
+                        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }, 250);
+            });
+            box.append(make);
         } else if (!r.manifestTrusted) {
             box.append(line(t('repo.discoverUntrusted') || 'A manifest was found but its signature does not verify — treated as absent',
                 'color:var(--danger);font-weight:700;margin-bottom:6px'));

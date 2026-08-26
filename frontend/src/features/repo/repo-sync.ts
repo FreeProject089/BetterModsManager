@@ -70,6 +70,8 @@ function initSyncPasswordField(): void {
     toggle.addEventListener('click', () => {
         const open = row.style.display !== 'none';
         row.style.display = open ? 'none' : '';
+        // The chevron is the only thing on screen that says which way this goes.
+        toggle.classList.toggle('is-open', !open);
         if (!open) (document.getElementById('repo-sync-password') as HTMLInputElement | null)?.focus();
     });
 }
@@ -93,6 +95,7 @@ function initSyncKeyAndSshFields(): void {
         keyToggle.addEventListener('click', async () => {
             const open = keyRow.style.display !== 'none';
             keyRow.style.display = open ? 'none' : '';
+            keyToggle.classList.toggle('is-open', !open);
             // Read on open rather than at start-up: the ring can have changed from either of
             // the other two screens since this panel was built.
             if (!open) {

@@ -2042,8 +2042,19 @@ export function initRepo() {
                             const mods = await invoke('get_profile_mod_list', { profileId: pid });
                             box.innerHTML = `
                                 <div style="font-size:10px;color:var(--text-muted);margin:6px 0 4px;">${t('repo.update.modsHint') || 'Checked mods will be added. Leave all checked to add the whole profile.'}</div>
+                                <!-- A profile with two hundred mods is four rows each: a wall
+                                     you scroll past to reach anything else on the screen.
+                                     Rows are FILTERED and capped, never re-rendered — a tick
+                                     and a typed changelog live in the DOM, and rebuilding the
+                                     list would quietly throw both away. -->
+                                <div class="ru-mods-head">
+                                    <input type="search" class="input input-sm ru-mods-find"
+                                           data-pid="${escAttr(pid)}" spellcheck="false"
+                                           placeholder="${escAttr(t('repo.update.findMod'))}">
+                                    <span class="ru-mods-count" data-pid="${escAttr(pid)}"></span>
+                                </div>
                                 ${mods.map(m => `
-                                <div style="padding:1px 0;">
+                                <div class="ru-mod-row" data-find="${escAttr(String(m.name || '').toLowerCase())}" style="padding:1px 0;">
                                     <label style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text-secondary);cursor:pointer;">
                                         <input type="checkbox" class="repo-up-add-mod" data-pid="${escAttr(pid)}" data-mid="${escAttr(m.id)}" checked>
                                         <span>${escHtml(m.name)} <span style="color:var(--text-muted);">v${escHtml(m.version)}</span></span>
@@ -2056,8 +2067,43 @@ export function initRepo() {
                                         <span style="color:var(--text-secondary);user-select:all;">${escHtml(m.id)}</span>
                                         <button type="button" class="repo-up-copy-id" data-mid="${escAttr(m.id)}" data-tooltip="${escAttr(t('common.copy') || 'Copy')}" style="border:none;background:rgba(255,255,255,0.06);color:var(--text-secondary);border-radius:3px;padding:1px 5px;cursor:pointer;font-size:9px;">${t('common.copy') || 'Copy'}</button>
                                     </div>
-                                </div>`).join('') || `<div style="font-size:11px;color:var(--text-muted);">${t('repo.update.noMods') || 'No mods in this profile'}</div>`}`;
+                                </div>`).join('') || `<div style="font-size:11px;color:var(--text-muted);">${t('repo.update.noMods') || 'No mods in this profile'}</div>`}
+                                <button type="button" class="btn btn-xs btn-ghost ru-mods-more" style="display:none;margin-top:4px"></button>`;
                             box.dataset.loaded = '1';
+                            // ── Find, and a cap ──────────────────────────────────────
+                            const rows = [...box.querySelectorAll('.ru-mod-row')];
+                            const findEl = box.querySelector('.ru-mods-find');
+                            const countEl = box.querySelector('.ru-mods-count');
+                            const moreEl = box.querySelector('.ru-mods-more');
+                            const STEP = 30;
+                            let shown = STEP;
+                            const paintRows = () => {
+                                const q = (findEl?.value || '').trim().toLowerCase();
+                                let matched = 0;
+                                for (const row of rows) {
+                                    const hit = !q || (row.dataset.find || '').includes(q);
+                                    // Past the cap it is HIDDEN, not removed — its checkbox is
+                                    // still in the form and still counts when the update runs,
+                                    // which is what "leave all checked" has always meant.
+                                    const within = hit && matched < shown;
+                                    if (hit)
+                                        matched += 1;
+                                    row.style.display = within ? '' : 'none';
+                                }
+                                const hiddenByCap = Math.max(0, matched - shown);
+                                if (countEl) {
+                                    countEl.textContent = q
+                                        ? t('repo.update.matchN').replace('{n}', String(matched)).replace('{m}', String(rows.length))
+                                        : t('repo.update.modN').replace('{n}', String(rows.length));
+                                }
+                                if (moreEl) {
+                                    moreEl.style.display = hiddenByCap ? '' : 'none';
+                                    moreEl.textContent = t('repo.update.showMore').replace('{n}', String(hiddenByCap));
+                                }
+                            };
+                            findEl?.addEventListener('input', () => { shown = STEP; paintRows(); });
+                            moreEl?.addEventListener('click', () => { shown += STEP; paintRows(); });
+                            paintRows();
                             // Selecting any mod auto-checks the profile
                             const profCb = addEl.querySelector(`.repo-up-add-profile[data-pid="${pid}"]`);
                             box.querySelectorAll('.repo-up-add-mod').forEach(cb => cb.addEventListener('change', () => { if (profCb)
