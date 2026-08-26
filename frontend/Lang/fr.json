@@ -8448,5 +8448,7 @@
   "common.copyFailed": "Copie impossible",
   "mm.errLocked": "Cette liste est verrouillée — il lui faut sa phrase secrète",
   "mm.cancelled": "Import annulé",
-  "mm.errNotLocked": "Cette liste n’est pas verrouillée"
+  "mm.errNotLocked": "Cette liste n’est pas verrouillée",
+  "restore.lockedTitle": "Cette sauvegarde est verrouillée",
+  "restore.lockedDesc": "Elle a été exportée avec une phrase secrète. Sans elle le contenu n’est pas là — et aucune phrase ne se récupère."
 }

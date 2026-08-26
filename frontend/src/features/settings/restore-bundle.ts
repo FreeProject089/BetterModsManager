@@ -71,17 +71,31 @@ export async function openRestoreBundle(): Promise<void> {
             return;
         }
         const { promptRepoPassword } = await import('../repo/repo-sync.js');
-        const given = await promptRepoPassword();
-        if (given == null) return;
-        passphrase = given;
-        try {
-            info = await invoke('inspect_data_bundle', { path, passphrase }) as BundleInfo;
-        } catch (e2) {
-            (window as any).toast?.(String(e2).includes('bmm.enc.errWrongPass')
-                ? t('bmm.enc.errWrongPass')
-                : t('restore.unreadable', { error: String(e2) }), 'error');
-            return;
+        // Asked until it opens or you give up, saying WHY each time after the first. Closing
+        // on a wrong answer and toasting afterwards made a mistyped character look like a
+        // broken feature — the second prompt was identical to the first.
+        let lastError = '';
+        let opened: BundleInfo | null = null;
+        for (;;) {
+            const given = await promptRepoPassword({
+                title: t('restore.lockedTitle'),
+                desc: t('restore.lockedDesc'),
+                error: lastError,
+            });
+            if (given == null) return;
+            try {
+                opened = await invoke('inspect_data_bundle', { path, passphrase: given }) as BundleInfo;
+                passphrase = given;
+                break;
+            } catch (e2) {
+                if (!String(e2).includes('bmm.enc.errWrongPass')) {
+                    (window as any).toast?.(t('restore.unreadable', { error: String(e2) }), 'error');
+                    return;
+                }
+                lastError = t('bmm.enc.errWrongPass');
+            }
         }
+        info = opened;
     }
 
     document.getElementById(OVERLAY_ID)?.remove();

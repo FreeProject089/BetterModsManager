@@ -8450,5 +8450,7 @@
   "common.copyFailed": "Could not copy",
   "mm.errLocked": "This list is locked — it needs its passphrase",
   "mm.cancelled": "Import cancelled",
-  "mm.errNotLocked": "That list is not locked"
+  "mm.errNotLocked": "That list is not locked",
+  "restore.lockedTitle": "This backup is locked",
+  "restore.lockedDesc": "It was exported with a passphrase. Without it the contents are not there to read — there is no way to recover one."
 }

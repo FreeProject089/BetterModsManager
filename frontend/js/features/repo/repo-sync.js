@@ -3,6 +3,7 @@ import { invoke } from '../../core/api.js';
 import { registerRepoSyncOpener } from './auto-sync.js';
 import { toast, updateLibraryProfileSelector } from '../../ui/app.js';
 import { t } from '../../core/i18n.js';
+import { raiseAboveAll } from '../../ui/layer.js';
 import { renderProfiles } from '../profiles/profiles.js';
 import { formatBytes, escHtml } from '../../core/utils.js';
 import { checkModUpdates } from './mod-updates.js';
@@ -13,53 +14,102 @@ let lastFetchedRepoSaltedId = null;
 // DOWNLOAD_PASSWORD on the mini-server; content requests then need `X-Repo-Password`.
 // We remember what the user typed for this session so the follow-up fetch + the sync reuse it.
 let lastRepoPassword = null;
-// Small themed modal that asks the subscriber for the repo's download password.
-// Resolves to the entered string, or null if the user cancels.
-export function promptRepoPassword() {
+/**
+ * Ask for a password, or a passphrase.
+ *
+ * Three faults, one cause: it was appended to `document.body`.
+ *
+ * `#app-window-outer` carries `contain: paint`, so an overlay outside it dims the transparent
+ * Tauri margins and the desktop behind them instead of the app — the "buggy shadow". It also
+ * competes with the app frame for the top of the stack rather than sitting inside it, which
+ * is why clicks went through it as though it were not there. Every other dialog in BMM is
+ * mounted in the frame and raised with raiseAboveAll; this one had been written on its own.
+ *
+ * And it could not say the answer was wrong. It resolved, the caller failed, and the second
+ * prompt looked exactly like the first — so a mistyped character read as a broken feature.
+ * `error` is shown in the box, so a re-ask says why it is being asked again.
+ */
+export function promptRepoPassword(opts) {
     return new Promise((resolve) => {
         const overlay = document.createElement('div');
-        overlay.style.cssText = 'position:fixed;inset:0;z-index:2147483647;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.55);backdrop-filter:blur(2px);';
+        // Absolute INSIDE the frame, not fixed on the document: the dim belongs to the app,
+        // and the rounded window corners are the app's edge.
+        overlay.className = 'modal-overlay open';
+        overlay.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;';
+        raiseAboveAll(overlay, 2000300);
         const box = document.createElement('div');
-        box.style.cssText = 'background:var(--bg-secondary,#1b1b1f);border:1px solid var(--border,rgba(255,255,255,0.1));border-radius:12px;padding:22px;width:min(90vw,380px);box-shadow:0 20px 60px rgba(0,0,0,0.5);';
+        box.className = 'modal glass';
+        box.style.cssText = 'width:min(90vw,400px);padding:22px;';
         const title = document.createElement('div');
-        title.textContent = t('repo.passwordPrompt.title') || 'Password required';
-        title.style.cssText = 'font-weight:700;font-size:15px;margin-bottom:6px;color:var(--text-primary,#fff);';
+        title.textContent = opts?.title || t('repo.passwordPrompt.title') || 'Password required';
+        title.style.cssText = 'font-weight:700;font-size:15px;margin-bottom:6px;color:var(--text-primary);';
         const desc = document.createElement('div');
-        desc.textContent = t('repo.passwordPrompt.desc') || 'This repository is protected. Enter its download password to continue.';
-        desc.style.cssText = 'font-size:12px;color:var(--text-secondary,#aaa);margin-bottom:14px;line-height:1.4;';
+        desc.textContent = opts?.desc || t('repo.passwordPrompt.desc')
+            || 'This repository is protected. Enter its download password to continue.';
+        desc.style.cssText = 'font-size:12px;color:var(--text-secondary);margin-bottom:14px;line-height:1.5;';
         const input = document.createElement('input');
         input.type = 'password';
+        input.className = 'input';
         input.autocomplete = 'off';
         input.placeholder = t('repo.passwordPrompt.placeholder') || 'Download password';
-        input.style.cssText = 'width:100%;box-sizing:border-box;padding:9px 11px;border-radius:8px;border:1px solid var(--border,rgba(255,255,255,0.15));background:var(--bg-primary,#111);color:var(--text-primary,#fff);font-size:13px;margin-bottom:16px;';
+        input.style.cssText = 'width:100%;box-sizing:border-box;margin-bottom:14px;';
         const row = document.createElement('div');
         row.style.cssText = 'display:flex;gap:8px;justify-content:flex-end;';
         const cancel = document.createElement('button');
+        cancel.className = 'btn btn-sm btn-ghost';
         cancel.textContent = t('common.cancel') || 'Cancel';
-        cancel.style.cssText = 'padding:8px 14px;border-radius:8px;border:1px solid var(--border,rgba(255,255,255,0.15));background:transparent;color:var(--text-secondary,#ccc);cursor:pointer;font-size:13px;';
         const ok = document.createElement('button');
+        ok.className = 'btn btn-sm btn-primary';
         ok.textContent = t('common.confirm') || 'Confirm';
-        ok.style.cssText = 'padding:8px 14px;border-radius:8px;border:none;background:var(--accent,#5b8def);color:var(--bmm-text-on-accent);cursor:pointer;font-size:13px;font-weight:600;';
-        const done = (val) => { try {
-            overlay.remove();
-        }
-        catch { } resolve(val); };
+        const done = (val) => {
+            document.removeEventListener('keydown', onKey, true);
+            try {
+                overlay.remove();
+            }
+            catch { /* already gone */ }
+            resolve(val);
+        };
+        // Captured on the document, so Escape works before the input has focus and cannot be
+        // swallowed by whatever is underneath.
+        const onKey = (ev) => {
+            if (ev.key === 'Escape') {
+                ev.preventDefault();
+                ev.stopPropagation();
+                done(null);
+            }
+        };
+        document.addEventListener('keydown', onKey, true);
         cancel.onclick = () => done(null);
-        ok.onclick = () => done(input.value);
+        // Empty is not an answer. Refusing here saves a round trip that would come back as
+        // "wrong password", which is a different and misleading thing to be told.
+        ok.onclick = () => { if (input.value)
+            done(input.value);
+        else
+            input.focus(); };
         input.addEventListener('keydown', (ev) => {
             if (ev.key === 'Enter') {
                 ev.preventDefault();
-                done(input.value);
-            }
-            else if (ev.key === 'Escape') {
-                ev.preventDefault();
-                done(null);
+                if (input.value)
+                    done(input.value);
             }
         });
         row.append(cancel, ok);
-        box.append(title, desc, input, row);
+        box.append(title, desc);
+        if (opts?.error) {
+            const err = document.createElement('div');
+            err.textContent = opts.error;
+            err.style.cssText = 'font-size:11.5px;color:var(--danger);background:color-mix(in srgb,'
+                + ' var(--danger) 10%, transparent);border:1px solid color-mix(in srgb,'
+                + ' var(--danger) 30%, transparent);border-radius:8px;padding:8px 10px;margin-bottom:12px;';
+            box.append(err);
+        }
+        box.append(input, row);
         overlay.append(box);
-        document.body.append(overlay);
+        // Clicking the dim cancels, like every other dialog. Only the dim: a click that
+        // started inside the box and drifted out while selecting text must not close it.
+        overlay.addEventListener('mousedown', (e) => { if (e.target === overlay)
+            done(null); });
+        (document.getElementById('app-window-outer') || document.body).append(overlay);
         setTimeout(() => input.focus(), 30);
     });
 }
