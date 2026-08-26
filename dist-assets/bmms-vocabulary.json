@@ -652,6 +652,23 @@
       ]
     },
     {
+      "type": "import.file",
+      "group": "system",
+      "params": [
+        "path",
+        "url",
+        "password",
+        "kind",
+        "passphrase",
+        "apply",
+        "install",
+        "exact",
+        "catType",
+        "restore",
+        "sections"
+      ]
+    },
+    {
       "type": "catalog.follow",
       "group": "repo",
       "params": [
@@ -711,6 +728,7 @@
     "wait.tries",
     "script.code",
     "script.ok",
+    "import.count",
     "http.status",
     "map.size",
     "map.hit"

@@ -499,6 +499,12 @@
       "group": "repo"
     },
     {
+      "type": "import.file",
+      "label": "Import a file (list, plugin, theme, automation, backup)",
+      "needs": "importFile",
+      "group": "system"
+    },
+    {
       "type": "catalog.follow",
       "label": "Follow (or stop following) a catalogue",
       "needs": "catFollow",

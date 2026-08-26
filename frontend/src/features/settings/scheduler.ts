@@ -1220,6 +1220,38 @@ function engineFor(path: string): string {
         || 'powershell';
 }
 
+/**
+ * Add the automations from a `.bmmpa` to the scheduler, DISABLED.
+ *
+ * Disabled is the whole point, and it is the same rule a repo's carried automation follows:
+ * an automation can run commands, its author is whoever sent the file, and importing is not
+ * the same act as agreeing to run it. Permissions are stripped for the same reason — they
+ * are granted by the person who reads the task, not carried in by the file that asks.
+ *
+ * An id already present is left alone rather than replaced, so an import cannot rewrite a
+ * task somebody already trusts by naming it the same thing.
+ */
+async function importTasksDisabled(path: string): Promise<number> {
+    const raw = String(await invoke('read_file_text', { path }));
+    const doc = JSON.parse(raw);
+    const incoming: any[] = Array.isArray(doc?.tasks) ? doc.tasks : (Array.isArray(doc) ? doc : [doc]);
+    // Typed, because the catch arm's [] would otherwise infer never[] and the push below
+    // becomes an error that reads as if the DATA were wrong rather than the annotation.
+    const current: any[] = await (invoke('get_schedules') as Promise<any[]>).catch(() => [] as any[]);
+    const have = new Set((current || []).map((x: any) => String(x?.id || '')));
+    let added = 0;
+    for (const raw of incoming) {
+        if (!raw || typeof raw !== 'object' || !raw.id) continue;
+        if (have.has(String(raw.id))) continue;
+        current.push({ ...raw, enabled: false, perms: {}, osSchedule: false });
+        have.add(String(raw.id));
+        added += 1;
+    }
+    if (added) await invoke('save_schedules', { tasks: current });
+    if (added) await loadTasks();
+    return added;
+}
+
 async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Promise<void> {
     // Substituted once, here, so every action sees resolved parameters without each case
     // having to remember to ask. `action.params` itself is left alone — it is the saved
@@ -1639,6 +1671,81 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
             // the difference between the two must not be which button somebody clicked.
             const full = await invoke('plugin_asset_path', { pluginId, path: assetPath }) as string;
             await invoke('open_folder', { path: full.replace(/[/\\][^/\\]*$/, '') });
+            break;
+        }
+
+        // Bring a file in.
+        //
+        // The kind is worked out from the extension unless the task names one. Everything
+        // else is shared: a URL is fetched with the source's credentials first, and the
+        // passphrase is handed to whichever reader needs it.
+        case 'import.file': {
+            let path = String(p.path || '').trim();
+            const url = String(p.url || '').trim();
+            if (!path && !url) { toast(`${task.name}: ${t('sched.imp.nothing')}`, 'warning', 8000); break; }
+            if (!path) {
+                await applyCredsFor(url, p);
+                path = await invoke('fetch_to_app_data', {
+                    url, folder: 'imports', password: p.password || null, defaultExt: null,
+                }) as string;
+            }
+            const ext = (path.split('.').pop() || '').toLowerCase();
+            const kind = String(p.kind || 'auto') === 'auto'
+                ? ({ mm: 'modlist', mmlist: 'modlist', bmmplug: 'plugin', bmmtheme: 'theme',
+                     bmmpa: 'automation', databmm: 'backup', bmmbundle: 'bundle' } as Record<string, string>)[ext] || 'modlist'
+                : String(p.kind);
+            const pass = p.passphrase ? String(p.passphrase) : null;
+
+            if (kind === 'modlist') {
+                const { applyModList } = await import('../mods/modlist.js');
+                // Installing is a separate question from importing: a task that only wants
+                // the list read into BMM should not start downloading mods because the
+                // action's name has "import" in it.
+                if (p.apply) {
+                    const r = await applyModList({ path, install: p.install !== false, exact: !!p.exact, passphrase: pass || undefined });
+                    toast(`${task.name}: ${t('sched.listApply.done').replace('{on}', String(r.enabled)).replace('{new}', String(r.installed))}`, 'success', 8000);
+                } else {
+                    const list: any = await invoke('import_modlist', { path, passphrase: pass });
+                    ctx.nums['import.count'] = Array.isArray(list?.mods) ? list.mods.length : 0;
+                    ctx.text['import.name'] = String(list?.name || '');
+                    toast(`${task.name}: ${t('sched.imp.read').replace('{n}', String(ctx.nums['import.count']))}`, 'success', 7000);
+                }
+            } else if (kind === 'plugin') {
+                const r: any = await invoke('install_plugin_from_file', { filePath: path });
+                ctx.text['import.name'] = String(r?.manifest?.name || '');
+                toast(`${task.name}: ${t('sched.imp.plugin').replace('{p}', ctx.text['import.name'])}`, 'success', 8000);
+            } else if (kind === 'theme') {
+                await invoke('import_theme', { path });
+                toast(`${task.name}: ${t('sched.imp.theme')}`, 'success', 6000);
+            } else if (kind === 'automation') {
+                const n = await importTasksDisabled(path);
+                ctx.nums['import.count'] = n;
+                toast(`${task.name}: ${t('sched.imp.tasks').replace('{n}', String(n))}`, 'success', 9000);
+            } else if (kind === 'bundle') {
+                // A .bmmbundle is a catalogue in a zip. It is FOLLOWED, not unpacked — what
+                // it holds changes when its author republishes it.
+                requirePerm(task, 'deeplink', t('sched.permDeeplink') || 'fire deeplinks');
+                await runDeepLink(`bmm://catalog/follow?type=${encodeURIComponent(String(p.catType || 'plugin'))}`
+                    + `&url=${encodeURIComponent('bundle:' + path)}`);
+            } else if (kind === 'backup') {
+                // Restoring OVERWRITES what is here. Unattended, that is the most
+                // destructive thing in the scheduler, so it is not what the action does
+                // unless the task says so in its own words — and by default it INSPECTS,
+                // which is the useful half anyway ("did last night's backup come out right").
+                const info: any = await invoke('inspect_data_bundle', { path, passphrase: pass });
+                ctx.nums['import.count'] = Number(info?.sections?.length || 0);
+                ctx.text['import.name'] = String(info?.created_at || '');
+                if (!p.restore) {
+                    toast(`${task.name}: ${t('sched.imp.checked').replace('{n}', String(ctx.nums['import.count']))}`, 'success', 8000);
+                } else {
+                    const r: any = await invoke('restore_data_bundle', {
+                        args: { path, passphrase: pass, sections: Array.isArray(p.sections) ? p.sections : [] },
+                    });
+                    toast(`${task.name}: ${t('sched.imp.restored').replace('{n}', String((r?.restored || []).length))}`, 'warning', 14000);
+                }
+            } else {
+                toast(`${task.name}: ${t('sched.imp.unknownKind').replace('{k}', kind)}`, 'warning', 8000);
+            }
             break;
         }
 
@@ -4887,6 +4994,9 @@ const ACTION_TYPES: { v: string; label: string; needs?: string; group: string }[
     { v: 'plugin.asset', label: 'Use a file a plugin ships', needs: 'pluginAsset', group: 'mods' },
     // Identity and sources. Both were reachable only by clicking.
     { v: 'key.create', label: 'Make an identity key', needs: 'keyCreate', group: 'repo' },
+    // Bringing a file IN. One action for every BMM format, because the questions are the
+    // same each time — where is it, is the source protected, is the file locked.
+    { v: 'import.file', label: 'Import a file (list, plugin, theme, automation, backup)', needs: 'importFile', group: 'system' },
     { v: 'catalog.follow', label: 'Follow (or stop following) a catalogue', needs: 'catFollow', group: 'repo' },
 ];
 
@@ -5260,6 +5370,70 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
     // Reuses .sched-p-varname / .sched-p-varvalue because the generic wiring at the end of
     // this function already maps them to params.name / params.value — which is exactly what
     // list.set, list.push and list.clear read.
+    else if (needs === 'importFile') {
+        const KINDS = ['auto', 'modlist', 'plugin', 'theme', 'automation', 'bundle', 'backup'];
+        const kind = String(params.kind || 'auto');
+        host.innerHTML = `<div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${escHtml(t('sched.imp.file') || '1. A file on this machine')}</label>
+            <div style="display:flex;gap:6px">
+                <input class="input sched-p-impath" spellcheck="false" style="flex:1" value="${escAttr(params.path || '')}">
+                <button type="button" class="btn btn-xs btn-ghost sched-browse-impath">${escHtml(t('common.browse') || 'Browse')}</button>
+            </div>
+            <label class="sched-cmd-label">${escHtml(t('sched.imp.url') || '… or an address to fetch it from')}</label>
+            <input class="input sched-p-imurl" spellcheck="false" placeholder="https://…" value="${escAttr(params.url || '')}">
+            <label class="sched-cmd-label">${escHtml(t('sched.imp.kind') || '2. What it is')}</label>
+            <select class="input sched-p-imkind" style="max-width:280px">
+                ${KINDS.map((k) => `<option value="${k}"${kind === k ? ' selected' : ''}>${escHtml(t('sched.imp.k.' + k))}</option>`).join('')}
+            </select>
+            <span class="sched-cmd-hint">${escHtml(t('sched.imp.kindHint') || '')}</span>
+            <div class="sched-imp-extra"></div>
+            ${credsFields(params, { password: true, key: true, passphrase: true })}
+        </div>`;
+
+        // Per-kind extras, drawn for the kind that is chosen. `auto` shows the mod-list ones,
+        // because that is what `auto` resolves to for anything it cannot place, and a form
+        // with no options at all reads as an action with nothing to configure.
+        const extra = host.querySelector('.sched-imp-extra') as HTMLElement;
+        const paintExtra = () => {
+            const k = (host.querySelector('.sched-p-imkind') as HTMLSelectElement).value;
+            if (k === 'modlist' || k === 'auto') {
+                extra.innerHTML = `
+                    <label class="sched-cmd-row"><input type="checkbox" class="sched-p-imapply"${params.apply ? ' checked' : ''}>
+                        <span>${escHtml(t('sched.imp.apply'))}</span></label>
+                    <label class="sched-cmd-row"><input type="checkbox" class="sched-p-iminstall"${params.install !== false ? ' checked' : ''}>
+                        <span>${escHtml(t('sched.la.install'))}</span></label>
+                    <label class="sched-cmd-row"><input type="checkbox" class="sched-p-imexact"${params.exact ? ' checked' : ''}>
+                        <span>${escHtml(t('sched.la.exact'))}</span></label>`;
+            } else if (k === 'backup') {
+                extra.innerHTML = `
+                    <label class="sched-cmd-row sched-bk-danger"><input type="checkbox" class="sched-p-imrestore"${params.restore ? ' checked' : ''}>
+                        <span>${escHtml(t('sched.imp.restore'))}</span></label>
+                    <span class="sched-cmd-hint">${escHtml(t('sched.imp.restoreHint'))}</span>`;
+            } else if (k === 'bundle') {
+                const TYPES = ['app', 'plugin', 'theme', 'preset', 'modpack', 'repo', 'tutorial', 'list'];
+                extra.innerHTML = `<label class="sched-cmd-label">${escHtml(t('sched.cat.type'))}</label>
+                    <select class="input sched-p-imcattype" style="max-width:220px">
+                        ${TYPES.map((v) => `<option value="${v}"${(params.catType || 'plugin') === v ? ' selected' : ''}>${escHtml(t('sched.cat.t.' + v))}</option>`).join('')}
+                    </select>
+                    <span class="sched-cmd-hint">${escHtml(t('sched.imp.bundleHint'))}</span>`;
+            } else if (k === 'automation') {
+                extra.innerHTML = `<span class="sched-cmd-hint">${escHtml(t('sched.imp.autoHint'))}</span>`;
+            } else {
+                extra.innerHTML = '';
+            }
+            extra.querySelector('.sched-p-imapply')?.addEventListener('change', (e) => { params.apply = (e.target as HTMLInputElement).checked; });
+            extra.querySelector('.sched-p-iminstall')?.addEventListener('change', (e) => { params.install = (e.target as HTMLInputElement).checked; });
+            extra.querySelector('.sched-p-imexact')?.addEventListener('change', (e) => { params.exact = (e.target as HTMLInputElement).checked; });
+            extra.querySelector('.sched-p-imrestore')?.addEventListener('change', (e) => { params.restore = (e.target as HTMLInputElement).checked; });
+            extra.querySelector('.sched-p-imcattype')?.addEventListener('change', (e) => { params.catType = (e.target as HTMLSelectElement).value; });
+        };
+        host.querySelector('.sched-p-imkind')?.addEventListener('change', (e) => {
+            params.kind = (e.target as HTMLSelectElement).value;
+            paintExtra();
+        });
+        paintExtra();
+        wireCreds(host, params);
+    }
     else if (needs === 'keyCreate') {
         host.innerHTML = `<div class="sched-cmd-builder">
             <label class="sched-cmd-label">${escHtml(t('sched.key.name') || '1. Name it')}</label>
@@ -5939,6 +6113,18 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
     host.querySelector('.sched-p-listsep')?.addEventListener('input', (e) => { params.sep = (e.target as HTMLInputElement).value; });
     // text.extract / modlist.apply / dcs.hook. Same shape as everything else here: a
     // querySelector that finds nothing for the other action types binds nothing.
+    host.querySelector('.sched-p-impath')?.addEventListener('input', (e) => { params.path = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-imurl')?.addEventListener('input', (e) => { params.url = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-browse-impath')?.addEventListener('click', async () => {
+        const { pickFile } = await import('../../core/api.js');
+        const f = await pickFile({ filters: [
+            { name: 'BMM files', extensions: ['mm', 'mmlist', 'bmmplug', 'bmmtheme', 'bmmpa', 'bmmbundle', 'DATABMM', 'json'] },
+            { name: 'All files', extensions: ['*'] },
+        ] }).catch(() => null);
+        if (!f) return;
+        params.path = f;
+        (host.querySelector('.sched-p-impath') as HTMLInputElement).value = String(f);
+    });
     host.querySelector('.sched-p-kcname')?.addEventListener('input', (e) => { params.name = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-p-kckind')?.addEventListener('change', (e) => { params.kind = (e.target as HTMLSelectElement).value; });
     host.querySelector('.sched-p-kcbind')?.addEventListener('input', (e) => { params.bindUrl = (e.target as HTMLInputElement).value; });
@@ -6119,6 +6305,10 @@ const VALUE_SOURCES = [
     // as something a condition can select. Without these a task could wait and could not
     // branch on the outcome of waiting, which is most of the reason to wait.
     'wait.ok', 'wait.tries', 'script.code', 'script.ok',
+    // How much an import brought in — mods in a list, tasks in a .bmmpa, sections in a
+    // backup. The number is what a task branches on: "if the nightly backup came out
+    // with fewer sections than usual, say so".
+    'import.count',
     // Written by http.request on every call, including a failed one. Listed here because
     // check-scheduler-vars caught that it was not: a value an action writes and no
     // condition can select is half a feature, and the half that is missing is the point —

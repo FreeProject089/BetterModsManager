@@ -662,31 +662,75 @@ mod modlist_tests;
 /// The name comes from the URL and is sanitised: it is chosen by whoever hosts the file.
 #[tauri::command]
 pub async fn modlist_fetch(app: tauri::AppHandle, url: String) -> Result<String, AppError> {
+    fetch_to_app_data(app, url, Some("modlists".into()), None, Some("mm".into())).await
+}
+
+/// Fetch any importable file into the app's own data dir, and return where it landed.
+///
+/// The app's data dir, never the system temp. A shared list can carry download passwords and
+/// identity keys, a backup carries everything, and on Windows the system temp is a directory
+/// every process on the machine can read — which would undo, in the last step, the whole
+/// point of sealing it.
+///
+/// `password` is the download password a protected host asks for. Sent as the same header
+/// BMM's repo client sends, so one protected host works the same way whether the thing being
+/// fetched is a mod or a mod list.
+#[tauri::command]
+pub async fn fetch_to_app_data(
+    app: tauri::AppHandle,
+    url: String,
+    folder: Option<String>,
+    password: Option<String>,
+    default_ext: Option<String>,
+) -> Result<String, AppError> {
     use tauri::Manager;
     if !url.starts_with("http://") && !url.starts_with("https://") {
         return Err(AppError::LockError("mm.errBadUrl".into()));
     }
-    let res = crate::commands::net::client()
+    let mut req = crate::commands::net::client()
         .get(&url)
-        .timeout(std::time::Duration::from_secs(60))
+        .timeout(std::time::Duration::from_secs(120));
+    if let Some(pw) = password.as_deref().filter(|p| !p.is_empty()) {
+        req = req.header("X-Repo-Password", pw);
+    }
+    // And a key proof, when one is bound to this host. A protected source can ask for either
+    // or both, and an import that could only send the password would fail on half of them.
+    {
+        let mut headers = reqwest::header::HeaderMap::new();
+        crate::commands::repo_keyauth::add_proof(&mut headers, &url);
+        for (k, v) in headers.iter() {
+            req = req.header(k.clone(), v.clone());
+        }
+    }
+    let res = req
         .send()
         .await
         .map_err(|e| AppError::LockError(format!("mm.errFetch|{}", e)))?;
+    if res.status() == reqwest::StatusCode::UNAUTHORIZED {
+        // Named, because "401" and "the file is not there" send somebody to different places.
+        return Err(AppError::LockError("repo.errPasswordRequired".into()));
+    }
     if !res.status().is_success() {
         return Err(AppError::LockError(format!("mm.errFetch|{}", res.status())));
     }
     let bytes = res.bytes().await.map_err(|e| AppError::LockError(e.to_string()))?;
 
+    let folder = crate::commands::repo_extras::safe_name(&folder.unwrap_or_else(|| "downloads".into()));
     let dir = app
         .path()
         .app_data_dir()
         .map_err(|e| AppError::LockError(e.to_string()))?
-        .join("modlists");
+        .join(folder);
     std::fs::create_dir_all(&dir)?;
-    let name = crate::commands::repo_extras::safe_name(
-        url.rsplit('/').next().unwrap_or("list.mm"),
-    );
-    let name = if name.contains('.') { name } else { format!("{}.mm", name) };
+    // The name comes from the URL, which is chosen by whoever hosts the file — so it goes
+    // through the same narrowing a repo's carried files do, and cannot climb out of the
+    // folder or arrive with a name the host would rewrite.
+    let raw = url.split(['?', '#']).next().unwrap_or(&url);
+    let name = crate::commands::repo_extras::safe_name(raw.rsplit('/').next().unwrap_or("download"));
+    let name = match (name.contains('.'), default_ext) {
+        (false, Some(ext)) => format!("{}.{}", name, ext.trim_start_matches('.')),
+        _ => name,
+    };
     let path = dir.join(name);
     std::fs::write(&path, &bytes)?;
     Ok(path.to_string_lossy().to_string())

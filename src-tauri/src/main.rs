@@ -753,6 +753,7 @@ fn main() {
             commands::repo_keyauth::key_auth_generate,
             commands::repo_extras::repo_extras_write,
             commands::modlist::modlist_fetch,
+            commands::modlist::fetch_to_app_data,
             commands::settings::backup_dest_path,
             commands::plugin_assets::plugin_assets_list,
             commands::plugin_assets::plugin_asset_read,
