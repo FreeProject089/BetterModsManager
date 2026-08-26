@@ -84,18 +84,27 @@ fn safe_entry(id: &str, index: usize) -> String {
 /// document — but a pack somebody already hosts should not have to be copied in to be
 /// listed beside them. Each link is written into the index with its address instead of a
 /// zip entry, and nothing is packed for it.
+///
+/// `files` carries packs that are NOT installed here.
+///
+/// A catalogue used to be buildable only out of your own library, so publishing one for
+/// somebody else's pack meant installing it first — and with nothing installed the builder
+/// said so and stopped. A `.bmp` is a signed JSON document, so carrying one somebody sent
+/// you is reading a file, not trusting it.
 pub async fn export_modpack_catalog(
     handle: AppHandle,
     state: State<'_, crate::state::AppState>,
     name: String,
     ids: Vec<String>,
     links: Vec<LinkedPack>,
+    // Paths to .bmp files to carry — see the note above the function.
+    files: Vec<String>,
     dest_path: String,
 ) -> Result<usize, AppError> {
     let _ = &state;
     let title = name.trim();
     let title = if title.is_empty() { "Modpacks" } else { title };
-    if ids.is_empty() && links.is_empty() {
+    if ids.is_empty() && links.is_empty() && files.is_empty() {
         return Err(AppError::Internal("modpack.cat.errNoPacks".into()));
     }
 
@@ -123,6 +132,34 @@ pub async fn export_modpack_catalog(
         zip.start_file(&entry, opts).map_err(|e| AppError::Internal(e.to_string()))?;
         zip.write_all(json.as_bytes()).map_err(|e| AppError::Internal(e.to_string()))?;
 
+        entries.push(CatalogPack {
+            id: pack.id.clone(),
+            name: pack.name.clone(),
+            description: pack.description.clone().unwrap_or_default(),
+            version: String::new(),
+            mods: Some(pack.mods.len()),
+            file: entry,
+        });
+    }
+
+    // Packs handed over as FILES. Parsed rather than copied through: a file that is not a
+    // modpack must not become an entry that fails when somebody installs it, and the name
+    // and mod count in the index have to come from the document itself.
+    //
+    // The signature it arrived with is kept as-is — re-signing would put this machine's name
+    // on somebody else's pack. A pack signed by its author stays signed by its author.
+    for (i, path) in files.iter().enumerate() {
+        let text = match std::fs::read_to_string(path) {
+            Ok(t) => t,
+            Err(_) => continue,
+        };
+        let pack: crate::models::modpack::LocalModpack = match serde_json::from_str(&text) {
+            Ok(p) => p,
+            Err(_) => continue,
+        };
+        let entry = safe_entry(&pack.id, ids.len() + i);
+        zip.start_file(&entry, opts).map_err(|e| AppError::Internal(e.to_string()))?;
+        zip.write_all(text.as_bytes()).map_err(|e| AppError::Internal(e.to_string()))?;
         entries.push(CatalogPack {
             id: pack.id.clone(),
             name: pack.name.clone(),

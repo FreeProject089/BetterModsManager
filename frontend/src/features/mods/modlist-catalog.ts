@@ -176,6 +176,9 @@ export async function openListCatalog(onImported?: (doc: unknown) => void): Prom
         ext: 'mm',
         fallbackNoun: 'list',
         candidates: pickLists,
+        // BMM keeps no library of mod lists, so the create tab IS a file picker — and one
+        // that can only be answered once is a screen you have to reopen to fix a mistake.
+        addMoreLabel: t('mm.cat.addFiles'),
         label: (x) => ({ name: x.name, sub: `${x.mods} ${t('modpack.cat.mods')}` }),
         entryId: (x) => x.id,
         // The BYTES that were read, not a re-serialisation: a .mm may carry a signature over

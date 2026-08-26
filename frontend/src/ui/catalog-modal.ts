@@ -68,6 +68,16 @@ export interface CatalogKindSpec<T> {
 
     /** Everything the user could put in a catalogue of this kind. */
     candidates(): Promise<T[]>;
+    /**
+     * When candidates come from a FILE PICKER rather than a library, the label of a button
+     * that asks again and adds to what is already chosen.
+     *
+     * Mod lists are the case: BMM keeps no library of them — a .mm is written out of a
+     * profile and then belongs to the filesystem — so the create tab opens a picker the
+     * moment it is shown. Cancel it, or pick two and then remember a third, and without this
+     * the only way back is to close the screen and open it again.
+     */
+    addMoreLabel?: string;
     /** How a row reads. `sub` is the muted half. */
     label(item: T): { name: string; sub?: string };
     /** Stable id for an entry, used in the document. */
@@ -420,7 +430,11 @@ export async function openCatalogModal<T>(spec: CatalogKindSpec<T>): Promise<voi
 
     const createPane = (): string => {
         if (!loaded) return `<p class="cm-empty">${escHtml(t('common.loading'))}</p>`;
-        if (!items.length) return `<p class="cm-empty">${escHtml(t('cm.nothingToAdd'))}</p>`;
+        if (!items.length) {
+            return `<p class="cm-empty">${escHtml(t('cm.nothingToAdd'))}</p>`
+                + (spec.addMoreLabel
+                    ? `<button class="btn btn-sm btn-accent" id="${P}-more">${escHtml(spec.addMoreLabel)}</button>` : '');
+        }
         const linked = items.filter((i) => picked.has(spec.entryId(i)) && effectiveMode(spec.entryId(i)) === 'link').length;
         return `
         <label class="sched-label">${escHtml(t('cm.name'))}</label>
@@ -442,6 +456,8 @@ export async function openCatalogModal<T>(spec: CatalogKindSpec<T>): Promise<voi
             <span>${escHtml(t('cm.whatGoesIn'))}</span>
             <button type="button" class="btn btn-xs btn-ghost" id="${P}-all">${escHtml(t('common.selectAll'))}</button>
             <button type="button" class="btn btn-xs btn-ghost" id="${P}-none">${escHtml(t('common.selectNone'))}</button>
+            ${spec.addMoreLabel
+                ? `<button type="button" class="btn btn-xs btn-ghost" id="${P}-more">${escHtml(spec.addMoreLabel)}</button>` : ''}
         </div>
         <div class="cm-list">
             ${items.map((it) => {
@@ -587,6 +603,15 @@ export async function openCatalogModal<T>(spec: CatalogKindSpec<T>): Promise<voi
             paint();
         });
         ov.querySelector(`#${P}-none`)?.addEventListener('click', () => { picked.clear(); paint(); });
+        ov.querySelector(`#${P}-more`)?.addEventListener('click', async () => {
+            // ADDED to what is there, not replacing it — and deduplicated, because picking
+            // the same file twice is a normal thing to do and two rows for one list would
+            // publish two entries with one filename.
+            const more = await spec.candidates().catch(() => []);
+            const have = new Set(items.map((i) => spec.entryId(i)));
+            items = [...items, ...more.filter((i) => !have.has(spec.entryId(i)))];
+            paint();
+        });
         ov.querySelector(`#${P}-go`)?.addEventListener('click', () => { void create(); });
     };
 

@@ -108,6 +108,16 @@ export async function openModpackCatalog(notify) {
           <p class="mpc-lede">${escHtml(t('modpack.cat.build.desc'))}</p>
           <input type="text" class="input" id="mpc-b-name"
                  placeholder="${escHtml(t('modpack.cat.build.namePh'))}" spellcheck="false">
+          <div class="mpc-label">${escHtml(t('modpack.cat.build.add'))}</div>
+          <p class="mpc-note">${escHtml(t('modpack.cat.build.addDesc'))}</p>
+          <div class="mpc-row">
+            <input type="text" class="input" id="mpc-b-aname"
+                   placeholder="${escAttr(t('modpack.cat.build.addNamePh'))}" spellcheck="false">
+            <input type="text" class="input" id="mpc-b-aurl"
+                   placeholder="https://…/pack.bmp" spellcheck="false">
+            <button type="button" class="btn btn-sm btn-secondary" id="mpc-b-addlink">${escHtml(t('common.add'))}</button>
+            <button type="button" class="btn btn-sm btn-secondary" id="mpc-b-addfile">${escHtml(t('modpack.cat.build.addFile'))}</button>
+          </div>
           <div class="mpc-label">${escHtml(t('modpack.cat.build.pick'))}</div>
           <div id="mpc-b-list" class="mpc-list"></div>
           <footer class="mpc-foot">
@@ -185,17 +195,7 @@ export async function openModpackCatalog(notify) {
 function slugify(name) {
     return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'pack';
 }
-/**
- * The builder: tick the packs, name the catalogue, get ONE file.
- *
- * The first version asked for a download address per pack, because a catalogue was a JSON feed
- * and the packs had to live somewhere else. That is right for themes and plugins, whose
- * payloads are large; it is wrong here, because a `.bmp` is a small signed JSON document. So a
- * publisher was made to upload eleven files and type eleven addresses to distribute something
- * that fits in one — and the screen that asked for it was the screen nobody understood.
- *
- * A `.cbmp` holds the packs. There is nothing to host separately and nothing to type.
- */
+let _added = [];
 async function renderBuilder(ov) {
     const listEl = ov.querySelector('#mpc-b-list');
     let packs = [];
@@ -205,7 +205,8 @@ async function renderBuilder(ov) {
     catch {
         packs = [];
     }
-    if (!packs.length) {
+    wireBuilderAdders(ov);
+    if (!packs.length && !_added.length) {
         listEl.innerHTML = `<span style="font-size:12px;color:var(--text-muted)">${escHtml(t('modpack.cat.build.noPacks'))}</span>`;
         return;
     }
@@ -225,7 +226,21 @@ async function renderBuilder(ov) {
         </select>
         <input class="input cat-pub-url mpc-b-url" data-i="${i}" hidden spellcheck="false"
                placeholder="${escAttr(t('catpub.urlPh'))}">
+      </div>`).join('')
+        // Always in, and with no picker: a hand-added row already said which of the two it is,
+        // and offering to change it would be offering to throw the address away.
+        + _added.map((a, j) => `
+      <div class="cat-pub-row" data-added="${j}">
+        <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px">${escHtml(a.name)}</span>
+        <span style="flex:0 0 auto;font-size:10px;color:var(--text-muted)">${escHtml(a.kind === 'link' ? t('catpub.link') : t('catpub.embed'))}</span>
+        <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;color:var(--text-muted)"
+              title="${escAttr(a.kind === 'link' ? a.url : a.path)}">${escHtml(a.kind === 'link' ? a.url : a.path.replace(/^.*[/\\]/, ''))}</span>
+        <button type="button" class="btn btn-xs btn-ghost" data-drop-added="${j}">×</button>
       </div>`).join('');
+    listEl.querySelectorAll('[data-drop-added]').forEach((b) => b.addEventListener('click', () => {
+        _added.splice(Number(b.dataset.dropAdded), 1);
+        void renderBuilder(ov);
+    }));
     listEl.querySelectorAll('.mpc-b-mode').forEach((sel) => sel.addEventListener('change', () => {
         const i = sel.dataset.i;
         const box = listEl.querySelector(`.mpc-b-url[data-i="${CSS.escape(i)}"]`);
@@ -270,7 +285,12 @@ async function renderBuilder(ov) {
             if (bad.length) {
                 toast(t('catpub.dropped').replace('{n}', String(bad.length)) + ' — ' + bad.slice(0, 3).join(' · '), 'warning', 8000);
             }
-            if (!ids.filter(Boolean).length && !links.length) {
+            for (const a of _added) {
+                if (a.kind === 'link')
+                    links.push({ id: a.id, name: a.name, description: a.description, url: a.url });
+            }
+            const files = _added.flatMap((a) => (a.kind === 'file' ? [a.path] : []));
+            if (!ids.filter(Boolean).length && !links.length && !files.length) {
                 toast(t('modpack.cat.build.nothing'), 'warning');
                 return;
             }
@@ -281,7 +301,7 @@ async function renderBuilder(ov) {
                 return;
             exportBtn.disabled = true;
             try {
-                const n = await invoke('export_modpack_catalog', { name, ids: ids.filter(Boolean), links, destPath: path });
+                const n = await invoke('export_modpack_catalog', { name, ids: ids.filter(Boolean), links, files, destPath: path });
                 toast(t('modpack.cat.build.done').replace('{n}', String(n)), 'success', 7000);
             }
             catch (e) {
@@ -293,9 +313,71 @@ async function renderBuilder(ov) {
         });
     }
 }
+/**
+ * The two ways to list a pack you do not have installed.
+ *
+ * Wired once per overlay rather than per render: renderBuilder runs again every time the
+ * list changes, and a second listener on the same button would add two entries per click.
+ */
+function wireBuilderAdders(ov) {
+    const linkBtn = ov.querySelector('#mpc-b-addlink');
+    if (linkBtn && linkBtn.dataset.wired !== '1') {
+        linkBtn.dataset.wired = '1';
+        const addLink = () => {
+            const nameEl = ov.querySelector('#mpc-b-aname');
+            const urlEl = ov.querySelector('#mpc-b-aurl');
+            const url = urlEl.value.trim();
+            if (!/^https?:\/\//i.test(url)) {
+                toast(t('modpack.cat.badUrl'), 'warning');
+                return;
+            }
+            // The filename is a better guess than nothing and is usually right, so a name is
+            // offered rather than demanded.
+            const name = nameEl.value.trim()
+                || decodeURIComponent(url.replace(/[?#].*$/, '').replace(/^.*\//, '').replace(/\.[^.]+$/, ''))
+                || t('modpack.cat.build.addNamePh');
+            _added.push({ kind: 'link', id: slugify(name), name, description: '', url });
+            nameEl.value = '';
+            urlEl.value = '';
+            void renderBuilder(ov);
+        };
+        linkBtn.addEventListener('click', addLink);
+        ov.querySelector('#mpc-b-aurl')
+            ?.addEventListener('keydown', (e) => { if (e.key === 'Enter')
+            addLink(); });
+    }
+    const fileBtn = ov.querySelector('#mpc-b-addfile');
+    if (fileBtn && fileBtn.dataset.wired !== '1') {
+        fileBtn.dataset.wired = '1';
+        fileBtn.addEventListener('click', async () => {
+            const { pickFiles } = await import('../../core/api.js');
+            const paths = await pickFiles([{ name: 'BMM modpack', extensions: ['bmp', 'json'] }]).catch(() => null);
+            for (const p of paths || []) {
+                const base = String(p).replace(/^.*[/\\]/, '');
+                // Checked HERE rather than at export time: picking the wrong file in a folder
+                // full of JSON is the normal mistake, and finding out once the catalogue is
+                // written is finding out too late.
+                try {
+                    const doc = JSON.parse(await invoke('read_file_text', { path: p }));
+                    if (!doc || typeof doc !== 'object' || !Array.isArray(doc.mods)) {
+                        toast(t('modpack.cat.build.notPack').replace('{f}', base), 'warning', 7000);
+                        continue;
+                    }
+                    _added.push({ kind: 'file', id: String(doc.id || slugify(base)), name: String(doc.name || base), path: String(p) });
+                }
+                catch {
+                    toast(t('modpack.cat.build.notPack').replace('{f}', base), 'warning', 7000);
+                }
+            }
+            void renderBuilder(ov);
+        });
+    }
+}
 function close() {
     _overlay?.remove();
     _overlay = null;
+    // Not carried into the next open: what was staged belonged to that catalogue.
+    _added = [];
 }
 async function refresh() {
     const ov = _overlay;

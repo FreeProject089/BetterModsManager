@@ -8345,5 +8345,11 @@
   "cm.indexAll": "Cet index liste {n} catalogue(s) de ce type et tu les suis déjà tous.",
   "cm.indexNone": "Aucun catalogue de ce type dans cet index — il contient {what}. Ajoute-les depuis leurs propres écrans.",
   "themes.catalogues": "Catalogues…",
-  "themes.cataloguesSub": "Suis les thèmes de quelqu’un, ou fais ton propre catalogue"
+  "themes.cataloguesSub": "Suis les thèmes de quelqu’un, ou fais ton propre catalogue",
+  "mm.cat.addFiles": "Ajouter des fichiers .mm…",
+  "modpack.cat.build.add": "Ajouter un pack que tu n’as pas",
+  "modpack.cat.build.addDesc": "Un catalogue n’a pas à être fait uniquement de packs installés chez toi. Donne une adresse que quelqu’un héberge déjà, ou passe un fichier .bmp qu’on t’a envoyé — il est lu et vérifié ici, puis embarqué dans le .cbmp.",
+  "modpack.cat.build.addNamePh": "Nom du pack (optionnel)",
+  "modpack.cat.build.addFile": "Ajouter un fichier .bmp…",
+  "modpack.cat.build.notPack": "{f} n’est pas un modpack — laissé de côté"
 }
