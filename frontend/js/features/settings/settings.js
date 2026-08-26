@@ -9,6 +9,7 @@ import { bcRoot, bcTestMode } from '../../core/links-config.js';
 import { initI18nSandbox } from './i18n-sandbox.js';
 import { renderShortcutsManager } from '../../core/commands.js';
 import { parseCatalogIndex, planImport, STORE_KEY, rememberOrigin, addSource, removeSource, originOf, originLabel, forgetOrigin, readHistory, recordHistory, clearHistory, forgetHistoryAt, isDisabled, setDisabled, INDEX_TYPES, } from '../catalogs/catalog-index.js';
+import { writeSources } from '../catalogs/catalog-sources.js';
 import { toast } from '../../ui/app.js';
 import { getProfiles, getActiveProfileId } from '../profiles/profiles.js';
 import { formatBytes, escHtml, escAttr } from '../../core/utils.js';
@@ -2349,7 +2350,7 @@ async function initCatalogIndexSettings() {
                     const { list, removed } = removeSource(readSources(type), u);
                     if (!removed)
                         return;
-                    localStorage.setItem(key, JSON.stringify(list));
+                    writeSources(key, list);
                 }
                 forgetOrigin(u);
                 recordHistory({ action: 'remove', type, url: u });
@@ -2531,7 +2532,7 @@ async function initCatalogIndexSettings() {
                     // separately they did not.
                     if (!addSource(list, e.url))
                         continue;
-                    localStorage.setItem(key, JSON.stringify(list));
+                    writeSources(key, list);
                 }
                 // Recorded only after the add succeeded, so a source that failed to be
                 // added does not get an origin pointing at an index it never came from.

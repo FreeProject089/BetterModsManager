@@ -301,6 +301,21 @@ enum Commands {
 
     // ── What a repo carries besides mods ──────────────────────────
 
+    /// List the catalogues this BMM follows, by type.
+    Catalogs,
+
+    /// Follow a catalogue. `--off` stops following it.
+    Follow {
+        /// app | plugin | theme | preset | modpack | repo | tutorial | list
+        #[arg(long = "type")]
+        kind: String,
+        /// The catalogue's address
+        url: String,
+        /// Stop following it instead
+        #[arg(long, default_value_t = false)]
+        off: bool,
+    },
+
     /// List what a repo carries besides mods: plugins, automations, themes,
     /// mod lists, catalogues to follow. Reads the manifest — downloads nothing.
     #[command(name = "repo-extras")]
@@ -783,6 +798,51 @@ async fn run_cli_command(cmd: Commands) -> anyhow::Result<()> {
         }
 
         // ── Live app bridge ──────────────────────────────────────────
+        // ── Catalogues ───────────────────────────────────────
+        Commands::Catalogs => {
+            let res = state_bridge::api_call("GET", "/api/catalogs", None).await?;
+            let body = res.get("body").cloned().unwrap_or(serde_json::Value::Null);
+            let sources = body.get("sources").and_then(|v| v.as_object()).cloned().unwrap_or_default();
+            let total: usize = sources.values().map(|v| v.as_array().map_or(0, |a| a.len())).sum();
+            if total == 0 {
+                // The distinction the mirror exists to make. Without it, an app that has not
+                // run since this feature landed is indistinguishable from one that follows
+                // nothing — and only one of those is worth investigating.
+                if body.get("written_at").and_then(|v| v.as_str()).is_none() {
+                    println!("  {}", "BMM has not pushed its catalogue list yet — open the app once.".dimmed());
+                } else {
+                    println!("  {}", "No catalogues followed.".dimmed());
+                }
+            } else {
+                let mut table = Table::new();
+                table.load_preset(UTF8_FULL_CONDENSED);
+                table.set_content_arrangement(ContentArrangement::Dynamic);
+                table.set_header(vec!["Type", "Catalogue"]);
+                for (kind, urls) in &sources {
+                    for u in urls.as_array().cloned().unwrap_or_default() {
+                        table.add_row(vec![kind.clone(), u.as_str().unwrap_or("").to_string()]);
+                    }
+                }
+                println!("{table}");
+                println!("  {} {}", total.to_string().cyan().bold(), "catalogue(s) followed".dimmed());
+                if let Some(at) = body.get("written_at").and_then(|v| v.as_str()) {
+                    println!("  {} {}", "as of".dimmed(), at.dimmed());
+                }
+            }
+        }
+        Commands::Follow { kind, url, off } => {
+            let body = serde_json::json!({ "type": kind, "url": url, "follow": !off });
+            let res = state_bridge::api_call("POST", "/api/catalogs", Some(body)).await?;
+            let status = res.get("status").and_then(|v| v.as_u64()).unwrap_or(0);
+            // 202, not 200: the write is driven through the app's own screens, so what came
+            // back is "the app was told", not "the list now says this".
+            if (200..300).contains(&status) {
+                println!("  {} {}", "✓".green().bold(), "Asked BMM to update its catalogue list.".dimmed());
+            } else {
+                println!("{}", serde_json::to_string_pretty(res.get("body").unwrap_or(&serde_json::Value::Null))?);
+            }
+        }
+
         // ── Repo extras ──────────────────────────────────────
         //
         // Through the live app's own API rather than a second fetcher, so the headers, the

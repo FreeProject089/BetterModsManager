@@ -29,6 +29,7 @@ import {
     originLabel, originOf, forgetOrigin, isDisabled, setDisabled, recordHistory,
     hasSource, looksLikeIndex, catalogLooksLike, importIndexForType,
 } from '../catalogs/catalog-index.js';
+import { writeSources } from '../catalogs/catalog-sources.js';
 import { getLinks } from '../../core/links-config.js';
 import { askConfirm } from '../../core/api.js';
 import { fetchSourceText } from '../../core/source-fetch.js';
@@ -6439,7 +6440,7 @@ function showPresetCatalog(data: { presets: any[]; sources: PresetSource[] }): v
                     // Imported here, and only its automation entries. Refusing and pointing at
                     // Settings was correct and unhelpful: this panel knows which type it is,
                     // and the index says which of its entries are that type.
-                    const r = await importIndexForType(doc, 'preset', url);
+                    const r = await importIndexForType(doc, 'preset', url, undefined, writeSources);
                     addUrl = '';
                     say(r.added ? 'ok' : 'bad', r.added
                         ? (t('sched.pc.fromIndex') || 'Added {n} automation catalogue(s) from that index.').replace('{n}', String(r.added))

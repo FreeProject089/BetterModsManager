@@ -8569,5 +8569,11 @@
   "game.errRead": "Lecture de ce fichier impossible",
   "game.errWrite": "Écriture impossible à cet endroit",
   "mm.errBadUrl": "Ce n'est pas une adresse http(s)",
-  "mm.errFetch": "Récupération de cette liste impossible"
+  "mm.errFetch": "Récupération de cette liste impossible",
+  "cat.followed": "Catalogue suivi.",
+  "cat.unfollowed": "Catalogue retiré.",
+  "cat.already": "Tu suis déjà celui-là.",
+  "cat.notFollowed": "Tu ne suis pas celui-là.",
+  "cat.badType": "Aucun type de catalogue nommé « {t} ».",
+  "cat.badUrl": "Une adresse de catalogue doit être en http(s)."
 }

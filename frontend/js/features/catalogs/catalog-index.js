@@ -170,7 +170,21 @@ export function catalogLooksLike(doc, kind) {
  * `addApp` exists because app sources live in the Rust backend rather than localStorage; every
  * other type is written here. Passing it is how a caller says "I am the app browser".
  */
-export async function importIndexForType(doc, type, indexUrl, addApp) {
+export async function importIndexForType(doc, type, indexUrl, addApp, 
+// How a list gets written. A PARAMETER for the same reason `addApp` is one: this module
+// is deliberately Tauri-free so its parsing half can be tested without a webview, and
+// the real writer pushes a mirror to the backend, which means reaching `invoke`.
+//
+// The default writes localStorage and nothing else. That is correct for a test and
+// WRONG for the app — a source added without the mirror is invisible to the CLI, the
+// API and the MCP tools — so every caller in the app passes the real one, and this
+// stays the fallback rather than the path.
+write = (key, list) => {
+    try {
+        localStorage.setItem(key, JSON.stringify(list));
+    }
+    catch { /* store blocked */ }
+}) {
     const { index } = parseCatalogIndex(doc);
     const mine = index.catalogs.filter((e) => e.type === type);
     let added = 0;
@@ -191,7 +205,7 @@ export async function importIndexForType(doc, type, indexUrl, addApp) {
                     already += 1;
                     continue;
                 }
-                localStorage.setItem(key, JSON.stringify(list));
+                write(key, list);
             }
             // Recorded only after the add succeeded, so a source that failed does not get an
             // origin pointing at an index it never came from.

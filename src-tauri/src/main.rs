@@ -753,6 +753,8 @@ fn main() {
             commands::repo_keyauth::key_auth_generate,
             commands::repo_extras::repo_extras_write,
             commands::modlist::modlist_fetch,
+            commands::catalog_sources::catalog_sources_set,
+            commands::catalog_sources::catalog_sources_get,
             commands::game_watch::file_stamp,
             commands::game_watch::read_text_tail,
             commands::game_watch::dcs_saved_games,

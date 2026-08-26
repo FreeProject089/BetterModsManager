@@ -6,6 +6,7 @@ import { t } from '../../core/i18n.js';
 import {
     readOrigins, originLabel, forgetOrigin, enabledOnly, isDisabled, setDisabled, recordHistory,
     looksLikeIndex, importIndexForType, describeKinds } from '../catalogs/catalog-index.js';
+import { writeSources } from '../catalogs/catalog-sources.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { getLinks } from '../../core/links-config.js';
 import { fetchSourceText } from '../../core/source-fetch.js';
@@ -1038,7 +1039,8 @@ function renderSources() {
                     // them, and an app browser quietly following theme catalogues would be a
                     // bigger action than the one that was asked for.
                     const r = await importIndexForType(doc, 'app', url,
-                        async (u) => { _state.community_sources = await invoke('add_community_source', { url: u }); });
+                        async (u) => { _state.community_sources = await invoke('add_community_source', { url: u }); },
+                        writeSources);
                     input.value = '';
                     toast(r.added
                         ? (t('apps.sources.fromIndex') || 'Added {n} app catalog(s) from that index.').replace('{n}', String(r.added))

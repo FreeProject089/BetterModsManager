@@ -8,6 +8,7 @@ import { bundleEntryKind, resolveBundleEntry } from '../../core/catalog-bundle.j
 // NOTE: this file is @ts-nocheck, so a wrong name here is a runtime ReferenceError and not a
 // build error. Checked against the exports in catalog-index.ts by hand.
 import { enabledOnly, isDisabled, setDisabled, originOf, originLabel, forgetOrigin, recordHistory, looksLikeIndex, importIndexForType, describeKinds } from '../catalogs/catalog-index.js';
+import { writeSources } from '../catalogs/catalog-sources.js';
 /**
  * The modpack list from the LOCAL plugin API, or an empty list.
  *
@@ -676,7 +677,7 @@ async function renderCatalog(container) {
                 const probe = await fetchSourceText(src, true);
                 const doc = JSON.parse(probe);
                 if (looksLikeIndex(doc)) {
-                    const r = await importIndexForType(doc, 'plugin', src);
+                    const r = await importIndexForType(doc, 'plugin', src, undefined, writeSources);
                     toast(r.added
                         ? (t('plugins.fromIndex') || 'Added {n} plugin catalog(s) from that index.').replace('{n}', String(r.added))
                         : r.ofType

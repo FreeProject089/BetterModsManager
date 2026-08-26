@@ -8571,5 +8571,11 @@
   "game.errRead": "Could not read that file",
   "game.errWrite": "Could not write there",
   "mm.errBadUrl": "That is not an http(s) address",
-  "mm.errFetch": "Could not fetch that list"
+  "mm.errFetch": "Could not fetch that list",
+  "cat.followed": "Catalogue followed.",
+  "cat.unfollowed": "Catalogue removed.",
+  "cat.already": "You already follow that one.",
+  "cat.notFollowed": "You do not follow that one.",
+  "cat.badType": "No catalogue type called \"{t}\".",
+  "cat.badUrl": "A catalogue address must be http(s)."
 }

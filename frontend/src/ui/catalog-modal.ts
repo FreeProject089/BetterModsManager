@@ -183,6 +183,13 @@ const readList = (key: string): string[] => {
 };
 const writeList = (key: string, v: string[]): void => {
     try { localStorage.setItem(key, JSON.stringify([...new Set(v)])); } catch { /* preference only */ }
+    // And the mirror, so this list reaches the CLI and the MCP tools. Writing localStorage
+    // and forgetting this is how a source added here becomes invisible to everything
+    // outside the interface — which is what the mirror exists to fix.
+    //
+    // Imported dynamically: catalog-index imports nothing from here, and a static edge in
+    // this direction closes nine cycles in the module graph.
+    void import('../features/catalogs/catalog-sources.js').then((m) => m.pushMirror());
 };
 
 /** A source shown as its filename when it is a local bundle, its address otherwise. */
@@ -267,7 +274,8 @@ export async function openCatalogModal<T>(spec: CatalogKindSpec<T>): Promise<voi
         } catch { return false; }
         const ix = await import('../features/catalogs/catalog-index.js');
         if (!ix.looksLikeIndex(doc)) return false;
-        const r = await ix.importIndexForType(doc as any, spec.indexType as any, url);
+        const cs = await import('../features/catalogs/catalog-sources.js');
+        const r = await ix.importIndexForType(doc as any, spec.indexType as any, url, undefined, cs.writeSources);
         toast(r.added
             ? t('cm.fromIndex').replace('{n}', String(r.added))
             : r.ofType

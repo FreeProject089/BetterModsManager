@@ -48,6 +48,20 @@
     ]
   },
   {
+    "action": "catalog/follow",
+    "params": [
+      "type",
+      "url"
+    ]
+  },
+  {
+    "action": "catalog/unfollow",
+    "params": [
+      "type",
+      "url"
+    ]
+  },
+  {
     "action": "data/export-auto",
     "params": [
       "dir",

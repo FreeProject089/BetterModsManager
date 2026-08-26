@@ -10,6 +10,7 @@ import { bundleEntryKind, resolveBundleEntry } from '../../core/catalog-bundle.j
 import {
     enabledOnly, isDisabled, setDisabled, originOf, originLabel, forgetOrigin, recordHistory,
     looksLikeIndex, importIndexForType, describeKinds } from '../catalogs/catalog-index.js';
+import { writeSources } from '../catalogs/catalog-sources.js';
 
 /**
  * The modpack list from the LOCAL plugin API, or an empty list.
@@ -643,7 +644,7 @@ async function renderCatalog(container: HTMLElement) {
                 const probe: string = await fetchSourceText(src, true);
                 const doc = JSON.parse(probe);
                 if (looksLikeIndex(doc)) {
-                    const r = await importIndexForType(doc, 'plugin', src);
+                    const r = await importIndexForType(doc, 'plugin', src, undefined, writeSources);
                     toast(r.added
                         ? (t('plugins.fromIndex') || 'Added {n} plugin catalog(s) from that index.').replace('{n}', String(r.added))
                         : r.ofType

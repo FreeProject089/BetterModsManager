@@ -538,6 +538,25 @@ impl ServerHandler for BmmMcpServer {
             "required": ["name", "mod_ids"]
         })).unwrap()),
     ),
+    // Catalogues.
+    Tool::new(
+        "bmm_list_catalogs",
+        "List the catalogues this BMM follows, grouped by type (plugin, theme, preset, modpack, repo, tutorial, list). Returns `{ sources: { <type>: [url, …] }, written_at }`. `written_at` is when the app last pushed this — the lists live in the interface's own storage, so an ABSENT written_at means the app has not run since this mirror existed, which is different from following nothing.",
+        std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": {} })).unwrap()),
+    ),
+    Tool::new(
+        "bmm_follow_catalog",
+        "Follow a catalogue, or stop following one. Goes through the app's own screens, so the source appears in the following list with an origin and can be removed there like any other. Requires the app to be running.",
+        std::sync::Arc::new(serde_json::from_value(json!({
+            "type": "object",
+            "properties": {
+                "type": { "type": "string", "enum": ["app", "plugin", "theme", "preset", "modpack", "repo", "tutorial", "list"] },
+                "url": { "type": "string", "description": "The catalogue's address (http/https)." },
+                "follow": { "type": "boolean", "description": "false to stop following it. Default true." }
+            },
+            "required": ["type", "url"]
+        })).unwrap()),
+    ),
     // Everything a repo carries that is NOT a mod.
     Tool::new(
         "bmm_repo_extras",
@@ -1021,6 +1040,14 @@ impl ServerHandler for BmmMcpServer {
                 Ok(msg) => Ok(CallToolResult::success(vec![Content::text(msg)])),
                 Err(e) => err_result(&e),
             }
+        }
+        "bmm_list_catalogs" => self.tool_api_call("GET", "/api/catalogs", None).await,
+        "bmm_follow_catalog" => {
+            let mut body = serde_json::Map::new();
+            for k in ["type", "url", "follow"] {
+                if let Some(v) = args.get(k) { body.insert(k.into(), v.clone()); }
+            }
+            self.tool_api_call("POST", "/api/catalogs", Some(serde_json::Value::Object(body))).await
         }
         "bmm_repo_extras" => {
             // Percent-encoding for a query value, rather than a dependency for two call

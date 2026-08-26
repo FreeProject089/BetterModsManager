@@ -11,9 +11,11 @@
 
 import { invoke } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
+import { STORE_KEY, addSource, rememberOrigin, recordHistory } from '../catalogs/catalog-index.js';
+import { writeSources } from '../catalogs/catalog-sources.js';
 import { toast } from '../../ui/app.js';
 import { showConfirm } from '../../ui/confirm.js';
-import { STORE_KEY, addSource, rememberOrigin, recordHistory } from '../catalogs/catalog-index.js';
+
 
 /** One entry as `repo.json` carries it. Mirrors `models::repo::RepoExtra`. */
 export interface RepoExtra {
@@ -208,7 +210,7 @@ async function followCatalog(url: string, catalogType: string | undefined, via: 
             try { list = JSON.parse(localStorage.getItem(key) || '[]'); } catch { list = []; }
             if (!Array.isArray(list)) list = [];
             if (!addSource(list, url)) return false;
-            localStorage.setItem(key, JSON.stringify(list));
+            writeSources(key, list);
         }
         // The ORIGIN is the repo's address, not its name. It is what the catalogue list
         // shows as provenance and what un-following matches on, and two repos can perfectly

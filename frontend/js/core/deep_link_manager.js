@@ -715,6 +715,83 @@ async function handleDeepLink(urlStr) {
                 console.warn(`[deeplink] view/open: no screen named "${id}"`);
             return;
         }
+        // Follow / stop following a catalogue.
+        //
+        //   bmm://catalog/follow?type=theme&url=https://…/catalog.json
+        //   bmm://catalog/unfollow?type=theme&url=…
+        //
+        // The catalogue source lists live in localStorage, which is the right place for them
+        // and a place nothing outside the interface can reach — so until this existed the
+        // whole subsystem could be driven by clicking and by no other means. Every other
+        // route in (the API, the CLI, an assistant, a scheduled task) comes through here.
+        //
+        // It goes through the SCREENS' own store rather than writing localStorage directly,
+        // so a source added this way appears in the following list, carries an origin, and
+        // is removable by the button that removes the others.
+        if (action === 'catalog/follow' || action === 'catalog/unfollow') {
+            const type = parsedUrl.searchParams.get('type') || '';
+            const url = parsedUrl.searchParams.get('url') || '';
+            const { STORE_KEY, addSource, removeSource, rememberOrigin, forgetOrigin, recordHistory } = await import('../features/catalogs/catalog-index.js');
+            const { writeSources } = await import('../features/catalogs/catalog-sources.js');
+            // `app` is the one type whose sources live in the Rust backend rather than in
+            // localStorage, so it has its own command. Special-cased here exactly as it is
+            // in importIndexForType — one exception, stated twice, rather than a second
+            // store invented to make it uniform.
+            if (type === 'app') {
+                if (!url)
+                    return;
+                try {
+                    await invoke(action === 'catalog/follow' ? 'add_community_source' : 'remove_community_source', { url });
+                    toast(t(action === 'catalog/follow' ? 'cat.followed' : 'cat.unfollowed'), 'success');
+                }
+                catch (e) {
+                    toast(String(e), 'error');
+                }
+                return;
+            }
+            const key = STORE_KEY[type];
+            if (!key || !url) {
+                // Named. "Nothing happened" for a type that does not exist is the failure
+                // somebody spends an afternoon on.
+                toast(t('cat.badType').replace('{t}', type || '?'), 'warning', 8000);
+                return;
+            }
+            let list = [];
+            try {
+                list = JSON.parse(localStorage.getItem(key) || '[]');
+            }
+            catch {
+                list = [];
+            }
+            if (!Array.isArray(list))
+                list = [];
+            if (action === 'catalog/follow') {
+                if (!/^https?:\/\//i.test(url) && !url.startsWith('bundle:')) {
+                    toast(t('cat.badUrl'), 'warning', 8000);
+                    return;
+                }
+                if (!addSource(list, url)) {
+                    toast(t('cat.already'), 'info');
+                    return;
+                }
+                writeSources(key, list);
+                rememberOrigin(url, 'deeplink');
+                recordHistory({ action: 'add', type, url, via: 'deeplink' });
+                toast(t('cat.followed'), 'success');
+            }
+            else {
+                const { list: next, removed } = removeSource(list, url);
+                if (!removed) {
+                    toast(t('cat.notFollowed'), 'info');
+                    return;
+                }
+                writeSources(key, next);
+                forgetOrigin(url);
+                recordHistory({ action: 'remove', type, url });
+                toast(t('cat.unfollowed'), 'success');
+            }
+            return;
+        }
         // Open a Help & Other article in-app. Lets BMM Docs (the website) link straight
         // into the integrated docs: bmm://docs/open?article=<id> (or no id → docs home).
         if (action === 'docs/open') {

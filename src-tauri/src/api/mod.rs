@@ -226,6 +226,20 @@ struct RepoExtraBody {
     password: Option<String>,
 }
 
+/// `POST /api/catalogs` — follow or stop following a catalogue.
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct CatalogFollowBody {
+    /// `plugin` · `theme` · `preset` · `modpack` · `repo` · `tutorial` · `list` · `app`.
+    #[serde(rename = "type")]
+    kind: String,
+    url: String,
+    /// `false` to stop following it.
+    #[serde(default = "yes")]
+    follow: bool,
+}
+fn yes() -> bool { true }
+
 /// `POST /api/keys` — make an identity keypair.
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -3016,6 +3030,45 @@ pub async fn start_api_server(
         .boxed();
 
     // group_c: repo routes (cancel routes BEFORE the main route they override)
+    // ── Catalogues ─────────────────────────────────────────────────────
+    //
+    // The source lists live in the webview's localStorage, which this side cannot read — so
+    // the interface pushes a MIRROR after every change and this reads that. It says when it
+    // was written, because "BMM has never run since you added that" and "BMM says you follow
+    // nothing" are different facts and only one of them is a bug.
+    let tok_cats_get = token.clone();
+    let handle_cats_get = app_handle.clone();
+    let catalogs_get = warp::path!("api" / "catalogs")
+        .and(warp::get())
+        .and(require_token(tok_cats_get))
+        .and(with_app_handle(handle_cats_get))
+        .map(|handle: tauri::AppHandle| {
+            match crate::commands::catalog_sources::catalog_sources_get(handle) {
+                Ok(v) => warp::reply::with_status(warp::reply::json(&v), StatusCode::OK),
+                Err(e) => warp::reply::with_status(
+                    warp::reply::json(&ApiError { error: e }), StatusCode::INTERNAL_SERVER_ERROR),
+            }
+        });
+
+    // Writing goes through the INTERFACE, not through the mirror.
+    //
+    // A mirror that could be written from outside and then read back by the app would be a
+    // second writer, and the two would disagree the first time both changed. This drives the
+    // same deeplink a person's click drives, so the source lands in the following list with
+    // an origin and can be removed by the button that removes the others.
+    let tok_cats_set = token.clone();
+    let handle_cats_set = app_handle.clone();
+    let catalogs_set = warp::path!("api" / "catalogs")
+        .and(warp::post())
+        .and(require_token(tok_cats_set))
+        .and(require_permission(token.clone(), "catalog.write"))
+        .and(warp::body::json::<CatalogFollowBody>())
+        .and(with_app_handle(handle_cats_set))
+        .map(|body: CatalogFollowBody, handle: tauri::AppHandle| {
+            let action = if body.follow { "catalog/follow" } else { "catalog/unfollow" };
+            api_exec_reply(&handle, action, serde_json::json!({ "type": body.kind, "url": body.url }))
+        });
+
     // ── Extras, and identity keys ──────────────────────────────────────
     //
     // Reading what a repo carries needs no new endpoint: `/api/repo/info` returns the
@@ -3104,7 +3157,9 @@ pub async fn start_api_server(
             }
         });
 
-    let group_c = repo_extra_take
+    let group_c = catalogs_get
+        .or(catalogs_set)
+        .or(repo_extra_take)
         .or(keys_new)
         .or(keys_list)
         .or(repo_info)
