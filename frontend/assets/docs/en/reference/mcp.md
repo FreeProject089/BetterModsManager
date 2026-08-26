@@ -56,7 +56,7 @@ connection error if the BMM window is not open.
 
 ## The tools
 
-51 of them. `*` marks a required parameter; a slash-separated list is the set of accepted
+59 of them. `*` marks a required parameter; a slash-separated list is the set of accepted
 values.
 
 ### Finding things
@@ -106,6 +106,10 @@ values.
 | `bmm_list_connected_repos` | — |  | List the Server-Repos this BMM is connected to (name, url, sync state) |
 | `bmm_generate_repo` | `name`\*, `mod_ids`\* |  | Generate a repository from a list of mods |
 | `bmm_start_repo_server` | `path`\*, `port`\* | app | Start the repository server |
+| `bmm_repo_extras` | `url`\*, `password` | app | List what a repo carries besides mods — plugins, automations, themes, mod lists, catalogues to follow. Reads the manifest; downloads nothing. `locked: true` on a list means its contents are encrypted |
+| `bmm_repo_extra_take` | `url`\*, `kind`\*, `id`\*, `password` | app | Install ONE of them. A plugin or automation arrives **disabled** and a plugin with no permissions — taking one is not a decision to run it. A catalogue is followed, not downloaded; a mod list is saved and its path returned, because opening one asks questions that belong to a person |
+| `bmm_list_keys` | — | app | The identity keys BMM can prove with: `{name, path}` plus which is active. **Names and paths only** — no tool reads a private key |
+| `bmm_create_key` | `name`\*, `kind` | app | Make an identity keypair. Returns the **public** line — the one you hand to whoever runs a protected source — and where the private half was written. The private half is never returned. `ed25519` unless a server says otherwise |
 | `bmm_generate_lightweight_server` | `repo_path`\*, `port`\*, `auto_start`\*, `use_cloudflare`\*, `use_upnp`\*, `upload_limit`\*, `server_version`\*, `admin_password`\*, `enable_docker`, `docker_host_type`, `server_type` |  | Generate a standalone lightweight server script (.bat) for a given repo |
 
 ### Plugins & apps
@@ -203,12 +207,12 @@ pointed at another host.
 
 The tables above are generated from the `Tool::new(...)` declarations in
 `src-tauri/src/mcp/server.rs` — the same ones the server registers at startup — rather than
-written by hand, because 51 tools with their parameters is exactly the list that rots the
+written by hand, because 59 tools with their parameters is exactly the list that rots the
 first time someone adds one.
 
 One cross-check is worth repeating after any change: every tool the server **declares** must
 also be **dispatched**, or a client sees a tool that errors when called. At the time of
-writing both sets are 51 and identical.
+writing both sets are 59 and identical.
 
 ---
 

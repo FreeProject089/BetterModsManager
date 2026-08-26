@@ -191,7 +191,7 @@
         "en": "A Server Repo is a shared, versioned collection of mods. Two things flow through it: you sync mods from a repo into a profile, and BMM uses the repo to tell…",
         "fr": "Un Dépôt Serveur est une collection de mods partagée et versionnée. Deux flux le traversent : tu synchronises des mods depuis un dépôt vers un profil, et BMM…"
       },
-      "words": 3322,
+      "words": 3965,
       "diagrams": 1,
       "fr": true
     },
@@ -221,7 +221,7 @@
         "en": "Schedule BMM actions (one-time or recurring) — activate a mod, modpack, profile… with conditions (if/else), your own scripts and external programs.",
         "fr": "Planifiez des actions BMM (ponctuelles ou récurrentes) — activer un mod, un modpack, un profil… avec conditions (si/sinon), tes propres scripts et des…"
       },
-      "words": 2566,
+      "words": 3207,
       "diagrams": 0,
       "fr": true
     },
@@ -248,8 +248,8 @@
         "fr": "BMMScript — toutes les actions, conditions et valeurs"
       },
       "summary": {
-        "en": "75 actions · 28 conditions · 15 values · 8 loop sources",
-        "fr": "75 actions · 28 conditions · 15 valeurs · 8 sources de boucle"
+        "en": "78 actions · 30 conditions · 15 values · 8 loop sources",
+        "fr": "78 actions · 30 conditions · 15 valeurs · 8 sources de boucle"
       },
       "words": 413,
       "diagrams": 0,
@@ -611,7 +611,7 @@
         "en": "BMM exposes two ways to drive it from outside: deeplinks (bmm://…, no token, fired at the running window) and a local HTTP API (token, 127.0.0.1 only).",
         "fr": "BMM expose deux façons de le piloter depuis l'extérieur : les deeplinks (bmm://…, sans token, envoyés à la fenêtre en cours) et une API HTTP locale (token,…"
       },
-      "words": 1362,
+      "words": 1408,
       "diagrams": 0,
       "fr": true
     },

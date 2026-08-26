@@ -41,13 +41,23 @@ pub fn is_file_kind(kind: &str) -> bool {
 /// local path. `../../` in it is the whole of CWE-22, so the components are dropped rather
 /// than escaped — a path that tried to traverse becomes a plain name, and nothing outside
 /// `extras/<kind>/` can be reached even by a manifest written to do it.
+///
+/// The character set is narrow for a second reason. What comes out of here goes into the
+/// manifest AND becomes the path on whatever hosts the repo, and BCWEB's own normaliser
+/// replaces everything outside `[A-Za-z0-9._-]` — spaces included. Keeping a space here
+/// would write `My Theme.bmmtheme` into the manifest, store `My_Theme.bmmtheme` on the
+/// server, and 404 on a file that is sitting right there. The failure reads as a publisher
+/// who forgot to upload something.
 pub fn safe_name(raw: &str) -> String {
     let base = raw.rsplit(|c| c == '/' || c == '\\').next().unwrap_or("file");
     let cleaned: String = base
         .chars()
-        .map(|c| if c.is_alphanumeric() || "._- ".contains(c) { c } else { '_' })
+        // ASCII, not Unicode. is_alphanumeric() accepts 'é' and the host's [A-Za-z0-9]
+        // does not, so an accented name would be renamed in transit — which is the exact
+        // failure this narrowing exists to prevent. Found by the test, not by reading.
+        .map(|c| if c.is_ascii_alphanumeric() || "._-".contains(c) { c } else { '_' })
         .collect();
-    let trimmed = cleaned.trim_matches(|c| c == '.' || c == ' ').to_string();
+    let trimmed = cleaned.trim_matches(|c| c == '.' || c == '_').to_string();
     if trimmed.is_empty() { "file".to_string() } else { trimmed }
 }
 
@@ -510,9 +520,23 @@ mod tests {
     }
 
     #[test]
-    fn a_name_keeps_what_makes_it_readable() {
-        assert_eq!(safe_name("My Theme v2.bmmtheme"), "My Theme v2.bmmtheme");
+    fn a_name_survives_the_host_that_will_serve_it() {
+        // Not merely "is it safe" — is it the SAME name once the server has normalised it.
+        // BCWEB replaces everything outside [A-Za-z0-9._-], so anything kept here that it
+        // does not keep is a manifest pointing at a path that does not exist, and the 404
+        // reads as a publisher who forgot to upload the file.
+        assert_eq!(safe_name("My Theme v2.bmmtheme"), "My_Theme_v2.bmmtheme");
         assert_eq!(safe_name("weird:name?.mm"), "weird_name_.mm");
+
+        let host_norm = |s: &str| -> String {
+            s.chars()
+                .map(|c| if c.is_ascii_alphanumeric() || ".-_".contains(c) { c } else { '_' })
+                .collect()
+        };
+        for raw in ["My Theme v2.bmmtheme", "café list.mm", "a b c.bmmpa", "weird:name?.mm"] {
+            let ours = safe_name(raw);
+            assert_eq!(host_norm(&ours), ours, "{:?} would be renamed by the host", raw);
+        }
     }
 
     #[test]

@@ -2,7 +2,7 @@
 
 !!! info ""
 
-    75 actions · 28 conditions · 15 valeurs · 8 sources de boucle
+    78 actions · 30 conditions · 15 valeurs · 8 sources de boucle
 
 > Généré depuis le registre de BMM lui-même, donc cette page ne peut pas décrire une version de l'application qui n'existe pas. Si une action est dans l'éditeur de blocs, elle est dans cette liste.
 
@@ -35,6 +35,7 @@ S'écrit `do <nom>(param: valeur, …)`. Une action sans paramètre prend des pa
 | `mods.autoImportOmm` | Importe les mods trouvés dans les dossiers OvGME/OMM connus de BMM. | — |
 | `mods.clearHistory` | Vide la liste d’historique des mods. Les mods eux-mêmes ne sont pas touchés. | `id` |
 | `mods.exportModpack` | Écrit le profil actif sous forme de modpack partageable. | `id` · `dir` |
+| `modlist.apply` | Installe ce que la liste nomme et qui manque, puis active exactement ceux-là. | `path` · `url` · `install` · `exact` · `passphrase` |
 
 ### Repo & partage
 
@@ -59,6 +60,7 @@ S'écrit `do <nom>(param: valeur, …)`. Une action sans paramètre prend des pa
 | `folder.open` | Ouvre un dossier dans l'explorateur | `path` |
 | `app.install` | Installe une app depuis une URL | `id` · `url` · `title` |
 | `launchpack.run` | Lance un launch pack enregistré | `id` |
+| `dcs.hook` | Installe le petit hook Lua qui dit à BMM quel serveur DCS tu as rejoint. | `mode` · `dir` |
 
 ### Apparence
 
@@ -105,6 +107,7 @@ S'écrit `do <nom>(param: valeur, …)`. Une action sans paramètre prend des pa
 | `map.get` | Lit une clé dans une variable que vous nommez. Une clé absente enregistre une valeur vide — testez {map.hit} pour distinguer « absente » de « présente et vide ». | `name` · `key` · `into` |
 | `map.clear` | Vide la table sans supprimer son nom. | `name` |
 | `var.clear` | Retire une variable partagée, ou toutes. Les valeurs d’une exécution disparaissent avec elle de toute façon. | `name` |
+| `text.extract` | Applique un motif aux derniers Ko d'un fichier, ou à une variable, et garde ce qu'il a trouvé. | `target` · `path` · `tailKb` · `source` · `regex` · `group` |
 
 ### Système & flux
 
@@ -137,6 +140,8 @@ S'écrivent là où une condition va — après `if`, `case`, `waitfor`, `repeat
 | `all` | Toutes (ET) |
 | `any` | Au moins une (OU) |
 | `value` | Comparer une valeur (si X > Y …) |
+| `textIs` | Une variable texte… |
+| `fileContains` | Un fichier contient… |
 | `enumIs` | la variable vaut un membre d’enum |
 | `profileActive` | Profil actif |
 | `modEnabled` | Mod activé |

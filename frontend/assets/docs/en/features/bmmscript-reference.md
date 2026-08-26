@@ -2,7 +2,7 @@
 
 !!! info ""
 
-    75 actions · 28 conditions · 15 values · 8 loop sources
+    78 actions · 30 conditions · 15 values · 8 loop sources
 
 > Generated from BMM's own registry, so it cannot describe a version of the app that does not exist. If an action is in the block editor, it is in this list.
 
@@ -35,6 +35,7 @@ Written `do <name>(param: value, …)`. An action with no parameters takes empty
 | `mods.autoImportOmm` | Imports mods found in the OvGME/OMM folders BMM knows about. | — |
 | `mods.clearHistory` | Empties the mod history list. The mods themselves are untouched. | `id` |
 | `mods.exportModpack` | Writes the active profile out as a shareable modpack. | `id` · `dir` |
+| `modlist.apply` | Installs anything the list names that is not here, then turns exactly those on. | `path` · `url` · `install` · `exact` · `passphrase` |
 
 ### Repo & sharing
 
@@ -59,6 +60,7 @@ Written `do <name>(param: value, …)`. An action with no parameters takes empty
 | `folder.open` | Open a folder in the explorer | `path` |
 | `app.install` | Install an app from a URL | `id` · `url` · `title` |
 | `launchpack.run` | Run a saved launch pack | `id` |
+| `dcs.hook` | Installs the small Lua hook that tells BMM which DCS server you joined. | `mode` · `dir` |
 
 ### Appearance
 
@@ -105,6 +107,7 @@ Written `do <name>(param: value, …)`. An action with no parameters takes empty
 | `map.get` | Reads one key into a variable you name. A missing key stores an empty value — check {map.hit} to tell “not there” from “there and blank”. | `name` · `key` · `into` |
 | `map.clear` | Empties the map without deleting its name. | `name` |
 | `var.clear` | Removes one shared variable, or all of them. A run’s own values disappear with it anyway. | `name` |
+| `text.extract` | Runs a pattern over a file's last KB, or over a variable, and keeps what it matched. | `target` · `path` · `tailKb` · `source` · `regex` · `group` |
 
 ### System & flow
 
@@ -137,6 +140,8 @@ Written where a condition goes — after `if`, `case`, `waitfor`, `repeat while`
 | `all` | All of (AND) |
 | `any` | Any of (OR) |
 | `value` | Value compare (if X > Y …) |
+| `textIs` | A text variable is… |
+| `fileContains` | A file contains… |
 | `enumIs` | variable is an enum member |
 | `profileActive` | Profile is active |
 | `modEnabled` | Mod is enabled |

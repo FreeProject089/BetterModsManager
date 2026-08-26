@@ -60,8 +60,13 @@ For a plugin token the caller's identity comes **from the token**, never from th
 `X-BMM-Plugin-Id` header — a plugin cannot escalate by forging or omitting that header. Grant with
 `PUT /api/apps/permissions/<plugin_id>`:
 
-`app.read` · `app.write` · `catalog.read` · `catalog.write` · `modpacks.write` · `mods.write` ·
-`plugins.read` · `plugins.write` · `profiles.write` · `repo.write`
+`app.read` · `app.write` · `catalog.read` · `catalog.write` · `keys.write` · `modpacks.write` ·
+`mods.write` · `plugins.read` · `plugins.write` · `profiles.write` · `repo.write`
+
+!!! warning "`keys.write` is deliberately not part of `repo.write`"
+
+    An identity key is what proves you are *you* to every protected source. "Can publish a
+    repo" must not also mean "can mint the thing I sign with", so it is its own grant.
 
 !!! note "Read endpoints are not permission-gated"
 
@@ -275,7 +280,7 @@ Two shapes sit outside that rule:
 | `GET` | `/api/plugins` | — | Installed plugins (manifest + `enabled`) |
 | `GET` | `/api/modpacks` | — | All saved modpacks |
 | `GET` | `/api/creator-id` | — | This install's creator id (used when exporting plugins) |
-| `GET` | `/api/repo/info` | — | Fetches a remote `repo.json`. Query `url`*, `password`. `401` if protected, `502` if the remote fails |
+| `GET` | `/api/repo/info` | — | Fetches a remote `repo.json`. Query `url`*, `password`. `401` if protected, `502` if the remote fails. **`extras` is part of it** — reading what a repo carries besides mods needs no separate endpoint |
 | `GET` | `/api/repo/list` | — | Registered remote repos |
 | `GET` | `/api/language/template` | — | `lang-template.json`, a flat `{"key": "English"}` map |
 | `GET` | `/api/data` | token | **Full `data.json` dump** — profiles, mods, modpacks, plugins, settings, tags |
@@ -333,6 +338,9 @@ Two shapes sit outside that rule:
 | `POST` | `/api/repo/manifest` | `repo.write` | `dir`*, `authorName` · writes `repo.json` for a folder that is ALREADY hosted. Needs no profile and copies nothing — it reads the directory, writes one file, and returns the diff. Synchronous, so a publish script can act on the result | |
 | `POST` | `/api/repo/publish-ssh` | token | `dir`* · uploads over SSH **using the connection already saved in the app**. The host, the user and the key are deliberately NOT parameters: a caller able to name them could make BMM read a private key of its choosing and ship a repo to a machine of its choosing. Driven through the UI, so the upload is visible and cancellable → `202` | |
 | `POST` | `/api/repo/fetch-ssh` | token | `dir`* · the same rule, and it matters more in this direction: publishing writes to a server the owner chose, fetching writes to the owner's own disk. Only the destination is a parameter, and the backend refuses any remote path that would escape it → `202` | |
+| `POST` | `/api/repo/extras` | `repo.write` | `url`*, `kind`*, `id`*, `creatorId`, `password` · takes ONE thing a repo carries besides mods. The entry is looked up in the manifest BMM fetches — a caller cannot describe its own `{kind, url, sha256}`, because that would be using BMM's installer to install arbitrary files and the hash check would be checking the caller's own number. A plugin or automation arrives **disabled**; a catalogue is followed; a mod list is saved and its path returned | |
+| `GET` | `/api/keys` | `keys.write` | — · names and paths only. There is no endpoint that reads a private key | |
+| `POST` | `/api/keys` | `keys.write` | `name`*, `kind` (`ed25519` default · `ecdsa` · `rsa`) → `201 {path, public, ring}`. The response carries the **public** line and where the private half went — never the private half itself, because replies are logged by callers, proxied and read in browser tabs. A name already on the ring is refused rather than overwritten | |
 | `POST` | `/api/mod/check-updates` | token | — → `202` | ✓ |
 | `POST` | `/api/mod/update` | token | `repoUrl` → `202` | ✓ |
 

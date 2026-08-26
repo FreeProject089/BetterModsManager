@@ -53,6 +53,18 @@ struct Cli {
     command: Option<Commands>,
 }
 
+/// Percent-encode a query VALUE.
+///
+/// A repo URL carries :// and often a ?; all of them end the value early and turn
+/// "read this repo" into "read some other one". A dependency for two call sites
+/// would be the wrong trade.
+fn pct(s: &str) -> String {
+    s.bytes().map(|b| match b {
+        b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => (b as char).to_string(),
+        _ => format!("%{:02X}", b),
+    }).collect()
+}
+
 #[derive(Subcommand)]
 enum Commands {
     /// Start the MCP server (JSON-RPC over stdio)
@@ -285,6 +297,50 @@ enum Commands {
         /// Also delete the mod folder on disk (irreversible)
         #[arg(long, default_value_t = false)]
         files: bool,
+    },
+
+    // ── What a repo carries besides mods ──────────────────────────
+
+    /// List what a repo carries besides mods: plugins, automations, themes,
+    /// mod lists, catalogues to follow. Reads the manifest — downloads nothing.
+    #[command(name = "repo-extras")]
+    RepoExtras {
+        /// Repo URL, with or without /repo.json
+        url: String,
+        /// Download password, if the repo has one
+        #[arg(long)]
+        password: Option<String>,
+    },
+
+    /// Take ONE thing a repo carries, named by kind and id from `repo-extras`.
+    /// A plugin or an automation arrives DISABLED; a catalogue is followed, not
+    /// downloaded; a mod list is saved and its path printed.
+    #[command(name = "repo-take")]
+    RepoTake {
+        /// Repo URL
+        url: String,
+        /// plugin | task | theme | modlist | bundle | catalog | app
+        kind: String,
+        /// The entry id
+        id: String,
+        #[arg(long)]
+        password: Option<String>,
+    },
+
+    // ── Identity keys ────────────────────────────────────
+
+    /// List the identity keys BMM can prove with — names and paths only.
+    Keys,
+
+    /// Make an identity keypair. Prints the PUBLIC line and where the private
+    /// half was written; the private half itself is never printed.
+    #[command(name = "new-key")]
+    NewKey {
+        /// What to call it on the ring
+        name: String,
+        /// ed25519 (default) | ecdsa | rsa
+        #[arg(long)]
+        kind: Option<String>,
     },
 
     /// Call the RUNNING BMM app's local API (e.g. `call GET /api/status`)
@@ -727,6 +783,73 @@ async fn run_cli_command(cmd: Commands) -> anyhow::Result<()> {
         }
 
         // ── Live app bridge ──────────────────────────────────────────
+        // ── Repo extras ──────────────────────────────────────
+        //
+        // Through the live app's own API rather than a second fetcher, so the headers, the
+        // password handling and the fallbacks are the ones the app itself uses — and so
+        // there is one implementation of the hash check, not two.
+        Commands::RepoExtras { url, password } => {
+            let mut q = format!("/api/repo/info?url={}", pct(&url));
+            if let Some(pw) = password.as_deref().filter(|p| !p.is_empty()) {
+                q.push_str(&format!("&password={}", pct(pw)));
+            }
+            let res = state_bridge::api_call("GET", &q, None).await?;
+            let extras = res.get("body").and_then(|b| b.get("extras"))
+                .and_then(|v| v.as_array()).cloned().unwrap_or_default();
+            if extras.is_empty() {
+                println!("  {}", "This repo carries nothing besides mods.".dimmed());
+            } else {
+                let mut table = Table::new();
+                table.load_preset(UTF8_FULL_CONDENSED);
+                table.set_content_arrangement(ContentArrangement::Dynamic);
+                table.set_header(vec!["Kind", "Id", "Name", "Note"]);
+                for e in &extras {
+                    let s = |k: &str| e.get(k).and_then(|v| v.as_str()).unwrap_or("").to_string();
+                    let mut note = s("version");
+                    if e.get("locked").and_then(|v| v.as_bool()) == Some(true) {
+                        // Said in the listing, so somebody deciding what to take knows
+                        // before they take it that it will need a passphrase.
+                        note = if note.is_empty() { "locked".into() } else { format!("{} · locked", note) };
+                    }
+                    table.add_row(vec![s("kind"), s("id"), s("name"), note]);
+                }
+                println!("{table}");
+                println!("  {} {}", extras.len().to_string().cyan().bold(), "item(s)".dimmed());
+            }
+        }
+        Commands::RepoTake { url, kind, id, password } => {
+            let mut body = serde_json::json!({ "url": url, "kind": kind, "id": id });
+            if let Some(pw) = password.filter(|p| !p.is_empty()) {
+                body["password"] = serde_json::Value::String(pw);
+            }
+            let res = state_bridge::api_call("POST", "/api/repo/extras", Some(body)).await?;
+            println!("{}", serde_json::to_string_pretty(res.get("body").unwrap_or(&serde_json::Value::Null))?);
+        }
+
+        // ── Identity keys ───────────────────────────────────
+        Commands::Keys => {
+            let res = state_bridge::api_call("GET", "/api/keys", None).await?;
+            println!("{}", serde_json::to_string_pretty(res.get("body").unwrap_or(&serde_json::Value::Null))?);
+        }
+        Commands::NewKey { name, kind } => {
+            let mut body = serde_json::json!({ "name": name });
+            if let Some(k) = kind { body["kind"] = serde_json::Value::String(k); }
+            let res = state_bridge::api_call("POST", "/api/keys", Some(body)).await?;
+            let b = res.get("body").cloned().unwrap_or(serde_json::Value::Null);
+            // The public line on its own, because that is the thing somebody has to paste
+            // into a message, and hunting it out of a JSON blob is where it gets truncated.
+            if let Some(pubkey) = b.get("public").and_then(|v| v.as_str()) {
+                println!("  {} {}", "✓".green().bold(), "Key created. Give this line to whoever runs the source:".dimmed());
+                println!("{}", pubkey);
+                if let Some(path) = b.get("path").and_then(|v| v.as_str()) {
+                    println!("  {} {}", "private half:".dimmed(), path);
+                }
+            } else {
+                println!("{}", serde_json::to_string_pretty(&b)?);
+            }
+        }
+
+        // ── Live app bridge ───────────────────────────────
         Commands::Call { method, path, body } => {
             let body_json = match body {
                 Some(b) => Some(serde_json::from_str::<serde_json::Value>(&b)

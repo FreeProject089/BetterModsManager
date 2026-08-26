@@ -47,6 +47,7 @@ l'action est *quoi*.
 | `weeklyAt` | À une heure, les jours de semaine choisis. |
 | `monthlyAt` | Un jour du mois (1–31) à une heure. |
 | `appStart` | Une fois par lancement de BMM (quelques secondes après le démarrage). |
+| `watchFile` | Un fichier a changé. |
 | `manual` | Jamais tout seul — seulement le bouton ▶ **Lancer maintenant** ou `bmm://schedule/run`. |
 
 !!! warning "Les déclencheurs horaires ne partent que si BMM est éveillé"
@@ -233,6 +234,8 @@ plus bas).
 | `allModsActive` | Tous les mods du profil actif sont activés. |
 | `appRunning` · `appNotRunning` | Un processus (par nom) tourne / ne tourne pas. |
 | `online` | La machine a une connexion Internet. |
+| `textIs` | Une variable texte vaut / ne vaut pas / contient / correspond / est vide. |
+| `fileContains` | Les derniers N Ko d'un fichier contiennent un texte ou correspondent à un motif. |
 | `dayOfWeek` | Aujourd'hui fait partie des jours choisis. |
 | `timeRange` · `timeReached` | L'heure est dans une plage / a dépassé une heure. |
 | `fileExists` · `fileHash` · `fileSize` · `fileType` | Vérifications de fichier — un chemin existe, ou son hash (blake3/sha256), sa taille ou son type correspond. |
@@ -448,3 +451,88 @@ un bloc deviendrait un moyen d'exécuter des actions que la tâche appelante s'e
     vers un nom disparu **arrête la tâche** au lieu de passer en silence. Un appel qui ne fait
     rien discrètement, c'est une tâche qui annonce un succès alors que la moitié n'a jamais
     tourné. Les blocs qui s'appellent entre eux sont plafonnés à 20 niveaux.
+
+
+## Réagir à un jeu
+
+BMM ne peut pas te voir rejoindre un serveur. D'un jeu qui tourne, un autre processus ne voit
+rien d'autre que ce que ce jeu **écrit** — c'est donc là-dessus que tout ça repose : trois
+pièces, plus un fichier pour DCS.
+
+### `watchFile` — quelque chose a changé
+
+Indique un fichier. La tâche se déclenche quand sa date de modification ou sa taille change.
+
+!!! note "La première vérification après le démarrage ne déclenche jamais"
+
+    Elle enregistre le fichier et s'arrête là. Sans ça, chaque tâche de surveillance se
+    déclencherait une fois à chaque lancement, et un changement survenu pendant que BMM était
+    fermé agirait sur une session terminée depuis des heures.
+
+    Un fichier absent n'est pas un changement non plus. Un jeu qui n'a jamais tourné n'a pas
+    de log, et se déclencher quand il apparaît est correct — se déclencher sur son absence
+    maintenant ne l'est pas.
+
+### `text.extract` — en extraire une valeur
+
+Applique un motif aux **derniers Ko** d'un fichier (un log de jeu est alimenté pendant toute
+la session ; ce qui vient d'arriver est à la fin) ou à une variable, et garde ce que le
+groupe 1 a capturé.
+
+**C'est la dernière correspondance qui gagne.** Dans un log, la ligne la plus récente décrit
+maintenant ; la première décrit ce qui s'est passé au démarrage.
+
+Le nom que tu lui donnes est le tien — `server`, `mission`, ce que tu veux — et les étapes
+suivantes le relisent avec `{text.server}`. Si la valeur se trouve être un nombre, elle est
+aussi disponible pour les conditions numériques : pas besoin d'une action de conversion.
+
+### `modlist.apply` — mettre les bons mods
+
+Installe ce que la liste nomme et qui manque, puis active exactement ceux-là.
+
+!!! warning "`exact` est celui qui mord"
+
+    Désactivé, la liste **s'ajoute** à ce qui est déjà actif — ce que tu veux quand tu
+    appliques deux listes pour deux avions.
+
+    Activé, l'ensemble actif **devient** la liste, et rien d'autre. C'est ce qu'un serveur
+    strict entend par liste de mods, et un mod en trop, c'est le même refus qu'un mod manquant.
+
+Une liste verrouillée sans phrase secrète dans l'action **échoue** au lieu de demander. Une
+tâche planifiée ne peut pas répondre à une fenêtre à quatre heures du matin, et une fenêtre
+que personne ne voit, c'est une tâche bloquée qui a l'air de travailler.
+
+Les mods introuvables sont signalés **par leur nom**. « Appliqué » avec trois mods absents en
+silence, c'est le rapport qui fait éjecter quelqu'un à l'écran de chargement sans savoir
+pourquoi.
+
+### DCS a un vrai hook
+
+DCS dispose d'une API de callbacks supportée : on le lui **demande** plutôt que de le deviner
+dans un log. **Configurer DCS** (sur le déclencheur `watchFile`, ou l'action `dcs.hook`) écrit
+un petit fichier Lua dans `Saved Games/DCS/Scripts/Hooks/bmm-serverwatch.lua`. Il signale sur
+quel serveur multijoueur tu es, dans un fichier que BMM surveille. Il ne lit rien d'autre et
+n'envoie rien nulle part.
+
+Il est installé dans **tous** les dossiers DCS trouvés — il y en a généralement deux, release
+et open beta — parce que voler dans celui que tu n'as pas configuré ressemble exactement à
+une fonctionnalité qui ne marche pas.
+
+!!! note "Pourquoi chaque appel y est protégé"
+
+    Un hook GUI qui lève une erreur est abandonné par DCS pour toute la session. Une seule
+    fonction manquante dans une version arrêterait le signalement en silence, sans rien
+    afficher à personne — donc chaque appel est dans un `pcall`.
+
+### Deux modèles
+
+**Partir d'un modèle** propose les deux :
+
+- **DCS : les bons mods pour le serveur rejoint** — met en place le hook, lit le serveur dans
+  ce qu'il écrit, applique la liste.
+- **N'importe quel jeu : les mods du serveur lu dans le log** — la même forme, en lisant un
+  log. La seule chose qui change d'un jeu à l'autre, c'est le motif.
+
+Les deux arrivent avec le chemin du fichier et la liste de mods **vides**. Un modèle qui
+devinerait serait une tâche qui a l'air configurée, s'exécute, ne trouve rien, et annonce
+qu'elle a réussi.

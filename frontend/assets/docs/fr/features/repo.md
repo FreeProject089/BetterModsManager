@@ -494,3 +494,112 @@ serveur la compare à sa propre adresse configurée, jamais à celle que la requ
 
 La signature est mise en cache par origine : synchroniser mille fichiers coûte une signature
 toutes les deux minutes, pas mille.
+
+
+## Tout ce que le dépôt transporte d'autre
+
+Un dépôt, c'était des profils de mods, plus des modpacks. Le reste d'une configuration — le
+plugin qui la fait tourner, l'automatisation qui la maintient à jour, le thème, les listes de
+mods, les catalogues à suivre — devait être publié ailleurs et décrit en prose : ce que
+recevait la personne en face, c'était un dossier de mods et un exercice de lecture.
+
+**Server Repo → Inclure dans le dépôt…** prend un DOSSIER de dépôt, pas un nouvel export.
+C'est voulu : ça marche sur un dépôt exporté il y a cinq minutes comme sur un dépôt publié
+au printemps dernier, sans regénérer un seul mod.
+
+### Deux formes, et la différence compte
+
+=== "Les fichiers voyagent avec le dépôt"
+
+    Un **plugin**, une **automatisation**, un **thème**, une **liste de mods** (`.mm`) et un
+    **bundle de catalogue** (`.bmmbundle`) sont copiés dans `extras/<kind>/` et listés dans
+    `repo.json` avec un sha256. Ils sont vérifiés à l'arrivée exactement comme un fichier de
+    mod.
+
+    Ce sont des instantanés par nature. Ce que tu as publié est ce que les autres reçoivent.
+
+=== "Les catalogues et sources d'apps voyagent comme adresses"
+
+    Un **catalogue** est une chose qui CHANGE. En copier un dans un dépôt publierait un fork
+    gelé qui cesse discrètement de correspondre à sa source, sans que le lecteur puisse s'en
+    apercevoir — donc seule l'adresse voyage, et celui qui la suit obtient le catalogue tel
+    qu'il sera le jour où il regarde.
+
+### Ce qui arrive, et ce que ça a le droit de faire
+
+Rien de ce qui vient d'un dépôt ne s'exécute.
+
+| Type | À l'arrivée |
+|---|---|
+| Plugin | Installé **désactivé**, **sans aucune permission** — et toute permission déjà accordée à cet id est effacée. |
+| Automatisation | Ajoutée au planificateur, **désactivée**. |
+| Thème | Installé. C'est de la donnée. |
+| Liste de mods · bundle | Enregistré, et BMM **demande** avant de l'ouvrir. |
+| Catalogue · source d'apps | Suivi, et listé avec le dépôt comme origine pour pouvoir le retirer plus tard. |
+
+!!! warning "Pourquoi les plugins et les automatisations sont décochés par défaut"
+
+    Un plugin est du code qui tourne dans BMM ; une automatisation peut lancer des commandes
+    sur ta machine. Synchroniser un dépôt est une décision à propos de mods. Une case cochée
+    par défaut en ferait une décision d'exécuter le code d'un inconnu que personne n'a prise
+    à voix haute.
+
+    L'effacement des permissions est la moitié moins évidente. Les ids sont choisis par celui
+    qui écrit le manifeste : sans ça, un dépôt pourrait nommer son plugin comme un que tu
+    avais déjà approuvé et hériter de l'autorisation en silence.
+
+!!! note "Un type que cette version ne connaît pas"
+
+    Il est quand même **listé**, nommé, et refusé avec une raison. Un dépôt publié par un BMM
+    plus récent ne doit pas ressembler à un dépôt auquel il manque des choses.
+
+### Le manifeste
+
+```json
+{
+  "extras": [
+    { "kind": "plugin", "id": "dcs-helper", "name": "DCS Helper", "version": "1.2",
+      "file": { "relative_path": "dcs-helper.bmmplug", "size": 40122, "sha256_hash": "…" } },
+    { "kind": "catalog", "id": "…", "name": "Thèmes de l'escadron",
+      "url": "https://example.org/themes/catalog.json", "catalog_type": "theme" },
+    { "kind": "modlist", "id": "ops", "name": "Liste Ops", "locked": true,
+      "file": { "relative_path": "ops.mm", "size": 8210, "sha256_hash": "…" } }
+  ]
+}
+```
+
+`kind` vaut `plugin` · `task` · `theme` · `modlist` · `bundle` · `catalog` · `app`. Une liste
+verrouillée le dit dans le manifeste, pour que l'écran puisse annoncer qu'il faudra une
+phrase secrète *avant* le téléchargement plutôt qu'après — sinon ce qui arrive est un fichier
+qui ne s'ouvre pas, sans moyen de savoir si c'est voulu ou si le transfert a échoué.
+
+**Ajouter des extras resigne `repo.json`**, parce qu'ils sont à l'intérieur de ce que la
+signature couvre. Laisser l'ancienne signature publierait un manifeste qui échoue à sa propre
+vérification — ce qui, pour celui qui télécharge, ressemble à une falsification et en est
+indiscernable.
+
+!!! tip "Les noms de fichiers sont restreints exprès"
+
+    Le nom d'un fichier transporté ne garde que `A-Z a-z 0-9 . _ -`. Les hébergeurs normalisent
+    les chemins — BetterCommunity remplace tout le reste, espaces compris — donc un caractère
+    gardé ici que l'hébergeur ne garde pas mettrait `Mon Thème.bmmtheme` dans le manifeste,
+    `Mon_Th_me.bmmtheme` sur le serveur, et un 404 sur un fichier pourtant bien présent.
+    L'erreur ressemble à un éditeur qui aurait oublié d'uploader quelque chose.
+
+### Depuis un script, la CLI ou un assistant
+
+```bash
+bmm repo-extras https://example.org/repo
+bmm repo-take https://example.org/repo theme night-ops
+```
+
+`POST /api/repo/extras` fait la même chose en HTTP (`repo.write`). Lire ne demande aucun
+nouvel endpoint — `/api/repo/info` renvoie le manifeste, et `extras` en fait partie. Les
+outils MCP sont `bmm_repo_extras` et `bmm_repo_extra_take`.
+
+!!! note "L'entrée est cherchée, pas décrite"
+
+    L'endpoint prend une URL de dépôt plus un `kind` et un `id`, et trouve l'entrée dans le
+    manifeste qu'il a récupéré. Un appelant qui pourrait fournir ses propres
+    `{kind, url, sha256}` se servirait de l'installeur de BMM pour installer des fichiers
+    arbitraires — et la vérification de hash vérifierait son propre chiffre.

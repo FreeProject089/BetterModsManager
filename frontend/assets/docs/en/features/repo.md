@@ -474,3 +474,109 @@ claims to be for.
 
 Signing is cached per origin, so a sync of a thousand files costs one signature every two
 minutes rather than a thousand.
+
+
+## Everything else the repo carries
+
+A repo used to mean profiles of mods, plus modpacks. The rest of a setup — the plugin that
+drives it, the automation that keeps it in step, the theme, the mod lists, the catalogues to
+follow — had to be published somewhere else and described in prose, so what somebody received
+was a folder of mods and a reading exercise.
+
+**Server Repo → Include in the repo…** takes a repo FOLDER, not a fresh export. That is
+deliberate: it works on a repo you exported five minutes ago and on one you published last
+spring, without regenerating a single mod.
+
+### Two shapes, and the difference matters
+
+=== "Files travel with the repo"
+
+    A **plugin**, an **automation**, a **theme**, a **mod list** (`.mm`) and a **catalogue
+    bundle** (`.bmmbundle`) are copied into `extras/<kind>/` and listed in `repo.json` with a
+    sha256. They are checked on arrival exactly as a mod file is.
+
+    These are snapshots by nature. What you published is what somebody gets.
+
+=== "Catalogues and app sources travel as addresses"
+
+    A **catalogue** is a thing that CHANGES. Copying one into a repo would publish a frozen
+    fork that quietly stops matching its source, and the reader would have no way to tell —
+    so only the address travels, and whoever follows it gets the catalogue as it is on the
+    day they look.
+
+### What arrives, and what it is allowed to do
+
+Nothing installed from a repo runs.
+
+| Kind | On arrival |
+|---|---|
+| Plugin | Installed **disabled**, with **no permissions** — and any permission previously granted to that id is cleared. |
+| Automation | Added to the scheduler **disabled**. |
+| Theme | Installed. It is data. |
+| Mod list · bundle | Saved, and BMM **asks** before opening it. |
+| Catalogue · app source | Followed, and listed with the repo as its origin so you can un-follow it later. |
+
+!!! warning "Why plugins and automations are unticked by default"
+
+    A plugin is code that runs inside BMM; an automation can run commands on your machine.
+    Syncing a repo is a decision about mods. A default tick would turn it into a decision
+    about running a stranger's code that nobody made out loud.
+
+    The permission clearing is the less obvious half. Ids are chosen by whoever writes the
+    manifest, so without it a repo could name its plugin after one you had already trusted
+    and inherit the grant in silence.
+
+!!! note "A kind this build does not know"
+
+    It is still **listed**, named, and refused with a reason. A repo published by a newer BMM
+    must not look like a repo with things missing from it.
+
+### The manifest
+
+```json
+{
+  "extras": [
+    { "kind": "plugin", "id": "dcs-helper", "name": "DCS Helper", "version": "1.2",
+      "file": { "relative_path": "dcs-helper.bmmplug", "size": 40122, "sha256_hash": "…" } },
+    { "kind": "catalog", "id": "…", "name": "Squadron themes",
+      "url": "https://example.org/themes/catalog.json", "catalog_type": "theme" },
+    { "kind": "modlist", "id": "ops", "name": "Ops list", "locked": true,
+      "file": { "relative_path": "ops.mm", "size": 8210, "sha256_hash": "…" } }
+  ]
+}
+```
+
+`kind` is one of `plugin` · `task` · `theme` · `modlist` · `bundle` · `catalog` · `app`. A
+locked mod list says so in the manifest, so the screen can tell you it needs a passphrase
+*before* the download rather than after — otherwise what arrives is a file that will not open
+and no way to tell whether that is the point or a broken transfer.
+
+**Adding extras re-signs `repo.json`**, because they are inside what the signature covers.
+Leaving the old signature would publish a manifest that fails its own check, which reads to a
+downloader as tampering and is indistinguishable from it.
+
+!!! tip "File names are narrowed on purpose"
+
+    A carried file's name keeps only `A-Z a-z 0-9 . _ -`. Hosts normalise paths — BetterCommunity
+    replaces everything else, spaces included — so a name this kept that the host does not
+    would put `My Theme.bmmtheme` in the manifest, `My_Theme.bmmtheme` on the server, and a
+    404 on a file sitting right there. The failure reads as a publisher who forgot to upload
+    something.
+
+### From a script, the CLI or an assistant
+
+```bash
+bmm repo-extras https://example.org/repo
+bmm repo-take https://example.org/repo theme night-ops
+```
+
+`POST /api/repo/extras` does the same thing over HTTP (`repo.write`). Reading needs no new
+endpoint — `/api/repo/info` returns the manifest, and `extras` is part of it. The MCP tools
+are `bmm_repo_extras` and `bmm_repo_extra_take`.
+
+!!! note "The entry is looked up, not described"
+
+    The endpoint takes a repo URL plus a `kind` and an `id`, and finds the entry in the
+    manifest it fetched. A caller that could hand over its own `{kind, url, sha256}` would be
+    using BMM's installer to install arbitrary files — and the hash check would be checking
+    the caller's own number.

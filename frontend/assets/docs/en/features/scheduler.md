@@ -45,6 +45,7 @@ you driving it.
 | `weeklyAt` | At a time, on the weekdays you pick. |
 | `monthlyAt` | On a day-of-month (1–31) at a time. |
 | `appStart` | Once per BMM launch (a few seconds after start). |
+| `watchFile` | A file changed. |
 | `manual` | Never on its own — only the ▶ **Run now** button or `bmm://schedule/run`. |
 
 !!! warning "Time triggers only fire while BMM is awake"
@@ -194,6 +195,8 @@ until something becomes true (`waitFor`, below).
 | `allModsActive` | Every mod in the active profile is on. |
 | `appRunning` · `appNotRunning` | A process (by name) is / isn't running. |
 | `online` | The machine has an internet connection. |
+| `textIs` | A text variable is / is not / contains / matches / is empty. |
+| `fileContains` | The last N KB of a file contain some text or match a pattern. |
 | `dayOfWeek` | Today is one of the days you picked. |
 | `timeRange` · `timeReached` | The clock is inside a range / has passed a time. |
 | `fileExists` · `fileHash` · `fileSize` · `fileType` | File checks — a path exists, or its hash (blake3/sha256), size or type matches. |
@@ -396,3 +399,82 @@ actions the calling task was refused.
     no longer exists **stops the task** rather than skipping quietly. A call that silently does
     nothing is a task reporting success while half of it never ran. Blocks calling each other are
     capped at 20 levels deep.
+
+
+## Reacting to a game
+
+BMM cannot see you join a server. Nothing about a running game is visible to another process
+except what that game **writes** — so that is what this is built on, and it is three pieces
+plus one file for DCS.
+
+### `watchFile` — something changed
+
+Point it at a file. The task runs when that file's modified time or size changes.
+
+!!! note "The first check after BMM starts never fires"
+
+    It records the file and stops there. Without that, every watch task would run once at
+    every launch, and a change made while BMM was closed would act on a session that ended
+    hours ago.
+
+    A file that does not exist is not a change either. A game that has never run has no log,
+    and firing on its later appearance is right — firing on its absence now is not.
+
+### `text.extract` — pull a value out
+
+Runs a pattern over the **last few KB** of a file (a game log is appended to all session; what
+just happened is at the end of it) or over a variable, and keeps what group 1 matched.
+
+**The last match wins.** In a log the most recent line describes now; the first describes
+whatever happened at startup.
+
+The name you give it is yours — `server`, `mission`, anything — and the next steps read it
+back as `{text.server}`. If the value happens to be a number it is also available to numeric
+conditions, so you do not need a second action to convert it.
+
+### `modlist.apply` — put the right mods on
+
+Installs anything the list names that is not here, then turns exactly those on.
+
+!!! warning "`exact` is the one with teeth"
+
+    Off, the list is **added** to what is already active — which is what you want when you run
+    two lists for two aircraft.
+
+    On, the active set **becomes** the list and nothing else. That is what a strict server
+    means by a mod list, and one extra mod is the same rejection as a missing one.
+
+A locked list with no passphrase in the action **fails** rather than prompting. A scheduled
+task cannot answer a dialog at four in the morning, and one nobody sees is a task that hangs
+looking like it is working.
+
+Mods it could not get are reported **by name**. "Applied" with three mods silently absent is
+the report that gets somebody kicked at the loading screen without knowing why.
+
+### DCS gets a real hook
+
+DCS has a supported callback API, so it is **asked** rather than guessed at from a log.
+**Set up DCS** (on the `watchFile` trigger, or the `dcs.hook` action) writes a small Lua file
+to `Saved Games/DCS/Scripts/Hooks/bmm-serverwatch.lua`. It reports which multiplayer server
+you are on, to a file BMM watches. It reads nothing else and sends nothing anywhere.
+
+It goes into **every** DCS folder found — there are usually two, release and open beta —
+because flying in the one you did not set up looks exactly like the feature not working.
+
+!!! note "Why every call in it is wrapped"
+
+    A GUI hook that raises is dropped by DCS for the rest of the session. One missing function
+    in one build would silently stop the reporting rather than logging anything anybody sees,
+    so every call inside it is inside a `pcall`.
+
+### Two presets
+
+**Starting from a preset** carries both:
+
+- **DCS: the right mods for the server you joined** — sets up the hook, reads the server out
+  of what it writes, applies the list.
+- **Any game: mods for the server in the log** — the same shape, reading a log instead. The
+  only thing that changes between games is the pattern.
+
+Both arrive with the file path and the mod list **blank**. A preset that guessed would be a
+task that looks configured, runs, finds nothing, and reports success.

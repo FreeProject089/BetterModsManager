@@ -58,7 +58,7 @@ l'API locale et échouent sur une erreur de connexion si la fenêtre de BMM n'es
 
 ## Les outils
 
-51 au total. `*` marque un paramètre obligatoire ; une liste séparée par des barres obliques
+59 au total. `*` marque un paramètre obligatoire ; une liste séparée par des barres obliques
 donne les valeurs acceptées.
 
 ### Recherche
@@ -107,6 +107,10 @@ donne les valeurs acceptées.
 |---|---|---|---|
 | `bmm_list_connected_repos` | — |  | Liste les Dépôts Serveur connectés (nom, url, état de synchro) |
 | `bmm_generate_repo` | `name`\*, `mod_ids`\* |  | Génère un dépôt depuis une liste de mods |
+| `bmm_repo_extras` | `url`\*, `password` | app | Liste ce qu'un dépôt transporte en plus des mods — plugins, automatisations, thèmes, listes de mods, catalogues à suivre. Lit le manifeste ; ne télécharge rien. `locked: true` sur une liste signifie que son contenu est chiffré |
+| `bmm_repo_extra_take` | `url`\*, `kind`\*, `id`\*, `password` | app | En installe UN. Un plugin ou une automatisation arrive **désactivé**, et un plugin sans aucune permission — en prendre un n'est pas une décision de l'exécuter. Un catalogue est suivi, pas téléchargé ; une liste de mods est enregistrée et son chemin renvoyé, parce que l'ouvrir pose des questions qui reviennent à une personne |
+| `bmm_list_keys` | — | app | Les clés d'identité avec lesquelles BMM peut prouver : `{name, path}` et laquelle est active. **Noms et chemins uniquement** — aucun outil ne lit une clé privée |
+| `bmm_create_key` | `name`\*, `kind` | app | Fabrique une paire de clés. Renvoie la ligne **publique** — celle à donner à qui gère une source protégée — et où la moitié privée a été écrite. La moitié privée n'est jamais renvoyée. `ed25519` sauf si un serveur dit le contraire |
 | `bmm_start_repo_server` | `path`\*, `port`\* | app | Démarre le serveur de dépôt |
 | `bmm_generate_lightweight_server` | `repo_path`\*, `port`\*, `auto_start`\*, `use_cloudflare`\*, `use_upnp`\*, `upload_limit`\*, `server_version`\*, `admin_password`\*, `enable_docker`, `docker_host_type`, `server_type` |  | Génère un script serveur autonome (.bat) pour un dépôt donné |
 
@@ -205,12 +209,12 @@ Il est volontairement étroit : seulement `GET` et `POST`, et seulement vers
 
 Les tableaux ci-dessus sont générés depuis les déclarations `Tool::new(...)` de
 `src-tauri/src/mcp/server.rs` — celles-là mêmes que le serveur enregistre au démarrage —
-plutôt qu'écrits à la main, parce que 51 outils avec leurs paramètres, c'est exactement le
+plutôt qu'écrits à la main, parce que 59 outils avec leurs paramètres, c'est exactement le
 genre de liste qui pourrit dès qu'on en ajoute un.
 
 Une vérification vaut le coup après chaque changement : tout outil **déclaré** par le serveur
 doit aussi être **dispatché**, sinon un client voit un outil qui échoue à l'appel. À l'heure
-où ces lignes sont écrites, les deux ensembles font 51 et sont identiques.
+où ces lignes sont écrites, les deux ensembles font 59 et sont identiques.
 
 ---
 
