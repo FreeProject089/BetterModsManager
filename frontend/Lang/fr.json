@@ -8399,5 +8399,9 @@
   "srcacc.keyMadeFailed": "Impossible de créer une clé",
   "repo.keyauth.errNameTaken": "Une clé de ce nom est déjà sur ton trousseau",
   "repo.keyauth.errFileExists": "Un fichier de clé de ce nom existe déjà — renomme la clé",
-  "repo.keyauth.errGenFailed": "La clé n’a pas pu être créée"
+  "repo.keyauth.errGenFailed": "La clé n’a pas pu être créée",
+  "repo.cat.followedN": "{n} catalogue(s) suivi(s)",
+  "repo.hideOne": "Le retirer de ma liste",
+  "repo.hiddenN": "{n} masqué(s) par toi",
+  "repo.unhideAll": "Les réafficher"
 }

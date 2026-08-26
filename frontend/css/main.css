@@ -17644,7 +17644,28 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
    job of a control — and the address, the state and the provenance all lived in one tooltip.
    The shape now matches .cm-src and .apps-source-row: state on the left, what it is in the
    middle, where it came from beside it, remove on the right. */
+/* The fold handle for the followed-catalogue strip. It states the count, so folding never
+   hides the fact that there is something behind it. */
+.repo-cat-fold {
+    display: flex; align-items: center; gap: 6px; width: 100%; margin-bottom: 6px;
+    font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+    color: var(--text-muted); background: none; border: 0; cursor: pointer; padding: 3px 2px;
+    font-family: inherit; text-align: left; border-radius: 6px;
+}
+.repo-cat-fold:hover { color: var(--text-primary); background: var(--bmm-s03); }
+.repo-cat-chev { flex: none; transition: transform .15s ease; }
+.repo-cat-fold.is-folded .repo-cat-chev { transform: rotate(-90deg); }
+@media (prefers-reduced-motion: reduce) { .repo-cat-chev { transition: none; } }
 .repo-cat-srcs { display: flex; flex-direction: column; gap: 4px; }
+
+/* Taking a repo out of your own list, and the way back. The note is quiet but always there
+   while something is hidden: an entry that vanishes without a trace is indistinguishable
+   from a catalogue that stopped publishing it. */
+.repo-hide-btn { background: none; border: 0; color: var(--text-muted); cursor: pointer;
+    padding: 3px; border-radius: 6px; display: inline-flex; align-items: center; }
+.repo-hide-btn:hover { color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, transparent); }
+.repo-hidden-note { display: flex; align-items: center; gap: 8px; font-size: 11px;
+    color: var(--text-muted); padding: 6px 2px 10px; }
 .repo-cat-src {
     display: flex; align-items: center; gap: 8px; padding: 6px 9px;
     border: 1px solid var(--border); border-radius: 8px; background: var(--bmm-s02);

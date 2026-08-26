@@ -8401,5 +8401,9 @@
   "srcacc.keyMadeFailed": "Could not create a key",
   "repo.keyauth.errNameTaken": "A key with that name is already on your ring",
   "repo.keyauth.errFileExists": "A key file with that name already exists — rename the key",
-  "repo.keyauth.errGenFailed": "The key could not be created"
+  "repo.keyauth.errGenFailed": "The key could not be created",
+  "repo.cat.followedN": "{n} catalogue(s) followed",
+  "repo.hideOne": "Take it out of my list",
+  "repo.hiddenN": "{n} hidden by you",
+  "repo.unhideAll": "Show them again"
 }

@@ -32,6 +32,50 @@ function normaliseRepoFeed(doc) {
         return doc.repos;
     return [];
 }
+/**
+ * Repos you have taken out of the browser, by normalised URL.
+ *
+ * HIDDEN, never deleted — an entry belongs to the catalogue that publishes it, and BMM has
+ * no way to remove it from somebody else's file. Pretending otherwise would put the list
+ * back the next time that catalogue is fetched, which reads as the button not working.
+ * Kept as a local preference, and restorable, because "I never want to see this one" is a
+ * decision about your screen rather than about the catalogue.
+ */
+function hiddenRepos() {
+    try {
+        const v = JSON.parse(localStorage.getItem('bmm_repo_hidden') || '[]');
+        return new Set(Array.isArray(v) ? v : []);
+    }
+    catch {
+        return new Set();
+    }
+}
+function setRepoHidden(url, hide) {
+    const set = hiddenRepos();
+    if (hide)
+        set.add(url);
+    else
+        set.delete(url);
+    try {
+        localStorage.setItem('bmm_repo_hidden', JSON.stringify([...set]));
+    }
+    catch { /* preference only */ }
+}
+/** Is the followed-catalogues strip folded? Only consulted past a handful of them. */
+function catStripFolded() {
+    try {
+        return localStorage.getItem('bmm_repo_cat_folded') !== 'false';
+    }
+    catch {
+        return true;
+    }
+}
+function setCatStripFolded(v) {
+    try {
+        localStorage.setItem('bmm_repo_cat_folded', String(v));
+    }
+    catch { /* preference only */ }
+}
 /** Repo-catalog URLs the user added. Shares the key the catalog index writes to, so a repo
  *  catalog pulled in by an index and one pasted by hand land in the same list — two lists
  *  would mean two places to look when removing one. */
@@ -80,8 +124,20 @@ export function renderRepoCatalogStrip(reload, getRepos) {
         // where the catalogue came from were all folded into one tooltip. A followed source
         // is a thing with a state and an address, which is what every other catalogue screen
         // in BMM draws as a row — so this draws one too, in the same shape.
+        // FOLDED once there are more than a handful.
+        //
+        // Fifteen followed catalogues is fifteen rows above the repo list — taller than the
+        // panel, so the thing the panel exists for starts below the fold and the browser
+        // becomes a scroll to somewhere else. Folded is remembered, and the header carries the
+        // count so a fold never hides the fact that there is something behind it.
+        const folded = urls.length > 3 && catStripFolded();
         host.innerHTML = urls.length
-            ? `<div class="repo-cat-srcs">${urls.map((u) => {
+            ? `<button type="button" class="repo-cat-fold${folded ? ' is-folded' : ''}" data-cat-fold>
+                 <svg class="repo-cat-chev" width="12" height="12" viewBox="0 0 24 24" fill="none"
+                      stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                 ${escHtml(t('repo.cat.followedN').replace('{n}', String(urls.length)))}
+               </button>
+               <div class="repo-cat-srcs"${folded ? ' hidden' : ''}>${urls.map((u) => {
                 const off = isDisabled(u);
                 // catalogLabel(u) is the LABEL — the host of the catalogue itself. originOf(u)
                 // is the index that brought it in: a different question with a different
@@ -102,6 +158,10 @@ export function renderRepoCatalogStrip(reload, getRepos) {
                 </div>`;
             }).join('')}</div>`
             : '';
+        host.querySelector('[data-cat-fold]')?.addEventListener('click', () => {
+            setCatStripFolded(!catStripFolded());
+            paint();
+        });
         // Bound inside paint(), like .repo-cat-del: the outer listeners bind once behind the
         // _bmmBound guard, but this markup is rebuilt on every paint.
         host.querySelectorAll('.repo-cat-off').forEach((b) => b.addEventListener('click', () => {
@@ -264,6 +324,13 @@ async function openCatalogBuilder(onScreen) {
                     <input class="input" id="repo-cat-b-url" value="${escAttr(urlBox)}" placeholder="https://example.com/repos.json">
                     <button class="btn btn-sm btn-secondary" id="repo-cat-b-fetch"${busy ? ' disabled' : ''}>${escHtml(t('repo.cat.b.fetch') || 'Pull')}</button>
                 </div>
+                <!-- The address above can be a protected one. This screen was the only place
+                     in BMM that fetches a catalogue by URL without offering the download
+                     password or the identity key it might need — so a private catalogue could
+                     be pasted, refused, and there was nothing on screen to explain what was
+                     missing. Mounted here and wired below, in the same file, which is what
+                     check-source-access requires. -->
+                <div id="repo-cat-b-access"></div>
                 <label class="repo-cat-b-follow">
                     <input type="checkbox" id="repo-cat-b-follow"${follow ? ' checked' : ''}>
                     ${escHtml(t('repo.cat.b.alsofollow') || 'Follow this catalogue too, so the browser keeps showing it')}
@@ -352,6 +419,20 @@ async function openCatalogBuilder(onScreen) {
         urlEl?.addEventListener('input', () => { urlBox = urlEl.value; });
         const folEl = ov.querySelector('#repo-cat-b-follow');
         folEl?.addEventListener('change', () => { follow = folEl.checked; });
+        const accessSlot = ov.querySelector('#repo-cat-b-access');
+        void import('../../core/source-access.js').then((sa) => {
+            if (accessSlot)
+                accessSlot.innerHTML = sa.sourceAccessHtml('rcb');
+            // Wired AFTER the markup is in the document: wireSourceAccess finds its controls
+            // with getElementById, and on a detached subtree it bails out and leaves a fold
+            // with no listeners — which looks exactly like one nobody has clicked yet.
+            sa.wireSourceAccess('rcb', (m, k) => toast(m, k === 'warning' ? 'warning' : 'success'), () => {
+                close();
+                document.getElementById('nav-settings')?.click();
+                setTimeout(() => document.getElementById('settings-identity-card')
+                    ?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 250);
+            }, () => ov.querySelector('#repo-cat-b-url')?.value?.trim() || '');
+        });
         ov.querySelector('#repo-cat-b-fetch')?.addEventListener('click', () => { void pull((urlEl?.value || '').trim(), follow); });
         urlEl?.addEventListener('keydown', (e) => { if (e.key === 'Enter')
             void pull(urlEl.value.trim(), follow); });
@@ -1337,6 +1418,20 @@ export function initRepo() {
                 // the feed: a catalog that could label its own entries "official" would
                 // borrow a badge it was never given — the same rule apply_trust enforces
                 // for app catalogs.
+                // SHOWN NOW, not after the last catalogue answers.
+                //
+                // The official feed is already in hand at this point, and everything below is
+                // other people's servers, fetched one after another with a cache-buster. With
+                // fifteen followed catalogues that is fifteen round trips — and until the last
+                // one finished, the panel was a spinner over a hidden list nobody could
+                // search, scroll or read. A slow stranger's host made BMM's own repos
+                // unreachable.
+                //
+                // Each catalogue re-renders as it lands, so the list grows under you instead
+                // of appearing at the end.
+                renderRepoList();
+                loadingEl.style.display = 'none';
+                contentEl.style.display = 'block';
                 // enabledOnly: a catalogue switched off keeps its chip and is not fetched.
                 for (const catUrl of enabledOnly(readRepoCatalogs())) {
                     try {
@@ -1368,6 +1463,10 @@ export function initRepo() {
                                 source_catalog: catUrl,
                             });
                         }
+                        // Repainted per catalogue rather than once at the end: the point of
+                        // showing the list early is lost if the additions arrive in one lump
+                        // at the same moment they used to.
+                        renderRepoList();
                     }
                     catch { /* one unreachable catalog must not empty the browser */ }
                 }
@@ -1438,6 +1537,12 @@ export function initRepo() {
             // This is intentional — unvalidated entries in repos.json stay hidden until
             // the team adds a hash. The Verified badge is then shown for those entries.
             filtered = filtered.filter(r => r.hash && r.hash.length > 0);
+            // Ones you took out yourself. Counted before they go, so the list can say they
+            // exist — a hidden entry that leaves no trace is indistinguishable from a
+            // catalogue that stopped publishing it.
+            const hidden = hiddenRepos();
+            const hiddenCount = filtered.filter(r => hidden.has(normRepoUrl(r.url || ''))).length;
+            filtered = filtered.filter(r => !hidden.has(normRepoUrl(r.url || '')));
             // Filter by category
             if (currentFilter !== 'all') {
                 filtered = filtered.filter(r => r.category === currentFilter);
@@ -1479,7 +1584,13 @@ export function initRepo() {
                     return boost;
                 return (isRepoFav(b.url) ? 1 : 0) - (isRepoFav(a.url) ? 1 : 0);
             });
-            listEl.innerHTML = filtered.map(repo => `
+            const hiddenNote = hiddenCount
+                ? `<div class="repo-hidden-note">
+                     ${escHtml(t('repo.hiddenN').replace('{n}', String(hiddenCount)))}
+                     <button type="button" class="btn btn-xs btn-ghost" id="repo-unhide-all">${escHtml(t('repo.unhideAll'))}</button>
+                   </div>`
+                : '';
+            listEl.innerHTML = hiddenNote + filtered.map(repo => `
                 <div class="repo-browser-item${isBoosted(repo) ? ' repo-browser-item-boosted' : ''}" style="background:${isBoosted(repo) ? 'linear-gradient(180deg, rgba(245,158,11,0.06), rgba(255,255,255,0.03))' : 'rgba(255,255,255,0.03)'}; border:1px solid ${isBoosted(repo) ? 'rgba(245,158,11,0.35)' : 'rgba(255,255,255,0.08)'}; border-radius:12px; padding:16px; cursor:pointer; transition:all 0.2s ease;" data-url="${escAttr(repo.url)}">
                     <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
                         <div style="flex:1;">
@@ -1499,6 +1610,13 @@ export function initRepo() {
                         <div style="display:flex; flex-direction:column; gap:4px; align-items:flex-end; margin-left:16px;">
                             <div style="display:flex; align-items:center; gap:8px;">
                                 ${repoStarBtn(repo.url)}
+                                <!-- Taken out of YOUR list, not out of the catalogue: BMM has
+                                     no way to edit somebody else's file, and pretending
+                                     otherwise would put the entry back on the next fetch. -->
+                                <button class="repo-hide-btn" data-hide-url="${escAttr(repo.url)}"
+                                        data-tooltip="${escAttr(t('repo.hideOne'))}">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                                </button>
                                 <span style="font-size:10px; color:var(--text-muted);">${escHtml(repo.region || 'Unknown')}</span>
                             </div>
                             ${repo.tags && repo.tags.length > 0 ? `
@@ -1575,6 +1693,20 @@ export function initRepo() {
                 </div>
             `).join('');
             // Favorite star handlers (must run before item-click; stop propagation)
+            listEl.querySelector('#repo-unhide-all')?.addEventListener('click', () => {
+                try {
+                    localStorage.removeItem('bmm_repo_hidden');
+                }
+                catch { /* preference only */ }
+                renderRepoList();
+            });
+            listEl.querySelectorAll('.repo-hide-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    setRepoHidden(normRepoUrl(btn.dataset.hideUrl || ''), true);
+                    renderRepoList();
+                });
+            });
             listEl.querySelectorAll('.repo-fav-btn').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     e.stopPropagation();
