@@ -1070,3 +1070,40 @@ Those four are a legend at the top of the panel, always visible. The filters gai
 axis — whether something is happening now or only if you change something — and an empty list
 now tells "no conflicts" apart from "your filters hid all of them", which look identical and
 mean opposite things.
+
+---
+
+## 77. One catalogue screen (v1.0.0+)
+
+Automations, mod lists, themes and tutorials share a single screen. What a catalogue holds
+differs; what you do with one does not.
+
+| Tab | What it is for |
+|---|---|
+| **Browse** | What the catalogues you follow contain, and one action per entry. |
+| **Follow** | Add a source by address **or by file**, see what you follow, switch one off or drop it. Protected sources are handled here, once, for every kind. |
+| **Create** | Pick what goes in, and choose **per entry** whether its file travels with the catalogue or is fetched from an address. |
+
+**Two shapes out.** A **`.bmmbundle`** holds the `catalog.json` and every file it packs, in
+one thing you can send — nothing to host, no address to keep alive. A **`catalog.json`** holds
+addresses only, for content that already lives somewhere. Only what the catalogue names is
+packed, and you choose where the file goes.
+
+**Indexes work in the follow box.** Pasting a catalogue index follows the catalogues of that
+kind and leaves the other kinds alone — following them all would be a bigger action than the
+one that was asked for.
+
+**Themes have a third per-entry choice**, *keep it in the catalogue*: the whole theme written
+inline, which is what every theme catalogue published so far contains and still their default.
+It works for custom themes with images, because a theme is self-contained JSON and its
+preview, assets and fonts are base64 inside it — at the cost of everyone who follows the
+catalogue downloading all of it just to read the list.
+
+**Two kinds keep their own screen, on purpose.** The plugin catalogue is an editor of saved
+drafts, because it is the one you come back to and change; this screen writes a file and
+forgets. Modpack catalogues keep theirs because a `.cbmp` already *is* a bundle.
+
+**A catalogue can carry what you do not have installed.** Modpacks accept an address or a
+`.bmp` file; plugins accept a `.bmmplug`. Both are read and checked when you pick them rather
+than when the catalogue is written, and a handed-over pack keeps the signature it arrived
+with — re-signing would put your name on somebody else's work.

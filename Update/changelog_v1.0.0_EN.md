@@ -548,18 +548,63 @@ v1 and v2 in both `.bat` and `.sh` — now reads an **`access.json`** from the f
 - `.bmmscript` files open a **review screen** rather than running: compiled first, every step
   listed, every script body printed in full.
 
-## [MAJOR] Publish a catalogue of automations
+## [MAJOR] One catalogue screen, for every kind of catalogue
 
-- **Settings → Scheduler → From a catalogue… → Publish my own…** writes a folder: one signed
-  `.bmmpa` per automation plus a `catalog.json`. Drop it on GitHub or any static host.
-- Addresses are **relative** by default, so the folder keeps working when it is moved,
-  mirrored or forked — which is the normal life of a folder on GitHub. The reader refused
-  relative addresses before, so the natural way to publish was the one way that could not be
-  read back.
-- Two automations with the same name get different files: without that, one entry would
-  silently serve another's contents.
-- **Theme catalogues** can point at a file too, which every other catalogue kind already
-  could. Inline still works and is still what the builder writes.
+BMM grew six of these independently and they disagreed about everything that was not the
+content. One called the builder *Publish my own…* and another *Create catalog*. One wrote a
+folder, another a single JSON. One had the "this source is protected" block and three did
+not. Following a catalogue lived on a different screen from making one, and the mod-list
+screen had two buttons where the rest had tabs. Somebody who had learnt one had learnt one.
+
+There is now one screen and the KIND is a parameter — automations, mod lists, themes and
+tutorials all use it, with three tabs:
+
+- **Browse** what the catalogues you follow contain.
+- **Follow** one by address **or by file**, see what you follow, switch one off or drop it.
+  Protected sources are handled here, once, for every kind. Pasting a catalogue INDEX works
+  too: it follows the catalogues of that kind and leaves the others alone.
+- **Create** one: pick what goes in, and choose **per entry** whether its file travels with
+  the catalogue or is fetched from an address.
+
+The output is a choice between **one `.bmmbundle`** — the `catalog.json` and every file it
+packs, in a single thing you can send, with nothing to host — and **one `catalog.json`** of
+addresses, for content that already lives somewhere. The word "publish" is gone from the act
+of making one: making a catalogue and putting it somewhere are different acts, and a button
+that says *Publish* promises the second while doing the first.
+
+Themes keep a third per-entry choice, **keep it in the catalogue** — the body written inline,
+which is what every theme catalogue published so far contains, and still their default.
+
+The plugin catalogue keeps its own editor, because it is the one you come back to and edit,
+and this screen writes a file and forgets. Modpack catalogues keep theirs, because a `.cbmp`
+already is a bundle.
+
+## [FIXED] A `.mm` was losing three things, and none of them said so
+
+- **Tags arrived as raw ids.** A tag somebody named "Liveries" and gave an icon showed up as
+  a bare UUID. The definitions were in the file the whole time — the preview simply never
+  read them.
+- **Install notes never travelled.** The exporter wrote an empty string: written by the
+  exporter, read by the importer, empty in between.
+- **A mod arrived with no provenance.** Where it came from and how it keeps itself current
+  (`source_repo`, `repo_mod_id`, `update_url`, plus its `id` and content fingerprint) were not
+  carried. `update_sources` was, which is what made the gap easy to miss — a list arrived with
+  some of its update wiring and none of the rest, so the mods looked fine and never updated
+  again.
+
+Every `.mm` ever written still opens: the new fields are all optional.
+
+## [NEW] Catalogues can carry what you do not have installed
+
+- **Modpacks:** the builder listed your own library and nothing else, so with nothing
+  installed it said "no packs" and stopped. Add an address, or hand over a `.bmp` file
+  somebody sent you — read and checked when you pick it, then carried inside the `.cbmp`. Its
+  signature is kept as it arrived: re-signing would put your name on somebody else's pack.
+- **Plugins:** same problem, worse. Packing went through the exporter, which can only export
+  an installed plugin, so publishing for somebody else meant install, publish, uninstall.
+  Hand over the `.bmmplug` instead; its manifest fills the entry.
+- **Mod lists:** the create tab is a file picker — BMM keeps no library of `.mm` files — and it
+  could only be answered once. There is a button to add more.
 
 ## [SECURITY] A shared automation could grant itself the right to run programs
 
@@ -577,6 +622,36 @@ says what the file had asked for. Everything else is kept: the automation is int
 toggle away from working.
 
 ## [IMPROVED] The rest
+
+- **A mod says where it came from.** The detail panel could say "From server repo" and nothing
+  else, so a mod added by hand, one pulled off a link and one that arrived inside somebody's
+  mod list all looked identical. It is derived from the fields the updater reads, so it cannot
+  claim a provenance the updater disagrees with — and a repo that shipped no checksums gets
+  its own phrase.
+- **Updates are a section, not a menu item.** *Check for updates* and *Configure updates*
+  existed only in a card's ⋮ menu — the one you open to copy an id — beside what actually
+  updates that mod, listed rather than counted.
+- **A link in mod detail can reach a protected host**, with the same block every catalogue
+  screen has. It was the one place in BMM offering a URL box with no way to say the address
+  needs a password or a key. Link kinds gained repo and http(s).
+- **Followed repo catalogues are rows.** They were tag-shaped pills where a ● was the on/off
+  switch — punctuation doing the job of a control — with the address, the state and where the
+  catalogue came from all folded into one tooltip. The repo-catalogue builder is two numbered
+  steps rather than four sibling labels.
+- **Both sidebar boxes in the docs reader fold**, and remember it. On a long page the contents
+  list and the whole documentation tree are each taller than the viewport, so the second was
+  only reachable by scrolling past the first.
+- **The whole top edge of the window drags it**, including Tasky and the strip beside the
+  title bar. Tasky carried the drag attribute but his container is click-through, so neither
+  he nor the attribute ever saw a press.
+- **A linked theme stopped shipping its assets inside the index.** The entry kept everything
+  but `vars`, so a theme "linked" to an address still carried its megabytes of base64 in
+  `catalog.json` and the link bought nothing.
+- **Three pockets of untranslated text**, all invisible to the parity check because the keys
+  existed: the theme catalogue's header (built after translations run, so its `data-i18n`
+  was never read), two French entries whose value was the English text, and the content-id
+  status words. A sweep of all 8150 keys found no others.
+
 
 - **`.bmmpa` includes now carry shared blocks.** A `call "block"` step is a step KIND, not an
   action, so the exporter never saw it — sharing a task that called a block shipped one that

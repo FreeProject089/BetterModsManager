@@ -989,3 +989,41 @@ Ces quatre définitions sont une légende en haut du panneau, toujours visible. 
 gagné un axe **état** — est-ce que ça se produit maintenant, ou seulement si vous changez
 quelque chose — et une liste vide distingue enfin « aucun conflit » de « vos filtres ont tout
 masqué », qui se ressemblent et veulent dire le contraire.
+
+---
+
+## 77. Un seul écran de catalogue (v1.0.0+)
+
+Automatisations, listes de mods, thèmes et tutoriels partagent un même écran. Ce que contient
+un catalogue diffère ; ce qu'on en fait, non.
+
+| Onglet | À quoi il sert |
+|---|---|
+| **Parcourir** | Ce que contiennent les catalogues suivis, avec une action par entrée. |
+| **Suivre** | Ajouter une source par adresse **ou par fichier**, voir ce qu'on suit, en désactiver un ou le retirer. Les sources protégées sont traitées ici, une fois, pour tous les types. |
+| **En créer un** | Choisir ce qui entre dedans, et décider **par entrée** si son fichier voyage avec le catalogue ou est récupéré à une adresse. |
+
+**Deux formes en sortie.** Un **`.bmmbundle`** porte le `catalog.json` et chaque fichier qu'il
+emballe, en une seule chose à envoyer — rien à héberger, aucune adresse à maintenir en vie.
+Un **`catalog.json`** ne porte que des adresses, pour du contenu déjà hébergé. Seul ce que le
+catalogue nomme est emballé, et c'est toi qui choisis où va le fichier.
+
+**Les index marchent dans la case « suivre ».** Coller un index de catalogues suit ceux de ce
+type-là et laisse les autres — tous les suivre serait une action plus grande que celle
+demandée.
+
+**Les thèmes ont un troisième choix par entrée**, *le garder dans le catalogue* : le thème
+entier écrit en ligne, ce que contient tout catalogue de thèmes publié jusqu'ici et toujours
+leur défaut. Ça marche pour un thème custom avec images, parce qu'un thème est du JSON
+auto-contenu dont l'aperçu, les assets et les polices sont en base64 dedans — au prix de tous
+ceux qui suivent le catalogue et téléchargent l'ensemble juste pour lire la liste.
+
+**Deux types gardent leur écran, exprès.** Le catalogue de plugins est un éditeur de
+brouillons enregistrés, parce que c'est celui qu'on rouvre pour le modifier ; cet écran-ci
+écrit un fichier puis oublie. Les catalogues de modpacks gardent le leur parce qu'un `.cbmp`
+**est** déjà un bundle.
+
+**Un catalogue peut porter ce que tu n'as pas installé.** Les modpacks acceptent une adresse
+ou un fichier `.bmp` ; les plugins acceptent un `.bmmplug`. Les deux sont lus et vérifiés au
+moment où tu les choisis, pas quand le catalogue est écrit, et un pack qu'on te passe garde la
+signature avec laquelle il est arrivé — re-signer mettrait ton nom sur le travail d'un autre.

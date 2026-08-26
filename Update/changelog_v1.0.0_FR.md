@@ -564,18 +564,67 @@ v2 en `.bat` **et** `.sh` — lit désormais un **`access.json`** dans le dossie
 - Les fichiers `.bmmscript` ouvrent un **écran de revue** au lieu de s'exécuter : compilés
   d'abord, chaque étape listée, chaque corps de script affiché en entier.
 
-## [MAJEUR] Publier un catalogue d'automatisations
+## [MAJEUR] Un seul écran de catalogue, pour tous les catalogues
 
-- **Paramètres → Planificateur → Depuis un catalogue… → Publier les miennes…** écrit un
-  dossier : un `.bmmpa` signé par automatisation, plus un `catalog.json`. Déposez-le sur GitHub
-  ou n'importe quel hébergement statique.
-- Les adresses sont **relatives** par défaut, pour que le dossier continue de fonctionner s'il
-  est déplacé, copié ou forké — la vie normale d'un dossier sur GitHub. Le lecteur refusait
-  les adresses relatives : la façon naturelle de publier était donc la seule illisible.
-- Deux automatisations du même nom reçoivent des fichiers différents : sans cela, une entrée
-  servirait en silence le contenu d'une autre.
-- **Les catalogues de thèmes** peuvent aussi pointer vers un fichier, ce que tous les autres
-  types savaient déjà faire. L'inline fonctionne toujours et reste ce qu'écrit le constructeur.
+BMM en avait fait pousser six indépendamment, et ils étaient en désaccord sur tout ce qui
+n'était pas le contenu. L'un appelait le constructeur *Publier les miennes…* et l'autre
+*Créer un catalogue*. L'un écrivait un dossier, l'autre un seul JSON. L'un avait le bloc
+« cette source est protégée », trois autres non. Suivre un catalogue vivait sur un écran
+différent d'en faire un, et l'écran des listes de mods avait deux boutons là où les autres
+avaient des onglets. Qui en avait appris un en avait appris un.
+
+Il y a maintenant **un** écran, et le TYPE est un paramètre — automatisations, listes de mods,
+thèmes et tutoriels l'utilisent tous, avec trois onglets :
+
+- **Parcourir** ce que contiennent les catalogues que tu suis.
+- **Suivre** par adresse **ou par fichier**, voir ce que tu suis, en désactiver un ou le
+  retirer. Les sources protégées sont traitées ici, une fois, pour tous les types. Coller un
+  **index** de catalogues marche aussi : il suit ceux de ce type-là et laisse les autres.
+- **En créer un** : choisis ce qui entre dedans, et décide **par entrée** si son fichier
+  voyage avec le catalogue ou s'il est récupéré à une adresse.
+
+La sortie est un choix entre **un `.bmmbundle`** — le `catalog.json` et chaque fichier qu'il
+emballe, en une seule chose à envoyer, rien à héberger — et **un `catalog.json`** d'adresses,
+pour du contenu qui vit déjà quelque part. Le mot « publier » a disparu de l'acte de créer :
+faire un catalogue et le mettre quelque part sont deux actes différents, et un bouton qui dit
+*Publier* promet le second en faisant le premier.
+
+Les thèmes gardent un troisième choix par entrée, **le garder dans le catalogue** — le corps
+écrit en ligne, ce que contient tout catalogue de thèmes publié jusqu'ici, et toujours leur
+défaut.
+
+Le catalogue de plugins garde son propre éditeur, parce que c'est celui qu'on rouvre pour le
+modifier et que cet écran-ci écrit un fichier puis oublie. Les catalogues de modpacks gardent
+le leur, parce qu'un `.cbmp` **est** déjà un bundle.
+
+## [CORRIGÉ] Un `.mm` perdait trois choses, et aucune ne le disait
+
+- **Les tags arrivaient en identifiants bruts.** Un tag nommé « Liveries » avec une icône
+  s'affichait comme un UUID nu. Les définitions étaient dans le fichier depuis toujours —
+  l'aperçu ne les lisait simplement pas.
+- **Les notes d'installation ne voyageaient jamais.** L'export écrivait une chaîne vide :
+  écrite par l'export, lue par l'import, vide entre les deux.
+- **Un mod arrivait sans provenance.** D'où il vient et comment il se met à jour
+  (`source_repo`, `repo_mod_id`, `update_url`, plus son `id` et son empreinte de contenu)
+  n'étaient pas portés. `update_sources` l'était, ce qui rendait le trou facile à manquer —
+  une liste arrivait avec une partie de son câblage de mise à jour et pas le reste : les mods
+  avaient l'air corrects et ne se mettaient plus jamais à jour.
+
+Tous les `.mm` jamais écrits s'ouvrent encore : les nouveaux champs sont tous optionnels.
+
+## [NOUVEAU] Un catalogue peut porter ce que tu n'as pas installé
+
+- **Modpacks :** le constructeur listait ta bibliothèque et rien d'autre — sans rien
+  d'installé il disait « aucun pack » et s'arrêtait. Donne une adresse, ou passe un fichier
+  `.bmp` qu'on t'a envoyé : il est lu et vérifié au moment où tu le choisis, puis embarqué
+  dans le `.cbmp`. Sa signature est conservée telle quelle — re-signer mettrait ton nom sur
+  le pack de quelqu'un d'autre.
+- **Plugins :** même problème, en pire. L'emballage passait par l'export, qui ne sait exporter
+  qu'un plugin installé : publier pour quelqu'un d'autre voulait dire installer, publier,
+  désinstaller. Passe le `.bmmplug` à la place ; son manifeste remplit l'entrée.
+- **Listes de mods :** l'onglet de création **est** un sélecteur de fichiers — BMM ne garde
+  aucune bibliothèque de `.mm` — et on ne pouvait y répondre qu'une fois. Il y a un bouton
+  pour en ajouter.
 
 ## [SÉCURITÉ] Une automatisation partagée pouvait s'accorder le droit d'exécuter des programmes
 
@@ -593,6 +642,37 @@ BMM dit ce que le fichier demandait. Tout le reste est conservé : l'automatisat
 et à un interrupteur de fonctionner.
 
 ## [AMÉLIORÉ] Le reste
+
+- **Un mod dit d'où il vient.** Le panneau de détail savait dire « depuis un dépôt serveur »
+  et rien d'autre : un mod ajouté à la main, un tiré d'un lien et un arrivé dans la liste de
+  quelqu'un se ressemblaient tous. C'est dérivé des champs que lit l'updater, donc ça ne peut
+  pas revendiquer une provenance qu'il contredit — et un dépôt livré sans sommes de contrôle
+  a sa propre phrase.
+- **Les mises à jour sont une section, pas une entrée de menu.** *Vérifier* et *Configurer*
+  n'existaient que dans le menu ⋮ d'une carte — celui qu'on ouvre pour copier un id — à côté
+  de ce qui met vraiment ce mod à jour, listé plutôt que compté.
+- **Un lien du détail de mod peut atteindre un hôte protégé**, avec le même bloc que tous les
+  écrans de catalogue. C'était le seul endroit de BMM à offrir un champ URL sans moyen de dire
+  que l'adresse demande un mot de passe ou une clé. Les types de lien gagnent dépôt et http(s).
+- **Les catalogues de dépôts suivis sont des lignes.** C'étaient des pastilles où un ● servait
+  d'interrupteur — de la ponctuation faisant le travail d'un contrôle — avec l'adresse, l'état
+  et la provenance repliés dans un seul tooltip. Le constructeur est en deux étapes numérotées
+  au lieu de quatre libellés frères.
+- **Les deux boîtes latérales du lecteur de docs se replient**, et s'en souviennent. Sur une
+  page longue, le sommaire et l'arbre complet dépassent chacun la hauteur de l'écran : le
+  second n'était atteignable qu'en passant par-dessus le premier.
+- **Tout le bord haut de la fenêtre la déplace**, Tasky et la bande à côté de la barre de titre
+  compris. Tasky portait l'attribut de déplacement mais son conteneur laisse passer les clics :
+  ni lui ni l'attribut ne recevaient jamais d'appui.
+- **Un thème lié n'embarque plus ses assets dans l'index.** L'entrée gardait tout sauf `vars`,
+  donc un thème « lié » à une adresse portait quand même ses mégaoctets de base64 dans
+  `catalog.json` et le lien ne servait à rien.
+- **Trois poches de texte non traduit**, toutes invisibles pour le contrôle de parité parce que
+  les clés existaient : l'en-tête du catalogue de thèmes (construit après le passage des
+  traductions, donc son `data-i18n` n'était jamais lu), deux entrées françaises dont la valeur
+  était le texte anglais, et les mots d'état de l'empreinte de contenu. Un balayage des 8150
+  clés n'en a trouvé aucune autre.
+
 
 - **Les includes d'un `.bmmpa` emportent les blocs partagés.** Une étape `call "bloc"` est un
   TYPE d'étape, pas une action : l'exportateur ne la voyait pas, et partager une tâche qui
