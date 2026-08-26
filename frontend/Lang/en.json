@@ -8430,5 +8430,14 @@
   "bmm.enc.errSeal": "The archive could not be sealed",
   "bmm.enc.errKey": "The passphrase could not be turned into a key",
   "bmm.enc.errParams": "The lock settings are not usable",
-  "bmm.enc.errDerive": "The passphrase could not be turned into a key"
+  "bmm.enc.errDerive": "The passphrase could not be turned into a key",
+  "mm.creds.title": "Include credentials for protected sources",
+  "mm.creds.desc": "Off by default. BMM keeps download passwords in memory only — never on disk — because settings end up in backups and crash reports. Putting them in a file you hand to somebody undoes that, so whatever you include here is encrypted with the passphrase below and nothing else in the list is.",
+  "mm.creds.pw": "Download passwords",
+  "mm.creds.keys": "Private identity keys",
+  "mm.creds.passPh": "Passphrase — required, and the only way back in",
+  "mm.creds.hosts": "Concerns: {list}",
+  "mm.creds.noPass": "Credentials need a passphrase — they are encrypted, not merely marked private.",
+  "mm.creds.sessionOnly": "Only passwords entered since BMM started are known — they are never stored.",
+  "mm.creds.errNoPass": "Credentials need a passphrase"
 }

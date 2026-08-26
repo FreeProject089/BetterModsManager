@@ -23,6 +23,16 @@ pub struct ModList {
     /// list from last year must still open.
     #[serde(default)]
     pub tag_defs: Vec<crate::models::tag::TagDef>,
+    /// Credentials for the protected sources this list points at — SEALED.
+    ///
+    /// Only this section is encrypted, never the whole list: a `.mm` is meant to be readable
+    /// by BMM, by BetterCommunity's inspector and by a person deciding whether to trust it,
+    /// and a list nobody can read is a list nobody can check. What is inside is the part that
+    /// must not be readable.
+    ///
+    /// Absent on every list that carries no credentials, which is almost all of them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub credentials: Option<serde_json::Value>,
     /// Modpacks whose mods are ALL in this list.
     ///
     /// A pack referring to a mod the list does not carry would install nine of its twelve
@@ -116,6 +126,7 @@ impl ModList {
             created_at: chrono::Local::now().to_rfc3339(),
             mods: Vec::new(),
             tag_defs: Vec::new(),
+            credentials: None,
             modpacks: Vec::new(),
         }
     }

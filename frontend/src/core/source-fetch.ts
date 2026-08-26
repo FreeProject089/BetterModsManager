@@ -54,6 +54,25 @@ function passwordKey(url: string): string {
     try { const u = new URL(url); return u.origin + u.pathname; } catch { return url.split('?')[0]; }
 }
 
+/**
+ * The passwords this run knows, keyed by origin.
+ *
+ * Exposed for one caller: exporting a mod list that carries credentials for the sources it
+ * names. Keyed by ORIGIN rather than by the origin+path used internally, because what
+ * travels is "the password for this host" — a path from the exporter's machine means
+ * nothing on the machine that opens the list.
+ *
+ * Only what was typed since launch. Nothing is stored, so nothing older can be offered, and
+ * the export screen says so rather than letting somebody assume otherwise.
+ */
+export function knownSourcePasswords(): Record<string, string> {
+    const out: Record<string, string> = {};
+    for (const [key, pw] of Object.entries(_sessionPasswords)) {
+        try { out[new URL(key).origin] = pw; } catch { /* not a URL: not an origin */ }
+    }
+    return out;
+}
+
 /** Remember a password for a source, for this run only. */
 export function rememberSourcePassword(url: string, password: string): void {
     _sessionPasswords[passwordKey(url)] = password;

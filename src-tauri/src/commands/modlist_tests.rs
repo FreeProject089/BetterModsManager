@@ -184,6 +184,50 @@ fn an_entry_written_before_provenance_existed_still_opens() {
     assert!(m.content_id.is_none() && m.source_repo.is_none() && m.update_url.is_none());
 }
 
+/// A list that carries credentials stays READABLE. Only the credentials do not.
+///
+/// This is the whole shape of the feature: a `.mm` is inspected by BMM, by BetterCommunity's
+/// moderation tools and by a person deciding whether to trust it, so sealing the document
+/// would trade one problem for a worse one — a list nobody can check. The secrets are sealed
+/// inside a list that is not.
+#[test]
+fn a_list_with_credentials_is_still_a_readable_list() {
+    let mut list = ModList::new("Shared".into(), "DCS".into(), "C:/DCS".into());
+    let plain = serde_json::json!({
+        "passwords": { "https://repo.example.org": "hunter2" },
+        "keys": [],
+    });
+    let sealed = crate::commands::secret_box::seal(
+        &serde_json::to_vec(&plain).unwrap(), "phrase").unwrap();
+    list.credentials = Some(serde_json::from_slice(&sealed).unwrap());
+
+    let text = serde_json::to_string(&list).unwrap();
+    // The list reads normally...
+    let back: ModList = serde_json::from_str(&text).unwrap();
+    assert_eq!(back.name, "Shared");
+    assert_eq!(back.game_name, "DCS");
+    assert!(back.credentials.is_some());
+    // ...and the password is nowhere in the file.
+    assert!(!text.contains("hunter2"), "the secret must not be readable in the list");
+
+    // It opens with the passphrase, and only with it.
+    let env = serde_json::to_vec(back.credentials.as_ref().unwrap()).unwrap();
+    let opened = crate::commands::secret_box::open(&env, "phrase").unwrap();
+    let doc: serde_json::Value = serde_json::from_slice(&opened).unwrap();
+    assert_eq!(doc["passwords"]["https://repo.example.org"], "hunter2");
+    assert!(crate::commands::secret_box::open(&env, "wrong").is_err());
+}
+
+/// A list carrying nothing must not GROW a credentials field. Every `.mm` ever written is
+/// one of these, and an empty section in all of them is noise in every diff and one more
+/// thing a reader has to decide is not a warning.
+#[test]
+fn a_list_without_credentials_writes_no_such_field() {
+    let list = ModList::new("Plain".into(), "DCS".into(), "".into());
+    let text = serde_json::to_string(&list).unwrap();
+    assert!(!text.contains("credentials"), "absent, not null");
+}
+
 #[test]
 fn dependencies_travel_as_names() {
     // An id from somebody else's install resolves to nothing here, so the importer would

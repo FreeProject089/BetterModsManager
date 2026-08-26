@@ -19,6 +19,27 @@ let lastImportedModlistJson = null;
 import { toast, toastSaved } from '../../ui/app.js';
 
 
+/**
+ * The origins the mods in the ACTIVE profile update from.
+ *
+ * What the export is about to write, read the same way the exporter reads it: source_repo,
+ * a per-mod update address, and each extra update source. A host the list does not mention
+ * has no business having its password carried in that list.
+ */
+function exportOrigins(): string[] {
+    const out = new Set<string>();
+    const add = (u: unknown) => {
+        if (typeof u !== 'string' || !u) return;
+        try { out.add(new URL(u).origin); } catch { /* not an address */ }
+    };
+    for (const m of (appState.get('allMods') as any[]) || []) {
+        add(m?.source_repo);
+        add(m?.update_url);
+        for (const s of m?.update_sources || []) add(s?.url);
+    }
+    return [...out];
+}
+
 export function initModlist() {
     const exportBtn = document.getElementById('btn-export-mm');
     const importBtn = document.getElementById('btn-import-mm');
@@ -49,11 +70,47 @@ export function initModlist() {
 
     const abortExportBtn = document.getElementById('btn-abort-export');
 
+    // The hosts this list would carry credentials FOR, named before anything is ticked.
+    //
+    // "Include download passwords" with nothing else on screen is a decision made blind:
+    // whether it is safe depends entirely on WHICH hosts, and that is knowable here.
+    const credsFold = document.getElementById('mm-creds');
+    credsFold?.addEventListener('toggle', () => {
+        const hostsEl = document.getElementById('mm-creds-hosts');
+        if (!hostsEl || !(credsFold as HTMLDetailsElement).open) return;
+        const origins = exportOrigins();
+        hostsEl.textContent = origins.length
+            ? t('mm.creds.hosts').replace('{list}', origins.map((o) => {
+                try { return new URL(o).host; } catch { return o; }
+            }).join(', ')) + ' — ' + t('mm.creds.sessionOnly')
+            : t('mm.creds.sessionOnly');
+    });
+
     confirmExportBtn.addEventListener('click', async () => {
         const listName = document.getElementById('mm-list-name').value.trim() || 'Ma liste';
         const description = document.getElementById('mm-description').value.trim();
         const author = document.getElementById('mm-author').value.trim();
         const includeHashes = (document.getElementById('mm-include-hashes') as HTMLInputElement)?.checked ?? true;
+
+        // ── Credentials, if they were asked for ──────────────────────────────
+        const wantPw = (document.getElementById('mm-creds-pw') as HTMLInputElement | null)?.checked ?? false;
+        const wantKeys = (document.getElementById('mm-creds-keys') as HTMLInputElement | null)?.checked ?? false;
+        const credsPass = (document.getElementById('mm-creds-pass') as HTMLInputElement | null)?.value || '';
+        let creds: unknown = null;
+        if (wantPw || wantKeys) {
+            // Refused here as well as in Rust. Failing at the far end after the export has
+            // walked every mod costs minutes for a mistake visible before it started.
+            if (!credsPass) { toast(t('mm.creds.noPass'), 'warning', 8000); return; }
+            const { knownSourcePasswords } = await import('../../core/source-fetch.js');
+            // Only the hosts THIS list points at. Handing over every password the session
+            // happens to hold would be exporting credentials for sources the list does not
+            // even mention.
+            const wanted = new Set(exportOrigins());
+            const all = wantPw ? knownSourcePasswords() : {};
+            const passwords: Record<string, string> = {};
+            for (const [origin, pw] of Object.entries(all)) if (wanted.has(origin)) passwords[origin] = pw;
+            creds = { passwords, includeKeys: wantKeys, passphrase: credsPass };
+        }
 
         // Named after the list, not "modlist.mm". Somebody who typed "DCS Cold War" and then
         // saved three of these had three files called modlist.mm to tell apart.
@@ -108,7 +165,7 @@ export function initModlist() {
                 if (progressLabel) progressLabel.textContent = done ? '' : (mod_name || '');
             });
 
-            await invoke('export_modlist', { listName, description, author, outputPath: path, includeHashes });
+            await invoke('export_modlist', { listName, description, author, outputPath: path, includeHashes, creds });
 
             if (wasCancelled) {
                 toast(t('mm.exportCancelled') || 'Export annulé', 'info');

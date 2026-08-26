@@ -8428,5 +8428,14 @@
   "bmm.enc.errSeal": "L’archive n’a pas pu être scellée",
   "bmm.enc.errKey": "La phrase secrète n’a pas pu être transformée en clé",
   "bmm.enc.errParams": "Les réglages du verrou sont inutilisables",
-  "bmm.enc.errDerive": "La phrase secrète n’a pas pu être transformée en clé"
+  "bmm.enc.errDerive": "La phrase secrète n’a pas pu être transformée en clé",
+  "mm.creds.title": "Inclure les identifiants des sources protégées",
+  "mm.creds.desc": "Décoché par défaut. BMM garde les mots de passe de téléchargement en mémoire seulement — jamais sur disque — parce que les réglages finissent dans les sauvegardes et les rapports de crash. Les mettre dans un fichier que tu donnes à quelqu’un annule ça : ce que tu inclus ici est donc chiffré avec la phrase ci-dessous, et rien d’autre dans la liste ne l’est.",
+  "mm.creds.pw": "Mots de passe de téléchargement",
+  "mm.creds.keys": "Clés d’identité privées",
+  "mm.creds.passPh": "Phrase secrète — obligatoire, et seul moyen d’y revenir",
+  "mm.creds.hosts": "Concerne : {list}",
+  "mm.creds.noPass": "Les identifiants exigent une phrase secrète — ils sont chiffrés, pas seulement marqués privés.",
+  "mm.creds.sessionOnly": "Seuls les mots de passe saisis depuis le lancement de BMM sont connus — ils ne sont jamais stockés.",
+  "mm.creds.errNoPass": "Les identifiants exigent une phrase secrète"
 }

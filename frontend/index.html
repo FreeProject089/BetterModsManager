@@ -1157,6 +1157,31 @@
                             <span id="mm-hashes-badge"
                                 style="font-size:9px;font-weight:800;padding:2px 7px;border-radius:4px;background:rgba(16,185,129,0.12);color:var(--bmm-success);border:1px solid rgba(16,185,129,0.25)">SHA-256</span>
                         </div>
+                        <!-- Credentials for the sources this list points at.
+                             Off, both of them, and separately: a mod list is a file people
+                             pass to strangers, and BMM keeps download passwords in memory
+                             ONLY — never on disk — precisely because settings end up in
+                             backups and crash reports. Putting them in a shared document
+                             undoes that on purpose, so it has to be asked for on purpose.
+                             Whatever is included is SEALED with the passphrase below; a list
+                             carrying secrets in the clear is a leak by construction. -->
+                        <details class="mm-creds" id="mm-creds">
+                            <summary data-i18n="mm.creds.title">Include credentials for protected sources</summary>
+                            <p class="mm-creds-note" data-i18n="mm.creds.desc">...</p>
+                            <label class="mm-creds-row">
+                                <input type="checkbox" id="mm-creds-pw">
+                                <span data-i18n="mm.creds.pw">Download passwords</span>
+                            </label>
+                            <label class="mm-creds-row">
+                                <input type="checkbox" id="mm-creds-keys">
+                                <span data-i18n="mm.creds.keys">Private identity keys</span>
+                            </label>
+                            <input type="password" class="input input-sm" id="mm-creds-pass"
+                                   autocomplete="new-password"
+                                   data-i18n-placeholder="mm.creds.passPh" placeholder="Passphrase">
+                            <p class="mm-creds-note" id="mm-creds-hosts"></p>
+                        </details>
+
                         <div class="form-actions">
                             <button class="btn btn-ghost" id="btn-cancel-export" data-i18n="prof.cancel">Cancel</button>
                             <button class="btn btn-primary" id="btn-confirm-export"
