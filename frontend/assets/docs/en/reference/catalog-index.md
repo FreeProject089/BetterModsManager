@@ -165,3 +165,59 @@ Two things worth knowing about that feed specifically: BetterCommunity's own ent
 no `items`, `updatedAt` or `sha256` — those appear on community entries only — and a feed
 is listed only when something is actually published in it, because an index entry leading
 to an empty document teaches people to stop trusting the index.
+
+
+## Following a catalogue from outside the app
+
+The source lists live in the interface's own storage, which is the right place for them and
+a place nothing else can read. Until recently that had a consequence: the whole catalogue
+subsystem could be driven by clicking, and by no other means.
+
+### Reading — a mirror
+
+BMM pushes the whole map of what it follows after any change, and the API, the CLI and the
+MCP tools read that copy.
+
+```bash
+bmm catalogs
+```
+
+```json
+{ "sources": { "theme": ["https://example.org/themes/catalog.json"], "plugin": [] },
+  "written_at": "2026-08-26T10:14:00Z" }
+```
+
+!!! note "`written_at` is the part that matters"
+
+    **No** `written_at` means BMM has not pushed since this existed. That is not the same
+    fact as following nothing, and only one of the two is worth investigating — so the CLI
+    prints a different sentence for each.
+
+### Writing — through the app
+
+```
+bmm://catalog/follow?type=theme&url=https://example.org/themes/catalog.json
+bmm://catalog/unfollow?type=theme&url=…
+```
+
+```bash
+bmm follow --type theme https://example.org/themes/catalog.json
+bmm follow --type theme https://example.org/themes/catalog.json --off
+```
+
+`POST /api/catalogs` (`catalog.write`) takes `{ type, url, follow }`, and the MCP tools are
+`bmm_list_catalogs` and `bmm_follow_catalog`.
+
+!!! warning "It answers `202`, not `200`"
+
+    The write is driven through the app's own screens, so the reply means *the app was
+    told* — not *the list now says this*. That is deliberate: a mirror that could be written
+    from outside and then read back by the app would be a second writer, and the two would
+    disagree the first time both changed.
+
+    Going through the screens is also what makes the source appear in the following list
+    with an origin, and removable by the same button that removes the others.
+
+`type` is one of `app` · `plugin` · `theme` · `preset` · `modpack` · `repo` · `tutorial` ·
+`list`. `app` is the exception whose sources live in the backend rather than the interface;
+it is handled, and it is the only one.

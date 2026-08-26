@@ -172,3 +172,61 @@ disque — il est donc demandé une fois par session, pas à chaque lecture.
 C'est le mécanisme qu'utilise déjà un Dépôt Serveur protégé (`X-Repo-Password`, ou
 `?password=` pour un navigateur), ce qui explique que rien n'ait changé dans la façon de
 s'abonner.
+
+
+## Suivre un catalogue depuis l'extérieur de l'app
+
+Les listes de sources vivent dans le stockage de l'interface, ce qui est le bon endroit pour
+elles et un endroit que rien d'autre ne peut lire. Jusqu'à récemment ça avait une
+conséquence : tout le sous-système des catalogues se pilotait à la souris, et par aucun
+autre moyen.
+
+### Lire — un miroir
+
+BMM pousse toute la carte de ce qu'il suit après chaque changement, et l'API, la CLI et les
+outils MCP lisent cette copie.
+
+```bash
+bmm catalogs
+```
+
+```json
+{ "sources": { "theme": ["https://example.org/themes/catalog.json"], "plugin": [] },
+  "written_at": "2026-08-26T10:14:00Z" }
+```
+
+!!! note "`written_at` est la partie qui compte"
+
+    **Pas** de `written_at` signifie que BMM n'a rien poussé depuis que ça existe. Ce n'est
+    pas le même fait que « ne suivre aucun catalogue », et un seul des deux mérite qu'on
+    aille voir — la CLI affiche donc une phrase différente pour chacun.
+
+### Écrire — en passant par l'app
+
+```
+bmm://catalog/follow?type=theme&url=https://example.org/themes/catalog.json
+bmm://catalog/unfollow?type=theme&url=…
+```
+
+```bash
+bmm follow --type theme https://example.org/themes/catalog.json
+bmm follow --type theme https://example.org/themes/catalog.json --off
+```
+
+`POST /api/catalogs` (`catalog.write`) prend `{ type, url, follow }`, et les outils MCP sont
+`bmm_list_catalogs` et `bmm_follow_catalog`.
+
+!!! warning "Ça répond `202`, pas `200`"
+
+    L'écriture passe par les écrans de l'app : la réponse veut dire *l'app a été prévenue*,
+    pas *la liste dit maintenant ceci*. C'est voulu — un miroir qui pourrait être écrit de
+    l'extérieur puis relu par l'app serait un second écrivain, et les deux seraient en
+    désaccord dès que les deux changeraient.
+
+    Passer par les écrans est aussi ce qui fait apparaître la source dans la liste des
+    catalogues suivis, avec son origine, et la rend retirable par le même bouton que les
+    autres.
+
+`type` vaut `app` · `plugin` · `theme` · `preset` · `modpack` · `repo` · `tutorial` ·
+`list`. `app` est l'exception dont les sources vivent côté backend plutôt que dans
+l'interface ; c'est traité, et c'est la seule.
