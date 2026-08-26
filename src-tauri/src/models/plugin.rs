@@ -59,6 +59,29 @@ pub struct PluginManifest {
     /// or "both".
     #[serde(default = "default_apply_mode")]
     pub apply_mode: String,
+    /// The files shipped under `assets/` — a README, a config template, a sample list, a
+    /// tool. Not code and not installed anywhere: they sit in the plugin to be read, copied
+    /// out, or handed to an automation.
+    ///
+    /// This is a DECLARATION, written from what is on disk when the plugin is packed. The
+    /// installed copy reads the folder rather than this, because a manifest can be edited
+    /// and a folder cannot lie about what is in it. It exists so a reader who has only the
+    /// manifest — BetterCommunity's inspector, a moderation queue, a catalogue entry — can
+    /// still see that a plugin ships a script.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub assets: Vec<PluginAssetRef>,
+}
+
+/// One shipped file, as the manifest names it.
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct PluginAssetRef {
+    /// Relative to `assets/`, forward slashes.
+    pub path: String,
+    /// `doc` · `script` · `image` · `data` · `archive` · `other`.
+    #[serde(default)]
+    pub kind: String,
+    #[serde(default)]
+    pub size: u64,
 }
 
 fn default_apply_mode() -> String { "modlist".to_string() }

@@ -18702,3 +18702,37 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
 .rx-group-title { margin: 0; font-size: 10px; font-weight: 800; text-transform: uppercase;
     letter-spacing: .06em; color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
 .rx-group-title span { font-family: var(--font-mono); font-weight: 600; opacity: .7; }
+
+/* The files a plugin ships. Two panes: what is in the folder, and whatever you clicked.
+   A fixed-width list beside a 1fr view needs min-width:0 on the view, or a long line in a
+   README pushes the whole modal past the window instead of wrapping. */
+.pa-modal { max-width: 860px; width: 94vw; }
+.pa-lede { margin: 0 0 10px; font-size: 11px; color: var(--text-muted); line-height: 1.5; }
+.pa-body { display: grid; grid-template-columns: minmax(180px, 260px) 1fr; gap: 12px;
+    max-height: 56vh; }
+.pa-list { display: flex; flex-direction: column; gap: 3px; overflow-y: auto; padding-right: 4px; }
+.pa-row { display: flex; align-items: center; gap: 7px; width: 100%; text-align: left;
+    padding: 6px 8px; border: 1px solid transparent; border-radius: 6px; cursor: pointer;
+    background: none; color: var(--text-secondary); font-size: 11px; }
+.pa-row:hover { background: var(--bg-hover); }
+.pa-row.is-on { background: var(--bg-card); border-color: var(--accent); color: var(--text-primary); }
+.pa-row-icon { flex: 0 0 auto; display: flex; opacity: .75; }
+.pa-row-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; font-family: var(--font-mono); }
+.pa-row-meta { flex: 0 0 auto; font-size: 9px; color: var(--text-muted); font-family: var(--font-mono); }
+/* A shipped script is not a problem and it is also not a README. Marked so nobody scrolling
+   eleven files has to read extensions to notice there is a program in the list. */
+.pa-row-tag { flex: 0 0 auto; font-size: 8px; font-weight: 800; text-transform: uppercase;
+    letter-spacing: .05em; padding: 1px 5px; border-radius: 3px;
+    background: var(--warning-dim); color: var(--warning); }
+.pa-view { min-width: 0; overflow: auto; border: 1px solid var(--border); border-radius: 8px;
+    padding: 12px 14px; background: var(--bg-card); }
+.pa-hint { margin: 0; font-size: 11px; color: var(--text-muted); }
+.pa-pre { margin: 0; font-family: var(--font-mono); font-size: 10.5px; line-height: 1.55;
+    white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-primary); }
+.pa-doc { font-size: 12px; line-height: 1.6; color: var(--text-primary); }
+.pa-doc h1, .pa-doc h2, .pa-doc h3 { margin: 14px 0 6px; font-size: 13px; }
+.pa-doc h1:first-child { margin-top: 0; }
+.pa-doc pre { overflow-x: auto; }
+.pa-img { max-width: 100%; height: auto; border-radius: 6px; display: block; }
+.pa-count { font-size: 10px; color: var(--text-muted); font-family: var(--font-mono); margin-right: auto; }

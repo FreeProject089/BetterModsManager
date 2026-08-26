@@ -2065,6 +2065,18 @@ pub async fn export_plugin(
     let plugin_dir = PathBuf::from(&plugin.install_dir);
     let dest = PathBuf::from(&dest_path);
 
+    // The manifest's asset list is rewritten from the folder before packing.
+    //
+    // Written rather than trusted, so the declaration cannot drift from what ships: an
+    // author who adds a README and forgets to edit plugin.json would otherwise publish a
+    // plugin whose file list is a lie — and the reader most affected is the moderation queue,
+    // which has only the manifest to go on.
+    let mut plugin = plugin;
+    plugin.manifest.assets = crate::commands::plugin_assets::list_dir(&plugin_dir.join("assets"))
+        .into_iter()
+        .map(|a| crate::models::plugin::PluginAssetRef { path: a.path, kind: a.kind, size: a.size })
+        .collect();
+
     // Every entry is collected FIRST, so the signature can cover the whole archive: a
     // plugin's scripts sit beside its manifest, and vouching only for the manifest would say
     // "this plugin is intact" while the code next to it could be swapped.
@@ -2077,8 +2089,15 @@ pub async fn export_plugin(
             if path.is_file() {
                 let rel = path.strip_prefix(&plugin_dir).map_err(|e| e.to_string())?;
                 let rel_str = rel.to_string_lossy().replace(char::from(92), "/");
+                // The manifest ON DISK is the one that ships, so the refreshed asset list
+                // is written into it here rather than only into the in-memory copy — which
+                // is used solely by the fallback below and would have left every real
+                // export declaring nothing.
                 if rel_str == "plugin.json" {
                     has_manifest = true;
+                    let data = serde_json::to_vec_pretty(&plugin.manifest).map_err(|e| e.to_string())?;
+                    entries.push((format!("{}/{}", plugin_id, rel_str), data));
+                    continue;
                 }
                 let data = std::fs::read(path).map_err(|e| e.to_string())?;
                 entries.push((format!("{}/{}", plugin_id, rel_str), data));

@@ -467,6 +467,12 @@
       "label": "DCS: set up (or remove) the server watcher",
       "needs": "dcsHook",
       "group": "apps"
+    },
+    {
+      "type": "plugin.asset",
+      "label": "Use a file a plugin ships",
+      "needs": "pluginAsset",
+      "group": "mods"
     }
   ]
 }

@@ -114,3 +114,75 @@ place, generated against the code:
 
 Both are worth skimming once even if you never write a plugin: they are the clearest inventory
 of what BMM can be made to do.
+
+
+## Files a plugin ships — `assets/`
+
+A plugin could already carry two kinds of extra: **scripts**, declared so they can be run,
+and **`bundle/`** folders, copied into the game. Everything else an author actually hands
+people — a README, a config template, a sample `.mm`, a spreadsheet of codes, a small tool —
+had nowhere to go. It went in a Discord message.
+
+Put it in `assets/` inside the plugin:
+
+```
+my-plugin/
+  plugin.json
+  assets/
+    README.md
+    setup.ps1
+    docs/codes.csv
+```
+
+The paperclip on the plugin's card opens it. A README opens by itself; other documents,
+`.json`, `.csv` and scripts are shown as text; images are shown; anything else offers
+**Save a copy…**.
+
+!!! note "The folder is the truth, not the manifest"
+
+    `plugin.json` gains an `assets` list, and it is **written from disk when the plugin is
+    packed** — an author who adds a README and forgets to edit the manifest would otherwise
+    publish a file list that is a lie.
+
+    The installed copy still reads the folder. A plugin whose manifest names a file that is
+    not there shows nothing rather than an entry that fails to open, and one carrying a file
+    its manifest never mentioned still shows it — which is the case that matters, because a
+    surprise file is the one somebody should see.
+
+    The declaration exists for readers who have only the manifest: BetterCommunity's
+    inspector, a moderation queue, a catalogue entry. Paste a `plugin.json` into **Inspect a
+    BMM file** and it now lists what the plugin ships, and names any script among them.
+
+!!! warning "Nothing in `assets/` runs on its own"
+
+    A script asset is listed, marked as a script, and its **folder** opens — never the file,
+    because opening a `.ps1` hands it to whatever the OS runs `.ps1` with, and that is not
+    what "show me this" means.
+
+    Running one is a scheduled task's decision, below.
+
+### From an automation
+
+The **Use a file a plugin ships** action (`plugin.asset`) has four modes.
+
+| Mode | What it does |
+|---|---|
+| **Read it into a variable** | The whole file, as text, into `{text.<name>}`. |
+| **Copy it somewhere** | Into a folder you pick. Never overwrites — a name already taken becomes `name (2).ext`. |
+| **Open its folder** | The folder, not the file. |
+| **Run it (script)** | Read, and handed to PowerShell / cmd / bash / Python. |
+
+**Read** is the one worth reaching for. A plugin ships the list of squadron codes, or the
+config template, or the server address — and the task reads it from the plugin instead of
+that value being typed into the task, where it drifts the first time the plugin updates.
+
+!!! danger "Run needs the task's own script permission"
+
+    Not the plugin's, and not a setting about plugins: the **task's**. Whether *this
+    automation* may run programs is a question you answered once, in writing, on the task —
+    and that answer governs a shipped script exactly as it governs a typed one. Without it
+    the step refuses out loud rather than skipping, because a silent skip would look like the
+    plugin shipping a broken file.
+
+    The engine comes from the extension unless you say otherwise. Nobody ships `setup.ps1`
+    and means "run this with Python".

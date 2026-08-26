@@ -2,7 +2,7 @@
 
 !!! info ""
 
-    78 actions · 30 conditions · 15 valeurs · 8 sources de boucle
+    79 actions · 30 conditions · 15 valeurs · 8 sources de boucle
 
 > Généré depuis le registre de BMM lui-même, donc cette page ne peut pas décrire une version de l'application qui n'existe pas. Si une action est dans l'éditeur de blocs, elle est dans cette liste.
 
@@ -36,6 +36,7 @@ S'écrit `do <nom>(param: valeur, …)`. Une action sans paramètre prend des pa
 | `mods.clearHistory` | Vide la liste d’historique des mods. Les mods eux-mêmes ne sont pas touchés. | `id` |
 | `mods.exportModpack` | Écrit le profil actif sous forme de modpack partageable. | `id` · `dir` |
 | `modlist.apply` | Installe ce que la liste nomme et qui manque, puis active exactement ceux-là. | `path` · `url` · `install` · `exact` · `passphrase` |
+| `plugin.asset` | En lire un dans une variable, le copier quelque part, ouvrir son dossier, ou l'exécuter. | `pluginId` · `path` · `mode` · `target` · `dir` · `engine` · `workingDir` |
 
 ### Repo & partage
 

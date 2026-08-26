@@ -1207,6 +1207,19 @@ function _captureOutput(p: Record<string, any>, out: any, ctx: RunCtx): void {
 }
 
 
+/**
+ * Which engine runs a shipped script, from its extension.
+ *
+ * The action has a field for it, and leaving that field blank has to do the right thing:
+ * nobody ships `setup.ps1` and means "run this with Python". PowerShell is the fallback
+ * because this is a Windows app and it is what `custom.script` already defaults to.
+ */
+function engineFor(path: string): string {
+    const ext = (path.split('.').pop() || '').toLowerCase();
+    return ({ ps1: 'powershell', bat: 'cmd', cmd: 'cmd', sh: 'bash', py: 'python' } as Record<string, string>)[ext]
+        || 'powershell';
+}
+
 async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Promise<void> {
     // Substituted once, here, so every action sees resolved parameters without each case
     // having to remember to ask. `action.params` itself is left alone — it is the saved
@@ -1552,6 +1565,62 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
                     .replace('{n}', String(r.missing.length))} — ${r.missing.slice(0, 6).join(', ')}`,
                     'warning', 12000);
             }
+            break;
+        }
+
+        // One of a plugin's shipped files: read it, copy it out, or run it.
+        //
+        // `run` is the only mode that is gated, and it is gated by the TASK's own script
+        // permission rather than by anything about the plugin. A shipped script is a program
+        // somebody else wrote; whether this automation may run programs is a question the
+        // user answered once, in writing, on the task — and that answer governs here too.
+        case 'plugin.asset': {
+            const pluginId = String(p.pluginId || '');
+            const assetPath = String(p.path || '');
+            if (!pluginId || !assetPath) { toast(`${task.name}: ${t('sched.pa.nothing')}`, 'warning', 8000); break; }
+            const mode = String(p.mode || 'read');
+
+            if (mode === 'read') {
+                const target = String(p.target || 'asset').trim() || 'asset';
+                const text = String(await invoke('plugin_asset_read', { pluginId, path: assetPath }));
+                ctx.text[target] = text;
+                const n = Number(text.trim());
+                if (text.trim() !== '' && Number.isFinite(n)) ctx.nums[target] = n;
+                break;
+            }
+
+            if (mode === 'copy') {
+                const dir = String(p.dir || '');
+                if (!dir) { toast(`${task.name}: ${t('sched.pa.noDir')}`, 'warning', 8000); break; }
+                const where = await invoke('plugin_asset_export', { pluginId, path: assetPath, destDir: dir }) as string;
+                toast(`${task.name}: ${t('sched.pa.copied').replace('{f}', String(where).replace(/^.*[/\\]/, ''))}`, 'success', 7000);
+                break;
+            }
+
+            if (mode === 'run') {
+                // The task's OWN script permission, through the same helper `custom.script`
+                // uses — so this refuses in the same words, and there is one place that
+                // decides whether an automation may run programs.
+                requirePerm(task, 'script', t('sched.permRunScript') || 'run scripts');
+                // Read and handed to the engine as code, exactly as a typed script is. The
+                // alternative — launching the file by path — would mean the OS choosing what
+                // runs a .ps1, which is a different decision made by a different party.
+                const code = String(await invoke('plugin_asset_read', { pluginId, path: assetPath }));
+                const out = await invoke('run_scheduled_script', {
+                    engine: String(p.engine || engineFor(assetPath)),
+                    code,
+                    workingDir: p.workingDir || null,
+                    allow: true,
+                });
+                _captureOutput(p, out, ctx);
+                toast(`${task.name}: ${t('sched.pa.ran').replace('{f}', assetPath)}`, 'success', 7000);
+                break;
+            }
+
+            // `open` — the folder, not the file. Handing a .ps1 to the shell is `run`, and
+            // the difference between the two must not be which button somebody clicked.
+            const full = await invoke('plugin_asset_path', { pluginId, path: assetPath }) as string;
+            await invoke('open_folder', { path: full.replace(/[/\\][^/\\]*$/, '') });
             break;
         }
 
@@ -4583,6 +4652,10 @@ const ACTION_TYPES: { v: string; label: string; needs?: string; group: string }[
     { v: 'text.extract', label: 'Read a value out of a file or a variable', needs: 'textExtract', group: 'logic' },
     { v: 'modlist.apply', label: 'Apply a mod list (install what is missing)', needs: 'listApply', group: 'mods' },
     { v: 'dcs.hook', label: 'DCS: set up (or remove) the server watcher', needs: 'dcsHook', group: 'apps' },
+    // A plugin's shipped files, usable by an automation. The point is the `read` mode: a
+    // plugin ships a config template or a list of codes, and a task reads it into a variable
+    // instead of that value being typed into the task and drifting from the plugin.
+    { v: 'plugin.asset', label: 'Use a file a plugin ships', needs: 'pluginAsset', group: 'mods' },
 ];
 
 function actionEditor(action: Action, onStructureChange?: () => void): HTMLElement {
@@ -4867,6 +4940,99 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
     // Reuses .sched-p-varname / .sched-p-varvalue because the generic wiring at the end of
     // this function already maps them to params.name / params.value — which is exactly what
     // list.set, list.push and list.clear read.
+    else if (needs === 'pluginAsset') {
+        host.innerHTML = `<div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${escHtml(t('sched.pa.plugin') || '1. Plugin')}</label>
+            <select class="input sched-p-paplugin"><option value="">—</option></select>
+            <label class="sched-cmd-label">${escHtml(t('sched.pa.file') || '2. File it ships')}</label>
+            <select class="input sched-p-pafile"><option value="">—</option></select>
+            <label class="sched-cmd-label">${escHtml(t('sched.pa.mode') || '3. What to do with it')}</label>
+            <select class="input sched-p-pamode" style="max-width:260px">
+                <option value="read"${(params.mode || 'read') === 'read' ? ' selected' : ''}>${escHtml(t('sched.pa.modeRead'))}</option>
+                <option value="copy"${params.mode === 'copy' ? ' selected' : ''}>${escHtml(t('sched.pa.modeCopy'))}</option>
+                <option value="open"${params.mode === 'open' ? ' selected' : ''}>${escHtml(t('sched.pa.modeOpen'))}</option>
+                <option value="run"${params.mode === 'run' ? ' selected' : ''}>${escHtml(t('sched.pa.modeRun'))}</option>
+            </select>
+            <div class="sched-pa-extra"></div>
+        </div>`;
+
+        // The two lists come from what is actually installed, not from what the task
+        // remembers. A plugin uninstalled since the task was written must show as missing
+        // here rather than as a name that looks fine and fails at four in the morning.
+        void (async () => {
+            const plugins = await (invoke('get_installed_plugins') as Promise<any[]>).catch(() => []);
+            const psel = host.querySelector('.sched-p-paplugin') as HTMLSelectElement | null;
+            const fsel = host.querySelector('.sched-p-pafile') as HTMLSelectElement | null;
+            if (!psel || !fsel) return;
+
+            const chosen = String(params.pluginId || '');
+            const known = plugins.some((pl: any) => pl?.manifest?.id === chosen);
+            psel.innerHTML = `<option value="">—</option>`
+                + plugins.map((pl: any) => {
+                    const id = String(pl?.manifest?.id || '');
+                    return `<option value="${escAttr(id)}"${id === chosen ? ' selected' : ''}>${escHtml(pl?.manifest?.name || id)}</option>`;
+                }).join('')
+                // Named as gone rather than silently dropped: the task still holds the id,
+                // and a blank dropdown would look like nothing had ever been chosen.
+                + (chosen && !known ? `<option value="${escAttr(chosen)}" selected>${escHtml(t('sched.pa.missing').replace('{p}', chosen))}</option>` : '');
+
+            const fillFiles = async () => {
+                const id = psel.value;
+                const files = id
+                    ? await (invoke('plugin_assets_list', { pluginId: id }) as Promise<any[]>).catch(() => [])
+                    : [];
+                const cur = String(params.path || '');
+                fsel.innerHTML = files.length
+                    ? files.map((a: any) => `<option value="${escAttr(a.path)}"${a.path === cur ? ' selected' : ''}>${escHtml(a.path)}${a.kind === 'script' ? '  • ' + escHtml(t('plugins.assets.kindScript')) : ''}</option>`).join('')
+                    : `<option value="">${escHtml(t('sched.pa.noFiles'))}</option>`;
+                if (files.length && !files.some((a: any) => a.path === cur)) params.path = files[0].path;
+            };
+            psel.addEventListener('change', () => { params.pluginId = psel.value; params.path = ''; void fillFiles(); });
+            fsel.addEventListener('change', () => { params.path = fsel.value; });
+            await fillFiles();
+        })();
+
+        // The mode decides which extra field is needed, so it is drawn per mode rather than
+        // showing a "folder" box to somebody who chose "read".
+        const extra = host.querySelector('.sched-pa-extra') as HTMLElement;
+        const paintExtra = () => {
+            const mode = (host.querySelector('.sched-p-pamode') as HTMLSelectElement).value;
+            if (mode === 'read') {
+                extra.innerHTML = `<label class="sched-cmd-label">${escHtml(t('sched.pa.target') || 'Keep it as')}</label>
+                    <input class="input sched-p-patarget" spellcheck="false" style="max-width:220px"
+                        placeholder="asset" value="${escAttr(params.target || '')}">
+                    <span class="sched-cmd-hint">${escHtml(t('sched.pa.readHint') || '')}</span>`;
+                extra.querySelector('.sched-p-patarget')?.addEventListener('input', (e) => {
+                    params.target = (e.target as HTMLInputElement).value;
+                });
+            } else if (mode === 'copy') {
+                extra.innerHTML = `<label class="sched-cmd-label">${escHtml(t('sched.pa.dir') || 'Copy it into')}</label>
+                    <div style="display:flex;gap:6px">
+                        <input class="input sched-p-padir" spellcheck="false" style="flex:1" value="${escAttr(params.dir || '')}">
+                        <button type="button" class="btn btn-xs btn-ghost sched-browse-padir">${escHtml(t('common.browse') || 'Browse')}</button>
+                    </div>`;
+                extra.querySelector('.sched-p-padir')?.addEventListener('input', (e) => {
+                    params.dir = (e.target as HTMLInputElement).value;
+                });
+                extra.querySelector('.sched-browse-padir')?.addEventListener('click', async () => {
+                    const { pickFolder } = await import('../../core/api.js');
+                    const d = await pickFolder().catch(() => null);
+                    if (!d) return;
+                    params.dir = d;
+                    (extra.querySelector('.sched-p-padir') as HTMLInputElement).value = String(d);
+                });
+            } else if (mode === 'run') {
+                extra.innerHTML = `<span class="sched-cmd-hint">${escHtml(t('sched.pa.runHint') || '')}</span>`;
+            } else {
+                extra.innerHTML = `<span class="sched-cmd-hint">${escHtml(t('sched.pa.openHint') || '')}</span>`;
+            }
+        };
+        host.querySelector('.sched-p-pamode')?.addEventListener('change', (e) => {
+            params.mode = (e.target as HTMLSelectElement).value;
+            paintExtra();
+        });
+        paintExtra();
+    }
     else if (needs === 'textExtract') {
         // Two sources, one field each, and only one is used — whichever is filled in. A
         // radio to choose between them would be a third control for a decision the two

@@ -2,7 +2,7 @@
 
 !!! info ""
 
-    78 actions · 30 conditions · 15 values · 8 loop sources
+    79 actions · 30 conditions · 15 values · 8 loop sources
 
 > Generated from BMM's own registry, so it cannot describe a version of the app that does not exist. If an action is in the block editor, it is in this list.
 
@@ -36,6 +36,7 @@ Written `do <name>(param: value, …)`. An action with no parameters takes empty
 | `mods.clearHistory` | Empties the mod history list. The mods themselves are untouched. | `id` |
 | `mods.exportModpack` | Writes the active profile out as a shareable modpack. | `id` · `dir` |
 | `modlist.apply` | Installs anything the list names that is not here, then turns exactly those on. | `path` · `url` · `install` · `exact` · `passphrase` |
+| `plugin.asset` | Read one into a variable, copy it somewhere, open its folder, or run it. | `pluginId` · `path` · `mode` · `target` · `dir` · `engine` · `workingDir` |
 
 ### Repo & sharing
 

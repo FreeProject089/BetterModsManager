@@ -122,3 +122,78 @@ même endroit, généré à partir du code :
 
 Les deux valent un coup d'œil même si tu n'écris jamais de plugin : c'est l'inventaire le plus
 clair de ce qu'on peut faire faire à BMM.
+
+
+## Fichiers livrés par un plugin — `assets/`
+
+Un plugin pouvait déjà transporter deux sortes de suppléments : des **scripts**, déclarés
+pour pouvoir être exécutés, et des dossiers **`bundle/`**, copiés dans le jeu. Tout le
+reste de ce qu'un auteur donne vraiment aux gens — un README, un modèle de config, un `.mm`
+d'exemple, un tableau de codes, un petit outil — n'avait nulle part où aller. Ça finissait
+dans un message Discord.
+
+Mets-le dans `assets/`, dans le plugin :
+
+```
+mon-plugin/
+  plugin.json
+  assets/
+    README.md
+    setup.ps1
+    docs/codes.csv
+```
+
+Le trombone sur la carte du plugin l'ouvre. Un README s'ouvre tout seul ; les autres
+documents, les `.json`, les `.csv` et les scripts sont affichés en texte ; les images sont
+affichées ; le reste propose **Enregistrer une copie…**.
+
+!!! note "C'est le dossier qui fait foi, pas le manifeste"
+
+    `plugin.json` gagne une liste `assets`, et elle est **écrite à partir du disque au moment
+    où le plugin est empaqueté** — sinon un auteur qui ajoute un README et oublie d'éditer le
+    manifeste publierait une liste de fichiers mensongère.
+
+    La copie installée lit quand même le dossier. Un plugin dont le manifeste nomme un
+    fichier absent n'affiche rien plutôt qu'une entrée qui refuse de s'ouvrir, et un plugin
+    qui transporte un fichier que son manifeste n'a jamais mentionné l'affiche quand même —
+    c'est le cas qui compte, parce qu'un fichier surprise est justement celui qu'il faut voir.
+
+    La déclaration existe pour les lecteurs qui n'ont que le manifeste : l'inspecteur de
+    BetterCommunity, une file de modération, une entrée de catalogue. Colle un `plugin.json`
+    dans **Inspecter un fichier BMM** : il liste maintenant ce que le plugin livre, et nomme
+    les scripts qui s'y trouvent.
+
+!!! warning "Rien dans `assets/` ne s'exécute tout seul"
+
+    Un script est listé, signalé comme script, et c'est son **dossier** qui s'ouvre — jamais
+    le fichier, parce qu'ouvrir un `.ps1` le confie à ce que l'OS utilise pour les `.ps1`, et
+    ce n'est pas ce que veut dire « montre-moi ça ».
+
+    L'exécuter est une décision de tâche planifiée, ci-dessous.
+
+### Depuis une automatisation
+
+L'action **Utiliser un fichier livré par un plugin** (`plugin.asset`) a quatre modes.
+
+| Mode | Ce qu'il fait |
+|---|---|
+| **Le lire dans une variable** | Tout le fichier, en texte, dans `{text.<nom>}`. |
+| **Le copier quelque part** | Dans un dossier que tu choisis. N'écrase jamais — un nom déjà pris devient `nom (2).ext`. |
+| **Ouvrir son dossier** | Le dossier, pas le fichier. |
+| **L'exécuter (script)** | Lu, puis confié à PowerShell / cmd / bash / Python. |
+
+**Le lire** est celui qui vaut le détour. Un plugin livre la liste des codes d'escadron, ou
+le modèle de config, ou l'adresse du serveur — et la tâche la lit depuis le plugin au lieu
+que cette valeur soit tapée dans la tâche, où elle diverge dès la première mise à jour du
+plugin.
+
+!!! danger "L'exécution demande la permission script de la tâche"
+
+    Pas celle du plugin, et pas un réglage sur les plugins : celle de la **tâche**. Savoir si
+    *cette automatisation* a le droit de lancer des programmes est une question à laquelle tu
+    as répondu une fois, par écrit, sur la tâche — et cette réponse vaut pour un script livré
+    exactement comme pour un script tapé. Sans elle, l'étape refuse à voix haute au lieu de
+    passer son tour : un saut silencieux ressemblerait à un plugin qui livre un fichier cassé.
+
+    Le moteur vient de l'extension sauf indication contraire. Personne ne livre `setup.ps1`
+    en voulant dire « lance ça avec Python ».

@@ -593,6 +593,19 @@
         "mode",
         "dir"
       ]
+    },
+    {
+      "type": "plugin.asset",
+      "group": "mods",
+      "params": [
+        "pluginId",
+        "path",
+        "mode",
+        "target",
+        "dir",
+        "engine",
+        "workingDir"
+      ]
     }
   ],
   "conditions": [

@@ -35,6 +35,7 @@ import { getLinks } from '../../core/links-config.js';
 import { fetchSourceText } from '../../core/source-fetch.js';
 // ── SVG Icons (no unicode emoji) ───────────────────────────────────────────
 const IC = {
+    paperclip: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>`,
     puzzle: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>`,
     editIcon: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`,
     duplicate: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`,
@@ -443,6 +444,9 @@ function buildPluginCard(plugin, source) {
                         data-tooltip="${auOn ? (t('plugins.autoUpdateOn') || 'Auto-update: ON (re-installs when the catalog version changes)') : (t('plugins.autoUpdateOff') || 'Auto-update: OFF')}">
                         ${IC.refresh}
                     </button>` : ''}
+                    <button class="btn btn-xs btn-ghost plug-btn-assets" data-id="${escHtml(manifest.id)}" data-tooltip="${t('plugins.assets.tip')}" hidden>
+                        ${IC.paperclip}
+                    </button>
                     <button class="btn btn-xs btn-ghost plug-btn-folder" data-id="${escHtml(manifest.id)}" data-dir="${escHtml(plugin.install_dir || '')}" data-tooltip="${t('plugins.openFolder')}">
                         ${IC.folder}
                     </button>
@@ -476,6 +480,23 @@ function buildPluginCard(plugin, source) {
                 ${IC.alert} ${t('plugins.communityWarning')}
             </div>` : ''}
     `;
+    // The assets button reveals itself only if there is something behind it.
+    //
+    // Hidden by default and unhidden after the count comes back, rather than the card
+    // waiting on a disk walk before it draws: most plugins ship no assets, and a grid that
+    // renders a frame late for all of them to spare one button is the wrong trade.
+    const assetsBtn = card.querySelector('.plug-btn-assets');
+    if (assetsBtn && source === 'installed') {
+        void (async () => {
+            const { listAssets, openPluginAssets } = await import('./plugin-assets.js');
+            const found = await listAssets(manifest.id);
+            if (!found.length)
+                return;
+            assetsBtn.hidden = false;
+            assetsBtn.dataset.count = String(found.length);
+            assetsBtn.addEventListener('click', () => void openPluginAssets(manifest.id, manifest.name));
+        })();
+    }
     card.querySelector('.plug-btn-compare')?.addEventListener('click', () => handleCompare(manifest.id));
     card.querySelector('.plug-btn-apply')?.addEventListener('click', () => handleApply(manifest.id));
     card.querySelector('.plug-btn-export')?.addEventListener('click', () => handleExport(manifest.id, manifest.name));
