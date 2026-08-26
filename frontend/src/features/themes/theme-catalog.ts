@@ -146,9 +146,21 @@ async function openThemeCatalogues(): Promise<void> {
         // resolveThemeBody short-circuits on `vars`, so a theme carrying both would have its
         // file written, referenced, and silently ignored.
         row: (th: any, address: string) => {
+            // Inline: the WHOLE object, base64 preview, assets and fonts included. A theme
+            // is self-contained JSON, so this works for a custom theme with images — at the
+            // cost of everybody who follows the catalogue downloading every theme’s images
+            // just to read the list.
             if (!address) return th;
-            const { vars, ...meta } = th;
-            return { ...meta, download_url: address };
+            // Linked or packed: an ALLOWLIST, not a rest-spread. Dropping vars alone is
+            // what makes resolveThemeBody fetch the body — but it left assets, fonts,
+            // global_css and the page overrides in the index, so a “linked” theme still
+            // shipped its megabytes inside catalog.json and the link bought nothing.
+            // preview stays: the gallery draws it before anything is fetched.
+            const { id, name, author, version, description, preview, mode, bmm_min_version } = th;
+            return {
+                id, name, author, version, description, preview, mode, bmm_min_version,
+                download_url: address,
+            };
         },
         looksLike: (doc: any) => !!doc && typeof doc === 'object' && Array.isArray(doc.themes),
         onChange: () => {
