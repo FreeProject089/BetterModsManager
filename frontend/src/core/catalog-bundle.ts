@@ -91,7 +91,7 @@ export function resolveBundleEntry(raw: unknown, dir: unknown): string {
  * business — and a check that knew the list would be one more place to update when an
  * eighth kind of catalog is added.
  */
-export const CATALOG_ARRAYS = ['presets', 'plugins', 'themes', 'apps', 'modpacks', 'tutorials', 'catalogs', 'items'] as const;
+export const CATALOG_ARRAYS = ['presets', 'plugins', 'themes', 'apps', 'modpacks', 'tutorials', 'lists', 'catalogs', 'items'] as const;
 
 export function looksLikeCatalog(doc: unknown): boolean {
     if (!doc || typeof doc !== 'object' || Array.isArray(doc)) return false;

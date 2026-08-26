@@ -127,6 +127,25 @@ export function initModlist() {
             resetUI();
         }
     });
+    // The catalogue pair. Opening an entry hands the document to the SAME preview the
+    // file importer uses — a catalogue is a way to find a list, not a second way to
+    // install one.
+    document.getElementById('btn-mm-catalog')?.addEventListener('click', async () => {
+        const m = await import('./modlist-catalog.js');
+        await m.openListCatalog(async (doc) => {
+            const localMods = await invoke('get_mods');
+            appState.set('allMods', localMods);
+            lastImportedModlistJson = JSON.stringify(doc);
+            exportCard.style.display = 'none';
+            previewCard.style.display = '';
+            renderImportedModlist(doc);
+            updateInstallBtnText();
+        });
+    });
+    document.getElementById('btn-mm-publish')?.addEventListener('click', async () => {
+        const m = await import('./modlist-catalog.js');
+        await m.openListCatalogBuilder();
+    });
     importBtn.addEventListener('click', async () => {
         const path = await pickFile([{ name: 'Mod List', extensions: ['mm', 'json'] }]);
         if (!path)

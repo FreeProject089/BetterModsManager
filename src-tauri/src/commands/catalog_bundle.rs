@@ -64,8 +64,8 @@ fn list_files(dir: &Path) -> Vec<(PathBuf, String)> {
 /// an `http(s)` entry lives elsewhere and is none of the packer's business, and anything
 /// else is not something to go looking for on disk.
 fn packed_names(doc: &serde_json::Value) -> Vec<String> {
-    const ARRAYS: [&str; 8] = [
-        "presets", "plugins", "themes", "apps", "modpacks", "tutorials", "catalogs", "items",
+    const ARRAYS: [&str; 9] = [
+        "presets", "plugins", "themes", "apps", "modpacks", "tutorials", "lists", "catalogs", "items",
     ];
     let mut out = Vec::new();
     for key in ARRAYS {

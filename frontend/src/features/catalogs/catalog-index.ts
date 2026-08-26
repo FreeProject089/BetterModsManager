@@ -38,7 +38,7 @@ export interface CatalogIndex {
 // not sending it, which is the wrong place to go looking. Keep this in step with what the
 // index can emit; a type accepted here with nowhere to route it is lost by the caller,
 // which is worse than refusing it.
-export const INDEX_TYPES = ['app', 'plugin', 'theme', 'preset', 'modpack', 'repo', 'tutorial'] as const;
+export const INDEX_TYPES = ['app', 'plugin', 'theme', 'preset', 'modpack', 'repo', 'tutorial', 'list'] as const;
 
 /**
  * Parse and sanitise an index document.
@@ -270,6 +270,9 @@ export const STORE_KEY: Record<string, string> = {
     // dropped by the caller and looks like the server never sent it — which is what the
     // check below exists to prevent.
     tutorial: 'bmm.tutorialCatalogs',
+    // Catalogues of shared MOD LISTS — the .mm files people already export and send
+    // each other. They were the one BMM document with no catalogue of its own.
+    list: 'bmm_list_catalogs',
 };
 
 /** Every type this module can actually deliver somewhere.
