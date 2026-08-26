@@ -134,7 +134,7 @@ async function openThemeCatalogues(): Promise<void> {
     const all = () => [...getInstalledThemes(), ...(_builtins || []).filter((b: any) => !b._hidden)];
     await openCatalogModal({
         id: 'theme',
-        title: t('themes.catalogues'),
+        title: t('themes.cataloguesTitle'),
         subtitle: t('themes.cataloguesSub'),
         storeKey: COMMUNITY_SRC_KEY,
         feedField: 'themes',
@@ -451,12 +451,18 @@ function renderCatalog(): void {
         try { dir = await invoke('theme_presets_dir') as string; } catch { return; }
         const bar = document.createElement('div');
         bar.className = 'btc-dropin';
-        bar.style.cssText = 'display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 14px;padding:10px 12px;border:1px solid var(--bmm-border);border-radius:10px;background:var(--bmm-bg-elevated)';
+        // Quieter than the catalogue it sits above. It is a side note about a folder, and it
+        // was reading as a section header: a raised surface, a bordered box and a button in
+        // the default (light) variant, which is the loudest button in the app.
+        bar.style.cssText = 'display:flex;align-items:center;gap:10px;flex-wrap:wrap;'
+            + 'margin:0 0 14px;padding:8px 10px;border:1px solid var(--border);'
+            + 'border-radius:8px;background:var(--bmm-s02)';
 
         const label = document.createElement('div');
-        label.style.cssText = 'flex:1;min-width:200px;font-size:12px;color:var(--bmm-text-secondary)';
+        label.style.cssText = 'flex:1;min-width:200px;font-size:11px;color:var(--text-muted)';
         const strong = document.createElement('strong');
-        strong.style.cssText = 'display:block;color:var(--bmm-text-primary);font-size:13px;margin-bottom:2px';
+        strong.style.cssText = 'display:block;color:var(--text-secondary);font-size:11px;'
+            + 'font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px';
         strong.textContent = t('themes.dropinTitle') || 'Drop-in presets';
         const path = document.createElement('code');
         // One line, ellipsised, full text on hover. word-break:break-all wrapped a long
@@ -470,12 +476,14 @@ function renderCatalog(): void {
         label.append(strong, path);
 
         const open = document.createElement('button');
-        open.className = 'btn btn-sm';
+        // btn-secondary, not the bare default: an unvariant .btn is the light one, which made
+        // "Open folder" the brightest thing on a screen full of theme cards.
+        open.className = 'btn btn-xs btn-secondary';
         open.textContent = t('themes.dropinOpen') || 'Open folder';
         open.addEventListener('click', () => { void invoke('open_folder', { path: dir }); });
 
         const rescan = document.createElement('button');
-        rescan.className = 'btn btn-sm btn-secondary';
+        rescan.className = 'btn btn-xs btn-secondary';
         rescan.textContent = t('themes.dropinRescan') || 'Rescan';
         rescan.addEventListener('click', async () => {
             const before = _builtins.length;

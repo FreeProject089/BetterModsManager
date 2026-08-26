@@ -8346,7 +8346,7 @@
   "cm.fromIndex": "Added {n} catalogue(s) from that index.",
   "cm.indexAll": "That index lists {n} catalogue(s) of this kind and you already follow them all.",
   "cm.indexNone": "No catalogue of this kind in that index — it holds {what}. Add those from their own screens.",
-  "themes.catalogues": "Catalogues…",
+  "themes.catalogues": "Catalogues",
   "themes.cataloguesSub": "Follow somebody else’s themes, or make a catalogue of your own",
   "mm.cat.addFiles": "Add .mm files…",
   "modpack.cat.build.add": "Add a pack you do not have",
@@ -8456,5 +8456,6 @@
   "mm.cat.addLink": "Add by address…",
   "mm.cat.addLinkDesc": "The address of a .mm somebody already hosts. Nothing is downloaded — the entry points at it.",
   "mm.cat.addLinkName": "A name for it. Leave empty to use “{g}”.",
-  "mm.cat.remote": "hosted elsewhere"
+  "mm.cat.remote": "hosted elsewhere",
+  "themes.cataloguesTitle": "Theme catalogues"
 }

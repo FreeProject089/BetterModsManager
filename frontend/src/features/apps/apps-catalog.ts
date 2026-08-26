@@ -1247,6 +1247,9 @@ function openAppEditor(index: number | null) {
             <option value="free"${existing.price==='free'||!existing.price?' selected':''}>${t('apps.price.free')||'Free'}</option>
             <option value="freemium"${existing.price==='freemium'?' selected':''}>${t('apps.price.freemium')||'Freemium'}</option>
             <option value="paid"${existing.price==='paid'?' selected':''}>${t('apps.price.paid')||'Paid'}</option>
+            <!-- The filter learnt this; the creator had not, so a catalogue made in-app could
+                 not produce the value the browser can filter for. -->
+            <option value="oss"${existing.price==='oss'?' selected':''}>${escHtml(t('apps.price.oss'))}</option>
           </select>
         </div>
       </div>

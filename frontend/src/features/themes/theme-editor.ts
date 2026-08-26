@@ -12,7 +12,7 @@ import { toast } from '../../ui/app.js';
 import { invoke } from '../../core/api.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import {
-    applyTheme, previewTheme, resetTheme, getActiveTheme,
+    applyTheme, previewTheme, resetTheme, getActiveTheme, getCachedTheme,
     installTheme, exportTheme, getInstalledThemes,
     activateTheme, deleteTheme, BUILTIN_THEMES,
     isContrastEnforced, setContrastEnforced,
@@ -233,12 +233,23 @@ export function initThemeEditor(): void {
     (window as any).openThemeEditor = openEditor;
 }
 
-export function openEditor(): void {
+/**
+ * @param themeId open on THAT theme rather than on the active one.
+ *
+ * The catalogue's Edit button had nothing to pass, so editing a theme from the list opened
+ * the editor on whatever happened to be applied — you pressed Edit on one theme and edited
+ * another, which is the kind of wrong that gets saved before it is noticed.
+ */
+export function openEditor(themeId?: string): void {
     if (!_panel) buildPanel();
     _panel!.style.display = 'flex';
     if (localStorage.getItem(BTE_DOCK_KEY) === 'right') _bteSetDock(true);
-    _draft = JSON.parse(JSON.stringify(getActiveTheme() || {}));
-    _origTheme = getActiveTheme() ? JSON.parse(JSON.stringify(getActiveTheme())) : null;
+    // The named theme if it is installed, the active one otherwise. A name that resolves to
+    // nothing falls back rather than opening an empty editor: an id from a stale list is a
+    // reason to show something, not a reason to show nothing.
+    const wanted = themeId ? (getCachedTheme(themeId) || getActiveTheme()) : getActiveTheme();
+    _draft = JSON.parse(JSON.stringify(wanted || {}));
+    _origTheme = wanted ? JSON.parse(JSON.stringify(wanted)) : null;
     renderTab(_tab);
     if (!_draft.custom_elements) _draft.custom_elements = [];
 }

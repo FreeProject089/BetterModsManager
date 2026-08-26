@@ -34,6 +34,23 @@ function writeBest(n: number): void {
 }
 
 /** Tell Discord, when Discord is listening. Failure is silence, never a popup. */
+/**
+ * The presence text, in ENGLISH, deliberately.
+ *
+ * Everything else in BMM is translated because the reader is the person using it. Rich
+ * Presence is the opposite: it is shown to everybody in the reader's Discord, and they do
+ * not share the language BMM happens to be set to. A French "En vol — 12 points" on an
+ * English server is a status nobody around it can read.
+ *
+ * Written here rather than pulled from the dictionary, so a future translator cannot
+ * helpfully localise a string whose whole point is not being localised.
+ */
+const RPC = {
+    title: 'Flappy Tasky',
+    playing: (n: number) => `Flapping — ${n} points`,
+    dead: (n: number, best: number) => `Scored ${n} (best ${best})`,
+};
+
 function presence(details: string, status: string): void {
     // The command itself checks whether Rich Presence is switched on, so there is nothing to
     // ask here — and nothing to get wrong by asking separately and disagreeing with it.
@@ -134,7 +151,7 @@ export function openFlappyTasky(): void {
         state = 'dead';
         if (score > best) { best = score; writeBest(best); }
         footEl.textContent = t('flappy.dead').replace('{best}', String(best));
-        presence(t('flappy.title'), t('flappy.rpcDead').replace('{n}', String(score)).replace('{best}', String(best)));
+        presence(RPC.title, RPC.dead(score, best));
     };
 
     const flap = () => {
@@ -142,7 +159,7 @@ export function openFlappyTasky(): void {
         if (state === 'ready') {
             state = 'playing';
             footEl.textContent = '';
-            presence(t('flappy.title'), t('flappy.rpcPlaying').replace('{n}', '0'));
+            presence(RPC.title, RPC.playing(0));
         }
         vy = flapNow();
     };
@@ -196,7 +213,7 @@ export function openFlappyTasky(): void {
                     scoreEl.textContent = String(score);
                     // Told to Discord on every point: that is the whole reason somebody has it
                     // on, and a presence that only updates at the end shows a zero all game.
-                    presence(t('flappy.title'), t('flappy.rpcPlaying').replace('{n}', String(score)));
+                    presence(RPC.title, RPC.playing(score));
                 }
             }
         }

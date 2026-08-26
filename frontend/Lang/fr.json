@@ -8344,7 +8344,7 @@
   "cm.fromIndex": "{n} catalogue(s) ajouté(s) depuis cet index.",
   "cm.indexAll": "Cet index liste {n} catalogue(s) de ce type et tu les suis déjà tous.",
   "cm.indexNone": "Aucun catalogue de ce type dans cet index — il contient {what}. Ajoute-les depuis leurs propres écrans.",
-  "themes.catalogues": "Catalogues…",
+  "themes.catalogues": "Catalogues",
   "themes.cataloguesSub": "Suis les thèmes de quelqu’un, ou fais ton propre catalogue",
   "mm.cat.addFiles": "Ajouter des fichiers .mm…",
   "modpack.cat.build.add": "Ajouter un pack que tu n’as pas",
@@ -8454,5 +8454,6 @@
   "mm.cat.addLink": "Ajouter par adresse…",
   "mm.cat.addLinkDesc": "L’adresse d’un .mm que quelqu’un héberge déjà. Rien n’est téléchargé — l’entrée pointe dessus.",
   "mm.cat.addLinkName": "Un nom pour lui. Vide pour utiliser « {g} ».",
-  "mm.cat.remote": "hébergé ailleurs"
+  "mm.cat.remote": "hébergé ailleurs",
+  "themes.cataloguesTitle": "Catalogues de thèmes"
 }
