@@ -34,7 +34,10 @@ fn kind_of(path: &Path) -> Option<Kind> {
         Some(Kind::TarGz)
     } else if name.ends_with(".tar") {
         Some(Kind::Tar)
-    } else if name.ends_with(".zip") {
+    } else if name.ends_with(".zip") || name.ends_with(".bmmbundle") {
+        // A catalogue bundle IS a zip — it carries its own extension so a person can
+        // tell one from a mod archive at a glance, and so double-clicking it never means
+        // "unpack this into my downloads". The reader does not care.
         Some(Kind::Zip)
     } else if name.ends_with(".7z") {
         Some(Kind::SevenZ)

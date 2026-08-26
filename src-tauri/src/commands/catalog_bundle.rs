@@ -90,14 +90,67 @@ fn packed_names(doc: &serde_json::Value) -> Vec<String> {
     out
 }
 
+/// A staging folder to build a bundle in, unique per call.
+///
+/// The single-file flow used to write its payloads into whatever folder the user picked and
+/// then drop a zip beside them, which meant publishing left a pile of loose files behind in
+/// a directory the person had chosen for one thing. It stages here instead and the finished
+/// bundle goes wherever they said — nothing is left in either place.
+#[tauri::command]
+pub fn catalog_bundle_stage() -> Result<String, String> {
+    let base = std::env::temp_dir().join("bmm_catalog_build");
+    // Time is not a name. Two publishes in the same millisecond — or one left behind by a
+    // crash — must not land in the same directory, so it counts up until one is free.
+    for n in 0..500u32 {
+        let dir = base.join(format!("cat_{}_{}", std::process::id(), n));
+        if !dir.exists() {
+            std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+            return Ok(dir.to_string_lossy().to_string());
+        }
+    }
+    Err("could not make a staging folder".into())
+}
+
+/// Throw a staging folder away.
+///
+/// Refuses anything that is not one of ours. This deletes a directory recursively and is
+/// reachable from the WebView, so it is not allowed to take a path on trust: the only
+/// argument it accepts is a path inside the staging root it created.
+#[tauri::command]
+pub fn catalog_bundle_unstage(dir: String) -> Result<(), String> {
+    let base = std::env::temp_dir().join("bmm_catalog_build");
+    let p = PathBuf::from(&dir);
+    let (Ok(p), Ok(base)) = (p.canonicalize(), base.canonicalize()) else {
+        return Ok(()); // already gone, or never existed — nothing to do and nothing wrong
+    };
+    if !p.starts_with(&base) {
+        return Err("refused: not a staging folder".into());
+    }
+    std::fs::remove_dir_all(&p).map_err(|e| e.to_string())
+}
+
 /// Pack a catalog FOLDER into a single-file bundle.
 ///
-/// Refuses a folder with no `catalog.json` at its root, and refuses one whose catalog.json
-/// is not a catalog. Both refusals are the same idea: a bundle is a catalog by
-/// construction, so the thing that makes it one is checked before a file is written rather
-/// than discovered by whoever opens it.
+/// **Only what the catalogue actually uses.** It packs `catalog.json` plus exactly the files
+/// its entries name, and nothing else. The first version zipped every file in the folder,
+/// which is fine for a folder BMM just wrote and catastrophic for one the user picked —
+/// choosing your Desktop packed your Desktop.
+///
+/// Refuses a folder with no `catalog.json` at its root, and one whose catalog.json is not an
+/// object. A bundle is a catalogue by construction, so what makes it one is checked before a
+/// byte is written rather than discovered by whoever opens it.
+///
+/// ASYNC, on a blocking thread. Compressing a few hundred MB on the main thread is what made
+/// BMM stop repainting mid-publish — the same mistake this codebase has fixed before, which
+/// is why `spawn_blocking` is the house pattern for anything that touches a lot of disk.
 #[tauri::command]
-pub fn catalog_bundle_pack(dir: String, out: String) -> Result<BundlePacked, String> {
+pub async fn catalog_bundle_pack(dir: String, out: String) -> Result<BundlePacked, String> {
+    tauri::async_runtime::spawn_blocking(move || pack_blocking(dir, out))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+fn pack_blocking(dir: String, out: String) -> Result<BundlePacked, String> {
     let dir = PathBuf::from(&dir);
     let out_path = PathBuf::from(&out);
     let manifest = dir.join("catalog.json");
@@ -111,11 +164,13 @@ pub fn catalog_bundle_pack(dir: String, out: String) -> Result<BundlePacked, Str
         return Err("catalog.json is not a catalog".into());
     }
 
-    let files = list_files(&dir);
-    let have: std::collections::HashSet<&str> = files.iter().map(|(_, n)| n.as_str()).collect();
-    let missing: Vec<String> = packed_names(&doc)
-        .into_iter()
+    let wanted = packed_names(&doc);
+    let present = list_files(&dir);
+    let have: std::collections::HashSet<&str> = present.iter().map(|(_, n)| n.as_str()).collect();
+    let missing: Vec<String> = wanted
+        .iter()
         .filter(|n| !have.contains(n.as_str()))
+        .cloned()
         .collect();
 
     if let Some(parent) = out_path.parent() {
@@ -123,21 +178,31 @@ pub fn catalog_bundle_pack(dir: String, out: String) -> Result<BundlePacked, Str
     }
     let file = std::fs::File::create(&out_path).map_err(|e| e.to_string())?;
     let mut zip = zip::ZipWriter::new(file);
-    let opts = zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+    let opts =
+        zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
 
+    // catalog.json first, then exactly what it names. A name appearing twice in the document
+    // is one file in the archive: `start_file` on a duplicate name produces an archive whose
+    // second copy is unreachable.
+    let mut written: std::collections::HashSet<String> = std::collections::HashSet::new();
     let mut count = 0u32;
     let mut bytes = 0u64;
-    for (path, name) in &files {
-        // The output can legitimately be written INTO the folder being packed, and a zip
-        // that contains itself is both wrong and unbounded in the general case.
-        if path == &out_path {
-            continue;
+    let mut add = |zip: &mut zip::ZipWriter<std::fs::File>, name: &str| -> Result<(), String> {
+        if !written.insert(name.to_string()) {
+            return Ok(());
         }
-        let Ok(data) = std::fs::read(path) else { continue };
-        zip.start_file(name.clone(), opts).map_err(|e| e.to_string())?;
+        let path = dir.join(name);
+        let Ok(data) = std::fs::read(&path) else { return Ok(()) };
+        zip.start_file(name.to_string(), opts).map_err(|e| e.to_string())?;
         zip.write_all(&data).map_err(|e| e.to_string())?;
         count += 1;
         bytes += data.len() as u64;
+        Ok(())
+    };
+
+    add(&mut zip, "catalog.json")?;
+    for name in &wanted {
+        add(&mut zip, name)?;
     }
     zip.finish().map_err(|e| e.to_string())?;
 
@@ -199,5 +264,71 @@ mod tests {
         let mut got = packed_names(&doc);
         got.sort();
         assert_eq!(got, vec!["a.bmmpa", "b.bmmpa", "d.zip"]);
+    }
+
+    /// The bundle holds the catalogue and what it NAMES, and nothing else.
+    ///
+    /// The first version zipped every file in the folder, which is harmless for a folder BMM
+    /// had just written and catastrophic for one the user picked: choosing Desktop packed the
+    /// Desktop. This is the regression guard for that, and it is worth the temp directory.
+    #[test]
+    fn only_what_the_catalogue_uses_is_packed() {
+        let dir = std::env::temp_dir().join(format!("bmm_pack_test_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        std::fs::write(
+            dir.join("catalog.json"),
+            r#"{"name":"c","presets":[{"id":"a","download_url":"used.bmmpa"},
+                                      {"id":"b","download_url":"https://x.test/remote.bmmpa"}]}"#,
+        )
+        .unwrap();
+        std::fs::write(dir.join("used.bmmpa"), b"{}").unwrap();
+        // The things that must NOT travel: a private document that happened to be in the
+        // same folder, and a file the catalogue does not mention.
+        std::fs::write(dir.join("tax-return.pdf"), b"private").unwrap();
+        std::fs::write(dir.join("stray.bmmpa"), b"{}").unwrap();
+
+        let out = dir.join("out.bmmbundle");
+        let rep = super::pack_blocking(
+            dir.to_string_lossy().to_string(),
+            out.to_string_lossy().to_string(),
+        )
+        .expect("pack");
+
+        let f = std::fs::File::open(&out).unwrap();
+        let mut zip = zip::ZipArchive::new(f).unwrap();
+        let mut names: Vec<String> = (0..zip.len())
+            .map(|i| zip.by_index(i).unwrap().name().to_string())
+            .collect();
+        names.sort();
+        assert_eq!(names, vec!["catalog.json", "used.bmmpa"]);
+        assert_eq!(rep.files, 2);
+        // A remote entry is not a missing file: it lives somewhere else on purpose.
+        assert!(rep.missing.is_empty(), "{:?}", rep.missing);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A catalogue naming a file the folder does not hold is reported, not fatal.
+    #[test]
+    fn a_named_file_that_is_absent_is_reported() {
+        let dir = std::env::temp_dir().join(format!("bmm_pack_miss_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("catalog.json"),
+            r#"{"name":"c","presets":[{"id":"a","download_url":"gone.bmmpa"}]}"#,
+        )
+        .unwrap();
+        let out = dir.join("out.bmmbundle");
+        let rep = super::pack_blocking(
+            dir.to_string_lossy().to_string(),
+            out.to_string_lossy().to_string(),
+        )
+        .expect("pack");
+        assert_eq!(rep.missing, vec!["gone.bmmpa".to_string()]);
+        assert_eq!(rep.files, 1, "catalog.json still went in");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

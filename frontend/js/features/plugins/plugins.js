@@ -729,7 +729,7 @@ async function renderCatalog(container) {
     // file that is not one fails HERE with the reason rather than becoming a source that
     // errors every time this tab is drawn.
     container.querySelector('#plug-source-bundle')?.addEventListener('click', async () => {
-        const path = await pickFile({ filters: [{ name: 'Catalogue bundle', extensions: ['zip'] }] });
+        const path = await pickFile({ filters: [{ name: t('catpub.bundleKind'), extensions: ['bmmbundle', 'zip'] }] });
         if (!path)
             return;
         try {
@@ -902,63 +902,91 @@ function openPluginCatalogBuilder(onSourcesChanged) {
      * on a CDN, which is the whole point.
      */
     const publishDraft = async (d, bundle) => {
-        const dir = await pickFolder().catch(() => null);
-        if (!dir)
-            return;
-        const sep = dir.includes('\\') ? '\\' : '/';
         const slug = (d.name || 'catalog').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'catalog';
-        const out = JSON.parse(JSON.stringify(d));
-        let packed = 0;
-        let kept = 0;
-        for (const entry of out.plugins) {
-            // An address already given is a decision already made.
-            if ((entry.download_url || '').trim()) {
-                kept++;
-                continue;
-            }
-            const installed = _installedPlugins.find((p) => p.manifest.id === entry.id);
-            if (!installed) {
-                // Blank address AND not installed: there is nothing to pack and nothing to
-                // point at, so the entry would publish as unfollowable. Named, not dropped.
-                toast((t('plugins.catNoSource')).replace('{id}', entry.id), 'warning');
-                kept++;
-                continue;
-            }
-            const file = `${entry.id}.bmmplug`;
-            try {
-                await invoke('export_plugin', { pluginId: entry.id, destPath: `${dir}${sep}${file}` });
-                entry.download_url = file;
-                packed++;
-            }
-            catch (e) {
-                // Named, and the entry keeps its old address: a catalogue that silently lost
-                // one plugin is worse than one that says which.
-                toast(`${t('plugins.catPackFailed') || 'Could not pack'} ${entry.id}: ${e}`, 'warning');
-                kept++;
-            }
-        }
-        try {
-            await invoke('write_text_file', { path: `${dir}${sep}catalog.json`, content: draftToCatalogJson(out) });
-        }
-        catch (e) {
-            toast(`${t('common.error')}: ${e}`, 'error');
-            return;
-        }
-        let bundleNote = '';
+        // ONE destination. A bundle is built in a staging folder nobody sees and saved
+        // where you say — it used to fill a folder you picked with .bmmplug files and drop
+        // a zip in among them, so publishing to Desktop published onto your Desktop.
+        let dir = null;
+        let bundleOut = '';
         if (bundle) {
-            const res = await invoke('catalog_bundle_pack', { dir, out: `${dir}${sep}${slug}.zip` })
-                .catch((e) => { toast(`${t('common.error')}: ${e}`, 'error'); return null; });
-            if (res) {
-                bundleNote = ` — ${(t('plugins.catPacked') || 'packed into {f}').replace('{f}', `${slug}.zip`)}`;
-                if (res.missing?.length) {
-                    toast((t('plugins.catPackMissing') || 'The catalogue names {n} file(s) that are not in the folder: {list}')
-                        .replace('{n}', String(res.missing.length))
-                        .replace('{list}', res.missing.slice(0, 5).join(', ')), 'warning', 7000);
+            bundleOut = (await saveFile({
+                defaultPath: `${slug}.bmmbundle`,
+                filters: [{ name: t('catpub.bundleKind'), extensions: ['bmmbundle'] }],
+            }).catch(() => null));
+            if (!bundleOut)
+                return;
+            dir = (await invoke('catalog_bundle_stage').catch(() => null));
+            if (!dir) {
+                toast(t('catpub.stageFailed'), 'error');
+                return;
+            }
+        }
+        else {
+            dir = await pickFolder().catch(() => null);
+            if (!dir)
+                return;
+        }
+        const sep = dir.includes('\\') ? '\\' : '/';
+        try {
+            const out = JSON.parse(JSON.stringify(d));
+            let packed = 0;
+            let kept = 0;
+            for (const entry of out.plugins) {
+                // An address already given is a decision already made.
+                if ((entry.download_url || '').trim()) {
+                    kept++;
+                    continue;
+                }
+                const installed = _installedPlugins.find((p) => p.manifest.id === entry.id);
+                if (!installed) {
+                    // Blank address AND not installed: there is nothing to pack and nothing to
+                    // point at, so the entry would publish as unfollowable. Named, not dropped.
+                    toast((t('plugins.catNoSource')).replace('{id}', entry.id), 'warning');
+                    kept++;
+                    continue;
+                }
+                const file = `${entry.id}.bmmplug`;
+                try {
+                    await invoke('export_plugin', { pluginId: entry.id, destPath: `${dir}${sep}${file}` });
+                    entry.download_url = file;
+                    packed++;
+                }
+                catch (e) {
+                    // Named, and the entry keeps its old address: a catalogue that silently lost
+                    // one plugin is worse than one that says which.
+                    toast(`${t('plugins.catPackFailed') || 'Could not pack'} ${entry.id}: ${e}`, 'warning');
+                    kept++;
                 }
             }
+            try {
+                await invoke('write_text_file', { path: `${dir}${sep}catalog.json`, content: draftToCatalogJson(out) });
+            }
+            catch (e) {
+                toast(`${t('common.error')}: ${e}`, 'error');
+                return;
+            }
+            let bundleNote = '';
+            if (bundleOut) {
+                const res = await invoke('catalog_bundle_pack', { dir, out: bundleOut })
+                    .catch((e) => { toast(`${t('common.error')}: ${e}`, 'error'); return null; });
+                if (res) {
+                    bundleNote = ` — ${t('plugins.catPacked').replace('{f}', String(bundleOut).replace(/^.*[/\\]/, ''))}`;
+                    if (res.missing?.length) {
+                        toast(t('plugins.catPackMissing')
+                            .replace('{n}', String(res.missing.length))
+                            .replace('{list}', res.missing.slice(0, 5).join(', ')), 'warning', 7000);
+                    }
+                }
+            }
+            toast(t('plugins.catPublished')
+                .replace('{n}', String(packed)).replace('{k}', String(kept)) + bundleNote, 'success');
         }
-        toast((t('plugins.catPublished') || 'Published — {n} plugin(s) packed, {k} left pointing at their address')
-            .replace('{n}', String(packed)).replace('{k}', String(kept)) + bundleNote, 'success');
+        finally {
+            // Whatever happened. A half-written staging folder is a copy of somebody's
+            // plugins sitting in temp.
+            if (bundleOut && dir)
+                await invoke('catalog_bundle_unstage', { dir }).catch(() => { });
+        }
     };
     // ── Editor view ──
     const renderEditor = () => {

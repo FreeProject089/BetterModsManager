@@ -5731,25 +5731,47 @@ export async function openTaskCatalogBuilder(): Promise<void> {
         }
         base = base.replace(/\/+$/, '');
 
-        const { pickFolder } = await import('../../core/api.js');
-        const dir = await pickFolder().catch(() => null);
-        if (!dir) return;
-
         // A base address means the files live somewhere else, so there is nothing to pack.
-        // Refused rather than quietly ignored: the checkbox is on screen saying otherwise.
+        // Refused rather than quietly ignored: the control is on screen saying otherwise.
         const wantBundle = !!(overlay.querySelector('#sched-tcb-bundle') as HTMLInputElement)?.checked;
         if (wantBundle && base) {
-            toast(t('sched.tcb.bundleVsBase') || 'A catalogue with its own address elsewhere has nothing to pack — clear the address, or untick the single-file option', 'warning');
+            toast(t('sched.tcb.bundleVsBase'), 'warning');
             return;
+        }
+
+        // ONE destination, not two. It used to fill a folder you picked with loose files
+        // AND drop a zip in among them — pick Desktop and you published onto your Desktop.
+        // A bundle is built in a staging folder nobody sees and saved where you say.
+        const { pickFolder, saveFile } = await import('../../core/api.js');
+        let dir: string | null = null;
+        let bundleOut = '';
+        if (wantBundle) {
+            bundleOut = (await saveFile({
+                defaultPath: `${safeFileStem(name, 'catalog')}.bmmbundle`,
+                filters: [{ name: t('catpub.bundleKind'), extensions: ['bmmbundle'] }],
+            }).catch(() => null)) as string;
+            if (!bundleOut) return;
+            dir = (await invoke('catalog_bundle_stage').catch(() => null)) as string;
+            if (!dir) { toast(t('catpub.stageFailed'), 'error'); return; }
+        } else {
+            dir = await pickFolder().catch(() => null);
+            if (!dir) return;
         }
 
         goBtn.disabled = true;
         try {
-            await writeTaskCatalog(dir, name, base, chosen, wantBundle);
+            await writeTaskCatalog(dir, name, base, chosen, bundleOut, (task) => {
+                const m = modeOf(task.id);
+                return m.mode === 'link' ? { mode: 'link', url: m.url } : { mode: 'embed' };
+            });
             close();
         } catch (e) {
             toast(`${t('common.error') || 'Error'}: ${e}`, 'error');
             goBtn.disabled = false;
+        } finally {
+            // The staging folder goes whatever happened. One left half-written is a copy of
+            // somebody's automations sitting in temp.
+            if (bundleOut && dir) await invoke('catalog_bundle_unstage', { dir }).catch(() => {});
         }
     });
 }
@@ -5763,7 +5785,7 @@ export async function openTaskCatalogBuilder(): Promise<void> {
  * for no reason anybody chose.
  */
 async function writeTaskCatalog(
-    dir: string, name: string, base: string, tasks: Task[], bundle = false,
+    dir: string, name: string, base: string, tasks: Task[], bundleOut = '',
     choose: (task: Task) => EntryChoice = () => ({ mode: 'embed' }),
 ): Promise<void> {
     const sep = dir.includes('\\') ? '\\' : '/';
@@ -5805,13 +5827,11 @@ async function writeTaskCatalog(
     let packed = '';
     // Nothing embedded means nothing to pack — the control is disabled for that case, and
     // this is the guard for the case where it was not.
-    if (bundle && embedded > 0) {
-        const stem = safeFileStem(name, 'catalog');
-        const res: any = await invoke('catalog_bundle_pack', {
-            dir, out: `${dir}${sep}${stem}.zip`,
-        }).catch((e: any) => { toast(`${t('common.error') || 'Error'}: ${e}`, 'error'); return null; });
+    if (bundleOut && embedded > 0) {
+        const res: any = await invoke('catalog_bundle_pack', { dir, out: bundleOut })
+            .catch((e: any) => { toast(`${t('common.error') || 'Error'}: ${e}`, 'error'); return null; });
         if (res) {
-            packed = ` — ${(t('sched.tcb.packed') || 'packed into {f}').replace('{f}', `${stem}.zip`)}`;
+            packed = ` — ${t('sched.tcb.packed').replace('{f}', String(bundleOut).replace(/^.*[/\\]/, ''))}`;
             // Named, not counted: "3 missing" is a number somebody has to go and diff.
             if (res.missing?.length) {
                 toast((t('sched.tcb.packMissing') || 'The catalogue names {n} file(s) that are not in the folder: {list}')
@@ -6194,7 +6214,7 @@ function showPresetCatalog(data: { presets: any[]; sources: PresetSource[] }): v
         overlay.querySelector('#sched-pc-publish')?.addEventListener('click', () => { void openTaskCatalogBuilder(); });
         overlay.querySelector('#sched-pc-openbundle')?.addEventListener('click', async () => {
             const { pickFile } = await import('../../core/api.js');
-            const path = await pickFile([{ name: 'Catalogue bundle', extensions: ['zip'] }]).catch(() => null);
+            const path = await pickFile([{ name: t('catpub.bundleKind'), extensions: ['bmmbundle', 'zip'] }]).catch(() => null);
             if (!path) return;
             try {
                 // Opened before it is followed: a file that is not a catalogue must fail

@@ -65,15 +65,17 @@ le travail de quelqu'un d'autre.
 
 Tout ce qui précède suppose que les `.bmmpa` vivent quelque part où une URL peut les
 atteindre. Ce n'est pas obligatoire. **Publier les miennes…** propose une option *emballer
-le tout dans un seul fichier* : BMM écrit le dossier comme d'habitude, puis un unique `.zip`
-de ce dossier à côté, contenant `catalog.json` et chaque automatisation qu'il nomme.
+le tout dans un seul fichier* : BMM écrit le dossier comme d'habitude, puis un unique `.bmmbundle`
+contenant `catalog.json` et chaque automatisation qu'il nomme. C'est toi qui choisis où va
+ce fichier ; rien n'est laissé ailleurs.
 
 Envoie ce seul fichier à quelqu'un. Dans le panneau des catalogues d'automatisations,
 **Ouvrir un fichier bundle…** le suit — pas d'hébergeur, pas d'adresse, rien à maintenir en
 vie.
 
-Le format n'est volontairement pas nouveau. C'est le dossier, zippé : `catalog.json` à la
-racine et les fichiers à côté. N'importe qui avec un outil zip peut regarder dedans sans
+Le format n'est volontairement pas nouveau. C'est un zip avec sa propre extension : `catalog.json`
+à la racine et les fichiers à côté. Renomme-le en `.zip` et n'importe quel outil l'ouvre —
+l'extension existe pour qu'on distingue un catalogue d'une archive de mod d'un coup d'œil. N'importe qui avec un outil zip peut regarder dedans sans
 BMM, et le dézipper redonne exactement le dossier qui aurait été publié.
 
 Deux choses à savoir :
@@ -82,6 +84,8 @@ Deux choses à savoir :
   `https://…/gros.bmmpa` fonctionne dans un bundle exactement comme dans un catalogue
   hébergé : les petites automatisations voyagent avec le fichier, une grosse reste sur un
   CDN.
+- **Seul ce que le catalogue utilise est emballé.** Le bundle contient `catalog.json` et
+  exactement les fichiers que ses entrées nomment — pas ce qui traînait dans le dossier.
 - **Un bundle ne peut pas avoir d'adresse de base.** L'option est refusée si tu as rempli
   l'adresse de base, parce qu'un catalogue dont les fichiers vivent ailleurs n'a rien à
   emballer — et emballer un zip vide en silence serait pire que de le dire.

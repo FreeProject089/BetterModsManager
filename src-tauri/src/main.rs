@@ -819,6 +819,8 @@ fn main() {
             commands::tutorial_custom::tutorial_custom_delete,
             commands::tutorial_custom::tutorial_custom_import,
             commands::catalog_bundle::catalog_bundle_pack,
+            commands::catalog_bundle::catalog_bundle_stage,
+            commands::catalog_bundle::catalog_bundle_unstage,
             commands::catalog_bundle::catalog_bundle_open,
             commands::modpack_catalog::export_modpack_catalog,
             commands::modpack_catalog::read_modpack_catalog,
