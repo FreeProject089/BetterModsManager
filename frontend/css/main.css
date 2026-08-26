@@ -13231,7 +13231,13 @@ body.sched-drag-live .sched-branch .sched-drop-zone:empty {
 .plug-cat-addbar { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
 .plug-cat-addbar .select { flex: 1; }
 .plug-cat-entries { overflow-y: auto; display: flex; flex-direction: column; gap: 8px; flex: 1; }
-.plug-cat-entry { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--bmm-s08); border-radius: 10px; background: var(--bmm-s03); }
+/* align-items: flex-start, not center: the row is two lines tall now (the four fields,
+   then the metadata that will be published) and a centred delete button floats in the
+   middle of them. */
+.plug-cat-entry { display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; border: 1px solid var(--bmm-s08); border-radius: 10px; background: var(--bmm-s03); }
+/* The two stacked rows. Without this they were siblings of the delete button in a flex
+   ROW, so the metadata sat BESIDE the four fields and both got half the width. */
+.pcb-body { flex: 1; min-width: 0; }
 .plug-cat-entry-grid { flex: 1; min-width: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .plug-cat-entry-grid .input { font-size: 11px; padding: 5px 8px; }
 .plug-ov-actions { display: flex; align-items: center; gap: 8px; padding: 12px 18px 16px; border-top: 1px solid var(--bmm-s06); margin-top: 10px; flex-wrap: wrap; }
@@ -16638,6 +16644,82 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 .cix-add > input { flex: 1 1 200px; min-width: 160px; font-size: 11px; padding: 4px 8px; }
 .cix-added { display: flex; flex-direction: column; gap: 3px; margin-top: 6px; }
 .cix-added-row { display: flex; align-items: center; gap: 8px; font-size: 11px; }
+/* ── The shared catalogue screen ──────────────────────────────────────────────
+   One layout for six kinds. The point of writing it once is that a change to how following
+   looks lands in all of them, so nothing here may be tuned for a particular kind. */
+.cm-modal { max-width: 660px; width: 94%; max-height: 86vh; display: flex; flex-direction: column; }
+.cm-sub { margin: 2px 0 0; font-size: 11px; color: var(--text-muted); }
+.cm-body { flex: 1; min-height: 0; overflow: auto; padding: 14px 18px; }
+
+.cm-tabs { display: flex; gap: 2px; padding: 0 18px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.cm-tab {
+    background: none;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    padding: 8px 14px;
+    font: inherit;
+    font-size: 12.5px;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: color 0.14s ease, border-color 0.14s ease;
+}
+.cm-tab:hover { color: var(--text-primary); }
+.cm-tab.on { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+.cm-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.cm-add { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.cm-add > input { flex: 1 1 220px; min-width: 160px; }
+.cm-hint { font-size: 11px; color: var(--text-muted); margin: 6px 0 10px; line-height: 1.5; }
+.cm-empty { font-size: 12px; color: var(--text-muted); padding: 10px 0; }
+
+.cm-srcs { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; }
+.cm-src { display: flex; align-items: center; gap: 8px; padding: 6px 9px; border: 1px solid var(--border); border-radius: 8px; background: var(--bmm-s02); }
+/* Which SORT of source it is, because "a file on this machine" and "an address" behave
+   differently when they stop working and the difference is invisible in a filename. */
+.cm-src-kind {
+    flex: none;
+    font-size: 9px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    background: var(--bmm-s05);
+    padding: 2px 6px;
+    border-radius: 999px;
+}
+.cm-src-url { flex: 1; min-width: 0; font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Two outcomes, side by side and described — a radio labelled "bundle" tells somebody who
+   already knows what a bundle is, which is nobody the first time. */
+.cm-out { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+.cm-out-opt {
+    flex: 1 1 240px;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 9px 11px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: border-color 0.14s ease, background 0.14s ease;
+}
+.cm-out-opt:hover { border-color: var(--border-accent); }
+.cm-out-opt.on { border-color: var(--accent); background: var(--bmm-bg-active); }
+.cm-out-opt span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cm-out-opt b { font-size: 12.5px; }
+.cm-out-opt small { font-size: 10.5px; color: var(--text-muted); line-height: 1.4; }
+
+.cm-listh { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 6px; }
+.cm-listh > span { flex: 1; }
+.cm-list { display: flex; flex-direction: column; gap: 5px; }
+.cm-row-name { flex: 1; min-width: 0; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cm-row-sub { flex: none; font-size: 10.5px; color: var(--text-muted); }
+/* With a catalogue FILE there is nothing to pack, so the picker is replaced by the word
+   rather than shown disabled: a dead control invites a click that cannot work. */
+.cm-forced { flex: none; width: 130px; font-size: 11px; color: var(--text-muted); text-align: center; }
+
+@media (prefers-reduced-motion: reduce) { .cm-tab, .cm-out-opt { transition: none; } }
+
 .cix-added-url {
     flex: 1;
     min-width: 0;

@@ -1020,10 +1020,6 @@
                                 data-i18n-tooltip="mm.cat.browseTip" data-tooltip="Follow catalogues of shared mod lists">
                                 <span data-i18n="mm.cat.browse">Catalogues…</span>
                             </button>
-                            <button class="btn btn-secondary" id="btn-mm-publish"
-                                data-i18n-tooltip="mm.cat.buildTip" data-tooltip="Publish a catalogue of mod lists">
-                                <span data-i18n="mm.cat.build">Publish…</span>
-                            </button>
                             <button class="btn btn-primary" id="btn-export-mm"
                                 data-tasky="mm.exportTip" data-tasky-icon="list"
                                >
@@ -3852,6 +3848,27 @@
                                     </div>
                                     <label class="toggle-switch" style="flex-shrink:0">
                                         <input type="checkbox" id="toggle-tasky-animation" checked
+                                            data-act-change="applyTaskySettings" />
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
+                                <!-- The loading SPIN, separately.
+                                     It shared the float's switch, so somebody who wanted a
+                                     still mascot lost the one animation that says something
+                                     — and somebody who found the spinning distracting had to
+                                     turn off the float to stop it. Two behaviours, two
+                                     switches. -->
+                                <div
+                                    style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--bmm-s03);border:1px solid var(--border);border-radius:10px">
+                                    <div>
+                                        <div style="font-size:13px;font-weight:600;color:var(--text-primary)"
+                                            data-i18n="settings.taskySpin">Tasky tourne pendant les chargements</div>
+                                        <div style="font-size:11px;color:var(--text-muted);margin-top:2px"
+                                            data-i18n="settings.taskySpinDesc">La mascotte pivote pendant une
+                                            synchronisation ou un scan. Indépendant de l'animation de flottement.</div>
+                                    </div>
+                                    <label class="toggle-switch" style="flex-shrink:0">
+                                        <input type="checkbox" id="toggle-tasky-spin" checked
                                             data-act-change="applyTaskySettings" />
                                         <span class="toggle-slider"></span>
                                     </label>

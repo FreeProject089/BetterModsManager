@@ -24,7 +24,6 @@ import { initSettings, runAutoBenchmarks } from '../features/settings/settings.j
 import { initModals } from './modals.js';
 import { wireTipDismissal, restoreAllTips } from './dismissible-tip.js';
 import { registerBmmsLanguage } from '../features/settings/bmms-prism.js';
-import { initTaskyDrag } from './tasky-drag.js';
 import { initNavbarVersion, initUpdateNotes, initAutoUpdate, checkPtbMode, checkAutoEula, checkAutoPrivacy, checkShowReleaseNotes, checkLangSelect } from './update-notes.js';
 // New Modularized Imports
 import { initModlist } from '../features/mods/modlist.js';
@@ -235,8 +234,10 @@ export function startTaskyLoader(reverse = false) {
     const mascotContainer = document.getElementById('app-mascot-container');
     if (!mascotContainer)
         return;
-    const isAnimated = localStorage.getItem('bmm_tasky_animated') !== 'false';
-    if (!isAnimated)
+    // Its OWN switch, not the float's. They were one setting, so wanting a still mascot
+    // also silenced the one animation that carries information — and wanting the spin gone
+    // meant giving up the float.
+    if (localStorage.getItem('bmm_tasky_spin') === 'false')
         return;
     const className = reverse ? 'is-loading-reverse' : 'is-loading';
     const otherClass = reverse ? 'is-loading' : 'is-loading-reverse';
@@ -1068,10 +1069,6 @@ async function main() {
     // the 14 ```bmms fences in the bundled documentation, which nobody would think to
     // blame on the scheduler not having been opened yet.
     registerBmmsLanguage();
-    // Tasky can be moved. It sits over the title bar's left corner, which is also where the
-    // window logo and the first navbar item are — the app should not be the one deciding
-    // which of those you would rather see.
-    initTaskyDrag();
     // Per-tip dismissal. The Settings switch is all-or-nothing, which is the wrong
     // granularity for what people actually want: THIS box gone, the tips on screens they
     // have not learnt yet kept. Every .bmm-tip[data-tip-id] gets its own × here.
@@ -1353,6 +1350,16 @@ window.applyTaskySettings = function () {
     // In-app tips (the unified .bmm-tip callouts). A CLASS on <body>, so hiding is one
     // rule and a page can never half-obey. Warnings are exempt by design: danger/warning
     // callouts never carry .bmm-tip, so the toggle cannot silence anything load-bearing.
+    const spinToggle = document.getElementById('toggle-tasky-spin');
+    localStorage.setItem('bmm_tasky_spin', String(spinToggle ? spinToggle.checked : true));
+    // Off while it is already spinning: stop now rather than at the end of whatever is
+    // loading, or the switch appears not to work for as long as the sync lasts.
+    if (spinToggle && !spinToggle.checked) {
+        const c = document.getElementById('app-mascot-container');
+        c?.classList.remove('is-loading', 'is-loading-reverse');
+        if (c)
+            c.dataset.spinStartTime = '0';
+    }
     const tipsToggle = document.getElementById('toggle-bmm-tips');
     const tipsOn = tipsToggle ? tipsToggle.checked : true;
     localStorage.setItem('bmm_tips_visible', String(tipsOn));
@@ -1607,10 +1614,12 @@ window.applyTaskySettings = function () {
     const visibleToggle = document.getElementById('toggle-tasky-visible');
     const animToggle = document.getElementById('toggle-tasky-animation');
     const tooltipToggle = document.getElementById('toggle-tasky-tooltip');
+    const spinToggle = document.getElementById('toggle-tasky-spin');
     const opacitySlider = document.getElementById('tasky-opacity-slider');
     const opacityLabel = document.getElementById('tasky-opacity-value');
     const isVisible = localStorage.getItem('bmm_tasky_visible') !== 'false';
     const isAnimated = localStorage.getItem('bmm_tasky_animated') !== 'false';
+    const spins = localStorage.getItem('bmm_tasky_spin') !== 'false';
     const tooltipEnabled = localStorage.getItem('bmm_tasky_tooltip') !== 'false';
     const opacity = parseInt(localStorage.getItem('bmm_tasky_opacity') || '100');
     if (visibleToggle)
@@ -1619,6 +1628,8 @@ window.applyTaskySettings = function () {
         animToggle.checked = isAnimated;
     if (tooltipToggle)
         tooltipToggle.checked = tooltipEnabled;
+    if (spinToggle)
+        spinToggle.checked = spins;
     if (opacitySlider)
         opacitySlider.value = String(opacity);
     if (opacityLabel)

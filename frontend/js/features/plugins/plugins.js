@@ -1099,6 +1099,7 @@ function openPluginCatalogBuilder(onSourcesChanged) {
             const linked = !!(p.download_url || '').trim();
             return `
             <div class="plug-cat-entry" data-i="${i}">
+                <div class="pcb-body">
                 <div class="plug-cat-entry-grid">
                     <input class="input pcb-f" data-f="id" data-i="${i}" value="${escAttr(p.id)}" placeholder="${t('plugins.createId') || 'id'} *">
                     <input class="input pcb-f" data-f="name" data-i="${i}" value="${escAttr(p.name)}" placeholder="${t('plugins.createName') || 'name'} *">
@@ -1111,6 +1112,7 @@ function openPluginCatalogBuilder(onSourcesChanged) {
                     <input class="input pcb-f pcb-small" data-f="author" data-i="${i}" value="${escAttr(p.author)}" placeholder="${escAttr(t('plugins.createAuthor') || 'author')}">
                     <input class="input pcb-f pcb-small" data-f="game" data-i="${i}" value="${escAttr(p.game)}" placeholder="${escAttr(t('plugins.createGame') || 'game')}">
                     <input class="input pcb-f pcb-grow" data-f="description" data-i="${i}" value="${escAttr(p.description)}" placeholder="${escAttr(t('plugins.createDesc') || 'description')}">
+                </div>
                 </div>
                 <button class="btn btn-xs btn-ghost pcb-rm" data-i="${i}" style="color:var(--danger)">${IC.x}</button>
             </div>`;
