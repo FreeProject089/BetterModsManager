@@ -23,6 +23,14 @@ struct ModSnapshot {
     /// opens the file.
     dependencies: Vec<String>,
     update_sources: Vec<crate::models::mod_entry::UpdateSource>,
+    /// Carried through so the list keeps what the mod knows about itself: who it is, and
+    /// where it updates from.
+    id: String,
+    content_id: Option<String>,
+    source_repo: Option<String>,
+    repo_mod_id: Option<String>,
+    update_url: Option<String>,
+    install_notes: String,
 }
 
 #[tauri::command]
@@ -78,6 +86,12 @@ pub async fn export_modlist(
                     })
                     .collect(),
                 update_sources: m.update_sources.clone(),
+                id: m.id.clone(),
+                content_id: m.content_id.clone(),
+                source_repo: m.source_repo.clone(),
+                repo_mod_id: m.repo_mod_id.clone(),
+                update_url: m.update_url.clone(),
+                install_notes: m.install_notes.clone(),
             })
         }).collect();
 
@@ -147,10 +161,18 @@ pub async fn export_modlist(
             description: snap.description,
             download_links: snap.download_links,
             file_tree,
-            install_notes: String::new(),
+            // The mod's own notes. This was String::new() — written by the exporter, read by
+            // the importer, and empty in between, so placement instructions somebody wrote
+            // for their own install never reached the person they sent the list to.
+            install_notes: snap.install_notes,
             tags: snap.tags,
             dependencies: snap.dependencies,
             update_sources: snap.update_sources,
+            id: snap.id,
+            content_id: snap.content_id,
+            source_repo: snap.source_repo,
+            repo_mod_id: snap.repo_mod_id,
+            update_url: snap.update_url,
         });
     }
 

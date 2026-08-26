@@ -139,6 +139,51 @@ fn an_archive_without_the_list_says_so_rather_than_parsing_nothing() {
     assert!(err.contains(MODLIST_ENTRY), "{err}");
 }
 
+/// A mod knows where it came from. A list that drops that is a list of mods that will
+/// never update again on the machine it lands on — and nothing says so, because everything
+/// else about the import looks right.
+#[test]
+fn a_mod_carries_its_provenance_and_its_notes() {
+    let json = r#"{
+        "format_version": "1.0", "name": "L", "description": null, "game_name": "DCS",
+        "game_path_hint": "", "author": null, "created_at": "now",
+        "mods": [{
+            "name": "Cockpit", "version": "1", "author": null, "description": null,
+            "download_links": [], "file_tree": [], "install_notes": "Drop it in Saved Games.",
+            "tags": [], "id": "m-7", "content_id": "c-abc",
+            "source_repo": "https://example.com/repo.json", "repo_mod_id": "r-3",
+            "update_url": "https://example.com/latest.zip"
+        }]
+    }"#;
+    let list: ModList = serde_json::from_str(json).unwrap();
+    let m = &list.mods[0];
+    assert_eq!(m.id, "m-7");
+    assert_eq!(m.content_id.as_deref(), Some("c-abc"));
+    assert_eq!(m.source_repo.as_deref(), Some("https://example.com/repo.json"));
+    assert_eq!(m.repo_mod_id.as_deref(), Some("r-3"));
+    assert_eq!(m.update_url.as_deref(), Some("https://example.com/latest.zip"));
+    // The exporter used to write String::new() here, so notes never travelled at all.
+    assert_eq!(m.install_notes, "Drop it in Saved Games.");
+}
+
+/// Every `.mm` written before those fields existed has none of them, and one from last
+/// year must still open rather than fail to parse.
+#[test]
+fn an_entry_written_before_provenance_existed_still_opens() {
+    let json = r#"{
+        "format_version": "1.0", "name": "L", "description": null, "game_name": "DCS",
+        "game_path_hint": "", "author": null, "created_at": "now",
+        "mods": [{
+            "name": "Cockpit", "version": "1", "author": null, "description": null,
+            "download_links": [], "file_tree": [], "install_notes": "", "tags": []
+        }]
+    }"#;
+    let list: ModList = serde_json::from_str(json).unwrap();
+    let m = &list.mods[0];
+    assert_eq!(m.id, "");
+    assert!(m.content_id.is_none() && m.source_repo.is_none() && m.update_url.is_none());
+}
+
 #[test]
 fn dependencies_travel_as_names() {
     // An id from somebody else's install resolves to nothing here, so the importer would

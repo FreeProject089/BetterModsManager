@@ -83,6 +83,25 @@ pub struct ModListEntry {
     /// Custom tags
     #[serde(default)]
     pub tags: Vec<String>,
+    /// The publisher's id for this mod. Informational: ids are local, and the importer makes
+    /// its own. Carried so a list can be diffed against the install it came from.
+    #[serde(default)]
+    pub id: String,
+    /// The publisher's content fingerprint — the one identifier that means the same thing on
+    /// two machines. The importer derives its own from the files it wrote; this is what it
+    /// can be compared AGAINST.
+    #[serde(default)]
+    pub content_id: Option<String>,
+    /// Where the mod came from, and how it keeps itself current. Carried for the same reason
+    /// update_sources is: a list that arrives with its provenance stripped is a list of mods
+    /// that will never update again, and re-attaching every repo by hand is not a thing
+    /// anybody does.
+    #[serde(default)]
+    pub source_repo: Option<String>,
+    #[serde(default)]
+    pub repo_mod_id: Option<String>,
+    #[serde(default)]
+    pub update_url: Option<String>,
 }
 
 impl ModList {

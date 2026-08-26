@@ -10,6 +10,7 @@ import { refreshMods } from './mods.js';
 import { renderProfiles } from '../profiles/profiles.js';
 import { getGithubPat } from '../settings/settings.js';
 import { escHtml, escAttr, formatBytes } from '../../core/utils.js';
+import { renderTagChip } from '../../ui/icon-pack.js';
 let lastImportedModlistJson = null;
 // Re-exporting toast from app.js for now or until moved to a better place
 import { toast, toastSaved } from '../../ui/app.js';
@@ -369,6 +370,11 @@ export function renderImportedModlist(modlist) {
     const container = document.getElementById('imported-content');
     if (!container)
         return;
+    // A mod carries tag IDs; a .mm carries the DEFINITIONS of the tags its mods use, and has
+    // since tag_defs was added to the format. This screen was printing the id — so a tag
+    // somebody named "Liveries" and gave an icon arrived as a bare UUID. The definitions were
+    // in the file the whole time; nothing was reading them.
+    const tagDefs = new Map((modlist.tag_defs || []).map((d) => [d.id, d]));
     // Calculate totals
     let totalFiles = 0;
     let totalBytes = 0;
@@ -477,7 +483,15 @@ export function renderImportedModlist(modlist) {
           ` : ''}
 
           <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap">
-            ${m.tags && m.tags.length > 0 ? m.tags.map(tag => `<span style="font-size:9px; background:rgba(255,255,255,0.05); padding:2px 6px; border-radius:4px; color:var(--text-secondary); border:1px solid var(--border)">${escHtml(tag)}</span>`).join('') : ''}
+            ${(m.tags || []).map((tag) => {
+            const def = tagDefs.get(tag);
+            // Only a list written before tag_defs existed reaches the fallback, and back
+            // then the ids WERE the words — so printing the id is right there and wrong
+            // for everything written since.
+            return def
+                ? renderTagChip(def, { fontSize: 9, pad: '2px 6px' })
+                : `<span style="font-size:9px; background:rgba(255,255,255,0.05); padding:2px 6px; border-radius:4px; color:var(--text-secondary); border:1px solid var(--border)">${escHtml(tag)}</span>`;
+        }).join('')}
 
             ${m.download_links && m.download_links.length > 0 ? m.download_links.map(l => `
                 <a href="${l.url}" target="_blank" class="btn btn-sm btn-ghost" style="padding:2px 8px; font-size:10px; height:22px; gap:4px; text-decoration:none; color:var(--accent)">

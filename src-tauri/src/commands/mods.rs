@@ -1945,6 +1945,13 @@ pub async fn install_from_modlist(
                 new_mod.description = entry.description.clone();
                 new_mod.tags = entry.tags.clone();
                 new_mod.update_sources = entry.update_sources.clone();
+                // Provenance, so the mod keeps updating itself on the machine it lands on.
+                // Written unconditionally: the mod was just created, so there is nothing
+                // local to overwrite — and a list whose mods arrive with no source is a
+                // list of mods that will never update again.
+                new_mod.source_repo = entry.source_repo.clone();
+                new_mod.repo_mod_id = entry.repo_mod_id.clone();
+                new_mod.update_url = entry.update_url.clone();
                 new_mod.install_notes = entry.install_notes.clone();
                 let mid = new_mod.id.clone();
                 let _mod_folder = new_mod.mod_folder_path.clone();
@@ -2001,6 +2008,13 @@ pub async fn install_from_modlist(
                 new_mod.author = entry.author.clone();
                 new_mod.tags = entry.tags.clone();
                 new_mod.update_sources = entry.update_sources.clone();
+                // Provenance, so the mod keeps updating itself on the machine it lands on.
+                // Written unconditionally: the mod was just created, so there is nothing
+                // local to overwrite — and a list whose mods arrive with no source is a
+                // list of mods that will never update again.
+                new_mod.source_repo = entry.source_repo.clone();
+                new_mod.repo_mod_id = entry.repo_mod_id.clone();
+                new_mod.update_url = entry.update_url.clone();
                 new_mod.install_notes = entry.install_notes.clone();
                 let mid = new_mod.id.clone();
                 data.mods.push(new_mod);
@@ -2114,6 +2128,13 @@ pub async fn install_from_modlist(
                     new_mod.description = entry.description.clone();
                     new_mod.tags = entry.tags.clone();
                 new_mod.update_sources = entry.update_sources.clone();
+                // Provenance, so the mod keeps updating itself on the machine it lands on.
+                // Written unconditionally: the mod was just created, so there is nothing
+                // local to overwrite — and a list whose mods arrive with no source is a
+                // list of mods that will never update again.
+                new_mod.source_repo = entry.source_repo.clone();
+                new_mod.repo_mod_id = entry.repo_mod_id.clone();
+                new_mod.update_url = entry.update_url.clone();
                     new_mod.install_notes = entry.install_notes.clone();
                     new_mod.download_links = entry.download_links.iter().map(|l| crate::models::mod_entry::DownloadLink {
                         url: l.url.clone(),
