@@ -11489,13 +11489,6 @@ body.tasky-hidden #app-mascot-container {
     background:rgba(59,130,246,0.15); color: var(--cyan); vertical-align:middle; }
 .btc-card-hidden { opacity:.6; }
 
-/* ── Theme catalog builder (pick themes → export) ── */
-.tcb-row { display: flex; align-items: center; gap: 9px; padding: 7px 10px; border: 1px solid var(--bmm-s08); border-radius: 9px; cursor: pointer; background: var(--bmm-s03); }
-.tcb-row:hover { border-color: var(--bmm-s15); background: var(--bmm-s05); }
-.tcb-swatch { width: 16px; height: 16px; border-radius: 5px; flex-shrink: 0; box-shadow: 0 0 0 1px var(--bmm-s10) inset; }
-.tcb-name { font-size: 12.5px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tcb-tag { font-size: 8.5px; text-transform: uppercase; letter-spacing: .04em; font-weight: 800; color: var(--bmm-text-muted); border: 1px solid var(--bmm-s10); border-radius: 4px; padding: 1px 4px; margin-left: 4px; }
-
 /* ── Reorderable settings cards ─────────────────────────────────────────── */
 .cardorder-bar { display:flex; align-items:center; gap:12px; flex-wrap:wrap;
     padding:8px 12px; margin-bottom:14px; border:1px dashed var(--border); border-radius:10px;
@@ -18369,9 +18362,9 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
    These two are opened FROM it and inherit .modal-overlay's 11000 — which put them behind
    the thing that opened them: visible as a dim, unreachable, and looking like nothing
    happened. Measured, not guessed: 2000000 is what .tut-hub-overlay declares. */
-.tutc-overlay, .tutcat-overlay { z-index: 2000100; }
+.tutc-overlay { z-index: 2000100; }
 
-.tutc-panel, .tutcat-panel {
+.tutc-panel {
     width: min(760px, 92vw); max-height: 84vh; overflow-y: auto;
     background: var(--bmm-bg-elevated); border: 1px solid var(--border);
     border-radius: 16px; padding: 18px 20px;
@@ -18408,27 +18401,6 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
 .tutc-hint { font-size: 11px; color: var(--text-muted); }
 .tut-hub-tools { display: flex; gap: 6px; flex-wrap: wrap; padding: 10px 12px; border-top: 1px solid var(--border); }
 
-.tutcat-lede { margin: 0; font-size: 12px; color: var(--text-muted); line-height: 1.5; }
-.tutcat-addrow { display: flex; gap: 6px; }
-.tutcat-addrow > .input { flex: 1; min-width: 0; }
-.tutcat-sources { display: flex; gap: 6px; flex-wrap: wrap; }
-.tutcat-chip {
-    display: inline-flex; align-items: center; gap: 6px;
-    padding: 3px 10px; border-radius: 999px; font-size: 11px;
-    border: 1px solid var(--border); background: var(--bmm-s03); color: var(--text-secondary);
-}
-.tutcat-drop { border: none; background: none; color: var(--text-muted); cursor: pointer; }
-.tutcat-drop:hover { color: var(--danger); }
-.tutcat-none { font-size: 11px; color: var(--text-muted); }
-.tutcat-err { font-size: 11px; color: var(--danger); overflow-wrap: anywhere; }
-.tutcat-list { display: flex; flex-direction: column; gap: 8px; }
-.tutcat-item {
-    display: flex; align-items: center; gap: 10px;
-    border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; background: var(--bmm-s02);
-}
-.tutcat-item-mid { flex: 1; min-width: 0; }
-.tutcat-item-name { font-size: 13px; font-weight: 600; color: var(--text-primary); }
-.tutcat-item-desc { font-size: 11px; color: var(--text-muted); }
 
 
 /* ── Element picker (tutorial creator) ──

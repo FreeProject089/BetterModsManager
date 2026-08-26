@@ -13,14 +13,10 @@
 // secrets, the same storage decision every other catalogue screen already made.
 
 import { t } from '../core/i18n.js';
-import { planPublish } from '../core/catalog-publish.js';
-import { raiseAboveAll } from './layer.js';
 import { invoke } from '../core/api.js';
 import { toast } from './app.js';
-import { sourceAccessHtml, wireSourceAccess, closeOwningOverlay } from '../core/source-access.js';
 import { fetchSourceText } from '../core/source-fetch.js';
 import { importCustomTutorialText, signatureLabel } from './tutorial-custom.js';
-import { escHtml, escAttr } from '../core/utils.js';
 
 const STORE = 'bmm.tutorialCatalogs';
 
@@ -31,9 +27,6 @@ function sources(): string[] {
         const v = JSON.parse(localStorage.getItem(STORE) || '[]');
         return Array.isArray(v) ? v.filter((x) => typeof x === 'string') : [];
     } catch { return []; }
-}
-function saveSources(list: string[]): void {
-    try { localStorage.setItem(STORE, JSON.stringify([...new Set(list)])); } catch { /* full */ }
 }
 
 /** Entries out of one fetched catalogue document, tolerant of the two shapes in the wild. */
@@ -54,317 +47,113 @@ function entriesOf(doc: unknown): CatalogEntry[] {
 
 
 /**
- * Build a catalog.json from the tutorials you have.
+ * Tutorial catalogues, on the screen every other kind of catalogue uses.
  *
- * The catalogue screen could only READ one. This is the other half: pick from your own
- * documents, give the folder they will be served from, and write the file.
+ * This was two screens with two different ideas of the same thing: a browser that could
+ * follow an address and nothing else, and a builder that could only write a FOLDER to a host
+ * you had to arrange yourself. Neither could open a file somebody sent you, and the wording
+ * they used for the same acts did not match the other five kinds.
  *
- * It does NOT upload anything. A catalogue is a list of addresses, and the .bmmtut files
- * have to be reachable from somewhere — asking for the base URL up front is what stops this
- * writing a document full of links that resolve to nothing.
+ * Both are ui/catalog-modal.ts now, so tutorials gained following by file, the single-file
+ * bundle, and catalogue-index support without any of it being written here. What is left is
+ * the part that is about tutorials.
+ *
+ * Two things it has to say for itself, both of which would be silent regressions:
+ *
+ *   · files are named after the ID, not the title. A tutorial id is already a slug and is
+ *     what its entry has always been called, so naming files after titles would rename every
+ *     file in every catalogue already published.
+ *   · the document carries its entries TWICE — under `tutorials`, which this app prefers,
+ *     and under `items` with a kind, which is what BCWEB's pooled catalogues emit. Write one
+ *     and not the other and half the readers see an empty catalogue.
  */
-export async function openTutorialCatalogBuilder(): Promise<void> {
-    document.getElementById('tutcat-build')?.remove();
-
+export async function openTutorialCatalog(onInstalled: () => void): Promise<void> {
+    const { openCatalogModal } = await import('./catalog-modal.js');
     const { listCustomDocs, getCustomDoc } = await import('./tutorial-custom.js');
-    // `mode`/`url`: where each lesson's file comes from. Per ENTRY, so one catalogue can
-    // carry the small lessons and point at a big one somebody already hosts.
-    type Row = { id: string; name: string; desc: string; on: boolean; mode: 'embed' | 'link'; url: string };
-    // OFF by default. Pre-ticking everything made "build a catalogue" mean "publish every
-    // lesson I happen to have", and the only way to publish two was to untick twenty.
-    const rows: Row[] = listCustomDocs().map((d) => ({
-        id: d.id,
-        name: d.title?.en || d.id,
-        desc: d.desc?.en || '',
-        on: false,
-        mode: 'embed',
-        url: '',
-    }));
 
-    const ov = document.createElement('div');
-    ov.className = 'modal-overlay open';
-    ov.id = 'tutcat-build';
-    // Inside the app frame and above whatever opened it. It used to be a flat 11200,
-    // which is above ordinary modals and far BELOW the tutorial hub (2000000) this is
-    // always opened from — so it painted its dim underneath the hub and looked like the
-    // button did nothing. `contain: paint` on the frame is the other half: an overlay on
-    // <body> dims the desktop instead of the app.
-    raiseAboveAll(ov, 11200);
-    (document.getElementById('app-window-outer') || document.body).appendChild(ov);
+    type Row = { id: string; name: string; desc: string };
+    /** Where each browsed entry came from, so a relative address can be resolved. */
+    let from = new Map<string, string>();
 
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    const close = () => {
-        document.body.style.overflow = prevOverflow;
-        document.removeEventListener('keydown', onKey);
-        ov.remove();
-    };
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
-    document.addEventListener('keydown', onKey);
-
-    let name = t('tutcat.b.defname') || 'My tutorials';
-    let base = '';
-
-    const paint = () => {
-        const on = rows.filter((r) => r.on).length;
-        ov.innerHTML = `
-        <div class="modal glass" style="max-width:640px; width:94%; max-height:86vh; display:flex; flex-direction:column;">
-            <div class="modal-header" style="flex-shrink:0;">
-                <h3>${escHtml(t('tutcat.b.title') || 'Build a tutorial catalogue')}</h3>
-                <button class="modal-close" type="button" data-x>&times;</button>
-            </div>
-            <div class="modal-body" style="flex:1; min-height:0; overflow:auto;">
-                <label class="repo-cat-b-lbl">${escHtml(t('tutcat.b.name') || 'Catalogue name')}</label>
-                <input class="input" id="tutcat-b-name" value="${escAttr(name)}" style="margin-bottom:14px;">
-
-                <label class="repo-cat-b-lbl">${escHtml(t('tutcat.b.base') || 'Address the files will be served from (optional)')}</label>
-                <input class="input" id="tutcat-b-base" value="${escAttr(base)}" placeholder="${escAttr(t('tutcat.b.basePh') || 'leave empty — they sit beside the catalogue')}" style="margin-bottom:4px;">
-                <div class="cat-index-empty" style="margin-bottom:14px;">${escHtml(t('tutcat.b.baseHint')
-                    || 'Leave it empty and the tutorials are written next to catalog.json, so you can upload the folder anywhere. Fill it in only if the files will live somewhere else.')}</div>
-
-                <label class="repo-cat-b-lbl">${escHtml(t('tutcat.b.pick') || 'Tutorials to include')}</label>
-                ${rows.length ? '' : `<div class="cat-index-empty">${escHtml(t('tutcat.b.none') || 'You have no tutorials of your own yet.')}</div>`}
-                <div class="repo-cat-b-list">
-                    ${rows.map((r, i) => `
-                        <div class="repo-cat-b-row cat-pub-row">
-                            <label class="cat-pub-pick">
-                                <input type="checkbox" data-i="${i}" ${r.on ? 'checked' : ''}>
-                                <span class="repo-cat-b-name">${escHtml(r.name)}</span>
-                                <span class="repo-cat-b-url" title="${escAttr(r.id)}">${escHtml(r.mode === 'link' ? t('catpub.linked') : `${r.id}.bmmtut`)}</span>
-                            </label>
-                            <select class="input cat-pub-mode" data-m="${i}">
-                                <option value="embed"${r.mode === 'embed' ? ' selected' : ''}>${escHtml(t('catpub.embed'))}</option>
-                                <option value="link"${r.mode === 'link' ? ' selected' : ''}>${escHtml(t('catpub.link'))}</option>
-                            </select>
-                            ${r.on && r.mode === 'link' ? `<input class="input cat-pub-url" data-u="${i}" spellcheck="false"
-                                   value="${escAttr(r.url)}" placeholder="${escAttr(t('catpub.urlPh'))}">` : ''}
-                        </div>`).join('')}
-                </div>
-            </div>
-            <div class="modal-footer" style="flex-shrink:0;">
-                <button class="btn btn-xs" data-all>${escHtml(t('repo.cat.b.all') || 'All')}</button>
-                <button class="btn btn-xs" data-none>${escHtml(t('repo.cat.b.none') || 'None')}</button>
-                <span style="flex:1"></span>
-                <button class="btn btn-primary" data-go ${on ? '' : 'disabled'}>
-                    ${escHtml((t('tutcat.b.write') || 'Export the catalogue ({n})').replace('{n}', String(on)))}
-                </button>
-            </div>
-        </div>`;
-
-        ov.querySelector('[data-x]')?.addEventListener('click', close);
-        ov.addEventListener('mousedown', (e) => { if (e.target === ov) close(); });
-        (ov.querySelector('#tutcat-b-name') as HTMLInputElement | null)
-            ?.addEventListener('input', (e) => { name = (e.target as HTMLInputElement).value; });
-        (ov.querySelector('#tutcat-b-base') as HTMLInputElement | null)
-            ?.addEventListener('input', (e) => { base = (e.target as HTMLInputElement).value; });
-        ov.querySelectorAll('[data-i]').forEach((c) => c.addEventListener('change', (e) => {
-            rows[Number((e.target as HTMLElement).dataset.i)].on = (e.target as HTMLInputElement).checked;
-            paint();
-        }));
-        ov.querySelectorAll('[data-m]').forEach((c) => c.addEventListener('change', (e) => {
-            const el = e.target as HTMLSelectElement;
-            const r = rows[Number(el.dataset.m)];
-            r.mode = el.value === 'link' ? 'link' : 'embed';
-            // Saying HOW a lesson should be published is saying you want it published —
-            // and a picker that does nothing until a box is ticked reads as broken.
-            r.on = true;
-            paint();
-        }));
-        // NOT repainted on input: the whole modal is rebuilt by paint(), which would take
-        // the caret out of the box on every keystroke.
-        ov.querySelectorAll('[data-u]').forEach((c) => c.addEventListener('input', (e) => {
-            const el = e.target as HTMLInputElement;
-            rows[Number(el.dataset.u)].url = el.value;
-        }));
-        ov.querySelector('[data-all]')?.addEventListener('click', () => { rows.forEach((r) => { r.on = true; }); paint(); });
-        ov.querySelector('[data-none]')?.addEventListener('click', () => { rows.forEach((r) => { r.on = false; }); paint(); });
-
-        ov.querySelector('[data-go]')?.addEventListener('click', async () => {
-            const b = base.trim().replace(/\/+$/, '');
-            const chosen = rows.filter((r) => r.on);
-            if (!chosen.length) return;
-
-            // A FOLDER, not a filename: this writes catalog.json and one .bmmtut per
-            // tutorial, and asking for "catalog.json" would leave the files nowhere.
-            const { pickFolder } = await import('../core/api.js');
-            const dir = await pickFolder().catch(() => null);
-            if (!dir) return;
-
-            // Per entry: packed beside the catalogue, or an address you gave. The shared
-            // planner owns both decisions — the filename a name collapses to, and the
-            // address written for it — because every catalogue builder in BMM asks them and
-            // three different answers is three different sets of bugs.
-            //
-            // The file is named after the ID here, not the title: a tutorial's id is already
-            // a slug and is what its entry has always been called, so renaming them after
-            // their titles would break every catalogue already pointing at the old names.
-            const plan = planPublish(chosen, (r) => (r.mode === 'link' ? { mode: 'link', url: r.url } : { mode: 'embed' }),
-                { ext: 'bmmtut', base: b, nameOf: (r) => r.id });
-            if (plan.errors.length) {
-                toast(t('catpub.dropped').replace('{n}', String(plan.errors.length))
-                    + ' — ' + plan.errors.slice(0, 3).join(' · '), 'warning', 8000);
-            }
-            if (!plan.rows.length) { toast(t('catpub.nothing'), 'error'); return; }
-            const entries = plan.rows.map((p) => ({
-                id: p.item.id,
-                name: p.item.name,
-                description: p.item.desc,
-                url: p.address,
-            }));
-            // BOTH shapes, on purpose: `tutorials` is what this app's own reader prefers and
-            // `items` with a kind is what BCWEB's pooled catalogues emit. Writing one and not
-            // the other makes a catalogue that half the readers cannot see.
-            const doc = JSON.stringify({
-                name: name.trim() || 'My tutorials',
-                generatedAt: new Date().toISOString(),
-                tutorials: entries,
-                items: entries.map((e) => ({ ...e, kind: 'tutorial' })),
-            }, null, 2);
-
-            try {
-                // The lessons first. A catalog.json listing files that failed to write is
-                // the one outcome worth avoiding — it looks finished and installs nothing.
-                const failed: string[] = [];
-                // Only the PACKED ones. A linked entry already lives somewhere.
-                const toWrite = plan.rows.filter((p) => p.embed);
-                for (const p of toWrite) {
-                    const tut = getCustomDoc(p.item.id);
-                    if (!tut) { failed.push(p.item.name); continue; }
+    await openCatalogModal<Row>({
+        id: 'tut',
+        title: t('tutcat.title'),
+        subtitle: t('tutcat.desc'),
+        storeKey: STORE,
+        feedField: 'tutorials',
+        ext: 'bmmtut',
+        fallbackNoun: 'tutorial',
+        indexType: 'tutorial',
+        candidates: async () => listCustomDocs().map((d: any) => ({
+            id: d.id, name: d.title?.en || d.id, desc: d.desc?.en || '',
+        })),
+        label: (r) => ({ name: r.name, sub: r.desc }),
+        entryId: (r) => r.id,
+        nameOf: (r) => r.id,
+        writeEntry: async (r, dir, file) => {
+            const tut = getCustomDoc(r.id);
+            if (!tut) return false;
+            const sep = dir.includes('\\') ? '\\' : '/';
+            await invoke('write_text_file', { path: `${dir}${sep}${file}`, content: JSON.stringify(tut, null, 2) });
+            return true;
+        },
+        row: (r, address) => ({ id: r.id, name: r.name, description: r.desc, url: address }),
+        decorateDoc: (doc) => {
+            const entries = (doc.tutorials as Array<Record<string, unknown>>) || [];
+            doc.items = entries.map((e) => ({ ...e, kind: 'tutorial' }));
+        },
+        looksLike: (doc) => entriesOf(doc).length > 0 || Array.isArray((doc as any)?.tutorials),
+        browse: {
+            action: t('tutcat.install'),
+            load: async () => {
+                const entries: Array<{ id: string; name: string; sub?: string }> = [];
+                const problems: string[] = [];
+                from = new Map();
+                for (const source of sources()) {
                     try {
-                        await invoke('write_text_file', { path: `${dir}/${p.file}`, content: JSON.stringify(tut, null, 2) });
-                    } catch { failed.push(p.item.name); }
+                        // Cache-busted: a catalogue somebody just republished is the one case
+                        // where a stale copy is worse than a slow fetch.
+                        const sep = source.includes('?') ? '&' : '?';
+                        const raw = await fetchSourceText(`${source}${sep}t=${Date.now()}`);
+                        const found = entriesOf(JSON.parse(raw));
+                        if (!found.length) { problems.push(`${source} — ${t('tutcat.empty')}`); continue; }
+                        for (const e of found) {
+                            // Kept apart per SOURCE: two catalogues may list the same id, and
+                            // the address one of them gave is not the address of the other.
+                            const key = `${source}::${e.id}`;
+                            from.set(key, `${source}::${e.url}`);
+                            entries.push({ id: key, name: e.name, sub: e.description });
+                        }
+                    } catch (e) {
+                        // Kept ON the source: when one server is down, which one is the
+                        // useful thing to know.
+                        problems.push(`${source} — ${String(e).slice(0, 80)}`);
+                    }
                 }
-                if (toWrite.length && failed.length === toWrite.length) { toast(t('tutcat.b.failAll') || 'Could not write the tutorials.', 'error'); return; }
-
-                await invoke('write_text_file', { path: `${dir}/catalog.json`, content: doc });
-                // Named, not counted: "wrote 4 of 5" leaves you hunting for which one.
-                if (failed.length) {
-                    toast((t('tutcat.b.savedPartial') || 'Wrote the catalogue, but these could not be exported: {names}')
-                        .replace('{names}', failed.join(', ')), 'warning');
-                } else {
-                    toast((t('tutcat.b.saved') || 'Wrote catalog.json and {n} tutorial file(s) — upload the folder as it is.')
-                        .replace('{n}', String(toWrite.length))
-                        + (plan.linked ? ` — ${t('catpub.plusLinked').replace('{l}', String(plan.linked))}` : ''), 'success');
-                }
-                close();   // NOT ov.remove(): the page would stay locked with the modal gone
-            } catch (e) { toast(String(e), 'error'); }
-        });
-    };
-
-    paint();
-}
-
-export function openTutorialCatalog(onInstalled: () => void): void {
-    document.querySelectorAll('.tutcat-overlay').forEach((n) => n.remove());
-    const overlay = document.createElement('div');
-    overlay.className = 'modal-overlay tutcat-overlay open';
-
-    let results: Array<{ source: string; entries: CatalogEntry[]; error?: string }> = [];
-    let loading = false;
-
-    const paint = () => {
-        overlay.innerHTML = `
-      <div class="tutcat-panel">
-        <div class="tutc-head">
-          <h2 class="tutc-title">${escHtml(t('tutcat.title'))}</h2>
-          <button type="button" class="modal-close" data-close>×</button>
-        </div>
-        <p class="tutcat-lede">${escHtml(t('tutcat.desc'))}</p>
-        <div class="tutcat-addrow">
-          <input type="text" class="input input-sm" id="tutcat-url" placeholder="https://…/catalog.json" spellcheck="false">
-          <button type="button" class="btn btn-sm btn-accent" id="tutcat-follow">${escHtml(t('tutcat.follow'))}</button>
-        </div>
-        ${sourceAccessHtml('tutcat')}
-        <div class="tutcat-sources">
-          ${sources().map((u) => `
-            <span class="tutcat-chip" title="${escAttr(u)}">${escHtml(u.length > 42 ? u.slice(0, 40) + '…' : u)}
-              <button type="button" class="tutcat-drop" data-url="${escAttr(u)}" title="${escAttr(t('tutcat.unfollow'))}">×</button>
-            </span>`).join('')}
-          ${sources().length ? '' : `<span class="tutcat-none">${escHtml(t('tutcat.noSources'))}</span>`}
-        </div>
-        <div class="tutcat-list">
-          ${loading ? `<div class="tutcat-none">${escHtml(t('common.loading'))}</div>` : results.map((r) => r.error
-            ? `<div class="tutcat-err">${escHtml(r.source)}: ${escHtml(r.error)}</div>`
-            : r.entries.map((e) => `
-              <div class="tutcat-item">
-                <div class="tutcat-item-mid">
-                  <div class="tutcat-item-name">${escHtml(e.name)}</div>
-                  ${e.description ? `<div class="tutcat-item-desc">${escHtml(e.description)}</div>` : ''}
-                </div>
-                <button type="button" class="btn btn-sm btn-accent tutcat-install"
-                        data-url="${escAttr(e.url)}" data-src="${escAttr(r.source)}">${escHtml(t('tutcat.install'))}</button>
-              </div>`).join('')).join('')}
-        </div>
-      </div>`;
-        wire();
-    };
-
-    const refresh = async () => {
-        loading = true;
-        paint();
-        results = [];
-        for (const source of sources()) {
-            try {
-                const sep = source.includes('?') ? '&' : '?';
-                const raw = await fetchSourceText(`${source}${sep}t=${Date.now()}`);
-                const entries = entriesOf(JSON.parse(raw));
-                results.push({ source, entries, ...(entries.length ? {} : { error: t('tutcat.empty') }) });
-            } catch (e) {
-                results.push({ source, entries: [], error: String(e).slice(0, 120) });
-            }
-        }
-        loading = false;
-        paint();
-    };
-
-    function wire(): void {
-        overlay.querySelector('[data-close]')?.addEventListener('click', () => overlay.remove());
-        wireSourceAccess('tutcat', (m, k) => toast(m, k === 'warning' ? 'warning' : 'success'),
-            () => {
-                closeOwningOverlay(overlay);
-                (document.getElementById('nav-settings') as HTMLElement | null)?.click();
-                setTimeout(() => document.getElementById('settings-identity-card')
-                    ?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 250);
+                return { entries, problems };
             },
-            () => (overlay.querySelector('#tutcat-url') as HTMLInputElement | null)?.value?.trim() || '');
-
-        overlay.querySelector('#tutcat-follow')?.addEventListener('click', () => {
-            const url = (overlay.querySelector('#tutcat-url') as HTMLInputElement | null)?.value?.trim();
-            if (!url) return;
-            saveSources([...sources(), url]);
-            void refresh();
-        });
-        overlay.querySelectorAll('.tutcat-drop').forEach((b) => b.addEventListener('click', () => {
-            saveSources(sources().filter((u) => u !== (b as HTMLElement).dataset.url));
-            void refresh();
-        }));
-        overlay.querySelectorAll('.tutcat-install').forEach((b) => b.addEventListener('click', async () => {
-            const btn = b as HTMLButtonElement;
-            const raw = btn.dataset.url || '';
-            // Relative to its catalogue, so a catalogue and its files move hosts together.
-            const url = /^[a-z]+:\/\//i.test(raw) ? raw : new URL(raw, btn.dataset.src).toString();
-            btn.disabled = true;
-            try {
+            pick: async (e) => {
+                const rec = from.get(e.id);
+                if (!rec) return;
+                const i = rec.lastIndexOf('::');
+                const src = rec.slice(0, i);
+                const addr = rec.slice(i + 2);
+                // Relative to its catalogue, so a catalogue and its files move hosts together.
+                const url = /^[a-z]+:\/\//i.test(addr) ? addr : new URL(addr, src).toString();
                 const text = await fetchSourceText(url);
                 const res = await importCustomTutorialText(text);
                 const sig = signatureLabel(res.signature);
                 toast(`${t('tuthub.imported')} — ${sig.text}`, sig.tone === 'err' ? 'warning' : 'success');
                 onInstalled();
-            } catch (e) {
-                toast(String(e).slice(0, 160), 'error');
-            } finally {
-                btn.disabled = false;
-            }
-        }));
-    }
-
-    // ATTACH FIRST. paint() ends in wire(), and wire() calls wireSourceAccess('tutcat'),
-    // which finds its controls with document.getElementById — on a detached overlay those ids
-    // are not in the document yet, wiring bails out, and the protected-source fold ships with
-    // an unfilled key list and a dead "manage keys" button. The exact bug the automations
-    // catalogue had, reproduced here by writing the same two lines in the same wrong order.
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
-    (document.getElementById('app-window-outer') || document.body).append(overlay);
-    paint();
-    if (sources().length) void refresh();
+            },
+        },
+        manageKeys: () => {
+            (document.getElementById('nav-settings') as HTMLElement | null)?.click();
+            setTimeout(() => document.getElementById('settings-identity-card')
+                ?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 250);
+        },
+    });
 }
+
+/** The builder is the same screen's Create tab now. Kept as a name callers already use. */
+export const openTutorialCatalogBuilder = (): Promise<void> => openTutorialCatalog(() => {});

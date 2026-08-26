@@ -3,18 +3,18 @@
 // Fetches official / partner / community theme lists (same pattern as app-catalog)
 // and displays a gallery with preview, install & apply buttons.
 
-import { sourceAccessHtml, wireSourceAccess } from '../../core/source-access.js';
-import { invoke, saveFile } from '../../core/api.js';
+
+import { invoke } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
 import { toast } from '../../ui/app.js';
-// NOTE: this file is @ts-nocheck, so a wrong name here is a runtime ReferenceError and not a
-// build error. Checked against the exports in catalog-index.ts by hand.
-import { enabledOnly, looksLikeIndex, importIndexForType, describeKinds } from '../catalogs/catalog-index.js';
+// NOTE: this file is @ts-nocheck, so a wrong name here is a runtime ReferenceError and not
+// a build error — scripts/check-undefined-names.mjs is what catches one.
+import { enabledOnly } from '../catalogs/catalog-index.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { installTheme, activateTheme, getInstalledThemes, BmmTheme } from './theme-engine.js';
 import { fetchSourceText } from '../../core/source-fetch.js';
 import { resolveEntryUrl } from '../../core/catalog-url.js';
-import { planPublish } from '../../core/catalog-publish.js';
+
 
 const OFFICIAL_CATALOG = 'https://raw.githubusercontent.com/BetterDCS/BMM_Themes/main/catalog.json';
 const COMMUNITY_SRC_KEY = 'bmm_theme_community_sources';
@@ -72,7 +72,6 @@ function buildModal(): void {
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
                     <input id="theme-cat-search" placeholder="${t('common.search') || 'Search...'}" style="flex:1;border:none;background:transparent;padding:8px 0;font-size:12.5px;color:var(--bmm-text-primary);">
                 </div>
-                <button class="btn btn-ghost btn-sm" id="theme-cat-add-community">${t('themes.addCommunity') || '+ Community source'}</button>
                 <button class="btn btn-ghost btn-sm" id="theme-cat-refresh">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="margin-right:5px;"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
                     ${t('common.refresh') || 'Refresh'}
@@ -81,7 +80,7 @@ function buildModal(): void {
             <div id="theme-cat-list" style="flex:1;overflow-y:auto;padding:16px 18px;display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;"></div>
             <div class="modal-footer" style="padding:12px 18px;border-top:1px solid rgba(255,255,255,0.06);font-size:11px;color:var(--bmm-text-muted);">
                 <span id="theme-cat-count"></span>
-                <button class="btn btn-ghost btn-sm" id="theme-cat-build">${t('themes.createCatalog') || 'Create theme catalog'}</button>
+                <button class="btn btn-ghost btn-sm" id="theme-cat-build">${escHtml(t('themes.catalogues'))}</button>
                 <button class="btn btn-ghost btn-sm" id="theme-cat-import-file">${t('themes.importFile') || 'Import .bmmtheme / .json file'}</button>
             </div>
         </div>`;
@@ -99,241 +98,69 @@ function buildModal(): void {
         await fetchCatalog(true);
         renderCatalog();
     });
-    _modal.querySelector('#theme-cat-add-community')!.addEventListener('click', addCommunitySource);
     _modal.querySelector('#theme-cat-import-file')!.addEventListener('click', importFromFile);
-    _modal.querySelector('#theme-cat-build')!.addEventListener('click', openThemeCatalogBuilder);
+    _modal.querySelector('#theme-cat-build')!.addEventListener('click', openThemeCatalogues);
 }
 
 // ── Theme-catalog BUILDER ─────────────────────────────────────────────────────
 // Pick installed/custom themes → export a catalog.json ({version,name,themes:[full
 // theme objects, vars inline]}) that this app AND the BCWEB theme feed both consume.
-function openThemeCatalogBuilder(): void {
-    const builder = document.createElement('div');
-    builder.className = 'modal-overlay open';
-    builder.style.zIndex = '10000';
-    const themes = getInstalledThemes();
-    // Optionally include built-in presets that are still installed (not hidden).
-    const builtins = (_builtins || []).filter((b: any) => !b._hidden);
-    const picked = new Set<string>();
-    // Where each theme's BODY goes. Themes have three answers where the other catalogues
-    // have two, and hiding one of them would be worse than an extra option:
-    //
-    //   inline — the whole theme sits in catalog.json. The default, and what every
-    //            catalogue published so far contains, so it must stay the default.
-    //   file   — written as <name>.bmmtheme beside the catalogue, referenced relatively.
-    //            Needs a FOLDER, so choosing it changes what the export button asks for.
-    //   link   — an address you already host.
-    const modes = new Map<string, { mode: 'inline' | 'file' | 'link'; url: string }>();
-    const modeOf = (id: string) => modes.get(id) || { mode: 'inline' as const, url: '' };
 
-    const themeRow = (th: any, isBuiltin: boolean) => {
-        const accent = th.vars?.['--bmm-accent'] || '#3b82f6';
-        const m = modeOf(th.id);
-        const on = picked.has(th.id);
-        return `
-            <div class="tcb-row cat-pub-row" data-row="${escAttr(th.id)}">
-                <label class="cat-pub-pick">
-                    <input type="checkbox" class="tcb-cb" data-id="${escAttr(th.id)}" data-builtin="${isBuiltin ? '1' : '0'}"${on ? ' checked' : ''}>
-                    <span class="tcb-swatch" style="background:${accent}"></span>
-                    <span class="tcb-name">${escHtml(th.name || th.id)}${isBuiltin ? ` <span class="tcb-tag">${t('themes.builtin') || 'Default'}</span>` : ''}</span>
-                </label>
-                <select class="input cat-pub-mode tcb-mode" data-id="${escAttr(th.id)}">
-                    <option value="inline"${m.mode === 'inline' ? ' selected' : ''}>${escHtml(t('catpub.inline'))}</option>
-                    <option value="file"${m.mode === 'file' ? ' selected' : ''}>${escHtml(t('catpub.embed'))}</option>
-                    <option value="link"${m.mode === 'link' ? ' selected' : ''}>${escHtml(t('catpub.link'))}</option>
-                </select>
-                <input class="input cat-pub-url tcb-url" data-id="${escAttr(th.id)}"${on && m.mode === 'link' ? '' : ' hidden'}
-                       spellcheck="false" value="${escAttr(m.url)}" placeholder="${escAttr(t('catpub.urlPh'))}">
-            </div>`;
-    };
-
-    builder.innerHTML = `
-        <div class="modal glass" style="max-width:520px;width:95%;max-height:82vh;display:flex;flex-direction:column;">
-            <div class="modal-header">
-                <div>
-                    <h2 style="margin:0;font-size:15px;">${t('themes.createCatalog') || 'Create theme catalog'}</h2>
-                    <p style="margin:2px 0 0;font-size:11px;color:var(--bmm-text-muted);">${t('themes.createCatalogDesc') || 'Pick the themes to include, then export the catalog or add it as a source. Host it on BetterCommunity to share it.'}</p>
-                </div>
-                <button class="modal-close" id="tcb-close"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
-            </div>
-            <div style="padding:12px 18px;flex-shrink:0;">
-                <input id="tcb-name" class="input" placeholder="${t('themes.catalogName') || 'Catalog name'}" style="width:100%;">
-            </div>
-            <div id="tcb-list" style="flex:1;overflow-y:auto;padding:0 18px 8px;display:flex;flex-direction:column;gap:4px;">
-                ${themes.length || builtins.length
-                    ? (themes.map((th: any) => themeRow(th, false)).join('') + builtins.map((th: any) => themeRow(th, true)).join(''))
-                    : `<p style="font-size:12px;color:var(--bmm-text-muted);padding:12px 0;">${t('themes.noInstalledThemes') || 'No installed themes to add. Create one in the theme editor first.'}</p>`}
-            </div>
-            <div class="modal-footer" style="padding:12px 18px;border-top:1px solid rgba(255,255,255,0.06);display:flex;gap:8px;align-items:center;">
-                <span id="tcb-count" style="font-size:11px;color:var(--bmm-text-muted);">0 ${t('themes.themes') || 'theme(s)'}</span>
-                <div style="flex:1"></div>
-                <label class="sched-tg" style="margin-right:auto"><input type="checkbox" id="tcb-bundle"> ${escHtml(t('sched.tcb.bundle'))}</label>
-                <button class="btn btn-ghost btn-sm" id="tcb-export">${t('themes.exportBtn') || 'Export'}</button>
-                <button class="btn btn-accent btn-sm" id="tcb-export-source">${t('themes.exportAndSource') || 'Export & add as source'}</button>
-            </div>
-        </div>`;
-    (document.getElementById('app-window-outer') || document.body).appendChild(builder);
-    const close = () => builder.remove();
-    builder.querySelector('#tcb-close')!.addEventListener('click', close);
-    builder.addEventListener('click', e => { if (e.target === builder) close(); });
-    const countEl = builder.querySelector('#tcb-count') as HTMLElement;
-    const syncRow = (id: string) => {
-        const on = picked.has(id);
-        const sel = builder.querySelector(`.tcb-mode[data-id="${CSS.escape(id)}"]`) as HTMLSelectElement | null;
-        const box = builder.querySelector(`.tcb-url[data-id="${CSS.escape(id)}"]`) as HTMLInputElement | null;
-        // The picker stays LIVE whether or not the row is ticked. Dead until ticked was a
-        // two-step nobody discovers: you reach for the thing that says what will happen,
-        // it does nothing, and there is no way to tell that from a broken control.
-        if (sel) sel.value = modeOf(id).mode;
-        if (box) box.hidden = !on || modeOf(id).mode !== 'link';
-    };
-    const recount = () => {
-        const linked = [...picked].filter((id) => modeOf(id).mode === 'link').length;
-        const filed = [...picked].filter((id) => modeOf(id).mode === 'file').length;
-        countEl.textContent = `${picked.size} ${t('themes.themes') || 'theme(s)'}`
-            + (filed || linked ? ` — ${t('catpub.split').replace('{f}', String(filed)).replace('{l}', String(linked))}` : '');
-    };
-    builder.querySelectorAll('.tcb-cb').forEach(cb => cb.addEventListener('change', (e) => {
-        const el = e.target as HTMLInputElement;
-        if (el.checked) picked.add(el.dataset.id!); else picked.delete(el.dataset.id!);
-        syncRow(el.dataset.id!);
-        recount();
-    }));
-    builder.querySelectorAll('.tcb-mode').forEach(sel => sel.addEventListener('change', (e) => {
-        const el = e.target as HTMLSelectElement;
-        const id = el.dataset.id!;
-        modes.set(id, { ...modeOf(id), mode: el.value as any });
-        // Saying HOW a theme should be published is saying you want it published. Making
-        // somebody tick the box as well is a second step for a decision already made.
-        if (!picked.has(id)) {
-            picked.add(id);
-            const cb = builder.querySelector(`.tcb-cb[data-id="${CSS.escape(id)}"]`) as HTMLInputElement | null;
-            if (cb) cb.checked = true;
-        }
-        syncRow(id);
-        recount();
-    }));
-    builder.querySelectorAll('.tcb-url').forEach(box => box.addEventListener('input', (e) => {
-        const el = e.target as HTMLInputElement;
-        modes.set(el.dataset.id!, { ...modeOf(el.dataset.id!), url: el.value });
-    }));
-
-    /**
-     * The document, plus whatever has to be written beside it.
-     *
-     * An INLINE theme keeps the shape this builder has always produced — the whole object
-     * in the array — so every catalogue published so far still round-trips. A FILE entry is
-     * reduced to its metadata plus a relative `download_url`, and a LINK to its metadata
-     * plus the address given. `resolveThemeBody` already knows how to read both of the
-     * latter: an entry carrying no `vars` is fetched from its address.
-     */
-    const buildCatalog = () => {
-        const name = (builder.querySelector('#tcb-name') as HTMLInputElement).value.trim() || 'My theme catalog';
-        const all = [...themes, ...builtins];
-        const chosen = all.filter((th: any) => picked.has(th.id));
-        const plan = planPublish(
-            chosen as any,
-            (th: any) => (modeOf(th.id).mode === 'link' ? { mode: 'link', url: modeOf(th.id).url } : { mode: 'embed' }),
-            { ext: 'bmmtheme', fallback: 'theme' },
-        );
-        const files: { file: string; content: string }[] = [];
-        const entries = plan.rows.map((p) => {
-            const th: any = p.item;
-            if (modeOf(th.id).mode === 'inline') return th;
-            // Metadata only. Keeping `vars` beside a download_url would mean the body never
-            // gets fetched (resolveThemeBody short-circuits on vars) — the file would be
-            // written, referenced, and silently ignored.
-            const { vars, ...meta } = th;
-            if (p.embed) files.push({ file: p.file, content: JSON.stringify(th, null, 2) });
-            return { ...meta, download_url: p.address };
-        });
-        return {
-            name, files, errors: plan.errors,
-            json: JSON.stringify({ version: '1.0', name, themes: entries }, null, 2),
-        };
-    };
-
-    const doExport = async (): Promise<string | null> => {
-        if (picked.size === 0) { toast(t('themes.pickAtLeastOne') || 'Pick at least one theme', 'warning'); return null; }
-        const built = buildCatalog();
-        if (built.errors.length) {
-            toast(t('catpub.dropped').replace('{n}', String(built.errors.length))
-                + ' — ' + built.errors.slice(0, 3).join(' · '), 'warning', 8000);
-        }
-        const slug = built.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'themes';
-
-        // Three shapes, and the choices on screen decide which is asked for:
-        //   files + bundle → a .bmmbundle saved where you say, built in a staging folder
-        //   files          → a folder to put them in
-        //   neither        → one document, so a filename
-        // Asking for a folder to write a single file would be a worse question, and asking
-        // for one to then fill it with loose files AND an archive is what this used to do.
-        const wantBundle = !!(builder.querySelector('#tcb-bundle') as HTMLInputElement | null)?.checked;
-        if (built.files.length) {
-            const { pickFolder, saveFile } = await import('../../core/api.js');
-            let dir: string | null = null;
-            let bundleOut = '';
-            if (wantBundle) {
-                bundleOut = (await saveFile({
-                    defaultPath: `${slug}.bmmbundle`,
-                    filters: [{ name: t('catpub.bundleKind'), extensions: ['bmmbundle'] }],
-                }).catch(() => null)) as string;
-                if (!bundleOut) return null;
-                dir = (await invoke('catalog_bundle_stage').catch(() => null)) as string;
-                if (!dir) { toast(t('catpub.stageFailed'), 'error'); return null; }
-            } else {
-                dir = await pickFolder().catch(() => null);
-                if (!dir) return null;
-            }
+/**
+ * Following theme catalogues, and making one — on the screen every other kind uses.
+ *
+ * This was three controls in two places: *+ Community source* in the header, *Create theme
+ * catalog* in the footer, and its own builder modal, none of which knew about the others.
+ * Following by FILE was not possible at all, and a protected source had a block here that
+ * four other kinds did not have. All of it is now ui/catalog-modal.ts, and what is left is
+ * the part that is about themes.
+ *
+ * Themes keep a third choice the other kinds do not have — the body written into
+ * catalog.json itself — because that is what every theme catalogue published so far
+ * contains, and it stays the default. `inlineMode` is what asks for it.
+ *
+ * The gallery is NOT replaced. It previews and installs, which a list of names cannot do.
+ */
+async function openThemeCatalogues(): Promise<void> {
+    const { openCatalogModal } = await import('../../ui/catalog-modal.js');
+    const all = () => [...getInstalledThemes(), ...(_builtins || []).filter((b: any) => !b._hidden)];
+    await openCatalogModal({
+        id: 'theme',
+        title: t('themes.catalogues'),
+        subtitle: t('themes.cataloguesSub'),
+        storeKey: COMMUNITY_SRC_KEY,
+        feedField: 'themes',
+        ext: 'bmmtheme',
+        fallbackNoun: 'theme',
+        inlineMode: true,
+        indexType: 'theme',
+        candidates: async () => all(),
+        label: (th: any) => ({ name: th.name || th.id, sub: th.author || '' }),
+        entryId: (th: any) => th.id,
+        writeEntry: async (th: any, dir: string, file: string) => {
             const sep = dir.includes('\\') ? '\\' : '/';
-            try {
-                for (const f of built.files) {
-                    await invoke('write_text_file', { path: `${dir}${sep}${f.file}`, content: f.content });
-                }
-                await invoke('write_text_file', { path: `${dir}${sep}catalog.json`, content: built.json });
-                if (bundleOut) {
-                    const res: any = await invoke('catalog_bundle_pack', { dir, out: bundleOut });
-                    if (res?.missing?.length) {
-                        toast(t('plugins.catPackMissing')
-                            .replace('{n}', String(res.missing.length))
-                            .replace('{list}', res.missing.slice(0, 5).join(', ')), 'warning', 7000);
-                    }
-                    toast(t('themes.catalogExportedBundle')
-                        .replace('{n}', String(built.files.length))
-                        .replace('{f}', String(bundleOut).replace(/^.*[/\\]/, '')), 'success');
-                    return bundleOut;
-                }
-                toast((t('themes.catalogExportedFolder'))
-                    .replace('{n}', String(built.files.length)), 'success');
-                return `${dir}${sep}catalog.json`;
-            } catch (e) { toast(`${t('common.error')}: ${e}`, 'error'); return null; }
-            finally {
-                if (bundleOut && dir) await invoke('catalog_bundle_unstage', { dir }).catch(() => {});
-            }
-        }
-        if (wantBundle) {
-            // Nothing to pack: every theme is inline or linked, so the catalogue IS the
-            // whole thing. Said rather than silently writing a zip with one file in it.
-            toast(t('themes.bundleNothing'), 'warning');
-        }
-
-        const path = await saveFile({ defaultPath: `${slug}.json`, filters: [{ name: 'JSON catalog', extensions: ['json'] }] });
-        if (!path) return null;
-        try { await invoke('write_text_file', { path, content: built.json }); toast(t('themes.catalogExported') || 'Catalog exported', 'success'); return path; }
-        catch (e) { toast(`${t('common.error')}: ${e}`, 'error'); return null; }
-    };
-    builder.querySelector('#tcb-export')!.addEventListener('click', doExport);
-    builder.querySelector('#tcb-export-source')!.addEventListener('click', async () => {
-        const path = await doExport();
-        if (!path) return;
-        if (!_communitySources.includes(path)) {
-            _communitySources.push(path);
-            localStorage.setItem(COMMUNITY_SRC_KEY, JSON.stringify(_communitySources));
-        }
-        toast(t('themes.addedAsSource') || 'Added as a local source', 'success');
-        close();
-        await fetchCatalog(true);
-        renderCatalog();
+            await invoke('write_text_file', { path: `${dir}${sep}${file}`, content: JSON.stringify(th, null, 2) });
+            return true;
+        },
+        // An address means the body is fetched, so the body must NOT also be here:
+        // resolveThemeBody short-circuits on `vars`, so a theme carrying both would have its
+        // file written, referenced, and silently ignored.
+        row: (th: any, address: string) => {
+            if (!address) return th;
+            const { vars, ...meta } = th;
+            return { ...meta, download_url: address };
+        },
+        looksLike: (doc: any) => !!doc && typeof doc === 'object' && Array.isArray(doc.themes),
+        onChange: () => {
+            // Re-read from storage rather than tracking it: the shared screen writes the
+            // key, and this module holds its own copy read once at init.
+            try { _communitySources = JSON.parse(localStorage.getItem(COMMUNITY_SRC_KEY) || '[]'); } catch { /* keep what we had */ }
+            fetchCatalog(true).then(renderCatalog);
+        },
+        manageKeys: () => {
+            (document.getElementById('nav-settings') as HTMLElement | null)?.click();
+            setTimeout(() => document.getElementById('settings-identity-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 250);
+        },
     });
 }
 
@@ -637,75 +464,6 @@ function renderCatalog(): void {
 }
 
 // ── Community sources ─────────────────────────────────────────────────────────
-function addCommunitySource(): void {
-    // Small in-app modal (no native prompt()).
-    const ov = document.createElement('div');
-    ov.className = 'modal-overlay open tc-src-modal';
-    ov.style.cssText = 'position:absolute;inset:0;z-index:2147483000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);backdrop-filter:blur(6px)';
-    ov.innerHTML = `
-        <div class="modal glass" style="width:480px;max-width:94vw">
-            <div class="modal-header">
-                <h2 class="modal-title" style="margin:0;font-size:1.1rem">${escHtml(t('themes.communityAddTitle') || 'Add a community theme catalogue')}</h2>
-                <button class="modal-close" id="tc-src-close">&times;</button>
-            </div>
-            <div class="modal-body" style="padding:18px 22px;display:flex;flex-direction:column;gap:10px">
-                <p style="font-size:12px;color:var(--bmm-text-muted);margin:0">${escHtml(t('themes.communityAddDesc') || 'Paste the HTTPS/HTTP link to a themes catalog.json. The catalogue\'s themes appear in the gallery to install.')}</p>
-                <input type="text" class="input" id="tc-src-input" placeholder="https://raw.githubusercontent.com/.../catalog.json" style="width:100%">
-                ${sourceAccessHtml('tc')}
-            </div>
-            <div class="modal-footer" style="display:flex;justify-content:flex-end;gap:10px;padding:14px 22px;border-top:1px solid var(--border)">
-                <button class="btn btn-ghost" id="tc-src-cancel">${escHtml(t('common.cancel') || 'Cancel')}</button>
-                <button class="btn btn-accent" id="tc-src-add">${escHtml(t('common.add') || 'Add')}</button>
-            </div>
-        </div>`;
-    (document.getElementById('app-window-outer') || document.body).appendChild(ov);
-    const close = () => ov.remove();
-    wireSourceAccess('tc', (m, k) => toast(m, k === 'warning' ? 'warning' : 'success'),
-        () => { (document.getElementById('nav-settings') as HTMLElement | null)?.click(); setTimeout(() => document.getElementById('settings-identity-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 250); },
-        () => (ov.querySelector('#tc-src-input') as HTMLInputElement | null)?.value?.trim() || '');
-    const input = ov.querySelector('#tc-src-input') as HTMLInputElement;
-    const submit = async () => {
-        const url = input.value.trim();
-        if (!url) return;
-        if (!/^https?:\/\//i.test(url)) { toast(t('themes.communityInvalid') || 'Enter a valid http(s) URL', 'warning'); return; }
-        // An INDEX pasted here is a real intention, not a typo: every catalogue box takes a
-        // URL and none says which document it wants. Import its THEME entries and leave the
-        // other four types alone — following them all would be a bigger action than the ask.
-        try {
-            const probe: string = await invoke('fetch_remote_json', { url }, { quiet: true }) as string;
-            const doc = JSON.parse(probe);
-            if (looksLikeIndex(doc)) {
-                const r = await importIndexForType(doc, 'theme', url);
-                toast(r.added
-                    ? (t('themes.fromIndex') || 'Added {n} theme catalogue(s) from that index.').replace('{n}', String(r.added))
-                    : r.ofType
-                        ? (t('themes.indexAll') || 'That index lists {n} theme catalogue(s) and you already follow them all.').replace('{n}', String(r.ofType))
-                        : (t('themes.indexNone2') || 'No theme catalogues in that index — it holds {what}. Add those from their own screens.')
-                            .replace('{what}', describeKinds(r.kinds) || String(r.total)),
-                    r.added ? 'success' : 'info');
-                // Re-read from storage: importIndexForType wrote the key, and this module
-                // holds its own copy read once at init.
-                try { _communitySources = JSON.parse(localStorage.getItem(COMMUNITY_SRC_KEY) || '[]'); } catch { /* keep what we had */ }
-                close();
-                fetchCatalog(true).then(renderCatalog);
-                return;
-            }
-        } catch { /* unreachable or not JSON — fall through to the normal add */ }
-        if (!_communitySources.includes(url)) {
-            _communitySources.push(url);
-            localStorage.setItem(COMMUNITY_SRC_KEY, JSON.stringify(_communitySources));
-            fetchCatalog(true).then(renderCatalog);
-            toast(t('themes.communityAdded') || 'Catalogue added', 'success');
-        }
-        close();
-    };
-    ov.addEventListener('click', e => { if (e.target === ov) close(); });
-    ov.querySelector('#tc-src-close')?.addEventListener('click', close);
-    ov.querySelector('#tc-src-cancel')?.addEventListener('click', close);
-    ov.querySelector('#tc-src-add')?.addEventListener('click', submit);
-    input.addEventListener('keydown', e => { if ((e as KeyboardEvent).key === 'Enter') submit(); });
-    setTimeout(() => input.focus(), 50);
-}
 
 async function importFromFile(): Promise<void> {
     const { pickFile } = await import('../../core/api.js');

@@ -57,6 +57,14 @@ export interface CatalogKindSpec<T> {
     ext: string;
     /** The noun a nameless entry falls back to. */
     fallbackNoun?: string;
+    /**
+     * What a packed entry's FILE is named after. The label's name by default.
+     *
+     * Tutorials override it with the id, and the reason is worth keeping: a tutorial id is
+     * already a slug and is what its entry has always been called, so naming the files after
+     * their titles instead would rename every file in every catalogue already published.
+     */
+    nameOf?(item: T): string;
 
     /** Everything the user could put in a catalogue of this kind. */
     candidates(): Promise<T[]>;
@@ -71,8 +79,43 @@ export interface CatalogKindSpec<T> {
 
     /** Is this parsed document a catalogue of THIS kind? */
     looksLike(doc: unknown): boolean;
+    /**
+     * A last look at the finished document before it is written.
+     *
+     * For the one case where a kind's readers disagree about the shape: a tutorial catalogue
+     * writes its entries under `tutorials` AND under `items` with a kind, because the first
+     * is what this app prefers and the second is what BCWEB's pooled catalogues emit — write
+     * one and not the other and half the readers see an empty catalogue.
+     */
+    decorateDoc?(doc: Record<string, unknown>): void;
+
     /** Called whenever the followed list changed, so a screen behind can refresh. */
     onChange?(): void;
+    /**
+     * Offer a THIRD choice: the entry's body written into catalog.json itself.
+     *
+     * Only themes have this, and only because they always had it — a theme catalogue is a
+     * list of whole theme objects, which is what every one published so far contains and
+     * what BCWEB's feed reads. Dropping it to fit two modes would have broken the format;
+     * offering it everywhere would invent a shape no other reader knows.
+     *
+     * An inline entry writes no file and gets an empty address, so `row()` is called with
+     * `''` and the kind puts the body in.
+     */
+    inlineMode?: boolean;
+
+    /**
+     * This kind's name in a catalogue INDEX, when it has one.
+     *
+     * Every follow box in BMM takes a URL and none of them says which document it wants, so
+     * pasting an index into one is a real intention rather than a typo — the theme screen
+     * had learnt this and grew its own handling, and the other five had not. With this set,
+     * an index is recognised and the catalogues of THIS kind inside it are followed; the
+     * other kinds are left alone, because following them all is a bigger action than the
+     * one that was asked for.
+     */
+    indexType?: string;
+
     /** Where "manage keys" should take somebody. */
     manageKeys?(): void;
 
@@ -117,8 +160,23 @@ export async function openCatalogModal<T>(spec: CatalogKindSpec<T>): Promise<voi
 
     /** Per-entry decision, keyed by entry id. */
     const picked = new Set<string>();
-    const modes = new Map<string, { mode: 'embed' | 'link'; url: string }>();
-    const modeOf = (id: string) => modes.get(id) || { mode: 'embed' as const, url: '' };
+    const modes = new Map<string, { mode: 'embed' | 'link' | 'inline'; url: string }>();
+    const modeOf = (id: string): { mode: 'embed' | 'link' | 'inline'; url: string } =>
+        modes.get(id) || { mode: spec.inlineMode ? 'inline' : 'embed', url: '' };
+
+    /**
+     * What a mode BECOMES once the output is known.
+     *
+     * A catalogue file has nowhere to put a packed entry, so packing has to turn into
+     * something. Where a body can be written inline it turns into that — a theme
+     * catalog.json with the themes in it is the normal shape, not a fallback — and where it
+     * cannot, into a link, which then has to carry an address somebody typed.
+     */
+    const effectiveMode = (id: string): 'embed' | 'link' | 'inline' => {
+        const m = modeOf(id).mode;
+        if (output === 'json' && m === 'embed') return spec.inlineMode ? 'inline' : 'link';
+        return m;
+    };
     let name = '';
     let output: 'bundle' | 'json' = 'bundle';
 
@@ -146,8 +204,40 @@ export async function openCatalogModal<T>(spec: CatalogKindSpec<T>): Promise<voi
         const box = ov.querySelector(`#${P}-url`) as HTMLInputElement | null;
         const url = (box?.value || '').trim();
         if (!/^https?:\/\//i.test(url)) { toast(t('cm.badUrl'), 'warning'); return; }
+        if (await followedAnIndex(url)) { if (box) box.value = ''; return; }
         await addSource(url);
         if (box) box.value = '';
+    };
+
+    /**
+     * Was that an index? If so, follow what it lists of THIS kind and say what happened.
+     *
+     * Unreachable or not JSON is not an error here — it only means this was not an index,
+     * and the address goes on to be followed the ordinary way, where a real failure is
+     * reported by the code that reads it.
+     */
+    const followedAnIndex = async (url: string): Promise<boolean> => {
+        if (!spec.indexType) return false;
+        let doc: unknown;
+        try {
+            doc = JSON.parse(await invoke('fetch_remote_json', { url }, { quiet: true }) as string);
+        } catch { return false; }
+        const ix = await import('../features/catalogs/catalog-index.js');
+        if (!ix.looksLikeIndex(doc)) return false;
+        const r = await ix.importIndexForType(doc as any, spec.indexType as any, url);
+        toast(r.added
+            ? t('cm.fromIndex').replace('{n}', String(r.added))
+            : r.ofType
+                ? t('cm.indexAll').replace('{n}', String(r.ofType))
+                : t('cm.indexNone').replace('{what}', ix.describeKinds(r.kinds) || String(r.total)),
+        r.added ? 'success' : 'info');
+        if (r.added) {
+            spec.onChange?.();
+            browseLoaded = false;
+            paint();
+            void loadBrowse();
+        }
+        return true;
     };
 
     const followByFile = async () => {
@@ -180,17 +270,25 @@ export async function openCatalogModal<T>(spec: CatalogKindSpec<T>): Promise<voi
         const chosen = items.filter((i) => picked.has(spec.entryId(i)));
         if (!chosen.length) { toast(t('cm.pickSomething'), 'warning'); return; }
 
+        // Inline entries are not planned: there is no filename to pick and no address to
+        // write, so passing them through the planner would only give them one. They keep
+        // their place in the list rather than being appended, because the order on screen is
+        // the order somebody arranged.
+        const inline = new Set(chosen.filter((i) => effectiveMode(spec.entryId(i)) === 'inline')
+            .map((i) => spec.entryId(i)));
+        const planned = chosen.filter((i) => !inline.has(spec.entryId(i)));
+
         // A catalogue FILE has nowhere to put a packed entry. Rather than quietly linking
         // them — which would publish addresses nobody gave — every entry has to carry one,
         // and the ones that do not are named.
         const choose = (item: T): EntryChoice => {
             const m = modeOf(spec.entryId(item));
-            return m.mode === 'link' || output === 'json'
+            return effectiveMode(spec.entryId(item)) === 'link'
                 ? { mode: 'link', url: m.url }
                 : { mode: 'embed' };
         };
         const plan = planPublish(
-            chosen.map((item) => ({ id: spec.entryId(item), name: spec.label(item).name, item })) as any,
+            planned.map((item) => ({ id: spec.entryId(item), name: spec.label(item).name, item })) as any,
             (w: any) => choose(w.item),
             {
                 ext: spec.ext,
@@ -199,14 +297,16 @@ export async function openCatalogModal<T>(spec: CatalogKindSpec<T>): Promise<voi
                 // t-lq3k2j.bmmpa in a published catalogue helps nobody — and planPublish
                 // falls back to the id unless it is told not to. Two nameless entries become
                 // automation and automation-2, which is what every builder did before this.
-                nameOf: (w: any) => String(w.name || ''),
+                nameOf: (w: any) => (spec.nameOf ? spec.nameOf(w.item) : String(w.name || '')),
             },
         );
         if (plan.errors.length) {
             toast(t('catpub.dropped').replace('{n}', String(plan.errors.length))
                 + ' — ' + plan.errors.slice(0, 3).join(' · '), 'warning', 8000);
         }
-        if (!plan.rows.length) { toast(t('catpub.nothing'), 'error'); return; }
+        if (!plan.rows.length && !inline.size) { toast(t('catpub.nothing'), 'error'); return; }
+        /** The address decided for one entry, or '' when its body is written inline. */
+        const addressOf = new Map<string, string>(plan.rows.map((p) => [spec.entryId((p.item as any).item), p.address]));
 
         const slug = safeFileStem(name || spec.title, 'catalog');
         const asBundle = output === 'bundle' && plan.embedded > 0;
@@ -241,8 +341,11 @@ export async function openCatalogModal<T>(spec: CatalogKindSpec<T>): Promise<voi
             const doc = {
                 version: '1.0',
                 name: name.trim() || spec.title,
-                [spec.feedField]: plan.rows.map((p) => spec.row((p.item as any).item, p.address)),
+                [spec.feedField]: chosen
+                    .filter((i) => inline.has(spec.entryId(i)) || addressOf.has(spec.entryId(i)))
+                    .map((i) => spec.row(i, addressOf.get(spec.entryId(i)) || '')),
             };
+            spec.decorateDoc?.(doc as Record<string, unknown>);
             const jsonPath = asBundle ? `${dir}${sep}catalog.json` : outPath;
             await invoke('write_text_file', { path: jsonPath, content: JSON.stringify(doc, null, 2) });
 
@@ -318,7 +421,7 @@ export async function openCatalogModal<T>(spec: CatalogKindSpec<T>): Promise<voi
     const createPane = (): string => {
         if (!loaded) return `<p class="cm-empty">${escHtml(t('common.loading'))}</p>`;
         if (!items.length) return `<p class="cm-empty">${escHtml(t('cm.nothingToAdd'))}</p>`;
-        const linked = items.filter((i) => picked.has(spec.entryId(i)) && modeOf(spec.entryId(i)).mode === 'link').length;
+        const linked = items.filter((i) => picked.has(spec.entryId(i)) && effectiveMode(spec.entryId(i)) === 'link').length;
         return `
         <label class="sched-label">${escHtml(t('cm.name'))}</label>
         <input class="input" id="${P}-name" value="${escAttr(name)}" placeholder="${escAttr(spec.title)}" style="margin-bottom:12px">
@@ -346,9 +449,12 @@ export async function openCatalogModal<T>(spec: CatalogKindSpec<T>): Promise<voi
                 const l = spec.label(it);
                 const m = modeOf(id);
                 const on = picked.has(id);
-                // With a catalogue FILE there is nowhere to pack anything, so the per-entry
-                // picker would be offering a choice that is not there.
-                const forced = output === 'json';
+                // With a catalogue FILE there is nowhere to pack anything. Where a body can
+                // be written inline that is still a real choice, so the picker stays and
+                // only loses its packing option; where it cannot, there is nothing left to
+                // choose and the row says so instead of offering a control that lies.
+                const eff = effectiveMode(id);
+                const forced = output === 'json' && !spec.inlineMode;
                 return `
                 <div class="cat-pub-row">
                     <label class="cat-pub-pick">
@@ -358,10 +464,11 @@ export async function openCatalogModal<T>(spec: CatalogKindSpec<T>): Promise<voi
                     </label>
                     ${forced ? `<span class="cm-forced">${escHtml(t('catpub.link'))}</span>`
                       : `<select class="input cat-pub-mode" data-mode="${escAttr(id)}">
-                            <option value="embed"${m.mode === 'embed' ? ' selected' : ''}>${escHtml(t('catpub.embed'))}</option>
-                            <option value="link"${m.mode === 'link' ? ' selected' : ''}>${escHtml(t('catpub.link'))}</option>
+                            ${spec.inlineMode ? `<option value="inline"${eff === 'inline' ? ' selected' : ''}>${escHtml(t('catpub.inline'))}</option>` : ''}
+                            ${output === 'json' ? '' : `<option value="embed"${eff === 'embed' ? ' selected' : ''}>${escHtml(t('catpub.embed'))}</option>`}
+                            <option value="link"${eff === 'link' ? ' selected' : ''}>${escHtml(t('catpub.link'))}</option>
                          </select>`}
-                    ${(forced || m.mode === 'link') && on ? `<input class="input cat-pub-url" data-url="${escAttr(id)}"
+                    ${(forced || eff === 'link') && on ? `<input class="input cat-pub-url" data-url="${escAttr(id)}"
                            spellcheck="false" value="${escAttr(m.url)}" placeholder="${escAttr(t('catpub.urlPh'))}">` : ''}
                 </div>`;
             }).join('')}
@@ -463,7 +570,8 @@ export async function openCatalogModal<T>(spec: CatalogKindSpec<T>): Promise<voi
         }));
         ov.querySelectorAll<HTMLElement>('[data-mode]').forEach((sel) => sel.addEventListener('change', (e) => {
             const id = sel.dataset.mode!;
-            modes.set(id, { ...modeOf(id), mode: (e.target as HTMLSelectElement).value === 'link' ? 'link' : 'embed' });
+            const v = (e.target as HTMLSelectElement).value;
+            modes.set(id, { ...modeOf(id), mode: v === 'link' ? 'link' : v === 'inline' ? 'inline' : 'embed' });
             // Saying HOW something should be published is saying you want it published.
             picked.add(id);
             paint();
