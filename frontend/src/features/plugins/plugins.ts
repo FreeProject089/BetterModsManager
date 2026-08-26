@@ -2027,6 +2027,7 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
             { group: 'Modpacks', color: '#8b5cf6', perms: ['modpacks.write'] },
             { group: 'Plugins',  color: '#ec4899', perms: ['plugins.read', 'plugins.write'] },
             { group: 'Repo',     color: '#10b981', perms: ['repo.write'] },
+            { group: 'Keys',     color: '#eab308', perms: ['keys.write'] },
         ];
         const permRows = permGroups.map(g => `
             <div style="margin-bottom:8px;">
@@ -4893,6 +4894,7 @@ function buildEndpointRow(ep: EndpointDef): string {
         { g: 'Modpacks', c: '#8b5cf6', perms: ['modpacks.write'] },
         { g: 'Plugins',  c: '#ec4899', perms: ['plugins.read', 'plugins.write'] },
         { g: 'Repo',     c: '#10b981', perms: ['repo.write'] },
+        { g: 'Keys',     c: '#eab308', perms: ['keys.write'] },
     ];
     const showsPerms = ep.path === '/api/apps/permissions/:id' && ep.method === 'PUT';
     const permChipsHtml = showsPerms ? `
@@ -6222,9 +6224,9 @@ function getEndpointDefs(): EndpointDef[] {
         {
             method: 'PUT', path: '/api/apps/permissions/:id', auth: true,
             desc: t('plugins.ep.setPerms') || 'Set Plugin Perms',
-            about: t('plugins.epAbout.permsSet') || 'Replaces the full permission list for a plugin. Available permissions: <code>app.read</code>, <code>app.write</code>, <code>catalog.read</code>, <code>catalog.write</code>, <code>modpacks.write</code>, <code>mods.write</code>, <code>plugins.read</code>, <code>plugins.write</code>, <code>profiles.write</code>, <code>repo.write</code>. Read endpoints are not permission-gated, so there is no <code>mods.read</code> or <code>profiles.read</code> to grant. Replace <code>:id</code> with the plugin ID.',
+            about: t('plugins.epAbout.permsSet') || 'Replaces the full permission list for a plugin. Available permissions: <code>app.read</code>, <code>app.write</code>, <code>catalog.read</code>, <code>catalog.write</code>, <code>modpacks.write</code>, <code>keys.write</code>, <code>mods.write</code>, <code>plugins.read</code>, <code>plugins.write</code>, <code>profiles.write</code>, <code>repo.write</code>. Read endpoints are not permission-gated, so there is no <code>mods.read</code> or <code>profiles.read</code> to grant. Replace <code>:id</code> with the plugin ID.',
             fields: [
-                { name: 'permissions', type: 'array', required: true, desc: 'Array of permission strings to grant. Available values: app.read, app.write, catalog.read, catalog.write, modpacks.write, mods.write, plugins.read, plugins.write, profiles.write, repo.write. Unknown strings are stored but gate nothing. An empty array revokes everything.' },
+                { name: 'permissions', type: 'array', required: true, desc: 'Array of permission strings to grant. Available values: app.read, app.write, catalog.read, catalog.write, keys.write, modpacks.write, mods.write, plugins.read, plugins.write, profiles.write, repo.write. Unknown strings are stored but gate nothing. An empty array revokes everything.' },
             ],
             responseStatuses: [
                 { code: 200, label: 'OK', body: '{ "ok": true, "plugin_id": "my-plugin", "permissions": ["app.read", "catalog.write"] }' },
@@ -8979,6 +8981,10 @@ async function renderPerms(container: HTMLElement) {
         { domain: t('plugins.permDomModpacks') || 'Modpacks',    color: '#8b5cf6', scopes: ['modpacks.write'] },
         { domain: t('plugins.permDomPlugins')  || 'Plugins',     color: '#ec4899', scopes: ['plugins.read', 'plugins.write'] },
         { domain: t('plugins.permDomRepo')     || 'Server Repo', color: '#10b981', scopes: ['repo.write'] },
+        // Its own domain, not folded into Repo. An identity key is what proves you are you
+        // to every protected source; granting "can publish a repo" must not also grant
+        // "can mint the thing I sign with".
+        { domain: t('plugins.permDomKeys')      || 'Identity keys', color: '#eab308', scopes: ['keys.write'] },
         { domain: t('plugins.permDomApps')     || 'App Catalog', color: '#f97316', scopes: ['app.read', 'app.write', 'catalog.read', 'catalog.write'] },
     ];
     const ALL_PERMS = PERM_GROUPS.flatMap(g => g.scopes);

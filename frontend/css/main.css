@@ -17704,6 +17704,17 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
     color: var(--text-secondary); margin-bottom: 6px; cursor: pointer; }
 .mm-creds .input { width: 100%; margin-top: 4px; }
 
+/* Nothing on the key card is prose, so dragging across it must not paint it blue.
+   A radio, a name, a path and a button are CONTROLS: a drag that starts on one of them is
+   somebody reaching for the button, and a selection is what they get instead — which then
+   sits highlighted until they click elsewhere.
+   The exception is the part that exists to be copied: the public key, and any field you type
+   into. Those keep selection, because taking the text out is their whole job. */
+.sic-nosel { user-select: none; -webkit-user-select: none; }
+.sic-nosel input, .sic-nosel textarea, .sic-nosel .sic-make-out {
+    user-select: text; -webkit-user-select: text;
+}
+
 /* Making an identity key, on the card that owns the ring. Folded: most people never need
    one, and an always-open generator on the Identity card reads as a step you skipped. */
 .sic-make { margin-top: 10px; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
@@ -18654,3 +18665,40 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
     padding: 2px 6px; border-radius: 4px; flex-shrink: 0;
     background: var(--bmm-s05); border: 1px solid var(--border); color: var(--text-secondary);
 }
+
+/* What a repo carries besides mods, on the sync screen.
+   A LABEL per row, so the whole strip is a hit target — these rows are read and ticked in
+   one pass, and a 13px checkbox is not something anybody aims at twice. */
+.repo-extras { margin-top: 20px; padding: 12px; background: var(--surface-1);
+    border: 1px solid var(--border); border-radius: 8px; }
+.repo-extras-title { margin: 0 0 4px; font-size: 13px; font-weight: 700;
+    color: var(--text-primary); display: flex; align-items: center; gap: 8px; }
+.repo-extras-lede { margin: 0 0 10px; font-size: 11px; color: var(--text-muted); line-height: 1.5; }
+.repo-extras-rows { display: flex; flex-direction: column; gap: 6px;
+    max-height: 320px; overflow-y: auto; padding-right: 4px; }
+.repo-extras-row { display: flex; align-items: flex-start; gap: 10px; padding: 8px 10px;
+    border: 1px solid var(--border); border-radius: 8px; cursor: pointer;
+    transition: background .15s, border-color .15s; }
+.repo-extras-row:hover { background: var(--surface-2); border-color: var(--accent); }
+.repo-extras-row input { margin-top: 2px; flex: 0 0 auto; cursor: pointer; }
+/* A kind this build cannot install. Shown rather than hidden — a repo from a newer BMM
+   must not look like a repo with things missing from it. */
+.repo-extras-row.is-unknown { opacity: .55; cursor: default; }
+.repo-extras-row.is-unknown:hover { background: none; border-color: var(--border); }
+.repo-extras-body { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px;
+    min-width: 0; flex: 1; }
+.repo-extras-name { font-size: 12px; font-weight: 600; color: var(--text-primary); }
+.repo-extras-kind { font-size: 9px; font-weight: 800; text-transform: uppercase;
+    letter-spacing: .5px; padding: 2px 6px; border-radius: 4px;
+    background: var(--surface-2); color: var(--text-secondary); }
+.repo-extras-meta { font-size: 10px; color: var(--text-muted); font-family: var(--font-mono); }
+.repo-extras-desc { flex: 1 0 100%; font-size: 11px; color: var(--text-muted); line-height: 1.45; }
+/* The picker, on the publishing side. Reuses the row styles above so a thing looks the same
+   whether you are deciding to publish it or deciding to take it. */
+.rx-modal { max-width: 620px; width: 92vw; }
+.rx-body { max-height: 52vh; overflow-y: auto; display: flex; flex-direction: column; gap: 14px;
+    padding-right: 4px; }
+.rx-group { display: flex; flex-direction: column; gap: 6px; }
+.rx-group-title { margin: 0; font-size: 10px; font-weight: 800; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
+.rx-group-title span { font-family: var(--font-mono); font-weight: 600; opacity: .7; }

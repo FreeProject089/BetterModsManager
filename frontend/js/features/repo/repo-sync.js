@@ -822,6 +822,12 @@ export function initRepoSync(elements) {
                         mpGroup.appendChild(mpList);
                         profilesSelectionEl.appendChild(mpGroup);
                     }
+                    // ── Everything else the repo carries ───────────────────
+                    // Plugins, automations, themes, mod lists, catalogues to follow. Draws
+                    // nothing when the repo carries none, which is every repo published
+                    // before this existed.
+                    const { renderRepoExtras } = await import('./repo-extras.js');
+                    renderRepoExtras(repo.extras, profilesSelectionEl);
                     updateSyncPathsVisibility();
                 }
                 // Connecting to a repo → proactively detect updates for mods we
@@ -972,6 +978,19 @@ export function initRepoSync(elements) {
                         addRepoAsUpdateSource: addRepoSource
                     }
                 });
+                // The extras, AFTER the mods. A plugin that drives a profile is useless
+                // before the profile is there, and a failure here must not be able to
+                // abandon a sync that already succeeded — which is why it is its own try.
+                try {
+                    const { installSelectedExtras } = await import('./repo-extras.js');
+                    await installSelectedExtras(document.body, url, {
+                        creatorId: finalCreatorId,
+                        password: lastRepoPassword,
+                    });
+                }
+                catch (e) {
+                    console.error('[repo] extras:', e);
+                }
                 // Import modpacks if selected
                 const modpackCbs = document.querySelectorAll('.repo-sync-modpack-cb:checked');
                 for (const cb of modpackCbs) {

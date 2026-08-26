@@ -72,8 +72,20 @@ const badRefs = [];
             badRefs.push(`preset uses '${m[1]}', which is neither an action nor a condition type`);
         }
     }
+    // `textIs` is the one condition whose source is NOT from VALUE_SOURCES.
+    //
+    // VALUE_SOURCES is a fixed list because every numeric source is written by a named
+    // action into a name that action chose. `text.extract` is the opposite: the person
+    // writing the task picks the variable name, so no fixed list can contain it, and
+    // checking one against VALUE_SOURCES would report every correct task as broken.
+    //
+    // Matched by looking at what precedes the source, so this exemption cannot be claimed
+    // by a `value` condition that simply happens to sit nearby.
+    const freeSourced = new Set(
+        [...body.matchAll(/type: 'textIs', params: \{[^}]*source: '([a-zA-Z0-9._]+)'/g)].map((m) => m[1]),
+    );
     for (const m of body.matchAll(/source: '([a-zA-Z0-9._]+)'/g)) {
-        if (!offered.has(m[1])) {
+        if (!offered.has(m[1]) && !freeSourced.has(m[1])) {
             badRefs.push(`preset reads value source '${m[1]}', which is not in VALUE_SOURCES`);
         }
     }

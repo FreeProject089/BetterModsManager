@@ -37,6 +37,8 @@ pub mod identity;
 pub mod repo_discover;
 pub mod repo_autoindex;
 pub mod repo_credentials;
+pub mod repo_extras;
+pub mod game_watch;
 pub mod repo_remote;
 pub mod whitelist_manager;
 pub mod discord;

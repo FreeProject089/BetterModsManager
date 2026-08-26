@@ -538,6 +538,51 @@ impl ServerHandler for BmmMcpServer {
             "required": ["name", "mod_ids"]
         })).unwrap()),
     ),
+    // Everything a repo carries that is NOT a mod.
+    Tool::new(
+        "bmm_repo_extras",
+        "List what a repo carries besides mods: plugins, scheduled automations, themes, mod lists, catalogue bundles, catalogues to follow and app sources. Each entry is { kind, id, name, description?, author?, version?, locked?, url? }. `locked: true` on a mod list means its contents are encrypted and opening it needs a passphrase. Reads the manifest only — nothing is downloaded or installed. Use bmm_repo_extra_take to act on one.",
+        std::sync::Arc::new(serde_json::from_value(json!({
+            "type": "object",
+            "properties": {
+                "url": { "type": "string", "description": "The repo URL, with or without /repo.json." },
+                "password": { "type": "string", "description": "Download password, if the repo has one." }
+            },
+            "required": ["url"]
+        })).unwrap()),
+    ),
+    Tool::new(
+        "bmm_repo_extra_take",
+        "Install ONE thing a repo carries besides mods, named by its kind and id from bmm_repo_extras. A plugin or an automation arrives DISABLED and a plugin arrives with no permissions — taking one is not a decision to run it. A catalogue or an app source is followed rather than downloaded. A mod list or a bundle is saved to disk and its path returned, because opening one asks questions (a passphrase, which credentials to accept) that belong to a person.",
+        std::sync::Arc::new(serde_json::from_value(json!({
+            "type": "object",
+            "properties": {
+                "url": { "type": "string" },
+                "kind": { "type": "string", "enum": ["plugin", "task", "theme", "modlist", "bundle", "catalog", "app"] },
+                "id": { "type": "string" },
+                "password": { "type": "string" }
+            },
+            "required": ["url", "kind", "id"]
+        })).unwrap()),
+    ),
+    // Identity keys.
+    Tool::new(
+        "bmm_list_keys",
+        "List the identity keys BMM can prove with: each is { name, path }, plus which one is active. NAMES AND PATHS ONLY — no key material is ever returned, and there is no tool that reads a private key.",
+        std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": {} })).unwrap()),
+    ),
+    Tool::new(
+        "bmm_create_key",
+        "Make an identity keypair and add it to the ring. Returns the PUBLIC line — the one you give to whoever runs a protected source — and the path the private half was written to. The private half never leaves the machine and is never returned. Pick ed25519 unless a server says otherwise: every source in this protocol accepts it. A name already on the ring is refused rather than overwritten.",
+        std::sync::Arc::new(serde_json::from_value(json!({
+            "type": "object",
+            "properties": {
+                "name": { "type": "string", "description": "What to call it on the ring, e.g. \"work\"." },
+                "kind": { "type": "string", "enum": ["ed25519", "ecdsa", "rsa"], "description": "ed25519 by default. ECDSA (nistp256) and RSA 4096 are for a host that predates ed25519 support; RSA takes a few seconds to generate." }
+            },
+            "required": ["name"]
+        })).unwrap()),
+    ),
     Tool::new(
         "bmm_start_repo_server",
         "Start the repository server.",
@@ -976,6 +1021,43 @@ impl ServerHandler for BmmMcpServer {
                 Ok(msg) => Ok(CallToolResult::success(vec![Content::text(msg)])),
                 Err(e) => err_result(&e),
             }
+        }
+        "bmm_repo_extras" => {
+            // Percent-encoding for a query value, rather than a dependency for two call
+            // sites. A repo URL carries :// and ?, all three of which end the value early
+            // and turn "read this repo" into "read some other one".
+            fn enc(s: &str) -> String {
+                s.bytes().map(|b| match b {
+                    b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => (b as char).to_string(),
+                    _ => format!("%{:02X}", b),
+                }).collect()
+            }
+            let url = args.get("url").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing url", None))?;
+            let mut q = format!("/api/repo/info?url={}", enc(url));
+            if let Some(pw) = args.get("password").and_then(|v| v.as_str()) {
+                q.push_str(&format!("&password={}", enc(pw)));
+            }
+            // Through the live app's own API rather than a second fetcher, so the headers,
+            // the password handling and the fallbacks are the ones the app itself uses.
+            match state_bridge::api_call("GET", &q, None).await {
+                Ok(v) => ok_json(&json!({ "extras": v.get("extras").cloned().unwrap_or(json!([])) })),
+                Err(e) => err_result(&e.to_string()),
+            }
+        }
+        "bmm_repo_extra_take" => {
+            let mut body = serde_json::Map::new();
+            for k in ["url", "kind", "id", "password"] {
+                if let Some(v) = args.get(k) { body.insert(k.into(), v.clone()); }
+            }
+            self.tool_api_call("POST", "/api/repo/extras", Some(serde_json::Value::Object(body))).await
+        }
+        "bmm_list_keys" => self.tool_api_call("GET", "/api/keys", None).await,
+        "bmm_create_key" => {
+            let mut body = serde_json::Map::new();
+            for k in ["name", "kind"] {
+                if let Some(v) = args.get(k) { body.insert(k.into(), v.clone()); }
+            }
+            self.tool_api_call("POST", "/api/keys", Some(serde_json::Value::Object(body))).await
         }
         "bmm_start_repo_server" => {
             let path = args.get("path").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing path", None))?;

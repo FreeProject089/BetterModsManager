@@ -562,6 +562,37 @@
         "jsonPath",
         "allowAnyStatus"
       ]
+    },
+    {
+      "type": "text.extract",
+      "group": "logic",
+      "params": [
+        "target",
+        "path",
+        "tailKb",
+        "source",
+        "regex",
+        "group"
+      ]
+    },
+    {
+      "type": "modlist.apply",
+      "group": "mods",
+      "params": [
+        "path",
+        "url",
+        "install",
+        "exact",
+        "passphrase"
+      ]
+    },
+    {
+      "type": "dcs.hook",
+      "group": "apps",
+      "params": [
+        "mode",
+        "dir"
+      ]
     }
   ],
   "conditions": [
@@ -569,6 +600,8 @@
     "all",
     "any",
     "value",
+    "textIs",
+    "fileContains",
     "enumIs",
     "profileActive",
     "modEnabled",

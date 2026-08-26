@@ -2818,6 +2818,18 @@ export function initRepo() {
         });
     }
 
+    // What else goes in the repo. Deliberately not chained to the export run — it takes a
+    // FOLDER, which means it works on a repo exported five minutes ago and on one published
+    // last spring, without regenerating a single mod.
+    const btnExtras = document.getElementById('btn-repo-extras');
+    if (btnExtras) {
+        btnExtras.addEventListener('click', async () => {
+            const { openExtrasPicker } = await import('./repo-extras.js');
+            const hint = (elements.inputExportPath as HTMLInputElement | null)?.value?.trim() || '';
+            await openExtrasPicker(hint || undefined);
+        });
+    }
+
     if (elements.btnCancelExport) {
         elements.btnCancelExport.onclick = async () => {
             try {

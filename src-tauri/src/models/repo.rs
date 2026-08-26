@@ -62,6 +62,68 @@ pub struct ServerRepo {
     #[serde(default)]
     pub profiles: Vec<RepoProfile>,
     pub modpacks: Option<Vec<RepoModpackShare>>,
+    /// Everything a repo carries that is not a mod.
+    ///
+    /// A repo used to mean "profiles of mods, plus modpacks", so publishing the rest of a
+    /// setup meant publishing it somewhere ELSE and telling people where — the plugin on one
+    /// host, the theme in a message, the automation as an attachment, the catalogues as a
+    /// list of links in a README. What arrived was a folder of mods and a reading exercise.
+    ///
+    /// One flat array rather than six fields, because every consumer — the client, the
+    /// server, BCWEB's inspector, the API, the CLI and the MCP tools — then has ONE code
+    /// path, and a kind added later reaches an old BMM as an item it can name and decline
+    /// rather than as a parse error over the whole manifest.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub extras: Vec<RepoExtra>,
+}
+
+/// One non-mod thing a repo carries.
+///
+/// Two shapes, one struct:
+///
+///  - **A file that travels with the repo** — a plugin, an automation, a theme, a mod list,
+///    a bundle. `file` names it under `extras/<kind>/`, resolved exactly like a mod file is,
+///    so the same base URL, the same layout override and the same hash check apply.
+///  - **An address** — a catalogue to follow, or an app to fetch. `url` carries it and no
+///    bytes are copied, because a catalogue is a thing that CHANGES: freezing a copy of one
+///    into a repo would publish a snapshot that silently stops matching its source.
+///
+/// Exactly one of the two is set. An entry with neither is dropped by the reader rather
+/// than shown as something that cannot be acted on.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct RepoExtra {
+    /// `plugin` · `task` · `theme` · `modlist` · `bundle` · `catalog` · `app`.
+    ///
+    /// A String, not an enum: an unknown kind must survive the parse. serde on an enum
+    /// refuses the document, which would mean a repo published by a newer BMM failing to
+    /// load AT ALL on an older one — over an item it merely could not install.
+    pub kind: String,
+    pub id: String,
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub author: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
+    /// The carried file, under `extras/<kind>/<relative_path>`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub file: Option<RepoFile>,
+    /// The address, for `catalog` and `app`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+    /// For a `catalog`: which subsystem it belongs to (`app`, `plugin`, `theme`, `list`…),
+    /// matching the catalog-index vocabulary the client already routes on.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub catalog_type: Option<String>,
+    /// A `modlist` whose contents are sealed. Stated in the manifest so the screen can say
+    /// so BEFORE the download — finding out afterwards means a file you cannot open and no
+    /// idea whether that is the point or a corruption.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub locked: bool,
+    /// Built-in icon name, shared so the receiver sees what the publisher saw.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub icon: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -175,6 +237,7 @@ impl ServerRepo {
             require_login: None,
             profiles: Vec::new(),
             modpacks: None,
+            extras: Vec::new(),
         }
     }
 }

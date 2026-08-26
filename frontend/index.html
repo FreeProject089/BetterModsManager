@@ -1586,6 +1586,23 @@
                                         </button>
                                     </div>
 
+                                    <!-- ── Everything that is not a mod ──
+                                         Its own button, and NOT part of the export run, because the
+                                         three moments it serves are the same act: finishing an
+                                         export, updating a repo, and adding something to one
+                                         published months ago. Folding it into the export would have
+                                         made the third mean re-exporting every mod. -->
+                                    <button class="btn btn-secondary btn-sm" id="btn-repo-extras"
+                                        style="width:100%;justify-content:center;margin-top:8px;"
+                                        data-tasky="repo.extras.lede" data-tasky-icon="list">
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+                                            <path d="M20 7h-9"/><path d="M14 17H5"/>
+                                            <circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/>
+                                        </svg>
+                                        <span data-i18n="repo.extras.pick">Include in the repo…</span>
+                                    </button>
+
                                     <!-- ── Publish over SSH ──
                                          Exporting writes a folder; this is what puts it on the machine
                                          that serves it. Separate from the export button on purpose: you
@@ -4774,7 +4791,7 @@
                                  reason for holding more than one. -->
                             <div class="sic-row" style="align-items:flex-start;">
                                 <span class="sic-label" data-i18n="settings.identity.authKeys">Clés d'identité</span>
-                                <div class="sic-value revealed" style="filter:none;pointer-events:auto;flex:1;min-width:0;">
+                                <div class="sic-value revealed sic-nosel" style="filter:none;pointer-events:auto;flex:1;min-width:0;">
                                     <div id="sic-keyring-list" style="display:flex;flex-direction:column;gap:6px;"></div>
                                     <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
                                         <input type="text" id="sic-key-name" class="form-input"

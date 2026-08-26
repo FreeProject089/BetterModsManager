@@ -171,6 +171,55 @@ pub async fn install_plugin_from_file(
     Ok(installed)
 }
 
+/// Install a plugin that arrived in a REPO, from bytes already fetched and hash-checked.
+///
+/// Two differences from the ordinary install path, both because the author is whoever
+/// published a repo rather than somebody the user went looking for:
+///
+///  - It lands **disabled**. A plugin is code that runs inside BMM; syncing a repo is not
+///    a decision to run a stranger's code, and turning it on is one click away for somebody
+///    who has looked at it.
+///  - Any permissions previously granted to that id are **cleared**. Ids are chosen by
+///    whoever writes the manifest, so without this a repo could name its plugin after one
+///    the user had already trusted and inherit the grant silently.
+pub fn install_plugin_bytes(
+    state: &AppState,
+    handle: &tauri::AppHandle,
+    bytes: &[u8],
+) -> Result<String, String> {
+    let plugins_dir = handle
+        .path()
+        .app_data_dir()
+        .ok()
+        .ok_or("Cannot resolve app data dir")?
+        .join("plugins");
+    std::fs::create_dir_all(&plugins_dir).map_err(|e| e.to_string())?;
+
+    let manifest = extract_plugin_zip(bytes, &plugins_dir)?;
+    let id = manifest.id.clone();
+
+    let installed = InstalledPlugin {
+        install_dir: plugins_dir.join(&id).to_string_lossy().to_string(),
+        icon_path: {
+            let icon = plugins_dir.join(&id).join("icon.png");
+            if icon.exists() { Some(icon.to_string_lossy().to_string()) } else { None }
+        },
+        installed_at: chrono::Utc::now().to_rfc3339(),
+        enabled: false,
+        manifest,
+    };
+
+    {
+        let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        data.installed_plugins.retain(|p| p.manifest.id != id);
+        data.installed_plugins.push(installed);
+        data.plugin_permissions.remove(&id);
+    }
+    let _ = state.save();
+    log_line(format!("[PLUGINS] Installed '{}' from a repo (disabled, no permissions)", id));
+    Ok(id)
+}
+
 /// The manifest inside a `.bmmplug`, WITHOUT installing it.
 ///
 /// Building a plugin catalogue used to mean installing every plugin that was going in it

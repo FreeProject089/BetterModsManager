@@ -652,3 +652,42 @@ pub fn remove_download_link(
 #[cfg(test)]
 #[path = "modlist_tests.rs"]
 mod modlist_tests;
+
+/// Fetch a `.mm` from a URL into the app's own data dir, and return where it landed.
+///
+/// The app's data dir, never the system temp. A shared list can carry download passwords
+/// and identity keys, and on Windows the system temp is a directory every process on the
+/// machine can read — which would undo, in the last step, the whole point of sealing it.
+///
+/// The name comes from the URL and is sanitised: it is chosen by whoever hosts the file.
+#[tauri::command]
+pub async fn modlist_fetch(app: tauri::AppHandle, url: String) -> Result<String, AppError> {
+    use tauri::Manager;
+    if !url.starts_with("http://") && !url.starts_with("https://") {
+        return Err(AppError::LockError("mm.errBadUrl".into()));
+    }
+    let res = crate::commands::net::client()
+        .get(&url)
+        .timeout(std::time::Duration::from_secs(60))
+        .send()
+        .await
+        .map_err(|e| AppError::LockError(format!("mm.errFetch|{}", e)))?;
+    if !res.status().is_success() {
+        return Err(AppError::LockError(format!("mm.errFetch|{}", res.status())));
+    }
+    let bytes = res.bytes().await.map_err(|e| AppError::LockError(e.to_string()))?;
+
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| AppError::LockError(e.to_string()))?
+        .join("modlists");
+    std::fs::create_dir_all(&dir)?;
+    let name = crate::commands::repo_extras::safe_name(
+        url.rsplit('/').next().unwrap_or("list.mm"),
+    );
+    let name = if name.contains('.') { name } else { format!("{}.mm", name) };
+    let path = dir.join(name);
+    std::fs::write(&path, &bytes)?;
+    Ok(path.to_string_lossy().to_string())
+}

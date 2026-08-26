@@ -768,3 +768,97 @@ function getLinkIcon(type) {
             return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>`;
     }
 }
+
+/** What `applyModList` did, in the terms a report has to use. */
+export interface ApplyListResult {
+    /** Mods enabled by this run. */
+    enabled: number;
+    /** Mods that were not here and had to be fetched. */
+    installed: number;
+    /** Mods this machine could not get, BY NAME. */
+    missing: string[];
+    /** Mods turned off because `exact` was asked for and the list does not name them. */
+    disabled: number;
+}
+
+/**
+ * Put a mod list on, unattended.
+ *
+ * Every step of this is something a person can do by hand in Mods → Import; that is the
+ * rule for anything the scheduler may do on its own. What it adds is doing them in order,
+ * without a screen, and reporting what did not work.
+ *
+ * `exact` is the one with teeth. Without it the list is added to what is already on, which
+ * is what somebody wants when they run two lists for two aircraft. With it the active set
+ * becomes the list and nothing else — which is what a STRICT server means by a mod list,
+ * and getting that wrong is being kicked at the loading screen with no reason given.
+ *
+ * A locked list without a passphrase fails here rather than prompting. A scheduled task
+ * cannot answer a prompt at four in the morning, and a dialog nobody sees is a task that
+ * hangs forever looking like it is working.
+ */
+export async function applyModList(opts: {
+    path?: string;
+    url?: string;
+    install?: boolean;
+    exact?: boolean;
+    passphrase?: string;
+}): Promise<ApplyListResult> {
+    let path = opts.path || '';
+    if (!path && opts.url) {
+        // Fetched into the app's own data dir, not the system temp: a `.mm` can carry
+        // credentials, and the system temp is readable by every process on the machine.
+        path = await invoke('modlist_fetch', { url: opts.url }) as string;
+    }
+    if (!path) throw new Error(t('sched.listApply.noSource'));
+
+    const list: any = await invoke('import_modlist', {
+        path, passphrase: opts.passphrase || null,
+    });
+
+    const wanted: any[] = Array.isArray(list?.mods) ? list.mods : [];
+    const out: ApplyListResult = { enabled: 0, installed: 0, missing: [], disabled: 0 };
+    if (!wanted.length) return out;
+
+    // Installed FIRST, all of it, before anything is switched on. Enabling as you go means
+    // a failure half-way leaves a half-applied set — which on a strict server is neither the
+    // old state nor the new one, and is harder to explain than either.
+    const here = () => (invoke('get_mods') as Promise<any[]>).catch(() => []);
+    let mods = await here();
+    const has = (m: any) =>
+        mods.find((x) => x.id === m.id) ||
+        mods.find((x) => String(x.name || '').toLowerCase() === String(m.name || '').toLowerCase());
+
+    const absent = wanted.filter((m) => !has(m));
+    if (absent.length && opts.install !== false) {
+        await invoke('install_from_modlist', {
+            modlistJson: JSON.stringify({ ...list, mods: absent }),
+            createProfile: false,
+            githubToken: await getGithubPat().catch(() => null),
+        });
+        const after = await here();
+        out.installed = Math.max(0, after.length - mods.length);
+        mods = after;
+    }
+
+    for (const m of wanted) {
+        const local = has(m);
+        if (!local) { out.missing.push(String(m.name || m.id)); continue; }
+        if (local.enabled) continue;
+        try {
+            await invoke('enable_mod', { modId: local.id, bypassSha: false });
+            out.enabled += 1;
+        } catch { out.missing.push(String(m.name || m.id)); }
+    }
+
+    if (opts.exact) {
+        const keep = new Set(wanted.map((m) => (has(m) || {}).id).filter(Boolean));
+        for (const m of await here()) {
+            if (!m.enabled || keep.has(m.id)) continue;
+            try { await invoke('disable_mod', { modId: m.id }); out.disabled += 1; } catch { /* leave it on */ }
+        }
+    }
+
+    if (window._refreshModsFn) window._refreshModsFn(true);
+    return out;
+}

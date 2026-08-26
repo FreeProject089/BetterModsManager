@@ -207,6 +207,35 @@ struct ApiSyncChoice {
 
 fn default_dl_limit() -> u32 { 0 }
 
+/// `POST /api/repo/extras` — take ONE thing a repo carries that is not a mod.
+///
+/// One at a time rather than a list, on purpose. Each kind lands somewhere different — a
+/// plugin on disk, an automation in the scheduler, a catalogue in the source list — and a
+/// batch endpoint would have to report five outcomes in one status code.
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct RepoExtraBody {
+    /// The repo, the same URL `/api/repo/info` takes.
+    url: String,
+    /// Which entry, matched against what `/api/repo/info` returned under `extras`.
+    kind: String,
+    id: String,
+    #[serde(default)]
+    creator_id: Option<String>,
+    #[serde(default)]
+    password: Option<String>,
+}
+
+/// `POST /api/keys` — make an identity keypair.
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct NewKeyBody {
+    name: String,
+    /// `ed25519` (default) · `ecdsa` · `rsa`.
+    #[serde(default)]
+    kind: Option<String>,
+}
+
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct RepoSyncBody {
@@ -2987,7 +3016,98 @@ pub async fn start_api_server(
         .boxed();
 
     // group_c: repo routes (cancel routes BEFORE the main route they override)
-    let group_c = repo_info
+    // ── Extras, and identity keys ──────────────────────────────────────
+    //
+    // Reading what a repo carries needs no new endpoint: `/api/repo/info` returns the
+    // manifest, and `extras` is part of it. Only the two ACTS are new.
+    let tok_extra_take = token.clone();
+    let handle_extra_take = app_handle.clone();
+    let repo_extra_take = warp::path!("api" / "repo" / "extras")
+        .and(warp::post())
+        .and(require_token(tok_extra_take))
+        .and(require_permission(token.clone(), "repo.write"))
+        .and(warp::body::json::<RepoExtraBody>())
+        .and(with_app_handle(handle_extra_take))
+        .and_then(|body: RepoExtraBody, handle: tauri::AppHandle| async move {
+            // The manifest is fetched and the entry taken FROM IT, rather than the caller
+            // describing the entry it wants installed. A caller that could hand over its own
+            // {kind, url, sha256} would be using this endpoint to install arbitrary files
+            // through BMM's own installer, which is not what "take what this repo carries"
+            // means — and the hash check would be checking the attacker's own number.
+            let repo = match crate::commands::repo::fetch_repo_info(
+                body.url.clone(), body.creator_id.clone(), body.password.clone(),
+            ).await {
+                Ok(r) => r,
+                Err(e) => return Ok::<_, warp::Rejection>(warp::reply::with_status(
+                    warp::reply::json(&ApiError { error: e }), StatusCode::BAD_GATEWAY)),
+            };
+            let Some(entry) = repo.extras.iter()
+                .find(|e| e.kind == body.kind && e.id == body.id)
+                .cloned()
+            else {
+                return Ok(warp::reply::with_status(
+                    warp::reply::json(&ApiError { error: "no such extra in that repo".into() }),
+                    StatusCode::NOT_FOUND));
+            };
+            let state = handle.state::<crate::state::AppState>();
+            match crate::commands::repo_extras::install_extra(
+                &handle, &state, &body.url, entry,
+                body.creator_id.as_deref(), body.password.as_deref(),
+            ).await {
+                Ok(v) => Ok(warp::reply::with_status(warp::reply::json(&v), StatusCode::OK)),
+                Err(e) => Ok(warp::reply::with_status(
+                    warp::reply::json(&ApiError { error: e }), StatusCode::BAD_REQUEST)),
+            }
+        });
+
+    // Identity keys. Its OWN grant rather than repo.write: a key is what proves you are you
+    // to every protected source, so minting one is not the same act as writing to a repo,
+    // and a plugin granted one must not silently get the other.
+    let tok_keys_list = token.clone();
+    let handle_keys_list = app_handle.clone();
+    let keys_list = warp::path!("api" / "keys")
+        .and(warp::get())
+        .and(require_token(tok_keys_list))
+        .and(require_permission(token.clone(), "keys.write"))
+        .and(with_app_handle(handle_keys_list))
+        .map(|handle: tauri::AppHandle| {
+            let state = handle.state::<crate::state::AppState>();
+            // Names and PATHS. Never key material — there is no endpoint that reads a
+            // private key, and this is the one somebody would reach for first.
+            match crate::commands::repo_keyauth::key_auth_list(state) {
+                Ok(v) => warp::reply::with_status(warp::reply::json(&v), StatusCode::OK),
+                Err(e) => warp::reply::with_status(
+                    warp::reply::json(&ApiError { error: e }), StatusCode::INTERNAL_SERVER_ERROR),
+            }
+        });
+
+    let tok_keys_new = token.clone();
+    let handle_keys_new = app_handle.clone();
+    let keys_new = warp::path!("api" / "keys")
+        .and(warp::post())
+        .and(require_token(tok_keys_new))
+        .and(require_permission(token.clone(), "keys.write"))
+        .and(warp::body::json::<NewKeyBody>())
+        .and(with_app_handle(handle_keys_new))
+        .and_then(|body: NewKeyBody, handle: tauri::AppHandle| async move {
+            let state = handle.state::<crate::state::AppState>();
+            match crate::commands::repo_keyauth::key_auth_generate(
+                handle.clone(), state, body.name, body.kind,
+            ).await {
+                // The response carries the PUBLIC line and the path the private half went
+                // to. The private half itself is never in a response body, because this
+                // API's replies are logged by callers, proxied, and read in a browser tab.
+                Ok(v) => Ok::<_, warp::Rejection>(warp::reply::with_status(
+                    warp::reply::json(&v), StatusCode::CREATED)),
+                Err(e) => Ok(warp::reply::with_status(
+                    warp::reply::json(&ApiError { error: e }), StatusCode::BAD_REQUEST)),
+            }
+        });
+
+    let group_c = repo_extra_take
+        .or(keys_new)
+        .or(keys_list)
+        .or(repo_info)
         .or(repo_connect)
         .or(repo_list)
         .or(repo_sync_cancel)   // DELETE must come before POST for same path prefix

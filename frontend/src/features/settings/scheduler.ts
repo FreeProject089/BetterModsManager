@@ -52,6 +52,11 @@ type Trigger =
     | { type: 'weeklyAt'; time: string; days: number[] }            // 0=Sun..6=Sat
     | { type: 'monthlyAt'; day: number; time: string }              // day-of-month 1..31
     | { type: 'appStart' }                                          // once per app launch
+    // Fires when a FILE changes — the only way one process learns that another did
+    // something. A game does not announce anything; it writes. This is what turns "DCS
+    // just joined a server" into something an automation can hang off, and it is not
+    // DCS-specific: point it at any log, any save, any file a program touches.
+    | { type: 'watchFile'; path: string }
     | { type: 'manual' };                                           // only via Run button / deeplink
 
 interface Action { type: string; params: Record<string, any>; }
@@ -475,11 +480,37 @@ function isDue(task: Task, now: Date): boolean {
     return false;
 }
 
+/**
+ * The last stamp seen for each watched file, per task.
+ *
+ * In memory, not on the task. Persisting it would mean a change made while BMM was closed
+ * fires on the next start — which for "you joined a server" means acting on a session that
+ * ended hours ago. The first poll after a start therefore RECORDS and does not fire, which
+ * is also what stops every watch task running once at every launch.
+ */
+const _watchSeen = new Map<string, string>();
+
+async function watchFired(task: Task): Promise<boolean> {
+    const tr = task.trigger as { type: 'watchFile'; path: string };
+    const path = String(tr.path || '').trim();
+    if (!path) return false;
+    const stamp = String(await invoke('file_stamp', { path }).catch(() => ''));
+    // No file is not a change. A game that has never run has no log, and firing on its
+    // appearance later is right — firing on its absence now is not.
+    if (!stamp) { _watchSeen.set(task.id, ''); return false; }
+    const seen = _watchSeen.get(task.id);
+    _watchSeen.set(task.id, stamp);
+    if (seen === undefined) return false;   // first sighting: learn it, do not act on it
+    return seen !== stamp;
+}
+
 async function tick(): Promise<void> {
     const now = new Date();
     for (const task of _tasks) {
         if (!task.enabled) continue;
-        if (!isDue(task, now)) continue;
+        if (task.trigger.type === 'watchFile') {
+            if (!(await watchFired(task))) continue;
+        } else if (!isDue(task, now)) continue;
         if (task.trigger.type === 'appStart') _appStartFired.add(task.id);
         if (task.trigger.type === 'once') _onceFired.add(task.id);
         await runTask(task);
@@ -1445,6 +1476,96 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
             }
             break;
         }
+        // ── Games: notice, then act ─────────────────────────────────────
+
+        // Pull one value out of a file or a variable and keep it.
+        //
+        // This is the whole of "which server am I on" for every game that is not DCS. A game
+        // writes a log; the log has a line naming what it just did; a regex takes the part
+        // that matters and puts it in a variable the next steps can branch on. Nothing about
+        // it is game-specific, which is why it is not called anything game-specific.
+        case 'text.extract': {
+            const target = String(p.target || 'value').trim() || 'value';
+            let hay = '';
+            if (p.path) {
+                // The TAIL, not the file. A game log is appended to for the whole session
+                // and can be hundreds of megabytes; what just happened is at the end of it.
+                hay = String(await invoke('read_text_tail', {
+                    path: String(p.path), kb: Number(p.tailKb) || 64,
+                }).catch(() => ''));
+            } else if (p.source) {
+                hay = String(ctx.text[String(p.source)] ?? '');
+            }
+            let value = '';
+            const pattern = String(p.regex || '').trim();
+            if (pattern) {
+                try {
+                    // LAST match, not first. In a log the most recent line is the one that
+                    // describes now; the first is whatever happened when the game started.
+                    const re = new RegExp(pattern, 'g');
+                    let m: RegExpExecArray | null;
+                    let last: RegExpExecArray | null = null;
+                    while ((m = re.exec(hay)) !== null) {
+                        last = m;
+                        if (m.index === re.lastIndex) re.lastIndex += 1;  // a zero-width match
+                    }
+                    if (last) value = String(last[Number(p.group) || 1] ?? last[0] ?? '');
+                } catch {
+                    // A regex somebody typed. A bad one is a mistake in the task, not a
+                    // reason to abandon the run half-way through.
+                    toast(`${task.name}: ${t('sched.textExtract.badRegex')}`, 'warning', 8000);
+                }
+            } else {
+                value = hay.trim();
+            }
+            ctx.text[target] = value;
+            // Also as a number when it is one, so `value >` conditions work on it without a
+            // second action to convert it.
+            const n = Number(value);
+            if (value !== '' && Number.isFinite(n)) ctx.nums[target] = n;
+            break;
+        }
+
+        // Put a mod list on: install what is missing, then enable exactly what it names.
+        //
+        // The unattended half of the import screen. Everything it does, a person can do by
+        // hand in Mods → Import — which is the rule for a scheduler action.
+        case 'modlist.apply': {
+            const { applyModList } = await import('../mods/modlist.js');
+            const r = await applyModList({
+                path: p.path ? String(p.path) : undefined,
+                url: p.url ? String(p.url) : undefined,
+                install: p.install !== false,
+                exact: !!p.exact,
+                passphrase: p.passphrase ? String(p.passphrase) : undefined,
+            });
+            toast(`${task.name}: ${t('sched.listApply.done')
+                .replace('{on}', String(r.enabled))
+                .replace('{new}', String(r.installed))}`, 'success', 8000);
+            if (r.missing.length) {
+                // Named, and a warning rather than a failure. A list that names a mod
+                // nothing can supply is still worth applying for the rest of it — but
+                // "applied" with three mods silently absent is the report that gets somebody
+                // kicked off a strict server without knowing why.
+                toast(`${task.name}: ${t('sched.listApply.missing')
+                    .replace('{n}', String(r.missing.length))} — ${r.missing.slice(0, 6).join(', ')}`,
+                    'warning', 12000);
+            }
+            break;
+        }
+
+        case 'dcs.hook': {
+            if (String(p.mode || 'install') === 'remove') {
+                const n = Number(await invoke('dcs_remove_hook', { dir: p.dir || null }).catch(() => 0));
+                toast(`${task.name}: ${t('sched.dcsHookOff').replace('{n}', String(n))}`, 'info', 6000);
+            } else {
+                const r: any = await invoke('dcs_install_hook', { dir: p.dir || null });
+                toast(`${task.name}: ${t('sched.dcsHookOk')
+                    .replace('{n}', String((r?.installed || []).length))}`, 'success', 8000);
+            }
+            break;
+        }
+
         case 'task.stop':                          // guard clause / early exit (clean)
             throw new _StopTask(String(p.reason || ''));
 
@@ -1839,6 +1960,40 @@ async function evalConditionRaw(cond: Condition, ctx: RunCtx, task?: Task): Prom
             return !(await invoke('is_process_running', { name: p.name || '', pid: p.pid || null }).catch(() => false));
         case 'fileExists':
             return await invoke('path_exists', { path: p.path || '' }).catch(() => false);
+        // Is this text in the end of that file?
+        //
+        // The tail, for the same reason text.extract reads the tail: what a game just did is
+        // at the end of its log, and "somewhere in 300 MB" is a different question with a
+        // different answer — usually yes, for every server you have ever joined.
+        case 'fileContains': {
+            const hay = String(await invoke('read_text_tail', {
+                path: String(p.path || ''), kb: Number(p.tailKb) || 64,
+            }).catch(() => ''));
+            if (!hay) return false;
+            const needle = String(p.text || '');
+            if (!needle) return false;
+            if (p.regex) {
+                try { return new RegExp(needle, 'i').test(hay); } catch { return false; }
+            }
+            return hay.toLowerCase().includes(needle.toLowerCase());
+        }
+        // Compare a TEXT variable. `value` only ever compared numbers, so a task that had
+        // just extracted a server name had no way to branch on it — the name became its
+        // length and every comparison was quietly false.
+        case 'textIs': {
+            const left = String(ctx.text[String(p.source || '')] ?? '');
+            const right = String(p.value ?? '');
+            switch (String(p.op || 'is')) {
+                case 'is': return left.toLowerCase() === right.toLowerCase();
+                case 'isNot': return left.toLowerCase() !== right.toLowerCase();
+                case 'contains': return left.toLowerCase().includes(right.toLowerCase());
+                case 'empty': return left.trim() === '';
+                case 'notEmpty': return left.trim() !== '';
+                case 'matches':
+                    try { return new RegExp(right, 'i').test(left); } catch { return false; }
+                default: return false;
+            }
+        }
         case 'online':
             return navigator.onLine;
         case 'timeReached': {
@@ -2127,6 +2282,7 @@ function triggerIcon(tr: Trigger): string {
         case 'dailyAt':   return P('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>');
         case 'weeklyAt':
         case 'monthlyAt': return P('<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>');
+        case 'watchFile': return P('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><circle cx="12" cy="15" r="2"/>');
         case 'appStart':  return P('<path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/>');
         case 'manual':    return P('<path d="M18 11V6a2 2 0 0 0-4 0v5"/><path d="M14 10V4a2 2 0 0 0-4 0v2"/><path d="M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/>');
     }
@@ -2429,6 +2585,12 @@ function triggerLabel(tr: Trigger): string {
         }
         case 'monthlyAt': return `${t('sched.lblMonthly') || 'Day'} ${tr.day} ${t('sched.lblAt') || 'at'} ${tr.time}`;
         case 'appStart': return t('sched.trAppStart') || 'On BMM start';
+        case 'watchFile': {
+            const name = String(tr.path || '').replace(/^.*[\\/]/, '');
+            return name
+                ? `${t('sched.trWatch') || 'When a file changes'}: ${name}`
+                : (t('sched.trWatchNoPath') || 'When a file changes — no file picked');
+        }
         case 'manual': return t('sched.trManual') || 'Manual only';
     }
 }
@@ -2550,6 +2712,87 @@ async function loadPickers(): Promise<void> {
  * so the user has to grant it deliberately, and say so in their description.
  */
 const PRESETS: { key: string; icon: string; title: string; desc: string; make: () => Partial<Task> }[] = [
+    {
+        // Two presets for the same idea: notice which server you are on, put the right mods
+        // on before the loading screen decides for you. This one is DCS because DCS can be
+        // ASKED — it has a supported hook API — so it does not have to guess from a log.
+        //
+        // Both arrive with the path and the list blank on purpose. A preset that filled them
+        // in with a guess would be a task that looks configured, runs, finds nothing, and
+        // reports success.
+        key: 'dcsServer',
+        icon: '<path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/>',
+        title: 'DCS: the right mods for the server you joined',
+        desc: 'Sets up the DCS watcher, then applies the mod list for whichever server you join.',
+        make: () => ({
+            name: 'DCS — mods for this server',
+            // The file the DCS hook writes. Left blank so the trigger editor's "Set up DCS"
+            // button fills it in — it is the same click that installs the hook, and a path
+            // typed here without the hook installed watches a file nothing will ever write.
+            trigger: { type: 'watchFile', path: '' },
+            steps: [
+                // Which server. The hook writes JSON, so one pattern gets the name out of it.
+                {
+                    kind: 'action',
+                    action: {
+                        type: 'text.extract',
+                        params: { path: '', regex: '\"server\"\s*:\s*\"([^\"]*)\"', group: 1, target: 'server', tailKb: 4 },
+                    },
+                },
+                // Nothing to do when you left the server rather than joined one. Without
+                // this the task fires on disconnect too and re-applies a list for a session
+                // that has ended.
+                {
+                    kind: 'if',
+                    condition: { type: 'textIs', params: { source: 'server', op: 'notEmpty' } },
+                    then: [
+                        {
+                            kind: 'if',
+                            condition: { type: 'textIs', params: { source: 'server', op: 'contains', value: 'Blue Flag' } },
+                            // `exact` is on: a strict server means the list AND NOTHING ELSE,
+                            // and one extra mod is the same rejection as a missing one.
+                            then: [{ kind: 'action', action: { type: 'modlist.apply', params: { path: '', install: true, exact: true } } }],
+                            else: [{ kind: 'action', action: { type: 'notify', params: { message: 'No mod list set for {text.server}.' } } }],
+                        },
+                    ],
+                    else: [],
+                },
+            ],
+        }),
+    },
+    {
+        // The same thing for a game with no hook API: watch its log, read the server out of
+        // a line, branch. Every game that prints what it connected to can do this, and the
+        // only part that changes between them is the pattern.
+        key: 'gameServer',
+        icon: '<rect width="20" height="8" x="2" y="2" rx="2"/><rect width="20" height="8" x="2" y="14" rx="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/>',
+        title: 'Any game: mods for the server in the log',
+        desc: 'Watch a game log, read the server name out of a line, apply the matching mod list.',
+        make: () => ({
+            name: 'Server → mod list',
+            trigger: { type: 'watchFile', path: '' },
+            steps: [
+                {
+                    kind: 'action',
+                    action: {
+                        // The pattern is the one thing to change per game. It reads: find the
+                        // last line saying "connected to X" and keep X.
+                        type: 'text.extract',
+                        params: { path: '', regex: 'connect(?:ed|ing)? to[: ]+(.+)', group: 1, target: 'server', tailKb: 64 },
+                    },
+                },
+                {
+                    kind: 'if',
+                    condition: { type: 'textIs', params: { source: 'server', op: 'notEmpty' } },
+                    then: [
+                        { kind: 'action', action: { type: 'notify', params: { message: 'Joined {text.server} — applying its mod list.' } } },
+                        { kind: 'action', action: { type: 'modlist.apply', params: { url: '', install: true, exact: false } } },
+                    ],
+                    else: [],
+                },
+            ],
+        }),
+    },
     {
         key: 'backup', icon: '<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>',
         title: 'Weekly backup',
@@ -3366,6 +3609,7 @@ function renderTriggerEditor(host: HTMLElement): void {
         ['monthlyAt', t('sched.trMonthly') || 'Monthly on a day'],
         ['once',      t('sched.trOnce')    || 'Once at date/time'],
         ['appStart',  t('sched.trAppStart')|| 'On BMM start'],
+        ['watchFile', t('sched.trWatch')   || 'When a file changes'],
         ['manual',    t('sched.trManual')  || 'Manual only'],
     ];
     host.innerHTML = `
@@ -3385,6 +3629,7 @@ function renderTriggerEditor(host: HTMLElement): void {
         else if (v === 'weeklyAt') _draft.trigger = { type: 'weeklyAt', time: '08:00', days: [1] };
         else if (v === 'monthlyAt') _draft.trigger = { type: 'monthlyAt', day: 1, time: '08:00' };
         else if (v === 'once') _draft.trigger = { type: 'once', at: new Date(Date.now() + 3600000).toISOString().slice(0, 16) };
+        else if (v === 'watchFile') _draft.trigger = { type: 'watchFile', path: '' };
         else if (v === 'manual') _draft.trigger = { type: 'manual' };
         else _draft.trigger = { type: 'appStart' };
         renderTriggerEditor(host);
@@ -3406,6 +3651,45 @@ function renderTriggerEditor(host: HTMLElement): void {
             <input type="time" class="input" id="sched-tr-time" value="${tr.time}" style="max-width:140px">`;
         ph.querySelector('#sched-tr-dom')?.addEventListener('input', (e) => { (_draft.trigger as any).day = Math.min(31, Math.max(1, parseInt((e.target as HTMLInputElement).value) || 1)); });
         ph.querySelector('#sched-tr-time')?.addEventListener('input', (e) => { (_draft.trigger as any).time = (e.target as HTMLInputElement).value; });
+    } else if (tr.type === 'watchFile') {
+        // The DCS button is here rather than in a "games" screen because this is the moment
+        // somebody needs it: they have chosen "when a file changes" and do not yet know
+        // which file. It installs the hook and fills the path in with what the hook writes.
+        ph.innerHTML = `
+            <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+                <input class="input" id="sched-tr-watch" spellcheck="false" style="flex:1;min-width:220px"
+                    placeholder="${escAttr(t('sched.trWatchPh') || 'Full path to the file to watch')}"
+                    value="${escAttr(tr.path || '')}">
+                <button type="button" class="btn btn-xs btn-ghost" id="sched-tr-watch-pick">${escHtml(t('common.browse') || 'Browse')}</button>
+                <button type="button" class="btn btn-xs btn-ghost" id="sched-tr-watch-dcs">${escHtml(t('sched.trWatchDcs') || 'Set up DCS')}</button>
+            </div>
+            <p class="sched-hint">${escHtml(t('sched.trWatchHint') || '')}</p>`;
+        ph.querySelector('#sched-tr-watch')?.addEventListener('input', (e) => {
+            (_draft.trigger as any).path = (e.target as HTMLInputElement).value;
+        });
+        ph.querySelector('#sched-tr-watch-pick')?.addEventListener('click', async () => {
+            const { pickFile } = await import('../../core/api.js');
+            const f = await pickFile({ filters: [{ name: 'All files', extensions: ['*'] }] }).catch(() => null);
+            if (!f) return;
+            (_draft.trigger as any).path = f;
+            (ph.querySelector('#sched-tr-watch') as HTMLInputElement).value = String(f);
+        });
+        ph.querySelector('#sched-tr-watch-dcs')?.addEventListener('click', async () => {
+            try {
+                const r: any = await invoke('dcs_install_hook', { dir: null });
+                // The FIRST is picked rather than asking, and the count is reported — there
+                // are usually two DCS folders (release and open beta) and the hook goes in
+                // both, but a trigger watches one file.
+                const first = (r?.watch || [])[0];
+                if (!first) return;
+                (_draft.trigger as any).path = first;
+                (ph.querySelector('#sched-tr-watch') as HTMLInputElement).value = String(first);
+                toast(t('sched.dcsHookOk').replace('{n}', String((r.installed || []).length)), 'success', 8000);
+            } catch (e) {
+                toast(String(e).includes('game.errNoDcs')
+                    ? t('sched.dcsHookNone') : String(e), 'warning', 8000);
+            }
+        });
     } else if (tr.type === 'manual') {
         ph.innerHTML = `<span style="font-size:12px;color:var(--text-muted)">${t('sched.trManualHint') || 'Never runs automatically — use the ▶ Run button or a bmm://schedule/run link.'}</span>`;
     } else if (tr.type === 'dailyAt') {
@@ -4292,6 +4576,12 @@ const ACTION_TYPES: { v: string; label: string; needs?: string; group: string }[
     { v: 'map.clear', label: 'Map — empty it', needs: 'mapName', group: 'logic' },
     { v: 'var.clear', label: 'Clear a shared variable', needs: 'varClear', group: 'logic' },
     { v: 'http.request', label: 'Call an HTTP API', needs: 'http', group: 'system' },
+    // ── Games ──
+    // The glue between "a file changed" and "put the right mods on". Universal on purpose:
+    // nothing here knows what DCS is except the one action that installs its hook.
+    { v: 'text.extract', label: 'Read a value out of a file or a variable', needs: 'textExtract', group: 'logic' },
+    { v: 'modlist.apply', label: 'Apply a mod list (install what is missing)', needs: 'listApply', group: 'mods' },
+    { v: 'dcs.hook', label: 'DCS: set up (or remove) the server watcher', needs: 'dcsHook', group: 'apps' },
 ];
 
 function actionEditor(action: Action, onStructureChange?: () => void): HTMLElement {
@@ -4576,6 +4866,79 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
     // Reuses .sched-p-varname / .sched-p-varvalue because the generic wiring at the end of
     // this function already maps them to params.name / params.value — which is exactly what
     // list.set, list.push and list.clear read.
+    else if (needs === 'textExtract') {
+        // Two sources, one field each, and only one is used — whichever is filled in. A
+        // radio to choose between them would be a third control for a decision the two
+        // fields already make.
+        host.innerHTML = `<div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${escHtml(t('sched.tx.file') || '1. Read from this file')}</label>
+            <div style="display:flex;gap:6px">
+                <input class="input sched-p-txpath" spellcheck="false" style="flex:1"
+                    placeholder="${escAttr(t('sched.tx.filePh') || '')}"
+                    value="${escAttr(params.path || '')}">
+                <button type="button" class="btn btn-xs btn-ghost sched-browse-txpath">${escHtml(t('common.browse') || 'Browse')}</button>
+            </div>
+            <label class="sched-cmd-label">${escHtml(t('sched.tx.orVar') || '… or from this variable')}</label>
+            <input class="input sched-p-txsource" spellcheck="false" style="max-width:220px"
+                placeholder="${escAttr(t('sched.tx.orVarPh') || 'a variable name')}"
+                value="${escAttr(params.source || '')}">
+            <label class="sched-cmd-label">${escHtml(t('sched.tx.regex') || '2. Pattern')}</label>
+            <input class="input sched-p-txregex" spellcheck="false"
+                placeholder="${escAttr(t('sched.tx.regexPh') || '')}"
+                value="${escAttr(params.regex || '')}">
+            <span class="sched-cmd-hint">${escHtml(t('sched.tx.regexHint') || '')}</span>
+            <label class="sched-cmd-label">${escHtml(t('sched.tx.target') || '3. Keep it as')}</label>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+                <input class="input sched-p-txtarget" spellcheck="false" style="max-width:200px"
+                    placeholder="server" value="${escAttr(params.target || '')}">
+                <span class="sched-cmd-hint">${escHtml(t('sched.tx.group') || 'group')}</span>
+                <input type="number" class="input sched-p-txgroup" min="0" style="max-width:80px"
+                    value="${escAttr(String(params.group ?? 1))}">
+                <span class="sched-cmd-hint">${escHtml(t('sched.tx.tail') || 'last KB')}</span>
+                <input type="number" class="input sched-p-txtail" min="1" style="max-width:90px"
+                    value="${escAttr(String(params.tailKb ?? 64))}">
+            </div>
+        </div>`;
+    }
+    else if (needs === 'listApply') {
+        host.innerHTML = `<div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${escHtml(t('sched.la.file') || '1. The list file')}</label>
+            <div style="display:flex;gap:6px">
+                <input class="input sched-p-lapath" spellcheck="false" style="flex:1"
+                    placeholder="${escAttr(t('sched.la.filePh') || 'a .mm on this machine')}"
+                    value="${escAttr(params.path || '')}">
+                <button type="button" class="btn btn-xs btn-ghost sched-browse-lapath">${escHtml(t('common.browse') || 'Browse')}</button>
+            </div>
+            <label class="sched-cmd-label">${escHtml(t('sched.la.url') || '… or an address to fetch it from')}</label>
+            <input class="input sched-p-laurl" spellcheck="false"
+                placeholder="https://…/list.mm" value="${escAttr(params.url || '')}">
+            <label class="sched-cmd-row"><input type="checkbox" class="sched-p-lainstall"
+                ${params.install !== false ? 'checked' : ''}>
+                <span>${escHtml(t('sched.la.install') || 'Install what is missing')}</span></label>
+            <label class="sched-cmd-row"><input type="checkbox" class="sched-p-laexact"
+                ${params.exact ? 'checked' : ''}>
+                <span>${escHtml(t('sched.la.exact') || 'Turn everything else OFF')}</span></label>
+            <span class="sched-cmd-hint">${escHtml(t('sched.la.exactHint') || '')}</span>
+            <label class="sched-cmd-label">${escHtml(t('sched.la.pass') || 'Passphrase, if the list is locked')}</label>
+            <input type="password" class="input sched-p-lapass" autocomplete="new-password"
+                value="${escAttr(params.passphrase || '')}">
+            <span class="sched-cmd-hint">${escHtml(t('sched.la.passHint') || '')}</span>
+        </div>`;
+    }
+    else if (needs === 'dcsHook') {
+        host.innerHTML = `<div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${escHtml(t('sched.dcs.mode') || 'What to do')}</label>
+            <select class="input sched-p-dcsmode" style="max-width:220px">
+                <option value="install"${params.mode !== 'remove' ? ' selected' : ''}>${escHtml(t('sched.dcs.install') || 'Set it up')}</option>
+                <option value="remove"${params.mode === 'remove' ? ' selected' : ''}>${escHtml(t('sched.dcs.remove') || 'Take it out')}</option>
+            </select>
+            <label class="sched-cmd-label">${escHtml(t('sched.dcs.dir') || 'A specific DCS folder (optional)')}</label>
+            <input class="input sched-p-dcsdir" spellcheck="false"
+                placeholder="${escAttr(t('sched.dcs.dirPh') || 'blank = every DCS folder found')}"
+                value="${escAttr(params.dir || '')}">
+            <span class="sched-cmd-hint">${escHtml(t('sched.dcs.hint') || '')}</span>
+        </div>`;
+    }
     else if (needs === 'listSet' || needs === 'listPush' || needs === 'listName') {
         const nameField = `
             <label class="sched-cmd-label">${t('sched.list.name') || '1. List name'}</label>
@@ -4905,6 +5268,31 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
     host.querySelector('.sched-p-varname')?.addEventListener('input', (e) => { params.name = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-p-varvalue')?.addEventListener('input', (e) => { params.value = (e.target as HTMLTextAreaElement).value; });
     host.querySelector('.sched-p-listsep')?.addEventListener('input', (e) => { params.sep = (e.target as HTMLInputElement).value; });
+    // text.extract / modlist.apply / dcs.hook. Same shape as everything else here: a
+    // querySelector that finds nothing for the other action types binds nothing.
+    host.querySelector('.sched-p-txpath')?.addEventListener('input', (e) => { params.path = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-txsource')?.addEventListener('input', (e) => { params.source = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-txregex')?.addEventListener('input', (e) => { params.regex = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-txtarget')?.addEventListener('input', (e) => { params.target = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-txgroup')?.addEventListener('input', (e) => { params.group = parseInt((e.target as HTMLInputElement).value) || 0; });
+    host.querySelector('.sched-p-txtail')?.addEventListener('input', (e) => { params.tailKb = parseInt((e.target as HTMLInputElement).value) || 64; });
+    host.querySelector('.sched-p-lapath')?.addEventListener('input', (e) => { params.path = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-laurl')?.addEventListener('input', (e) => { params.url = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-lainstall')?.addEventListener('change', (e) => { params.install = (e.target as HTMLInputElement).checked; });
+    host.querySelector('.sched-p-laexact')?.addEventListener('change', (e) => { params.exact = (e.target as HTMLInputElement).checked; });
+    host.querySelector('.sched-p-lapass')?.addEventListener('input', (e) => { params.passphrase = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-dcsmode')?.addEventListener('change', (e) => { params.mode = (e.target as HTMLSelectElement).value; });
+    host.querySelector('.sched-p-dcsdir')?.addEventListener('input', (e) => { params.dir = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-browse-txpath')?.addEventListener('click', async () => {
+        const { pickFile } = await import('../../core/api.js');
+        const f = await pickFile({ filters: [{ name: 'All files', extensions: ['*'] }] }).catch(() => null);
+        if (f) { params.path = f; (host.querySelector('.sched-p-txpath') as HTMLInputElement).value = String(f); }
+    });
+    host.querySelector('.sched-browse-lapath')?.addEventListener('click', async () => {
+        const { pickFile } = await import('../../core/api.js');
+        const f = await pickFile({ filters: [{ name: 'BMM mod list', extensions: ['mm', 'mmlist', 'json'] }] }).catch(() => null);
+        if (f) { params.path = f; (host.querySelector('.sched-p-lapath') as HTMLInputElement).value = String(f); }
+    });
     host.querySelector('.sched-p-mapkey')?.addEventListener('input', (e) => { params.key = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-p-mapinto')?.addEventListener('input', (e) => { params.into = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-p-varscope')?.addEventListener('change', (e) => { params.scope = (e.target as HTMLSelectElement).value; });
@@ -5013,7 +5401,7 @@ function diskOptions(selected: string): string {
 
 /** What `for each` can walk. One list: the editor's dropdown and the code box's suggestions. */
 const LOOP_SOURCES = ['enabledMods', 'disabledMods', 'mods', 'profiles', 'modpacks', 'themes', 'list', 'mapKeys'] as const;
-const COND_TYPES = ['always', 'all', 'any', 'value', 'enumIs', 'profileActive', 'modEnabled', 'modDisabled', 'modpackActive', 'modpackInactive', 'allModsActive', 'appRunning', 'appNotRunning', 'fileExists', 'pathIsDir', 'fileHash', 'filesMatch', 'fileSize', 'fileType', 'fileName', 'fileNewer', 'online', 'catalogOk', 'repoOk', 'timeReached', 'dayOfWeek', 'timeRange', 'commandSucceeds'];
+const COND_TYPES = ['always', 'all', 'any', 'value', 'textIs', 'fileContains', 'enumIs', 'profileActive', 'modEnabled', 'modDisabled', 'modpackActive', 'modpackInactive', 'allModsActive', 'appRunning', 'appNotRunning', 'fileExists', 'pathIsDir', 'fileHash', 'filesMatch', 'fileSize', 'fileType', 'fileName', 'fileNewer', 'online', 'catalogOk', 'repoOk', 'timeReached', 'dayOfWeek', 'timeRange', 'commandSucceeds'];
 // Values a preceding action can capture (used by the `value` condition).
 // Every variable an action writes into `ctx`, so a `value` condition can read all of
 // them. Four were missing — check_disk_space has always written disk.free_gb,
@@ -5173,6 +5561,33 @@ function renderCondParams(host: HTMLElement, cond: Condition): void {
         host.querySelector('.sched-cp-src')?.addEventListener('change', (e) => { p.source = (e.target as HTMLSelectElement).value; });
         host.querySelector('.sched-cp-op')?.addEventListener('change', (e) => { p.op = (e.target as HTMLSelectElement).value; });
         host.querySelector('.sched-cp-val')?.addEventListener('input', (e) => { p.value = (e.target as HTMLInputElement).value; });
+    } else if (cond.type === 'textIs') {
+        // A free-typed variable name, not a dropdown of VALUE_SOURCES: the whole point of
+        // this condition is branching on something text.extract just invented a name for,
+        // and a fixed list cannot contain a name that does not exist yet.
+        host.innerHTML = `
+            <input class="input sched-cp-src" spellcheck="false" style="max-width:170px"
+                placeholder="${escAttr(t('sched.phVarName') || 'variable')}" value="${escAttr(p.source || '')}">
+            <select class="input sched-cp-op" style="max-width:130px">
+                ${['is', 'isNot', 'contains', 'matches', 'empty', 'notEmpty']
+                    .map(o => `<option value="${o}"${(p.op || 'is') === o ? ' selected' : ''}>${escHtml(t('sched.txtOp.' + o) || o)}</option>`).join('')}
+            </select>
+            <input class="input sched-cp-val" spellcheck="false" style="min-width:170px"
+                placeholder="${escAttr(t('sched.phValue') || 'value')}" value="${escAttr(p.value ?? '')}">`;
+        host.querySelector('.sched-cp-src')?.addEventListener('input', (e) => { p.source = (e.target as HTMLInputElement).value; });
+        host.querySelector('.sched-cp-op')?.addEventListener('change', (e) => { p.op = (e.target as HTMLSelectElement).value; });
+        host.querySelector('.sched-cp-val')?.addEventListener('input', (e) => { p.value = (e.target as HTMLInputElement).value; });
+    } else if (cond.type === 'fileContains') {
+        host.innerHTML = `${condFileInput(p)}
+            <input class="input sched-cp-val" spellcheck="false" style="min-width:190px"
+                placeholder="${escAttr(t('sched.phContains') || 'text to look for')}" value="${escAttr(p.text || '')}">
+            <label class="sched-cp-chk"><input type="checkbox" class="sched-cp-re"${p.regex ? ' checked' : ''}>
+                <span>${escHtml(t('sched.asRegex') || 'as a pattern')}</span></label>
+            <input class="input sched-cp-tail" type="number" min="1" style="max-width:90px"
+                title="${escAttr(t('sched.tx.tail') || 'last KB')}" value="${escAttr(String(p.tailKb ?? 64))}">`;
+        host.querySelector('.sched-cp-val')?.addEventListener('input', (e) => { p.text = (e.target as HTMLInputElement).value; });
+        host.querySelector('.sched-cp-re')?.addEventListener('change', (e) => { p.regex = (e.target as HTMLInputElement).checked; });
+        host.querySelector('.sched-cp-tail')?.addEventListener('input', (e) => { p.tailKb = parseInt((e.target as HTMLInputElement).value) || 64; });
     } else if (cond.type === 'fileHash') {
         host.innerHTML = `${condFileInput(p)}
             <select class="input sched-cp-algo" style="max-width:110px">${['blake3', 'sha256'].map(a => `<option value="${a}"${(p.algo || 'blake3') === a ? ' selected' : ''}>${a}</option>`).join('')}</select>

@@ -449,6 +449,24 @@
       "label": "Call an HTTP API",
       "needs": "http",
       "group": "system"
+    },
+    {
+      "type": "text.extract",
+      "label": "Read a value out of a file or a variable",
+      "needs": "textExtract",
+      "group": "logic"
+    },
+    {
+      "type": "modlist.apply",
+      "label": "Apply a mod list (install what is missing)",
+      "needs": "listApply",
+      "group": "mods"
+    },
+    {
+      "type": "dcs.hook",
+      "label": "DCS: set up (or remove) the server watcher",
+      "needs": "dcsHook",
+      "group": "apps"
     }
   ]
 }

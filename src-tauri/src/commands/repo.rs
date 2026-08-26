@@ -2202,6 +2202,7 @@ async fn discovered_repo(base: &str, client: &reqwest::Client) -> Result<ServerR
         files_base_url: None,
         files_layout: None,
         modpacks: None,
+        extras: Vec::new(),
         profiles: vec![crate::models::repo::RepoProfile {
             id: "discovered".to_string(),
             name: "Server".to_string(),
