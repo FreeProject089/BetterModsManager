@@ -28,6 +28,21 @@ if (!presetFields.length) { console.error('✗ could not read PresetEntry'); pro
 // ── the guides ────────────────────────────────────────────────────────────────
 const GUIDES = 'Update/Guides/Catalogs-and-Repos';
 const indexDocs = ['catalog-index-format_EN.md', 'catalog-index-format_FR.md'].map((f) => `${GUIDES}/${f}`);
+
+// The published site says the same thing in its own words, and drifted for exactly as long
+// as nothing looked at it: it listed five index types while the reader accepted eight, so a
+// publisher following the site wrote entries BMM drops on the floor. Checked here for the
+// type NAMES only — the prose is its own, and the names are the part that can be objectively
+// wrong. Those pages have no "Fields on an entry" heading, so the field check below finds
+// nothing in them and only the type check applies, which is the intent.
+//
+// The submodule may not be checked out. That is normal, and it is reported as a SKIP rather
+// than passing quietly: "OK" for a comparison that never ran is the lie this file exists to
+// prevent.
+const SITE = 'BMM Docs/docs/reference';
+const siteDocs = ['catalog-index.md', 'catalog-index.fr.md']
+  .map((f) => `${SITE}/${f}`)
+  .filter((p) => fs.existsSync(p));
 const presetDocs = ['preset-catalog-format_EN.md', 'preset-catalog-format_FR.md'].map((f) => `${GUIDES}/${f}`);
 
 for (const p of [...indexDocs, ...presetDocs]) {
@@ -37,7 +52,7 @@ if (fail.length) { fail.forEach((f) => console.error(`✗ ${f}`)); process.exit(
 
 // Every routable type must be named in the index guides — a type a client accepts but the
 // guide never mentions is a feature nobody knows exists.
-for (const p of indexDocs) {
+for (const p of [...indexDocs, ...siteDocs]) {
   const doc = read(p);
   for (const t of types) {
     if (!new RegExp(`\`${t}\``).test(doc)) fail.push(`${p}: does not mention the \`${t}\` type`);
@@ -55,6 +70,9 @@ for (const p of indexDocs) {
     if (!known.includes(field)) fail.push(`${p}: documents an index field \`${field}\` that the reader does not use`);
   }
   ok.push(`${p}: ${types.length} types documented`);
+}
+if (!siteDocs.length) {
+  ok.push("BMM Docs is not checked out — the site's copy of the index reference was NOT checked");
 }
 
 // The preset guide's field table must match PresetEntry, allowing the feed's snake_case
