@@ -8617,5 +8617,10 @@
   "plugins.assets.errOutside": "Refused: that path leaves the plugin's assets folder.",
   "plugins.assets.errNotText": "That is not a text file.",
   "plugins.assets.errTooBig": "Too big to show ({0} KB).",
-  "plugins.assets.errNoPlugin": "No plugin with that id is installed."
+  "plugins.assets.errNoPlugin": "No plugin with that id is installed.",
+  "conflict.sharedCount": "shared",
+  "conflict.currentlyWins": "{m} is active, so its version of these files is the one on disk.",
+  "conflict.bothOn": "Both are active. Whichever was enabled last is the one on disk — BMM cannot tell which from here.",
+  "conflict.noneOn": "Neither is active, so none of these files is currently installed.",
+  "common.noMatch": "Nothing matches that."
 }

@@ -6448,8 +6448,24 @@ body.tut-docked.tut-min .app-shell {
    RESPONSIVE DESIGN (Mobile / Tablets)
 ═══════════════════════════════════ */
 @media (max-width: 768px) {
-    .app-layout {
+    /* The shell stacks, and the rail becomes a strip across the top.
+       This said `.app-layout`, which does not exist — the class was renamed to `.app-shell`
+       and this block was left behind. The consequence was not a slightly-off layout: the
+       rule below still made the sidebar 100% wide, the shell stayed a ROW, and
+       `.content-area` (flex: 1 1 0) was squeezed to ZERO width. Every screen then rendered
+       at x = the window's right edge and ran off it, so a narrow window showed a page with
+       no navigation and its right-hand half cut off by the window frame.
+       Reported as "the script generator preview is broken"; the generator was fine. */
+    .app-shell {
         flex-direction: column;
+    }
+
+    /* And the content area has to be allowed to shrink. A flex item's min-width is `auto`,
+       which means "as wide as my content", so a wide panel inside would push the strip off
+       the screen the other way — trading one overflow for its mirror image. */
+    .content-area {
+        min-width: 0;
+        min-height: 0;
     }
 
     .sidebar {
@@ -6459,6 +6475,10 @@ body.tut-docked.tut-min .app-shell {
         border-right: none;
         border-bottom: 1px solid var(--border);
         overflow: visible;
+        /* Its own scroller, so the nav strip stays one row and scrolls sideways instead of
+           wrapping into three rows and eating the screen it was meant to leave room for. */
+        overflow-x: auto;
+        flex: 0 0 auto;
     }
 
     .sidebar-brand {
@@ -18736,3 +18756,13 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
 .pa-doc pre { overflow-x: auto; }
 .pa-img { max-width: 100%; height: auto; border-radius: 6px; display: block; }
 .pa-count { font-size: 10px; color: var(--text-muted); font-family: var(--font-mono); margin-right: auto; }
+
+/* The search box in a long dropdown. Sticky, so it stays reachable while the list scrolls
+   under it — a filter you have to scroll back up to reach is a filter people use once. */
+.bmm-csel-search { position: sticky; top: 0; z-index: 1; padding: 6px;
+    background: var(--bg-card); border-bottom: 1px solid var(--border); }
+.bmm-csel-search-input { width: 100%; height: 26px; padding: 0 8px; font-size: 11px;
+    color: var(--text-primary); background: var(--bg-primary);
+    border: 1px solid var(--border); border-radius: 6px; outline: none; }
+.bmm-csel-search-input:focus { border-color: var(--accent); }
+.bmm-csel-empty { padding: 10px 12px; font-size: 11px; color: var(--text-muted); text-align: center; }

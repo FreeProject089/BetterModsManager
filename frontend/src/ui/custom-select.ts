@@ -11,6 +11,8 @@
 //    by overflow ancestors nor mis-placed by a transformed ancestor.
 //  • The native <select> stays the source of truth (.value / change events).
 
+import { t } from '../core/i18n.js';
+
 let _openCsel: any = null;
 
 export function initCustomSelects(): void {
@@ -84,6 +86,24 @@ function enhance(sel: HTMLSelectElement): void {
     const labelEl = trigger.querySelector('.bmm-csel-label') as HTMLElement;
 
     const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    /**
+     * Does this list need a search box?
+     *
+     * By COUNT, not by an attribute on each call site. The lists that need one are the ones
+     * that grew — the scheduler's actions went from twenty to seventy-nine over a year, and
+     * nobody was going to revisit its markup on the day it crossed the line. A short list is
+     * unchanged, because a search box above six options is furniture.
+     *
+     * `data-csel-search="off"` forces it away for a list that is long and still not worth
+     * searching, and `"on"` forces it on for a short one whose labels are hard to scan.
+     */
+    const wantsSearch = () => {
+        const forced = sel.dataset ? sel.dataset.cselSearch : undefined;
+        if (forced === 'off') return false;
+        if (forced === 'on') return true;
+        return sel.options.length >= 12;
+    };
+
     const buildMenu = () => {
         menu.innerHTML = '';
         let i = -1; // flat option index, matches sel.selectedIndex / sel.options order
@@ -127,12 +147,78 @@ function enhance(sel: HTMLSelectElement): void {
                 const header = document.createElement('div');
                 header.className = 'bmm-csel-group';
                 header.textContent = ch.label || '';
+                // Remembered on the header so filtering can hide a group whose options all
+                // went away. A lone heading over nothing reads as a section that failed to
+                // load rather than as one that matched nothing.
+                (header as any)._cselGroup = true;
                 menu.appendChild(header);
                 Array.from(ch.children).forEach(o => { if (o.tagName === 'OPTION') renderOpt(o); });
             } else if (ch.tagName === 'OPTION') {
                 renderOpt(ch);
             }
         });
+
+        if (wantsSearch()) buildSearch();
+    };
+
+    /**
+     * The search box, added to the top of the menu.
+     *
+     * It FILTERS the rendered rows rather than rebuilding them. Rebuilding would drop the
+     * click handlers' captured indices — each row closes over the flat option index it was
+     * built with, which is what makes the grouped menu map back onto `sel.selectedIndex`.
+     */
+    const buildSearch = () => {
+        const bar = document.createElement('div');
+        bar.className = 'bmm-csel-search';
+        const input = document.createElement('input');
+        input.type = 'search';
+        input.className = 'bmm-csel-search-input';
+        input.placeholder = t('common.search');
+        input.spellcheck = false;
+        // A select is a form control and this box lives inside a menu attached to <body>;
+        // without this, typing a space or Enter reaches whatever form is behind it.
+        input.addEventListener('keydown', (e) => {
+            e.stopPropagation();
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                // Enter takes the first thing still showing, which is what somebody who
+                // typed three letters and stopped is asking for.
+                const first = menu.querySelector('.bmm-csel-opt:not([hidden]):not(.disabled)') as HTMLElement | null;
+                first?.click();
+            }
+        });
+        const empty = document.createElement('div');
+        empty.className = 'bmm-csel-empty';
+        empty.hidden = true;
+        empty.textContent = t('common.noMatch');
+
+        input.addEventListener('input', () => {
+            const q = input.value.trim().toLowerCase();
+            let shown = 0;
+            let group: HTMLElement | null = null;
+            let groupShown = 0;
+            const closeGroup = () => { if (group) group.hidden = groupShown === 0; };
+            for (const node of Array.from(menu.children) as HTMLElement[]) {
+                if (node === bar || node === empty) continue;
+                if ((node as any)._cselGroup) { closeGroup(); group = node; groupShown = 0; continue; }
+                if (!node.classList.contains('bmm-csel-opt')) continue;
+                // Matched on the row's whole text, which is the label AND the description —
+                // "kill" should find "Stop app / process" through its description even though
+                // the word is in neither label.
+                const hit = !q || (node.textContent || '').toLowerCase().includes(q);
+                node.hidden = !hit;
+                if (hit) { shown += 1; groupShown += 1; }
+            }
+            closeGroup();
+            empty.hidden = shown > 0;
+        });
+
+        bar.appendChild(input);
+        menu.insertBefore(bar, menu.firstChild);
+        menu.appendChild(empty);
+        // Focused after the menu is on screen, not here — see the open handler.
+        (menu as any)._cselSearchInput = input;
     };
 
     const syncTrigger = () => {
@@ -189,6 +275,10 @@ function enhance(sel: HTMLSelectElement): void {
         window.addEventListener('resize', position);
         const selItem = menu.querySelector('.bmm-csel-opt.selected') as HTMLElement | null;
         if (selItem) selItem.scrollIntoView({ block: 'nearest' });
+        // Focused only once the menu is in the document and positioned. Focusing a detached
+        // input does nothing, and focusing before positioning makes the page jump.
+        const search = (menu as any)._cselSearchInput as HTMLInputElement | undefined;
+        if (search) { search.value = ''; search.focus({ preventScroll: true }); }
     });
 
     sel.addEventListener('change', syncTrigger);

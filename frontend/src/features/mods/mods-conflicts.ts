@@ -111,7 +111,7 @@ export async function openGlobalConflictModal(preselectModId = null) {
 
     let allConflicts = [];
     const allModsGlobal = await invoke('get_all_mods').catch(() => []);
-    
+
     Object.keys(S.conflictCache).forEach(mid => {
        const reports = S.conflictCache[mid];
        if (reports && reports.length > 0) {
@@ -391,7 +391,7 @@ export async function openGlobalConflictModal(preselectModId = null) {
     searchInput.oninput = () => renderList(false);
     profileFilter.onchange = () => renderList(false);
     typeFilter.onchange = () => renderList(false);
-    
+
     if (closeBtn) closeBtn.onclick = () => modal.classList.remove('open');
 
     if (preselectModId) {
@@ -407,27 +407,35 @@ export async function openGlobalConflictModal(preselectModId = null) {
 
 window.openGlobalConflictModal = openGlobalConflictModal;
 
+/**
+ * Clicking a conflict opens the file list.
+ *
+ * It used to open a one-item menu — "View conflicting files" — whose only button did this.
+ * A menu with one entry is a second click charged for nothing: it cannot be a choice, and
+ * the thing it leads to is the thing that was clicked. The entry point keeps its name
+ * because several call sites and `actAttrs` refer to it.
+ */
 export function showConflictContextMenu(e, mod1Id, mod2Id) {
   e.preventDefault();
+  // Any menu left open from before this changed — and the one the markup still carries for
+  // other callers — must not stay on screen behind the modal.
   const ctx = document.getElementById('conflict-context-menu');
-  if (!ctx) return;
-  
-  ctx.style.display = 'block';
-  ctx.style.left = e.pageX + 'px';
-  ctx.style.top = e.pageY + 'px';
-  
-  const btn = document.getElementById('ctx-open-explorer');
-  btn.onclick = async () => {
-    ctx.style.display = 'none';
+  if (ctx) ctx.style.display = 'none';
+  return openConflictTree(mod1Id, mod2Id);
+}
+
+/** The shared-files list for one pair of mods. */
+export async function openConflictTree(mod1Id, mod2Id) {
+  {
     const modal = document.getElementById('modal-conflict-tree');
     const container = document.getElementById('conflict-tree-container');
     const btnConfirm = document.getElementById('btn-confirm-conflict-tree');
     if (btnConfirm) btnConfirm.style.display = 'none';
-    
+
     modal.style.zIndex = '10005';
     modal.classList.add('open');
     container.innerHTML = `<div style="text-align:center;padding:20px;color:var(--text-muted)">${t('conflict.loadingTree')||"Chargement de l'arbre..."}</div>`;
-    
+
     try {
       // The command now returns { files, total, truncated } and caps the list: two mods can
       // share tens of thousands of paths, and this view builds one DOM row per entry, so an
@@ -440,14 +448,60 @@ export function showConflictContextMenu(e, mod1Id, mod2Id) {
         container.innerHTML = `<div style="text-align:center;padding:20px;color:var(--text-muted)">${t('conflict.noTreeFiles')}</div>`;
         return;
       }
-      container.innerHTML = files.map(f => `<div style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.05);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.4;min-height:24px;display:flex;align-items:center;gap:8px;cursor:pointer;transition:all 0.15s ease;border-radius:6px;margin-bottom:2px"
+      // Who is actually involved, and who currently wins.
+      //
+      // The modal used to be a list of paths and the sentence "Last activated mod wins",
+      // which states the RULE without saying who that is here. The two questions somebody
+      // opens this to answer are "between which mods" and "so which file am I getting", and
+      // neither was on screen.
+      const all = await invoke('get_all_mods').catch(() => []);
+      const byId = new Map((all || []).map((m) => [m.id, m]));
+      const a = byId.get(mod1Id);
+      const b = byId.get(mod2Id);
+      const nameOf = (id, m) => (m?.name || id);
+      // "Last activated wins" resolves to the one enabled most recently. When only one is
+      // on, it is that one; when both are, BMM cannot know the order from here, so it says
+      // so rather than picking.
+      const bothOn = !!a?.enabled && !!b?.enabled;
+      const winner = bothOn ? null : (a?.enabled ? a : (b?.enabled ? b : null));
+
+      const chip = (m, id) => `<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border-radius:999px;
+            background:${m?.enabled ? 'var(--success-dim, rgba(34,197,94,.15))' : 'var(--bmm-s06)'};
+            font-size:10.5px;font-weight:600;color:var(--text-primary);max-width:45%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+          <span style="width:6px;height:6px;border-radius:50%;flex:none;background:${m?.enabled ? 'var(--success)' : 'var(--text-muted)'}"></span>
+          ${escHtml(nameOf(id, m))}</span>`;
+
+      const summary = `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+          ${chip(a, mod1Id)}
+          <span style="font-size:11px;color:var(--text-muted)">\u2194</span>
+          ${chip(b, mod2Id)}
+          <span style="margin-left:auto;font-size:10.5px;color:var(--text-muted);font-family:var(--font-mono)">
+            ${total} ${escHtml(t('conflict.sharedCount') || 'shared')}</span>
+        </div>
+        <div style="font-size:11px;color:${winner ? 'var(--text-secondary)' : 'var(--warning)'};margin-bottom:10px;line-height:1.5">
+          ${winner
+            ? escHtml((t('conflict.currentlyWins') || '{m} is active, so its version of these files is the one on disk.')
+                .replace('{m}', nameOf(winner.id, winner)))
+            : (bothOn
+                ? escHtml(t('conflict.bothOn') || 'Both are active. Whichever was enabled last is the one on disk — BMM cannot tell which from here.')
+                : escHtml(t('conflict.noneOn') || 'Neither is active, so none of these files is currently installed.'))}
+        </div>`;
+
+      container.innerHTML = summary + files.map(f => {
+        const base = String(f).replace(/^.*[/\\]/, '');
+        const dir = String(f).slice(0, String(f).length - base.length).replace(/[/\\]$/, '');
+        return `<div style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.05);line-height:1.4;min-height:24px;display:flex;align-items:center;gap:8px;cursor:pointer;transition:all 0.15s ease;border-radius:6px;margin-bottom:2px"
            data-hover="background:rgba(59,130,246,0.15);border-left:2px solid var(--accent)"
            data-hover-out="background:transparent;border-left:none"
            ${actAttrs('showFileConflictSelector', f, mod1Id, mod2Id)} data-act-with="event"
-           data-tooltip="${escAttr(f)}" data-tooltip="${escAttr(f)}">
+           data-tooltip="${escAttr(f)}">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;color:var(--accent)"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
-        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;font-size:11.5px;color:var(--text-primary)">${escHtml(f)}</span>
-      </div>`).join('');
+        <span style="flex:1;min-width:0;display:flex;flex-direction:column">
+          <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11.5px;color:var(--text-primary)">${escHtml(base)}</span>
+          ${dir ? `<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:9.5px;color:var(--text-muted)">${escHtml(dir)}</span>` : ''}
+        </span>
+      </div>`;
+      }).join('');
       // Say so when the list was cut, rather than silently implying these are all of them.
       if (truncated) {
         container.innerHTML += `<div style="padding:10px;text-align:center;font-size:11px;color:var(--text-muted)">`
@@ -458,14 +512,7 @@ export function showConflictContextMenu(e, mod1Id, mod2Id) {
     } catch (err) {
       container.innerHTML = `<span style="color:var(--danger)">${t('common.error')||"Error"}: ${err}</span>`;
     }
-  };
-  
-  document.addEventListener('mousedown', function hideCtx(ev) {
-    if (!ctx.contains(ev.target)) {
-      ctx.style.display = 'none';
-      document.removeEventListener('mousedown', hideCtx);
-    }
-  });
+  }
 }
 window.showConflictContextMenu = showConflictContextMenu;
 
@@ -567,7 +614,7 @@ export function showActivationWarning(modId, conflicts, onConfirm) {
   const cancelBtn = document.getElementById('btn-cancel-activation-warning');
   const orderPanel = document.getElementById('activation-order-panel');
   const orderList = document.getElementById('activation-order-list');
-  
+
   if (!modal) return;
 
   list.innerHTML = conflicts.map(c => `
@@ -581,7 +628,7 @@ export function showActivationWarning(modId, conflicts, onConfirm) {
       </div>
     </div>
   `).join('');
-  
+
   const activeConflicts = conflicts.filter(c => c.status === 'Active');
   if (activeConflicts.length > 0) {
     activeConflicts.sort((a, b) => a.activation_order - b.activation_order);
@@ -596,7 +643,7 @@ export function showActivationWarning(modId, conflicts, onConfirm) {
   } else {
     orderPanel.style.display = 'none';
   }
-  
+
   btn.onclick = () => {
     modal.classList.remove('open');
     onConfirm();

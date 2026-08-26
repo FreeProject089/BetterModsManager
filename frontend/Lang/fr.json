@@ -8615,5 +8615,10 @@
   "plugins.assets.errOutside": "Refusé : ce chemin sort du dossier assets du plugin.",
   "plugins.assets.errNotText": "Ce n'est pas un fichier texte.",
   "plugins.assets.errTooBig": "Trop gros pour être affiché ({0} Ko).",
-  "plugins.assets.errNoPlugin": "Aucun plugin installé avec cet id."
+  "plugins.assets.errNoPlugin": "Aucun plugin installé avec cet id.",
+  "conflict.sharedCount": "partagés",
+  "conflict.currentlyWins": "{m} est actif : c'est sa version de ces fichiers qui est sur le disque.",
+  "conflict.bothOn": "Les deux sont actifs. C'est celui activé en dernier qui est sur le disque — BMM ne peut pas savoir lequel d'ici.",
+  "conflict.noneOn": "Aucun des deux n'est actif : aucun de ces fichiers n'est installé pour l'instant.",
+  "common.noMatch": "Rien ne correspond."
 }
