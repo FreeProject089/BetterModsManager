@@ -8357,5 +8357,11 @@
   "plugins.addFromFile": "Add a .bmmplug file…",
   "plugins.pcbFromFile": "from {f}",
   "plugins.pcbNotPlugin": "{f} is not a plugin — left out",
-  "plugins.pcbAlready": "{id} is already in this catalogue"
+  "plugins.pcbAlready": "{id} is already in this catalogue",
+  "repo.cat.stateOn": "Fetching",
+  "repo.cat.stateOff": "Paused",
+  "repo.cat.b.lede": "Gather repos from wherever they are, then choose which of them the catalogue lists.",
+  "repo.cat.b.step1": "Where the repos come from",
+  "repo.cat.b.step2": "What the catalogue will list",
+  "repo.cat.pick.exportNone": "Choose at least one"
 }

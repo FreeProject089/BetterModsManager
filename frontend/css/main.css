@@ -17513,7 +17513,7 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 .apps-source-row.is-off .apps-source-url,
 .plug-source-row.is-off .plug-source-url,
 .sched-pc-src.is-off .sched-pc-src-url { text-decoration: line-through; opacity: .55; }
-.repo-cat-chip.is-off { opacity: .5; text-decoration: line-through; }
+.repo-cat-src.is-off .repo-cat-src-url { text-decoration: line-through; opacity: .55; }
 
 /* Where a source came from, in the panels that never showed it. Quiet: it is context for a
    decision, not the row's subject — the URL is. Matches .apps-source-from, which already
@@ -17524,14 +17524,28 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 }
 .sched-pc-src-from { display: inline-block; margin-top: 3px; }
 
-/* An imported chip is worth telling apart from a hand-added one at a glance, since the
-   whole point of the strip is deciding which to keep. */
-.repo-cat-chip.is-imported { border-style: dashed; }
+/* Where a repo catalogue came from, said rather than hidden in a tooltip — the same fact
+   .plug-source-from and .sched-pc-src-from already show, in the same quiet treatment. */
+.repo-cat-via {
+    font-size: 10px; color: var(--text-muted); background: var(--bg-secondary);
+    border-radius: 4px; padding: 1px 5px; white-space: nowrap; flex: none;
+    max-width: 160px; overflow: hidden; text-overflow: ellipsis;
+}
 
 /* ── The repo-catalogue builder ────────────────────────────────────────────────
    Three sources feeding one list, so each section states what it is. Secondary,
    not muted: at 2.3:1 muted is not readable on this surface, and every label here
    is something you have to read to make the choice the modal exists for. */
+/* Two steps, drawn as two steps. Everything used to sit at one weight — three ways to pull
+   repos in and the list to choose from, all as sibling labels — so arriving with nothing
+   followed meant three empty prompts and no idea which was the first move. */
+.repo-cat-b-lede { font-size: 12px; color: var(--text-secondary); margin: 0 0 14px; line-height: 1.5; }
+.repo-cat-b-step { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; background: var(--bmm-s02); }
+.repo-cat-b-steph { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .05em; color: var(--text-secondary); margin-bottom: 10px; }
+.repo-cat-b-stepn { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 999px;
+    background: var(--accent); color: var(--bmm-text-on-accent); font-size: 10px; font-weight: 800; flex: none; }
+
 .repo-cat-b-lbl { display: block; font-size: 11px; color: var(--text-secondary);
     margin-bottom: 4px; }
 .repo-cat-b-srcs { display: flex; flex-direction: column; gap: 4px; }
@@ -17598,10 +17612,33 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 .repo-cats { margin-bottom: 10px; }
 .repo-cats-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .repo-cats-row .input-field { flex: 1; min-width: 200px; }
-.repo-cats-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-.repo-cat-chip { display: inline-flex; align-items: center; gap: 5px; font-size: 11px;
-    padding: 2px 4px 2px 9px; border-radius: 999px; border: 1px solid var(--border);
-    background: var(--bg-card); color: var(--text-secondary); }
+/* Holds .repo-cat-srcs now, which stacks its own rows — wrapping is what a strip of pills needed. */
+.repo-cats-list { margin-top: 8px; }
+/* A followed catalogue, as a row.
+   These used to be tag-shaped pills where a ● was the on/off switch — punctuation doing the
+   job of a control — and the address, the state and the provenance all lived in one tooltip.
+   The shape now matches .cm-src and .apps-source-row: state on the left, what it is in the
+   middle, where it came from beside it, remove on the right. */
+.repo-cat-srcs { display: flex; flex-direction: column; gap: 4px; }
+.repo-cat-src {
+    display: flex; align-items: center; gap: 8px; padding: 6px 9px;
+    border: 1px solid var(--border); border-radius: 8px; background: var(--bmm-s02);
+}
+.repo-cat-src-main { flex: 1; min-width: 0; }
+.repo-cat-src-name { font-size: 12px; color: var(--text-primary); overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap; }
+.repo-cat-src-url { font-size: 10.5px; color: var(--text-muted); overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap; }
+/* The switch SAYS what it is. A dot could be read as a bullet, a status light or a button,
+   and it was in fact the only way to stop fetching a source. */
+.repo-cat-off {
+    flex: none; font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .04em; padding: 3px 8px; border-radius: 999px; cursor: pointer;
+    border: 1px solid var(--success); color: var(--success); background: var(--bmm-success-dim);
+}
+.repo-cat-src.is-off .repo-cat-off {
+    border-color: var(--border); color: var(--text-muted); background: var(--bmm-s03);
+}
 /* A real button, not a styled span: removing a source is an action, and it should be
    reachable by keyboard like every other one. */
 .repo-cat-del { background: none; border: 0; color: var(--text-muted); cursor: pointer;

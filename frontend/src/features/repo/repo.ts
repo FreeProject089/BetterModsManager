@@ -8,6 +8,7 @@ import {
 import { getLinks } from '../../core/links-config.js';
 import { renderProfiles } from '../profiles/profiles.js';
 import { t } from '../../core/i18n.js';
+import { raiseAboveAll } from '../../ui/layer.js';
 
 // Sub-modules
 import { initRepoServer } from './repo-server.js';
@@ -77,20 +78,35 @@ export function renderRepoCatalogStrip(reload: () => void, getRepos: () => any[]
 
     const paint = () => {
         const urls = readRepoCatalogs();
+        // ROWS, not chips.
+        //
+        // These were tag-shaped pills reading "discord.com · developers ● ×", where the dot
+        // was a switch that looked like punctuation and the address, the on/off state and
+        // where the catalogue came from were all folded into one tooltip. A followed source
+        // is a thing with a state and an address, which is what every other catalogue screen
+        // in BMM draws as a row — so this draws one too, in the same shape.
         host.innerHTML = urls.length
-            ? urls.map((u) => {
+            ? `<div class="repo-cat-srcs">${urls.map((u) => {
                 const off = isDisabled(u);
-                // originLabel(u) is the chip's LABEL — the host of the catalogue itself, not
-                // its provenance. originOf(u) is the index that brought it in, and it is a
-                // different question with a different answer; the tooltip carries both.
+                // catalogLabel(u) is the LABEL — the host of the catalogue itself. originOf(u)
+                // is the index that brought it in: a different question with a different
+                // answer, and now shown rather than hidden behind a hover.
                 const from = originOf(u);
-                const tip = from
-                    ? `${u}\n${t('repo.cat.via') || 'via'} ${originLabel(from)}`
-                    : u;
-                return `<span class="repo-cat-chip${off ? ' is-off' : ''}${from ? ' is-imported' : ''}" title="${escAttr(tip)}">${escHtml(catalogLabel(u))}
-                 <button class="repo-cat-off" data-u="${escAttr(u)}" aria-label="${escAttr(off ? (t('repo.cat.on') || 'Fetch this one again') : (t('repo.cat.off') || 'Stop fetching this one'))}">${off ? '○' : '●'}</button>
-                 <button class="repo-cat-del" data-u="${escAttr(u)}" aria-label="${escAttr(t('common.remove') || 'Remove')}">×</button></span>`;
-            }).join('')
+                return `
+                <div class="repo-cat-src${off ? ' is-off' : ''}">
+                    <button class="repo-cat-off" data-u="${escAttr(u)}"
+                            title="${escAttr(off ? t('repo.cat.on') : t('repo.cat.off'))}"
+                    >${escHtml(off ? t('repo.cat.stateOff') : t('repo.cat.stateOn'))}</button>
+                    <div class="repo-cat-src-main">
+                        <div class="repo-cat-src-name">${escHtml(catalogLabel(u))}</div>
+                        <div class="repo-cat-src-url" title="${escAttr(u)}">${escHtml(u)}</div>
+                    </div>
+                    ${from ? `<span class="repo-cat-via" title="${escAttr(from)}">${escHtml(
+                        (t('repo.cat.via') || 'via') + ' ' + originLabel(from))}</span>` : ''}
+                    <button class="repo-cat-del" data-u="${escAttr(u)}"
+                            aria-label="${escAttr(t('common.remove') || 'Remove')}">×</button>
+                </div>`;
+            }).join('')}</div>`
             : '';
         // Bound inside paint(), like .repo-cat-del: the outer listeners bind once behind the
         // _bmmBound guard, but this markup is rebuilt on every paint.
@@ -189,7 +205,11 @@ async function openCatalogBuilder(onScreen: any[]): Promise<void> {
     // report. And z-index 10000 is UNDER .modal-overlay's 11000 — the panel drew, and every
     // click landed on whatever owned the stacking context above it, which reads exactly like
     // "the modal is not clickable, clicks pass through".
-    ov.style.zIndex = '11200';
+    //
+    // Computed rather than declared, for the reason a flat number was wrong twice: 11200 is
+    // above ordinary modals and below anything that declares more, so wherever this is opened
+    // from something taller it paints underneath and the button reads as dead.
+    raiseAboveAll(ov, 11200);
     (document.getElementById('app-window-outer') || document.body).appendChild(ov);
 
     // A modal that does not lock the page scrolls it under itself: the wheel over the dim
@@ -226,6 +246,10 @@ async function openCatalogBuilder(onScreen: any[]): Promise<void> {
                 <label class="repo-cat-b-lbl">${escHtml(t('repo.cat.b.name') || 'Catalogue name')}</label>
                 <input class="input" id="repo-cat-b-name" value="${escAttr(name)}" style="margin-bottom:14px;">
 
+                <p class="repo-cat-b-lede">${escHtml(t('repo.cat.b.lede'))}</p>
+
+                <section class="repo-cat-b-step">
+                <div class="repo-cat-b-steph"><span class="repo-cat-b-stepn">1</span>${escHtml(t('repo.cat.b.step1'))}</div>
                 <label class="repo-cat-b-lbl">${escHtml(t('repo.cat.b.pull') || 'Pull repos in from a catalogue')}</label>
                 <div class="repo-cat-b-srcs">
                     ${readRepoCatalogs().length
@@ -250,7 +274,10 @@ async function openCatalogBuilder(onScreen: any[]): Promise<void> {
                     ${escHtml(t('repo.cat.b.alsofollow') || 'Follow this catalogue too, so the browser keeps showing it')}
                 </label>
                 ${msg ? `<div class="sched-pc-addout-${escAttr(msg.kind)}" style="margin-top:6px;">${escHtml(msg.text)}</div>` : ''}
+                </section>
 
+                <section class="repo-cat-b-step">
+                <div class="repo-cat-b-steph"><span class="repo-cat-b-stepn">2</span>${escHtml(t('repo.cat.b.step2'))}</div>
                 <div class="repo-cat-b-head">
                     <span>${escHtml((t('repo.cat.b.count') || '{n} of {m} selected').replace('{n}', String(on)).replace('{m}', String(list.length)))}</span>
                     <button class="btn btn-xs" data-all>${escHtml(t('repo.cat.pick.all') || 'All')}</button>
@@ -268,10 +295,15 @@ async function openCatalogBuilder(onScreen: any[]): Promise<void> {
                         </label>`).join('')
                         : `<div class="cat-index-empty">${escHtml(t('repo.cat.b.norepos') || 'Nothing yet — pull from a catalogue or an address above.')}</div>`}
                 </div>
+                </section>
             </div>
             <div class="modal-footer" style="flex-shrink:0; display:flex; gap:8px; justify-content:flex-end;">
                 <button class="btn" type="button" data-x>${escHtml(t('common.cancel') || 'Cancel')}</button>
-                <button class="btn btn-primary" type="button" data-go${on ? '' : ' disabled'}>${escHtml((t('repo.cat.pick.export') || 'Export {n}').replace('{n}', String(on)))}</button>
+                <button class="btn btn-primary" type="button" data-go${on ? '' : ' disabled'}>${escHtml(
+                    // "Export 0" reads like an instruction that will do something. With
+                    // nothing chosen the button says what is missing instead.
+                    on ? (t('repo.cat.pick.export') || 'Export {n}').replace('{n}', String(on))
+                       : t('repo.cat.pick.exportNone'))}</button>
             </div>
         </div>`;
         wire();
