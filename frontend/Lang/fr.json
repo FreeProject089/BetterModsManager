@@ -8789,5 +8789,7 @@
   "sched.catBundle": "L'emballer aussi dans un .bmmbundle",
   "sched.catBundleHint": "Le catalogue ET ses fichiers dans une seule archive — ce qu'on remet quand il n'y a pas de serveur où déposer un dossier. Empaqueté depuis le dossier qui vient d'être écrit : les deux ne peuvent pas décrire des choses différentes.",
   "sched.catEmpty": "rien à publier pour « {k} » — aucun catalogue écrit",
-  "sched.catBundled": "Empaqueté dans {f}."
+  "sched.catBundled": "Empaqueté dans {f}.",
+  "repo.extras.openTask": "Ajouter cette automatisation ? Elle arrive désactivée et sans permissions.",
+  "repo.extras.taskAdded": "{n} automatisation(s) ajoutée(s), désactivée(s)."
 }

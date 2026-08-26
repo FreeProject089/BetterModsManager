@@ -12,7 +12,7 @@
 //! the standalone CLI and the MCP server mount the same code rather than a second copy of
 //! the guard. What is here is the part that needs BMM's state: where a plugin is installed.
 
-pub use super::plugin_assets_core::{kind_of, list_dir, read_text, resolve, PluginAsset};
+pub use super::plugin_assets_core::{list_dir, read_text, resolve, PluginAsset};
 
 fn install_dir_of(state: &crate::state::AppState, plugin_id: &str) -> Result<String, String> {
     let data = state.data.lock().unwrap_or_else(|p| p.into_inner());

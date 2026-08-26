@@ -1241,10 +1241,16 @@ function engineFor(path: string): string {
  *
  * An id already present is left alone rather than replaced, so an import cannot rewrite a
  * task somebody already trusts by naming it the same thing.
+ *
+ * `includes` are restored FIRST. A `.bmmpa` carries the reusable blocks, modpacks and launch
+ * packs its tasks call, and dropping them would import a task whose `Run a block` step points
+ * at a name that does not exist here — which stops the task rather than skipping, by design.
+ * Written and then found by reading the export side: the exporter has always carried them.
  */
-async function importTasksDisabled(path: string): Promise<number> {
+export async function importTasksFromPath(path: string): Promise<number> {
     const raw = String(await invoke('read_file_text', { path }));
     const doc = JSON.parse(raw);
+    await restoreIncludes(doc?.includes).catch(() => ({ count: 0, remap: {} }));
     const incoming: any[] = Array.isArray(doc?.tasks) ? doc.tasks : (Array.isArray(doc) ? doc : [doc]);
     // Typed, because the catch arm's [] would otherwise infer never[] and the push below
     // becomes an error that reads as if the DATA were wrong rather than the annotation.
@@ -1748,7 +1754,7 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
                 await invoke('import_theme', { path });
                 toast(`${task.name}: ${t('sched.imp.theme')}`, 'success', 6000);
             } else if (kind === 'automation') {
-                const n = await importTasksDisabled(path);
+                const n = await importTasksFromPath(path);
                 ctx.nums['import.count'] = n;
                 toast(`${task.name}: ${t('sched.imp.tasks').replace('{n}', String(n))}`, 'success', 9000);
             } else if (kind === 'bundle') {

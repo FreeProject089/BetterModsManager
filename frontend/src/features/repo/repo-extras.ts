@@ -244,6 +244,18 @@ async function offerFile(r: ExtraInstalled, via: string): Promise<void> {
         }
         return;
     }
+    // An automation goes through the scheduler's own importer, which restores the blocks and
+    // packs its tasks call and enforces "disabled, no permissions". Rust hands it back rather
+    // than installing it, because restoring those means writing localStorage.
+    if (r.kind === 'task') {
+        const ok = await showConfirm(r.name, t('repo.extras.openTask'), false);
+        if (!ok) return;
+        const { importTasksFromPath } = await import('../settings/scheduler.js');
+        const n = await importTasksFromPath(r.path as string);
+        toast(t('repo.extras.taskAdded').replace('{n}', String(n)), 'success', 9000);
+        return;
+    }
+
     const ok = await showConfirm(
         r.name,
         r.locked ? t('repo.extras.openLocked') : t('repo.extras.openList'),

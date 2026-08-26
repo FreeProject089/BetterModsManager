@@ -396,9 +396,19 @@ pub async fn install_extra(
             r?;
             Ok(done(entry.id.clone(), None, false, false))
         }
+        // An automation is handed BACK, not installed here.
+        //
+        // A `.bmmpa` carries `includes` — the reusable blocks, modpacks and launch packs its
+        // tasks call — and restoring those means writing to localStorage, which is the
+        // interface's, not Rust's. Installing the task alone would import one whose
+        // `Run a block` step points at a name that does not exist here, and that stops the
+        // task rather than skipping quietly. It was doing exactly that.
+        //
+        // The caller runs the same importer every other .bmmpa goes through, which is also
+        // where "disabled, no permissions" is enforced — one rule, one place.
         "task" => {
-            let id = install_task(app, &bytes)?;
-            Ok(done(id, None, false, false))
+            let path = write_temp(app, &entry.kind, &file.relative_path, &bytes)?;
+            Ok(done(entry.id.clone(), Some(path.to_string_lossy().to_string()), true, false))
         }
         // A list and a bundle become a FILE, and the caller opens it — because opening one
         // asks questions (a passphrase, which credentials to accept, which entries to take)
@@ -447,45 +457,6 @@ fn write_temp(
     let path = dir.join(safe_name(name));
     std::fs::write(&path, bytes).map_err(|e| e.to_string())?;
     Ok(path)
-}
-
-/// Add a downloaded automation to the scheduler, **disabled**.
-///
-/// Disabled is the entire point. A scheduled task can run commands, and the author of this
-/// one is whoever published a repo. It lands where the user can read it, and enabling it is
-/// a separate act by somebody who has.
-///
-/// An id already present is left alone rather than replaced: a repo must not be able to
-/// rewrite an automation the user already trusts by naming it the same thing.
-fn install_task(app: &tauri::AppHandle, bytes: &[u8]) -> Result<String, String> {
-    let doc: serde_json::Value =
-        serde_json::from_slice(bytes).map_err(|_| "repo.extras.errBadTask".to_string())?;
-    // A `.bmmpa` is `{ tasks: [...] }`; a bare task object is accepted too, because that is
-    // what somebody who exported one by hand ends up holding.
-    let task = doc
-        .get("tasks")
-        .and_then(|t| t.as_array())
-        .and_then(|a| a.first())
-        .cloned()
-        .unwrap_or(doc);
-    let mut task = task.as_object().cloned().ok_or("repo.extras.errBadTask")?;
-    let id = task.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
-    if id.is_empty() {
-        return Err("repo.extras.errBadTask".to_string());
-    }
-    task.insert("enabled".into(), serde_json::Value::Bool(false));
-
-    let mut list = crate::commands::scheduler::get_schedules(app.clone())?;
-    let arr = list.as_array_mut().ok_or("repo.extras.errBadTask")?;
-    if arr
-        .iter()
-        .any(|t| t.get("id").and_then(|v| v.as_str()) == Some(id.as_str()))
-    {
-        return Ok(id);
-    }
-    arr.push(serde_json::Value::Object(task));
-    crate::commands::scheduler::save_schedules(app.clone(), list)?;
-    Ok(id)
 }
 
 #[cfg(test)]

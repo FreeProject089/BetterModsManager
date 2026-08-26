@@ -8791,5 +8791,7 @@
   "sched.catBundle": "Also pack it into a .bmmbundle",
   "sched.catBundleHint": "The catalogue AND its files in one archive — what you hand over when there is no server to put a folder on. Packed from the folder just written, so the two can never describe different things.",
   "sched.catEmpty": "nothing to publish for \"{k}\" — no catalogue was written",
-  "sched.catBundled": "Packed into {f}."
+  "sched.catBundled": "Packed into {f}.",
+  "repo.extras.openTask": "Add this automation? It arrives disabled and with no permissions.",
+  "repo.extras.taskAdded": "{n} automation(s) added, disabled."
 }
