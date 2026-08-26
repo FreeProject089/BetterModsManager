@@ -8363,5 +8363,16 @@
   "repo.cat.b.lede": "Gather repos from wherever they are, then choose which of them the catalogue lists.",
   "repo.cat.b.step1": "Where the repos come from",
   "repo.cat.b.step2": "What the catalogue will list",
-  "repo.cat.pick.exportNone": "Choose at least one"
+  "repo.cat.pick.exportNone": "Choose at least one",
+  "detail.origin": "Came from",
+  "detail.originLocal": "Added here — no source recorded",
+  "detail.originRepo": "Server repo · {h}",
+  "detail.originRepoUnverified": "Server repo · {h} (no checksums)",
+  "detail.originUpdate": "Its own update address · {h}",
+  "detail.originSources": "{n} update source(s)",
+  "detail.originLink": "A link · {h}",
+  "detail.linkDirect": "Direct",
+  "detail.linkRepo": "Repo",
+  "detail.linkHttp": "http(s)",
+  "detail.linkOther": "Other"
 }

@@ -8361,5 +8361,16 @@
   "repo.cat.b.lede": "Rassemble des dépôts d’où qu’ils viennent, puis choisis lesquels le catalogue liste.",
   "repo.cat.b.step1": "D’où viennent les dépôts",
   "repo.cat.b.step2": "Ce que le catalogue listera",
-  "repo.cat.pick.exportNone": "Choisis-en au moins un"
+  "repo.cat.pick.exportNone": "Choisis-en au moins un",
+  "detail.origin": "Provenance",
+  "detail.originLocal": "Ajouté ici — aucune source enregistrée",
+  "detail.originRepo": "Dépôt serveur · {h}",
+  "detail.originRepoUnverified": "Dépôt serveur · {h} (sans sommes de contrôle)",
+  "detail.originUpdate": "Son propre lien de mise à jour · {h}",
+  "detail.originSources": "{n} source(s) de mise à jour",
+  "detail.originLink": "Un lien · {h}",
+  "detail.linkDirect": "Direct",
+  "detail.linkRepo": "Dépôt",
+  "detail.linkHttp": "http(s)",
+  "detail.linkOther": "Autre"
 }

@@ -7,6 +7,7 @@ import { toast, openExternal } from '../../ui/app.js';
 import { t } from '../../core/i18n.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { getModDetailHTML } from '../../ui/components.js';
+import { sourceAccessHtml, wireSourceAccess } from '../../core/source-access.js';
 import { renderModList, updateCardState } from './mods-list.js';
 import { setupDependencyInput } from './mods-actions.js';
 import { dispatchBmmAction, BMM_ACTIONS } from '../../ui/tutorial-events.js';
@@ -113,6 +114,39 @@ function initArchiveContextMenu() {
         });
     }
 }
+/**
+ * Where a mod came from, in one phrase.
+ *
+ * DERIVED, never stored. It reads the same fields the updater reads, so it cannot claim a
+ * provenance the updater disagrees with — a stored label would drift the first time a mod
+ * was re-synced from somewhere else, and it would drift silently.
+ *
+ * The order is the order that answers the question: a server repo is the strongest claim, a
+ * per-mod update address next, then a hand-typed link, and "added here" is what is left when
+ * nothing else is known. `unverified` is worth its own phrase because a repo that shipped no
+ * hashes is a different situation from one that did, and it is not visible anywhere else.
+ */
+function describeOrigin(mod) {
+    const host = (u) => { try {
+        return new URL(u).host;
+    }
+    catch {
+        return String(u).slice(0, 48);
+    } };
+    if (mod.source_repo) {
+        return (mod.unverified ? t('detail.originRepoUnverified') : t('detail.originRepo'))
+            .replace('{h}', host(mod.source_repo));
+    }
+    if (mod.update_url)
+        return t('detail.originUpdate').replace('{h}', host(mod.update_url));
+    if ((mod.update_sources || []).length) {
+        return t('detail.originSources').replace('{n}', String(mod.update_sources.length));
+    }
+    if ((mod.download_links || []).length) {
+        return t('detail.originLink').replace('{h}', host(mod.download_links[0].url || ''));
+    }
+    return t('detail.originLocal');
+}
 export function selectMod(modId) {
     if (S.selectedModId === modId) {
         closeModDetail();
@@ -169,7 +203,21 @@ export async function renderModDetail(modId) {
         conflicts: [],
         links: mod.download_links || [],
         repoLink: mod.source_repo || mod.update_url || null,
+        origin: describeOrigin(mod),
     });
+    // The protected-source block: mounted HERE, beside its listeners, because markup with no
+    // listeners looks exactly like markup nobody has clicked yet.
+    const accessSlot = panel.querySelector('#detail-links-access');
+    if (accessSlot)
+        accessSlot.innerHTML = sourceAccessHtml('mdl');
+    // Wired the same way as on every catalogue screen. Attached
+    // AFTER the panel is in the document: wireSourceAccess finds its controls with
+    // getElementById, and on a detached subtree it bails out and leaves a dead fold.
+    wireSourceAccess('mdl', (m, k) => toast(t(m), k === 'warning' ? 'warning' : 'success'), () => {
+        document.getElementById('nav-settings')?.click();
+        setTimeout(() => document.getElementById('settings-identity-card')
+            ?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 250);
+    }, () => panel.querySelector('.detail-link-url')?.value?.trim() || '');
     // The derived repo link opens in the system browser. window.open is a no-op in the
     // Tauri v2 webview, so it goes through the same open_external route every other
     // link in the app uses — a second mechanism here is how one of them silently stops

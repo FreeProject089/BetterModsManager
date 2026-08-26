@@ -435,13 +435,27 @@ export function getModDetailHTML(mod, ctx) {
           <span class="detail-repo-link-label">${escHtml(t('detail.fromRepo') || 'From server repo')}</span>
           <a href="#" class="detail-repo-link-url" data-open-url="${escAttr(ctx.repoLink)}" title="${escAttr(ctx.repoLink)}">${escHtml(ctx.repoLink)}</a>
         </div>` : ''}
+        <!-- Where this mod actually came from.
+             The panel could say "From server repo" and nothing else, so a mod added by hand,
+             one pulled off a link and one that arrived inside somebody's mod list all looked
+             identical — and "where did this come from" is the first question anybody asks of
+             a mod they do not recognise. Derived, never stored: it reads the same fields the
+             updater reads, so it cannot claim a provenance the updater disagrees with. -->
+        <div class="detail-origin">
+          <span class="detail-origin-k">${escHtml(t('detail.origin'))}</span>
+          <span class="detail-origin-v">${escHtml(ctx.origin || t('detail.originLocal'))}</span>
+        </div>
         <div id="detail-links-list" style="display:flex;flex-direction:column;gap:6px">
           ${ctx.links.map((dl, i) => `
             <div style="display:flex;align-items:center;gap:6px;background:rgba(0,0,0,0.2);padding:6px 8px;border-radius:8px">
-              <select class="detail-link-type input-field" style="width:90px;padding:3px;font-size:10px" data-index="${i}">
+              <select class="detail-link-type input-field" style="width:104px;padding:3px;font-size:10px" data-index="${i}">
                 <option value="github" ${dl.link_type === 'github' ? 'selected' : ''}>GitHub</option>
-                <option value="direct" ${dl.link_type === 'direct' ? 'selected' : ''}>Direct</option>
-                <option value="other" ${dl.link_type === 'other' ? 'selected' : ''}>Autre</option>
+                <option value="direct" ${dl.link_type === 'direct' ? 'selected' : ''}>${escHtml(t('detail.linkDirect'))}</option>
+                <option value="repo" ${dl.link_type === 'repo' ? 'selected' : ''}>${escHtml(t('detail.linkRepo'))}</option>
+                <option value="http" ${dl.link_type === 'http' ? 'selected' : ''}>${escHtml(t('detail.linkHttp'))}</option>
+                <!-- "Autre" was written in French, in a file that is otherwise translated — so
+                     an English UI had one French word in this one dropdown. -->
+                <option value="other" ${dl.link_type === 'other' ? 'selected' : ''}>${escHtml(t('detail.linkOther'))}</option>
               </select>
               <input type="text" class="detail-link-url input-field" style="flex:1;padding:3px 6px;font-size:10px" value="${escAttr(dl.url)}" placeholder="URL" data-index="${i}" />
               <input type="text" class="detail-link-label input-field" style="width:80px;padding:3px 6px;font-size:10px" value="${escAttr(dl.label || '')}" placeholder="Label" data-index="${i}" />
@@ -450,6 +464,14 @@ export function getModDetailHTML(mod, ctx) {
           `).join('')}
         </div>
         <button id="btn-add-link" class="btn btn-sm" style="margin-top:8px;background:rgba(59,130,246,0.15);color:var(--accent);border:none;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:11px">+ ${t('detail.addLink')}</button>
+        <!-- Filled by mods-details.ts, which also wires it.
+             A link here can point at a repo or a host that asks for a password or a signed
+             key, exactly like a catalogue source — and this was the one place offering a URL
+             box with no way to say so. The block is mounted THERE rather than here so the
+             markup and its listeners live in one file, which is what
+             scripts/check-source-access.mjs protects: markup with no listeners looks exactly
+             like markup nobody has clicked yet. -->
+        <div id="detail-links-access"></div>
   `;
     return `
     <div class="detail-header">

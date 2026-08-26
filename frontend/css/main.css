@@ -17614,6 +17614,14 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 .repo-cats-row .input-field { flex: 1; min-width: 200px; }
 /* Holds .repo-cat-srcs now, which stacks its own rows — wrapping is what a strip of pills needed. */
 .repo-cats-list { margin-top: 8px; }
+
+/* Where a mod came from, above its links. One line, quiet: it is context for the list under
+   it, and the list is the subject. */
+.detail-origin { display: flex; align-items: baseline; gap: 8px; font-size: 11px; margin-bottom: 8px; }
+.detail-origin-k { color: var(--text-muted); text-transform: uppercase; letter-spacing: .05em;
+    font-size: 9.5px; font-weight: 700; flex: none; }
+.detail-origin-v { color: var(--text-secondary); min-width: 0; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap; }
 /* A followed catalogue, as a row.
    These used to be tag-shaped pills where a ● was the on/off switch — punctuation doing the
    job of a control — and the address, the state and the provenance all lived in one tooltip.
