@@ -332,3 +332,84 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
+
+/// The files directly inside a folder, optionally filtered by extension.
+///
+/// For building a catalogue out of a drop folder. A `.mm` is not held by BMM — it is
+/// exported — so a catalogue of mod lists can only be made from files somebody has already
+/// put somewhere, and this is how that folder is read.
+///
+/// One level deep, on purpose. A catalogue's files sit beside its `catalog.json`; recursing
+/// would sweep in whatever else happens to be under that folder, and "it published my whole
+/// Documents tree" is not a mistake worth being able to make.
+#[tauri::command]
+pub fn list_dir_files(dir: String, exts: Option<Vec<String>>) -> Vec<String> {
+    let want: Option<Vec<String>> = exts.map(|v| {
+        v.into_iter()
+            .map(|e| e.trim_start_matches('.').to_ascii_lowercase())
+            .filter(|e| !e.is_empty())
+            .collect()
+    });
+    let Ok(rd) = std::fs::read_dir(&dir) else { return Vec::new() };
+    let mut out: Vec<String> = rd
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.is_file())
+        .filter(|p| match want.as_ref() {
+            None => true,
+            Some(list) => {
+                let ext = p
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .unwrap_or("")
+                    .to_ascii_lowercase();
+                list.iter().any(|w| w == &ext)
+            }
+        })
+        .map(|p| p.to_string_lossy().to_string())
+        .collect();
+    // Sorted, so the same folder builds the same catalogue twice. read_dir order is the
+    // filesystem's, which is not stable — and a catalogue whose entries shuffle between
+    // builds looks changed to anything comparing them.
+    out.sort();
+    out
+}
+
+#[cfg(test)]
+mod list_dir_tests {
+    use super::*;
+
+    #[test]
+    fn only_files_in_this_folder_and_sorted() {
+        let d = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(d.path().join("sub")).unwrap();
+        std::fs::write(d.path().join("sub").join("deep.mm"), b"x").unwrap();
+        for n in ["b.mm", "a.mm", "notes.txt"] {
+            std::fs::write(d.path().join(n), b"x").unwrap();
+        }
+        let all = list_dir_files(d.path().to_string_lossy().to_string(), None);
+        let names: Vec<String> = all.iter().map(|p| p.rsplit(['/', '\\']).next().unwrap().to_string()).collect();
+        assert_eq!(names, vec!["a.mm", "b.mm", "notes.txt"]);
+        // One level. "It published my whole Documents tree" is not a mistake worth being
+        // able to make.
+        assert!(!names.iter().any(|n| n == "deep.mm"));
+    }
+
+    #[test]
+    fn the_extension_filter_is_case_insensitive_and_dot_agnostic() {
+        let d = tempfile::tempdir().unwrap();
+        std::fs::write(d.path().join("one.MM"), b"x").unwrap();
+        std::fs::write(d.path().join("two.txt"), b"x").unwrap();
+        let got = list_dir_files(
+            d.path().to_string_lossy().to_string(),
+            Some(vec![".mm".into()]),
+        );
+        assert_eq!(got.len(), 1, "{:?}", got);
+        assert!(got[0].to_lowercase().ends_with("one.mm"));
+    }
+
+    #[test]
+    fn a_folder_that_is_not_there_is_empty_rather_than_an_error() {
+        assert!(list_dir_files("Z:/nope".into(), None).is_empty());
+    }
+}

@@ -8782,5 +8782,12 @@
   "docs.diagram.label.awaits": "attend",
   "docs.diagram.label.timeout": "n'est jamais venu",
   "docs.diagram.label.arrived": "arrivé",
-  "docs.diagram.label.last": "dernière étape"
+  "docs.diagram.label.last": "dernière étape",
+  "sched.catKindModpack": "Mes modpacks",
+  "sched.catKindAuto": "Mes automatisations",
+  "sched.catKindFolder": "Ce qu'il y a dans le dossier",
+  "sched.catBundle": "L'emballer aussi dans un .bmmbundle",
+  "sched.catBundleHint": "Le catalogue ET ses fichiers dans une seule archive — ce qu'on remet quand il n'y a pas de serveur où déposer un dossier. Empaqueté depuis le dossier qui vient d'être écrit : les deux ne peuvent pas décrire des choses différentes.",
+  "sched.catEmpty": "rien à publier pour « {k} » — aucun catalogue écrit",
+  "sched.catBundled": "Empaqueté dans {f}."
 }

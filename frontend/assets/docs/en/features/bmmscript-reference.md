@@ -2,7 +2,7 @@
 
 !!! info ""
 
-    85 actions · 30 conditions · 21 values · 8 loop sources
+    85 actions · 30 conditions · 22 values · 8 loop sources
 
 > Generated from BMM's own registry, so it cannot describe a version of the app that does not exist. If an action is in the block editor, it is in this list.
 
@@ -130,7 +130,7 @@ Written `do <name>(param: value, …)`. An action with no parameters takes empty
 | `custom.command` | Run a program with arguments | `args` · `program` · `workingDir` |
 | `custom.script` | Runs PowerShell, CMD, Bash or Python you write. Needs “Run scripts”. | `keepGoing` · `engine` · `code` · `workingDir` |
 | `folder.create` | Creates a folder inside BMM’s own data folder. It cannot reach outside it. | `path` |
-| `catalog.create` | Write a catalog.json into a folder, plus the files it points at. Tutorials and plugins are linked; themes are embedded. | `dir` · `kind` · `name` · `base` |
+| `catalog.create` | Write a catalog.json into a folder, plus the files it points at. Tutorials and plugins are linked; themes are embedded. | `dir` · `kind` · `name` · `base` · `bundle` · `bundleOut` |
 | `deeplink` | Trigger any bmm:// deep link | `url` |
 | `http.request` | Sends a request to any address and captures the reply. Needs “Run external programs”. | `url` · `headers` · `method` · `body` · `timeoutMs` · `jsonPath` · `allowAnyStatus` |
 | `wait.http` | Polls it until it answers, or gives up and says so. | `url` · `everySeconds` · `timeoutSeconds` · `status` · `stopOnTimeout` |
@@ -180,7 +180,7 @@ Written where a condition goes — after `if`, `case`, `waitfor`, `repeat while`
 
 Written by an action into the task, and readable afterwards in a comparison or an expression — `if disk.free_gb < 5`, `set total = benchmark.mbps * 2`.
 
-`disk.read_mbps` · `disk.write_mbps` · `disk.suggested_limit` · `disk.free_gb` · `disk.free_percent` · `disk.total_gb` · `benchmark.mbps` · `benchmark.total_ms` · `update.available` · `lasttask.ok` · `lasttask.spawned` · `list.length` · `backup.bytes` · `wait.ok` · `wait.tries` · `script.code` · `script.ok` · `import.count` · `http.status` · `map.size` · `map.hit`
+`disk.read_mbps` · `disk.write_mbps` · `disk.suggested_limit` · `disk.free_gb` · `disk.free_percent` · `disk.total_gb` · `benchmark.mbps` · `benchmark.total_ms` · `update.available` · `lasttask.ok` · `lasttask.spawned` · `list.length` · `backup.bytes` · `wait.ok` · `wait.tries` · `script.code` · `script.ok` · `import.count` · `catalog.entries` · `http.status` · `map.size` · `map.hit`
 
 A value nothing has written yet reads as zero. `lasttask.ok` is 1 or 0, and only means anything after a `run`.
 

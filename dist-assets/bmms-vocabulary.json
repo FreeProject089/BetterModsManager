@@ -472,7 +472,9 @@
         "dir",
         "kind",
         "name",
-        "base"
+        "base",
+        "bundle",
+        "bundleOut"
       ]
     },
     {
@@ -729,6 +731,7 @@
     "script.code",
     "script.ok",
     "import.count",
+    "catalog.entries",
     "http.status",
     "map.size",
     "map.hit"

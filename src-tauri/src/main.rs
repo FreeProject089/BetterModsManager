@@ -764,6 +764,7 @@ fn main() {
             commands::game_watch::file_stamp,
             commands::game_watch::read_text_tail,
             commands::scheduler::run_scheduled_script_full,
+            commands::catalog_bundle::list_dir_files,
             commands::hooks::hook_fire,
             commands::hooks::hook_poll,
             commands::hooks::hook_list,

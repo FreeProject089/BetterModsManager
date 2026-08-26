@@ -1360,7 +1360,26 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
             // Trailing slash stripped once, here, so neither branch has to think about it.
             const base = String(p.base || '').trim().replace(/\/+$/, '');
             const wrote = await buildCatalogueInto(kind, dir, title, base);
-            toast(`${task.name}: ${(t('sched.catDone') || 'Published {n} entry(ies).').replace('{n}', String(wrote))}`, 'success');
+            ctx.nums['catalog.entries'] = wrote;
+            // Nothing written is not a success. A catalogue with no entries is a file that
+            // looks published and installs nothing, and on a schedule nobody is watching the
+            // count go by.
+            if (!wrote) {
+                toast(`${task.name}: ${t('sched.catEmpty').replace('{k}', kind)}`, 'warning', 12000);
+                break;
+            }
+            let msg = (t('sched.catDone') || 'Published {n} entry(ies).').replace('{n}', String(wrote));
+            if (p.bundle) {
+                // A .bmmbundle is the catalogue AND its files in one archive, which is what
+                // somebody hands over when there is no server to put a folder on. Packed
+                // from the folder just written, so the two can never describe different
+                // things.
+                const out = String(p.bundleOut || '').trim() || `${dir}/${(title || 'catalogue').replace(/[^A-Za-z0-9._-]/g, '_')}.bmmbundle`;
+                const packed: any = await invoke('catalog_bundle_pack', { dir, out });
+                ctx.text['catalog.bundle'] = String(packed?.path || out);
+                msg += ` ${t('sched.catBundled').replace('{f}', String(out).replace(/^.*[/\\]/, ''))}`;
+            }
+            toast(`${task.name}: ${msg}`, 'success', 9000);
             break;
         }
         case 'folder.create': {
@@ -4830,6 +4849,72 @@ async function buildCatalogueInto(kind: string, dir: string, title: string, base
     const stamp = new Date().toISOString();
     const write = (file: string, content: string) => invoke('write_text_file', { path: `${dir}/${file}`, content });
 
+    if (kind === 'modpack') {
+        // Embedded. BMM holds a modpack as data, so there is nothing to link to and nothing
+        // for the reader to fetch — the same shape the modpack catalogue reader expects.
+        const packs: any[] = (await invoke('load_modpacks').catch(() => [])) as any[];
+        await write('catalog.json', JSON.stringify({ version: '1.0', name: title, generatedAt: stamp, modpacks: packs }, null, 2));
+        return packs.length;
+    }
+
+    if (kind === 'automation') {
+        // Automations are written OUT as files and linked, not embedded, because a `.bmmpa`
+        // is a document somebody reads before trusting it — and a catalogue whose entries
+        // are inline JSON is one nobody can read without installing.
+        //
+        // Permissions are stripped on the way out for the same reason they are stripped on
+        // the way in: they are granted by the person who reads the task, never carried by
+        // the file that asks for them.
+        const tasks = await getTasks();
+        let n = 0;
+        const entries: any[] = [];
+        for (const task of tasks) {
+            const file = `${String(task.id).replace(/[^A-Za-z0-9._-]/g, '_')}.bmmpa`;
+            await write(file, JSON.stringify({ magic: 'BMMPA', version: 1, tasks: [{ ...task, perms: {}, enabled: false, osSchedule: false }] }, null, 2));
+            entries.push({
+                id: task.id,
+                name: task.name || task.id,
+                description: (task as any).description || '',
+                file,
+                url: base ? `${base}/${file}` : undefined,
+            });
+            n += 1;
+        }
+        // The index goes down LAST: a catalog.json listing files that failed to write looks
+        // finished and installs nothing.
+        await write('catalog.json', JSON.stringify({ version: '1.0', name: title, generatedAt: stamp, presets: entries }, null, 2));
+        return n;
+    }
+
+    if (kind === 'folder') {
+        // The universal one: publish whatever is already in the folder.
+        //
+        // This is the case the other kinds cannot cover. A `.mm` is not held by BMM — it is
+        // exported — so a catalogue of mod lists can only be built from files somebody has
+        // already put somewhere. Point this at that folder.
+        const files: string[] = (await invoke('list_dir_files', { dir, exts: null }).catch(() => [])) as string[];
+        const KNOWN: Record<string, string> = {
+            mm: 'lists', mmlist: 'lists', bmmplug: 'plugins', bmmtheme: 'themes',
+            bmmpa: 'presets', bmp: 'modpacks',
+        };
+        const buckets: Record<string, any[]> = {};
+        for (const f of files) {
+            const name = String(f).replace(/^.*[/\\]/, '');
+            const ext = (name.split('.').pop() || '').toLowerCase();
+            const bucket = KNOWN[ext];
+            if (!bucket) continue;
+            (buckets[bucket] = buckets[bucket] || []).push({
+                id: name.replace(/\.[^.]+$/, ''),
+                name: name.replace(/\.[^.]+$/, ''),
+                file: name,
+                url: base ? `${base}/${name}` : undefined,
+            });
+        }
+        const total = Object.values(buckets).reduce((a, b) => a + b.length, 0);
+        await write('catalog.json', JSON.stringify({ version: '1.0', name: title, generatedAt: stamp, ...buckets }, null, 2));
+        return total;
+    }
+
     if (kind === 'theme') {
         // Embedded, not linked — this is the shape the theme catalogue reader already
         // expects, so a published folder can be followed without any other file.
@@ -6053,7 +6138,12 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
             <select class="input sched-cat-kind" style="min-width:170px">${
                 ([['tutorial', t('sched.catKindTut') || 'My tutorials'],
                   ['theme', t('sched.catKindTheme') || 'My themes'],
-                  ['plugin', t('sched.catKindPlugin') || 'My plugins']] as [string, string][])
+                  ['plugin', t('sched.catKindPlugin') || 'My plugins'],
+                  ['modpack', t('sched.catKindModpack')],
+                  ['automation', t('sched.catKindAuto')],
+                  // The one the others cannot cover: a `.mm` is exported, not held by BMM,
+                  // so a catalogue of mod lists can only be built from a folder.
+                  ['folder', t('sched.catKindFolder')]] as [string, string][])
                     .map(([v, l]) => `<option value="${v}"${(params.kind || 'tutorial') === v ? ' selected' : ''}>${escHtml(l)}</option>`).join('')
             }</select></div>
         <div class="sched-field" style="flex:1;min-width:220px"><label class="sched-flabel">${t('sched.catDirLbl') || 'Destination folder'}</label>
@@ -6062,6 +6152,9 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
             <input class="input sched-cat-name" placeholder="${escAttr(t('sched.catNamePh') || 'My catalogue')}" value="${escAttr(params.name || '')}" style="min-width:170px"></div>
         <div class="sched-field" style="flex:1;min-width:220px"><label class="sched-flabel">${t('sched.catBaseLbl') || 'Address the files will be served from (optional)'}</label>
             <input class="input sched-cat-base" placeholder="${escAttr(t('sched.catBasePh') || 'leave empty — they sit beside the catalogue')}" value="${escAttr(params.base || '')}"></div>
+        <label class="sched-cmd-row" style="margin-top:6px"><input type="checkbox" class="sched-cat-bundle"${params.bundle ? ' checked' : ''}>
+            <span>${escHtml(t('sched.catBundle'))}</span></label>
+        <span class="sched-cmd-hint">${escHtml(t('sched.catBundleHint'))}</span>
         <span class="sched-cmd-hint">${t('sched.catHint') || 'Writes catalog.json into the folder, plus the files it points at when the kind has any. Themes are embedded in the index and have no separate files.'}</span>`;
     else if (needs === 'checkUpdate') host.innerHTML = `<label class="sched-tg"><input type="checkbox" class="sched-en" ${params.enabled ? 'checked' : ''}> ${t('sched.includePrerelease') || 'Include pre-releases'}</label>`;
     else if (needs === 'modpackExport') host.innerHTML = `
@@ -6124,6 +6217,7 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
     host.querySelector('.sched-p-listsep')?.addEventListener('input', (e) => { params.sep = (e.target as HTMLInputElement).value; });
     // text.extract / modlist.apply / dcs.hook. Same shape as everything else here: a
     // querySelector that finds nothing for the other action types binds nothing.
+    host.querySelector('.sched-cat-bundle')?.addEventListener('change', (e) => { params.bundle = (e.target as HTMLInputElement).checked; });
     host.querySelector('.sched-p-impath')?.addEventListener('input', (e) => { params.path = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-p-imurl')?.addEventListener('input', (e) => { params.url = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-browse-impath')?.addEventListener('click', async () => {
@@ -6320,6 +6414,9 @@ const VALUE_SOURCES = [
     // backup. The number is what a task branches on: "if the nightly backup came out
     // with fewer sections than usual, say so".
     'import.count',
+    // How many entries a publish wrote. Zero is the interesting number: a catalogue with
+    // no entries looks published and installs nothing.
+    'catalog.entries',
     // Written by http.request on every call, including a failed one. Listed here because
     // check-scheduler-vars caught that it was not: a value an action writes and no
     // condition can select is half a feature, and the half that is missing is the point —
