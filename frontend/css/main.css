@@ -18669,7 +18669,7 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
 /* What a repo carries besides mods, on the sync screen.
    A LABEL per row, so the whole strip is a hit target — these rows are read and ticked in
    one pass, and a 13px checkbox is not something anybody aims at twice. */
-.repo-extras { margin-top: 20px; padding: 12px; background: var(--surface-1);
+.repo-extras { margin-top: 20px; padding: 12px; background: var(--bg-card);
     border: 1px solid var(--border); border-radius: 8px; }
 .repo-extras-title { margin: 0 0 4px; font-size: 13px; font-weight: 700;
     color: var(--text-primary); display: flex; align-items: center; gap: 8px; }
@@ -18679,7 +18679,7 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
 .repo-extras-row { display: flex; align-items: flex-start; gap: 10px; padding: 8px 10px;
     border: 1px solid var(--border); border-radius: 8px; cursor: pointer;
     transition: background .15s, border-color .15s; }
-.repo-extras-row:hover { background: var(--surface-2); border-color: var(--accent); }
+.repo-extras-row:hover { background: var(--bg-hover); border-color: var(--accent); }
 .repo-extras-row input { margin-top: 2px; flex: 0 0 auto; cursor: pointer; }
 /* A kind this build cannot install. Shown rather than hidden — a repo from a newer BMM
    must not look like a repo with things missing from it. */
@@ -18690,7 +18690,7 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
 .repo-extras-name { font-size: 12px; font-weight: 600; color: var(--text-primary); }
 .repo-extras-kind { font-size: 9px; font-weight: 800; text-transform: uppercase;
     letter-spacing: .5px; padding: 2px 6px; border-radius: 4px;
-    background: var(--surface-2); color: var(--text-secondary); }
+    background: var(--bg-hover); color: var(--text-secondary); }
 .repo-extras-meta { font-size: 10px; color: var(--text-muted); font-family: var(--font-mono); }
 .repo-extras-desc { flex: 1 0 100%; font-size: 11px; color: var(--text-muted); line-height: 1.45; }
 /* The picker, on the publishing side. Reuses the row styles above so a thing looks the same
