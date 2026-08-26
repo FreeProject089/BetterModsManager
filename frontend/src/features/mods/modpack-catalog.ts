@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { invoke } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
-import { escHtml } from '../../core/utils.js';
+import { escHtml, escAttr } from '../../core/utils.js';
 import { fetchSourceText } from '../../core/source-fetch.js';
 import { sourceAccessHtml, wireSourceAccess } from '../../core/source-access.js';
 
