@@ -938,10 +938,11 @@ actions, conditions et valeurs**, et la même page sur le site de documentation.
 BMM savait suivre un catalogue d'automatisations et n'avait aucun moyen d'en fabriquer un.
 Publier voulait dire écrire `catalog.json` à la main en devinant les noms de champs.
 
-**Paramètres → Planificateur → Depuis un catalogue… → Publier les miennes…** choisit vos
-automatisations et écrit un dossier : un `.bmmpa` signé par automatisation, plus un
-`catalog.json` à côté. Déposez le dossier sur GitHub, GitHub Pages ou n'importe quel
-hébergement statique, pointez BMM sur le `catalog.json`, c'est fait.
+**Paramètres → Planificateur → Fichiers… → Mes catalogues… → En créer un** choisit vos
+automatisations et écrit **un seul fichier** : un `.bmmbundle` contenant le `catalog.json` et
+chaque automatisation emballée dedans, ou un `catalog.json` d'adresses pour des
+automatisations déjà hébergées. Envoyez le bundle, ou déposez le fichier de catalogue sur
+GitHub, GitHub Pages ou n'importe quel hébergement statique — voir §77.
 
 Les adresses écrites sont **relatives** — `nightly.bmmpa`, pas une URL complète — parce qu'un
 catalogue qui nomme son propre hébergeur cesse de fonctionner dès qu'il est déplacé, copié ou

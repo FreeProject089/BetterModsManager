@@ -1022,9 +1022,10 @@ and value**, and the same page on the documentation site.
 BMM could follow a catalogue of automations and had no way to make one. Publishing meant
 writing `catalog.json` by hand and guessing the field names.
 
-**Settings → Scheduler → From a catalogue… → Publish my own…** picks your automations and
-writes a folder: one signed `.bmmpa` per automation plus a `catalog.json` beside them. Drop
-the folder on GitHub, GitHub Pages or any static host, point BMM at the `catalog.json`, done.
+**Settings → Scheduler → Files… → My catalogues… → Create one** picks your automations and
+writes one file: a `.bmmbundle` holding the `catalog.json` and every automation packed into
+it, or a `catalog.json` of addresses for automations already hosted. Send the bundle, or drop
+the catalogue file on GitHub, GitHub Pages or any static host — see §77.
 
 The addresses it writes are **relative** — `nightly.bmmpa`, not a full URL — because a
 catalogue that names its own host stops working the moment it is moved, mirrored or forked,

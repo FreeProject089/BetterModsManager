@@ -320,15 +320,18 @@ reads either.
 
 ## Publish a catalogue of your own
 
-**Files… → Publish my own…** picks your automations and writes a folder: one signed `.bmmpa`
-per automation plus a `catalog.json` beside them. Upload the folder anywhere static — a GitHub
-repository, GitHub Pages, your own server — and give people the address of the `catalog.json`.
+**Files… → My catalogues…** is the same screen every other kind of catalogue uses: browse what
+you follow, follow another one by address or by file, or make your own.
 
-Each automation is either **packed** into the catalogue or **linked** to an address you give,
-chosen per entry — so one catalogue can carry the small ones and point at the large one
-somebody already hosts. Tick *Publish it as ONE file* and you get a single `.bmmbundle`
-instead of a folder: the catalogue and every automation it packs, in one thing you can send
-somebody, with nothing to host and no address to keep alive.
+**Create one** picks your automations and writes **one file**, and you choose which of two. A
+`.bmmbundle` holds the `catalog.json` and every automation packed into it — one thing to send
+somebody, nothing to host, no address to keep alive. A `catalog.json` holds addresses only,
+for automations already hosted somewhere.
+
+Inside either, each automation is **packed** into the catalogue or **linked** to an address
+you give, chosen per entry — so one catalogue can carry the small ones and point at the large
+one somebody already hosts. Only what the catalogue names is packed, and you choose where the
+file is saved.
 
 The addresses it writes are **relative** (`nightly.bmmpa`, not a full URL). A catalogue that
 names its own host stops working the moment it is moved, mirrored or forked — which is the
