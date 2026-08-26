@@ -286,6 +286,17 @@ function _wireSchedMenuDelegation(): void {
 export async function initScheduler(): Promise<void> {
     await loadTasks();
     renderScheduleList();
+
+    // The API can arm and disarm a task, and the file it writes is not what the running
+    // scheduler is using — that was loaded at startup. Without this the change sits on disk
+    // while a task that shows as disabled keeps firing, which is a lie with consequences.
+    if (!(window as any).__bmmSchedWatch) {
+        (window as any).__bmmSchedWatch = true;
+        const { listen } = await import('../../core/api.js');
+        void listen('bmm://schedules-changed', () => {
+            void loadTasks().then(() => renderScheduleList());
+        });
+    }
     const btn = document.getElementById('btn-create-schedule');
     if (btn && !btn.dataset.wired) {
         btn.dataset.wired = '1';

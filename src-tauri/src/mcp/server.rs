@@ -560,6 +560,35 @@ impl ServerHandler for BmmMcpServer {
             "required": ["plugin_id", "path"]
         })).unwrap()),
     ),
+    // Arming a task, and the doorbell one can wait on.
+    //
+    // Listing them is `bmm_list_schedules`, which already existed and reads data.json
+    // directly — so it answers with BMM closed, which is the better behaviour for "did my
+    // nightly task even exist". A second one here would have been a worse copy.
+    Tool::new(
+        "bmm_set_schedule_enabled",
+        "Arm or disarm one saved task by id. Only `enabled` can be changed — nothing here can write a task's steps, because installing an automation with a script step in it is a decision that belongs to somebody reading it on screen.",
+        std::sync::Arc::new(serde_json::from_value(json!({
+            "type": "object",
+            "properties": {
+                "id": { "type": "string" },
+                "enabled": { "type": "boolean" }
+            },
+            "required": ["id", "enabled"]
+        })).unwrap()),
+    ),
+    Tool::new(
+        "bmm_signal",
+        "Ring a named doorbell a scheduled task may be waiting on (`wait.hook`). Use it to tell BMM that something you were doing has finished. `data` is free-form and reaches the waiting task as text.",
+        std::sync::Arc::new(serde_json::from_value(json!({
+            "type": "object",
+            "properties": {
+                "name": { "type": "string", "description": "The signal name the task waits on, e.g. \"build-done\"." },
+                "data": { "description": "Anything the task should receive." }
+            },
+            "required": ["name"]
+        })).unwrap()),
+    ),
     // Catalogues.
     Tool::new(
         "bmm_list_catalogs",
@@ -1080,6 +1109,20 @@ impl ServerHandler for BmmMcpServer {
                 Ok(v) => ok_json(&v),
                 Err(e) => err_result(&e.to_string()),
             }
+        }
+        "bmm_set_schedule_enabled" => {
+            let mut body = serde_json::Map::new();
+            for k in ["id", "enabled"] {
+                if let Some(v) = args.get(k) { body.insert(k.into(), v.clone()); }
+            }
+            self.tool_api_call("POST", "/api/schedules/enabled", Some(serde_json::Value::Object(body))).await
+        }
+        "bmm_signal" => {
+            let mut body = serde_json::Map::new();
+            for k in ["name", "data"] {
+                if let Some(v) = args.get(k) { body.insert(k.into(), v.clone()); }
+            }
+            self.tool_api_call("POST", "/api/hook", Some(serde_json::Value::Object(body))).await
         }
         "bmm_list_catalogs" => self.tool_api_call("GET", "/api/catalogs", None).await,
         "bmm_follow_catalog" => {

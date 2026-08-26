@@ -226,6 +226,14 @@ struct RepoExtraBody {
     password: Option<String>,
 }
 
+/// `POST /api/schedules/enabled` — arm or disarm one saved task.
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct ScheduleEnabledBody {
+    id: String,
+    enabled: bool,
+}
+
 /// `POST /api/hook` — ring a named doorbell a scheduled task can be waiting on.
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -3040,6 +3048,98 @@ pub async fn start_api_server(
         .boxed();
 
     // group_c: repo routes (cancel routes BEFORE the main route they override)
+    // ── Scheduled tasks ───────────────────────────────────────────────
+    //
+    // Running one was reachable (`POST /api/schedule/run`); SEEING them was not. "Which
+    // tasks exist, and is the one I care about even switched on" had no answer from outside
+    // the app — which is the first question when a nightly job did not happen.
+    let tok_sch_list = token.clone();
+    let handle_sch_list = app_handle.clone();
+    let schedules_list = warp::path!("api" / "schedules")
+        .and(warp::get())
+        .and(require_token(tok_sch_list))
+        .and(with_app_handle(handle_sch_list))
+        .map(|handle: tauri::AppHandle| {
+            match crate::commands::scheduler::get_schedules(handle) {
+                Ok(v) => {
+                    // A SUMMARY, not the tasks. A task carries its steps, and its steps can
+                    // carry a script, a password typed into an action, a path off somebody's
+                    // disk — none of which a caller asking "what is scheduled" needs, and all
+                    // of which would then be in whatever logs that caller keeps.
+                    let rows: Vec<serde_json::Value> = v
+                        .as_array()
+                        .cloned()
+                        .unwrap_or_default()
+                        .iter()
+                        .map(|t| {
+                            serde_json::json!({
+                                "id": t.get("id").and_then(|x| x.as_str()).unwrap_or(""),
+                                "name": t.get("name").and_then(|x| x.as_str()).unwrap_or(""),
+                                "enabled": t.get("enabled").and_then(|x| x.as_bool()).unwrap_or(true),
+                                "trigger": t.get("trigger").and_then(|x| x.get("type")).cloned()
+                                    .unwrap_or(serde_json::Value::Null),
+                                "lastRun": t.get("lastRun").cloned().unwrap_or(serde_json::Value::Null),
+                                "steps": t.get("steps").and_then(|x| x.as_array()).map(|a| a.len()).unwrap_or(0),
+                            })
+                        })
+                        .collect();
+                    warp::reply::with_status(
+                        warp::reply::json(&serde_json::json!({ "schedules": rows })), StatusCode::OK)
+                }
+                Err(e) => warp::reply::with_status(
+                    warp::reply::json(&ApiError { error: e }), StatusCode::INTERNAL_SERVER_ERROR),
+            }
+        });
+
+    // Arming and disarming, which is the other half of "a nightly job did not happen".
+    //
+    // Only `enabled` can be changed. A route that could write a whole task would be a route
+    // that can install an automation with a script step in it, which is the scheduler's
+    // permission model gone — that decision belongs to somebody reading the task on screen.
+    let tok_sch_set = token.clone();
+    let handle_sch_set = app_handle.clone();
+    let schedules_set = warp::path!("api" / "schedules" / "enabled")
+        .and(warp::post())
+        .and(require_token(tok_sch_set))
+        .and(warp::body::json::<ScheduleEnabledBody>())
+        .and(with_app_handle(handle_sch_set))
+        .map(|body: ScheduleEnabledBody, handle: tauri::AppHandle| {
+            let mut doc = match crate::commands::scheduler::get_schedules(handle.clone()) {
+                Ok(v) => v,
+                Err(e) => return warp::reply::with_status(
+                    warp::reply::json(&ApiError { error: e }), StatusCode::INTERNAL_SERVER_ERROR),
+            };
+            let mut found = false;
+            if let Some(arr) = doc.as_array_mut() {
+                for t in arr.iter_mut() {
+                    if t.get("id").and_then(|x| x.as_str()) == Some(body.id.as_str()) {
+                        if let Some(o) = t.as_object_mut() {
+                            o.insert("enabled".into(), serde_json::Value::Bool(body.enabled));
+                            found = true;
+                        }
+                    }
+                }
+            }
+            if !found {
+                return warp::reply::with_status(
+                    warp::reply::json(&ApiError { error: "no task with that id".into() }),
+                    StatusCode::NOT_FOUND);
+            }
+            match crate::commands::scheduler::save_schedules(handle.clone(), doc) {
+                // The app is told to re-read, or the change sits on disk while the running
+                // scheduler keeps using what it loaded at startup — a task that shows as
+                // disabled and still fires.
+                Ok(()) => {
+                    let _ = handle.emit("bmm://schedules-changed", serde_json::json!({ "id": body.id }));
+                    warp::reply::with_status(
+                        warp::reply::json(&serde_json::json!({ "ok": true, "id": body.id, "enabled": body.enabled })),
+                        StatusCode::OK)
+                }
+                Err(e) => warp::reply::with_status(
+                    warp::reply::json(&ApiError { error: e }), StatusCode::INTERNAL_SERVER_ERROR),
+            }
+        });
+
     // ── The doorbell ─────────────────────────────────────────────────
     //
     // A scheduled task could wait for a clock and for a file. This is the third thing:
@@ -3252,7 +3352,9 @@ pub async fn start_api_server(
             }
         });
 
-    let group_c = hook_ring
+    let group_c = schedules_list
+        .or(schedules_set)
+        .or(hook_ring)
         .or(hook_seen)
         .or(plugin_assets)
         .or(catalogs_get)

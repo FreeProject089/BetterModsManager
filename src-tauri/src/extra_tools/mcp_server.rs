@@ -322,6 +322,24 @@ enum Commands {
         path: String,
     },
 
+    /// Arm or disarm one saved task
+    #[command(name = "schedule-set")]
+    ScheduleSet {
+        /// Task id, from `schedules`
+        id: String,
+        /// Turn it off instead of on
+        #[arg(long, default_value_t = false)]
+        off: bool,
+    },
+
+    /// Ring a doorbell a task may be waiting on (wait.hook)
+    Signal {
+        /// The signal name
+        name: String,
+        /// Optional JSON payload for the waiting task
+        data: Option<String>,
+    },
+
     /// List the catalogues this BMM follows, by type.
     Catalogs,
 
@@ -859,6 +877,30 @@ async fn run_cli_command(cmd: Commands) -> anyhow::Result<()> {
             // `bmm plugin-asset x README.md > out.md` is a file rather than a file with a
             // banner in it.
             print!("{}", v.get("text").and_then(|t| t.as_str()).unwrap_or(""));
+        }
+
+        Commands::ScheduleSet { id, off } => {
+            let body = serde_json::json!({ "id": id, "enabled": !off });
+            let res = state_bridge::api_call("POST", "/api/schedules/enabled", Some(body)).await?;
+            println!("{}", serde_json::to_string_pretty(res.get("body").unwrap_or(&serde_json::Value::Null))?);
+        }
+        Commands::Signal { name, data } => {
+            let payload = match data {
+                // Parsed as JSON when it is JSON, sent as a string when it is not. A caller
+                // piping a plain word should not have to quote it into a JSON string.
+                Some(d) => serde_json::from_str::<serde_json::Value>(&d)
+                    .unwrap_or(serde_json::Value::String(d)),
+                None => serde_json::Value::Null,
+            };
+            let res = state_bridge::api_call("POST", "/api/hook", Some(serde_json::json!({ "name": name, "data": payload }))).await?;
+            let b = res.get("body").cloned().unwrap_or(serde_json::Value::Null);
+            // The name it was FILED under, which is not always the name given — it is
+            // narrowed to something that can be a key.
+            if let Some(n) = b.get("name").and_then(|v| v.as_str()) {
+                println!("  {} {}", "✓".green().bold(), format!("rang \"{}\"", n).dimmed());
+            } else {
+                println!("{}", serde_json::to_string_pretty(&b)?);
+            }
         }
 
         Commands::Catalogs => {
