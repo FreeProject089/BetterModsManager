@@ -107,8 +107,65 @@ function initSyncKeyAndSshFields() {
             }
         });
     }
+    // NAVIGATE first, then scroll.
+    //
+    // This only scrolled. #settings-identity-card lives in the Settings view, and while
+    // another view is showing it is in a hidden subtree — scrollIntoView on it moves nothing
+    // and reports nothing, so the button did exactly nothing, forever. Every other screen
+    // that offers this clicks nav-settings first; this one had been written without it.
     document.getElementById('btn-sync-key-manage')?.addEventListener('click', () => {
-        document.getElementById('settings-identity-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        document.getElementById('nav-settings')?.click();
+        setTimeout(() => document.getElementById('settings-identity-card')
+            ?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 250);
+    });
+    /** A name nothing on the ring is using yet — see the same helper in core/source-access. */
+    const freshKeyName = async () => {
+        const kr = await import('../../core/identity-key.js');
+        const view = await kr.listKeyring().catch(() => null);
+        const taken = new Set(Object.keys(view?.keys || {}));
+        if (!taken.has('BMM'))
+            return 'BMM';
+        for (let n = 2; n < 999; n += 1)
+            if (!taken.has(`BMM ${n}`))
+                return `BMM ${n}`;
+        return `BMM ${Date.now()}`;
+    };
+    const repaintKeys = async () => {
+        const kr = await import('../../core/identity-key.js');
+        await kr.refreshKeySelect('repo-sync-key-sel', syncUrl, t);
+    };
+    // A chooser with nothing in it is disabled — correct, and a dead end: the only way to get
+    // a key was ssh-keygen in a terminal. Both doors are on the row now.
+    document.getElementById('btn-sync-key-add')?.addEventListener('click', async () => {
+        const { pickFile } = await import('../../core/api.js');
+        const path = await pickFile([{ name: 'Private key', extensions: ['key', 'pem', ''] }]).catch(() => null);
+        if (!path)
+            return;
+        const name = String(path).replace(/^.*[/\\]/, '').replace(/\.[^.]+$/, '') || 'key';
+        try {
+            await invoke('key_auth_add', { name, path });
+            toast(t('srcacc.keyAdded'), 'success');
+            await repaintKeys();
+        }
+        catch (e) {
+            toast(t(String(e).split('|')[0]) || t('srcacc.keyAddFailed'), 'warning', 7000);
+        }
+    });
+    document.getElementById('btn-sync-key-new')?.addEventListener('click', async () => {
+        try {
+            const res = await invoke('key_auth_generate', { name: await freshKeyName() });
+            // The PUBLIC line is the one thing that has to leave this machine, and a toast is
+            // too small to read a key out of — so it goes to the clipboard.
+            try {
+                await navigator.clipboard.writeText(String(res?.public || ''));
+            }
+            catch { /* no clipboard */ }
+            toast(t('srcacc.keyMade'), 'success', 8000);
+            await repaintKeys();
+        }
+        catch (e) {
+            toast(t(String(e).split('|')[0]) || t('srcacc.keyMadeFailed'), 'warning', 7000);
+        }
     });
     // ── which SSH server an ssh:// source connects to ────────────────────────
     const sshRow = document.getElementById('repo-sync-ssh-row');

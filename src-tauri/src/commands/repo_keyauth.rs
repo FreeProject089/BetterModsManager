@@ -405,6 +405,15 @@ pub fn key_auth_list(
 /// Refused up front when the file is not a usable ed25519 key, so the mistake is reported
 /// while the person is still looking at the picker rather than as a silent refusal from
 /// somebody else's server a week later.
+/// What a freshly generated key gives back: where it went, the public line to hand out, and
+/// the ring as it now stands so the caller does not have to ask again.
+#[derive(serde::Serialize)]
+pub struct KeyGenerated {
+    pub path: String,
+    pub public: String,
+    pub ring: KeyringView,
+}
+
 #[tauri::command]
 pub fn key_auth_add(
     state: tauri::State<'_, crate::state::AppState>,
@@ -433,6 +442,95 @@ pub fn key_auth_add(
     }
     commit(&state)?;
     key_auth_list(state)
+}
+
+/// Make a key, here, without a terminal.
+///
+/// Every screen that asks for an identity key assumed you already had one — and the way to
+/// get one was `ssh-keygen` in a terminal, which is a different skill from using a mod
+/// manager. So the chooser was a dropdown with nothing in it, disabled, next to a Manage
+/// button, and the honest reading of that is "this feature is not for me".
+///
+/// ed25519, and only ed25519. It is the one algorithm every server in this protocol accepts,
+/// the key is small enough to paste into a chat message, and offering a choice of algorithms
+/// would be offering a decision nobody making their first key can make.
+///
+/// The private key never leaves this machine. What is returned is the PUBLIC line, which is
+/// the thing you send to whoever runs the repo.
+#[tauri::command]
+pub fn key_auth_generate(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, crate::state::AppState>,
+    name: String,
+) -> Result<KeyGenerated, String> {
+    use tauri::Manager;
+    let name = name.trim().to_string();
+    if name.is_empty() {
+        return Err("repo.keyauth.errNoName".into());
+    }
+    {
+        let data = state.data.lock().map_err(|_| "state lock".to_string())?;
+        if data.settings.key_auth_keys.iter().any(|e| e.name == name) {
+            return Err("repo.keyauth.errNameTaken".into());
+        }
+    }
+
+    // Beside the rest of BMM's data, in a folder of its own. Not next to the profiles: a
+    // private key that ends up inside an exported profile is a private key somebody else has.
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("keys");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+
+    // The filename is derived, never the name as typed: a key called `../id_rsa` would
+    // otherwise write outside the folder.
+    let stem: String = name
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '-' })
+        .collect();
+    let path = dir.join(format!("{}.key", stem.trim_matches('-')));
+    if path.exists() {
+        return Err("repo.keyauth.errFileExists".into());
+    }
+
+    // Built from a seed rather than through PrivateKey::random, which wants an RNG from a
+    // rand_core generation this crate only carries in dev-dependencies. OsRng IS the
+    // operating system's CSPRNG — the same source that RNG would have reached — so this is
+    // the same randomness through a dependency the app already ships, not a weaker one.
+    let mut seed = [0u8; 32];
+    {
+        use rand::RngCore;
+        rand::rngs::OsRng.fill_bytes(&mut seed);
+    }
+    let pair = russh::keys::ssh_key::private::Ed25519Keypair::from_seed(&seed);
+    let key = russh::keys::PrivateKey::from(pair);
+    let pem = key
+        .to_openssh(russh::keys::ssh_key::LineEnding::LF)
+        .map_err(|e| format!("repo.keyauth.errGenFailed|{}", e))?;
+    std::fs::write(&path, pem.as_bytes()).map_err(|e| e.to_string())?;
+
+    // Owner-only. On Windows the file inherits the user profile's ACL, which is already
+    // owner-only in practice — said here because the difference matters to anybody reading
+    // this for a security review.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
+    }
+
+    let public = key
+        .public_key()
+        .to_openssh()
+        .map_err(|e| format!("repo.keyauth.errGenFailed|{}", e))?;
+
+    // Through the same door a hand-added key uses, so it is proved to open and to be
+    // ed25519 before it is written to the ring — a key that generated but cannot sign would
+    // otherwise sit there looking usable.
+    let path_str = path.to_string_lossy().to_string();
+    let view = key_auth_add(state, name, path_str.clone())?;
+    Ok(KeyGenerated { path: path_str, public, ring: view })
 }
 
 /// Take a key off the ring.
@@ -564,6 +662,51 @@ mod tests {
         s.key_auth_by_origin.clear();
         s.key_auth_key_path = None;
         s
+    }
+
+    /// A generated key has to SIGN. A file that is shaped like a key and cannot open is the
+    /// failure mode worth a test: it writes fine, it lists fine, and it fails at the moment
+    /// somebody is trying to reach a server.
+    ///
+    /// This exercises the same two steps the command does — seed, then build — without the
+    /// Tauri state and app handle the command needs, which a unit test cannot construct.
+    #[test]
+    fn a_generated_key_can_actually_sign() {
+        let mut seed = [0u8; 32];
+        {
+            use rand::RngCore;
+            rand::rngs::OsRng.fill_bytes(&mut seed);
+        }
+        let pair = russh::keys::ssh_key::private::Ed25519Keypair::from_seed(&seed);
+        let key = russh::keys::PrivateKey::from(pair);
+        let pem = key
+            .to_openssh(russh::keys::ssh_key::LineEnding::LF)
+            .expect("serialises to OpenSSH");
+
+        let dir = std::env::temp_dir().join("bmm_keygen_test");
+        let _ = std::fs::create_dir_all(&dir);
+        let path = dir.join("generated.key");
+        std::fs::write(&path, pem.as_bytes()).expect("writes");
+
+        // The same call key_auth_add makes to validate a key somebody added by hand — which
+        // is what proves the generated file is accepted by the ring, not merely written.
+        let proof = make_proof(&path.to_string_lossy(), None, "probe://validate")
+            .expect("a generated key opens and signs");
+        assert!(!proof.is_empty());
+
+        // ed25519, because that is the one algorithm every server in this protocol accepts.
+        assert_eq!(key.algorithm(), russh::keys::ssh_key::Algorithm::Ed25519);
+
+        // Two generations must differ: a seed that was not random would produce the same key
+        // on every machine, and every one of them would look fine.
+        let mut seed2 = [0u8; 32];
+        {
+            use rand::RngCore;
+            rand::rngs::OsRng.fill_bytes(&mut seed2);
+        }
+        assert_ne!(seed, seed2, "the seed is not constant");
+
+        let _ = std::fs::remove_file(&path);
     }
 
     #[test]

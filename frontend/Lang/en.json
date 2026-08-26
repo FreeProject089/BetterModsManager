@@ -8392,5 +8392,14 @@
   "sched.tcb.notTask": "{f} is not an automation — left out",
   "themes.mine": "Your themes",
   "themes.edit": "Edit",
-  "themes.importFailed": "Could not import: {list}"
+  "themes.importFailed": "Could not import: {list}",
+  "srcacc.newKey": "Create one",
+  "srcacc.addKey": "Add…",
+  "srcacc.keyAdded": "Key added to your ring",
+  "srcacc.keyAddFailed": "That file could not be used as a key",
+  "srcacc.keyMade": "Key created — its public line is on your clipboard, send it to whoever runs the source",
+  "srcacc.keyMadeFailed": "Could not create a key",
+  "repo.keyauth.errNameTaken": "A key with that name is already on your ring",
+  "repo.keyauth.errFileExists": "A key file with that name already exists — rename the key",
+  "repo.keyauth.errGenFailed": "The key could not be created"
 }

@@ -30,6 +30,11 @@ export function sourceAccessHtml(p: string): string {
         <label class="src-access-label" for="${p}-access-key">${t('srcacc.key')}</label>
         <div class="src-access-row">
           <select class="input input-sm" id="${p}-access-key"></select>
+          <!-- A chooser with nothing in it is disabled, which is correct and a dead end: the
+               only way to get a key was ssh-keygen in a terminal, which is a different skill
+               from using a mod manager. Both doors are here now. -->
+          <button type="button" class="btn btn-sm" id="${p}-access-new">${t('srcacc.newKey')}</button>
+          <button type="button" class="btn btn-sm" id="${p}-access-add">${t('srcacc.addKey')}</button>
           <button type="button" class="btn btn-sm" id="${p}-access-manage">${t('srcacc.manage')}</button>
         </div>
         <div class="src-access-hint">${t('srcacc.keyHint')}</div>
@@ -167,6 +172,60 @@ export function wireSourceAccess(
     document.getElementById(`${p}-access-manage`)?.addEventListener('click', () => {
         closeOwningOverlay(det);
         manageKeys();
+    });
+
+    // Add a key you already have, and make one you do not. Both land on the same ring the
+    // Settings screen edits — one value with several doors, never several values.
+    /**
+     * A name nothing on the ring is using yet.
+     *
+     * Generating refuses a name already taken — rightly, since two keys under one name is a
+     * ring where the one that signs is whichever was written last. Asking the person for a
+     * name before they have a key is asking about something that does not exist, so the first
+     * one is just "BMM" and the rest count up. Renaming lives in Settings.
+     */
+    const freshKeyName = async (): Promise<string> => {
+        const kr = await import('./identity-key.js');
+        const view = await kr.listKeyring().catch(() => null);
+        const taken = new Set(Object.keys(view?.keys || {}));
+        if (!taken.has('BMM')) return 'BMM';
+        for (let n = 2; n < 999; n += 1) if (!taken.has(`BMM ${n}`)) return `BMM ${n}`;
+        return `BMM ${Date.now()}`;
+    };
+
+    document.getElementById(`${p}-access-add`)?.addEventListener('click', async () => {
+        const { pickFile } = await import('./api.js');
+        const path = await pickFile([{ name: 'Private key', extensions: ['key', 'pem', ''] }]).catch(() => null);
+        if (!path) return;
+        // Named after the file, because asking for a name before the file is picked is asking
+        // about something nobody has looked at yet. It is renameable in Settings.
+        const name = String(path).replace(/^.*[/\\]/, '').replace(/\.[^.]+$/, '') || 'key';
+        try {
+            const { invoke } = await import('./api.js');
+            await invoke('key_auth_add', { name, path });
+            notify('srcacc.keyAdded', 'success');
+            const kr = await import('./identity-key.js');
+            await kr.refreshKeySelect(`${p}-access-key`, urlOf, t);
+        } catch (e) {
+            // The message IS the reason: a file that is not a key, or one that is passphrase
+            // protected, fail differently and only the backend knows which.
+            notify(String(e).split('|')[0] || 'srcacc.keyAddFailed', 'warning');
+        }
+    });
+
+    document.getElementById(`${p}-access-new`)?.addEventListener('click', async () => {
+        try {
+            const { invoke } = await import('./api.js');
+            const res: any = await invoke('key_auth_generate', { name: await freshKeyName() });
+            // The PUBLIC line goes to the clipboard, because it is the one thing that has to
+            // leave this machine and a toast is too small to read a key out of.
+            try { await navigator.clipboard.writeText(String(res?.public || '')); } catch { /* no clipboard */ }
+            notify('srcacc.keyMade', 'success');
+            const kr = await import('./identity-key.js');
+            await kr.refreshKeySelect(`${p}-access-key`, urlOf, t);
+        } catch (e) {
+            notify(String(e).split('|')[0] || 'srcacc.keyMadeFailed', 'warning');
+        }
     });
 
     document.getElementById(`${p}-access-pw-set`)?.addEventListener('click', async () => {

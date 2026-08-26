@@ -747,6 +747,7 @@ fn main() {
             commands::repo_keyauth::set_key_auth_key,
             commands::repo_keyauth::key_auth_list,
             commands::repo_keyauth::key_auth_add,
+            commands::repo_keyauth::key_auth_generate,
             commands::repo_keyauth::key_auth_remove,
             commands::repo_keyauth::key_auth_set_active,
             commands::repo_keyauth::key_auth_set_for_url,

@@ -8390,5 +8390,14 @@
   "sched.tcb.notTask": "{f} n’est pas une automatisation — laissé de côté",
   "themes.mine": "Tes thèmes",
   "themes.edit": "Modifier",
-  "themes.importFailed": "Import impossible : {list}"
+  "themes.importFailed": "Import impossible : {list}",
+  "srcacc.newKey": "En créer une",
+  "srcacc.addKey": "Ajouter…",
+  "srcacc.keyAdded": "Clé ajoutée à ton trousseau",
+  "srcacc.keyAddFailed": "Ce fichier ne peut pas servir de clé",
+  "srcacc.keyMade": "Clé créée — sa ligne publique est dans ton presse-papiers, envoie-la à qui gère la source",
+  "srcacc.keyMadeFailed": "Impossible de créer une clé",
+  "repo.keyauth.errNameTaken": "Une clé de ce nom est déjà sur ton trousseau",
+  "repo.keyauth.errFileExists": "Un fichier de clé de ce nom existe déjà — renomme la clé",
+  "repo.keyauth.errGenFailed": "La clé n’a pas pu être créée"
 }
