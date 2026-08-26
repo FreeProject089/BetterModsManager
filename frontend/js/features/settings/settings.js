@@ -1935,6 +1935,15 @@ async function initSecurityInfoCard() {
                 toast(t('repo.keyauth.errNameTaken'), 'warning');
                 return;
             }
+            // RSA 4096 is seconds of prime search even off the main thread. A button that
+            // looks unpressed for that long gets pressed again, and the second press fails on
+            // a name the first one has already taken.
+            const goBtn = document.getElementById('btn-sic-make-go');
+            const goText = goBtn?.textContent || '';
+            if (goBtn) {
+                goBtn.disabled = true;
+                goBtn.textContent = t('settings.identity.authKeyMaking');
+            }
             try {
                 const res = await invoke('key_auth_generate', { name, kind });
                 const out = document.getElementById('sic-make-out');
@@ -1954,6 +1963,35 @@ async function initSecurityInfoCard() {
             }
             catch (e) {
                 toast(t(String(e).split('|')[0]) || String(e), 'warning', 7000);
+            }
+            finally {
+                if (goBtn) {
+                    goBtn.disabled = false;
+                    goBtn.textContent = goText;
+                }
+            }
+        });
+        document.getElementById('btn-sic-save-pub')?.addEventListener('click', async () => {
+            const pub = document.getElementById('sic-make-pub')?.value || '';
+            if (!pub)
+                return;
+            const { saveFile } = await import('../../core/api.js');
+            // Named after the key, with .pub — the extension every tool that consumes one
+            // expects, and the reason it is offered as a file rather than only a clipboard.
+            const stem = (document.getElementById('sic-make-name')?.value || 'bmm')
+                .replace(/[^A-Za-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'bmm';
+            const dest = await saveFile({
+                defaultPath: `${stem}.pub`,
+                filters: [{ name: 'Public key', extensions: ['pub'] }],
+            }).catch(() => null);
+            if (!dest)
+                return;
+            try {
+                await invoke('write_text_file', { path: dest, content: pub });
+                toast(t('settings.identity.authKeySaved'), 'success');
+            }
+            catch (e) {
+                toast(String(e).slice(0, 160), 'error');
             }
         });
         document.getElementById('btn-sic-copy-pub')?.addEventListener('click', async () => {

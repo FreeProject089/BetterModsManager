@@ -8468,5 +8468,9 @@
   "mm.creds.inKeysWarn": "A signing key is who you are to every source that asks. Installing one from a file somebody sent you means signing as whoever made it. Say no unless you know exactly why you want this.",
   "mm.creds.inKeysDone": "Added to your ring: {list}",
   "mm.creds.inKeysNone": "Nothing added — those names are already on your ring, and an import never overwrites a key you sign with",
-  "mm.creds.inUnreadable": "This list carries credentials that could not be opened — the list itself imported fine"
+  "mm.creds.inUnreadable": "This list carries credentials that could not be opened — the list itself imported fine",
+  "settings.identity.authKeySavePub": "Save…",
+  "settings.identity.authKeyMaking": "Creating…",
+  "settings.identity.authKeySaved": "Public key saved",
+  "repo.sync.findMod": "Find a mod…"
 }

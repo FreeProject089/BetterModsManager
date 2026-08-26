@@ -8466,5 +8466,9 @@
   "mm.creds.inKeysWarn": "Une clé de signature, c’est qui tu es pour toute source qui demande. En installer une depuis un fichier qu’on t’a envoyé revient à signer sous l’identité de celui qui l’a faite. Dis non, sauf si tu sais exactement pourquoi tu veux ça.",
   "mm.creds.inKeysDone": "Ajoutées à ton trousseau : {list}",
   "mm.creds.inKeysNone": "Rien ajouté — ces noms sont déjà sur ton trousseau, et un import n’écrase jamais une clé avec laquelle tu signes",
-  "mm.creds.inUnreadable": "Cette liste porte des identifiants illisibles — la liste elle-même s’est bien importée"
+  "mm.creds.inUnreadable": "Cette liste porte des identifiants illisibles — la liste elle-même s’est bien importée",
+  "settings.identity.authKeySavePub": "Enregistrer…",
+  "settings.identity.authKeyMaking": "Création…",
+  "settings.identity.authKeySaved": "Clé publique enregistrée",
+  "repo.sync.findMod": "Trouver un mod…"
 }

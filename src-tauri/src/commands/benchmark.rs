@@ -148,7 +148,11 @@ pub fn read_file_text(path: String) -> Result<String, String> {
     if path.contains("..") {
         return Err("Refused: path traversal".to_string());
     }
-    const OK_EXT: &[&str] = &["csv", "json", "txt", "md", "log", "ini", "cfg", "xml", "yml", "yaml", "html", "bmmpa", "bmmreplay", "bmmtut"];
+    // `bmp` is a modpack DOCUMENT here — signed JSON — not an image; the catalogue builder
+    // reads one to check it is a pack before listing it. `mm` is deliberately absent: a mod
+    // list is a zip as often as a document, so it goes through import_modlist, which knows
+    // both shapes and can ask for a passphrase.
+    const OK_EXT: &[&str] = &["csv", "json", "txt", "md", "log", "ini", "cfg", "xml", "yml", "yaml", "html", "bmmpa", "bmmreplay", "bmmtut", "bmp"];
     let ext = std::path::Path::new(&path)
         .extension()
         .and_then(|e| e.to_str())

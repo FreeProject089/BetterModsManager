@@ -734,6 +734,8 @@ export function initRepoSync(elements) {
                             modToolbar.style.display = 'flex';
                             modToolbar.style.gap = '6px';
                             modToolbar.style.margin = '6px 0 4px';
+                            modToolbar.style.alignItems = 'center';
+                            modToolbar.style.flexWrap = 'wrap';
 
                             const makeSmallBtn = (label, onClick) => {
                                 const b = document.createElement('button');
@@ -745,8 +747,48 @@ export function initRepoSync(elements) {
 
                             const modCheckboxes = [];
 
-                            modToolbar.appendChild(makeSmallBtn(t('common.selectAll') || 'Tout', () => modCheckboxes.forEach(c => c.checked = true)));
-                            modToolbar.appendChild(makeSmallBtn(t('common.unselectAll') || 'None', () => modCheckboxes.forEach(c => c.checked = false)));
+                            // Select all / none act on what is SHOWN, not on everything.
+                            //
+                            // With a filter typed, "Select all" meaning all four hundred is
+                            // the opposite of what somebody who just narrowed the list means
+                            // by it — and it is silent, so they would find out at download.
+                            const visible = () => modCheckboxes.filter((c) => {
+                                const row = c.closest('label') as HTMLElement | null;
+                                return !row || row.style.display !== 'none';
+                            });
+                            modToolbar.appendChild(makeSmallBtn(t('common.selectAll') || 'Tout', () => visible().forEach(c => c.checked = true)));
+                            modToolbar.appendChild(makeSmallBtn(t('common.unselectAll') || 'None', () => visible().forEach(c => c.checked = false)));
+
+                            // A search box, for the profile with two hundred mods in it.
+                            //
+                            // It FILTERS rather than re-rendering: a tick is state that lives
+                            // in the DOM here, and rebuilding the rows would silently reset
+                            // every choice made before the search. A hidden row's checkbox is
+                            // still in the form and still counts, which is what keeps
+                            // "everything is ticked by default" true while you are looking at
+                            // three of them.
+                            const find = document.createElement('input');
+                            find.type = 'search';
+                            find.className = 'input input-sm';
+                            find.placeholder = t('repo.sync.findMod');
+                            find.spellcheck = false;
+                            find.style.cssText = 'flex:1;min-width:0;height:24px;font-size:10px;';
+                            const found = document.createElement('span');
+                            found.style.cssText = 'font-size:9px;color:var(--text-muted);font-family:var(--font-mono);flex:none;';
+                            find.addEventListener('input', () => {
+                                const q = find.value.trim().toLowerCase();
+                                let n = 0;
+                                for (const cb of modCheckboxes) {
+                                    const row = cb.closest('label') as HTMLElement | null;
+                                    if (!row) continue;
+                                    const hit = !q || (row.dataset.find || '').includes(q);
+                                    row.style.display = hit ? '' : 'none';
+                                    if (hit) n += 1;
+                                }
+                                found.textContent = q ? `${n}/${modCheckboxes.length}` : '';
+                            });
+                            modToolbar.appendChild(find);
+                            modToolbar.appendChild(found);
                             modSection.appendChild(modToolbar);
 
                             const modList = document.createElement('div');
@@ -760,6 +802,9 @@ export function initRepoSync(elements) {
                             rp.mods.forEach(mod => {
                                 const modSize = mod.files ? mod.files.reduce((a, f) => a + f.size, 0) : 0;
                                 const row = document.createElement('label');
+                                // What the search matches on, lowercased once here rather than
+                                // on every keystroke for every row.
+                                row.dataset.find = String(mod.name || '').toLowerCase();
                                 row.style.cssText = 'display:flex;align-items:center;gap:6px;cursor:pointer;padding:3px 4px;border-radius:4px;transition:background 0.15s;';
                                 row.addEventListener('mouseenter', () => row.style.background = 'rgba(255,255,255,0.04)');
                                 row.addEventListener('mouseleave', () => row.style.background = '');

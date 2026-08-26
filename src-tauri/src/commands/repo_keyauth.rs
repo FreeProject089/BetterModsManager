@@ -496,7 +496,7 @@ impl russh::keys::ssh_key::rand_core::TryCryptoRng for OsRngCompat {}
 /// The private key never leaves this machine. What is returned is the PUBLIC line, which is
 /// the thing you send to whoever runs the repo.
 #[tauri::command]
-pub fn key_auth_generate(
+pub async fn key_auth_generate(
     app: tauri::AppHandle,
     state: tauri::State<'_, crate::state::AppState>,
     name: String,
@@ -534,15 +534,45 @@ pub fn key_auth_generate(
         return Err("repo.keyauth.errFileExists".into());
     }
 
-    // ed25519 is built from a seed rather than through PrivateKey::random, which wants an
-    // RNG from a rand_core generation this crate only carries in dev-dependencies. OsRng IS
-    // the operating system's CSPRNG — the same source that RNG would have reached — so this
-    // is the same randomness through a dependency the app already ships.
+    // OFF THE MAIN THREAD.
     //
-    // The other two have no from_seed, so they go through russh's own generator, which asks
-    // for its RNG the way ssh-key expects.
+    // A synchronous #[tauri::command] runs on the thread that owns the window, so the whole
+    // interface stops until it returns. ed25519 is instant and hid this; RSA 4096 is seconds
+    // of prime search, and those seconds were a frozen app with no cursor and no explanation.
+    // The house rule for anything that can take longer than a frame is spawn_blocking.
     let kind = kind.unwrap_or_else(|| "ed25519".into());
-    let key = match kind.as_str() {
+    let kind_for_gen = kind.clone();
+    let generated = tauri::async_runtime::spawn_blocking(move || generate_key(&kind_for_gen))
+        .await
+        .map_err(|e| format!("repo.keyauth.errGenFailed|{}", e))??;
+    let (pem, public) = generated;
+
+    std::fs::write(&path, pem.as_bytes()).map_err(|e| e.to_string())?;
+
+    // Owner-only. On Windows the file inherits the user profile's ACL, which is already
+    // owner-only in practice — said here because the difference matters to anybody reading
+    // this for a security review.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
+    }
+
+    // Through the same door a hand-added key uses, so it is proved to open and to be
+    // ed25519 before it is written to the ring — a key that generated but cannot sign would
+    // otherwise sit there looking usable.
+    let path_str = path.to_string_lossy().to_string();
+    let view = key_auth_add(state, name, path_str.clone())?;
+    Ok(KeyGenerated { path: path_str, public, ring: view })
+}
+
+/// The expensive half: make a key and serialise both of its halves.
+///
+/// Split out so it can run on a blocking thread. It touches no Tauri state, which is what
+/// makes that possible — and is the reason the state work stays on the async side rather
+/// than being dragged across the boundary.
+fn generate_key(kind: &str) -> Result<(String, String), String> {
+    let key = match kind {
         "ed25519" => {
             let mut seed = [0u8; 32];
             {
@@ -567,29 +597,13 @@ pub fn key_auth_generate(
     };
     let pem = key
         .to_openssh(russh::keys::ssh_key::LineEnding::LF)
-        .map_err(|e| format!("repo.keyauth.errGenFailed|{}", e))?;
-    std::fs::write(&path, pem.as_bytes()).map_err(|e| e.to_string())?;
-
-    // Owner-only. On Windows the file inherits the user profile's ACL, which is already
-    // owner-only in practice — said here because the difference matters to anybody reading
-    // this for a security review.
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
-    }
-
+        .map_err(|e| format!("repo.keyauth.errGenFailed|{}", e))?
+        .to_string();
     let public = key
         .public_key()
         .to_openssh()
         .map_err(|e| format!("repo.keyauth.errGenFailed|{}", e))?;
-
-    // Through the same door a hand-added key uses, so it is proved to open and to be
-    // ed25519 before it is written to the ring — a key that generated but cannot sign would
-    // otherwise sit there looking usable.
-    let path_str = path.to_string_lossy().to_string();
-    let view = key_auth_add(state, name, path_str.clone())?;
-    Ok(KeyGenerated { path: path_str, public, ring: view })
+    Ok((pem, public))
 }
 
 /// Take a key off the ring.

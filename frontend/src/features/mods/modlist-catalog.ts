@@ -23,6 +23,7 @@ import { resolveEntryUrl } from '../../core/catalog-url.js';
 import { bundleEntryKind, resolveBundleEntry } from '../../core/catalog-bundle.js';
 import { planPublish, safeFileStem, type EntryChoice } from '../../core/catalog-publish.js';
 import { fetchSourceText } from '../../core/source-fetch.js';
+import { importListAsking } from './modlist.js';
 
 /** One row of a mod-list catalogue, after sanitising. */
 export interface ListEntry {
@@ -192,11 +193,14 @@ async function pickLists(): Promise<PickedList[]> {
     for (const p of paths) {
         const base = String(p).replace(/^.*[/\\]/, '');
         try {
-            const text = await invoke('read_file_text', { path: p }) as string;
-            const doc = JSON.parse(text);
-            // The shape a .mm has, checked rather than assumed: picking the wrong file in a
-            // folder full of JSON is the normal mistake, and publishing it would produce an
-            // entry that installs nothing.
+            // THE READER THAT KNOWS THE FORMAT, not read_file_text.
+            //
+            // Two bugs in one line. read_file_text has an extension allowlist that never had
+            // `mm` on it, so every pick was refused outright — and even allowed, a `.mm` is a
+            // ZIP as often as not, so reading it as text would have produced bytes that do not
+            // parse. import_modlist opens both shapes, and asks for the passphrase when the
+            // list turns out to be locked, which this path could not have done at all.
+            const doc: any = await importListAsking(String(p));
             if (!doc || typeof doc !== 'object' || !Array.isArray(doc.mods)) { unreadable.push(base); continue; }
             out.push({
                 id: safeFileStem(doc.name || base.replace(/\.[^.]+$/, ''), 'list').toLowerCase(),
@@ -204,7 +208,12 @@ async function pickLists(): Promise<PickedList[]> {
                 description: String(doc.description || ''),
                 author: String(doc.author || ''),
                 mods: doc.mods.length,
-                content: text,
+                // Re-serialised, because the bytes on disk may be a zip or a locked envelope
+                // and what a catalogue packs has to be the document itself. The signature
+                // does not survive that, and cannot: a list that was re-published is a
+                // different file, and claiming the original author's signature over it would
+                // be worse than having none.
+                content: JSON.stringify(doc, null, 2),
             });
         } catch { unreadable.push(base); }
     }
