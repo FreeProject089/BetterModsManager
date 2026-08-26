@@ -971,8 +971,26 @@ function openPluginCatalogBuilder(onSourcesChanged: () => void) {
             if (!id) return;
             const pl = _installedPlugins.find(p => p.manifest.id === id);
             if (pl && !d.plugins.some(x => x.id === pl.manifest.id)) {
-                const m = pl.manifest;
-                d.plugins.push({ id: m.id, name: m.name || m.id, version: m.version || '1.0.0', author: m.author || '', description: m.description || '', game: m.game || '', official: false, download_url: '', tags: m.tags || [], icon_url: null });
+                const m: any = pl.manifest;
+                // Everything the manifest actually says, including the icon — which was
+                // dropped, so a catalogue built from installed plugins published them all
+                // iconless while the same plugins had icons two screens away.
+                //
+                // `download_url` stays EMPTY on purpose: empty means "pack this one" at
+                // publish time, and an installed plugin is exactly the case where packing is
+                // possible. Filling it with a guess would silently turn that off.
+                d.plugins.push({
+                    id: m.id,
+                    name: m.name || m.id,
+                    version: m.version || '1.0.0',
+                    author: m.author || '',
+                    description: m.description || '',
+                    game: m.game || '',
+                    official: false,
+                    download_url: '',
+                    tags: Array.isArray(m.tags) ? m.tags : [],
+                    icon_url: m.icon_url || m.icon || null,
+                });
                 renderEntries();
             }
             (e.target as HTMLSelectElement).value = '';
@@ -1003,20 +1021,48 @@ function openPluginCatalogBuilder(onSourcesChanged: () => void) {
         const wrap = panel.querySelector('#pcb-entries') as HTMLElement;
         const d = editing!;
         if (!d.plugins.length) { wrap.innerHTML = `<p class="plug-sources-empty">${t('plugins.noEntries') || 'No entry yet. Add one from an installed plugin above.'}</p>`; return; }
-        wrap.innerHTML = d.plugins.map((p, i) => `
+        wrap.innerHTML = d.plugins.map((p, i) => {
+            // An entry whose plugin is installed here can be PACKED at publish time; one
+            // that is not can only be linked. Saying which is the difference between "leave
+            // the address blank" being a shortcut and being a mistake.
+            const installed = _installedPlugins.some((x) => x.manifest.id === p.id);
+            const linked = !!(p.download_url || '').trim();
+            return `
             <div class="plug-cat-entry" data-i="${i}">
                 <div class="plug-cat-entry-grid">
                     <input class="input pcb-f" data-f="id" data-i="${i}" value="${escAttr(p.id)}" placeholder="${t('plugins.createId') || 'id'} *">
                     <input class="input pcb-f" data-f="name" data-i="${i}" value="${escAttr(p.name)}" placeholder="${t('plugins.createName') || 'name'} *">
                     <input class="input pcb-f" data-f="version" data-i="${i}" value="${escAttr(p.version)}" placeholder="1.0.0">
-                    <input class="input pcb-f" data-f="download_url" data-i="${i}" value="${escAttr(p.download_url)}" placeholder="https://.../plugin.bmmplug *">
+                    <input class="input pcb-f" data-f="download_url" data-i="${i}" value="${escAttr(p.download_url)}" placeholder="${escAttr(installed ? t('plugins.pcbUrlPacked') : t('plugins.pcbUrlNeeded'))}">
+                </div>
+                <div class="pcb-meta">
+                    <span class="pcb-badge ${linked ? 'is-link' : installed ? 'is-pack' : 'is-bad'}">${escHtml(
+                        linked ? t('catpub.link') : installed ? t('catpub.embed') : t('plugins.pcbNoSource'))}</span>
+                    ${p.icon_url ? `<img class="pcb-icon" src="${escAttr(p.icon_url)}" alt="">` : ''}
+                    <input class="input pcb-f pcb-small" data-f="author" data-i="${i}" value="${escAttr(p.author)}" placeholder="${escAttr(t('plugins.createAuthor') || 'author')}">
+                    <input class="input pcb-f pcb-small" data-f="game" data-i="${i}" value="${escAttr(p.game)}" placeholder="${escAttr(t('plugins.createGame') || 'game')}">
+                    <input class="input pcb-f pcb-grow" data-f="description" data-i="${i}" value="${escAttr(p.description)}" placeholder="${escAttr(t('plugins.createDesc') || 'description')}">
                 </div>
                 <button class="btn btn-xs btn-ghost pcb-rm" data-i="${i}" style="color:var(--danger)">${IC.x}</button>
-            </div>`).join('');
+            </div>`;
+        }).join('');
         wrap.querySelectorAll('.pcb-f').forEach(inp => inp.addEventListener('input', (e) => {
             const el = e.target as HTMLInputElement;
             const i = parseInt(el.dataset.i!, 10);
             (d.plugins[i] as any)[el.dataset.f!] = el.value;
+            // The badge answers "packed or linked", and the address field is what decides
+            // it — so that one field repaints the badge. Not the whole list: re-rendering
+            // would take the caret out of the box being typed into.
+            if (el.dataset.f === 'download_url') {
+                const badge = el.closest('.plug-cat-entry')?.querySelector('.pcb-badge') as HTMLElement | null;
+                const p = d.plugins[i];
+                const installed = _installedPlugins.some((x) => x.manifest.id === p.id);
+                const linked = !!(p.download_url || '').trim();
+                if (badge) {
+                    badge.className = `pcb-badge ${linked ? 'is-link' : installed ? 'is-pack' : 'is-bad'}`;
+                    badge.textContent = linked ? t('catpub.link') : installed ? t('catpub.embed') : t('plugins.pcbNoSource');
+                }
+            }
         }));
         wrap.querySelectorAll('.pcb-rm').forEach(b => b.addEventListener('click', () => {
             d.plugins.splice(parseInt((b as HTMLElement).dataset.i!, 10), 1);

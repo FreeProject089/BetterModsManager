@@ -308,6 +308,13 @@ export async function initScheduler(): Promise<void> {
                 ['sched-example-btn', t('sched.loadExample') || 'Load example',
                     t('sched.loadExample.d') || 'Create a ready-made simple-loop automation you can inspect and enable.',
                     () => createExampleAutomation()],
+                // Following and publishing live behind the same button as the rest of the
+                // file work, because that is what they are — and until now the only way to
+                // reach either was a button inside a panel you had to already know about.
+                ['sched-catalog-btn', t('sched.pc.open'), t('sched.pc.open.d'),
+                    () => { void browsePresetCatalogs(); }],
+                ['sched-publish-btn', t('sched.tcb.open'), t('sched.tcb.tip'),
+                    () => { void openTaskCatalogBuilder(); }],
             ];
 
             const wrap = document.createElement('div');
@@ -5631,8 +5638,9 @@ export async function openTaskCatalogBuilder(): Promise<void> {
                     <p class="sched-tcb-hint">${escHtml(t('sched.tcb.baseHint') || 'Empty is the right answer almost always: the addresses stay relative, so the folder keeps working when it is moved, mirrored or forked. Fill this in only when the .bmmpa files will sit somewhere other than beside the catalogue.')}</p>
                 </div>
                 <div class="sched-tcb-field">
-                    <label class="sched-tg"><input type="checkbox" id="sched-tcb-bundle"> ${escHtml(t('sched.tcb.bundle') || 'Also pack it into one file')}</label>
-                    <p class="sched-tcb-hint">${escHtml(t('sched.tcb.bundleHint') || 'The folder is written either way — this adds a single .zip of it beside the folder, holding the catalogue and every automation. Send that one file to somebody and they can follow the catalogue with no host and no link. A base address above turns this off: a catalogue whose files live elsewhere has nothing to pack.')}</p>
+                    <label class="sched-tg"><input type="checkbox" id="sched-tcb-bundle"> ${escHtml(t('sched.tcb.bundle'))}</label>
+                    <details class="sched-tcb-more"><summary>${escHtml(t('sched.tcb.bundleWhen'))}</summary>
+                        <p class="sched-tcb-hint">${escHtml(t('sched.tcb.bundleHint'))}</p></details>
                 </div>
                 <div class="sched-tcb-listh">
                     <span>${escHtml(t('sched.tcb.pick') || 'What goes in it')}</span>
@@ -5645,7 +5653,7 @@ export async function openTaskCatalogBuilder(): Promise<void> {
                 <span class="sched-tcb-count" id="sched-tcb-count"></span>
                 <div style="flex:1"></div>
                 <button class="btn btn-sm btn-ghost" id="sched-tcb-cancel">${escHtml(t('common.cancel') || 'Cancel')}</button>
-                <button class="btn btn-sm btn-accent" id="sched-tcb-go" disabled>${escHtml(t('sched.tcb.export') || 'Choose a folder…')}</button>
+                <button class="btn btn-sm btn-accent" id="sched-tcb-go" disabled>${escHtml(t('sched.tcb.export'))}</button>
             </div>
         </div>`;
     (document.getElementById('app-window-outer') || document.body).appendChild(overlay);
@@ -5669,6 +5677,9 @@ export async function openTaskCatalogBuilder(): Promise<void> {
             const anyEmbed = picked.size > linked;
             bundleBox.disabled = !anyEmbed;
             if (!anyEmbed) bundleBox.checked = false;
+            // The button says what it is about to ask for. "Choose a folder…" under a ticked
+            // "publish as one file" is the control contradicting the box above it.
+            goBtn.textContent = bundleBox.checked ? t('sched.tcb.exportFile') : t('sched.tcb.export');
         }
     };
     refresh();
@@ -5713,6 +5724,9 @@ export async function openTaskCatalogBuilder(): Promise<void> {
         });
         refresh();
     };
+    // The button label follows the checkbox, so ticking it is visibly a change of
+    // destination rather than an extra somewhere.
+    overlay.querySelector('#sched-tcb-bundle')?.addEventListener('change', () => refresh());
     overlay.querySelector('#sched-tcb-all')?.addEventListener('click', () => setAll(true));
     overlay.querySelector('#sched-tcb-none')?.addEventListener('click', () => setAll(false));
     overlay.querySelector('#sched-tcb-close')?.addEventListener('click', close);

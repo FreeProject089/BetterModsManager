@@ -16590,6 +16590,47 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 .cat-pub-mode { flex: none; width: 130px; font-size: 11px; padding: 3px 6px; }
 .cat-pub-mode:disabled { opacity: 0.45; }
 .cat-pub-url { flex-basis: 100%; font-size: 11px; padding: 4px 8px; font-family: var(--font-mono); }
+
+/* The long explanations fold away.
+   Two paragraphs of prose sitting permanently between the name field and the list is a wall
+   somebody reads once and scrolls past for ever — and this modal had two of them. The
+   sentence that answers "when would I want this" stays visible; the reasoning is one click
+   below it. */
+.sched-tcb-more > summary {
+    cursor: pointer;
+    font-size: 11px;
+    color: var(--text-muted);
+    list-style: none;
+    padding: 2px 0;
+}
+.sched-tcb-more > summary::-webkit-details-marker { display: none; }
+.sched-tcb-more > summary::before { content: 'B8'; display: inline-block; margin-right: 5px; transition: transform 0.15s ease; }
+.sched-tcb-more[open] > summary::before { transform: rotate(90deg); }
+.sched-tcb-more > summary:hover { color: var(--accent); }
+.sched-tcb-more .sched-tcb-hint { margin-top: 2px; }
+
+@media (prefers-reduced-motion: reduce) { .sched-tcb-more > summary::before { transition: none; } }
+
+/* The plugin catalogue's entry row, second line: the metadata that WILL be published.
+   It was carried in the object and shown nowhere, so a catalogue built from installed
+   plugins published descriptions and authors its author never saw and could not correct. */
+.pcb-meta { display: flex; align-items: center; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+.pcb-small { flex: 0 1 130px; min-width: 90px; font-size: 11px; padding: 4px 8px; }
+.pcb-grow { flex: 1 1 200px; min-width: 140px; font-size: 11px; padding: 4px 8px; }
+.pcb-icon { width: 18px; height: 18px; border-radius: 4px; object-fit: cover; flex: none; }
+/* Packed / linked / neither — the one thing about a row you cannot work out by reading it. */
+.pcb-badge {
+    flex: none;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.03em;
+    padding: 2px 7px;
+    border-radius: 10px;
+    border: 1px solid;
+}
+.pcb-badge.is-pack { color: var(--success); border-color: var(--success); background: var(--bmm-success-dim); }
+.pcb-badge.is-link { color: var(--accent); border-color: var(--accent); background: var(--bmm-bg-active); }
+.pcb-badge.is-bad { color: var(--warning); border-color: var(--warning); background: var(--bmm-warning-dim); }
 .sched-tcb-foot { display: flex; align-items: center; gap: 8px; }
 .sched-tcb-count { font-size: 11px; color: var(--text-muted); }
 .sched-pc-publish { width: 100%; justify-content: center; margin-top: 6px; }
