@@ -509,7 +509,7 @@ pourquoi.
 ### DCS a un vrai hook
 
 DCS dispose d'une API de callbacks supportée : on le lui **demande** plutôt que de le deviner
-dans un log. **Configurer DCS** (sur le déclencheur `watchFile`, ou l'action `dcs.hook`) écrit
+dans un log. **Configurer DCS** (sur le déclencheur `watchFile`, ou l'action `game.watch`) écrit
 un petit fichier Lua dans `Saved Games/DCS/Scripts/Hooks/bmm-serverwatch.lua`. Il signale sur
 quel serveur multijoueur tu es, dans un fichier que BMM surveille. Il ne lit rien d'autre et
 n'envoie rien nulle part.
@@ -536,3 +536,146 @@ une fonctionnalité qui ne marche pas.
 Les deux arrivent avec le chemin du fichier et la liste de mods **vides**. Un modèle qui
 devinerait serait une tâche qui a l'air configurée, s'exécute, ne trouve rien, et annonce
 qu'elle a réussi.
+
+
+## Sauvegardes, clés, catalogues et imports
+
+Quatre choses qu'une tâche ne pouvait pas faire du tout, et une qu'elle faisait dans le
+mauvais format.
+
+### Sauvegarder les données — `data.backup`
+
+La **même** archive que l'écran Export de données : un `.DATABMM`, les sections que tu coches,
+et une phrase secrète si tu en donnes une.
+
+!!! warning "L'ancienne action écrivait autre chose"
+
+    « Export de données (sauvegarde) » écrivait un `.json` via une autre commande : une
+    automatisation nocturne produisait donc un artefact plus petit et différent, sans choix
+    de contenu et sans verrou. Elle est toujours là, renommée pour dire `.json`, parce que
+    des tâches existantes s'y réfèrent et qu'un BMM plus ancien sait en lire une.
+
+Les enregistrements, rapports de crash et diagnostics sont **décochés** par défaut : c'est
+volumineux et c'est du diagnostic, pas de la configuration — et une sauvegarde nocturne qui
+grossit discrètement jusqu'au gigaoctet est une sauvegarde qu'on finit par désactiver.
+
+!!! danger "Les clés d'identité refusent de partir sans phrase secrète"
+
+    L'indication du champ passe à OBLIGATOIRE dès que tu coches cette case : c'est la seule
+    section qui change le sens du champ. Une tâche nocturne écrivant des clés privées non
+    verrouillées dans un dossier synchronisé le ferait *toutes les nuits*, et on ne
+    l'apprendrait qu'une fois fait.
+
+`{backup.bytes}` et `{text.backup.path}` sont écrits : une étape suivante peut alerter quand
+le bundle triple d'un coup — ce à quoi ressemble une section d'enregistrements cochée par
+inadvertance.
+
+### Créer une clé d'identité — `key.create`
+
+Un nom déjà sur le trousseau est **laissé tel quel, jamais remplacé**. C'est ce qui rend
+l'action sûre sur une planification : une tâche hebdomadaire crée une clé puis ne fait plus
+rien, au lieu de remplacer discrètement celle avec laquelle tu prouves et de te fermer toutes
+les sources qui ont ta ligne publique.
+
+La ligne publique arrive dans `{text.key.public}`, le chemin du fichier dans
+`{text.key.path}`, et un hôte facultatif l'associe immédiatement — c'est toute la raison d'en
+créer une sans surveillance : la synchro qui en a besoin est l'étape suivante.
+
+### Suivre un catalogue — `catalog.follow`
+
+N'importe lequel des huit types, dépôts compris. Ça passe par les écrans de l'app : la source
+arrive dans la liste des suivis **avec son origine** et se retire avec le même bouton que les
+autres.
+
+### Importer un fichier — `import.file`
+
+Un chemin ou une adresse, lu dans le format BMM qui est le sien. Ce qui diffère selon le type
+est ce qui mérite de différer :
+
+| Type | Par défaut |
+|---|---|
+| Liste de mods | **Lue**, pas appliquée. Appliquer est une case séparée — une tâche qui veut la liste dans BMM ne doit pas se mettre à télécharger des mods parce que l'action s'appelle « importer ». |
+| Automatisation | Arrive **désactivée, permissions retirées**. Importer n'est pas accepter d'exécuter la tâche de quelqu'un. Un id que tu as déjà est laissé tel quel. |
+| Bundle de catalogue | **Suivi**, pas décompressé — le contenu d'un catalogue change quand son auteur le republie. |
+| Sauvegarde | **Inspectée**. La restaurer est sa propre case : sans surveillance, c'est la chose la plus destructrice du planificateur. |
+
+Inspecter une sauvegarde est de toute façon la moitié utile sur une planification : ça répond
+à *celle de cette nuit est-elle correcte ?*
+
+## Sources protégées
+
+Un dépôt peut vouloir un mot de passe, une preuve signée par une clé d'identité, ou les
+deux ; un fichier verrouillé veut une phrase secrète. Toute action qui atteint une source
+demande maintenant de la même façon, dans un seul bloc.
+
+Choisir une clé l'**associe** à cet hôte. C'est le comportement honnête plutôt que de basculer
+une « clé active » globale le temps de l'opération : les preuves sont par hôte, l'association
+persiste, et la prochaine synchro manuelle du même dépôt utilise la même clé. Elle est
+appliquée *avant* la récupération du manifeste, parce que sur un dépôt protégé le manifeste
+est lui-même derrière la porte.
+
+!!! note "Le mot de passe était sous « Options destructrices »"
+
+    Ce n'est pas une option destructrice. Il est maintenant avec la clé et la phrase secrète.
+
+## Attendre quelque chose d'extérieur à BMM
+
+### Qu'une adresse réponde — `wait.http`
+
+Interroge, **avec un plafond**. C'est le plafond qui compte : une attente sans fin, c'est une
+tâche bloquée pour toujours et un planificateur qui n'exécute plus la suivante — et « toujours
+en attente » ressemble exactement à « en train de travailler » vu de l'extérieur.
+
+N'importe quel statut compte comme une réponse par défaut : c'est ce qui rend exprimable
+*attendre qu'elle cesse de renvoyer 503*. Indique un code précis quand un service répond 503
+pendant son démarrage.
+
+L'abandon est annoncé avec le dernier statut, et arrête la tâche sauf si tu décoches — sinon
+les étapes suivantes travaillent contre quelque chose qui n'est jamais arrivé. Teste
+`{wait.ok}` d'abord si tu décoches.
+
+### Un signal — `wait.hook`
+
+Quelque chose poste sur `POST /api/hook` avec un nom, et l'attente se termine.
+
+```bash
+curl -X POST http://127.0.0.1:51274/api/hook \
+  -H "Authorization: Bearer <ton token d'API>" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"build-done","data":{"version":"1.4"}}'
+```
+
+Ce que tu envoies arrive dans `{text.hook.data}`. Une sonnette qui ne saurait dire que
+« quelqu'un a sonné » aurait besoin d'un second canal pour dire de quoi.
+
+!!! note "C'est une sonnette LOCALE"
+
+    L'API n'écoute que sur 127.0.0.1 et la route exige le token : un service sur Internet ne
+    peut pas sonner sans un tunnel que tu mets en place exprès. Ce à quoi ça sert vraiment,
+    c'est aux autres choses de cette machine : un script, un jeu, un autre outil, la CLI.
+
+    Seuls les signaux envoyés **après** le début de l'attente comptent : une tâche horaire ne
+    se déclenche pas aussitôt sur celui de l'heure d'avant. Lire ne consomme pas — deux
+    tâches peuvent attendre la même sonnette.
+
+    `GET /api/hook` liste ce qui est arrivé. « Mon webhook passe-t-il vraiment ? » est la
+    première question quand une attente ne finit jamais.
+
+## Le code de sortie d'un script est un résultat
+
+Un code non nul faisait échouer toute l'étape : *sorti 2 parce qu'il n'y avait rien à faire*
+et *l'interpréteur n'est pas installé* étaient le même verdict — et un script qui voulait
+SIGNALER un état n'avait aucun moyen de le faire, puisque le dire faisait échouer l'étape qui
+demandait.
+
+Coche **Un code de sortie non nul est un résultat, pas un échec** et il arrive dans
+`{script.code}`, avec `{text.script.stdout}` et `{text.script.stderr}` gardés séparément. Ne
+pas *démarrer* reste une erreur : il n'y a alors aucun code de sortie et rien n'a tourné.
+
+## Deux choses plus petites
+
+**Toute liste déroulante de douze entrées ou plus a une barre de recherche.** Elle cherche
+dans toute la ligne : « kill » trouve *Stop app / process* par sa description.
+
+**La référence est à un clic de l'éditeur de code.** Elle ouvre la page générée — construite
+depuis le registre, donc elle ne peut jamais lister une action que cette version n'a pas.

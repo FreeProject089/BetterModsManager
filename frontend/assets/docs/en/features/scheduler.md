@@ -454,7 +454,7 @@ the report that gets somebody kicked at the loading screen without knowing why.
 ### DCS gets a real hook
 
 DCS has a supported callback API, so it is **asked** rather than guessed at from a log.
-**Set up DCS** (on the `watchFile` trigger, or the `dcs.hook` action) writes a small Lua file
+**Set up DCS** (on the `watchFile` trigger, or the `game.watch` action) writes a small Lua file
 to `Saved Games/DCS/Scripts/Hooks/bmm-serverwatch.lua`. It reports which multiplayer server
 you are on, to a file BMM watches. It reads nothing else and sends nothing anywhere.
 
@@ -478,3 +478,140 @@ because flying in the one you did not set up looks exactly like the feature not 
 
 Both arrive with the file path and the mod list **blank**. A preset that guessed would be a
 task that looks configured, runs, finds nothing, and reports success.
+
+
+## Backups, keys, catalogues and imports
+
+Four things a task could not do at all, and one it did in the wrong format.
+
+### Back up data — `data.backup`
+
+The **same** archive the Export data screen writes: a `.DATABMM`, the sections you tick, and
+a passphrase if you give one.
+
+!!! warning "The old action wrote something else"
+
+    "Export data (backup)" wrote a `.json` through a different command, so a nightly
+    automation produced a smaller, different artefact with no choice of contents and no lock.
+    It is still there, renamed to say `.json`, because existing tasks refer to it and an
+    older BMM can read one.
+
+Replays, crash reports and diagnostics are **off** by default: they are large and are
+diagnostics rather than configuration, and a nightly backup that quietly grew to gigabytes
+is a backup somebody turns off.
+
+!!! danger "Identity keys refuse to travel without a passphrase"
+
+    The field's hint changes to say REQUIRED the moment you tick that box, because it is the
+    only section that changes what the field means. A nightly job writing unlocked private
+    keys to a synced folder would do it *every night*, and the first anybody would know is
+    when it had.
+
+`{backup.bytes}` and `{text.backup.path}` are written, so a later step can warn when the
+bundle suddenly triples — which is what a replays section left ticked by accident looks like.
+
+### Make an identity key — `key.create`
+
+A name already on the ring is **left alone, never replaced**. That is what makes it safe on a
+schedule: a weekly task makes one key and then does nothing, instead of quietly replacing the
+key you prove with and locking you out of every source that has your public line.
+
+The public line lands in `{text.key.public}` and the file's path in `{text.key.path}`, and an
+optional host binds it immediately — which is the whole reason to make one unattended: the
+sync that needs it is the next step.
+
+### Follow a catalogue — `catalog.follow`
+
+Any of the eight types, repos included. It goes through the app's own screens, so the source
+lands in the following list **with an origin** and is removable by the button that removes the
+others.
+
+### Import a file — `import.file`
+
+A path or an address, read as whatever BMM format it is. What differs per kind is what
+deserves to:
+
+| Kind | Default |
+|---|---|
+| Mod list | **Read**, not applied. Applying is a separate tick — a task that wants the list in BMM should not start downloading mods because the action says "import". |
+| Automation | Arrives **disabled, with permissions stripped**. Importing is not agreeing to run somebody's task. An id you already have is left alone. |
+| Catalogue bundle | **Followed**, not unpacked — what a catalogue holds changes when its author republishes it. |
+| Data backup | **Inspected**. Restoring is its own tick, because unattended it is the most destructive thing in the scheduler. |
+
+Inspecting a backup is the useful half on a schedule anyway: it answers *did last night's
+come out right?*
+
+## Protected sources
+
+A repo can want a download password, a signed proof from an identity key, or both; a locked
+file wants a passphrase. Every action that reaches a source now asks the same way, in one
+block.
+
+Choosing a key **binds** it to that host. That is the honest behaviour rather than switching
+a global "active key" for the duration: proofs are per-host, the binding persists, and the
+next manual sync of the same repo uses the same key. It is applied *before* the manifest is
+fetched, because on a protected repo the manifest is itself behind the gate.
+
+!!! note "The password used to be under Destructive options"
+
+    It is not a destructive option. It sits with the key and the passphrase now.
+
+## Waiting for something outside BMM
+
+### Until an address answers — `wait.http`
+
+Polls, with a **ceiling**. The ceiling is the point: a wait with no end is a task that hangs
+forever and a scheduler that never runs the next one — and "still waiting" looks exactly like
+"working" from outside.
+
+Any status counts as an answer by default, which is what makes *wait until it stops returning
+503* expressible. Name an exact code when a service answers 503 while it is starting.
+
+Giving up is said out loud with the last status, and stops the task unless you untick it —
+otherwise the steps after this run against something that never came up. Check `{wait.ok}`
+first if you do untick it.
+
+### For a signal — `wait.hook`
+
+Something posts to `POST /api/hook` with a name, and the wait ends.
+
+```bash
+curl -X POST http://127.0.0.1:51274/api/hook \
+  -H "Authorization: Bearer <your API token>" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"build-done","data":{"version":"1.4"}}'
+```
+
+Whatever you send arrives as `{text.hook.data}`. A doorbell that could only say "somebody
+rang" would need a second channel for the thing it rang about.
+
+!!! note "It is a LOCAL doorbell"
+
+    The API listens on 127.0.0.1 and the route needs the token, so a service on the internet
+    cannot ring it without a tunnel you set up on purpose. What it is really for is the other
+    things on this machine: a script, a game, another tool, the CLI.
+
+    Only signals sent **after** the wait began count, so an hourly task does not fire
+    instantly on last hour's. Reading does not consume them — two tasks can wait on the same
+    doorbell.
+
+    `GET /api/hook` lists what has arrived. "Is my webhook actually getting through?" is the
+    first question when a wait never ends.
+
+## A script's exit code is a result
+
+A non-zero exit used to fail the whole step, so *exited 2 because there was nothing to do*
+and *the interpreter is not installed* were the same outcome — and a script that wanted to
+REPORT a state had no way to, because saying so failed the step that asked.
+
+Tick **A non-zero exit is a result, not a failure** and it lands in `{script.code}`, with
+`{text.script.stdout}` and `{text.script.stderr}` kept apart. Failing to *start* is still an
+error, because then there is no exit code and nothing ran.
+
+## Two smaller things
+
+**Every dropdown with twelve or more entries has a search box.** It matches the whole row, so
+"kill" finds *Stop app / process* through its description.
+
+**The reference is one click from the code editor.** It opens the generated page — built from
+the registry, so it can never list an action this build does not have.

@@ -817,7 +817,7 @@ Il peut piloter les [Launch Packs](doc:launch-packs), tes limites de [stockage](
         },
       },
       {
-        id: 'bmmscript', view: 'settings', docsPath: 'features/bmmscript/',
+        id: 'bmmscript', view: 'settings', docsPath: 'features/bmmscript/', diagram: ['bmmscript-flow'],
         title: { en: 'BMMScript — automations as code', fr: 'BMMScript — les automatisations en code' },
         summary: {
           en: 'Write a task as text instead of bricks — and open it back up as bricks.',

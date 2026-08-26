@@ -28,6 +28,7 @@ import { integrityEngine } from './diagrams/integrity-engine.js';
 import { mtimeCache } from './diagrams/mtime-cache.js';
 import { betahubReporting } from './diagrams/betahub-reporting.js';
 import { modpackFlow } from './diagrams/modpack-flow.js';
+import { bmmscriptFlow } from './diagrams/bmmscript-flow.js';
 import { securitySystem } from './diagrams/security-system.js';
 import { modMapper } from './diagrams/mod-mapper.js';
 import { launchPacks } from './diagrams/launch-packs.js';
@@ -48,6 +49,7 @@ import { deeplinks } from './diagrams/deeplinks.js';
 
 // Diagram Registry
 export const diagrams = {
+    'bmmscript-flow': bmmscriptFlow,
     'custom-pages': customPages,
     'deeplinks': deeplinks,
     'resumable-downloads': resumableDownloads,
