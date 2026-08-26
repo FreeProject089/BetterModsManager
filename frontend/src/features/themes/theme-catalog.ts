@@ -59,8 +59,12 @@ function buildModal(): void {
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--bmm-accent)" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/><path d="M3.6 15a10 10 0 1 0 .6-5"/></svg>
                     </div>
                     <div>
-                        <h2 style="margin:0;font-size:16px;" data-i18n="themes.catalogue">Theme Catalogue</h2>
-                        <p style="margin:0;font-size:11px;color:var(--bmm-text-muted);" data-i18n="themes.catalogueSub">Official, partner & community themes</p>
+                        <!-- t(), not data-i18n. applyTranslations() runs once at boot and this
+                             modal is built long after — so the two attributes here were never
+                             read, and the header sat in English inside a French app while every
+                             other string in this file, which uses t(), was translated. -->
+                        <h2 style="margin:0;font-size:16px;">${escHtml(t('themes.catalogue'))}</h2>
+                        <p style="margin:0;font-size:11px;color:var(--bmm-text-muted);">${escHtml(t('themes.catalogueSub'))}</p>
                     </div>
                 </div>
                 <button class="modal-close" id="theme-catalog-close">
@@ -78,9 +82,13 @@ function buildModal(): void {
                 </button>
             </div>
             <div id="theme-cat-list" style="flex:1;overflow-y:auto;padding:16px 18px;display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;"></div>
-            <div class="modal-footer" style="padding:12px 18px;border-top:1px solid rgba(255,255,255,0.06);font-size:11px;color:var(--bmm-text-muted);">
+            <div class="modal-footer" style="padding:12px 18px;border-top:1px solid rgba(255,255,255,0.06);font-size:11px;color:var(--bmm-text-muted);display:flex;align-items:center;gap:8px;">
                 <span id="theme-cat-count"></span>
-                <button class="btn btn-ghost btn-sm" id="theme-cat-build">${escHtml(t('themes.catalogues'))}</button>
+                <div style="flex:1"></div>
+                <!-- The way in, so it looks like one. Following and making a catalogue were a
+                     ghost button in the corner, beside a second ghost button that does a
+                     different job — two footnotes where one is the whole feature. -->
+                <button class="btn btn-accent btn-sm" id="theme-cat-build">${escHtml(t('themes.catalogues'))}</button>
                 <button class="btn btn-ghost btn-sm" id="theme-cat-import-file">${t('themes.importFile') || 'Import .bmmtheme / .json file'}</button>
             </div>
         </div>`;
@@ -404,7 +412,12 @@ function renderCatalog(): void {
         strong.style.cssText = 'display:block;color:var(--bmm-text-primary);font-size:13px;margin-bottom:2px';
         strong.textContent = t('themes.dropinTitle') || 'Drop-in presets';
         const path = document.createElement('code');
-        path.style.cssText = 'font-size:11px;word-break:break-all;opacity:.85';
+        // One line, ellipsised, full text on hover. word-break:break-all wrapped a long
+        // Windows path onto three lines and made a side note the tallest thing above the
+        // catalogue it is a side note TO.
+        path.style.cssText = 'display:block;font-size:11px;opacity:.85;overflow:hidden;'
+            + 'text-overflow:ellipsis;white-space:nowrap';
+        path.title = dir;
         // textContent: a path is user data and this is not a place to interpolate markup.
         path.textContent = dir;
         label.append(strong, path);
@@ -415,7 +428,7 @@ function renderCatalog(): void {
         open.addEventListener('click', () => { void invoke('open_folder', { path: dir }); });
 
         const rescan = document.createElement('button');
-        rescan.className = 'btn btn-sm btn-primary';
+        rescan.className = 'btn btn-sm btn-secondary';
         rescan.textContent = t('themes.dropinRescan') || 'Rescan';
         rescan.addEventListener('click', async () => {
             const before = _builtins.length;
