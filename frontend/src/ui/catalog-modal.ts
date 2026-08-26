@@ -89,6 +89,19 @@ export interface CatalogKindSpec<T> {
      */
     extraAdd?: { label: string; run(): Promise<T[]> };
     /**
+     * Do not call `candidates()` when the tab opens.
+     *
+     * For a kind whose candidates come from a FILE PICKER, the tab opening means a Windows
+     * dialog jumping in front of a screen nobody has read yet — and that dialog is modal, so
+     * the screen behind it is frozen until it is answered. The first thing somebody sees of
+     * "make a catalogue" should not be a file browser they did not ask for.
+     *
+     * The empty state carries the ways in instead, and they choose one.
+     */
+    pickOnDemand?: boolean;
+    /** What the empty create tab says, when its list starts empty by design. */
+    emptyHint?: string;
+    /**
      * The address an item already carries, if it was added as a link rather than a file.
      *
      * Returning one starts that entry in link mode with the address filled in — there is no
@@ -456,11 +469,17 @@ export async function openCatalogModal<T>(spec: CatalogKindSpec<T>): Promise<voi
     const createPane = (): string => {
         if (!loaded) return `<p class="cm-empty">${escHtml(t('common.loading'))}</p>`;
         if (!items.length) {
-            return `<p class="cm-empty">${escHtml(t('cm.nothingToAdd'))}</p>`
-                + (spec.addMoreLabel
-                    ? `<button class="btn btn-sm btn-accent" id="${P}-more">${escHtml(spec.addMoreLabel)}</button>` : '')
-                + (spec.extraAdd
-                    ? ` <button class="btn btn-sm btn-secondary" id="${P}-more2">${escHtml(spec.extraAdd.label)}</button>` : '');
+            // The ways IN, not an apology. "Nothing to add" is true and useless on a screen
+            // whose whole job is adding something.
+            return `<div class="cm-start">
+                <p class="cm-start-lede">${escHtml(spec.emptyHint || t('cm.nothingToAdd'))}</p>
+                <div class="cm-start-actions">
+                    ${spec.addMoreLabel
+                        ? `<button class="btn btn-sm btn-accent" id="${P}-more">${escHtml(spec.addMoreLabel)}</button>` : ''}
+                    ${spec.extraAdd
+                        ? `<button class="btn btn-sm btn-secondary" id="${P}-more2">${escHtml(spec.extraAdd.label)}</button>` : ''}
+                </div>
+            </div>`;
         }
         const linked = items.filter((i) => picked.has(spec.entryId(i)) && effectiveMode(spec.entryId(i)) === 'link').length;
         return `
@@ -563,7 +582,8 @@ export async function openCatalogModal<T>(spec: CatalogKindSpec<T>): Promise<voi
             // Loaded on FIRST use of the tab rather than when the modal opens: somebody who
             // came to follow a catalogue should not wait for a list of their own things.
             if (tab === 'create' && !loaded) {
-                items = await spec.candidates().catch(() => []);
+                // A picker-backed kind starts empty on purpose — see pickOnDemand.
+                items = spec.pickOnDemand ? [] : await spec.candidates().catch(() => []);
                 loaded = true;
                 paint();
             }

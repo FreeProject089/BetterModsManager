@@ -239,6 +239,11 @@ export async function openListCatalog(onImported?: (doc: unknown) => void): Prom
         candidates: pickLists,
         // BMM keeps no library of mod lists, so the create tab IS a file picker — and one
         // that can only be answered once is a screen you have to reopen to fix a mistake.
+        // BMM keeps no library of mod lists, so this tab has nothing to show until you say
+        // where a list comes from — and opening a Windows dialog the instant the tab appears
+        // is a modal window in front of a screen nobody has read yet.
+        pickOnDemand: true,
+        emptyHint: t('mm.cat.startHint'),
         addMoreLabel: t('mm.cat.addFiles'),
         extraAdd: { label: t('mm.cat.addLink'), run: askListLink },
         linkOf: (x) => x.url,

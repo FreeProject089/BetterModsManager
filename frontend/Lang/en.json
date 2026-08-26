@@ -8472,5 +8472,6 @@
   "settings.identity.authKeySavePub": "Save…",
   "settings.identity.authKeyMaking": "Creating…",
   "settings.identity.authKeySaved": "Public key saved",
-  "repo.sync.findMod": "Find a mod…"
+  "repo.sync.findMod": "Find a mod…",
+  "mm.cat.startHint": "A catalogue of mod lists points at .mm files. Add ones you have, or the address of one somebody else hosts — you can mix both, and choose per entry whether the file travels with the catalogue."
 }

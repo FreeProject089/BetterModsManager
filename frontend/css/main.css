@@ -16693,6 +16693,13 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 .cm-add > input { flex: 1 1 220px; min-width: 160px; }
 .cm-hint { font-size: 11px; color: var(--text-muted); margin: 6px 0 10px; line-height: 1.5; }
 .cm-empty { font-size: 12px; color: var(--text-muted); padding: 10px 0; }
+/* The starting state of a create tab that has nothing yet by design. It carries the ways in
+   rather than an apology — “nothing to add” is true and useless on a screen whose job is
+   adding something. */
+.cm-start { display: flex; flex-direction: column; gap: 14px; align-items: flex-start;
+    padding: 18px; border: 1px dashed var(--border); border-radius: 10px; }
+.cm-start-lede { margin: 0; font-size: 12px; color: var(--text-secondary); line-height: 1.6; }
+.cm-start-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
 .cm-srcs { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; }
 .cm-src { display: flex; align-items: center; gap: 8px; padding: 6px 9px; border: 1px solid var(--border); border-radius: 8px; background: var(--bmm-s02); }

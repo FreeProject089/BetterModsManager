@@ -8470,5 +8470,6 @@
   "settings.identity.authKeySavePub": "Enregistrer…",
   "settings.identity.authKeyMaking": "Création…",
   "settings.identity.authKeySaved": "Clé publique enregistrée",
-  "repo.sync.findMod": "Trouver un mod…"
+  "repo.sync.findMod": "Trouver un mod…",
+  "mm.cat.startHint": "Un catalogue de listes pointe vers des fichiers .mm. Ajoute ceux que tu as, ou l’adresse d’un que quelqu’un héberge — tu peux mélanger les deux, et choisir par entrée si le fichier voyage avec le catalogue."
 }
