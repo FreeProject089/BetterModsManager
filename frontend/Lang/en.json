@@ -8452,5 +8452,9 @@
   "mm.cancelled": "Import cancelled",
   "mm.errNotLocked": "That list is not locked",
   "restore.lockedTitle": "This backup is locked",
-  "restore.lockedDesc": "It was exported with a passphrase. Without it the contents are not there to read — there is no way to recover one."
+  "restore.lockedDesc": "It was exported with a passphrase. Without it the contents are not there to read — there is no way to recover one.",
+  "mm.cat.addLink": "Add by address…",
+  "mm.cat.addLinkDesc": "The address of a .mm somebody already hosts. Nothing is downloaded — the entry points at it.",
+  "mm.cat.addLinkName": "A name for it. Leave empty to use “{g}”.",
+  "mm.cat.remote": "hosted elsewhere"
 }

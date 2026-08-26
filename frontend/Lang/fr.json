@@ -8450,5 +8450,9 @@
   "mm.cancelled": "Import annulé",
   "mm.errNotLocked": "Cette liste n’est pas verrouillée",
   "restore.lockedTitle": "Cette sauvegarde est verrouillée",
-  "restore.lockedDesc": "Elle a été exportée avec une phrase secrète. Sans elle le contenu n’est pas là — et aucune phrase ne se récupère."
+  "restore.lockedDesc": "Elle a été exportée avec une phrase secrète. Sans elle le contenu n’est pas là — et aucune phrase ne se récupère.",
+  "mm.cat.addLink": "Ajouter par adresse…",
+  "mm.cat.addLinkDesc": "L’adresse d’un .mm que quelqu’un héberge déjà. Rien n’est téléchargé — l’entrée pointe dessus.",
+  "mm.cat.addLinkName": "Un nom pour lui. Vide pour utiliser « {g} ».",
+  "mm.cat.remote": "hébergé ailleurs"
 }

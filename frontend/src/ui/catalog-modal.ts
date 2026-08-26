@@ -79,6 +79,22 @@ export interface CatalogKindSpec<T> {
      * the only way back is to close the screen and open it again.
      */
     addMoreLabel?: string;
+    /**
+     * A SECOND way to add an entry, for a kind where picking a file is not the only one.
+     *
+     * Mod lists are the case: the create tab is a file picker, so an entry you only have the
+     * ADDRESS of — somebody else's list, hosted — could not be added at all. Every other
+     * builder gained that this week; this one had the per-entry link choice and no way to
+     * reach it without owning the file first.
+     */
+    extraAdd?: { label: string; run(): Promise<T[]> };
+    /**
+     * The address an item already carries, if it was added as a link rather than a file.
+     *
+     * Returning one starts that entry in link mode with the address filled in — there is no
+     * file behind it, so offering "pack it" would offer to pack nothing.
+     */
+    linkOf?(item: T): string | undefined;
     /** How a row reads. `sub` is the muted half. */
     label(item: T): { name: string; sub?: string };
     /** Stable id for an entry, used in the document. */
@@ -442,7 +458,9 @@ export async function openCatalogModal<T>(spec: CatalogKindSpec<T>): Promise<voi
         if (!items.length) {
             return `<p class="cm-empty">${escHtml(t('cm.nothingToAdd'))}</p>`
                 + (spec.addMoreLabel
-                    ? `<button class="btn btn-sm btn-accent" id="${P}-more">${escHtml(spec.addMoreLabel)}</button>` : '');
+                    ? `<button class="btn btn-sm btn-accent" id="${P}-more">${escHtml(spec.addMoreLabel)}</button>` : '')
+                + (spec.extraAdd
+                    ? ` <button class="btn btn-sm btn-secondary" id="${P}-more2">${escHtml(spec.extraAdd.label)}</button>` : '');
         }
         const linked = items.filter((i) => picked.has(spec.entryId(i)) && effectiveMode(spec.entryId(i)) === 'link').length;
         return `
@@ -467,6 +485,8 @@ export async function openCatalogModal<T>(spec: CatalogKindSpec<T>): Promise<voi
             <button type="button" class="btn btn-xs btn-ghost" id="${P}-none">${escHtml(t('common.selectNone'))}</button>
             ${spec.addMoreLabel
                 ? `<button type="button" class="btn btn-xs btn-ghost" id="${P}-more">${escHtml(spec.addMoreLabel)}</button>` : ''}
+            ${spec.extraAdd
+                ? `<button type="button" class="btn btn-xs btn-ghost" id="${P}-more2">${escHtml(spec.extraAdd.label)}</button>` : ''}
         </div>
         <div class="cm-list">
             ${items.map((it) => {
@@ -612,14 +632,36 @@ export async function openCatalogModal<T>(spec: CatalogKindSpec<T>): Promise<voi
             paint();
         });
         ov.querySelector(`#${P}-none`)?.addEventListener('click', () => { picked.clear(); paint(); });
-        ov.querySelector(`#${P}-more`)?.addEventListener('click', async () => {
-            // ADDED to what is there, not replacing it — and deduplicated, because picking
-            // the same file twice is a normal thing to do and two rows for one list would
-            // publish two entries with one filename.
-            const more = await spec.candidates().catch(() => []);
+        /**
+         * Append what an adder produced.
+         *
+         * ADDED to what is there, not replacing it — and deduplicated, because picking the
+         * same file twice is a normal thing to do and two rows for one entry would publish
+         * two rows with one filename.
+         *
+         * An item that arrives with an address is switched to link mode and TICKED: it has no
+         * file behind it, so packing is not a choice it has, and somebody who just typed an
+         * address has already said they want it in.
+         */
+        const absorb = (more: T[]) => {
             const have = new Set(items.map((i) => spec.entryId(i)));
-            items = [...items, ...more.filter((i) => !have.has(spec.entryId(i)))];
+            const fresh = more.filter((i) => !have.has(spec.entryId(i)));
+            for (const item of fresh) {
+                const url = spec.linkOf?.(item);
+                if (!url) continue;
+                const id = spec.entryId(item);
+                modes.set(id, { mode: 'link', url });
+                picked.add(id);
+            }
+            items = [...items, ...fresh];
             paint();
+        };
+
+        ov.querySelector(`#${P}-more`)?.addEventListener('click', async () => {
+            absorb(await spec.candidates().catch(() => []));
+        });
+        ov.querySelector(`#${P}-more2`)?.addEventListener('click', async () => {
+            if (spec.extraAdd) absorb(await spec.extraAdd.run().catch(() => []));
         });
         ov.querySelector(`#${P}-go`)?.addEventListener('click', () => { void create(); });
     };

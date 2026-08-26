@@ -48,10 +48,13 @@ export function promptRepoPassword(opts) {
             || 'This repository is protected. Enter its download password to continue.';
         desc.style.cssText = 'font-size:12px;color:var(--text-secondary);margin-bottom:14px;line-height:1.5;';
         const input = document.createElement('input');
-        input.type = 'password';
+        input.type = opts?.kind === 'text' ? 'text' : 'password';
         input.className = 'input';
         input.autocomplete = 'off';
-        input.placeholder = t('repo.passwordPrompt.placeholder') || 'Download password';
+        input.spellcheck = false;
+        input.value = opts?.value || '';
+        input.placeholder = opts?.placeholder
+            || (opts?.kind === 'text' ? '' : (t('repo.passwordPrompt.placeholder') || 'Download password'));
         input.style.cssText = 'width:100%;box-sizing:border-box;margin-bottom:14px;';
         const row = document.createElement('div');
         row.style.cssText = 'display:flex;gap:8px;justify-content:flex-end;';

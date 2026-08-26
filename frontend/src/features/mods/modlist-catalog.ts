@@ -128,8 +128,60 @@ interface PickedList {
     description: string;
     author: string;
     mods: number;
-    /** The bytes as they were read — see writeEntry. */
+    /** The bytes as they were read — see writeEntry. Empty for an entry added by address. */
     content: string;
+    /**
+     * An address somebody else hosts.
+     *
+     * Set only for an entry added by LINK, where there is no file on this machine at all.
+     * The create tab is a file picker, so a list you only have the address of — somebody
+     * else's, hosted — could not be added: the per-entry link choice existed and there was
+     * no way to reach it without owning the file first.
+     */
+    url?: string;
+}
+
+/**
+ * Add an entry from an address, with no file behind it.
+ *
+ * Two questions, asked in the order they can be answered: the address first, because the
+ * name can be guessed from it and asking for a name before there is anything to name it
+ * after is asking about nothing.
+ */
+async function askListLink(): Promise<PickedList[]> {
+    const { promptRepoPassword } = await import('../repo/repo-sync.js');
+    const url = (await promptRepoPassword({
+        title: t('mm.cat.addLink'),
+        desc: t('mm.cat.addLinkDesc'),
+        kind: 'text',
+        placeholder: 'https://…/list.mm',
+    }) || '').trim();
+    if (!url) return [];
+    if (!/^https?:\/\//i.test(url)) { toast(t('modpack.cat.badUrl'), 'warning'); return []; }
+
+    const guess = decodeURIComponent(url.replace(/[?#].*$/, '').replace(/^.*\//, '').replace(/\.[^.]+$/, ''));
+    // Cancelling the second question cancels the whole thing. Falling back to the guess
+    // would add an entry somebody just declined to name.
+    const answered = await promptRepoPassword({
+        title: t('mm.cat.addLink'),
+        desc: t('mm.cat.addLinkName').replace('{g}', guess || '—'),
+        kind: 'text',
+        value: guess,
+    });
+    if (answered == null) return [];
+    const name = answered.trim() || guess || 'list';
+
+    return [{
+        id: safeFileStem(name, 'list').toLowerCase(),
+        name,
+        description: '',
+        author: '',
+        // Not stated rather than guessed at zero: an address is not something BMM can count
+        // the mods of without fetching it, and "0 mods" is a claim.
+        mods: -1,
+        content: '',
+        url,
+    }];
 }
 
 async function pickLists(): Promise<PickedList[]> {
@@ -179,19 +231,30 @@ export async function openListCatalog(onImported?: (doc: unknown) => void): Prom
         // BMM keeps no library of mod lists, so the create tab IS a file picker — and one
         // that can only be answered once is a screen you have to reopen to fix a mistake.
         addMoreLabel: t('mm.cat.addFiles'),
-        label: (x) => ({ name: x.name, sub: `${x.mods} ${t('modpack.cat.mods')}` }),
+        extraAdd: { label: t('mm.cat.addLink'), run: askListLink },
+        linkOf: (x) => x.url,
+        label: (x) => ({
+            name: x.name,
+            sub: x.mods >= 0 ? `${x.mods} ${t('modpack.cat.mods')}` : t('mm.cat.remote'),
+        }),
         entryId: (x) => x.id,
         // The BYTES that were read, not a re-serialisation: a .mm may carry a signature over
         // its own text, and re-encoding it would break that while leaving a file that still
         // parses.
         writeEntry: async (x, dir, file) => {
+            // An entry added by address has no file here to pack. It cannot reach this in
+            // practice — linkOf puts it in link mode — and refusing beats writing an empty
+            // .mm that would then be published as if it held something.
+            if (!x.content) return false;
             const sep = dir.includes('\\') ? '\\' : '/';
             await invoke('write_text_file', { path: `${dir}${sep}${file}`, content: x.content });
             return true;
         },
         row: (x, address) => ({
             id: x.id, name: x.name, description: x.description, author: x.author,
-            mods: x.mods, download_url: address,
+            // Omitted rather than sent as -1, which a reader would show as a count.
+            ...(x.mods >= 0 ? { mods: x.mods } : {}),
+            download_url: address,
         }),
         looksLike: looksLikeListFeed,
         browse: {
