@@ -1165,3 +1165,57 @@ l'écran pour dire lequel. Le code est affiché comme un code, avec le pays nomm
 **La leçon :** un repli n'est pas seulement une valeur, c'est une valeur dans un FORMAT. Un
 repli qui renvoie une forme différente de ce qu'il remplace produit des données individuellement
 valides et collectivement dépourvues de sens.
+---
+
+## 71. Un dictionnaire peut être complet et faux
+
+`check-i18n-parity` compare des ENSEMBLES de clés : chaque clé de `en.json` doit exister dans
+`fr.json`. Il passait, et il avait toujours passé, pendant que la barre des préréglages du
+catalogue de thèmes affichait « Open folder » et « Rescan » dans une interface française —
+parce que ces clés existent dans `fr.json` et que leur valeur française **est le texte
+anglais**. Un garde qui compare des ensembles ne peut pas voir à l'intérieur d'une valeur.
+
+L'autre moitié du même écran était fausse pour une raison sans rapport. Son en-tête était le
+seul markup de ce fichier à utiliser `data-i18n` ; tout le reste utilisait `t()`.
+`applyTranslations()` passe une fois au démarrage et cette modale est construite bien après :
+les attributs n'ont jamais été lus. Les deux mécanismes sont corrects ; un seul fonctionne sur
+du markup qui n'existe pas encore.
+
+Le balayage a donc été écrit comme une requête et non comme une règle : sur les 8150 clés,
+trouver les valeurs françaises identiques à l'anglais **et** de forme anglaise — mots-outils
+anglais présents, français absents. Deux résultats, deux noms propres (« Open Mod Manager »).
+Les deux vrais avaient déjà été trouvés en lisant l'écran.
+
+**La leçon :** sache quelle moitié d'un fait ton garde vérifie. La parité vérifie la
+*présence* d'une traduction, jamais son *contenu*, et les deux échecs sont identiques de
+l'extérieur — une clé manquante et une clé présente-mais-anglaise affichent toutes deux de
+l'anglais. Quand un garde ne voit qu'une moitié, l'autre demande une requête qu'on lance
+exprès, pas une règle dont on espère qu'elle se déclenchera.
+
+---
+
+## 72. Ne rien trouver ressemble exactement à ce qu'il n'y ait rien
+
+Trois défauts en une semaine, tous de la même forme.
+
+L'inspecteur de listes de mods de BCWEB lisait `m.links` et `m.url`. Aucun de ces champs n'a
+jamais existé dans un `.mm` — l'entrée porte `download_links` — donc « Download hosts »
+affichait « — » et la note de chaque entrée était vide, pour toutes les listes jamais
+inspectées. Aucune exception, aucune ligne de log. On disait à un modérateur que la liste ne
+pointait nulle part, et *ne pointer nulle part est la réponse rassurante*.
+
+L'export `.mm` écrivait `install_notes: String::new()`. Écrit par l'export, lu par l'import,
+vide entre les deux : les instructions de placement que quelqu'un avait écrites pour sa propre
+installation n'atteignaient jamais la personne à qui il envoyait la liste — et le champ était
+présent dans le fichier, prouvant qu'on y avait pensé.
+
+Tasky portait `data-tauri-drag-region` depuis le moment où déplacer la fenêtre par lui avait
+été demandé. Son conteneur est en `pointer-events: none` : ni lui ni l'attribut n'ont jamais
+reçu d'appui. L'attribut était bien là dans le markup, et il n'avait jamais tourné une fois.
+
+**La leçon :** un résultat vide et une source vide sont indiscernables à l'endroit où on lit.
+Chacun de ces trois cas a été trouvé en demandant « qu'est-ce que ça devrait produire ? »
+face à un vrai document — jamais en lisant le code, qui se lit correctement dans les trois
+cas. Là où un lecteur peut ne rien renvoyer, un test doit porter sur un cas qui DOIT renvoyer
+quelque chose ; là où une capacité est déclarée plutôt qu'exercée, quelque chose doit
+l'exercer.

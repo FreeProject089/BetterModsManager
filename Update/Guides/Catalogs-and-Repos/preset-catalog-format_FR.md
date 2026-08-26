@@ -64,14 +64,16 @@ le travail de quelqu'un d'autre.
 ## Un catalogue qui porte ses propres fichiers
 
 Tout ce qui précède suppose que les `.bmmpa` vivent quelque part où une URL peut les
-atteindre. Ce n'est pas obligatoire. **Publier les miennes…** propose une option *emballer
-le tout dans un seul fichier* : BMM écrit le dossier comme d'habitude, puis un unique `.bmmbundle`
-contenant `catalog.json` et chaque automatisation qu'il nomme. C'est toi qui choisis où va
-ce fichier ; rien n'est laissé ailleurs.
+atteindre. Ce n'est pas obligatoire. **Mes catalogues… → En créer un** propose deux formes, et
+**Un bundle** est l'autre : un unique `.bmmbundle` contenant `catalog.json` et chaque
+automatisation qu'il nomme. Les fichiers sont assemblés dans un dossier de travail que
+personne ne voit, le bundle est enregistré là où tu dis, et le dossier de travail est supprimé
+ensuite — rien n'est laissé nulle part.
 
-Envoie ce seul fichier à quelqu'un. Dans le panneau des catalogues d'automatisations,
-**Ouvrir un fichier bundle…** le suit — pas d'hébergeur, pas d'adresse, rien à maintenir en
-vie.
+Envoie ce seul fichier à quelqu'un. Sur le même écran, **Suivre → depuis un fichier…**
+l'ouvre — pas d'hébergeur, pas d'adresse, rien à maintenir en vie. Il est vérifié à
+l'ouverture et pas à la prochaine lecture : un fichier qui n'est pas un catalogue
+d'automatisations échoue tout de suite, avec la raison.
 
 Le format n'est volontairement pas nouveau. C'est un zip avec sa propre extension : `catalog.json`
 à la racine et les fichiers à côté. Renomme-le en `.zip` et n'importe quel outil l'ouvre —

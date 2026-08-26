@@ -4,12 +4,20 @@ BMM themes restyle the app UI. They are shared through the **theme catalog** and
 packaged as a `.bmmtheme` file (a ZIP). This guide covers the package format and how
 to publish one.
 
-> **Build a catalog in-app:** open the **Theme Catalogue** and click **"Create theme
-> catalog"** — tick the installed themes to include and **Export** the `catalog.json`
-> (or "Export & add as source" to test it right away). Host the file anywhere and add its
-> URL as a community source, or host it on **BetterCommunity** (`/submit → Host my own
-> catalog`) as a public or **private** (invite-only) catalog. Local `.json`/`.bmmtheme`
-> files added as sources are read directly (no server round-trip).
+> **Build a catalog in-app:** open the **Theme Catalogue** and click **"Catalogues…"** — the
+> same screen every other kind of catalogue uses. **Create one** ticks the installed themes
+> to include and writes either one `.bmmbundle` or one `catalog.json`; **Follow** takes an
+> address *or a file*, and handles a protected source. Host the file anywhere and add its URL
+> as a source, or host it on **BetterCommunity** (`/submit → Host my own catalog`) as a public
+> or **private** (invite-only) catalog. Local `.json`/`.bmmtheme` files added as sources are
+> read directly (no server round-trip).
+>
+> Themes have a third per-entry choice the other kinds do not: **keep it in the catalogue**,
+> the whole theme written inline. It is what every theme catalogue published so far contains
+> and still the default — and it works for a custom theme with images, because a theme is
+> self-contained JSON whose preview, assets and fonts are base64 inside it. The cost is that
+> everybody following the catalogue downloads all of it just to read the list, so an
+> image-heavy theme is better **packed** or **linked**.
 
 ---
 

@@ -62,12 +62,15 @@ did not say" and "it contains nothing" are different claims about somebody else'
 ## A catalogue that carries its own files
 
 Everything above assumes the `.bmmpa` files sit somewhere a URL can reach. They do not have
-to. **Publish my own…** has a *pack it into one file* option: BMM writes the folder as
-usual and then a single `.bmmbundle` of it, holding `catalog.json` and every automation it
-names. You choose where that file goes; nothing is left behind anywhere else.
+to. **My catalogues… → Create one** offers two shapes, and **One bundle** is the other one: a
+single `.bmmbundle` holding `catalog.json` and every automation it names. The files are
+assembled in a working folder nobody sees, the bundle is saved where you say, and the working
+folder is removed afterwards — nothing is left in either place.
 
-Send that one file to somebody. In the automation catalogue panel, **Open a bundle
-file…** follows it — no host, no address, nothing to keep alive.
+Send that one file to somebody. On the same screen, **Follow → from a file…** opens it — no
+host, no address, nothing to keep alive. It is checked when it is opened rather than when it
+is next read, so a file that is not an automation catalogue fails there and then, with the
+reason.
 
 The format is deliberately not a new one. It is a zip with its own extension: `catalog.json` at
 the root and the payloads next to it. Rename it to `.zip` and any zip tool opens it — the

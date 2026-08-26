@@ -4,29 +4,30 @@ An automation catalogue is a list of shareable scheduled tasks. Somebody follows
 in BMM, sees what you published, and installs one.
 
 BMM has read these for a while. It can now **write** one: **Settings → Scheduler → Files… →
-Publish my own…** (it is also on the catalogue panel itself).
+My catalogues…**, which is the same screen every other kind of catalogue uses — follow one,
+browse what you follow, or make your own.
 
 ---
 
 ## 🧱 What it writes
 
-A folder — or, if you tick *Publish it as ONE file*, a single `.bmmbundle` holding all of
-it. Either way each automation is either **packed** into the catalogue or **linked** to an
-address you give, chosen per entry: see **[Embed or link](Embed_Or_Link_EN.md)**.
+**One file, and you choose which of two.**
 
-The folder:
+| Choice | What you get |
+|---|---|
+| **One bundle** | A `.bmmbundle` holding `catalog.json` and every automation packed into it. Nothing to host: send the file. |
+| **One catalogue file** | A `catalog.json` of addresses only, for automations already hosted somewhere. |
 
-```text
-my-automations/
-├── catalog.json
-├── Nightly-tidy.bmmpa
-├── Weekly-backup.bmmpa
-└── Sync-and-launch.bmmpa
-```
+Inside either, each automation is **packed** into the catalogue or **linked** to an address
+you give, chosen per entry: see **[Embed or link](Embed_Or_Link_EN.md)**. Only what the
+catalogue names is packed, and you choose where the file is saved.
 
-One signed `.bmmpa` per automation, and a `catalog.json` that lists them. Upload the whole
-folder anywhere static — a GitHub repository, GitHub Pages, an S3 bucket, your own server —
-and give people the address of the `catalog.json`.
+Each packed automation is a signed `.bmmpa`, the same document a hand-export writes. A
+catalogue whose files were unsigned while an exported one was signed would be a quieter file
+for no reason anybody chose.
+
+If you want the older shape — a folder you upload as-is — unpack the bundle: it is a zip with
+its own extension, and what is inside is exactly that folder.
 
 That is the entire mechanism. There is no account to create and nothing to register.
 

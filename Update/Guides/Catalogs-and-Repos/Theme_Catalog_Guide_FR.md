@@ -5,12 +5,20 @@ de thèmes** et sont empaquetés dans un fichier `.bmmtheme` (un ZIP). Ce guide 
 le format et la publication.
 
 > **Construire un catalogue dans l'app :** ouvre le **Catalogue de thèmes** et clique sur
-> **« Créer un catalogue de thèmes »** — coche les thèmes installés à inclure et **Exporte**
-> le `catalog.json` (ou « Exporter & ajouter comme source » pour le tester tout de suite).
-> Héberge le fichier n'importe où et ajoute son URL comme source communautaire, ou héberge-le
-> sur **BetterCommunity** (`/submit → Héberger mon propre catalogue`) en catalogue public ou
-> **privé** (sur invitation). Les fichiers locaux `.json`/`.bmmtheme` ajoutés comme sources
-> sont lus directement (sans passer par le serveur).
+> **« Catalogues… »** — le même écran que tous les autres types de catalogue. **En créer un**
+> coche les thèmes installés à inclure et écrit soit un `.bmmbundle`, soit un `catalog.json` ;
+> **Suivre** prend une adresse *ou un fichier*, et gère une source protégée. Héberge le fichier
+> n'importe où et ajoute son URL comme source, ou héberge-le sur **BetterCommunity**
+> (`/submit → Héberger mon propre catalogue`) en catalogue public ou **privé** (sur
+> invitation). Les fichiers locaux `.json`/`.bmmtheme` ajoutés comme sources sont lus
+> directement (sans passer par le serveur).
+>
+> Les thèmes ont un troisième choix par entrée que les autres n'ont pas : **le garder dans le
+> catalogue**, le thème entier écrit en ligne. C'est ce que contient tout catalogue de thèmes
+> publié jusqu'ici et c'est toujours le défaut — et ça marche pour un thème custom avec
+> images, parce qu'un thème est du JSON auto-contenu dont l'aperçu, les assets et les polices
+> sont en base64 dedans. Le coût : tous ceux qui suivent le catalogue téléchargent l'ensemble
+> juste pour lire la liste — un thème lourd en images est mieux **emballé** ou **lié**.
 
 ---
 

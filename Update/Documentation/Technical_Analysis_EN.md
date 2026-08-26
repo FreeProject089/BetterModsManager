@@ -1212,3 +1212,53 @@ code is shown as a code with the country named beside it.
 **The lesson:** a fallback is not just a value, it is a value in a FORMAT. A fallback that
 returns a different shape from the thing it stands in for produces data that is individually
 valid and collectively meaningless.
+---
+
+## 71. A dictionary can be complete and wrong
+
+`check-i18n-parity` compares key SETS: every key in `en.json` must exist in `fr.json`. It
+passed, and it had always passed, while the theme catalogue's drop-in bar rendered "Open
+folder" and "Rescan" in a French interface — because those keys exist in `fr.json` and their
+French value **is the English text**. A gate that compares sets cannot see inside a value.
+
+The second half of the same screen was wrong for an unrelated reason. Its header was the only
+markup in that file using `data-i18n`; everything else used `t()`. `applyTranslations()` runs
+once at boot and that modal is built long after, so the attributes were never read. Both
+mechanisms are correct; only one of them works on markup that does not exist yet.
+
+So the sweep was written as a query rather than a rule: over all 8150 keys, find French values
+identical to the English **and** English-shaped — English function words present, French ones
+absent. Two hits, both proper nouns ("Open Mod Manager"). The two real ones had already been
+found by reading the screen.
+
+**The lesson:** know which half of a fact your gate is checking. Parity checks the *presence*
+of a translation, never its *content*, and the two failures look identical from the outside —
+a key that is missing and a key that is present and English both render English. When a gate
+can only see one half, the other half needs a query you run deliberately, not a rule you hope
+will fire.
+
+---
+
+## 72. Finding nothing looks exactly like there being nothing
+
+Three faults from one week, all the same shape.
+
+BCWEB's mod-list inspector read `m.links` and `m.url`. Neither field has ever existed in a
+`.mm` — the entry carries `download_links` — so "Download hosts" said "—" and every entry note
+was empty, for every list ever inspected. No exception, no log line. A moderator was told the
+list pointed nowhere, and *pointing nowhere is the reassuring answer*.
+
+The `.mm` exporter wrote `install_notes: String::new()`. Written by the exporter, read by the
+importer, empty in between: placement instructions somebody wrote for their own install never
+reached the person they sent the list to, and the field was present in the file to prove it
+had been considered.
+
+Tasky carried `data-tauri-drag-region` from the moment dragging the window by him was asked
+for. His container is `pointer-events: none`, so neither he nor the attribute ever received a
+mousedown. The attribute was right there in the markup, and it had never once run.
+
+**The lesson:** an empty result and an empty source are indistinguishable at the point of
+reading. Every one of these was found by asking "what should this produce?" against a real
+document — never by looking at the code, which reads correctly in all three cases. Where a
+reader can return nothing, a test has to assert on a case that must return SOMETHING; where a
+capability is declared rather than exercised, something has to exercise it.

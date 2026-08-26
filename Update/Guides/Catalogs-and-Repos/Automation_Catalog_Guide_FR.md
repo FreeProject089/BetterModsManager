@@ -4,31 +4,31 @@ Un catalogue d'automatisations est une liste de tâches planifiées partageables
 son adresse dans BMM, voit ce que vous avez publié, et en installe une.
 
 BMM sait les lire depuis un moment. Il sait désormais en **écrire** un : **Paramètres →
-Planificateur → Fichiers… → Publier les miennes…** (c'est aussi sur le panneau des
-catalogues lui-même).
+Planificateur → Fichiers… → Mes catalogues…**, qui est le même écran que tous les autres
+types de catalogue — en suivre un, parcourir ce qu'on suit, ou faire le sien.
 
 ---
 
 ## 🧱 Ce qu'il écrit
 
-Un dossier — ou, si tu coches *Publier en UN seul fichier*, un unique `.bmmbundle` qui
-contient le tout. Dans les deux cas chaque automatisation est soit **emballée** dans le
-catalogue, soit **liée** à une adresse que tu donnes, au choix par entrée : voir
-**[Emballer ou lier](Embed_Or_Link_FR.md)**.
+**Un seul fichier, et c'est toi qui choisis lequel des deux.**
 
-Le dossier :
+| Choix | Ce que tu obtiens |
+|---|---|
+| **Un bundle** | Un `.bmmbundle` contenant `catalog.json` et chaque automatisation emballée dedans. Rien à héberger : envoie le fichier. |
+| **Un fichier de catalogue** | Un `catalog.json` d'adresses seulement, pour des automatisations déjà hébergées. |
 
-```text
-mes-automatisations/
-├── catalog.json
-├── Nettoyage-nocturne.bmmpa
-├── Sauvegarde-hebdo.bmmpa
-└── Sync-et-lancement.bmmpa
-```
+Dans l'un comme dans l'autre, chaque automatisation est **emballée** dans le catalogue ou
+**liée** à une adresse que tu donnes, au choix par entrée : voir
+**[Emballer ou lier](Embed_Or_Link_FR.md)**. Seul ce que le catalogue nomme est emballé, et
+c'est toi qui choisis où le fichier est enregistré.
 
-Un `.bmmpa` signé par automatisation, et un `catalog.json` qui les liste. Téléversez le dossier
-entier sur n'importe quel hébergement statique — un dépôt GitHub, GitHub Pages, un bucket S3,
-votre propre serveur — et donnez aux gens l'adresse du `catalog.json`.
+Chaque automatisation emballée est un `.bmmpa` signé, le même document qu'un export à la main.
+Un catalogue dont les fichiers seraient non signés alors qu'un export l'est serait un fichier
+plus discret sans que personne l'ait choisi.
+
+Si tu veux l'ancienne forme — un dossier à téléverser tel quel — décompresse le bundle : c'est
+un zip avec sa propre extension, et ce qu'il contient est exactement ce dossier.
 
 C'est tout le mécanisme. Aucun compte à créer, rien à enregistrer.
 
