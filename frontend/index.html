@@ -3704,6 +3704,18 @@
                                     data-i18n-placeholder="settings.catIndex.makeNamePh"
                                     style="width:100%;font-size:12px;margin-bottom:8px" spellcheck="false">
                                 <div id="cat-index-make-list" style="display:flex;flex-direction:column;gap:4px;max-height:34vh;overflow:auto"></div>
+                                <!-- An index is a list of catalogues, and there is no rule
+                                     that says you have to follow one to name it. Recommending
+                                     somebody else's catalogue was the obvious use and the one
+                                     thing this could not do. -->
+                                <div class="cix-add">
+                                    <select class="input-field" id="cat-index-add-type"></select>
+                                    <input type="text" class="input-field" id="cat-index-add-url" spellcheck="false"
+                                           data-i18n-placeholder="settings.catIndex.addUrlPh" placeholder="https://…/catalog.json">
+                                    <button class="btn btn-ghost btn-sm" id="cat-index-add-btn"
+                                        data-i18n="settings.catIndex.addBtn">Add a link</button>
+                                </div>
+                                <div id="cat-index-added" class="cix-added"></div>
                                 <div style="display:flex;justify-content:flex-end;margin-top:10px">
                                     <button class="btn btn-primary btn-sm" id="cat-index-make-export"
                                         data-i18n="settings.catIndex.makeExport">Export the index</button>

@@ -5605,7 +5605,7 @@ export async function openTaskCatalogBuilder(): Promise<void> {
                 <span class="sched-tcb-name">${escHtml(task.name || task.id)}</span>
                 <span class="sched-tcb-n">${stepCount(task.steps)} ${escHtml(t('sched.tcb.steps') || 'steps')}</span>
             </label>
-            <select class="input sched-tcb-mode" data-id="${escAttr(task.id)}" disabled>
+            <select class="input sched-tcb-mode" data-id="${escAttr(task.id)}">
                 <option value="embed">${escHtml(t('sched.tcb.modeEmbed'))}</option>
                 <option value="link">${escHtml(t('sched.tcb.modeLink'))}</option>
             </select>
@@ -5693,7 +5693,10 @@ export async function openTaskCatalogBuilder(): Promise<void> {
         const on = picked.has(id);
         const sel = overlay.querySelector(`.sched-tcb-mode[data-id="${CSS.escape(id)}"]`) as HTMLSelectElement | null;
         const box = overlay.querySelector(`.sched-tcb-url[data-id="${CSS.escape(id)}"]`) as HTMLInputElement | null;
-        if (sel) { sel.disabled = !on; sel.value = modeOf(id).mode; }
+        // The picker stays LIVE whether or not the row is ticked: reaching for the control
+        // that says what will happen and having it do nothing is indistinguishable from a
+        // broken one.
+        if (sel) sel.value = modeOf(id).mode;
         if (box) { box.hidden = !on || modeOf(id).mode !== 'link'; box.value = modeOf(id).url; }
     };
 
@@ -5707,6 +5710,12 @@ export async function openTaskCatalogBuilder(): Promise<void> {
         const el = e.target as HTMLSelectElement;
         const id = el.dataset.id!;
         modes.set(id, { ...modeOf(id), mode: el.value === 'link' ? 'link' : 'embed' });
+        // Saying HOW an automation should be published is saying you want it published.
+        if (!picked.has(id)) {
+            picked.add(id);
+            const cb = overlay.querySelector(`.sched-tcb-cb[data-id="${CSS.escape(id)}"]`) as HTMLInputElement | null;
+            if (cb) cb.checked = true;
+        }
         syncRow(id);
         refresh();
     }));

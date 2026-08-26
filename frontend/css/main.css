@@ -16631,6 +16631,21 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 .pcb-badge.is-pack { color: var(--success); border-color: var(--success); background: var(--bmm-success-dim); }
 .pcb-badge.is-link { color: var(--accent); border-color: var(--accent); background: var(--bmm-bg-active); }
 .pcb-badge.is-bad { color: var(--warning); border-color: var(--warning); background: var(--bmm-warning-dim); }
+
+/* Adding a catalogue you do NOT follow to an index you are publishing. */
+.cix-add { display: flex; gap: 6px; margin-top: 8px; align-items: center; flex-wrap: wrap; }
+.cix-add > select { flex: 0 0 120px; font-size: 11px; padding: 4px 6px; }
+.cix-add > input { flex: 1 1 200px; min-width: 160px; font-size: 11px; padding: 4px 8px; }
+.cix-added { display: flex; flex-direction: column; gap: 3px; margin-top: 6px; }
+.cix-added-row { display: flex; align-items: center; gap: 8px; font-size: 11px; }
+.cix-added-url {
+    flex: 1;
+    min-width: 0;
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
 .sched-tcb-foot { display: flex; align-items: center; gap: 8px; }
 .sched-tcb-count { font-size: 11px; color: var(--text-muted); }
 .sched-pc-publish { width: 100%; justify-content: center; margin-top: 6px; }

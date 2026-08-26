@@ -8,7 +8,7 @@ import { t } from '../../core/i18n.js';
 import { bcRoot, bcTestMode } from '../../core/links-config.js';
 import { initI18nSandbox } from './i18n-sandbox.js';
 import { renderShortcutsManager } from '../../core/commands.js';
-import { parseCatalogIndex, planImport, STORE_KEY, rememberOrigin, addSource, removeSource, originOf, originLabel, forgetOrigin, readHistory, recordHistory, clearHistory, forgetHistoryAt, isDisabled, setDisabled, } from '../catalogs/catalog-index.js';
+import { parseCatalogIndex, planImport, STORE_KEY, rememberOrigin, addSource, removeSource, originOf, originLabel, forgetOrigin, readHistory, recordHistory, clearHistory, forgetHistoryAt, isDisabled, setDisabled, INDEX_TYPES, } from '../catalogs/catalog-index.js';
 import { toast } from '../../ui/app.js';
 import { getProfiles, getActiveProfileId } from '../profiles/profiles.js';
 import { formatBytes, escHtml, escAttr } from '../../core/utils.js';
@@ -2033,11 +2033,57 @@ async function initCatalogIndexSettings() {
         // taken when the card was built would offer catalogues you have since removed.
         makeFold.addEventListener('toggle', () => { if (makeFold.open)
             void paint(); });
+        // ── Catalogues you do NOT follow ────────────────────────────────────
+        //
+        // An index is a list of addresses, and nothing says you have to follow one to name
+        // it. Recommending somebody else's catalogue was the obvious thing to want and the
+        // one thing this card could not do — so publishing a reading list meant hand-writing
+        // the JSON after all, which is what the card exists to avoid.
+        const extra = [];
+        const typeSel = document.getElementById('cat-index-add-type');
+        const addedEl = document.getElementById('cat-index-added');
+        if (typeSel && !typeSel.options.length) {
+            typeSel.innerHTML = INDEX_TYPES
+                .map((ty) => `<option value="${escAttr(ty)}">${escHtml(t(`settings.catIndex.type.${ty}`))}</option>`).join('');
+        }
+        const paintExtra = () => {
+            if (!addedEl)
+                return;
+            addedEl.innerHTML = extra.map((e, i) => `
+                <div class="cix-added-row">
+                    <span class="cat-index-type">${escHtml(t(`settings.catIndex.type.${e.type}`))}</span>
+                    <span class="cix-added-url">${escHtml(e.url)}</span>
+                    <button type="button" class="btn btn-xs btn-ghost cix-drop" data-i="${i}">×</button>
+                </div>`).join('');
+            addedEl.querySelectorAll('.cix-drop').forEach((b) => b.addEventListener('click', () => {
+                extra.splice(Number(b.dataset.i), 1);
+                paintExtra();
+            }));
+        };
+        document.getElementById('cat-index-add-btn')?.addEventListener('click', () => {
+            const urlEl = document.getElementById('cat-index-add-url');
+            const url = (urlEl?.value || '').trim();
+            // http(s) only, and said here rather than at export: the address is checked where
+            // it is typed, so the mistake is fixed while the box is still in front of you.
+            if (!/^https?:\/\//i.test(url)) {
+                toast(t('settings.catIndex.addBadUrl'), 'warning');
+                return;
+            }
+            const type = typeSel?.value || 'app';
+            if (extra.some((e) => e.url === url && e.type === type)) {
+                toast(t('settings.catIndex.addDup'), 'warning');
+                return;
+            }
+            extra.push({ type, url });
+            if (urlEl)
+                urlEl.value = '';
+            paintExtra();
+        });
         document.getElementById('cat-index-make-export')?.addEventListener('click', async () => {
             const name = document.getElementById('cat-index-make-name')?.value?.trim()
                 || t('settings.catIndex.makeDefName');
             const picks = [...document.querySelectorAll('.cix-pick')].filter((b) => b.checked);
-            if (!picks.length) {
+            if (!picks.length && !extra.length) {
                 toast(t('settings.catIndex.makeNone'), 'warning');
                 return;
             }
@@ -2048,7 +2094,10 @@ async function initCatalogIndexSettings() {
             const doc = {
                 version: '1.0',
                 name,
-                catalogs: picks.map((b) => ({ type: b.dataset.t, url: b.dataset.u, app: 'bmm' })),
+                catalogs: [
+                    ...picks.map((b) => ({ type: b.dataset.t, url: b.dataset.u, app: 'bmm' })),
+                    ...extra.map((e) => ({ type: e.type, url: e.url, app: 'bmm' })),
+                ],
             };
             const { saveFile } = await import('../../core/api.js');
             const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'catalogs';
@@ -2057,7 +2106,7 @@ async function initCatalogIndexSettings() {
                 return;
             try {
                 await invoke('write_text_file', { path, content: JSON.stringify(doc, null, 2) });
-                toast(t('settings.catIndex.makeDone').replace('{n}', String(picks.length)), 'success', 7000);
+                toast(t('settings.catIndex.makeDone').replace('{n}', String(picks.length + extra.length)), 'success', 7000);
             }
             catch (e) {
                 toast(String(e), 'error');

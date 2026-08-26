@@ -231,12 +231,32 @@ async function renderBuilder(ov: HTMLElement): Promise<void> {
         listEl.innerHTML = `<span style="font-size:12px;color:var(--text-muted)">${escHtml(t('modpack.cat.build.noPacks'))}</span>`;
         return;
     }
+    // Packed by default — a .bmp is a small signed JSON document, so carrying it is right
+    // almost always. The alternative exists for the pack somebody already hosts: it should
+    // not have to be copied in to be listed beside the others.
     listEl.innerHTML = packs.map((p, i) => `
-      <label style="display:flex;align-items:center;gap:8px;min-width:0;cursor:pointer">
-        <input type="checkbox" class="mpc-b-pick" data-i="${i}" checked style="flex:0 0 auto">
-        <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px">${escHtml(p.name || '')}</span>
-        <span style="flex:0 0 auto;font-size:10px;color:var(--text-muted)">${Array.isArray(p.mods) ? p.mods.length : 0} ${escHtml(t('modpack.cat.mods'))}</span>
-      </label>`).join('');
+      <div class="cat-pub-row" data-i="${i}">
+        <label class="cat-pub-pick">
+          <input type="checkbox" class="mpc-b-pick" data-i="${i}" checked style="flex:0 0 auto">
+          <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px">${escHtml(p.name || '')}</span>
+          <span style="flex:0 0 auto;font-size:10px;color:var(--text-muted)">${Array.isArray(p.mods) ? p.mods.length : 0} ${escHtml(t('modpack.cat.mods'))}</span>
+        </label>
+        <select class="input cat-pub-mode mpc-b-mode" data-i="${i}">
+          <option value="embed">${escHtml(t('catpub.embed'))}</option>
+          <option value="link">${escHtml(t('catpub.link'))}</option>
+        </select>
+        <input class="input cat-pub-url mpc-b-url" data-i="${i}" hidden spellcheck="false"
+               placeholder="${escAttr(t('catpub.urlPh'))}">
+      </div>`).join('');
+
+    listEl.querySelectorAll<HTMLSelectElement>('.mpc-b-mode').forEach((sel) => sel.addEventListener('change', () => {
+        const i = sel.dataset.i!;
+        const box = listEl.querySelector(`.mpc-b-url[data-i="${CSS.escape(i)}"]`) as HTMLInputElement | null;
+        if (box) box.hidden = sel.value !== 'link';
+        // Saying HOW a pack should be published is saying you want it published.
+        const cb = listEl.querySelector(`.mpc-b-pick[data-i="${CSS.escape(i)}"]`) as HTMLInputElement | null;
+        if (cb) cb.checked = true;
+    }));
 
     const exportBtn = ov.querySelector('#mpc-b-export') as HTMLButtonElement | null;
     if (exportBtn && exportBtn.dataset.wired !== '1') {
@@ -245,17 +265,33 @@ async function renderBuilder(ov: HTMLElement): Promise<void> {
             const name = (ov.querySelector('#mpc-b-name') as HTMLInputElement).value.trim()
                 || t('modpack.cat.build.defName');
             const ids: string[] = [];
+            const links: Array<{ id: string; name: string; description: string; url: string }> = [];
+            const bad: string[] = [];
             listEl.querySelectorAll<HTMLInputElement>('.mpc-b-pick').forEach((box) => {
-                if (box.checked) ids.push(packs[Number(box.dataset.i)]?.id);
+                if (!box.checked) return;
+                const i = Number(box.dataset.i);
+                const p = packs[i];
+                if (!p) return;
+                const mode = (listEl.querySelector(`.mpc-b-mode[data-i="${CSS.escape(String(i))}"]`) as HTMLSelectElement | null)?.value;
+                if (mode !== 'link') { ids.push(p.id); return; }
+                const url = ((listEl.querySelector(`.mpc-b-url[data-i="${CSS.escape(String(i))}"]`) as HTMLInputElement | null)?.value || '').trim();
+                // Named, and refused. A pack set to link with no address would publish as a
+                // row nobody can follow, and dropping it silently publishes a shorter list
+                // than the one on screen.
+                if (!/^https?:\/\//i.test(url)) { bad.push(p.name || p.id); return; }
+                links.push({ id: String(p.id), name: String(p.name || p.id), description: String(p.description || ''), url });
             });
-            if (!ids.filter(Boolean).length) { toast(t('modpack.cat.build.nothing'), 'warning'); return; }
+            if (bad.length) {
+                toast(t('catpub.dropped').replace('{n}', String(bad.length)) + ' — ' + bad.slice(0, 3).join(' · '), 'warning', 8000);
+            }
+            if (!ids.filter(Boolean).length && !links.length) { toast(t('modpack.cat.build.nothing'), 'warning'); return; }
             const { saveFile } = await import('../../core/api.js');
             const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'modpacks';
             const path = await saveFile({ defaultPath: `${slug}.cbmp`, filters: [{ name: 'BMM modpack catalogue', extensions: ['cbmp'] }] });
             if (!path) return;
             exportBtn.disabled = true;
             try {
-                const n = await invoke('export_modpack_catalog', { name, ids: ids.filter(Boolean), destPath: path }) as number;
+                const n = await invoke('export_modpack_catalog', { name, ids: ids.filter(Boolean), links, destPath: path }) as number;
                 toast(t('modpack.cat.build.done').replace('{n}', String(n)), 'success', 7000);
             } catch (e) {
                 toast(String(e).startsWith('modpack.cat.errNoPacks') ? t('modpack.cat.build.nothing') : String(e), 'error', 8000);

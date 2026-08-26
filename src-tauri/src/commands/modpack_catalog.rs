@@ -23,6 +23,16 @@ use tauri::{AppHandle, State};
 
 /// One entry, as `catalog.json` lists it.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LinkedPack {
+    pub id: String,
+    pub name: String,
+    #[serde(default)]
+    pub description: String,
+    pub url: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CatalogPack {
     pub id: String,
     pub name: String,
@@ -68,17 +78,24 @@ fn safe_entry(id: &str, index: usize) -> String {
 
 /// Write a `.cbmp` holding the named modpacks.
 #[tauri::command]
+/// `links` are entries that live somewhere else.
+///
+/// A `.cbmp` carries its packs, and that is the right default for a small signed JSON
+/// document — but a pack somebody already hosts should not have to be copied in to be
+/// listed beside them. Each link is written into the index with its address instead of a
+/// zip entry, and nothing is packed for it.
 pub async fn export_modpack_catalog(
     handle: AppHandle,
     state: State<'_, crate::state::AppState>,
     name: String,
     ids: Vec<String>,
+    links: Vec<LinkedPack>,
     dest_path: String,
 ) -> Result<usize, AppError> {
     let _ = &state;
     let title = name.trim();
     let title = if title.is_empty() { "Modpacks" } else { title };
-    if ids.is_empty() {
+    if ids.is_empty() && links.is_empty() {
         return Err(AppError::Internal("modpack.cat.errNoPacks".into()));
     }
 
@@ -113,6 +130,27 @@ pub async fn export_modpack_catalog(
             version: String::new(),
             mods: Some(pack.mods.len()),
             file: entry,
+        });
+    }
+
+    // The linked ones, after the packed ones so the index reads in the order the builder
+    // showed. `file` carries the ADDRESS here — the reader already branches on whether it
+    // looks like a URL, because that is how a .json feed and a .cbmp have always differed.
+    for l in &links {
+        let url = l.url.trim();
+        // http(s) only, checked HERE as well as on screen: a catalogue is a list of
+        // addresses somebody else will follow, and this is the last place before it is
+        // written to somebody's disk.
+        if !(url.starts_with("http://") || url.starts_with("https://")) {
+            continue;
+        }
+        entries.push(CatalogPack {
+            id: l.id.clone(),
+            name: l.name.clone(),
+            description: l.description.clone(),
+            version: String::new(),
+            mods: None,
+            file: url.to_string(),
         });
     }
 

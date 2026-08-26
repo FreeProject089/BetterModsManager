@@ -137,7 +137,7 @@ function openThemeCatalogBuilder(): void {
                     <span class="tcb-swatch" style="background:${accent}"></span>
                     <span class="tcb-name">${escHtml(th.name || th.id)}${isBuiltin ? ` <span class="tcb-tag">${t('themes.builtin') || 'Default'}</span>` : ''}</span>
                 </label>
-                <select class="input cat-pub-mode tcb-mode" data-id="${escAttr(th.id)}"${on ? '' : ' disabled'}>
+                <select class="input cat-pub-mode tcb-mode" data-id="${escAttr(th.id)}">
                     <option value="inline"${m.mode === 'inline' ? ' selected' : ''}>${escHtml(t('catpub.inline'))}</option>
                     <option value="file"${m.mode === 'file' ? ' selected' : ''}>${escHtml(t('catpub.embed'))}</option>
                     <option value="link"${m.mode === 'link' ? ' selected' : ''}>${escHtml(t('catpub.link'))}</option>
@@ -167,6 +167,7 @@ function openThemeCatalogBuilder(): void {
             <div class="modal-footer" style="padding:12px 18px;border-top:1px solid rgba(255,255,255,0.06);display:flex;gap:8px;align-items:center;">
                 <span id="tcb-count" style="font-size:11px;color:var(--bmm-text-muted);">0 ${t('themes.themes') || 'theme(s)'}</span>
                 <div style="flex:1"></div>
+                <label class="sched-tg" style="margin-right:auto"><input type="checkbox" id="tcb-bundle"> ${escHtml(t('sched.tcb.bundle'))}</label>
                 <button class="btn btn-ghost btn-sm" id="tcb-export">${t('themes.exportBtn') || 'Export'}</button>
                 <button class="btn btn-accent btn-sm" id="tcb-export-source">${t('themes.exportAndSource') || 'Export & add as source'}</button>
             </div>
@@ -180,7 +181,10 @@ function openThemeCatalogBuilder(): void {
         const on = picked.has(id);
         const sel = builder.querySelector(`.tcb-mode[data-id="${CSS.escape(id)}"]`) as HTMLSelectElement | null;
         const box = builder.querySelector(`.tcb-url[data-id="${CSS.escape(id)}"]`) as HTMLInputElement | null;
-        if (sel) { sel.disabled = !on; sel.value = modeOf(id).mode; }
+        // The picker stays LIVE whether or not the row is ticked. Dead until ticked was a
+        // two-step nobody discovers: you reach for the thing that says what will happen,
+        // it does nothing, and there is no way to tell that from a broken control.
+        if (sel) sel.value = modeOf(id).mode;
         if (box) box.hidden = !on || modeOf(id).mode !== 'link';
     };
     const recount = () => {
@@ -197,8 +201,16 @@ function openThemeCatalogBuilder(): void {
     }));
     builder.querySelectorAll('.tcb-mode').forEach(sel => sel.addEventListener('change', (e) => {
         const el = e.target as HTMLSelectElement;
-        modes.set(el.dataset.id!, { ...modeOf(el.dataset.id!), mode: el.value as any });
-        syncRow(el.dataset.id!);
+        const id = el.dataset.id!;
+        modes.set(id, { ...modeOf(id), mode: el.value as any });
+        // Saying HOW a theme should be published is saying you want it published. Making
+        // somebody tick the box as well is a second step for a decision already made.
+        if (!picked.has(id)) {
+            picked.add(id);
+            const cb = builder.querySelector(`.tcb-cb[data-id="${CSS.escape(id)}"]`) as HTMLInputElement | null;
+            if (cb) cb.checked = true;
+        }
+        syncRow(id);
         recount();
     }));
     builder.querySelectorAll('.tcb-url').forEach(box => box.addEventListener('input', (e) => {
@@ -250,23 +262,59 @@ function openThemeCatalogBuilder(): void {
         }
         const slug = built.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'themes';
 
-        // A catalogue with files beside it needs a FOLDER; one that is entirely inline or
-        // linked is a single document, and asking for a folder to write one file would be a
-        // worse question. The choice on screen decides which is asked.
+        // Three shapes, and the choices on screen decide which is asked for:
+        //   files + bundle → a .bmmbundle saved where you say, built in a staging folder
+        //   files          → a folder to put them in
+        //   neither        → one document, so a filename
+        // Asking for a folder to write a single file would be a worse question, and asking
+        // for one to then fill it with loose files AND an archive is what this used to do.
+        const wantBundle = !!(builder.querySelector('#tcb-bundle') as HTMLInputElement | null)?.checked;
         if (built.files.length) {
-            const { pickFolder } = await import('../../core/api.js');
-            const dir = await pickFolder().catch(() => null);
-            if (!dir) return null;
+            const { pickFolder, saveFile } = await import('../../core/api.js');
+            let dir: string | null = null;
+            let bundleOut = '';
+            if (wantBundle) {
+                bundleOut = (await saveFile({
+                    defaultPath: `${slug}.bmmbundle`,
+                    filters: [{ name: t('catpub.bundleKind'), extensions: ['bmmbundle'] }],
+                }).catch(() => null)) as string;
+                if (!bundleOut) return null;
+                dir = (await invoke('catalog_bundle_stage').catch(() => null)) as string;
+                if (!dir) { toast(t('catpub.stageFailed'), 'error'); return null; }
+            } else {
+                dir = await pickFolder().catch(() => null);
+                if (!dir) return null;
+            }
             const sep = dir.includes('\\') ? '\\' : '/';
             try {
                 for (const f of built.files) {
                     await invoke('write_text_file', { path: `${dir}${sep}${f.file}`, content: f.content });
                 }
                 await invoke('write_text_file', { path: `${dir}${sep}catalog.json`, content: built.json });
+                if (bundleOut) {
+                    const res: any = await invoke('catalog_bundle_pack', { dir, out: bundleOut });
+                    if (res?.missing?.length) {
+                        toast(t('plugins.catPackMissing')
+                            .replace('{n}', String(res.missing.length))
+                            .replace('{list}', res.missing.slice(0, 5).join(', ')), 'warning', 7000);
+                    }
+                    toast(t('themes.catalogExportedBundle')
+                        .replace('{n}', String(built.files.length))
+                        .replace('{f}', String(bundleOut).replace(/^.*[/\\]/, '')), 'success');
+                    return bundleOut;
+                }
                 toast((t('themes.catalogExportedFolder'))
                     .replace('{n}', String(built.files.length)), 'success');
                 return `${dir}${sep}catalog.json`;
             } catch (e) { toast(`${t('common.error')}: ${e}`, 'error'); return null; }
+            finally {
+                if (bundleOut && dir) await invoke('catalog_bundle_unstage', { dir }).catch(() => {});
+            }
+        }
+        if (wantBundle) {
+            // Nothing to pack: every theme is inline or linked, so the catalogue IS the
+            // whole thing. Said rather than silently writing a zip with one file in it.
+            toast(t('themes.bundleNothing'), 'warning');
         }
 
         const path = await saveFile({ defaultPath: `${slug}.json`, filters: [{ name: 'JSON catalog', extensions: ['json'] }] });

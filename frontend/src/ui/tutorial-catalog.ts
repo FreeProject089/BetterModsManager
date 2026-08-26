@@ -132,7 +132,7 @@ export async function openTutorialCatalogBuilder(): Promise<void> {
                                 <span class="repo-cat-b-name">${escHtml(r.name)}</span>
                                 <span class="repo-cat-b-url" title="${escAttr(r.id)}">${escHtml(r.mode === 'link' ? t('catpub.linked') : `${r.id}.bmmtut`)}</span>
                             </label>
-                            <select class="input cat-pub-mode" data-m="${i}" ${r.on ? '' : 'disabled'}>
+                            <select class="input cat-pub-mode" data-m="${i}">
                                 <option value="embed"${r.mode === 'embed' ? ' selected' : ''}>${escHtml(t('catpub.embed'))}</option>
                                 <option value="link"${r.mode === 'link' ? ' selected' : ''}>${escHtml(t('catpub.link'))}</option>
                             </select>
@@ -163,7 +163,11 @@ export async function openTutorialCatalogBuilder(): Promise<void> {
         }));
         ov.querySelectorAll('[data-m]').forEach((c) => c.addEventListener('change', (e) => {
             const el = e.target as HTMLSelectElement;
-            rows[Number(el.dataset.m)].mode = el.value === 'link' ? 'link' : 'embed';
+            const r = rows[Number(el.dataset.m)];
+            r.mode = el.value === 'link' ? 'link' : 'embed';
+            // Saying HOW a lesson should be published is saying you want it published —
+            // and a picker that does nothing until a box is ticked reads as broken.
+            r.on = true;
             paint();
         }));
         // NOT repainted on input: the whole modal is rebuilt by paint(), which would take
