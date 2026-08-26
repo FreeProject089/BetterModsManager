@@ -42,6 +42,7 @@ pub mod game_watch;
 pub mod catalog_sources;
 pub mod plugin_assets_core;
 pub mod plugin_assets;
+pub mod hooks;
 pub mod repo_remote;
 pub mod whitelist_manager;
 pub mod discord;

@@ -226,6 +226,16 @@ struct RepoExtraBody {
     password: Option<String>,
 }
 
+/// `POST /api/hook` — ring a named doorbell a scheduled task can be waiting on.
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct HookBody {
+    name: String,
+    /// Anything the caller wants the waiting task to receive. Free-form on purpose.
+    #[serde(default)]
+    data: Option<serde_json::Value>,
+}
+
 /// `POST /api/catalogs` — follow or stop following a catalogue.
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -3030,6 +3040,48 @@ pub async fn start_api_server(
         .boxed();
 
     // group_c: repo routes (cancel routes BEFORE the main route they override)
+    // ── The doorbell ─────────────────────────────────────────────────
+    //
+    // A scheduled task could wait for a clock and for a file. This is the third thing:
+    // something else finished, and it knows that it did.
+    //
+    // The token is required like everywhere else. That makes this a LOCAL doorbell — the
+    // API listens on 127.0.0.1, so a service on the internet cannot reach it without a
+    // tunnel the user sets up on purpose, and then they can carry the token. What it is
+    // really for is the other things on this machine: a script, a game, another tool.
+    let tok_hook = token.clone();
+    let hook_ring = warp::path!("api" / "hook")
+        .and(warp::post())
+        .and(require_token(tok_hook))
+        .and(warp::body::json::<HookBody>())
+        .map(|body: HookBody| {
+            match crate::commands::hooks::hook_fire(body.name, body.data) {
+                Ok(name) => warp::reply::with_status(
+                    // The name it was FILED under, which is not always the name given — it
+                    // is narrowed to something that can be a key. A caller that sent
+                    // "build/done" needs to know it became "build_done", or it waits on a
+                    // name nothing will ever ring.
+                    warp::reply::json(&serde_json::json!({ "ok": true, "name": name })),
+                    StatusCode::ACCEPTED),
+                Err(e) => warp::reply::with_status(
+                    warp::reply::json(&ApiError { error: e }), StatusCode::BAD_REQUEST),
+            }
+        });
+
+    let tok_hook_list = token.clone();
+    let hook_seen = warp::path!("api" / "hook")
+        .and(warp::get())
+        .and(require_token(tok_hook_list))
+        .map(|| {
+            // "Is my webhook actually arriving?" is the first question when a wait never
+            // ends, and it had no answer at all before this.
+            let seen: Vec<serde_json::Value> = crate::commands::hooks::hook_list()
+                .into_iter()
+                .map(|(name, count)| serde_json::json!({ "name": name, "count": count }))
+                .collect();
+            warp::reply::with_status(warp::reply::json(&serde_json::json!({ "hooks": seen })), StatusCode::OK)
+        });
+
     // ── What a plugin ships ─────────────────────────────────────────
     //
     // Read only, and that is the whole decision. Copying one OUT is not exposed: a caller
@@ -3200,7 +3252,9 @@ pub async fn start_api_server(
             }
         });
 
-    let group_c = plugin_assets
+    let group_c = hook_ring
+        .or(hook_seen)
+        .or(plugin_assets)
         .or(catalogs_get)
         .or(catalogs_set)
         .or(repo_extra_take)

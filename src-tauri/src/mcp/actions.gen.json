@@ -457,6 +457,18 @@
       "group": "system"
     },
     {
+      "type": "wait.http",
+      "label": "Wait until an address answers",
+      "needs": "waitHttp",
+      "group": "system"
+    },
+    {
+      "type": "wait.hook",
+      "label": "Wait for a signal (webhook)",
+      "needs": "waitHook",
+      "group": "system"
+    },
+    {
       "type": "text.extract",
       "label": "Read a value out of a file or a variable",
       "needs": "textExtract",

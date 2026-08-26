@@ -113,6 +113,58 @@ pub fn run_scheduled_command(
 /// arbitrary executable.
 ///
 /// `allow` MUST be true; it carries the task's explicit "run scripts" permission.
+/// What a script did, rather than whether it pleased us.
+///
+/// `run_scheduled_script` turns a non-zero exit into an `Err`, which makes "exited 2 because
+/// there was nothing to do" indistinguishable from "the interpreter is not installed" — one
+/// is a result and the other is a broken step. A script that wanted to REPORT a state had no
+/// way to, because saying so failed the step that asked.
+///
+/// This returns the state. Starting the program is still the only thing that can fail.
+#[derive(serde::Serialize)]
+pub struct ScriptRun {
+    /// True when the process exited 0.
+    pub ok: bool,
+    /// The exit code. `-1` when the process was ended by a signal and has none — a real
+    /// outcome that is not any exit code, so it gets a value no exit code can be.
+    pub code: i32,
+    pub stdout: String,
+    pub stderr: String,
+}
+
+#[tauri::command]
+pub fn run_scheduled_script_full(
+    engine: String,
+    code: String,
+    working_dir: Option<String>,
+    allow: bool,
+) -> Result<ScriptRun, String> {
+    match run_scheduled_script(engine, code, working_dir, allow) {
+        Ok(stdout) => Ok(ScriptRun { ok: true, code: 0, stdout, stderr: String::new() }),
+        Err(e) => {
+            // The failure string is parsed back rather than the runner being duplicated:
+            // one place spawns processes, resolves interpreters and cleans up temp files,
+            // and a second copy of it would be a second place to keep those right.
+            //
+            // A message that does NOT match the exit shape is a failure to START — no
+            // interpreter, unwritable temp dir — and that is still an error, because there
+            // is no exit code to branch on and nothing ran.
+            if let Some(rest) = e.strip_prefix("Script exited with ") {
+                let (code_s, tail) = rest.split_once(':').unwrap_or((rest, ""));
+                let code = code_s.trim().parse::<i32>().unwrap_or(-1);
+                return Ok(ScriptRun {
+                    ok: false,
+                    code,
+                    stdout: String::new(),
+                    stderr: tail.trim().to_string(),
+                });
+            }
+            Err(e)
+        }
+    }
+}
+
+// `(async)` is not decoration here either: `cmd.output()` blocks until the child EXITS.
 #[tauri::command(async)]
 pub fn run_scheduled_script(
     engine: String,

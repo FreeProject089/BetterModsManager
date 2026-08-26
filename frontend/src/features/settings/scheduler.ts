@@ -1332,6 +1332,24 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
         }
         case 'custom.script': {
             requirePerm(task, 'script', t('sched.permRunScript') || 'run scripts');
+            // A non-zero exit used to fail the whole STEP, so a script could not report a
+            // state — "exited 2 because there was nothing to do" and "could not start" were
+            // the same outcome. With this ticked the exit code lands in a variable and the
+            // task decides what it means.
+            if (p.keepGoing) {
+                const r = await invoke('run_scheduled_script_full', {
+                    engine: p.engine || 'powershell',
+                    code: String(p.code || ''),
+                    workingDir: p.workingDir || null,
+                    allow: true,
+                }) as { code: number; stdout: string; stderr: string; ok: boolean };
+                ctx.nums['script.code'] = Number(r.code);
+                ctx.nums['script.ok'] = r.ok ? 1 : 0;
+                ctx.text['script.stdout'] = String(r.stdout || '');
+                ctx.text['script.stderr'] = String(r.stderr || '');
+                _captureOutput(p, r.stdout, ctx);
+                break;
+            }
             // The body goes through the same {item.*} / {var} substitution as every
             // other string param, so a script inside a For-Each can act on the item
             // it was handed instead of re-deriving it.
@@ -1704,6 +1722,84 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
             // that `text.extract` and the watch trigger use what it found.
             ctx.text['game.watchFile'] = watch;
             if (game !== 'dcs') toast(`${task.name}: ${t('sched.gw.ready').replace('{f}', watch.replace(/^.*[/\\]/, ''))}`, 'success', 7000);
+            break;
+        }
+
+        // Poll an address until it answers, or give up.
+        //
+        // The point is the giving up. A wait with no ceiling is a task that hangs forever
+        // and a scheduler that never runs the next one — and "still waiting" looks exactly
+        // like "working" from outside.
+        case 'wait.http': {
+            const url = String(p.url || '').trim();
+            if (!url) { toast(`${task.name}: ${t('sched.wait.noUrl')}`, 'warning', 8000); break; }
+            const everyMs = Math.max(1000, Number(p.everySeconds || 5) * 1000);
+            const untilMs = Date.now() + Math.max(everyMs, Number(p.timeoutSeconds || 300) * 1000);
+            const wantStatus = Number(p.status || 0);
+            let tries = 0;
+            let ok = false;
+            let lastStatus = 0;
+            while (Date.now() < untilMs) {
+                tries += 1;
+                try {
+                    // Same command the http.request action uses. It resolves any status
+                    // rather than throwing on a 4xx/5xx, which is what makes "wait until it
+                    // stops answering 503" expressible at all.
+                    const r = await invoke('http_request', {
+                        url, method: 'GET', headers: {}, body: null,
+                        timeoutMs: Math.min(everyMs, 15000),
+                    }) as any;
+                    lastStatus = Number(r?.status || 0);
+                    // Any 2xx by default; an exact code when the task named one — a service
+                    // that answers 503 while starting is the case this exists for.
+                    ok = wantStatus ? lastStatus === wantStatus : (lastStatus >= 200 && lastStatus < 300);
+                } catch { ok = false; }
+                if (ok) break;
+                if (Date.now() + everyMs >= untilMs) break;
+                await new Promise((r) => setTimeout(r, everyMs));
+            }
+            ctx.nums['wait.tries'] = tries;
+            ctx.nums['wait.ok'] = ok ? 1 : 0;
+            ctx.nums['http.status'] = lastStatus;
+            if (!ok) {
+                // Said out loud, with the last status. A silent give-up leaves the steps
+                // after this running against something that never came up.
+                toast(`${task.name}: ${t('sched.wait.gaveUp')
+                    .replace('{n}', String(tries)).replace('{s}', String(lastStatus || '—'))}`, 'warning', 12000);
+                if (p.stopOnTimeout !== false) throw new _StopTask(t('sched.wait.stopped'));
+            }
+            break;
+        }
+
+        // Wait for something to ring a named doorbell.
+        //
+        // `POST /api/hook` with that name wakes this up. Only rings from AFTER the wait
+        // began count, so a task that runs hourly does not fire instantly on last hour's
+        // signal.
+        case 'wait.hook': {
+            const name = String(p.name || '').trim();
+            if (!name) { toast(`${task.name}: ${t('sched.wait.noName')}`, 'warning', 8000); break; }
+            const since = Date.now();
+            const everyMs = Math.max(500, Number(p.everySeconds || 2) * 1000);
+            const untilMs = since + Math.max(everyMs, Number(p.timeoutSeconds || 300) * 1000);
+            let hits: any[] = [];
+            while (Date.now() < untilMs) {
+                hits = await (invoke('hook_poll', { name, since }) as Promise<any[]>).catch(() => []);
+                if (hits.length) break;
+                if (Date.now() + everyMs >= untilMs) break;
+                await new Promise((r) => setTimeout(r, everyMs));
+            }
+            ctx.nums['wait.ok'] = hits.length ? 1 : 0;
+            if (hits.length) {
+                // Whatever the caller sent, as text, so the next steps can read it. A
+                // doorbell that could only say "somebody rang" would need a second channel
+                // for the thing it rang about.
+                const last = hits[hits.length - 1];
+                ctx.text['hook.data'] = typeof last?.data === 'string' ? last.data : JSON.stringify(last?.data ?? null);
+            } else {
+                toast(`${task.name}: ${t('sched.wait.noSignal').replace('{h}', name)}`, 'warning', 12000);
+                if (p.stopOnTimeout !== false) throw new _StopTask(t('sched.wait.stopped'));
+            }
             break;
         }
 
@@ -4772,6 +4868,10 @@ const ACTION_TYPES: { v: string; label: string; needs?: string; group: string }[
     { v: 'map.clear', label: 'Map — empty it', needs: 'mapName', group: 'logic' },
     { v: 'var.clear', label: 'Clear a shared variable', needs: 'varClear', group: 'logic' },
     { v: 'http.request', label: 'Call an HTTP API', needs: 'http', group: 'system' },
+    // Waiting for something OUTSIDE BMM to be ready. A task could wait for a clock and for
+    // a file; these are the two cases that kept coming up and had no answer.
+    { v: 'wait.http', label: 'Wait until an address answers', needs: 'waitHttp', group: 'system' },
+    { v: 'wait.hook', label: 'Wait for a signal (webhook)', needs: 'waitHook', group: 'system' },
     // ── Games ──
     // The glue between "a file changed" and "put the right mods on". Universal on purpose:
     // nothing here knows what DCS is except the one action that installs its hook.
@@ -5143,6 +5243,9 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
                 <input class="input sched-p-into" style="margin-top:6px"
                     placeholder="${escAttr(t('sched.scrIntoPh') || 'store the first output line in a variable, e.g. count')}" value="${escAttr(params.into || '')}">
                 <span class="sched-cmd-hint">${t('sched.scrIntoHint') || 'Named here, the result becomes a variable later steps can test — otherwise a script can only pass or fail.'}</span>
+                <label class="sched-cmd-row" style="margin-top:8px"><input type="checkbox" class="sched-p-keepgoing"${params.keepGoing ? ' checked' : ''}>
+                    <span>${escHtml(t('sched.scrKeepGoing'))}</span></label>
+                <span class="sched-cmd-hint">${escHtml(t('sched.scrKeepGoingHint'))}</span>
             </details>
             <span class="sched-cmd-hint">${t('sched.scrHint') || 'Tip: grant “Run scripts” in this task’s Permissions, or it won’t run.'}</span>
         </div>`;
@@ -5404,6 +5507,33 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
             <input type="password" class="input sched-p-lapass" autocomplete="new-password"
                 value="${escAttr(params.passphrase || '')}">
             <span class="sched-cmd-hint">${escHtml(t('sched.la.passHint') || '')}</span>
+        </div>`;
+    }
+    else if (needs === 'waitHttp' || needs === 'waitHook') {
+        const isHook = needs === 'waitHook';
+        host.innerHTML = `<div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${escHtml(isHook ? t('sched.wait.name') : t('sched.wait.url'))}</label>
+            <input class="input ${isHook ? 'sched-p-wname' : 'sched-p-wurl'}" spellcheck="false"
+                placeholder="${escAttr(isHook ? 'build-done' : 'https://…/health')}"
+                value="${escAttr((isHook ? params.name : params.url) || '')}">
+            <span class="sched-cmd-hint">${escHtml(isHook ? t('sched.wait.nameHint') : t('sched.wait.urlHint'))}</span>
+            ${isHook ? '' : `<label class="sched-cmd-label">${escHtml(t('sched.wait.status'))}</label>
+                <input type="number" class="input sched-p-wstatus" min="0" max="599" style="max-width:120px"
+                    placeholder="200" value="${escAttr(params.status ?? '')}">
+                <span class="sched-cmd-hint">${escHtml(t('sched.wait.statusHint'))}</span>`}
+            <label class="sched-cmd-label">${escHtml(t('sched.wait.timing'))}</label>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                <span class="sched-cmd-hint">${escHtml(t('sched.wait.every'))}</span>
+                <input type="number" class="input sched-p-wevery" min="1" style="max-width:90px"
+                    value="${escAttr(String(params.everySeconds ?? (isHook ? 2 : 5)))}">
+                <span class="sched-cmd-hint">${escHtml(t('sched.wait.upTo'))}</span>
+                <input type="number" class="input sched-p-wtimeout" min="1" style="max-width:110px"
+                    value="${escAttr(String(params.timeoutSeconds ?? 300))}">
+                <span class="sched-cmd-hint">${escHtml(t('sched.unitSec'))}</span>
+            </div>
+            <label class="sched-cmd-row"><input type="checkbox" class="sched-p-wstop"${params.stopOnTimeout !== false ? ' checked' : ''}>
+                <span>${escHtml(t('sched.wait.stopOnTimeout'))}</span></label>
+            <span class="sched-cmd-hint">${escHtml(t('sched.wait.stopHint'))}</span>
         </div>`;
     }
     else if (needs === 'gameWatch') {
@@ -5837,6 +5967,13 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
     host.querySelector('.sched-p-lainstall')?.addEventListener('change', (e) => { params.install = (e.target as HTMLInputElement).checked; });
     host.querySelector('.sched-p-laexact')?.addEventListener('change', (e) => { params.exact = (e.target as HTMLInputElement).checked; });
     host.querySelector('.sched-p-lapass')?.addEventListener('input', (e) => { params.passphrase = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-wurl')?.addEventListener('input', (e) => { params.url = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-wname')?.addEventListener('input', (e) => { params.name = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-wstatus')?.addEventListener('input', (e) => { params.status = parseInt((e.target as HTMLInputElement).value, 10) || 0; });
+    host.querySelector('.sched-p-wevery')?.addEventListener('input', (e) => { params.everySeconds = parseInt((e.target as HTMLInputElement).value, 10) || 1; });
+    host.querySelector('.sched-p-wtimeout')?.addEventListener('input', (e) => { params.timeoutSeconds = parseInt((e.target as HTMLInputElement).value, 10) || 1; });
+    host.querySelector('.sched-p-wstop')?.addEventListener('change', (e) => { params.stopOnTimeout = (e.target as HTMLInputElement).checked; });
+    host.querySelector('.sched-p-keepgoing')?.addEventListener('change', (e) => { params.keepGoing = (e.target as HTMLInputElement).checked; });
     host.querySelector('.sched-p-gwpath')?.addEventListener('input', (e) => { params.path = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-p-gwmode')?.addEventListener('change', (e) => { params.mode = (e.target as HTMLSelectElement).value; });
     host.querySelector('.sched-p-dcsmode')?.addEventListener('change', (e) => { params.mode = (e.target as HTMLSelectElement).value; });
@@ -5978,6 +6115,10 @@ const VALUE_SOURCES = [
     // How big the backup came out. A task can then warn when a nightly bundle suddenly
     // triples — which is what a replays section left ticked by accident looks like.
     'backup.bytes',
+    // Written by the two waits and by a script run with "keep going": what happened,
+    // as something a condition can select. Without these a task could wait and could not
+    // branch on the outcome of waiting, which is most of the reason to wait.
+    'wait.ok', 'wait.tries', 'script.code', 'script.ok',
     // Written by http.request on every call, including a failed one. Listed here because
     // check-scheduler-vars caught that it was not: a value an action writes and no
     // condition can select is half a feature, and the half that is missing is the point —

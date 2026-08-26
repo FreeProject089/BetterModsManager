@@ -452,6 +452,7 @@
       "type": "custom.script",
       "group": "system",
       "params": [
+        "keepGoing",
         "engine",
         "code",
         "workingDir"
@@ -575,6 +576,27 @@
       ]
     },
     {
+      "type": "wait.http",
+      "group": "system",
+      "params": [
+        "url",
+        "everySeconds",
+        "timeoutSeconds",
+        "status",
+        "stopOnTimeout"
+      ]
+    },
+    {
+      "type": "wait.hook",
+      "group": "system",
+      "params": [
+        "name",
+        "everySeconds",
+        "timeoutSeconds",
+        "stopOnTimeout"
+      ]
+    },
+    {
       "type": "text.extract",
       "group": "logic",
       "params": [
@@ -685,6 +707,10 @@
     "lasttask.spawned",
     "list.length",
     "backup.bytes",
+    "wait.ok",
+    "wait.tries",
+    "script.code",
+    "script.ok",
     "http.status",
     "map.size",
     "map.hit"

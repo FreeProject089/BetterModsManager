@@ -2,7 +2,7 @@
 
 !!! info ""
 
-    82 actions · 30 conditions · 16 valeurs · 8 sources de boucle
+    84 actions · 30 conditions · 20 valeurs · 8 sources de boucle
 
 > Généré depuis le registre de BMM lui-même, donc cette page ne peut pas décrire une version de l'application qui n'existe pas. Si une action est dans l'éditeur de blocs, elle est dans cette liste.
 
@@ -128,11 +128,13 @@ S'écrit `do <nom>(param: valeur, …)`. Une action sans paramètre prend des pa
 | `restart` | Redémarre BMM | — |
 | `open.url` | Ouvre une URL ou un lien | `url` |
 | `custom.command` | Lance un programme avec arguments | `args` · `program` · `workingDir` |
-| `custom.script` | Exécute du PowerShell, CMD, Bash ou Python que vous écrivez. Exige « Exécuter des scripts ». | `engine` · `code` · `workingDir` |
+| `custom.script` | Exécute du PowerShell, CMD, Bash ou Python que vous écrivez. Exige « Exécuter des scripts ». | `keepGoing` · `engine` · `code` · `workingDir` |
 | `folder.create` | Crée un dossier dans le dossier de données de BMM. Il ne peut pas en sortir. | `path` |
 | `catalog.create` | Écrit un catalog.json dans un dossier, avec les fichiers qu’il référence. Tutoriels et plugins sont liés ; les thèmes sont intégrés. | `dir` · `kind` · `name` · `base` |
 | `deeplink` | Déclenche n'importe quel deep link bmm:// | `url` |
 | `http.request` | Envoie une requête à n’importe quelle adresse et capture la réponse. Exige « Exécuter des programmes externes ». | `url` · `headers` · `method` · `body` · `timeoutMs` · `jsonPath` · `allowAnyStatus` |
+| `wait.http` | L'interroge jusqu'à ce qu'elle réponde, ou abandonne et le dit. | `url` · `everySeconds` · `timeoutSeconds` · `status` · `stopOnTimeout` |
+| `wait.hook` | Dort jusqu'à ce que quelque chose poste sur /api/hook avec ce nom. | `name` · `everySeconds` · `timeoutSeconds` · `stopOnTimeout` |
 
 ## Conditions
 
@@ -177,7 +179,7 @@ S'écrivent là où une condition va — après `if`, `case`, `waitfor`, `repeat
 
 Écrites dans la tâche par une action, puis lisibles dans une comparaison ou une expression — `if disk.free_gb < 5`, `set total = benchmark.mbps * 2`.
 
-`disk.read_mbps` · `disk.write_mbps` · `disk.suggested_limit` · `disk.free_gb` · `disk.free_percent` · `disk.total_gb` · `benchmark.mbps` · `benchmark.total_ms` · `update.available` · `lasttask.ok` · `lasttask.spawned` · `list.length` · `backup.bytes` · `http.status` · `map.size` · `map.hit`
+`disk.read_mbps` · `disk.write_mbps` · `disk.suggested_limit` · `disk.free_gb` · `disk.free_percent` · `disk.total_gb` · `benchmark.mbps` · `benchmark.total_ms` · `update.available` · `lasttask.ok` · `lasttask.spawned` · `list.length` · `backup.bytes` · `wait.ok` · `wait.tries` · `script.code` · `script.ok` · `http.status` · `map.size` · `map.hit`
 
 Une valeur que rien n'a encore écrite vaut zéro. `lasttask.ok` vaut 1 ou 0, et ne veut dire quelque chose qu'après un `run`.
 
