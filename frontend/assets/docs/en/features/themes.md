@@ -5,7 +5,7 @@
 > Building your own? The full token-by-token reference is
 > **[Make your own theme](doc-page:features/making-themes)**.
 
-Not a light/dark switch. BMM ships **twelve** built-in themes (dark and light) and an editor
+Not a light/dark switch. BMM ships **eleven** built-in themes (dark and light) and an editor
 that can rebuild the app's entire look — then export it as a file someone else imports in one
 click.
 
