@@ -1869,6 +1869,32 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
         case 'replay.import':    dl('replay/import', { path: p.path, url: p.url }); break;
         case 'discord.rpc':      dl('discord/rpc', { enabled: b(p.enabled) }); break;
         case 'data.exportAuto':  dl('data/export-auto', { dir: p.dir, name: p.name, increment: p.increment }); break;
+
+        // The real backup: the same archive the Export data screen writes, with the same
+        // sections and the same lock.
+        case 'data.backup': {
+            const { writeBackup, backupDestPath, DEFAULT_SECTIONS } = await import('./data-backup.js');
+            const dir = String(p.dir || '');
+            if (!dir) { toast(`${task.name}: ${t('sched.bk.noDir')}`, 'warning', 8000); break; }
+            const sections = { ...DEFAULT_SECTIONS, ...(p.sections || {}) };
+            // Refused HERE as well as inside writeBackup, so the message names the task. A
+            // nightly job writing unlocked private keys to a synced folder would do it every
+            // night, and the first anybody would know is when it had.
+            if (sections.identityKeys && !p.passphrase) {
+                toast(`${task.name}: ${t('settings.exportKeysNeedPass')}`, 'warning', 12000);
+                break;
+            }
+            const dest = await backupDestPath(dir, p.name, p.increment, 'DATABMM');
+            const r = await writeBackup(dest, sections, p.passphrase || null);
+            const took = r.sections.filter((x) => x.files > 0).length;
+            ctx.nums['backup.bytes'] = r.bytes;
+            ctx.text['backup.path'] = r.path;
+            toast(`${task.name}: ${t('sched.bk.done')
+                .replace('{mb}', (r.bytes / 1048576).toFixed(1))
+                .replace('{n}', String(took))
+                .replace('{f}', String(r.path).replace(/^.*[/\\]/, ''))}`, 'success', 9000);
+            break;
+        }
         case 'restart':          dl('restart'); break;
         case 'app.checkUpdate': {
             const info: any = await invoke('check_for_update', { includePrerelease: !!p.enabled });
@@ -4617,7 +4643,11 @@ const ACTION_TYPES: { v: string; label: string; needs?: string; group: string }[
     // ── System & flow ──
     { v: 'notify', label: 'Show notification', needs: 'message', group: 'system' },
     { v: 'discord.rpc', label: 'Discord Rich Presence', needs: 'toggle', group: 'system' },
-    { v: 'data.exportAuto', label: 'Export data (backup)', needs: 'exportAuto', group: 'system' },
+    // The old one wrote a `.json` through a different command than the Export data screen:
+    // a smaller, different thing, with no choice of contents and no way to lock it. Kept,
+    // because tasks refer to it and a JSON backup is still what an older BMM can read.
+    { v: 'data.exportAuto', label: 'Export data (backup, .json)', needs: 'exportAuto', group: 'system' },
+    { v: 'data.backup', label: 'Back up data (.DATABMM)', needs: 'dataBackup', group: 'system' },
     { v: 'var.set', label: 'Set a variable', needs: 'varSet', group: 'logic' },
     { v: 'app.checkUpdate', label: 'Check for BMM update', needs: 'checkUpdate', group: 'system' },
     { v: 'system.clearApiLog', label: 'Clear API log', group: 'system' },
@@ -4940,6 +4970,71 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
     // Reuses .sched-p-varname / .sched-p-varvalue because the generic wiring at the end of
     // this function already maps them to params.name / params.value — which is exactly what
     // list.set, list.push and list.clear read.
+    else if (needs === 'dataBackup') {
+        // The sections, and their order, come from the shared defaults rather than a list
+        // typed here — a section added to the backup format would otherwise be missing from
+        // this screen and from nowhere else, which is invisible until somebody restores.
+        const SECTIONS: [string, string][] = [
+            ['appData', 'sched.bk.sAppData'], ['themes', 'sched.bk.sThemes'],
+            ['themePresets', 'sched.bk.sPresets'], ['translations', 'sched.bk.sLang'],
+            ['launchPacks', 'sched.bk.sPacks'], ['automations', 'sched.bk.sAutomations'],
+            ['navigation', 'sched.bk.sNav'], ['apps', 'sched.bk.sApps'],
+            ['replays', 'sched.bk.sReplays'], ['crashes', 'sched.bk.sCrashes'],
+            ['diagnostics', 'sched.bk.sDiag'], ['identityKeys', 'sched.bk.sKeys'],
+        ];
+        const DEFAULTS: Record<string, boolean> = {
+            appData: true, themes: true, themePresets: true, translations: true,
+            launchPacks: true, automations: true, navigation: true, apps: true,
+            replays: false, crashes: false, diagnostics: false, identityKeys: false,
+        };
+        params.sections = params.sections || { ...DEFAULTS };
+        const on = (k: string) => params.sections[k] !== undefined ? !!params.sections[k] : DEFAULTS[k];
+
+        host.innerHTML = `<div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${escHtml(t('sched.bk.dir') || '1. Folder')}</label>
+            <div style="display:flex;gap:6px">
+                <input class="input sched-p-bkdir" spellcheck="false" style="flex:1" value="${escAttr(params.dir || '')}">
+                <button type="button" class="btn btn-xs btn-ghost sched-browse-bkdir">${escHtml(t('common.browse') || 'Browse')}</button>
+            </div>
+            <label class="sched-cmd-label">${escHtml(t('sched.bk.name') || '2. File name')}</label>
+            <input class="input sched-p-bkname" spellcheck="false"
+                placeholder="bmm-backup-{date}" value="${escAttr(params.name || '')}">
+            <span class="sched-cmd-hint">${escHtml(t('sched.bk.nameHint') || '')}</span>
+            <label class="sched-cmd-label">${escHtml(t('sched.bk.exists') || '3. If that name is taken')}</label>
+            <select class="input sched-p-bkinc" style="max-width:280px">
+                ${['paren', 'underscore', 'timestamp', 'overwrite'].map((v) =>
+                    `<option value="${v}"${(params.increment || 'paren') === v ? ' selected' : ''}>${escHtml(t('sched.bk.inc.' + v))}</option>`).join('')}
+            </select>
+            <label class="sched-cmd-label">${escHtml(t('sched.bk.what') || '4. What goes in')}</label>
+            <div class="sched-bk-grid">
+                ${SECTIONS.map(([k, key]) => `<label class="sched-cmd-row${k === 'identityKeys' ? ' sched-bk-danger' : ''}">
+                    <input type="checkbox" class="sched-p-bksec" data-sec="${escAttr(k)}"${on(k) ? ' checked' : ''}>
+                    <span>${escHtml(t(key))}</span></label>`).join('')}
+            </div>
+            <label class="sched-cmd-label">${escHtml(t('sched.bk.pass') || '5. Passphrase')}</label>
+            <input type="password" class="input sched-p-bkpass" autocomplete="new-password"
+                value="${escAttr(params.passphrase || '')}">
+            <span class="sched-cmd-hint sched-bk-passhint">${escHtml(t('sched.bk.passHint') || '')}</span>
+        </div>`;
+
+        const passHint = host.querySelector('.sched-bk-passhint') as HTMLElement;
+        const syncHint = () => {
+            // The one section that changes what the passphrase field MEANS: optional
+            // everywhere else, required here, and the screen has to say which it is now.
+            const keys = !!params.sections.identityKeys;
+            passHint.textContent = keys
+                ? (t('sched.bk.passRequired') || '')
+                : (t('sched.bk.passHint') || '');
+            passHint.classList.toggle('is-required', keys);
+        };
+        host.querySelectorAll<HTMLInputElement>('.sched-p-bksec').forEach((cb) => {
+            cb.addEventListener('change', () => {
+                params.sections[cb.dataset.sec as string] = cb.checked;
+                syncHint();
+            });
+        });
+        syncHint();
+    }
     else if (needs === 'pluginAsset') {
         host.innerHTML = `<div class="sched-cmd-builder">
             <label class="sched-cmd-label">${escHtml(t('sched.pa.plugin') || '1. Plugin')}</label>
@@ -5437,6 +5532,17 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
     host.querySelector('.sched-p-listsep')?.addEventListener('input', (e) => { params.sep = (e.target as HTMLInputElement).value; });
     // text.extract / modlist.apply / dcs.hook. Same shape as everything else here: a
     // querySelector that finds nothing for the other action types binds nothing.
+    host.querySelector('.sched-p-bkdir')?.addEventListener('input', (e) => { params.dir = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-bkname')?.addEventListener('input', (e) => { params.name = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-bkinc')?.addEventListener('change', (e) => { params.increment = (e.target as HTMLSelectElement).value; });
+    host.querySelector('.sched-p-bkpass')?.addEventListener('input', (e) => { params.passphrase = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-browse-bkdir')?.addEventListener('click', async () => {
+        const { pickFolder } = await import('../../core/api.js');
+        const d = await pickFolder().catch(() => null);
+        if (!d) return;
+        params.dir = d;
+        (host.querySelector('.sched-p-bkdir') as HTMLInputElement).value = String(d);
+    });
     host.querySelector('.sched-p-txpath')?.addEventListener('input', (e) => { params.path = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-p-txsource')?.addEventListener('input', (e) => { params.source = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-p-txregex')?.addEventListener('input', (e) => { params.regex = (e.target as HTMLInputElement).value; });
@@ -5584,6 +5690,9 @@ const VALUE_SOURCES = [
     'disk.free_gb', 'disk.free_percent', 'disk.total_gb',
     'benchmark.mbps', 'benchmark.total_ms',
     'update.available', 'lasttask.ok', 'lasttask.spawned', 'list.length',
+    // How big the backup came out. A task can then warn when a nightly bundle suddenly
+    // triples — which is what a replays section left ticked by accident looks like.
+    'backup.bytes',
     // Written by http.request on every call, including a failed one. Listed here because
     // check-scheduler-vars caught that it was not: a value an action writes and no
     // condition can select is half a feature, and the half that is missing is the point —

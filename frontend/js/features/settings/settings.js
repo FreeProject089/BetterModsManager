@@ -2950,25 +2950,20 @@ export async function initSettings() {
                             toast(t('settings.dataExported') || 'Data exported successfully', 'success');
                         }
                         else {
-                            // The app_data section is built by the JSON exporter's own rules; the
-                            // bundle command only decides which FILES ride along.
-                            const appDataJson = JSON.parse(await invoke('export_app_data_json', { options, extras }));
-                            // The navbar layout is in localStorage; Rust cannot read it, so it
-                            // travels with the call. Read here rather than in the bundle command
-                            // for the same reason appDataJson is: one place owns the shape.
-                            let navbarConfig = null;
-                            if (bundle.navigation) {
-                                try {
-                                    navbarConfig = JSON.parse(localStorage.getItem('bmm_navbar_config') || 'null');
-                                }
-                                catch {
-                                    navbarConfig = null;
-                                }
-                            }
-                            const r = await invoke('export_data_bundle', {
-                                destPath, options: bundle, appDataJson, extras, navbarConfig,
-                                passphrase: passphrase || null,
-                            });
+                            // Through the shared writer, which the scheduler's backup action
+                            // also uses. It used to be written out here and the scheduler
+                            // wrote a `.json` through a different command — so a nightly
+                            // automation produced a smaller, different thing than this
+                            // button, with no choice of contents and no lock.
+                            const { writeBackup } = await import('./data-backup.js');
+                            const r = await writeBackup(destPath, {
+                                appData: bundle.app_data, themes: bundle.themes,
+                                themePresets: bundle.theme_presets, translations: bundle.translations,
+                                launchPacks: bundle.launch_packs, automations: bundle.automations,
+                                navigation: bundle.navigation, apps: bundle.apps,
+                                replays: bundle.replays, crashes: bundle.crashes,
+                                diagnostics: bundle.diagnostics, identityKeys: bundle.identity_keys,
+                            }, passphrase || null, options, extras);
                             // What it actually took, not what was asked for. A section that was
                             // ticked and turned out empty is the thing worth knowing.
                             const took = r.sections.filter((x) => x.files > 0).length;

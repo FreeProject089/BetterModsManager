@@ -155,10 +155,35 @@ pub fn export_app_data_auto(
     state: State<AppState>, app_handle: tauri::AppHandle,
     dir: String, name: Option<String>, increment: Option<String>,
 ) -> Result<String, String> {
+    let dest = backup_dest_path(dir, name, increment, None)?;
+    export_app_data(state, app_handle, dest.clone(), None, None).map_err(|e| e.to_string())?;
+    Ok(dest)
+}
+
+/// Where an unattended backup goes: the template resolved, the name made legal, and the
+/// collision policy applied.
+///
+/// Split out and exposed as a command because there are now TWO unattended backups — the
+/// old `.json` one and the `.DATABMM` bundle a scheduled task writes — and they must agree
+/// about what `{date}` means and about what happens when the file is already there. Written
+/// twice, they would drift, and the drift would show up as a backup silently overwriting
+/// yesterday's instead of sitting beside it.
+///
+/// `ext` defaults to `json` so the original caller behaves exactly as it did.
+#[tauri::command]
+pub fn backup_dest_path(
+    dir: String,
+    name: Option<String>,
+    increment: Option<String>,
+    ext: Option<String>,
+) -> Result<String, String> {
     let folder = std::path::Path::new(&dir);
     if !folder.is_dir() {
         return Err(format!("Not a folder: {}", dir));
     }
+    let ext = ext.filter(|e| !e.trim().is_empty()).unwrap_or_else(|| "json".into());
+    let ext = ext.trim_start_matches('.').to_string();
+
     let now = chrono::Local::now();
     let tmpl = name.unwrap_or_default();
     let tmpl = if tmpl.trim().is_empty() { "bmm-backup-{date}".to_string() } else { tmpl };
@@ -166,32 +191,92 @@ pub fn export_app_data_auto(
         .replace("{datetime}", &now.format("%Y-%m-%d_%H%M%S").to_string())
         .replace("{date}", &now.format("%Y-%m-%d").to_string())
         .replace("{time}", &now.format("%H%M%S").to_string());
-    // Strip a trailing .json and any illegal filename characters.
-    let base: String = raw.trim_end_matches(".json")
-        .chars().map(|c| if "<>:\"/\\|?*".contains(c) { '_' } else { c }).collect();
+    // Strip a trailing extension the template already carries, and any illegal filename
+    // characters. Case-insensitively: somebody who types `{date}.DATABMM` must not get
+    // `{date}.DATABMM.DATABMM`.
+    let lowered = raw.to_lowercase();
+    let suffix = format!(".{}", ext.to_lowercase());
+    let raw = if lowered.ends_with(&suffix) { raw[..raw.len() - suffix.len()].to_string() } else { raw };
+    let base: String = raw
+        .chars()
+        .map(|c| if "<>:\"/\\|?*".contains(c) { '_' } else { c })
+        .collect();
     let base = base.trim().to_string();
 
     let policy = increment.unwrap_or_else(|| "paren".into());
-    let mut candidate = folder.join(format!("{base}.json"));
+    let mut candidate = folder.join(format!("{base}.{ext}"));
     if candidate.exists() {
         match policy.as_str() {
             "overwrite" => {}
-            "timestamp" => { candidate = folder.join(format!("{base}_{}.json", now.timestamp())); }
+            "timestamp" => { candidate = folder.join(format!("{base}_{}.{ext}", now.timestamp())); }
             "underscore" => {
                 let mut i = 1;
-                while folder.join(format!("{base}_{i}.json")).exists() && i < 9999 { i += 1; }
-                candidate = folder.join(format!("{base}_{i}.json"));
+                while folder.join(format!("{base}_{i}.{ext}")).exists() && i < 9999 { i += 1; }
+                candidate = folder.join(format!("{base}_{i}.{ext}"));
             }
-            _ => { // "paren" (default): name (1).json, name (2).json …
+            _ => { // "paren" (default): name (1).ext, name (2).ext …
                 let mut i = 1;
-                while folder.join(format!("{base} ({i}).json")).exists() && i < 9999 { i += 1; }
-                candidate = folder.join(format!("{base} ({i}).json"));
+                while folder.join(format!("{base} ({i}).{ext}")).exists() && i < 9999 { i += 1; }
+                candidate = folder.join(format!("{base} ({i}).{ext}"));
             }
         }
     }
-    let dest = candidate.to_string_lossy().to_string();
-    export_app_data(state, app_handle, dest.clone(), None, None).map_err(|e| e.to_string())?;
-    Ok(dest)
+    Ok(candidate.to_string_lossy().to_string())
+}
+
+#[cfg(test)]
+mod backup_naming_tests {
+    use super::*;
+
+    #[test]
+    fn the_extension_is_honoured_and_not_doubled() {
+        let d = tempfile::tempdir().unwrap();
+        let dir = d.path().to_string_lossy().to_string();
+        let p = backup_dest_path(dir.clone(), Some("nightly".into()), None, Some("DATABMM".into())).unwrap();
+        assert!(p.ends_with("nightly.DATABMM"), "{}", p);
+        // A template that already carries the extension must not gain a second one — the
+        // save dialog puts one there, so people type it out of habit.
+        let p2 = backup_dest_path(dir.clone(), Some("nightly.DATABMM".into()), None, Some("DATABMM".into())).unwrap();
+        assert!(p2.ends_with("nightly.DATABMM"), "{}", p2);
+        assert!(!p2.to_lowercase().contains(".databmm.databmm"), "{}", p2);
+    }
+
+    #[test]
+    fn a_name_already_taken_does_not_overwrite_by_default() {
+        let d = tempfile::tempdir().unwrap();
+        let dir = d.path().to_string_lossy().to_string();
+        std::fs::write(d.path().join("nightly.DATABMM"), b"yesterday").unwrap();
+        let p = backup_dest_path(dir, Some("nightly".into()), None, Some("DATABMM".into())).unwrap();
+        assert!(p.ends_with("nightly (1).DATABMM"), "{}", p);
+        // Yesterday's is still there. A backup that quietly replaced the previous one is the
+        // failure nobody notices until they need the previous one.
+        assert_eq!(std::fs::read(d.path().join("nightly.DATABMM")).unwrap(), b"yesterday");
+    }
+
+    #[test]
+    fn overwrite_is_available_but_has_to_be_asked_for() {
+        let d = tempfile::tempdir().unwrap();
+        let dir = d.path().to_string_lossy().to_string();
+        std::fs::write(d.path().join("nightly.DATABMM"), b"yesterday").unwrap();
+        let p = backup_dest_path(dir, Some("nightly".into()), Some("overwrite".into()), Some("DATABMM".into())).unwrap();
+        assert!(p.ends_with("nightly.DATABMM"), "{}", p);
+    }
+
+    #[test]
+    fn illegal_characters_become_underscores_rather_than_a_failed_write() {
+        let d = tempfile::tempdir().unwrap();
+        let dir = d.path().to_string_lossy().to_string();
+        let p = backup_dest_path(dir, Some("before:after?".into()), None, Some("json".into())).unwrap();
+        assert!(p.ends_with("before_after_.json"), "{}", p);
+    }
+
+    #[test]
+    fn a_folder_that_is_not_there_is_refused_rather_than_created() {
+        // Creating it would turn a typo in a scheduled task into a stray folder that fills
+        // up nightly somewhere nobody looks.
+        let err = backup_dest_path("Z:/definitely/not/here".into(), None, None, None).unwrap_err();
+        assert!(err.starts_with("Not a folder"), "{}", err);
+    }
 }
 
 /// Import a backup. Returns the `extras` object (frontend localStorage data) so the

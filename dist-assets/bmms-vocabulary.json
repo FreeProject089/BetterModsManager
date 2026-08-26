@@ -343,6 +343,17 @@
       ]
     },
     {
+      "type": "data.backup",
+      "group": "system",
+      "params": [
+        "dir",
+        "sections",
+        "passphrase",
+        "name",
+        "increment"
+      ]
+    },
+    {
       "type": "var.set",
       "group": "logic",
       "params": [
@@ -653,6 +664,7 @@
     "lasttask.ok",
     "lasttask.spawned",
     "list.length",
+    "backup.bytes",
     "http.status",
     "map.size",
     "map.hit"
