@@ -248,12 +248,48 @@ pub async fn export_modlist(
         "done": true,
     }));
 
-    // Signed on the way out, like repo.json has always been. A mod list is posted and
-    // opened by strangers exactly the way a repo is, and the person opening it had no way to
-    // tell whether it was still what the author wrote.
-    let mut doc = serde_json::to_value(&modlist)?;
-    crate::commands::doc_sign::sign_doc(&handle, &mut doc, "mm");
-    let json = serde_json::to_string_pretty(&doc)?;
+    // LOCKED, when a passphrase was given.
+    //
+    // A passphrase that sealed only the credentials sealed nothing anybody would notice: the
+    // list opened, the mods installed, and the phrase was a formality on a door that was not
+    // shut. So the whole list goes inside the envelope — mods included — and what stays
+    // outside is a header: the name, the author, the game and how many mods. Enough for
+    // BetterCommunity's inspector and for a person to decide whether to ask the author for
+    // the phrase; not enough to install anything.
+    let passphrase = creds.as_ref().map(|c| c.passphrase.as_str()).filter(|p| !p.is_empty());
+    let json = if let Some(pass) = passphrase {
+        let count = modlist.mods.len();
+        let name = modlist.name.clone();
+        let author = modlist.author.clone();
+        let game_name = modlist.game_name.clone();
+        let created_at = modlist.created_at.clone();
+
+        // Signed BEFORE sealing. The signature belongs to the list, and a signature over an
+        // envelope would only say who did the encrypting — which is not the question a
+        // reader is asking when they open somebody's mod list.
+        let mut inner = serde_json::to_value(&modlist)?;
+        crate::commands::doc_sign::sign_doc(&handle, &mut inner, "mm");
+        let sealed_bytes = crate::commands::secret_box::seal(
+            &serde_json::to_vec(&inner)?, pass).map_err(AppError::LockError)?;
+
+        let locked = LockedList {
+            bmm_locked: true,
+            name,
+            author,
+            game_name,
+            created_at,
+            mods_count: count,
+            sealed: serde_json::from_slice(&sealed_bytes)?,
+        };
+        serde_json::to_string_pretty(&locked)?
+    } else {
+        // Signed on the way out, like repo.json has always been. A mod list is posted and
+        // opened by strangers exactly the way a repo is, and the person opening it had no way
+        // to tell whether it was still what the author wrote.
+        let mut doc = serde_json::to_value(&modlist)?;
+        crate::commands::doc_sign::sign_doc(&handle, &mut doc, "mm");
+        serde_json::to_string_pretty(&doc)?
+    };
 
     // Written as a ZIP. The list has grown past "a JSON document": it carries tag
     // definitions, whole modpacks and update sources, and the next thing it needs to carry
@@ -341,9 +377,24 @@ fn hash_file_streaming(path: &PathBuf) -> Option<String> {
     Some(hex::encode(hasher.finalize()))
 }
 
+/// Open a locked list that was FETCHED rather than opened from disk.
+///
+/// The catalogue reads its entries over the network, so it holds the document as text and
+/// has no path to hand `import_modlist`. Same envelope, same refusal on the wrong phrase.
 #[tauri::command]
-pub fn import_modlist(path: String) -> Result<ModList, AppError> {
-    read_modlist_file(std::path::Path::new(&path))
+pub fn open_locked_modlist(text: String, passphrase: String) -> Result<String, AppError> {
+    let header: LockedList = serde_json::from_str(&text).map_err(AppError::Json)?;
+    if !header.bmm_locked {
+        return Err(AppError::LockError("mm.errNotLocked".into()));
+    }
+    let env = serde_json::to_vec(&header.sealed)?;
+    let plain = crate::commands::secret_box::open(&env, &passphrase).map_err(AppError::LockError)?;
+    String::from_utf8(plain).map_err(|e| AppError::LockError(e.to_string()))
+}
+
+#[tauri::command]
+pub fn import_modlist(path: String, passphrase: Option<String>) -> Result<ModList, AppError> {
+    read_modlist_file_with(std::path::Path::new(&path), passphrase.as_deref())
 }
 
 /// The name the document has inside a `.mm` archive.
@@ -359,8 +410,73 @@ pub const MODLIST_ENTRY: &str = "modlist.json";
 /// Deliberately not a version field. A file written last year has no idea a version field
 /// was going to exist, and asking "is this a zip" is a question the file answers about
 /// itself.
+/// What a LOCKED `.mm` looks like from outside.
+///
+/// A passphrase that only protected the credentials protected nothing anybody cares about:
+/// the list opened, the mods installed, and the phrase was a formality. So a list written
+/// with a passphrase seals the WHOLE thing — mods included — and leaves this outside it.
+///
+/// The header stays readable on purpose, and it is the smallest header that still answers
+/// the questions somebody holds before deciding whether to ask its author for the phrase:
+/// what is it called, who wrote it, which game, how many mods. BetterCommunity's inspector
+/// and a person reading the file both get that much. What they do not get is the contents.
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct LockedList {
+    /// Always true. Present so the shape is recognised by its own claim rather than by the
+    /// absence of `mods`, which a truncated file would also produce.
+    pub bmm_locked: bool,
+    pub name: String,
+    #[serde(default)]
+    pub author: Option<String>,
+    #[serde(default)]
+    pub game_name: String,
+    #[serde(default)]
+    pub created_at: String,
+    /// How many mods are inside. A count is not a leak and it is the difference between
+    /// "worth asking for the phrase" and "not worth it".
+    #[serde(default)]
+    pub mods_count: usize,
+    /// The sealed envelope holding the real ModList.
+    pub sealed: serde_json::Value,
+}
+
+/// Is this document a locked list, and what does its header say?
+pub fn locked_header(bytes: &[u8]) -> Option<LockedList> {
+    let text = if bytes.starts_with(b"PK") {
+        let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes)).ok()?;
+        let mut file = zip.by_name(MODLIST_ENTRY).ok()?;
+        let mut t = String::new();
+        std::io::Read::read_to_string(&mut file, &mut t).ok()?;
+        t
+    } else {
+        String::from_utf8_lossy(bytes).to_string()
+    };
+    serde_json::from_str::<LockedList>(&text).ok().filter(|l| l.bmm_locked)
+}
+
 pub fn read_modlist_file(path: &std::path::Path) -> Result<ModList, AppError> {
+    read_modlist_file_with(path, None)
+}
+
+/// The same, with the passphrase for a locked list.
+///
+/// A locked list without one is refused BY NAME — `mm.errLocked` — rather than failing to
+/// parse. "This file is locked" and "this file is broken" are different sentences with
+/// different next steps, and a serde error would say the second.
+pub fn read_modlist_file_with(
+    path: &std::path::Path,
+    passphrase: Option<&str>,
+) -> Result<ModList, AppError> {
     let bytes = std::fs::read(path)?;
+    if let Some(header) = locked_header(&bytes) {
+        let Some(pass) = passphrase.filter(|p| !p.is_empty()) else {
+            return Err(AppError::LockError("mm.errLocked".into()));
+        };
+        let env = serde_json::to_vec(&header.sealed)?;
+        let plain = crate::commands::secret_box::open(&env, pass)
+            .map_err(AppError::LockError)?;
+        return serde_json::from_slice(&plain).map_err(AppError::Json);
+    }
     if bytes.starts_with(b"PK") {
         let mut zip = zip::ZipArchive::new(std::io::Cursor::new(&bytes))
             .map_err(|e| AppError::LockError(format!("not a readable .mm archive: {e}")))?;

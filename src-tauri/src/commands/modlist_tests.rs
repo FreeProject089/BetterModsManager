@@ -228,6 +228,59 @@ fn a_list_without_credentials_writes_no_such_field() {
     assert!(!text.contains("credentials"), "absent, not null");
 }
 
+/// A locked list refuses to open without its phrase, and its header still says what it is.
+///
+/// This is the fix for a lock that locked nothing: sealing only the credentials left the
+/// list itself readable, so the phrase was a formality on a door that was not shut. The
+/// whole list is inside now — and the outside still answers "what is it called, who wrote
+/// it, how many mods", which is what somebody needs to decide whether to ask for the phrase.
+#[test]
+fn a_locked_list_needs_its_phrase_but_still_says_what_it_is() {
+    use crate::commands::modlist::{locked_header, read_modlist_file_with, LockedList};
+
+    let mut inner = ModList::new("Secret Ops".into(), "DCS".into(), "C:/DCS".into());
+    inner.author = Some("somebody".into());
+    inner.mods.push(serde_json::from_str(r#"{
+        "name": "Cockpit", "version": "1", "author": null, "description": null,
+        "download_links": [], "file_tree": [], "install_notes": "", "tags": []
+    }"#).unwrap());
+
+    let sealed = crate::commands::secret_box::seal(
+        &serde_json::to_vec(&inner).unwrap(), "the phrase").unwrap();
+    let locked = LockedList {
+        bmm_locked: true,
+        name: inner.name.clone(),
+        author: inner.author.clone(),
+        game_name: inner.game_name.clone(),
+        created_at: inner.created_at.clone(),
+        mods_count: inner.mods.len(),
+        sealed: serde_json::from_slice(&sealed).unwrap(),
+    };
+    let text = serde_json::to_string_pretty(&locked).unwrap();
+
+    // The mod names are NOT in the file.
+    assert!(!text.contains("Cockpit"), "a locked list must not leak its contents");
+
+    // The header is.
+    let header = locked_header(text.as_bytes()).expect("recognised as locked");
+    assert_eq!(header.name, "Secret Ops");
+    assert_eq!(header.mods_count, 1);
+
+    let p = tmp("locked.mm");
+    std::fs::write(&p, text.as_bytes()).unwrap();
+
+    // Without the phrase: refused BY NAME, not as a parse failure.
+    let err = read_modlist_file_with(&p, None).unwrap_err();
+    assert!(format!("{err:?}").contains("mm.errLocked"), "got {err:?}");
+    assert!(read_modlist_file_with(&p, Some("wrong")).is_err());
+
+    // With it: the real list.
+    let back = read_modlist_file_with(&p, Some("the phrase")).unwrap();
+    assert_eq!(back.name, "Secret Ops");
+    assert_eq!(back.mods.len(), 1);
+    assert_eq!(back.mods[0].name, "Cockpit");
+}
+
 #[test]
 fn dependencies_travel_as_names() {
     // An id from somebody else's install resolves to nothing here, so the importer would

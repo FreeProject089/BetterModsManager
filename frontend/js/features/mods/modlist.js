@@ -21,6 +21,37 @@ import { toast, toastSaved } from '../../ui/app.js';
  * a per-mod update address, and each extra update source. A host the list does not mention
  * has no business having its password carried in that list.
  */
+/**
+ * Read a `.mm`, asking for its passphrase only if it turns out to be locked.
+ *
+ * Asked AFTER the first attempt, never before: almost no list is locked, and a prompt in
+ * front of every import teaches people that one is expected. The backend refuses a locked
+ * list by NAME rather than failing to parse, so "this is locked" and "this is broken" stay
+ * different sentences with different next steps.
+ *
+ * Exported because the mod-list catalogue reads the same files and has to ask the same
+ * question — every time, since nothing about the phrase is remembered.
+ */
+export async function importListAsking(path) {
+    try {
+        return await invoke('import_modlist', { path, passphrase: null });
+    }
+    catch (e) {
+        if (!String(e).includes('mm.errLocked'))
+            throw e;
+        const { promptRepoPassword } = await import('../repo/repo-sync.js');
+        const pass = await promptRepoPassword();
+        if (pass == null)
+            throw new Error('mm.cancelled');
+        try {
+            return await invoke('import_modlist', { path, passphrase: pass });
+        }
+        catch (e2) {
+            throw new Error(String(e2).includes('bmm.enc.errWrongPass')
+                ? t('bmm.enc.errWrongPass') : String(e2));
+        }
+    }
+}
 function exportOrigins() {
     const out = new Set();
     const add = (u) => {
@@ -213,7 +244,7 @@ export function initModlist() {
             // Refresh local mods to ensure "Present" status is accurate
             const localMods = await invoke('get_mods');
             appState.set('allMods', localMods);
-            const modList = await invoke('import_modlist', { path });
+            const modList = await importListAsking(path);
             lastImportedModlistJson = JSON.stringify(modList);
             exportCard.style.display = 'none';
             previewCard.style.display = '';

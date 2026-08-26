@@ -8445,5 +8445,8 @@
   "settings.identity.authKeyPrivNote": "La moitié privée reste sur cette machine et n’est jamais affichée. Sauvegarde-la depuis Export de données — c’est la seule chose ici que tu ne peux pas remplacer en la redemandant.",
   "settings.identity.authKeyTypeHint": "ed25519 sauf si un serveur dit le contraire : toutes les sources de ce protocole l’acceptent et la clé tient dans un message. Les deux autres sont pour un hôte plus ancien.",
   "repo.keyauth.errBadKind": "Type de clé inconnu",
-  "common.copyFailed": "Copie impossible"
+  "common.copyFailed": "Copie impossible",
+  "mm.errLocked": "Cette liste est verrouillée — il lui faut sa phrase secrète",
+  "mm.cancelled": "Import annulé",
+  "mm.errNotLocked": "Cette liste n’est pas verrouillée"
 }

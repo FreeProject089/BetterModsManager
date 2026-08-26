@@ -507,6 +507,7 @@ fn main() {
             commands::mods::verify_integrity,
             commands::modlist::export_modlist,
             commands::modlist::import_modlist,
+            commands::modlist::open_locked_modlist,
             commands::modlist::cancel_export_modlist,
             commands::modlist::add_download_link,
             commands::modlist::remove_download_link,

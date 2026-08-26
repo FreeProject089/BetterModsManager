@@ -218,7 +218,23 @@ export async function openListCatalog(onImported?: (doc: unknown) => void): Prom
                 const text = l.local
                     ? await invoke('read_file_text', { path: l.downloadUrl }) as string
                     : await fetchSourceText(l.downloadUrl, true);
-                const doc = JSON.parse(text);
+                let doc = JSON.parse(text);
+
+                // A LOCKED list, asked for every time.
+                //
+                // Nothing about the phrase is remembered — not for the session, not per
+                // source. A catalogue is a list of addresses somebody else controls, and a
+                // remembered phrase would mean a list swapped at that address opens with a
+                // secret its new author never had.
+                if (doc?.bmm_locked) {
+                    const { promptRepoPassword } = await import('../repo/repo-sync.js');
+                    const pass = await promptRepoPassword();
+                    if (pass == null) return;
+                    const opened = await invoke('open_locked_modlist', { text, passphrase: pass })
+                        .catch(() => null) as string | null;
+                    if (!opened) { toast(t('bmm.enc.errWrongPass'), 'error', 7000); return; }
+                    doc = JSON.parse(opened);
+                }
                 if (!doc || !Array.isArray(doc.mods)) { toast(t('mm.cat.notAList'), 'error'); return; }
                 if (onImported) onImported(doc);
                 else (await import('./modlist.js')).renderImportedModlist(doc);
