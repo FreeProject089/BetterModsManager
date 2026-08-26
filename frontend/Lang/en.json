@@ -8410,5 +8410,9 @@
   "repo.update.findMod": "Find a mod…",
   "repo.update.modN": "{n} mods",
   "repo.update.matchN": "{n} of {m}",
-  "repo.update.showMore": "Show {n} more"
+  "repo.update.showMore": "Show {n} more",
+  "apps.price.oss": "Open source",
+  "apps.price.unknown": "Price not stated",
+  "apps.badge.official": "Official",
+  "apps.badge.partner": "Partner"
 }

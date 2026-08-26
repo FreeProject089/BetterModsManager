@@ -198,6 +198,7 @@ function renderShell(view: HTMLElement) {
           <option value="free"${_filterPrice==='free'?' selected':''}>${t('apps.price.free')||'Free'}</option>
           <option value="freemium"${_filterPrice==='freemium'?' selected':''}>${t('apps.price.freemium')||'Freemium'}</option>
           <option value="paid"${_filterPrice==='paid'?' selected':''}>${t('apps.price.paid')||'Paid'}</option>
+          <option value="oss"${_filterPrice==='oss'?' selected':''}>${t('apps.price.oss')}</option>
         </select>
       </div>
 
@@ -397,8 +398,12 @@ function renderAppCard(app: AppEntry) {
         <div class="apps-card-badges">
           ${installed
             ? `<span class="apps-card-installed-chip">${IC.check} ${t('apps.installed')||'Installed'}</span>`
-            : app.official ? `<span class="apps-official-badge">✦ Official</span>`
-            : app.partner ? `<span class="apps-partner-badge">Partner</span>`
+            // Translated, like the community badge two lines down. These three sit on the
+            // same card and two of them were written in English — so a French reader was told
+            // "Official" and "Communauté", which reads as two different systems rather than
+            // three rungs of one.
+            : app.official ? `<span class="apps-official-badge">✦ ${escHtml(t('apps.badge.official'))}</span>`
+            : app.partner ? `<span class="apps-partner-badge">${escHtml(t('apps.badge.partner'))}</span>`
             // A community entry used to render NOTHING here. An absent badge is not a
             // warning — a reader who does not know the badge system reads blank as neutral,
             // which is exactly the gap an impersonating catalogue lives in. Say it plainly.
@@ -410,7 +415,7 @@ function renderAppCard(app: AppEntry) {
       <div class="apps-card-body">
         <span class="apps-card-title">${escHtml(app.title)}</span>
         <div class="apps-card-meta">
-          <span class="apps-cat-badge apps-cat-${app.category}">${catIconSm(app.category)}${escHtml(app.category)}</span>
+          <span class="apps-cat-badge apps-cat-${app.category}">${catIconSm(app.category)}${escHtml(catLabel(app.category))}</span>
           ${app.version ? `<span class="apps-version">v${escHtml(app.version)}</span>` : ''}
           ${priceText(app.price)}
         </div>
@@ -423,16 +428,46 @@ function renderAppCard(app: AppEntry) {
 /** Loud pill kept for the detail modal (priceBadge); the browse card uses the
  *  quieter priceText() below so the card carries only one prominent signal. */
 function priceBadge(price: string) {
-    const cls: Record<string,string> = { free:'apps-price-free', freemium:'apps-price-freemium', paid:'apps-price-paid' };
-    return `<span class="apps-price-badge ${cls[price]||''}">${escHtml(price)}</span>`;
+    const cls: Record<string,string> = {
+        free: 'apps-price-free', freemium: 'apps-price-freemium',
+        paid: 'apps-price-paid', oss: 'apps-price-oss',
+    };
+    return `<span class="apps-price-badge ${cls[price] || ''}">${escHtml(priceLabel(price))}</span>`;
+}
+
+/**
+ * The word for a price value — translated, and never guessed.
+ *
+ * priceText used to fall through to "Free" for anything it did not recognise, so an entry
+ * with a missing or misspelt price was announced as free of charge. That is the one wrong
+ * answer with consequences: it is the reassuring one.
+ */
+function priceLabel(price: string): string {
+    if (price === 'paid') return t('apps.price.paid') || 'Paid';
+    if (price === 'freemium') return t('apps.price.freemium') || 'Freemium';
+    if (price === 'oss') return t('apps.price.oss');
+    if (price === 'free') return t('apps.price.free') || 'Free';
+    return t('apps.price.unknown');
 }
 
 /** Subtle, localized price as muted meta text (not a loud overlay pill). */
 function priceText(price: string) {
-    const label = price === 'paid' ? (t('apps.price.paid') || 'Paid')
-        : price === 'freemium' ? (t('apps.price.freemium') || 'Freemium')
-        : (t('apps.price.free') || 'Free');
-    return `<span class="apps-card-price apps-card-price-${escAttr(price)}">${escHtml(label)}</span>`;
+    return `<span class="apps-card-price apps-card-price-${escAttr(price || 'unknown')}">${escHtml(priceLabel(price))}</span>`;
+}
+
+/**
+ * The word for a category.
+ *
+ * The card printed the raw value — `utility`, `game` — so a French UI showed an English
+ * lowercase identifier on a badge beside three translated ones. The keys existed the whole
+ * time; the card simply never asked for them.
+ */
+function catLabel(cat: string): string {
+    const key = `apps.cat.${cat}`;
+    const word = t(key);
+    // t() returns the key on a miss. A category nobody has named yet should read as the
+    // value the catalogue used, not as "apps.cat.whatever".
+    return word === key ? cat : word;
 }
 
 /** Small (badge-sized) category icon — drawn at 12px via CSS. */

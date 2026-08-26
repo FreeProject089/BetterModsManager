@@ -26,7 +26,12 @@ pub struct AppEntry {
     pub description: String,
     pub md_link: Option<String>,
     pub category: String,  // "game" | "utility" | "other"
-    pub price: String,     // "free" | "freemium" | "paid"
+    /// "free" | "freemium" | "paid" | "oss".
+    ///
+    /// `oss` is not a price and that is the point: "open source" is what people are
+    /// actually looking for when they filter this column, and it says something "free"
+    /// does not — free is about the money, oss is about whether you can read it.
+    pub price: String,
     pub tags: Vec<String>,
     pub version: Option<String>,
     pub requirements: Option<String>,
