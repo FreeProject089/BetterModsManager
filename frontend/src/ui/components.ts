@@ -256,8 +256,11 @@ export function getModDetailHTML(mod, ctx) {
   const hasFileHashes = !isMissing;
   const contentIdStatus = !hasContentId ? 'missing' : isBmmDeclared ? 'declared' : hasFileHashes ? 'precise' : 'approximate';
   const contentIdColor = contentIdStatus === 'missing' ? 'var(--text-muted)' : contentIdStatus === 'approximate' ? 'var(--warning)' : 'var(--success)';
-  const contentIdLabel = contentIdStatus === 'missing' ? 'NOT COMPUTED' : contentIdStatus === 'declared' ? 'DECLARED' : contentIdStatus === 'precise' ? 'PRECISE' : 'APPROXIMATE';
-  const contentIdHint = contentIdStatus === 'missing' ? 'Click ↻ SHA to compute' : contentIdStatus === 'declared' ? 'From bmm.json' : contentIdStatus === 'precise' ? 'Content hash (reliable)' : 'Path+size only — click ↻ SHA for precise';
+  // Written in English in a file that is otherwise translated, so a French UI said
+  // "NOT COMPUTED" and "Path+size only" in the one place that explains how much the
+  // fingerprint under it can be trusted — which is exactly the place it has to be readable.
+  const contentIdLabel = t(`detail.cid.${contentIdStatus}`);
+  const contentIdHint = t(`detail.cid.${contentIdStatus}.hint`);
 
   // Helper for collapsible sections
   const renderSection = (id, title, icon, content, defaultExpanded = false) => {
@@ -415,17 +418,64 @@ export function getModDetailHTML(mod, ctx) {
       </div>
   `;
 
+  /**
+   * Updating this mod: what it updates from, and the two things you can do about it.
+   *
+   * Both actions existed only as items in the card's ⋮ menu — a menu you open for "copy the
+   * id" and "open the folder", which is not where somebody looks for "is there a new
+   * version". The menu keeps them; this is the place they belong.
+   *
+   * The sources are LISTED rather than counted, because "2 update sources" tells you nothing
+   * about which repo is about to overwrite your files.
+   */
+  const updatesContent = `
+        <div class="detail-upd-list">
+          ${mod.source_repo ? `<div class="detail-upd-row">
+            <span class="detail-upd-k">${escHtml(t('detail.upd.repo'))}</span>
+            <span class="detail-upd-v" title="${escAttr(mod.source_repo)}">${escHtml(mod.source_repo)}</span>
+          </div>` : ''}
+          ${mod.update_url ? `<div class="detail-upd-row">
+            <span class="detail-upd-k">${escHtml(t('detail.upd.url'))}</span>
+            <span class="detail-upd-v" title="${escAttr(mod.update_url)}">${escHtml(mod.update_url)}</span>
+          </div>` : ''}
+          ${(mod.update_sources || []).map((u) => `<div class="detail-upd-row">
+            <span class="detail-upd-k">${escHtml(t('detail.upd.source'))}</span>
+            <span class="detail-upd-v" title="${escAttr(u.url || '')}">${escHtml(u.url || '')}</span>
+          </div>`).join('')}
+          ${!mod.source_repo && !mod.update_url && !(mod.update_sources || []).length
+            ? `<div class="detail-upd-none">${escHtml(t('detail.upd.none'))}</div>` : ''}
+        </div>
+        <div class="detail-files-actions" style="margin-top:10px">
+          <button class="btn btn-xs btn-secondary" ${actAttrsStop('bmmMenuCheckModUpdate', mod.id)}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            ${escHtml(t('mod.checkUpdate') || 'Check for updates')}
+          </button>
+          <button class="btn btn-xs btn-secondary" ${actAttrsStop('bmmMenuOpenModUpdateConfig', mod.id)}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6h.09A1.65 1.65 0 0 0 10 3.09V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            ${escHtml(t('mod.updateConfig') || 'Configure updates')}
+          </button>
+        </div>
+  `;
+
   const filesContent = `
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px">
-          <span style="font-size:11px; color:var(--text-muted)">${t('mod.filesCount', { count: mod.installed_files ? mod.installed_files.length : 0 })}</span>
-          <button id="btn-browse-archive" class="btn btn-sm" style="background:rgba(59,130,246,0.15); color:var(--accent); border:none; padding:4px 10px; border-radius:6px; cursor:pointer; font-size:11px">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:middle; margin-right:4px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            ${t('mod.exploreArchive')}
-          </button>
-          <button id="btn-verify-mod-integrity" class="btn btn-sm" style="background:rgba(16,185,129,0.15); color:var(--success); border:none; padding:4px 10px; border-radius:6px; cursor:pointer; font-size:11px; margin-left:8px">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:middle; margin-right:4px"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-            ${t('mod.verifyIntegrityDeep')}
-          </button>
+        <!-- The count takes the slack and the two actions travel together.
+             This was justify-content:space-between across THREE children, so the count, the
+             archive button and the verify button were spread evenly across the width with a
+             margin-left:8px hack holding the last two apart — which put a gap between two
+             buttons that belong to each other, and broke into a ragged column the moment the
+             panel narrowed. -->
+        <div class="detail-files-head">
+          <span class="detail-files-count">${t('mod.filesCount', { count: mod.installed_files ? mod.installed_files.length : 0 })}</span>
+          <div class="detail-files-actions">
+            <button id="btn-browse-archive" class="btn btn-xs btn-secondary">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              ${t('mod.exploreArchive')}
+            </button>
+            <button id="btn-verify-mod-integrity" class="btn btn-xs btn-secondary">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+              ${t('mod.verifyIntegrityDeep')}
+            </button>
+          </div>
         </div>
         ${mod.installed_files && mod.installed_files.length > 0 ? `
           <div style="font-family:var(--font-mono);font-size:10px;color:var(--text-muted);background:rgba(0,0,0,0.3);padding:10px;border-radius:8px;max-height:200px;overflow-y:auto">
@@ -503,6 +553,7 @@ export function getModDetailHTML(mod, ctx) {
       ${renderSection('info', t('detail.sectionGeneral') || 'Général', '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>', infoContent, true)}
       ${renderSection('conflicts', t('detail.sectionConflicts') || 'Conflits', '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>', conflictsContent, false)}
       ${renderSection('links', t('detail.sectionLinks') || 'Liens', '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>', linksContent, false)}
+      ${renderSection('updates', t('detail.sectionUpdates'), '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>', updatesContent, false)}
       ${renderSection('files', t('detail.sectionFiles') || 'Files', '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>', filesContent, false)}
 
       <button id="btn-save-detail" class="btn btn-primary" style="margin-top:12px;width:100%;height:38px;font-weight:700;flex-shrink:0">

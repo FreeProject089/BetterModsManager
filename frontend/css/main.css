@@ -17618,6 +17618,23 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 /* Where a mod came from, above its links. One line, quiet: it is context for the list under
    it, and the list is the subject. */
 .detail-origin { display: flex; align-items: baseline; gap: 8px; font-size: 11px; margin-bottom: 8px; }
+
+/* The Files header. The count takes the slack; the two buttons travel together and wrap as
+   a pair rather than being spread across the width by space-between. */
+.detail-files-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.detail-files-count { font-size: 11px; color: var(--text-muted); flex: 1; min-width: 0; }
+.detail-files-actions { display: flex; gap: 6px; flex-wrap: wrap; flex: none; }
+.detail-files-actions .btn { display: inline-flex; align-items: center; gap: 5px; }
+
+/* What updates this mod. Listed, not counted: “2 update sources” says nothing about which
+   repo is about to overwrite your files. */
+.detail-upd-list { display: flex; flex-direction: column; gap: 4px; }
+.detail-upd-row { display: flex; align-items: baseline; gap: 8px; font-size: 11px; min-width: 0; }
+.detail-upd-k { flex: none; font-size: 9.5px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .05em; color: var(--text-muted); }
+.detail-upd-v { flex: 1; min-width: 0; color: var(--text-secondary); font-family: var(--font-mono);
+    font-size: 10.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.detail-upd-none { font-size: 11.5px; color: var(--text-muted); line-height: 1.5; }
 .detail-origin-k { color: var(--text-muted); text-transform: uppercase; letter-spacing: .05em;
     font-size: 9.5px; font-weight: 700; flex: none; }
 .detail-origin-v { color: var(--text-secondary); min-width: 0; overflow: hidden;

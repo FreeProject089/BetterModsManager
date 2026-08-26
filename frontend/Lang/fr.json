@@ -8372,5 +8372,18 @@
   "detail.linkDirect": "Direct",
   "detail.linkRepo": "Dépôt",
   "detail.linkHttp": "http(s)",
-  "detail.linkOther": "Autre"
+  "detail.linkOther": "Autre",
+  "detail.sectionUpdates": "Mises à jour",
+  "detail.upd.repo": "Dépôt serveur",
+  "detail.upd.url": "Adresse de mise à jour",
+  "detail.upd.source": "Source",
+  "detail.upd.none": "Rien n’est configuré pour mettre ce mod à jour — il reste tel quel tant que tu n’y touches pas.",
+  "detail.cid.missing": "NON CALCULÉ",
+  "detail.cid.declared": "DÉCLARÉ",
+  "detail.cid.precise": "PRÉCIS",
+  "detail.cid.approximate": "APPROXIMATIF",
+  "detail.cid.missing.hint": "Utilise ↻ SHA pour le calculer",
+  "detail.cid.declared.hint": "Depuis bmm.json",
+  "detail.cid.precise.hint": "Empreinte du contenu — fiable",
+  "detail.cid.approximate.hint": "Chemin et taille seulement — utilise ↻ SHA pour un précis"
 }

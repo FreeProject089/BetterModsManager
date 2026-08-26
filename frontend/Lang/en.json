@@ -8374,5 +8374,18 @@
   "detail.linkDirect": "Direct",
   "detail.linkRepo": "Repo",
   "detail.linkHttp": "http(s)",
-  "detail.linkOther": "Other"
+  "detail.linkOther": "Other",
+  "detail.sectionUpdates": "Updates",
+  "detail.upd.repo": "Server repo",
+  "detail.upd.url": "Update address",
+  "detail.upd.source": "Source",
+  "detail.upd.none": "Nothing is set to update this mod — it stays as it is until you change it.",
+  "detail.cid.missing": "NOT COMPUTED",
+  "detail.cid.declared": "DECLARED",
+  "detail.cid.precise": "PRECISE",
+  "detail.cid.approximate": "APPROXIMATE",
+  "detail.cid.missing.hint": "Use ↻ SHA to compute it",
+  "detail.cid.declared.hint": "From bmm.json",
+  "detail.cid.precise.hint": "Content hash — reliable",
+  "detail.cid.approximate.hint": "Path and size only — use ↻ SHA for a precise one"
 }
