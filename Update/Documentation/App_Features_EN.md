@@ -1108,3 +1108,39 @@ forgets. Modpack catalogues keep theirs because a `.cbmp` already *is* a bundle.
 `.bmp` file; plugins accept a `.bmmplug`. Both are read and checked when you pick them rather
 than when the catalogue is written, and a handed-over pack keeps the signature it arrived
 with — re-signing would put your name on somebody else's work.
+---
+
+## 78. Passphrases, and the keys they protect (v1.0.0+)
+
+Three things in BMM can hold a secret — a data backup, a shared mod list, and your identity
+keys — and one envelope now covers all three: Argon2id to a key, AES-256-GCM to seal.
+
+**It encrypts.** A prompt that only makes the import screen refuse is a sign on a door: the
+file is a zip and anybody with 7-Zip reads it regardless. A locked `.DATABMM` stops being a
+zip at all.
+
+A locked **mod list** is the exception, and deliberately: it keeps a readable header — name,
+author, game, how many mods — and seals the rest. A `.mm` is read by BMM, by
+BetterCommunity's inspector and by a person deciding whether to trust it, and a list nobody
+can check is worse than one whose contents are private. The signature is applied BEFORE the
+lock, because a signature over an envelope would only say who did the encrypting.
+
+**There is no recovery.** No reset, no hint, nobody who can open it.
+
+**Identity keys** are made in Settings → Identity & API. ed25519 by default, ECDSA and RSA for
+a host that predates it, and every type is tested to SIGN rather than merely to generate. The
+public line goes to the clipboard; the private half is never shown, only where it went. They
+can ride in a backup, and BMM refuses to write them without a passphrase — that is the one
+export deleting the file afterwards cannot undo.
+
+**A shared list can carry credentials**, off and asked for separately. BMM keeps download
+passwords in memory only and never on disk, because settings end up in backups and crash
+reports; writing them into a file you hand somebody undoes that on purpose, so what it writes
+is unreadable without the phrase, only covers the hosts that list points at, and only includes
+passwords typed since launch — there are no others.
+
+Importing one asks twice. Passwords are offered for the session. Keys get their own question
+and a blunt warning, and a name already on your ring is skipped rather than overwritten:
+importing a list cannot replace the key you sign with.
+
+Full detail: **Guides → Catalogs and Repos → Passphrases and identity keys**.

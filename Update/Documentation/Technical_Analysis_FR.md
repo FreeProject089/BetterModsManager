@@ -1219,3 +1219,28 @@ face à un vrai document — jamais en lisant le code, qui se lit correctement d
 cas. Là où un lecteur peut ne rien renvoyer, un test doit porter sur un cas qui DOIT renvoyer
 quelque chose ; là où une capacité est déclarée plutôt qu'exercée, quelque chose doit
 l'exercer.
+---
+
+## 73. Un verrou doit verrouiller quelque chose
+
+La phrase secrète d'une liste de mods partagée scellait le bloc d'identifiants et laissait la
+liste elle-même lisible. Elle passait tous les tests qu'elle avait, elle chiffrait de vrais
+octets avec un vrai algorithme, et elle ne protégeait rien que quelqu'un remarque : la liste
+s'ouvrait, les mods s'installaient, la phrase était une formalité sur une porte qui n'était
+pas fermée.
+
+Ça a été signalé en cinq mots — *« à quoi il sert »* — et il n'y avait pas de réponse.
+
+La même forme, deux fois de plus dans la même semaine. Une phrase sur l'export de données qui
+n'aurait fait refuser que l'écran d'IMPORT aurait laissé un zip que n'importe qui ouvre dans
+7-Zip — celle-là a été attrapée avant livraison, en demandant à quoi ressemble le fichier pour
+quelqu'un qui ne l'ouvre pas avec BMM. Et un dropdown dans la Rich Presence Discord, demandé
+de bonne foi — la réponse honnête était que le protocole n'a pas ça, et ajouter un champ de
+configuration pour lui aurait été un verrou sur rien d'un autre genre : un réglage qui
+enregistre ton choix et ne peut pas agir dessus.
+
+**La leçon :** une fonctionnalité de sécurité ne se teste pas en vérifiant que la
+cryptographie est correcte. Elle se teste en nommant ce que détient l'attaquant et en
+demandant ce que ça lui coûte. Ici l'attaquant détient le fichier — la question n'a jamais
+été « est-ce qu'AES-GCM est solide », mais « qu'est-ce qu'on lit en l'ouvrant dans un éditeur
+de texte ». Cette question prend dix secondes et c'est celle qui aurait attrapé les trois.

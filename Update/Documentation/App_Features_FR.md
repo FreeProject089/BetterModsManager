@@ -1028,3 +1028,42 @@ brouillons enregistrés, parce que c'est celui qu'on rouvre pour le modifier ; c
 ou un fichier `.bmp` ; les plugins acceptent un `.bmmplug`. Les deux sont lus et vérifiés au
 moment où tu les choisis, pas quand le catalogue est écrit, et un pack qu'on te passe garde la
 signature avec laquelle il est arrivé — re-signer mettrait ton nom sur le travail d'un autre.
+---
+
+## 78. Phrases secrètes, et les clés qu'elles protègent (v1.0.0+)
+
+Trois choses dans BMM peuvent contenir un secret — une sauvegarde, une liste de mods
+partagée, tes clés d'identité — et une seule enveloppe les couvre : Argon2id vers une clé,
+AES-256-GCM pour sceller.
+
+**Ça chiffre.** Une invite qui se contente de faire refuser l'écran d'import est un panneau
+sur une porte : le fichier est un zip et quiconque a 7-Zip le lit quand même. Un `.DATABMM`
+verrouillé cesse d'être un zip.
+
+Une **liste de mods** verrouillée est l'exception, exprès : elle garde un en-tête lisible —
+nom, auteur, jeu, nombre de mods — et scelle le reste. Un `.mm` est lu par BMM, par
+l'inspecteur de BetterCommunity et par quelqu'un qui décide s'il fait confiance : une liste
+que personne ne peut vérifier est pire qu'une liste au contenu privé. La signature est
+appliquée AVANT le verrou, parce qu'une signature sur l'enveloppe ne dirait que qui a chiffré.
+
+**Aucune récupération.** Pas de réinitialisation, pas d'indice, personne qui puisse l'ouvrir.
+
+**Les clés d'identité** se fabriquent dans Paramètres → Identity & API. ed25519 par défaut,
+ECDSA et RSA pour un hôte plus ancien, et chaque type est testé pour **signer**, pas seulement
+pour se générer. La ligne publique va au presse-papiers ; la moitié privée n'est jamais
+affichée, seulement l'endroit où elle est allée. Elles peuvent voyager dans une sauvegarde, et
+BMM refuse de les écrire sans phrase — c'est le seul export que supprimer le fichier ensuite
+ne rattrape pas.
+
+**Une liste partagée peut porter des identifiants**, décochés et demandés séparément. BMM
+garde les mots de passe en mémoire seulement et jamais sur disque, parce que les réglages
+finissent dans les sauvegardes et les rapports de crash ; les écrire dans un fichier qu'on
+donne annule ça exprès — donc ce qui est écrit est illisible sans la phrase, ne couvre que les
+hôtes que cette liste vise, et n'inclut que les mots de passe tapés depuis le lancement : il
+n'y en a pas d'autres.
+
+L'import pose deux questions. Les mots de passe sont proposés pour la session. Les clés ont
+leur propre question et un avertissement direct, et un nom déjà sur ton trousseau est ignoré
+plutôt qu'écrasé : importer une liste ne peut pas remplacer la clé avec laquelle tu signes.
+
+Détail complet : **Guides → Catalogs and Repos → Phrases secrètes et clés d'identité**.

@@ -124,3 +124,4 @@ utilisent, et si l'archive contient réellement tout ce que le catalogue nomme.
 - [Catalogues de thèmes](Theme_Catalog_Guide_FR.md)
 - [Le format du catalogue de presets](preset-catalog-format_FR.md)
 - [Le format de l'index de catalogues](catalog-index-format_FR.md)
+- [Phrases secrètes et clés d’identité](Passphrases_And_Keys_FR.md)

@@ -119,3 +119,4 @@ whether the archive actually holds everything the catalogue names.
 - [Theme catalogues](Theme_Catalog_Guide_EN.md)
 - [The preset catalogue format](preset-catalog-format_EN.md)
 - [The catalogue index format](catalog-index-format_EN.md)
+- [Passphrases and identity keys](Passphrases_And_Keys_EN.md)

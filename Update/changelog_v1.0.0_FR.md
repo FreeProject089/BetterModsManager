@@ -641,6 +641,58 @@ Une tâche importée arrive maintenant **désactivée**, avec les quatre autoris
 BMM dit ce que le fichier demandait. Tout le reste est conservé : l'automatisation est intacte
 et à un interrupteur de fonctionner.
 
+## [MAJEUR] Une phrase secrète qui est un verrou, pas un panneau sur une porte
+
+Trois choses dans BMM peuvent contenir un secret — une sauvegarde, une liste de mods
+partagée, tes clés d'identité — et les trois utilisent désormais la même enveloppe :
+Argon2id vers une clé, AES-256-GCM pour sceller.
+
+Argon2id parce que l'attaquant a le fichier et un temps illimité, et qu'un KDF gourmand en
+mémoire est la seule chose qui rende coûteux de deviner une phrase tapée à la main. GCM
+parce qu'une enveloppe altérée doit échouer à s'ouvrir plutôt que de se déchiffrer en quelque
+chose de plausible. Les paramètres de coût voyagent AVEC le fichier : les relever plus tard
+ne peut enfermer personne dehors de ce qu'il a déjà exporté.
+
+- **Une sauvegarde** est scellée entière. Ouvre un `.DATABMM` verrouillé dans un outil zip :
+  ce n'est plus un zip du tout — et c'est le point. Une invite qui se contente de faire
+  refuser l'écran d'import laisse le contenu lisible à quiconque a 7-Zip.
+- **Une liste de mods** garde un en-tête lisible — nom, auteur, jeu, nombre de mods — et
+  scelle le reste. Un `.mm` est lu par BMM, par l'inspecteur de BetterCommunity et par
+  quelqu'un qui décide s'il fait confiance : une liste que personne ne peut vérifier est pire
+  qu'une liste au contenu privé. La signature est appliquée AVANT le verrou — une signature
+  sur l'enveloppe ne dirait que qui a chiffré.
+- **Les clés d'identité** peuvent voyager dans une sauvegarde, et BMM refuse de les écrire
+  sans phrase secrète. C'est le seul export que supprimer le fichier après coup ne rattrape
+  pas.
+
+**Aucune récupération.** Pas de réinitialisation, pas d'indice, personne qui puisse l'ouvrir.
+Perds la phrase et le fichier est perdu, pas refusé.
+
+## [NOUVEAU] Créer une clé d'identité ne demande plus de terminal
+
+Le sélecteur de clé se désactivait tout seul sur un trousseau vide — correct, et sans issue,
+puisque le seul moyen d'avoir une clé était `ssh-keygen`. **Paramètres → Identity & API →
+En créer une…** en fabrique une : ed25519 par défaut, ECDSA et RSA pour un hôte plus ancien.
+La ligne publique va dans ton presse-papiers ; la moitié privée n'est jamais affichée,
+seulement l'endroit où elle est allée.
+
+Chaque type proposé est testé pour **signer**, pas seulement pour se générer — un type qui
+produit un fichier inutilisable est une promesse rompue au moment où quelqu'un cherche à
+joindre un serveur.
+
+## [NOUVEAU] Une liste partagée peut porter les identifiants de ses sources
+
+Décoché, les deux types, séparément, et seulement pour les hôtes que CETTE liste vise. Ça
+vaut la peine de dire pourquoi c'est construit ainsi : BMM garde les mots de passe en mémoire
+seulement et jamais sur disque, parce que les réglages finissent dans les sauvegardes et les
+rapports de crash — les mettre dans un fichier qu'on donne annule ça exprès, et ce qui est
+écrit doit être illisible sans la phrase.
+
+L'import pose deux questions. Les mots de passe sont proposés pour la session, comme un que tu
+aurais tapé. Les clés ont leur propre question et un avertissement direct : une clé de
+signature, c'est qui tu es pour toute source qui demande — et un nom déjà sur ton trousseau
+est ignoré, jamais écrasé.
+
 ## [AMÉLIORÉ] Le reste
 
 - **Un mod dit d'où il vient.** Le panneau de détail savait dire « depuis un dépôt serveur »

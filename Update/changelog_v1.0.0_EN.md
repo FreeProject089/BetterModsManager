@@ -621,6 +621,51 @@ An imported task now arrives **disabled**, with all four capability grants remov
 says what the file had asked for. Everything else is kept: the automation is intact and one
 toggle away from working.
 
+## [MAJOR] A passphrase that is a lock, not a sign on a door
+
+Three things in BMM can hold a secret — a data backup, a shared mod list, and your identity
+keys — and all three now use one envelope: Argon2id to a key, AES-256-GCM to seal.
+
+Argon2id because the attacker has the file and unlimited time, and a memory-hard KDF is the
+only thing that makes a typed phrase cost anything to guess. GCM because a tampered envelope
+must fail to open rather than decrypt to something plausible. The cost parameters travel WITH
+the file, so raising them later cannot lock anybody out of what they already exported.
+
+- **A data backup** is sealed whole. Open a locked `.DATABMM` in a zip tool and it is not a
+  zip at all — which is the point: a prompt that only makes the import screen refuse leaves
+  the contents readable to anybody with 7-Zip.
+- **A mod list** keeps a readable header — name, author, game, how many mods — and seals the
+  rest. A `.mm` is read by BMM, by BetterCommunity's inspector and by a person deciding
+  whether to trust it, and a list nobody can check is worse than one whose contents are
+  private. The signature is applied BEFORE the lock: a signature over an envelope would only
+  say who did the encrypting.
+- **Identity keys** can ride along in a backup, and BMM refuses to write them without a
+  passphrase. That is the one export deleting the file afterwards cannot undo.
+
+**There is no recovery.** No reset, no hint, nobody who can open it. Lose the phrase and the
+file is gone rather than withheld.
+
+## [NEW] Making an identity key no longer needs a terminal
+
+The key chooser disabled itself on an empty ring — correct, and a dead end, because the only
+way to get a key was `ssh-keygen`. **Settings → Identity & API → Create one…** makes one:
+ed25519 by default, with ECDSA and RSA for a host that predates it. The public line goes to
+your clipboard; the private half is never shown, only where it went.
+
+Every type offered is tested to sign, not merely to generate — a key that produces a file BMM
+cannot use is a promise broken at the moment somebody is reaching for a server.
+
+## [NEW] A shared list can carry the credentials its sources need
+
+Off, both kinds, separately, and only for the hosts THAT list points at. Worth saying why it
+is built the way it is: BMM keeps download passwords in memory only and never on disk,
+because settings end up in backups and crash reports — so putting them in a file you hand
+somebody undoes that on purpose, and what it writes has to be unreadable without the phrase.
+
+Importing one asks twice. Passwords are offered for the session, like one you typed yourself.
+Keys get their own question and a blunt warning: a signing key is who you are to every source
+that asks, and a name already on your ring is skipped rather than overwritten.
+
 ## [IMPROVED] The rest
 
 - **A mod says where it came from.** The detail panel could say "From server repo" and nothing

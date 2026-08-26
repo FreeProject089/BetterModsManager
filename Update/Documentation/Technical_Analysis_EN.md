@@ -1262,3 +1262,26 @@ reading. Every one of these was found by asking "what should this produce?" agai
 document — never by looking at the code, which reads correctly in all three cases. Where a
 reader can return nothing, a test has to assert on a case that must return SOMETHING; where a
 capability is declared rather than exercised, something has to exercise it.
+---
+
+## 73. A lock has to lock something
+
+The passphrase on a shared mod list sealed the credentials block and left the list itself
+readable. It passed every test it had, it encrypted real bytes with a real cipher, and it
+protected nothing anybody would notice: the list opened, the mods installed, and the phrase
+was a formality on a door that was not shut.
+
+It was reported in four words — *"à quoi il sert"* — and there was no answer.
+
+The same shape, twice more in the same week. A data-export passphrase that only made the
+IMPORT screen refuse would have left a zip anybody could open in 7-Zip; that one was caught
+before it shipped, by asking what the file looks like to somebody who does not use BMM to
+open it. And a Discord Rich Presence dropdown, asked for in good faith — the honest answer
+was that the protocol has no such thing, and adding a config field for it would have been a
+lock on nothing of a different kind: a setting that stores your choice and cannot act on it.
+
+**The lesson:** a security feature is not tested by whether the cryptography is correct. It
+is tested by naming what an attacker holds and asking what it costs them. Here the attacker
+holds the file — so the question was never "is AES-GCM sound", it was "what can be read by
+opening this in a text editor". That question takes ten seconds and it is the one that would
+have caught all three.
