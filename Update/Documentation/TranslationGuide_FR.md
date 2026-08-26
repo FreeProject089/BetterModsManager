@@ -53,7 +53,7 @@ BMM intègre un moteur de recherche sémantique dans l'onglet Documentation. Pou
 
 ## 5. Tutoriels Vidéo Localisés (v0.9.9)
 BMM supporte les tutoriels vidéo localisés. Vous pouvez définir des liens YouTube spécifiques et des chemins MP4 locaux pour votre langue via les clés `docs.videos`.
-Pour plus de détails, consultez le [Guide des Vidéos Localisées](../Guides/video_localization_FR.md).
+Pour plus de détails, consultez le [Guide des Vidéos Localisées](../Guides/Translation/video_localization_FR.md).
 
 ## 6. Validation
 - Assurez-vous que le JSON reste valide (utilisez un validateur si besoin).
