@@ -479,6 +479,18 @@
       "label": "Use a file a plugin ships",
       "needs": "pluginAsset",
       "group": "mods"
+    },
+    {
+      "type": "key.create",
+      "label": "Make an identity key",
+      "needs": "keyCreate",
+      "group": "repo"
+    },
+    {
+      "type": "catalog.follow",
+      "label": "Follow (or stop following) a catalogue",
+      "needs": "catFollow",
+      "group": "repo"
     }
   ]
 }

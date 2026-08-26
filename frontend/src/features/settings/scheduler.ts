@@ -1624,6 +1624,49 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
             break;
         }
 
+        // Make an identity key.
+        //
+        // The name is what makes this safe to run on a schedule: an existing name is
+        // REFUSED by the backend rather than overwritten, so a task that fires every week
+        // makes one key and then does nothing, instead of quietly replacing the key you
+        // prove with — which would lock you out of every source that has your public line.
+        case 'key.create': {
+            const name = String(p.name || '').trim();
+            if (!name) { toast(`${task.name}: ${t('sched.key.noName')}`, 'warning', 8000); break; }
+            try {
+                const r = await invoke('key_auth_generate', { name, kind: p.kind || 'ed25519' }) as any;
+                ctx.text['key.public'] = String(r?.public || '');
+                ctx.text['key.path'] = String(r?.path || '');
+                // Bound to a host straight away when the task named one, which is the whole
+                // reason to make a key unattended: the sync that needs it is the next step.
+                if (p.bindUrl) {
+                    await invoke('key_auth_set_for_url', { url: String(p.bindUrl), name }).catch(() => undefined);
+                }
+                toast(`${task.name}: ${t('sched.key.made').replace('{k}', name)}`, 'success', 9000);
+            } catch (e) {
+                // errNameTaken is the ordinary outcome of a repeating task, not a failure.
+                if (String(e).includes('errNameTaken')) {
+                    toast(`${task.name}: ${t('sched.key.exists').replace('{k}', name)}`, 'info', 6000);
+                } else { throw e; }
+            }
+            break;
+        }
+
+        // Follow a catalogue, or stop.
+        //
+        // Through the deeplink the interface's own screens use, so the source lands in the
+        // following list with an origin and can be removed by the button that removes the
+        // others — rather than being written straight into a store nothing else knows about.
+        case 'catalog.follow': {
+            const type = String(p.catType || 'plugin');
+            const url = String(p.url || '').trim();
+            if (!url) { toast(`${task.name}: ${t('sched.cat.noUrl')}`, 'warning', 8000); break; }
+            requirePerm(task, 'deeplink', t('sched.permDeeplink') || 'fire deeplinks');
+            await runDeepLink(`bmm://catalog/${p.unfollow ? 'unfollow' : 'follow'}`
+                + `?type=${encodeURIComponent(type)}&url=${encodeURIComponent(url)}`);
+            break;
+        }
+
         case 'dcs.hook': {
             if (String(p.mode || 'install') === 'remove') {
                 const n = Number(await invoke('dcs_remove_hook', { dir: p.dir || null }).catch(() => 0));
@@ -1674,6 +1717,11 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
             if (!p.url || !p.gameDir || !p.modsDir) {
                 throw new Error(t('sched.syncMissing') || 'This sync step needs a repo URL, a destination folder and a mods folder.');
             }
+
+            // Bind the identity key this task names to this host, BEFORE the fetch — the
+            // manifest itself is behind the gate on a protected repo, so binding after it
+            // would be binding after the request that needed it.
+            await applyCredsFor(String(p.url), p);
 
             // Resolve which profile INSIDE the repo to install. Fetching first also
             // answers the "repo with no repo.json" case with a real message instead of
@@ -4686,7 +4734,92 @@ const ACTION_TYPES: { v: string; label: string; needs?: string; group: string }[
     // plugin ships a config template or a list of codes, and a task reads it into a variable
     // instead of that value being typed into the task and drifting from the plugin.
     { v: 'plugin.asset', label: 'Use a file a plugin ships', needs: 'pluginAsset', group: 'mods' },
+    // Identity and sources. Both were reachable only by clicking.
+    { v: 'key.create', label: 'Make an identity key', needs: 'keyCreate', group: 'repo' },
+    { v: 'catalog.follow', label: 'Follow (or stop following) a catalogue', needs: 'catFollow', group: 'repo' },
 ];
+
+/**
+ * The three things a protected source can ask for, as one block.
+ *
+ * A repo can want a download password, a signed proof from one of your identity keys, or
+ * both; a `.mm` or a `.DATABMM` can be sealed with a passphrase. Those were scattered — the
+ * sync form had a password buried under "Destructive options" (a password is not a
+ * destructive option), nothing offered a key, and nothing offered a passphrase. Written once
+ * here so every action that reaches a source asks the same way.
+ *
+ * `want` picks which of the three apply, because they are not all meaningful everywhere: a
+ * catalogue has no passphrase, and a local file has no download password.
+ */
+function credsFields(params: Record<string, any>, want: { password?: boolean; key?: boolean; passphrase?: boolean }): string {
+    const rows: string[] = [];
+    if (want.password) {
+        rows.push(`<label class="sched-cmd-label">${escHtml(t('sched.creds.password'))}</label>
+            <input class="input sched-c-pass" type="password" autocomplete="new-password"
+                placeholder="${escAttr(t('sched.creds.passwordPh'))}" value="${escAttr(params.password || '')}">`);
+    }
+    if (want.key) {
+        // Filled in from the ring after render — reading it is async and this returns markup.
+        rows.push(`<label class="sched-cmd-label">${escHtml(t('sched.creds.key'))}</label>
+            <select class="input sched-c-key" style="max-width:280px"></select>
+            <span class="sched-cmd-hint">${escHtml(t('sched.creds.keyHint'))}</span>`);
+    }
+    if (want.passphrase) {
+        rows.push(`<label class="sched-cmd-label">${escHtml(t('sched.creds.passphrase'))}</label>
+            <input class="input sched-c-phrase" type="password" autocomplete="new-password"
+                value="${escAttr(params.passphrase || '')}">
+            <span class="sched-cmd-hint">${escHtml(t('sched.creds.passphraseHint'))}</span>`);
+    }
+    if (!rows.length) return '';
+    return `<details class="sched-cmd-adv sched-creds">
+        <summary>${escHtml(t('sched.creds.title'))}</summary>
+        ${rows.join('')}
+    </details>`;
+}
+
+/** Bind the block. Safe to call for a host that has none of it — nothing matches. */
+function wireCreds(host: HTMLElement, params: Record<string, any>): void {
+    host.querySelector('.sched-c-pass')?.addEventListener('input', (e) => {
+        params.password = (e.target as HTMLInputElement).value;
+    });
+    host.querySelector('.sched-c-phrase')?.addEventListener('input', (e) => {
+        params.passphrase = (e.target as HTMLInputElement).value;
+    });
+    const keySel = host.querySelector('.sched-c-key') as HTMLSelectElement | null;
+    if (!keySel) return;
+    void (async () => {
+        const ring = await (invoke('key_auth_list') as Promise<any>).catch(() => null);
+        const keys: { name: string }[] = Array.isArray(ring?.keys) ? ring.keys : [];
+        const chosen = String(params.keyName || '');
+        // "The active one" is the default and is named, rather than being a blank option
+        // that silently means the same thing. Which key is active is a global setting and
+        // somebody reading this task should not have to go and look it up.
+        const activeLabel = ring?.active
+            ? t('sched.creds.keyActive').replace('{k}', String(ring.active))
+            : t('sched.creds.keyNone');
+        keySel.innerHTML = `<option value="">${escHtml(activeLabel)}</option>`
+            + keys.map((k) => `<option value="${escAttr(k.name)}"${k.name === chosen ? ' selected' : ''}>${escHtml(k.name)}</option>`).join('')
+            // A key named by the task and since removed from the ring: shown as gone rather
+            // than silently falling back to the active one, which would sign as somebody else.
+            + (chosen && !keys.some((k) => k.name === chosen)
+                ? `<option value="${escAttr(chosen)}" selected>${escHtml(t('sched.creds.keyMissing').replace('{k}', chosen))}</option>` : '');
+        keySel.addEventListener('change', () => { params.keyName = keySel.value; });
+    })();
+}
+
+/**
+ * Apply an action's credentials before it reaches the source.
+ *
+ * The password and the passphrase are passed to the command that needs them; the KEY is
+ * different — proofs are signed by whichever key is bound to that host, so naming one here
+ * binds it. That binding is what `key_auth_set_for_url` was built for, and it persists,
+ * which is the honest behaviour: the next sync of the same repo, by hand, uses the same key.
+ */
+async function applyCredsFor(url: string, params: Record<string, any>): Promise<void> {
+    const name = String(params.keyName || '').trim();
+    if (!name || !url) return;
+    try { await invoke('key_auth_set_for_url', { url, name }); } catch { /* unprotected source */ }
+}
 
 function actionEditor(action: Action, onStructureChange?: () => void): HTMLElement {
     const el = document.createElement('div');
@@ -4914,9 +5047,12 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
                 <summary>${t('sched.syncDanger') || 'Destructive options — off by default'}</summary>
                 <label class="sched-opt" style="margin-top:6px"><input type="checkbox" class="sched-rs-overwrite" ${params.overwriteAll ? 'checked' : ''}><div><b>${t('sched.syncOverwriteT') || 'Overwrite every file'}</b><span>${t('sched.syncOverwrite') || 'Re-downloads and replaces files that already match. Slower, and your local edits are lost.'}</span></div></label>
                 <label class="sched-opt"><input type="checkbox" class="sched-rs-delete" ${params.deleteExtra ? 'checked' : ''}><div><b>${t('sched.syncDeleteT') || 'Delete mods the repo does not have'}</b><span>${t('sched.syncDelete') || 'Removes anything in the mods folder that is not in the repo. On a schedule this runs with nobody watching — leave it off unless the folder is only ever filled by this repo.'}</span></div></label>
-                <input class="input sched-rs-pass" type="password" style="margin-top:6px" placeholder="${escAttr(t('sched.syncPassPh') || 'download password (if the repo needs one)')}" value="${escAttr(params.password || '')}">
             </details>
+            ${credsFields(params, { password: true, key: true })}
         </div>`;
+        // The password used to live inside "Destructive options", which it is not. It is now
+        // in the block every action that reaches a protected source shares, next to the key.
+        wireCreds(host, params);
     }
     else if (needs === 'bmmfolder') host.innerHTML = _field(needs,
         `<input class="input sched-p-bmmdir" placeholder="${escAttr(t('sched.bmmFolderPh') || 'e.g. backups/weekly')}" value="${escAttr(params.path || '')}">`)
@@ -4970,6 +5106,38 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
     // Reuses .sched-p-varname / .sched-p-varvalue because the generic wiring at the end of
     // this function already maps them to params.name / params.value — which is exactly what
     // list.set, list.push and list.clear read.
+    else if (needs === 'keyCreate') {
+        host.innerHTML = `<div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${escHtml(t('sched.key.name') || '1. Name it')}</label>
+            <input class="input sched-p-kcname" spellcheck="false" style="max-width:260px"
+                placeholder="${escAttr(t('sched.key.namePh') || 'e.g. work')}" value="${escAttr(params.name || '')}">
+            <label class="sched-cmd-label">${escHtml(t('sched.key.kind') || '2. Type')}</label>
+            <select class="input sched-p-kckind" style="max-width:260px">
+                ${[['ed25519', 'ed25519'], ['ecdsa', 'ECDSA (nistp256)'], ['rsa', 'RSA 4096']]
+                    .map(([v, l]) => `<option value="${v}"${(params.kind || 'ed25519') === v ? ' selected' : ''}>${escHtml(l)}</option>`).join('')}
+            </select>
+            <span class="sched-cmd-hint">${escHtml(t('sched.key.kindHint') || '')}</span>
+            <label class="sched-cmd-label">${escHtml(t('sched.key.bind') || '3. Use it for this host (optional)')}</label>
+            <input class="input sched-p-kcbind" spellcheck="false"
+                placeholder="https://repo.example.org" value="${escAttr(params.bindUrl || '')}">
+            <span class="sched-cmd-hint">${escHtml(t('sched.key.hint') || '')}</span>
+        </div>`;
+    }
+    else if (needs === 'catFollow') {
+        const TYPES = ['app', 'plugin', 'theme', 'preset', 'modpack', 'repo', 'tutorial', 'list'];
+        host.innerHTML = `<div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${escHtml(t('sched.cat.type') || '1. Kind of catalogue')}</label>
+            <select class="input sched-p-cftype" style="max-width:220px">
+                ${TYPES.map((v) => `<option value="${v}"${(params.catType || 'plugin') === v ? ' selected' : ''}>${escHtml(t('sched.cat.t.' + v))}</option>`).join('')}
+            </select>
+            <label class="sched-cmd-label">${escHtml(t('sched.cat.url') || '2. Address')}</label>
+            <input class="input sched-p-cfurl" spellcheck="false"
+                placeholder="https://…/catalog.json" value="${escAttr(params.url || '')}">
+            <label class="sched-cmd-row"><input type="checkbox" class="sched-p-cfoff"${params.unfollow ? ' checked' : ''}>
+                <span>${escHtml(t('sched.cat.unfollow') || 'Stop following it instead')}</span></label>
+            <span class="sched-cmd-hint">${escHtml(t('sched.cat.hint') || '')}</span>
+        </div>`;
+    }
     else if (needs === 'dataBackup') {
         // The sections, and their order, come from the shared defaults rather than a list
         // typed here — a section added to the backup format would otherwise be missing from
@@ -5500,7 +5668,8 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
     rsBind('.sched-rs-url', 'url'); rsBind('.sched-rs-rprof', 'repoProfile');
     rsBind('.sched-rs-target', 'targetProfile'); rsBind('.sched-rs-game', 'gameDir');
     rsBind('.sched-rs-mods', 'modsDir'); rsBind('.sched-rs-backup', 'backupDir');
-    rsBind('.sched-rs-pass', 'password');
+    // The password moved into the shared credentials block (credsFields/wireCreds), which
+    // binds it. This selector now matches nothing and would be a binding nobody can see.
     rsBind('.sched-rs-overwrite', 'overwriteAll', 'checked');
     rsBind('.sched-rs-delete', 'deleteExtra', 'checked');
     host.querySelectorAll('.sched-rs-browse').forEach((b) => b.addEventListener('click', async () => {
@@ -5532,6 +5701,12 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
     host.querySelector('.sched-p-listsep')?.addEventListener('input', (e) => { params.sep = (e.target as HTMLInputElement).value; });
     // text.extract / modlist.apply / dcs.hook. Same shape as everything else here: a
     // querySelector that finds nothing for the other action types binds nothing.
+    host.querySelector('.sched-p-kcname')?.addEventListener('input', (e) => { params.name = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-kckind')?.addEventListener('change', (e) => { params.kind = (e.target as HTMLSelectElement).value; });
+    host.querySelector('.sched-p-kcbind')?.addEventListener('input', (e) => { params.bindUrl = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-cftype')?.addEventListener('change', (e) => { params.catType = (e.target as HTMLSelectElement).value; });
+    host.querySelector('.sched-p-cfurl')?.addEventListener('input', (e) => { params.url = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-cfoff')?.addEventListener('change', (e) => { params.unfollow = (e.target as HTMLInputElement).checked; });
     host.querySelector('.sched-p-bkdir')?.addEventListener('input', (e) => { params.dir = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-p-bkname')?.addEventListener('input', (e) => { params.name = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-p-bkinc')?.addEventListener('change', (e) => { params.increment = (e.target as HTMLSelectElement).value; });

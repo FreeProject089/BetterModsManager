@@ -2,7 +2,7 @@
 
 !!! info ""
 
-    79 actions · 30 conditions · 15 valeurs · 8 sources de boucle
+    82 actions · 30 conditions · 16 valeurs · 8 sources de boucle
 
 > Généré depuis le registre de BMM lui-même, donc cette page ne peut pas décrire une version de l'application qui n'existe pas. Si une action est dans l'éditeur de blocs, elle est dans cette liste.
 
@@ -50,6 +50,8 @@ S'écrit `do <nom>(param: valeur, …)`. Une action sans paramètre prend des pa
 | `repo.publishSsh` | Envoie le dossier exporté vers la cible SSH enregistrée dans Server Repo | `dir` |
 | `repo.fetchSsh` | Récupère le dépôt depuis la cible SSH enregistrée, dans un dossier local | `dir` |
 | `repo.syncNow` | Synchronise un dépôt serveur dans un profil local, sans surveillance. | `url` · `gameDir` · `modsDir` · `password` · `repoProfile` · `backupDir` · `targetProfile` · `overwriteAll` · `deleteExtra` · `downloadLimit` · `keepZipped` |
+| `key.create` | Génère une paire de clés sur le trousseau. Un nom déjà pris est laissé tel quel, jamais remplacé. | `name` · `kind` · `bindUrl` |
+| `catalog.follow` | Ajoute une source de catalogue via les écrans de l'app, pour qu'elle apparaisse dans la liste des suivis avec son origine. | `catType` · `url` · `unfollow` |
 
 ### Apps & lancement
 
@@ -117,6 +119,7 @@ S'écrit `do <nom>(param: valeur, …)`. Une action sans paramètre prend des pa
 | `notify` | Affiche une notification | `message` |
 | `discord.rpc` | Bascule la présence Discord | `enabled` |
 | `data.exportAuto` | Sauvegarde automatique des données | `dir` · `name` · `increment` |
+| `data.backup` | La même archive que l'écran Export de données — les sections que tu choisis, verrouillée si tu donnes une phrase. | `dir` · `sections` · `passphrase` · `name` · `increment` |
 | `app.checkUpdate` | Vérifie s’il existe une mise à jour de BMM. Renseigne update.available ; ne télécharge rien. | `enabled` |
 | `system.clearApiLog` | Vide le journal des requêtes API. | — |
 | `system.clearResourceRecords` | Vide les relevés CPU/mémoire enregistrés. | — |
@@ -174,7 +177,7 @@ S'écrivent là où une condition va — après `if`, `case`, `waitfor`, `repeat
 
 Écrites dans la tâche par une action, puis lisibles dans une comparaison ou une expression — `if disk.free_gb < 5`, `set total = benchmark.mbps * 2`.
 
-`disk.read_mbps` · `disk.write_mbps` · `disk.suggested_limit` · `disk.free_gb` · `disk.free_percent` · `disk.total_gb` · `benchmark.mbps` · `benchmark.total_ms` · `update.available` · `lasttask.ok` · `lasttask.spawned` · `list.length` · `http.status` · `map.size` · `map.hit`
+`disk.read_mbps` · `disk.write_mbps` · `disk.suggested_limit` · `disk.free_gb` · `disk.free_percent` · `disk.total_gb` · `benchmark.mbps` · `benchmark.total_ms` · `update.available` · `lasttask.ok` · `lasttask.spawned` · `list.length` · `backup.bytes` · `http.status` · `map.size` · `map.hit`
 
 Une valeur que rien n'a encore écrite vaut zéro. `lasttask.ok` vaut 1 ou 0, et ne veut dire quelque chose qu'après un `run`.
 

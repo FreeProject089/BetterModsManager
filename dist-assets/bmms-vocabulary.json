@@ -617,6 +617,24 @@
         "engine",
         "workingDir"
       ]
+    },
+    {
+      "type": "key.create",
+      "group": "repo",
+      "params": [
+        "name",
+        "kind",
+        "bindUrl"
+      ]
+    },
+    {
+      "type": "catalog.follow",
+      "group": "repo",
+      "params": [
+        "catType",
+        "url",
+        "unfollow"
+      ]
     }
   ],
   "conditions": [

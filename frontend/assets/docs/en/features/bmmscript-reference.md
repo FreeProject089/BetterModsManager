@@ -2,7 +2,7 @@
 
 !!! info ""
 
-    79 actions · 30 conditions · 15 values · 8 loop sources
+    82 actions · 30 conditions · 16 values · 8 loop sources
 
 > Generated from BMM's own registry, so it cannot describe a version of the app that does not exist. If an action is in the block editor, it is in this list.
 
@@ -50,6 +50,8 @@ Written `do <name>(param: value, …)`. An action with no parameters takes empty
 | `repo.publishSsh` | Uploads the exported folder to the SSH target saved in Server Repo | `dir` |
 | `repo.fetchSsh` | Fetches the repo from the saved SSH target into a local folder | `dir` |
 | `repo.syncNow` | Syncs a server repo into a local profile, unattended. | `url` · `gameDir` · `modsDir` · `password` · `repoProfile` · `backupDir` · `targetProfile` · `overwriteAll` · `deleteExtra` · `downloadLimit` · `keepZipped` |
+| `key.create` | Generates a keypair on the ring. A name already taken is left alone, never replaced. | `name` · `kind` · `bindUrl` |
+| `catalog.follow` | Adds a catalogue source through the app's own screens, so it appears in the following list with an origin. | `catType` · `url` · `unfollow` |
 
 ### Apps & launch
 
@@ -117,6 +119,7 @@ Written `do <name>(param: value, …)`. An action with no parameters takes empty
 | `notify` | Show a toast notification | `message` |
 | `discord.rpc` | Toggle Discord Rich Presence | `enabled` |
 | `data.exportAuto` | Unattended data backup | `dir` · `name` · `increment` |
+| `data.backup` | The same archive the Export data screen writes — sections you pick, locked with a passphrase if you give one. | `dir` · `sections` · `passphrase` · `name` · `increment` |
 | `app.checkUpdate` | Asks whether a BMM update exists. Sets update.available; downloads nothing. | `enabled` |
 | `system.clearApiLog` | Empties the API request log. | — |
 | `system.clearResourceRecords` | Empties the recorded CPU/memory samples. | — |
@@ -174,7 +177,7 @@ Written where a condition goes — after `if`, `case`, `waitfor`, `repeat while`
 
 Written by an action into the task, and readable afterwards in a comparison or an expression — `if disk.free_gb < 5`, `set total = benchmark.mbps * 2`.
 
-`disk.read_mbps` · `disk.write_mbps` · `disk.suggested_limit` · `disk.free_gb` · `disk.free_percent` · `disk.total_gb` · `benchmark.mbps` · `benchmark.total_ms` · `update.available` · `lasttask.ok` · `lasttask.spawned` · `list.length` · `http.status` · `map.size` · `map.hit`
+`disk.read_mbps` · `disk.write_mbps` · `disk.suggested_limit` · `disk.free_gb` · `disk.free_percent` · `disk.total_gb` · `benchmark.mbps` · `benchmark.total_ms` · `update.available` · `lasttask.ok` · `lasttask.spawned` · `list.length` · `backup.bytes` · `http.status` · `map.size` · `map.hit`
 
 A value nothing has written yet reads as zero. `lasttask.ok` is 1 or 0, and only means anything after a `run`.
 
