@@ -146,6 +146,7 @@ une valeur manquante n'en est pas une.
 | `modpack` | Modpacks → *Catalogues* |
 | `repo` | Parcourir les Server-Repos |
 | `tutorial` | Hub des tutoriels → *Catalogues…* |
+| `list` | Listes de mods → *Catalogues…* — les `.mm` partagées |
 
 Un catalogue de repos est un document de la forme `repos.json` — voir le guide Server-Repo.
 Les entrées qu'il amène sont taguées **community** par BMM, quoi que prétende le fichier.
