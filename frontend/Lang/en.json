@@ -8457,5 +8457,6 @@
   "mm.cat.addLinkDesc": "The address of a .mm somebody already hosts. Nothing is downloaded — the entry points at it.",
   "mm.cat.addLinkName": "A name for it. Leave empty to use “{g}”.",
   "mm.cat.remote": "hosted elsewhere",
-  "themes.cataloguesTitle": "Theme catalogues"
+  "themes.cataloguesTitle": "Theme catalogues",
+  "common.nativeDialog": "Waiting for the file window — BMM is not frozen, it is behind it."
 }

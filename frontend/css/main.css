@@ -17713,6 +17713,21 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 .sic-make-out textarea { width: 100%; font-family: var(--font-mono); font-size: 10px;
     resize: vertical; overflow-wrap: anywhere; }
 
+/* Shown while a native file window is up. It cannot be animated and it cannot be dismissed
+   — nothing in the webview runs while that dialog owns the message loop — so it is a still
+   strip that explains the stillness, painted before the dialog opens. Bottom, out of the way
+   of whatever the click was aimed at. */
+.bmm-native-wait {
+    position: absolute; left: 50%; transform: translateX(-50%); bottom: 18px;
+    z-index: 2147483000; max-width: min(90%, 460px);
+    padding: 8px 14px; border-radius: 999px; font-size: 12px; line-height: 1.4;
+    color: var(--text-primary); background: var(--bg-solid, var(--bg-secondary));
+    border: 1px solid var(--border-accent); box-shadow: 0 8px 28px rgba(0,0,0,.45);
+    /* Nothing to click: it is a statement, and a click on it would land on the app behind
+       the native dialog, which cannot receive one anyway. */
+    pointer-events: none; text-align: center;
+}
+
 .repo-cat-srcs { display: flex; flex-direction: column; gap: 4px; }
 
 /* Taking a repo out of your own list, and the way back. The note is quiet but always there

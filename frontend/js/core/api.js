@@ -3,6 +3,7 @@
  * Handles communication between frontend and Rust backend
  */
 import { debugHub } from '../features/debug/debug.js';
+import { t } from './i18n.js';
 let _invoke = null;
 // Bridge-readiness gate. The bridge is wired up by loadTauri(), but some boot code (e.g.
 // loadLinks → fetch_links_json) can invoke BEFORE loadTauri() has run. Rather than fail those
@@ -193,9 +194,66 @@ export async function invoke(command, args = {}, opts) {
         throw err;
     }
 }
+/**
+ * The app looks frozen while a native file dialog is up, because it IS.
+ *
+ * A Windows file dialog is modal and owns the message loop: the webview stops painting,
+ * animations stop mid-frame, and hovering does nothing. Nothing in BMM can fix that — it is
+ * the operating system's window, not ours — and nothing can be drawn once it is up either,
+ * which is why "show a warning while it is open" cannot work.
+ *
+ * What CAN be done is say so BEFORE, and leave the sentence on screen. Somebody who alt-tabs
+ * back to a still BMM then finds an explanation instead of a hang: the app is not stuck, it
+ * is waiting for a window that is in front of it.
+ *
+ * Every picker goes through here, so the promise is kept everywhere rather than at the call
+ * sites that remembered.
+ */
+let _nativeDepth = 0;
+function nativeWaitOn() {
+    _nativeDepth += 1;
+    if (_nativeDepth > 1 || document.getElementById('bmm-native-wait'))
+        return;
+    const el = document.createElement('div');
+    el.id = 'bmm-native-wait';
+    el.className = 'bmm-native-wait';
+    // Plain DOM and a class — this module is core/ and must not reach into ui/, which the
+    // dependency gate counts as a cycle. i18n is core too, so the text is translated rather
+    // than left in English behind a window-global that did not exist.
+    el.textContent = t('common.nativeDialog');
+    (document.getElementById('app-window-outer') || document.body).appendChild(el);
+}
+function nativeWaitOff() {
+    _nativeDepth = Math.max(0, _nativeDepth - 1);
+    if (_nativeDepth === 0)
+        document.getElementById('bmm-native-wait')?.remove();
+}
+/**
+ * Run a native dialog with the notice actually on screen first.
+ *
+ * The two frames matter. Appending a node does not paint it; the native dialog takes the
+ * loop on the very next tick, and without waiting for a real frame the notice would be
+ * created, never drawn, and removed — present in the DOM for the whole freeze and visible
+ * for none of it.
+ */
+async function withNativeWait(run) {
+    nativeWaitOn();
+    await new Promise((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+        // A hidden or backgrounded webview never fires rAF, and a picker opened from one must
+        // not hang on a frame that will not come.
+        setTimeout(resolve, 120);
+    });
+    try {
+        return await run();
+    }
+    finally {
+        nativeWaitOff();
+    }
+}
 export async function pickFolder() {
     try {
-        return await _dialog.open({ directory: true, multiple: false });
+        return await withNativeWait(() => _dialog.open({ directory: true, multiple: false }));
     }
     catch {
         return null;
@@ -211,7 +269,7 @@ export async function pickFolder() {
  */
 export async function pickFiles(filters) {
     try {
-        const r = await _dialog.open({ multiple: true, ...(filters?.length ? { filters } : {}) });
+        const r = await withNativeWait(() => _dialog.open({ multiple: true, ...(filters?.length ? { filters } : {}) }));
         return Array.isArray(r) ? r : (r ? [r] : []);
     }
     catch {
@@ -233,7 +291,7 @@ export async function pickFile(options = []) {
             if (options.filters?.length)
                 dialogOptions.filters = options.filters;
         }
-        return await _dialog.open(dialogOptions);
+        return await withNativeWait(() => _dialog.open(dialogOptions));
     }
     catch {
         return null;
@@ -250,9 +308,9 @@ let _lastSavePath = null;
 export function lastSavePath() { return _lastSavePath; }
 export async function saveFile(options = {}) {
     try {
-        const picked = _dialog?.save
+        const picked = await withNativeWait(async () => (_dialog?.save
             ? await _dialog.save(options)
-            : await (await import('https://unpkg.com/@tauri-apps/api@1/dialog.js')).save(options);
+            : await (await import('https://unpkg.com/@tauri-apps/api@1/dialog.js')).save(options)));
         if (picked)
             _lastSavePath = picked;
         return picked;

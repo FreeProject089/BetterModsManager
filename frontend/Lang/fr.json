@@ -8455,5 +8455,6 @@
   "mm.cat.addLinkDesc": "L’adresse d’un .mm que quelqu’un héberge déjà. Rien n’est téléchargé — l’entrée pointe dessus.",
   "mm.cat.addLinkName": "Un nom pour lui. Vide pour utiliser « {g} ».",
   "mm.cat.remote": "hébergé ailleurs",
-  "themes.cataloguesTitle": "Catalogues de thèmes"
+  "themes.cataloguesTitle": "Catalogues de thèmes",
+  "common.nativeDialog": "En attente de la fenêtre de fichiers — BMM n’est pas figé, il est derrière."
 }
