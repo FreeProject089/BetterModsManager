@@ -219,6 +219,11 @@ export function describeKinds(kinds) {
         preset: ['preset catalogue', 'preset catalogues'],
         modpack: ['modpack catalogue', 'modpack catalogues'],
         repo: ['repo catalogue', 'repo catalogues'],
+        // The two that were missing fell through to the fallback, so an index holding them
+        // reported "1 tutorials" and "1 lists" — a sentence that reads like a bug in the
+        // index rather than a gap here.
+        tutorial: ['tutorial catalogue', 'tutorial catalogues'],
+        list: ['mod-list catalogue', 'mod-list catalogues'],
     };
     return Object.entries(kinds)
         .filter(([, n]) => n > 0)

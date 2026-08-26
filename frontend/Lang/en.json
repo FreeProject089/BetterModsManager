@@ -7624,7 +7624,7 @@
   "settings.catIndex.type.repo": "Repo",
   "settings.catIndex.type.modpack": "Modpacks",
   "settings.catIndex.type.tutorial": "Tutorials",
-  "settings.catIndex.type.list": "Mod lists",
+  "settings.catIndex.type.list": "Mod lists (.mm)",
   "settings.catIndex.disable": "On",
   "settings.catIndex.disable.h": "Keep it in the list but stop fetching it",
   "settings.catIndex.enable": "Off",

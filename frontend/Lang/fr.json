@@ -7622,7 +7622,7 @@
   "settings.catIndex.type.repo": "Dépôt",
   "settings.catIndex.type.modpack": "Modpacks",
   "settings.catIndex.type.tutorial": "Tutoriels",
-  "settings.catIndex.type.list": "Listes de mods",
+  "settings.catIndex.type.list": "Listes de mods (.mm)",
   "settings.catIndex.disable": "Actif",
   "settings.catIndex.disable.h": "Le garder dans la liste mais arrêter de le récupérer",
   "settings.catIndex.enable": "Inactif",

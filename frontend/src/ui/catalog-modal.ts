@@ -31,6 +31,7 @@ import { toast } from './app.js';
 import { sourceAccessHtml, wireSourceAccess } from '../core/source-access.js';
 import { planPublish, safeFileStem, type EntryChoice } from '../core/catalog-publish.js';
 import { looksLikeCatalog } from '../core/catalog-bundle.js';
+import { raiseAboveAll } from './layer.js';
 
 /** One thing a followed catalogue offers, flattened for showing in a list. */
 export interface BrowseEntry {
@@ -192,7 +193,10 @@ export async function openCatalogModal<T>(spec: CatalogKindSpec<T>): Promise<voi
 
     const ov = document.createElement('div');
     ov.className = 'modal-overlay open';
-    ov.style.zIndex = '11400';
+    // Above whatever opened it, computed rather than declared. It was a flat 11400, which is
+    // above ordinary modals and far below the tutorial hub (2000000) — so opening this from
+    // the hub painted it UNDERNEATH, and the button read as doing nothing.
+    raiseAboveAll(ov, 11400);
 
     const close = () => { ov.remove(); document.removeEventListener('keydown', onKey); };
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
@@ -476,7 +480,7 @@ export async function openCatalogModal<T>(spec: CatalogKindSpec<T>): Promise<voi
                     <label class="cat-pub-pick">
                         <input type="checkbox" data-pick="${escAttr(id)}"${on ? ' checked' : ''}>
                         <span class="cm-row-name">${escHtml(l.name)}</span>
-                        ${l.sub ? `<span class="cm-row-sub">${escHtml(l.sub)}</span>` : ''}
+                        ${l.sub ? `<span class="cm-row-sub cm-row-desc" title="${escAttr(l.sub)}">${escHtml(l.sub)}</span>` : ''}
                     </label>
                     ${forced ? `<span class="cm-forced">${escHtml(t('catpub.link'))}</span>`
                       : `<select class="input cat-pub-mode" data-mode="${escAttr(id)}">

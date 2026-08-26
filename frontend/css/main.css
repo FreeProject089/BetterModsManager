@@ -2783,8 +2783,10 @@ body.bmm-toolbar-opaque .lib-header-shell {
     opacity: 1;
 }
 
+/* A press has to look different from a hover. This was the same -1px lift, so pointing at a
+   button and pressing it produced the same picture and nothing acknowledged the click. */
 .btn:active {
-    transform: translateY(-1px);
+    transform: translateY(0);
 }
 
 .btn-primary {
@@ -2793,9 +2795,16 @@ body.bmm-toolbar-opaque .lib-header-shell {
     border-color: var(--bmm-btn-primary-border, var(--bmm-s12));
 }
 
+/* The generic hover paints --bmm-s08 over the button, which is a pale wash. On a neutral
+   surface that reads as "lit"; over the accent it desaturates the accent into a flat pale
+   blue, so the primary action stops looking primary at the moment you point at it. It gets
+   brighter instead, and keeps its colour. */
+.btn-primary:hover::after { opacity: 0; }
+
 .btn-primary:hover {
     box-shadow: var(--accent-glow);
     transform: translateY(-1px);
+    filter: brightness(1.09);
 }
 
 .btn-secondary {
@@ -16723,6 +16732,10 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 .cm-list { display: flex; flex-direction: column; gap: 5px; }
 .cm-row-name { flex: 1; min-width: 0; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cm-row-sub { flex: none; font-size: 10.5px; color: var(--text-muted); }
+/* A note beside a name is short; an entry DESCRIPTION is whatever somebody wrote, and a
+   tutorial’s ran off the right and put a horizontal scrollbar under the whole list. It
+   takes the slack and truncates; the full text is on the title. */
+.cm-row-desc { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* With a catalogue FILE there is nothing to pack, so the picker is replaced by the word
    rather than shown disabled: a dead control invites a click that cannot work. */
 .cm-forced { flex: none; width: 130px; font-size: 11px; color: var(--text-muted); text-align: center; }
