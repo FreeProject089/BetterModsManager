@@ -37,6 +37,70 @@ import { toast, toastSaved } from '../../ui/app.js';
  * Exported because the mod-list catalogue reads the same files and has to ask the same
  * question — every time, since nothing about the phrase is remembered.
  */
+/**
+ * A list arrived carrying credentials. Say what applying them would mean, then ask.
+ *
+ * Applied is never the default, and the two halves are asked for separately. A download
+ * password for a host you are about to fetch from and somebody else's SIGNING KEY are
+ * different things with different consequences: the first lets you get the mods, the second
+ * changes who you are to every server you talk to. Agreeing to one must not agree to the
+ * other.
+ *
+ * The hosts and the key names are shown, because "apply the credentials?" is a question
+ * nobody can answer — whether it is safe depends entirely on WHICH, and that is knowable
+ * here.
+ */
+async function offerListCredentials(credentials: unknown, passphrase: string): Promise<void> {
+    let preview: { passwords: Record<string, string>; key_names: string[] };
+    try {
+        preview = await invoke('modlist_credentials_open', { credentials, passphrase }) as any;
+    } catch {
+        // A list whose credentials will not open is still a usable list. Said once, quietly,
+        // rather than failing the import that already succeeded.
+        toast(t('mm.creds.inUnreadable'), 'warning', 7000);
+        return;
+    }
+
+    const hosts = Object.keys(preview.passwords || {});
+    const keys = preview.key_names || [];
+    if (!hosts.length && !keys.length) return;
+
+    const lines: string[] = [];
+    if (hosts.length) {
+        lines.push(t('mm.creds.inPw').replace('{n}', String(hosts.length))
+            .replace('{list}', hosts.map((h) => { try { return new URL(h).host; } catch { return h; } }).join(', ')));
+    }
+    if (keys.length) {
+        lines.push(t('mm.creds.inKeys').replace('{n}', String(keys.length)).replace('{list}', keys.join(', ')));
+    }
+
+    const takePw = hosts.length && await (window as any).confirmCustom?.(
+        t('mm.creds.inTitle'), `${lines.join('\n\n')}\n\n${t('mm.creds.inAskPw')}`);
+    if (takePw) {
+        const { rememberSourcePassword } = await import('../../core/source-fetch.js');
+        // For this run only, exactly like a password you typed yourself. Writing them down
+        // because they arrived in a file would be a different rule for the same secret.
+        for (const [origin, pw] of Object.entries(preview.passwords)) rememberSourcePassword(origin, pw);
+        toast(t('mm.creds.inPwDone').replace('{n}', String(hosts.length)), 'success');
+    }
+
+    if (!keys.length) return;
+    const takeKeys = await (window as any).confirmCustom?.(
+        t('mm.creds.inKeysTitle'), `${t('mm.creds.inKeysWarn')}\n\n${keys.join(', ')}`);
+    if (!takeKeys) return;
+    try {
+        const added = await invoke('modlist_credentials_apply_keys',
+            { credentials, passphrase, names: keys }) as string[];
+        // Named, and counted against what was offered: a name already on the ring is skipped
+        // rather than overwritten, and silence about that would read as "it worked".
+        toast(added.length
+            ? t('mm.creds.inKeysDone').replace('{list}', added.join(', '))
+            : t('mm.creds.inKeysNone'), added.length ? 'success' : 'info', 7000);
+    } catch (e) {
+        toast(String(e).slice(0, 160), 'error', 7000);
+    }
+}
+
 export async function importListAsking(path: string): Promise<any> {
     try {
         return await invoke('import_modlist', { path, passphrase: null });
@@ -46,7 +110,12 @@ export async function importListAsking(path: string): Promise<any> {
         const pass = await promptRepoPassword();
         if (pass == null) throw new Error('mm.cancelled');
         try {
-            return await invoke('import_modlist', { path, passphrase: pass });
+            const list: any = await invoke('import_modlist', { path, passphrase: pass });
+            // The phrase that opened the list opens its credentials too, so this never asks
+            // for it twice — but it does ask whether to APPLY them, which is a different
+            // question and the one with consequences.
+            if (list?.credentials) await offerListCredentials(list.credentials, pass);
+            return list;
         } catch (e2) {
             throw new Error(String(e2).includes('bmm.enc.errWrongPass')
                 ? t('bmm.enc.errWrongPass') : String(e2));

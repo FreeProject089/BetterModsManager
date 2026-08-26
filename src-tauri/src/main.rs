@@ -508,6 +508,8 @@ fn main() {
             commands::modlist::export_modlist,
             commands::modlist::import_modlist,
             commands::modlist::open_locked_modlist,
+            commands::modlist::modlist_credentials_open,
+            commands::modlist::modlist_credentials_apply_keys,
             commands::modlist::cancel_export_modlist,
             commands::modlist::add_download_link,
             commands::modlist::remove_download_link,

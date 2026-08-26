@@ -392,6 +392,123 @@ pub fn open_locked_modlist(text: String, passphrase: String) -> Result<String, A
     String::from_utf8(plain).map_err(|e| AppError::LockError(e.to_string()))
 }
 
+/// What a list's sealed credentials contain, WITHOUT the key material.
+///
+/// The names and the hosts, so the screen can say what applying would mean. The private keys
+/// themselves are never returned: they go from the envelope to disk inside Rust, the same way
+/// they went from disk to the envelope on the way out. A key that passes through the webview
+/// to be handed straight back is a copy of it in a second place for no reason.
+#[derive(serde::Serialize)]
+pub struct CredsPreview {
+    pub passwords: std::collections::HashMap<String, String>,
+    pub key_names: Vec<String>,
+}
+
+/// Open a list's credentials block. Nothing is applied.
+///
+/// Separate from applying on purpose: the screen has to be able to SAY what is in there —
+/// which hosts, which keys — before anybody agrees to it. A list that installs somebody
+/// else's signing identity the moment it is imported is a list that changes who you are to
+/// every server you talk to, and it must be a decision, not a side effect.
+#[tauri::command]
+pub fn modlist_credentials_open(
+    credentials: serde_json::Value,
+    passphrase: String,
+) -> Result<CredsPreview, AppError> {
+    let env = serde_json::to_vec(&credentials)?;
+    let plain = crate::commands::secret_box::open(&env, &passphrase).map_err(AppError::LockError)?;
+    let doc: serde_json::Value = serde_json::from_slice(&plain)?;
+
+    let passwords = doc
+        .get("passwords")
+        .and_then(|v| serde_json::from_value(v.clone()).ok())
+        .unwrap_or_default();
+    let key_names = doc
+        .get("keys")
+        .and_then(|v| v.as_array())
+        .map(|a| {
+            a.iter()
+                .filter_map(|k| k.get("name").and_then(|n| n.as_str()).map(String::from))
+                .collect()
+        })
+        .unwrap_or_default();
+    Ok(CredsPreview { passwords, key_names })
+}
+
+/// Install the NAMED keys onto this machine's ring.
+///
+/// Only the ones asked for by name. "Apply the credentials" is not one decision — a password
+/// for a host you are about to download from and somebody else's signing key are different
+/// things with different consequences, and agreeing to the first must not agree to the
+/// second.
+///
+/// A name already on the ring is SKIPPED, never overwritten. Importing a list must not be
+/// able to replace the key you sign with; that is the one change nobody would look for and
+/// everybody would feel.
+#[tauri::command]
+pub fn modlist_credentials_apply_keys(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, crate::state::AppState>,
+    credentials: serde_json::Value,
+    passphrase: String,
+    names: Vec<String>,
+) -> Result<Vec<String>, AppError> {
+    use tauri::Manager;
+    let env = serde_json::to_vec(&credentials)?;
+    let plain = crate::commands::secret_box::open(&env, &passphrase).map_err(AppError::LockError)?;
+    let doc: serde_json::Value = serde_json::from_slice(&plain)?;
+    let wanted: std::collections::HashSet<&str> = names.iter().map(|s| s.as_str()).collect();
+
+    let existing: std::collections::HashSet<String> = {
+        let data = state.data.lock().map_err(|_| AppError::LockError("state".into()))?;
+        data.settings.key_auth_keys.iter().map(|e| e.name.clone()).collect()
+    };
+
+    let dir = app.path().app_data_dir().map_err(|e| AppError::Internal(e.to_string()))?.join("keys");
+    std::fs::create_dir_all(&dir)?;
+
+    let mut added = Vec::new();
+    for k in doc.get("keys").and_then(|v| v.as_array()).cloned().unwrap_or_default() {
+        let (Some(name), Some(pem)) = (
+            k.get("name").and_then(|n| n.as_str()),
+            k.get("pem").and_then(|p| p.as_str()),
+        ) else { continue };
+        if !wanted.contains(name) || existing.contains(name) {
+            continue;
+        }
+        // The filename is derived, never the name as it arrived: a key called `../id_rsa` in
+        // somebody else's list would otherwise write outside the folder.
+        let stem: String = name
+            .chars()
+            .map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '-' })
+            .collect();
+        let path = dir.join(format!("{}.key", stem.trim_matches('-')));
+        if path.exists() {
+            continue;
+        }
+        std::fs::write(&path, pem.as_bytes())?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
+        }
+        // Through key_auth_add, so it is proved to open and to sign before it is listed —
+        // a key from somebody else's file is exactly the one worth checking.
+        if crate::commands::repo_keyauth::key_auth_add(
+            state.clone(),
+            name.to_string(),
+            path.to_string_lossy().to_string(),
+        )
+        .is_ok()
+        {
+            added.push(name.to_string());
+        } else {
+            let _ = std::fs::remove_file(&path);
+        }
+    }
+    Ok(added)
+}
+
 #[tauri::command]
 pub fn import_modlist(path: String, passphrase: Option<String>) -> Result<ModList, AppError> {
     read_modlist_file_with(std::path::Path::new(&path), passphrase.as_deref())

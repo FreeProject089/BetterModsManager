@@ -8456,5 +8456,15 @@
   "mm.cat.addLinkName": "Un nom pour lui. Vide pour utiliser « {g} ».",
   "mm.cat.remote": "hébergé ailleurs",
   "themes.cataloguesTitle": "Catalogues de thèmes",
-  "common.nativeDialog": "En attente de la fenêtre de fichiers — BMM n’est pas figé, il est derrière."
+  "common.nativeDialog": "En attente de la fenêtre de fichiers — BMM n’est pas figé, il est derrière.",
+  "mm.creds.inTitle": "Cette liste porte des identifiants",
+  "mm.creds.inPw": "{n} mot(s) de passe de téléchargement, pour : {list}",
+  "mm.creds.inKeys": "{n} clé(s) d’identité privée(s) : {list}",
+  "mm.creds.inAskPw": "Utiliser ces mots de passe pour cette session ? Ils ne sont pas écrits sur disque, exactement comme un que tu tapes toi-même.",
+  "mm.creds.inPwDone": "{n} mot(s) de passe retenu(s) pour cette session",
+  "mm.creds.inKeysTitle": "Installer les clés de signature de quelqu’un d’autre ?",
+  "mm.creds.inKeysWarn": "Une clé de signature, c’est qui tu es pour toute source qui demande. En installer une depuis un fichier qu’on t’a envoyé revient à signer sous l’identité de celui qui l’a faite. Dis non, sauf si tu sais exactement pourquoi tu veux ça.",
+  "mm.creds.inKeysDone": "Ajoutées à ton trousseau : {list}",
+  "mm.creds.inKeysNone": "Rien ajouté — ces noms sont déjà sur ton trousseau, et un import n’écrase jamais une clé avec laquelle tu signes",
+  "mm.creds.inUnreadable": "Cette liste porte des identifiants illisibles — la liste elle-même s’est bien importée"
 }

@@ -8458,5 +8458,15 @@
   "mm.cat.addLinkName": "A name for it. Leave empty to use “{g}”.",
   "mm.cat.remote": "hosted elsewhere",
   "themes.cataloguesTitle": "Theme catalogues",
-  "common.nativeDialog": "Waiting for the file window — BMM is not frozen, it is behind it."
+  "common.nativeDialog": "Waiting for the file window — BMM is not frozen, it is behind it.",
+  "mm.creds.inTitle": "This list carries credentials",
+  "mm.creds.inPw": "{n} download password(s), for: {list}",
+  "mm.creds.inKeys": "{n} private identity key(s): {list}",
+  "mm.creds.inAskPw": "Use those passwords for this session? They are not written to disk, exactly like one you type yourself.",
+  "mm.creds.inPwDone": "{n} password(s) remembered for this session",
+  "mm.creds.inKeysTitle": "Install somebody else’s signing keys?",
+  "mm.creds.inKeysWarn": "A signing key is who you are to every source that asks. Installing one from a file somebody sent you means signing as whoever made it. Say no unless you know exactly why you want this.",
+  "mm.creds.inKeysDone": "Added to your ring: {list}",
+  "mm.creds.inKeysNone": "Nothing added — those names are already on your ring, and an import never overwrites a key you sign with",
+  "mm.creds.inUnreadable": "This list carries credentials that could not be opened — the list itself imported fine"
 }
