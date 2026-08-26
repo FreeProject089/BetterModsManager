@@ -2632,12 +2632,6 @@
                                             <div class="path-picker">
                                                 <select class="form-input" id="repo-sync-key-sel"
                                                     style="height:32px;font-size:12px;"></select>
-                                                <button class="btn btn-secondary btn-sm" type="button" id="btn-sync-key-new"
-                                                    data-i18n="srcacc.newKey"
-                                                    style="padding:0 12px;height:32px;border-radius:6px;font-size:12px;">Create one</button>
-                                                <button class="btn btn-secondary btn-sm" type="button" id="btn-sync-key-add"
-                                                    data-i18n="srcacc.addKey"
-                                                    style="padding:0 12px;height:32px;border-radius:6px;font-size:12px;">Add…</button>
                                                 <button class="btn btn-secondary btn-sm" type="button" id="btn-sync-key-manage"
                                                     data-i18n="repo.syncKeyManage"
                                                     style="padding:0 12px;height:32px;border-radius:6px;font-size:12px;">Manage…</button>
@@ -4791,6 +4785,38 @@
                                             data-i18n="settings.identity.authKeyAdd"
                                             data-tasky="settings.identity.authKeyTip" data-tasky-icon="icon-lock">Add…</button>
                                     </div>
+
+                                    <!-- Making one, HERE, where the ring is.
+                                         It used to be a button on the sync screen — which is
+                                         where you discover you need a key, not where you keep
+                                         them, and two doors onto one list is how the copy you
+                                         edited stops being the one that signs. -->
+                                    <details class="sic-make" id="sic-make">
+                                        <summary data-i18n="settings.identity.authKeyMake">Create one…</summary>
+                                        <div class="sic-make-row">
+                                            <select class="form-input" id="sic-make-type">
+                                                <option value="ed25519">ed25519</option>
+                                                <option value="ecdsa">ECDSA (nistp256)</option>
+                                                <option value="rsa">RSA 4096</option>
+                                            </select>
+                                            <input type="text" id="sic-make-name" class="form-input"
+                                                data-i18n-placeholder="settings.identity.authKeyNamePh"
+                                                placeholder="Name" spellcheck="false">
+                                            <button class="sic-btn" id="btn-sic-make-go"
+                                                data-i18n="settings.identity.authKeyMakeGo">Create</button>
+                                        </div>
+                                        <p class="sic-make-note" data-i18n="settings.identity.authKeyTypeHint">...</p>
+                                        <div class="sic-make-out" id="sic-make-out" hidden>
+                                            <label class="sic-make-lbl" data-i18n="settings.identity.authKeyPublic">Public key</label>
+                                            <textarea class="form-input" id="sic-make-pub" rows="2" readonly spellcheck="false"></textarea>
+                                            <div class="sic-make-row">
+                                                <button class="sic-btn" id="btn-sic-copy-pub"
+                                                    data-i18n="common.copy">Copy</button>
+                                                <span class="sic-make-note" id="sic-make-where"></span>
+                                            </div>
+                                            <p class="sic-make-note" data-i18n="settings.identity.authKeyPrivNote">...</p>
+                                        </div>
+                                    </details>
                                 </div>
                             </div>
 

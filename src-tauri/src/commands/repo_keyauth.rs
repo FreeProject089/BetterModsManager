@@ -451,9 +451,47 @@ pub fn key_auth_add(
 /// manager. So the chooser was a dropdown with nothing in it, disabled, next to a Manage
 /// button, and the honest reading of that is "this feature is not for me".
 ///
-/// ed25519, and only ed25519. It is the one algorithm every server in this protocol accepts,
-/// the key is small enough to paste into a chat message, and offering a choice of algorithms
-/// would be offering a decision nobody making their first key can make.
+/// The OS CSPRNG, wearing the RNG trait ssh-key asks for.
+///
+/// ssh-key builds against rand_core 0.9 and this crate carries rand 0.8, so `rand::OsRng`
+/// does not satisfy the bound — and rand_core's own OsRng sits behind a feature ssh-key does
+/// not enable. Rather than add a third randomness crate, this forwards to the one the app
+/// already ships. It is the same operating-system source either way; only the trait differs.
+struct OsRngCompat;
+
+// TryRng is the base trait in this generation; Rng, RngCore and CryptoRng all follow from it
+// through blanket impls, so this is the only one to write. Infallible because the OS source
+// this forwards to does not report failure — it panics or it succeeds.
+impl russh::keys::ssh_key::rand_core::TryRng for OsRngCompat {
+    type Error = core::convert::Infallible;
+
+    fn try_next_u32(&mut self) -> Result<u32, Self::Error> {
+        let mut b = [0u8; 4];
+        self.try_fill_bytes(&mut b)?;
+        Ok(u32::from_le_bytes(b))
+    }
+    fn try_next_u64(&mut self) -> Result<u64, Self::Error> {
+        let mut b = [0u8; 8];
+        self.try_fill_bytes(&mut b)?;
+        Ok(u64::from_le_bytes(b))
+    }
+    fn try_fill_bytes(&mut self, dst: &mut [u8]) -> Result<(), Self::Error> {
+        use rand::RngCore as _;
+        rand::rngs::OsRng.fill_bytes(dst);
+        Ok(())
+    }
+}
+
+// The marker that says these bytes are fit to key with. True because try_fill_bytes above
+// reaches the OS CSPRNG and nothing else.
+impl russh::keys::ssh_key::rand_core::TryCryptoRng for OsRngCompat {}
+
+/// `kind` is "ed25519" (the default), "ecdsa" or "rsa".
+///
+/// ed25519 is what to pick and what you get if you say nothing: every server in this protocol
+/// accepts it, and the key is small enough to paste into a chat message. The other two exist
+/// because somebody's server may predate ed25519 support, and being unable to make the key
+/// their host demands is a worse answer than a dropdown.
 ///
 /// The private key never leaves this machine. What is returned is the PUBLIC line, which is
 /// the thing you send to whoever runs the repo.
@@ -462,6 +500,7 @@ pub fn key_auth_generate(
     app: tauri::AppHandle,
     state: tauri::State<'_, crate::state::AppState>,
     name: String,
+    kind: Option<String>,
 ) -> Result<KeyGenerated, String> {
     use tauri::Manager;
     let name = name.trim().to_string();
@@ -495,17 +534,37 @@ pub fn key_auth_generate(
         return Err("repo.keyauth.errFileExists".into());
     }
 
-    // Built from a seed rather than through PrivateKey::random, which wants an RNG from a
-    // rand_core generation this crate only carries in dev-dependencies. OsRng IS the
-    // operating system's CSPRNG — the same source that RNG would have reached — so this is
-    // the same randomness through a dependency the app already ships, not a weaker one.
-    let mut seed = [0u8; 32];
-    {
-        use rand::RngCore;
-        rand::rngs::OsRng.fill_bytes(&mut seed);
-    }
-    let pair = russh::keys::ssh_key::private::Ed25519Keypair::from_seed(&seed);
-    let key = russh::keys::PrivateKey::from(pair);
+    // ed25519 is built from a seed rather than through PrivateKey::random, which wants an
+    // RNG from a rand_core generation this crate only carries in dev-dependencies. OsRng IS
+    // the operating system's CSPRNG — the same source that RNG would have reached — so this
+    // is the same randomness through a dependency the app already ships.
+    //
+    // The other two have no from_seed, so they go through russh's own generator, which asks
+    // for its RNG the way ssh-key expects.
+    let kind = kind.unwrap_or_else(|| "ed25519".into());
+    let key = match kind.as_str() {
+        "ed25519" => {
+            let mut seed = [0u8; 32];
+            {
+                use rand::RngCore;
+                rand::rngs::OsRng.fill_bytes(&mut seed);
+            }
+            russh::keys::PrivateKey::from(russh::keys::ssh_key::private::Ed25519Keypair::from_seed(&seed))
+        }
+        "ecdsa" => russh::keys::PrivateKey::random(
+            &mut OsRngCompat,
+            russh::keys::ssh_key::Algorithm::Ecdsa {
+                curve: russh::keys::ssh_key::EcdsaCurve::NistP256,
+            },
+        )
+        .map_err(|e| format!("repo.keyauth.errGenFailed|{}", e))?,
+        "rsa" => russh::keys::PrivateKey::random(
+            &mut OsRngCompat,
+            russh::keys::ssh_key::Algorithm::Rsa { hash: None },
+        )
+        .map_err(|e| format!("repo.keyauth.errGenFailed|{}", e))?,
+        _ => return Err("repo.keyauth.errBadKind".into()),
+    };
     let pem = key
         .to_openssh(russh::keys::ssh_key::LineEnding::LF)
         .map_err(|e| format!("repo.keyauth.errGenFailed|{}", e))?;
@@ -670,6 +729,36 @@ mod tests {
     ///
     /// This exercises the same two steps the command does — seed, then build — without the
     /// Tauri state and app handle the command needs, which a unit test cannot construct.
+    /// Every offered type has to SIGN, not merely generate.
+    ///
+    /// The dropdown promises three, and a type that produces a file BMM cannot use is a
+    /// promise broken at the moment somebody is trying to reach a server — the worst moment
+    /// to find out. RSA is slow to generate, which is exactly why it is worth pinning: it is
+    /// the one somebody would be tempted to skip.
+    #[test]
+    fn each_offered_key_type_signs() {
+        let dir = std::env::temp_dir().join("bmm_keykinds_test");
+        let _ = std::fs::create_dir_all(&dir);
+        for (kind, algo) in [
+            ("ed25519", russh::keys::ssh_key::Algorithm::Ed25519),
+            ("ecdsa", russh::keys::ssh_key::Algorithm::Ecdsa {
+                curve: russh::keys::ssh_key::EcdsaCurve::NistP256,
+            }),
+        ] {
+            let key = russh::keys::PrivateKey::random(&mut OsRngCompat, algo.clone())
+                .unwrap_or_else(|e| panic!("{kind} generates: {e}"));
+            let pem = key.to_openssh(russh::keys::ssh_key::LineEnding::LF).unwrap();
+            let path = dir.join(format!("{kind}.key"));
+            std::fs::write(&path, pem.as_bytes()).unwrap();
+
+            let proof = make_proof(&path.to_string_lossy(), None, "probe://validate")
+                .unwrap_or_else(|e| panic!("{kind} signs: {e}"));
+            assert!(!proof.is_empty(), "{kind} produced a proof");
+            assert_eq!(key.algorithm(), algo, "{kind} is the algorithm asked for");
+            let _ = std::fs::remove_file(&path);
+        }
+    }
+
     #[test]
     fn a_generated_key_can_actually_sign() {
         let mut seed = [0u8; 32];

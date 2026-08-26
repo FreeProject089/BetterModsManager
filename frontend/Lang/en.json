@@ -8439,5 +8439,13 @@
   "mm.creds.hosts": "Concerns: {list}",
   "mm.creds.noPass": "Credentials need a passphrase — they are encrypted, not merely marked private.",
   "mm.creds.sessionOnly": "Only passwords entered since BMM started are known — they are never stored.",
-  "mm.creds.errNoPass": "Credentials need a passphrase"
+  "mm.creds.errNoPass": "Credentials need a passphrase",
+  "settings.identity.authKeyMake": "Create one…",
+  "settings.identity.authKeyMakeGo": "Create",
+  "settings.identity.authKeyMade": "Key created and added to your ring",
+  "settings.identity.authKeyPublic": "Public key — give this to whoever runs the source",
+  "settings.identity.authKeyPrivNote": "The private half stays on this machine and is never shown. Back it up from Export data — it is the one thing here you cannot replace by asking again.",
+  "settings.identity.authKeyTypeHint": "ed25519 unless a server tells you otherwise: every source in this protocol accepts it and the key is short enough to paste into a message. The other two are for a host that predates it.",
+  "repo.keyauth.errBadKind": "Unknown key type",
+  "common.copyFailed": "Could not copy"
 }

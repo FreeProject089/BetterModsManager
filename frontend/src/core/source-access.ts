@@ -187,7 +187,10 @@ export function wireSourceAccess(
     const freshKeyName = async (): Promise<string> => {
         const kr = await import('./identity-key.js');
         const view = await kr.listKeyring().catch(() => null);
-        const taken = new Set(Object.keys(view?.keys || {}));
+        // keys is an ARRAY of { name, path }. Object.keys on it returns "0", "1", … — so the
+        // set never held a real name, every call answered "BMM", and the second one collided
+        // with the first as errNameTaken.
+        const taken = new Set((view?.keys || []).map((k) => k.name));
         if (!taken.has('BMM')) return 'BMM';
         for (let n = 2; n < 999; n += 1) if (!taken.has(`BMM ${n}`)) return `BMM ${n}`;
         return `BMM ${Date.now()}`;

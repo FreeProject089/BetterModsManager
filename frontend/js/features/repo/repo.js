@@ -61,13 +61,21 @@ function setRepoHidden(url, hide) {
     }
     catch { /* preference only */ }
 }
-/** Is the followed-catalogues strip folded? Only consulted past a handful of them. */
-function catStripFolded() {
+/**
+ * Is the followed-catalogues strip folded?
+ *
+ * The count decides only the DEFAULT — folded once there are more than a handful, open
+ * below that. It used to gate the STATE as well (`urls.length > 3 && folded`), so with one
+ * or two catalogues the handle was drawn, clicking it wrote a preference, and nothing on
+ * screen moved. A control that stores your answer and ignores it is worse than no control.
+ */
+function catStripFolded(count) {
     try {
-        return localStorage.getItem('bmm_repo_cat_folded') !== 'false';
+        const v = localStorage.getItem('bmm_repo_cat_folded');
+        return v === null ? count > 3 : v === 'true';
     }
     catch {
-        return true;
+        return count > 3;
     }
 }
 function setCatStripFolded(v) {
@@ -130,7 +138,7 @@ export function renderRepoCatalogStrip(reload, getRepos) {
         // panel, so the thing the panel exists for starts below the fold and the browser
         // becomes a scroll to somewhere else. Folded is remembered, and the header carries the
         // count so a fold never hides the fact that there is something behind it.
-        const folded = urls.length > 3 && catStripFolded();
+        const folded = catStripFolded(urls.length);
         host.innerHTML = urls.length
             ? `<button type="button" class="repo-cat-fold${folded ? ' is-folded' : ''}" data-cat-fold>
                  <svg class="repo-cat-chev" width="12" height="12" viewBox="0 0 24 24" fill="none"
@@ -159,7 +167,7 @@ export function renderRepoCatalogStrip(reload, getRepos) {
             }).join('')}</div>`
             : '';
         host.querySelector('[data-cat-fold]')?.addEventListener('click', () => {
-            setCatStripFolded(!catStripFolded());
+            setCatStripFolded(!folded);
             paint();
         });
         // Bound inside paint(), like .repo-cat-del: the outer listeners bind once behind the

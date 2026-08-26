@@ -1846,6 +1846,48 @@ async function initSecurityInfoCard() {
         const kr = await import('../../core/identity-key.js');
         await kr.renderKeyManager('sic-keyring-list', 'sic-key-name', 'btn-sic-key-add',
             (k, kind) => toast(t(k), kind, kind === 'warning' ? 6000 : 3000), t);
+
+        // ── Making one, here, where the ring is ───────────────────────────────
+        document.getElementById('btn-sic-make-go')?.addEventListener('click', async () => {
+            const kind = (document.getElementById('sic-make-type') as HTMLSelectElement | null)?.value || 'ed25519';
+            const typed = (document.getElementById('sic-make-name') as HTMLInputElement | null)?.value?.trim() || '';
+            // A name is offered rather than demanded: nobody making their first key has one
+            // in mind, and the ring refuses a duplicate, so an unnamed one has to be given a
+            // name that is free rather than a name that fails.
+            const view = await kr.listKeyring().catch(() => null);
+            const taken = new Set((view?.keys || []).map((k) => k.name));
+            let name = typed;
+            if (!name) {
+                name = 'BMM';
+                for (let n = 2; taken.has(name) && n < 999; n += 1) name = `BMM ${n}`;
+            }
+            if (taken.has(name)) { toast(t('repo.keyauth.errNameTaken'), 'warning'); return; }
+
+            try {
+                const res: any = await invoke('key_auth_generate', { name, kind });
+                const out = document.getElementById('sic-make-out');
+                const pub = document.getElementById('sic-make-pub') as HTMLTextAreaElement | null;
+                const where = document.getElementById('sic-make-where');
+                if (pub) pub.value = String(res?.public || '');
+                // The path is shown rather than the key: the private half is on disk and
+                // knowing WHERE is the useful half of that fact. Printing it would put it in
+                // the DOM, in screenshots, and in the replay recorder.
+                if (where) where.textContent = String(res?.path || '');
+                if (out) out.hidden = false;
+                await kr.renderKeyManager('sic-keyring-list', 'sic-key-name', 'btn-sic-key-add',
+                    (k, kk) => toast(t(k), kk, kk === 'warning' ? 6000 : 3000), t);
+                toast(t('settings.identity.authKeyMade'), 'success', 6000);
+            } catch (e) {
+                toast(t(String(e).split('|')[0]) || String(e), 'warning', 7000);
+            }
+        });
+
+        document.getElementById('btn-sic-copy-pub')?.addEventListener('click', async () => {
+            const pub = (document.getElementById('sic-make-pub') as HTMLTextAreaElement | null)?.value || '';
+            if (!pub) return;
+            try { await navigator.clipboard.writeText(pub); toast(t('common.copied'), 'success'); }
+            catch { toast(t('common.copyFailed'), 'warning'); }
+        });
     } catch (_) {}
 
     // Reset API token

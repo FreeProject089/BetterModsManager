@@ -17697,6 +17697,22 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
     color: var(--text-secondary); margin-bottom: 6px; cursor: pointer; }
 .mm-creds .input { width: 100%; margin-top: 4px; }
 
+/* Making an identity key, on the card that owns the ring. Folded: most people never need
+   one, and an always-open generator on the Identity card reads as a step you skipped. */
+.sic-make { margin-top: 10px; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+.sic-make > summary { cursor: pointer; font-size: 11px; font-weight: 700; color: var(--text-secondary); }
+.sic-make[open] > summary { margin-bottom: 8px; color: var(--text-primary); }
+.sic-make-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 6px; }
+.sic-make-row .form-input { flex: 1; min-width: 110px; height: 28px; font-size: 11px; }
+.sic-make-note { font-size: 10px; color: var(--text-muted); line-height: 1.5; margin: 0 0 6px;
+    overflow-wrap: anywhere; }
+.sic-make-lbl { display: block; font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .04em; color: var(--text-muted); margin: 6px 0 4px; }
+/* The public key, readable and selectable. It is meant to be copied out, so it must not be
+   truncated into something that looks complete and is not. */
+.sic-make-out textarea { width: 100%; font-family: var(--font-mono); font-size: 10px;
+    resize: vertical; overflow-wrap: anywhere; }
+
 .repo-cat-srcs { display: flex; flex-direction: column; gap: 4px; }
 
 /* Taking a repo out of your own list, and the way back. The note is quiet but always there

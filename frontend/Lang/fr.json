@@ -8437,5 +8437,13 @@
   "mm.creds.hosts": "Concerne : {list}",
   "mm.creds.noPass": "Les identifiants exigent une phrase secrète — ils sont chiffrés, pas seulement marqués privés.",
   "mm.creds.sessionOnly": "Seuls les mots de passe saisis depuis le lancement de BMM sont connus — ils ne sont jamais stockés.",
-  "mm.creds.errNoPass": "Les identifiants exigent une phrase secrète"
+  "mm.creds.errNoPass": "Les identifiants exigent une phrase secrète",
+  "settings.identity.authKeyMake": "En créer une…",
+  "settings.identity.authKeyMakeGo": "Créer",
+  "settings.identity.authKeyMade": "Clé créée et ajoutée à ton trousseau",
+  "settings.identity.authKeyPublic": "Clé publique — donne-la à qui gère la source",
+  "settings.identity.authKeyPrivNote": "La moitié privée reste sur cette machine et n’est jamais affichée. Sauvegarde-la depuis Export de données — c’est la seule chose ici que tu ne peux pas remplacer en la redemandant.",
+  "settings.identity.authKeyTypeHint": "ed25519 sauf si un serveur dit le contraire : toutes les sources de ce protocole l’acceptent et la clé tient dans un message. Les deux autres sont pour un hôte plus ancien.",
+  "repo.keyauth.errBadKind": "Type de clé inconnu",
+  "common.copyFailed": "Copie impossible"
 }
