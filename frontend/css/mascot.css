@@ -130,7 +130,16 @@ body.is-maximized #app-mascot-container {
     height: auto;
     filter: drop-shadow(2px 4px 12px rgba(0,0,0,0.6));
     transform: rotate(-3deg);
+    /* The mascot moves the WINDOW. Its container stays click-through so the empty box
+       around him never eats a click, but the image itself has to receive one or the drag
+       attribute on it does nothing at all — which is exactly what it did before this line.
+       Safe to make solid: he sits in the corner and does not roam, and what is under him
+       is the title-bar gutter, which drags the window too. */
+    pointer-events: auto;
+    cursor: grab;
 }
+
+#app-mascot:active { cursor: grabbing; }
 
 @keyframes mascot-bounce {
     0%, 100% { transform: translateY(0) rotate(-5deg); }

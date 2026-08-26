@@ -132,6 +132,22 @@ img {
     backdrop-filter: blur(var(--bmm-titlebar-blur));
 }
 
+/* The strip the title bar does NOT cover.
+   The bar stops at the sidebar’s edge so it does not sit on the brand block, which leaves
+   the app shell’s own 42px of top padding exposed above the sidebar — the one piece of the
+   window’s top edge you could not grab. It is a drag surface and nothing else: no
+   background of its own, so it keeps showing whatever is behind it. */
+.titlebar-gutter {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: var(--sidebar-w);
+    height: var(--titlebar-h);
+    /* Under the title bar’s own layer, and under the mascot, which overlaps this corner and
+       drags the window itself. */
+    z-index: 999;
+}
+
 .titlebar-left {
     display: flex;
     align-items: center;
