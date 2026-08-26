@@ -16655,6 +16655,10 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 .pcb-badge.is-pack { color: var(--success); border-color: var(--success); background: var(--bmm-success-dim); }
 .pcb-badge.is-link { color: var(--accent); border-color: var(--accent); background: var(--bmm-bg-active); }
 .pcb-badge.is-bad { color: var(--warning); border-color: var(--warning); background: var(--bmm-warning-dim); }
+/* Where a packable entry’s file comes from, when it is a file that was handed over rather
+   than a plugin installed here. Quieter than the pack/link badge beside it: it answers a
+   follow-up question, not the main one. */
+.pcb-badge.is-file { color: var(--text-muted); border-color: var(--border); background: var(--bmm-s03); max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* Adding a catalogue you do NOT follow to an index you are publishing. */
 .cix-add { display: flex; gap: 6px; margin-top: 8px; align-items: center; flex-wrap: wrap; }

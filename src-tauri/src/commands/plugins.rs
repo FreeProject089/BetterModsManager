@@ -171,6 +171,44 @@ pub async fn install_plugin_from_file(
     Ok(installed)
 }
 
+/// The manifest inside a `.bmmplug`, WITHOUT installing it.
+///
+/// Building a plugin catalogue used to mean installing every plugin that was going in it
+/// first — the only way to add an entry with a file behind it was to pick from what was
+/// installed here. Somebody who was sent a .bmmplug to publish had to install it, publish,
+/// then uninstall it.
+///
+/// Reading the manifest is not running anything: the archive is opened, one JSON entry is
+/// parsed, and nothing is written to disk. Extraction stays where it was, in the install
+/// path, because that is the step that needs the Zip-Slip guard.
+#[tauri::command]
+pub async fn read_plugin_manifest(file_path: String) -> Result<PluginManifest, String> {
+    let bytes = tokio::task::spawn_blocking(move || std::fs::read(&file_path))
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|e| format!("Read error: {}", e))?;
+    let cursor = std::io::Cursor::new(bytes);
+    let mut archive = zip::ZipArchive::new(cursor).map_err(|e| format!("ZIP error: {}", e))?;
+    let manifest_str = (0..archive.len())
+        .find_map(|i| {
+            let mut file = archive.by_index(i).ok()?;
+            if file.name().to_lowercase().ends_with("plugin.json") {
+                let mut s = String::new();
+                std::io::Read::read_to_string(&mut file, &mut s).ok()?;
+                Some(s)
+            } else {
+                None
+            }
+        })
+        .ok_or_else(|| "plugin.json not found in archive".to_string())?;
+    let manifest: PluginManifest = serde_json::from_str(&manifest_str)
+        .map_err(|e| format!("plugin.json parse error: {}", e))?;
+    if manifest.id.is_empty() || manifest.name.is_empty() {
+        return Err("plugin.json: 'id' and 'name' are required".to_string());
+    }
+    Ok(manifest)
+}
+
 fn extract_plugin_zip(bytes: &[u8], plugins_dir: &PathBuf) -> Result<PluginManifest, String> {
     let cursor = std::io::Cursor::new(bytes);
     let mut archive = zip::ZipArchive::new(cursor).map_err(|e| format!("ZIP error: {}", e))?;

@@ -845,6 +845,7 @@ fn main() {
             commands::plugins::fetch_plugin_catalog,
             commands::plugins::install_plugin,
             commands::plugins::install_plugin_from_file,
+            commands::plugins::read_plugin_manifest,
             commands::plugins::uninstall_plugin,
             commands::plugins::toggle_plugin,
             commands::plugins::get_installed_plugins,

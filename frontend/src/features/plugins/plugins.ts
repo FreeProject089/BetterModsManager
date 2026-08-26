@@ -885,6 +885,21 @@ function openPluginCatalogBuilder(onSourcesChanged: () => void) {
         for (const entry of out.plugins) {
             // An address already given is a decision already made.
             if ((entry.download_url || '').trim()) { kept++; continue; }
+            // A file that was handed over is COPIED. export_plugin can only export what is
+            // installed here, so calling it for one of these would fail on a catalogue that
+            // is otherwise correct.
+            if (entry.src_file) {
+                const file = `${entry.id}.bmmplug`;
+                try {
+                    await invoke('copy_file', { src: entry.src_file, dest: `${dir}${sep}${file}` });
+                    entry.download_url = file;
+                    packed++;
+                } catch {
+                    toast((t('plugins.catNoSource')).replace('{id}', entry.id), 'warning');
+                    kept++;
+                }
+                continue;
+            }
             const installed = _installedPlugins.find((p) => p.manifest.id === entry.id);
             if (!installed) {
                 // Blank address AND not installed: there is nothing to pack and nothing to
@@ -949,6 +964,7 @@ function openPluginCatalogBuilder(onSourcesChanged: () => void) {
                     <option value="">${t('plugins.addFromInstalled') || '+ Add from installed plugin…'}</option>
                     ${_installedPlugins.map(p => `<option value="${escAttr(p.manifest.id)}">${escHtml(p.manifest.name || p.manifest.id)}</option>`).join('')}
                 </select>
+                <button class="btn btn-sm btn-ghost" id="pcb-add-file">${IC.upload} ${escHtml(t('plugins.addFromFile'))}</button>
                 <button class="btn btn-sm btn-ghost" id="pcb-add-empty">${IC.plus} ${t('plugins.addManual') || 'Add empty entry'}</button>
             </div>
             <div id="pcb-entries" class="plug-cat-entries"></div>
@@ -995,6 +1011,45 @@ function openPluginCatalogBuilder(onSourcesChanged: () => void) {
             }
             (e.target as HTMLSelectElement).value = '';
         });
+        // A .bmmplug somebody sent you. Building a catalogue used to mean installing every
+        // plugin going into it first — the picker above only lists what is installed here —
+        // so publishing on behalf of somebody else meant install, publish, uninstall.
+        //
+        // `src_file` is what makes it packable: the publish step copies that file instead of
+        // calling export_plugin, which only works for an installed plugin. It never reaches
+        // catalog.json; exportDraft strips it.
+        panel.querySelector('#pcb-add-file')?.addEventListener('click', async () => {
+            const { pickFiles } = await import('../../core/api.js');
+            const paths = await pickFiles([{ name: 'BMM plugin', extensions: ['bmmplug', 'zip'] }]).catch(() => null);
+            for (const p of paths || []) {
+                const base = String(p).replace(/^.*[/\\]/, '');
+                try {
+                    // Read, not installed. The manifest is what the entry is made of, and a
+                    // file that is not a plugin has to fail HERE rather than at publish time.
+                    const m: any = await invoke('read_plugin_manifest', { filePath: p });
+                    if (d.plugins.some((x) => x.id === m.id)) {
+                        toast(t('plugins.pcbAlready').replace('{id}', m.id), 'info');
+                        continue;
+                    }
+                    d.plugins.push({
+                        id: m.id,
+                        name: m.name || m.id,
+                        version: m.version || '1.0.0',
+                        author: m.author || '',
+                        description: m.description || '',
+                        game: m.game || '',
+                        official: false,
+                        download_url: '',
+                        tags: Array.isArray(m.tags) ? m.tags : [],
+                        icon_url: m.icon_url || m.icon || null,
+                        src_file: String(p),
+                    });
+                } catch (e) {
+                    toast(t('plugins.pcbNotPlugin').replace('{f}', base) + ' — ' + String(e).slice(0, 90), 'warning', 8000);
+                }
+            }
+            renderEntries();
+        });
         panel.querySelector('#pcb-add-empty')?.addEventListener('click', () => {
             d.plugins.push({ id: '', name: '', version: '1.0.0', author: '', description: '', game: '', official: false, download_url: '', tags: [], icon_url: null });
             renderEntries();
@@ -1025,7 +1080,9 @@ function openPluginCatalogBuilder(onSourcesChanged: () => void) {
             // An entry whose plugin is installed here can be PACKED at publish time; one
             // that is not can only be linked. Saying which is the difference between "leave
             // the address blank" being a shortcut and being a mistake.
-            const installed = _installedPlugins.some((x) => x.manifest.id === p.id);
+            // Three ways an entry can have a file behind it, and the badge has to tell them
+            // apart: installed here, handed over as a file, or neither.
+            const installed = _installedPlugins.some((x) => x.manifest.id === p.id) || !!p.src_file;
             const linked = !!(p.download_url || '').trim();
             return `
             <div class="plug-cat-entry" data-i="${i}">
@@ -1039,6 +1096,8 @@ function openPluginCatalogBuilder(onSourcesChanged: () => void) {
                 <div class="pcb-meta">
                     <span class="pcb-badge ${linked ? 'is-link' : installed ? 'is-pack' : 'is-bad'}">${escHtml(
                         linked ? t('catpub.link') : installed ? t('catpub.embed') : t('plugins.pcbNoSource'))}</span>
+                    ${p.src_file ? `<span class="pcb-badge is-file" title="${escAttr(p.src_file)}">${escHtml(
+                        t('plugins.pcbFromFile').replace('{f}', String(p.src_file).replace(/^.*[/\\]/, '')))}</span>` : ''}
                     ${p.icon_url ? `<img class="pcb-icon" src="${escAttr(p.icon_url)}" alt="">` : ''}
                     <input class="input pcb-f pcb-small" data-f="author" data-i="${i}" value="${escAttr(p.author)}" placeholder="${escAttr(t('plugins.createAuthor') || 'author')}">
                     <input class="input pcb-f pcb-small" data-f="game" data-i="${i}" value="${escAttr(p.game)}" placeholder="${escAttr(t('plugins.createGame') || 'game')}">
@@ -1058,7 +1117,7 @@ function openPluginCatalogBuilder(onSourcesChanged: () => void) {
             if (el.dataset.f === 'download_url') {
                 const badge = el.closest('.plug-cat-entry')?.querySelector('.pcb-badge') as HTMLElement | null;
                 const p = d.plugins[i];
-                const installed = _installedPlugins.some((x) => x.manifest.id === p.id);
+                const installed = _installedPlugins.some((x) => x.manifest.id === p.id) || !!p.src_file;
                 const linked = !!(p.download_url || '').trim();
                 if (badge) {
                     badge.className = `pcb-badge ${linked ? 'is-link' : installed ? 'is-pack' : 'is-bad'}`;

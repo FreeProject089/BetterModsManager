@@ -8351,5 +8351,9 @@
   "modpack.cat.build.addDesc": "Un catalogue n’a pas à être fait uniquement de packs installés chez toi. Donne une adresse que quelqu’un héberge déjà, ou passe un fichier .bmp qu’on t’a envoyé — il est lu et vérifié ici, puis embarqué dans le .cbmp.",
   "modpack.cat.build.addNamePh": "Nom du pack (optionnel)",
   "modpack.cat.build.addFile": "Ajouter un fichier .bmp…",
-  "modpack.cat.build.notPack": "{f} n’est pas un modpack — laissé de côté"
+  "modpack.cat.build.notPack": "{f} n’est pas un modpack — laissé de côté",
+  "plugins.addFromFile": "Ajouter un fichier .bmmplug…",
+  "plugins.pcbFromFile": "depuis {f}",
+  "plugins.pcbNotPlugin": "{f} n’est pas un plugin — laissé de côté",
+  "plugins.pcbAlready": "{id} est déjà dans ce catalogue"
 }
