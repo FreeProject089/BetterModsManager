@@ -4,13 +4,19 @@ Un catalogue d'automatisations est une liste de tâches planifiées partageables
 son adresse dans BMM, voit ce que vous avez publié, et en installe une.
 
 BMM sait les lire depuis un moment. Il sait désormais en **écrire** un : **Paramètres →
-Planificateur → Depuis un catalogue… → Publier les miennes…**
+Planificateur → Fichiers… → Publier les miennes…** (c'est aussi sur le panneau des
+catalogues lui-même).
 
 ---
 
 ## 🧱 Ce qu'il écrit
 
-Un dossier, pas un fichier :
+Un dossier — ou, si tu coches *Publier en UN seul fichier*, un unique `.bmmbundle` qui
+contient le tout. Dans les deux cas chaque automatisation est soit **emballée** dans le
+catalogue, soit **liée** à une adresse que tu donnes, au choix par entrée : voir
+**[Emballer ou lier](Embed_Or_Link_FR.md)**.
+
+Le dossier :
 
 ```text
 mes-automatisations/

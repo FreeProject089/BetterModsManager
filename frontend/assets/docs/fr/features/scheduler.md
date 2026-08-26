@@ -368,10 +368,16 @@ seule — donc tout ce qui lit un .bmmpa lit l'un comme l'autre.
 
 ## Publier ton propre catalogue
 
-**Depuis un catalogue… → Publier les miennes…** choisit tes automatisations et écrit un dossier :
-un `.bmmpa` signé par automatisation, plus un `catalog.json` à côté. Téléverse le dossier sur
+**Fichiers… → Publier les miennes…** choisit tes automatisations et écrit un dossier : un
+`.bmmpa` signé par automatisation, plus un `catalog.json` à côté. Téléverse le dossier sur
 n'importe quel hébergement statique — un dépôt GitHub, GitHub Pages, ton propre serveur — et
 donne aux gens l'adresse du `catalog.json`.
+
+Chaque automatisation est soit **emballée** dans le catalogue, soit **liée** à une adresse que
+tu donnes, au choix par entrée — un même catalogue peut donc porter les petites et pointer
+vers la grosse que quelqu'un héberge déjà. Coche *Publier en UN seul fichier* et tu obtiens un
+unique `.bmmbundle` au lieu d'un dossier : le catalogue et chaque automatisation qu'il
+emballe, en une seule chose à envoyer, sans rien à héberger ni adresse à maintenir.
 
 Les adresses écrites sont **relatives** (`nightly.bmmpa`, pas une URL complète). Un catalogue
 qui nomme son propre hébergeur cesse de fonctionner dès qu'il est déplacé, copié ou forké — la

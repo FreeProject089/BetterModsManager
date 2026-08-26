@@ -60,6 +60,16 @@ autre est écarté par le lecteur plutôt que deviné.
 
 ---
 
+### Nommer un catalogue que tu ne suis pas
+
+La liste proposée est celle que tu suis déjà — le cas courant, et le seul possible
+jusqu'ici. À côté, il y a maintenant un sélecteur de type et un champ d'adresse :
+recommander le catalogue de quelqu'un d'autre est la raison évidente de publier un index,
+et c'était la seule chose que ça ne savait pas faire. L'adresse est vérifiée là où tu la
+tapes, donc l'erreur se corrige pendant que le champ est encore devant toi.
+
+---
+
 ## L'héberger sur BetterCommunity
 
 **Proposer du contenu → Héberger mon propre catalogue**, puis dans *Type de catalogue*

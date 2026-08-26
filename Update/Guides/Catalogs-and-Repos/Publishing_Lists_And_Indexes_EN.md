@@ -58,6 +58,16 @@ else is dropped by the reader rather than guessed at.
 
 ---
 
+### Naming a catalogue you do not follow
+
+The list it offers is what you already follow, which is the common case and was the only
+case. Beside it there is now a type picker and an address box: recommending somebody else's
+catalogue is the obvious reason to publish an index, and it was the one thing this could not
+do. The address is checked where you type it, so a mistake is fixed while the box is still in
+front of you.
+
+---
+
 ## Hosting it on BetterCommunity
 
 **Submit content → Host my own catalog**, then under *Catalog type* choose from the

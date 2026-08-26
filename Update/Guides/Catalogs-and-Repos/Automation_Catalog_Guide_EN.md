@@ -3,14 +3,18 @@
 An automation catalogue is a list of shareable scheduled tasks. Somebody follows its address
 in BMM, sees what you published, and installs one.
 
-BMM has read these for a while. It can now **write** one: **Settings → Scheduler → From a
-catalogue… → Publish my own…**
+BMM has read these for a while. It can now **write** one: **Settings → Scheduler → Files… →
+Publish my own…** (it is also on the catalogue panel itself).
 
 ---
 
 ## 🧱 What it writes
 
-A folder, not a file:
+A folder — or, if you tick *Publish it as ONE file*, a single `.bmmbundle` holding all of
+it. Either way each automation is either **packed** into the catalogue or **linked** to an
+address you give, chosen per entry: see **[Embed or link](Embed_Or_Link_EN.md)**.
+
+The folder:
 
 ```text
 my-automations/
