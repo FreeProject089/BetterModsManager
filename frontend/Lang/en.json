@@ -7337,12 +7337,12 @@
   "sched.pc.official": "Official",
   "sched.pc.community": "Community",
   "sched.pc.follow": "Follow",
-  "sched.tcb.open": "Publish my own…",
+  "sched.tcb.open": "My catalogues…",
   "sched.pc.open": "Automation catalogues…",
   "sched.pc.open.d": "Follow a catalogue somebody published, or open one that came as a single file.",
-  "sched.tcb.tip": "Write a folder of your own automations plus a catalog.json — drop it on GitHub and follow it from anywhere",
-  "sched.tcb.title": "Publish a catalogue of automations",
-  "sched.tcb.sub": "A folder you can drop on GitHub or any static host",
+  "sched.tcb.tip": "Follow a catalogue of automations, or make one of your own — as one .bmmbundle or as a catalog.json of addresses",
+  "sched.tcb.title": "Catalogues of automations",
+  "sched.tcb.sub": "Follow somebody else’s, or make one from your own automations",
   "sched.tcb.noTasks": "You have no automations to publish yet",
   "sched.tcb.name": "Catalogue name",
   "sched.tcb.namePh": "My automations",
@@ -8338,5 +8338,9 @@
   "bms.perm.command": "run external programs",
   "bms.perm.script": "run scripts (PowerShell, Python, Bash…)",
   "bms.perm.deeplink": "fire bmm:// links, which reach anything the app exposes",
-  "bms.perm.stopProcess": "stop running programs"
+  "bms.perm.stopProcess": "stop running programs",
+  "cm.tabBrowse": "Browse",
+  "cm.browseEmpty": "The catalogues you follow list nothing yet.",
+  "cm.browseNone": "You follow no catalogue yet. Add one in Follow.",
+  "cm.dropped": "{n} entries could not be used"
 }

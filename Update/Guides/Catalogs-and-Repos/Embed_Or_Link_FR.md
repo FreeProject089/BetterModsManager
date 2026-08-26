@@ -70,11 +70,11 @@ l'autre — un schéma, un chemin absolu, un `..` — est refusé plutôt que r�
 
 | Catalogue | Où | Emballer | Lier | Bundle |
 |---|---|---|---|---|
-| Automatisations | Planificateur → Fichiers… → *Publier les miennes…* | oui | oui | oui |
+| Automatisations | Planificateur → Fichiers… → *Mes catalogues…* | oui | oui | oui |
 | Plugins | Plugins → Mes catalogues → *Publier…* | oui | oui | oui |
 | Tutoriels | Hub des tutoriels → *Construire un catalogue* | oui | oui | oui |
 | Thèmes | Thèmes → *Créer un catalogue de thèmes* | oui¹ | oui | oui |
-| Listes de mods | Listes de mods → *Publier…* | oui | oui | oui |
+| Listes de mods | Listes de mods → *Catalogues…* | oui | oui | oui |
 | Modpacks | Modpacks → Catalogues → *Publier* | oui² | oui | s.o.² |
 | Apps | — | non³ | oui | non³ |
 

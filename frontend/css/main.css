@@ -16718,6 +16718,13 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
    rather than shown disabled: a dead control invites a click that cannot work. */
 .cm-forced { flex: none; width: 130px; font-size: 11px; color: var(--text-muted); text-align: center; }
 
+/* Browsing what the followed catalogues hold. The name column takes the slack so a long
+   title truncates rather than pushing the action button off the row. */
+.cm-browse-main { flex: 1; min-width: 0; }
+.cm-browse-sub { display: block; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cm-browse-row { align-items: center; }
+
+
 @media (prefers-reduced-motion: reduce) { .cm-tab, .cm-out-opt { transition: none; } }
 
 .cix-added-url {

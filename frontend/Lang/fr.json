@@ -7335,12 +7335,12 @@
   "sched.pc.official": "Officiel",
   "sched.pc.community": "Communauté",
   "sched.pc.follow": "Suivre",
-  "sched.tcb.open": "Publier les miennes…",
+  "sched.tcb.open": "Mes catalogues…",
   "sched.pc.open": "Catalogues d'automatisations…",
   "sched.pc.open.d": "Suivre un catalogue publié par quelqu'un, ou ouvrir celui qui est arrivé en un seul fichier.",
-  "sched.tcb.tip": "Écrit un dossier avec vos propres automatisations et un catalog.json — déposez-le sur GitHub et suivez-le depuis n'importe où",
-  "sched.tcb.title": "Publier un catalogue d'automatisations",
-  "sched.tcb.sub": "Un dossier à déposer sur GitHub ou n'importe quel hébergement statique",
+  "sched.tcb.tip": "Suis un catalogue d’automatisations, ou fais le tien — en un .bmmbundle ou en catalog.json d’adresses",
+  "sched.tcb.title": "Catalogues d’automatisations",
+  "sched.tcb.sub": "Suis celui de quelqu’un, ou fais le tien à partir de tes automatisations",
   "sched.tcb.noTasks": "Vous n'avez encore aucune automatisation à publier",
   "sched.tcb.name": "Nom du catalogue",
   "sched.tcb.namePh": "Mes automatisations",
@@ -8336,5 +8336,9 @@
   "bms.perm.command": "exécuter des programmes externes",
   "bms.perm.script": "exécuter des scripts (PowerShell, Python, Bash…)",
   "bms.perm.deeplink": "déclencher des liens bmm://, qui atteignent tout ce que l’app expose",
-  "bms.perm.stopProcess": "arrêter des programmes en cours"
+  "bms.perm.stopProcess": "arrêter des programmes en cours",
+  "cm.tabBrowse": "Parcourir",
+  "cm.browseEmpty": "Les catalogues que tu suis ne listent encore rien.",
+  "cm.browseNone": "Tu ne suis encore aucun catalogue. Ajoutes-en un dans Suivre.",
+  "cm.dropped": "{n} entrées inutilisables"
 }

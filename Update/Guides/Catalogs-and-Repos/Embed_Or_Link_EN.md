@@ -67,11 +67,11 @@ refused rather than repaired.
 
 | Catalogue | Where | Pack | Link | Bundle |
 |---|---|---|---|---|
-| Automations | Scheduler → Files… → *Publish my own…* | yes | yes | yes |
+| Automations | Scheduler → Files… → *My catalogues…* | yes | yes | yes |
 | Plugins | Plugins → My catalogues → *Publish…* | yes | yes | yes |
 | Tutorials | Tutorial hub → *Build a catalogue* | yes | yes | yes |
 | Themes | Themes → *Create theme catalog* | yes¹ | yes | yes |
-| Mod lists | Mod lists → *Publish…* | yes | yes | yes |
+| Mod lists | Mod lists → *Catalogues…* | yes | yes | yes |
 | Modpacks | Modpacks → Catalogues → *Publish* | yes² | yes | n/a² |
 | Apps | — | no³ | yes | no³ |
 

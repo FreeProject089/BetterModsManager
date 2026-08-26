@@ -12,7 +12,7 @@
 // Still pure, and for the original reason: both of those are only visible once somebody
 // ELSE follows the catalogue, which is far too late to find out.
 
-import { planPublish, safeFileStem as stem, type EntryChoice } from '../../core/catalog-publish.js';
+import { safeFileStem as stem } from '../../core/catalog-publish.js';
 
 /**
  * The shared stem rule, with THIS catalogue's noun as the fallback.
@@ -30,68 +30,32 @@ export interface CatalogTask {
     description?: string;
 }
 
-export interface PlannedEntry {
-    /** The .bmmpa filename, without its extension. */
-    stem: string;
-    /** The filename to write beside the catalogue. Empty when the entry is a LINK. */
-    file: string;
-    /** False when the publisher gave an address instead of packing the file. */
-    embed: boolean;
-    /** The row written into catalog.json, in the feed's own field names. */
-    entry: {
-        id: string;
-        name: string;
-        description: string;
-        version: string;
-        download_url: string;
-        tasks: number;
+/**
+ * The row a preset catalogue lists an automation as, given the address decided for it.
+ *
+ * Deciding WHERE an entry lives, what filename it collapses to and how two entries that
+ * collapse to one name are kept apart is core/catalog-publish.ts's job, and identical for
+ * every kind of catalogue. What is left here — the only part that is about automations — is
+ * the field names a preset feed uses, and they are pinned by tests because a wrong one is
+ * invisible until somebody else follows the catalogue.
+ *
+ * The id comes from the ADDRESS when the file travels with the catalogue, because that
+ * address already carries the deduplicated filename; a linked entry has no such filename, so
+ * it falls back to its name.
+ */
+export function presetRow(task: CatalogTask, address: string): {
+    id: string; name: string; description: string; version: string; download_url: string; tasks: number;
+} {
+    const bare = /^[^/\\]+$/.test(address) ? address.replace(/\.bmmpa$/i, '') : '';
+    const id = bare || safeFileStem(task.name, 'automation');
+    return {
+        id,
+        // The real name, even when the filename had to change: the reader shows this, and
+        // "a-b" instead of "a/b: the good one" is a rename nobody asked for.
+        name: task.name || id,
+        description: task.description || '',
+        version: '1.0',
+        download_url: address,
+        tasks: 1,
     };
 }
-
-/**
- * What the catalog will contain: one filename and one feed entry per automation.
- *
- * Addresses are RELATIVE when no base is given, and that is the default because a catalog
- * that names its own host stops working the moment it is moved, mirrored or forked — and
- * being forked is the normal life of a folder on GitHub. The reader resolves a relative name
- * against wherever it fetched the catalog from, so the folder is self-contained.
- */
-export function planTaskCatalog<T extends CatalogTask>(
-    tasks: T[],
-    base = '',
-    choose: (task: T) => EntryChoice = () => ({ mode: 'embed' }),
-): (PlannedEntry & { task: T })[] {
-    const plan = planPublish(tasks as any, choose as any, {
-        ext: 'bmmpa', base, fallback: 'automation',
-        // The NAME only, never the id — a task id is opaque, and a file called
-        // `t-lq3k2j.bmmpa` in a published catalogue helps nobody. Two unnamed automations
-        // become automation and automation-2, which is what this builder has always done.
-        nameOf: (t: any) => String(t?.name || ''),
-    });
-    // Errors are the caller's to report — it knows which screen the entry is on. Dropping
-    // them here silently would publish a shorter list than the one somebody is looking at.
-    _lastErrors = plan.errors;
-    return plan.rows.map((r) => {
-        const task = r.item as unknown as T;
-        const stem = r.file ? r.file.replace(/\.bmmpa$/i, '') : safeFileStem(task.name, 'automation');
-        return {
-            task,
-            stem,
-            // Empty when the entry is a LINK: there is no file to write for it.
-            file: r.file,
-            embed: r.embed,
-            entry: {
-                id: stem,
-                name: task.name || stem,
-                description: task.description || '',
-                version: '1.0',
-                download_url: r.address,
-                tasks: 1,
-            },
-        };
-    });
-}
-
-/** Why an entry did not make it, from the last plan. One sentence each, naming it. */
-let _lastErrors: string[] = [];
-export function lastPlanErrors(): string[] { return _lastErrors; }

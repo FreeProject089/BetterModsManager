@@ -32,6 +32,15 @@ import { sourceAccessHtml, wireSourceAccess } from '../core/source-access.js';
 import { planPublish, safeFileStem, type EntryChoice } from '../core/catalog-publish.js';
 import { looksLikeCatalog } from '../core/catalog-bundle.js';
 
+/** One thing a followed catalogue offers, flattened for showing in a list. */
+export interface BrowseEntry {
+    id: string;
+    name: string;
+    sub?: string;
+    /** A short right-aligned note — a count, a version, where it came from. */
+    note?: string;
+}
+
 /** What one kind of catalogue has to tell this screen. */
 export interface CatalogKindSpec<T> {
     /** Short id, used for element prefixes. Must be unique per kind. */
@@ -66,6 +75,23 @@ export interface CatalogKindSpec<T> {
     onChange?(): void;
     /** Where "manage keys" should take somebody. */
     manageKeys?(): void;
+
+    /**
+     * What the followed catalogues hold, and what to do with one of them.
+     *
+     * Optional, because some kinds already browse their catalogues inside a bigger screen —
+     * the plugin tab, the theme gallery — and a second browser here would be two places
+     * showing the same list, disagreeing the first time one of them is changed. When it IS
+     * supplied it becomes the first tab, because "what have I got" is the question somebody
+     * opens the screen with; following and creating are what they do afterwards.
+     */
+    browse?: {
+        load(): Promise<{ entries: BrowseEntry[]; problems: string[] }>;
+        /** The button on each row. */
+        action: string;
+        /** Return true when acting on the entry means this screen is done. */
+        pick(entry: BrowseEntry): Promise<boolean | void>;
+    };
 }
 
 const readList = (key: string): string[] => {
@@ -82,7 +108,10 @@ const sourceLabel = (u: string): string =>
 
 export async function openCatalogModal<T>(spec: CatalogKindSpec<T>): Promise<void> {
     const P = `cm-${spec.id}`;
-    let tab: 'follow' | 'create' = 'follow';
+    let tab: 'browse' | 'follow' | 'create' = spec.browse ? 'browse' : 'follow';
+    let browsed: BrowseEntry[] = [];
+    let browseProblems: string[] = [];
+    let browseLoaded = false;
     let items: T[] = [];
     let loaded = false;
 
@@ -106,7 +135,11 @@ export async function openCatalogModal<T>(spec: CatalogKindSpec<T>): Promise<voi
         if (readList(spec.storeKey).includes(src)) { toast(t('cm.already'), 'warning'); return; }
         writeList(spec.storeKey, [...readList(spec.storeKey), src]);
         spec.onChange?.();
+        // Re-read rather than append: what a source holds is only known by reading it, and a
+        // browse pane still showing the old list is a screen saying following did nothing.
+        browseLoaded = false;
         paint();
+        void loadBrowse();
     };
 
     const followByLink = async () => {
@@ -159,7 +192,15 @@ export async function openCatalogModal<T>(spec: CatalogKindSpec<T>): Promise<voi
         const plan = planPublish(
             chosen.map((item) => ({ id: spec.entryId(item), name: spec.label(item).name, item })) as any,
             (w: any) => choose(w.item),
-            { ext: spec.ext, fallback: spec.fallbackNoun || 'entry' },
+            {
+                ext: spec.ext,
+                fallback: spec.fallbackNoun || 'entry',
+                // The label only, never the entry id. An id is opaque — a file called
+                // t-lq3k2j.bmmpa in a published catalogue helps nobody — and planPublish
+                // falls back to the id unless it is told not to. Two nameless entries become
+                // automation and automation-2, which is what every builder did before this.
+                nameOf: (w: any) => String(w.name || ''),
+            },
         );
         if (plan.errors.length) {
             toast(t('catpub.dropped').replace('{n}', String(plan.errors.length))
@@ -226,6 +267,33 @@ export async function openCatalogModal<T>(spec: CatalogKindSpec<T>): Promise<voi
     };
 
     // ── Drawing ─────────────────────────────────────────────────────────────
+    const loadBrowse = async () => {
+        if (!spec.browse || browseLoaded) return;
+        const r = await spec.browse.load().catch(() => ({ entries: [], problems: [] }));
+        browsed = r.entries;
+        browseProblems = r.problems;
+        browseLoaded = true;
+        if (tab === 'browse') paint();
+    };
+
+    const browsePane = (): string => {
+        if (!browseLoaded) return `<p class="cm-empty">${escHtml(t('common.loading'))}</p>`;
+        return `
+        ${browsed.length ? `<div class="cm-list">${browsed.map((e, i) => `
+            <div class="cat-pub-row cm-browse-row">
+                <div class="cm-browse-main">
+                    <div class="cm-row-name">${escHtml(e.name)}</div>
+                    ${e.sub ? `<div class="cm-row-sub cm-browse-sub">${escHtml(e.sub)}</div>` : ''}
+                </div>
+                ${e.note ? `<span class="cm-row-sub">${escHtml(e.note)}</span>` : ''}
+                <button class="btn btn-xs btn-accent" data-open="${i}">${escHtml(spec.browse!.action)}</button>
+            </div>`).join('')}</div>`
+          : `<p class="cm-empty">${escHtml(readList(spec.storeKey).length ? t('cm.browseEmpty') : t('cm.browseNone'))}</p>`}
+        ${browseProblems.length ? `<details class="sched-tcb-more" style="margin-top:10px">
+            <summary>${escHtml(t('cm.dropped').replace('{n}', String(browseProblems.length)))}</summary>
+            <p class="sched-tcb-hint">${escHtml(browseProblems.slice(0, 8).join(' · '))}</p></details>` : ''}`;
+    };
+
     const followPane = (): string => {
         const srcs = readList(spec.storeKey);
         return `
@@ -314,12 +382,15 @@ export async function openCatalogModal<T>(spec: CatalogKindSpec<T>): Promise<voi
                 <button class="modal-close" type="button" data-x>&times;</button>
             </div>
             <div class="cm-tabs" role="tablist">
+                ${spec.browse ? `<button type="button" class="cm-tab${tab === 'browse' ? ' on' : ''}" data-tab="browse"
+                        role="tab" aria-selected="${tab === 'browse'}">${escHtml(t('cm.tabBrowse'))}</button>` : ''}
                 <button type="button" class="cm-tab${tab === 'follow' ? ' on' : ''}" data-tab="follow"
                         role="tab" aria-selected="${tab === 'follow'}">${escHtml(t('cm.tabFollow'))}</button>
                 <button type="button" class="cm-tab${tab === 'create' ? ' on' : ''}" data-tab="create"
                         role="tab" aria-selected="${tab === 'create'}">${escHtml(t('cm.tabCreate'))}</button>
             </div>
-            <div class="modal-body cm-body">${tab === 'follow' ? followPane() : createPane()}</div>
+            <div class="modal-body cm-body">${
+                tab === 'browse' ? browsePane() : tab === 'follow' ? followPane() : createPane()}</div>
             <div class="modal-footer">
                 <div style="flex:1"></div>
                 <button class="btn btn-sm btn-ghost" data-x>${escHtml(t('common.close'))}</button>
@@ -334,8 +405,9 @@ export async function openCatalogModal<T>(spec: CatalogKindSpec<T>): Promise<voi
     const wire = () => {
         ov.querySelectorAll('[data-x]').forEach((b) => b.addEventListener('click', close));
         ov.querySelectorAll<HTMLElement>('[data-tab]').forEach((b) => b.addEventListener('click', async () => {
-            tab = b.dataset.tab === 'create' ? 'create' : 'follow';
+            tab = b.dataset.tab === 'create' ? 'create' : b.dataset.tab === 'browse' ? 'browse' : 'follow';
             paint();
+            if (tab === 'browse') await loadBrowse();
             // Loaded on FIRST use of the tab rather than when the modal opens: somebody who
             // came to follow a catalogue should not wait for a list of their own things.
             if (tab === 'create' && !loaded) {
@@ -344,6 +416,17 @@ export async function openCatalogModal<T>(spec: CatalogKindSpec<T>): Promise<voi
                 paint();
             }
         }));
+
+        if (tab === 'browse') {
+            ov.querySelectorAll<HTMLElement>('[data-open]').forEach((b) => b.addEventListener('click', async () => {
+                const e = browsed[Number(b.dataset.open)];
+                if (!e || !spec.browse) return;
+                try {
+                    if (await spec.browse.pick(e)) close();
+                } catch (err) { toast(String(err).slice(0, 160), 'error'); }
+            }));
+            return;
+        }
 
         if (tab === 'follow') {
             ov.querySelector(`#${P}-add`)?.addEventListener('click', () => { void followByLink(); });
@@ -354,7 +437,9 @@ export async function openCatalogModal<T>(spec: CatalogKindSpec<T>): Promise<voi
             ov.querySelectorAll<HTMLElement>('[data-drop]').forEach((b) => b.addEventListener('click', () => {
                 writeList(spec.storeKey, readList(spec.storeKey).filter((u) => u !== b.dataset.drop));
                 spec.onChange?.();
+                browseLoaded = false;
                 paint();
+                void loadBrowse();
             }));
             // The protected-source block, wired the same way on every kind. It reads the
             // address box so "which server" is answered without asking twice.
@@ -400,4 +485,5 @@ export async function openCatalogModal<T>(spec: CatalogKindSpec<T>): Promise<voi
     (document.getElementById('app-window-outer') || document.body).appendChild(ov);
     ov.addEventListener('mousedown', (e) => { if (e.target === ov) close(); });
     paint();
+    void loadBrowse();
 }

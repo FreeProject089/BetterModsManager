@@ -164,6 +164,9 @@ async function pickLists(): Promise<PickedList[]> {
 
 export async function openListCatalog(onImported?: (doc: unknown) => void): Promise<void> {
     const { openCatalogModal } = await import('../../ui/catalog-modal.js');
+    // Kept beside the browse tab rather than threaded through it: a BrowseEntry says what a
+    // row LOOKS like, and where the file lives is this kind's business, not the screen's.
+    let offered: ListEntry[] = [];
     await openCatalogModal<PickedList>({
         id: 'list',
         title: t('mm.cat.browseTitle'),
@@ -188,6 +191,37 @@ export async function openListCatalog(onImported?: (doc: unknown) => void): Prom
             mods: x.mods, download_url: address,
         }),
         looksLike: looksLikeListFeed,
+        browse: {
+            action: t('mm.import'),
+            load: async () => {
+                const r = await loadFollowedLists();
+                offered = r.lists;
+                return {
+                    entries: r.lists.map((l) => ({
+                        id: l.id,
+                        name: l.name,
+                        sub: l.description || l.author,
+                        note: l.mods === undefined ? undefined : `${l.mods} ${t('modpack.cat.mods')}`,
+                    })),
+                    problems: r.problems,
+                };
+            },
+            // Read, then shown in the same preview an imported .mm gets. Nothing is applied
+            // to a profile here: a catalogue offers lists, and choosing one is choosing to
+            // LOOK at it.
+            pick: async (e) => {
+                const l = offered.find((x) => x.id === e.id);
+                if (!l) return;
+                const text = l.local
+                    ? await invoke('read_file_text', { path: l.downloadUrl }) as string
+                    : await fetchSourceText(l.downloadUrl, true);
+                const doc = JSON.parse(text);
+                if (!doc || !Array.isArray(doc.mods)) { toast(t('mm.cat.notAList'), 'error'); return; }
+                if (onImported) onImported(doc);
+                else (await import('./modlist.js')).renderImportedModlist(doc);
+                return true;
+            },
+        },
         onChange: () => { void onImported; },
     });
 }
