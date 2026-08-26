@@ -51,12 +51,37 @@ export async function openRestoreBundle(): Promise<void> {
     const path = await pickFile([{ name: 'BMM data bundle', extensions: ['DATABMM'] }]).catch(() => null);
     if (!path) return;
 
+    /**
+     * Open it, asking for the passphrase only if the file turns out to be sealed.
+     *
+     * Asked AFTER the first attempt rather than before: most archives are not locked, and a
+     * password prompt in front of every restore teaches people that one is expected — the
+     * same reasoning the sync screen's collapsed password row is built on.
+     *
+     * The backend tells "sealed, no passphrase given" apart from "wrong passphrase", so the
+     * second attempt can say which it was instead of repeating one message twice.
+     */
     let info: BundleInfo;
+    let passphrase = '';
     try {
-        info = await invoke('inspect_data_bundle', { path }) as BundleInfo;
+        info = await invoke('inspect_data_bundle', { path, passphrase: null }) as BundleInfo;
     } catch (e) {
-        (window as any).toast?.(t('restore.unreadable', { error: String(e) }), 'error');
-        return;
+        if (!String(e).includes('bmm.enc.errSealedNeedsPass')) {
+            (window as any).toast?.(t('restore.unreadable', { error: String(e) }), 'error');
+            return;
+        }
+        const { promptRepoPassword } = await import('../repo/repo-sync.js');
+        const given = await promptRepoPassword();
+        if (given == null) return;
+        passphrase = given;
+        try {
+            info = await invoke('inspect_data_bundle', { path, passphrase }) as BundleInfo;
+        } catch (e2) {
+            (window as any).toast?.(String(e2).includes('bmm.enc.errWrongPass')
+                ? t('bmm.enc.errWrongPass')
+                : t('restore.unreadable', { error: String(e2) }), 'error');
+            return;
+        }
     }
 
     document.getElementById(OVERLAY_ID)?.remove();
@@ -143,7 +168,10 @@ export async function openRestoreBundle(): Promise<void> {
         go.disabled = true;
         go.textContent = t('restore.working');
         try {
-            const r = await invoke('restore_data_bundle', { args: { path: info.path, sections } }) as RestoreResult;
+            // The same passphrase the inspection used. Asking twice for one file would be
+            // asking whether the answer that just worked still works.
+            const r = await invoke('restore_data_bundle',
+                { args: { path: info.path, sections, passphrase: passphrase || null } }) as RestoreResult;
             // localStorage is the frontend's to write — Rust hands these back rather than
             // guessing at a browser store it cannot reach.
             if (r.extras && typeof r.extras === 'object') {

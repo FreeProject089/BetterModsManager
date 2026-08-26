@@ -89,11 +89,29 @@ fn data_dir(app: &tauri::AppHandle) -> PathBuf {
     app.path().app_data_dir().unwrap_or_else(|_| PathBuf::from("."))
 }
 
+/// The archive bytes, unsealing first if the file is a sealed envelope.
+///
+/// The three outcomes are told apart on purpose, because they have three different answers:
+/// a plain archive opens with no passphrase; a sealed one with no passphrase given says so,
+/// rather than failing as "not a readable .DATABMM"; and a sealed one with the wrong
+/// passphrase says THAT. Collapsing them into one error is how somebody spends an evening
+/// convinced their backup is corrupt.
+fn open_bundle_bytes(path: &str, passphrase: Option<&str>) -> Result<Vec<u8>, AppError> {
+    let raw = std::fs::read(path)?;
+    if !crate::commands::secret_box::is_sealed(&raw) {
+        return Ok(raw);
+    }
+    let Some(pass) = passphrase.filter(|p| !p.is_empty()) else {
+        return Err(AppError::Internal("bmm.enc.errSealedNeedsPass".into()));
+    };
+    crate::commands::secret_box::open(&raw, pass).map_err(AppError::Internal)
+}
+
 /// Read the archive's shape without unpacking it.
 #[tauri::command]
-pub fn inspect_data_bundle(path: String) -> Result<BundleInfo, AppError> {
-    let file = std::fs::File::open(&path)?;
-    let mut zip = zip::ZipArchive::new(file)
+pub fn inspect_data_bundle(path: String, passphrase: Option<String>) -> Result<BundleInfo, AppError> {
+    let bytes = open_bundle_bytes(&path, passphrase.as_deref())?;
+    let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes))
         .map_err(|e| AppError::Internal(format!("Not a readable .DATABMM: {e}")))?;
 
     let mut counts: std::collections::BTreeMap<String, (usize, u64)> = Default::default();
@@ -150,6 +168,9 @@ pub struct RestoreArgs {
     /// Section prefixes to put back. Anything not listed is left alone — a restore that took
     /// more than was asked for would be indistinguishable from a mistake.
     pub sections: Vec<String>,
+    /// The passphrase, when the archive is a sealed envelope. Absent for a plain one.
+    #[serde(default)]
+    pub passphrase: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -179,8 +200,8 @@ pub fn restore_data_bundle(
     let dir = data_dir(&app_handle);
     let wanted: std::collections::HashSet<&str> = args.sections.iter().map(|s| s.as_str()).collect();
 
-    let file = std::fs::File::open(&args.path)?;
-    let mut zip = zip::ZipArchive::new(file)
+    let bytes = open_bundle_bytes(&args.path, args.passphrase.as_deref())?;
+    let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes))
         .map_err(|e| AppError::Internal(format!("Not a readable .DATABMM: {e}")))?;
 
     let mut result = RestoreResult {
@@ -411,7 +432,7 @@ mod tests {
             ("Crashes/Reports/a.zip", "x"),
             ("app_data.json", "{}"),
         ]);
-        let info = inspect_data_bundle(p.to_string_lossy().to_string()).unwrap();
+        let info = inspect_data_bundle(p.to_string_lossy().to_string(), None).unwrap();
 
         assert_eq!(info.app_version.as_deref(), Some("1.0.0"));
         // No signature block in this manifest — unsigned, and that is not an error.
@@ -446,21 +467,21 @@ mod tests {
 
         let good = tmp("signed.DATABMM");
         write_bundle(&good, &[("manifest.json", &serde_json::to_string(&doc).unwrap()), ("themes/a.json", "{}")]);
-        assert_eq!(inspect_data_bundle(good.to_string_lossy().to_string()).unwrap().signature, "valid");
+        assert_eq!(inspect_data_bundle(good.to_string_lossy().to_string(), None).unwrap().signature, "valid");
 
         // One field changed after signing — the archive now claims a version it was not
         // signed with.
         doc["app_version"] = serde_json::json!("9.9.9");
         let bad = tmp("edited.DATABMM");
         write_bundle(&bad, &[("manifest.json", &serde_json::to_string(&doc).unwrap()), ("themes/a.json", "{}")]);
-        assert_eq!(inspect_data_bundle(bad.to_string_lossy().to_string()).unwrap().signature, "tampered");
+        assert_eq!(inspect_data_bundle(bad.to_string_lossy().to_string(), None).unwrap().signature, "tampered");
     }
 
     #[test]
     fn a_file_that_is_not_a_zip_is_an_error_not_a_panic() {
         let p = tmp("notazip.DATABMM");
         std::fs::write(&p, b"this is not a zip").unwrap();
-        assert!(inspect_data_bundle(p.to_string_lossy().to_string()).is_err());
+        assert!(inspect_data_bundle(p.to_string_lossy().to_string(), None).is_err());
     }
 
     #[test]

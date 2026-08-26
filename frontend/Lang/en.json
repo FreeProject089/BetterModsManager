@@ -8414,5 +8414,21 @@
   "apps.price.oss": "Open source",
   "apps.price.unknown": "Price not stated",
   "apps.badge.official": "Official",
-  "apps.badge.partner": "Partner"
+  "apps.badge.partner": "Partner",
+  "settings.exportKeys": "Identity keys (private)",
+  "settings.exportKeysDesc": "The private halves of your signing keys. Everything else here costs you an afternoon of setup if you lose it; this costs you the thing that proves you are you.",
+  "settings.exportKeysNeedPass": "A backup carrying your private keys must have a passphrase — set one below.",
+  "settings.exportPass": "Passphrase (optional)",
+  "settings.exportPassPh": "Leave empty for an unlocked archive",
+  "settings.exportPassHint": "A passphrase ENCRYPTS the whole archive: without it the contents are not there to read, not merely refused. There is no way to recover it — lose it and the backup is gone.",
+  "bmm.enc.errWrongPass": "Wrong passphrase — or the file was changed after it was sealed",
+  "bmm.enc.errSealedNeedsPass": "This archive is locked — it needs its passphrase",
+  "bmm.enc.errNotSealed": "That file is not a sealed archive",
+  "bmm.enc.errBadEnvelope": "The sealed archive is damaged",
+  "bmm.enc.errKdf": "This archive uses a lock this version does not know",
+  "bmm.enc.errNoPass": "A passphrase cannot be empty",
+  "bmm.enc.errSeal": "The archive could not be sealed",
+  "bmm.enc.errKey": "The passphrase could not be turned into a key",
+  "bmm.enc.errParams": "The lock settings are not usable",
+  "bmm.enc.errDerive": "The passphrase could not be turned into a key"
 }

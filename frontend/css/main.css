@@ -17678,6 +17678,14 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 .ru-mods-find { flex: 1; min-width: 0; font-size: 11px; height: 26px; }
 .ru-mods-count { flex: none; font-size: 10px; color: var(--text-muted); font-family: var(--font-mono); }
 
+/* The one export option whose loss is not “set BMM up again”. Marked, and below a line, so
+   it is not read as one more thing to tick on the way past. */
+.exp-opt-danger { border-top: 1px solid var(--border); margin-top: 6px; padding-top: 12px; }
+.exp-opt-danger .exp-opt-ic { color: var(--warning); }
+.exp-pass { display: flex; flex-direction: column; gap: 6px; margin: 14px 0 4px;
+    padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--bmm-s02); }
+.exp-pass .exp-opt-desc { line-height: 1.5; }
+
 .repo-cat-srcs { display: flex; flex-direction: column; gap: 4px; }
 
 /* Taking a repo out of your own list, and the way back. The note is quiet but always there

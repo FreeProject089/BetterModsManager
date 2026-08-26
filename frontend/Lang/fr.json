@@ -8412,5 +8412,21 @@
   "apps.price.oss": "Open source",
   "apps.price.unknown": "Prix non indiqué",
   "apps.badge.official": "Officiel",
-  "apps.badge.partner": "Partenaire"
+  "apps.badge.partner": "Partenaire",
+  "settings.exportKeys": "Clés d’identité (privées)",
+  "settings.exportKeysDesc": "Les moitiés privées de tes clés de signature. Tout le reste ici te coûte un après-midi de configuration si tu le perds ; ça, ça te coûte ce qui prouve que c’est toi.",
+  "settings.exportKeysNeedPass": "Une sauvegarde qui emporte tes clés privées doit avoir une phrase secrète — mets-en une en dessous.",
+  "settings.exportPass": "Phrase secrète (optionnelle)",
+  "settings.exportPassPh": "Vide = archive non verrouillée",
+  "settings.exportPassHint": "Une phrase secrète CHIFFRE toute l’archive : sans elle le contenu n’est pas là, pas seulement refusé. Elle est irrécupérable — si tu la perds, la sauvegarde est perdue.",
+  "bmm.enc.errWrongPass": "Mauvaise phrase secrète — ou le fichier a été modifié après avoir été scellé",
+  "bmm.enc.errSealedNeedsPass": "Cette archive est verrouillée — il lui faut sa phrase secrète",
+  "bmm.enc.errNotSealed": "Ce fichier n’est pas une archive scellée",
+  "bmm.enc.errBadEnvelope": "L’archive scellée est endommagée",
+  "bmm.enc.errKdf": "Cette archive utilise un verrou que cette version ne connaît pas",
+  "bmm.enc.errNoPass": "Une phrase secrète ne peut pas être vide",
+  "bmm.enc.errSeal": "L’archive n’a pas pu être scellée",
+  "bmm.enc.errKey": "La phrase secrète n’a pas pu être transformée en clé",
+  "bmm.enc.errParams": "Les réglages du verrou sont inutilisables",
+  "bmm.enc.errDerive": "La phrase secrète n’a pas pu être transformée en clé"
 }

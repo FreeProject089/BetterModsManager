@@ -1,5 +1,6 @@
 pub mod doc_sign;
 pub mod export_bundle;
+pub mod secret_box;
 pub mod restore_bundle;
 pub mod net;
 pub mod proc;

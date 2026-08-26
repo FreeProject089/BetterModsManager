@@ -78,6 +78,13 @@ discord-rich-presence = "0.2.4"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "ico"] }
 futures = "0.3"
 sha2 = "0.10.9"
+# The passphrase lock on a data export and on a mod list that carries credentials.
+# Both versions were already resolved in the lock as transitive dependencies of russh, so
+# naming them here adds nothing to the tree — it only says out loud what the app relies on.
+# Argon2id because the attacker has the file and unlimited time; AES-GCM because a tampered
+# envelope must fail to open rather than decrypt to something plausible.
+aes-gcm = "0.11.1"
+argon2 = "0.6.0-rc.8"
 # BLAKE3 for fast local content hashing: a tree hash that parallelises WITHIN a
 # single large file (mmap + rayon), unlike SHA-256. Used for file_hashes and the
 # modpack hash-match index. Repo delta-sync keeps its own SHA-256 (wire format).

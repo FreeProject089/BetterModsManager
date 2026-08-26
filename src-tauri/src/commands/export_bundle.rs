@@ -38,6 +38,13 @@ pub struct BundleOptions {
     #[serde(default)] pub replays: bool,
     #[serde(default)] pub crashes: bool,
     #[serde(default)] pub diagnostics: bool,
+    /// Your identity keys — the PRIVATE halves.
+    ///
+    /// Off unless asked for, and asked for separately from everything else, because it is
+    /// the one section whose loss is not "I have to set BMM up again". A backup without them
+    /// costs you a re-generate and a message to whoever runs the repo; a backup WITH them,
+    /// left on a shared drive, is somebody else signing as you.
+    #[serde(default)] pub identity_keys: bool,
 }
 
 /// One line per section: what it is, how many files, how many bytes. Returned to the UI AND
@@ -112,6 +119,27 @@ fn add_dir<W: Write + std::io::Seek>(
     rep
 }
 
+/// A ring entry's name, made safe to be one path component.
+///
+/// A key called `../id_rsa` would otherwise write outside its folder in the archive — and a
+/// zip that escapes its own directory is the Zip-Slip everybody guards on the way IN and
+/// forgets on the way out.
+fn safe_component(name: &str) -> String {
+    let cleaned: String = name
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == ' ' { c } else { '-' })
+        .collect();
+    let trimmed = cleaned.trim().trim_matches('-').to_string();
+    if trimmed.is_empty() { "key".into() } else { trimmed }
+}
+
+/// `passphrase` locks the finished archive. Off unless one is given.
+///
+/// Everything is written normally first and sealed at the END, rather than encrypting section
+/// by section: the archive has to be one document either way, and a half-locked zip — some
+/// entries readable, some not — is a shape no tool expects and every tool reports as
+/// corruption.
+///
 /// Write the archive.
 ///
 /// `app_data_json` is passed in already filtered by the existing export logic, so the two
@@ -130,6 +158,8 @@ pub fn export_data_bundle(
     // be backed up and the buttons that reach them would not — a restore with every page
     // present and no way to open one.
     navbar_config: Option<serde_json::Value>,
+    // Lock the finished archive with a passphrase — see the note above the function.
+    passphrase: Option<String>,
 ) -> Result<BundleResult, AppError> {
     let _ = state.save(); // whatever is in memory belongs in the backup
     let dir = data_dir(&app_handle);
@@ -140,6 +170,38 @@ pub fn export_data_bundle(
         .compression_method(zip::CompressionMethod::Deflated);
 
     let mut sections: Vec<SectionReport> = Vec::new();
+
+    if options.identity_keys {
+        // The key FILES, read from wherever the ring points — which is not necessarily inside
+        // BMM's own folder: a key added by hand can live anywhere, and backing up the ring
+        // without the files it names would restore a list of paths to nothing.
+        let mut rep = SectionReport { section: "identity_keys".into(), files: 0, bytes: 0, note: None };
+        let ring: Vec<(String, String)> = {
+            let data = state.data.lock().map_err(|_| AppError::from("state lock".to_string()))?;
+            data.settings.key_auth_keys.iter().map(|e| (e.name.clone(), e.path.clone())).collect()
+        };
+        for (name, path) in &ring {
+            let p = std::path::PathBuf::from(path);
+            if !p.is_file() { continue; }
+            // Named after the RING entry, not the file on disk: two keys can be called
+            // id_ed25519 in different folders, and restoring would silently keep one.
+            let entry = format!("identity_keys/{}.key", safe_component(name));
+            match std::fs::read(&p) {
+                Ok(bytes) => {
+                    zip.start_file(&entry, json_opts).map_err(|e| AppError::from(e.to_string()))?;
+                    zip.write_all(&bytes)?;
+                    rep.files += 1;
+                    rep.bytes += bytes.len() as u64;
+                }
+                Err(_) => { /* unreadable key: counted by its absence, not by a crash */ }
+            }
+        }
+        if rep.files < ring.len() {
+            rep.note = Some(format!("{} of {} key file(s) could be read", rep.files, ring.len()));
+        }
+        if ring.is_empty() { rep.note = Some("no identity keys on the ring".into()); }
+        sections.push(rep);
+    }
 
     if options.app_data {
         let mut rep = SectionReport { section: "app_data".into(), files: 0, bytes: 0, note: None };
@@ -238,6 +300,29 @@ pub fn export_data_bundle(
     zip.write_all(&serde_json::to_vec_pretty(&manifest)?)?;
 
     zip.finish().map_err(|e| AppError::from(e.to_string()))?;
+
+    // Sealed in place, over the finished archive.
+    //
+    // A passphrase that only makes the IMPORT screen refuse is a sign on a door: the file is
+    // a zip, and anybody who opens it in a zip tool reads everything regardless. That is not
+    // a lock, and it would be a worse-than-useless one here, because it invites people to
+    // include their identity keys on the strength of it.
+    if let Some(pass) = passphrase.as_deref().filter(|p| !p.is_empty()) {
+        let plain = std::fs::read(&dest_path)?;
+        let sealed = crate::commands::secret_box::seal(&plain, pass).map_err(AppError::from)?;
+        // Written to a neighbour and renamed over the top: a failure part-way through must
+        // not leave a file that is neither the archive nor the envelope.
+        let tmp = format!("{}.sealing", dest_path);
+        std::fs::write(&tmp, &sealed)?;
+        std::fs::rename(&tmp, &dest_path)?;
+        sections.push(SectionReport {
+            section: "encrypted".into(),
+            files: 1,
+            bytes: sealed.len() as u64,
+            note: Some("the whole archive is sealed — the passphrase is the only way in".into()),
+        });
+    }
+
     let bytes = std::fs::metadata(&dest_path).map(|m| m.len()).unwrap_or(0);
     Ok(BundleResult { path: dest_path, bytes, sections })
 }

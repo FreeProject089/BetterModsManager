@@ -2749,6 +2749,29 @@ export async function initSettings() {
                             </span>
                             <label class="bmm-switch"><input type="checkbox" id="exp-diagnostics"><span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span></label>
                         </label>
+
+                        <!-- Below the line, and off. Everything above this loses you an
+                             afternoon of setup; this one loses you the thing that proves you
+                             are you. -->
+                        <label class="exp-opt exp-opt-danger">
+                            <span class="exp-opt-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="7.5" cy="15.5" r="4.5"/><path d="M10.7 12.3 21 2"/><path d="m17 6 3 3"/></svg></span>
+                            <span class="exp-opt-txt">
+                                <span class="exp-opt-title">${escHtml(t('settings.exportKeys'))}</span>
+                                <span class="exp-opt-desc">${escHtml(t('settings.exportKeysDesc'))}</span>
+                            </span>
+                            <label class="bmm-switch"><input type="checkbox" id="exp-identity-keys"><span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span></label>
+                        </label>
+                    </div>
+
+                    <!-- The lock. A passphrase here ENCRYPTS the archive, so an empty box is
+                         not "no protection asked for" but "anybody who finds this file reads
+                         it" — which is the sentence people need before they tick the line
+                         above, not after. -->
+                    <div class="exp-pass">
+                        <label class="exp-opt-title" for="exp-passphrase">${escHtml(t('settings.exportPass'))}</label>
+                        <input type="password" class="input input-sm" id="exp-passphrase"
+                               autocomplete="new-password" placeholder="${escAttr(t('settings.exportPassPh'))}">
+                        <p class="exp-opt-desc" id="exp-pass-hint">${escHtml(t('settings.exportPassHint'))}</p>
                     </div>
 
                     <div class="exp-note">
@@ -2809,7 +2832,16 @@ export async function initSettings() {
                     replays: content.querySelector('#exp-replays').checked,
                     crashes: content.querySelector('#exp-crashes').checked,
                     diagnostics: content.querySelector('#exp-diagnostics').checked,
+                    identityKeys: content.querySelector('#exp-identity-keys').checked,
                 };
+                const passphrase = content.querySelector('#exp-passphrase')?.value || '';
+                // Refused rather than written. An archive carrying the private half of your
+                // identity, unlocked, is the one export that cannot be undone by deleting the
+                // file afterwards — by then it has been copied to wherever backups go.
+                if (bundle.identityKeys && !passphrase) {
+                    toast(t('settings.exportKeysNeedPass'), 'warning', 8000);
+                    return;
+                }
                 const destPath = await saveFile({
                     defaultPath: 'bmm-backup.DATABMM',
                     filters: [
@@ -2844,6 +2876,7 @@ export async function initSettings() {
                             }
                             const r = await invoke('export_data_bundle', {
                                 destPath, options: bundle, appDataJson, extras, navbarConfig,
+                                passphrase: passphrase || null,
                             });
                             // What it actually took, not what was asked for. A section that was
                             // ticked and turned out empty is the thing worth knowing.
