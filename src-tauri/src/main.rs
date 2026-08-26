@@ -762,6 +762,8 @@ fn main() {
             commands::catalog_sources::catalog_sources_get,
             commands::game_watch::file_stamp,
             commands::game_watch::read_text_tail,
+            commands::game_watch::game_profiles,
+            commands::game_watch::game_find_logs,
             commands::game_watch::dcs_saved_games,
             commands::game_watch::dcs_install_hook,
             commands::game_watch::dcs_remove_hook,

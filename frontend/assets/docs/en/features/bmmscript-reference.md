@@ -63,7 +63,7 @@ Written `do <name>(param: value, …)`. An action with no parameters takes empty
 | `folder.open` | Open a folder in the explorer | `path` |
 | `app.install` | Install an app from a URL | `id` · `url` · `title` |
 | `launchpack.run` | Run a saved launch pack | `id` |
-| `dcs.hook` | Installs the small Lua hook that tells BMM which DCS server you joined. | `mode` · `dir` |
+| `game.watch` | DCS gets a hook installed; every other game resolves which log to watch and hands it to the next steps. | `game` · `mode` · `dir` · `path` |
 
 ### Appearance
 

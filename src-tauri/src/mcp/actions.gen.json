@@ -469,9 +469,9 @@
       "group": "mods"
     },
     {
-      "type": "dcs.hook",
-      "label": "DCS: set up (or remove) the server watcher",
-      "needs": "dcsHook",
+      "type": "game.watch",
+      "label": "Set up watching a game",
+      "needs": "gameWatch",
       "group": "apps"
     },
     {

@@ -63,7 +63,7 @@ S'écrit `do <nom>(param: valeur, …)`. Une action sans paramètre prend des pa
 | `folder.open` | Ouvre un dossier dans l'explorateur | `path` |
 | `app.install` | Installe une app depuis une URL | `id` · `url` · `title` |
 | `launchpack.run` | Lance un launch pack enregistré | `id` |
-| `dcs.hook` | Installe le petit hook Lua qui dit à BMM quel serveur DCS tu as rejoint. | `mode` · `dir` |
+| `game.watch` | DCS reçoit un hook ; tous les autres jeux se résument au log à surveiller, transmis aux étapes suivantes. | `game` · `mode` · `dir` · `path` |
 
 ### Apparence
 

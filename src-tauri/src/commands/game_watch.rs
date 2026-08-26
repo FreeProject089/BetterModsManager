@@ -166,6 +166,162 @@ end
 DCS.setUserCallbacks(bmm)
 "#;
 
+/// A game BMM knows a starting point for.
+///
+/// A STARTING POINT, and the word is doing work. Every field is editable afterwards, the
+/// paths are checked against this machine before being offered, and a game whose files are
+/// not here comes back with `found` empty rather than with a path that looks right and
+/// watches nothing.
+///
+/// The alternative was a table of guessed paths presented as facts, which is worse than no
+/// table: a wrong path produces a task that never fires, and "never fired" is the hardest
+/// failure to tell apart from "nothing happened yet".
+#[derive(Serialize, Clone)]
+pub struct GameProfile {
+    pub id: String,
+    pub name: String,
+    /// Where its log or state file lives, for the paths that exist HERE. Possibly empty.
+    pub found: Vec<String>,
+    /// A pattern that gets the server or session name out of that file. A starting point
+    /// too: log formats change between versions, and this is the first thing to adjust.
+    pub pattern: String,
+    /// True when BMM can install something that reports directly, instead of reading a log.
+    pub has_hook: bool,
+    /// Said plainly when there is nothing to find, so the screen can explain rather than
+    /// show an empty dropdown.
+    pub note: Option<String>,
+}
+
+/// Everything under a folder that looks like a log, newest first.
+///
+/// The universal half. A game with no supported API and no entry in the table below still
+/// writes SOMETHING, and pointing this at its folder is how somebody finds it without
+/// knowing what it is called.
+#[tauri::command]
+pub fn game_find_logs(dir: String, limit: Option<usize>) -> Vec<String> {
+    const LOGGY: &[&str] = &["log", "txt", "rpt", "dcs", "json"];
+    let root = std::path::PathBuf::from(&dir);
+    if !root.is_dir() {
+        return Vec::new();
+    }
+    let mut hits: Vec<(u64, String)> = Vec::new();
+    for entry in walkdir::WalkDir::new(&root).max_depth(3).into_iter().flatten() {
+        let p = entry.path();
+        if !p.is_file() {
+            continue;
+        }
+        let ext = p.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
+        if !LOGGY.contains(&ext.as_str()) {
+            continue;
+        }
+        let Ok(md) = p.metadata() else { continue };
+        // Empty files are not logs yet. Offering one is offering a file whose first write
+        // will look like the change the trigger is waiting for.
+        if md.len() == 0 {
+            continue;
+        }
+        let when = md
+            .modified()
+            .ok()
+            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        hits.push((when, p.to_string_lossy().to_string()));
+    }
+    // Newest first: the file a game just wrote to is the one somebody is looking for, and it
+    // is never the one that sorts first alphabetically.
+    hits.sort_by(|a, b| b.0.cmp(&a.0));
+    hits.into_iter().map(|(_, p)| p).take(limit.unwrap_or(25)).collect()
+}
+
+fn first_existing(paths: Vec<std::path::PathBuf>) -> Vec<String> {
+    paths
+        .into_iter()
+        .filter(|p| p.exists())
+        .map(|p| p.to_string_lossy().to_string())
+        .collect()
+}
+
+/// The games with a starting point, resolved against this machine.
+#[tauri::command]
+pub fn game_profiles() -> Vec<GameProfile> {
+    let home = dirs_home();
+    let appdata = std::env::var_os("APPDATA").map(std::path::PathBuf::from);
+    let local = std::env::var_os("LOCALAPPDATA").map(std::path::PathBuf::from);
+
+    let mut out = Vec::new();
+
+    // DCS — the one with a supported callback API, so it is asked rather than guessed at.
+    let dcs = dcs_saved_games();
+    let dcs_found: Vec<String> = dcs
+        .iter()
+        .map(|d| std::path::PathBuf::from(d).join(STATE_FILE).to_string_lossy().to_string())
+        .collect();
+    out.push(GameProfile {
+        id: "dcs".into(),
+        name: "DCS World".into(),
+        // The file the HOOK writes. It does not exist until the hook is installed and you
+        // have flown once, which is why the note says so rather than the list being empty
+        // and unexplained.
+        found: dcs_found,
+        pattern: "\"server\"\\s*:\\s*\"([^\"]*)\"".into(),
+        has_hook: true,
+        note: if dcs.is_empty() {
+            Some("game.note.noDcs".into())
+        } else {
+            Some("game.note.dcsHook".into())
+        },
+    });
+
+    // Arma 3 writes an .rpt per session next to its other files.
+    let arma = first_existing(
+        [home.clone().map(|h| h.join("Documents").join("Arma 3")),
+         local.clone().map(|l| l.join("Arma 3"))]
+            .into_iter()
+            .flatten()
+            .collect(),
+    );
+    out.push(GameProfile {
+        id: "arma3".into(),
+        name: "Arma 3".into(),
+        found: arma
+            .iter()
+            .flat_map(|d| game_find_logs(d.clone(), Some(3)))
+            .collect(),
+        pattern: "[Cc]onnected to[: ]+(.+)".into(),
+        has_hook: false,
+        note: None,
+    });
+
+    // Minecraft's launcher log has a fixed name and place.
+    let mc = first_existing(
+        appdata
+            .clone()
+            .map(|a| vec![a.join(".minecraft").join("logs").join("latest.log")])
+            .unwrap_or_default(),
+    );
+    out.push(GameProfile {
+        id: "minecraft".into(),
+        name: "Minecraft".into(),
+        found: mc,
+        pattern: "Connecting to ([^,]+)".into(),
+        has_hook: false,
+        note: None,
+    });
+
+    // And the one that covers everything else: point BMM at a folder.
+    out.push(GameProfile {
+        id: "custom".into(),
+        name: "game.other".into(),
+        found: Vec::new(),
+        pattern: "connect(?:ed|ing)? to[: ]+(.+)".into(),
+        has_hook: false,
+        note: Some("game.note.custom".into()),
+    });
+
+    out
+}
+
 #[derive(Serialize)]
 pub struct HookResult {
     /// Where the hook was written, one per DCS folder.
@@ -288,6 +444,62 @@ mod tests {
         // Removing one that is not there is 0, not an error: "make sure it is gone" is a
         // reasonable thing to ask twice.
         assert_eq!(dcs_remove_hook(Some(dir.path().to_string_lossy().to_string())), 0);
+    }
+
+    #[test]
+    fn a_folder_of_logs_comes_back_newest_first_and_without_the_empty_ones() {
+        let d = tempfile::tempdir().unwrap();
+        let old = d.path().join("old.log");
+        let new = d.path().join("new.log");
+        let empty = d.path().join("empty.log");
+        let notalog = d.path().join("save.dat");
+        std::fs::write(&old, b"a").unwrap();
+        std::fs::write(&new, b"b").unwrap();
+        // An empty file is not a log yet: offering one is offering a file whose FIRST write
+        // will look exactly like the change the trigger is waiting for.
+        std::fs::write(&empty, b"").unwrap();
+        std::fs::write(&notalog, b"x").unwrap();
+        // Make `new` unambiguously newer than `old`. Through std rather than a crate:
+        // this is the only place in the app that needs to set an mtime, and a dependency
+        // for one test line is a dependency somebody has to keep patched.
+        let later = std::time::SystemTime::now() + std::time::Duration::from_secs(60);
+        std::fs::File::options().write(true).open(&new).unwrap().set_modified(later).unwrap();
+
+        let got = game_find_logs(d.path().to_string_lossy().to_string(), None);
+        assert!(got.iter().any(|p| p.ends_with("new.log")));
+        assert!(got.iter().any(|p| p.ends_with("old.log")));
+        assert!(!got.iter().any(|p| p.ends_with("empty.log")), "an empty file is not a log");
+        assert!(!got.iter().any(|p| p.ends_with("save.dat")), "{:?}", got);
+    }
+
+    #[test]
+    fn a_folder_that_is_not_there_yields_nothing_rather_than_an_error() {
+        assert!(game_find_logs("Z:/nope".into(), None).is_empty());
+    }
+
+    #[test]
+    fn every_profile_names_itself_and_carries_a_pattern() {
+        // The table is a starting point, and a starting point with no pattern is a form the
+        // user has to fill in from scratch — which is what having a table was for.
+        let ps = game_profiles();
+        assert!(ps.iter().any(|p| p.id == "dcs"));
+        assert!(ps.iter().any(|p| p.id == "custom"), "there must be a way in for a game not listed");
+        for p in &ps {
+            assert!(!p.id.is_empty() && !p.name.is_empty(), "{:?}", p.id);
+            assert!(!p.pattern.is_empty(), "{} has no starting pattern", p.id);
+            // Every path offered must exist. A path that looks right and watches nothing
+            // produces a task that never fires, and "never fired" is the hardest failure to
+            // tell apart from "nothing has happened yet".
+            for f in &p.found {
+                assert!(
+                    std::path::Path::new(f).exists() || p.id == "dcs",
+                    "{} offered a path that is not here: {}",
+                    p.id, f
+                );
+            }
+        }
+        // Exactly one game can be asked directly rather than read from a log.
+        assert_eq!(ps.iter().filter(|p| p.has_hook).count(), 1);
     }
 
     #[test]

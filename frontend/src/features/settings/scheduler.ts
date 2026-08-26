@@ -1667,15 +1667,43 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
             break;
         }
 
-        case 'dcs.hook': {
-            if (String(p.mode || 'install') === 'remove') {
+        // Set a game up to be watched.
+        //
+        // For DCS that means installing the hook, because DCS can be ASKED. For everything
+        // else it means resolving which file to watch and putting it where the next steps
+        // can read it — there is nothing to install, and pretending otherwise would be an
+        // action that reports success for doing nothing.
+        // Tasks saved before this existed still say `dcs.hook`. Falling through to the
+        // default would make them silently do nothing, which for a watcher means the whole
+        // automation stops firing with no error anywhere.
+        //
+        // @retired-action dcs.hook
+        case 'dcs.hook':
+        case 'game.watch': {
+            const game = String(p.game || (action.type === 'dcs.hook' ? 'dcs' : 'custom'));
+            if (String(p.mode || 'setup') === 'remove') {
+                if (game !== 'dcs') { toast(`${task.name}: ${t('sched.gw.nothingToRemove')}`, 'info', 6000); break; }
                 const n = Number(await invoke('dcs_remove_hook', { dir: p.dir || null }).catch(() => 0));
                 toast(`${task.name}: ${t('sched.dcsHookOff').replace('{n}', String(n))}`, 'info', 6000);
-            } else {
+                break;
+            }
+            let watch = String(p.path || '');
+            if (game === 'dcs') {
                 const r: any = await invoke('dcs_install_hook', { dir: p.dir || null });
+                watch = watch || String((r?.watch || [])[0] || '');
                 toast(`${task.name}: ${t('sched.dcsHookOk')
                     .replace('{n}', String((r?.installed || []).length))}`, 'success', 8000);
             }
+            if (!watch) {
+                // Named, and a warning. A "set up" step that quietly resolved to nothing is
+                // the reason the task never fires, and it is the hardest thing to find later.
+                toast(`${task.name}: ${t('sched.gw.noFile')}`, 'warning', 10000);
+                break;
+            }
+            // Handed to the next steps rather than only reported: the point of this action is
+            // that `text.extract` and the watch trigger use what it found.
+            ctx.text['game.watchFile'] = watch;
+            if (game !== 'dcs') toast(`${task.name}: ${t('sched.gw.ready').replace('{f}', watch.replace(/^.*[/\\]/, ''))}`, 'success', 7000);
             break;
         }
 
@@ -4749,7 +4777,10 @@ const ACTION_TYPES: { v: string; label: string; needs?: string; group: string }[
     // nothing here knows what DCS is except the one action that installs its hook.
     { v: 'text.extract', label: 'Read a value out of a file or a variable', needs: 'textExtract', group: 'logic' },
     { v: 'modlist.apply', label: 'Apply a mod list (install what is missing)', needs: 'listApply', group: 'mods' },
-    { v: 'dcs.hook', label: 'DCS: set up (or remove) the server watcher', needs: 'dcsHook', group: 'apps' },
+    // One action for every game. DCS is a CASE inside it — the only one with a supported
+    // callback API, so it gets a hook installed; everything else is a log and a pattern.
+    // It used to be a DCS-only action, which made the whole feature look like a DCS feature.
+    { v: 'game.watch', label: 'Set up watching a game', needs: 'gameWatch', group: 'apps' },
     // A plugin's shipped files, usable by an automation. The point is the `read` mode: a
     // plugin ships a config template or a list of codes, and a task reads it into a variable
     // instead of that value being typed into the task and drifting from the plugin.
@@ -5375,6 +5406,63 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
             <span class="sched-cmd-hint">${escHtml(t('sched.la.passHint') || '')}</span>
         </div>`;
     }
+    else if (needs === 'gameWatch') {
+        host.innerHTML = `<div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${escHtml(t('sched.gw.game') || '1. Game')}</label>
+            <select class="input sched-p-gwgame" style="max-width:280px"></select>
+            <div class="sched-gw-note sched-cmd-hint"></div>
+            <label class="sched-cmd-label">${escHtml(t('sched.gw.file') || '2. File to watch')}</label>
+            <div style="display:flex;gap:6px">
+                <input class="input sched-p-gwpath" spellcheck="false" style="flex:1" value="${escAttr(params.path || '')}">
+                <button type="button" class="btn btn-xs btn-ghost sched-gw-scan">${escHtml(t('sched.gw.scan') || 'Find in a folder…')}</button>
+            </div>
+            <span class="sched-cmd-hint">${escHtml(t('sched.gw.fileHint') || '')}</span>
+            <label class="sched-cmd-label">${escHtml(t('sched.gw.mode') || '3. What to do')}</label>
+            <select class="input sched-p-gwmode" style="max-width:240px">
+                <option value="setup"${params.mode !== 'remove' ? ' selected' : ''}>${escHtml(t('sched.gw.setup'))}</option>
+                <option value="remove"${params.mode === 'remove' ? ' selected' : ''}>${escHtml(t('sched.gw.remove'))}</option>
+            </select>
+        </div>`;
+
+        const gameSel = host.querySelector('.sched-p-gwgame') as HTMLSelectElement;
+        const pathIn = host.querySelector('.sched-p-gwpath') as HTMLInputElement;
+        const noteEl = host.querySelector('.sched-gw-note') as HTMLElement;
+        void (async () => {
+            const profiles = await (invoke('game_profiles') as Promise<any[]>).catch(() => []);
+            const chosen = String(params.game || 'custom');
+            gameSel.innerHTML = profiles.map((g) =>
+                `<option value="${escAttr(g.id)}"${g.id === chosen ? ' selected' : ''}>${escHtml(g.id === 'custom' ? t('game.other') : g.name)}</option>`).join('');
+            const apply = (fromUser: boolean) => {
+                const g = profiles.find((x) => x.id === gameSel.value);
+                params.game = gameSel.value;
+                // A note per game: whether BMM found anything, and whether there is a hook.
+                // An empty dropdown with no explanation is the version of this screen that
+                // sends somebody hunting through their Documents folder.
+                noteEl.textContent = g?.note ? t(g.note) : (g?.found?.length ? '' : t('game.note.notFound'));
+                if (fromUser) {
+                    // Only on a real choice: overwriting a path somebody typed, because the
+                    // form was drawn, is the kind of help nobody asks for twice.
+                    pathIn.value = String(g?.found?.[0] || '');
+                    params.path = pathIn.value;
+                    if (g?.pattern) params.pattern = g.pattern;
+                }
+            };
+            gameSel.addEventListener('change', () => apply(true));
+            apply(false);
+        })();
+        host.querySelector('.sched-gw-scan')?.addEventListener('click', async () => {
+            const { pickFolder } = await import('../../core/api.js');
+            const dir = await pickFolder().catch(() => null);
+            if (!dir) return;
+            const hits = await (invoke('game_find_logs', { dir, limit: 25 }) as Promise<string[]>).catch(() => []);
+            if (!hits.length) { toast(t('sched.gw.noneFound'), 'warning', 8000); return; }
+            // Newest first, and the first is taken: the file a game just wrote to is the one
+            // being looked for, and it is never the one that sorts first alphabetically.
+            pathIn.value = hits[0];
+            params.path = hits[0];
+            toast(t('sched.gw.found').replace('{n}', String(hits.length)).replace('{f}', hits[0].replace(/^.*[/\\]/, '')), 'success', 8000);
+        });
+    }
     else if (needs === 'dcsHook') {
         host.innerHTML = `<div class="sched-cmd-builder">
             <label class="sched-cmd-label">${escHtml(t('sched.dcs.mode') || 'What to do')}</label>
@@ -5749,6 +5837,8 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
     host.querySelector('.sched-p-lainstall')?.addEventListener('change', (e) => { params.install = (e.target as HTMLInputElement).checked; });
     host.querySelector('.sched-p-laexact')?.addEventListener('change', (e) => { params.exact = (e.target as HTMLInputElement).checked; });
     host.querySelector('.sched-p-lapass')?.addEventListener('input', (e) => { params.passphrase = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-gwpath')?.addEventListener('input', (e) => { params.path = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-gwmode')?.addEventListener('change', (e) => { params.mode = (e.target as HTMLSelectElement).value; });
     host.querySelector('.sched-p-dcsmode')?.addEventListener('change', (e) => { params.mode = (e.target as HTMLSelectElement).value; });
     host.querySelector('.sched-p-dcsdir')?.addEventListener('input', (e) => { params.dir = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-browse-txpath')?.addEventListener('click', async () => {

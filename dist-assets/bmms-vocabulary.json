@@ -598,11 +598,13 @@
       ]
     },
     {
-      "type": "dcs.hook",
+      "type": "game.watch",
       "group": "apps",
       "params": [
+        "game",
         "mode",
-        "dir"
+        "dir",
+        "path"
       ]
     },
     {

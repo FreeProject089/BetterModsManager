@@ -96,8 +96,45 @@ function functionBody(signature) {
 
 const runner = functionBody('async function runAction');
 const caseMarks = [...runner.matchAll(/\n[ \t]*case '([^']+)':/g)];
-if (caseMarks.length !== actions.length) {
-  bail(`runAction has ${caseMarks.length} cases but the registry declares ${actions.length} actions — the extractor cannot be trusted until those agree`);
+
+// A retired action keeps its case.
+//
+// An action can be replaced by a better one — `dcs.hook` became `game.watch` — and the case
+// has to stay, or every task somebody already saved silently does nothing on that step. For
+// a watcher that means the whole automation stops firing with no error anywhere.
+//
+// So a case is allowed to have no registry entry when it is DECLARED retired, on its own
+// line, next to it. Declared rather than inferred: "a case with no entry" is also exactly
+// what a typo in the registry looks like, and that is the thing this check exists to catch.
+const retired = new Set([...src.matchAll(/@retired-action\s+([a-zA-Z0-9._]+)/g)].map((m) => m[1]));
+const live = caseMarks.filter((m) => !retired.has(m[1]));
+for (const name of retired) {
+  if (!caseMarks.some((m) => m[1] === name)) {
+    bail(`'${name}' is marked @retired-action but has no case — the note outlived the code it explains`);
+  }
+  if (actions.some((a) => a.type === name)) {
+    bail(`'${name}' is marked @retired-action and is still in the registry — it is one or the other`);
+  }
+}
+// By NAME, not by count.
+//
+// Counting alone passes a RENAME: `case 'restart'` mistyped as `case 'restartt'` leaves the
+// number identical, so the check said nothing while the action silently stopped running.
+// Verified by making that exact typo, watching this pass, and then writing this.
+const caseNames = new Set(live.map((m) => m[1]));
+const declared = new Set(actions.map((a) => a.type));
+const noCase = [...declared].filter((v) => !caseNames.has(v));
+const noEntry = [...caseNames].filter((v) => !declared.has(v));
+if (noCase.length || noEntry.length) {
+  const bits = [];
+  if (noCase.length) bits.push(`declared with no case: ${noCase.join(', ')}`);
+  // A case with no entry is unreachable from the editor, which is what a typo looks like.
+  // Retire it on purpose with @retired-action if it is meant to stay for saved tasks.
+  if (noEntry.length) bits.push(`a case nothing declares: ${noEntry.join(', ')}`);
+  bail(`the registry and runAction disagree — ${bits.join('; ')}`);
+}
+if (live.length !== actions.length) {
+  bail(`runAction has ${live.length} live cases but the registry declares ${actions.length} actions — the extractor cannot be trusted until those agree`);
 }
 const paramsByAction = {};
 for (let k = 0; k < caseMarks.length; k++) {
