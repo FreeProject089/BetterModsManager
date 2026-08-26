@@ -328,13 +328,53 @@ function renderCatalog(): void {
             </div>`;
     }).join('');
 
-    if (!filtered.length && !builtinsFiltered.length) {
+    // ── YOUR themes ───────────────────────────────────────────────────────────
+    //
+    // Installed themes that are in no catalogue and are not built in: the ones made in the
+    // editor, and the ones imported from a .bmmtheme file. They had no row anywhere in this
+    // modal — `installed` was read only to LABEL a catalogue entry as installed, so a theme
+    // that came from nowhere but this machine matched nothing and simply was not drawn.
+    // Which reads, correctly, as "my themes are gone".
+    const builtinIds = new Set(_builtins.map((b: any) => b.id));
+    const catalogIds = new Set(_catalog.map((c: any) => c.id));
+    const mine = getInstalledThemes()
+        .filter((th) => !builtinIds.has(th.id) && !catalogIds.has(th.id))
+        .filter((th) => !_filter
+            || (th.name || '').toLowerCase().includes(_filter)
+            || (th.author || '').toLowerCase().includes(_filter));
+
+    const mineHtml = mine.map((th: any) => {
+        const accentColor = th.vars?.['--bmm-accent'] || '#3b82f6';
+        return `
+            <div class="btc-card" data-theme-id="${escAttr(th.id)}">
+                <div class="btc-preview">
+                    ${th.preview
+                        ? `<img class="btc-preview-img" src="${escAttr(th.preview)}" alt="">`
+                        : `<div class="btc-preview-placeholder" style="background:linear-gradient(135deg,${accentColor}22 0%,${accentColor}08 100%);">
+                            <div class="btc-preview-swatches">
+                                ${Object.values(th.vars || {}).slice(0, 5).filter((v: any) => typeof v === 'string' && (v.startsWith('#') || v.startsWith('rgb'))).map((c: any) => `<span class="btc-swatch" style="background:${c}"></span>`).join('')}
+                            </div>
+                            <span class="btc-preview-name">${escHtml(th.name || th.id)}</span>
+                        </div>`}
+                </div>
+                <div class="btc-info">
+                    <div class="btc-name">${escHtml(th.name || th.id)}</div>
+                    <div class="btc-author">${escHtml(th.author || '')}</div>
+                </div>
+                <div class="btc-actions">
+                    <button class="btn btn-xs btn-accent btc-activate" data-id="${escAttr(th.id)}">${escHtml(t('themes.activate') || 'Apply')}</button>
+                    <button class="btn btn-xs btn-ghost btc-edit-mine" data-id="${escAttr(th.id)}">${escHtml(t('themes.edit'))}</button>
+                </div>
+            </div>`;
+    }).join('');
+
+    if (!filtered.length && !builtinsFiltered.length && !mine.length) {
         listEl.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--bmm-text-muted);">${t('themes.noCatalog') || 'No themes found.'}</div>`;
         if (countEl) countEl.textContent = '';
         return;
     }
 
-    if (countEl) countEl.textContent = `${filtered.length + builtinsFiltered.length} ${t('themes.themes') || 'theme(s)'}`;
+    if (countEl) countEl.textContent = `${filtered.length + builtinsFiltered.length + mine.length} ${t('themes.themes') || 'theme(s)'}`;
     const sectionHead = (label: string) => `<div class="btc-section-head" style="grid-column:1/-1;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--bmm-text-muted);margin:6px 0 2px;">${escHtml(label)}</div>`;
     const catalogHtml = filtered.map(th => {
         const isInstalled = installed.has(th.id);
@@ -371,8 +411,15 @@ function renderCatalog(): void {
         ${anyHidden ? `<button class="btn btn-xs btn-ghost" id="btc-restore-all">${escHtml(t('themes.restoreAll') || 'Restore all defaults')}</button>` : ''}
     </div>`;
     listEl.innerHTML =
+        // Yours first: it is the section you came to find, and the one that was missing.
+        (mine.length ? sectionHead(t('themes.mine')) + mineHtml : '') +
         (builtinsFiltered.length || anyHidden ? defaultHead + builtinsHtml : '') +
         (filtered.length ? sectionHead(t('themes.catalogThemes') || 'Catalogue') + catalogHtml : '');
+
+    listEl.querySelectorAll<HTMLElement>('.btc-edit-mine').forEach((b) => b.addEventListener('click', () => {
+        closeModal();
+        (window as any).openThemeEditor?.(b.dataset.id);
+    }));
 
     listEl.querySelector('#btc-restore-all')?.addEventListener('click', async () => {
         try {
@@ -491,18 +538,38 @@ function renderCatalog(): void {
 // ── Community sources ─────────────────────────────────────────────────────────
 
 async function importFromFile(): Promise<void> {
-    const { pickFile } = await import('../../core/api.js');
-    const path = await pickFile([
+    const { pickFiles } = await import('../../core/api.js');
+    // SEVERAL. Somebody who has been sent a set of themes had to import them one at a time,
+    // reopening the picker for each — and the modal closed after the first one, so the
+    // picker had to be found again too.
+    const paths = await pickFiles([
         { name: 'BMM Theme (.bmmtheme / .json)', extensions: ['bmmtheme', 'zip', 'json'] },
         { name: 'All files', extensions: ['*'] },
-    ]);
-    if (!path) return;
-    try {
-        const raw: string = await invoke('import_theme', { path });
-        const theme: BmmTheme = JSON.parse(raw);
-        await installTheme(theme);
-        toast(`${t('themes.imported') || 'Imported'}: ${theme.name}`, 'success');
-        closeModal();
-        (window as any).openThemeEditor?.();
-    } catch (e) { toast(String(e), 'error'); }
+    ]).catch(() => null);
+    if (!paths?.length) return;
+
+    const ok: string[] = [];
+    const bad: string[] = [];
+    for (const path of paths) {
+        const base = String(path).replace(/^.*[/\\]/, '');
+        try {
+            const raw: string = await invoke('import_theme', { path });
+            const theme: BmmTheme = JSON.parse(raw);
+            await installTheme(theme);
+            ok.push(theme.name || base);
+        } catch { bad.push(base); }
+    }
+
+    // Named, not counted: "2 failed" out of nine leaves you diffing a folder by hand.
+    if (bad.length) {
+        toast(t('themes.importFailed').replace('{list}', bad.slice(0, 4).join(', ')), 'warning', 8000);
+    }
+    if (!ok.length) return;
+    toast(`${t('themes.imported') || 'Imported'}: ${ok.slice(0, 4).join(', ')}${ok.length > 4 ? '…' : ''}`, 'success');
+
+    // The catalogue stays open and redraws, so the imported themes appear in "Your themes"
+    // where they now have a section. It used to close and open the EDITOR instead, which is
+    // a different screen from the one the import was started on.
+    await fetchCatalog(true);
+    renderCatalog();
 }

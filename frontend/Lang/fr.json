@@ -541,7 +541,7 @@
   "themes.notATheme": "ce fichier n'est pas un thème",
   "themes.noInstalled": "Aucun thème installé. Importez-en un ou explorez le catalogue.",
   "themes.import": "⬆ Importer .bmmtheme",
-  "themes.importFile": "Importer un fichier .bmmtheme",
+  "themes.importFile": "Importer des fichiers .bmmtheme",
   "themes.addCommunity": "+ Source communautaire",
   "themes.communityUrlPrompt": "Entrez l'URL du catalog.json de thèmes communautaires :",
   "themes.noCatalog": "Aucun thème trouvé.",
@@ -8385,5 +8385,10 @@
   "detail.cid.missing.hint": "Utilise ↻ SHA pour le calculer",
   "detail.cid.declared.hint": "Depuis bmm.json",
   "detail.cid.precise.hint": "Empreinte du contenu — fiable",
-  "detail.cid.approximate.hint": "Chemin et taille seulement — utilise ↻ SHA pour un précis"
+  "detail.cid.approximate.hint": "Chemin et taille seulement — utilise ↻ SHA pour un précis",
+  "sched.tcb.addFile": "Ajouter un fichier .bmmpa…",
+  "sched.tcb.notTask": "{f} n’est pas une automatisation — laissé de côté",
+  "themes.mine": "Tes thèmes",
+  "themes.edit": "Modifier",
+  "themes.importFailed": "Import impossible : {list}"
 }

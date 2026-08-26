@@ -246,6 +246,21 @@ type AddedPack =
     | { kind: 'file'; id: string; name: string; path: string };
 let _added: AddedPack[] = [];
 
+/**
+ * What was chosen for each of YOUR packs, keyed by pack id.
+ *
+ * It lived in the DOM — the select's value and the box's text — and renderBuilder rebuilds
+ * every row from scratch. So adding a link, or a .bmp file, or anything else that redraws the
+ * list silently reset every mode and erased every address already typed. The work looked
+ * saved, because the rows were still there.
+ *
+ * Keyed by ID rather than by index for the same reason: the list is rebuilt from
+ * load_modpacks each time, and a row's position is not a promise.
+ */
+const _mode = new Map<string, { mode: 'embed' | 'link'; url: string }>();
+const _off = new Set<string>();
+const modeOf = (id: string) => _mode.get(id) || { mode: 'embed' as const, url: '' };
+
 async function renderBuilder(ov: HTMLElement): Promise<void> {
     const listEl = ov.querySelector('#mpc-b-list') as HTMLElement;
     let packs: any[] = [];
@@ -260,20 +275,26 @@ async function renderBuilder(ov: HTMLElement): Promise<void> {
     // Packed by default — a .bmp is a small signed JSON document, so carrying it is right
     // almost always. The alternative exists for the pack somebody already hosts: it should
     // not have to be copied in to be listed beside the others.
-    listEl.innerHTML = packs.map((p, i) => `
-      <div class="cat-pub-row" data-i="${i}">
+    listEl.innerHTML = packs.map((p, i) => {
+      const id = String(p.id || '');
+      const m = modeOf(id);
+      const on = !_off.has(id);
+      return `
+      <div class="cat-pub-row" data-i="${i}" data-id="${escAttr(id)}">
         <label class="cat-pub-pick">
-          <input type="checkbox" class="mpc-b-pick" data-i="${i}" checked style="flex:0 0 auto">
+          <input type="checkbox" class="mpc-b-pick" data-i="${i}"${on ? ' checked' : ''} style="flex:0 0 auto">
           <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px">${escHtml(p.name || '')}</span>
           <span style="flex:0 0 auto;font-size:10px;color:var(--text-muted)">${Array.isArray(p.mods) ? p.mods.length : 0} ${escHtml(t('modpack.cat.mods'))}</span>
         </label>
         <select class="input cat-pub-mode mpc-b-mode" data-i="${i}">
-          <option value="embed">${escHtml(t('catpub.embed'))}</option>
-          <option value="link">${escHtml(t('catpub.link'))}</option>
+          <option value="embed"${m.mode === 'embed' ? ' selected' : ''}>${escHtml(t('catpub.embed'))}</option>
+          <option value="link"${m.mode === 'link' ? ' selected' : ''}>${escHtml(t('catpub.link'))}</option>
         </select>
-        <input class="input cat-pub-url mpc-b-url" data-i="${i}" hidden spellcheck="false"
+        <input class="input cat-pub-url mpc-b-url" data-i="${i}"${m.mode === 'link' ? '' : ' hidden'}
+               spellcheck="false" value="${escAttr(m.url)}"
                placeholder="${escAttr(t('catpub.urlPh'))}">
-      </div>`).join('')
+      </div>`;
+    }).join('')
       // Always in, and with no picker: a hand-added row already said which of the two it is,
       // and offering to change it would be offering to throw the address away.
       + _added.map((a, j) => `
@@ -292,13 +313,27 @@ async function renderBuilder(ov: HTMLElement): Promise<void> {
         void renderBuilder(ov);
     }));
 
+    const idAt = (i: string) => String(packs[Number(i)]?.id || '');
     listEl.querySelectorAll<HTMLSelectElement>('.mpc-b-mode').forEach((sel) => sel.addEventListener('change', () => {
         const i = sel.dataset.i!;
+        const id = idAt(i);
+        _mode.set(id, { ...modeOf(id), mode: sel.value === 'link' ? 'link' : 'embed' });
         const box = listEl.querySelector(`.mpc-b-url[data-i="${CSS.escape(i)}"]`) as HTMLInputElement | null;
         if (box) box.hidden = sel.value !== 'link';
         // Saying HOW a pack should be published is saying you want it published.
+        _off.delete(id);
         const cb = listEl.querySelector(`.mpc-b-pick[data-i="${CSS.escape(i)}"]`) as HTMLInputElement | null;
         if (cb) cb.checked = true;
+    }));
+    // NOT re-rendered on input: renderBuilder rebuilds the list and would take the caret out
+    // of the box being typed into.
+    listEl.querySelectorAll<HTMLInputElement>('.mpc-b-url').forEach((box) => box.addEventListener('input', () => {
+        const id = idAt(box.dataset.i!);
+        _mode.set(id, { ...modeOf(id), url: box.value });
+    }));
+    listEl.querySelectorAll<HTMLInputElement>('.mpc-b-pick').forEach((cb) => cb.addEventListener('change', () => {
+        const id = idAt(cb.dataset.i!);
+        if (cb.checked) _off.delete(id); else _off.add(id);
     }));
 
     const exportBtn = ov.querySelector('#mpc-b-export') as HTMLButtonElement | null;
@@ -310,20 +345,18 @@ async function renderBuilder(ov: HTMLElement): Promise<void> {
             const ids: string[] = [];
             const links: Array<{ id: string; name: string; description: string; url: string }> = [];
             const bad: string[] = [];
-            listEl.querySelectorAll<HTMLInputElement>('.mpc-b-pick').forEach((box) => {
-                if (!box.checked) return;
-                const i = Number(box.dataset.i);
-                const p = packs[i];
-                if (!p) return;
-                const mode = (listEl.querySelector(`.mpc-b-mode[data-i="${CSS.escape(String(i))}"]`) as HTMLSelectElement | null)?.value;
-                if (mode !== 'link') { ids.push(p.id); return; }
-                const url = ((listEl.querySelector(`.mpc-b-url[data-i="${CSS.escape(String(i))}"]`) as HTMLInputElement | null)?.value || '').trim();
+            for (const p of packs) {
+                const id = String(p?.id || '');
+                if (!id || _off.has(id)) continue;
+                const { mode, url: typed } = modeOf(id);
+                if (mode !== 'link') { ids.push(p.id); continue; }
+                const url = typed.trim();
                 // Named, and refused. A pack set to link with no address would publish as a
                 // row nobody can follow, and dropping it silently publishes a shorter list
                 // than the one on screen.
-                if (!/^https?:\/\//i.test(url)) { bad.push(p.name || p.id); return; }
+                if (!/^https?:\/\//i.test(url)) { bad.push(p.name || p.id); continue; }
                 links.push({ id: String(p.id), name: String(p.name || p.id), description: String(p.description || ''), url });
-            });
+            }
             if (bad.length) {
                 toast(t('catpub.dropped').replace('{n}', String(bad.length)) + ' — ' + bad.slice(0, 3).join(' · '), 'warning', 8000);
             }
@@ -412,6 +445,8 @@ function close(): void {
     _overlay = null;
     // Not carried into the next open: what was staged belonged to that catalogue.
     _added = [];
+    _mode.clear();
+    _off.clear();
 }
 
 async function refresh(): Promise<void> {

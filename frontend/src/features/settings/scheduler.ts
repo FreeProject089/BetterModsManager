@@ -10,7 +10,7 @@
 // is here so it can reuse every existing invoke() action.
 
 import { sourceAccessHtml, wireSourceAccess } from '../../core/source-access.js';
-import { invoke } from '../../core/api.js';
+import { invoke, pickFiles } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { toast } from '../../ui/app.js';
@@ -5588,6 +5588,50 @@ let _catalogOpenToken = 0;
 export async function openTaskCatalogBuilder(): Promise<void> {
     const { openCatalogModal } = await import('../../ui/catalog-modal.js');
     let unsigned = 0;
+
+    /**
+     * Automations handed over as `.bmmpa` files rather than taken from your own list.
+     *
+     * Publishing on somebody else's behalf used to mean importing their automation first —
+     * which grants it nothing, but does put a task you did not write into your scheduler,
+     * with its permissions stripped, for you to remember to delete afterwards. Reading the
+     * file is not running it: it is parsed, checked for the shape a .bmmpa has, and the
+     * BYTES are copied at publish time. Nothing is imported and nothing executes.
+     *
+     * `_file` is what makes that work: writeEntry copies that file instead of re-exporting a
+     * task this machine does not have. It never reaches catalog.json, because the row is
+     * built by presetRow from the fields below.
+     */
+    type Candidate = Task & { _file?: string };
+    let handed: Candidate[] = [];
+    let firstCall = true;
+
+    const pickBmmpa = async (): Promise<Candidate[]> => {
+        const paths = await pickFiles([{ name: 'BMM automation', extensions: ['bmmpa', 'json'] }]).catch(() => null);
+        const out: Candidate[] = [];
+        for (const p of paths || []) {
+            const base = String(p).replace(/^.*[/\\]/, '');
+            try {
+                const doc = JSON.parse(await invoke('read_file_text', { path: p }) as string);
+                const first = Array.isArray(doc?.tasks) ? doc.tasks[0] : null;
+                // Checked when it is PICKED. A file that is not an automation must fail here,
+                // with its name, rather than produce a catalogue entry that installs nothing.
+                if (!first || typeof first !== 'object') {
+                    toast(t('sched.tcb.notTask').replace('{f}', base), 'warning', 7000);
+                    continue;
+                }
+                out.push({
+                    ...(first as Task),
+                    id: String(first.id || base),
+                    name: String(first.name || base.replace(/\.[^.]+$/, '')),
+                    _file: String(p),
+                });
+            } catch {
+                toast(t('sched.tcb.notTask').replace('{f}', base), 'warning', 7000);
+            }
+        }
+        return out;
+    };
     await openCatalogModal<Task>({
         id: 'preset',
         title: t('sched.tcb.title'),
@@ -5596,7 +5640,15 @@ export async function openTaskCatalogBuilder(): Promise<void> {
         feedField: 'presets',
         ext: 'bmmpa',
         fallbackNoun: 'automation',
-        candidates: async () => _tasks.slice(),
+        candidates: async () => {
+            // The first call is the screen opening: your own automations. Every call after it
+            // is the "add a file" button, so it asks for files and adds them to what is there.
+            if (firstCall) { firstCall = false; return _tasks.slice(); }
+            const more = await pickBmmpa();
+            handed = [...handed, ...more];
+            return more;
+        },
+        addMoreLabel: t('sched.tcb.addFile'),
         label: (task) => ({
             name: task.name || '',
             sub: `${(task.steps || []).length} ${t('sched.tcb.steps')}`,
@@ -5604,6 +5656,14 @@ export async function openTaskCatalogBuilder(): Promise<void> {
         entryId: (task) => task.id,
         writeEntry: async (task, dir, file) => {
             const sep = dir.includes('\\') ? '\\' : '/';
+            // A handed-over file is COPIED, signature and all. Re-exporting it would sign
+            // somebody else's automation with this machine's key, and collectIncludes cannot
+            // resolve sub-tasks and blocks that live on their machine, not this one.
+            const src = (task as Candidate)._file;
+            if (src) {
+                await invoke('copy_file', { src, dest: `${dir}${sep}${file}` });
+                return true;
+            }
             // Everything it calls, transitively — sub-tasks, blocks, launch packs, plugins.
             // The same collector a hand-export uses, so a published automation is not a
             // thinner thing than a shared one.

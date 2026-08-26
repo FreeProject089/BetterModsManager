@@ -323,7 +323,12 @@ export async function openCatalogModal<T>(spec: CatalogKindSpec<T>): Promise<voi
         const addressOf = new Map<string, string>(plan.rows.map((p) => [spec.entryId((p.item as any).item), p.address]));
 
         const slug = safeFileStem(name || spec.title, 'catalog');
-        const asBundle = output === 'bundle' && plan.embedded > 0;
+        // A bundle with nothing packed is normally not a bundle — it is a catalog.json
+        // somebody has to unzip first. The exception is a kind that can write its content
+        // INLINE: a theme catalogue whose themes are all in the document is already the
+        // whole thing, so asking for one file and being handed a different one instead is
+        // the screen overruling a choice that was not wrong.
+        const asBundle = output === 'bundle' && (plan.embedded > 0 || (!!spec.inlineMode && inline.size > 0));
         const outPath = (await saveFile(asBundle
             ? { defaultPath: `${slug}.bmmbundle`, filters: [{ name: t('catpub.bundleKind'), extensions: ['bmmbundle'] }] }
             : { defaultPath: `${slug}.json`, filters: [{ name: t('cm.jsonKind'), extensions: ['json'] }] })
