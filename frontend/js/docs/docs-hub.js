@@ -2822,6 +2822,21 @@ function onClick(e) {
         void playClip(clip);
         return;
     }
+    // Folding a sidebar box. Before [data-page], because the documentation list holds
+    // [data-page] buttons and a click on its header must not also open a page.
+    const fold = hit('[data-fold]');
+    if (fold) {
+        const which = fold.getAttribute('data-fold') || '';
+        const box = fold.closest('.dh-aside-box');
+        const now = !box?.classList.contains('is-folded');
+        box?.classList.toggle('is-folded', now);
+        fold.setAttribute('aria-expanded', String(!now));
+        try {
+            localStorage.setItem(`bmm_dh_fold_${which}`, String(now));
+        }
+        catch { /* preference only */ }
+        return;
+    }
     const pg = hit('[data-page]');
     if (pg) {
         void openPage(pg.getAttribute('data-page') || '');
@@ -2981,13 +2996,24 @@ function pageReaderView(path) {
           <button class="dh-rel dh-rel-ext" data-ext="${DOCS_SITE}${escapeHtml(path)}/">${svg('ext', 15)} ${tr({ en: 'Open on the site', fr: 'Ouvrir sur le site' })}</button>
         </div>
       </article>
+      <!-- Both boxes fold. On a long page the contents list and the whole documentation tree
+           are each taller than the viewport, so the aside scrolls independently of the
+           article and the second list is only reachable by scrolling past the first. Folded
+           state is remembered per box, because it is a preference about how you read, not
+           about which page you are on. -->
       <aside class="dh-aside">
-        <div class="dh-aside-box">
-          <div class="dh-aside-h">${tr({ en: 'On this page', fr: 'Sur cette page' })}</div>
+        <div class="dh-aside-box${asideFolded('toc') ? ' is-folded' : ''}" data-box="toc">
+          <button type="button" class="dh-aside-h" data-fold="toc"
+                  aria-expanded="${!asideFolded('toc')}">
+            <span>${tr({ en: 'On this page', fr: 'Sur cette page' })}</span><svg class="dh-fold-chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
           <div class="dh-toc" data-toc></div>
         </div>
-        <div class="dh-aside-box">
-          <div class="dh-aside-h">${tr({ en: 'Documentation', fr: 'Documentation' })}</div>
+        <div class="dh-aside-box${asideFolded('nav') ? ' is-folded' : ''}" data-box="nav">
+          <button type="button" class="dh-aside-h" data-fold="nav"
+                  aria-expanded="${!asideFolded('nav')}">
+            <span>${tr({ en: 'Documentation', fr: 'Documentation' })}</span><svg class="dh-fold-chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
           <div class="dh-nav">${navList(path)}</div>
         </div>
       </aside>
@@ -2995,6 +3021,15 @@ function pageReaderView(path) {
 }
 /** The whole documentation, grouped and in the site's order — the app's equivalent of the site's
  *  sidebar. Only shown when the window is wide enough to carry it (see .dh-reader in the CSS). */
+/** Is one of the reader's sidebar boxes folded? Open is the default for both. */
+function asideFolded(which) {
+    try {
+        return localStorage.getItem(`bmm_dh_fold_${which}`) === 'true';
+    }
+    catch {
+        return false;
+    }
+}
 function navList(current) {
     const pages = _manifest || [];
     const out = [];
