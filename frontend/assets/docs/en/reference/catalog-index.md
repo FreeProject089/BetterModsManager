@@ -40,7 +40,7 @@ improves what the preview can show you; none of it changes what happens.
 
 | Field | Required | Meaning |
 |---|---|---|
-| `type` | yes | `app`, `plugin`, `theme`, `preset` or `repo` |
+| `type` | yes | `app`, `plugin`, `theme`, `preset`, `modpack`, `repo`, `tutorial` or `list`. Anything else is dropped. |
 | `url` | yes | the catalogue itself, `http`/`https` only |
 | `app` | no | `bmm`, `bsm`, `installer` — which product it is for |
 | `name` `description` `owner` | no | shown in the preview |
@@ -87,8 +87,11 @@ missing value is not.
 | `app` | App Catalog → Sources |
 | `plugin` | Plugin catalogues |
 | `theme` | Theme catalogues |
-| `preset` | Scheduler → *From a catalogue…* |
+| `preset` | Scheduler → *My catalogues…* |
+| `modpack` | Modpacks → *Catalogues* |
 | `repo` | Browse Server-Repos |
+| `tutorial` | Tutorial hub → *Catalogues* |
+| `list` | Mod lists → *Catalogues…* — shared `.mm` lists |
 
 A `repo` entry points at a `repos.json`-shaped document — see
 [the repo format](doc-page:reference/repo-format). Entries it brings in are tagged **community** by BMM

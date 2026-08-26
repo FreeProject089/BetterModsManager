@@ -41,7 +41,7 @@ améliore ce que l'aperçu peut montrer ; rien de tout cela ne change ce qui se 
 
 | Champ | Obligatoire | Signification |
 |---|---|---|
-| `type` | oui | `app`, `plugin`, `theme`, `preset` ou `repo` |
+| `type` | oui | `app`, `plugin`, `theme`, `preset`, `modpack`, `repo`, `tutorial` ou `list`. Tout le reste est ignoré. |
 | `url` | oui | le catalogue lui-même, `http`/`https` uniquement |
 | `app` | non | `bmm`, `bsm`, `installer` — pour quel produit |
 | `name` `description` `owner` | non | affichés dans l'aperçu |
@@ -89,8 +89,11 @@ valeur manquante n'en est pas une.
 | `app` | Catalogue d'apps → Sources |
 | `plugin` | Catalogues de plugins |
 | `theme` | Catalogues de thèmes |
-| `preset` | Planificateur → *Depuis un catalogue…* |
+| `preset` | Planificateur → *Mes catalogues…* |
+| `modpack` | Modpacks → *Catalogues* |
 | `repo` | Parcourir les Server-Repos |
+| `tutorial` | Hub des tutoriels → *Catalogues* |
+| `list` | Listes de mods → *Catalogues…* — listes `.mm` partagées |
 
 Une entrée `repo` pointe vers un document de la forme `repos.json` — voir
 [le format de dépôt](doc-page:reference/repo-format.fr). Les entrées qu'elle amène sont taguées
