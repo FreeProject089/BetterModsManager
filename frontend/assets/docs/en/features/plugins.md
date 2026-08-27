@@ -29,7 +29,7 @@ for a release.
 
 ## What you can grant a plugin
 
-Twenty-four grants, in twelve domains, and each domain splits **read** from **write** —
+Twenty-six grants, in twelve domains, and each domain splits **read** from **write** —
 knowing is not the same permission as changing.
 
 | Domain | Read | Write |
@@ -46,6 +46,7 @@ knowing is not the same permission as changing.
 | Automations | list saved tasks | run one, arm or disarm one |
 | Hooks | see what has fired | fire one a task may be waiting on |
 | The app itself | — | restart BMM, change the open screen, benchmark, import a language |
+| Session recordings | list them, and export one — a recording shows the screen, paths and names included | start and stop recording, import one and play it, delete one |
 | Privacy | — | change what is recorded and what is sent |
 
 Grant the narrowest set that does the job. A plugin asking for `repo.write` when all it does
@@ -66,7 +67,7 @@ everything at once.
 !!! danger "The permission list itself is not something a plugin can touch"
 
     `PUT /api/apps/permissions/<id>` writes the grants, and it takes the **admin** token. A
-    plugin that could set its own permissions could grant itself all twenty-four, which would
+    plugin that could set its own permissions could grant itself all twenty-six, which would
     make this page a description of nothing.
 
 !!! tip "The API isn't only for plugins"
@@ -304,7 +305,7 @@ Two verbs stay in the open: **Compare** and **Apply**. Then three buttons that o
 
 | | |
 |---|---|
-| **Permissions** | The twenty-four grants, for THIS plugin, on its card. They lived on a settings screen listing every plugin at once. Ticking here **grants** — nothing is asked again afterwards. |
+| **Permissions** | The twenty-six grants, for THIS plugin, on its card. They lived on a settings screen listing every plugin at once. Ticking here **grants** — nothing is asked again afterwards. |
 | **Contents** | Everything the plugin holds: scripts, bundled folders, automations, assets, the lot. |
 | **Analyse** | What it would change if you applied it. |
 

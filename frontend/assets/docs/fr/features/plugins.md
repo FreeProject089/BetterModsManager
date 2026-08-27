@@ -29,7 +29,7 @@ version.
 
 ## Ce que vous pouvez accorder à un plugin
 
-Vingt-quatre autorisations, en douze domaines, et chaque domaine sépare **lecture** et
+Vingt-six autorisations, en douze domaines, et chaque domaine sépare **lecture** et
 **écriture** — savoir n'est pas la même permission que changer.
 
 | Domaine | Lecture | Écriture |
@@ -46,6 +46,7 @@ Vingt-quatre autorisations, en douze domaines, et chaque domaine sépare **lectu
 | Automatisations | lister les tâches enregistrées | en exécuter une, l'armer ou la désarmer |
 | Hooks | voir ce qui a sonné | en sonner un qu'une tâche attend peut-être |
 | L'application | — | redémarrer BMM, changer l'écran, benchmark, importer une langue |
+| Enregistrements de session | les lister, et en exporter un — un enregistrement montre l'écran, chemins et noms compris | démarrer et arrêter l'enregistrement, en importer un et le lire, en supprimer un |
 | Confidentialité | — | changer ce qui est enregistré et ce qui est envoyé |
 
 Accordez le minimum qui fait le travail. Un plugin qui demande `repo.write` alors qu'il ne
@@ -67,7 +68,7 @@ tout lire d'un coup.
 !!! danger "La liste des permissions n'est pas quelque chose qu'un plugin peut toucher"
 
     `PUT /api/apps/permissions/<id>` écrit les autorisations, et exige le jeton **admin**. Un
-    plugin capable de définir ses propres permissions pourrait s'accorder les vingt-quatre, ce
+    plugin capable de définir ses propres permissions pourrait s'accorder les vingt-six, ce
     qui ferait de cette page la description de rien.
 
 !!! tip "L'API n'est pas réservée aux plugins"
@@ -320,7 +321,7 @@ que demander :
 
 | | |
 |---|---|
-| **Permissions** | Les vingt-quatre autorisations, pour CE plugin, sur sa carte. Elles vivaient sur un écran de réglages listant tous les plugins d'un coup. Cocher ici **accorde** — plus rien n'est redemandé ensuite. |
+| **Permissions** | Les vingt-six autorisations, pour CE plugin, sur sa carte. Elles vivaient sur un écran de réglages listant tous les plugins d'un coup. Cocher ici **accorde** — plus rien n'est redemandé ensuite. |
 | **Contenu** | Tout ce que le plugin contient : scripts, dossiers embarqués, automatisations, assets, l'ensemble. |
 | **Analyser** | Ce qu'il changerait si tu l'appliquais. |
 

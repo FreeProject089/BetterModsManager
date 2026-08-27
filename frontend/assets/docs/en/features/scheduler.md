@@ -762,6 +762,18 @@ change, or it would hide the next real one.
     The step is shown, run whole, and whatever it returned appears in the variables like
     anything else.
 
+!!! tip "A protected source, from a task"
+
+    **Connect a repo**, **Sync repo** and **Follow a catalogue** each carry a *This source is
+    protected* block now — they used to offer a URL and nothing else, so a task pointed at a
+    protected repo opened the screen with an empty password box and waited for somebody who
+    is not there.
+
+    A **password** only, in those three. All three act through a `bmm://` link, and a link
+    able to name which identity key signs is a link choosing who you are to a server; the key
+    stays the active one. **Sync a server repo (unattended)** and **Import from a URL** are
+    the two that do the work themselves, so those offer the key and the passphrase as well.
+
 ## Checking what a file is before acting on it
 
 An automation that fetches something and then acts on it has one question first: **is what came

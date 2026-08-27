@@ -835,6 +835,19 @@ le nom, parce que c'est celle que la substitution utilisera.
     L'étape est montrée, exécutée entièrement, et ce qu'elle a renvoyé apparaît dans les
     variables comme le reste.
 
+!!! tip "Une source protégée, depuis une tâche"
+
+    **Connecter un dépôt**, **Synchroniser un dépôt** et **Suivre un catalogue** portent
+    désormais chacun un bloc *Cette source est protégée* — ils n'offraient qu'une URL, donc
+    une tâche pointée vers un dépôt protégé ouvrait l'écran avec un champ de mot de passe
+    vide et attendait quelqu'un qui n'est pas là.
+
+    Un **mot de passe** seulement, pour ces trois-là. Tous agissent via un lien `bmm://`, et
+    un lien capable de nommer quelle clé d'identité signe est un lien qui choisit qui vous
+    êtes pour un serveur ; la clé reste l'active. **Synchroniser un dépôt (sans surveillance)**
+    et **Importer depuis une URL** font le travail eux-mêmes, et proposent donc aussi la clé
+    et la phrase secrète.
+
 ## Vérifier ce qu'est un fichier avant d'agir dessus
 
 Une automatisation qui récupère quelque chose puis agit dessus a une question d'abord : **est-ce
