@@ -59,6 +59,7 @@ const KIND_LABEL: Record<string, string> = {
     modlist: 'repo.extras.kindModlist',
     bundle: 'repo.extras.kindBundle',
     catalog: 'repo.extras.kindCatalog',
+    modpack: 'repo.extras.kindModpack',
     app: 'repo.extras.kindApp',
 };
 
@@ -338,6 +339,22 @@ export async function collectExtraCandidates(): Promise<ExtraCandidate[]> {
         }
     } catch { /* see above */ }
 
+    // Modpacks. NOT an extra — they are a first-class manifest field with their own share
+    // rule — but they belong on this screen, which is "everything that is not a mod". They
+    // were only settable on the export form, so adding one to a repo published last month
+    // meant re-exporting every mod in it.
+    try {
+        const packs = await invoke('load_modpacks') as any[];
+        for (const p of packs || []) {
+            if (!p?.id) continue;
+            out.push({
+                kind: 'modpack', id: String(p.id), name: String(p.name || p.id),
+                description: p.description ? String(p.description) : undefined,
+                inline: p,
+            });
+        }
+    } catch { /* see above */ }
+
     // Catalogues followed here. TWO kinds, and the difference is the whole point:
     //
     //   · an https catalogue is RECOMMENDED — the repo names the address and the receiver
@@ -505,6 +522,27 @@ export async function openExtrasPicker(repoDirHint?: string): Promise<void> {
         }
     }
 
+    // Per-modpack share rule, seeded from what this repo already publishes so opening the
+    // screen and saving without touching anything leaves it exactly as it was.
+    const shareModes: Record<string, string> = {};
+    const whitelists: Record<string, string[]> = {};
+    try {
+        const current = await invoke('repo_modpacks_read', { repoDir }) as any[];
+        for (const sh of current || []) {
+            const id = String(sh?.modpack?.id || '');
+            if (!id) continue;
+            shareModes[id] = String(sh.share_mode || 'public');
+            if (Array.isArray(sh.custom_whitelist)) whitelists[id] = sh.custom_whitelist.map(String);
+            // Already published: ticked, like the extras it sits beside.
+            picked.add(`modpack:${id}`);
+            if (!candidates.some((c) => c.kind === 'modpack' && c.id === id)) {
+                // Shared by the repo but no longer on this machine. Kept rather than
+                // silently un-published, the same rule the extras use.
+                candidates.push({ kind: 'modpack', id, name: String(sh.modpack?.name || id), inline: sh.modpack });
+            }
+        }
+    } catch { /* no manifest yet, or none shared: an empty screen is the right answer */ }
+
     const ov = document.createElement('div');
     ov.className = 'cm-overlay';
     const draw = () => {
@@ -525,6 +563,18 @@ export async function openExtrasPicker(repoDirHint?: string): Promise<void> {
                                 <span class="repo-extras-name">${esc(c.name)}</span>
                                 ${c.version ? `<span class="repo-extras-meta">v${esc(c.version)}</span>` : ''}
                                 ${c.description ? `<span class="repo-extras-desc">${esc(c.description)}</span>` : ''}
+                                ${c.kind === 'modpack' ? `
+                                <span class="rx-share">
+                                    <select class="input input-sm rx-share-mode" data-id="${esc(c.id)}">
+                                        <option value="public"${(shareModes[c.id] || 'public') === 'public' ? ' selected' : ''}>${esc(t('modpack.sharePublic') || 'Public')}</option>
+                                        <option value="whitelist_repo"${shareModes[c.id] === 'whitelist_repo' ? ' selected' : ''}>${esc(t('modpack.shareWhitelistRepo') || 'Repo whitelist')}</option>
+                                        <option value="whitelist_custom"${shareModes[c.id] === 'whitelist_custom' ? ' selected' : ''}>${esc(t('modpack.shareWhitelistCustom') || 'Custom whitelist')}</option>
+                                    </select>
+                                    <input type="text" class="input input-sm rx-share-wl" data-id="${esc(c.id)}"
+                                        placeholder="${esc(t('modpack.shareWhitelistPh') || 'ids, comma separated')}"
+                                        value="${esc((whitelists[c.id] || []).join(', '))}"
+                                        ${shareModes[c.id] === 'whitelist_custom' ? '' : 'hidden'}>
+                                </span>` : ''}
                             </div>
                         </label>`;
                     }).join('')}
@@ -563,6 +613,22 @@ export async function openExtrasPicker(repoDirHint?: string): Promise<void> {
                 if (cb.checked) picked.add(k); else picked.delete(k);
             });
         });
+        ov.querySelectorAll<HTMLSelectElement>('.rx-share-mode').forEach((sel) => {
+            sel.addEventListener('change', () => {
+                const id = sel.dataset.id as string;
+                shareModes[id] = sel.value;
+                // The whitelist field only means something for one of the three modes, so it
+                // appears with it rather than sitting there greyed and unexplained.
+                const wl = ov.querySelector<HTMLInputElement>(`.rx-share-wl[data-id="${CSS.escape(id)}"]`);
+                if (wl) wl.hidden = sel.value !== 'whitelist_custom';
+            });
+        });
+        ov.querySelectorAll<HTMLInputElement>('.rx-share-wl').forEach((inp) => {
+            inp.addEventListener('input', () => {
+                whitelists[inp.dataset.id as string] =
+                    inp.value.split(',').map((x) => x.trim()).filter(Boolean);
+            });
+        });
         (ov.querySelector('#rx-save') as HTMLElement)?.addEventListener('click', save);
     };
 
@@ -574,8 +640,22 @@ export async function openExtrasPicker(repoDirHint?: string): Promise<void> {
         if (btn) { btn.disabled = true; btn.textContent = t('common.saving'); }
         try {
             const chosen = candidates.filter((c) => picked.has(`${c.kind}:${c.id}`));
-            const written = await applyExtrasToRepo(repoDir, chosen, true);
-            toast(t('repo.extras.applied').replace('{n}', String(written.length)), 'success', 6000);
+            // Two destinations, because they are two different things in the manifest: an
+            // extra is a file under `extras/` listed in `repo.extras`, a modpack is an entry
+            // in `repo.modpacks` with its own share rule. Both re-sign the manifest.
+            const packs = chosen.filter((c) => c.kind === 'modpack');
+            const extras = chosen.filter((c) => c.kind !== 'modpack');
+            const written = await applyExtrasToRepo(repoDir, extras, true);
+            const shares = packs.map((c) => ({
+                modpack: c.inline,
+                share_mode: shareModes[c.id] || 'public',
+                custom_whitelist: (shareModes[c.id] === 'whitelist_custom' && whitelists[c.id]?.length)
+                    ? whitelists[c.id] : null,
+            }));
+            // Sent even when empty: this screen shows the whole list and the user edits it, so
+            // unticking the last modpack has to mean the repo stops sharing it.
+            const nPacks = await invoke('repo_modpacks_apply', { repoDir, shares, replace: true }) as number;
+            toast(t('repo.extras.applied').replace('{n}', String(written.length + nPacks)), 'success', 6000);
             close();
         } catch (e) {
             toast(String(e), 'error', 9000);

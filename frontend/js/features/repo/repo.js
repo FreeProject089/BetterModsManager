@@ -2806,20 +2806,11 @@ export function initRepo() {
                             elements.exportStatus.textContent = t(step) || step;
                     });
                 }
-                const modpackCbs = document.querySelectorAll('.repo-modpack-cb:checked');
-                const modpacksShareConfig = Array.from(modpackCbs).map(cb => {
-                    const pack = JSON.parse(cb.dataset.pack);
-                    const item = cb.closest('.repo-modpack-item');
-                    const shareMode = item.querySelector('.repo-modpack-share-mode').value;
-                    const customWhitelistStr = item.querySelector('.repo-modpack-custom-whitelist').value;
-                    const customWhitelist = shareMode === 'whitelist_custom' ?
-                        customWhitelistStr.split(',').map(s => s.trim()).filter(s => s.length > 0) : null;
-                    return {
-                        modpack: pack,
-                        share_mode: shareMode,
-                        custom_whitelist: customWhitelist
-                    };
-                });
+                // Modpacks are chosen in "Include in the repo…" now, and written into the
+                // manifest by repo_modpacks_apply. Sending null here rather than an empty
+                // list on purpose: an export must not WIPE what that screen published, and
+                // the Rust side leaves the field alone when it is None.
+                const modpacksShareConfig = null;
                 let serverOptions = null;
                 if (elements.cbZipEnable && elements.cbZipEnable.checked) {
                     serverOptions = {

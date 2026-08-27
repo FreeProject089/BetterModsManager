@@ -9326,5 +9326,7 @@
   "sched.idof.hint": "The content id says WHAT the thing is, so the same pack on another machine gives the same answer. Compare it with textIs to check you have what you expect.",
   "sched.preset.packUnchanged": "Apply a modpack only if it has not changed",
   "sched.presetd.packUnchanged": "Reads what the pack IS and compares it to the id you recorded, so an edited pack stops rather than applying quietly. Fill in the modpack id and paste its Content ID from the card.",
-  "repo.hostLedeClose": "Hide this — “How does this work?” on step 1 brings it back"
+  "repo.hostLedeClose": "Hide this — “How does this work?” on step 1 brings it back",
+  "repo.extras.kindModpack": "Modpacks",
+  "modpack.shareWhitelistPh": "ids, comma separated"
 }

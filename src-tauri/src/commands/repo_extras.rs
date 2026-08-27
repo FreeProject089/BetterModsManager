@@ -636,3 +636,115 @@ mod tests {
         assert!(!out2[0].locked);
     }
 }
+
+/// Set which modpacks an ALREADY-EXPORTED repo shares.
+///
+/// A modpack is not an extra. It is a first-class manifest field — `repo.modpacks`, each
+/// entry carrying its share mode and whitelist — and it was only ever writable at export
+/// time, from a list on the export form. That made adding one to a repo published last month
+/// mean re-exporting every mod in it, which is the same reason the extras picker exists.
+///
+/// So: the same shape as `repo_extras_apply`, deliberately. Read the manifest, replace or
+/// merge, clear the old signature before signing so the signature covers the bytes a
+/// verifier will actually reconstruct, write it back.
+#[tauri::command]
+pub fn repo_modpacks_apply(
+    handle: tauri::AppHandle,
+    repo_dir: String,
+    shares: Vec<crate::models::repo::RepoModpackShare>,
+    // The picker shows the whole list and the user edits it, so it sends true. An
+    // "add these" caller sends false and entries merge by modpack id.
+    replace: bool,
+) -> Result<usize, String> {
+    let manifest_path = std::path::PathBuf::from(&repo_dir).join("repo.json");
+    let raw = std::fs::read_to_string(&manifest_path)
+        .map_err(|_| "repo.extras.errNoManifest".to_string())?;
+    let mut repo: crate::models::repo::ServerRepo =
+        serde_json::from_str(&raw).map_err(|e| format!("repo.extras.errManifest|{}", e))?;
+
+    let mut list = if replace {
+        Vec::new()
+    } else {
+        repo.modpacks.clone().unwrap_or_default()
+    };
+    for share in shares {
+        // By modpack id, so re-sending one with a changed share mode updates it rather than
+        // publishing the same pack twice under two rules.
+        list.retain(|e| e.modpack.id != share.modpack.id);
+        list.push(share);
+    }
+    let count = list.len();
+    // None rather than an empty array: a manifest that says `"modpacks": []` and one that
+    // says nothing are read the same way by every client, and the shorter one is honest
+    // about there being nothing to say.
+    repo.modpacks = if list.is_empty() { None } else { Some(list) };
+
+    repo.author_id = None;
+    repo.signature = None;
+    let payload = serde_json::to_string(&repo).map_err(|e| e.to_string())?;
+    let (author_id, signature) = crate::commands::security::sign_message(&handle, payload.as_bytes())?;
+    repo.author_id = Some(author_id);
+    repo.signature = Some(signature);
+
+    std::fs::write(
+        &manifest_path,
+        serde_json::to_string_pretty(&repo).map_err(|e| e.to_string())?,
+    )
+    .map_err(|e| format!("repo.extras.errWrite|{}", e))?;
+    Ok(count)
+}
+
+/// What an already-exported repo currently shares, so the picker can open on the truth.
+#[tauri::command]
+pub fn repo_modpacks_read(repo_dir: String) -> Result<Vec<crate::models::repo::RepoModpackShare>, String> {
+    let manifest_path = std::path::PathBuf::from(&repo_dir).join("repo.json");
+    let raw = std::fs::read_to_string(&manifest_path)
+        .map_err(|_| "repo.extras.errNoManifest".to_string())?;
+    let repo: crate::models::repo::ServerRepo =
+        serde_json::from_str(&raw).map_err(|e| format!("repo.extras.errManifest|{}", e))?;
+    Ok(repo.modpacks.unwrap_or_default())
+}
+
+#[cfg(test)]
+mod modpack_apply_tests {
+    use crate::models::repo::RepoModpackShare;
+
+    fn share(id: &str, mode: &str) -> RepoModpackShare {
+        let pack = crate::models::modpack::LocalModpack {
+            id: id.to_string(),
+            name: id.to_string(),
+            description: None,
+            created_at: String::new(),
+            updated_at: String::new(),
+            multi_profile: false,
+            dependency_mode: crate::models::modpack::DependencyMode::None,
+            skip_integrity_check: false,
+            mods: Vec::new(),
+            sr_link: None,
+            game_name: None,
+        };
+        RepoModpackShare { modpack: pack, share_mode: mode.to_string(), custom_whitelist: None }
+    }
+
+    /// The merge rule, without touching the disk: re-sending a pack REPLACES its entry.
+    fn merge(mut list: Vec<RepoModpackShare>, incoming: Vec<RepoModpackShare>) -> Vec<RepoModpackShare> {
+        for s in incoming {
+            list.retain(|e| e.modpack.id != s.modpack.id);
+            list.push(s);
+        }
+        list
+    }
+
+    #[test]
+    fn re_sending_a_pack_updates_it_rather_than_publishing_it_twice() {
+        let out = merge(vec![share("a", "public")], vec![share("a", "whitelist_repo")]);
+        assert_eq!(out.len(), 1, "one pack, one rule");
+        assert_eq!(out[0].share_mode, "whitelist_repo", "the new rule wins");
+    }
+
+    #[test]
+    fn a_different_pack_is_added_beside_it() {
+        let out = merge(vec![share("a", "public")], vec![share("b", "public")]);
+        assert_eq!(out.len(), 2);
+    }
+}

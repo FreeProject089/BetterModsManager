@@ -178,6 +178,22 @@ fn compute_local_chunk_hashes(path: &Path) -> Result<Vec<String>, String> {
     Ok(chunk_hashes)
 }
 
+/// Which modpack list an export should publish.
+///
+/// Supplied wins. `Some(vec![])` is a caller saying "share none", which is a decision and is
+/// honoured; only `None` — "I am not touching this" — falls back to what the repo already
+/// published. Pulled out of the command because the command needs Tauri state and this is
+/// the part that loses data when it is wrong.
+fn carry_modpacks(
+    supplied: Option<Vec<crate::models::repo::RepoModpackShare>>,
+    previous: Option<Vec<crate::models::repo::RepoModpackShare>>,
+) -> Option<Vec<crate::models::repo::RepoModpackShare>> {
+    match supplied {
+        Some(list) => Some(list),
+        None => previous,
+    }
+}
+
 #[tauri::command]
 pub async fn export_server_repo(
     window: Window,
@@ -223,19 +239,27 @@ pub async fn export_server_repo(
         fs::create_dir_all(&repo_mods_dir).map_err(|_| "repo.errCreateModDir".to_string())?;
     }
 
+    // What the PREVIOUS manifest said, for the fields an export does not rebuild.
+    //
+    // `ServerRepo::new` starts empty, so everything the "Include in the repo…" screen
+    // published — plugins, themes, automations, mod lists, catalogues, bundles, and the
+    // shared modpacks — was thrown away by the next export. That is data loss on the exact
+    // workflow that screen exists for: "adding something to a repo published months ago",
+    // then re-exporting when a mod changes.
+    //
+    // Only the seed was carried over, and only because losing it breaks every client at
+    // once. The rest fail quietly: the repo simply stops offering them and nobody is told.
+    let previous: Option<ServerRepo> = {
+        let manifest_path = output_path.join("repo.json");
+        fs::read_to_string(&manifest_path)
+            .ok()
+            .and_then(|c| serde_json::from_str::<ServerRepo>(&c).ok())
+    };
+
     // Determine the seed to use
     let mut final_seed = seed;
-    
-    // If no seed provided by user, try to recover existing one or generate new
     if final_seed.is_none() {
-        let manifest_path = output_path.join("repo.json");
-        if manifest_path.exists() {
-            if let Ok(content) = fs::read_to_string(&manifest_path) {
-                if let Ok(existing_repo) = serde_json::from_str::<ServerRepo>(&content) {
-                    final_seed = existing_repo.seed;
-                }
-            }
-        }
+        final_seed = previous.as_ref().and_then(|p| p.seed.clone());
     }
 
     let (mut repo, profiles_data, all_tags) = {
@@ -263,7 +287,16 @@ pub async fn export_server_repo(
             repo.author = Some(author_name.clone());
         }
 
-        repo.modpacks = modpacks_share_config;
+        // Supplied wins; otherwise keep what the repo already published. `Some(vec![])` is
+        // a caller saying "share none", which is a decision and is honoured — only `None`,
+        // meaning "I am not touching this", falls back.
+        repo.modpacks = carry_modpacks(
+            modpacks_share_config,
+            previous.as_ref().and_then(|p| p.modpacks.clone()),
+        );
+        // Never supplied by an export at all: extras are written by their own screen, and an
+        // export's job is the mods.
+        repo.extras = previous.as_ref().map(|p| p.extras.clone()).unwrap_or_default();
 
         let mut profiles_data = Vec::new();
         for pid in &profile_ids {
@@ -3943,6 +3976,17 @@ mod manifest_tests {
         }
     }
 
+    /// One shared modpack, for the carry-over tests.
+    fn share_of(id: &str) -> crate::models::repo::RepoModpackShare {
+        let mut p = pack(id, &[]);
+        p.id = id.to_string();
+        crate::models::repo::RepoModpackShare {
+            modpack: p,
+            share_mode: "public".to_string(),
+            custom_whitelist: None,
+        }
+    }
+
     fn pack(name: &str, refs: &[(&str, &str)]) -> crate::models::modpack::LocalModpack {
         crate::models::modpack::LocalModpack {
             id: format!("pack-{name}"),
@@ -3998,6 +4042,38 @@ mod manifest_tests {
         // reads as tampering to every client that verifies.
         assert_ne!(first.signature, second.signature);
         assert!(crate::commands::security::verify_repo_signature(second));
+    }
+
+    /// Re-exporting a repo used to throw away everything the extras screen had published.
+    ///
+    /// Only the seed was carried across, and only because losing it breaks every client at
+    /// once. Modpacks and extras failed quietly instead: the repo simply stopped offering
+    /// them and nobody was told — on the exact workflow the "Include in the repo…" screen
+    /// exists for, which is adding something to a repo published months ago.
+    #[test]
+    fn an_export_that_says_nothing_about_modpacks_keeps_the_ones_already_published() {
+        let existing = vec![share_of("a")];
+        let out = super::carry_modpacks(None, Some(existing.clone()));
+        assert_eq!(out.unwrap().len(), 1, "silence must not un-publish");
+    }
+
+    #[test]
+    fn sharing_none_is_a_decision_and_is_honoured() {
+        // `Some(vec![])` is somebody saying "share no modpacks", which is different from
+        // saying nothing at all. Folding the two together would make "remove them" impossible.
+        let out = super::carry_modpacks(Some(vec![]), Some(vec![share_of("a")]));
+        assert!(out.unwrap().is_empty());
+    }
+
+    #[test]
+    fn what_is_supplied_replaces_what_was_there() {
+        let out = super::carry_modpacks(
+            Some(vec![share_of("new")]),
+            Some(vec![share_of("old")]),
+        );
+        let list = out.unwrap();
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].modpack.id, "new");
     }
 
     #[test]

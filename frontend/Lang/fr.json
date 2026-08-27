@@ -9324,5 +9324,7 @@
   "sched.idof.hint": "L'id de contenu dit CE QU'EST la chose : le même pack sur une autre machine donne la même réponse. Comparez-le avec textIs pour vérifier que vous avez ce que vous attendez.",
   "sched.preset.packUnchanged": "Appliquer un modpack seulement s'il n'a pas changé",
   "sched.presetd.packUnchanged": "Lit ce que le pack EST et le compare à l'id que vous avez noté, pour qu'un pack modifié s'arrête au lieu de s'appliquer en silence. Renseignez l'id du modpack et collez son Content ID depuis sa carte.",
-  "repo.hostLedeClose": "Masquer — « Comment ça marche ? » à l'étape 1 le ramène"
+  "repo.hostLedeClose": "Masquer — « Comment ça marche ? » à l'étape 1 le ramène",
+  "repo.extras.kindModpack": "Modpacks",
+  "modpack.shareWhitelistPh": "ids, séparés par des virgules"
 }

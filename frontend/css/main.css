@@ -19648,3 +19648,9 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
     cursor: pointer;
 }
 .repo-host-lede-x:hover { background: var(--bmm-s05); color: var(--text-primary); }
+
+/* A modpack row in the extras picker carries a share rule; the other kinds do not. */
+.rx-share { display: flex; align-items: center; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+.rx-share .rx-share-mode { font-size: 11px; padding: 3px 7px; flex: 0 0 auto; }
+.rx-share .rx-share-wl { font-size: 11px; padding: 3px 7px; flex: 1 1 160px; min-width: 0; }
+.rx-share .rx-share-wl[hidden] { display: none; }

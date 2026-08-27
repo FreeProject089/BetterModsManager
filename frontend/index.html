@@ -1370,15 +1370,12 @@
                                         </div>
                                     </div>
 
-                                    <div class="form-group" style="margin-bottom:12px;">
-                                        <label class="form-label" data-i18n="modpack.shareTitle">Partager des Modpacks
-                                            (Optionnel)</label>
-                                        <div id="repo-export-modpacks-list"
-                                            style="max-height:130px;overflow-y:auto;background:var(--bmm-bg-base);border-radius:8px;padding:10px;border:1px solid var(--bmm-s08);display:flex;flex-direction:column;gap:7px;">
-                                            <div style="color:var(--text-muted);font-size:12px;text-align:center;"
-                                                data-i18n="modpack.loadingModpacks">Chargement des modpacks...</div>
-                                        </div>
-                                    </div>
+                                    <!-- "Partager des Modpacks" used to live here, as a list on
+                                         the export form. It moved into "Include in the repo…",
+                                         beside the plugins, themes, automations, mod lists and
+                                         catalogues — which is the same question and was already
+                                         a screen. Keeping it here meant a modpack could only be
+                                         added while re-exporting every mod. -->
 
                                     <div class="form-group" style="margin-bottom:6px;">
                                         <label class="form-label" style="margin-bottom:4px;"

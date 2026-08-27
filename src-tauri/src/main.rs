@@ -906,6 +906,8 @@ fn main() {
             commands::format_check::bmm_validate,
             commands::content_ids::content_id_of,
             commands::content_ids::content_id_from,
+            commands::repo_extras::repo_modpacks_apply,
+            commands::repo_extras::repo_modpacks_read,
             commands::apps::catalog_probe_url,
             commands::apps::catalog_probe_file,
             commands::plugins::get_effective_api_port,
