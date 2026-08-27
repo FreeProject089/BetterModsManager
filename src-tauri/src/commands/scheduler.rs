@@ -681,6 +681,101 @@ fn sanitize_task_id(id: &str) -> String {
     id.chars().filter(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_')).collect()
 }
 
+/// The PowerShell that registers one task, as a string.
+///
+/// Pulled out of `register_os_schedule` so it can be checked without a running app. The
+/// quoting is the part that goes wrong and the part nothing could see: the deep link is
+/// wrapped in DOUBLE quotes inside a PowerShell SINGLE-quoted argument, because the OS
+/// splits `-Argument` on whitespace otherwise and `bmm://schedule/run?id=x&k=y` would
+/// arrive as several argv entries — or, with `&` unquoted, as a command separator.
+///
+/// Every caller-supplied piece is already narrowed by the time it gets here: `exe` has its
+/// single quotes doubled, `id` is `sanitize_task_id`'d, and `key` is filtered to
+/// alphanumerics and dashes. This function does no escaping of its own, on purpose — two
+/// layers of escaping in two places is how one of them ends up doing it twice.
+fn build_register_script(exe: &str, id: &str, key: &str, trigger_expr: &str, task_name: &str) -> String {
+    format!(
+        "$ErrorActionPreference='Stop'; \
+         $a = New-ScheduledTaskAction -Execute '{exe}' -Argument '\"bmm://schedule/run?id={id}&k={key}\"'; \
+         $t = {trig}; \
+         $s = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries; \
+         Register-ScheduledTask -TaskName '{name}' -Action $a -Trigger $t -Settings $s -Force | Out-Null",
+        exe = exe, id = id, key = key, trig = trigger_expr, name = task_name
+    )
+}
+
+#[cfg(test)]
+mod os_schedule_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn the_deep_link_survives_two_layers_of_quoting() {
+        let sc = build_register_script("C:\\BMM\\bmm.exe", "sched-1", "abc-123", "$TRIG", "BMM_sched-1");
+        // One argv, and the `&` inside it must not read as a command separator.
+        assert!(sc.contains(r#"-Argument '"bmm://schedule/run?id=sched-1&k=abc-123"'"#), "{sc}");
+    }
+
+    #[test]
+    fn the_key_is_in_the_link_at_all() {
+        // The whole point of the key: an OS task carries it, a page the user clicked does
+        // not. A registration that omitted it would produce tasks the app then refuses,
+        // which is what the one-time re-registration exists to repair.
+        let sc = build_register_script("x", "sched-9", "K", "$T", "BMM_sched-9");
+        assert!(sc.contains("&k=K"), "{sc}");
+    }
+
+    #[test]
+    fn an_id_that_could_break_out_never_reaches_the_script() {
+        // sanitize_task_id runs first in the caller; this pins what it removes.
+        // `-` and `_` are kept — a task id is `sched-<millis>`. Everything a shell could
+        // read as syntax is not.
+        assert_eq!(sanitize_task_id("sched-1'; rm -rf /; '"), "sched-1rm-rf");
+        assert_eq!(sanitize_task_id("../../evil"), "evil");
+    }
+
+    #[test]
+    fn every_trigger_the_editor_offers_produces_an_expression() {
+        // A trigger with no expression is a task the user armed and that never registers.
+        for t in [
+            json!({ "type": "interval", "everyMinutes": 30 }),
+            json!({ "type": "hourly", "everyHours": 2 }),
+            json!({ "type": "dailyAt", "time": "03:00" }),
+            json!({ "type": "weeklyAt", "time": "08:00", "days": [1] }),
+            json!({ "type": "monthlyAt", "day": 1, "time": "00:00" }),
+            json!({ "type": "once", "at": "2030-01-01T09:00" }),
+            json!({ "type": "appStart" }),
+        ] {
+            let r = build_trigger_expr(&t);
+            assert!(r.is_ok(), "{t} produced no trigger expression: {r:?}");
+            assert!(!r.unwrap().trim().is_empty());
+        }
+    }
+
+    #[test]
+    fn app_start_becomes_at_logon_rather_than_being_refused() {
+        // The one mapping worth writing down, because it is a decision and not an
+        // equivalence: the OS cannot mirror "when BMM starts" — it would have to launch BMM
+        // to notice BMM launched — so it fires at logon, which is when BMM starts for
+        // anybody who has it starting with Windows.
+        assert_eq!(build_trigger_expr(&json!({ "type": "appStart" })).unwrap(),
+                   "New-ScheduledTaskTrigger -AtLogOn");
+    }
+
+    #[test]
+    fn a_trigger_the_os_cannot_mirror_says_so_rather_than_registering_nothing() {
+        // Silence here would arm a task in the app that the OS never runs.
+        for t in [
+            json!({ "type": "manual" }),
+            json!({ "type": "watchFile", "path": "C:/x.log" }),
+            json!({ "type": "onEvent", "event": "bmm.mod.missing" }),
+            json!({ "type": "weeklyAt", "time": "08:00", "days": [] }),
+        ] {
+            assert!(build_trigger_expr(&t).is_err(), "{t} should be refused");
+        }
+    }
+}
+
 fn ps_day_name(n: i64) -> Option<&'static str> {
     Some(match n {
         0 => "Sunday", 1 => "Monday", 2 => "Tuesday", 3 => "Wednesday",
@@ -781,15 +876,7 @@ pub fn register_os_schedule(
     let exe_str = exe.to_string_lossy().replace('\'', "''"); // PS single-quote escape
     let trigger_expr = build_trigger_expr(&trigger)?;
 
-    // -Argument is the bmm:// deep link, double-quoted so the OS passes it as one argv.
-    let script = format!(
-        "$ErrorActionPreference='Stop'; \
-         $a = New-ScheduledTaskAction -Execute '{exe}' -Argument '\"bmm://schedule/run?id={id}&k={key}\"'; \
-         $t = {trig}; \
-         $s = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries; \
-         Register-ScheduledTask -TaskName '{name}' -Action $a -Trigger $t -Settings $s -Force | Out-Null",
-        exe = exe_str, id = safe_id, key = key, trig = trigger_expr, name = task_name
-    );
+    let script = build_register_script(&exe_str, &safe_id, &key, &trigger_expr, &task_name);
 
     let out = crate::commands::proc::hidden_command("powershell")
         .args(["-NoProfile", "-NonInteractive", "-Command", &script])
