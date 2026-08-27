@@ -19402,3 +19402,50 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
     color: var(--text-muted);
     border-style: dashed;
 }
+
+
+/* Create-a-catalog: reopening one, and what is wrong with it. */
+.apps-create-open {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px 8px;
+    margin-top: 10px;
+}
+.apps-create-open-url { flex: 1 1 220px; min-width: 0; font-size: 11px; }
+
+.apps-create-app-facts {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-left: 8px;
+}
+.apps-tag-bad {
+    color: var(--warning);
+    border-color: color-mix(in srgb, var(--warning) 45%, transparent);
+    background: color-mix(in srgb, var(--warning) 10%, transparent);
+}
+
+/* Reported, never blocking — it is the author's document. */
+.apps-create-problems {
+    margin: 12px 0;
+    padding: 10px 13px;
+    border: 1px solid color-mix(in srgb, var(--warning) 35%, transparent);
+    border-radius: 9px;
+    background: color-mix(in srgb, var(--warning) 7%, transparent);
+}
+.apps-create-problems-h {
+    display: block;
+    margin-bottom: 5px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--warning);
+}
+.apps-create-problems ul {
+    margin: 0;
+    padding-left: 18px;
+    font-size: 11.5px;
+    line-height: 1.5;
+    color: var(--text-secondary);
+}

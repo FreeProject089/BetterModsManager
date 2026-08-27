@@ -12,6 +12,20 @@ import { t, applyTranslations } from '../../core/i18n.js';
 import { escHtml } from '../../core/utils.js';
 import { dispatchBmmAction, BMM_ACTIONS } from '../../ui/tutorial-events.js';
 
+/**
+ * `Cropper` is a real global, set by `<script src="assets/cropper/cropper.min.js">` in
+ * index.html — not a typo for the local `cropper` variable three lines below it.
+ *
+ * Declared because check-undefined-names.mjs now reads TS2552 as well as TS2304, and 2552
+ * is the code TypeScript uses when a SIMILAR name is in scope: it suggested `cropper` and
+ * flagged this as undefined. Saying what it is beats teaching the gate to ignore it.
+ */
+declare const Cropper: new (el: HTMLElement, opts: Record<string, unknown>) => {
+    getCroppedCanvas: (opts?: Record<string, unknown>) => HTMLCanvasElement;
+    destroy: () => void;
+};
+
+
 window.pendingBgState = { action: null, tmpPath: null }; // Tracks 'apply', 'remove', or null
 let selectedGlobalModIds = new Set();
 let selectedProfileIds = new Set();

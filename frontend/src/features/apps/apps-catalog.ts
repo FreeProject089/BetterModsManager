@@ -6,6 +6,8 @@ import { t } from '../../core/i18n.js';
 import {
     readOrigins, originLabel, forgetOrigin, enabledOnly, isDisabled, setDisabled, recordHistory,
     looksLikeIndex, importIndexForType, describeKinds } from '../catalogs/catalog-index.js';
+import { showConfirm } from '../../ui/confirm.js';
+import { draftFromCatalog as parseCatalog, draftProblems as problemsOf } from './catalog-draft.js';
 import { writeSources } from '../catalogs/catalog-sources.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { getLinks } from '../../core/links-config.js';
@@ -1128,17 +1130,70 @@ interface CatalogDraft {
     apps: Partial<AppEntry>[];
 }
 
+const DRAFT_KEY = 'bmm_apps_catalog_draft';
+
+/**
+ * The catalogue being built.
+ *
+ * Kept on disk between sessions. It was a module-level variable, so closing BMM threw away
+ * a catalogue somebody had been assembling entry by entry — and each entry takes a URL, a
+ * size and a checksum, which is not work anybody wants to do twice.
+ */
 let _draft: CatalogDraft = { name: '', description: '', partner_catalogs: [], community_imports: [], apps: [] };
+
+function loadDraft(): void {
+    try {
+        const raw = localStorage.getItem(DRAFT_KEY);
+        if (!raw) return;
+        const d = JSON.parse(raw);
+        if (d && Array.isArray(d.apps)) {
+            _draft = {
+                name: String(d.name || ''), description: String(d.description || ''),
+                partner_catalogs: d.partner_catalogs || [], community_imports: d.community_imports || [],
+                apps: d.apps,
+            };
+        }
+    } catch { /* a draft that will not parse is one to start again from, not to crash on */ }
+}
+
+/** Parse a catalogue document into the draft, and keep it. Returns how many came in. */
+function intoDraft(json: any): number {
+    _draft = parseCatalog(json) as CatalogDraft;
+    saveDraft();
+    return _draft.apps.length;
+}
+
+function saveDraft(): void {
+    try { localStorage.setItem(DRAFT_KEY, JSON.stringify(_draft)); } catch { /* quota, private mode */ }
+}
+
+/** True once the stored draft has been read, so switching tabs does not re-read it over
+ *  edits made since. */
+let _draftLoaded = false;
 
 function renderCreate() {
     const content = document.getElementById('apps-content');
     if (!content) return;
+    if (!_draftLoaded) { _draftLoaded = true; loadDraft(); }
+    const problems = problemsOf(_draft, (k, f) => t(k) || f);
 
     content.innerHTML = `
     <div class="apps-create-wrap">
       <div class="apps-create-header">
         <h3>${t('apps.create.title')||'Create a Catalog'}</h3>
         <p class="apps-sources-desc">${t('apps.create.desc')||'Build a catalog.json to share with others or host on GitHub.'}</p>
+        <!-- Reopening one. The screen could only build from nothing, so publishing a
+             catalogue was a one-way trip: a typo in one entry meant reassembling all of
+             them by hand, each with a URL, a size and a checksum. -->
+        <div class="apps-create-open">
+          <button class="btn btn-xs btn-secondary" id="cr-open-file">${IC.folder} ${escHtml(t('apps.create.openFile') || 'Open a catalog.json…')}</button>
+          <input class="apps-source-input apps-create-open-url" id="cr-open-url-input" type="text"
+                 placeholder="${escAttr(t('apps.create.openUrlPh') || 'https://…/catalog.json')}">
+          <button class="btn btn-xs btn-ghost" id="cr-open-url">${escHtml(t('apps.create.openUrl') || 'From a URL')}</button>
+          ${_draft.apps.length || _draft.name
+            ? `<button class="btn btn-xs btn-ghost btn-danger-ghost" id="cr-clear">${escHtml(t('apps.create.clear') || 'Start again')}</button>`
+            : ''}
+        </div>
       </div>
 
       <div class="apps-create-section">
@@ -1158,13 +1213,33 @@ function renderCreate() {
           <div class="apps-create-app-row">
             <span class="apps-create-app-id">${escHtml(app.id||'untitled')}</span>
             <span style="color:var(--text-muted);font-size:11px">${escHtml(app.title||'')}</span>
+            <!-- The row said id and title. Auditing your own catalogue meant opening every
+                 entry to see whether it had a URL and a checksum at all. -->
+            <span class="apps-create-app-facts">
+              ${app.category ? `<span class="apps-tag">${escHtml(catLabel(app.category))}</span>` : ''}
+              ${app.price ? `<span class="apps-tag">${escHtml(priceLabel(app.price))}</span>` : ''}
+              ${((app as any).download?.sha256 || '').trim()
+                ? `<span class="apps-tag apps-tag-sha">${escHtml(t('apps.shaYes') || 'checksum')}</span>`
+                : `<span class="apps-tag apps-tag-nosha">${escHtml(t('apps.shaNo') || 'unverified')}</span>`}
+              ${((app as any).download?.url || '').trim()
+                ? ''
+                : `<span class="apps-tag apps-tag-bad">${escHtml(t('apps.create.pbNoUrlShort') || 'no URL')}</span>`}
+            </span>
             <div style="display:flex;gap:6px;margin-left:auto">
-              <button class="btn btn-xs btn-ghost" data-cr-edit="${i}">Edit</button>
+              <button class="btn btn-xs btn-ghost" data-cr-edit="${i}">${escHtml(t('common.edit') || 'Edit')}</button>
               <button class="btn btn-xs btn-ghost btn-danger-ghost" data-cr-del="${i}">${IC.trash}</button>
             </div>
           </div>`).join('') || `<p style="color:var(--text-muted);font-size:12px">${t('apps.create.noApps')||'No apps yet — click Add app'}</p>`}
         </div>
       </div>
+
+      <!-- Said before the export, not after somebody follows it. Never blocking: it is a
+           document, and a document with a problem in it is still the author's to publish. -->
+      ${problems.length ? `
+      <div class="apps-create-problems">
+        <span class="apps-create-problems-h">${escHtml((t('apps.create.problems') || '{n} thing(s) to look at').replace('{n}', String(problems.length)))}</span>
+        <ul>${problems.map(p => `<li>${escHtml(p)}</li>`).join('')}</ul>
+      </div>` : ''}
 
       <div class="apps-create-actions">
         <button class="btn btn-ghost" id="cr-preview">${t('apps.create.preview')||'Preview JSON'}</button>
@@ -1194,8 +1269,44 @@ function renderCreate() {
     });
 
     // Sync name/desc inputs to draft
-    document.getElementById('cr-name')?.addEventListener('input', e => { _draft.name = (e.target as HTMLInputElement).value; });
-    document.getElementById('cr-desc')?.addEventListener('input', e => { _draft.description = (e.target as HTMLInputElement).value; });
+    document.getElementById('cr-name')?.addEventListener('input', e => { _draft.name = (e.target as HTMLInputElement).value; saveDraft(); });
+    document.getElementById('cr-desc')?.addEventListener('input', e => { _draft.description = (e.target as HTMLInputElement).value; saveDraft(); });
+
+    {
+        // The failure carries a KEY, so it reaches the reader in their language rather than
+        // as `apps.create.errNoApps` in both.
+        const blame = (e: unknown) => {
+            const key = String(e).replace(/^Error:\s*/, '').split('|')[0].trim();
+            toast(key.startsWith('apps.create.') ? (t(key) || key) : String(e), 'error', 7000);
+        };
+        const took = (n: number) => {
+            toast((t('apps.create.opened') || 'Opened — {n} app(s)').replace('{n}', String(n)), 'success');
+            renderCreate();
+        };
+        document.getElementById('cr-open-file')?.addEventListener('click', async () => {
+            const picked = await pickFile({ filters: [{ name: 'catalog.json', extensions: ['json'] }] }).catch(() => null);
+            if (!picked) return;
+            try { took(intoDraft(JSON.parse(await invoke('read_file_text', { path: picked }) as string))); }
+            catch (e) { blame(e); }
+        });
+        document.getElementById('cr-open-url')?.addEventListener('click', async () => {
+            const url = (document.getElementById('cr-open-url-input') as HTMLInputElement)?.value.trim() || '';
+            if (!url.startsWith('http')) { toast(t('apps.sources.invalidUrl') || 'Invalid URL', 'error'); return; }
+            try { took(intoDraft(JSON.parse(await fetchSourceText(url)))); }
+            catch (e) { blame(e); }
+        });
+        document.getElementById('cr-clear')?.addEventListener('click', async () => {
+            const ok = await showConfirm(
+                t('apps.create.clear') || 'Start again',
+                (t('apps.create.clearBody') || 'This throws away the draft — {n} entr(ies). Export it first if you want to keep it.').replace('{n}', String(_draft.apps.length)),
+                true,
+            );
+            if (!ok) return;
+            _draft = { name: '', description: '', partner_catalogs: [], community_imports: [], apps: [] };
+            saveDraft();
+            renderCreate();
+        });
+    }
 
     // Add app
     document.getElementById('cr-add-app')?.addEventListener('click', () => openAppEditor(null));
@@ -1208,6 +1319,7 @@ function renderCreate() {
         btn.addEventListener('click', () => {
             const i = parseInt((btn as HTMLElement).dataset.crDel!);
             _draft.apps.splice(i, 1);
+            saveDraft();
             renderCreate();
         });
     });
@@ -1388,6 +1500,7 @@ function openAppEditor(index: number | null) {
 
         if (index !== null) _draft.apps[index] = app;
         else _draft.apps.push(app);
+        saveDraft();
 
         document.getElementById('cr-app-modal')!.classList.remove('open');
         renderCreate();

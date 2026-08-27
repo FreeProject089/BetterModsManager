@@ -9271,5 +9271,19 @@
   "apps.shaYes": "checksum",
   "apps.shaYesTip": "The catalogue publishes a checksum for the download. It is verified before anything is run.",
   "apps.shaNo": "unverified",
-  "apps.shaNoTip": "No checksum published. The download cannot be verified — BMM will warn you before installing."
+  "apps.shaNoTip": "No checksum published. The download cannot be verified — BMM will warn you before installing.",
+  "apps.create.openFile": "Open a catalog.json…",
+  "apps.create.openUrl": "From a URL",
+  "apps.create.openUrlPh": "https://…/catalog.json",
+  "apps.create.opened": "Opened — {n} app(s)",
+  "apps.create.clear": "Start again",
+  "apps.create.clearBody": "This throws away the draft — {n} entr(ies). Export it first if you want to keep it.",
+  "apps.create.errNotJson": "That file is not JSON.",
+  "apps.create.errNoApps": "No `apps` array in there — that looks like a plugin or theme catalogue, which is a different screen.",
+  "apps.create.problems": "{n} thing(s) to look at",
+  "apps.create.pbNoId": "An entry has no id.",
+  "apps.create.pbNoUrl": "{id}: no download URL — every reader drops this entry silently.",
+  "apps.create.pbNoUrlShort": "no URL",
+  "apps.create.pbNoTitle": "{id}: no title.",
+  "apps.create.pbDupe": "{id} appears {n} times — two entries with one id fight over one install record."
 }

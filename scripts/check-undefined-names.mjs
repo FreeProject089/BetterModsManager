@@ -59,7 +59,17 @@ host.getSourceFile = (f, lang, onErr, shouldCreate) => {
 
 const program = ts.createProgram(parsed.fileNames, { ...parsed.options, noEmit: true }, host);
 
-const CANNOT_FIND_NAME = 2304;
+// FOUR codes, not one, and the missing three were the common case.
+//
+// TypeScript reports 2304 for a name it cannot resolve — unless a similar name is in scope,
+// in which case it reports 2552, "Cannot find name 'X'. Did you mean 'Y'?". That is exactly
+// the shape of the bug this gate exists for: a typo, a renamed export, a helper somebody
+// forgot to import next to a sibling with a near-identical name. The gate matched only 2304
+// and reported clean on a file calling `showConfirmZZZ`, verified by trying it.
+//
+// 2662 and 2663 are the same failure inside a class — the name resolves to a member that
+// needs `this.` or the class name. All four end the same way at run time: ReferenceError.
+const CANNOT_FIND_NAME = new Set([2304, 2552, 2662, 2663]);
 
 // Two kinds of "cannot find name" cannot throw at runtime, and reporting them would make
 // this gate fail on correct code — which is how a gate gets deleted. Both were found by
@@ -88,7 +98,7 @@ for (const f of suppressed) {
   if (!sf) continue;
   const text = sf.getFullText();
   for (const d of program.getSemanticDiagnostics(sf)) {
-    if (d.code !== CANNOT_FIND_NAME) continue;
+    if (!CANNOT_FIND_NAME.has(d.code)) continue;
     const pos = d.start ?? 0;
     const name = text.slice(pos, pos + (d.length ?? 0));
     if (new RegExp(`typeof\\s+${name}\\b`).test(text)) continue;

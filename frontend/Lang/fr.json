@@ -9269,5 +9269,19 @@
   "apps.shaYes": "vérifiable",
   "apps.shaYesTip": "Le catalogue publie une somme de contrôle pour le téléchargement. Elle est vérifiée avant que quoi que ce soit ne s'exécute.",
   "apps.shaNo": "non vérifiable",
-  "apps.shaNoTip": "Aucune somme de contrôle publiée. Le téléchargement ne peut pas être vérifié — BMM vous avertira avant d'installer."
+  "apps.shaNoTip": "Aucune somme de contrôle publiée. Le téléchargement ne peut pas être vérifié — BMM vous avertira avant d'installer.",
+  "apps.create.openFile": "Ouvrir un catalog.json…",
+  "apps.create.openUrl": "Depuis une URL",
+  "apps.create.openUrlPh": "https://…/catalog.json",
+  "apps.create.opened": "Ouvert — {n} application(s)",
+  "apps.create.clear": "Recommencer",
+  "apps.create.clearBody": "Ceci jette le brouillon — {n} entrée(s). Exportez-le d'abord si vous voulez le garder.",
+  "apps.create.errNotJson": "Ce fichier n'est pas du JSON.",
+  "apps.create.errNoApps": "Pas de tableau `apps` là-dedans — ça ressemble à un catalogue de plugins ou de thèmes, qui est un autre écran.",
+  "apps.create.problems": "{n} chose(s) à regarder",
+  "apps.create.pbNoId": "Une entrée n'a pas d'id.",
+  "apps.create.pbNoUrl": "{id} : pas d'URL de téléchargement — chaque lecteur écarte cette entrée en silence.",
+  "apps.create.pbNoUrlShort": "sans URL",
+  "apps.create.pbNoTitle": "{id} : pas de titre.",
+  "apps.create.pbDupe": "{id} apparaît {n} fois — deux entrées avec un seul id se disputent un seul enregistrement d'installation."
 }
