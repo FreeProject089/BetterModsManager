@@ -9291,5 +9291,8 @@
   "apps.create.probeHttp": "en http clair — c'est la somme de ce qui est arrivé",
   "apps.probe.errScheme": "Seules les adresses http et https peuvent être lues.",
   "iconpack.chosen": "L'icône que vous avez choisie dans la bibliothèque",
-  "cid.errNoApp": "Cette entrée ne fixe ni somme de contrôle ni URL : il n'y a rien pour l'identifier."
+  "cid.errNoApp": "Cette entrée ne fixe ni somme de contrôle ni URL : il n'y a rien pour l'identifier.",
+  "apps.sources.addBundle": "Suivre un .bmmbundle…",
+  "apps.sources.already": "Déjà suivi",
+  "apps.sources.bundleAdded": "Suivi — {n} application(s)"
 }

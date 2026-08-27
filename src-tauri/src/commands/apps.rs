@@ -595,15 +595,30 @@ pub async fn install_app(
     sha256: Option<String>,
     allow_insecure: Option<bool>,
     allow_bad_checksum: Option<bool>,
+    // A file already on this machine, instead of a download.
+    //
+    // For a catalogue that CARRIES its apps — a `.bmmbundle` is a zip with `catalog.json`
+    // at its root and the payloads beside it, so an entry can name a neighbour rather than
+    // an address. One file to send somebody, and nothing to host.
+    //
+    // It replaces the download and NOTHING else: the same checksum gate, the same refusal
+    // to rename or run a payload that fails it, the same installer detection. A second path
+    // that skipped those would be the path everybody's malware took.
+    local_path: Option<String>,
 ) -> Result<InstallResult, String> {
-    log_line(format!("[APPS] Installing {} from {}", app_id, download_url));
+    log_line(format!(
+        "[APPS] Installing {} from {}",
+        app_id,
+        local_path.as_deref().unwrap_or(&download_url)
+    ));
 
     // CWE-494: code is fetched then executed/extracted on this machine, so the
     // transport should be authenticated. HTTPS is always allowed. Plain HTTP is
     // allowed only when the user explicitly accepted the warning shown by the UI
     // (`allow_insecure`) — an HTTP source can be MITM-swapped for a malicious
     // binary. Any other scheme (file://, ftp://, …) is always rejected.
-    {
+    // A local payload never travelled, so there is no transport to judge.
+    if local_path.is_none() {
         let scheme = download_url.split("://").next().unwrap_or("").to_ascii_lowercase();
         match scheme.as_str() {
             "https" => {}
@@ -627,22 +642,53 @@ pub async fn install_app(
     let target_dir = std::path::PathBuf::from(&install_path).join(&app_id);
     std::fs::create_dir_all(&target_dir).map_err(|e| format!("mkdir failed: {}", e))?;
 
-    // Download
-    let resp = crate::commands::net::client().get(&download_url)
-        .header(reqwest::header::USER_AGENT, "BetterModsManager/1.0")
-        .timeout(std::time::Duration::from_secs(300))
-        .send().await
-        .map_err(|e| format!("Download failed: {}", e))?;
-
-    if !resp.status().is_success() {
-        return Err(format!("Download returned HTTP {}", resp.status()));
-    }
-
-    // STREAM to a .part file while hashing, instead of `resp.bytes()`. Holding a whole
-    // installer in memory made peak RSS the size of the download, and the buffer stayed alive
-    // until it was written — an app catalog can point at a payload of any size.
+    // Where the bytes come from. EVERYTHING after this is identical either way — the same
+    // .part file, the same checksum gate, the same refusal to rename or run what fails it.
+    // A local payload that skipped those would be the shortcut every bad bundle takes.
     let tmp_download = target_dir.join(".bmm-app-download.part");
-    let actual = {
+    let actual = if let Some(src) = local_path.as_deref() {
+        use sha2::{Digest, Sha256};
+        use std::io::Read;
+        // Copied into the .part rather than used where it lies: the bundle's extraction
+        // directory is a cache and can be swept, and the checksum must be of the bytes that
+        // will actually be installed, not of a file that may be replaced between the two.
+        let mut f = std::fs::File::open(src)
+            .map_err(|e| format!("Cannot open the bundled file: {}", e))?;
+        let mut out = std::fs::File::create(&tmp_download)
+            .map_err(|e| format!("Cannot open the download file: {}", e))?;
+        let mut hasher = Sha256::new();
+        let mut buf = vec![0u8; 64 * 1024];
+        loop {
+            let n = f.read(&mut buf).map_err(|e| {
+                let _ = std::fs::remove_file(&tmp_download);
+                format!("Read failed: {}", e)
+            })?;
+            if n == 0 { break; }
+            hasher.update(&buf[..n]);
+            if let Err(e) = std::io::Write::write_all(&mut out, &buf[..n]) {
+                let _ = std::fs::remove_file(&tmp_download);
+                return Err(format!("Write failed: {}", e));
+            }
+        }
+        if let Err(e) = std::io::Write::flush(&mut out) {
+            let _ = std::fs::remove_file(&tmp_download);
+            return Err(format!("Write failed: {}", e));
+        }
+        hex::encode(hasher.finalize())
+    } else {
+        let resp = crate::commands::net::client().get(&download_url)
+            .header(reqwest::header::USER_AGENT, "BetterModsManager/1.0")
+            .timeout(std::time::Duration::from_secs(300))
+            .send().await
+            .map_err(|e| format!("Download failed: {}", e))?;
+
+        if !resp.status().is_success() {
+            return Err(format!("Download returned HTTP {}", resp.status()));
+        }
+
+        // STREAM to a .part file while hashing, instead of `resp.bytes()`. Holding a whole
+        // installer in memory made peak RSS the size of the download, and the buffer stayed
+        // alive until it was written — an app catalog can point at a payload of any size.
         use sha2::{Digest, Sha256};
         let mut resp = resp;
         let mut hasher = Sha256::new();
@@ -716,7 +762,14 @@ pub async fn install_app(
 
     // Detect installer type from extension or filename.
     // Scripts are never treated as installers, even if named "install.ps1".
-    let url_filename = download_url.split('/').next_back().unwrap_or("").to_lowercase();
+    // The name of the thing, wherever it came from. A bundled payload has no URL, and
+    // reading one out of an empty string made every bundled app look like a portable exe
+    // called nothing — setup detection, the extension and the saved filename all depend on
+    // this one line.
+    let url_filename = local_path
+        .as_deref()
+        .map(|p| p.rsplit(['/', '\\']).next().unwrap_or(p).to_lowercase())
+        .unwrap_or_else(|| download_url.split('/').next_back().unwrap_or("").to_lowercase());
     let is_script = ext == "script"
         || url_filename.ends_with(".ps1") || url_filename.ends_with(".bat")
         || url_filename.ends_with(".cmd") || url_filename.ends_with(".sh")

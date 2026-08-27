@@ -7,6 +7,7 @@ import {
     readOrigins, originLabel, forgetOrigin, enabledOnly, isDisabled, setDisabled, recordHistory,
     looksLikeIndex, importIndexForType, describeKinds } from '../catalogs/catalog-index.js';
 import { showConfirm } from '../../ui/confirm.js';
+import { bundleEntryKind, resolveBundleEntry } from '../../core/catalog-bundle.js';
 import { draftFromCatalog as parseCatalog, draftProblems as problemsOf } from './catalog-draft.js';
 import { writeSources } from '../catalogs/catalog-sources.js';
 import { escHtml, escAttr } from '../../core/utils.js';
@@ -306,6 +307,22 @@ async function loadCatalog(force = false) {
             extraCommunityUrls: enabledOnly(_state.community_sources),
         });
         _catalog = result.apps;
+        // A catalogue that CARRIES its apps.
+        //
+        // `fetch_app_catalogs` speaks http; a `.bmmbundle` is a zip on this disk, so it is
+        // opened here and merged in. Plugins and mod lists have read bundles for a while
+        // and app catalogues were the one kind that could only ever point at an address —
+        // which meant publishing one always needed a host, and following one meant that
+        // host still being there.
+        for (const src of enabledOnly(_state.community_sources)) {
+            if (!src.startsWith('bundle:')) continue;
+            try {
+                _catalog = _catalog.concat(await appsFromBundle(src));
+            } catch (e) {
+                console.warn('[BMM] bundle source failed:', src, e);
+                result.sources_failed.push(src);
+            }
+        }
         // Only alert if EVERY source failed; partial failures (e.g. a placeholder
         // partner URL) are just logged, not shown as a noisy toast.
         if (result.sources_failed.length) {
@@ -417,22 +434,32 @@ function renderAppCard(app: AppEntry) {
         ${fav ? `<div class="apps-card-fav-star">${IC.starFill}</div>` : ''}
       </div>
       <div class="apps-card-body">
-        <span class="apps-card-title">${escHtml(app.title)}</span>
+        <span class="apps-card-title" data-tooltip="${escAttr(app.title)}">${escHtml(app.title)}</span>
         <div class="apps-card-meta">
           <span class="apps-cat-badge apps-cat-${app.category}">${catIconSm(app.category)}${escHtml(catLabel(app.category))}</span>
           ${app.version ? `<span class="apps-version">v${escHtml(app.version)}</span>` : ''}
           ${priceText(app.price)}
         </div>
         <p class="apps-card-desc">${escHtml(app.description)}</p>
+        <!-- Two rows, because these are two different kinds of thing and they were sharing
+             one. A TAG is a word the publisher chose; "unverified" and "http" are facts
+             about the download that BMM worked out. Mixed together, the fact that matters
+             most read as the publisher's fourth hashtag — and it wrapped onto its own line
+             anyway, so the row was two rows already, just not the useful two. -->
+        ${(app.tags || []).length ? `
         <div class="apps-card-tags">
-          ${(app.tags || []).slice(0, 2).map(tag => `<span class="apps-tag">${escHtml(tag)}</span>`).join('')}
-          ${(app.tags || []).length > 2
+          ${app.tags.slice(0, 3).map(tag => `<span class="apps-tag">${escHtml(tag)}</span>`).join('')}
+          ${app.tags.length > 3
             // The +N chip said how many were cut and not WHICH, so the only way to read the
-            // third tag was to open the entry.
-            ? `<span class="apps-tag apps-tag-more" data-tooltip="${escAttr(app.tags.slice(2).join(' · '))}">+${app.tags.length - 2}</span>`
+            // fourth tag was to open the entry.
+            ? `<span class="apps-tag apps-tag-more" data-tooltip="${escAttr(app.tags.slice(3).join(' · '))}">+${app.tags.length - 3}</span>`
             : ''}
+        </div>` : ''}
+        <div class="apps-card-facts">
           ${integrityChip(app)}
           ${httpChip(app.download?.url || '')}
+          ${app.download?.size ? `<span class="apps-fact">${escHtml(formatBytes(app.download.size))}</span>` : ''}
+          ${app.download?.file_type ? `<span class="apps-fact">${escHtml(app.download.file_type.toUpperCase())}</span>` : ''}
         </div>
       </div>
     </div>`;
@@ -1023,6 +1050,8 @@ function renderSources() {
       <div class="apps-sources-add">
         <input class="apps-source-input" id="apps-source-input" type="text" placeholder="https://raw.githubusercontent.com/.../catalog.json">
         <button class="btn btn-sm btn-accent" id="apps-add-source">${IC.plus} ${t('apps.sources.add')||'Add'}</button>
+        <!-- A catalogue that needs no host at all. -->
+        <button class="btn btn-sm btn-secondary" id="apps-add-bundle">${IC.folder} ${escHtml(t('apps.sources.addBundle') || 'Follow a .bmmbundle…')}</button>
       </div>
       ${sourceAccessHtml('apps')}
       <div class="apps-sources-list">
@@ -1064,6 +1093,27 @@ function renderSources() {
     wireSourceAccess('apps', (m, k) => toast(m, k === 'warning' ? 'warning' : 'success'),
         () => { (document.getElementById('nav-settings') as HTMLElement | null)?.click(); setTimeout(() => document.getElementById('settings-identity-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 250); },
         () => (document.getElementById('apps-source-input') as HTMLInputElement | null)?.value?.trim() || '');
+
+    document.getElementById('apps-add-bundle')?.addEventListener('click', async () => {
+        const path = await pickFile({ filters: [{ name: t('catpub.bundleKind') || 'Bundle', extensions: ['bmmbundle', 'zip'] }] }).catch(() => null);
+        if (!path) return;
+        const src = `bundle:${path}`;
+        if (_state.community_sources.includes(src)) { toast(t('apps.sources.already') || 'Already following that one', 'info'); return; }
+        try {
+            // Opened before it is followed. A file that is not an app catalogue must fail
+            // HERE, with the reason, rather than becoming a source that quietly contributes
+            // nothing to the list.
+            const found = await appsFromBundle(src);
+            if (!found.length) { toast(t('apps.create.errNoApps') || 'No apps in there', 'warning', 7000); return; }
+            _state.community_sources.push(src);
+            await writeSources('apps', _state.community_sources);
+            toast((t('apps.sources.bundleAdded') || 'Following — {n} app(s)').replace('{n}', String(found.length)), 'success');
+            _catalog = null;
+            renderSources();
+        } catch (e) {
+            toast(`${t('common.error')}: ${e}`, 'error', 7000);
+        }
+    });
 
     document.getElementById('apps-add-source')?.addEventListener('click', async () => {
         const input = document.getElementById('apps-source-input') as HTMLInputElement;
@@ -1549,6 +1599,42 @@ function openAppEditor(index: number | null) {
     document.getElementById('cr-app-modal')!.classList.add('open');
 }
 
+/**
+ * The entries inside a `.bmmbundle`, with their payloads pointed at the extracted copy.
+ *
+ * An entry inside a bundle may name a file that travelled with it OR still point at a URL,
+ * and both are legal in the same document — one catalogue can carry the three small tools
+ * and link the 90 MB one somebody already hosts. `_local` records which, so the installer
+ * reaches for the disk or the network deliberately rather than sniffing the string later.
+ *
+ * `bundleEntryKind` is the shared rule that decides: it refuses absolute paths, drive
+ * letters, UNC, `..` segments, control characters and every scheme that is not http(s).
+ * Reusing it is the point — a second reading of "is this a safe relative name" is a second
+ * place for `..` to be got wrong.
+ */
+async function appsFromBundle(src: string): Promise<AppEntry[]> {
+    const res: any = await invoke('catalog_bundle_open', { path: src.slice('bundle:'.length) });
+    const dir = String(res?.dir || '');
+    const cat = JSON.parse(String(res?.catalog || '{}'));
+    const apps: any[] = Array.isArray(cat?.apps) ? cat.apps : [];
+    return apps.map((a) => {
+        const url = a?.download?.url ?? a?.download_url ?? '';
+        const inside = dir && bundleEntryKind(url) === 'inside';
+        const resolved = inside ? resolveBundleEntry(url, dir) : '';
+        return {
+            ...a,
+            official: false,          // a bundle somebody sent you is never official
+            partner: false,
+            source_label: src,
+            download: {
+                ...(a.download || {}),
+                url: resolved || (a.download?.url ?? a.download_url ?? ''),
+            },
+            ...(resolved ? { _local: true } : {}),
+        };
+    });
+}
+
 // ── Detail Modal (rebuilt) ────────────────────────────────────────────────────
 
 function openDetailModal(appId: string) {
@@ -2017,6 +2103,11 @@ function openInstallModal(app: AppEntry) {
                 sha256:      app.download.sha256 || null,
                 allowInsecure,
                 allowBadChecksum,
+                // Set only for an entry that came out of a bundle. The backend then reads
+                // the file instead of the network and runs the SAME checksum gate on it —
+                // a bundle somebody sent you is not more trustworthy than a download, it is
+                // just closer.
+                localPath:   (app as any)._local ? app.download.url : null,
             });
 
             let result: InstallResult;

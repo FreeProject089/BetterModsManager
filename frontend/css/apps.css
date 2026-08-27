@@ -1029,3 +1029,39 @@
     max-height: 320px;
     overflow-y: auto;
 }
+
+/* ── The card, tightened ─────────────────────────────────────────────────────
+   Tags and facts were one wrapping row, so "unverified" — the thing most worth reading —
+   sat under the publisher's hashtags looking like one of them. Two rows now: what the
+   publisher called it, then what the entry actually is. */
+.apps-card-title {
+    /* A long title used to push the meta row down and eat the description's two lines. */
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.apps-card-tags {
+    margin-top: auto;          /* tags settle at the bottom of the text block… */
+    row-gap: 4px;
+}
+.apps-card-facts {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding-top: 8px;
+    margin-top: 6px;
+    border-top: 1px solid var(--border);   /* …and the facts sit below the line, always */
+}
+.apps-card-tags:empty + .apps-card-facts { margin-top: auto; }
+/* A fact with no colour of its own: size and type are neutral information. */
+.apps-fact {
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: .3px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    color: var(--text-muted);
+    background: var(--bmm-s04);
+}
