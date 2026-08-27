@@ -4467,11 +4467,13 @@ function renderModal(modal: HTMLElement): void {
                 <div class="sched-codepane" id="sched-codepane" hidden>
                     <div class="sched-code-bar">
                         <span class="sched-code-bar-hint">${escHtml(t('sched.bmms.barHint'))}</span>
-                        <button type="button" class="btn btn-xs btn-ghost" id="sched-code-outline" aria-pressed="false">
+                        <button type="button" class="btn btn-xs btn-ghost" id="sched-code-outline" aria-pressed="false"
+                            data-tasky="sched.outline.tip" data-tasky-icon="list">
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 6h4M4 12h4M4 18h4M11 6h9M11 12h9M11 18h9"/></svg>
                             ${escHtml(t('sched.outline.toggle'))}
                         </button>
-                        <button type="button" class="btn btn-xs btn-ghost" id="sched-code-ref" aria-pressed="false">
+                        <button type="button" class="btn btn-xs btn-ghost" id="sched-code-ref" aria-pressed="false"
+                            data-tasky="sched.ref.insertHint" data-tasky-icon="icon-info">
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M21 21l-4.35-4.35"/><circle cx="11" cy="11" r="7"/></svg>
                             ${escHtml(t('sched.ref.toggle'))}
                         </button>
@@ -4486,7 +4488,6 @@ function renderModal(modal: HTMLElement): void {
                             <input type="search" class="input sched-ref-q" id="sched-ref-q"
                                    placeholder="${escAttr(t('sched.ref.search'))}" spellcheck="false">
                             <div class="sched-ref-list" id="sched-ref-list"></div>
-                            <p class="sched-ref-foot">${escHtml(t('sched.ref.insertHint'))}</p>
                         </aside>
                     </div>
                     <div class="sched-code-status" id="sched-code-status"></div>

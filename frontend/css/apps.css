@@ -1105,13 +1105,18 @@
     line-height: 1.5;
 }
 
-/* The category is context, not a claim: no border, so it stops competing with the stamp. */
+/* The category is context, not a claim: no border, so it stops competing with the stamp.
+   And a soft-cornered rectangle rather than a pill — the pill shape belongs to the tags,
+   which are the things somebody typed. */
 .apps-cat-badge {
     border-color: transparent !important;
+    border-radius: 6px;
     font-weight: 600;
     padding-left: 5px;
     padding-right: 7px;
 }
+/* Price sits beside it in the same row and reads as the same kind of statement. */
+.apps-price-badge { border-radius: 6px; }
 
 /* A fact is measured, not chosen. Monospace says so, and there is no leading # — these were
    inheriting `.apps-tag`, which adds one, so "unverified" arrived reading as #unverified:

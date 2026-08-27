@@ -8871,7 +8871,7 @@
   "sched.dl.hookRang": "Hook rung:",
   "sched.ref.toggle": "Reference",
   "sched.ref.search": "Search actions, conditions, values…",
-  "sched.ref.insertHint": "Click one to write it at the cursor.",
+  "sched.ref.insertHint": "Every action, condition, value and loop source this build has, with their parameters — generated from BMM's own registry, so it cannot list something the app does not have. Click one to write it at the cursor.",
   "sched.ref.none": "Nothing matches that.",
   "sched.ref.more": "{n} more — narrow the search to see them.",
   "sched.ref.kindAction": "do",
@@ -9333,5 +9333,6 @@
   "sched.dbg.filter": "Filter the variables…",
   "sched.dbg.noMatch": "Nothing matches that.",
   "sched.dbg.editTip": "Click to change this value, then Enter. The run continues with what you typed.",
-  "cid.errNoBundle": "That bundle has neither a checksum nor a readable path, so there is nothing to identify it by."
+  "cid.errNoBundle": "That bundle has neither a checksum nor a readable path, so there is nothing to identify it by.",
+  "sched.outline.tip": "The shape of the script, line by line. Scanned rather than compiled, so it still works while the script is halfway through being changed — which is when you want it. Click a line to jump to it."
 }

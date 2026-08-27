@@ -8869,7 +8869,7 @@
   "sched.dl.hookRang": "Hook sonné :",
   "sched.ref.toggle": "Référence",
   "sched.ref.search": "Chercher une action, condition, valeur…",
-  "sched.ref.insertHint": "Clique dessus pour l'écrire au curseur.",
+  "sched.ref.insertHint": "Chaque action, condition, valeur et source de boucle de cette version, avec leurs paramètres — généré depuis le registre de BMM, donc impossible d'y lister ce que l'app n'a pas. Cliquez pour l'écrire au curseur.",
   "sched.ref.none": "Rien ne correspond.",
   "sched.ref.more": "{n} de plus — affine la recherche pour les voir.",
   "sched.ref.kindAction": "do",
@@ -9331,5 +9331,6 @@
   "sched.dbg.filter": "Filtrer les variables…",
   "sched.dbg.noMatch": "Rien ne correspond.",
   "sched.dbg.editTip": "Cliquez pour changer cette valeur, puis Entrée. L'exécution continue avec ce que vous avez tapé.",
-  "cid.errNoBundle": "Ce bundle n'a ni somme de contrôle ni chemin lisible : il n'y a rien pour l'identifier."
+  "cid.errNoBundle": "Ce bundle n'a ni somme de contrôle ni chemin lisible : il n'y a rien pour l'identifier.",
+  "sched.outline.tip": "La forme du script, ligne par ligne. Scannée et non compilée, donc elle fonctionne encore pendant que le script est à moitié modifié — c'est-à-dire quand on en a besoin. Cliquez une ligne pour y aller."
 }
