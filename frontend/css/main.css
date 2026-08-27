@@ -19626,3 +19626,25 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
 .profile-card-ids { margin-bottom: 10px; }
 .adm-info-value .bmm-copy-id,
 .adm-info-value .bmm-copy-cid { vertical-align: middle; }
+
+/* The orientation note answers a question once; after that it is a paragraph in the way. */
+.repo-host-lede { position: relative; padding-right: 34px; }
+.repo-host-lede[hidden] { display: none; }
+.repo-host-lede-x {
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 17px;
+    line-height: 1;
+    cursor: pointer;
+}
+.repo-host-lede-x:hover { background: var(--bmm-s05); color: var(--text-primary); }

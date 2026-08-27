@@ -2821,6 +2821,30 @@ export function initRepo() {
     // What else goes in the repo. Deliberately not chained to the export run — it takes a
     // FOLDER, which means it works on a repo exported five minutes ago and on one published
     // last spring, without regenerating a single mod.
+    // The orientation note at the top of the Host tab.
+    //
+    // It answers "what am I looking at" once. After that it is a paragraph between somebody
+    // and the button they came for, so it closes and stays closed — and the "How does this
+    // work?" button on step 1 brings it back, which is where somebody would look for it.
+    {
+        const lede = document.getElementById('repo-host-lede');
+        const KEY = 'bmm_repo_host_lede_hidden';
+        if (lede && localStorage.getItem(KEY) === '1') lede.hidden = true;
+        document.getElementById('repo-host-lede-x')?.addEventListener('click', () => {
+            if (!lede) return;
+            lede.hidden = true;
+            try { localStorage.setItem(KEY, '1'); } catch { /* private mode: closed for this session only */ }
+        });
+        // The close button's tooltip says this brings it back, so it has to. A promise in a
+        // tooltip that nothing implements is worse than no tooltip.
+        document.querySelector('[data-act="openDiagram"][data-act-args*="hosting-flow"]')
+            ?.addEventListener('click', () => {
+                if (!lede) return;
+                lede.hidden = false;
+                try { localStorage.removeItem(KEY); } catch { /* nothing to undo */ }
+            });
+    }
+
     const btnExtras = document.getElementById('btn-repo-extras');
     if (btnExtras) {
         btnExtras.addEventListener('click', async () => {
