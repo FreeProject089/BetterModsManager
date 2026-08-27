@@ -60,6 +60,21 @@ l'app.
     N'installe que depuis des sources de confiance — les badges **Officiel** et **Partenaire**
     existent justement pour repérer d'un coup d'œil quelles entrées sont cautionnées.
 
+!!! question "La somme de contrôle porte sur le téléchargement, pas sur l'app installée"
+
+    C'est le sha256 des **octets à l'URL de téléchargement** — l'installeur si l'entrée pointe
+    dessus, le zip si elle pointe sur un zip. Rien n'est encore installé au moment de la
+    vérification, et c'est tout l'intérêt : BMM hache la charge pendant qu'elle s'écrit dans un
+    fichier `.part` et refuse de le renommer ou de l'exécuter en cas d'écart.
+
+    La somme change donc à chaque fois que l'éditeur revérse le fichier, et elle ne dit rien de
+    ce qui atterrit ensuite dans `Program Files`.
+
+    La carte indique quelles entrées en ont une. Une somme absente est courante et ne prouve
+    rien en soi — c'est donc un contour discret, pas une alarme. Mais entre deux entrées qui
+    proposent la même application, c'est la différence qu'on veut voir avant de cliquer plutôt
+    que dans un avertissement après.
+
 ## Lancer
 
 Les apps installées montrent une action **Lancer** sur leur carte. La plupart se lancent
@@ -114,6 +129,20 @@ jusqu'à un total de **30 sources**, pour qu'une grande toile communautaire de c
 bornée.
 
 ## Créer le tien
+
+Quand vous ajoutez une application, **Récupérer depuis l'URL** lit le fichier que les gens vont
+réellement télécharger et remplit la taille et la somme de contrôle. *Depuis un fichier
+local…* fait pareil pour l'installeur que vous avez sous la main et n'avez pas encore versé —
+ce sont les mêmes octets, donc la même empreinte.
+
+C'étaient deux champs de texte libre, ce qui laissait deux issues honnêtes : vide (aucune
+vérification) ou mal tapé (toute installation refusée). Https uniquement pour l'URL : une
+somme récupérée en http clair est une somme choisie par qui est sur le chemin.
+
+Une entrée n'a besoin que d'un `id`, d'un `title` et d'une URL. Tout le reste a un défaut
+désormais — sans `tags`, serde refusait l'entrée, ce qui faisait refuser tout le
+**catalogue** à `fetch_app_catalogs`, ce que le navigateur ne signalait que si *toutes* les
+sources avaient échoué.
 
 > Construis un `catalog.json` que tu peux héberger sur GitHub et partager.
 

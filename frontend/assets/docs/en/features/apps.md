@@ -59,6 +59,21 @@ with zero clicks from you beyond the app's own wizard.
     from sources you trust — the **Official** and **Partner** badges exist precisely so you can
     tell at a glance which entries are vouched for.
 
+!!! question "The checksum is of the download, not of the installed app"
+
+    It is the sha256 of **the bytes at the download URL** — the installer if the entry points
+    at one, the zip if it points at a zip. Nothing has been installed yet at the moment the
+    check happens, which is the whole point: BMM hashes the payload while it streams to a
+    `.part` file and refuses to rename or run it on a mismatch.
+
+    So a catalogue's checksum changes whenever the publisher re-uploads the file, and it says
+    nothing about what ends up in `Program Files` afterwards.
+
+    The browse card says which entries have one. A missing checksum is common and proves
+    nothing by itself, so it is a quiet outline rather than an alarm — but between two entries
+    offering the same app, it is the difference worth seeing before you click rather than in a
+    warning after.
+
 ## Launching
 
 Installed apps show a **Launch** action on their card. Most apps launch straight away. When an
@@ -107,6 +122,18 @@ imported catalogs are followed up to a total of **30 sources**, so a big communi
 catalogs stays bounded.
 
 ## Making your own
+
+When you add an app, **Fetch from the URL** reads the file people will actually download and
+fills in the size and the checksum. *From a local file…* does the same for the installer you
+have in front of you and have not uploaded yet — it is the same bytes, so it is the same hash.
+
+Both were free-text fields before, which left two honest outcomes: empty (no integrity check
+at all) or mistyped (every install refused). https only for the URL: a checksum fetched over
+plain http is a checksum whoever is on the path chose.
+
+An entry only needs an `id`, a `title` and a download URL. Everything else has a default now —
+`tags` without one used to make serde refuse the entry, which made `fetch_app_catalogs` refuse
+the whole **catalogue**, which the browser only mentioned if *every* source had failed.
 
 > Build a `catalog.json` you can host on GitHub and share with others.
 

@@ -1184,3 +1184,92 @@ pub fn clear_app_history(app_handle: AppHandle) -> Result<(), String> {
     state.history.clear();
     save_state(&app_handle, &state)
 }
+
+/// What a catalogue entry should say about the file at a URL.
+///
+/// The Add-an-app form asks an author for a size in bytes and a sha256, which are the two
+/// things nobody can produce by hand and the two things that matter: the size is what the
+/// download bar counts against, and the checksum is the only reason installing from a
+/// catalogue is different from clicking a link on a forum.
+///
+/// **It hashes the PAYLOAD — the bytes at that URL** — not the app once installed. If the
+/// entry points at an installer, this is the installer's hash; if it points at a portable
+/// zip, it is the zip's. That is the same thing `install_catalog_app` recomputes while
+/// downloading and refuses to execute on a mismatch, which is why it has to be this and not
+/// something derived from the installed folder: nothing has been installed yet at the moment
+/// the check happens.
+///
+/// Streamed and thrown away rather than kept: the point is the two numbers, and writing an
+/// arbitrary URL's contents to disk to read a hash off it would be a download nobody asked
+/// for. Capped, so pointing this at a live stream ends rather than filling the disk it never
+/// touches.
+#[derive(serde::Serialize)]
+pub struct UrlProbe {
+    pub size: u64,
+    pub sha256: String,
+}
+
+const PROBE_MAX_BYTES: u64 = 4 * 1024 * 1024 * 1024; // 4 GiB
+
+#[tauri::command]
+pub async fn catalog_probe_url(url: String) -> Result<UrlProbe, String> {
+    // The same scheme rule as installing: https always, http never here at all. Installing
+    // over http is a decision the user can take with a warning in front of them; filling in
+    // a form field is not that moment, and a checksum fetched over http is a checksum an
+    // attacker on the path chose.
+    let scheme = url.split("://").next().unwrap_or("").to_ascii_lowercase();
+    if scheme != "https" {
+        return Err("apps.probe.errHttps".to_string());
+    }
+    let resp = crate::commands::net::client()
+        .get(&url)
+        .header(reqwest::header::USER_AGENT, "BetterModsManager/1.0")
+        .timeout(std::time::Duration::from_secs(600))
+        .send()
+        .await
+        .map_err(|e| format!("apps.probe.errFetch|{}", e))?;
+    if !resp.status().is_success() {
+        return Err(format!("apps.probe.errStatus|{}", resp.status()));
+    }
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    let mut size: u64 = 0;
+    let mut resp = resp;
+    loop {
+        match resp.chunk().await {
+            Ok(Some(chunk)) => {
+                size += chunk.len() as u64;
+                if size > PROBE_MAX_BYTES {
+                    return Err("apps.probe.errTooBig".to_string());
+                }
+                hasher.update(&chunk);
+            }
+            Ok(None) => break,
+            Err(e) => return Err(format!("apps.probe.errRead|{}", e)),
+        }
+    }
+    Ok(UrlProbe { size, sha256: hex::encode(hasher.finalize()) })
+}
+
+/// The same two numbers, for a file already on this machine.
+///
+/// For the author who has the installer in front of them and has not uploaded it yet — the
+/// hash is the same either way, which is the property the whole check rests on.
+#[tauri::command]
+pub fn catalog_probe_file(path: String) -> Result<UrlProbe, String> {
+    use sha2::{Digest, Sha256};
+    use std::io::Read;
+    let mut f = std::fs::File::open(&path).map_err(|e| format!("apps.probe.errOpen|{}", e))?;
+    let mut hasher = Sha256::new();
+    let mut size: u64 = 0;
+    let mut buf = vec![0u8; 64 * 1024];
+    loop {
+        let n = f.read(&mut buf).map_err(|e| format!("apps.probe.errRead|{}", e))?;
+        if n == 0 {
+            break;
+        }
+        size += n as u64;
+        hasher.update(&buf[..n]);
+    }
+    Ok(UrlProbe { size, sha256: hex::encode(hasher.finalize()) })
+}

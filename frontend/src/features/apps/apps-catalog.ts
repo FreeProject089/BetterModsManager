@@ -421,9 +421,37 @@ function renderAppCard(app: AppEntry) {
           ${priceText(app.price)}
         </div>
         <p class="apps-card-desc">${escHtml(app.description)}</p>
-        <div class="apps-card-tags">${app.tags.slice(0,2).map(tag=>`<span class="apps-tag">${escHtml(tag)}</span>`).join('')}${app.tags.length>2?`<span class="apps-tag apps-tag-more">+${app.tags.length-2}</span>`:''}</div>
+        <div class="apps-card-tags">
+          ${(app.tags || []).slice(0, 2).map(tag => `<span class="apps-tag">${escHtml(tag)}</span>`).join('')}
+          ${(app.tags || []).length > 2
+            // The +N chip said how many were cut and not WHICH, so the only way to read the
+            // third tag was to open the entry.
+            ? `<span class="apps-tag apps-tag-more" data-tooltip="${escAttr(app.tags.slice(2).join(' · '))}">+${app.tags.length - 2}</span>`
+            : ''}
+          ${integrityChip(app)}
+        </div>
       </div>
     </div>`;
+}
+
+/**
+ * Whether this entry can be checked when it downloads.
+ *
+ * The catalogue's `sha256` is the hash of the PAYLOAD — the installer or the zip at that
+ * URL — and `install_catalog_app` recomputes it while downloading, refusing to rename the
+ * .part file if it does not match. An entry without one installs after a warning, and that
+ * warning arrives once you have already chosen it.
+ *
+ * So it belongs on the card. Not as an alarm: a missing checksum is common and is not proof
+ * of anything, which is why the unverifiable state is a quiet outline rather than a red
+ * badge. It is the difference between two entries offering the same app, which is exactly
+ * the choice being made at this moment.
+ */
+function integrityChip(app: AppEntry): string {
+    const has = !!(app.download?.sha256 || '').trim();
+    return has
+        ? `<span class="apps-tag apps-tag-sha" data-tooltip="${escAttr(t('apps.shaYesTip') || 'The catalogue publishes a checksum for the download. It is verified before anything is run.')}">${escHtml(t('apps.shaYes') || 'checksum')}</span>`
+        : `<span class="apps-tag apps-tag-nosha" data-tooltip="${escAttr(t('apps.shaNoTip') || 'No checksum published. The download cannot be verified — BMM will warn you before installing.')}">${escHtml(t('apps.shaNo') || 'unverified')}</span>`;
 }
 
 /** Loud pill kept for the detail modal (priceBadge); the browse card uses the
@@ -1256,11 +1284,13 @@ function openAppEditor(index: number | null) {
         </div>
       </div>
       ${field('version', t('apps.create.fVersion')||'Version', existing.version||'', '1.0.0')}
+      <div class="apps-cr-sec">${escHtml(t('apps.create.secLook') || 'How it looks in the list')}</div>
       ${field('tags', t('apps.create.fTags')||'Tags (comma-separated, max 3)', (existing.tags||[]).join(', '), 'dcs, tool, audio')}
       ${field('requirements', t('apps.requirements')||'Requirements', existing.requirements||'', 'Windows 10+')}
       ${field('thumb', t('apps.create.fThumb')||'Thumbnail URL', existing.images?.thumb||'', 'https://.../thumb.png')}
       ${field('extra', t('apps.create.fExtra')||'Extra images (comma-separated URLs)', (existing.images?.extra||[]).join(', '))}
       ${field('md_link', t('apps.create.fMd')||'Documentation URL (md_link)', existing.md_link||'', 'https://github.com/.../README.md')}
+      <div class="apps-cr-sec">${escHtml(t('apps.create.secGet') || 'Where it comes from')}</div>
       ${field('dl-url', t('apps.create.fDlUrl')||'Download URL', (existing.download as any)?.url||'', 'https://github.com/.../app.exe')}
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
         <div>
@@ -1272,6 +1302,15 @@ function openAppEditor(index: number | null) {
         <div>${field('size', t('apps.create.fSize')||'Size (bytes)', String((existing.download as any)?.size||''), '10485760')}</div>
       </div>
       ${field('sha256', t('apps.create.fSha')||'SHA-256 checksum (recommended — verified before install)', (existing.download as any)?.sha256||'', 'e3b0c44298fc1c149afbf4c8996fb924…')}
+      <!-- The two fields nobody can fill by hand. They were asked for as free text, so the
+           honest outcomes were "left empty" (no integrity check at all) and "typed wrong"
+           (every install refused). Both are computed from the same bytes the installer will
+           hash, which is the only version of this number that means anything. -->
+      <div class="apps-cr-probe">
+        <button type="button" class="btn btn-xs btn-secondary" id="cr-probe-url">${escHtml(t('apps.create.probeUrl') || 'Fetch from the URL')}</button>
+        <button type="button" class="btn btn-xs btn-ghost" id="cr-probe-file">${escHtml(t('apps.create.probeFile') || 'From a local file…')}</button>
+        <span class="apps-cr-probe-say" id="cr-probe-say">${escHtml(t('apps.create.probeHint') || 'This hashes the file people will download — the installer or the zip at that URL, not the app once installed.')}</span>
+      </div>
       <div class="apps-install-footer">
         <button class="btn btn-ghost" id="cr-app-cancel">${t('common.cancel')||'Cancel'}</button>
         <button class="btn btn-accent" id="cr-app-save">${t('common.confirm')||'Save'}</button>
@@ -1281,6 +1320,48 @@ function openAppEditor(index: number | null) {
     document.getElementById('cr-app-cancel')?.addEventListener('click', () => {
         document.getElementById('cr-app-modal')!.classList.remove('open');
     });
+
+    {
+        const say = document.getElementById('cr-probe-say');
+        const sizeEl = document.getElementById('cr-size') as HTMLInputElement | null;
+        const shaEl = document.getElementById('cr-sha256') as HTMLInputElement | null;
+        const fill = (r: { size: number; sha256: string }) => {
+            if (sizeEl) sizeEl.value = String(r.size);
+            if (shaEl) shaEl.value = r.sha256;
+            if (say) say.textContent = `${t('apps.create.probeOk') || 'Read'} — ${(r.size / 1048576).toFixed(1)} MB`;
+        };
+        // The command answers with a KEY on failure, sometimes with a detail after a `|`.
+        // Printing it raw would put `apps.probe.errHttps` in front of somebody in both
+        // languages, which is the same bug as an untranslated toast.
+        const blame = (e: unknown) => {
+            const raw = String(e);
+            const [key, detail] = raw.split('|');
+            const said = key.startsWith('apps.probe.') ? (t(key.trim()) || key.trim()) : raw;
+            if (say) say.textContent = detail ? `${said} (${detail})` : said;
+            say?.classList.add('is-bad');
+        };
+        const busy = (on: boolean) => {
+            for (const id of ['cr-probe-url', 'cr-probe-file']) {
+                const b = document.getElementById(id) as HTMLButtonElement | null;
+                if (b) b.disabled = on;
+            }
+            if (on && say) { say.classList.remove('is-bad'); say.textContent = t('apps.create.probeBusy') || 'Reading…'; }
+        };
+        document.getElementById('cr-probe-url')?.addEventListener('click', async () => {
+            const url = (document.getElementById('cr-dl-url') as HTMLInputElement)?.value.trim();
+            if (!url) { if (say) say.textContent = t('apps.create.probeNoUrl') || 'Put the download URL in first.'; return; }
+            busy(true);
+            try { fill(await invoke('catalog_probe_url', { url }) as any); } catch (e) { blame(e); }
+            busy(false);
+        });
+        document.getElementById('cr-probe-file')?.addEventListener('click', async () => {
+            const picked = await pickFile().catch(() => null);
+            if (!picked) return;
+            busy(true);
+            try { fill(await invoke('catalog_probe_file', { path: picked }) as any); } catch (e) { blame(e); }
+            busy(false);
+        });
+    }
 
     document.getElementById('cr-app-save')?.addEventListener('click', () => {
         const get = (id: string) => (document.getElementById(`cr-${id}`) as HTMLInputElement)?.value.trim() || '';

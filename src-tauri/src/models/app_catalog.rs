@@ -23,15 +23,28 @@ pub struct AppDownload {
 pub struct AppEntry {
     pub id: String,
     pub title: String,
+    /// Absent is not a parse error.
+    ///
+    /// Every field below carries a default, and the reason is what happens without one:
+    /// serde refuses the ENTRY, `fetch_app_catalogs` refuses the whole CATALOGUE, and the
+    /// UI only says so when every source failed. So one community entry written without a
+    /// `tags` key made an entire list vanish from the browser with a line in the console.
+    ///
+    /// The defaults are the honest reading of an omission — no tags, no description, "other"
+    /// rather than a category invented for it, "free" rather than a price nobody stated.
+    #[serde(default)]
     pub description: String,
     pub md_link: Option<String>,
+    #[serde(default = "default_category")]
     pub category: String,  // "game" | "utility" | "other"
     /// "free" | "freemium" | "paid" | "oss".
     ///
     /// `oss` is not a price and that is the point: "open source" is what people are
     /// actually looking for when they filter this column, and it says something "free"
     /// does not — free is about the money, oss is about whether you can read it.
+    #[serde(default = "default_price")]
     pub price: String,
+    #[serde(default)]
     pub tags: Vec<String>,
     pub version: Option<String>,
     pub requirements: Option<String>,
@@ -127,4 +140,48 @@ pub struct ExeInfo {
     pub name: String,
     pub path: String,
     pub size: u64,
+}
+
+fn default_category() -> String { "other".to_string() }
+fn default_price() -> String { "free".to_string() }
+
+#[cfg(test)]
+mod entry_tests {
+    use super::*;
+
+    #[test]
+    fn an_entry_with_only_the_essentials_still_parses() {
+        // What a hand-written community catalogue actually looks like. Before the defaults,
+        // this refused — and took every other entry in the same file with it.
+        let e: AppEntry = serde_json::from_str(
+            r#"{"id":"x","title":"X","download":{"url":"https://e/x.zip","file_type":"zip"}}"#,
+        )
+        .expect("a minimal entry must parse");
+        assert!(e.tags.is_empty());
+        assert_eq!(e.category, "other");
+        assert_eq!(e.price, "free");
+        assert_eq!(e.description, "");
+    }
+
+    #[test]
+    fn what_is_stated_is_never_replaced_by_a_default() {
+        let e: AppEntry = serde_json::from_str(
+            r#"{"id":"x","title":"X","category":"game","price":"paid","tags":["a"],
+                "description":"d","download":{"url":"https://e/x.zip","file_type":"zip"}}"#,
+        )
+        .unwrap();
+        assert_eq!(e.category, "game");
+        assert_eq!(e.price, "paid");
+        assert_eq!(e.tags, vec!["a".to_string()]);
+    }
+
+    #[test]
+    fn an_entry_with_no_id_is_still_refused() {
+        // The defaults are for what an author may omit, not for what makes an entry an
+        // entry. Something with no id cannot be installed, favourited or deduplicated.
+        assert!(serde_json::from_str::<AppEntry>(
+            r#"{"title":"X","download":{"url":"https://e/x.zip","file_type":"zip"}}"#
+        )
+        .is_err());
+    }
 }

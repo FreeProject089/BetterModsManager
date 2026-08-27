@@ -19362,3 +19362,43 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
     margin-left: 18px;
     border-left: 1px dashed var(--bmm-s07);
 }
+
+
+/* App catalogue — the create form's seams, and the two computed fields. */
+.apps-cr-sec {
+    margin: 12px 0 2px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid var(--border);
+    font-size: 10.5px;
+    font-weight: 800;
+    letter-spacing: .6px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+.apps-cr-probe {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px 10px;
+    margin-top: -2px;
+}
+.apps-cr-probe-say {
+    flex: 1 1 200px;
+    min-width: 0;
+    font-size: 10.5px;
+    line-height: 1.4;
+    color: var(--text-muted);
+}
+.apps-cr-probe-say.is-bad { color: var(--warning); }
+
+/* Whether an entry can be checked at all. Deliberately quiet: a missing checksum is common
+   and proves nothing on its own, so the unverifiable state is an outline, not an alarm. */
+.apps-tag-sha {
+    color: var(--success);
+    border-color: color-mix(in srgb, var(--success) 40%, transparent);
+    background: color-mix(in srgb, var(--success) 10%, transparent);
+}
+.apps-tag-nosha {
+    color: var(--text-muted);
+    border-style: dashed;
+}
