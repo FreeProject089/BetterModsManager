@@ -487,6 +487,18 @@
       "group": "logic"
     },
     {
+      "type": "log.print",
+      "label": "Write a line to the log",
+      "needs": "message",
+      "group": "logic"
+    },
+    {
+      "type": "file.write",
+      "label": "Write a file",
+      "needs": "fileWrite",
+      "group": "logic"
+    },
+    {
       "type": "modlist.apply",
       "label": "Apply a mod list (install what is missing)",
       "needs": "listApply",

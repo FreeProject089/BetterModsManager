@@ -2,7 +2,7 @@
 
 !!! info ""
 
-    87 actions · 31 conditions · 28 valeurs · 8 sources de boucle
+    89 actions · 31 conditions · 28 valeurs · 8 sources de boucle
 
 > Généré depuis le registre de BMM lui-même, donc cette page ne peut pas décrire une version de l'application qui n'existe pas. Si une action est dans l'éditeur de blocs, elle est dans cette liste.
 
@@ -113,6 +113,8 @@ S'écrit `do <nom>(param: valeur, …)`. Une action sans paramètre prend des pa
 | `map.clear` | Vide la table sans supprimer son nom. | `name` |
 | `var.clear` | Retire une variable partagée, ou toutes. Les valeurs d’une exécution disparaissent avec elle de toute façon. | `name` |
 | `text.extract` | Applique un motif aux derniers Ko d'un fichier, ou à une variable, et garde ce qu'il a trouvé. | `target` · `path` · `tailKb` · `source` · `regex` · `group` |
+| `log.print` | Met une ligne dans le panneau d'exécution et dans le run.log de la tâche. En code, c'est `print "…"`. | `message` · `text` |
+| `file.write` | Écrit ou ajoute du texte dans un fichier. Un chemin relatif atterrit dans le dossier de sortie de la tâche. | `path` · `text` · `append` |
 
 ### Système & flux
 

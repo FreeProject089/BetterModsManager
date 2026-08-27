@@ -256,6 +256,41 @@ one it could not fix.
 
 In the block editor this is the **Make sure of** brick.
 
+### Values every task has
+
+| Written | Is |
+|---|---|
+| `{date}` · `{time}` · `{now}` · `{stamp}` | Today, the clock, an ISO timestamp, and one a person can read. |
+| `{nl}` · `{tab}` | A real newline and a real tab — a text field cannot hold either. |
+
+A variable your task defines wins over a built-in of the same name, so adding these changed
+nothing about a task that already had one.
+
+### Saying what happened
+
+```bmms
+print "checking {n} mods"
+do file.write(path: "report.txt", text: "{n} mods on {date}")
+do file.write(path: "run.log", text: "done{nl}", append: true)
+```
+
+`print` puts a line in the running panel and in the task's `run.log`. It is the statement you
+write twenty times while working out why a task did what it did — which is the difference
+between a language you debug IN and one you debug by staring at.
+
+**A relative path lands in the task's output folder.** An absolute path, or a place name like
+`mods:notes.txt`, goes exactly where it says. A bare filename with no rule about where would
+end up next to the executable: wrong, and hard to find afterwards.
+
+The output folder defaults to a per-task folder inside BMM's own data, and can be set to
+anywhere — including a place name, so "write into the folder that plugin ships" is one setting
+rather than a path that breaks on the next machine.
+
+!!! note "A relative path may not climb out"
+
+    `../elsewhere/run.log` is refused. It is the one shape nobody writes by accident, and the
+    only one that turns "write in my folder" into "write anywhere".
+
 ### Errors and branches
 
 ```bmms

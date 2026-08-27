@@ -1,3 +1,4 @@
+pub mod task_output;
 pub mod mod_order;
 pub mod bmm_paths;
 pub mod bmm_paths_core;

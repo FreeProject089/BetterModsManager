@@ -204,6 +204,26 @@ export const VAR_NAME_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
  * change that is invisible in review and destructive at run time. When the storage migrates to
  * typed values, THIS is the function whose behaviour has to be pinned first.
  */
+/**
+ * The handful of values every task wants and nobody should have to compute.
+ *
+ * Functions, not constants: a task that runs for two minutes and prints twice should print two
+ * different times, and a frozen value would be a bug that only shows up on long runs.
+ *
+ * `nl` and `tab` exist because a text field cannot hold a real newline — people were writing
+ * `\n` and getting two characters into their log file.
+ */
+const BUILT_INS: Record<string, () => string> = {
+    date: () => new Date().toISOString().slice(0, 10),
+    time: () => new Date().toTimeString().slice(0, 8),
+    now: () => new Date().toISOString(),
+    // Local, human, and deliberately not ISO: this is the one that goes in a message somebody
+    // reads, where "2026-08-27T14:05:33.123Z" is worse than useless.
+    stamp: () => new Date().toLocaleString(),
+    nl: () => '\n',
+    tab: () => '\t',
+};
+
 export function substituteVars(params: Record<string, any>, ctx: RunCtx): Record<string, any> {
     const rep = (v: any): any => {
         if (typeof v === 'string') {
@@ -216,6 +236,14 @@ export function substituteVars(params: Record<string, any>, ctx: RunCtx): Record
                 if (Object.prototype.hasOwnProperty.call(ctx.text, k)) return ctx.text[k];
                 if (Object.prototype.hasOwnProperty.call(ctx.nums, k)) return String(ctx.nums[k]);
                 if (ctx.shared && Object.prototype.hasOwnProperty.call(ctx.shared, k)) return ctx.shared[k];
+                // Built-ins come LAST, on purpose.
+                //
+                // A task that already captures a variable called `date` must keep reading its
+                // own — adding these at the front would silently change what an existing task
+                // writes, which is the worst kind of upgrade: nothing errors and the output is
+                // different.
+                const built = BUILT_INS[k];
+                if (built) return built();
                 return m;
             });
         }

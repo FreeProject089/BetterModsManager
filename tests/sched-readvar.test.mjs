@@ -165,3 +165,31 @@ describe('maps', () => {
         assert.deepEqual(substituteVars({ p: 'go {m} go' }, ctx({ maps: { m: { a: '1' } } })), { p: 'go {m} go' });
     });
 });
+
+describe('built-in variables', () => {
+    // The ordering is the whole point. A task that already captures `date` must keep reading
+    // its own — built-ins arriving in front would silently change what an existing task
+    // writes, which is the worst kind of upgrade: nothing errors and the output is different.
+    test("a task's own variable beats a built-in of the same name", () => {
+        const out = substituteVars({ s: '{date}' }, ctx({ text: { date: 'MINE' } }));
+        assert.equal(out.s, 'MINE');
+    });
+
+    test('built-ins fill in when nothing else claims the name', () => {
+        const out = substituteVars({ s: '{date}' }, ctx());
+        assert.match(out.s, /^\d{4}-\d{2}-\d{2}$/);
+    });
+
+    test('nl and tab are the real characters, not two of them', () => {
+        // People were writing a literal backslash-n into a text field and getting exactly
+        // that in their log file, because a form input cannot hold a newline.
+        const out = substituteVars({ s: 'a{nl}b{tab}c' }, ctx());
+        assert.equal(out.s, 'a\nb\tc');
+    });
+
+    test('an unknown name is left alone rather than emptied', () => {
+        // `{item.id}` and anything a later step will define must survive this pass.
+        const out = substituteVars({ s: '{nope} {item.id}' }, ctx());
+        assert.equal(out.s, '{nope} {item.id}');
+    });
+});

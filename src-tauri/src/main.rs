@@ -894,6 +894,8 @@ fn main() {
             commands::plugin_assets::plugin_file_read,
             commands::mod_order::mod_order_get,
             commands::mod_order::mod_order_set,
+            commands::task_output::task_write_file,
+            commands::task_output::task_output_dir,
             commands::plugins::get_effective_api_port,
             commands::plugins::get_api_status,
             commands::plugins::restart_api_server,

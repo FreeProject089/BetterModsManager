@@ -895,6 +895,20 @@ impl P {
                 let block = self.string("the block name")?;
                 Ok(json!({ "kind": "call", "block": block }))
             }
+            // `print "…"` — a line in the run log, and in the task's log file when it keeps one.
+            //
+            // Sugar over `log.print`, the same way `set` is sugar over `var.set`: one word for
+            // the thing people write twenty times while working out why a task did what it did.
+            // Writing it as a statement rather than only as an action is the difference between
+            // a language you debug in and one you debug by staring at.
+            "print" => {
+                self.next();
+                let text = self.string("something to print")?;
+                Ok(json!({
+                    "kind": "action",
+                    "action": { "type": "log.print", "params": { "text": text } }
+                }))
+            }
             "set" | "shared" => {
                 // `shared set x = "…"` writes the variable every task can read.
                 let shared = w == "shared";
@@ -1578,6 +1592,10 @@ fn steps_str(steps: &[Value], depth: usize, out: &mut String) {
                     ));
                     continue;
                 }
+                if ty == "log.print" {
+                    out.push_str(&format!("{}print {}\n", pad, quote(&ps("text"))));
+                    continue;
+                }
                 if ty == "var.set" && !ps("name").is_empty() {
                     let sh = if ps("scope") == "shared" {
                         "shared "
@@ -2087,6 +2105,31 @@ mod tests {
             compile(r#"task "T" { every month on 1 at 00:00 }"#)["trigger"]["day"],
             1
         );
+    }
+
+    /// `print` is sugar, and sugar has to survive the printer or the editor eats it.
+    #[test]
+    fn print_lowers_to_an_action_and_prints_back_as_print() {
+        let src = "task \"P\" {
+    every day at 03:00
+
+    print \"got {n} mods\"
+}
+";
+        let first = compile(src);
+        let st = &first["steps"][0];
+        // It IS an action. Nothing new to run, nothing new to permission — the same reason
+        // `set` lowers to var.set.
+        assert_eq!(st["kind"], "action");
+        assert_eq!(st["action"]["type"], "log.print");
+        assert_eq!(st["action"]["params"]["text"], "got {n} mods");
+
+        // And it comes back as `print`, not as `do log.print(...)`. Without the printer rule
+        // a task written in code and reopened would read as somebody else's task.
+        let printed = bmms_decompile(first.clone());
+        assert!(printed.contains("print \"got {n} mods\""), "printed: {}", printed);
+        assert!(!printed.contains("do log.print"), "printed: {}", printed);
+        assert_eq!(compile(&printed), first);
     }
 
     /// `ensure` is not sugar for `if not`, and the tree has to show that.

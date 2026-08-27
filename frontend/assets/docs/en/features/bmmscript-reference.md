@@ -2,7 +2,7 @@
 
 !!! info ""
 
-    87 actions · 31 conditions · 28 values · 8 loop sources
+    89 actions · 31 conditions · 28 values · 8 loop sources
 
 > Generated from BMM's own registry, so it cannot describe a version of the app that does not exist. If an action is in the block editor, it is in this list.
 
@@ -113,6 +113,8 @@ Written `do <name>(param: value, …)`. An action with no parameters takes empty
 | `map.clear` | Empties the map without deleting its name. | `name` |
 | `var.clear` | Removes one shared variable, or all of them. A run’s own values disappear with it anyway. | `name` |
 | `text.extract` | Runs a pattern over a file's last KB, or over a variable, and keeps what it matched. | `target` · `path` · `tailKb` · `source` · `regex` · `group` |
+| `log.print` | Puts a line in the running panel and in the task's run.log. In code this is `print "…"`. | `message` · `text` |
+| `file.write` | Write or append text to a file. A relative path lands in the task's output folder. | `path` · `text` · `append` |
 
 ### System & flow
 

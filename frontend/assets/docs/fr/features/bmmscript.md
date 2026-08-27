@@ -260,6 +260,42 @@ première qu'elle n'a pas pu corriger.
 
 Dans l'éditeur en blocs, c'est la brique **S'assurer que**.
 
+### Values every task has
+
+| Written | Is |
+|---|---|
+| `{date}` · `{time}` · `{now}` · `{stamp}` | Aujourd'hui, l'heure, un horodatage ISO, et un lisible par un humain. |
+| `{nl}` · `{tab}` | Un vrai saut de ligne et une vraie tabulation — un champ texte ne peut porter ni l'un ni l'autre. |
+
+Une variable définie par ta tâche l'emporte sur un intégré du même nom : les ajouter n'a donc
+rien changé pour une tâche qui en avait déjà un.
+
+### Dire ce qui s'est passé
+
+```bmms
+print "vérification de {n} mods"
+do file.write(path: "rapport.txt", text: "{n} mods le {date}")
+do file.write(path: "run.log", text: "fini{nl}", append: true)
+```
+
+`print` met une ligne dans le panneau d'exécution et dans le `run.log` de la tâche. C'est
+l'instruction qu'on écrit vingt fois en cherchant pourquoi une tâche a fait ce qu'elle a fait —
+c'est la différence entre un langage dans lequel on débugue et un langage qu'on débugue en le
+fixant du regard.
+
+**Un chemin relatif atterrit dans le dossier de sortie de la tâche.** Un chemin absolu, ou un nom
+d'endroit comme `mods:notes.txt`, va exactement où il dit. Un simple nom de fichier sans règle
+finirait à côté de l'exécutable : au mauvais endroit, et introuvable ensuite.
+
+Le dossier de sortie est par défaut un dossier par tâche dans les données de BMM, et peut être
+mis n'importe où — y compris un nom d'endroit, pour que « écrire dans le dossier que livre ce
+plugin » soit un réglage plutôt qu'un chemin qui casse sur la machine suivante.
+
+!!! note "Un chemin relatif ne peut pas remonter"
+
+    `../ailleurs/run.log` est refusé. C'est la seule forme que personne n'écrit par accident, et
+    la seule qui transforme « écrire dans mon dossier » en « écrire n'importe où ».
+
 ### Erreurs et branches
 
 ```bmms

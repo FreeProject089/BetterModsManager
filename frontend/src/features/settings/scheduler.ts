@@ -165,6 +165,18 @@ interface Task {
      *  Absent on an old task — taskPerms() derives it from allowCustomCommands. */
     perms?: TaskPerms;
     osSchedule?: boolean;   // also register a Windows Scheduled Task (runs when BMM is closed)
+    /**
+     * Where this task writes when it is given a RELATIVE path.
+     *
+     * Empty means `appdata:TaskOutput/<task id>`, which is the answer for almost everybody:
+     * somewhere that exists, is per-task, and is not the game folder. An absolute path or a
+     * place name (`mods:`, `plugin:x/bundle`) is honoured as written.
+     *
+     * The point is that `do file.write(path: "run.log", …)` has an obvious meaning and cannot
+     * land somewhere surprising. A task writing to a bare filename with no rule about where
+     * would write next to the executable, which is both wrong and hard to find.
+     */
+    outputDir?: string;
     /** When the task started existing. It is the CATCH-UP BASELINE: without it, a daily
      *  task created at 22:00 would consider today's 21:00 window missed and fire the
      *  moment you saved it. Backfilled on load for tasks written before this existed. */
@@ -1403,6 +1415,35 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
             await invoke('toggle_all_mods', { enable: false, bypassSha: false }); break;
         case 'mods.scan':
             await invoke('scan_mods_folder'); break;
+        case 'log.print': {
+            const line = String(p.message ?? p.text ?? '');
+            // Two places, on purpose. The running panel is what somebody watching sees; the
+            // log file is what they read afterwards, which is the case `print` exists for —
+            // a task that failed at 3am and the question is what it was holding at the time.
+            // runAction has no `state` of its own — runSteps holds it. Looked up by id, which
+            // is the same map and one call.
+            const rs = _running.get(task.id);
+            if (rs) { rs.step = line.slice(0, 200); renderRunningPanel(); }
+            ctx.text['log.last'] = line;
+            if (task.outputDir !== '-') {
+                try {
+                    await invoke('task_write_file', {
+                        taskId: task.id, outputDir: task.outputDir || null,
+                        path: 'run.log', text: `${new Date().toISOString()}  ${line}\n`, append: true,
+                    });
+                } catch { /* printing must never be the thing that fails a task */ }
+            }
+            break;
+        }
+        case 'file.write': {
+            const where = await invoke('task_write_file', {
+                taskId: task.id, outputDir: task.outputDir || null,
+                path: String(p.path || 'output.txt'), text: String(p.text ?? ''),
+                append: p.append === true || p.append === 'true',
+            }) as string;
+            ctx.text['file.written'] = where;
+            break;
+        }
         case 'mods.order': {
             // Two shapes, because there are two questions. "Make this one win" is what
             // somebody has when they are looking at a conflict; "here is the order" is what a
@@ -5301,6 +5342,8 @@ const ACTION_TYPES: { v: string; label: string; needs?: string; group: string }[
     // The glue between "a file changed" and "put the right mods on". Universal on purpose:
     // nothing here knows what DCS is except the one action that installs its hook.
     { v: 'text.extract', label: 'Read a value out of a file or a variable', needs: 'textExtract', group: 'logic' },
+    { v: 'log.print', label: 'Write a line to the log', needs: 'message', group: 'logic' },
+    { v: 'file.write', label: 'Write a file', needs: 'fileWrite', group: 'logic' },
     { v: 'modlist.apply', label: 'Apply a mod list (install what is missing)', needs: 'listApply', group: 'mods' },
     // One action for every game. DCS is a CASE inside it — the only one with a supported
     // callback API, so it gets a hook installed; everything else is a log and a pattern.
@@ -6009,6 +6052,10 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
                 placeholder="${escAttr(t('sched.tx.orVarPh') || 'a variable name')}"
                 value="${escAttr(params.source || '')}">
             <label class="sched-cmd-label">${escHtml(t('sched.tx.regex') || '2. Pattern')}</label>
+            <select class="input sched-p-txlib" data-csel-search="1" style="max-width:100%;margin-bottom:6px">
+                <option value="">${escHtml(t('sched.rx.pick'))}</option>
+                ${REGEX_LIBRARY.map((r) => `<option value="${escAttr(r.re)}">${escHtml(t(r.label))}</option>`).join('')}
+            </select>
             <input class="input sched-p-txregex" spellcheck="false"
                 placeholder="${escAttr(t('sched.tx.regexPh') || '')}"
                 value="${escAttr(params.regex || '')}">
@@ -6024,6 +6071,23 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
                 <input type="number" class="input sched-p-txtail" min="1" style="max-width:90px"
                     value="${escAttr(String(params.tailKb ?? 64))}">
             </div>
+        </div>`;
+    }
+    else if (needs === 'fileWrite') {
+        host.innerHTML = `<div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${escHtml(t('sched.fw.path'))}</label>
+            <div style="display:flex;gap:6px">
+                <input class="input sched-path" spellcheck="false" style="flex:1"
+                    placeholder="${escAttr(t('sched.fw.pathPh'))}" value="${escAttr(params.path || '')}">
+                <button type="button" class="btn btn-xs btn-ghost sched-browse-folder">${escHtml(t('common.browse') || 'Browse')}</button>
+            </div>
+            <span class="sched-cmd-hint">${escHtml(t('sched.fw.pathHint'))}</span>
+            <label class="sched-cmd-label">${escHtml(t('sched.fw.text'))}</label>
+            <textarea class="input sched-p-fwtext" rows="4" spellcheck="false"
+                placeholder="${escAttr(t('sched.fw.textPh'))}">${escHtml(params.text || '')}</textarea>
+            <label class="sched-cmd-opt"><input type="checkbox" class="sched-p-fwappend" ${params.append ? 'checked' : ''}>
+                <span>${escHtml(t('sched.fw.append'))}</span></label>
+            <span class="sched-cmd-hint">${escHtml(t('sched.fw.appendHint'))}</span>
         </div>`;
     }
     else if (needs === 'listApply') {
@@ -6468,6 +6532,17 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
         sel.addEventListener('input', set);
     }
     host.querySelector('.sched-p-mode')?.addEventListener('change', (e) => { params.mode = (e.target as HTMLSelectElement).value; });
+    // Picking a pattern FILLS the field rather than replacing it invisibly: the point is to
+    // see what you got, and to edit it afterwards.
+    host.querySelector('.sched-p-txlib')?.addEventListener('change', (e) => {
+        const v = (e.target as HTMLSelectElement).value;
+        if (!v) return;
+        params.regex = v;
+        const inp = host.querySelector('.sched-p-txregex') as HTMLInputElement | null;
+        if (inp) { inp.value = v; inp.focus(); }
+    });
+    host.querySelector('.sched-p-fwtext')?.addEventListener('input', (e) => { params.text = (e.target as HTMLTextAreaElement).value; });
+    host.querySelector('.sched-p-fwappend')?.addEventListener('change', (e) => { params.append = (e.target as HTMLInputElement).checked; });
     host.querySelector('.sched-p-order')?.addEventListener('input', (e) => { params.order = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-p-prog')?.addEventListener('input', (e) => { params.program = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-p-args')?.addEventListener('input', (e) => { params.args = (e.target as HTMLInputElement).value; });
@@ -6705,6 +6780,40 @@ const COND_TYPES = ['always', 'all', 'any', 'value', 'textIs', 'fileContains', '
 //
 // Keep this in step with the context writes in runAction. A source listed here with
 // nothing writing it reads as always-zero; a write missing from here is unreachable.
+
+/**
+ * Patterns worth not writing again.
+ *
+ * Every one of these is something people were writing by hand into `text.extract`, getting
+ * subtly wrong, and only finding out when a task read the wrong half of a line at 3am. A
+ * shelf of them is not a feature so much as a refusal to make everybody rediscover
+ * `\d+\.\d+\.\d+`.
+ *
+ * They all carry ONE capture group, because that is what `text.extract` keeps: a pattern with
+ * none matches and stores nothing, which reads exactly like a pattern that did not match.
+ */
+const REGEX_LIBRARY: { label: string; re: string }[] = [
+    { label: 'sched.rx.version', re: '\b(v?\d+\.\d+(?:\.\d+)?)\b' },
+    { label: 'sched.rx.number', re: '(-?\d+(?:\.\d+)?)' },
+    { label: 'sched.rx.url', re: '(https?://[^\s"<>)]+)' },
+    { label: 'sched.rx.ipv4', re: '\b((?:\d{1,3}\.){3}\d{1,3})\b' },
+    { label: 'sched.rx.hostPort', re: '([A-Za-z0-9.-]+:\d{2,5})' },
+    { label: 'sched.rx.email', re: '([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})' },
+    { label: 'sched.rx.sha256', re: '\b([a-fA-F0-9]{64})\b' },
+    { label: 'sched.rx.guid', re: '([0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12})' },
+    { label: 'sched.rx.isoDate', re: '(\d{4}-\d{2}-\d{2})' },
+    { label: 'sched.rx.time', re: '(\d{1,2}:\d{2}(?::\d{2})?)' },
+    { label: 'sched.rx.winPath', re: '([A-Za-z]:\\\\[^"<>|?*\r\n]+)' },
+    { label: 'sched.rx.quoted', re: '"([^"]*)"' },
+    { label: 'sched.rx.afterEquals', re: '=\s*(.+?)\s*$' },
+    { label: 'sched.rx.jsonString', re: '"name"\s*:\s*"([^"]*)"' },
+    { label: 'sched.rx.lastLine', re: '(.+)$' },
+    // The two people ask for by name. A DCS server line and a "player joined" line are the
+    // reason this list exists at all.
+    { label: 'sched.rx.joined', re: '(?:joined|connected)\s*:?\s*(.+?)\s*$' },
+    { label: 'sched.rx.error', re: '(?:ERROR|FATAL)\s*:?\s*(.+?)\s*$' },
+];
+
 const VALUE_SOURCES = [
     'disk.read_mbps', 'disk.write_mbps', 'disk.suggested_limit',
     'disk.free_gb', 'disk.free_percent', 'disk.total_gb',
