@@ -318,6 +318,15 @@ call "repair/fetch"
 Runs a named block from the scheduler's block store, inside this task and with this task's
 permissions.
 
+!!! warning "A block belongs to every task, not to this one"
+
+    They are stored once for the whole app. The panel is showing you every task's blocks, so
+    saving onto a name that exists replaces what somebody else's automation runs — and it asks
+    first, naming the tasks that call it.
+
+    Deleting one is refused while ANYTHING still calls it: another task, or another block. That
+    check used to look at the open task only, which is the one case where you already know.
+
 ### Folders, for when there are eleven of them
 
 A block name can hold a slash. `repair/fetch` and `repair/verify` sit in a `repair` folder in

@@ -9088,5 +9088,10 @@
   "sched.dbg.ended": "Exécution de débogage arrêtée.",
   "sched.dbg.noVars": "Aucune variable pour l'instant — rien n'a encore capturé quoi que ce soit.",
   "sched.scrTimeout": "Abandonner après (secondes)",
-  "sched.scrTimeoutHint": "Vide = cinq minutes. Au-delà, le script est arrêté — sous Windows avec tout ce qu'il a lancé — et l'étape échoue en le disant. Sans limite, un script qui attend une saisie retient la tâche jusqu'à la fermeture de BMM."
+  "sched.scrTimeoutHint": "Vide = cinq minutes. Au-delà, le script est arrêté — sous Windows avec tout ce qu'il a lancé — et l'étape échoue en le disant. Sans limite, un script qui attend une saisie retient la tâche jusqu'à la fermeture de BMM.",
+  "sched.bl.blockWord": "bloc",
+  "sched.bl.inuseBy": "Encore appelé par :",
+  "sched.bl.overwriteTitle": "Remplacer le bloc « {n} » ?",
+  "sched.bl.overwriteUsed": "Les blocs sont partagés par toutes les tâches : ça remplace donc ce qu'exécutent {n} appelant(s) :",
+  "sched.bl.overwriteFree": "Un bloc porte déjà ce nom. L'enregistrer remplace ses étapes partout — rien ne l'appelle encore."
 }

@@ -326,6 +326,16 @@ permissions de cette tâche.
 Un nom de bloc s'écrit comme un nom de variable — lettres, chiffres, tirets bas — éventuellement
 plusieurs joints par `/`. Un nom avec des espaces n'a jamais pu être enregistré.
 
+!!! warning "Un bloc appartient à toutes les tâches, pas à celle-ci"
+
+    Ils sont stockés une seule fois pour toute l'application. Le panneau te montre les blocs de
+    toutes les tâches : enregistrer sur un nom existant remplace donc ce qu'exécute
+    l'automatisation de quelqu'un d'autre — et ça demande d'abord, en nommant les tâches qui
+    l'appellent.
+
+    En supprimer un est refusé tant que N'IMPORTE QUOI l'appelle encore : une autre tâche, ou un
+    autre bloc. Ce contrôle ne regardait que la tâche ouverte — le seul cas où tu sais déjà.
+
 ### Des dossiers, pour quand il y en a onze
 
 `repair/fetch` et `repair/verify` se retrouvent dans un dossier `repair` dans le panneau, et

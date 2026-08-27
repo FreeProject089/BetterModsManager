@@ -9090,5 +9090,10 @@
   "sched.dbg.ended": "Debug run stopped.",
   "sched.dbg.noVars": "No variables yet — nothing has captured anything.",
   "sched.scrTimeout": "Give up after (seconds)",
-  "sched.scrTimeoutHint": "Empty means five minutes. Past this the script is stopped — on Windows along with anything it started — and the step fails saying so. Without a limit, a script waiting for input holds the task until BMM is closed."
+  "sched.scrTimeoutHint": "Empty means five minutes. Past this the script is stopped — on Windows along with anything it started — and the step fails saying so. Without a limit, a script waiting for input holds the task until BMM is closed.",
+  "sched.bl.blockWord": "block",
+  "sched.bl.inuseBy": "Still called by:",
+  "sched.bl.overwriteTitle": "Replace the block “{n}”?",
+  "sched.bl.overwriteUsed": "Blocks are shared by every task, so this replaces what {n} caller(s) run:",
+  "sched.bl.overwriteFree": "A block with that name already exists. Saving replaces its steps everywhere — nothing calls it yet."
 }

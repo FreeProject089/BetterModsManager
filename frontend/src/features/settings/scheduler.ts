@@ -22,6 +22,7 @@ import { BMMS_INDEX, type BmmsEntry } from '../../docs/bmms-reference.gen.js';
 import { outlineOf, offsetOfLine, renderOutline, explain, wordAtPoint, type OutlineRow } from './bmms-editor-aids.js';
 import { BMM_EVENTS, fireEvent, noteTaskRunning } from '../../core/bmm-events.js';
 import { treeOf, foldersOf, renderTree } from './block-tree.js';
+import { showConfirm } from '../../ui/confirm.js';
 import { debugging, gate, startDebug, endDebug, DebugStopped } from './sched-debug.js';
 import { parsePresetFeed, looksLikePresetFeed, readPresetCatalogs, writePresetCatalogs } from './preset-catalog.js';
 import { mountCompletions } from './bmms-complete.js';
@@ -4023,14 +4024,18 @@ function renderBlocksPanel(modal: HTMLElement): void {
 
     host.querySelectorAll('.sched-bl-del').forEach((btn) => btn.addEventListener('click', () => {
         const name = (btn as HTMLElement).dataset.name || '';
-        // Refused while a step still calls it. A block that vanishes turns every caller into a
-        // task that fails at a step which no longer exists — and it fails at RUN time, which is
-        // the worst moment to find out.
-        const used = _draft.steps.some(function seek(s: any): boolean {
-            if (s.kind === 'call' && s.block === name) return true;
-            return stepBodies(s).some((body) => body.some(seek));
-        });
-        if (used) { toast(t('sched.bl.inuse') || 'This task still calls that block.', 'warning'); return; }
+        // Refused while ANYTHING still calls it. A block that vanishes turns every caller into
+        // a task that fails at a step which no longer exists — at RUN time, which is the worst
+        // moment to find out.
+        //
+        // This used to check the OPEN task only, which is the one case where somebody already
+        // knows. Blocks are stored once for the whole app, so the caller that matters is
+        // usually a task nobody has open.
+        const used = blockCallers(name, _draft);
+        if (used.length) {
+            toast(`${t('sched.bl.inuseBy')} ${used.slice(0, 4).join(', ')}${used.length > 4 ? '…' : ''}`, 'warning', 9000);
+            return;
+        }
         const store = readBlocks();
         delete store[name];
         writeBlocks(store);
@@ -4039,16 +4044,30 @@ function renderBlocksPanel(modal: HTMLElement): void {
     }));
     }
 
-    host.querySelector('.sched-bl-save')?.addEventListener('click', () => {
+    host.querySelector('.sched-bl-save')?.addEventListener('click', async () => {
         const name = (host.querySelector('.sched-bl-name') as HTMLInputElement).value.trim();
         if (!BLOCK_NAME_RE.test(name)) {
             toast((t('sched.var.badName') || 'Not a usable variable name: {n}').replace('{n}', name || '(empty)'), 'warning');
             return;
         }
         if (!_draft.steps.length) { toast(t('sched.bl.nosteps') || 'Add some steps first.', 'warning'); return; }
+        const store = readBlocks();
+        // Saving onto a name that exists REPLACES it, everywhere, for every task — blocks are
+        // stored once for the whole app. Silently was the old behaviour, and the way to meet it
+        // was for somebody else's automation to start doing your steps.
+        if (store[name]) {
+            const callers = blockCallers(name, _draft);
+            const ok = await showConfirm(
+                t('sched.bl.overwriteTitle').replace('{n}', name),
+                callers.length
+                    ? `${t('sched.bl.overwriteUsed').replace('{n}', String(callers.length))} — ${callers.slice(0, 8).join(' · ')}`
+                    : t('sched.bl.overwriteFree'),
+                true,
+            );
+            if (!ok) return;
+        }
         // A deep copy, or editing the task afterwards would silently rewrite the block — the
         // saved thing has to stop being the same object.
-        const store = readBlocks();
         store[name] = JSON.parse(JSON.stringify(_draft.steps));
         writeBlocks(store);
         toast((t('sched.bl.saved') || 'Saved “{n}”.').replace('{n}', name), 'info');
@@ -7055,7 +7074,7 @@ const REGEX_LIBRARY: { label: string; re: string }[] = [
     { label: 'sched.rx.joined', re: '(?:joined|connected)\s*:?\s*(.+?)\s*$' },
     { label: 'sched.rx.error', re: '(?:ERROR|FATAL)\s*:?\s*(.+?)\s*$' },
 ];
-
+
 const VALUE_SOURCES = [
     'disk.read_mbps', 'disk.write_mbps', 'disk.suggested_limit',
     'disk.free_gb', 'disk.free_percent', 'disk.total_gb',
@@ -7386,6 +7405,38 @@ function stepBodies(st: any): Step[][] {
     for (const k of STEP_BODIES) if (Array.isArray(st?.[k])) out.push(st[k]);
     if (Array.isArray(st?.branches)) for (const b of st.branches) if (Array.isArray(b)) out.push(b);
     if (Array.isArray(st?.cases)) for (const c of st.cases) if (Array.isArray(c?.steps)) out.push(c.steps);
+    return out;
+}
+
+/**
+ * Everything that calls this block, by name.
+ *
+ * Blocks are stored in ONE place for the whole app, not per task — which is what makes them
+ * shareable and also what makes them dangerous: the panel is showing you every task's blocks,
+ * and the name you are about to save over may belong to something you have never opened.
+ *
+ * Blocks calling blocks are included. A helper called only by another helper is exactly the one
+ * nobody remembers, and it breaks the same way.
+ */
+function blockCallers(name: string, draft?: Task | null): string[] {
+    if (!name) return [];
+    const calls = (steps: Step[]): boolean => (steps || []).some(function seek(st: any): boolean {
+        if (st?.kind === 'call' && st.block === name) return true;
+        return stepBodies(st).some((body) => body.some(seek));
+    });
+    const out: string[] = [];
+    // The draft first: it is the one open on screen, and it is not in `_tasks` until saved.
+    if (draft && calls(draft.steps || [])) {
+        out.push(draft.name || t('sched.untitled') || 'Untitled');
+    }
+    for (const task of _tasks) {
+        if (draft && task.id === draft.id) continue;
+        if (calls(task.steps || [])) out.push(task.name || task.id);
+    }
+    const blocks = readBlocks();
+    for (const [other, steps] of Object.entries(blocks)) {
+        if (other !== name && calls(steps)) out.push(`${t('sched.bl.blockWord')} ${other}`);
+    }
     return out;
 }
 
