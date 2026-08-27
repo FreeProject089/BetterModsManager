@@ -68,6 +68,13 @@ pub struct AppSettings {
     pub current_sort_by: String,
     #[serde(default = "default_true")]
     pub last_session_clean: bool,
+    /// Has the one-time read-scope carry-over run?
+    ///
+    /// Fifty routes gained a permission at once; without this, every plugin already trusted
+    /// with a domain would lose the ability to LIST it on upgrade. Recorded rather than
+    /// re-derived, so a grant the user then revokes is not handed back on the next start.
+    #[serde(default)]
+    pub plugin_scopes_migrated: bool,
     #[serde(default)]
     pub auto_fill_metadata: bool,
     #[serde(default)]
@@ -186,6 +193,7 @@ impl Default for AppSettings {
             storage_critical_space_pct: default_storage_critical(),
             current_filter: default_filter(),
             current_sort_by: default_sort(),
+            plugin_scopes_migrated: false,
             last_session_clean: true,
             auto_fill_metadata: false,
             cloudflared_path: None,

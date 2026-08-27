@@ -2,7 +2,7 @@
 
 > URL de base de l'API HTTP locale : `http://127.0.0.1:51274`
 > Auth : la plupart des endpoints exigent l'en-tête `Authorization: Bearer <TOKEN_API>` (le token est affiché dans **Plugins & API → Token API**).
-> Portée plugin : une requête peut inclure `X-BMM-Plugin-Id: <id>`. Si présent, l'appel est vérifié contre les permissions accordées à ce plugin (voir **Permissions**). Sans cet en-tête, l'appel a un accès complet (admin).
+> Portée plugin : l'identité de l'appelant vient du JETON, jamais de l'en-tête `X-BMM-Plugin-Id`. Le jeton admin a l'accès complet ; un jeton de plugin est vérifié contre les permissions accordées à ce plugin (voir **Permissions**). Omettre ou falsifier l'en-tête ne change rien — c'est ce qui empêche un plugin de s'élever en le retirant.
 
 Ce document est la source de vérité unique pour tout ce qui est pilotable par programme. Objectif : **tout ce que vous pouvez faire à la main dans BMM peut se faire via l'API / les deeplinks sans intervention humaine** (là où un dialogue de fichier natif est normalement nécessaire, un champ optionnel `path` / `destDir` permet de le contourner).
 
@@ -221,20 +221,42 @@ Les deeplinks sont des URL cliquables (pages web, Discord, scripts) qui pilotent
 
 ## Permissions
 
-Les permissions ne s'appliquent que lorsqu'une requête porte `X-BMM-Plugin-Id`. Accordées via `PUT /api/apps/permissions/:id`.
+Les permissions qui s'appliquent sont décidées par le jeton que porte la requête. Accordées via `PUT /api/apps/permissions/:id`, qui exige le jeton **admin**.
 
-| Permission | Accorde |
+| Permission | Autorise |
 |---|---|
-| `app.read` | lire les apps installées (`GET /api/apps`) |
-| `app.write` | installer / lancer / désinstaller des apps |
-| `catalog.read` | lire le catalogue local |
-| `catalog.write` | créer / éditer / supprimer des entrées de catalogue |
-| `mods.write` | activer / désactiver / éditer / supprimer des mods |
-| `profiles.write` | créer / éditer / supprimer / activer des profils |
-| `modpacks.write` | créer / activer / désactiver / éditer / supprimer des modpacks |
-| `plugins.read` | comparer la modlist d'un plugin |
-| `plugins.write` | appliquer un plugin |
-| `repo.write` | connecter / déconnecter / synchroniser / générer des repos |
+| `app.read` | lister les applications installées et leurs permissions |
+| `app.write` | installer, lancer et retirer des applications |
+| `catalog.read` | lire le catalogue d'applications local |
+| `catalog.write` | créer, modifier et supprimer des entrées du catalogue |
+| `data.read` | lire TOUT ce que BMM contient (`GET /api/data`) et l'exporter dans un fichier |
+| `data.write` | importer des données par-dessus les vôtres |
+| `hooks.read` | voir quels hooks ont sonné |
+| `hooks.write` | sonner un hook qu'une automatisation attend peut-être |
+| `keys.read` | voir quelles clés d'identité existent |
+| `keys.write` | créer une clé d'identité — ce qui prouve que vous êtes vous auprès de chaque source protégée |
+| `modpacks.read` | lister et exporter les modpacks |
+| `modpacks.write` | créer, modifier, appliquer et supprimer les modpacks |
+| `mods.read` | lister les mods, et voir lequel gagne un fichier partagé |
+| `mods.write` | activer, désactiver, mettre à jour, supprimer et réordonner les mods |
+| `plugins.read` | lister les plugins, comparer une modlist, lire les fichiers livrés |
+| `plugins.write` | installer, appliquer et SUPPRIMER des plugins — y compris d'autres |
+| `profiles.read` | lister les profils |
+| `profiles.write` | créer, modifier, supprimer et activer des profils |
+| `repo.read` | voir quels repos sont connectés et ce qu'ils contiennent |
+| `repo.write` | connecter, synchroniser, publier et héberger des repos |
+| `schedules.read` | lister les automatisations enregistrées |
+| `schedules.write` | exécuter une automatisation, l'armer ou la désarmer |
+| `system.write` | redémarrer BMM, changer l'écran ouvert, lancer un benchmark, importer une langue |
+| `telemetry.write` | changer ce qui est enregistré et ce qui est envoyé |
+
+> La liste vit dans le code sous le nom `api::PLUGIN_SCOPES`, et un test vérifie qu'elle correspond au routeur dans les deux sens — une portée exigée que rien ne peut accorder est une route inatteignable, et une portée qui ne protège aucune route est une case à cocher qui promet une protection inexistante. Ce sont exactement les cases de **Plugins & API → Permissions**.
+
+> **Les lectures sont protégées.** Elles ne l'étaient pas : cinquante routes demandaient un jeton et aucune permission, et un jeton de plugin est un jeton valide — donc `GET /api/data`, `POST /api/data/import`, `POST /api/restart` et `DELETE /api/plugins/<id>` étaient atteignables par un plugin sans aucune permission. À la mise à jour, chaque plugin conserve la moitié lecture de chaque domaine sur lequel il avait déjà l'écriture ; rien d'autre n'est reporté, et un plugin qui s'appuyait sur un domaine jamais accordé reçoit un `403` qui nomme la portée.
+
+> **La table des permissions exige le jeton admin**, jamais un jeton de plugin : un plugin capable de `PUT` ses propres autorisations pourrait tout s'accorder.
+
+> Les chaînes de permission inconnues sont stockées telles quelles et ne protègent rien.
 
 > Ces scopes sont appliqués côté serveur dans `src-tauri/src/api/mod.rs` via `require_permission(...)` et correspondent exactement aux cases affichées dans **Plugins & API → Permissions** (groupées par domaine). En accorder une dans l'UI débloque les endpoints correspondants pour ce plugin.
 

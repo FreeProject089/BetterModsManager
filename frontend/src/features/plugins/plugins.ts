@@ -22,6 +22,42 @@ import { writeSources } from '../catalogs/catalog-sources.js';
  * API produced one console error per feature that asked, and the real cause sat in the crash
  * log. Asking only when something is listening is the fix; the fallback stays identical.
  */
+// matching API endpoints for a plugin (when it sends X-BMM-Plugin-Id).
+//
+// TWENTY-FOUR scopes, mirroring `api::mod::PLUGIN_SCOPES`, and a Rust test asserts the
+// router and that list agree in both directions.
+//
+// This screen used to offer eleven. The comment above it said read scopes did not exist
+// because "the GET routes carry no require_permission filter" — which was true of most
+// of them and had become the reason fifty routes were reachable by any plugin holding a
+// token at all: `GET /api/data`, `POST /api/data/import`, `POST /api/restart`,
+// `DELETE /api/plugins/<id>`. They are gated now, so the checkboxes are the boundary
+// they always looked like.
+//
+// Read and write are separate in every domain that has something to disclose. Knowing
+// is not the same permission as changing, and for keys that IS the distinction: listing
+// which identities exist is not minting one that signs on the user's behalf.
+export function permDomains(): { domain: string; color: string; scopes: string[] }[] {
+    return [
+        { domain: t('plugins.permDomMods')     || 'Mods',        color: '#3b82f6', scopes: ['mods.read', 'mods.write'] },
+        { domain: t('plugins.permDomProfiles') || 'Profiles',    color: '#a855f7', scopes: ['profiles.read', 'profiles.write'] },
+        { domain: t('plugins.permDomModpacks') || 'Modpacks',    color: '#8b5cf6', scopes: ['modpacks.read', 'modpacks.write'] },
+        { domain: t('plugins.permDomPlugins')  || 'Plugins',     color: '#ec4899', scopes: ['plugins.read', 'plugins.write'] },
+        { domain: t('plugins.permDomRepo')     || 'Server Repo', color: '#10b981', scopes: ['repo.read', 'repo.write'] },
+        // Its own domain, not folded into Repo. An identity key is what proves you are you
+        // to every protected source; granting "can publish a repo" must not also grant
+        // "can mint the thing I sign with" — nor, now, "can see which identities exist".
+        { domain: t('plugins.permDomKeys')      || 'Identity keys', color: '#eab308', scopes: ['keys.read', 'keys.write'] },
+        { domain: t('plugins.permDomApps')     || 'App Catalog', color: '#f97316', scopes: ['app.read', 'app.write', 'catalog.read', 'catalog.write'] },
+        // The three that had no checkbox at all, and are the ones worth reading twice.
+        { domain: t('plugins.permDomData')      || 'Your data',    color: '#ef4444', scopes: ['data.read', 'data.write'] },
+        { domain: t('plugins.permDomSchedules') || 'Automations',  color: '#06b6d4', scopes: ['schedules.read', 'schedules.write'] },
+        { domain: t('plugins.permDomHooks')     || 'Hooks',        color: '#14b8a6', scopes: ['hooks.read', 'hooks.write'] },
+        { domain: t('plugins.permDomSystem')    || 'The app itself', color: '#64748b', scopes: ['system.write'] },
+        { domain: t('plugins.permDomTelemetry') || 'Privacy & recording', color: '#f43f5e', scopes: ['telemetry.write'] },
+    ];
+}
+
 async function fetchModpacks(init?: RequestInit): Promise<any[]> {
     if (!apiRunning()) return [];
     try {
@@ -4962,16 +4998,10 @@ function buildEndpointRow(ep: EndpointDef): string {
     const safeId = (ep.method.toLowerCase() + '_' + ep.path).replace(/\//g, '_').replace(/^_/, '').replace(/:/g, '');
 
     // For permission/app/catalog endpoints, show the available permission chips
-    const PERM_GROUPS: { g: string; c: string; perms: string[] }[] = [
-        { g: 'Apps',     c: '#f97316', perms: ['app.read', 'app.write'] },
-        { g: 'Catalog',  c: '#06b6d4', perms: ['catalog.read', 'catalog.write'] },
-        { g: 'Mods',     c: '#3b82f6', perms: ['mods.write'] },
-        { g: 'Profiles', c: '#a855f7', perms: ['profiles.write'] },
-        { g: 'Modpacks', c: '#8b5cf6', perms: ['modpacks.write'] },
-        { g: 'Plugins',  c: '#ec4899', perms: ['plugins.read', 'plugins.write'] },
-        { g: 'Repo',     c: '#10b981', perms: ['repo.write'] },
-        { g: 'Keys',     c: '#eab308', perms: ['keys.write'] },
-    ];
+    // The SAME list the permission screen draws. Two copies had already drifted: this one
+    // named app.read and catalog.read, the screen did not offer them, and neither mentioned
+    // the thirteen scopes the router had gained.
+    const PERM_GROUPS = permDomains().map(d => ({ g: d.domain, c: d.color, perms: d.scopes }));
     const showsPerms = ep.path === '/api/apps/permissions/:id' && ep.method === 'PUT';
     const permChipsHtml = showsPerms ? `
         <div class="plug-ep-perms" style="margin:10px 0;padding:11px 13px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:9px;">
@@ -6300,9 +6330,14 @@ function getEndpointDefs(): EndpointDef[] {
         {
             method: 'PUT', path: '/api/apps/permissions/:id', auth: true,
             desc: t('plugins.ep.setPerms') || 'Set Plugin Perms',
-            about: t('plugins.epAbout.permsSet') || 'Replaces the full permission list for a plugin. Available permissions: <code>app.read</code>, <code>app.write</code>, <code>catalog.read</code>, <code>catalog.write</code>, <code>modpacks.write</code>, <code>keys.write</code>, <code>mods.write</code>, <code>plugins.read</code>, <code>plugins.write</code>, <code>profiles.write</code>, <code>repo.write</code>. Read endpoints are not permission-gated, so there is no <code>mods.read</code> or <code>profiles.read</code> to grant. Replace <code>:id</code> with the plugin ID.',
+            // The list is BUILT, not written down. This paragraph named eleven scopes and
+            // then explained that read scopes did not exist — which stopped being true, and
+            // a hand-kept third copy of a list is a third chance to say so after the fact.
+            about: `${t('plugins.epAbout.permsSet') || 'Replaces the full permission list for a plugin. Granting is all-or-nothing per scope, and an empty array revokes everything. Replace <code>:id</code> with the plugin ID.'} ${
+                (t('plugins.epAbout.permsAvail') || 'Available:')} ${
+                permDomains().flatMap(d => d.scopes).map(x => `<code>${x}</code>`).join(', ')}.`,
             fields: [
-                { name: 'permissions', type: 'array', required: true, desc: 'Array of permission strings to grant. Available values: app.read, app.write, catalog.read, catalog.write, keys.write, modpacks.write, mods.write, plugins.read, plugins.write, profiles.write, repo.write. Unknown strings are stored but gate nothing. An empty array revokes everything.' },
+                { name: 'permissions', type: 'array', required: true, desc: `${t('plugins.epField.perms') || 'Array of permission strings to grant. Unknown strings are stored but gate nothing. An empty array revokes everything.'} ${permDomains().flatMap(d => d.scopes).join(', ')}.` },
             ],
             responseStatuses: [
                 { code: 200, label: 'OK', body: '{ "ok": true, "plugin_id": "my-plugin", "permissions": ["app.read", "catalog.write"] }' },
@@ -9197,24 +9232,7 @@ function _jsAction(a: any, token: string | null, useDeeplink: boolean, base: str
 async function renderPerms(container: HTMLElement) {
     // Canonical scopes — these EXACTLY match the backend `require_permission(...)`
     // checks in src-tauri/src/api/mod.rs. Granting one here actually unlocks the
-    // matching API endpoints for a plugin (when it sends X-BMM-Plugin-Id).
-    //
-    // Only write scopes exist for mods/profiles/modpacks/repo: the GET routes carry no
-    // `require_permission` filter at all, so a `mods.read`-style scope would be a checkbox
-    // that grants nothing and withholds nothing. Reads are bounded by the loopback bind and
-    // the CORS allow-list instead. Do not add a scope here without a filter to back it.
-    const PERM_GROUPS: { domain: string; color: string; scopes: string[] }[] = [
-        { domain: t('plugins.permDomMods')     || 'Mods',        color: '#3b82f6', scopes: ['mods.write'] },
-        { domain: t('plugins.permDomProfiles') || 'Profiles',    color: '#a855f7', scopes: ['profiles.write'] },
-        { domain: t('plugins.permDomModpacks') || 'Modpacks',    color: '#8b5cf6', scopes: ['modpacks.write'] },
-        { domain: t('plugins.permDomPlugins')  || 'Plugins',     color: '#ec4899', scopes: ['plugins.read', 'plugins.write'] },
-        { domain: t('plugins.permDomRepo')     || 'Server Repo', color: '#10b981', scopes: ['repo.write'] },
-        // Its own domain, not folded into Repo. An identity key is what proves you are you
-        // to every protected source; granting "can publish a repo" must not also grant
-        // "can mint the thing I sign with".
-        { domain: t('plugins.permDomKeys')      || 'Identity keys', color: '#eab308', scopes: ['keys.write'] },
-        { domain: t('plugins.permDomApps')     || 'App Catalog', color: '#f97316', scopes: ['app.read', 'app.write', 'catalog.read', 'catalog.write'] },
-    ];
+    const PERM_GROUPS = permDomains();
     const ALL_PERMS = PERM_GROUPS.flatMap(g => g.scopes);
 
     const globalAllowed   = localStorage.getItem('bmm_plug_allow_global') === 'always';
@@ -9454,10 +9472,11 @@ async function renderPerms(container: HTMLElement) {
                             <div class="plug-perm-domain-h" style="color:${g.color};">${escHtml(g.domain)}</div>
                             <div class="plug-perm-domain-row">
                                 ${g.scopes.map(perm => `
-                                    <label class="plug-perm-item">
+                                    <label class="plug-perm-item" data-tooltip="${escHtml(t('plugins.scope.' + perm) || '')}">
                                         <input type="checkbox" class="plug-perm-check" data-perm="${perm}" style="accent-color:${g.color};"
                                             ${(currentPerms.includes(perm) || plugin.manifest.permissions?.includes(perm)) ? 'checked' : ''}>
                                         <code style="color:${g.color};font-size:11px;">${perm}</code>
+                                        <span class="plug-perm-what">${escHtml(t('plugins.scope.' + perm) || '')}</span>
                                     </label>`).join('')}
                             </div>
                         </div>`).join('')}

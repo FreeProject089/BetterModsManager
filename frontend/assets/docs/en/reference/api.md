@@ -60,19 +60,38 @@ For a plugin token the caller's identity comes **from the token**, never from th
 `X-BMM-Plugin-Id` header — a plugin cannot escalate by forging or omitting that header. Grant with
 `PUT /api/apps/permissions/<plugin_id>`:
 
-`app.read` · `app.write` · `catalog.read` · `catalog.write` · `keys.write` · `modpacks.write` ·
-`mods.write` · `plugins.read` · `plugins.write` · `profiles.write` · `repo.write`
+`app.read` · `app.write` · `catalog.read` · `catalog.write` · `data.read` · `data.write` ·
+`hooks.read` · `hooks.write` · `keys.read` · `keys.write` · `modpacks.read` · `modpacks.write` ·
+`mods.read` · `mods.write` · `plugins.read` · `plugins.write` · `profiles.read` · `profiles.write` ·
+`repo.read` · `repo.write` · `schedules.read` · `schedules.write` · `system.write` · `telemetry.write`
+
+That list lives in the code as `api::PLUGIN_SCOPES`, and a test asserts it matches the router
+in both directions: a scope the router demands that nothing can grant is a route nothing can
+reach, and a scope that gates no route is a checkbox promising protection it does not give.
 
 !!! warning "`keys.write` is deliberately not part of `repo.write`"
 
     An identity key is what proves you are *you* to every protected source. "Can publish a
-    repo" must not also mean "can mint the thing I sign with", so it is its own grant.
+    repo" must not also mean "can mint the thing I sign with", so it is its own grant — and
+    `keys.read`, seeing which identities exist, is separate again.
 
-!!! note "Read endpoints are not permission-gated"
+!!! note "Read and write are separate, and reads ARE gated"
 
-    There is no `mods.read` / `profiles.read`. Routes below marked *no token* are open to anything
-    that can reach the port; routes marked *token* accept **any** valid token, including a plugin
-    token with no permissions at all.
+    They were not. Fifty routes needed a token and no permission at all, and `require_token`
+    accepts **any** plugin token — so `GET /api/data` (the full dump), `POST /api/data/import`,
+    `POST /api/restart` and `DELETE /api/plugins/<id>` were reachable by a plugin with an empty
+    permission list. They are gated now.
+
+    On upgrade, each plugin keeps the read half of every domain it already had write on:
+    trusted to change your mods means still able to list them. Nothing else is carried over,
+    so a plugin that was leaning on a domain it was never granted now gets a `403` naming the
+    scope — which is one click from granted, and a great deal better than a silent hole.
+
+!!! danger "The permission table itself is admin-only"
+
+    `GET`/`PUT /api/apps/permissions*` take the **admin token**, never a plugin token. A plugin
+    that could `PUT` its own grants could grant itself everything, which would make this entire
+    page decorative.
 
 ### Errors
 
@@ -294,20 +313,20 @@ Two shapes sit outside that rule:
 | `GET` | `/api/health` | — | `{ok, service, port}` — the liveness probe, and how to learn the real port |
 | `GET` | `/api/status` | — | App version, active profile, mod/profile/plugin counts |
 | `GET` | `/api/check-update` | — | Latest GitHub release vs current: `has_update`, `release_url` |
-| `GET` | `/api/mods` | — | Visible mods of the active profile |
-| `GET` | `/api/mods/active` | — | Only the enabled ones |
-| `GET` | `/api/mods/all` | — | Every mod of **every** profile, grouped, plus `total_mods` |
-| `GET` | `/api/profiles` | — | All profiles with their mod lists |
-| `GET` | `/api/plugins` | — | Installed plugins (manifest + `enabled`) |
-| `GET` | `/api/modpacks` | — | All saved modpacks |
+| `GET` | `/api/mods` | `mods.read` | Visible mods of the active profile |
+| `GET` | `/api/mods/active` | `mods.read` | Only the enabled ones |
+| `GET` | `/api/mods/all` | `mods.read` | Every mod of **every** profile, grouped, plus `total_mods` |
+| `GET` | `/api/profiles` | `profiles.read` | All profiles with their mod lists |
+| `GET` | `/api/plugins` | `plugins.read` | Installed plugins (manifest + `enabled`) |
+| `GET` | `/api/modpacks` | `modpacks.read` | All saved modpacks |
 | `GET` | `/api/creator-id` | — | This install's creator id (used when exporting plugins) |
-| `GET` | `/api/repo/info` | — | Fetches a remote `repo.json`. Query `url`*, `password`. `401` if protected, `502` if the remote fails. **`extras` is part of it** — reading what a repo carries besides mods needs no separate endpoint |
-| `GET` | `/api/repo/list` | — | Registered remote repos |
+| `GET` | `/api/repo/info` | `repo.read` | Fetches a remote `repo.json`. Query `url`*, `password`. `401` if protected, `502` if the remote fails. **`extras` is part of it** — reading what a repo carries besides mods needs no separate endpoint |
+| `GET` | `/api/repo/list` | `repo.read` | Registered remote repos |
 | `GET` | `/api/language/template` | — | `lang-template.json`, a flat `{"key": "English"}` map |
-| `GET` | `/api/data` | token | **Full `data.json` dump** — profiles, mods, modpacks, plugins, settings, tags |
+| `GET` | `/api/data` | `data.read` | **Full `data.json` dump** — profiles, mods, modpacks, plugins, settings, tags |
 | `GET` | `/api/apps` | `app.read` | Apps installed through the catalog |
-| `GET` | `/api/apps/permissions` | token | `plugin_id → [permissions]` |
-| `GET` | `/api/apps/permissions/:id` | token | One plugin's permissions |
+| `GET` | `/api/apps/permissions` | admin token | `plugin_id → [permissions]` |
+| `GET` | `/api/apps/permissions/:id` | admin token | One plugin's permissions |
 | `GET` | `/api/catalog` | `catalog.read` | The local app catalog |
 
 !!! danger "`GET /api/data` is the whole database"
@@ -323,10 +342,10 @@ Two shapes sit outside that rule:
 | `POST` | `/api/mods/enable` | `mods.write` | `mod_id`* | ✓ |
 | `POST` | `/api/mods/disable` | `mods.write` | `mod_id`* | ✓ |
 | `GET` | `/api/mods/order` | `mods.read` | — · the deployment order plus every contested file and who wins it | |
-| `GET` | `/api/schedules` | token | — · a summary of every saved task: id, name, whether it is on, its trigger. **Not** its steps | |
-| `POST` | `/api/schedules/enabled` | token | `id`*, `enabled`* · arm or disarm one task. Only `enabled` can be changed — a route that could write a whole task could install one with a script step in it | |
-| `POST` | `/api/hook` | token | `name`*, `data` · ring a named doorbell a task may be waiting on with `wait.hook`, or be triggered by with `on event` | |
-| `GET` | `/api/hook` | token | `name` · what has rung, without consuming it — for the screen that asks “is my webhook actually arriving?” | |
+| `GET` | `/api/schedules` | `schedules.read` | — · a summary of every saved task: id, name, whether it is on, its trigger. **Not** its steps | |
+| `POST` | `/api/schedules/enabled` | `schedules.write` | `id`*, `enabled`* · arm or disarm one task. Only `enabled` can be changed — a route that could write a whole task could install one with a script step in it | |
+| `POST` | `/api/hook` | `hooks.write` | `name`*, `data` · ring a named doorbell a task may be waiting on with `wait.hook`, or be triggered by with `on event` | |
+| `GET` | `/api/hook` | `hooks.read` | `name` · what has rung, without consuming it — for the screen that asks “is my webhook actually arriving?” | |
 | `POST` | `/api/mods/order` | `mods.write` | `order[]`*, `profileId` · must be the same set of mods that are active; re-copies the files that change hands | |
 | `PUT` | `/api/mods/:id` | `mods.write` | `name`, `version`, `author`, `description`, `tags[]`, `install_notes` | |
 | `DELETE` | `/api/mods/:id` | `mods.write` | — · removes the entry, **keeps the files** | |
@@ -347,7 +366,7 @@ Two shapes sit outside that rule:
 | `DELETE` | `/api/modpacks/:id` | `modpacks.write` | — · irreversible, local mods kept | |
 | `POST` | `/api/plugins/compare` | `plugins.read` | `plugin_id`* → `missing_required`, `strict_extra` | ✓ |
 | `POST` | `/api/plugins/apply` | `plugins.write` | `plugin_id`*, `force_strict` → `enabled`, `not_found` | ✓ |
-| `DELETE` | `/api/plugins/:id` | token | — · registry + permissions + files | ✓ |
+| `DELETE` | `/api/plugins/:id` | `plugins.write` | — · registry + permissions + files | ✓ |
 
 ### Server repo
 
@@ -356,23 +375,23 @@ Two shapes sit outside that rule:
 | `POST` | `/api/repo/connect` | `repo.write` | `url`*, `name` | ✓ |
 | `DELETE` | `/api/repo` | `repo.write` | `url`* · files kept | |
 | `POST` | `/api/repo/sync` | `repo.write` | `url`*, `choices[]`*, `gameDir`, `modsDir`, `backupDir`, `creatorId`, `password`, `overwriteAll`, `deleteExtra`, `downloadLimit` → `202 {job_id}`. **One at a time** (`409`) | ✓ |
-| `DELETE` | `/api/repo/sync/cancel` | token | — · stops at the next mod boundary | |
+| `DELETE` | `/api/repo/sync/cancel` | `repo.write` | — · stops at the next mod boundary | |
 | `POST` | `/api/repo/gen` | `repo.write` | `profileIds[]`*, `outputDir`*, `authorName`*, `seed`, `generateServer`, `port`, `uploadLimit`, `adminPassword`, `useCloudflare`, `useUpnp`, `autoStart`, `lang`, `serverVersion` (number), `serverType` (`std`/`lux`), `lightweight`, `zipOutput`, `useDocker`, `dockerOs` → `202` | ✓ |
-| `DELETE` | `/api/repo/gen/cancel` | token | — | |
-| `POST` | `/api/repo/update` | token | `repoDir`*, `authorName`, `removeModIds[]`, `removeProfileIds[]`, `addProfiles[]`, `modChangelogs{}` → `202` | ✓ |
-| `POST` | `/api/repo/host` | token | `serveDir`*, `port`, `uploadLimit` → `202`, `409` if already serving | ✓ |
-| `DELETE` | `/api/repo/host` | token | — | |
+| `DELETE` | `/api/repo/gen/cancel` | `repo.write` | — | |
+| `POST` | `/api/repo/update` | `repo.write` | `repoDir`*, `authorName`, `removeModIds[]`, `removeProfileIds[]`, `addProfiles[]`, `modChangelogs{}` → `202` | ✓ |
+| `POST` | `/api/repo/host` | `repo.write` | `serveDir`*, `port`, `uploadLimit` → `202`, `409` if already serving | ✓ |
+| `DELETE` | `/api/repo/host` | `repo.write` | — | |
 | `POST` | `/api/repo/manifest` | `repo.write` | `dir`*, `authorName` · writes `repo.json` for a folder that is ALREADY hosted. Needs no profile and copies nothing — it reads the directory, writes one file, and returns the diff. Synchronous, so a publish script can act on the result | |
-| `POST` | `/api/repo/publish-ssh` | token | `dir`* · uploads over SSH **using the connection already saved in the app**. The host, the user and the key are deliberately NOT parameters: a caller able to name them could make BMM read a private key of its choosing and ship a repo to a machine of its choosing. Driven through the UI, so the upload is visible and cancellable → `202` | |
-| `POST` | `/api/repo/fetch-ssh` | token | `dir`* · the same rule, and it matters more in this direction: publishing writes to a server the owner chose, fetching writes to the owner's own disk. Only the destination is a parameter, and the backend refuses any remote path that would escape it → `202` | |
+| `POST` | `/api/repo/publish-ssh` | `repo.write` | `dir`* · uploads over SSH **using the connection already saved in the app**. The host, the user and the key are deliberately NOT parameters: a caller able to name them could make BMM read a private key of its choosing and ship a repo to a machine of its choosing. Driven through the UI, so the upload is visible and cancellable → `202` | |
+| `POST` | `/api/repo/fetch-ssh` | `repo.write` | `dir`* · the same rule, and it matters more in this direction: publishing writes to a server the owner chose, fetching writes to the owner's own disk. Only the destination is a parameter, and the backend refuses any remote path that would escape it → `202` | |
 | `POST` | `/api/repo/extras` | `repo.write` | `url`*, `kind`*, `id`*, `creatorId`, `password` · takes ONE thing a repo carries besides mods. The entry is looked up in the manifest BMM fetches — a caller cannot describe its own `{kind, url, sha256}`, because that would be using BMM's installer to install arbitrary files and the hash check would be checking the caller's own number. A plugin or automation arrives **disabled**; a catalogue is followed; a mod list is saved and its path returned | |
 | `GET` | `/api/plugins/assets` | `plugins.read` | Query `id`* · the files a plugin ships in `assets/`. Add `path` and it returns that file's TEXT instead of the list. Reads the folder, not the manifest. Text kinds only — an image is refused by kind rather than returned as noise, and nothing is executed |
-| `GET` | `/api/catalogs` | token | — · what BMM follows, by type, plus `written_at`. A MIRROR the interface pushes: no `written_at` means the app has not run since this existed, which is not the same fact as following nothing |
+| `GET` | `/api/catalogs` | `catalog.read` | — · what BMM follows, by type, plus `written_at`. A MIRROR the interface pushes: no `written_at` means the app has not run since this existed, which is not the same fact as following nothing |
 | `POST` | `/api/catalogs` | `catalog.write` | `type`*, `url`*, `follow` (default true) → `202`. Driven through the app's own screens, so the reply means "the app was told", not "the list now says this" — and the source lands in the following list with an origin, removable like any other |
-| `GET` | `/api/keys` | `keys.write` | — · names and paths only. There is no endpoint that reads a private key | |
+| `GET` | `/api/keys` | `keys.read` | — · names and paths only. There is no endpoint that reads a private key | |
 | `POST` | `/api/keys` | `keys.write` | `name`*, `kind` (`ed25519` default · `ecdsa` · `rsa`) → `201 {path, public, ring}`. The response carries the **public** line and where the private half went — never the private half itself, because replies are logged by callers, proxied and read in browser tabs. A name already on the ring is refused rather than overwritten | |
-| `POST` | `/api/mod/check-updates` | token | — → `202` | ✓ |
-| `POST` | `/api/mod/update` | token | `repoUrl` → `202` | ✓ |
+| `POST` | `/api/mod/check-updates` | `mods.write` | — → `202` | ✓ |
+| `POST` | `/api/mod/update` | `mods.write` | `repoUrl` → `202` | ✓ |
 
 ### Apps & catalog
 
@@ -381,7 +400,7 @@ Two shapes sit outside that rule:
 | `POST` | `/api/apps/install` | `app.write` | `appId`*, `appTitle`*, `downloadUrl`*, `fileType`*, `installPath`, `version`, `category`, `thumb` → `202` | ✓ |
 | `POST` | `/api/apps/launch` | `app.write` | `appId`*, `exePath`* | ✓ |
 | `DELETE` | `/api/apps/:id` | `app.write` | — · deregisters, files kept | |
-| `PUT` | `/api/apps/permissions/:id` | token | `permissions[]`* · **replaces** the list; `[]` revokes everything | |
+| `PUT` | `/api/apps/permissions/:id` | admin token | `permissions[]`* · **replaces** the list; `[]` revokes everything | |
 | `POST` | `/api/catalog/new` | `catalog.write` | `name`, `description`, `partner_catalogs[]`, `community_imports[]`, `apps[]` → `201` | |
 | `POST` | `/api/catalog/apps` | `catalog.write` | `id`*, `title`*, `download`* `{url, file_type}`, `description`, `category`, `price`, `tags` (≤3), `requirements`, `md_link` → `201` | |
 | `PUT` | `/api/catalog/apps/:id` | `catalog.write` | `title`, `description`, `version`, `category`, `download` | |
@@ -395,31 +414,31 @@ is `data/export-auto`.
 | Method | Path | Auth | Body | DL |
 |---|---|---|---|---|
 | `POST` | `/api/data/export` · `/api/data/import` | token | — | |
-| `POST` | `/api/data/export-auto` | token | `dir`*, `name`, `increment` · **unattended**, no dialog | ✓ |
+| `POST` | `/api/data/export-auto` | `data.read` | `dir`*, `name`, `increment` · **unattended**, no dialog | ✓ |
 | `POST` | `/api/modlists/export` · `/api/modlists/import` | token | — · `.mm`, metadata only, no mod files | |
-| `POST` | `/api/modpacks/import` | token | `path` | |
-| `POST` | `/api/modpacks/export` | token | `id`*, `destDir` | |
-| `POST` | `/api/plugins/import` | token | — | |
-| `POST` | `/api/plugins/export` | token | `id`* → `.bmmplug` | |
-| `POST` | `/api/language/import` | token | `path` · the filename becomes the language code; `template.json` is refused | ✓ |
-| `POST` | `/api/profiles/import/ovgme` | token | — · scans `%PROGRAMDATA%/OvGME` | |
-| `POST` | `/api/profiles/import/omm` | token | — · OpenModManager `.omm`/`.omx` | |
+| `POST` | `/api/modpacks/import` | `modpacks.write` | `path` | |
+| `POST` | `/api/modpacks/export` | `modpacks.read` | `id`*, `destDir` | |
+| `POST` | `/api/plugins/import` | `plugins.write` | — | |
+| `POST` | `/api/plugins/export` | `plugins.read` | `id`* → `.bmmplug` | |
+| `POST` | `/api/language/import` | `system.write` | `path` · the filename becomes the language code; `template.json` is refused | ✓ |
+| `POST` | `/api/profiles/import/ovgme` | `profiles.write` | — · scans `%PROGRAMDATA%/OvGME` | |
+| `POST` | `/api/profiles/import/omm` | `profiles.write` | — · OpenModManager `.omm`/`.omx` | |
 
 ### Automation & privacy
 
 | Method | Path | Auth | Body | DL |
 |---|---|---|---|---|
-| `POST` | `/api/schedule/run` | token | `id`* | ✓ |
-| `POST` | `/api/launchpack/run` | token | `id`* | ✓ |
-| `POST` | `/api/benchmark` | token | `dataset`, `size`, `mode`, `sources[]`, `profiles[]` | ✓ |
-| `POST` | `/api/telemetry/consent` | token | `enabled`* | ✓ |
-| `POST` | `/api/telemetry/settings` | token | `replay`, `full`, `bench` | ✓ |
-| `POST` | `/api/recorder` | token | `on`, `full`, `rust`, `js` | ✓ |
-| `POST` | `/api/replay/export` | token | — | ✓ |
-| `POST` | `/api/replay/import` | token | `path`, `url` | ✓ |
-| `POST` | `/api/discord/rpc` | token | `enabled`* | ✓ |
-| `POST` | `/api/restart` | token | — · the API is briefly unavailable | ✓ |
-| `POST` | `/api/view` | token | `id`* · show a screen. The id is the sidebar's own `data-view` value (`mapper`, `library`, …); an unknown one is a no-op that says so in the app console, exactly like the `bmm://view/open` deeplink | ✓ |
+| `POST` | `/api/schedule/run` | `schedules.write` | `id`* | ✓ |
+| `POST` | `/api/launchpack/run` | `app.write` | `id`* | ✓ |
+| `POST` | `/api/benchmark` | `system.write` | `dataset`, `size`, `mode`, `sources[]`, `profiles[]` | ✓ |
+| `POST` | `/api/telemetry/consent` | `telemetry.write` | `enabled`* | ✓ |
+| `POST` | `/api/telemetry/settings` | `telemetry.write` | `replay`, `full`, `bench` | ✓ |
+| `POST` | `/api/recorder` | `telemetry.write` | `on`, `full`, `rust`, `js` | ✓ |
+| `POST` | `/api/replay/export` | `telemetry.write` | — | ✓ |
+| `POST` | `/api/replay/import` | `telemetry.write` | `path`, `url` | ✓ |
+| `POST` | `/api/discord/rpc` | `system.write` | `enabled`* | ✓ |
+| `POST` | `/api/restart` | `system.write` | — · the API is briefly unavailable | ✓ |
+| `POST` | `/api/view` | `system.write` | `id`* · show a screen. The id is the sidebar's own `data-view` value (`mapper`, `library`, …); an unknown one is a no-op that says so in the app console, exactly like the `bmm://view/open` deeplink | ✓ |
 
 ---
 

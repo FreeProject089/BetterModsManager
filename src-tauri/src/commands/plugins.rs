@@ -512,6 +512,103 @@ pub async fn apply_plugin_modlist(
 
 // ── Permissions ────────────────────────────────────────────────────────────
 
+/// Give every plugin the READ scope for each domain it already had WRITE on.
+///
+/// Fifty routes used to need a token and no permission at all: `GET /api/mods`,
+/// `POST /api/data/import`, `POST /api/restart`, `DELETE /api/plugins/<id>` and the rest.
+/// They are gated now, which is right — a permission table that two thirds of the surface
+/// ignores is decoration — but it would also stop every installed plugin dead on upgrade,
+/// for a reason nobody would connect to having updated BMM.
+///
+/// So: a plugin already trusted to CHANGE mods keeps being able to LIST them. Nothing else
+/// is granted. A plugin that was relying on a route in a domain it was never trusted with
+/// now gets a 403 that names the scope, one click from being granted — which is the loud
+/// failure the silent hole was hiding.
+///
+/// Runs once; `plugin_scopes_migrated` records it, so a grant the user later REVOKES is not
+/// handed back on the next start.
+pub fn migrate_plugin_read_scopes(data: &mut crate::state::AppData) -> usize {
+    if data.settings.plugin_scopes_migrated {
+        return 0;
+    }
+    data.settings.plugin_scopes_migrated = true;
+    let mut touched = 0usize;
+    for perms in data.plugin_permissions.values_mut() {
+        let mut add: Vec<String> = Vec::new();
+        for p in perms.iter() {
+            if let Some(domain) = p.strip_suffix(".write") {
+                // `system.write` and `telemetry.write` have no read half: there is nothing
+                // to disclose, only settings to change.
+                if matches!(domain, "system" | "telemetry") {
+                    continue;
+                }
+                let read = format!("{domain}.read");
+                if !perms.contains(&read) && !add.contains(&read) {
+                    add.push(read);
+                }
+            }
+        }
+        if !add.is_empty() {
+            touched += 1;
+            perms.extend(add);
+            perms.sort();
+        }
+    }
+    touched
+}
+
+#[cfg(test)]
+mod scope_migration_tests {
+    use super::*;
+
+    fn with(perms: &[&str]) -> crate::state::AppData {
+        let mut d = crate::state::AppData::default();
+        d.plugin_permissions.insert(
+            "p".into(),
+            perms.iter().map(|x| x.to_string()).collect(),
+        );
+        d
+    }
+
+    #[test]
+    fn a_plugin_trusted_to_change_mods_may_still_list_them() {
+        let mut d = with(&["mods.write"]);
+        assert_eq!(migrate_plugin_read_scopes(&mut d), 1);
+        assert!(d.plugin_permissions["p"].contains(&"mods.read".to_string()));
+    }
+
+    #[test]
+    fn nothing_else_is_granted() {
+        let mut d = with(&["mods.write"]);
+        migrate_plugin_read_scopes(&mut d);
+        assert!(!d.plugin_permissions["p"].contains(&"repo.read".to_string()));
+        assert!(!d.plugin_permissions["p"].contains(&"data.read".to_string()));
+    }
+
+    #[test]
+    fn the_two_domains_with_nothing_to_disclose_gain_nothing() {
+        let mut d = with(&["system.write", "telemetry.write"]);
+        migrate_plugin_read_scopes(&mut d);
+        assert_eq!(d.plugin_permissions["p"].len(), 2);
+    }
+
+    #[test]
+    fn it_runs_once_so_a_revoked_grant_stays_revoked() {
+        let mut d = with(&["mods.write"]);
+        migrate_plugin_read_scopes(&mut d);
+        d.plugin_permissions.get_mut("p").unwrap().retain(|x| x != "mods.read");
+        assert_eq!(migrate_plugin_read_scopes(&mut d), 0, "it must not run twice");
+        assert!(!d.plugin_permissions["p"].contains(&"mods.read".to_string()));
+    }
+
+    #[test]
+    fn a_plugin_with_nothing_granted_still_has_nothing() {
+        let mut d = with(&[]);
+        migrate_plugin_read_scopes(&mut d);
+        assert!(d.plugin_permissions["p"].is_empty());
+    }
+}
+
 #[tauri::command]
 pub fn set_plugin_permissions(
     state: State<'_, AppState>,

@@ -409,6 +409,13 @@ fn main() {
                 // (e.g. BMM closed mid-tutorial before cleanup could run).
                 crate::commands::tutorial_demo::purge_tutorial_demo(&mut data);
                 crate::commands::tutorial_demo::purge_demo_files();
+                // Fifty API routes gained a permission this version. Carry the read half of
+                // each domain a plugin was already trusted with, once, or upgrading BMM
+                // stops every installed plugin for a reason nobody would connect to it.
+                let moved = crate::commands::plugins::migrate_plugin_read_scopes(&mut data);
+                if moved > 0 {
+                    println!("plugin scopes: read access carried over for {moved} plugin(s)");
+                }
             }
             let _ = app_state.save();
 

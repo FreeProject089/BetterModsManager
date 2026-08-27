@@ -611,7 +611,7 @@
         "en": "BMM exposes two ways to drive it from outside: deeplinks (bmm://…, no token, fired at the running window) and a local HTTP API (token, 127.0.0.1 only).",
         "fr": "BMM expose deux façons de le piloter depuis l'extérieur : les deeplinks (bmm://…, sans token, envoyés à la fenêtre en cours) et une API HTTP locale (token,…"
       },
-      "words": 1559,
+      "words": 1773,
       "diagrams": 0,
       "fr": true
     },

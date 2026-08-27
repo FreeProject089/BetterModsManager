@@ -581,6 +581,114 @@ fn require_token(
         .untuple_one()
 }
 
+/// Every permission a plugin can be granted.
+///
+/// The ONE list. The router demands these strings, the settings screen draws checkboxes from
+/// them, and the test below asserts the two agree in both directions — a scope the router
+/// demands but nobody can grant is a route nothing can reach, and a checkbox for a scope no
+/// route demands is a promise of protection that protects nothing. Both had happened:
+/// `mods.read` was enforced and ungrantable.
+///
+/// Read and write are separate everywhere, because knowing is not the same permission as
+/// changing — and for keys it is the whole point: listing what identities exist is not
+/// minting one that signs on the user's behalf.
+pub const PLUGIN_SCOPES: [&str; 24] = [
+    "app.read", "app.write",
+    "catalog.read", "catalog.write",
+    "data.read", "data.write",
+    "hooks.read", "hooks.write",
+    "keys.read", "keys.write",
+    "modpacks.read", "modpacks.write",
+    "mods.read", "mods.write",
+    "plugins.read", "plugins.write",
+    "profiles.read", "profiles.write",
+    "repo.read", "repo.write",
+    "schedules.read", "schedules.write",
+    "system.write",
+    "telemetry.write",
+];
+
+#[cfg(test)]
+mod scope_tests {
+    use super::PLUGIN_SCOPES;
+
+    /// Every string this file demands, extracted from this file.
+    fn demanded() -> Vec<String> {
+        let src = include_str!("mod.rs");
+        let mut out = Vec::new();
+        for (i, _) in src.match_indices("require_permission(") {
+            // `require_permission(<expr>, "scope")` — take the quoted argument after it.
+            let rest = &src[i..];
+            let Some(q) = rest.find('"') else { continue };
+            let Some(end) = rest[q + 1..].find('"') else { continue };
+            let name = &rest[q + 1..q + 1 + end];
+            // The doc comments above mention the function by name; only a real call has a
+            // scope-shaped argument on the same line.
+            if name.contains('.') && !out.contains(&name.to_string()) {
+                out.push(name.to_string());
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn every_scope_the_router_demands_can_be_granted() {
+        for name in demanded() {
+            assert!(
+                PLUGIN_SCOPES.contains(&name.as_str()),
+                "the router demands `{name}`, and nothing can grant it — that route is unreachable"
+            );
+        }
+    }
+
+    #[test]
+    fn every_scope_that_can_be_granted_gates_something() {
+        // A checkbox for a scope no route demands reads as protection and is decoration.
+        let d = demanded();
+        for name in PLUGIN_SCOPES {
+            assert!(
+                d.contains(&name.to_string()),
+                "`{name}` can be granted and gates no route"
+            );
+        }
+    }
+
+    #[test]
+    fn the_list_is_sorted_and_has_no_duplicates() {
+        let mut sorted = PLUGIN_SCOPES.to_vec();
+        sorted.sort_unstable();
+        sorted.dedup();
+        assert_eq!(sorted.len(), PLUGIN_SCOPES.len(), "a duplicate scope");
+        assert_eq!(sorted, PLUGIN_SCOPES.to_vec(), "keep it sorted — it is read as a list");
+    }
+}
+
+/// The admin token and nothing else.
+///
+/// `require_token` deliberately accepts a per-plugin token too, and `require_permission`
+/// then decides what that plugin may do. That is right for every route EXCEPT the ones that
+/// write the permission table: a plugin holding a token could `PUT /api/apps/permissions/
+/// <itself>` and grant itself every scope, which makes the whole table decorative.
+///
+/// Nothing a plugin legitimately does needs to read or write another plugin's grants. This
+/// is for the app's own screens, the CLI and MCP — all of which hold the admin token.
+fn require_admin_token(
+    data: Arc<std::sync::Mutex<AppData>>,
+) -> impl Filter<Extract = (), Error = warp::Rejection> + Clone {
+    warp::header::optional::<String>("authorization")
+        .and_then(move |auth: Option<String>| {
+            let provided = auth.unwrap_or_default();
+            let ok = {
+                let d = data.lock().unwrap_or_else(|p| p.into_inner());
+                ct_eq(provided.strip_prefix("Bearer ").unwrap_or(""), &d.settings.api_token)
+            };
+            async move {
+                if ok { Ok(()) } else { Err(warp::reject::custom(Unauthorized)) }
+            }
+        })
+        .untuple_one()
+}
+
 #[derive(Debug)]
 struct Unauthorized;
 impl warp::reject::Reject for Unauthorized {}
@@ -708,6 +816,7 @@ pub async fn start_api_server(
     let data_mods = data.clone();
     let get_mods = warp::path!("api" / "mods")
         .and(warp::get())
+        .and(require_permission(token.clone(), "mods.read"))
         .and(with_data(data_mods))
         .map(|d: Arc<std::sync::Mutex<AppData>>| {
             let data = d.lock().unwrap_or_else(|p| p.into_inner());
@@ -732,6 +841,7 @@ pub async fn start_api_server(
     let data_mods_all = data.clone();
     let get_mods_all = warp::path!("api" / "mods" / "all")
         .and(warp::get())
+        .and(require_permission(token.clone(), "mods.read"))
         .and(with_data(data_mods_all))
         .map(|d: Arc<std::sync::Mutex<AppData>>| {
             let data = d.lock().unwrap_or_else(|p| p.into_inner());
@@ -758,6 +868,7 @@ pub async fn start_api_server(
     let get_data_dump = warp::path!("api" / "data")
         .and(warp::get())
         .and(require_token(tok_dump))
+        .and(require_permission(token.clone(), "data.read"))
         .and(with_data(data_dump))
         .map(|d: Arc<std::sync::Mutex<AppData>>| {
             let data = d.lock().unwrap_or_else(|p| p.into_inner());
@@ -771,6 +882,7 @@ pub async fn start_api_server(
     let data_active = data.clone();
     let get_active_mods = warp::path!("api" / "mods" / "active")
         .and(warp::get())
+        .and(require_permission(token.clone(), "mods.read"))
         .and(with_data(data_active))
         .map(|d: Arc<std::sync::Mutex<AppData>>| {
             let data = d.lock().unwrap_or_else(|p| p.into_inner());
@@ -790,6 +902,7 @@ pub async fn start_api_server(
     let data_profiles = data.clone();
     let get_profiles = warp::path!("api" / "profiles")
         .and(warp::get())
+        .and(require_permission(token.clone(), "profiles.read"))
         .and(with_data(data_profiles))
         .map(|d: Arc<std::sync::Mutex<AppData>>| {
             let data = d.lock().unwrap_or_else(|p| p.into_inner());
@@ -808,6 +921,7 @@ pub async fn start_api_server(
     let data_plugins = data.clone();
     let get_plugins = warp::path!("api" / "plugins")
         .and(warp::get())
+        .and(require_permission(token.clone(), "plugins.read"))
         .and(with_data(data_plugins))
         .map(|d: Arc<std::sync::Mutex<AppData>>| {
             let data = d.lock().unwrap_or_else(|p| p.into_inner());
@@ -1418,6 +1532,7 @@ pub async fn start_api_server(
     let mod_check_updates = warp::path!("api" / "mod" / "check-updates")
         .and(warp::post())
         .and(require_token(tok_mod_check))
+        .and(require_permission(token.clone(), "mods.write"))
         .and(with_app_handle(handle_mod_check))
         .map(|handle: tauri::AppHandle| {
             let _ = handle.emit("bmm://api-exec", serde_json::json!({
@@ -1437,6 +1552,7 @@ pub async fn start_api_server(
     let mod_update = warp::path!("api" / "mod" / "update")
         .and(warp::post())
         .and(require_token(tok_mod_update))
+        .and(require_permission(token.clone(), "mods.write"))
         .and(warp::body::json::<ModUpdateApiBody>())
         .and(with_app_handle(handle_mod_update))
         .map(|body: ModUpdateApiBody, handle: tauri::AppHandle| {
@@ -1459,6 +1575,7 @@ pub async fn start_api_server(
     let telemetry_consent = warp::path!("api" / "telemetry" / "consent")
         .and(warp::post())
         .and(require_token(tok_tc))
+        .and(require_permission(token.clone(), "telemetry.write"))
         .and(warp::body::json::<TelemetryConsentBody>())
         .and(with_app_handle(handle_tc))
         .map(|body: TelemetryConsentBody, handle: tauri::AppHandle| {
@@ -1477,6 +1594,7 @@ pub async fn start_api_server(
     let telemetry_settings = warp::path!("api" / "telemetry" / "settings")
         .and(warp::post())
         .and(require_token(tok_ts))
+        .and(require_permission(token.clone(), "telemetry.write"))
         .and(warp::body::json::<TelemetrySettingsBody>())
         .and(with_app_handle(handle_ts))
         .map(|body: TelemetrySettingsBody, handle: tauri::AppHandle| {
@@ -1497,6 +1615,7 @@ pub async fn start_api_server(
     let view = warp::path!("api" / "view")
         .and(warp::post())
         .and(require_token(tok_view))
+        .and(require_permission(token.clone(), "system.write"))
         .and(warp::body::json::<ViewBody>())
         .and(with_app_handle(handle_view))
         .map(|body: ViewBody, handle: tauri::AppHandle| {
@@ -1510,6 +1629,7 @@ pub async fn start_api_server(
     let recorder = warp::path!("api" / "recorder")
         .and(warp::post())
         .and(require_token(tok_rec))
+        .and(require_permission(token.clone(), "telemetry.write"))
         .and(warp::body::json::<RecorderBody>())
         .and(with_app_handle(handle_rec))
         .map(|body: RecorderBody, handle: tauri::AppHandle| {
@@ -1532,6 +1652,7 @@ pub async fn start_api_server(
     let replay_export = warp::path!("api" / "replay" / "export")
         .and(warp::post())
         .and(require_token(tok_rex))
+        .and(require_permission(token.clone(), "telemetry.write"))
         .and(warp::body::json::<ReplayExportBody>().or(warp::any().map(ReplayExportBody::default)).unify())
         .and(with_app_handle(handle_rex))
         .map(|body: ReplayExportBody, handle: tauri::AppHandle| {
@@ -1551,6 +1672,7 @@ pub async fn start_api_server(
     let replay_import = warp::path!("api" / "replay" / "import")
         .and(warp::post())
         .and(require_token(tok_rim))
+        .and(require_permission(token.clone(), "telemetry.write"))
         .and(warp::body::json::<ReplayImportBody>())
         .and(with_app_handle(handle_rim))
         .map(|body: ReplayImportBody, handle: tauri::AppHandle| {
@@ -1568,6 +1690,7 @@ pub async fn start_api_server(
     let launchpack_run = warp::path!("api" / "launchpack" / "run")
         .and(warp::post())
         .and(require_token(tok_lp))
+        .and(require_permission(token.clone(), "app.write"))
         .and(warp::body::json::<IdBody>())
         .and(with_app_handle(handle_lp))
         .map(|body: IdBody, handle: tauri::AppHandle| {
@@ -1585,6 +1708,7 @@ pub async fn start_api_server(
     let schedule_run = warp::path!("api" / "schedule" / "run")
         .and(warp::post())
         .and(require_token(tok_sr))
+        .and(require_permission(token.clone(), "schedules.write"))
         .and(warp::body::json::<IdBody>())
         .and(with_app_handle(handle_sr))
         .map(|body: IdBody, handle: tauri::AppHandle| {
@@ -1602,6 +1726,7 @@ pub async fn start_api_server(
     let discord_rpc = warp::path!("api" / "discord" / "rpc")
         .and(warp::post())
         .and(require_token(tok_dr))
+        .and(require_permission(token.clone(), "system.write"))
         .and(warp::body::json::<DiscordRpcBody>())
         .and(with_app_handle(handle_dr))
         .map(|body: DiscordRpcBody, handle: tauri::AppHandle| {
@@ -1621,6 +1746,7 @@ pub async fn start_api_server(
     let data_export_auto = warp::path!("api" / "data" / "export-auto")
         .and(warp::post())
         .and(require_token(tok_dea))
+        .and(require_permission(token.clone(), "data.read"))
         .and(warp::body::json::<DataExportAutoBody>())
         .and(with_app_handle(handle_dea))
         .map(|body: DataExportAutoBody, handle: tauri::AppHandle| {
@@ -1643,6 +1769,7 @@ pub async fn start_api_server(
     let benchmark = warp::path!("api" / "benchmark")
         .and(warp::post())
         .and(require_token(tok_bench))
+        .and(require_permission(token.clone(), "system.write"))
         .and(warp::body::json::<BenchmarkApiBody>())
         .and(with_app_handle(handle_bench))
         .and_then(|body: BenchmarkApiBody, handle: tauri::AppHandle| async move {
@@ -1752,6 +1879,7 @@ pub async fn start_api_server(
     let restart = warp::path!("api" / "restart")
         .and(warp::post())
         .and(require_token(tok_restart))
+        .and(require_permission(token.clone(), "system.write"))
         .and(with_app_handle(handle_restart))
         .map(|handle: tauri::AppHandle| {
             // Use Tauri's own restart: it relaunches with the correct entry point
@@ -1773,6 +1901,7 @@ pub async fn start_api_server(
     let data_mp_list = data.clone();
     let get_modpacks = warp::path!("api" / "modpacks")
         .and(warp::get())
+        .and(require_permission(token.clone(), "modpacks.read"))
         .and(with_data(data_mp_list))
         .map(|d: Arc<std::sync::Mutex<AppData>>| {
             let data = d.lock().unwrap_or_else(|p| p.into_inner());
@@ -1900,6 +2029,7 @@ pub async fn start_api_server(
     // GET /api/repo/info?url=<url>  (no auth)
     let repo_info = warp::path!("api" / "repo" / "info")
         .and(warp::get())
+        .and(require_permission(token.clone(), "repo.read"))
         .and(warp::query::<std::collections::HashMap<String, String>>())
         .and_then(|query: std::collections::HashMap<String, String>| async move {
             let url = match query.get("url") {
@@ -2006,6 +2136,7 @@ pub async fn start_api_server(
     let data_repo_list = data.clone();
     let repo_list = warp::path!("api" / "repo" / "list")
         .and(warp::get())
+        .and(require_permission(token.clone(), "repo.read"))
         .and(with_data(data_repo_list))
         .map(|d: Arc<std::sync::Mutex<AppData>>| {
             let data = d.lock().unwrap_or_else(|p| p.into_inner());
@@ -2054,6 +2185,7 @@ pub async fn start_api_server(
     let repo_sync_cancel = warp::path!("api" / "repo" / "sync" / "cancel")
         .and(warp::delete())
         .and(require_token(tok_sync_cancel))
+        .and(require_permission(token.clone(), "repo.write"))
         .and(with_atomic(sync_cancel_cancel))
         .and(with_atomic(sync_running_cancel))
         .map(|cancel: Arc<AtomicBool>, running: Arc<AtomicBool>| {
@@ -2140,6 +2272,7 @@ pub async fn start_api_server(
     let repo_gen_cancel = warp::path!("api" / "repo" / "gen" / "cancel")
         .and(warp::delete())
         .and(require_token(tok_gen_cancel))
+        .and(require_permission(token.clone(), "repo.write"))
         .and(with_atomic(gen_cancel_cancel))
         .and(with_atomic(gen_running_cancel))
         .map(|cancel: Arc<AtomicBool>, running: Arc<AtomicBool>| {
@@ -2305,6 +2438,7 @@ pub async fn start_api_server(
     let repo_update = warp::path!("api" / "repo" / "update")
         .and(warp::post())
         .and(require_token(tok_repo_update))
+        .and(require_permission(token.clone(), "repo.write"))
         .and(warp::body::json::<RepoUpdateBody>())
         .and(with_app_handle(handle_repo_update))
         .map(|body: RepoUpdateBody, handle: tauri::AppHandle| {
@@ -2337,6 +2471,7 @@ pub async fn start_api_server(
     let repo_host_start = warp::path!("api" / "repo" / "host")
         .and(warp::post())
         .and(require_token(tok_repo_host_start))
+        .and(require_permission(token.clone(), "repo.write"))
         .and(warp::body::json::<RepoHttpHostBody>())
         .and(with_http_host_shutdown(http_host_start))
         .and(with_app_handle(handle_repo_host))
@@ -2385,6 +2520,7 @@ pub async fn start_api_server(
     let repo_host_stop = warp::path!("api" / "repo" / "host")
         .and(warp::delete())
         .and(require_token(tok_repo_host_stop))
+        .and(require_permission(token.clone(), "repo.write"))
         .and(with_http_host_shutdown(http_host_stop))
         .and(with_app_handle(handle_repo_host_stop))
         .map(|_shutdown: HttpHostShutdown, handle: tauri::AppHandle| {
@@ -2412,6 +2548,7 @@ pub async fn start_api_server(
     let repo_publish_ssh = warp::path!("api" / "repo" / "publish-ssh")
         .and(warp::post())
         .and(require_token(tok_repo_ssh))
+        .and(require_permission(token.clone(), "repo.write"))
         .and(warp::body::json::<serde_json::Value>())
         .and(with_app_handle(handle_repo_ssh))
         .map(|body: serde_json::Value, handle: tauri::AppHandle| {
@@ -2451,6 +2588,7 @@ pub async fn start_api_server(
     let repo_fetch_ssh = warp::path!("api" / "repo" / "fetch-ssh")
         .and(warp::post())
         .and(require_token(tok_repo_pull))
+        .and(require_permission(token.clone(), "repo.write"))
         .and(warp::body::json::<serde_json::Value>())
         .and(with_app_handle(handle_repo_pull))
         .map(|body: serde_json::Value, handle: tauri::AppHandle| {
@@ -2576,6 +2714,7 @@ pub async fn start_api_server(
     let delete_plugin = warp::path!("api" / "plugins" / String)
         .and(warp::delete())
         .and(require_token(tok_plug_delete))
+        .and(require_permission(token.clone(), "plugins.write"))
         .and(with_data(data_plug_delete))
         .and(with_path(path_plug_delete))
         .map(|plugin_id: String, d: Arc<std::sync::Mutex<AppData>>, path: Arc<PathBuf>| {
@@ -2617,24 +2756,28 @@ pub async fn start_api_server(
     let t1 = token.clone(); let h1 = app_handle.clone();
     let io_data_export = warp::path!("api" / "data" / "export").and(warp::post())
         .and(require_token(t1)).and(with_app_handle(h1))
+        .and(require_permission(token.clone(), "data.read"))
         .map(|h: tauri::AppHandle| api_exec_reply(&h, "data/export", serde_json::json!({})));
 
     // POST /api/data/import — import an app-data backup
     let t2 = token.clone(); let h2 = app_handle.clone();
     let io_data_import = warp::path!("api" / "data" / "import").and(warp::post())
         .and(require_token(t2)).and(with_app_handle(h2))
+        .and(require_permission(token.clone(), "data.write"))
         .map(|h: tauri::AppHandle| api_exec_reply(&h, "data/import", serde_json::json!({})));
 
     // POST /api/modlists/export — export a .mm mod list (the save dialog writes modlist.mm)
     let t3 = token.clone(); let h3 = app_handle.clone();
     let io_modlist_export = warp::path!("api" / "modlists" / "export").and(warp::post())
         .and(require_token(t3)).and(with_app_handle(h3))
+        .and(require_permission(token.clone(), "mods.read"))
         .map(|h: tauri::AppHandle| api_exec_reply(&h, "modlist/export", serde_json::json!({})));
 
     // POST /api/modlists/import — import a .mm mod list
     let t4 = token.clone(); let h4 = app_handle.clone();
     let io_modlist_import = warp::path!("api" / "modlists" / "import").and(warp::post())
         .and(require_token(t4)).and(with_app_handle(h4))
+        .and(require_permission(token.clone(), "mods.write"))
         .map(|h: tauri::AppHandle| api_exec_reply(&h, "modlist/import", serde_json::json!({})));
 
     // POST /api/modpacks/import — import a .bmp modpack.
@@ -2642,6 +2785,7 @@ pub async fn start_api_server(
     let t5 = token.clone(); let h5 = app_handle.clone();
     let io_modpack_import = warp::path!("api" / "modpacks" / "import").and(warp::post())
         .and(require_token(t5)).and(with_app_handle(h5))
+        .and(require_permission(token.clone(), "modpacks.write"))
         .and(warp::body::bytes())
         .map(|h: tauri::AppHandle, body: bytes::Bytes| {
             let path = serde_json::from_slice::<serde_json::Value>(&body).ok()
@@ -2653,18 +2797,21 @@ pub async fn start_api_server(
     let t6 = token.clone(); let h6 = app_handle.clone();
     let io_modpack_export = warp::path!("api" / "modpacks" / "export").and(warp::post())
         .and(require_token(t6)).and(warp::body::json::<IoIdBody>()).and(with_app_handle(h6))
+        .and(require_permission(token.clone(), "modpacks.read"))
         .map(|b: IoIdBody, h: tauri::AppHandle| api_exec_reply(&h, "modpack/export", serde_json::json!({ "id": b.id, "destDir": b.dest_dir })));
 
     // POST /api/plugins/import — import a .bmmplug plugin
     let t7 = token.clone(); let h7 = app_handle.clone();
     let io_plugin_import = warp::path!("api" / "plugins" / "import").and(warp::post())
         .and(require_token(t7)).and(with_app_handle(h7))
+        .and(require_permission(token.clone(), "plugins.write"))
         .map(|h: tauri::AppHandle| api_exec_reply(&h, "plugin/import", serde_json::json!({})));
 
     // POST /api/plugins/export — export a plugin to .bmmplug (body: { id })
     let t8 = token.clone(); let h8 = app_handle.clone();
     let io_plugin_export = warp::path!("api" / "plugins" / "export").and(warp::post())
         .and(require_token(t8)).and(warp::body::json::<IoIdBody>()).and(with_app_handle(h8))
+        .and(require_permission(token.clone(), "plugins.read"))
         .map(|b: IoIdBody, h: tauri::AppHandle| api_exec_reply(&h, "plugin/export", serde_json::json!({ "id": b.id })));
 
     // POST /api/language/import — import a language .json file.
@@ -2673,6 +2820,7 @@ pub async fn start_api_server(
     let t10 = token.clone(); let h10 = app_handle.clone();
     let io_lang_import = warp::path!("api" / "language" / "import").and(warp::post())
         .and(require_token(t10)).and(with_app_handle(h10))
+        .and(require_permission(token.clone(), "system.write"))
         .and(warp::body::bytes())
         .map(|h: tauri::AppHandle, body: bytes::Bytes| {
             let path = serde_json::from_slice::<serde_json::Value>(&body).ok()
@@ -2684,12 +2832,14 @@ pub async fn start_api_server(
     let t11 = token.clone(); let h11 = app_handle.clone();
     let io_prof_ovgme = warp::path!("api" / "profiles" / "import" / "ovgme").and(warp::post())
         .and(require_token(t11)).and(with_app_handle(h11))
+        .and(require_permission(token.clone(), "profiles.write"))
         .map(|h: tauri::AppHandle| api_exec_reply(&h, "profile/import-ovgme", serde_json::json!({})));
 
     // POST /api/profiles/import/omm — import an OMM / OMX profile
     let t12 = token.clone(); let h12 = app_handle.clone();
     let io_prof_omm = warp::path!("api" / "profiles" / "import" / "omm").and(warp::post())
         .and(require_token(t12)).and(with_app_handle(h12))
+        .and(require_permission(token.clone(), "profiles.write"))
         .map(|h: tauri::AppHandle| api_exec_reply(&h, "profile/import-omm", serde_json::json!({})));
 
     let group_io = io_data_export
@@ -2800,7 +2950,7 @@ pub async fn start_api_server(
     let tok_perm_get = token.clone(); let d_perm_get = data.clone();
     let apps_perm_get = warp::path!("api" / "apps" / "permissions" / String)
         .and(warp::get())
-        .and(require_token(tok_perm_get))
+        .and(require_admin_token(tok_perm_get))
         .and(with_data(d_perm_get))
         .map(|plugin_id: String, d: Arc<std::sync::Mutex<AppData>>| {
             let data = d.lock().unwrap_or_else(|p| p.into_inner());
@@ -2814,7 +2964,7 @@ pub async fn start_api_server(
     let tok_perm_set = token.clone(); let d_perm_set = data.clone(); let dp_perm_set = data_path.clone();
     let apps_perm_set = warp::path!("api" / "apps" / "permissions" / String)
         .and(warp::put())
-        .and(require_token(tok_perm_set))
+        .and(require_admin_token(tok_perm_set))
         .and(warp::body::json::<SetPermsBody>())
         .and(with_data(d_perm_set))
         .and(with_path(dp_perm_set))
@@ -2830,7 +2980,7 @@ pub async fn start_api_server(
     let tok_perm_list = token.clone(); let d_perm_list = data.clone();
     let apps_perm_list = warp::path!("api" / "apps" / "permissions")
         .and(warp::get())
-        .and(require_token(tok_perm_list))
+        .and(require_admin_token(tok_perm_list))
         .and(with_data(d_perm_list))
         .map(|d: Arc<std::sync::Mutex<AppData>>| {
             let data = d.lock().unwrap_or_else(|p| p.into_inner());
@@ -3068,6 +3218,7 @@ pub async fn start_api_server(
     let schedules_list = warp::path!("api" / "schedules")
         .and(warp::get())
         .and(require_token(tok_sch_list))
+        .and(require_permission(token.clone(), "schedules.read"))
         .and(with_app_handle(handle_sch_list))
         .map(|handle: tauri::AppHandle| {
             match crate::commands::scheduler::get_schedules(handle) {
@@ -3111,6 +3262,7 @@ pub async fn start_api_server(
     let schedules_set = warp::path!("api" / "schedules" / "enabled")
         .and(warp::post())
         .and(require_token(tok_sch_set))
+        .and(require_permission(token.clone(), "schedules.write"))
         .and(warp::body::json::<ScheduleEnabledBody>())
         .and(with_app_handle(handle_sch_set))
         .map(|body: ScheduleEnabledBody, handle: tauri::AppHandle| {
@@ -3209,6 +3361,7 @@ pub async fn start_api_server(
     let hook_ring = warp::path!("api" / "hook")
         .and(warp::post())
         .and(require_token(tok_hook))
+        .and(require_permission(token.clone(), "hooks.write"))
         .and(warp::body::json::<HookBody>())
         .map(|body: HookBody| {
             match crate::commands::hooks::hook_fire(body.name, body.data) {
@@ -3228,6 +3381,7 @@ pub async fn start_api_server(
     let hook_seen = warp::path!("api" / "hook")
         .and(warp::get())
         .and(require_token(tok_hook_list))
+        .and(require_permission(token.clone(), "hooks.read"))
         .map(|| {
             // "Is my webhook actually arriving?" is the first question when a wait never
             // ends, and it had no answer at all before this.
@@ -3292,6 +3446,7 @@ pub async fn start_api_server(
     let catalogs_get = warp::path!("api" / "catalogs")
         .and(warp::get())
         .and(require_token(tok_cats_get))
+        .and(require_permission(token.clone(), "catalog.read"))
         .and(with_app_handle(handle_cats_get))
         .map(|handle: tauri::AppHandle| {
             match crate::commands::catalog_sources::catalog_sources_get(handle) {
@@ -3372,7 +3527,7 @@ pub async fn start_api_server(
     let keys_list = warp::path!("api" / "keys")
         .and(warp::get())
         .and(require_token(tok_keys_list))
-        .and(require_permission(token.clone(), "keys.write"))
+        .and(require_permission(token.clone(), "keys.read"))
         .and(with_app_handle(handle_keys_list))
         .map(|handle: tauri::AppHandle| {
             let state = handle.state::<crate::state::AppState>();

@@ -221,26 +221,44 @@ Deeplinks are clickable URLs (web pages, Discord, scripts) that drive BMM when i
 
 ## Permissions
 
-Permissions only apply when a request carries `X-BMM-Plugin-Id`. Granted via `PUT /api/apps/permissions/:id`.
+Which permissions apply is decided by the token the request carries. Granted via `PUT /api/apps/permissions/:id`, which takes the **admin** token.
 
 | Permission | Grants |
 |---|---|
-| `app.read` | read installed apps (`GET /api/apps`) |
-| `app.write` | install / launch / uninstall apps |
-| `catalog.read` | read the local catalog |
-| `catalog.write` | create / edit / delete catalog entries |
-| `mods.write` | enable / disable / edit / delete mods |
-| `profiles.write` | create / edit / delete / activate profiles |
-| `modpacks.write` | create / enable / disable / edit / delete modpacks |
-| `plugins.read` | compare a plugin's modlist |
-| `plugins.write` | apply a plugin |
-| `repo.write` | connect / disconnect / sync / gen repos |
+| `app.read` | list installed apps and their permissions |
+| `app.write` | install, launch and remove apps |
+| `catalog.read` | read the local app catalogue |
+| `catalog.write` | create, edit and delete catalogue entries |
+| `data.read` | read EVERYTHING BMM holds (`GET /api/data`) and export it to a file |
+| `data.write` | import data over what is there |
+| `hooks.read` | see which hooks have fired |
+| `hooks.write` | fire a hook an automation may be waiting on |
+| `keys.read` | see which identity keys exist |
+| `keys.write` | mint an identity key — the thing that proves you are you to every protected source |
+| `modpacks.read` | list and export modpacks |
+| `modpacks.write` | create, change, apply and delete modpacks |
+| `mods.read` | list mods, and see which one wins a shared file |
+| `mods.write` | enable, disable, update, delete and reorder mods |
+| `plugins.read` | list plugins, compare a modlist, read the files a plugin ships |
+| `plugins.write` | install, apply and DELETE plugins — including others |
+| `profiles.read` | list profiles |
+| `profiles.write` | create, edit, delete and activate profiles |
+| `repo.read` | see which repos are connected and what they hold |
+| `repo.write` | connect, sync, publish and host repos |
+| `schedules.read` | list saved automations |
+| `schedules.write` | run an automation, arm or disarm one |
+| `system.write` | restart BMM, change the open screen, run a benchmark, import a language |
+| `telemetry.write` | change what is recorded and what is sent |
 
-> These scopes are enforced server-side in `src-tauri/src/api/mod.rs` via `require_permission(...)` and are exactly the checkboxes shown in **Plugins & API → Permissions** (grouped by domain). Granting one in the UI unlocks the matching endpoints for that plugin.
+> The list lives in the code as `api::PLUGIN_SCOPES`, and a test asserts it matches the router in both directions — a scope the router demands that nothing can grant is a route nothing can reach, and a scope that gates no route is a checkbox promising protection it does not give. They are exactly the checkboxes in **Plugins & API → Permissions**.
 
-> **There is no read scope for mods, profiles, modpacks or repo.** Those GET routes (marked *Auth: no* above) carry no permission filter, so there is nothing to grant or withhold — a plugin can already read them. Only `app`, `catalog` and `plugins` gate a read. Unknown permission strings are stored verbatim by `PUT /api/apps/permissions/:id` and gate nothing.
+> **Reads are gated.** They were not: fifty routes needed a token and no permission at all, and a per-plugin token is a valid token — so `GET /api/data`, `POST /api/data/import`, `POST /api/restart` and `DELETE /api/plugins/<id>` were reachable by a plugin with an empty permission list. On upgrade each plugin keeps the read half of every domain it already had write on; nothing else is carried over, and a plugin leaning on a domain it was never granted now gets a `403` naming the scope.
 
-Without the header → admin (all allowed). With the header → only the granted permissions are allowed; everything else returns `403`.
+> **The permission table itself takes the admin token**, never a plugin token: a plugin able to `PUT` its own grants could grant itself everything.
+
+> Unknown permission strings are stored verbatim and gate nothing.
+
+Admin token → everything. Plugin token → only what that plugin was granted; everything else returns `403`, naming the scope it wanted.
 
 ---
 

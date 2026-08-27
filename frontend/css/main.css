@@ -19242,3 +19242,14 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
 }
 .dbg-brk label { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
 .dbg-brk .input { flex: 1; min-width: 0; font-size: 11px; padding: 3px 7px; }
+
+/* A permission checkbox that names itself and stops there is not enough to decide with:
+   "keys.write" and "mint the thing that proves you are you" are the same grant, and only
+   one of them tells you what you are agreeing to. */
+.plug-perm-item { align-items: baseline; }
+.plug-perm-what {
+    font-size: 10px;
+    color: var(--text-muted);
+    line-height: 1.3;
+}
+.plug-perm-domain-row { gap: 4px 14px; }
