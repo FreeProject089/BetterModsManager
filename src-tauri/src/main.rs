@@ -905,6 +905,7 @@ fn main() {
             commands::task_output::task_output_dir,
             commands::format_check::bmm_validate,
             commands::content_ids::content_id_of,
+            commands::content_ids::content_id_from,
             commands::apps::catalog_probe_url,
             commands::apps::catalog_probe_file,
             commands::plugins::get_effective_api_port,

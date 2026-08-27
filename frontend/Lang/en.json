@@ -9292,5 +9292,6 @@
   "apps.httpTip": "Served over plain http. Anyone between you and it can change what arrives — including the file and a checksum that would match it.",
   "apps.create.probeHttp": "over plain http — this is the checksum of whatever arrived",
   "apps.probe.errScheme": "Only http and https addresses can be read.",
-  "iconpack.chosen": "The icon you picked from the library"
+  "iconpack.chosen": "The icon you picked from the library",
+  "cid.errNoApp": "That entry pins neither a checksum nor a URL, so there is nothing to identify it by."
 }

@@ -444,8 +444,12 @@ function buildPluginCard(plugin: any, source: 'installed' | 'catalog') {
                         ? `<span class="plug-badge-official">${IC.star} ${t('plugins.official')}</span>`
                         : `<span class="plug-badge-community">${t('plugins.community')}</span>`}
                 </div>
-                <div class="plug-card-sub">v${escHtml(manifest.version || '1.0.0')} · ${escHtml(manifest.author || '')}</div>
+                <div class="plug-card-sub">v${escHtml(manifest.version || '1.0.0')}${manifest.author ? ` · ${escHtml(manifest.author)}` : ''}</div>
                 ${manifest.game ? `<div class="plug-card-game">${escHtml(manifest.game)}</div>` : ''}
+                <!-- The two ids belong WITH the name, not in the row of verbs. They were
+                     sitting between "Compare" and "Apply" as two labelled buttons, which
+                     made the widest thing on the card the one nobody presses most. -->
+                <div class="plug-card-ids">${copyIdButtons('plugin', manifest.id, { compact: true })}</div>
             </div>
         </div>
         ${manifest.description ? `<p class="plug-card-desc">${escHtml(manifest.description)}</p>` : ''}
@@ -460,7 +464,6 @@ function buildPluginCard(plugin: any, source: 'installed' | 'catalog') {
                 ${manifest.tags.map(tag => `<span class="plug-tag">${escHtml(tag)}</span>`).join('')}
             </div>` : ''}
         <div class="plug-card-actions">
-            ${copyIdButtons('plugin', manifest.id)}
             ${source === 'installed' ? `
                 ${hasModlist ? `
                     <button class="btn btn-sm btn-accent plug-btn-compare" data-id="${escHtml(manifest.id)}" data-tooltip="${t('plugins.compareTip')}">

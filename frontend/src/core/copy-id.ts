@@ -18,8 +18,17 @@ import { t } from './i18n.js';
 import { escHtml, escAttr } from './utils.js';
 
 
-/** What kinds have a content id. Mirrors `commands::content_ids::content_id_of`. */
-export type IdKind = 'modpack' | 'plugin' | 'task';
+/**
+ * What kinds have a content id. Mirrors `commands::content_ids`.
+ *
+ * The first three are looked up by local id, because they live in BMM's own store. The rest
+ * are DOCUMENTS the caller already has in front of it — a theme file, a catalogue entry, a
+ * repo manifest — and asking the backend to go and find one it was just handed would need
+ * six more stores to reach into and would hash exactly the same fields.
+ */
+export type IdKind =
+    'modpack' | 'plugin' | 'task'
+    | 'profile' | 'theme' | 'launchpack' | 'repo' | 'app' | 'modlist';
 
 const COPY_SVG = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
 
@@ -27,14 +36,31 @@ const COPY_SVG = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" st
  * The two buttons, as markup.
  *
  * `wireCopyIds` finds them by class, so a caller only has to drop this where it fits.
+ *
+ * `doc` is for the kinds BMM does not store by id: pass the object the row was drawn from
+ * and the content id is computed from that. It rides in a data attribute rather than a
+ * lookup table, so a re-render cannot leave a button pointing at a document that has gone.
+ *
+ * `compact` drops the words and keeps the icons, for rows that have no room for two labelled
+ * buttons — which is most cards.
  */
-export function copyIdButtons(kind: IdKind, localId: string): string {
-    return `<button type="button" class="btn btn-xs btn-ghost bmm-copy-id"
+export function copyIdButtons(
+    kind: IdKind,
+    localId: string,
+    opts: { doc?: unknown; compact?: boolean } = {},
+): string {
+    const docAttr = opts.doc === undefined ? '' : ` data-doc="${escAttr(JSON.stringify(opts.doc))}"`;
+    const words = !opts.compact;
+    const cls = `btn btn-xs btn-ghost${opts.compact ? ' is-compact' : ''}`;
+    // An id button with nothing to copy is worse than no button: it looks like an answer.
+    const local = localId
+        ? `<button type="button" class="${cls} bmm-copy-id"
                 data-kind="${escAttr(kind)}" data-id="${escAttr(localId)}"
-                data-tooltip="${escAttr(t('copyid.localHint'))}">${COPY_SVG} ${escHtml(t('copyid.local'))}</button>
-            <button type="button" class="btn btn-xs btn-ghost bmm-copy-cid"
-                data-kind="${escAttr(kind)}" data-id="${escAttr(localId)}"
-                data-tooltip="${escAttr(t('copyid.contentHint'))}">${COPY_SVG} ${escHtml(t('copyid.content'))}</button>`;
+                data-tooltip="${escAttr(t('copyid.localHint'))}">${COPY_SVG}${words ? ` ${escHtml(t('copyid.local'))}` : ''}</button>`
+        : '';
+    return `${local}<button type="button" class="${cls} bmm-copy-cid"
+                data-kind="${escAttr(kind)}" data-id="${escAttr(localId)}"${docAttr}
+                data-tooltip="${escAttr(t('copyid.contentHint'))}">${COPY_SVG}${words ? ` ${escHtml(t('copyid.content'))}` : ''}</button>`;
 }
 
 /**
@@ -76,9 +102,12 @@ export function wireCopyIds(host: ParentNode, notify: Notify): void {
         btn.addEventListener('click', async (e) => {
             e.stopPropagation();
             try {
-                const cid = await invoke('content_id_of', {
-                    kind: btn.dataset.kind, id: btn.dataset.id,
-                }) as string;
+                // A document if the caller gave one, a store lookup otherwise. Both end in
+                // the same Rust, which is where each kind is defined exactly once.
+                const raw = btn.dataset.doc;
+                const cid = raw
+                    ? await invoke('content_id_from', { kind: btn.dataset.kind, doc: JSON.parse(raw) }) as string
+                    : await invoke('content_id_of', { kind: btn.dataset.kind, id: btn.dataset.id }) as string;
                 await put(notify, cid, 'copyid.copiedContent');
             } catch (err) {
                 // Derived, not stored, so it can fail for a real reason: a pack whose members

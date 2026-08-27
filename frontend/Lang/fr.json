@@ -9290,5 +9290,6 @@
   "apps.httpTip": "Servi en http clair. N'importe qui entre vous et lui peut changer ce qui arrive — le fichier comme la somme de contrôle qui lui correspondrait.",
   "apps.create.probeHttp": "en http clair — c'est la somme de ce qui est arrivé",
   "apps.probe.errScheme": "Seules les adresses http et https peuvent être lues.",
-  "iconpack.chosen": "L'icône que vous avez choisie dans la bibliothèque"
+  "iconpack.chosen": "L'icône que vous avez choisie dans la bibliothèque",
+  "cid.errNoApp": "Cette entrée ne fixe ni somme de contrôle ni URL : il n'y a rien pour l'identifier."
 }

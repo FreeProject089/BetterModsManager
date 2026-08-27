@@ -19512,3 +19512,37 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
     font-weight: 600;
 }
 .icon-option-packed { width: 40px; }
+
+/* The two id buttons, compact.
+   They were labelled buttons in rows of verbs — the widest control on the card was the one
+   nobody presses most, and on the modpack card the row is absolutely positioned so growing
+   it put "Content ID" across the pack's name. Icons only, beside the name, where identity
+   belongs. */
+.bmm-copy-id.is-compact,
+.bmm-copy-cid.is-compact {
+    padding: 1px 6px;
+    min-width: 0;
+    gap: 0;
+    line-height: 1;
+}
+.bmm-copy-cid.is-compact { position: relative; }
+/* Told apart without a word: the content id carries a dot, the way it carries a prefix. */
+.bmm-copy-cid.is-compact::after {
+    content: "";
+    position: absolute;
+    right: 2px;
+    top: 2px;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--accent);
+}
+
+.plug-card-ids,
+.modpack-card-ids {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    margin-top: 5px;
+}
+.modpack-card-ids { margin-top: 7px; }
