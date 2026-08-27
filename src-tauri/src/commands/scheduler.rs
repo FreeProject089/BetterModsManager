@@ -138,8 +138,9 @@ pub fn run_scheduled_script_full(
     code: String,
     working_dir: Option<String>,
     allow: bool,
+    timeout_secs: Option<u64>,
 ) -> Result<ScriptRun, String> {
-    match run_scheduled_script(engine, code, working_dir, allow) {
+    match run_scheduled_script(engine, code, working_dir, allow, timeout_secs) {
         Ok(stdout) => Ok(ScriptRun { ok: true, code: 0, stdout, stderr: String::new() }),
         Err(e) => {
             // The failure string is parsed back rather than the runner being duplicated:
@@ -171,6 +172,7 @@ pub fn run_scheduled_script(
     code: String,
     working_dir: Option<String>,
     allow: bool,
+    timeout_secs: Option<u64>,
 ) -> Result<String, String> {
     if !allow {
         return Err("Script execution is not permitted for this task (grant it in the task's permissions).".to_string());
@@ -232,11 +234,19 @@ pub fn run_scheduled_script(
         path.display()
     ));
 
+    // How long it may take. Five minutes by default — long enough that no ordinary step is
+    // cut short, short enough that a stuck one is found the same day rather than being
+    // discovered as a run that has been "in progress" since 3am.
+    //
+    // Clamped rather than trusted: a task carrying 0 (or a hand-edited file carrying a
+    // million) would otherwise reintroduce the exact behaviour this replaces.
+    let limit = timeout_secs.unwrap_or(DEFAULT_SCRIPT_TIMEOUT_SECS).clamp(1, MAX_SCRIPT_TIMEOUT_SECS);
+
     let file = path.to_string_lossy().to_string();
 
     // Rust: compile, then run the binary. Both artefacts are removed on every path.
     if engine == "rust" {
-        let out = compile_and_run_rust(&program, &path, working_dir.as_deref());
+        let out = compile_and_run_rust(&program, &path, working_dir.as_deref(), limit);
         let _ = std::fs::remove_file(&path);
         return out;
     }
@@ -246,25 +256,43 @@ pub fn run_scheduled_script(
     if let Some(dir) = working_dir.as_ref().filter(|d| !d.trim().is_empty()) {
         cmd.current_dir(dir);
     }
-    let result = cmd.output();
+    let result = crate::commands::proc::run_with_timeout(cmd, limit);
 
     // Removed on EVERY path, including the spawn failing — a temp directory slowly
     // filling with the user's scripts is both a mess and a disclosure.
     let _ = std::fs::remove_file(&path);
 
     let output = result.map_err(|e| format!("Could not start {}: {}", program, e))?;
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    if output.status.success() {
-        Ok(stdout)
+    // Its OWN message, not an exit code. A timeout is not "the script failed" — the script may
+    // have been about to succeed — and `run_scheduled_script_full` parses exit shapes back out
+    // of this string, so a timeout must not look like one.
+    if output.timed_out {
+        log_line(format!("[SCHED] {} script killed after {}s", engine, limit));
+        return Err(format!("Script timed out after {}s and was stopped.", limit));
+    }
+    if output.code == Some(0) {
+        Ok(output.stdout)
     } else {
         Err(format!(
             "Script exited with {}: {}",
-            output.status.code().map(|c| c.to_string()).unwrap_or_else(|| "signal".into()),
-            if stderr.trim().is_empty() { stdout } else { stderr }
+            output.code.map(|c| c.to_string()).unwrap_or_else(|| "signal".into()),
+            if output.stderr.trim().is_empty() { output.stdout } else { output.stderr }
         ))
     }
 }
+
+/// How long a scheduled script may run before it is stopped.
+///
+/// Not a guess at how long work takes — it is the line past which a step is not slow, it is
+/// stuck. Five minutes leaves every ordinary step alone.
+pub const DEFAULT_SCRIPT_TIMEOUT_SECS: u64 = 300;
+
+/// The most anybody may ask for: two hours.
+///
+/// A ceiling exists because "no limit" is what this whole change removes. A step that really
+/// needs longer than this is a program that should be started and waited for with `wait until`,
+/// not held inside one step where nothing can see it.
+pub const MAX_SCRIPT_TIMEOUT_SECS: u64 = 7200;
 
 /// Compile a single-file Rust program and run it.
 ///
@@ -280,22 +308,30 @@ fn compile_and_run_rust(
     rustc: &str,
     src: &std::path::Path,
     working_dir: Option<&str>,
+    limit: u64,
 ) -> Result<String, String> {
     let exe_path = src.with_extension(if cfg!(windows) { "exe" } else { "bin" });
 
-    let compile = crate::commands::proc::hidden_command(rustc)
-        .arg(src)
+    let mut cc = crate::commands::proc::hidden_command(rustc);
+    cc.arg(src)
         .arg("-o")
         .arg(&exe_path)
         // Warnings are not failures, and a wall of them buries the error that is.
         .arg("--edition=2021")
-        .arg("-Awarnings")
-        .output()
+        .arg("-Awarnings");
+    // The COMPILE gets the deadline too. rustc waiting on a lock, or on a network share that
+    // stopped answering, is exactly as stuck as a running program — and it is stuck before
+    // anything the person wrote has run, which is the more confusing half.
+    let compile = crate::commands::proc::run_with_timeout(cc, limit)
         .map_err(|e| format!("Could not start {}: {}", rustc, e))?;
-
-    if !compile.status.success() {
+    if compile.timed_out {
         let _ = std::fs::remove_file(&exe_path);
-        let msg = String::from_utf8_lossy(&compile.stderr).to_string();
+        return Err(format!("The Rust step took longer than {}s to COMPILE and was stopped.", limit));
+    }
+
+    if compile.code != Some(0) {
+        let _ = std::fs::remove_file(&exe_path);
+        let msg = compile.stderr.clone();
         // Named as a COMPILE failure. The same text under "script exited with 1" reads as
         // the program having run and gone wrong, which is a different thing to go and fix.
         return Err(format!(
@@ -314,21 +350,22 @@ fn compile_and_run_rust(
     if let Some(dir) = working_dir.filter(|d| !d.trim().is_empty()) {
         run.current_dir(dir);
     }
-    let result = run.output();
+    let result = crate::commands::proc::run_with_timeout(run, limit);
     // Before the early returns below: a compiled binary left in the temp directory is the
     // one artefact here that is executable.
     let _ = std::fs::remove_file(&exe_path);
 
     let output = result.map_err(|e| format!("Could not run the compiled Rust step: {}", e))?;
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    if output.status.success() {
-        Ok(stdout)
+    if output.timed_out {
+        return Err(format!("The Rust step timed out after {}s and was stopped.", limit));
+    }
+    if output.code == Some(0) {
+        Ok(output.stdout)
     } else {
         Err(format!(
             "The Rust step exited with {}: {}",
-            output.status.code().map(|c| c.to_string()).unwrap_or_else(|| "signal".into()),
-            if stderr.trim().is_empty() { stdout } else { stderr }
+            output.code.map(|c| c.to_string()).unwrap_or_else(|| "signal".into()),
+            if output.stderr.trim().is_empty() { output.stdout } else { output.stderr }
         ))
     }
 }

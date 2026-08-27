@@ -9086,5 +9086,7 @@
   "sched.dbg.continue": "Continuer",
   "sched.dbg.stop": "Arrêter",
   "sched.dbg.ended": "Exécution de débogage arrêtée.",
-  "sched.dbg.noVars": "Aucune variable pour l'instant — rien n'a encore capturé quoi que ce soit."
+  "sched.dbg.noVars": "Aucune variable pour l'instant — rien n'a encore capturé quoi que ce soit.",
+  "sched.scrTimeout": "Abandonner après (secondes)",
+  "sched.scrTimeoutHint": "Vide = cinq minutes. Au-delà, le script est arrêté — sous Windows avec tout ce qu'il a lancé — et l'étape échoue en le disant. Sans limite, un script qui attend une saisie retient la tâche jusqu'à la fermeture de BMM."
 }

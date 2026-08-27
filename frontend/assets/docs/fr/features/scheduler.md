@@ -677,6 +677,20 @@ Coche **Un code de sortie non nul est un résultat, pas un échec** et il arrive
 `{script.code}`, avec `{text.script.stdout}` et `{text.script.stderr}` gardés séparément. Ne
 pas *démarrer* reste une erreur : il n'y a alors aucun code de sortie et rien n'a tourné.
 
+!!! danger "Un script a maintenant un délai"
+
+    Cinq minutes par défaut, réglable par étape, deux heures au maximum. Au-delà, le script est
+    arrêté — sous Windows avec tout ce qu'il a lancé — et l'étape échoue en disant qu'il a
+    expiré, plutôt que de faire croire qu'il s'est terminé.
+
+    Avant ça, il n'y avait aucune limite. Un `.ps1` qui lit sur l'entrée standard, un `python`
+    bloqué sur une socket, un installeur qui ouvre une boîte de dialogue sur une session que
+    personne ne regarde : la tâche gardait sa place jusqu'à la fermeture de BMM, et le seul
+    symptôme était une exécution « en cours » depuis 3h du matin.
+
+    Une étape qui a vraiment besoin de plus de deux heures est un programme à LANCER puis à
+    attendre avec `wait until`, pas quelque chose à retenir dans une étape où rien ne le voit.
+
 ## Parcourir une tâche pas à pas
 
 **Déboguer**, à côté de Test. Ça exécute les mêmes étapes dans le même ordre avec les mêmes

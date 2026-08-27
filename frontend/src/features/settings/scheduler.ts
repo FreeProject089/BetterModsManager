@@ -1378,6 +1378,20 @@ async function fillProgramSuggestions(host: HTMLElement): Promise<void> {
     } catch { /* a text box with no suggestions is the field as it was */ }
 }
 
+/**
+ * How long this script step may take, in seconds.
+ *
+ * Undefined means "the default", decided in Rust — not here. Two defaults for one rule is how
+ * they drift, and the one that matters is the one the process actually gets.
+ *
+ * A step written before this existed carries nothing and gets the default, which is the point:
+ * the change is a limit where there was none, not a setting people have to go and turn on.
+ */
+function scriptLimit(p: Record<string, any>): number | null {
+    const n = parseInt(String(p.timeoutSecs ?? ''), 10);
+    return Number.isFinite(n) && n > 0 ? n : null;
+}
+
 function _captureOutput(p: Record<string, any>, out: any, ctx: RunCtx): void {
     const name = String(p.into || '').trim();
     if (!name) return;
@@ -1670,6 +1684,7 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
                     code: String(p.code || ''),
                     workingDir: p.workingDir || null,
                     allow: true,
+                    timeoutSecs: scriptLimit(p),
                 }) as { code: number; stdout: string; stderr: string; ok: boolean };
                 ctx.nums['script.code'] = Number(r.code);
                 ctx.nums['script.ok'] = r.ok ? 1 : 0;
@@ -1686,6 +1701,7 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
                 code: String(p.code || ''),
                 workingDir: p.workingDir || null,
                 allow: true,
+                timeoutSecs: scriptLimit(p),
             });
             _captureOutput(p, out, ctx);
             break;
@@ -1957,6 +1973,7 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
                     code,
                     workingDir: p.workingDir || null,
                     allow: true,
+                    timeoutSecs: scriptLimit(p),
                 });
                 _captureOutput(p, out, ctx);
                 toast(`${task.name}: ${t('sched.pa.ran').replace('{f}', assetPath)}`, 'success', 7000);
@@ -5959,6 +5976,12 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
                 <label class="sched-cmd-row" style="margin-top:8px"><input type="checkbox" class="sched-p-keepgoing"${params.keepGoing ? ' checked' : ''}>
                     <span>${escHtml(t('sched.scrKeepGoing'))}</span></label>
                 <span class="sched-cmd-hint">${escHtml(t('sched.scrKeepGoingHint'))}</span>
+                <label class="sched-cmd-row" style="margin-top:8px">
+                    <span>${escHtml(t('sched.scrTimeout'))}</span>
+                    <input type="number" class="input sched-p-timeout" min="1" max="7200" style="max-width:110px"
+                        placeholder="300" value="${escAttr(params.timeoutSecs ?? '')}">
+                </label>
+                <span class="sched-cmd-hint">${escHtml(t('sched.scrTimeoutHint'))}</span>
             </details>
             <span class="sched-cmd-hint">${t('sched.scrHint') || 'Tip: grant “Run scripts” in this task’s Permissions, or it won’t run.'}</span>
         </div>`;
@@ -6754,6 +6777,12 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
     });
     host.querySelector('.sched-p-fwtext')?.addEventListener('input', (e) => { params.text = (e.target as HTMLTextAreaElement).value; });
     host.querySelector('.sched-p-vtext')?.addEventListener('input', (e) => { params.text = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-timeout')?.addEventListener('input', (e) => {
+        const v = parseInt((e.target as HTMLInputElement).value, 10);
+        // Cleared means "the default", not zero. Storing 0 would be a limit of one second
+        // after the clamp, which is not what an empty field means to anybody.
+        if (Number.isFinite(v) && v > 0) params.timeoutSecs = v; else delete params.timeoutSecs;
+    });
     host.querySelector('.sched-p-vexpect')?.addEventListener('change', (e) => { params.expect = (e.target as HTMLSelectElement).value; });
     host.querySelector('.sched-p-fwappend')?.addEventListener('change', (e) => { params.append = (e.target as HTMLInputElement).checked; });
     host.querySelector('.sched-p-order')?.addEventListener('input', (e) => { params.order = (e.target as HTMLInputElement).value; });

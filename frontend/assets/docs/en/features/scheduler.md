@@ -613,6 +613,20 @@ Tick **A non-zero exit is a result, not a failure** and it lands in `{script.cod
 `{text.script.stdout}` and `{text.script.stderr}` kept apart. Failing to *start* is still an
 error, because then there is no exit code and nothing ran.
 
+!!! danger "A script now has a deadline"
+
+    Five minutes by default, set per step, at most two hours. Past it the script is stopped —
+    on Windows along with anything it started — and the step fails saying it timed out rather
+    than pretending it exited.
+
+    Before this there was no limit at all. A `.ps1` reading from stdin, a `python` blocked on a
+    socket, an installer that opened a dialog on a session nobody is looking at: the task held
+    its place until BMM was closed, and the only symptom was a run that had been “in progress”
+    since 3am.
+
+    A step that genuinely needs longer than two hours is a program to START and then wait for
+    with `wait until`, not something to hold inside one step where nothing can see it.
+
 ## Walking a task one step at a time
 
 **Debug**, beside Test run. It runs the same steps in the same order with the same permissions,

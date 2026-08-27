@@ -9088,5 +9088,7 @@
   "sched.dbg.continue": "Continue",
   "sched.dbg.stop": "Stop",
   "sched.dbg.ended": "Debug run stopped.",
-  "sched.dbg.noVars": "No variables yet — nothing has captured anything."
+  "sched.dbg.noVars": "No variables yet — nothing has captured anything.",
+  "sched.scrTimeout": "Give up after (seconds)",
+  "sched.scrTimeoutHint": "Empty means five minutes. Past this the script is stopped — on Windows along with anything it started — and the step fails saying so. Without a limit, a script waiting for input holds the task until BMM is closed."
 }
