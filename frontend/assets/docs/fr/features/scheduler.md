@@ -702,6 +702,36 @@ pas *démarrer* reste une erreur : il n'y a alors aucun code de sortie et rien n
     et l'endroit où vivent ses fichiers. Rien ne prévenait, parce que rien n'allait mal dans
     l'automatisation.
 
+## Deux façons de demander avant de lancer
+
+**Demander**, à côté de n'importe quelle condition, l'évalue contre l'état actuel de l'app.
+« Est-ce que `fileExists` voit bien ce que je crois » demandait avant de construire toute une
+tâche autour : ajouter une étape, ajouter une notification, enregistrer, lancer, lire le toast,
+tout supprimer.
+
+La réponse est donnée avec les variables PARTAGÉES de la tâche et rien d'autre — une condition
+qui lit ce qu'une étape précédente aurait capturé ne peut pas être évaluée seule, et le bouton
+le dit plutôt que de répondre faux. Une condition qui LÈVE une erreur l'affiche — c'est la plus
+utile des trois réponses : une permission qu'elle n'a pas, un chemin qu'elle ne peut pas lire.
+
+**Aperçu**, à côté de Test et Déboguer, lit les étapes et dit ce qu'elles changeraient.
+
+| | |
+|---|---|
+| changerait | ça fait vraiment quelque chose |
+| déjà ainsi | le mod est activé et l'étape l'active |
+| impossible à dire d'ici | pas installé sur cette machine, ou dans un bloc |
+
+!!! warning "Ça lit, ça n'exécute pas"
+
+    Aucune condition n'est évaluée : tout ce qui est dans un `if`, une boucle, un `ensure` ou le
+    gestionnaire d'erreur d'un `try` est marqué **peut-être**. Le corps principal d'un `try` et
+    celui d'un `retry` n'en sont pas — le premier démarre toujours, le second tourne au moins
+    une fois.
+
+    Un `call` est listé et son contenu n'est pas lu. Dire « il y a un bloc ici et je n'ai pas
+    regardé dedans » vaut mieux que de laisser la moitié d'une tâche hors de la réponse.
+
 ## Parcourir une tâche pas à pas
 
 **Déboguer**, à côté de Test. Ça exécute les mêmes étapes dans le même ordre avec les mêmes

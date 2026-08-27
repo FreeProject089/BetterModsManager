@@ -22,6 +22,8 @@ const LANGS = ['frontend/Lang/en.json', 'frontend/Lang/fr.json'];
 
 const src = fs.readFileSync(SRC, 'utf8');
 const nav = fs.readFileSync(NAV, 'utf8');
+const prev = fs.readFileSync('frontend/src/features/settings/sched-preview.ts', 'utf8');
+const events = fs.readFileSync('frontend/src/core/bmm-events.ts', 'utf8');
 // The script generator's catalogue — its labels go through d('key', 'English'), which
 // builds the key from a fragment and is therefore invisible to check-i18n-keys.
 const plugins = fs.readFileSync('frontend/src/features/plugins/plugins.ts', 'utf8');
@@ -92,6 +94,23 @@ const FAMILIES = [
   { prefix: 'sched.grp.',     values: () => fromArray('ACTION_GROUPS', 'g'),  what: 'action group' },
   { prefix: 'sched.cond.',    values: () => fromList('COND_TYPES'),           what: 'condition name' },
   { prefix: 'sched.preset.',  values: () => fromArray('PRESETS', 'key'),      what: 'preset name' },
+  // The preview's two vocabularies. Both are built as `t('sched.prev.w.' + what)` from
+  // values that live in sched-preview.ts, so nothing that scans scheduler.ts for literals
+  // can see them — the same shape as every family above.
+  {
+    prefix: 'sched.prev.w.',
+    values: () => [...new Set([...prev.matchAll(/'[a-z.]+':\s*'([a-z]+)'/g)].map((m) => m[1]))],
+    what: 'preview action',
+  },
+  { prefix: 'sched.prev.e.', values: () => ['change', 'already', 'unknown'], what: 'preview effect' },
+  // The events the trigger offers, and the editor's hover for every keyword the compiler
+  // knows. gen-bmms-reference already refuses to run when a keyword has no line; this is the
+  // same check from the other side, and it covers the event list too.
+  {
+    prefix: 'sched.ev.',
+    values: () => [...new Set([...events.matchAll(/'(bmm\.[a-zA-Z.]+)'/g)].map((m) => m[1]))],
+    what: 'BMM event',
+  },
   { prefix: 'sched.presetd.', values: () => fromArray('PRESETS', 'key'),      what: 'preset description' },
   // The navbar editor's action list. Clean today — checked before adding it — but it is
   // the same shape of registry feeding the same shape of dynamic lookup, and a gate that

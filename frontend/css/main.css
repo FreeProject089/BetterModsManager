@@ -19101,3 +19101,28 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
 /* The "why not" chip. Muted, never coloured: none of these is an error — a
    manual task saying "only when you press Run" is working as intended. */
 .sched-chip-why { color: var(--text-muted); font-style: italic; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* The answer to "Ask now". Sits beside the button and stays there — a toast
+   would be gone before somebody has finished reading the condition it is about. */
+.sched-cond-result { font-size: 11px; margin-left: 6px; white-space: nowrap; }
+.sched-cond-result.is-busy { color: var(--text-muted); }
+.sched-cond-result.is-true { color: var(--success); }
+.sched-cond-result.is-false { color: var(--text-secondary); }
+.sched-cond-result.is-err { color: var(--danger); white-space: normal; }
+
+/* ── The preview ─────────────────────────────────────────────────────────────
+   A row that changes nothing is dimmed rather than hidden: "already like that"
+   is the answer to most of the questions people open this to ask. */
+.pv-modal { max-width: 620px; width: 92vw; }
+.pv-lede { font-size: 12px; color: var(--text-secondary); margin: 8px 2px 10px; }
+.pv-list { max-height: 46vh; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+.pv-row { display: grid; grid-template-columns: 92px minmax(0, 1fr) auto auto; gap: 8px; align-items: baseline; padding: 6px 8px; border-radius: 6px; font-size: 12px; }
+.pv-row:nth-child(odd) { background: var(--bg-hover); }
+.pv-what { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); }
+.pv-id { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pv-eff { font-size: 11px; color: var(--text-secondary); }
+.pv-change .pv-eff { color: var(--accent); }
+.pv-already { opacity: .6; }
+.pv-unknown .pv-eff { color: var(--warning); }
+.pv-maybe { font-size: 10px; padding: 0 6px; border-radius: 999px; background: var(--bg-card); color: var(--warning); }
+.pv-note { font-size: 11px; color: var(--text-muted); flex: 1; line-height: 1.45; }

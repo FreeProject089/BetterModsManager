@@ -637,6 +637,34 @@ error, because then there is no exit code and nothing ran.
     was at their computer and where their files live. Nothing warned about it, because nothing
     was wrong with the automation.
 
+## Two ways to ask before you run
+
+**Ask now**, beside any condition, evaluates it against the app as it is. "Does `fileExists`
+see what I think it sees" used to need a whole task built around it: add a step, add a notify,
+save, run, read the toast, delete it again.
+
+It answers with the task's SHARED variables available and nothing else — a condition reading
+something an earlier step would have captured cannot be answered on its own, and the button
+says so rather than reporting false. A condition that THROWS shows its error, which is the most
+useful of the three answers: a permission it does not have, a path it cannot read.
+
+**Preview**, beside Test run and Debug, reads the steps and says what they would change.
+
+| | |
+|---|---|
+| would change | this actually does something |
+| already like that | the mod is on and the step turns it on |
+| cannot tell from here | not installed on this machine, or inside a block |
+
+!!! warning "It reads, it does not run"
+
+    No condition is evaluated, so anything inside an `if`, a loop, an `ensure` or a `try`'s
+    error handler is marked **maybe**. A `try`'s main body and a `retry`'s body are not maybes —
+    the first always starts and the second runs at least once.
+
+    A `call` is listed and its contents are not read. Saying "there is a block here and I did
+    not look inside" beats leaving half a task out of the answer.
+
 ## Walking a task one step at a time
 
 **Debug**, beside Test run. It runs the same steps in the same order with the same permissions,

@@ -24,6 +24,7 @@ import { BMM_EVENTS, fireEvent, noteTaskRunning } from '../../core/bmm-events.js
 import { treeOf, foldersOf, renderTree } from './block-tree.js';
 import { showConfirm } from '../../ui/confirm.js';
 import { reasonNotRunning } from './sched-why.js';
+import { planOf, previewAgainst } from './sched-preview.js';
 import { debugging, gate, startDebug, endDebug, DebugStopped } from './sched-debug.js';
 import { parsePresetFeed, looksLikePresetFeed, readPresetCatalogs, writePresetCatalogs } from './preset-catalog.js';
 import { mountCompletions } from './bmms-complete.js';
@@ -4418,6 +4419,8 @@ function renderModal(modal: HTMLElement): void {
         </div>
         <div class="modal-footer sched-footer">
             <button class="btn btn-ghost" id="sched-cancel">${t('common.cancel') || 'Cancel'}</button>
+            <button class="btn btn-ghost sched-test" id="sched-preview" data-tooltip="${escAttr(t('sched.prev.hint'))}">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:5px"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>${escHtml(t('sched.prev.run'))}</button>
             <button class="btn btn-ghost sched-test" id="sched-debug" data-tooltip="${escAttr(t('sched.dbg.hint'))}">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:5px"><circle cx="12" cy="12" r="3"/><path d="M12 5V3M12 21v-2M5 12H3M21 12h-2M6.5 6.5 5 5M17.5 17.5 19 19M17.5 6.5 19 5M6.5 17.5 5 19"/></svg>${escHtml(t('sched.dbg.run'))}</button>
             <button class="btn btn-ghost sched-test" id="sched-test" data-tooltip="${escAttr(t('sched.testHint') || 'Run the steps once right now, without saving')}">
@@ -4469,6 +4472,8 @@ function renderModal(modal: HTMLElement): void {
     // Debug: the SAME run as a test, one step at a time. Not a second runner — a debugger
     // that runs the task differently from how it really runs is a debugger that lies about
     // the bug.
+    modal.querySelector('#sched-preview')?.addEventListener('click', () => { void openPreview(); });
+
     modal.querySelector('#sched-debug')?.addEventListener('click', () => {
         if (!_draft.steps.length) { toast(t('sched.testNoSteps') || 'Add at least one step to test.', 'warning'); return; }
         startDebug(_draft.id || 'draft', _draft.name || (t('sched.untitled') || 'Untitled'));
@@ -7243,10 +7248,38 @@ function conditionEditor(cond: Condition): HTMLElement {
             <select class="input sched-cond-type" style="max-width:170px">
                 ${COND_TYPES.map(c => `<option value="${c}" ${cond.type === c ? 'selected' : ''}>${escHtml(t('sched.cond.' + c) || c)}</option>`).join('')}
             </select>
-            <span class="sched-cond-params"></span>`;
+            <span class="sched-cond-params"></span>
+            <button type="button" class="btn btn-xs btn-ghost sched-cond-try"
+                data-tooltip="${escAttr(t('sched.cond.tryHint'))}">${escHtml(t('sched.cond.try'))}</button>
+            <span class="sched-cond-result"></span>`;
         el.querySelector('.sched-neg')?.addEventListener('change', (e) => { cond.negate = (e.target as HTMLInputElement).checked; });
         el.querySelector('.sched-cond-type')?.addEventListener('change', (e) => { _snapshot(); cond.type = (e.target as HTMLSelectElement).value; cond.params = {}; render(); });
         renderCondParams(el.querySelector('.sched-cond-params') as HTMLElement, cond);
+
+        // Ask it now.
+        //
+        // "Does fileExists see what I think it sees" needed a whole task built around it
+        // before: add a step, add a notify, save, run, read the toast, delete it again. The
+        // answer takes one call and it was never offered.
+        const out = el.querySelector('.sched-cond-result') as HTMLElement | null;
+        el.querySelector('.sched-cond-try')?.addEventListener('click', async () => {
+            if (!out) return;
+            out.className = 'sched-cond-result is-busy';
+            out.textContent = t('sched.cond.trying');
+            try {
+                // The task's SHARED variables, and nothing else. A condition that reads {path}
+                // captured by an earlier step cannot be answered here, and the hint says so —
+                // pretending otherwise would report false for a condition that is fine.
+                const ok = await evalCondition(cond, { nums: {}, text: {}, shared: readSharedVars() }, _draft as Task);
+                out.className = `sched-cond-result ${ok ? 'is-true' : 'is-false'}`;
+                out.textContent = ok ? t('sched.cond.isTrue') : t('sched.cond.isFalse');
+            } catch (e) {
+                // A condition that THREW is a third answer, and the most useful one: a
+                // permission it does not have, a path it cannot read.
+                out.className = 'sched-cond-result is-err';
+                out.textContent = String(e).slice(0, 120);
+            }
+        });
     };
     render();
     return el;
@@ -9051,4 +9084,60 @@ function wireOutlineAndHover(modal: HTMLElement): void {
     ta.addEventListener('mouseleave', hide);
     ta.addEventListener('scroll', hide);
     ta.addEventListener('keydown', hide);
+}
+
+
+/**
+ * What this task would change, without changing it.
+ *
+ * The debugger runs for real — mods really get enabled. That is right for a debugger and wrong
+ * for the question people have BEFORE running something they just wrote.
+ *
+ * It reads the steps and does not evaluate a single condition, so it cannot be exactly right.
+ * The screen is built around saying so: every line is marked certain or maybe, and the note at
+ * the bottom explains what it could not know.
+ */
+async function openPreview(): Promise<void> {
+    const plan = planOf(_draft.steps || []);
+    if (!plan.length) {
+        toast(t('sched.prev.nothing'), 'info', 7000);
+        return;
+    }
+    const mods: any[] = await invoke('get_all_mods').catch(() => []);
+    const known = new Set((mods || []).map((m) => String(m.id)));
+    const on = new Set((mods || []).filter((m) => m.enabled).map((m) => String(m.id)));
+    const nameOf = (id: string) => (mods || []).find((m) => String(m.id) === id)?.name || id;
+    const lines = previewAgainst(plan, on, known);
+
+    const changes = lines.filter((l) => l.effect === 'change').length;
+    const maybes = lines.filter((l) => !l.certain).length;
+
+    const ov = document.createElement('div');
+    ov.className = 'cm-overlay';
+    ov.innerHTML = `<div class="cm-modal pv-modal">
+        <div class="cm-head">
+            <h3>${escHtml(t('sched.prev.title'))}</h3>
+            <button class="cm-x" id="pv-x" aria-label="${escAttr(t('common.close'))}">&times;</button>
+        </div>
+        <p class="pv-lede">${escHtml(t('sched.prev.lede')
+            .replace('{c}', String(changes))
+            .replace('{n}', String(lines.length)))}</p>
+        <div class="pv-list">
+            ${lines.map((l) => `<div class="pv-row pv-${escHtml(l.effect)}${l.certain ? '' : ' is-maybe'}">
+                <span class="pv-what">${escHtml(t('sched.prev.w.' + l.what))}</span>
+                <span class="pv-id">${escHtml(l.what === 'enable' || l.what === 'disable' ? nameOf(l.id) : (l.id || '—'))}</span>
+                <span class="pv-eff">${escHtml(t('sched.prev.e.' + l.effect))}</span>
+                ${l.certain ? '' : `<span class="pv-maybe">${escHtml(t('sched.prev.maybe'))}</span>`}
+            </div>`).join('')}
+        </div>
+        <div class="cm-foot">
+            <span class="pv-note">${escHtml(maybes ? t('sched.prev.noteMaybe').replace('{m}', String(maybes)) : t('sched.prev.note'))}</span>
+            <button class="btn btn-sm btn-accent" id="pv-ok">${escHtml(t('common.close'))}</button>
+        </div>
+    </div>`;
+    const shut = () => ov.remove();
+    ov.querySelector('#pv-x')?.addEventListener('click', shut);
+    ov.querySelector('#pv-ok')?.addEventListener('click', shut);
+    (document.getElementById('app-window-outer') || document.body).appendChild(ov);
+    raiseAboveAll(ov, 11500);
 }
