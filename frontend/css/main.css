@@ -19487,3 +19487,28 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
     font-size: 10px;
 }
 .apps-cr-probe-say.is-warn { color: var(--warning); }
+
+
+/* The two tiles that are BUTTONS in a grid of divs.
+   A button does not inherit font-family, so "More icons…" rendered in Arial while every
+   other tile used the UI font; and `width: auto` on a 40px grid track made it 45px wide, so
+   it overflowed its cell and sat on top of its neighbour. */
+.icon-option-more,
+.icon-option-packed {
+    font: inherit;
+    appearance: none;
+    -webkit-appearance: none;
+    padding: 0;
+    margin: 0;
+}
+.icon-option-more {
+    /* Two cells, because the label needs them. Asking for one and taking one and a half is
+       what put it over the tile beside it. */
+    grid-column: span 2;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0 8px;
+    font-size: 11px;
+    font-weight: 600;
+}
+.icon-option-packed { width: 40px; }

@@ -417,6 +417,9 @@ function renderIconPicker(gridId, hiddenInputId) {
             item.classList.add('selected');
             if (input)
                 input.value = iconName;
+            // The library tile has to be told, or it keeps the selected ring it was given
+            // and two tiles look chosen at once.
+            paintPacked();
         });
         grid.appendChild(item);
     });
@@ -429,26 +432,49 @@ function renderIconPicker(gridId, hiddenInputId) {
     // nothing on the screen said "there are more icons here" any more: the door had become
     // the thing behind it. The picked icon now gets its own selected tile, and the button
     // keeps its face whatever happens.
-    const packed = document.createElement('div');
+    const packed = document.createElement('button');
+    packed.type = 'button';
     packed.className = 'icon-option icon-option-packed';
+    // What the tile shows, which is NOT the same as what is currently chosen.
+    //
+    // It used to be both, and that was the bug: pick a library icon, then click any built-in
+    // one, and the tile hid itself — because it only ever drew the CURRENT value. The library
+    // icon was then gone from the grid, and the only way back to it was to reopen the
+    // picker and find it again. Remembered separately, so it stays on offer once chosen.
+    let lastPacked = isPackIcon(input?.value || '') ? input.value : '';
     const paintPacked = () => {
         const v = input?.value || '';
-        if (isPackIcon(v)) {
-            packed.hidden = false;
-            packed.classList.add('selected');
-            void ensurePackFor(v).then(() => { packed.innerHTML = renderPackIcon(v, 18) || '…'; });
-        }
-        else {
+        if (isPackIcon(v))
+            lastPacked = v;
+        if (!lastPacked) {
             packed.hidden = true;
             packed.classList.remove('selected');
+            return;
         }
+        packed.hidden = false;
+        packed.classList.toggle('selected', v === lastPacked);
+        packed.title = '';
+        packed.dataset.tooltip = t('iconpack.chosen') || 'The icon you picked from the library';
+        const ref = lastPacked;
+        void ensurePackFor(ref).then(() => { packed.innerHTML = renderPackIcon(ref, 18) || '…'; });
     };
+    // A tile that shows an icon and cannot be clicked is a tile people click.
+    packed.addEventListener('click', () => {
+        if (!lastPacked || !input)
+            return;
+        input.value = lastPacked;
+        grid.querySelectorAll('.icon-option').forEach(el => el.classList.remove('selected'));
+        paintPacked();
+    });
     paintPacked();
     grid.appendChild(packed);
     const more = document.createElement('button');
     more.type = 'button';
     more.className = 'icon-option icon-option-more';
-    more.title = t('iconpack.title') || 'Choose an icon';
+    // `data-tooltip`, not `title`. A native tooltip is a white OS box in a dark modal, and
+    // it is the only one in this app that looks like that — which is exactly how it was
+    // reported: a white "More icons…" label stuck beside the grid.
+    more.dataset.tooltip = t('iconpack.title') || 'Choose an icon';
     // A face that says what it is — a grid glyph and a word, not an ellipsis. The old "…"
     // read as "truncated", which is a statement about the list, not an action.
     more.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>${escHtml(t('iconpack.more') || 'More…')}</span>`;
