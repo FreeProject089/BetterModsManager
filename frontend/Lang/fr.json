@@ -9077,5 +9077,14 @@
   "valid.errShortReplay": "L'enregistrement ne contient presque aucun événement.",
   "sched.tree.none": "Aucun script ici pour l'instant.",
   "sched.tree.pick": "Choisis-en un pour voir ce qu'il contient.",
-  "sched.tree.folderHint": "Un nom avec une barre oblique crée un dossier : repair/fetch et repair/verify se retrouvent ensemble. Rien ne stocke l'arbre — il est lu depuis les noms, donc renommer un bloc le déplace."
+  "sched.tree.folderHint": "Un nom avec une barre oblique crée un dossier : repair/fetch et repair/verify se retrouvent ensemble. Rien ne stocke l'arbre — il est lu depuis les noms, donc renommer un bloc le déplace.",
+  "sched.dbg.run": "Déboguer",
+  "sched.dbg.hint": "Exécuter les étapes une par une et voir ce que la tâche tient à chacune.",
+  "sched.dbg.title": "Débogage",
+  "sched.dbg.waiting": "démarrage…",
+  "sched.dbg.step": "Pas à pas",
+  "sched.dbg.continue": "Continuer",
+  "sched.dbg.stop": "Arrêter",
+  "sched.dbg.ended": "Exécution de débogage arrêtée.",
+  "sched.dbg.noVars": "Aucune variable pour l'instant — rien n'a encore capturé quoi que ce soit."
 }

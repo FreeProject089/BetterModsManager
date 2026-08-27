@@ -9079,5 +9079,14 @@
   "valid.errShortReplay": "The recording has almost no events in it.",
   "sched.tree.none": "No script in here yet.",
   "sched.tree.pick": "Pick one to see what it holds.",
-  "sched.tree.folderHint": "A name with a slash makes a folder: repair/fetch and repair/verify sit together. Nothing stores the tree — it is read from the names, so renaming a block moves it."
+  "sched.tree.folderHint": "A name with a slash makes a folder: repair/fetch and repair/verify sit together. Nothing stores the tree — it is read from the names, so renaming a block moves it.",
+  "sched.dbg.run": "Debug",
+  "sched.dbg.hint": "Run the steps one at a time and see what the task is holding at each one.",
+  "sched.dbg.title": "Debugging",
+  "sched.dbg.waiting": "starting…",
+  "sched.dbg.step": "Step",
+  "sched.dbg.continue": "Continue",
+  "sched.dbg.stop": "Stop",
+  "sched.dbg.ended": "Debug run stopped.",
+  "sched.dbg.noVars": "No variables yet — nothing has captured anything."
 }

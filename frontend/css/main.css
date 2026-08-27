@@ -19057,3 +19057,43 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
     /* The rotation is decoration; the aria-expanded state and the icon are the answer. */
     .bt-chev { transition: none; }
 }
+
+/* ── The debug panel ─────────────────────────────────────────────────────────
+   Bottom-right and fixed: it has to stay readable while the task modal is open
+   behind it, and it must never sit over the step list somebody is watching. */
+.dbg-panel {
+    position: fixed;
+    right: 18px;
+    bottom: 18px;
+    width: 340px;
+    max-width: calc(100vw - 36px);
+    max-height: 60vh;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg-solid, var(--bg-card));
+    box-shadow: 0 14px 40px rgba(0, 0, 0, .45);
+    z-index: 11800;
+}
+.dbg-head { display: flex; align-items: center; gap: 8px; padding: 9px 11px; border-bottom: 1px solid var(--border); }
+.dbg-head b { font-size: 12px; }
+.dbg-task { flex: 1 1 auto; min-width: 0; font-size: 11px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dbg-x { border: 0; background: none; color: var(--text-muted); font-size: 17px; line-height: 1; cursor: pointer; padding: 0 2px; }
+.dbg-x:hover { color: var(--text-primary); }
+.dbg-step {
+    padding: 8px 11px;
+    font-size: 12px;
+    color: var(--accent);
+    border-bottom: 1px solid var(--border);
+    font-family: var(--font-mono);
+    word-break: break-word;
+}
+.dbg-vars { flex: 1 1 auto; overflow-y: auto; padding: 6px 8px; display: flex; flex-direction: column; gap: 2px; }
+.dbg-var { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1px 8px; padding: 4px 5px; border-radius: 5px; }
+.dbg-var:nth-child(odd) { background: var(--bg-hover); }
+.dbg-k { grid-column: 1; font-family: var(--font-mono); font-size: 11px; overflow: hidden; text-overflow: ellipsis; }
+.dbg-t { grid-column: 2; font-size: 9.5px; color: var(--text-muted); }
+.dbg-v { grid-column: 1 / -1; font-size: 11px; color: var(--text-secondary); font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dbg-none { font-size: 11px; color: var(--text-muted); margin: 6px 4px; }
+.dbg-foot { display: flex; gap: 6px; padding: 8px 10px; border-top: 1px solid var(--border); }

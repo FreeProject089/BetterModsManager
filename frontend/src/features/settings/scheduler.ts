@@ -22,6 +22,7 @@ import { BMMS_INDEX, type BmmsEntry } from '../../docs/bmms-reference.gen.js';
 import { outlineOf, offsetOfLine, renderOutline, explain, wordAtPoint, type OutlineRow } from './bmms-editor-aids.js';
 import { BMM_EVENTS, fireEvent, noteTaskRunning } from '../../core/bmm-events.js';
 import { treeOf, foldersOf, renderTree } from './block-tree.js';
+import { debugging, gate, startDebug, endDebug, DebugStopped } from './sched-debug.js';
 import { parsePresetFeed, looksLikePresetFeed, readPresetCatalogs, writePresetCatalogs } from './preset-catalog.js';
 import { mountCompletions } from './bmms-complete.js';
 import { attachHighlight } from '../../ui/code-editor.js';
@@ -899,6 +900,10 @@ async function runSteps(steps: Step[], task: Task, ctx: RunCtx, depth = 0): Prom
             if (depth === 0) state.done++;
             renderRunningPanel();
         }
+        // Before the step, never inside one. Same rule as the cancel check above, for the same
+        // reason: a step already in flight has changed something, and pausing half-way through
+        // one leaves the world in a state nothing here can describe.
+        if (debugging(task.id)) await gate(task.id, stepLabel(step), ctx);
         if (step.kind === 'action') {
             await runAction(step.action, task, ctx, depth);
         } else if (step.kind === 'delay') {
@@ -4291,6 +4296,8 @@ function renderModal(modal: HTMLElement): void {
         </div>
         <div class="modal-footer sched-footer">
             <button class="btn btn-ghost" id="sched-cancel">${t('common.cancel') || 'Cancel'}</button>
+            <button class="btn btn-ghost sched-test" id="sched-debug" data-tooltip="${escAttr(t('sched.dbg.hint'))}">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:5px"><circle cx="12" cy="12" r="3"/><path d="M12 5V3M12 21v-2M5 12H3M21 12h-2M6.5 6.5 5 5M17.5 17.5 19 19M17.5 6.5 19 5M6.5 17.5 5 19"/></svg>${escHtml(t('sched.dbg.run'))}</button>
             <button class="btn btn-ghost sched-test" id="sched-test" data-tooltip="${escAttr(t('sched.testHint') || 'Run the steps once right now, without saving')}">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:5px"><polygon points="5 3 19 12 5 21 5 3"/></svg>${t('sched.testRun') || 'Test run'}</button>
             <button class="btn btn-primary" id="sched-save">${t('common.save') || 'Save'}</button>
@@ -4337,6 +4344,15 @@ function renderModal(modal: HTMLElement): void {
     modal.querySelector('#sched-catchup')?.addEventListener('change', (e) => { _draft.catchUp = (e.target as HTMLInputElement).checked; refreshSummary(modal); });
     // Test run: execute the CURRENT draft's steps once, without saving the task —
     // instant feedback while building an automation instead of save→run→edit loops.
+    // Debug: the SAME run as a test, one step at a time. Not a second runner — a debugger
+    // that runs the task differently from how it really runs is a debugger that lies about
+    // the bug.
+    modal.querySelector('#sched-debug')?.addEventListener('click', () => {
+        if (!_draft.steps.length) { toast(t('sched.testNoSteps') || 'Add at least one step to test.', 'warning'); return; }
+        startDebug(_draft.id || 'draft', _draft.name || (t('sched.untitled') || 'Untitled'));
+        (modal.querySelector('#sched-test') as HTMLButtonElement | null)?.click();
+    });
+
     modal.querySelector('#sched-test')?.addEventListener('click', async () => {
         if (!_draft.steps.length) { toast(t('sched.testNoSteps') || 'Add at least one step to test.', 'warning'); return; }
         const btn = modal.querySelector('#sched-test') as HTMLButtonElement;
@@ -4363,7 +4379,8 @@ function renderModal(modal: HTMLElement): void {
             await runSteps(_draft.steps, { ..._draft, id: testId } as Task, { nums: {}, text: {}, shared: readSharedVars() });
             toast(t('sched.testOk') || 'Test run finished.', 'success');
         } catch (e) {
-            if (e instanceof _StopTask) toast(`${t('sched.stopped') || 'stopped'}${(e as any).reason ? `: ${(e as any).reason}` : ''}`, 'info');
+            if (e instanceof DebugStopped) toast(t('sched.dbg.ended'), 'info');
+            else if (e instanceof _StopTask) toast(`${t('sched.stopped') || 'stopped'}${(e as any).reason ? `: ${(e as any).reason}` : ''}`, 'info');
             else if (e instanceof _CancelledTask) toast(t('sched.run.cancelled') || 'stopped by you', 'info');
             else toast(`${t('sched.testFail') || 'Test run failed'} — ${e}`, 'error');
         } finally {
@@ -4372,6 +4389,9 @@ function renderModal(modal: HTMLElement): void {
             _running.delete(testId);
             renderRunningPanel();
             btn.disabled = false;
+            // Whatever happened. A session left open holds the panel on screen with a Step
+            // button that resolves nothing — which looks exactly like a hung task.
+            endDebug();
         }
     });
     modal.querySelector('#sched-save')?.addEventListener('click', async () => {

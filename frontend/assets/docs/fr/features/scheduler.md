@@ -677,6 +677,40 @@ Coche **Un code de sortie non nul est un résultat, pas un échec** et il arrive
 `{script.code}`, avec `{text.script.stdout}` et `{text.script.stderr}` gardés séparément. Ne
 pas *démarrer* reste une erreur : il n'y a alors aucun code de sortie et rien n'a tourné.
 
+## Parcourir une tâche pas à pas
+
+**Déboguer**, à côté de Test. Ça exécute les mêmes étapes dans le même ordre avec les mêmes
+permissions, et s'arrête avant chacune pour te montrer ce que la tâche tient.
+
+| | |
+|---|---|
+| **Pas à pas** | Exécuter l'étape affichée, puis s'arrêter à nouveau. |
+| **Continuer** | Arrêter de s'arrêter. Le panneau continue d'afficher les variables qui changent. |
+| **Arrêter** | Terminer l'exécution ici. |
+
+La liste de variables est l'essentiel. Un nom qui est à la fois du texte et un nombre apparaît
+une seule fois, marqué comme les deux — une capture écrit chacun, et deux lignes se liraient
+comme deux variables. Une valeur **partagée** ne s'affiche que si rien dans ce run ne revendique
+le nom, parce que c'est celle que la substitution utilisera.
+
+!!! note "C'est la vraie exécution"
+
+    Pas une simulation, pas un second moteur. Un débogueur qui exécute la tâche autrement
+    qu'elle ne s'exécute vraiment est un débogueur qui ment sur le bug.
+
+    Ça veut dire aussi que les étapes arrivent pour de bon : les mods sont vraiment activés, les
+    fichiers vraiment écrits. Débogue sur un profil que tu peux te permettre de casser, comme
+    pour un test.
+
+!!! warning "Ça n'entre pas DANS un script"
+
+    Une étape « exécuter un script » confie son code à PowerShell, cmd, bash, Python, Node ou
+    Rust dans un autre processus. Y entrer voudrait dire écrire un débogueur pour cinq langages,
+    et faire semblant serait pire que de ne pas le proposer.
+
+    L'étape est montrée, exécutée entièrement, et ce qu'elle a renvoyé apparaît dans les
+    variables comme le reste.
+
 ## Vérifier ce qu'est un fichier avant d'agir dessus
 
 Une automatisation qui récupère quelque chose puis agit dessus a une question d'abord : **est-ce

@@ -613,6 +613,38 @@ Tick **A non-zero exit is a result, not a failure** and it lands in `{script.cod
 `{text.script.stdout}` and `{text.script.stderr}` kept apart. Failing to *start* is still an
 error, because then there is no exit code and nothing ran.
 
+## Walking a task one step at a time
+
+**Debug**, beside Test run. It runs the same steps in the same order with the same permissions,
+and stops before each one to show you what the task is holding.
+
+| | |
+|---|---|
+| **Step** | Run the step shown, then stop again. |
+| **Continue** | Stop stopping. The panel keeps showing variables as they change. |
+| **Stop** | End the run here. |
+
+The variable list is the point. A name that is both text and a number appears once, marked as
+both — a capture writes each, and two rows would read as two variables. A **shared** value shows
+only when nothing in this run claims the name, because that is the one substitution will use.
+
+!!! note "It is the real run"
+
+    Not a simulation and not a second runner. A debugger that runs the task differently from how
+    it really runs is a debugger that lies about the bug.
+
+    It also means the steps really happen: mods really get enabled, files really get written.
+    Debug a task on a profile you can afford to break, the same as a test run.
+
+!!! warning "It does not step INTO a script"
+
+    A `run a script` step hands its code to PowerShell, cmd, bash, Python, Node or Rust in
+    another process. Stepping through that would mean writing a debugger for five languages, and
+    pretending to would be worse than not offering it.
+
+    The step is shown, run whole, and whatever it returned appears in the variables like
+    anything else.
+
 ## Checking what a file is before acting on it
 
 An automation that fetches something and then acts on it has one question first: **is what came
