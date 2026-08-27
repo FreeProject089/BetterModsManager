@@ -358,6 +358,7 @@ Deux formes échappent à la règle :
 | `POST` | `/api/schedules/enabled` | `schedules.write` | `id`*, `enabled`* · armer ou désarmer une tâche. Seul `enabled` est modifiable — une route qui pourrait écrire une tâche entière pourrait en installer une avec une étape de script dedans | |
 | `POST` | `/api/hook` | `hooks.write` | `name`*, `data` · sonner une clochette nommée qu'une tâche peut attendre avec `wait.hook`, ou par laquelle elle peut être déclenchée avec `on event` | |
 | `GET` | `/api/hook` | `hooks.read` | `name` · ce qui a sonné, sans le consommer — pour l'écran qui demande « est-ce que mon webhook arrive vraiment ? » | |
+| `POST` | `/api/content-id` | token | `kind`*, `doc`* · l'id qui dit ce qu'un document EST plutôt que le nom que cette machine lui donne. Prend le document, donc il ne révèle rien de ce que cette installation contient — d'où le simple jeton plutôt qu'une portée de lecture par type |
 | `GET` | `/api/catalogs` | `catalog.read` | — · les catalogues suivis, par type | |
 | `POST` | `/api/catalogs` | `catalog.write` | `type`*, `url`*, `follow` · suivre ou cesser de suivre un catalogue | |
 | `GET` | `/api/plugins/assets` | `plugins.read` | `id`*, `path` · ce qu'un plugin livre ; avec `path`, le texte d'un fichier | |

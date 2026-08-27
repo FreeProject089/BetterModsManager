@@ -244,6 +244,15 @@ struct ScheduleEnabledBody {
     enabled: bool,
 }
 
+/// `POST /api/content-id` — what a document IS, as a stable name.
+#[derive(Deserialize)]
+struct ContentIdBody {
+    /// modpack · plugin · task · profile · theme · launchpack · repo · app · modlist
+    kind: String,
+    /// The document itself. Supplied by the caller, never looked up here — see the route.
+    doc: serde_json::Value,
+}
+
 /// `POST /api/hook` — ring a named doorbell a scheduled task can be waiting on.
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -3357,6 +3366,33 @@ pub async fn start_api_server(
     // API listens on 127.0.0.1, so a service on the internet cannot reach it without a
     // tunnel the user sets up on purpose, and then they can carry the token. What it is
     // really for is the other things on this machine: a script, a game, another tool.
+    // POST /api/content-id
+    //
+    // The id that says what a document IS rather than what this machine calls it: the same
+    // pack assembled on two machines gets the same one. For the tools that BUILD these — a
+    // script that generates a catalogue, a CI job that checks a repo still carries what it
+    // said — so they can compare without reimplementing the hashing and drifting from it.
+    //
+    // It takes the DOCUMENT, and that is what makes it safe to leave at token level rather
+    // than behind a per-kind read scope: the caller supplies what is hashed, so the answer
+    // discloses nothing this machine holds. A by-id variant would be an oracle for "does
+    // this install have X", and would need modpacks.read, plugins.read and the rest, one
+    // route each. That is a different endpoint and it is deliberately not this one.
+    let tok_cid = token.clone();
+    let content_id = warp::path!("api" / "content-id")
+        .and(warp::post())
+        .and(require_token(tok_cid))
+        .and(warp::body::json::<ContentIdBody>())
+        .map(|body: ContentIdBody| {
+            match crate::commands::content_ids::content_id_from(body.kind.clone(), body.doc) {
+                Ok(id) => warp::reply::with_status(
+                    warp::reply::json(&serde_json::json!({ "kind": body.kind, "content_id": id })),
+                    StatusCode::OK),
+                Err(e) => warp::reply::with_status(
+                    warp::reply::json(&ApiError { error: e }), StatusCode::BAD_REQUEST),
+            }
+        });
+
     let tok_hook = token.clone();
     let hook_ring = warp::path!("api" / "hook")
         .and(warp::post())
@@ -3568,6 +3604,7 @@ pub async fn start_api_server(
         .or(mods_order_get)
         .or(mods_order_set)
         .or(hook_ring)
+        .or(content_id)
         .or(hook_seen)
         .or(plugin_assets)
         .or(catalogs_get)

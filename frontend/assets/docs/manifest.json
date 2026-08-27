@@ -38,6 +38,7 @@
     "how-it-works/extending",
     "how-it-works/security",
     "reference/api",
+    "reference/content-ids",
     "reference/repo-format",
     "reference/passphrases",
     "reference/catalog-index",
@@ -612,6 +613,21 @@
         "fr": "BMM expose deux façons de le piloter depuis l'extérieur : les deeplinks (bmm://…, sans token, envoyés à la fenêtre en cours) et une API HTTP locale (token,…"
       },
       "words": 1773,
+      "diagrams": 0,
+      "fr": true
+    },
+    {
+      "path": "reference/content-ids",
+      "section": "reference",
+      "title": {
+        "en": "Two ids, and the difference is the point",
+        "fr": "Deux ids, et la différence est le sujet"
+      },
+      "summary": {
+        "en": "Everything BMM holds has a local id — the name this machine gave it. Nine kinds also have a content id, which names what the thing is.",
+        "fr": "Tout ce que BMM contient a un id local — le nom que cette machine lui a donné. Neuf types ont aussi un id de contenu, qui nomme ce que la chose est."
+      },
+      "words": 372,
       "diagrams": 0,
       "fr": true
     },

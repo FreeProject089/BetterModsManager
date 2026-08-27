@@ -346,6 +346,7 @@ Two shapes sit outside that rule:
 | `POST` | `/api/schedules/enabled` | `schedules.write` | `id`*, `enabled`* · arm or disarm one task. Only `enabled` can be changed — a route that could write a whole task could install one with a script step in it | |
 | `POST` | `/api/hook` | `hooks.write` | `name`*, `data` · ring a named doorbell a task may be waiting on with `wait.hook`, or be triggered by with `on event` | |
 | `GET` | `/api/hook` | `hooks.read` | `name` · what has rung, without consuming it — for the screen that asks “is my webhook actually arriving?” | |
+| `POST` | `/api/content-id` | token | `kind`*, `doc`* · the id that says what a document IS rather than what this machine calls it. Takes the document, so it discloses nothing this install holds — which is why it is token-level and not behind a per-kind read scope |
 | `POST` | `/api/mods/order` | `mods.write` | `order[]`*, `profileId` · must be the same set of mods that are active; re-copies the files that change hands | |
 | `PUT` | `/api/mods/:id` | `mods.write` | `name`, `version`, `author`, `description`, `tags[]`, `install_notes` | |
 | `DELETE` | `/api/mods/:id` | `mods.write` | — · removes the entry, **keeps the files** | |
