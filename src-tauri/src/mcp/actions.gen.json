@@ -451,6 +451,12 @@
       "group": "logic"
     },
     {
+      "type": "id.of",
+      "label": "Content id of a thing, into a variable",
+      "needs": "idOf",
+      "group": "logic"
+    },
+    {
       "type": "map.clear",
       "label": "Map — empty it",
       "needs": "mapName",

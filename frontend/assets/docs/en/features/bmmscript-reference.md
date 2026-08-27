@@ -2,7 +2,7 @@
 
 !!! info ""
 
-    90 actions · 32 conditions · 32 values · 8 loop sources
+    91 actions · 32 conditions · 32 values · 8 loop sources
 
 > Generated from BMM's own registry, so it cannot describe a version of the app that does not exist. If an action is in the block editor, it is in this list.
 
@@ -110,6 +110,7 @@ Written `do <name>(param: value, …)`. An action with no parameters takes empty
 | `list.clear` | Empties the list without deleting its name, so a later push starts from nothing. | `name` |
 | `map.set` | Stores one value under one key. A list answers “which ones”; a map answers “what goes with what”. | `name` · `key` · `value` |
 | `map.get` | Reads one key into a variable you name. A missing key stores an empty value — check {map.hit} to tell “not there” from “there and blank”. | `name` · `key` · `into` |
+| `id.of` | Works out what a modpack, plugin or automation IS — the id that is the same wherever the content is the same — and stores it in a variable. Compare it to check you have what you expect, without downloading anything or trusting a name. | `into` · `kind` · `id` |
 | `map.clear` | Empties the map without deleting its name. | `name` |
 | `var.clear` | Removes one shared variable, or all of them. A run’s own values disappear with it anyway. | `name` |
 | `text.extract` | Runs a pattern over a file's last KB, or over a variable, and keeps what it matched. | `target` · `path` · `tailKb` · `source` · `regex` · `group` |

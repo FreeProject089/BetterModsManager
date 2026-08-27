@@ -2,7 +2,7 @@
 
 !!! info ""
 
-    90 actions · 32 conditions · 32 valeurs · 8 sources de boucle
+    91 actions · 32 conditions · 32 valeurs · 8 sources de boucle
 
 > Généré depuis le registre de BMM lui-même, donc cette page ne peut pas décrire une version de l'application qui n'existe pas. Si une action est dans l'éditeur de blocs, elle est dans cette liste.
 
@@ -110,6 +110,7 @@ S'écrit `do <nom>(param: valeur, …)`. Une action sans paramètre prend des pa
 | `list.clear` | Vide la liste sans supprimer son nom : un ajout ultérieur repart de zéro. | `name` |
 | `map.set` | Enregistre une valeur sous une clé. Une liste répond « lesquels » ; une table répond « quoi va avec quoi ». | `name` · `key` · `value` |
 | `map.get` | Lit une clé dans une variable que vous nommez. Une clé absente enregistre une valeur vide — testez {map.hit} pour distinguer « absente » de « présente et vide ». | `name` · `key` · `into` |
+| `id.of` | Détermine ce qu'un modpack, un plugin ou une automatisation EST — l'id identique partout où le contenu l'est — et le range dans une variable. Comparez-le pour vérifier que vous avez ce que vous croyez, sans rien télécharger ni faire confiance à un nom. | `into` · `kind` · `id` |
 | `map.clear` | Vide la table sans supprimer son nom. | `name` |
 | `var.clear` | Retire une variable partagée, ou toutes. Les valeurs d’une exécution disparaissent avec elle de toute façon. | `name` |
 | `text.extract` | Applique un motif aux derniers Ko d'un fichier, ou à une variable, et garde ce qu'il a trouvé. | `target` · `path` · `tailKb` · `source` · `regex` · `group` |

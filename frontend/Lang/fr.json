@@ -9310,5 +9310,16 @@
   "repo.hostLedeP": "D'abord produire le fichier <b>repo.json</b> qui décrit vos mods, puis permettre aux autres de le télécharger. Les deux étapes sont ci-dessous, dans cet ordre.",
   "repo.hostLedeQ": "Vous pouvez vous arrêter après l'étape&nbsp;1 si vous avez déjà où déposer le dossier — un hébergement statique, un partage réseau, n'importe quoi qui serve des fichiers. L'étape&nbsp;2 est là pour ceux qui n'en ont pas.",
   "repo.hostLedeAlt": "Les cartes marquées <b>ALTERNATIVE</b> ne sont pas des étapes de plus : ce sont d'autres façons de faire celle au-dessus d'elles.",
-  "copyid.label": "Ids"
+  "copyid.label": "Ids",
+  "sched.act.id.of": "Id de contenu d'une chose",
+  "sched.actd.id.of": "Détermine ce qu'un modpack, un plugin ou une automatisation EST — l'id identique partout où le contenu l'est — et le range dans une variable. Comparez-le pour vérifier que vous avez ce que vous croyez, sans rien télécharger ni faire confiance à un nom.",
+  "sched.idof.kind": "1. Quel type de chose",
+  "sched.idof.k.modpack": "Un modpack",
+  "sched.idof.k.plugin": "Un plugin",
+  "sched.idof.k.task": "Une automatisation",
+  "sched.idof.id": "2. Son id local",
+  "sched.idof.idPh": "l'id vu sur sa carte — les {variables} sont substituées d'abord",
+  "sched.idof.into": "3. Ranger l'id de contenu dans",
+  "sched.idof.intoPh": "nom de variable — relu comme {name}",
+  "sched.idof.hint": "L'id de contenu dit CE QU'EST la chose : le même pack sur une autre machine donne la même réponse. Comparez-le avec textIs pour vérifier que vous avez ce que vous attendez."
 }

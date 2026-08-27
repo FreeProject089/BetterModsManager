@@ -578,6 +578,15 @@
       ]
     },
     {
+      "type": "id.of",
+      "group": "logic",
+      "params": [
+        "into",
+        "kind",
+        "id"
+      ]
+    },
+    {
       "type": "map.clear",
       "group": "logic",
       "params": [

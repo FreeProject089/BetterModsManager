@@ -2534,6 +2534,26 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
             ctx.nums['map.size'] = Object.keys(m).length;
             break;
         }
+        case 'id.of': {
+            // What a thing IS, as a variable an automation can compare.
+            //
+            // The local id is already knowable — the task was written with it in hand. The
+            // content id is the one worth asking for: "is the pack on this machine the pack
+            // I published", asked without downloading anything or trusting a name.
+            const into = String(p.into || '').trim();
+            if (!VAR_NAME_RE.test(into)) {
+                throw new Error((t('sched.var.badName') || 'Not a usable variable name: {n}').replace('{n}', into || '(empty)'));
+            }
+            const kind = String(p.kind || '').trim();
+            const id = String(p.id || '').trim();
+            // Looked up by id in Rust, where each kind is defined once. Deliberately not
+            // computed here from whatever the frontend happens to be holding: two
+            // implementations of a content id is the failure the whole thing exists to
+            // avoid.
+            const cid = await invoke('content_id_of', { kind, id }) as string;
+            ctx.text[into] = cid;
+            break;
+        }
         case 'map.get': {
             const name = String(p.name || 'map');
             const key = String(p.key ?? '').trim();
@@ -5737,6 +5757,7 @@ const ACTION_TYPES: { v: string; label: string; needs?: string; group: string }[
     { v: 'list.clear', label: 'List — empty it', needs: 'listName', group: 'logic' },
     { v: 'map.set', label: 'Map — set a key', needs: 'mapSet', group: 'logic' },
     { v: 'map.get', label: 'Map — read a key into a variable', needs: 'mapGet', group: 'logic' },
+    { v: 'id.of', label: 'Content id of a thing, into a variable', needs: 'idOf', group: 'logic' },
     { v: 'map.clear', label: 'Map — empty it', needs: 'mapName', group: 'logic' },
     { v: 'var.clear', label: 'Clear a shared variable', needs: 'varClear', group: 'logic' },
     { v: 'http.request', label: 'Call an HTTP API', needs: 'http', group: 'system' },
@@ -6689,6 +6710,27 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
                 value="${escAttr(params.into || '')}">` : '';
         host.innerHTML = `<div class="sched-cmd-builder">${nameField}${keyField}${tail}</div>`;
     }
+    else if (needs === 'idOf') {
+        // Three fields and no free text for the kind: a typo there is an action that always
+        // fails, and the list is short and fixed.
+        const KINDS = ['modpack', 'plugin', 'task'];
+        host.innerHTML = `
+        <div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${t('sched.idof.kind') || '1. What kind of thing'}</label>
+            <select class="input sched-p-idkind">
+                ${KINDS.map((k) => `<option value="${k}"${params.kind === k ? ' selected' : ''}>${escHtml(t('sched.idof.k.' + k) || k)}</option>`).join('')}
+            </select>
+            <label class="sched-cmd-label">${t('sched.idof.id') || '2. Its local id'}</label>
+            <input class="input sched-p-idid" spellcheck="false"
+                placeholder="${escAttr(t('sched.idof.idPh') || 'the id from its card — {variables} are substituted first')}"
+                value="${escAttr(params.id || '')}">
+            <label class="sched-cmd-label">${t('sched.idof.into') || '3. Store the content id in'}</label>
+            <input class="input sched-p-idinto" spellcheck="false"
+                placeholder="${escAttr(t('sched.idof.intoPh') || 'variable name — read back as {name}')}"
+                value="${escAttr(params.into || '')}">
+            <p class="sched-cmd-hint">${escHtml(t('sched.idof.hint') || 'The content id says WHAT the thing is, so the same pack on another machine gives the same answer. Compare it with textIs to check you have what you expect.')}</p>
+        </div>`;
+    }
     else if (needs === 'varSet') {
         const shared = params.scope === 'shared';
         host.innerHTML = `
@@ -7114,6 +7156,9 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
     });
     host.querySelector('.sched-p-mapkey')?.addEventListener('input', (e) => { params.key = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-p-mapinto')?.addEventListener('input', (e) => { params.into = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-idkind')?.addEventListener('change', (e) => { params.kind = (e.target as HTMLSelectElement).value; });
+    host.querySelector('.sched-p-idid')?.addEventListener('input', (e) => { params.id = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-idinto')?.addEventListener('input', (e) => { params.into = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-p-varscope')?.addEventListener('change', (e) => { params.scope = (e.target as HTMLSelectElement).value; });
     host.querySelector('.sched-p-method')?.addEventListener('change', (e) => { params.method = (e.target as HTMLSelectElement).value; });
     host.querySelector('.sched-p-url')?.addEventListener('input', (e) => { params.url = (e.target as HTMLInputElement).value; });
