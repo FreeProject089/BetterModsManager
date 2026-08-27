@@ -8888,5 +8888,16 @@
   "sched.ensure.orContinueHint": "For a task that makes sure of several independent things and wants all of them attempted.",
   "sched.ensure.already": "Already as it should be.",
   "sched.ensure.fixed": "Put right.",
-  "sched.ensure.stillFalse": "Still not true after the fix ran."
+  "sched.ensure.stillFalse": "Still not true after the fix ran.",
+  "paths.pick": "BMM…",
+  "paths.pickHint": "Name a folder BMM already knows about, instead of typing where it is.",
+  "paths.pickTitle": "A place BMM knows",
+  "paths.pickLede": "Pick one and the step stores its NAME, not its path — so the task still works after a reinstall, a profile switch, or on somebody else's machine.",
+  "paths.subfolder": "Inside it (optional)",
+  "paths.noneKnown": "Nothing to pick yet — no profile is active and nothing is installed.",
+  "paths.errFailed": "Could not work out where “{s}” is",
+  "paths.errNotSpec": "That is not a place BMM names.",
+  "paths.errOutside": "That path leads out of the folder it was given.",
+  "paths.errAbsolute": "That part must be relative — an absolute path would ignore the folder it was joined to.",
+  "paths.errNoRoot": "BMM does not know that one on this machine."
 }

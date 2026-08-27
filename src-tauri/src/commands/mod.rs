@@ -1,3 +1,5 @@
+pub mod bmm_paths;
+pub mod bmm_paths_core;
 pub mod doc_sign;
 pub mod export_bundle;
 pub mod secret_box;

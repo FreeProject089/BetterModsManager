@@ -677,6 +677,47 @@ Coche **Un code de sortie non nul est un résultat, pas un échec** et il arrive
 `{script.code}`, avec `{text.script.stdout}` et `{text.script.stderr}` gardés séparément. Ne
 pas *démarrer* reste une erreur : il n'y a alors aucun code de sortie et rien n'a tourné.
 
+## Nommer un endroit au lieu de taper où il est
+
+Tout champ qui propose **Parcourir** propose aussi **BMM…**. Il liste les dossiers que BMM
+connaît déjà, et garde celui que tu choisis sous forme de **nom** plutôt que de chemin :
+
+| Écrit | Veut dire |
+|---|---|
+| `mods:` · `game:` · `backup:` | Les dossiers du profil actif — et ils le suivent quand tu changes de profil |
+| `plugin:my-tools` | Là où ce plugin est installé |
+| `plugin:my-tools/bundle/presets` | Un dossier livré par le plugin |
+| `app:obs` | Une app installée depuis le catalogue d'apps |
+| `profile:<id>` · `modpack:<id>` | Le dossier de mods de ce profil |
+| `appdata:` | Le dossier de données de BMM |
+
+Un chemin tapé est correct sur une machine, jusqu'à ce que le plugin soit réinstallé, que le
+profil change ou que le dossier de données bouge — et là ça échoue à 3h du matin, au milieu
+d'une étape, avec un message sur un dossier que personne ne reconnaît. Un nom garde le même
+sens, **et le garde sur la machine de quelqu'un d'autre**, ce qui est ce qui rend une tâche
+partageable.
+
+Tu peux en écrire un à la main partout où va un chemin. Il est résolu au moment où l'étape
+s'exécute.
+
+!!! note "`C:\mods` n'est pas un nom"
+
+    Tout chemin absolu Windows contient un deux-points : « contient un deux-points » aurait donc
+    silencieusement réinterprété chaque chemin qui marche aujourd'hui. Seuls les mots de ce
+    tableau commencent un nom, et une lettre de lecteur fait un caractère — c'est la différence
+    que le contrôle teste vraiment.
+
+!!! warning "Un nom qui ne se résout pas arrête l'étape"
+
+    Un plugin qui n'est pas installé ici, un profil supprimé. L'étape échoue et dit quel nom
+    elle n'a pas su placer, plutôt que de passer `plugin:my-tools/bundle` à quelque chose qui
+    attend un dossier — ce qui échoue plus tard, ailleurs, avec un pire message.
+
+    Un **modpack multi-profil** n'a pas de dossier : ses mods vivent dans deux ou plus. Prendre
+    le premier serait juste une fois sur deux, ce qui est pire que rien, parce qu'une tâche qui
+    écrit dans le dossier de mods du mauvais profil n'échoue pas. Ces packs restent joignables
+    par id via les actions modpack.
+
 ## Deux choses plus petites
 
 **Toute liste déroulante de douze entrées ou plus a une barre de recherche.** Elle cherche

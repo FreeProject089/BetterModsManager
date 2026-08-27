@@ -613,6 +613,44 @@ Tick **A non-zero exit is a result, not a failure** and it lands in `{script.cod
 `{text.script.stdout}` and `{text.script.stderr}` kept apart. Failing to *start* is still an
 error, because then there is no exit code and nothing ran.
 
+## Naming a place instead of typing where it is
+
+Any field that offers **Browse** also offers **BMM…**. It lists the folders BMM already knows
+about, and stores the one you pick as a **name** rather than as a path:
+
+| Written | Means |
+|---|---|
+| `mods:` · `game:` · `backup:` | The active profile's folders — and they follow it when you switch profile |
+| `plugin:my-tools` | Where that plugin is installed |
+| `plugin:my-tools/bundle/presets` | A folder the plugin ships |
+| `app:obs` | An app installed from the app catalogue |
+| `profile:<id>` · `modpack:<id>` | That profile's mods folder |
+| `appdata:` | BMM's own data folder |
+
+A typed path is right on one machine, until the plugin is reinstalled, the profile switches or
+the app data folder moves — and then it fails at 3am, inside a step, with a message about a
+directory nobody recognises. A name keeps meaning the same thing, **and means it on somebody
+else's machine**, which is what makes a task worth sharing.
+
+You can type one by hand anywhere a path goes. It is resolved when the step runs.
+
+!!! note "`C:\mods` is not a name"
+
+    Every absolute Windows path has a colon in it, so "has a colon" would have quietly
+    reinterpreted every path that works today. Only the words in that table start a name, and
+    a drive letter is one character — which is the difference the check actually tests.
+
+!!! warning "A name that cannot be resolved stops the step"
+
+    A plugin that is not installed here, a profile that was deleted. The step fails and says
+    which name it could not place, rather than passing `plugin:my-tools/bundle` on to something
+    expecting a folder — which fails later, somewhere else, with a worse message.
+
+    A **multi-profile modpack** has no folder: its mods live in two or more. Picking the first
+    would be right about half the time, which is worse than nothing, because a task writing
+    into the wrong profile's mods folder does not fail. Those packs are still reachable by id
+    through the modpack actions.
+
 ## Two smaller things
 
 **Every dropdown with twelve or more entries has a search box.** It matches the whole row, so

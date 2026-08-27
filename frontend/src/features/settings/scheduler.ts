@@ -1341,6 +1341,11 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
     // having to remember to ask. `action.params` itself is left alone — it is the saved
     // task, and rewriting it would bake one run's values into the stored definition.
     const p = substituteVars(action.params || {}, ctx);
+    // A parameter may NAME a place instead of saying where it is: `plugin:my-tools/bundle`,
+    // `mods:`, `app:obs`. Resolved here, once, for the same reason substitution is — every
+    // case would otherwise have to remember to ask, and the one that forgets fails at 3am
+    // with a message about a folder nobody recognises.
+    await resolvePathSpecs(p);
     // Noted BEFORE the action runs, not after: a step that throws half-way through
     // has still changed something, and the screens are wrong either way. Try/On error
     // can swallow that throw and let the task continue, so recording it only on
@@ -6596,6 +6601,7 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
         const d = await pickFolder().catch(() => null);
         if (d) { params.path = d; (host.querySelector('.sched-path') as HTMLInputElement).value = d; }
     });
+    addBmmPathButtons(host, params);
 }
 
 function diskOptions(selected: string): string {
@@ -8202,4 +8208,130 @@ function wireReferencePanel(modal: HTMLElement): void {
         btn.setAttribute('aria-pressed', open ? 'true' : 'false');
     });
     q.addEventListener('input', paint);
+}
+
+
+/** The scheme words a spec can start with. See src-tauri/src/commands/bmm_paths_core.rs. */
+const PATH_KINDS = ['plugin', 'app', 'modpack', 'profile', 'mods', 'game', 'backup', 'appdata'];
+
+/**
+ * Expand any parameter that names a place instead of giving a path.
+ *
+ * The prefilter here can only be too GENEROUS, never too strict: anything whose first word
+ * looks like a scheme is sent to Rust, and Rust hands back whatever is not really a spec
+ * unchanged. Deciding it here would be a second implementation of "is this a spec", and the
+ * one that matters — the one that must never mistake `C:\\mods` for a scheme — is the one
+ * with the tests.
+ */
+async function resolvePathSpecs(params: Record<string, any>): Promise<void> {
+    for (const [k, v] of Object.entries(params)) {
+        if (typeof v !== 'string' || !v) continue;
+        const head = v.split(/[:/\\]/)[0];
+        if (!PATH_KINDS.includes(head)) continue;
+        try {
+            params[k] = await invoke('bmm_path_resolve', { spec: v }) as string;
+        } catch (e) {
+            // Loud. A spec that cannot be resolved is a plugin that is not installed or a
+            // profile that is gone, and continuing with the unresolved text would hand
+            // `plugin:my-tools/bundle` to something expecting a path — which fails later,
+            // somewhere else, with a worse message.
+            throw new Error(`${t('paths.errFailed').replace('{s}', v)} — ${e}`);
+        }
+    }
+}
+
+/**
+ * Put a "BMM…" button beside every Browse button in a step's form.
+ *
+ * Injected rather than written into each form's markup: there are eight of those today and
+ * the ninth would be the one somebody forgets. Anything that already offers Browse gets this
+ * for free, including forms added later.
+ */
+function addBmmPathButtons(host: HTMLElement, params: Record<string, any>): void {
+    const targets: [string, string, string][] = [
+        ['.sched-browse-dir', '.sched-r-dir, .sched-ea-dir', 'dir'],
+        ['.sched-browse-file', '.sched-path', 'path'],
+        ['.sched-browse-folder', '.sched-path', 'path'],
+    ];
+    for (const [btnSel, inputSel, key] of targets) {
+        const browse = host.querySelector(btnSel) as HTMLElement | null;
+        const input = host.querySelector(inputSel) as HTMLInputElement | null;
+        if (!browse || !input || browse.dataset.bmmPath) continue;
+        browse.dataset.bmmPath = '1';
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn btn-sm btn-ghost sched-bmm-path';
+        btn.textContent = t('paths.pick');
+        btn.title = t('paths.pickHint');
+        btn.addEventListener('click', async () => {
+            const spec = await pickBmmPath();
+            if (!spec) return;
+            params[key] = spec;
+            input.value = spec;
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+        browse.parentElement?.insertBefore(btn, browse.nextSibling);
+    }
+}
+
+/**
+ * Choose a place, and get back the SPEC rather than the path it points at today.
+ *
+ * The spec is the point. A resolved path is right on this machine until the plugin is
+ * reinstalled or the profile switches; `plugin:my-tools/bundle` keeps meaning the same thing,
+ * and means it on somebody else's machine too — which is what makes a task shareable.
+ */
+async function pickBmmPath(): Promise<string | null> {
+    let roots: { kind: string; id: string; label: string; path: string }[];
+    try {
+        roots = await invoke('bmm_path_roots') as typeof roots;
+    } catch (e) { toast(String(e), 'error', 8000); return null; }
+    if (!roots.length) { toast(t('paths.noneKnown'), 'info', 7000); return null; }
+
+    return new Promise((resolve) => {
+        const ov = document.createElement('div');
+        ov.className = 'cm-overlay';
+        const rows = roots.map((r, i) => {
+            const spec = r.id ? `${r.kind}:${r.id}` : `${r.kind}:`;
+            return `<button type="button" class="pp-row" data-i="${i}" data-spec="${escAttr(spec)}">
+                <span class="pp-kind">${escHtml(r.kind)}</span>
+                <span class="pp-label">${escHtml(r.label || r.id)}</span>
+                <span class="pp-spec">${escHtml(spec)}</span>
+                <span class="pp-path">${escHtml(r.path)}</span>
+            </button>`;
+        }).join('');
+        ov.innerHTML = `<div class="cm-modal pp-modal">
+            <div class="cm-head"><h3>${escHtml(t('paths.pickTitle'))}</h3>
+                <button class="cm-x" id="pp-x" aria-label="${escAttr(t('common.close'))}">&times;</button></div>
+            <p class="pp-lede">${escHtml(t('paths.pickLede'))}</p>
+            <input type="search" class="input pp-q" id="pp-q" placeholder="${escAttr(t('common.search') || 'Search')}" spellcheck="false">
+            <div class="pp-list" id="pp-list">${rows}</div>
+            <div class="cm-foot">
+                <label class="pp-sub">${escHtml(t('paths.subfolder'))}
+                    <input type="text" class="input" id="pp-sub" placeholder="bundle/presets" spellcheck="false"></label>
+                <button class="btn btn-sm btn-ghost" id="pp-cancel">${escHtml(t('common.cancel'))}</button>
+            </div>
+        </div>`;
+        const shut = (v: string | null) => { ov.remove(); resolve(v); };
+        ov.querySelector('#pp-x')?.addEventListener('click', () => shut(null));
+        ov.querySelector('#pp-cancel')?.addEventListener('click', () => shut(null));
+        const sub = ov.querySelector('#pp-sub') as HTMLInputElement;
+        ov.querySelectorAll<HTMLElement>('.pp-row').forEach((row) => {
+            row.addEventListener('click', () => {
+                const tail = sub.value.trim().replace(/^[/\\]+/, '');
+                const base = row.dataset.spec || '';
+                shut(tail ? `${base}${base.endsWith(':') ? '' : '/'}${tail}` : base);
+            });
+        });
+        const q = ov.querySelector('#pp-q') as HTMLInputElement;
+        q.addEventListener('input', () => {
+            const n = q.value.trim().toLowerCase();
+            ov.querySelectorAll<HTMLElement>('.pp-row').forEach((row) => {
+                row.style.display = !n || row.textContent!.toLowerCase().includes(n) ? '' : 'none';
+            });
+        });
+        (document.getElementById('app-window-outer') || document.body).appendChild(ov);
+        raiseAboveAll(ov, 11600);
+        q.focus();
+    });
 }

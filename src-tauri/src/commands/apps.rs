@@ -23,6 +23,19 @@ fn sanitize_download_name(name: &str, fallback_ext: &str) -> String {
 
 // ── State persistence ─────────────────────────────────────────────────────────
 
+/// (id, title, folder) for every installed app, for the path resolver.
+///
+/// Returns the install FOLDER rather than the exe: a spec names a place, and a task that
+/// wants the executable says `app:<id>/<name>.exe` — which also means an app whose exe was
+/// never registered is still reachable.
+pub fn installed_apps_for_paths(app: &AppHandle) -> Vec<(String, String, String)> {
+    load_state(app)
+        .installed
+        .into_values()
+        .map(|a| (a.id, a.title, a.install_path))
+        .collect()
+}
+
 fn state_path(app: &AppHandle) -> std::path::PathBuf {
     app.path()
         .app_data_dir().ok()

@@ -8886,5 +8886,16 @@
   "sched.ensure.orContinueHint": "Pour une tâche qui s'assure de plusieurs choses indépendantes et veut toutes les tenter.",
   "sched.ensure.already": "Déjà dans l'état voulu.",
   "sched.ensure.fixed": "Remis en ordre.",
-  "sched.ensure.stillFalse": "Toujours pas vrai après la correction."
+  "sched.ensure.stillFalse": "Toujours pas vrai après la correction.",
+  "paths.pick": "BMM…",
+  "paths.pickHint": "Nommer un dossier que BMM connaît déjà, au lieu de taper où il est.",
+  "paths.pickTitle": "Un endroit que BMM connaît",
+  "paths.pickLede": "Choisis-en un et l'étape garde son NOM, pas son chemin — la tâche marche donc encore après une réinstallation, un changement de profil, ou sur la machine de quelqu'un d'autre.",
+  "paths.subfolder": "Dedans (optionnel)",
+  "paths.noneKnown": "Rien à choisir pour l'instant — aucun profil actif et rien d'installé.",
+  "paths.errFailed": "Impossible de savoir où se trouve « {s} »",
+  "paths.errNotSpec": "Ce n'est pas un endroit que BMM nomme.",
+  "paths.errOutside": "Ce chemin sort du dossier qu'on lui a donné.",
+  "paths.errAbsolute": "Cette partie doit être relative — un chemin absolu ignorerait le dossier auquel il est joint.",
+  "paths.errNoRoot": "BMM ne connaît pas celui-là sur cette machine."
 }
