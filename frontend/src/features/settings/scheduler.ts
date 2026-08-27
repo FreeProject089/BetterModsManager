@@ -2174,7 +2174,10 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
             if (!url) { toast(`${task.name}: ${t('sched.cat.noUrl')}`, 'warning', 8000); break; }
             requirePerm(task, 'deeplink', t('sched.permDeeplink') || 'fire deeplinks');
             await runDeepLink(`bmm://catalog/${p.unfollow ? 'unfollow' : 'follow'}`
-                + `?type=${encodeURIComponent(type)}&url=${encodeURIComponent(url)}`);
+                + `?type=${encodeURIComponent(type)}&url=${encodeURIComponent(url)}`
+                // Only when there is one, so an unprotected catalogue's link stays the short
+                // readable thing it has always been.
+                + (p.password ? `&password=${encodeURIComponent(String(p.password))}` : ''));
             break;
         }
 
@@ -2319,8 +2322,10 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
             if (p.id) await invoke('export_modpack', { id: p.id, destDir: p.dir || null }); break;
         case 'file.open':        if (p.path) await invoke('open_file', { path: p.path }); break;
         case 'folder.open':      if (p.path) await invoke('open_folder', { path: p.path }); break;
-        case 'repo.connect':     dl('repo/connect', { url: p.url, name: p.name }); break;
-        case 'repo.sync':        dl('repo/sync', { url: p.url, profile: p.profile }); break;
+        // The password travels with the link. Dropping it here is what made a protected
+        // repo unreachable from a task however carefully the form was filled in.
+        case 'repo.connect':     dl('repo/connect', { url: p.url, name: p.name, password: p.password }); break;
+        case 'repo.sync':        dl('repo/sync', { url: p.url, profile: p.profile, password: p.password }); break;
         case 'repo.syncNow': {
             // A REAL sync, not a deeplink. Every other repo action here only opens the
             // UI prefilled, which is useless at 3am with nobody to press the button.
@@ -6351,7 +6356,13 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
             <label class="sched-cmd-row"><input type="checkbox" class="sched-p-cfoff"${params.unfollow ? ' checked' : ''}>
                 <span>${escHtml(t('sched.cat.unfollow') || 'Stop following it instead')}</span></label>
             <span class="sched-cmd-hint">${escHtml(t('sched.cat.hint') || '')}</span>
+            <!-- A catalogue can be protected too. Every catalogue SCREEN has offered the
+                 password and the key for a while, through the shared source-access block;
+                 this form offered neither, so a task following a protected catalogue simply
+                 failed with "could not read it". -->
+            ${credsFields(params, { password: true })}
         </div>`;
+        wireCreds(host, params);
     }
     else if (needs === 'dataBackup') {
         // The sections, and their order, come from the shared defaults rather than a list
@@ -6918,8 +6929,34 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
     else if (needs === 'pluginId') host.innerHTML = _field(needs, `<input class="input sched-p" placeholder="${escAttr(t('sched.pluginIdPh') || 'plugin id (from plugin.json)')}" value="${escAttr(params.id || '')}" style="max-width:260px">`);
     else if (needs === 'lpId')     host.innerHTML = _field(needs, `<input class="input sched-p" placeholder="${escAttr(t('sched.lpIdPh') || 'launch pack id')}" value="${escAttr(params.id || '')}" style="max-width:260px">`);
     else if (needs === 'taskId')   host.innerHTML = _field(needs, `<input class="input sched-p" placeholder="${escAttr(t('sched.taskIdPh') || 'scheduled task id')}" value="${escAttr(params.id || '')}" style="max-width:260px">`);
-    else if (needs === 'repoConnect') host.innerHTML = `<input class="input sched-r-url" placeholder="${escAttr(t('sched.repoUrlPh') || 'repo.json URL')}" value="${escAttr(params.url || '')}" style="min-width:240px"><input class="input sched-r-name" placeholder="${escAttr(t('sched.repoNamePh') || 'name (optional)')}" value="${escAttr(params.name || '')}" style="max-width:180px;margin-left:6px">`;
-    else if (needs === 'repoSync') host.innerHTML = `<input class="input sched-r-url" placeholder="${escAttr(t('sched.repoUrlPh') || 'repo.json URL')}" value="${escAttr(params.url || '')}" style="min-width:240px"><input class="input sched-r-prof" placeholder="${escAttr(t('sched.repoProfPh') || 'remote profile id')}" value="${escAttr(params.profile || '')}" style="max-width:180px;margin-left:6px">`;
+    // A repo can be password-protected. These two forms offered a URL and nothing else, so
+    // a task pointed at a protected repo opened the screen with an empty password box and
+    // waited for somebody who is not there. `repo.syncNow` has asked properly for a while;
+    // these did not, which is the sort of gap that only shows up at 3am.
+    //
+    // Password only, deliberately: both act through a `bmm://` deeplink, and a link able to
+    // name WHICH identity key signs is a link choosing who you are to a server. The key
+    // stays the active one — the same rule the SSH actions already follow.
+    else if (needs === 'repoConnect') {
+        host.innerHTML = `<div class="sched-cmd-builder">
+            <div class="sched-cmd-row">
+                <input class="input sched-r-url" placeholder="${escAttr(t('sched.repoUrlPh') || 'repo.json URL')}" value="${escAttr(params.url || '')}" style="min-width:240px">
+                <input class="input sched-r-name" placeholder="${escAttr(t('sched.repoNamePh') || 'name (optional)')}" value="${escAttr(params.name || '')}" style="max-width:180px;margin-left:6px">
+            </div>
+            ${credsFields(params, { password: true })}
+        </div>`;
+        wireCreds(host, params);
+    }
+    else if (needs === 'repoSync') {
+        host.innerHTML = `<div class="sched-cmd-builder">
+            <div class="sched-cmd-row">
+                <input class="input sched-r-url" placeholder="${escAttr(t('sched.repoUrlPh') || 'repo.json URL')}" value="${escAttr(params.url || '')}" style="min-width:240px">
+                <input class="input sched-r-prof" placeholder="${escAttr(t('sched.repoProfPh') || 'remote profile id')}" value="${escAttr(params.profile || '')}" style="max-width:180px;margin-left:6px">
+            </div>
+            ${credsFields(params, { password: true })}
+        </div>`;
+        wireCreds(host, params);
+    }
     else if (needs === 'repoUpdate') host.innerHTML = `<input class="input sched-r-dir" placeholder="${escAttr(t('sched.repoDirPh') || 'repo folder')}" value="${escAttr(params.dir || '')}" style="min-width:240px"><button type="button" class="btn btn-sm btn-secondary sched-browse-dir" style="margin-left:6px">${t('sched.choose') || 'Choose…'}</button>`;
     else if (needs === 'repoHost') host.innerHTML = `<input class="input sched-r-dir" placeholder="${escAttr(t('sched.serveDirPh') || 'folder to serve')}" value="${escAttr(params.dir || '')}" style="min-width:220px"><button type="button" class="btn btn-sm btn-secondary sched-browse-dir" style="margin-left:6px">${t('sched.choose') || 'Choose…'}</button><input class="input sched-r-port" type="number" min="1" placeholder="port" value="${escAttr(params.port || '')}" style="max-width:100px;margin-left:6px">`;
     else if (needs === 'repoManifest') {

@@ -91,7 +91,7 @@ This document is the single source of truth for everything that can be driven pr
 ### Server Repo
 | Path | Auth | Body |
 |---|---|---|
-| `/api/repo/connect` | yes | `{ url, name? }` |
+| `/api/repo/connect` | yes | `{ url, name?, password? }` |
 | `/api/repo/sync` | yes | `{ url, creator_id?, game_dir?, mods_dir?, backup_dir?, choices?, download_limit?, password? }` (UI-driven; `password` = optional download password for a protected repo) |
 | `/api/repo/gen` | yes | `{ profileIds[], outputDir, authorName, … }` (UI-driven) |
 | `/api/repo/update` | yes | `{ repoDir }` — opens the incremental-update modal pre-filled |
@@ -184,7 +184,7 @@ Deeplinks are clickable URLs (web pages, Discord, scripts) that drive BMM when i
 | `bmm://plugin/compare?id=<plugin_id>` | `POST /api/plugins/compare` |
 | `bmm://modpack/enable?id=<id>` | `POST /api/modpacks/enable` |
 | `bmm://modpack/disable?id=<id>` | `POST /api/modpacks/disable` |
-| `bmm://repo/connect?url=<url>` | `POST /api/repo/connect` |
+| `bmm://repo/connect?url=<url>&password=<pw>` | `POST /api/repo/connect` |
 | `bmm://repo/sync?url=<url>&profile=<repo_profile_id>[&password=<pw>]` | `POST /api/repo/sync` |
 | `bmm://repo/gen` | opens the Gen section (needs profile selection) |
 | `bmm://repo/update?dir=<repoDir>` | opens the incremental-update modal |

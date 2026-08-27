@@ -166,7 +166,7 @@ global (`bmm_deeplink_allow_global = blocked`) les refuse tous.
 
 | Deeplink | Params | Effet |
 |---|---|---|
-| `bmm://repo/connect` | `url`*, `name` | Enregistre un dépôt distant (le dossier parent suffit) |
+| `bmm://repo/connect` | `url`*, `name`, `password` | Enregistre un dépôt distant (le dossier parent suffit). `password` est le mot de passe de téléchargement d'un dépôt protégé, envoyé en `X-Repo-Password` au moment de lire le nom dans `repo.json` — sans lui, un dépôt protégé se connectait sous un nom qui était juste son URL. |
 | `bmm://repo/sync` | `url`*, `profile`*, `game_dir`, `mods_dir`, `backup_dir`, `local_profile`, `password` | Ouvre la synchro pré-remplie et lance la récupération. `password` est envoyé en `X-Repo-Password` |
 | `bmm://repo/gen` | — | Ouvre la section Génération |
 | `bmm://repo/update` | `dir` | Ouvre Mise à jour, pré-rempli |

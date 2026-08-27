@@ -233,9 +233,14 @@ async function handleDeepLink(urlStr: string): Promise<void> {
                 // and let the native UI fetch/connect the repo — no background HTTP call.
                 const navBtn = document.querySelector('.nav-item[data-view="repo"], .nav-btn[data-view="repo"], [data-view="repo"]') as HTMLElement | null;
                 navBtn?.click();
+                // A protected repo needs its password to be READ, not just to be synced.
+                // `repo/sync` has carried one for a while; connect did not, so a link to a
+                // protected repo opened the screen with an empty box — the one thing the
+                // link was supposed to save you typing.
+                const pw = parsedUrl.searchParams.get('password');
                 setTimeout(() => {
                     document.dispatchEvent(new CustomEvent('bmm:repo-focus', {
-                        detail: { section: 'connect', prefill: { url: repoUrl } },
+                        detail: { section: 'connect', prefill: { url: repoUrl, ...(pw ? { password: pw } : {}) } },
                     }));
                 }, 350);
                 toast(t('plugins.deepLinkConnectRepoOk') || 'Repo connecté avec succès.', 'success');
@@ -672,6 +677,14 @@ async function handleDeepLink(urlStr: string): Promise<void> {
         if (action === 'catalog/follow' || action === 'catalog/unfollow') {
             const type = parsedUrl.searchParams.get('type') || '';
             const url = parsedUrl.searchParams.get('url') || '';
+            // A catalogue can be password-protected, exactly as a repo can. Remembered for
+            // this run only, which is the rule the source-access panel already states: a
+            // password is never written to disk. Following an unprotected one is unchanged.
+            const password = parsedUrl.searchParams.get('password') || '';
+            if (password && url) {
+                const { rememberSourcePassword } = await import('./source-fetch.js');
+                try { rememberSourcePassword(url, password); } catch { /* follow anyway */ }
+            }
             const { STORE_KEY, addSource, removeSource, rememberOrigin, forgetOrigin, recordHistory } =
                 await import('../features/catalogs/catalog-index.js');
             const { writeSources } = await import('../features/catalogs/catalog-sources.js');

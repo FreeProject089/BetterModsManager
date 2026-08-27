@@ -137,7 +137,8 @@
       "group": "repo",
       "params": [
         "url",
-        "name"
+        "name",
+        "password"
       ]
     },
     {
@@ -145,7 +146,8 @@
       "group": "repo",
       "params": [
         "url",
-        "profile"
+        "profile",
+        "password"
       ]
     },
     {
@@ -741,7 +743,8 @@
       "params": [
         "catType",
         "url",
-        "unfollow"
+        "unfollow",
+        "password"
       ]
     }
   ],

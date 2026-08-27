@@ -51,14 +51,16 @@
     "action": "catalog/follow",
     "params": [
       "type",
-      "url"
+      "url",
+      "password"
     ]
   },
   {
     "action": "catalog/unfollow",
     "params": [
       "type",
-      "url"
+      "url",
+      "password"
     ]
   },
   {
@@ -216,7 +218,8 @@
   {
     "action": "repo/connect",
     "params": [
-      "url"
+      "url",
+      "password"
     ]
   },
   {

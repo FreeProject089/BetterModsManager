@@ -159,7 +159,7 @@ Start-Process "bmm://mod/enable?id=my-mod-folder"
 
 | Deeplink | Params | Does |
 |---|---|---|
-| `bmm://repo/connect` | `url`*, `name` | Registers a remote repo (the parent folder is enough) |
+| `bmm://repo/connect` | `url`*, `name`, `password` | Registers a remote repo (the parent folder is enough). `password` is a protected repo's download password, sent as `X-Repo-Password` when the name is read from `repo.json` — without it a protected repo connected under a name that was just its URL. |
 | `bmm://repo/sync` | `url`*, `profile`*, `game_dir`, `mods_dir`, `backup_dir`, `local_profile`, `password` | Opens sync pre-filled and starts the fetch. `password` is sent as `X-Repo-Password` |
 | `bmm://repo/gen` | — | Opens the Generation section |
 | `bmm://repo/update` | `dir` | Opens Update, pre-filled |

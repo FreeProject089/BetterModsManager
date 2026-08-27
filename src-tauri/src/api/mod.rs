@@ -188,6 +188,14 @@ struct RepoConnectBody {
     url: String,
     #[serde(default)]
     name: Option<String>,
+    /// A protected repo's download password.
+    ///
+    /// Without it this route probed `repo.json` bare, got a 401, and quietly fell back to
+    /// using the URL as the repo's name — so connecting to a protected repo over the API
+    /// "worked" and produced an entry named `https://…`. Same contract as everywhere else:
+    /// `X-Repo-Password`, never stored.
+    #[serde(default)]
+    password: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -2129,11 +2137,15 @@ pub async fn start_api_server(
                          else { format!("{}/repo.json", url.trim_end_matches('/')) };
             let repo_name = match body.name.filter(|n| !n.trim().is_empty()) {
                 Some(n) => n,
-                None => match crate::commands::net::client().get(&target)
-                    .header(reqwest::header::USER_AGENT, "BetterModManager")
-                    .timeout(std::time::Duration::from_secs(8))
-                    .send().await
-                {
+                None => match {
+                    let mut req = crate::commands::net::client().get(&target)
+                        .header(reqwest::header::USER_AGENT, "BetterModManager")
+                        .timeout(std::time::Duration::from_secs(8));
+                    if let Some(pw) = body.password.as_deref().filter(|p| !p.is_empty()) {
+                        req = req.header("X-Repo-Password", pw);
+                    }
+                    req.send().await
+                } {
                     Ok(r) if r.status().is_success() => {
                         let j: serde_json::Value = r.json().await.unwrap_or_default();
                         j["name"].as_str().unwrap_or(&url).to_string()
