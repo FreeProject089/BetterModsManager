@@ -28,11 +28,12 @@ use crate::state::AppState;
 /// The kinds this build knows how to act on. An entry naming anything else is kept and
 /// SHOWN — named, and refused with a reason — rather than hidden, so a repo published by a
 /// newer BMM does not appear to be missing things.
-pub const EXTRA_KINDS: &[&str] = &["plugin", "task", "theme", "modlist", "bundle", "catalog", "app"];
+pub const EXTRA_KINDS: &[&str] =
+    &["plugin", "task", "theme", "modlist", "bundle", "launchpack", "catalog", "app"];
 
 /// Does this kind carry bytes, or an address?
 pub fn is_file_kind(kind: &str) -> bool {
-    matches!(kind, "plugin" | "task" | "theme" | "modlist" | "bundle")
+    matches!(kind, "plugin" | "task" | "theme" | "modlist" | "bundle" | "launchpack")
 }
 
 /// A file name that cannot climb out of the folder it belongs in.
@@ -140,6 +141,7 @@ pub fn repo_extras_write(repo_dir: String, sources: Vec<ExtraSource>) -> Result<
             let ext = match src.kind.as_str() {
                 "task" => "bmmpa",
                 "theme" => "bmmtheme",
+                "launchpack" => "bmmlaunch",
                 _ => "json",
             };
             (text.into_bytes(), format!("{}.{}", safe_name(&src.id), ext))
@@ -410,9 +412,14 @@ pub async fn install_extra(
             let path = write_temp(app, &entry.kind, &file.relative_path, &bytes)?;
             Ok(done(entry.id.clone(), Some(path.to_string_lossy().to_string()), true, false))
         }
-        // A list and a bundle become a FILE, and the caller opens it — because opening one
-        // asks questions (a passphrase, which credentials to accept, which entries to take)
-        // that belong on screen and not in a download loop.
+        // A list, a bundle and a LAUNCH PACK become a FILE, and the caller opens it —
+        // because opening one asks questions (a passphrase, which credentials to accept,
+        // which entries to take) that belong on screen and not in a download loop.
+        //
+        // The launch pack is the loudest case for that rule. It is a list of programs to
+        // start on this machine, chosen by whoever published the repo. Installing one at
+        // the end of a sync, with nobody watching the progress bar, is precisely what must
+        // not happen: it is shown, and the person says yes.
         _ => {
             let path = write_temp(app, &entry.kind, &file.relative_path, &bytes)?;
             let locked = entry.locked || crate::commands::modlist::locked_header(&bytes).is_some();
@@ -511,8 +518,25 @@ mod tests {
     }
 
     #[test]
+    fn a_launch_pack_keeps_its_own_extension_rather_than_becoming_json() {
+        // The receiver opens this file. `.json` would make a list of programs to run look
+        // like configuration, and nothing would offer to import it as what it is.
+        let dir = tempfile::tempdir().unwrap();
+        let mut s = src("launchpack", "lp-1");
+        s.inline = Some(serde_json::json!({
+            "kind": "bmm-launchpack", "version": 1, "name": "Evening", "exe_paths": []
+        }));
+        s.file_path = None;
+        let out = repo_extras_write(dir.path().to_string_lossy().to_string(), vec![s]).unwrap();
+        assert_eq!(out.len(), 1);
+        let rel = out[0].file.as_ref().unwrap().relative_path.clone();
+        assert!(rel.ends_with(".bmmlaunch"), "{}", rel);
+        assert!(dir.path().join("extras").join("launchpack").join("lp-1.bmmlaunch").exists());
+    }
+
+    #[test]
     fn file_kinds_and_address_kinds_are_not_confused() {
-        for k in ["plugin", "task", "theme", "modlist", "bundle"] {
+        for k in ["plugin", "task", "theme", "modlist", "bundle", "launchpack"] {
             assert!(is_file_kind(k), "{} carries bytes", k);
         }
         for k in ["catalog", "app"] {

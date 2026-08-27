@@ -19766,3 +19766,47 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
 }
 .plug-folder-see:hover { color: var(--accent); }
 .plug-folder-see svg { width: 12px; height: 12px; }
+
+/* The destination lives INSIDE the picker. It used to be a Windows folder dialog fired
+   before the screen existed, so "what can I include?" was answered by a file explorer. */
+.rx-dest {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 14px;
+    margin: 0 0 6px;
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-secondary);
+}
+.rx-dest-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    white-space: nowrap;
+}
+.rx-dest-path {
+    flex: 1;
+    min-width: 0;
+    font-family: var(--font-mono, monospace);
+    font-size: 11px;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    direction: rtl;      /* a long path is identified by its END, not its drive letter */
+    text-align: left;
+}
+.rx-dest-path.is-empty {
+    font-family: inherit;
+    font-style: italic;
+    color: var(--text-muted);
+    direction: ltr;
+}
+.rx-dest-err {
+    margin: 0 14px 8px;
+    font-size: 11px;
+    color: var(--error);
+}

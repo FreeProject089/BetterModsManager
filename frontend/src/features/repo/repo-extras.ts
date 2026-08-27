@@ -61,6 +61,7 @@ const KIND_LABEL: Record<string, string> = {
     catalog: 'repo.extras.kindCatalog',
     modpack: 'repo.extras.kindModpack',
     app: 'repo.extras.kindApp',
+    launchpack: 'repo.extras.kindLaunchpack',
 };
 
 /**
@@ -257,6 +258,22 @@ async function offerFile(r: ExtraInstalled, via: string): Promise<void> {
         return;
     }
 
+    // A launch pack is a list of programs somebody else chose to start on this machine.
+    // It is never installed by a sync: the import is offered, and the toast says how many
+    // of those programs are not where the file says they are.
+    if (r.kind === 'launchpack') {
+        const ok = await showConfirm(r.name, t('repo.extras.openLaunchpack'), false);
+        if (!ok) return;
+        const res = await invoke('import_launch_pack', { path: r.path as string }) as
+            { pack: { name: string }; missing: string[] };
+        toast(res.missing?.length
+            ? (t('settings.lpImportedMissing') || 'Imported "{n}" — {c} program(s) not found')
+                .replace('{n}', res.pack.name).replace('{c}', String(res.missing.length))
+            : (t('settings.lpImported') || 'Imported "{n}"').replace('{n}', res.pack.name),
+            res.missing?.length ? 'error' : 'success', 9000);
+        return;
+    }
+
     const ok = await showConfirm(
         r.name,
         r.locked ? t('repo.extras.openLocked') : t('repo.extras.openList'),
@@ -354,6 +371,21 @@ export async function collectExtraCandidates(): Promise<ExtraCandidate[]> {
             });
         }
     } catch { /* see above */ }
+
+    // Launch packs. Carried as a `.bmmlaunch`, built at publish time by export_launch_pack
+    // the way a plugin is built by export_plugin — the candidate holds the id and the
+    // exporter does the packing, so nothing is written until the user saves.
+    try {
+        const packs = await invoke('get_launch_packs') as any[];
+        for (const p of packs || []) {
+            if (!p?.id) continue;
+            out.push({
+                kind: 'launchpack', id: String(p.id), name: String(p.name || p.id),
+                description: (t('repo.extras.lpDesc') || '{n} program(s)')
+                    .replace('{n}', String((p.executable_paths || []).length)),
+            });
+        }
+    } catch { /* none, or an older build: not an error on a picker */ }
 
     // Catalogues followed here. TWO kinds, and the difference is the whole point:
     //
@@ -459,7 +491,11 @@ export async function applyExtrasToRepo(
 ): Promise<RepoExtra[]> {
     const sources: ExtraCandidate[] = [];
     for (const c of chosen) {
-        if (c.kind === 'plugin' && !c.file_path && !c.inline) {
+        if (c.kind === 'launchpack' && !c.file_path && !c.inline) {
+            const dest = `${repoDir}/.extras-staging/${c.id}.bmmlaunch`;
+            await invoke('export_launch_pack', { id: c.id, destPath: dest });
+            sources.push({ ...c, file_path: dest });
+        } else if (c.kind === 'plugin' && !c.file_path && !c.inline) {
             // Packed into the repo folder's own staging area, so a failure leaves nothing
             // behind in the user's documents.
             // export_plugin takes the FULL destination path and returns nothing, so the
@@ -486,62 +522,98 @@ export async function openExtrasPicker(repoDirHint?: string): Promise<void> {
     const { pickFolder } = await import('../../core/api.js');
     const { raiseAboveAll } = await import('../../ui/layer.js');
 
+    // The destination is chosen INSIDE this screen, not before it.
+    //
+    // Clicking "include in the repo" used to open a Windows folder picker first, whenever
+    // the export-path field happened to be empty — so the answer to "what can I include?"
+    // was a file explorer, and the list of includable things only appeared after you had
+    // already committed to a folder. The list does not depend on the folder at all.
     let repoDir = repoDirHint || '';
-    if (!repoDir) {
-        repoDir = (await pickFolder().catch(() => null)) as string || '';
-        if (!repoDir) return;
-    }
 
-    // Read BEFORE the screen is drawn, so an empty list can say why it is empty rather than
-    // appear as a screen that failed to load.
+    // What this machine could publish. Read first, and never blocked on having a
+    // destination: an empty list must be able to say WHY it is empty rather than look like
+    // a screen that failed to load.
     let candidates: ExtraCandidate[] = [];
-    let already: RepoExtra[] = [];
     try {
         candidates = await collectExtraCandidates();
-        const manifest = await invoke('read_local_repo', { repoDir }) as any;
-        already = (manifest?.extras || []) as RepoExtra[];
     } catch (e) {
-        toast(`${t('repo.extras.errNoManifest')} — ${String(e).slice(0, 120)}`, 'error');
+        toast(`${t('common.error')} — ${String(e).slice(0, 120)}`, 'error');
         return;
     }
 
-    // What the repo already carries is ticked. This screen REPLACES the manifest's list, so
-    // opening it and saving without touching anything must leave the repo as it was — an
-    // "edit" screen that silently drops what it did not know about is a data-loss bug.
-    const picked = new Set(already.map((e) => `${e.kind}:${e.id}`));
-    for (const e of already) {
-        if (!candidates.some((c) => c.kind === e.kind && c.id === e.id)) {
-            // Carried by the repo but no longer on this machine: shown, ticked, and kept on
-            // save. Dropping it because this machine has changed since would quietly
-            // un-publish somebody else's download.
-            candidates.push({
-                kind: e.kind, id: e.id, name: e.name,
-                description: e.description, author: e.author, version: e.version,
-                url: e.url, catalog_type: e.catalog_type,
-            });
-        }
-    }
+    // What the chosen repo already carries. Re-read every time the destination changes,
+    // because "already ticked" is a fact about THAT repo and carrying it across from
+    // another one would publish things nobody asked for.
+    let already: RepoExtra[] = [];
 
-    // Per-modpack share rule, seeded from what this repo already publishes so opening the
-    // screen and saving without touching anything leaves it exactly as it was.
+    const picked = new Set<string>();
+    // Per-modpack share rule, seeded from what the destination repo already publishes so
+    // opening the screen and saving without touching anything leaves it exactly as it was.
     const shareModes: Record<string, string> = {};
     const whitelists: Record<string, string[]> = {};
-    try {
-        const current = await invoke('repo_modpacks_read', { repoDir }) as any[];
-        for (const sh of current || []) {
-            const id = String(sh?.modpack?.id || '');
-            if (!id) continue;
-            shareModes[id] = String(sh.share_mode || 'public');
-            if (Array.isArray(sh.custom_whitelist)) whitelists[id] = sh.custom_whitelist.map(String);
-            // Already published: ticked, like the extras it sits beside.
-            picked.add(`modpack:${id}`);
-            if (!candidates.some((c) => c.kind === 'modpack' && c.id === id)) {
-                // Shared by the repo but no longer on this machine. Kept rather than
-                // silently un-published, the same rule the extras use.
-                candidates.push({ kind: 'modpack', id, name: String(sh.modpack?.name || id), inline: sh.modpack });
+    /** Why the destination could not be read, as something to print rather than a toast. */
+    let destError = '';
+
+    /**
+     * Read a destination repo and seed what is ticked from it.
+     *
+     * Runs again whenever the destination changes, and clears first: "already ticked" is a
+     * fact about ONE repo, and carrying a tick over from the folder you looked at before
+     * would publish something nobody chose.
+     */
+    const seedFrom = async (dir: string): Promise<void> => {
+        picked.clear();
+        for (const k of Object.keys(shareModes)) delete shareModes[k];
+        for (const k of Object.keys(whitelists)) delete whitelists[k];
+        destError = '';
+        already = [];
+        if (!dir) return;
+        try {
+            const manifest = await invoke('read_local_repo', { repoDir: dir }) as any;
+            already = (manifest?.extras || []) as RepoExtra[];
+        } catch (e) {
+            // Named on the screen, not thrown away. "That folder is not a repo" is the
+            // answer somebody needs while they still have the browse button in front of
+            // them — a toast that fired before the screen existed was unactionable.
+            destError = String(e).slice(0, 160);
+            return;
+        }
+        // What the repo already carries is ticked. This screen REPLACES the manifest's
+        // list, so opening it and saving without touching anything must leave the repo as
+        // it was — an "edit" screen that silently drops what it did not know about is a
+        // data-loss bug.
+        for (const e of already) {
+            picked.add(`${e.kind}:${e.id}`);
+            if (!candidates.some((c) => c.kind === e.kind && c.id === e.id)) {
+                // Carried by the repo but no longer on this machine: shown, ticked, and
+                // kept on save. Dropping it because this machine has changed since would
+                // quietly un-publish somebody else's download.
+                candidates.push({
+                    kind: e.kind, id: e.id, name: e.name,
+                    description: e.description, author: e.author, version: e.version,
+                    url: e.url, catalog_type: e.catalog_type,
+                });
             }
         }
-    } catch { /* no manifest yet, or none shared: an empty screen is the right answer */ }
+        try {
+            const current = await invoke('repo_modpacks_read', { repoDir: dir }) as any[];
+            for (const sh of current || []) {
+                const id = String(sh?.modpack?.id || '');
+                if (!id) continue;
+                shareModes[id] = String(sh.share_mode || 'public');
+                if (Array.isArray(sh.custom_whitelist)) whitelists[id] = sh.custom_whitelist.map(String);
+                // Already published: ticked, like the extras it sits beside.
+                picked.add(`modpack:${id}`);
+                if (!candidates.some((c) => c.kind === 'modpack' && c.id === id)) {
+                    // Shared by the repo but no longer on this machine. Kept rather than
+                    // silently un-published, the same rule the extras use.
+                    candidates.push({ kind: 'modpack', id, name: String(sh.modpack?.name || id), inline: sh.modpack });
+                }
+            }
+        } catch { /* no manifest yet, or none shared: an empty list is the right answer */ }
+    };
+
+    await seedFrom(repoDir);
 
     const ov = document.createElement('div');
     ov.className = 'cm-overlay';
@@ -588,8 +660,14 @@ export async function openExtrasPicker(repoDirHint?: string): Promise<void> {
             </div>
             <p class="repo-extras-lede">${esc(t('repo.extras.pickHint'))}</p>
             <div class="rx-body">${body}</div>
+            <div class="rx-dest">
+                <span class="rx-dest-label">${esc(t('repo.extras.dest'))}</span>
+                <span class="rx-dest-path${repoDir ? '' : ' is-empty'}">${
+                    esc(repoDir || t('repo.extras.destNone'))}</span>
+                <button class="btn btn-sm btn-ghost" id="rx-dest-pick">${esc(t('repo.extras.destPick'))}</button>
+            </div>
+            ${destError ? `<p class="rx-dest-err">${esc(destError)}</p>` : ''}
             <div class="cm-foot">
-                <span class="repo-extras-meta">${esc(repoDir)}</span>
                 <!-- A bundle that was sent to you, or one just published from the Create
                      screen: neither is in a followed-sources list, and both are exactly what
                      a repo should be able to hand on. -->
@@ -599,6 +677,20 @@ export async function openExtrasPicker(repoDirHint?: string): Promise<void> {
         </div>`;
 
         (ov.querySelector('#rx-close') as HTMLElement)?.addEventListener('click', close);
+        (ov.querySelector('#rx-dest-pick') as HTMLElement)?.addEventListener('click', async () => {
+            const dir = (await pickFolder().catch(() => null)) as string || '';
+            if (!dir) return;      // cancelled: the screen stays exactly as it was
+            repoDir = dir;
+            await seedFrom(repoDir);
+            draw();
+        });
+        // Nowhere to save to is a disabled button that says why, not a click that opens a
+        // file explorer and loses the ticks behind it.
+        const saveBtn = ov.querySelector('#rx-save') as HTMLButtonElement | null;
+        if (saveBtn && !repoDir) {
+            saveBtn.disabled = true;
+            saveBtn.title = t('repo.extras.destNone');
+        }
         (ov.querySelector('#rx-add-bundle') as HTMLElement)?.addEventListener('click', async () => {
             const c = await pickBundleCandidate();
             if (!c) return;
