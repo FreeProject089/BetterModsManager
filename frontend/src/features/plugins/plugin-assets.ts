@@ -11,11 +11,12 @@
 // behind the automation's own script permission, where the decision is made once and in
 // writing.
 
-import { invoke, pickFolder, convertFileSrc } from '../../core/api.js';
+import { invoke, pickFile, pickFolder, convertFileSrc } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
 import { escHtml } from '../../core/utils.js';
 import { toast } from '../../ui/app.js';
 import { raiseAboveAll } from '../../ui/layer.js';
+import { showConfirm } from '../../ui/confirm.js';
 
 /** One shipped file, as the backend reports it. Mirrors `commands::plugin_assets::PluginAsset`. */
 export interface PluginAsset {
@@ -100,16 +101,57 @@ export async function openPluginAssets(pluginId: string, pluginName: string): Pr
                 </div>
                 <div class="cm-foot">
                     <span class="pa-count">${assets.length}</span>
+                    <button class="btn btn-sm btn-ghost" id="pa-check">${escHtml(t('plugins.check.run'))}</button>
+                    <button class="btn btn-sm btn-secondary" id="pa-add">${escHtml(t('plugins.assets.add'))}</button>
+                    <button class="btn btn-sm btn-ghost" id="pa-del" ${current ? '' : 'disabled'}>${escHtml(t('plugins.assets.remove'))}</button>
                     <button class="btn btn-sm btn-secondary" id="pa-folder">${escHtml(t('plugins.openFolder'))}</button>
                     <button class="btn btn-sm btn-accent" id="pa-save" ${current ? '' : 'disabled'}>${escHtml(t('plugins.assets.save'))}</button>
                 </div>`
             : `<p class="pa-lede">${escHtml(t('plugins.assets.none'))}</p>
                <div class="cm-foot">
-                   <button class="btn btn-sm btn-secondary" id="pa-folder">${escHtml(t('plugins.openFolder'))}</button>
+                    <button class="btn btn-sm btn-ghost" id="pa-check">${escHtml(t('plugins.check.run'))}</button>
+                    <button class="btn btn-sm btn-accent" id="pa-add">${escHtml(t('plugins.assets.add'))}</button>
+                    <button class="btn btn-sm btn-secondary" id="pa-folder">${escHtml(t('plugins.openFolder'))}</button>
                </div>`}
         </div>`;
 
         ov.querySelector('#pa-close')?.addEventListener('click', close);
+
+        // Adding one. The half that was missing: getting a README in there used to mean
+        // finding the install folder in Explorer, which is not a thing an author should have
+        // to know about their own plugin.
+        ov.querySelector('#pa-add')?.addEventListener('click', async () => {
+            const picked = await pickFile({ filters: [{ name: t('plugins.assets.anyFile'), extensions: ['*'] }] }).catch(() => null);
+            if (!picked) return;
+            try {
+                const rel = await invoke('plugin_asset_add', { pluginId, srcPath: picked, rel: null }) as string;
+                assets.splice(0, assets.length, ...(await listAssets(pluginId)));
+                current = assets.find((a) => a.path === rel) || current;
+                await paint();
+                toast(t('plugins.assets.added').replace('{f}', rel), 'success', 7000);
+            } catch (e) {
+                // errExists is the ordinary case, not a fault: two files with one name.
+                toast(String(e).includes('errExists')
+                    ? t('plugins.assets.errExists').replace('{f}', String(picked).replace(/^.*[/\\]/, ''))
+                    : String(e), 'warning', 9000);
+            }
+        });
+
+        ov.querySelector('#pa-del')?.addEventListener('click', async () => {
+            if (!current) return;
+            const gone = current.path;
+            const ok = await showConfirm(gone, t('plugins.assets.removeAsk'), true);
+            if (!ok) return;
+            try {
+                await invoke('plugin_asset_remove', { pluginId, path: gone });
+                assets.splice(0, assets.length, ...(await listAssets(pluginId)));
+                current = assets[0] || null;
+                await paint();
+                toast(t('plugins.assets.removed').replace('{f}', gone), 'success', 6000);
+            } catch (e) { toast(String(e), 'error', 9000); }
+        });
+
+        ov.querySelector('#pa-check')?.addEventListener('click', () => void runCheck(pluginId));
         ov.querySelectorAll<HTMLElement>('.pa-row').forEach((row) => {
             row.addEventListener('click', () => {
                 current = assets.find((a) => a.path === row.dataset.path) || null;
@@ -177,4 +219,61 @@ export async function openPluginAssets(pluginId: string, pluginName: string): Pr
     (document.getElementById('app-window-outer') || document.body).appendChild(ov);
     raiseAboveAll(ov, 11400);
     document.addEventListener('keydown', onKey, true);
+}
+
+/**
+ * What is wrong with this plugin, before it goes out.
+ *
+ * Everything it reports produces a plugin that INSTALLS and then does not work — the failure
+ * with no error message: the manifest is valid JSON, the archive unpacks, and the thing
+ * simply does nothing on somebody else's machine.
+ *
+ * Nothing wrong is said out loud too. "No problems found" is the answer somebody is looking
+ * for, and a check that only speaks when it is unhappy is one you never trust when it is
+ * quiet.
+ */
+export async function runCheck(pluginId: string): Promise<void> {
+    let problems: { level: string; key: string; subject?: string }[];
+    try {
+        problems = await invoke('plugin_check', { pluginId }) as typeof problems;
+    } catch (e) {
+        toast(String(e), 'error', 9000);
+        return;
+    }
+    if (!problems.length) {
+        toast(t('plugins.check.clean'), 'success', 6000);
+        return;
+    }
+    const say = (p: { key: string; subject?: string }) =>
+        t(p.key).replace('{f}', p.subject || '');
+    const errors = problems.filter((p) => p.level === 'error');
+    const warns = problems.filter((p) => p.level !== 'error');
+
+    const ov = document.createElement('div');
+    ov.className = 'cm-overlay';
+    ov.innerHTML = `<div class="cm-modal pa-check">
+        <div class="cm-head">
+            <h3>${escHtml(t('plugins.check.title'))}</h3>
+            <button class="cm-x" id="pc-x" aria-label="${escHtml(t('common.close'))}">&times;</button>
+        </div>
+        <div class="pa-check-body">
+            ${errors.length ? `<div class="pa-check-group">
+                <h5 class="pa-check-h is-error">${escHtml(t('plugins.check.errors'))} <span>${errors.length}</span></h5>
+                ${errors.map((p) => `<p class="pa-check-line">${escHtml(say(p))}</p>`).join('')}
+            </div>` : ''}
+            ${warns.length ? `<div class="pa-check-group">
+                <h5 class="pa-check-h">${escHtml(t('plugins.check.warnings'))} <span>${warns.length}</span></h5>
+                ${warns.map((p) => `<p class="pa-check-line">${escHtml(say(p))}</p>`).join('')}
+            </div>` : ''}
+        </div>
+        <div class="cm-foot">
+            <span class="pa-count">${escHtml(errors.length ? t('plugins.check.blocked') : t('plugins.check.onlyWarn'))}</span>
+            <button class="btn btn-sm btn-accent" id="pc-ok">${escHtml(t('common.close'))}</button>
+        </div>
+    </div>`;
+    const shut = () => ov.remove();
+    ov.querySelector('#pc-x')?.addEventListener('click', shut);
+    ov.querySelector('#pc-ok')?.addEventListener('click', shut);
+    (document.getElementById('app-window-outer') || document.body).appendChild(ov);
+    raiseAboveAll(ov, 11500);
 }

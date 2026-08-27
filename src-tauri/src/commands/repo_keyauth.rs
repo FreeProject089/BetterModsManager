@@ -302,9 +302,14 @@ fn key_path_for(audience: &str) -> Option<String> {
 
 /// The proof header to attach to a request, if this BMM can make one.
 ///
-/// Returns None — silently — when no key is configured or the key is not ed25519. A client
+/// Returns None — silently — when no key is configured, or the file will not open. A client
 /// that cannot prove anything simply does not, and a server that does not ask never notices;
 /// making this an error would break every ordinary unprotected repo.
+///
+/// It used to say “or the key is not ed25519”. That stopped being true when RSA and ECDSA
+/// were added — make_proof signs with all three, and a test proves each one verifies
+/// against its own key. A stale sentence about which keys a security function accepts is
+/// worse than none: it is the thing somebody reads instead of the code.
 pub fn header_for(url: &str) -> Option<(&'static str, String)> {
     let audience = audience_for(url)?;
     let key_path = key_path_for(&audience)?;

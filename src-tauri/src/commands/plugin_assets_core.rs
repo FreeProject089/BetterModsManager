@@ -41,11 +41,29 @@ pub fn kind_of(name: &str) -> &'static str {
     match ext.as_str() {
         "md" | "markdown" | "txt" | "rst" | "adoc" => "doc",
         "ps1" | "bat" | "cmd" | "sh" | "py" | "js" | "mjs" | "rb" | "pl" | "lua" | "vbs" => "script",
+        // `.bmp` is a bitmap AND BMM's own modpack extension. It reads as an image, which is
+        // the safer half of the ambiguity: a bitmap previews, and a modpack shown as an image
+        // simply fails to render. The compiler found the duplicate — the archive arm below had
+        // a second `bmp` that nothing could ever reach.
         "png" | "jpg" | "jpeg" | "gif" | "webp" | "bmp" | "svg" | "ico" => "image",
         "json" | "csv" | "tsv" | "yaml" | "yml" | "ini" | "toml" | "cfg" | "conf" | "xml" => "data",
-        "zip" | "7z" | "rar" | "gz" | "tar" | "bmmpa" | "bmmtheme" | "mm" | "bmp" => "archive",
+        "zip" | "7z" | "rar" | "gz" | "tar" | "bmmpa" | "bmmtheme" | "mm" => "archive",
         _ => "other",
     }
+}
+
+/// One path component, narrowed so it cannot be a path.
+///
+/// For the ADD side: a name from a file dialog can carry anything, and it is joined onto a
+/// path. Narrowed to the same set a file name gets, and a component that is nothing but
+/// traversal becomes a plain name rather than an empty one that joins to the folder itself.
+pub fn safe_component(raw: &str) -> String {
+    let cleaned: String = raw
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() || "._-".contains(c) { c } else { '_' })
+        .collect();
+    let trimmed = cleaned.trim_matches(|c| c == '.' || c == '_').to_string();
+    if trimmed.is_empty() { "file".to_string() } else { trimmed }
 }
 
 /// Can this be shown as text, or read into a variable?
@@ -142,6 +160,22 @@ mod tests {
         std::fs::write(a.join("docs").join("codes.csv"), b"a,b\n1,2\n").unwrap();
         std::fs::write(a.join("logo.png"), b"\x89PNG").unwrap();
         d
+    }
+
+    #[test]
+    fn a_component_cannot_become_a_path() {
+        // This one is joined onto a directory on the ADD side, so it is the guard that
+        // decides whether a file dialog can write outside the plugin.
+        assert_eq!(safe_component("README.md"), "README.md");
+        assert_eq!(safe_component(".."), "file");
+        assert_eq!(safe_component("."), "file");
+        assert_eq!(safe_component(""), "file");
+        assert_eq!(safe_component("a/b"), "a_b");
+        assert_eq!(safe_component("a\\b"), "a_b");
+        assert_eq!(safe_component("C:file"), "C_file");
+        // And the same narrowing a shipped file name gets, so a component added here cannot
+        // be renamed by a host that serves it later.
+        assert_eq!(safe_component("café notes.txt"), "caf__notes.txt");
     }
 
     #[test]
