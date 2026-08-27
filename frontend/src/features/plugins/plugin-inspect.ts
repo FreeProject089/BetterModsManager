@@ -127,3 +127,36 @@ export async function openPluginContent(pluginId: string, pluginName: string): P
             : treeHtml(entries),
     );
 }
+
+/**
+ * The same listing for a folder somebody is ABOUT to bundle into a plugin.
+ *
+ * The create screen let you import a folder and then showed you its name. Everything that
+ * decides whether shipping it is a good idea — how many files, how big, whether the build
+ * output or a .env crept in — was invisible until after other people had downloaded it.
+ */
+export async function openFolderContent(path: string): Promise<void> {
+    let entries: TreeEntry[] = [];
+    let failed = '';
+    try {
+        entries = await invoke('folder_tree', { path }) as TreeEntry[];
+    } catch (e) {
+        failed = String(e);
+    }
+    shell(
+        t('plugins.tree.folderTitle') || 'What is in this folder',
+        path,
+        failed ? `<p class="pi-none">${escHtml(t('plugins.assets.errNoFolder') || failed)}</p>` : treeHtml(entries),
+    );
+}
+
+/** How much a folder would add, for the chip that names it. Never throws. */
+export async function folderFacts(path: string): Promise<{ files: number; bytes: number } | null> {
+    try {
+        const entries = await invoke('folder_tree', { path }) as TreeEntry[];
+        const s = treeSummary(entries);
+        return { files: s.files, bytes: s.bytes };
+    } catch {
+        return null;
+    }
+}

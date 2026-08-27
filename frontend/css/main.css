@@ -19746,3 +19746,23 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
 .pi-tree-row.is-dir .pi-tree-name { color: var(--accent); font-weight: 600; }
 .pi-tree-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .pi-tree-size { flex: 0 0 auto; color: var(--text-muted); font-size: 10.5px; }
+
+/* A picked folder says how much it would add, and offers to show it. Without this the
+   chip was a name, and the answer to "what am I about to ship" arrived after shipping. */
+.plug-folder-facts {
+    font-size: 10px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    margin-left: 2px;
+}
+.plug-folder-see {
+    display: inline-flex;
+    align-items: center;
+    background: none;
+    border: none;
+    padding: 0 2px;
+    cursor: pointer;
+    color: var(--text-secondary);
+}
+.plug-folder-see:hover { color: var(--accent); }
+.plug-folder-see svg { width: 12px; height: 12px; }

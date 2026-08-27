@@ -9342,6 +9342,9 @@
   "plugins.tree.title": "Ce qu'il y a dans ce plugin",
   "plugins.tree.empty": "Il n'y a rien dedans.",
   "plugins.tree.sum": "{f} fichier(s) dans {d} dossier(s) · {b}",
+  "plugins.tree.folderTitle": "Ce que contient ce dossier",
+  "plugins.tree.folderTip": "Voir ce qui serait empaqueté",
+  "plugins.tree.chip": "{f} fichier(s) · {b}",
   "plugins.inspectWord": "Analyser",
   "plugins.more": "Tout le reste",
   "plugins.assets.errNoFolder": "Ce plugin n'a pas de dossier lisible sur cette machine."

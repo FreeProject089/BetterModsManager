@@ -5,6 +5,7 @@ import { invoke, pickFile, saveFile, pickFolder, convertFileSrc, apiBase, apiRun
 import { toast, fetchProfileIconPaths, updateSelectProfileIcon, decorateProfileOptions, toastSaved } from '../../ui/app.js';
 import { t, getLang } from '../../core/i18n.js';
 import { permDomains } from './plugin-perms.js';
+import { openFolderContent, folderFacts, humanSize } from './plugin-inspect.js';
 export { permDomains } from './plugin-perms.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { bundleEntryKind, resolveBundleEntry } from '../../core/catalog-bundle.js';
@@ -3871,7 +3872,12 @@ function renderCreate(container: HTMLElement) {
         const bundled = _editFolders.map(rel => bundledChip(rel, _removedFolders.includes(rel), 'folder')).join('');
         const picked = folderPaths.map((p, i) => {
             const fname = p.split(/[\\/]/).filter(Boolean).pop() || p;
-            return `<div class="plug-script-chip"><span>${escHtml(fname)}/</span><button class="plug-folder-rm" data-i="${i}" data-tooltip="${t('common.remove') || 'Remove'}">${IC.x}</button></div>`;
+            // The facts arrive after the chip does — see below. A folder with ten thousand
+            // files in it should say so before it ships, not after.
+            return `<div class="plug-script-chip"><span>${escHtml(fname)}/</span>
+                <span class="plug-folder-facts" data-path="${escAttr(p)}"></span>
+                <button class="plug-folder-see" data-path="${escAttr(p)}" data-tooltip="${escAttr(t('plugins.tree.folderTip'))}">${IC.eye}</button>
+                <button class="plug-folder-rm" data-i="${i}" data-tooltip="${escAttr(t('common.remove') || 'Remove')}">${IC.x}</button></div>`;
         }).join('');
         list.innerHTML = (bundled + picked)
             || `<span style="font-size:11px;color:var(--text-muted);">${t('plugins.noFolders') || 'No folder imported yet.'}</span>`;
@@ -3880,6 +3886,18 @@ function renderCreate(container: HTMLElement) {
             folderPaths.splice(parseInt((b as HTMLElement).dataset.i!, 10), 1);
             renderFoldersList();
         }));
+        list.querySelectorAll('.plug-folder-see').forEach(b => b.addEventListener('click', () => {
+            void openFolderContent((b as HTMLElement).dataset.path!);
+        }));
+        // Counted once per chip, after it is on screen. A folder on a slow drive must not
+        // hold up the list that names it.
+        list.querySelectorAll<HTMLElement>('.plug-folder-facts').forEach(async (el) => {
+            const facts = await folderFacts(el.dataset.path!);
+            if (!facts) return;
+            el.textContent = (t('plugins.tree.chip') || '{f} file(s) · {b}')
+                .replace('{f}', String(facts.files))
+                .replace('{b}', humanSize(facts.bytes) || '0 B');
+        });
         list.querySelectorAll('.plug-bundled-rm').forEach(b => b.addEventListener('click', () => {
             const rel = (b as HTMLElement).dataset.rel!;
             if (!_removedFolders.includes(rel)) _removedFolders.push(rel);

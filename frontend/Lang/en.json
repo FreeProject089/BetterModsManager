@@ -9344,6 +9344,9 @@
   "plugins.tree.title": "What is in this plugin",
   "plugins.tree.empty": "Nothing in there.",
   "plugins.tree.sum": "{f} file(s) in {d} folder(s) · {b}",
+  "plugins.tree.folderTitle": "What is in this folder",
+  "plugins.tree.folderTip": "See what would be bundled",
+  "plugins.tree.chip": "{f} file(s) · {b}",
   "plugins.inspectWord": "Analyse",
   "plugins.more": "Everything else",
   "plugins.assets.errNoFolder": "That plugin has no folder on this machine to read."
