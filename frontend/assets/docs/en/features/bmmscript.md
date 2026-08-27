@@ -291,6 +291,33 @@ rather than a path that breaks on the next machine.
     `../elsewhere/run.log` is refused. It is the one shape nobody writes by accident, and the
     only one that turns "write in my folder" into "write anywhere".
 
+### Trying again
+
+```bmms
+retry 4 times every 30s {
+    do repo.syncNow()
+}
+```
+
+A repo that is briefly unreachable, a file another program still has open, a server that is
+restarting. None of those is an error to handle — each is an attempt to make again.
+
+People were building this out of two tasks that call each other. That works, and it costs two
+tasks, a shared counter, and a reader who has to hold both in their head to see one loop.
+
+`every` is optional and defaults to a real wait, never zero: three instant attempts against a
+network failure are three failures in the same millisecond. `orcontinue` carries on with the
+rest of the task after the last attempt fails.
+
+`{retry.attempts}` is how many it took. One means it worked first time, which is worth being
+able to branch on — a step that needed three tries is working, and worth knowing about.
+
+!!! note "Stop is never retried"
+
+    Nor is Cancel, nor a debug stop, nor a `break` on its way out of a loop. Those are somebody's
+    decision or somebody's finger on a button, and running the block again is the opposite of
+    what they asked for. A cancelled task that retries three times is a task that ignores Stop.
+
 ### Errors and branches
 
 ```bmms

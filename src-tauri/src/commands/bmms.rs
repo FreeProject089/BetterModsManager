@@ -839,6 +839,42 @@ impl P {
                     json!({ "kind": "waitFor", "condition": condition, "timeoutSec": num(timeout), "pollSec": num(poll), "onTimeout": on_timeout }),
                 )
             }
+            // `retry 3 times every 30s { … }` — run it again when it fails.
+            //
+            // People were building this out of two tasks that call each other, which is why
+            // the export walker has a `seen` set. That works and it costs two tasks, a shared
+            // counter and a reader who has to hold both in their head to see one loop.
+            //
+            // A repo that is briefly unreachable is the case: not an error to handle, an
+            // attempt to make again.
+            "retry" => {
+                self.next();
+                let times = match self.peek().tok.clone() {
+                    Tok::Num(n) => {
+                        self.next();
+                        n as i64
+                    }
+                    _ => {
+                        let got = self.peek().clone();
+                        return Err(Diagnostic::at(&got, "Expected how many attempts, like `retry 3 times`."));
+                    }
+                };
+                // `times` reads as a word here for the same reason it does after `repeat`.
+                let _ = self.eat_word("times");
+                let mut every = 5.0;
+                if self.eat_word("every") {
+                    every = self.duration("how long between attempts")?;
+                }
+                let steps = self.block()?;
+                let on_fail = if self.eat_word("orcontinue") { "continue" } else { "abort" };
+                Ok(json!({
+                    "kind": "retry",
+                    "times": times.max(1),
+                    "everySec": num(every),
+                    "steps": steps,
+                    "onFail": on_fail
+                }))
+            }
             // `ensure <cond> { … }` — for a task whose job is a STATE rather than a script.
             //
             // Not sugar for `if not <cond>`. An `if` runs its block and never looks back, so a
@@ -1778,6 +1814,24 @@ fn steps_str(steps: &[Value], depth: usize, out: &mut String) {
                 out.push_str(&line);
                 out.push('\n');
             }
+            "retry" => {
+                let times = st.get("times").and_then(|x| x.as_i64()).unwrap_or(3);
+                let every = st.get("everySec").and_then(|x| x.as_f64()).unwrap_or(5.0);
+                out.push_str(&format!("{}retry {} times every {}s {{\n", pad, times, every as i64));
+                steps_str(
+                    st.get("steps")
+                        .and_then(|x| x.as_array())
+                        .map(|v| &v[..])
+                        .unwrap_or(&[]),
+                    depth + 1,
+                    out,
+                );
+                out.push_str(&format!("{}}}", pad));
+                if st.get("onFail").and_then(|x| x.as_str()) == Some("continue") {
+                    out.push_str(" orcontinue");
+                }
+                out.push('\n');
+            }
             "ensure" => {
                 out.push_str(&format!(
                     "{}ensure {} {{\n",
@@ -2187,6 +2241,50 @@ mod tests {
         assert!(printed.contains("print \"got {n} mods\""), "printed: {}", printed);
         assert!(!printed.contains("do log.print"), "printed: {}", printed);
         assert_eq!(compile(&printed), first);
+    }
+
+    /// `retry` keeps its count and its gap through a round trip.
+    ///
+    /// Both are easy to lose and neither fails loudly: a retry that comes back as `retry 1
+    /// times` is a step that has quietly stopped retrying, and one that loses its gap hammers
+    /// whatever it is retrying against as fast as it can.
+    #[test]
+    fn retry_keeps_its_count_and_its_gap() {
+        let src = "task \"R\" {
+    every day at 03:00
+
+    retry 4 times every 30s {
+        do repo.syncNow()
+    }
+}
+";
+        let first = compile(src);
+        let st = &first["steps"][0];
+        assert_eq!(st["kind"], "retry");
+        assert_eq!(st["times"], 4);
+        assert_eq!(st["everySec"], 30.0);
+        assert_eq!(st["onFail"], "abort");
+
+        let printed = bmms_decompile(first.clone());
+        assert!(printed.contains("retry 4 times every 30s"), "printed: {}", printed);
+        assert_eq!(compile(&printed), first, "printed: {}", printed);
+    }
+
+    /// A gap is optional, and leaving it out must not mean zero.
+    #[test]
+    fn retry_without_a_gap_still_waits() {
+        // `retry 3 times { … }` with no `every` would otherwise re-run instantly three
+        // times, which for a network failure is three failures in the same millisecond.
+        let first = compile("task \"R\" {
+    manual
+
+    retry 3 times {
+        do mods.scan()
+    }
+}
+");
+        assert_eq!(first["steps"][0]["times"], 3);
+        assert!(first["steps"][0]["everySec"].as_f64().unwrap() > 0.0);
     }
 
     /// `ensure` is not sugar for `if not`, and the tree has to show that.

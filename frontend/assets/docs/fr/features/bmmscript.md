@@ -296,6 +296,34 @@ plugin » soit un réglage plutôt qu'un chemin qui casse sur la machine suivant
     `../ailleurs/run.log` est refusé. C'est la seule forme que personne n'écrit par accident, et
     la seule qui transforme « écrire dans mon dossier » en « écrire n'importe où ».
 
+### Réessayer
+
+```bmms
+retry 4 times every 30s {
+    do repo.syncNow()
+}
+```
+
+Un repo brièvement injoignable, un fichier qu'un autre programme tient encore ouvert, un serveur
+qui redémarre. Aucun n'est une erreur à traiter — chacun est une tentative à refaire.
+
+Les gens construisaient ça avec deux tâches qui s'appellent. Ça marche, et ça coûte deux tâches,
+un compteur partagé, et un lecteur qui doit tenir les deux en tête pour voir une boucle.
+
+`every` est optionnel et vaut par défaut une vraie attente, jamais zéro : trois tentatives
+instantanées contre une panne réseau, ce sont trois échecs dans la même milliseconde.
+`orcontinue` poursuit le reste de la tâche après l'échec de la dernière tentative.
+
+`{retry.attempts}` dit combien il en a fallu. Un veut dire que ça a marché du premier coup — et
+pouvoir brancher là-dessus a de la valeur : une étape qui a eu besoin de trois essais fonctionne,
+et ça vaut la peine de le savoir.
+
+!!! note "Arrêter n'est jamais retenté"
+
+    Ni Annuler, ni un arrêt de débogage, ni un `break` en train de sortir d'une boucle. Ce sont
+    des décisions, ou un doigt sur un bouton, et rexécuter le bloc est l'inverse de ce qui a été
+    demandé. Une tâche annulée qui réessaie trois fois est une tâche qui ignore Arrêter.
+
 ### Erreurs et branches
 
 ```bmms

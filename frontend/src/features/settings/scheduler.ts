@@ -151,6 +151,17 @@ type Step = (
      * worked, and a task running hourly is the worst place for that to be invisible.
      */
     | { kind: 'ensure'; condition: Condition; steps: Step[]; onFail?: 'abort' | 'continue' }
+    /**
+     * Run it again when it fails.
+     *
+     * People were building this out of two tasks that call each other — which is why the
+     * export walker carries a `seen` set. That works, and it costs two tasks, a shared counter
+     * and a reader who has to hold both in their head to see one loop.
+     *
+     * The case is a repo that is briefly unreachable, or a file another program still has
+     * open: not an error to handle, an attempt to make again.
+     */
+    | { kind: 'retry'; times: number; everySec: number; steps: Step[]; onFail?: 'abort' | 'continue' }
     // Run every branch AT THE SAME TIME and carry on when all have settled. For the case a
     // sequence gets wrong: three independent downloads, or a sync and a benchmark that have
     // nothing to say to each other, where doing them in order only costs time.
@@ -243,6 +254,7 @@ function normalizeSteps(steps: any[]): Step[] {
         else if (st.kind === 'repeat' || st.kind === 'forEach') { st.steps = normalizeSteps(st.steps); }
         else if (st.kind === 'try') { st.steps = normalizeSteps(st.steps); st.onError = normalizeSteps(st.onError); }
         else if (st.kind === 'ensure') { st.steps = normalizeSteps(st.steps); }
+        else if (st.kind === 'retry') { st.steps = normalizeSteps(st.steps); }
         else if (st.kind === 'switch') {
             st.cases = Array.isArray(st.cases) ? st.cases : [];
             for (const c of st.cases) {
@@ -977,6 +989,43 @@ async function runSteps(steps: Step[], task: Task, ctx: RunCtx, depth = 0): Prom
                 if (!await runLoopBody(substituteItem(step.steps, item), task, ctx)) break;
                 if (gap) await new Promise(r => setTimeout(r, gap));
             }
+        } else if (step.kind === 'retry') {
+            const attempts = Math.max(1, Math.floor(step.times || 3));
+            const gap = Math.max(0, Number(step.everySec ?? 5)) * 1000;
+            let lastErr: unknown = null;
+            for (let attempt = 1; attempt <= attempts; attempt++) {
+                try {
+                    await runSteps(step.steps, task, ctx, depth + 1);
+                    ctx.nums['retry.attempts'] = attempt;
+                    lastErr = null;
+                    break;
+                } catch (e) {
+                    // NEVER retried: a stop, a cancel, a debug stop, or a break/continue on
+                    // its way out. Those are somebody's decision or somebody's finger on a
+                    // button, and running the block again is the opposite of what they asked
+                    // for — a cancelled task that retries three times is a task that ignores
+                    // Stop.
+                    if (e instanceof FlowSignal || e instanceof _StopTask
+                        || e instanceof _CancelledTask || e instanceof DebugStopped) throw e;
+                    lastErr = e;
+                    ctx.nums['retry.attempts'] = attempt;
+                    if (attempt >= attempts) break;
+                    if (state) {
+                        state.step = t('sched.retry.again')
+                            .replace('{n}', String(attempt + 1))
+                            .replace('{t}', String(attempts));
+                        renderRunningPanel();
+                    }
+                    // Interruptible, so Stop works during the wait. A retry that ignores the
+                    // button for thirty seconds at a time is the wait people most want to
+                    // abandon.
+                    await interruptibleSleep(gap, state);
+                }
+            }
+            if (lastErr && step.onFail !== 'continue') throw lastErr;
+            if (lastErr) {
+                ctx.text['retry.error'] = String(lastErr);
+            }
         } else if (step.kind === 'ensure') {
             const already = await evalCondition(step.condition, ctx, task);
             if (already) {
@@ -1128,6 +1177,11 @@ function substituteItem(steps: Step[], item: any): Step[] {
             return { ...rep(rest), steps: JSON.parse(JSON.stringify(inner || [])) };
         }
         if (st && st.kind === 'if') return { ...rep({ ...st, then: [], else: [] }), then: walk(st.then), else: walk(st.else) };
+        if (st && st.kind === 'retry') {
+            const copy: any = rep({ ...st, steps: [] });
+            copy.steps = walk(st.steps);
+            return copy;
+        }
         if (st && st.kind === 'ensure') {
             const copy: any = rep({ ...st, steps: [] });
             copy.steps = walk(st.steps);
@@ -2993,6 +3047,7 @@ function stepLabel(step: Step): string {
         waitFor: t('sched.addWaitFor') || 'Wait until',
         delay: t('sched.addDelay') || 'Pause',
         ensure: t('sched.addEnsure'),
+        retry: t('sched.addRetry'),
     };
     return words[step.kind] || step.kind;
 }
@@ -3331,6 +3386,7 @@ function stepCount(steps: Step[]): number {
         else if (s.kind === 'switch') n += stepCount(s.default) + (s.cases || []).reduce((acc, c) => acc + stepCount(c.steps), 0);
         else if (s.kind === 'try') n += stepCount(s.steps) + stepCount(s.onError);
         else if (s.kind === 'ensure') n += stepCount(s.steps);
+        else if (s.kind === 'retry') n += stepCount(s.steps);
         else if (s.kind === 'parallel') n += (s.branches || []).reduce((acc, b) => acc + stepCount(b), 0);
     }
     return n;
@@ -3442,6 +3498,7 @@ function _stepHasContent(step: Step): boolean {
     if (step.kind === 'switch') return ((step.default?.length || 0) + (step.cases || []).reduce((a, c) => a + (c.steps?.length || 0), 0)) > 0;
     if (step.kind === 'try') return ((step.steps?.length || 0) + (step.onError?.length || 0)) > 0;
     if (step.kind === 'ensure') return (step.steps?.length || 0) > 0;
+    if (step.kind === 'retry') return (step.steps?.length || 0) > 0;
     if (step.kind === 'parallel') return (step.branches || []).some((b) => b.length > 0);
     return false;
 }
@@ -5035,6 +5092,24 @@ function renderStepsEditor(host: HTMLElement, steps: Step[], depth = 0): void {
                 renderAddRow(el as HTMLElement, step.branches[bi], depth + 1, host, steps, depth);
             });
             _wireFold(block, step);
+        } else if (step.kind === 'retry') {
+            block.innerHTML = `<div class="sched-step-head">${_foldBtn(step)}${_kindTile('retry')}
+                    <span class="sched-step-tag sched-repeat">${escHtml(t('sched.retry'))}</span>
+                    <input type="number" class="input sched-rt-times" min="1" max="99" value="${step.times || 3}" style="max-width:80px">
+                    <span style="font-size:11px;color:var(--text-muted)">${escHtml(t('sched.retry.timesWord'))}</span>
+                    <span style="font-size:11px;color:var(--text-muted)">${escHtml(t('sched.loopEvery') || 'every')}</span>
+                    <input type="number" class="input sched-rt-every" min="0" value="${step.everySec ?? 30}" style="max-width:80px">
+                    <span style="font-size:11px;color:var(--text-muted)">${t('sched.unitSec') || 's'}</span>
+                    <label class="sched-ensure-cont"><input type="checkbox" class="sched-rt-cont" ${step.onFail === 'continue' ? 'checked' : ''}>
+                        <span data-tooltip="${escAttr(t('sched.retry.orContinueHint'))}">${escHtml(t('sched.ensure.orContinue'))}</span></label></div>
+                <p class="sched-ensure-hint">${escHtml(t('sched.retry.hint'))}</p>
+                <div class="sched-branch"><div class="sched-branch-label">${escHtml(t('sched.retry.body'))}</div><div class="sched-rt-body"></div><div class="sched-rt-add"></div></div>`;
+            block.querySelector('.sched-rt-times')?.addEventListener('input', (e) => { step.times = Math.max(1, parseInt((e.target as HTMLInputElement).value, 10) || 1); });
+            block.querySelector('.sched-rt-every')?.addEventListener('input', (e) => { step.everySec = Math.max(0, parseInt((e.target as HTMLInputElement).value, 10) || 0); });
+            block.querySelector('.sched-rt-cont')?.addEventListener('change', (e) => { step.onFail = (e.target as HTMLInputElement).checked ? 'continue' : 'abort'; });
+            renderStepsEditor(block.querySelector('.sched-rt-body') as HTMLElement, step.steps, depth + 1);
+            renderAddRow(block.querySelector('.sched-rt-add') as HTMLElement, step.steps, depth + 1, host, steps, depth);
+            _wireFold(block, step);
         } else if (step.kind === 'ensure') {
             block.innerHTML = `<div class="sched-step-head">${_foldBtn(step)}${_kindTile('ensure')}
                     <span class="sched-step-tag sched-if">${escHtml(t('sched.ensure'))}</span>
@@ -5232,6 +5307,7 @@ function renderAddRow(host: HTMLElement, steps: Step[], depth = 0, rerenderHost?
         <button class="btn btn-xs sched-chip sched-add-foreach" data-add="forEach" data-tooltip="${escAttr(t('sched.legendForEach') || '')}">${KIND_ICON.forEach} ${t('sched.addForEach') || 'For each'}</button>
         <button class="btn btn-xs sched-chip sched-add-switch" data-add="switch" data-tooltip="${escAttr(t('sched.legendSwitch') || '')}">${KIND_ICON.switch} ${t('sched.addSwitch') || 'Switch'}</button>
         <button class="btn btn-xs sched-chip sched-add-try" data-add="parallel" data-tooltip="${escAttr(t('sched.legendPar') || 'Run several branches at the same time')}">${KIND_ICON.parallel} ${t('sched.addParallel') || 'At the same time'}</button>
+        <button class="btn btn-xs sched-chip sched-add-loop" data-add="retry" data-tooltip="${escAttr(t('sched.retry.hint'))}">${KIND_ICON.retry} ${escHtml(t('sched.addRetry'))}</button>
         <button class="btn btn-xs sched-chip sched-add-try" data-add="try" data-tooltip="${escAttr(t('sched.legendTry') || '')}">${KIND_ICON.try} ${t('sched.addTry') || 'Try / on error'}</button>
         <button class="btn btn-xs sched-chip sched-add-call" data-add="call" data-tooltip="${escAttr(t('sched.legendCall') || '')}">${KIND_ICON.call} ${t('sched.addCall') || 'Run a block'}</button>
         <button class="btn btn-xs sched-chip sched-add-break" data-add="break" data-tooltip="${escAttr(t('sched.legendBreak') || '')}">${KIND_ICON.signal} ${t('sched.addBreak') || 'Break'}</button>
@@ -5261,6 +5337,7 @@ function _makeStep(kind: string): Step {
     if (kind === 'switch') return { kind: 'switch', cases: [{ condition: { type: 'always', params: {} }, steps: [] }], default: [] } as Step;
     if (kind === 'try') return { kind: 'try', steps: [], onError: [] } as Step;
     if (kind === 'ensure') return { kind: 'ensure', condition: { type: 'always', params: {} }, steps: [], onFail: 'abort' } as Step;
+    if (kind === 'retry') return { kind: 'retry', times: 3, everySec: 30, steps: [], onFail: 'abort' } as Step;
     // TWO empty branches, not one: a parallel with a single branch is a sequence with extra
     // words, and the shape has to show what the step is for the moment it is added.
     if (kind === 'parallel') return { kind: 'parallel', mode: 'all', branches: [[], []] } as Step;
@@ -5314,6 +5391,8 @@ const KIND_ICON: Record<string, string> = {
     try:     '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>',
     // Two lines running side by side, then meeting: the whole idea of the step.
     parallel: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3"/><path d="M12 6H6v6"/><path d="M12 6h6v6"/><path d="M6 12v3"/><path d="M18 12v3"/><path d="M6 15h12"/><path d="M12 15v6"/></svg>',
+    // A circular arrow with a small warning break: try again, because it went wrong.
+    retry:   '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/></svg>',
     ensure:  '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 12a8.5 8.5 0 1 1-2.9-6.4"/><path d="M8.5 12.2l2.7 2.7L21 5.5"/></svg>',
     signal:  '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="14" height="14" rx="2"/></svg>',
     // A box with an arrow going into it — the body lives elsewhere and is brought in here.
@@ -5335,6 +5414,7 @@ function _foldBtn(step: any): string {
     else if (step.kind === 'switch') sum = `${(step.cases?.length || 0)} cases`;
     else if (step.kind === 'try') sum = `${(step.steps?.length || 0)} + ${(step.onError?.length || 0)}`;
     else if (step.kind === 'ensure') sum = `${(step.steps?.length || 0)} ${t('sched.stepsInside') || 'inside'}`;
+    else if (step.kind === 'retry') sum = `${(step.steps?.length || 0)} ${t('sched.stepsInside') || 'inside'}`;
     else if (step.kind === 'parallel') sum = (step.branches || []).map((b: Step[]) => b.length).join(' | ');
     else if (step.kind === 'delay') sum = `${step.seconds || 0}${t('sched.unitSec') || 's'}`;
     const sumHtml = sum ? `<span class="sched-fold-sum">${sum}</span>` : '';
@@ -7116,6 +7196,10 @@ const VALUE_SOURCES = [
     // ordinary answer and a useful one: it means the order changed and nothing on disk
     // did, so the mods that moved share no file.
     'order.moved',
+    // How many attempts the last retry took. 1 means it worked first time, which is
+    // worth being able to branch on: a step that needed three tries is working and worth
+    // knowing about.
+    'retry.attempts',
     // What the last check found. `valid.ok` and `valid.matched` are 1/0 so a plain `value`
     // condition can read them; the format itself is text, as {valid.format}.
     'valid.ok',

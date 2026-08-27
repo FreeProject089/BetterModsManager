@@ -9109,5 +9109,13 @@
   "sched.why.onceDone": "already ran",
   "sched.why.onceBadDate": "its date cannot be read",
   "sched.why.dueAt": "due {v}",
-  "sched.why.noNext": "no next time — check its trigger"
+  "sched.why.noNext": "no next time — check its trigger",
+  "sched.retry": "RETRY",
+  "sched.addRetry": "Try again if it fails",
+  "sched.retry.timesWord": "attempts",
+  "sched.retry.body": "DO",
+  "sched.retry.hint": "Runs the steps below, and runs them again if any of them fails. A repo that is briefly unreachable is not an error to handle — it is an attempt to make again.",
+  "sched.retry.again": "failed — attempt {n} of {t}…",
+  "sched.retry.orContinueHint": "Carry on with the rest of the task even after the last attempt fails.",
+  "sched.kw.retry": "`retry 3 times every 30s { … }` — run the block again when it fails. Stop and Cancel are never retried."
 }

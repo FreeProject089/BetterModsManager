@@ -9107,5 +9107,13 @@
   "sched.why.onceDone": "déjà passée",
   "sched.why.onceBadDate": "sa date est illisible",
   "sched.why.dueAt": "prévue {v}",
-  "sched.why.noNext": "aucune prochaine fois — vérifie son déclencheur"
+  "sched.why.noNext": "aucune prochaine fois — vérifie son déclencheur",
+  "sched.retry": "RÉESSAYER",
+  "sched.addRetry": "Réessayer si ça échoue",
+  "sched.retry.timesWord": "tentatives",
+  "sched.retry.body": "FAIRE",
+  "sched.retry.hint": "Exécute les étapes ci-dessous, et les rexécute si l'une d'elles échoue. Un repo brièvement injoignable n'est pas une erreur à traiter — c'est une tentative à refaire.",
+  "sched.retry.again": "échec — tentative {n} sur {t}…",
+  "sched.retry.orContinueHint": "Poursuivre le reste de la tâche même après l'échec de la dernière tentative.",
+  "sched.kw.retry": "`retry 3 times every 30s { … }` — rexécute le bloc quand il échoue. Arrêter et Annuler ne sont jamais retentés."
 }

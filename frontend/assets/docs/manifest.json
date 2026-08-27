@@ -236,7 +236,7 @@
         "en": "The same automations as the scheduler's bricks, written as text. Anything you can build by clicking, you can type — and anything you type, you can open back…",
         "fr": "Les mêmes automatisations que les briques du planificateur, écrites en texte."
       },
-      "words": 1942,
+      "words": 2144,
       "diagrams": 0,
       "fr": true
     },
@@ -248,10 +248,10 @@
         "fr": "BMMScript — toutes les actions, conditions et valeurs"
       },
       "summary": {
-        "en": "90 actions · 32 conditions · 31 values · 8 loop sources",
-        "fr": "90 actions · 32 conditions · 31 valeurs · 8 sources de boucle"
+        "en": "90 actions · 32 conditions · 32 values · 8 loop sources",
+        "fr": "90 actions · 32 conditions · 32 valeurs · 8 sources de boucle"
       },
-      "words": 445,
+      "words": 447,
       "diagrams": 0,
       "fr": true
     },
