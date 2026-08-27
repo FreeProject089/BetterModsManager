@@ -9155,5 +9155,19 @@
   "plugins.ep.fetchSsh": "Fetch a repo over SSH",
   "plugins.epAbout.fetchSsh": "The same, for fetching, and with the same limit on what a caller may name.",
   "plugins.ep.view": "Open a screen",
-  "plugins.epAbout.view": "Switches the open app to a screen, the same way clicking the sidebar does. For an assistant or a script that has just changed something and wants the person to be looking at it."
+  "plugins.epAbout.view": "Switches the open app to a screen, the same way clicking the sidebar does. For an assistant or a script that has just changed something and wants the person to be looking at it.",
+  "plugins.epAbout.checkUpdate": "Asks GitHub for the latest release and compares it with the running version. Returns whether an update is available, and the release URL.",
+  "plugins.epAbout.restart": "Closes BMM cleanly and starts it again after 300&nbsp;ms. The API is briefly unreachable while it restarts — a caller should expect the next request to fail.",
+  "plugins.epAbout.modPatch": "Partially updates a mod's editable metadata. Replace <code>:id</code> in the URL with the mod's UUID. Every field is optional — only what you send is changed.",
+  "plugins.epAbout.modDelete": "Permanently removes a mod's ENTRY from BMM. Replace <code>:id</code> with the mod's UUID. It does <b>not</b> delete the files on disk — use the interface for that.",
+  "plugins.epAbout.profileNew": "Creates a mod profile. It does not become the active one — call <code>POST /api/profiles/activate</code> afterwards if that is what you meant.",
+  "plugins.epAbout.profilePatch": "Partially updates an existing profile. Replace <code>:id</code> with the profile's UUID. Every field is optional — only what you send is changed.",
+  "plugins.epAbout.profileDelete": "Permanently deletes a profile and drops every mod association it held. Replace <code>:id</code> with the profile's UUID. The currently active profile cannot be deleted.",
+  "plugins.epAbout.repoInfo": "Fetches a remote <code>repo.json</code> and returns it — metadata, profiles, mod list. For looking at a repo before connecting to or syncing with it. No authentication, unless the repo itself is password-protected.",
+  "plugins.epAbout.repoList": "Every remote repo BMM has registered, whether added through <code>POST /api/repo/connect</code> or from the interface. Each entry carries the repo's URL and name.",
+  "plugins.epAbout.repoConnect": "Registers a remote repo's URL in BMM's connected list. With no <code>name</code>, BMM tries to read one from the remote <code>repo.json</code>. A repo already in the list is not added twice.",
+  "plugins.epAbout.repoForget": "Removes a repo from the connected list. The body must carry the repo's URL exactly as it was added. Files already synced are <b>not</b> deleted.",
+  "plugins.epAbout.repoSync": "Downloads mods from a remote repo into local BMM profiles. It runs in the background: the reply is immediate (202 Accepted) with a <code>job_id</code>. <b>One sync at a time</b> — a second request is refused while one is running.",
+  "plugins.epAbout.repoManifest": "Writes a <code>repo.json</code> for one or more mod folders that are <b>already in place</b>. Unlike <code>/api/repo/gen</code> it asks for no profile and copies nothing: it reads the folder, writes a file, and leaves everything where it was.",
+  "plugins.epAbout.repoGen": "Exports local profiles as a BMM server repo — <code>repo.json</code>, hashed mods, the file structure. With <code>generate_server=true</code> it also writes the mini-server's start scripts; with <code>lightweight=true</code> it does not copy the mod files."
 }

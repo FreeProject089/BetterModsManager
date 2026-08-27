@@ -5612,14 +5612,14 @@ function getEndpointDefs(): EndpointDef[] {
         {
             method: 'GET', path: '/api/check-update', auth: false,
             desc: t('plugins.endpointCheckUpdate'),
-            about: 'Interroge la dernière release GitHub et la compare à la version en cours d\'exécution. Retourne si une mise à jour est disponible et l\'URL de la release.',
+            about: t('plugins.epAbout.checkUpdate'),
             fields: null,
             responseStatuses: [{ code: 200, label: 'OK', body: '{ "ok": true, "has_update": true, "current_version": "1.2.0", "latest_version": "1.3.0", "release_url": "https://github.com/FreeProject089/BetterModsManager/releases/latest" }' }],
         },
         {
             method: 'POST', path: '/api/restart', auth: true,
             desc: t('plugins.endpointRestart'),
-            about: 'Redémarre proprement l\'application BMM. Le processus se ferme et se relance après un délai de 300 ms. L\'API sera brièvement indisponible pendant le redémarrage.',
+            about: t('plugins.epAbout.restart'),
             fields: null,
             responseStatuses: [
                 { code: 200, label: 'OK', body: '{ "ok": true, "message": "Restarting..." }' },
@@ -5679,7 +5679,7 @@ function getEndpointDefs(): EndpointDef[] {
         {
             method: 'PUT', path: '/api/mods/:id', auth: true,
             desc: t('plugins.endpointUpdateMod'),
-            about: 'Met à jour partiellement les métadonnées éditables d\'un mod. Remplace :id dans l\'URL par l\'UUID du mod. Tous les champs sont optionnels — seuls les champs envoyés seront modifiés.',
+            about: t('plugins.epAbout.modPatch'),
             fields: [
                 { name: 'name',        type: 'string', required: false, desc: 'Nouveau nom affiché dans l\'interface.' },
                 { name: 'version',     type: 'string', required: false, desc: 'Chaîne de version, ex : "1.2.3".' },
@@ -5694,7 +5694,7 @@ function getEndpointDefs(): EndpointDef[] {
         {
             method: 'DELETE', path: '/api/mods/:id', auth: true,
             desc: t('plugins.endpointDeleteMod'),
-            about: 'Supprime définitivement l\'entrée d\'un mod dans BMM. Remplace :id par l\'UUID du mod. Cela ne supprime PAS les fichiers sur le disque — utilise l\'interface pour une suppression complète.',
+            about: t('plugins.epAbout.modDelete'),
             fields: null,
             responseStatuses: [
                 { code: 200, label: 'OK', body: '{ "ok": true, "mod_id": "mod-uuid" }' },
@@ -5711,7 +5711,7 @@ function getEndpointDefs(): EndpointDef[] {
         {
             method: 'POST', path: '/api/profiles', auth: true,
             desc: t('plugins.endpointCreateProfile'),
-            about: 'Crée un nouveau profil de mods. Le profil n\'est pas automatiquement défini comme actif — appelle POST /api/profiles/activate ensuite si nécessaire.',
+            about: t('plugins.epAbout.profileNew'),
             fields: [
                 { name: 'name',        type: 'string', required: true,  desc: 'Nom du profil affiché dans la barre latérale.' },
                 { name: 'game_path',   type: 'string', required: true,  desc: 'Chemin absolu vers le dossier d\'installation du jeu.' },
@@ -5738,7 +5738,7 @@ function getEndpointDefs(): EndpointDef[] {
         {
             method: 'PUT', path: '/api/profiles/:id', auth: true,
             desc: t('plugins.endpointUpdateProfile'),
-            about: 'Met à jour partiellement un profil existant. Remplace :id par l\'UUID du profil. Tous les champs sont optionnels — seuls les champs envoyés seront modifiés.',
+            about: t('plugins.epAbout.profilePatch'),
             fields: [
                 { name: 'name',        type: 'string', required: false, desc: 'Nouveau nom d\'affichage.' },
                 { name: 'color',       type: 'string', required: false, desc: 'Nouvelle couleur d\'accentuation hex, ex : "#ef4444".' },
@@ -5755,7 +5755,7 @@ function getEndpointDefs(): EndpointDef[] {
         {
             method: 'DELETE', path: '/api/profiles/:id', auth: true,
             desc: t('plugins.endpointDeleteProfile'),
-            about: 'Supprime définitivement un profil et retire toutes les associations de mods pour ce profil. Remplace :id par l\'UUID du profil. Impossible de supprimer le profil actuellement actif.',
+            about: t('plugins.epAbout.profileDelete'),
             fields: null,
             responseStatuses: [
                 { code: 200, label: 'OK', body: '{ "ok": true, "profile_id": "prof-uuid" }' },
@@ -5819,7 +5819,7 @@ function getEndpointDefs(): EndpointDef[] {
         {
             method: 'GET', path: '/api/repo/info', auth: false,
             desc: 'Informations repo distant',
-            about: 'Récupère et retourne le contenu du repo.json distant (métadonnées, profils, liste de mods). Utile pour prévisualiser un repo avant de le connecter ou de le synchroniser. Aucune authentification requise — sauf si le repo est protégé par un mot de passe de téléchargement (voir le paramètre password).\n\nQuery string : ?url=<URL_du_repo>&password=<optionnel>',
+            about: t('plugins.epAbout.repoInfo'),
             fields: [
                 { name: 'url', type: 'string', required: true, desc: 'URL vers le repo.json distant (query param). Ex : ?url=https://monserveur.com/repo.json' },
                 { name: 'password', type: 'string', required: false, desc: 'Mot de passe de téléchargement, si le repo auto-hébergé est protégé. Envoyé en header X-Repo-Password. Ex : &password=secret' },
@@ -5834,7 +5834,7 @@ function getEndpointDefs(): EndpointDef[] {
         {
             method: 'GET', path: '/api/repo/list', auth: false,
             desc: 'Liste des repos connectés',
-            about: 'Retourne la liste de tous les repos distants enregistrés dans BMM (ajoutés via POST /api/repo/connect ou depuis l\'interface). Chaque entrée contient l\'URL et le nom du repo.',
+            about: t('plugins.epAbout.repoList'),
             fields: null,
             responseStatuses: [
                 { code: 200, label: 'OK', body: '{ "ok": true, "data": [{ "url": "https://monserveur.com/repo.json", "name": "Mon Serveur" }] }' },
@@ -5843,7 +5843,7 @@ function getEndpointDefs(): EndpointDef[] {
         {
             method: 'POST', path: '/api/repo/connect', auth: true,
             desc: 'Connecter un repo distant',
-            about: 'Enregistre l\'URL d\'un repo distant dans la liste des repos connectés de BMM. Si le champ name est omis, BMM tente de récupérer le nom depuis le repo.json distant. Si le repo est déjà dans la liste, aucun doublon n\'est ajouté.\n\nÉquivalent deeplink : bmm://repo/connect?url=<URL>',
+            about: t('plugins.epAbout.repoConnect'),
             fields: [
                 { name: 'url',  type: 'string', required: true,  desc: 'URL complète vers le repo.json distant (ou le dossier parent — /repo.json sera ajouté automatiquement).' },
                 { name: 'name', type: 'string', required: false, desc: 'Nom affiché dans BMM. Si omis, récupéré depuis le champ "name" du repo.json distant.' },
@@ -5857,7 +5857,7 @@ function getEndpointDefs(): EndpointDef[] {
         {
             method: 'DELETE', path: '/api/repo', auth: true,
             desc: 'Déconnecter un repo',
-            about: 'Retire un repo de la liste des repos connectés. Le corps de la requête doit contenir l\'URL exacte du repo tel qu\'il a été ajouté. Les fichiers locaux synchronisés ne sont PAS supprimés.',
+            about: t('plugins.epAbout.repoForget'),
             fields: [
                 { name: 'url', type: 'string', required: true, desc: 'URL exacte du repo à retirer (identique à celle utilisée lors de la connexion).' },
             ],
@@ -5870,7 +5870,7 @@ function getEndpointDefs(): EndpointDef[] {
         {
             method: 'POST', path: '/api/repo/sync', auth: true,
             desc: 'Synchroniser depuis un repo distant',
-            about: 'Télécharge les mods depuis un repo distant et les intègre dans des profils locaux BMM. L\'opération est démarrée en arrière-plan — la réponse est immédiate (202 Accepted) avec un job_id. <strong>Max 1 sync simultanée</strong> — retourne 409 si une sync est déjà en cours. Annulez avec <code>DELETE /api/repo/sync/cancel</code>.\n\nÉquivalent deeplink : bmm://repo/sync?url=&lt;URL&gt;&amp;profile=&lt;repo_profile_id&gt;',
+            about: t('plugins.epAbout.repoSync'),
             fields: [
                 { name: 'url',                                type: 'string',  required: true,  desc: 'URL du repo.json distant.' },
                 { name: 'choices',                            type: 'array',   required: true,  desc: 'Tableau de profils à synchroniser. Chaque entrée : { repoProfileId, targetLocalProfileId?, selectedModIds? }.' },
@@ -5896,7 +5896,7 @@ function getEndpointDefs(): EndpointDef[] {
         {
             method: 'POST', path: '/api/repo/manifest', auth: true,
             desc: 'Générer repo.json pour un dossier déjà hébergé',
-            about: 'Écrit un <code>repo.json</code> pour un ou plusieurs dossiers de mods <b>déjà en place</b>. Contrairement à <code>/api/repo/gen</code>, il ne demande aucun profil et ne copie rien : il lit le dossier, écrit un fichier, et laisse le dossier intact. Synchrone (il ne fait que hacher), donc un script de publication peut agir directement sur le diff renvoyé. Par défaut <code>reuse_existing</code> conserve l\'identité du manifeste précédent : re-générer produit une nouvelle <i>révision du même dépôt</i>, pas un dépôt différent — mettez-le à <code>false</code> seulement si vous voulez délibérément en créer un nouveau.',
+            about: t('plugins.epAbout.repoManifest'),
             fields: [
                 { name: 'modsDir',       type: 'string',  required: false, desc: 'Dossier dont les sous-dossiers sont les mods. Obligatoire si <code>sources</code> est absent.' },
                 { name: 'sources',       type: 'array',   required: false, desc: 'Plusieurs dossiers d\'un coup : <code>[{ "dir": "…", "onlyDirs": ["…"], "label": "…" }]</code>. Prioritaire sur <code>modsDir</code>. Deux dossiers qui publieraient un mod du même nom sont refusés (l\'id d\'un mod est son nom de dossier) et rien n\'est écrit.' },
@@ -5917,7 +5917,7 @@ function getEndpointDefs(): EndpointDef[] {
         {
             method: 'POST', path: '/api/repo/gen', auth: true,
             desc: 'Générer la structure repo (Gen)',
-            about: 'Exporte des profils locaux au format repo serveur BMM (repo.json + mods hachés + structure de fichiers). Si <code>generate_server=true</code>, génère les scripts de démarrage du mini-serveur. Si <code>lightweight=true</code>, ne copie pas les fichiers de mods (manifeste seul). Si <code>zip_output=true</code>, compresse le tout dans un .zip. L\'opération est démarrée en arrière-plan — réponse immédiate (202). Annulez avec <code>DELETE /api/repo/gen/cancel</code>.',
+            about: t('plugins.epAbout.repoGen'),
             fields: [
                 { name: 'profileIds',    type: 'array',   required: true,  desc: 'Tableau des UUIDs de profils locaux à exporter.' },
                 { name: 'outputDir',     type: 'string',  required: true,  desc: 'Dossier de destination où créer repo.json et le dossier mods/.' },
