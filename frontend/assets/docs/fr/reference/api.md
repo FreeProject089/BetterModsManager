@@ -170,6 +170,10 @@ global (`bmm_deeplink_allow_global = blocked`) les refuse tous.
 |---|---|---|
 | `bmm://schedule/run` | `id`*, `k` | Exécute une tâche planifiée — c'est le hook utilisé par le Planificateur Windows. **Demande d'abord**, sauf si `k` est la clé de planification OS de cette machine |
 | `bmm://schedule/enable` | `id`*, `on` | Arme (`on=1`, par défaut) ou désarme (`on=0`) une tâche enregistrée. Demande d'abord |
+| `bmm://catalog/follow` | `type`*, `url`* | Suivre un catalogue — `plugin`, `theme`, `preset`, `modpack`, `repo`, `tutorial`, `list`, `app` |
+| `bmm://catalog/unfollow` | `type`*, `url`* | Cesser de le suivre |
+| `bmm://repo/publish-ssh` | `dir` | Ouvre l'écran repo prêt à publier en SSH. Ne porte ni hôte ni chemin de clé — un lien capable de les nommer pourrait diriger une publication vers un serveur que l'utilisateur n'a jamais choisi |
+| `bmm://repo/fetch-ssh` | `dir` | Pareil, pour récupérer |
 | `bmm://hook` | `name`*, `data` | Sonne un hook qu'une tâche peut attendre. `data` est lu en JSON, sinon passé en texte. Demande d'abord |
 | `bmm://launchpack/run` | `id`* | Exécute un Launch Pack |
 | `bmm://benchmark/run` | `dataset`, `size`, `mb`, `mode`, `sources`, `profiles`, `folders` | Ouvre le benchmark préconfiguré. **Se lance automatiquement sauf si `mode=manual`** |
@@ -329,6 +333,13 @@ Deux formes échappent à la règle :
 | `POST` | `/api/mods/enable` | `mods.write` | `mod_id`* | ✓ |
 | `POST` | `/api/mods/disable` | `mods.write` | `mod_id`* | ✓ |
 | `GET` | `/api/mods/order` | `mods.read` | — · l'ordre de déploiement, plus chaque fichier disputé et qui le gagne | |
+| `GET` | `/api/schedules` | token | — · un résumé de chaque tâche enregistrée : id, nom, activée ou non, son déclencheur. **Pas** ses étapes | |
+| `POST` | `/api/schedules/enabled` | token | `id`*, `enabled`* · armer ou désarmer une tâche. Seul `enabled` est modifiable — une route qui pourrait écrire une tâche entière pourrait en installer une avec une étape de script dedans | |
+| `POST` | `/api/hook` | token | `name`*, `data` · sonner une clochette nommée qu'une tâche peut attendre avec `wait.hook`, ou par laquelle elle peut être déclenchée avec `on event` | |
+| `GET` | `/api/hook` | token | `name` · ce qui a sonné, sans le consommer — pour l'écran qui demande « est-ce que mon webhook arrive vraiment ? » | |
+| `GET` | `/api/catalogs` | `catalog.read` | — · les catalogues suivis, par type | |
+| `POST` | `/api/catalogs` | `catalog.write` | `type`*, `url`*, `follow` · suivre ou cesser de suivre un catalogue | |
+| `GET` | `/api/plugins/assets` | `plugins.read` | `id`*, `path` · ce qu'un plugin livre ; avec `path`, le texte d'un fichier | |
 | `POST` | `/api/mods/order` | `mods.write` | `order[]`*, `profileId` · doit être le même ensemble de mods que ceux actifs ; recopie les fichiers qui changent de main | |
 | `PUT` | `/api/mods/:id` | `mods.write` | `name`, `version`, `author`, `description`, `tags[]`, `install_notes` | |
 | `DELETE` | `/api/mods/:id` | `mods.write` | — · retire l'entrée, **garde les fichiers** | |

@@ -9140,5 +9140,20 @@
   "sched.prev.w.block": "block",
   "sched.prev.e.change": "would change",
   "sched.prev.e.already": "already like that",
-  "sched.prev.e.unknown": "cannot tell from here"
+  "sched.prev.e.unknown": "cannot tell from here",
+  "sched.fw.openOut": "Open this task's output folder",
+  "plugins.ep.schedules": "List scheduled tasks",
+  "plugins.epAbout.schedules": "A summary of every saved task — id, name, whether it is armed, its trigger. Deliberately <b>not</b> its steps: a caller that could read those could read whatever somebody put in a script step.",
+  "plugins.ep.orderGet": "Read the deployment order",
+  "plugins.epAbout.orderGet": "Two active mods that ship the same file do not merge — the one deployed <b>last</b> is the one on disk. This returns that order plus every contested file and who currently wins it.",
+  "plugins.ep.orderSet": "Set the deployment order",
+  "plugins.epAbout.orderSet": "Reorders the active mods and re-copies the files that change hands. The list must be a <b>permutation</b> of what is active — a shorter one would drop a mod out of the order while its files stay in the game.",
+  "plugins.ep.pluginAssets": "Read what a plugin ships",
+  "plugins.epAbout.pluginAssets": "The files under a plugin's <code>assets/</code>, read from disk rather than from its manifest. With <code>path</code>, returns one file's text. Copying a file OUT is deliberately not offered: a caller that named both source and destination would be a file-copy primitive with BMM's privileges.",
+  "plugins.ep.publishSsh": "Publish a repo over SSH",
+  "plugins.epAbout.publishSsh": "Opens the repo screen ready to publish. Carries no host and no key path on purpose — a caller able to name those could point a publish at a server the user never chose.",
+  "plugins.ep.fetchSsh": "Fetch a repo over SSH",
+  "plugins.epAbout.fetchSsh": "The same, for fetching, and with the same limit on what a caller may name.",
+  "plugins.ep.view": "Open a screen",
+  "plugins.epAbout.view": "Switches the open app to a screen, the same way clicking the sidebar does. For an assistant or a script that has just changed something and wants the person to be looking at it."
 }

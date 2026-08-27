@@ -165,6 +165,10 @@ Start-Process "bmm://mod/enable?id=my-mod-folder"
 |---|---|---|
 | `bmm://schedule/run` | `id`*, `k` | Runs a scheduled task — the hook the Windows Scheduler uses. **Asks first**, unless `k` is this machine's OS-schedule key |
 | `bmm://schedule/enable` | `id`*, `on` | Arms (`on=1`, the default) or disarms (`on=0`) a saved task. Asks first |
+| `bmm://catalog/follow` | `type`*, `url`* | Follow a catalogue — `plugin`, `theme`, `preset`, `modpack`, `repo`, `tutorial`, `list`, `app` |
+| `bmm://catalog/unfollow` | `type`*, `url`* | Stop following it |
+| `bmm://repo/publish-ssh` | `dir` | Opens the repo screen ready to publish over SSH. Carries no host and no key path — a link able to name those could point a publish at a server the user never chose |
+| `bmm://repo/fetch-ssh` | `dir` | The same, for fetching |
 | `bmm://hook` | `name`*, `data` | Rings a hook a task may be waiting on. `data` is parsed as JSON, or passed as text. Asks first |
 | `bmm://launchpack/run` | `id`* | Runs a Launch Pack |
 | `bmm://benchmark/run` | `dataset`, `size`, `mb`, `mode`, `sources`, `profiles`, `folders` | Opens the benchmark pre-configured. **Auto-runs unless `mode=manual`** |
@@ -319,6 +323,10 @@ Two shapes sit outside that rule:
 | `POST` | `/api/mods/enable` | `mods.write` | `mod_id`* | ✓ |
 | `POST` | `/api/mods/disable` | `mods.write` | `mod_id`* | ✓ |
 | `GET` | `/api/mods/order` | `mods.read` | — · the deployment order plus every contested file and who wins it | |
+| `GET` | `/api/schedules` | token | — · a summary of every saved task: id, name, whether it is on, its trigger. **Not** its steps | |
+| `POST` | `/api/schedules/enabled` | token | `id`*, `enabled`* · arm or disarm one task. Only `enabled` can be changed — a route that could write a whole task could install one with a script step in it | |
+| `POST` | `/api/hook` | token | `name`*, `data` · ring a named doorbell a task may be waiting on with `wait.hook`, or be triggered by with `on event` | |
+| `GET` | `/api/hook` | token | `name` · what has rung, without consuming it — for the screen that asks “is my webhook actually arriving?” | |
 | `POST` | `/api/mods/order` | `mods.write` | `order[]`*, `profileId` · must be the same set of mods that are active; re-copies the files that change hands | |
 | `PUT` | `/api/mods/:id` | `mods.write` | `name`, `version`, `author`, `description`, `tags[]`, `install_notes` | |
 | `DELETE` | `/api/mods/:id` | `mods.write` | — · removes the entry, **keeps the files** | |

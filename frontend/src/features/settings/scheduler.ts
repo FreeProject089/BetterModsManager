@@ -6455,6 +6455,7 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
             <label class="sched-cmd-opt"><input type="checkbox" class="sched-p-fwappend" ${params.append ? 'checked' : ''}>
                 <span>${escHtml(t('sched.fw.append'))}</span></label>
             <span class="sched-cmd-hint">${escHtml(t('sched.fw.appendHint'))}</span>
+            <button type="button" class="btn btn-xs btn-ghost sched-fw-open" style="align-self:flex-start;margin-top:6px">${escHtml(t('sched.fw.openOut'))}</button>
         </div>`;
     }
     else if (needs === 'listApply') {
@@ -6918,6 +6919,17 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
     });
     host.querySelector('.sched-p-vexpect')?.addEventListener('change', (e) => { params.expect = (e.target as HTMLSelectElement).value; });
     host.querySelector('.sched-p-fwappend')?.addEventListener('change', (e) => { params.append = (e.target as HTMLInputElement).checked; });
+    // Where a bare filename actually lands. The rule is one sentence and it is still a rule
+    // somebody has to take on trust until they can see the folder — and after the first write
+    // "where did it go" is the only question.
+    host.querySelector('.sched-fw-open')?.addEventListener('click', async () => {
+        try {
+            const dir = await invoke('task_output_dir', {
+                taskId: _draft.id || 'draft', outputDir: _draft.outputDir || null,
+            }) as string;
+            await invoke('open_folder', { path: dir });
+        } catch (e) { toast(String(e), 'error', 8000); }
+    });
     host.querySelector('.sched-p-order')?.addEventListener('input', (e) => { params.order = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-p-prog')?.addEventListener('input', (e) => { params.program = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-p-args')?.addEventListener('input', (e) => { params.args = (e.target as HTMLInputElement).value; });

@@ -9138,5 +9138,20 @@
   "sched.prev.w.block": "bloc",
   "sched.prev.e.change": "changerait",
   "sched.prev.e.already": "déjà ainsi",
-  "sched.prev.e.unknown": "impossible à dire d'ici"
+  "sched.prev.e.unknown": "impossible à dire d'ici",
+  "sched.fw.openOut": "Ouvrir le dossier de sortie de cette tâche",
+  "plugins.ep.schedules": "Lister les tâches planifiées",
+  "plugins.epAbout.schedules": "Un résumé de chaque tâche enregistrée — id, nom, armée ou non, son déclencheur. Volontairement <b>pas</b> ses étapes : un appelant qui pourrait les lire pourrait lire ce que quelqu'un a mis dans une étape de script.",
+  "plugins.ep.orderGet": "Lire l'ordre de déploiement",
+  "plugins.epAbout.orderGet": "Deux mods actifs qui livrent le même fichier ne fusionnent pas — celui déployé <b>en dernier</b> est celui sur le disque. Renvoie cet ordre, plus chaque fichier disputé et qui le gagne actuellement.",
+  "plugins.ep.orderSet": "Définir l'ordre de déploiement",
+  "plugins.epAbout.orderSet": "Réordonne les mods actifs et recopie les fichiers qui changent de main. La liste doit être une <b>permutation</b> de ce qui est actif — une liste plus courte sortirait un mod de l'ordre pendant que ses fichiers restent dans le jeu.",
+  "plugins.ep.pluginAssets": "Lire ce qu'un plugin livre",
+  "plugins.epAbout.pluginAssets": "Les fichiers sous le <code>assets/</code> d'un plugin, lus depuis le disque et non depuis son manifeste. Avec <code>path</code>, renvoie le texte d'un fichier. Copier un fichier VERS l'extérieur n'est volontairement pas proposé : un appelant qui nommerait à la fois la source et la destination serait une primitive de copie avec les privilèges de BMM.",
+  "plugins.ep.publishSsh": "Publier un repo en SSH",
+  "plugins.epAbout.publishSsh": "Ouvre l'écran repo prêt à publier. Ne porte ni hôte ni chemin de clé, exprès — un appelant capable de les nommer pourrait diriger une publication vers un serveur que l'utilisateur n'a jamais choisi.",
+  "plugins.ep.fetchSsh": "Récupérer un repo en SSH",
+  "plugins.epAbout.fetchSsh": "Pareil, pour la récupération, avec la même limite sur ce qu'un appelant peut nommer.",
+  "plugins.ep.view": "Ouvrir un écran",
+  "plugins.epAbout.view": "Bascule l'app ouverte sur un écran, comme un clic dans la barre latérale. Pour un assistant ou un script qui vient de changer quelque chose et veut que la personne le regarde."
 }

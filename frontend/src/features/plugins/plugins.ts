@@ -6507,6 +6507,85 @@ function getEndpointDefs(): EndpointDef[] {
             ],
             responseStatuses: [{ code: 202, label: 'Accepted', body: '{ "ok": true, "driven_by": "bmm-ui", "action": "data/export-auto" }' }, e401],
         },
+        {
+            method: 'POST', path: '/api/view', auth: true,
+            desc: t('plugins.ep.view'),
+            about: t('plugins.epAbout.view'),
+            fields: [
+                { name: 'id', type: 'string', required: true, desc: 'Which screen: mods, profiles, repo, plugins, settings, apps, docs…' },
+            ],
+            responseStatuses: [{ code: 200, label: 'OK', body: '{ "ok": true, "driven_by": "bmm-ui", "action": "view/open" }' }, e401],
+        },
+        // ── Added after an audit against the router ──────────────────────────
+        //
+        // Six routes existed and were reachable, and none of them was in this list — which is
+        // the list people actually click. A route the documentation describes and the app does
+        // not offer is a feature nobody finds from inside the app.
+        {
+            method: 'GET', path: '/api/schedules', auth: true,
+            desc: t('plugins.ep.schedules'),
+            about: t('plugins.epAbout.schedules'),
+            fields: null,
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "ok": true, "schedules": [ { "id": "sched-1", "name": "Nightly", "enabled": true, "trigger": "dailyAt" } ] }' },
+                e401,
+            ],
+        },
+        {
+            method: 'GET', path: '/api/mods/order', auth: true,
+            desc: t('plugins.ep.orderGet'),
+            about: t('plugins.epAbout.orderGet'),
+            fields: null,
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "mods": [ { "id": "a", "name": "A", "position": 0, "contested": 2, "winning": 0 } ], "contested": [ { "path": "x/y.lua", "mods": ["a","b"], "winner": "b" } ] }' },
+                e401,
+            ],
+        },
+        {
+            method: 'POST', path: '/api/mods/order', auth: true,
+            desc: t('plugins.ep.orderSet'),
+            about: t('plugins.epAbout.orderSet'),
+            fields: [
+                { name: 'order', type: 'array', required: true, desc: 'Every active mod id, in deployment order. Last wins a shared file.' },
+                { name: 'profileId', type: 'string', required: false, desc: 'Which profile. Default: the active one.' },
+            ],
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "ok": true, "moved": 3 }' },
+                { code: 400, label: 'Bad Request', body: '{ "error": "order.errNotPermutation" }' },
+                e401,
+            ],
+        },
+        {
+            method: 'GET', path: '/api/plugins/assets', auth: true,
+            desc: t('plugins.ep.pluginAssets'),
+            about: t('plugins.epAbout.pluginAssets'),
+            fields: [
+                { name: 'id', type: 'string', required: true, desc: 'The plugin id. Query string, not a body.' },
+                { name: 'path', type: 'string', required: false, desc: 'One file, relative to assets/. Returns its text.' },
+            ],
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "ok": true, "assets": [ { "path": "README.md", "kind": "doc", "size": 812, "readable": true } ] }' },
+                e401,
+            ],
+        },
+        {
+            method: 'POST', path: '/api/repo/publish-ssh', auth: true,
+            desc: t('plugins.ep.publishSsh'),
+            about: t('plugins.epAbout.publishSsh'),
+            fields: [
+                { name: 'dir', type: 'string', required: false, desc: 'The repo folder. Default: the one on screen.' },
+            ],
+            responseStatuses: [{ code: 200, label: 'OK', body: '{ "ok": true }' }, e401],
+        },
+        {
+            method: 'POST', path: '/api/repo/fetch-ssh', auth: true,
+            desc: t('plugins.ep.fetchSsh'),
+            about: t('plugins.epAbout.fetchSsh'),
+            fields: [
+                { name: 'dir', type: 'string', required: false, desc: 'Where to fetch into. Default: the one on screen.' },
+            ],
+            responseStatuses: [{ code: 200, label: 'OK', body: '{ "ok": true }' }, e401],
+        },
     ];
 }
 
