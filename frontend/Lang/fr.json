@@ -9294,5 +9294,12 @@
   "cid.errNoApp": "Cette entrée ne fixe ni somme de contrôle ni URL : il n'y a rien pour l'identifier.",
   "apps.sources.addBundle": "Suivre un .bmmbundle…",
   "apps.sources.already": "Déjà suivi",
-  "apps.sources.bundleAdded": "Suivi — {n} application(s)"
+  "apps.sources.bundleAdded": "Suivi — {n} application(s)",
+  "apps.create.useFile": "Utiliser un fichier à la place…",
+  "apps.create.fileChosen": "Fichier choisi — changer…",
+  "apps.create.useFileHint": "Ou donnez une adresse ci-dessous. Un fichier est empaqueté dans le catalogue quand vous le publiez en un seul fichier.",
+  "apps.create.publishBundle": "Publier en un seul fichier (.bmmbundle)…",
+  "apps.create.bundled": "Publié — {n} application(s) empaquetée(s), {f}",
+  "apps.create.packFailed": "Impossible d'empaqueter",
+  "apps.create.packMissing": "{n} entrée(s) nomment un fichier absent du dossier"
 }

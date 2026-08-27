@@ -9296,5 +9296,12 @@
   "cid.errNoApp": "That entry pins neither a checksum nor a URL, so there is nothing to identify it by.",
   "apps.sources.addBundle": "Follow a .bmmbundle…",
   "apps.sources.already": "Already following that one",
-  "apps.sources.bundleAdded": "Following — {n} app(s)"
+  "apps.sources.bundleAdded": "Following — {n} app(s)",
+  "apps.create.useFile": "Use a file instead…",
+  "apps.create.fileChosen": "File chosen — change…",
+  "apps.create.useFileHint": "Or give an address below. A file is packed into the catalogue when you publish it as one file.",
+  "apps.create.publishBundle": "Publish as one file (.bmmbundle)…",
+  "apps.create.bundled": "Published — {n} app(s) packed, {f}",
+  "apps.create.packFailed": "Could not pack",
+  "apps.create.packMissing": "{n} entr(ies) name a file that is not in the folder"
 }

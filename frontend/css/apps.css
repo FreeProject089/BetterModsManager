@@ -1065,3 +1065,20 @@
     color: var(--text-muted);
     background: var(--bmm-s04);
 }
+
+/* An address OR a file — one row, so it reads as a choice rather than a field you skipped. */
+.apps-cr-src {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px 8px;
+    margin: 2px 0 8px;
+}
+.apps-cr-src-say {
+    flex: 1 1 180px;
+    min-width: 0;
+    font-size: 10.5px;
+    line-height: 1.4;
+    color: var(--text-muted);
+    overflow-wrap: anywhere;
+}

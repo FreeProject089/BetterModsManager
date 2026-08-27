@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { sourceAccessHtml, wireSourceAccess } from '../../core/source-access.js';
-import { invoke, pickFolder, pickFile } from '../../core/api.js';
+import { invoke, pickFolder, pickFile, saveFile } from '../../core/api.js';
 import { toast } from '../../ui/app.js';
 import { t } from '../../core/i18n.js';
 import {
@@ -1244,6 +1244,9 @@ function saveDraft(): void {
  *  edits made since. */
 let _draftLoaded = false;
 
+/** The file the app editor is currently offering to pack, while its modal is open. */
+let _pickedFile = '';
+
 function renderCreate() {
     const content = document.getElementById('apps-content');
     if (!content) return;
@@ -1324,6 +1327,8 @@ function renderCreate() {
         <button class="btn btn-ghost" id="cr-preview">${t('apps.create.preview')||'Preview JSON'}</button>
         <button class="btn btn-accent" id="cr-copy">${t('apps.create.copy')||'Copy JSON'}</button>
         <button class="btn btn-ghost" id="cr-download">${IC.download} ${t('apps.create.download')||'Download catalog.json'}</button>
+        <!-- The only one of these that needs no hosting afterwards. -->
+        <button class="btn btn-secondary" id="cr-bundle">${escHtml(t('apps.create.publishBundle') || 'Publish as one file (.bmmbundle)…')}</button>
       </div>
 
       <div id="cr-json-preview" class="apps-create-json" style="display:none"></div>
@@ -1425,9 +1430,74 @@ function renderCreate() {
         a.click();
     });
 
+    document.getElementById('cr-bundle')?.addEventListener('click', () => { void publishBundle(); });
+
     document.getElementById('cr-app-close')?.addEventListener('click', () => {
         document.getElementById('cr-app-modal')!.classList.remove('open');
     });
+}
+
+/**
+ * Write the catalogue and everything it packs into one `.bmmbundle`.
+ *
+ * The same shape the plugin catalogue builder uses, and deliberately so: stage in a
+ * temporary folder, copy the packed payloads beside the document, zip the folder, throw the
+ * staging away. Publishing used to leave a pile of loose files in whatever directory
+ * somebody had picked for one thing.
+ *
+ * An entry with an address keeps it. An entry with a file handed over gets that file copied
+ * in and its `url` rewritten to the neighbour's name. An entry with NEITHER is named and
+ * left alone — a catalogue that silently dropped one app is worse than one that says which.
+ */
+async function publishBundle(): Promise<void> {
+    const out = (await saveFile({
+        defaultPath: `${(_draft.name || 'catalog').replace(/[^A-Za-z0-9._-]/g, '_')}.bmmbundle`,
+        filters: [{ name: t('catpub.bundleKind') || 'Bundle', extensions: ['bmmbundle'] }],
+    }).catch(() => null)) as string;
+    if (!out) return;
+    const dir = (await invoke('catalog_bundle_stage').catch(() => null)) as string;
+    if (!dir) { toast(t('catpub.stageFailed') || 'Could not stage', 'error'); return; }
+    const sep = dir.includes('\\') ? '\\' : '/';
+    try {
+        const doc: any = JSON.parse(buildCatalogJson());
+        let packed = 0;
+        for (let i = 0; i < doc.apps.length; i++) {
+            const src = String((_draft.apps[i] as any)?.src_file || '');
+            const hasUrl = String(doc.apps[i]?.download?.url || '').trim();
+            if (!src) {
+                if (!hasUrl) {
+                    toast((t('apps.create.pbNoUrl') || '{id}: no download URL').replace('{id}', doc.apps[i]?.id || '?'), 'warning', 6000);
+                }
+                continue;
+            }
+            // The name inside the bundle. Derived from the id, not from the source path:
+            // two authors' files can share a basename, and the id is already unique here.
+            const ext = (src.replace(/^.*[/\\]/, '').split('.').pop() || 'bin').toLowerCase();
+            const file = `${String(doc.apps[i].id).replace(/[^A-Za-z0-9._-]/g, '_')}.${ext}`;
+            try {
+                await invoke('copy_file', { src, dest: `${dir}${sep}${file}` });
+                doc.apps[i].download.url = file;
+                packed++;
+            } catch (e) {
+                // Named, and the entry keeps whatever address it had.
+                toast(`${t('apps.create.packFailed') || 'Could not pack'} ${doc.apps[i]?.id}: ${e}`, 'warning', 7000);
+            }
+        }
+        await invoke('write_text_file', { path: `${dir}${sep}catalog.json`, content: JSON.stringify(doc, null, 2) });
+        const res: any = await invoke('catalog_bundle_pack', { dir, out });
+        toast((t('apps.create.bundled') || 'Published — {n} app(s) packed, {f}')
+            .replace('{n}', String(packed))
+            .replace('{f}', String(out).replace(/^.*[/\\]/, '')), 'success', 7000);
+        if (res?.missing?.length) {
+            toast((t('apps.create.packMissing') || '{n} entr(ies) name a file that is not in the folder')
+                .replace('{n}', String(res.missing.length)), 'warning', 8000);
+        }
+    } catch (e) {
+        toast(`${t('common.error')}: ${e}`, 'error', 8000);
+    } finally {
+        // Whatever happened, the staging folder is not left behind.
+        await invoke('catalog_bundle_unstage', { dir }).catch(() => {});
+    }
 }
 
 function buildCatalogJson(): string {
@@ -1437,12 +1507,29 @@ function buildCatalogJson(): string {
         description: _draft.description || '',
         partner_catalogs: [] as string[],
         community_imports: [] as string[],
-        apps: _draft.apps,
+        // NOT the draft's entries verbatim.
+        //
+        // `src_file` is where the payload sits on THIS machine — `C:\Users\<name>\Downloads\
+        // setup.exe` — and publishing the draft as-is would put the author's home directory
+        // and their username in a document meant to be handed to strangers. Anything that
+        // starts with `_` goes the same way: those are this screen's bookkeeping, never part
+        // of what a catalogue says.
+        apps: _draft.apps.map((a) => {
+            const out: Record<string, unknown> = {};
+            for (const [k, v] of Object.entries(a)) {
+                if (k === 'src_file' || k.startsWith('_')) continue;
+                out[k] = v;
+            }
+            return out;
+        }),
     };
     return JSON.stringify(cat, null, 2);
 }
 
 function openAppEditor(index: number | null) {
+    // Which file this entry hands over, for as long as the modal is open. Seeded from the
+    // entry so reopening one that already had a file does not silently drop it on Save.
+    _pickedFile = String((_draft.apps[index ?? -1] as any)?.src_file || '');
     const existing = index !== null ? _draft.apps[index] : {};
     const body = document.getElementById('cr-app-body')!;
 
@@ -1486,6 +1573,19 @@ function openAppEditor(index: number | null) {
       ${field('extra', t('apps.create.fExtra')||'Extra images (comma-separated URLs)', (existing.images?.extra||[]).join(', '))}
       ${field('md_link', t('apps.create.fMd')||'Documentation URL (md_link)', existing.md_link||'', 'https://github.com/.../README.md')}
       <div class="apps-cr-sec">${escHtml(t('apps.create.secGet') || 'Where it comes from')}</div>
+      <!-- An address OR a file. Publishing a catalogue used to mean finding somewhere to
+           host every installer in it first; a file handed over here is packed INTO the
+           catalogue when it is published as one, and nothing needs hosting at all. -->
+      <div class="apps-cr-src">
+        <button type="button" class="btn btn-xs ${existing.src_file ? 'btn-accent' : 'btn-ghost'}" id="cr-pick-file">
+          ${escHtml(existing.src_file ? (t('apps.create.fileChosen') || 'File chosen — change…') : (t('apps.create.useFile') || 'Use a file instead…'))}
+        </button>
+        <span class="apps-cr-src-say" id="cr-src-say">${escHtml(
+            existing.src_file
+                ? String(existing.src_file).replace(/^.*[/\\]/, '')
+                : (t('apps.create.useFileHint') || 'Or give an address below. A file is packed into the catalogue when you publish it as one file.'))}</span>
+        ${existing.src_file ? `<button type="button" class="btn btn-xs btn-ghost" id="cr-clear-file">${escHtml(t('common.remove') || 'Remove')}</button>` : ''}
+      </div>
       ${field('dl-url', t('apps.create.fDlUrl')||'Download URL', (existing.download as any)?.url||'', 'https://github.com/.../app.exe')}
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
         <div>
@@ -1556,6 +1656,28 @@ function openAppEditor(index: number | null) {
             try { fill(await invoke('catalog_probe_url', { url }) as any); } catch (e) { blame(e); }
             busy(false);
         });
+        document.getElementById('cr-pick-file')?.addEventListener('click', async () => {
+            const picked = await pickFile().catch(() => null);
+            if (!picked) return;
+            _pickedFile = picked;
+            const name = picked.replace(/^.*[/\\]/, '');
+            const el = document.getElementById('cr-src-say');
+            if (el) el.textContent = name;
+            // The extension is the file type, and the file is right here — so the two
+            // fields nobody can fill by hand get filled from the thing itself.
+            const ext = (name.split('.').pop() || '').toLowerCase();
+            const sel = document.getElementById('cr-filetype') as HTMLSelectElement | null;
+            if (sel && ['zip', 'exe', 'msi'].includes(ext)) sel.value = ext;
+            else if (sel && ['ps1', 'bat', 'cmd', 'py', 'sh', 'vbs'].includes(ext)) sel.value = 'script';
+            busy(true);
+            try { fill(await invoke('catalog_probe_file', { path: picked }) as any); } catch (e) { blame(e); }
+            busy(false);
+        });
+        document.getElementById('cr-clear-file')?.addEventListener('click', () => {
+            _pickedFile = '';
+            const el = document.getElementById('cr-src-say');
+            if (el) el.textContent = t('apps.create.useFileHint') || '';
+        });
         document.getElementById('cr-probe-file')?.addEventListener('click', async () => {
             const picked = await pickFile().catch(() => null);
             if (!picked) return;
@@ -1586,6 +1708,10 @@ function openAppEditor(index: number | null) {
                 size:      parseInt(get('size')) || undefined,
                 sha256:    get('sha256') || undefined,
             } as any,
+            // Where the bytes are on THIS machine, until the catalogue is published. Never
+            // part of the published document — stripped in draftToCatalog below, because a
+            // path off somebody's disk is not something a catalogue should carry.
+            ...(_pickedFile ? { src_file: _pickedFile } : {}),
         };
 
         if (index !== null) _draft.apps[index] = app;
