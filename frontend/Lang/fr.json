@@ -9305,5 +9305,9 @@
   "repo.extras.addBundle": "Emporter un fichier de catalogue…",
   "repo.extras.bundleOf": "Un catalogue de {t}, emporté dans le repo — le destinataire n'a besoin d'aucun autre hébergeur.",
   "repo.extras.bundleEmpty": "Ce bundle ne contient aucune entrée de catalogue.",
-  "plugins.shipCount": "{n} livré(s)"
+  "plugins.shipCount": "{n} livré(s)",
+  "repo.hostLede": "Héberger un dépôt, c'est deux choses",
+  "repo.hostLedeP": "D'abord produire le fichier <b>repo.json</b> qui décrit vos mods, puis permettre aux autres de le télécharger. Les deux étapes sont ci-dessous, dans cet ordre.",
+  "repo.hostLedeQ": "Vous pouvez vous arrêter après l'étape&nbsp;1 si vous avez déjà où déposer le dossier — un hébergement statique, un partage réseau, n'importe quoi qui serve des fichiers. L'étape&nbsp;2 est là pour ceux qui n'en ont pas.",
+  "repo.hostLedeAlt": "Les cartes marquées <b>ALTERNATIVE</b> ne sont pas des étapes de plus : ce sont d'autres façons de faire celle au-dessus d'elles."
 }
