@@ -9192,5 +9192,17 @@
   "sched.bmms.type.number": "toute valeur sans guillemets",
   "sched.bmms.type.whole": "un compte — 3, 0, 12. Refuse 1.5",
   "sched.bmms.type.decimal": "une fraction — 1.5, 0.25",
-  "sched.bmms.type.yesno": "1 ou 0. Il n'y a pas de true/false à l'exécution"
+  "sched.bmms.type.yesno": "1 ou 0. Il n'y a pas de true/false à l'exécution",
+  "sched.dbg.log": "Ce qui a déjà tourné",
+  "sched.dbg.breakOn": "Continuer jusqu'à une étape mentionnant",
+  "sched.dbg.breakOnPh": "ex. notify, ou un id de mod",
+  "sched.dbg.breakOnTip": "Continuer s'arrête à la première étape dont la description contient ceci. Laissez vide pour aller jusqu'au bout.",
+  "sched.dbg.stepTip": "Exécute l'étape suivante puis s'arrête. Pressez-le pendant une exécution pour reprendre pas à pas.",
+  "sched.dbg.continueTip": "Continue sans s'arrêter — ou jusqu'à ce que l'étape ci-dessus corresponde. Le panneau continue d'afficher les variables dans les deux cas.",
+  "sched.dbg.copy": "Copier",
+  "sched.dbg.copyTip": "Copie les étapes et les variables en texte, pour un rapport de bug.",
+  "sched.dbg.copied": "Copié",
+  "sched.dbg.modeStep": "pas à pas",
+  "sched.dbg.modeRun": "en cours",
+  "sched.dbg.modeUntil": "jusqu'à « {n} »"
 }

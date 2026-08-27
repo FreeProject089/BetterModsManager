@@ -14,7 +14,7 @@ globalThis.localStorage = globalThis.localStorage || {
 };
 
 const here = dirname(fileURLToPath(import.meta.url));
-const { snapshot } = await import(
+const { snapshot, hitsBreakpoint, changedSince, debugReport } = await import(
     pathToFileURL(join(here, '../frontend/js/features/settings/sched-debug.js')).href
 );
 
@@ -55,4 +55,55 @@ describe('snapshot', () => {
     test('an empty context is an empty list, not a row saying nothing', () => {
         assert.deepEqual(snapshot(ctx()), []);
     });
+});
+
+describe('running to somewhere instead of everywhere', () => {
+  test('an empty needle never matches \u2014 Continue still means "to the end"', () => {
+    assert.equal(hitsBreakpoint('do notify(message: "hi")', ''), false);
+    assert.equal(hitsBreakpoint('do notify(message: "hi")', '   '), false);
+  });
+
+  test('a substring of the step label matches, either case', () => {
+    assert.equal(hitsBreakpoint('do notify(message: "hi")', 'notify'), true);
+    assert.equal(hitsBreakpoint('do notify(message: "hi")', 'NOTIFY'), true);
+    assert.equal(hitsBreakpoint('do mods.scan()', 'notify'), false);
+  });
+});
+
+describe('what moved since the last step', () => {
+  const rows = (o) => Object.entries(o).map(([k, v]) => [k, 'text', v]);
+
+  test('a name that was not there is new, not changed', () => {
+    const r = changedSince(new Map(), rows({ a: '1' }));
+    assert.deepEqual([...r.fresh], ['a']);
+    assert.deepEqual([...r.changed], []);
+  });
+
+  test('a name holding something else is changed', () => {
+    const r = changedSince(new Map([['a', '1']]), rows({ a: '2' }));
+    assert.deepEqual([...r.changed], ['a']);
+    assert.deepEqual([...r.fresh], []);
+  });
+
+  test('a name holding the same thing is neither \u2014 the point is to narrow, not to light up', () => {
+    const r = changedSince(new Map([['a', '1']]), rows({ a: '1' }));
+    assert.equal(r.changed.size + r.fresh.size, 0);
+  });
+});
+
+describe('the report you paste into a bug', () => {
+  test('it carries the steps in order and the variables', () => {
+    const out = debugReport('Nightly', ['do mods.scan()', 'do notify(...)'],
+      [['count', 'num', '3']]);
+    assert.match(out, /Nightly/);
+    assert.match(out, /1\. do mods\.scan\(\)/);
+    assert.match(out, /2\. do notify/);
+    assert.match(out, /count \(num\) = 3/);
+  });
+
+  test('an empty session says so rather than printing two blank headings', () => {
+    const out = debugReport('T', [], []);
+    assert.match(out, /\(nothing ran\)/);
+    assert.match(out, /\(no variables\)/);
+  });
 });

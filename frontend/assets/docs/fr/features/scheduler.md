@@ -739,9 +739,28 @@ permissions, et s'arrête avant chacune pour te montrer ce que la tâche tient.
 
 | | |
 |---|---|
-| **Pas à pas** | Exécuter l'étape affichée, puis s'arrêter à nouveau. |
-| **Continuer** | Arrêter de s'arrêter. Le panneau continue d'afficher les variables qui changent. |
+| **Pas à pas** | Exécuter l'étape affichée, puis s'arrêter à nouveau. Pressez-le *pendant* une exécution pour reprendre pas à pas. |
+| **Continuer** | Arrêter de s'arrêter — ou aller jusqu'à la première étape correspondant au champ ci-dessous. Le panneau continue d'afficher les variables qui changent. |
+| **Copier** | Les étapes et les variables en texte, pour un rapport de bug. |
 | **Arrêter** | Terminer l'exécution ici. |
+
+**Continuer jusqu'à une étape mentionnant…** est le réglage entre les deux autres. Pas à pas
+avance d'une étape, Continuer va jusqu'au bout ; une tâche de cent étapes avec une seule
+branche suspecte, c'était le choix entre cent clics et aucun. Tapez n'importe quelle partie de
+la description d'une étape — un nom d'action, un id de mod — et Continuer s'arrête à la
+première étape qui la contient, puis vous rend la main. Laissez vide et Continuer veut dire ce
+qu'il a toujours voulu dire.
+
+**Ce qui a déjà tourné** liste chaque étape jusqu'ici, dans l'ordre. Le panneau n'affichait que
+l'étape courante, ce qui répond à « où suis-je » et pas à « comment suis-je arrivé là » — et
+c'est la seconde question qu'on se pose quand une tâche a pris une branche inattendue.
+
+Les noms qui viennent de **changer** sont surlignés, et ceux qui viennent d'**apparaître** le
+sont différemment : vingt lignes repeintes à l'identique cachent celle qui a bougé, et c'est
+la raison même de regarder.
+
+Le panneau se déplace par son en-tête — il est épinglé dans un coin, et ce coin est parfois
+exactement là où s'affiche l'étape qu'on lit.
 
 La liste de variables est l'essentiel. Un nom qui est à la fois du texte et un nombre apparaît
 une seule fois, marqué comme les deux — une capture écrit chacun, et deux lignes se liraient

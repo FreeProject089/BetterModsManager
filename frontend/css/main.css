@@ -19190,3 +19190,55 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
 .bmm-copy-cid:hover { color: var(--accent); }
 .bmm-copy-id svg,
 .bmm-copy-cid svg { opacity: .8; }
+
+
+/* The debugger's new parts (features/settings/sched-debug.ts).
+   The panel answers three questions now instead of one, so each has to be findable at a
+   glance rather than read for. */
+.dbg-head { cursor: grab; touch-action: none; }
+.dbg-head:active { cursor: grabbing; }
+.dbg-mode {
+    margin-left: auto;
+    margin-right: 6px;
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: var(--bmm-bg-active);
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+.dbg-mode.is-run { color: var(--warning); }
+
+.dbg-logwrap { border-top: 1px solid var(--border); }
+.dbg-logwrap > summary {
+    padding: 4px 10px;
+    font-size: 11px;
+    color: var(--text-muted);
+    cursor: pointer;
+}
+.dbg-log {
+    max-height: 130px;
+    overflow: auto;
+    margin: 0;
+    padding: 0 10px 6px 26px;
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+.dbg-log li { padding: 1px 0; }
+
+/* Changed since the last step. Without this, twenty rows repaint identically and the one
+   that moved — the reason anybody is watching — looks like the nineteen that did not. */
+.dbg-var.is-changed { background: color-mix(in srgb, var(--warning) 16%, transparent); }
+.dbg-var.is-new { background: color-mix(in srgb, var(--success) 16%, transparent); }
+.dbg-var.is-changed,
+.dbg-var.is-new { border-radius: 4px; }
+
+.dbg-brk {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border-top: 1px solid var(--border);
+}
+.dbg-brk label { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+.dbg-brk .input { flex: 1; min-width: 0; font-size: 11px; padding: 3px 7px; }

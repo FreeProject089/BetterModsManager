@@ -672,13 +672,30 @@ and stops before each one to show you what the task is holding.
 
 | | |
 |---|---|
-| **Step** | Run the step shown, then stop again. |
-| **Continue** | Stop stopping. The panel keeps showing variables as they change. |
+| **Step** | Run the step shown, then stop again. Press it *during* a run to go back to stepping. |
+| **Continue** | Stop stopping — or run to the first step matching the box below. The panel keeps showing variables as they change. |
+| **Copy** | The steps and the variables as text, for a bug report. |
 | **Stop** | End the run here. |
+
+**Run until the step mentions …** is the setting between the other two. Step is one at a time
+and Continue is all the way; a task with a hundred steps and one suspect branch used to be a
+choice between a hundred clicks and none. Type any part of a step's description — an action
+name, a mod id — and Continue stops at the first step that contains it, then hands you back
+control. Leave it empty and Continue means what it always did.
+
+**What already ran** lists every step so far, in order. The panel used to show the current step
+and nothing else, which answers "where am I" and not "how did I get here" — and the second is
+the question you have when a task took a branch you did not expect.
 
 The variable list is the point. A name that is both text and a number appears once, marked as
 both — a capture writes each, and two rows would read as two variables. A **shared** value shows
 only when nothing in this run claims the name, because that is the one substitution will use.
+Names that just **changed** are highlighted, and names that just **appeared** are highlighted
+differently: twenty rows repainted identically hide the one that moved, which is the reason
+anybody is watching.
+
+The panel can be dragged by its header — it is pinned to a corner, and the corner is sometimes
+exactly where the step you are reading is drawn.
 
 !!! note "It is the real run"
 
