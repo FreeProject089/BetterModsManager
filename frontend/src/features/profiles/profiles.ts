@@ -3,6 +3,7 @@
  * profiles.js — Profile management
  */
 import { invoke, pickFolder } from '../../core/api.js';
+import { copyIdButtons, wireCopyIds } from '../../core/copy-id.js';
 import { actAttrs } from '../../core/inline-actions.js';
 import { isPackIcon, renderPackIcon, ensurePackFor, openIconPicker } from '../../ui/icon-pack.js';
 import { toast, updateLibraryProfileSelector } from '../../ui/app.js';
@@ -933,6 +934,7 @@ export async function renderProfiles() {
           ${p.game_name ? `<div style="font-family:var(--font-mono);font-weight:600;font-size:10px;padding:2px 8px;border-radius:4px;background:${escAttr(brandColor)}15;color:${escAttr(brandColor)};border:1px solid ${escAttr(brandColor)}30;align-self:flex-start;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%">${escHtml(t(p.game_name) || p.game_name)}</div>` : ''}
         </div>
       </div>
+      <div class="profile-card-ids">${copyIdButtons('profile', p.id, { compact: true, doc: { game_name: p.game_name, active_mods: p.active_mods || [] } })}</div>
       <div class="profile-card-paths" style="margin-bottom:16px;background:rgba(255,255,255,0.015);padding:10px 12px;border-radius:8px;border:1px solid var(--border)">
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
           <span class="clickable-label btn-open-path" data-path="${escAttr(p.game_path)}" style="font-size:11px;color:var(--text-secondary);width:110px;flex-shrink:0;text-transform:uppercase;letter-spacing:0.04em">${t('prof.gameDirLabel')}</span>
@@ -993,6 +995,7 @@ export async function renderProfiles() {
       </div>
       </div>
     `;
+        wireCopyIds(card, toast);
         grid.appendChild(card);
         applyTranslations(card);
     });

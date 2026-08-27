@@ -7,6 +7,7 @@ import {
     readOrigins, originLabel, forgetOrigin, enabledOnly, isDisabled, setDisabled, recordHistory,
     looksLikeIndex, importIndexForType, describeKinds } from '../catalogs/catalog-index.js';
 import { showConfirm } from '../../ui/confirm.js';
+import { copyIdButtons, wireCopyIds } from '../../core/copy-id.js';
 import { bundleEntryKind, resolveBundleEntry } from '../../core/catalog-bundle.js';
 import { draftFromCatalog as parseCatalog, draftProblems as problemsOf } from './catalog-draft.js';
 import { writeSources } from '../catalogs/catalog-sources.js';
@@ -1785,6 +1786,13 @@ function openDetailModal(appId: string) {
 
     // Info table rows
     const infoRows = [
+        // The two ids. In the detail modal rather than on the card: a browse grid is for
+        // choosing, and "which exact entry is this" is a question you ask once you have.
+        `<div class="adm-info-row">
+            <div class="adm-info-icon">${IC.link}</div>
+            <div class="adm-info-label">${escHtml(t('copyid.label') || 'Ids')}</div>
+            <div class="adm-info-value">${copyIdButtons('app', app.id, { compact: true, doc: { download: app.download } })}</div>
+          </div>`,
         app.requirements ? `<div class="adm-info-row">
             <div class="adm-info-icon">${IC.info}</div>
             <div class="adm-info-label">${t('apps.requirements')||'Requirements'}</div>
@@ -1897,6 +1905,7 @@ function openDetailModal(appId: string) {
     </div>`;
 
     // ── Gallery ──
+    wireCopyIds(body, toast);
     body.querySelectorAll('.adm-thumb').forEach(thumb => {
         thumb.addEventListener('click', () => {
             (document.getElementById('adm-hero') as HTMLImageElement).src = (thumb as HTMLElement).dataset.src || '';

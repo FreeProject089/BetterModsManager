@@ -19604,3 +19604,15 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
 .repo-host-lede-p:last-child { margin-bottom: 0; }
 /* The sentence that stops three cards from being counted as steps. */
 .repo-host-lede-alt { color: var(--text-muted); font-size: 11.5px; }
+
+/* Id chips wherever a card carries them. Same two buttons, same place: with the name. */
+.profile-card-ids,
+.lp-card-ids {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    margin-top: 4px;
+}
+.profile-card-ids { margin-bottom: 10px; }
+.adm-info-value .bmm-copy-id,
+.adm-info-value .bmm-copy-cid { vertical-align: middle; }

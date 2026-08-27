@@ -9311,5 +9311,6 @@
   "repo.hostLede": "Hosting a repo is two things",
   "repo.hostLedeP": "First produce the <b>repo.json</b> that describes your mods, then let other people download it. Both steps are below, in that order.",
   "repo.hostLedeQ": "You can stop after step&nbsp;1 if you already have somewhere to put the folder — static hosting, a network share, anything that serves files. Step&nbsp;2 is for when you do not.",
-  "repo.hostLedeAlt": "Cards marked <b>ALTERNATIVE</b> are not extra steps: they are other ways of doing the one above them."
+  "repo.hostLedeAlt": "Cards marked <b>ALTERNATIVE</b> are not extra steps: they are other ways of doing the one above them.",
+  "copyid.label": "Ids"
 }

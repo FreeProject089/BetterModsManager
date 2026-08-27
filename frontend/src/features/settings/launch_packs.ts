@@ -2,6 +2,7 @@
  * launch_packs.ts — Management of application groups (Launch Packs)
  */
 import { invoke, pickFile } from '../../core/api.js';
+import { copyIdButtons, wireCopyIds } from '../../core/copy-id.js';
 import { t } from '../../core/i18n.js';
 import { toast } from '../../ui/app.js';
 import { escHtml } from '../../core/utils.js';
@@ -133,6 +134,7 @@ export async function renderLaunchPacks() {
                 <div style="flex:1; min-width:0;">
                     <div style="font-size:13px; font-weight:700; color:var(--text-bright); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escHtml(pack.name)}</div>
                     <div style="font-size:10px; color:var(--text-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${pack.executable_paths.length} ${t('settings.launchPackExes') || 'Apps'}</div>
+                    <div class="lp-card-ids">${copyIdButtons('launchpack', pack.id, { compact: true, doc: { executable_paths: pack.executable_paths || [] } })}</div>
                 </div>
                 <div style="display:flex; gap:8px;">
                     <button class="btn btn-primary btn-xs btn-run-lp" data-id="${pack.id}">${t('settings.launchPackRun')}</button>
@@ -142,6 +144,7 @@ export async function renderLaunchPacks() {
                 </div>
             `;
 
+            wireCopyIds(card, toast);
             container.appendChild(card);
         });
 
