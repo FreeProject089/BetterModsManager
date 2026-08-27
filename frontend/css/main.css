@@ -19810,3 +19810,90 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
     font-size: 11px;
     color: var(--error);
 }
+
+/* The debugger's post-mortem half. A failing task used to close this panel, so the values
+   at the moment of failure were only ever visible in a toast that did not have them. */
+.dbg-count {
+    font-size: 10px;
+    font-family: var(--font-mono, monospace);
+    color: var(--text-muted);
+    margin-left: auto;
+    padding-right: 6px;
+    white-space: nowrap;
+}
+.dbg-fail {
+    margin: 0;
+    padding: 8px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--error);
+    background: rgba(239, 68, 68, .1);
+    border-bottom: 1px solid var(--error);
+    word-break: break-word;
+}
+.dbg-panel.is-failed .dbg-step { color: var(--text-muted); }
+.dbg-log li.is-failed {
+    color: var(--error);
+    font-weight: 700;
+}
+.dbg-log li.is-failed::marker { color: var(--error); }
+
+/* One variable's whole trail, opened by clicking its name. */
+.dbg-trail {
+    border-top: 1px solid var(--border);
+    background: var(--bg-secondary);
+    max-height: 190px;
+    display: flex;
+    flex-direction: column;
+}
+.dbg-trail-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    font-size: 11px;
+}
+.dbg-trail-head code {
+    font-weight: 700;
+    color: var(--accent);
+}
+.dbg-trail-head span { color: var(--text-muted); }
+.dbg-trail-x {
+    margin-left: auto;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 15px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 2px;
+}
+.dbg-trail-x:hover { color: var(--text-primary); }
+.dbg-trail-list {
+    margin: 0;
+    padding: 0 10px 8px;
+    list-style: none;
+    overflow-y: auto;
+    font-size: 11px;
+}
+.dbg-trail-list li {
+    display: flex;
+    gap: 8px;
+    padding: 2px 0;
+    border-top: 1px solid var(--border);
+}
+.dbg-trail-step {
+    flex: 0 0 auto;
+    font-family: var(--font-mono, monospace);
+    color: var(--text-muted);
+}
+.dbg-trail-val {
+    flex: 1;
+    min-width: 0;
+    font-family: var(--font-mono, monospace);
+    color: var(--text-primary);
+    word-break: break-all;
+}
+/* The name is now a question you can click, so it has to look like one. */
+.dbg-k { cursor: pointer; }
+.dbg-k:hover { text-decoration: underline; }

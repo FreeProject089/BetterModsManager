@@ -44,6 +44,27 @@ interface Session {
     ctx: RunCtx | null;
     /** Substring filter over the variable names. */
     filter: string;
+    /**
+     * Every value each variable has held, and the step number that left it there.
+     *
+     * "It is empty NOW" is half an answer; the question is which step emptied it. The
+     * panel could only ever show the present and a one-step highlight, so answering that
+     * meant stepping the whole task again and watching one row.
+     */
+    history: Map<string, { step: number; value: string }[]>;
+    /** How many steps have been gated. The history's x-axis, and worth showing by itself. */
+    steps: number;
+    /** Wall clock, so a step that took nine seconds is visible as one. */
+    startedAt: number;
+    lastStepAt: number;
+    /**
+     * Set when the run threw. The panel STAYS, showing this and the values at that moment.
+     *
+     * It used to be torn down in the runner's `finally` — so the one moment a debugger
+     * exists for was the one moment its window was already gone, and all you had was a
+     * toast with the message in it.
+     */
+    failed: string;
     /** The last snapshot, so the next one can say what CHANGED rather than just what is. */
     seen: Map<string, string>;
     /**
@@ -77,19 +98,31 @@ export function startDebug(taskId: string, taskName: string): void {
     _session = {
         taskId, taskName, mode: 'step', release: null, stopped: false, panel: null,
         log: [], seen: new Map(), breakOn: '', ctx: null, filter: '',
+        history: new Map(), steps: 0, startedAt: Date.now(), lastStepAt: Date.now(),
+        failed: '',
     };
     openPanel(taskName);
 }
 
 /**
- * Does this step's label match what we are running to?
+ * Does this step's label match anything we are running to?
  *
- * Case-insensitive substring. An empty needle never matches, so "Continue" with the box
- * blank means what it has always meant — run to the end.
+ * Case-insensitive substring, and now a COMMA-SEPARATED LIST. One needle was the wrong
+ * shape for the question people actually have: a task usually has two or three places
+ * worth stopping at, and one box meant running the task once per place.
+ *
+ * An empty needle never matches, so "Continue" with the box blank means what it has always
+ * meant — run to the end. Blank entries between commas are dropped for the same reason:
+ * `download,,upload` must not become "stop at everything".
  */
 export function hitsBreakpoint(label: string, needle: string): boolean {
-    const n = needle.trim().toLowerCase();
-    return !!n && label.toLowerCase().includes(n);
+    const hay = label.toLowerCase();
+    return breakpointList(needle).some((n) => hay.includes(n));
+}
+
+/** The needles in a breakpoint box, lowercased, blanks dropped. */
+export function breakpointList(needle: string): string[] {
+    return needle.split(',').map((x) => x.trim().toLowerCase()).filter(Boolean);
 }
 
 /**
@@ -113,6 +146,45 @@ export function changedSince(
 }
 
 /**
+ * Append this step's values to each variable's trail.
+ *
+ * Only what CHANGED is recorded. A run holding twenty variables over two hundred steps
+ * would otherwise store four thousand identical entries, and the trail somebody opens to
+ * find the one step that mattered would be a wall of the same value.
+ *
+ * The cap drops the OLDEST entries. A variable that changed a thousand times is being
+ * changed in a loop, and the end of that loop is where the wrong value came from.
+ */
+export function recordHistory(
+    history: Map<string, { step: number; value: string }[]>,
+    step: number,
+    rows: [string, string, string][],
+    cap = 60,
+): void {
+    for (const [k, , v] of rows) {
+        let trail = history.get(k);
+        if (!trail) { trail = []; history.set(k, trail); }
+        if (trail.length && trail[trail.length - 1].value === v) continue;
+        trail.push({ step, value: v });
+        if (trail.length > cap) trail.splice(0, trail.length - cap);
+    }
+}
+
+/**
+ * What a thrown thing says, trimmed to something a panel can hold.
+ *
+ * An Error's `message` and not its `toString`, because "Error: " in front of every failure
+ * is noise on a line that has one job. Anything that is not an Error is printed as it is —
+ * a task can throw a string, and hiding it behind "unknown error" would lose the only
+ * description there was.
+ */
+export function failLine(err: unknown): string {
+    const raw = err instanceof Error ? (err.message || err.name) : String(err);
+    const one = raw.replace(/\s+/g, ' ').trim();
+    return one.length > 400 ? `${one.slice(0, 400)}\u2026` : (one || 'error');
+}
+
+/**
  * The session as text, for pasting into a bug report.
  *
  * Everything somebody would otherwise retype out of a screenshot, in an order that reads:
@@ -122,6 +194,7 @@ export function debugReport(
     taskName: string,
     log: { label: string; done: boolean }[],
     rows: [string, string, string][],
+    failed = '',
 ): string {
     // The mark says which step the run is standing on, which is the first thing anybody
     // reading a pasted report wants to know.
@@ -131,15 +204,49 @@ export function debugReport(
     const vars = rows.length
         ? rows.map(([k, kind, v]) => `${k} (${kind}) = ${v}`).join('\n')
         : '(no variables)';
-    return `BMM debug — ${taskName}\n\nSteps\n${steps}\n\nVariables\n${vars}\n`;
+    // First, because it is the reason the report exists when there is one. A reader who
+    // has to scroll past two hundred steps to find out whether it failed will not.
+    const head = failed ? `BMM debug — ${taskName}\nFAILED: ${failed}\n` : `BMM debug — ${taskName}\n`;
+    return `${head}\nSteps\n${steps}\n\nVariables\n${vars}\n`;
 }
 
-/** Tear the session down. Safe to call twice. */
+/**
+ * The run threw. Keep the window open on the moment it did.
+ *
+ * Called from the runner's catch, BEFORE its `finally` tears the session down. That order
+ * was the bug: a failing task closed the debugger and left a toast, so the one moment
+ * somebody opens a debugger for — "it broke, what was it holding" — was the one moment the
+ * variables were already gone.
+ *
+ * The session stops being a gate immediately (nothing can wait on it, nothing can hang);
+ * only the panel survives, and only to be read.
+ */
+export function failDebug(err: unknown): void {
+    const s = _session;
+    if (!s || s.failed) return;
+    s.failed = failLine(err);
+    // The step it was standing on is the one that threw. It is already the only entry
+    // without a tick, which is now also what the red mark hangs on.
+    paintFailure(s);
+}
+
+/**
+ * Tear the session down. Safe to call twice.
+ *
+ * A FAILED session detaches — the runner can no longer reach it, so nothing waits on a
+ * button that resolves nothing — but its panel stays until the person closes it.
+ */
 export function endDebug(): void {
     if (!_session) return;
     // Release anything still waiting, or the run hangs forever holding a lock nobody can see.
     _session.release?.();
+    _session.release = null;
+    if (_session.failed) {
+        _session = null;   // detached: `debugging()` is false, the panel is just a document
+        return;
+    }
     _session.panel?.remove();
+    detachKeys();
     _session = null;
 }
 
@@ -163,6 +270,8 @@ export async function gate(taskId: string, label: string, ctx: RunCtx): Promise<
     s.log.push({ label, done: false });
     if (s.log.length > 500) s.log.splice(0, s.log.length - 500);
     s.ctx = ctx;
+    s.steps++;
+    s.lastStepAt = Date.now();
     paint(s, label, ctx);
     if (s.mode === 'run') {
         if (!hitsBreakpoint(label, s.breakOn)) return;
@@ -209,8 +318,10 @@ function openPanel(taskName: string): void {
             <b>${escHtml(t('sched.dbg.title'))}</b>
             <span class="dbg-task">${escHtml(taskName)}</span>
             <span class="dbg-mode" id="dbg-mode">${escHtml(t('sched.dbg.modeStep'))}</span>
+            <span class="dbg-count" id="dbg-count" title="${escHtml(t('sched.dbg.countTip'))}">0</span>
             <button type="button" class="dbg-x" id="dbg-stop" title="${escHtml(t('sched.dbg.stop'))}">&times;</button>
         </div>
+        <div class="dbg-fail" id="dbg-fail" hidden></div>
         <div class="dbg-step" id="dbg-step">${escHtml(t('sched.dbg.waiting'))}</div>
         <details class="dbg-logwrap" id="dbg-logwrap">
             <summary>${escHtml(t('sched.dbg.log'))} <span id="dbg-logn">0</span></summary>
@@ -221,10 +332,11 @@ function openPanel(taskName: string): void {
                 placeholder="${escHtml(t('sched.dbg.filter'))}" spellcheck="false">
         </div>
         <div class="dbg-vars" id="dbg-vars"></div>
+        <div class="dbg-trail" id="dbg-trail" hidden></div>
         <div class="dbg-brk">
             <label for="dbg-break">${escHtml(t('sched.dbg.breakOn'))}</label>
             <input class="input" id="dbg-break" type="text"
-                placeholder="${escHtml(t('sched.dbg.breakOnPh'))}"
+                placeholder="${escHtml(t('sched.dbg.breakOnPhMulti'))}"
                 title="${escHtml(t('sched.dbg.breakOnTip'))}">
         </div>
         <div class="dbg-foot">
@@ -268,6 +380,16 @@ function openPanel(taskName: string): void {
     // task, running it again, and hoping the world cooperates.
     //
     // Delegated, because the rows are rebuilt on every step.
+    // Clicking the NAME asks "how did it get like that": every value it has held, and the
+    // step that left it there. Distinct from clicking the VALUE, which edits it — one row,
+    // two questions, and they were both worth having.
+    el.querySelector('#dbg-vars')?.addEventListener('click', (e) => {
+        const k = (e.target as HTMLElement).closest('.dbg-k') as HTMLElement | null;
+        if (k) { showTrail(s, k.textContent || ''); return; }
+    });
+    el.querySelector('#dbg-trail')?.addEventListener('click', (e) => {
+        if ((e.target as HTMLElement).closest('.dbg-trail-x')) hideTrail(s);
+    });
     el.querySelector('#dbg-vars')?.addEventListener('click', (e) => {
         const v = (e.target as HTMLElement).closest('.dbg-v') as HTMLElement | null;
         if (!v || !s.ctx || v.querySelector('input')) return;
@@ -304,7 +426,7 @@ function openPanel(taskName: string): void {
     });
     el.querySelector('#dbg-copy-btn')?.addEventListener('click', (e) => {
         const btn = e.currentTarget as HTMLButtonElement;
-        const text = debugReport(s.taskName, s.log, _lastRows);
+        const text = debugReport(s.taskName, s.log, _lastRows, s.failed);
         void navigator.clipboard.writeText(text).then(
             () => flash(btn, t('sched.dbg.copied')),
             () => flash(btn, t('common.error')),
@@ -314,6 +436,107 @@ function openPanel(taskName: string): void {
     el.querySelector('#dbg-stop')?.addEventListener('click', stop);
     el.querySelector('#dbg-stop-btn')?.addEventListener('click', stop);
     dragBy(el, el.querySelector('#dbg-head') as HTMLElement);
+    attachKeys(s);
+}
+
+/**
+ * F10 steps, F5 continues.
+ *
+ * The two most-pressed buttons in the panel were the two that required moving a hand off
+ * the keyboard, on a screen whose whole purpose is pressing one of them a hundred times.
+ * The same keys every debugger has used for thirty years, so nobody has to learn them.
+ *
+ * Nothing is bound to Escape: it closes modals all over BMM, and a key that sometimes stops
+ * a debug run and sometimes shuts a dialog behind it is worse than no key.
+ */
+let _keyHandler: ((e: KeyboardEvent) => void) | null = null;
+
+function attachKeys(s: Session): void {
+    detachKeys();
+    _keyHandler = (e: KeyboardEvent) => {
+        if (!_session || _session !== s || s.failed) return;
+        // Never while somebody is typing — the filter and the breakpoint box are inputs, and
+        // a debugger that steps when you type an F in a search field is a broken one.
+        const el = document.activeElement as HTMLElement | null;
+        if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
+        if (e.key === 'F10') {
+            e.preventDefault();
+            s.mode = 'step';
+            markMode(s);
+            s.release?.();
+        } else if (e.key === 'F5') {
+            e.preventDefault();
+            s.mode = 'run';
+            markMode(s);
+            s.release?.();
+        }
+    };
+    document.addEventListener('keydown', _keyHandler, true);
+}
+
+function detachKeys(): void {
+    if (_keyHandler) document.removeEventListener('keydown', _keyHandler, true);
+    _keyHandler = null;
+}
+
+/** Show one variable's whole trail: every value, and the step that left it there. */
+function showTrail(s: Session, name: string): void {
+    const box = s.panel?.querySelector('#dbg-trail') as HTMLElement | null;
+    if (!box) return;
+    const trail = s.history.get(name) || [];
+    box.hidden = false;
+    box.innerHTML = `
+        <div class="dbg-trail-head">
+            <code>${escHtml(name)}</code>
+            <span>${escHtml((t('sched.dbg.trailN') || '{n} value(s)').replace('{n}', String(trail.length)))}</span>
+            <button type="button" class="dbg-trail-x" aria-label="${escHtml(t('common.close'))}">&times;</button>
+        </div>
+        ${trail.length
+            ? `<ol class="dbg-trail-list">${trail.map((h) => `
+                <li><span class="dbg-trail-step">#${h.step}</span>
+                    <span class="dbg-trail-val">${escHtml(h.value.length > 200 ? `${h.value.slice(0, 200)}\u2026` : h.value)}</span></li>`).join('')}</ol>`
+            : `<p class="dbg-none">${escHtml(t('sched.dbg.trailNone'))}</p>`}`;
+    (box.querySelector('.dbg-trail-list') as HTMLElement | null)?.scrollTo(0, 1e6);
+}
+
+function hideTrail(s: Session): void {
+    const box = s.panel?.querySelector('#dbg-trail') as HTMLElement | null;
+    if (box) { box.hidden = true; box.innerHTML = ''; }
+}
+
+/**
+ * Repaint the panel as a post-mortem.
+ *
+ * Everything that would advance the run goes, because there is no run left to advance. What
+ * stays is everything that can be READ: the step it died on, the values it was holding, the
+ * trail behind each of them, and Copy.
+ */
+function paintFailure(s: Session): void {
+    const el = s.panel;
+    if (!el) return;
+    detachKeys();
+    const fail = el.querySelector('#dbg-fail') as HTMLElement | null;
+    if (fail) {
+        fail.hidden = false;
+        fail.textContent = `${t('sched.dbg.failed')} — ${s.failed}`;
+    }
+    el.classList.add('is-failed');
+    const mode = el.querySelector('#dbg-mode') as HTMLElement | null;
+    if (mode) { mode.textContent = t('sched.dbg.failedShort'); mode.classList.remove('is-run'); }
+    // The step it stopped on is already the one without a tick. Marked red so a two-hundred
+    // entry log does not have to be scanned for the absence of a character.
+    const logEl = el.querySelector('#dbg-log') as HTMLElement | null;
+    logEl?.querySelector('.is-here')?.classList.add('is-failed');
+    for (const id of ['#dbg-step-btn', '#dbg-run-btn']) {
+        const b = el.querySelector(id) as HTMLButtonElement | null;
+        if (b) b.disabled = true;
+    }
+    const stopBtn = el.querySelector('#dbg-stop-btn') as HTMLButtonElement | null;
+    if (stopBtn) stopBtn.textContent = t('common.close');
+    // The breakpoint box and the step keys mean nothing now; the filter still does, because
+    // finding one variable among forty is exactly what a post-mortem is for.
+    const brk = el.querySelector('.dbg-brk') as HTMLElement | null;
+    if (brk) brk.hidden = true;
 }
 
 /** The rows of the last paint, so Copy reports what is on screen rather than re-deriving. */
@@ -395,7 +618,15 @@ function paint(s: Session, label: string, ctx: RunCtx): void {
     // Computed HERE and not in repaintVars: typing in the filter must not count as the task
     // changing something, and neither must your own edit.
     const { changed, fresh } = changedSince(s.seen, rows);
+    recordHistory(s.history, s.steps, rows);
     s.seen = new Map(rows.map(([k, , v]) => [k, v]));
+    const countEl = s.panel?.querySelector('#dbg-count') as HTMLElement | null;
+    if (countEl) {
+        // Steps and seconds. A step that took nine of them is a fact the panel could not
+        // show at all, and it is usually the step somebody is looking for.
+        const secs = Math.round((Date.now() - s.startedAt) / 1000);
+        countEl.textContent = `${s.steps} · ${secs}s`;
+    }
     _lastMarks = { changed, fresh };
     repaintVars(s);
 }
@@ -422,7 +653,7 @@ function repaintVars(s: Session): void {
             const mark = fresh.has(k) ? ' is-new' : changed.has(k) ? ' is-changed' : '';
             const short = v.length > 200 ? `${v.slice(0, 200)}…` : v;
             return `<div class="dbg-var${mark}">
-               <code class="dbg-k">${escHtml(k)}</code>
+               <code class="dbg-k" title="${escHtml(t('sched.dbg.trailTip'))}">${escHtml(k)}</code>
                <span class="dbg-t">${escHtml(kind)}</span>
                <span class="dbg-v" data-name="${escHtml(k)}" data-raw="${escHtml(v)}"
                      title="${escHtml(t('sched.dbg.editTip') || v)}">${escHtml(short)}</span>

@@ -26,7 +26,7 @@ import { treeOf, foldersOf, renderTree } from './block-tree.js';
 import { showConfirm } from '../../ui/confirm.js';
 import { reasonNotRunning } from './sched-why.js';
 import { planOf, previewAgainst } from './sched-preview.js';
-import { debugging, gate, startDebug, endDebug, DebugStopped } from './sched-debug.js';
+import { debugging, gate, startDebug, endDebug, failDebug, DebugStopped } from './sched-debug.js';
 import { parsePresetFeed, looksLikePresetFeed, readPresetCatalogs, writePresetCatalogs } from './preset-catalog.js';
 import { mountCompletions } from './bmms-complete.js';
 import { attachHighlight } from '../../ui/code-editor.js';
@@ -4606,7 +4606,15 @@ function renderModal(modal: HTMLElement): void {
             if (e instanceof DebugStopped) toast(t('sched.dbg.ended'), 'info');
             else if (e instanceof _StopTask) toast(`${t('sched.stopped') || 'stopped'}${(e as any).reason ? `: ${(e as any).reason}` : ''}`, 'info');
             else if (e instanceof _CancelledTask) toast(t('sched.run.cancelled') || 'stopped by you', 'info');
-            else toast(`${t('sched.testFail') || 'Test run failed'} — ${e}`, 'error');
+            else {
+                // Before the `finally` below, which used to be the whole story: a failing
+                // task closed the debugger and left a toast, so the one moment somebody
+                // opens a debugger FOR — it broke, what was it holding — was the one moment
+                // the values were already gone. failDebug keeps the panel on that moment;
+                // endDebug then detaches the session so nothing can wait on it.
+                failDebug(e);
+                toast(`${t('sched.testFail') || 'Test run failed'} — ${e}`, 'error');
+            }
         } finally {
             // In the finally for the same reason runTask's is: a test that threw must not
             // leave a row in the panel with a Stop button that does nothing.
