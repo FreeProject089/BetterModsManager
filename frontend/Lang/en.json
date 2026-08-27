@@ -9036,5 +9036,19 @@
   "sched.kw.wait": "Pause for a while: `wait 30s`, `wait 5m`.",
   "sched.kw.waitfor": "Pause until a condition holds, or until the timeout runs out.",
   "sched.kw.week": "Part of `every week on <day>`.",
-  "sched.kw.while": "`repeat while <cond>` — keep going while the condition is TRUE."
+  "sched.kw.while": "`repeat while <cond>` — keep going while the condition is TRUE.",
+  "sched.trEvent": "When BMM does something",
+  "sched.trEventNone": "When BMM does something — no event picked",
+  "sched.trEventCustomPh": "… or a name of your own (a webhook rings the same ring)",
+  "sched.trEventHint": "What the event carried arrives as {event.…} — for a missing mod, {event.id} and {event.name}. A typed name wins over the list.",
+  "sched.ev.bmm.mod.missing": "a mod a pack needs is not installed",
+  "sched.ev.bmm.mod.corrupt": "a mod's files do not match what they should be",
+  "sched.ev.bmm.modpack.applied": "a modpack finished applying",
+  "sched.ev.bmm.modpack.incomplete": "a modpack applied with something missing or corrupt",
+  "sched.ev.bmm.repo.syncFailed": "a repo sync failed",
+  "sched.ev.bmm.repo.synced": "a repo finished syncing",
+  "sched.ev.bmm.profile.activated": "a profile became the active one",
+  "sched.ev.bmm.error": "anything BMM reported as an error",
+  "sched.kw.file": "Part of `on file \"…\"` — the trigger that fires when that file changes.",
+  "sched.kw.event": "Part of `on event \"…\"` — the trigger that fires when BMM rings that name."
 }

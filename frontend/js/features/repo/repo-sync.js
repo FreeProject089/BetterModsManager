@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { invoke } from '../../core/api.js';
+import { fireEvent } from '../../core/bmm-events.js';
 import { registerRepoSyncOpener } from './auto-sync.js';
 import { toast, updateLibraryProfileSelector } from '../../ui/app.js';
 import { t } from '../../core/i18n.js';
@@ -838,6 +839,7 @@ export function initRepoSync(elements) {
             }
             catch (err) {
                 const errMsg = String(err);
+                fireEvent('bmm.repo.syncFailed', { url: String(url || ''), error: errMsg.slice(0, 400) });
                 // Handle common connection errors more gracefully
                 if (errMsg.includes('tcp connect error') || errMsg.includes('connection refused')) {
                     toast(t('repo.errConnection') || 'Unable to connect to server. Check the URL and ensure the server is running.', 'error');
@@ -1003,6 +1005,7 @@ export function initRepoSync(elements) {
                     }
                 }
                 showSyncSummary(summary);
+                fireEvent('bmm.repo.synced', { url: String(url || '') });
                 syncStatus.textContent = t('repo.syncDone');
                 toast(t('repo.syncSuccess') || "Synchronization completed successfully", "success");
                 syncPercent.textContent = "100%";

@@ -6,6 +6,7 @@
  * optional ServerRepo link, SHA-256 identification for cross-PC recognition.
  */
 import { invoke } from '../../core/api.js';
+import { fireEvent } from '../../core/bmm-events.js';
 import { toast, toastSaved } from '../../ui/app.js';
 import { t } from '../../core/i18n.js';
 import { dispatchBmmAction, BMM_ACTIONS } from '../../ui/tutorial-events.js';
@@ -1056,6 +1057,28 @@ function _openMultiSelectModal(listEl) {
 
 
 async function _showRepairModal(container, pack, report, onComplete) {
+    // Told to whoever is listening, before the modal opens.
+    //
+    // This is the moment an automation actually wants: the pack was applied and something is
+    // missing or corrupt. Waiting for the person to read the modal and click something would
+    // mean the task only ever runs when somebody is already fixing it by hand — which is the
+    // one case where the task is not needed.
+    //
+    // One event per mod, so a task repairing them gets the id it needs rather than a count.
+    for (const m of report.missingMods || []) {
+        fireEvent('bmm.mod.missing', { id: m.mod_id, name: m.mod_name || m.mod_id, pack: pack?.name || '', packId: pack?.id || '' });
+    }
+    for (const m of report.corruptedMods || []) {
+        fireEvent('bmm.mod.corrupt', { id: m.mod_id, name: m.mod_name || m.mod_id, pack: pack?.name || '', packId: pack?.id || '' });
+    }
+    if ((report.missingMods || []).length || (report.corruptedMods || []).length) {
+        fireEvent('bmm.modpack.incomplete', {
+            pack: pack?.name || '', packId: pack?.id || '',
+            missing: (report.missingMods || []).length,
+            corrupt: (report.corruptedMods || []).length,
+        });
+    }
+
     const activeProfileId = _activeProfileId || window.cachedActiveProfileId;
     if (!activeProfileId) {
         toast((window.t ? window.t('common.error') : 'No active profile'), "error");

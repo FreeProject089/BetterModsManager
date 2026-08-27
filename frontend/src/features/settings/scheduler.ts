@@ -20,6 +20,7 @@ import { parseHeaderLines, readJsonPath, statusIsFailure } from './http-action.j
 import { inspectBmmpa } from './bmmpa-inspect.js';
 import { BMMS_INDEX, type BmmsEntry } from '../../docs/bmms-reference.gen.js';
 import { outlineOf, offsetOfLine, renderOutline, explain, wordAtPoint, type OutlineRow } from './bmms-editor-aids.js';
+import { BMM_EVENTS, fireEvent, noteTaskRunning } from '../../core/bmm-events.js';
 import { parsePresetFeed, looksLikePresetFeed, readPresetCatalogs, writePresetCatalogs } from './preset-catalog.js';
 import { mountCompletions } from './bmms-complete.js';
 import { attachHighlight } from '../../ui/code-editor.js';
@@ -60,6 +61,22 @@ type Trigger =
     // just joined a server" into something an automation can hang off, and it is not
     // DCS-specific: point it at any log, any save, any file a program touches.
     | { type: 'watchFile'; path: string }
+    /**
+     * Fires when BMM itself does something.
+     *
+     * The other triggers all watch the OUTSIDE: a clock, a file somebody else wrote. This one
+     * watches BMM — a mod that turned out to be missing while a modpack was being applied, a
+     * sync that failed, an error somebody saw.
+     *
+     * Those moments were previously observable only by the person sitting there. A task that
+     * repairs a broken install is useless if it can only find out on a timer, because by then
+     * the person has already given up and fixed it by hand.
+     *
+     * Built on the same hook ring as `wait.hook` and `bmm://hook`: BMM rings a hook named
+     * `bmm.<something>`, and this polls it. One mechanism, so an event and a webhook are the
+     * same kind of thing and everything that works for one works for the other.
+     */
+    | { type: 'onEvent'; event: string }
     | { type: 'manual' };                                           // only via Run button / deeplink
 
 interface Action { type: string; params: Record<string, any>; }
@@ -555,12 +572,45 @@ async function watchFired(task: Task): Promise<boolean> {
     return seen !== stamp;
 }
 
+/**
+ * The last event each task has already acted on.
+ *
+ * Per task rather than per event name: two tasks watching `bmm.mod.missing` must both see it,
+ * and a shared marker would give it to whichever polled first.
+ *
+ * Seeded on the first poll, like the file watch: a task enabled at 10:00 should not run for
+ * everything that happened at 09:00, which is what somebody arming a task means by arming it.
+ */
+const _eventSeen = new Map<string, number>();
+
+/** The event data of the hit that fired the current run, handed to the task as variables. */
+const _eventData = new Map<string, Record<string, unknown>>();
+
+async function eventFired(task: Task): Promise<boolean> {
+    const tr = task.trigger as { type: 'onEvent'; event: string };
+    const name = String(tr.event || '').trim();
+    if (!name) return false;
+    const since = _eventSeen.get(task.id);
+    const now = Date.now();
+    if (since === undefined) { _eventSeen.set(task.id, now); return false; }
+    const hits = await (invoke('hook_poll', { name, since: since + 1 }) as Promise<any[]>).catch(() => []);
+    if (!hits.length) return false;
+    // The LAST one. A burst of five missing mods in one modpack should run the repair task
+    // once with the most recent, not five times racing each other over the same folder.
+    const last = hits[hits.length - 1];
+    _eventSeen.set(task.id, Number(last?.at) || now);
+    _eventData.set(task.id, (last && typeof last.data === 'object' && last.data) || {});
+    return true;
+}
+
 async function tick(): Promise<void> {
     const now = new Date();
     for (const task of _tasks) {
         if (!task.enabled) continue;
         if (task.trigger.type === 'watchFile') {
             if (!(await watchFired(task))) continue;
+        } else if (task.trigger.type === 'onEvent') {
+            if (!(await eventFired(task))) continue;
         } else if (!isDue(task, now)) continue;
         if (task.trigger.type === 'appStart') _appStartFired.add(task.id);
         if (task.trigger.type === 'once') _onceFired.add(task.id);
@@ -718,6 +768,7 @@ async function syncOsSchedule(task: Task): Promise<void> {
 
 async function runTask(task: Task): Promise<void> {
     const t0 = Date.now();
+    noteTaskRunning(1);
     // Registered BEFORE the first step, so a task that fails immediately still appears in
     // the panel long enough to be seen, and a task started twice is visible as such.
     _running.set(task.id, {
@@ -737,6 +788,21 @@ async function runTask(task: Task): Promise<void> {
         // which is the least debuggable kind of difference. A var.set inside THIS run
         // updates the snapshot as well as the store, so a later step sees its own write.
         const ctx: RunCtx = { nums: {}, text: {}, shared: readSharedVars() };
+        // What the event carried, as `{event.<key>}`.
+        //
+        // Prefixed rather than merged: an event describing a mod as `id` must not quietly
+        // become whatever the task's own `id` variable means two steps later. The whole value
+        // of an event trigger is knowing WHICH mod, so it has to arrive under a name that
+        // cannot be shadowed by accident.
+        const evd = _eventData.get(task.id);
+        if (evd) {
+            for (const [k, v] of Object.entries(evd)) {
+                if (v === null || typeof v === 'object') continue;
+                ctx.text[`event.${k}`] = String(v);
+                if (typeof v === 'number') ctx.nums[`event.${k}`] = v;
+            }
+            _eventData.delete(task.id);
+        }
         await runSteps(task.steps, task, ctx);
         task.lastResult = 'ok';
         toast(`${t('sched.ran') || 'Ran'}: ${task.name}`, 'success');
@@ -756,6 +822,10 @@ async function runTask(task: Task): Promise<void> {
             toast(`${task.name} — ${e}`, 'error');
         }
     } finally {
+        // Paired with the increment above, in the finally for the same reason the panel entry
+        // is: a task that threw must not leave the app thinking it is still running, or every
+        // error toast after it would be swallowed as "that task's failure" forever.
+        noteTaskRunning(-1);
         // In a finally: a task that threw must not stay in the panel as "running" forever,
         // which is the state that makes a Stop button appear broken.
         _running.delete(task.id);
@@ -2910,6 +2980,8 @@ function triggerIcon(tr: Trigger): string {
         case 'weeklyAt':
         case 'monthlyAt': return P('<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>');
         case 'watchFile': return P('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><circle cx="12" cy="15" r="2"/>');
+        // A bell: BMM telling you, rather than you going to look.
+        case 'onEvent': return P('<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>');
         case 'appStart':  return P('<path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/>');
         case 'manual':    return P('<path d="M18 11V6a2 2 0 0 0-4 0v5"/><path d="M14 10V4a2 2 0 0 0-4 0v2"/><path d="M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/>');
     }
@@ -3218,6 +3290,10 @@ function triggerLabel(tr: Trigger): string {
             return name
                 ? `${t('sched.trWatch') || 'When a file changes'}: ${name}`
                 : (t('sched.trWatchNoPath') || 'When a file changes — no file picked');
+        }
+        case 'onEvent': {
+            const ev = String(tr.event || '').trim();
+            return ev ? `${t('sched.trEvent')}: ${ev}` : t('sched.trEventNone');
         }
         case 'manual': return t('sched.trManual') || 'Manual only';
     }
@@ -4265,6 +4341,7 @@ function renderTriggerEditor(host: HTMLElement): void {
         ['once',      t('sched.trOnce')    || 'Once at date/time'],
         ['appStart',  t('sched.trAppStart')|| 'On BMM start'],
         ['watchFile', t('sched.trWatch')   || 'When a file changes'],
+        ['onEvent',   t('sched.trEvent')],
         ['manual',    t('sched.trManual')  || 'Manual only'],
     ];
     host.innerHTML = `
@@ -4285,6 +4362,7 @@ function renderTriggerEditor(host: HTMLElement): void {
         else if (v === 'monthlyAt') _draft.trigger = { type: 'monthlyAt', day: 1, time: '08:00' };
         else if (v === 'once') _draft.trigger = { type: 'once', at: new Date(Date.now() + 3600000).toISOString().slice(0, 16) };
         else if (v === 'watchFile') _draft.trigger = { type: 'watchFile', path: '' };
+        else if (v === 'onEvent') _draft.trigger = { type: 'onEvent', event: 'bmm.mod.missing' };
         else if (v === 'manual') _draft.trigger = { type: 'manual' };
         else _draft.trigger = { type: 'appStart' };
         renderTriggerEditor(host);
@@ -4293,6 +4371,26 @@ function renderTriggerEditor(host: HTMLElement): void {
     const ph = host.querySelector('#sched-tr-params') as HTMLElement;
     // Any param change (time, minutes, day…) refreshes the header summary live.
     ph.addEventListener('input', () => { const m = document.getElementById('modal-scheduler'); if (m) refreshSummary(m); });
+    if (tr.type === 'onEvent') {
+        ph.innerHTML = `
+            <select class="input" id="sched-tr-ev" data-csel-search="1" style="max-width:100%">
+                ${BMM_EVENTS.map((e) => `<option value="${escAttr(e)}"${tr.event === e ? ' selected' : ''}>${escAttr(e)} — ${escHtml(t('sched.ev.' + e))}</option>`).join('')}
+            </select>
+            <input class="input" id="sched-tr-ev-custom" spellcheck="false" style="margin-top:6px"
+                placeholder="${escAttr(t('sched.trEventCustomPh'))}" value="${escAttr(BMM_EVENTS.includes(tr.event) ? '' : (tr.event || ''))}">
+            <p class="sched-hint">${escHtml(t('sched.trEventHint'))}</p>`;
+        ph.querySelector('#sched-tr-ev')?.addEventListener('change', (e) => {
+            (_draft.trigger as any).event = (e.target as HTMLSelectElement).value;
+            const custom = ph.querySelector('#sched-tr-ev-custom') as HTMLInputElement | null;
+            if (custom) custom.value = '';
+        });
+        // A name typed here WINS over the dropdown, because somebody typing one is naming
+        // something the list does not have — which is the whole reason the field is there.
+        ph.querySelector('#sched-tr-ev-custom')?.addEventListener('input', (e) => {
+            const v = (e.target as HTMLInputElement).value.trim();
+            if (v) (_draft.trigger as any).event = v;
+        });
+    }
     if (tr.type === 'interval') {
         ph.innerHTML = `<input type="number" class="input" id="sched-tr-min" min="1" value="${tr.everyMinutes}" style="max-width:120px"> ${t('sched.unitMin') || 'min'}`;
         ph.querySelector('#sched-tr-min')?.addEventListener('input', (e) => { (_draft.trigger as any).everyMinutes = parseInt((e.target as HTMLInputElement).value) || 1; });

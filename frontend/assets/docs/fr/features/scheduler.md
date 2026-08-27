@@ -677,6 +677,54 @@ Coche **Un code de sortie non nul est un résultat, pas un échec** et il arrive
 `{script.code}`, avec `{text.script.stdout}` et `{text.script.stderr}` gardés séparément. Ne
 pas *démarrer* reste une erreur : il n'y a alors aucun code de sortie et rien n'a tourné.
 
+## Quand BMM lui-même fait quelque chose
+
+Tous les autres déclencheurs regardent l'extérieur : une horloge, un fichier écrit par un autre
+programme. Celui-ci regarde BMM.
+
+| Événement | Part quand |
+|---|---|
+| `bmm.mod.missing` | Un mod dont un pack a besoin n'est pas installé. Un événement par mod. |
+| `bmm.mod.corrupt` | Les fichiers d'un mod ne correspondent pas à ce qu'ils devraient être. |
+| `bmm.modpack.incomplete` | Un pack s'est appliqué avec du manquant ou du corrompu. |
+| `bmm.repo.synced` · `bmm.repo.syncFailed` | Une synchro a fini, ou pas. |
+| `bmm.profile.activated` | Un profil est devenu l'actif. |
+| `bmm.error` | Tout ce que BMM a signalé comme une erreur. |
+
+Ce que porte l'événement arrive en `{event.…}`. Pour un mod manquant : `{event.id}`,
+`{event.name}` et `{event.pack}` — c'est la différence entre une tâche qui sait qu'un mod manque
+et une tâche qui peut aller le chercher.
+
+```bmms
+task "Réparation" {
+    on event "bmm.mod.missing"
+
+    print "{event.name} manque dans {event.pack}"
+    do mod.add(url: "https://…/{event.id}.zip", name: "{event.name}")
+}
+```
+
+!!! note "C'est le même anneau qu'un webhook"
+
+    Les événements sonnent les hooks qu'utilisent déjà `wait.hook`, `bmm://hook` et
+    `POST /api/hook`. Une tâche peut donc attendre un événement BMM exactement comme elle attend
+    quelque chose d'extérieur, le déclencheur accepte un nom à toi, et tout ce qui marche pour
+    l'un marche pour l'autre.
+
+!!! warning "`bmm.error` ne part pas pendant qu'une tâche tourne"
+
+    Volontairement. Une tâche déclenchée par `bmm.error` qui échoue lèverait un toast d'erreur,
+    qui ferait partir `bmm.error`, qui la relancerait — indéfiniment, sans que rien nulle part
+    ne l'explique, parce que chaque étape prise séparément se comporte correctement.
+
+    Une erreur levée pendant qu'une tâche tourne est l'échec de cette tâche. Il est déjà dans
+    son journal et dans le panneau d'exécution, et c'est là qu'il a sa place.
+
+Une tâche armée à 10h ne part pas pour ce qui s'est passé à 9h : le premier sondage apprend où
+en est l'anneau, et agit à partir de là. Et une rafale — cinq mods manquants dans un pack —
+lance la tâche **une fois**, avec le plus récent, au lieu de cinq fois à se courir après sur le
+même dossier.
+
 ## Quel mod gagne un fichier partagé
 
 BMM déploie en copiant les fichiers dans le jeu : deux mods actifs qui livrent le même chemin ne

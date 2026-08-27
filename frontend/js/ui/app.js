@@ -24,6 +24,7 @@ import { initSettings, runAutoBenchmarks } from '../features/settings/settings.j
 import { initModals } from './modals.js';
 import { wireTipDismissal, restoreAllTips } from './dismissible-tip.js';
 import { registerBmmsLanguage } from '../features/settings/bmms-prism.js';
+import { fireErrorEvent } from '../core/bmm-events.js';
 import { initNavbarVersion, initUpdateNotes, initAutoUpdate, checkPtbMode, checkAutoEula, checkAutoPrivacy, checkShowReleaseNotes, checkLangSelect } from './update-notes.js';
 // New Modularized Imports
 import { initModlist } from '../features/mods/modlist.js';
@@ -186,6 +187,16 @@ export function toast(message, type = 'info', duration = 3000, icon = '', source
         recordNotification(String(message ?? ''), type, source);
     }
     catch { /* never let history break a message */ }
+    // And told to any task waiting for one. Here for the same reason the record is here:
+    // every error in BMM comes through this function, so this is one call instead of a
+    // hundred — and it covers the failures nobody thought to instrument, which are exactly
+    // the ones worth reacting to.
+    if (type === 'error') {
+        try {
+            fireErrorEvent(String(message ?? ''), source);
+        }
+        catch { /* same rule */ }
+    }
     // Muted: the message is still RECORDED above, so the notification centre keeps every
     // word — what is switched off is the popup, not the information. Errors are never muted:
     // an error nobody is shown and nobody looks for is an app that failed silently.

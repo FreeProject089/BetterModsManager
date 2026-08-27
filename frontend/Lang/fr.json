@@ -9034,5 +9034,19 @@
   "sched.kw.wait": "Faire une pause : `wait 30s`, `wait 5m`.",
   "sched.kw.waitfor": "Attendre qu'une condition tienne, ou que le délai expire.",
   "sched.kw.week": "Fait partie de `every week on <jour>`.",
-  "sched.kw.while": "`repeat while <cond>` — continuer tant que la condition est VRAIE."
+  "sched.kw.while": "`repeat while <cond>` — continuer tant que la condition est VRAIE.",
+  "sched.trEvent": "Quand BMM fait quelque chose",
+  "sched.trEventNone": "Quand BMM fait quelque chose — aucun événement choisi",
+  "sched.trEventCustomPh": "… ou un nom à toi (un webhook sonne le même anneau)",
+  "sched.trEventHint": "Ce que porte l'événement arrive en {event.…} — pour un mod manquant, {event.id} et {event.name}. Un nom tapé l'emporte sur la liste.",
+  "sched.ev.bmm.mod.missing": "un mod dont un pack a besoin n'est pas installé",
+  "sched.ev.bmm.mod.corrupt": "les fichiers d'un mod ne correspondent pas à ce qu'ils devraient être",
+  "sched.ev.bmm.modpack.applied": "un modpack a fini de s'appliquer",
+  "sched.ev.bmm.modpack.incomplete": "un modpack s'est appliqué avec du manquant ou du corrompu",
+  "sched.ev.bmm.repo.syncFailed": "une synchro de repo a échoué",
+  "sched.ev.bmm.repo.synced": "un repo a fini de se synchroniser",
+  "sched.ev.bmm.profile.activated": "un profil est devenu l'actif",
+  "sched.ev.bmm.error": "tout ce que BMM a signalé comme une erreur",
+  "sched.kw.file": "Fait partie de `on file \"…\"` — le déclencheur qui part quand ce fichier change.",
+  "sched.kw.event": "Fait partie de `on event \"…\"` — le déclencheur qui part quand BMM sonne ce nom."
 }

@@ -1188,10 +1188,20 @@ impl P {
             if self.eat_word("app") && self.eat_word("start") {
                 return Ok(json!({ "type": "appStart" }));
             }
+            // `on file "C:\\path\\to\\thing.log"`
+            if self.eat_word("file") {
+                let path = self.string("the path to watch")?;
+                return Ok(json!({ "type": "watchFile", "path": path }));
+            }
+            // `on event "bmm.mod.missing"`
+            if self.eat_word("event") {
+                let event = self.string("the event name")?;
+                return Ok(json!({ "type": "onEvent", "event": event }));
+            }
             let got = self.peek().clone();
             return Err(Diagnostic::at(
                 &got,
-                "The only `on` trigger is `on app start`.",
+                "After `on`, expected `app start`, `file \"…\"` or `event \"…\"`.",
             ));
         }
         // every …
@@ -1913,6 +1923,12 @@ fn trigger_str(tr: &Value) -> String {
         "interval" => format!("every {}m", n("everyMinutes") as i64),
         "once" => format!("once at {}", quote(&s("at"))),
         "appStart" => "on app start".to_string(),
+        // These two were printing as `manual`, which is not a wrong word — it is a task that
+        // stops firing. A watch or an event task written in the editor, opened in code and
+        // saved back came out DISARMED, with nothing to notice: `manual` is a legitimate
+        // trigger, so nothing errored and nothing looked wrong.
+        "watchFile" => format!("on file {}", quote(&s("path"))),
+        "onEvent" => format!("on event {}", quote(&s("event"))),
         _ => "manual".to_string(),
     }
 }
@@ -2105,6 +2121,47 @@ mod tests {
             compile(r#"task "T" { every month on 1 at 00:00 }"#)["trigger"]["day"],
             1
         );
+    }
+
+    /// EVERY trigger has to survive a round trip, or opening a task in code disarms it.
+    ///
+    /// `watchFile` and `onEvent` were printing as `manual`. That is not a wrong word, it is a
+    /// task that stops firing — and nothing notices, because `manual` is a legitimate
+    /// trigger, so nothing errors and nothing on screen looks wrong.
+    ///
+    /// Written as a loop over every type rather than as one case each: the next trigger
+    /// somebody adds fails HERE, instead of silently becoming manual in the field.
+    #[test]
+    fn every_trigger_survives_being_printed_and_read_back() {
+        let cases: &[(&str, serde_json::Value)] = &[
+            ("manual", json!({ "type": "manual" })),
+            ("appStart", json!({ "type": "appStart" })),
+            ("interval", json!({ "type": "interval", "everyMinutes": 30 })),
+            ("hourly", json!({ "type": "hourly", "everyHours": 2 })),
+            ("dailyAt", json!({ "type": "dailyAt", "time": "03:00" })),
+            ("weeklyAt", json!({ "type": "weeklyAt", "time": "08:00", "days": [1] })),
+            ("monthlyAt", json!({ "type": "monthlyAt", "day": 1, "time": "00:00" })),
+            ("once", json!({ "type": "once", "at": "2026-01-01T09:00" })),
+            ("watchFile", json!({ "type": "watchFile", "path": "C:/games/dcs.log" })),
+            ("onEvent", json!({ "type": "onEvent", "event": "bmm.mod.missing" })),
+        ];
+        for (name, trigger) in cases {
+            let task = json!({ "name": "T", "trigger": trigger, "steps": [] });
+            let printed = bmms_decompile(task);
+            let back = compile(&printed);
+            assert_eq!(
+                back["trigger"]["type"], trigger["type"],
+                "{} printed as `{}` and came back as {}",
+                name, printed.trim(), back["trigger"]["type"]
+            );
+            // The type alone is not enough: `on file` with no path is still a watchFile, and
+            // still a task that watches nothing.
+            for key in ["path", "event", "time", "at", "everyMinutes", "everyHours", "day"] {
+                if let Some(want) = trigger.get(key) {
+                    assert_eq!(&back["trigger"][key], want, "{} lost its {}", name, key);
+                }
+            }
+        }
     }
 
     /// `print` is sugar, and sugar has to survive the printer or the editor eats it.

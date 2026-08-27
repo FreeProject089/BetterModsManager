@@ -16,7 +16,7 @@ export const BMMS_REFERENCE: { en: string; fr: string } = {
  * behind the language: a statement added to the compiler shows up here on the next
  * regeneration, and CI fails if somebody forgets.
  */
-export const BMMS_KEYWORDS: string[] = ["allow","and","app","at","branch","break","call","case","catch","clear","continue","day","default","describe","disabled","do","else","ensure","every","for","if","in","manual","month","not","on","once","or","orcontinue","parallel","poll","print","repeat","run","script","set","settle","shared","spawn","start","stop","switch","task","timeout","times","try","until","wait","waitfor","week","while"];
+export const BMMS_KEYWORDS: string[] = ["allow","and","app","at","branch","break","call","case","catch","clear","continue","day","default","describe","disabled","do","else","ensure","event","every","file","for","if","in","manual","month","not","on","once","or","orcontinue","parallel","poll","print","repeat","run","script","set","settle","shared","spawn","start","stop","switch","task","timeout","times","try","until","wait","waitfor","week","while"];
 
 /**
  * The same reference, as data rather than a page.

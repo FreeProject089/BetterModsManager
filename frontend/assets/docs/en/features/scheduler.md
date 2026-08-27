@@ -613,6 +613,52 @@ Tick **A non-zero exit is a result, not a failure** and it lands in `{script.cod
 `{text.script.stdout}` and `{text.script.stderr}` kept apart. Failing to *start* is still an
 error, because then there is no exit code and nothing ran.
 
+## When BMM itself does something
+
+Every other trigger watches the outside: a clock, a file another program wrote. This one
+watches BMM.
+
+| Event | Fires when |
+|---|---|
+| `bmm.mod.missing` | A mod a pack needs is not installed. One event per mod. |
+| `bmm.mod.corrupt` | A mod's files do not match what they should be. |
+| `bmm.modpack.incomplete` | A pack applied with something missing or corrupt. |
+| `bmm.repo.synced` · `bmm.repo.syncFailed` | A sync finished, or did not. |
+| `bmm.profile.activated` | A profile became the active one. |
+| `bmm.error` | Anything BMM reported as an error. |
+
+What the event carried arrives as `{event.…}`. For a missing mod that is `{event.id}`,
+`{event.name}` and `{event.pack}` — which is the difference between a task that knows a mod is
+missing and one that can go and fetch it.
+
+```bmms
+task "Repair" {
+    on event "bmm.mod.missing"
+
+    print "{event.name} is missing from {event.pack}"
+    do mod.add(url: "https://…/{event.id}.zip", name: "{event.name}")
+}
+```
+
+!!! note "It is the same ring as a webhook"
+
+    Events ring the hooks `wait.hook`, `bmm://hook` and `POST /api/hook` already use. So a task
+    can wait on a BMM event exactly the way it waits on something outside, the trigger accepts
+    a name of your own, and anything built for one works for the other.
+
+!!! warning "`bmm.error` does not fire while a task is running"
+
+    Deliberately. A task triggered by `bmm.error` that itself fails would raise an error toast,
+    which would fire `bmm.error`, which would run it again — forever, with nothing anywhere
+    explaining it, because every individual step behaved correctly.
+
+    An error raised while a task is running is that task's failure. It is already in its log and
+    in the running panel, and it belongs there.
+
+A task armed at 10:00 does not run for what happened at 09:00: the first poll learns where the
+ring is, and acts from then on. And a burst — five missing mods in one pack — runs the task
+**once**, with the most recent, rather than five times racing each other over the same folder.
+
 ## Which mod wins a shared file
 
 BMM deploys by copying files into the game, so two active mods that ship the same path do not
