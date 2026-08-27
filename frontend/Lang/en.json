@@ -8793,5 +8793,18 @@
   "sched.catEmpty": "nothing to publish for \"{k}\" — no catalogue was written",
   "sched.catBundled": "Packed into {f}.",
   "repo.extras.openTask": "Add this automation? It arrives disabled and with no permissions.",
-  "repo.extras.taskAdded": "{n} automation(s) added, disabled."
+  "repo.extras.taskAdded": "{n} automation(s) added, disabled.",
+  "sched.ssh.target": "Which saved server",
+  "sched.ssh.targetHint": "Saved in Server Repo → Publish over SSH. The host, user and key are never parameters here — a task that could name them could make BMM read a key of its choosing and ship a repo to a machine of its choosing.",
+  "sched.ssh.targetDefault": "The default one ({n})",
+  "sched.ssh.targetMissing": "{n} — no longer saved",
+  "sched.ssh.none": "No SSH server saved yet — set one up in Server Repo first, or this step has nothing to reach.",
+  "sched.act.repo.manifest": "Rebuild a repo's manifest (unattended)",
+  "sched.actd.repo.manifest": "Reads the folder, rewrites repo.json, and reports what changed. Pairs with Publish over SSH as the next step.",
+  "sched.rm.dir": "1. The repo folder",
+  "sched.rm.dirHint": "The folder whose subdirectories are the mods. repo.json is written beside it, not inside — so a later scan never picks the manifest up as one of the mod files.",
+  "sched.rm.name": "2. Repo name (optional)",
+  "sched.rm.author": "3. Author (optional)",
+  "sched.rm.noDir": "no folder given — no manifest was written",
+  "sched.rm.done": "{n} mod(s) indexed — {a} added, {c} changed, {r} REMOVED"
 }

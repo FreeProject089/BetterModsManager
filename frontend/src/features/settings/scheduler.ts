@@ -2041,12 +2041,48 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
             _captureOutput(p, (summary as any)?.installed ?? '', ctx);
             break;
         }
+        // Rewrite repo.json for a folder that is already hosted.
+        //
+        // Real, not a deeplink: it reads the directory, writes one file and returns the diff,
+        // which is exactly what a nightly "the folder changed, refresh the index" wants — and
+        // it pairs with `repo.publishSsh` as the next step.
+        case 'repo.manifest': {
+            const dir = String(p.dir || '').trim();
+            if (!dir) { toast(`${task.name}: ${t('sched.rm.noDir')}`, 'warning', 8000); break; }
+            // The field names are the Rust struct's — `author`, not `author_name`, which is
+            // what I wrote first. serde would have dropped the unknown key silently and the
+            // manifest would have been published with no author on it.
+            const report = await invoke('generate_repo_manifest', {
+                args: {
+                    mods_dir: dir,
+                    name: String(p.name || '') || null,
+                    author: String(p.author || '') || null,
+                },
+            }) as { mods: number; added: string[]; removed: string[]; changed: string[] };
+            ctx.nums['manifest.mods'] = report.mods;
+            ctx.nums['manifest.added'] = report.added.length;
+            ctx.nums['manifest.removed'] = report.removed.length;
+            ctx.nums['manifest.changed'] = report.changed.length;
+            // `removed` is the one worth reading. A mistyped path and a deliberate removal
+            // both write a perfectly valid manifest — one of them describing an empty server.
+            toast(`${task.name}: ${t('sched.rm.done')
+                .replace('{n}', String(report.mods))
+                .replace('{a}', String(report.added.length))
+                .replace('{r}', String(report.removed.length))
+                .replace('{c}', String(report.changed.length))}`,
+                report.removed.length ? 'warning' : 'success', report.removed.length ? 12000 : 8000);
+            break;
+        }
         case 'repo.gen':         dl('repo/gen'); break;
         case 'repo.update':      dl('repo/update', { dir: p.dir }); break;
         case 'repo.host':        dl('repo/host', { dir: p.dir, port: p.port }); break;
         case 'repo.publishSsh': {
             const { publishStoredTarget } = await import('../repo/repo-ssh.js');
-            const sent = await publishStoredTarget(String(p.dir || ''));
+            // WHICH server. BMM has held several named targets for a while and this action
+            // always used the first one, so somebody with a staging box and a live box could
+            // publish to exactly one of them from a task — and could not tell which.
+            const sent = await publishStoredTarget(String(p.dir || ''), String(p.target || '') || undefined);
+            ctx.nums['ssh.files'] = sent;
             _captureOutput(p, String(sent), ctx);
             break;
         }
@@ -2055,7 +2091,8 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
         // standing consent, and a prompt at 04:00 is a task that never finishes.
         case 'repo.fetchSsh': {
             const { pullStoredTarget } = await import('../repo/repo-ssh.js');
-            const got = await pullStoredTarget(String(p.dir || ''));
+            const got = await pullStoredTarget(String(p.dir || ''), String(p.target || '') || undefined);
+            ctx.nums['ssh.files'] = got;
             _captureOutput(p, String(got), ctx);
             break;
         }
@@ -5012,6 +5049,10 @@ const ACTION_TYPES: { v: string; label: string; needs?: string; group: string }[
     { v: 'repo.gen', label: 'Generate repo', group: 'repo' },
     { v: 'repo.update', label: 'Update repo', needs: 'repoUpdate', group: 'repo' },
     { v: 'repo.host', label: 'Host repo (HTTP)', needs: 'repoHost', group: 'repo' },
+    // The repo action that actually RUNS unattended. `repo.gen`, `repo.update` and
+    // `repo.host` only open the screen prefilled, which is nothing at 3am; this rewrites
+    // repo.json for a folder that is already hosted, and returns what changed.
+    { v: 'repo.manifest', label: 'Rebuild a repo\'s manifest (unattended)', needs: 'repoManifest', group: 'repo' },
     // Uses the SSH target saved in Server Repo. A scheduled task cannot answer a passphrase
     // prompt at 04:00, so a key with one fails with a message instead of hanging forever.
     { v: 'repo.publishSsh', label: 'Publish repo over SSH', needs: 'repoSshDir', group: 'repo' },
@@ -5114,6 +5155,40 @@ const ACTION_TYPES: { v: string; label: string; needs?: string; group: string }[
  * `want` picks which of the three apply, because they are not all meaningful everywhere: a
  * catalogue has no passphrase, and a local file has no download password.
  */
+/**
+ * Which saved SSH server this step uses.
+ *
+ * Filled in after render because reading the targets is cheap but the list is not known when
+ * the markup is built. Blank means the one named `default`, and the option SAYS so rather
+ * than being an empty line that happens to mean something.
+ */
+function sshTargetField(params: Record<string, any>): string {
+    return `<div class="sched-field" style="margin-top:6px">
+        <label class="sched-flabel">${escHtml(t('sched.ssh.target'))}</label>
+        <select class="input sched-r-target" style="min-width:200px"></select>
+        <span class="sched-cmd-hint">${escHtml(t('sched.ssh.targetHint'))}</span>
+    </div>`;
+}
+
+async function fillSshTargets(host: HTMLElement, params: Record<string, any>): Promise<void> {
+    const sel = host.querySelector('.sched-r-target') as HTMLSelectElement | null;
+    if (!sel) return;
+    const { loadTargets, DEFAULT_TARGET } = await import('../repo/repo-ssh.js');
+    const names = Object.keys(loadTargets());
+    const chosen = String(params.target || '');
+    sel.innerHTML = `<option value="">${escHtml(t('sched.ssh.targetDefault').replace('{n}', DEFAULT_TARGET))}</option>`
+        + names.map((n) => `<option value="${escAttr(n)}"${n === chosen ? ' selected' : ''}>${escHtml(n)}</option>`).join('')
+        // A target the task names and that has since been deleted: shown as gone rather than
+        // silently falling back to `default`, which would publish to the wrong server.
+        + (chosen && !names.includes(chosen)
+            ? `<option value="${escAttr(chosen)}" selected>${escHtml(t('sched.ssh.targetMissing').replace('{n}', chosen))}</option>` : '');
+    if (!names.length) {
+        sel.insertAdjacentHTML('afterend',
+            `<span class="sched-cmd-hint">${escHtml(t('sched.ssh.none'))}</span>`);
+    }
+    sel.addEventListener('change', () => { params.target = sel.value; });
+}
+
 function credsFields(params: Record<string, any>, want: { password?: boolean; key?: boolean; passphrase?: boolean }): string {
     const rows: string[] = [];
     if (want.password) {
@@ -6075,11 +6150,33 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
     else if (needs === 'repoSync') host.innerHTML = `<input class="input sched-r-url" placeholder="${escAttr(t('sched.repoUrlPh') || 'repo.json URL')}" value="${escAttr(params.url || '')}" style="min-width:240px"><input class="input sched-r-prof" placeholder="${escAttr(t('sched.repoProfPh') || 'remote profile id')}" value="${escAttr(params.profile || '')}" style="max-width:180px;margin-left:6px">`;
     else if (needs === 'repoUpdate') host.innerHTML = `<input class="input sched-r-dir" placeholder="${escAttr(t('sched.repoDirPh') || 'repo folder')}" value="${escAttr(params.dir || '')}" style="min-width:240px"><button type="button" class="btn btn-sm btn-secondary sched-browse-dir" style="margin-left:6px">${t('sched.choose') || 'Choose…'}</button>`;
     else if (needs === 'repoHost') host.innerHTML = `<input class="input sched-r-dir" placeholder="${escAttr(t('sched.serveDirPh') || 'folder to serve')}" value="${escAttr(params.dir || '')}" style="min-width:220px"><button type="button" class="btn btn-sm btn-secondary sched-browse-dir" style="margin-left:6px">${t('sched.choose') || 'Choose…'}</button><input class="input sched-r-port" type="number" min="1" placeholder="port" value="${escAttr(params.port || '')}" style="max-width:100px;margin-left:6px">`;
-    else if (needs === 'repoSshDir') host.innerHTML = `<input class="input sched-r-dir" placeholder="${escAttr(t('sched.sshDirPh') || 'exported repo folder to publish')}" value="${escAttr(params.dir || '')}" style="min-width:260px"><button type="button" class="btn btn-sm btn-secondary sched-browse-dir" style="margin-left:6px">${t('sched.choose') || 'Choose…'}</button>`;
+    else if (needs === 'repoManifest') {
+        host.innerHTML = `<div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${escHtml(t('sched.rm.dir') || '1. The repo folder')}</label>
+            <div style="display:flex;gap:6px">
+                <input class="input sched-p-rmdir" spellcheck="false" style="flex:1" value="${escAttr(params.dir || '')}">
+                <button type="button" class="btn btn-xs btn-ghost sched-browse-rmdir">${escHtml(t('common.browse') || 'Browse')}</button>
+            </div>
+            <span class="sched-cmd-hint">${escHtml(t('sched.rm.dirHint') || '')}</span>
+            <label class="sched-cmd-label">${escHtml(t('sched.rm.name') || '2. Repo name (optional)')}</label>
+            <input class="input sched-p-rmname" spellcheck="false" style="max-width:260px" value="${escAttr(params.name || '')}">
+            <label class="sched-cmd-label">${escHtml(t('sched.rm.author') || '3. Author (optional)')}</label>
+            <input class="input sched-p-rmauthor" spellcheck="false" style="max-width:260px" value="${escAttr(params.author || '')}">
+        </div>`;
+    }
+    else if (needs === 'repoSshDir') {
+        host.innerHTML = `<input class="input sched-r-dir" placeholder="${escAttr(t('sched.sshDirPh') || 'exported repo folder to publish')}" value="${escAttr(params.dir || '')}" style="min-width:260px"><button type="button" class="btn btn-sm btn-secondary sched-browse-dir" style="margin-left:6px">${t('sched.choose') || 'Choose…'}</button>`
+            + sshTargetField(params);
+        void fillSshTargets(host, params);
+    }
     // Same shape as repoSshDir, different placeholder: this folder is the DESTINATION, and
     // reusing the "folder to publish" wording here is how somebody points a fetch at the
     // wrong directory and overwrites an export they had not published yet.
-    else if (needs === 'repoSshPullDir') host.innerHTML = `<input class="input sched-r-dir" placeholder="${escAttr(t('sched.sshPullDirPh') || 'local folder to fetch INTO')}" value="${escAttr(params.dir || '')}" style="min-width:260px"><button type="button" class="btn btn-sm btn-secondary sched-browse-dir" style="margin-left:6px">${t('sched.choose') || 'Choose…'}</button>`;
+    else if (needs === 'repoSshPullDir') {
+        host.innerHTML = `<input class="input sched-r-dir" placeholder="${escAttr(t('sched.sshPullDirPh') || 'local folder to fetch INTO')}" value="${escAttr(params.dir || '')}" style="min-width:260px"><button type="button" class="btn btn-sm btn-secondary sched-browse-dir" style="margin-left:6px">${t('sched.choose') || 'Choose…'}</button>`
+            + sshTargetField(params);
+        void fillSshTargets(host, params);
+    }
     else if (needs === 'appInstall') host.innerHTML = `<input class="input sched-a-id" placeholder="${escAttr(t('sched.appIdPh2') || 'app id')}" value="${escAttr(params.id || '')}" style="max-width:140px"><input class="input sched-a-url" placeholder="${escAttr(t('sched.appUrlPh') || 'download URL')}" value="${escAttr(params.url || '')}" style="min-width:220px;margin-left:6px"><input class="input sched-a-title" placeholder="${escAttr(t('sched.appTitlePh') || 'title (optional)')}" value="${escAttr(params.title || '')}" style="max-width:160px;margin-left:6px">`;
     else if (needs === 'mpCreate') host.innerHTML = `
         <div class="sched-field"><label class="sched-flabel">${t('sched.mpNameLbl') || 'Modpack name'}</label>
@@ -6223,6 +6320,16 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
     host.querySelector('.sched-p-listsep')?.addEventListener('input', (e) => { params.sep = (e.target as HTMLInputElement).value; });
     // text.extract / modlist.apply / dcs.hook. Same shape as everything else here: a
     // querySelector that finds nothing for the other action types binds nothing.
+    host.querySelector('.sched-p-rmdir')?.addEventListener('input', (e) => { params.dir = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-rmname')?.addEventListener('input', (e) => { params.name = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-rmauthor')?.addEventListener('input', (e) => { params.author = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-browse-rmdir')?.addEventListener('click', async () => {
+        const { pickFolder } = await import('../../core/api.js');
+        const d = await pickFolder().catch(() => null);
+        if (!d) return;
+        params.dir = d;
+        (host.querySelector('.sched-p-rmdir') as HTMLInputElement).value = String(d);
+    });
     host.querySelector('.sched-cat-bundle')?.addEventListener('change', (e) => { params.bundle = (e.target as HTMLInputElement).checked; });
     host.querySelector('.sched-p-impath')?.addEventListener('input', (e) => { params.path = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-p-imurl')?.addEventListener('input', (e) => { params.url = (e.target as HTMLInputElement).value; });
@@ -6423,6 +6530,13 @@ const VALUE_SOURCES = [
     // How many entries a publish wrote. Zero is the interesting number: a catalogue with
     // no entries looks published and installs nothing.
     'catalog.entries',
+    // How many files a publish or fetch moved. Zero from a publish means the folder was
+    // empty, which is what a failed export upstream looks like from here.
+    'ssh.files',
+    // What a manifest rebuild found. `removed` is the one worth a condition: a mistyped
+    // path and a deliberate removal both write a valid manifest, and only one of them
+    // describes an empty server.
+    'manifest.mods', 'manifest.added', 'manifest.removed', 'manifest.changed',
     // Written by http.request on every call, including a failed one. Listed here because
     // check-scheduler-vars caught that it was not: a value an action writes and no
     // condition can select is half a feature, and the half that is missing is the point —

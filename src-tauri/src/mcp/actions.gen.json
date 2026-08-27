@@ -145,6 +145,12 @@
       "group": "repo"
     },
     {
+      "type": "repo.manifest",
+      "label": "Rebuild a repo\\'s manifest (unattended)",
+      "needs": "repoManifest",
+      "group": "repo"
+    },
+    {
       "type": "repo.publishSsh",
       "label": "Publish repo over SSH",
       "needs": "repoSshDir",

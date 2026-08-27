@@ -8791,5 +8791,18 @@
   "sched.catEmpty": "rien à publier pour « {k} » — aucun catalogue écrit",
   "sched.catBundled": "Empaqueté dans {f}.",
   "repo.extras.openTask": "Ajouter cette automatisation ? Elle arrive désactivée et sans permissions.",
-  "repo.extras.taskAdded": "{n} automatisation(s) ajoutée(s), désactivée(s)."
+  "repo.extras.taskAdded": "{n} automatisation(s) ajoutée(s), désactivée(s).",
+  "sched.ssh.target": "Quel serveur enregistré",
+  "sched.ssh.targetHint": "Enregistré dans Server Repo → Publier par SSH. L'hôte, l'utilisateur et la clé ne sont jamais des paramètres ici — une tâche qui pourrait les nommer pourrait faire lire à BMM une clé de son choix et expédier un dépôt vers une machine de son choix.",
+  "sched.ssh.targetDefault": "Celui par défaut ({n})",
+  "sched.ssh.targetMissing": "{n} — n'est plus enregistré",
+  "sched.ssh.none": "Aucun serveur SSH enregistré — configures-en un dans Server Repo, sinon cette étape n'a rien à joindre.",
+  "sched.act.repo.manifest": "Reconstruire le manifeste d'un dépôt (sans surveillance)",
+  "sched.actd.repo.manifest": "Lit le dossier, réécrit repo.json, et rapporte ce qui a changé. Se combine avec Publier par SSH à l'étape suivante.",
+  "sched.rm.dir": "1. Le dossier du dépôt",
+  "sched.rm.dirHint": "Le dossier dont les sous-dossiers sont les mods. repo.json est écrit à côté, pas dedans — pour qu'un scan ultérieur ne prenne jamais le manifeste pour un fichier de mod.",
+  "sched.rm.name": "2. Nom du dépôt (facultatif)",
+  "sched.rm.author": "3. Auteur (facultatif)",
+  "sched.rm.noDir": "aucun dossier indiqué — aucun manifeste écrit",
+  "sched.rm.done": "{n} mod(s) indexé(s) — {a} ajouté(s), {c} modifié(s), {r} RETIRÉ(S)"
 }

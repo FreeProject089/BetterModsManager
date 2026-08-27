@@ -46,7 +46,10 @@ function arrayBlock(name) {
 // ── the registry ─────────────────────────────────────────────────────────────
 const actionBlock = arrayBlock('ACTION_TYPES');
 const actions = [];
-const reAction = /\{\s*v:\s*'([^']+)'\s*,\s*label:\s*'([^']*)'\s*(?:,\s*needs:\s*'([^']+)')?\s*,\s*group:\s*'([^']+)'\s*\}/g;
+// Escaped quotes included: `[^']*` stops at the backslash in a label like
+// `Rebuild a repo's manifest`, so that entry does not match and the count check below
+// fails — correctly refusing, but over a shape that is perfectly legal JavaScript.
+const reAction = /\{\s*v:\s*'((?:[^'\\]|\\.)+)'\s*,\s*label:\s*'((?:[^'\\]|\\.)*)'\s*(?:,\s*needs:\s*'([^']+)')?\s*,\s*group:\s*'([^']+)'\s*\}/g;
 for (let m; (m = reAction.exec(actionBlock)); ) {
   actions.push({ type: m[1], label: m[2], needs: m[3] || null, group: m[4] });
 }

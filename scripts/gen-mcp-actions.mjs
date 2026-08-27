@@ -27,7 +27,10 @@ const block = src.slice(start, end);
 // One entry per object literal. The registry is flat `{ v, label, needs?, group }` literals,
 // which is what makes this extraction safe; anything fancier would fail loudly below.
 const entries = [];
-const re = /\{\s*v:\s*'([^']+)'\s*,\s*label:\s*'([^']*)'\s*(?:,\s*needs:\s*'([^']+)')?\s*,\s*group:\s*'([^']+)'\s*\}/g;
+// Escaped quotes included: `[^']*` stops at the backslash in a label like
+// `Rebuild a repo's manifest`, so that entry does not match and the count check below
+// fails — correctly refusing, but over a shape that is perfectly legal JavaScript.
+const re = /\{\s*v:\s*'((?:[^'\\]|\\.)+)'\s*,\s*label:\s*'((?:[^'\\]|\\.)*)'\s*(?:,\s*needs:\s*'([^']+)')?\s*,\s*group:\s*'([^']+)'\s*\}/g;
 let m;
 while ((m = re.exec(block))) {
   entries.push({ type: m[1], label: m[2], needs: m[3] || null, group: m[4] });

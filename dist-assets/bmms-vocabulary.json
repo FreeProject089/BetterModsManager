@@ -160,17 +160,28 @@
       ]
     },
     {
+      "type": "repo.manifest",
+      "group": "repo",
+      "params": [
+        "dir",
+        "name",
+        "author"
+      ]
+    },
+    {
       "type": "repo.publishSsh",
       "group": "repo",
       "params": [
-        "dir"
+        "dir",
+        "target"
       ]
     },
     {
       "type": "repo.fetchSsh",
       "group": "repo",
       "params": [
-        "dir"
+        "dir",
+        "target"
       ]
     },
     {
@@ -732,6 +743,11 @@
     "script.ok",
     "import.count",
     "catalog.entries",
+    "ssh.files",
+    "manifest.mods",
+    "manifest.added",
+    "manifest.removed",
+    "manifest.changed",
     "http.status",
     "map.size",
     "map.hit"
