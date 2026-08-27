@@ -20,7 +20,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 // The pure module, not the screen: apps-catalog.js reaches `window` through its import
 // chain, so importing it here dies before a single assertion runs.
-const { draftFromCatalog, draftProblems } = await import(
+const { draftFromCatalog, draftProblems, entryProblems } = await import(
   pathToFileURL(join(ROOT, 'frontend/js/features/apps/catalog-draft.js')).href
 );
 
@@ -107,5 +107,43 @@ describe('what counts as plain http', () => {
   test('nothing at all is not http', () => {
     assert.equal(isPlainHttp(''), false);
     assert.equal(isPlainHttp(undefined), false);
+  });
+});
+
+
+describe('one entry, checked before it is saved', () => {
+  test('a chosen FILE is a source — it used to be reported as a missing URL', () => {
+    // The whole point of "use a file instead": the file is packed in when the catalogue is
+    // published as one file, and the address is written at that moment. Calling that "no
+    // download URL — every reader drops this entry silently" is alarming, wrong, and
+    // unfixable without undoing what the author meant to do.
+    const p = entryProblems(app({ download: { url: '' }, src_file: 'C:/dl/setup.exe' }), say);
+    assert.equal(p.filter((x) => x.key === 'apps.create.pbNoUrl').length, 0);
+    // It is still worth saying that a plain catalog.json names no address for it.
+    assert.equal(p.filter((x) => x.key === 'apps.create.pbFileOnly').length, 1);
+  });
+
+  test('neither an address nor a file IS the problem it always was', () => {
+    const p = entryProblems(app({ download: { url: '' } }), say);
+    assert.equal(p.filter((x) => x.key === 'apps.create.pbNoUrl').length, 1);
+    assert.equal(p.filter((x) => x.key === 'apps.create.pbFileOnly').length, 0);
+  });
+
+  test('an entry with an address says nothing at all', () => {
+    assert.deepEqual(entryProblems(app(), say), []);
+  });
+
+  test('each problem names the input that fixes it', () => {
+    const p = entryProblems({ id: '', title: '', download: { url: '' } }, say);
+    const fields = p.map((x) => x.field).sort();
+    assert.deepEqual(fields, ['dl-url', 'id', 'title']);
+  });
+
+  test('the page list and the editor cannot disagree, because one calls the other', () => {
+    // A file-only entry must not be a problem on the page either — that was the bug.
+    const draft = { name: 'c', description: '', partner_catalogs: [], community_imports: [],
+      apps: [app({ download: { url: '' }, src_file: 'C:/dl/a.exe' })] };
+    const said = draftProblems(draft, say);
+    assert.equal(said.filter((x) => x.includes('every reader drops')).length, 0);
   });
 });

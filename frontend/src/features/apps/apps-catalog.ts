@@ -9,7 +9,7 @@ import {
 import { showConfirm } from '../../ui/confirm.js';
 import { copyIdButtons, wireCopyIds } from '../../core/copy-id.js';
 import { bundleEntryKind, resolveBundleEntry } from '../../core/catalog-bundle.js';
-import { draftFromCatalog as parseCatalog, draftProblems as problemsOf } from './catalog-draft.js';
+import { draftFromCatalog as parseCatalog, draftProblems as problemsOf, entryProblems } from './catalog-draft.js';
 import { writeSources } from '../catalogs/catalog-sources.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { getLinks } from '../../core/links-config.js';
@@ -1261,7 +1261,11 @@ function renderCreate() {
         <p class="apps-sources-desc">${t('apps.create.desc')||'Build a catalog.json to share with others or host on GitHub.'}</p>
         <!-- Reopening one. The screen could only build from nothing, so publishing a
              catalogue was a one-way trip: a typo in one entry meant reassembling all of
-             them by hand, each with a URL, a size and a checksum. -->
+             them by hand, each with a URL, a size and a checksum.
+             Folded away: it is how a SECOND session starts, and it was sitting above the
+             first step competing with it for the eye of somebody who has never been here. -->
+        <details class="apps-create-reopen">
+        <summary>${escHtml(t('apps.create.reopen'))}</summary>
         <div class="apps-create-open">
           <button class="btn btn-xs btn-secondary" id="cr-open-file">${IC.folder} ${escHtml(t('apps.create.openFile') || 'Open a catalog.json…')}</button>
           <input class="apps-source-input apps-create-open-url" id="cr-open-url-input" type="text"
@@ -1277,20 +1281,24 @@ function renderCreate() {
              protected catalogue from here was the one place credentials could not be
              attached. -->
         ${sourceAccessHtml('appscreate')}
+        </details>
       </div>
 
+      <!-- Numbered, because this screen has an order and used to draw four identical
+           panels that did not say so. -->
       <div class="apps-create-section">
-        <label class="apps-install-label">${t('apps.create.catalogName')||'Catalog name'}</label>
+        <h4 class="apps-cr-step-h"><span>1</span>${escHtml(t('apps.create.stepName'))}</h4>
+        <label class="apps-install-label" for="cr-name">${t('apps.create.catalogName')||'Catalog name'}</label>
         <input class="apps-path-input" id="cr-name" type="text" placeholder="${escAttr(t('apps.create.namePh'))}" value="${escAttr(_draft.name)}">
-        <label class="apps-install-label" style="margin-top:10px">${t('apps.create.catalogDesc')||'Description'}</label>
+        <label class="apps-install-label apps-cr-gap" for="cr-desc">${t('apps.create.catalogDesc')||'Description'}</label>
         <input class="apps-path-input" id="cr-desc" type="text" placeholder="${escAttr(t('apps.create.descPh'))}" value="${escAttr(_draft.description)}">
       </div>
 
       <div class="apps-create-section">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-          <span class="apps-install-label">${t('apps.create.apps')||'Apps'} (${_draft.apps.length})</span>
-          <button class="btn btn-sm btn-accent" id="cr-add-app">${IC.plus} ${t('apps.create.addApp')||'Add app'}</button>
-        </div>
+        <h4 class="apps-cr-step-h"><span>2</span>${escHtml(t('apps.create.stepApps'))}
+          <span class="apps-cr-step-n">${_draft.apps.length}</span>
+          <button class="btn btn-sm btn-accent apps-cr-step-btn" id="cr-add-app">${IC.plus} ${t('apps.create.addApp')||'Add app'}</button>
+        </h4>
         <div id="cr-apps-list">
           ${_draft.apps.map((app, i) => `
           <div class="apps-create-app-row">
@@ -1316,20 +1324,38 @@ function renderCreate() {
         </div>
       </div>
 
-      <!-- Said before the export, not after somebody follows it. Never blocking: it is a
-           document, and a document with a problem in it is still the author's to publish. -->
-      ${problems.length ? `
-      <div class="apps-create-problems">
-        <span class="apps-create-problems-h">${escHtml((t('apps.create.problems') || '{n} thing(s) to look at').replace('{n}', String(problems.length)))}</span>
-        <ul>${problems.map(p => `<li>${escHtml(p)}</li>`).join('')}</ul>
-      </div>` : ''}
+      <div class="apps-create-section">
+        <h4 class="apps-cr-step-h"><span>3</span>${escHtml(t('apps.create.stepPublish'))}</h4>
 
-      <div class="apps-create-actions">
-        <button class="btn btn-ghost" id="cr-preview">${t('apps.create.preview')||'Preview JSON'}</button>
-        <button class="btn btn-accent" id="cr-copy">${t('apps.create.copy')||'Copy JSON'}</button>
-        <button class="btn btn-ghost" id="cr-download">${IC.download} ${t('apps.create.download')||'Download catalog.json'}</button>
-        <!-- The only one of these that needs no hosting afterwards. -->
-        <button class="btn btn-secondary" id="cr-bundle">${escHtml(t('apps.create.publishBundle') || 'Publish as one file (.bmmbundle)…')}</button>
+        <!-- Said before the export, not after somebody follows it, and beside the buttons
+             rather than three scroll-lengths above them. Never blocking: it is a document,
+             and a document with a problem in it is still the author's to publish. -->
+        ${problems.length ? `
+        <div class="apps-create-problems">
+          <span class="apps-create-problems-h">${escHtml((t('apps.create.problems') || '{n} thing(s) to look at').replace('{n}', String(problems.length)))}</span>
+          <ul>${problems.map(p => `<li>${escHtml(p)}</li>`).join('')}</ul>
+        </div>` : ''}
+
+        <!-- Two ways out, and they are NOT peers. One file needs no hosting at all; a
+             catalog.json needs somewhere to live and an address that stays alive. Four
+             buttons of equal weight in a row said nothing about that, so the choice that
+             decides whether you need a web host looked like a choice of file format. -->
+        <div class="apps-create-ways">
+          <div class="apps-create-way is-first">
+            <b>${escHtml(t('apps.create.wayBundle'))}</b>
+            <p>${escHtml(t('apps.create.wayBundleWhy'))}</p>
+            <button class="btn btn-accent" id="cr-bundle">${escHtml(t('apps.create.publishBundle') || 'Publish as one file (.bmmbundle)…')}</button>
+          </div>
+          <div class="apps-create-way">
+            <b>${escHtml(t('apps.create.wayJson'))}</b>
+            <p>${escHtml(t('apps.create.wayJsonWhy'))}</p>
+            <div class="apps-create-actions">
+              <button class="btn btn-secondary" id="cr-download">${IC.download} ${t('apps.create.download')||'Download catalog.json'}</button>
+              <button class="btn btn-ghost" id="cr-copy">${t('apps.create.copy')||'Copy JSON'}</button>
+              <button class="btn btn-ghost" id="cr-preview">${t('apps.create.preview')||'Preview JSON'}</button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div id="cr-json-preview" class="apps-create-json" style="display:none"></div>
@@ -1534,84 +1560,215 @@ function openAppEditor(index: number | null) {
     const existing = index !== null ? _draft.apps[index] : {};
     const body = document.getElementById('cr-app-body')!;
 
-    const field = (id: string, label: string, val: string, placeholder = '') =>
-        `<label class="apps-install-label">${label}</label>
-         <input class="apps-path-input" id="cr-${id}" type="text" value="${escAttr(val||'')}" placeholder="${escAttr(placeholder)}" style="margin-bottom:8px">`;
+    // A field, with the required ones SAID to be required. Fifteen inputs where three
+    // matter and twelve are the author's taste, all drawn identically, is most of why
+    // somebody gets lost in here.
+    const field = (id: string, label: string, val: string, placeholder = '', need = false) =>
+        `<label class="apps-install-label${need ? ' is-need' : ''}" for="cr-${id}">${label}</label>
+         <input class="apps-path-input" id="cr-${id}" type="text" value="${escAttr(val||'')}" placeholder="${escAttr(placeholder)}">`;
+
+    const hasFile = !!existing.src_file;
 
     body.innerHTML = `
-    <div class="apps-install-form">
+    <div class="apps-install-form apps-cr-form">
       <h3 class="apps-install-title">${index !== null ? (t('apps.create.editApp')||'Edit App') : (t('apps.create.addApp')||'Add App')}</h3>
-      ${field('id', t('apps.create.fId')||'ID (unique, no spaces)', existing.id||'', 'my-app-name')}
-      ${field('title', t('apps.create.fTitle')||'Title', existing.title||'', 'My App')}
-      <label class="apps-install-label">${t('apps.create.fDesc')||'Description'}</label>
-      <textarea class="apps-path-input" id="cr-description" rows="2" style="resize:vertical;margin-bottom:8px">${escHtml(existing.description||'')}</textarea>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-        <div>
-          <label class="apps-install-label">${t('apps.create.fCategory')||'Category'}</label>
-          <select class="apps-filter" id="cr-category" style="width:100%">
-            <option value="game"${existing.category==='game'?' selected':''}>${t('apps.cat.game')||'Game'}</option>
-            <option value="utility"${existing.category==='utility'||!existing.category?' selected':''}>${t('apps.cat.utility')||'Utility'}</option>
-            <option value="other"${existing.category==='other'?' selected':''}>${t('apps.cat.other')||'Other'}</option>
-          </select>
+
+      <!-- Three steps, in the order the answers actually arrive: what it is, where it comes
+           from, then how it looks. The last one used to sit in the MIDDLE — ten cosmetic
+           fields between the title and the only decision on this screen. -->
+      <section class="apps-cr-step">
+        <h4 class="apps-cr-step-h"><span>1</span>${escHtml(t('apps.create.stepWhat'))}</h4>
+        <div class="apps-cr-grid2">
+          <div>${field('id', t('apps.create.fId')||'ID (unique, no spaces)', existing.id||'', 'my-app-name', true)}</div>
+          <div>${field('title', t('apps.create.fTitle')||'Title', existing.title||'', 'My App', true)}</div>
         </div>
-        <div>
-          <label class="apps-install-label">${t('apps.create.fPrice')||'Price'}</label>
-          <select class="apps-filter" id="cr-price" style="width:100%">
-            <option value="free"${existing.price==='free'||!existing.price?' selected':''}>${t('apps.price.free')||'Free'}</option>
-            <option value="freemium"${existing.price==='freemium'?' selected':''}>${t('apps.price.freemium')||'Freemium'}</option>
-            <option value="paid"${existing.price==='paid'?' selected':''}>${t('apps.price.paid')||'Paid'}</option>
-            <!-- The filter learnt this; the creator had not, so a catalogue made in-app could
-                 not produce the value the browser can filter for. -->
-            <option value="oss"${existing.price==='oss'?' selected':''}>${escHtml(t('apps.price.oss'))}</option>
-          </select>
+        <label class="apps-install-label" for="cr-description">${t('apps.create.fDesc')||'Description'}</label>
+        <textarea class="apps-path-input apps-cr-ta" id="cr-description" rows="2">${escHtml(existing.description||'')}</textarea>
+        <div class="apps-cr-grid3">
+          <div>
+            <label class="apps-install-label" for="cr-category">${t('apps.create.fCategory')||'Category'}</label>
+            <select class="apps-filter apps-cr-sel" id="cr-category">
+              <option value="game"${existing.category==='game'?' selected':''}>${t('apps.cat.game')||'Game'}</option>
+              <option value="utility"${existing.category==='utility'||!existing.category?' selected':''}>${t('apps.cat.utility')||'Utility'}</option>
+              <option value="other"${existing.category==='other'?' selected':''}>${t('apps.cat.other')||'Other'}</option>
+            </select>
+          </div>
+          <div>
+            <label class="apps-install-label" for="cr-price">${t('apps.create.fPrice')||'Price'}</label>
+            <select class="apps-filter apps-cr-sel" id="cr-price">
+              <option value="free"${existing.price==='free'||!existing.price?' selected':''}>${t('apps.price.free')||'Free'}</option>
+              <option value="freemium"${existing.price==='freemium'?' selected':''}>${t('apps.price.freemium')||'Freemium'}</option>
+              <option value="paid"${existing.price==='paid'?' selected':''}>${t('apps.price.paid')||'Paid'}</option>
+              <!-- The filter learnt this; the creator had not, so a catalogue made in-app
+                   could not produce the value the browser can filter for. -->
+              <option value="oss"${existing.price==='oss'?' selected':''}>${escHtml(t('apps.price.oss'))}</option>
+            </select>
+          </div>
+          <div>${field('version', t('apps.create.fVersion')||'Version', existing.version||'', '1.0.0')}</div>
         </div>
-      </div>
-      ${field('version', t('apps.create.fVersion')||'Version', existing.version||'', '1.0.0')}
-      <div class="apps-cr-sec">${escHtml(t('apps.create.secLook') || 'How it looks in the list')}</div>
-      ${field('tags', t('apps.create.fTags')||'Tags (comma-separated, max 3)', (existing.tags||[]).join(', '), 'dcs, tool, audio')}
-      ${field('requirements', t('apps.requirements')||'Requirements', existing.requirements||'', 'Windows 10+')}
-      ${field('thumb', t('apps.create.fThumb')||'Thumbnail URL', existing.images?.thumb||'', 'https://.../thumb.png')}
-      ${field('extra', t('apps.create.fExtra')||'Extra images (comma-separated URLs)', (existing.images?.extra||[]).join(', '))}
-      ${field('md_link', t('apps.create.fMd')||'Documentation URL (md_link)', existing.md_link||'', 'https://github.com/.../README.md')}
-      <div class="apps-cr-sec">${escHtml(t('apps.create.secGet') || 'Where it comes from')}</div>
-      <!-- An address OR a file. Publishing a catalogue used to mean finding somewhere to
-           host every installer in it first; a file handed over here is packed INTO the
-           catalogue when it is published as one, and nothing needs hosting at all. -->
-      <div class="apps-cr-src">
-        <button type="button" class="btn btn-xs ${existing.src_file ? 'btn-accent' : 'btn-ghost'}" id="cr-pick-file">
-          ${escHtml(existing.src_file ? (t('apps.create.fileChosen') || 'File chosen — change…') : (t('apps.create.useFile') || 'Use a file instead…'))}
-        </button>
-        <span class="apps-cr-src-say" id="cr-src-say">${escHtml(
-            existing.src_file
-                ? String(existing.src_file).replace(/^.*[/\\]/, '')
-                : (t('apps.create.useFileHint') || 'Or give an address below. A file is packed into the catalogue when you publish it as one file.'))}</span>
-        ${existing.src_file ? `<button type="button" class="btn btn-xs btn-ghost" id="cr-clear-file">${escHtml(t('common.remove') || 'Remove')}</button>` : ''}
-      </div>
-      ${field('dl-url', t('apps.create.fDlUrl')||'Download URL', (existing.download as any)?.url||'', 'https://github.com/.../app.exe')}
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-        <div>
-          <label class="apps-install-label">${t('apps.create.fType')||'Type'}</label>
-          <select class="apps-filter" id="cr-filetype" style="width:100%">
-            ${['zip','exe','msi','script'].map(v => `<option value="${v}"${(existing.download as any)?.file_type===v?' selected':''}>${v}</option>`).join('')}
-          </select>
+      </section>
+
+      <section class="apps-cr-step">
+        <h4 class="apps-cr-step-h"><span>2</span>${escHtml(t('apps.create.stepGet'))}</h4>
+        <!-- An address OR a file, asked as a question with two answers rather than as a
+             button sitting above a field that contradicts it. Publishing a catalogue used
+             to mean hosting every installer in it first; a file handed over here is packed
+             INTO the catalogue when it is published as one, and nothing needs hosting. -->
+        <div class="apps-cr-choice" id="cr-src-choice">
+          <button type="button" class="apps-cr-opt${hasFile ? '' : ' is-on'}" data-src="url">
+            <b>${escHtml(t('apps.create.srcUrl'))}</b>
+            <span>${escHtml(t('apps.create.srcUrlWhy'))}</span>
+          </button>
+          <button type="button" class="apps-cr-opt${hasFile ? ' is-on' : ''}" data-src="file">
+            <b>${escHtml(t('apps.create.srcFile'))}</b>
+            <span>${escHtml(t('apps.create.srcFileWhy'))}</span>
+          </button>
         </div>
-        <div>${field('size', t('apps.create.fSize')||'Size (bytes)', String((existing.download as any)?.size||''), '10485760')}</div>
-      </div>
-      ${field('sha256', t('apps.create.fSha')||'SHA-256 checksum (recommended — verified before install)', (existing.download as any)?.sha256||'', 'e3b0c44298fc1c149afbf4c8996fb924…')}
-      <!-- The two fields nobody can fill by hand. They were asked for as free text, so the
-           honest outcomes were "left empty" (no integrity check at all) and "typed wrong"
-           (every install refused). Both are computed from the same bytes the installer will
-           hash, which is the only version of this number that means anything. -->
-      <div class="apps-cr-probe">
-        <button type="button" class="btn btn-xs btn-secondary" id="cr-probe-url">${escHtml(t('apps.create.probeUrl') || 'Fetch from the URL')}</button>
-        <button type="button" class="btn btn-xs btn-ghost" id="cr-probe-file">${escHtml(t('apps.create.probeFile') || 'From a local file…')}</button>
-        <span class="apps-cr-probe-say" id="cr-probe-say">${escHtml(t('apps.create.probeHint') || 'This hashes the file people will download — the installer or the zip at that URL, not the app once installed.')}</span>
-      </div>
-      <div class="apps-install-footer">
+
+        <div class="apps-cr-src" id="cr-src-file-row"${hasFile ? '' : ' hidden'}>
+          <button type="button" class="btn btn-xs ${hasFile ? 'btn-accent' : 'btn-ghost'}" id="cr-pick-file">
+            ${escHtml(hasFile ? (t('apps.create.fileChosen') || 'File chosen — change…') : (t('apps.create.useFile') || 'Choose a file…'))}
+          </button>
+          <span class="apps-cr-src-say" id="cr-src-say">${escHtml(
+              hasFile
+                  ? String(existing.src_file).replace(/^.*[/\\]/, '')
+                  : (t('apps.create.useFileHint') || 'A file is packed into the catalogue when you publish it as one file.'))}</span>
+          ${hasFile ? `<button type="button" class="btn btn-xs btn-ghost" id="cr-clear-file">${escHtml(t('common.remove') || 'Remove')}</button>` : ''}
+        </div>
+
+        <div id="cr-src-url-row"${hasFile ? ' hidden' : ''}>
+          ${field('dl-url', t('apps.create.fDlUrl')||'Download URL', (existing.download as any)?.url||'', 'https://github.com/.../app.exe', true)}
+        </div>
+
+        <div class="apps-cr-grid2">
+          <div>
+            <label class="apps-install-label" for="cr-filetype">${t('apps.create.fType')||'Type'}</label>
+            <select class="apps-filter apps-cr-sel" id="cr-filetype">
+              ${['zip','exe','msi','script'].map(v => `<option value="${v}"${(existing.download as any)?.file_type===v?' selected':''}>${v}</option>`).join('')}
+            </select>
+          </div>
+          <div>${field('size', t('apps.create.fSize')||'Size (bytes)', String((existing.download as any)?.size||''), '10485760')}</div>
+        </div>
+        ${field('sha256', t('apps.create.fSha')||'SHA-256 checksum (recommended — verified before install)', (existing.download as any)?.sha256||'', 'e3b0c44298fc1c149afbf4c8996fb924…')}
+        <!-- The two fields nobody can fill by hand. They were asked for as free text, so the
+             honest outcomes were "left empty" (no integrity check at all) and "typed wrong"
+             (every install refused). Both are computed from the same bytes the installer will
+             hash, which is the only version of this number that means anything. -->
+        <div class="apps-cr-probe">
+          <button type="button" class="btn btn-xs btn-secondary" id="cr-probe-url">${escHtml(t('apps.create.probeUrl') || 'Fetch from the URL')}</button>
+          <button type="button" class="btn btn-xs btn-ghost" id="cr-probe-file">${escHtml(t('apps.create.probeFile') || 'From a local file…')}</button>
+          <span class="apps-cr-probe-say" id="cr-probe-say">${escHtml(t('apps.create.probeHint') || 'This hashes the file people will download — the installer or the zip at that URL, not the app once installed.')}</span>
+        </div>
+      </section>
+
+      <section class="apps-cr-step">
+        <h4 class="apps-cr-step-h"><span>3</span>${escHtml(t('apps.create.stepLook'))}
+          <em>${escHtml(t('apps.create.stepLookOpt'))}</em></h4>
+        ${field('tags', t('apps.create.fTags')||'Tags (comma-separated, max 3)', (existing.tags||[]).join(', '), 'dcs, tool, audio')}
+        ${field('requirements', t('apps.requirements')||'Requirements', existing.requirements||'', 'Windows 10+')}
+        ${field('thumb', t('apps.create.fThumb')||'Thumbnail URL', existing.images?.thumb||'', 'https://.../thumb.png')}
+        ${field('extra', t('apps.create.fExtra')||'Extra images (comma-separated URLs)', (existing.images?.extra||[]).join(', '))}
+        ${field('md_link', t('apps.create.fMd')||'Documentation URL (md_link)', existing.md_link||'', 'https://github.com/.../README.md')}
+      </section>
+
+      <!-- Sticky, and it says what is still missing. Finding that out used to mean saving
+           the entry, closing this, and reading a list at the bottom of the page. -->
+      <div class="apps-install-footer apps-cr-foot">
+        <span class="apps-cr-missing" id="cr-missing"></span>
         <button class="btn btn-ghost" id="cr-app-cancel">${t('common.cancel')||'Cancel'}</button>
         <button class="btn btn-accent" id="cr-app-save">${t('common.confirm')||'Save'}</button>
       </div>
     </div>`;
+
+    /**
+     * The entry the form currently describes.
+     *
+     * One reader for two callers: the footer that says what is missing as you type, and
+     * Save. Two readings of the same fifteen inputs is two places for them to disagree
+     * about what "finished" means — which is exactly what was happening, one of them
+     * simply saying nothing.
+     */
+    function draftEntry(): Partial<AppEntry> {
+        const get = (id: string) => (document.getElementById(`cr-${id}`) as HTMLInputElement)?.value.trim() || '';
+        const tags = get('tags').split(',').map((x) => x.trim()).filter(Boolean).slice(0, 3);
+        const extra = get('extra').split(',').map((x) => x.trim()).filter(Boolean);
+        return {
+            id:           get('id'),
+            title:        get('title'),
+            description:  (document.getElementById('cr-description') as HTMLTextAreaElement)?.value.trim() || '',
+            category:     (document.getElementById('cr-category') as HTMLSelectElement)?.value || 'utility',
+            price:        (document.getElementById('cr-price') as HTMLSelectElement)?.value || 'free',
+            tags,
+            version:      get('version') || undefined,
+            requirements: get('requirements') || undefined,
+            md_link:      get('md_link') || undefined,
+            images:       { thumb: get('thumb') || undefined, extra: extra.length ? extra : undefined },
+            download: {
+                url:       get('dl-url'),
+                file_type: (document.getElementById('cr-filetype') as HTMLSelectElement)?.value || 'exe',
+                size:      parseInt(get('size')) || undefined,
+                sha256:    get('sha256') || undefined,
+            } as any,
+            // Where the bytes are on THIS machine, until the catalogue is published. Never
+            // part of the published document — stripped in buildCatalogJson, because a path
+            // off somebody's disk is not something a catalogue should carry.
+            ...(_pickedFile ? { src_file: _pickedFile } : {}),
+        };
+    }
+
+    // ── The two answers to "where does it come from" ─────────────────────────
+    //
+    // Picking one hides the other's field. Both were on screen at once before, with a
+    // button above a URL box, and nothing said which one wins when both are filled.
+    const showSrc = (which: 'url' | 'file') => {
+        body.querySelectorAll<HTMLElement>('.apps-cr-opt').forEach((b) => {
+            b.classList.toggle('is-on', b.dataset.src === which);
+        });
+        const fileRow = document.getElementById('cr-src-file-row');
+        const urlRow = document.getElementById('cr-src-url-row');
+        if (fileRow) fileRow.hidden = which !== 'file';
+        if (urlRow) urlRow.hidden = which === 'file';
+        sayMissing();
+    };
+    body.querySelector('#cr-src-choice')?.addEventListener('click', (e) => {
+        const b = (e.target as HTMLElement).closest('.apps-cr-opt') as HTMLElement | null;
+        if (!b?.dataset.src) return;
+        // Choosing "an address" DROPS the file. Hiding the row while _pickedFile stayed set
+        // would save an entry that carries a file the author had just said they did not
+        // want — invisibly, since the row that names it is no longer on screen.
+        if (b.dataset.src === 'url' && _pickedFile) {
+            _pickedFile = '';
+            const say = document.getElementById('cr-src-say');
+            if (say) say.textContent = t('apps.create.useFileHint') || '';
+            const pick = document.getElementById('cr-pick-file');
+            if (pick) {
+                pick.classList.remove('btn-accent');
+                pick.classList.add('btn-ghost');
+                pick.textContent = t('apps.create.useFile') || 'Choose a file…';
+            }
+        }
+        showSrc(b.dataset.src as 'url' | 'file');
+    });
+
+    /**
+     * What is still missing, said in the footer as it is typed.
+     *
+     * The same function the page list uses, so the two cannot drift into disagreeing about
+     * whether an entry is finished.
+     */
+    function sayMissing(): void {
+        const el = document.getElementById('cr-missing');
+        if (!el) return;
+        const probs = entryProblems(draftEntry(), (k, f) => t(k) || f)
+            .filter((p) => p.key !== 'apps.create.pbFileOnly');
+        el.textContent = probs.length
+            ? (t('apps.create.stillNeeded') || 'Still needed: {x}')
+                .replace('{x}', probs.map((p) => p.field || '?').join(', '))
+            : '';
+        el.classList.toggle('is-bad', probs.length > 0);
+    }
+    body.addEventListener('input', sayMissing);
+    sayMissing();
 
     document.getElementById('cr-app-cancel')?.addEventListener('click', () => {
         document.getElementById('cr-app-modal')!.classList.remove('open');
@@ -1673,11 +1830,15 @@ function openAppEditor(index: number | null) {
             busy(true);
             try { fill(await invoke('catalog_probe_file', { path: picked }) as any); } catch (e) { blame(e); }
             busy(false);
+            // Choosing a file IS answering "where does it come from", so the footer has to
+            // stop asking for a URL. It only listened for `input`, and this is a click.
+            sayMissing();
         });
         document.getElementById('cr-clear-file')?.addEventListener('click', () => {
             _pickedFile = '';
             const el = document.getElementById('cr-src-say');
             if (el) el.textContent = t('apps.create.useFileHint') || '';
+            sayMissing();
         });
         document.getElementById('cr-probe-file')?.addEventListener('click', async () => {
             const picked = await pickFile().catch(() => null);
@@ -1689,31 +1850,11 @@ function openAppEditor(index: number | null) {
     }
 
     document.getElementById('cr-app-save')?.addEventListener('click', () => {
-        const get = (id: string) => (document.getElementById(`cr-${id}`) as HTMLInputElement)?.value.trim() || '';
-        const tags = get('tags').split(',').map(s => s.trim()).filter(Boolean).slice(0, 3);
-        const extra = get('extra').split(',').map(s => s.trim()).filter(Boolean);
-        const app: Partial<AppEntry> = {
-            id:           get('id') || `app-${Date.now()}`,
-            title:        get('title'),
-            description:  (document.getElementById('cr-description') as HTMLTextAreaElement)?.value.trim() || '',
-            category:     (document.getElementById('cr-category') as HTMLSelectElement)?.value || 'utility',
-            price:        (document.getElementById('cr-price') as HTMLSelectElement)?.value || 'free',
-            tags,
-            version:      get('version') || undefined,
-            requirements: get('requirements') || undefined,
-            md_link:      get('md_link') || undefined,
-            images:       { thumb: get('thumb') || undefined, extra: extra.length ? extra : undefined },
-            download: {
-                url:       get('dl-url'),
-                file_type: (document.getElementById('cr-filetype') as HTMLSelectElement)?.value || 'exe',
-                size:      parseInt(get('size')) || undefined,
-                sha256:    get('sha256') || undefined,
-            } as any,
-            // Where the bytes are on THIS machine, until the catalogue is published. Never
-            // part of the published document — stripped in draftToCatalog below, because a
-            // path off somebody's disk is not something a catalogue should carry.
-            ...(_pickedFile ? { src_file: _pickedFile } : {}),
-        };
+        const app = draftEntry();
+        // An id is generated only at the moment of saving, and only when there is none.
+        // Doing it in draftEntry would make the footer say the id is fine while the box is
+        // empty, which is the opposite of what that line is for.
+        if (!String(app.id || '').trim()) app.id = `app-${Date.now()}`;
 
         if (index !== null) _draft.apps[index] = app;
         else _draft.apps.push(app);

@@ -1150,3 +1150,160 @@
     border-color: color-mix(in srgb, var(--warning) 45%, transparent);
     background: color-mix(in srgb, var(--warning) 10%, transparent);
 }
+
+/* ── Creating a catalogue: an order, said out loud ──────────────────────────
+   The page drew four identical panels and four equal buttons, and the editor drew
+   fifteen identical fields. Neither said what came first or what mattered. */
+.apps-cr-step-h {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 10px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-bright);
+}
+.apps-cr-step-h > span:first-child {
+    flex: 0 0 auto;
+    width: 18px;
+    height: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    background: var(--accent-dim);
+    color: var(--accent);
+    font-size: 10px;
+    font-weight: 800;
+}
+.apps-cr-step-h em {
+    font-style: normal;
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--text-muted);
+}
+.apps-cr-step-n {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+.apps-cr-step-btn { margin-left: auto; }
+.apps-cr-gap { margin-top: 10px; }
+
+/* Reopening one is how a SECOND session starts. It was above the first step, competing
+   with it for somebody who had never been here. */
+.apps-create-reopen > summary {
+    cursor: pointer;
+    font-size: 11px;
+    color: var(--text-muted);
+    padding: 6px 0;
+}
+.apps-create-reopen > summary:hover { color: var(--text-primary); }
+
+/* Two ways out, and they are not peers: one needs no hosting, the other needs a host and
+   an address that stays alive. Four equal buttons said nothing about that. */
+.apps-create-ways {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+@media (max-width: 900px) {
+    .apps-create-ways { grid-template-columns: 1fr; }
+}
+.apps-create-way {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px;
+    background: var(--bg-card);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.apps-create-way.is-first { border-color: var(--accent); }
+.apps-create-way > b { font-size: 12px; color: var(--text-bright); }
+.apps-create-way > p {
+    margin: 0;
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--text-muted);
+    flex: 1;
+}
+.apps-create-way .apps-create-actions { margin: 0; flex-wrap: wrap; }
+
+/* ── The editor ─────────────────────────────────────────────────────────── */
+.apps-cr-form .apps-cr-step {
+    border-top: 1px solid var(--border);
+    padding-top: 12px;
+    margin-top: 14px;
+}
+.apps-cr-form .apps-cr-step:first-of-type { border-top: none; padding-top: 0; margin-top: 8px; }
+.apps-cr-form .apps-path-input { margin-bottom: 8px; }
+.apps-cr-ta { resize: vertical; }
+.apps-cr-sel { width: 100%; }
+.apps-cr-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.apps-cr-grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+@media (max-width: 620px) {
+    .apps-cr-grid2, .apps-cr-grid3 { grid-template-columns: 1fr; }
+}
+/* Three fields matter and twelve are taste. Saying which is which is most of the fix. */
+.apps-install-label.is-need::after {
+    content: '*';
+    color: var(--accent);
+    margin-left: 3px;
+    font-weight: 800;
+}
+
+/* One decision, asked as a question with two answers rather than as a button above a
+   field that contradicts it. */
+.apps-cr-choice {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+@media (max-width: 620px) {
+    .apps-cr-choice { grid-template-columns: 1fr; }
+}
+.apps-cr-opt {
+    text-align: left;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 10px;
+    background: var(--bg-card);
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    color: inherit;
+}
+.apps-cr-opt:hover { border-color: var(--border-hover); }
+.apps-cr-opt.is-on {
+    border-color: var(--accent);
+    background: var(--accent-dim);
+}
+.apps-cr-opt > b { font-size: 12px; color: var(--text-bright); }
+.apps-cr-opt > span { font-size: 10px; line-height: 1.45; color: var(--text-muted); }
+
+/* Sticky, and it says what is still missing. Finding that out used to mean saving the
+   entry, closing the editor, and reading a list at the bottom of the page. */
+.apps-cr-foot {
+    position: sticky;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-top: 10px;
+    margin-top: 14px;
+    border-top: 1px solid var(--border);
+    background: var(--bg-primary);
+}
+.apps-cr-missing {
+    flex: 1;
+    min-width: 0;
+    font-size: 10px;
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.apps-cr-missing.is-bad { color: var(--warning, #f59e0b); font-weight: 600; }

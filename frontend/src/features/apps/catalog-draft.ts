@@ -47,36 +47,84 @@ export function draftFromCatalog(json: any): DraftLike {
     };
 }
 
+/** One thing wrong with one entry. The `field` is what the editor should point at. */
+export interface EntryProblem {
+    /** i18n key, so a caller can decide how loud to be about each. */
+    key: string;
+    text: string;
+    /** Which input in the editor fixes it, or '' when it is about the entry as a whole. */
+    field: string;
+}
+
+/**
+ * What is wrong with ONE entry, before it is saved.
+ *
+ * Its own function because the answer is needed in two places that used to disagree: the
+ * create screen listed problems only AFTER an entry was saved and the modal listed none at
+ * all, so the way to find out an entry was incomplete was to save it, close the editor and
+ * read a list at the bottom of the page.
+ *
+ * Every check here is a thing that PARSES and then behaves badly elsewhere, never a matter
+ * of taste. Nothing about tags, images or descriptions appears — those are the author's.
+ */
+export function entryProblems(app: any, say: Say): EntryProblem[] {
+    const out: EntryProblem[] = [];
+    const id = String(app?.id || '').trim();
+    if (!id) {
+        out.push({ key: 'apps.create.pbNoId', field: 'id', text: say('apps.create.pbNoId', 'An entry has no id.') });
+    }
+    if (!String(app?.title || '').trim()) {
+        out.push({
+            key: 'apps.create.pbNoTitle', field: 'title',
+            text: say('apps.create.pbNoTitle', '{id}: no title.').replace('{id}', id || '?'),
+        });
+    }
+    // A FILE is a source, and this used to say otherwise.
+    //
+    // Choosing "use a file instead" and leaving the address blank is the whole point of
+    // that button — the file is packed in when the catalogue is published as one file, and
+    // the URL is written at that moment. The screen reported it as "no download URL, every
+    // reader drops this entry silently", which is alarming, wrong, and unfixable without
+    // undoing the thing the author meant to do.
+    const url = String(app?.download?.url || '').trim();
+    const file = String(app?.src_file || '').trim();
+    if (!url && !file) {
+        out.push({
+            key: 'apps.create.pbNoUrl', field: 'dl-url',
+            text: say('apps.create.pbNoUrl', '{id}: no download URL — every reader drops this entry silently.')
+                .replace('{id}', id || '?'),
+        });
+    } else if (!url && file) {
+        // Not a problem, but a fact worth knowing before you hand somebody a catalog.json:
+        // that document names no address for this entry, so only the one-file publish
+        // carries it.
+        out.push({
+            key: 'apps.create.pbFileOnly', field: '',
+            text: say('apps.create.pbFileOnly', '{id}: a file, no address — carried only by the one-file publish.')
+                .replace('{id}', id || '?'),
+        });
+    }
+    return out;
+}
+
 /**
  * What is wrong with a draft, as sentences.
  *
  * Reported, never blocking: it is the author's document, and a document with a problem in it
  * is still theirs to publish.
  *
- * The three checked are the ones that PARSE and then behave badly elsewhere. A duplicate id
- * makes two entries fight over one install record. An entry with no download URL is dropped
- * silently by every feed builder that reads a catalogue — BCWEB's filters on `download.url`
- * and says nothing — so the entry is simply not there and no one is told why.
+ * Per-entry checks come from entryProblems, so this list and the editor's footer cannot
+ * drift into disagreeing about whether an entry is finished. What is left here is the one
+ * thing no single entry can see: a duplicate id, which makes two entries fight over one
+ * install record.
  */
 export function draftProblems(draft: DraftLike, say: Say): string[] {
     const out: string[] = [];
     const seen = new Map<string, number>();
     for (const a of draft.apps || []) {
+        for (const p of entryProblems(a, say)) out.push(p.text);
         const id = String(a?.id || '').trim();
-        if (!id) {
-            // Counted per entry rather than folded into one line: two entries with no id are
-            // two things to fix, not one duplicate of "".
-            out.push(say('apps.create.pbNoId', 'An entry has no id.'));
-            continue;
-        }
-        seen.set(id, (seen.get(id) || 0) + 1);
-        if (!String(a?.download?.url || '').trim()) {
-            out.push(say('apps.create.pbNoUrl', '{id}: no download URL — every reader drops this entry silently.')
-                .replace('{id}', id));
-        }
-        if (!String(a?.title || '').trim()) {
-            out.push(say('apps.create.pbNoTitle', '{id}: no title.').replace('{id}', id));
-        }
+        if (id) seen.set(id, (seen.get(id) || 0) + 1);
     }
     for (const [id, n] of seen) {
         if (n > 1) {
