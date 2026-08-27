@@ -12,7 +12,14 @@ pub struct AppImages {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct AppDownload {
     pub url: String,
-    pub file_type: String, // "zip" | "exe" | "msi" | "script"
+    /// "zip" | "exe" | "msi" | "script" — or absent.
+    ///
+    /// Empty is the honest reading of an omission, and it degrades correctly: the installer
+    /// already decides script-vs-setup from the URL's filename, and only consults this to
+    /// agree with it. Without a default, an entry stating a url and no type failed to
+    /// deserialize and took its whole catalogue with it — the same trap `tags` had.
+    #[serde(default)]
+    pub file_type: String,
     pub size: Option<u64>,
     /// Optional sha256 checksum (CWE-494). Verified before install when present.
     #[serde(default)]
@@ -161,6 +168,16 @@ mod entry_tests {
         assert_eq!(e.category, "other");
         assert_eq!(e.price, "free");
         assert_eq!(e.description, "");
+    }
+
+    #[test]
+    fn a_download_with_no_stated_type_still_parses() {
+        // The installer works it out from the URL's filename; the field only agrees with it.
+        let e: AppEntry = serde_json::from_str(
+            r#"{"id":"x","title":"X","download":{"url":"https://e/setup.exe"}}"#,
+        )
+        .expect("a download without a file_type must parse");
+        assert_eq!(e.download.file_type, "");
     }
 
     #[test]

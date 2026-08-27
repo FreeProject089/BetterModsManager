@@ -9285,5 +9285,8 @@
   "apps.create.pbNoUrl": "{id}: no download URL — every reader drops this entry silently.",
   "apps.create.pbNoUrlShort": "no URL",
   "apps.create.pbNoTitle": "{id}: no title.",
-  "apps.create.pbDupe": "{id} appears {n} times — two entries with one id fight over one install record."
+  "apps.create.pbDupe": "{id} appears {n} times — two entries with one id fight over one install record.",
+  "apps.integrity": "Integrity",
+  "apps.shaYesShort": "verified before anything runs",
+  "apps.shaNoShort": "the publisher did not provide one"
 }

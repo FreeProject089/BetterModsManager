@@ -89,6 +89,7 @@ let _collections: FavCollection[] = loadCollections();
 
 // ── SVG icon helpers ──────────────────────────────────────────────────────────
 const IC = {
+    lock: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>',
     download: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`,
     play:     `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>`,
     trash:    `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>`,
@@ -1551,8 +1552,19 @@ function openDetailModal(appId: string) {
         app.download.size ? `<div class="adm-info-row">
             <div class="adm-info-icon">${IC.download}</div>
             <div class="adm-info-label">${t('apps.downloadSize')||'Download'}</div>
-            <div class="adm-info-value">${formatBytes(app.download.size)} · <span style="opacity:.6">${escHtml(app.download.file_type.toUpperCase())}</span></div>
+            <div class="adm-info-value">${formatBytes(app.download.size)}${app.download.file_type ? ` · <span style="opacity:.6">${escHtml(app.download.file_type.toUpperCase())}</span>` : ''}</div>
           </div>` : '',
+        // Whether this download can be checked at all, at the moment the Install button is
+        // the next thing under the pointer. It was said in a confirm AFTER choosing, which
+        // is the wrong end of the decision — and the modal already lists the size and the
+        // type from the same object.
+        `<div class="adm-info-row">
+            <div class="adm-info-icon">${IC.lock}</div>
+            <div class="adm-info-label">${escHtml(t('apps.integrity') || 'Integrity')}</div>
+            <div class="adm-info-value">${(app.download.sha256 || '').trim()
+                ? `<span class="apps-tag apps-tag-sha">${escHtml(t('apps.shaYes') || 'checksum')}</span> <span style="opacity:.6">${escHtml(t('apps.shaYesShort') || 'verified before anything runs')}</span>`
+                : `<span class="apps-tag apps-tag-nosha">${escHtml(t('apps.shaNo') || 'unverified')}</span> <span style="opacity:.6">${escHtml(t('apps.shaNoShort') || 'the publisher did not provide one')}</span>`}</div>
+          </div>`,
         app.source_label ? `<div class="adm-info-row">
             <div class="adm-info-icon">${IC.link}</div>
             <div class="adm-info-label">${t('apps.source')||'Source'}</div>
