@@ -771,11 +771,110 @@ async function handleDeepLink(urlStr: string): Promise<void> {
         }
 
         // ── Scheduler: run a specific task by id (Windows Task Scheduler hook) ──
-        if (action === 'schedule/run') {
+        // ── Scheduled tasks: bmm://schedule/run?id=…  ·  bmm://schedule/enable?id=…&on=0|1
+        //
+        // Both ASK first, and the question names the task rather than its id.
+        //
+        // Task ids are minted as `sched-<Date.now()>` — a millisecond timestamp, which is
+        // predictable in a way a random id is not. Running one of somebody's tasks is not a
+        // navigation, it is executing whatever they wrote in it, up to and including a script
+        // step. A link that could do that silently would only have to guess when the task was
+        // created. So the id stops being a secret and the person watching decides.
+        if (action === 'schedule/run' || action === 'schedule/enable') {
             const id = parsedUrl.searchParams.get('id');
-            if (id) {
-                setTimeout(() => { import('../features/settings/scheduler.js').then(m => m.runTaskById(id)).catch(() => {}); }, 900);
+            if (!id) {
+                toast(t('sched.dl.noId'), 'error');
+                return;
             }
+            const sched = await import('../features/settings/scheduler.js');
+            const task = await sched.findTask(id);
+            if (!task) {
+                // Named, because the usual cause is a link written against another machine's
+                // BMM — and "no task with that id" is the one answer that tells you so.
+                toast(`${t('sched.dl.noTask')} ${id}`, 'warning', 9000);
+                return;
+            }
+            // The Windows Scheduled Task mirror launches THIS link, at an hour when nobody is
+            // there to answer a question. It carries a key minted on this machine and kept in
+            // settings — never shown, never sent anywhere, and not the API token, because
+            // resetting that one is an ordinary thing to do and would quietly turn every
+            // registered task into a prompt. A page can write the id; it cannot write this.
+            if (action === 'schedule/run') {
+                const k = parsedUrl.searchParams.get('k') || '';
+                if (k) {
+                    const expected = await invoke('get_os_schedule_key').catch(() => '') as string;
+                    // No feedback either way: the link answers nothing to whoever opened it, so
+                    // a wrong key simply falls through to the question below.
+                    if (expected && k === expected) {
+                        await sched.runTaskById(id).catch(() => {});
+                        return;
+                    }
+                }
+            }
+            const steps = (task.steps || []).filter((s: any) => !s.disabled).length;
+            const label = escHtml(task.name || id);
+            let title: string;
+            let body: string;
+            let tone: 'accent' | 'danger' = 'accent';
+            if (action === 'schedule/run') {
+                title = t('sched.dl.runTitle');
+                // Whether it may run programs is the fact that changes the answer, so it is
+                // in the question and not in a tooltip somewhere.
+                const perms = task.allowCustomCommands ? t('sched.dl.runsPrograms') : t('sched.dl.noPrograms');
+                body = `<p style="font-size:13px;line-height:1.5;margin:10px 0 4px;">${t('sched.dl.runDesc')}</p>
+                        <div style="font-size:12px;background:rgba(0,0,0,0.3);padding:8px 10px;border-radius:6px;margin-top:8px;">
+                            <b>${label}</b><br><span style="color:var(--text-muted);">${escHtml(t('sched.dl.steps').replace('{n}', String(steps)))} · ${escHtml(perms)}</span>
+                        </div>`;
+                if (task.allowCustomCommands) tone = 'danger';
+            } else {
+                const on = parsedUrl.searchParams.get('on') !== '0';
+                title = on ? t('sched.dl.armTitle') : t('sched.dl.disarmTitle');
+                body = `<p style="font-size:13px;line-height:1.5;margin:10px 0 4px;">${on ? t('sched.dl.armDesc') : t('sched.dl.disarmDesc')}</p>
+                        <div style="font-size:12px;background:rgba(0,0,0,0.3);padding:8px 10px;border-radius:6px;margin-top:8px;"><b>${label}</b></div>`;
+            }
+            const ok = await window.confirmCustom!(title, body, tone,
+                { yesLabel: t('common.yes'), noLabel: t('common.no') });
+            if (!ok) return;
+            if (action === 'schedule/run') {
+                await sched.runTaskById(id).catch((e) => toast(`${t('common.error')}: ${e}`, 'error'));
+            } else {
+                const on = parsedUrl.searchParams.get('on') !== '0';
+                await sched.setTaskEnabled(id, on);
+                toast(on ? t('sched.dl.armed') : t('sched.dl.disarmed'), 'success');
+            }
+            return;
+        }
+
+        // ── Ring a hook: bmm://hook?name=…[&data=…] ─────────────────────────
+        //
+        // The counterpart of `POST /api/hook` for something that cannot hold an API token — a
+        // browser, a game's launcher, a shortcut on the desktop.
+        //
+        // It asks, for the same reason: a task waiting on a hook runs when the hook rings, so
+        // ringing one is running that task at one remove. Hook names are chosen by whoever
+        // wrote the task and are often obvious (`joined-server`), which makes them easier to
+        // guess than the ids above, not harder.
+        if (action === 'hook') {
+            const name = parsedUrl.searchParams.get('name');
+            if (!name) {
+                toast(t('sched.dl.noHook'), 'error');
+                return;
+            }
+            const ok = await window.confirmCustom!(
+                t('sched.dl.hookTitle'),
+                `<p style="font-size:13px;line-height:1.5;margin:10px 0 4px;">${t('sched.dl.hookDesc')}</p>
+                 <div style="font-size:12px;font-family:var(--font-mono);background:rgba(0,0,0,0.3);padding:6px 10px;border-radius:6px;margin-top:8px;word-break:break-all;">${escHtml(name)}</div>`,
+                'accent', { yesLabel: t('common.yes'), noLabel: t('common.no') });
+            if (!ok) return;
+            try {
+                const raw = parsedUrl.searchParams.get('data');
+                // Sent as text when it is not JSON. A link carrying `data=hello` is a caller
+                // saying hello, not a caller making a mistake.
+                let data: unknown = raw;
+                if (raw) { try { data = JSON.parse(raw); } catch { data = raw; } }
+                await invoke('hook_fire', { name, data: data ?? null });
+                toast(`${t('sched.dl.hookRang')} ${name}`, 'success');
+            } catch (e) { toast(`${t('common.error')}: ${e}`, 'error'); }
             return;
         }
 

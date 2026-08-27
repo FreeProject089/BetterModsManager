@@ -718,10 +718,27 @@ fn build_trigger_expr(trigger: &serde_json::Value) -> Result<String, String> {
 /// Registers (or replaces) a Windows Scheduled Task that launches BMM to run this
 /// task by id at the configured time — even when BMM is closed.
 #[tauri::command]
-pub fn register_os_schedule(task_id: String, trigger: serde_json::Value) -> Result<(), String> {
+pub fn register_os_schedule(
+    state: tauri::State<'_, crate::state::AppState>,
+    task_id: String,
+    trigger: serde_json::Value,
+) -> Result<(), String> {
     let safe_id = sanitize_task_id(&task_id);
     if safe_id.is_empty() { return Err("invalid task id".into()); }
     let task_name = format!("BMM_{}", safe_id);
+
+    // What tells the app this link is the OS mirror and not a page the user clicked. It
+    // lives in the task definition on this machine, beside the settings file that already
+    // holds it — so it is not reaching anywhere it could not already be read from.
+    let key = {
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        // Narrowed before it goes into a PowerShell single-quoted string. A uuid cannot
+        // contain a quote, but this field is in a JSON file somebody can edit by hand.
+        data.settings.os_schedule_key
+            .chars()
+            .filter(|c| c.is_ascii_alphanumeric() || *c == '-')
+            .collect::<String>()
+    };
 
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
     let exe_str = exe.to_string_lossy().replace('\'', "''"); // PS single-quote escape
@@ -730,11 +747,11 @@ pub fn register_os_schedule(task_id: String, trigger: serde_json::Value) -> Resu
     // -Argument is the bmm:// deep link, double-quoted so the OS passes it as one argv.
     let script = format!(
         "$ErrorActionPreference='Stop'; \
-         $a = New-ScheduledTaskAction -Execute '{exe}' -Argument '\"bmm://schedule/run?id={id}\"'; \
+         $a = New-ScheduledTaskAction -Execute '{exe}' -Argument '\"bmm://schedule/run?id={id}&k={key}\"'; \
          $t = {trig}; \
          $s = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries; \
          Register-ScheduledTask -TaskName '{name}' -Action $a -Trigger $t -Settings $s -Force | Out-Null",
-        exe = exe_str, id = safe_id, trig = trigger_expr, name = task_name
+        exe = exe_str, id = safe_id, key = key, trig = trigger_expr, name = task_name
     );
 
     let out = crate::commands::proc::hidden_command("powershell")

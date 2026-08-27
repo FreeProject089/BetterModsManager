@@ -127,6 +127,20 @@ pub struct AppSettings {
     pub history_retention_days: u32,
     #[serde(default = "default_api_token")]
     pub api_token: String,
+    /// Proves a `bmm://schedule/run` came from THIS machine's Windows Scheduled Task and
+    /// not from a web page.
+    ///
+    /// The OS mirror launches `BMM.exe "bmm://schedule/run?id=…"`, and a page can write
+    /// that same link — task ids are `sched-<millisecond timestamp>`, so they are guessable.
+    /// Running one is executing whatever the owner wrote in it, so the link asks first … which
+    /// would leave every OS-scheduled task waiting for a click at 3am. This is what the
+    /// registration puts in the link so the app can tell the two apart.
+    ///
+    /// Deliberately NOT `api_token`: resetting that one is something a user does, and it
+    /// would silently turn every registered task into a prompt. This one has no reason to
+    /// change, is never shown, and never leaves the machine.
+    #[serde(default = "default_api_token")]
+    pub os_schedule_key: String,
     /// Local Plugin API port (default 51274). Changing it requires a restart;
     /// the whole frontend + generated scripts read it dynamically.
     #[serde(default = "default_api_port")]
@@ -187,6 +201,7 @@ impl Default for AppSettings {
             enable_lazy_sha_calculation: true,
             history_retention_days: default_history_retention(),
             api_token: default_api_token(),
+            os_schedule_key: default_api_token(),
             api_port: default_api_port(),
             sound_effects_enabled: true,
             sound_volume: default_sound_volume(),

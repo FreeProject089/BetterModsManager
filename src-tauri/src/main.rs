@@ -886,6 +886,7 @@ fn main() {
             commands::plugins::set_plugin_permissions,
             commands::plugins::get_plugin_permissions,
             commands::plugins::get_api_token,
+            commands::plugins::get_os_schedule_key,
             commands::plugins::get_effective_api_port,
             commands::plugins::get_api_status,
             commands::plugins::restart_api_server,

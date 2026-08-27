@@ -617,6 +617,26 @@ export async function importTaskObject(task: Partial<Task>): Promise<void> {
     }
 }
 
+/** One saved task, by id, for a caller that has to SHOW what it is about to do. */
+export async function findTask(id: string): Promise<Task | null> {
+    if (!_tasks.length) await loadTasks();
+    return _tasks.find((t) => t.id === id) || null;
+}
+
+/** Arm or disarm one task. Returns false when there is no task with that id. */
+export async function setTaskEnabled(id: string, on: boolean): Promise<boolean> {
+    if (!_tasks.length) await loadTasks();
+    const task = _tasks.find((t) => t.id === id);
+    if (!task) return false;
+    task.enabled = on;
+    await saveTasks();
+    // The OS mirror follows, or a disabled task keeps firing from the Windows scheduler,
+    // which is the worst version of this: the app says off and the machine says on.
+    await syncOsSchedule(task);
+    renderScheduleList();
+    return true;
+}
+
 export async function runTaskById(id: string): Promise<void> {
     if (!_tasks.length) await loadTasks();
     const task = _tasks.find(t => t.id === id);

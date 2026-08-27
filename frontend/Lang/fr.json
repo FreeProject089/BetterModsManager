@@ -8849,5 +8849,22 @@
   "plugins.check.missingAsset": "Le manifeste liste le fichier {f}, et il n'est pas là. Cette liste est écrite depuis le disque à l'empaquetage : ça veut dire que le manifeste a été édité à la main.",
   "plugins.check.undeclaredAsset": "{f} est dans le dossier et pas dans le manifeste. Il est quand même livré et fonctionne — mais une file de modération n'a que le manifeste pour se prononcer.",
   "plugins.check.appliesNothing": "Appliquer ce plugin ne ferait rien : ni liste de mods, ni scripts.",
-  "plugins.check.strictEmpty": "La liste de mods est STRICTE et vide, ce qui veut dire « tout désactiver »."
+  "plugins.check.strictEmpty": "La liste de mods est STRICTE et vide, ce qui veut dire « tout désactiver ».",
+  "sched.dl.noId": "Ce lien ne dit pas quelle tâche utiliser.",
+  "sched.dl.noTask": "Aucune tâche sur cette machine n'a cet id :",
+  "sched.dl.runTitle": "Exécuter cette tâche ?",
+  "sched.dl.runDesc": "Un lien demande à BMM d'exécuter maintenant une de tes tâches enregistrées.",
+  "sched.dl.steps": "{n} étape(s)",
+  "sched.dl.runsPrograms": "autorisée à exécuter des programmes",
+  "sched.dl.noPrograms": "non autorisée à exécuter des programmes",
+  "sched.dl.armTitle": "Activer cette tâche ?",
+  "sched.dl.armDesc": "Un lien demande à BMM d'armer une de tes tâches enregistrées : elle se déclenchera selon sa planification.",
+  "sched.dl.disarmTitle": "Désactiver cette tâche ?",
+  "sched.dl.disarmDesc": "Un lien demande à BMM de désarmer une de tes tâches enregistrées. Elle reste enregistrée et cesse de se déclencher.",
+  "sched.dl.armed": "Tâche activée.",
+  "sched.dl.disarmed": "Tâche désactivée.",
+  "sched.dl.noHook": "Ce lien ne nomme aucun hook.",
+  "sched.dl.hookTitle": "Sonner ce hook ?",
+  "sched.dl.hookDesc": "Un lien veut sonner un hook. Toute tâche qui attend ce nom repartira de là où elle attend.",
+  "sched.dl.hookRang": "Hook sonné :"
 }

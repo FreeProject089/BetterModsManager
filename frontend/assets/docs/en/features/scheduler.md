@@ -14,9 +14,14 @@ you driving it.
     passes meanwhile runs the next time you open it, not at the moment you asked for.
 
     On Windows you can lift that. BMM registers a **Windows Scheduled Task** that launches
-    `BMM.exe "bmm://schedule/run?id=…"` at the right time; BMM handles the `bmm://` scheme,
-    so Windows starts it and the deep-link router runs that one task. The app opens — this
-    wakes BMM up rather than running behind its back.
+    `BMM.exe "bmm://schedule/run?id=…&k=…"` at the right time; BMM handles the `bmm://`
+    scheme, so Windows starts it and the deep-link router runs that one task. The app opens
+    — this wakes BMM up rather than running behind its back.
+
+    `k=` is a key minted on your machine. The same link, without it, asks before running
+    anything: a `bmm://` link can be written by any page you click, and task ids are
+    timestamps, so they are guessable. The registered task is the one caller that can prove
+    it is not a page.
 
 ![The scheduler](assets/docs/media/screens/scheduler.annotated.png)
 

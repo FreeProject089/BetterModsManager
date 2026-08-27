@@ -163,7 +163,9 @@ Start-Process "bmm://mod/enable?id=my-mod-folder"
 
 | Deeplink | Params | Does |
 |---|---|---|
-| `bmm://schedule/run` | `id`* | Runs a scheduled task — the hook the Windows Scheduler uses |
+| `bmm://schedule/run` | `id`*, `k` | Runs a scheduled task — the hook the Windows Scheduler uses. **Asks first**, unless `k` is this machine's OS-schedule key |
+| `bmm://schedule/enable` | `id`*, `on` | Arms (`on=1`, the default) or disarms (`on=0`) a saved task. Asks first |
+| `bmm://hook` | `name`*, `data` | Rings a hook a task may be waiting on. `data` is parsed as JSON, or passed as text. Asks first |
 | `bmm://launchpack/run` | `id`* | Runs a Launch Pack |
 | `bmm://benchmark/run` | `dataset`, `size`, `mb`, `mode`, `sources`, `profiles`, `folders` | Opens the benchmark pre-configured. **Auto-runs unless `mode=manual`** |
 | `bmm://telemetry/consent` | `enabled`* | Global telemetry consent; declining also purges the local queue |
@@ -172,6 +174,21 @@ Start-Process "bmm://mod/enable?id=my-mod-folder"
 | `bmm://replay/export` | — | Exports the session as `.bmmreplay` |
 | `bmm://replay/import` | `path`, `url` | Imports and plays a `.bmmreplay` |
 | `bmm://discord/rpc` | `enabled`* | Discord Rich Presence |
+
+!!! warning "Why three of these ask, and one of them sometimes does not"
+
+    A `bmm://` link can be written by any page you click. Task ids are minted as
+    `sched-<millisecond timestamp>`, so they are guessable in a way a random id is not
+    — and running somebody's task is executing whatever they wrote in it, up to a
+    script step. So `schedule/run`, `schedule/enable` and `hook` all ask, and the question
+    names the task and says whether it is allowed to run programs.
+
+    That would have left every OS-scheduled task waiting for a click at 3am, because the
+    Windows Scheduled Task mirror launches this exact link. It carries `k=`, a key minted on
+    your machine and kept in settings — never shown, never sent anywhere, and
+    deliberately **not** the API token, since resetting that one is an ordinary thing to do and
+    would quietly turn every registered task into a prompt.
+
 | `bmm://data/export-auto` | `dir`*, `name`, `increment` | Unattended `data.json` backup. `name` takes `{date}` `{time}` `{datetime}`; `increment` ∈ `paren` `underscore` `timestamp` `overwrite` |
 | `bmm://settings/layout` | `code`* | Applies a shared card layout |
 | `bmm://docs/open` | `article` | Opens Help & Other, optionally at an article id |

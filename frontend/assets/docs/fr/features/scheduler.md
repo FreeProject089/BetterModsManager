@@ -16,9 +16,14 @@ la pilotiez.
     lancement, pas au moment demandé.
 
     Sous Windows, vous pouvez lever cette limite. BMM enregistre une **tâche planifiée
-    Windows** qui lance `BMM.exe "bmm://schedule/run?id=…"` à l'heure voulue ; BMM gère le
-    schéma `bmm://`, donc Windows le démarre et le routeur de deeplinks exécute cette tâche.
-    L'application s'ouvre — c'est un réveil de BMM, pas une exécution dans son dos.
+    Windows** qui lance `BMM.exe "bmm://schedule/run?id=…&k=…"` à l'heure voulue ; BMM
+    gère le schéma `bmm://`, donc Windows le démarre et le routeur de deeplinks exécute cette
+    tâche. L'application s'ouvre — c'est un réveil de BMM, pas une exécution dans son dos.
+
+    `k=` est une clé créée sur ta machine. Le même lien, sans elle, demande avant
+    d'exécuter quoi que ce soit : un lien `bmm://` peut être écrit par n'importe quelle page
+    sur laquelle tu cliques, et les ids de tâches sont des horodatages, donc devinables. La
+    tâche enregistrée est le seul appelant qui puisse prouver qu'il n'est pas une page.
 
 ![Le planificateur](assets/docs/media/screens/scheduler.annotated.png)
 

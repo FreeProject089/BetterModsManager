@@ -546,6 +546,18 @@ pub fn get_api_token(state: State<'_, AppState>) -> Result<String, String> {
     Ok(data.settings.api_token.clone())
 }
 
+/// The key that proves a `bmm://schedule/run` came from this machine's Windows Scheduled
+/// Task. Read by the deep-link handler and by nothing else.
+///
+/// Not exposed over the local API on purpose: a caller holding an API token can already run
+/// a task through `POST /api/schedule/run`, so handing it this would add nothing but a way
+/// for the key to travel.
+#[tauri::command]
+pub fn get_os_schedule_key(state: State<'_, AppState>) -> Result<String, String> {
+    let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+    Ok(data.settings.os_schedule_key.clone())
+}
+
 /// The port the API actually bound THIS session. The frontend must use this
 /// (not settings.api_port) so changing the setting doesn't break calls before
 /// the restart that rebinds the server.

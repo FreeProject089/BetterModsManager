@@ -168,7 +168,9 @@ global (`bmm_deeplink_allow_global = blocked`) les refuse tous.
 
 | Deeplink | Params | Effet |
 |---|---|---|
-| `bmm://schedule/run` | `id`* | Exécute une tâche planifiée — c'est le hook utilisé par le Planificateur Windows |
+| `bmm://schedule/run` | `id`*, `k` | Exécute une tâche planifiée — c'est le hook utilisé par le Planificateur Windows. **Demande d'abord**, sauf si `k` est la clé de planification OS de cette machine |
+| `bmm://schedule/enable` | `id`*, `on` | Arme (`on=1`, par défaut) ou désarme (`on=0`) une tâche enregistrée. Demande d'abord |
+| `bmm://hook` | `name`*, `data` | Sonne un hook qu'une tâche peut attendre. `data` est lu en JSON, sinon passé en texte. Demande d'abord |
 | `bmm://launchpack/run` | `id`* | Exécute un Launch Pack |
 | `bmm://benchmark/run` | `dataset`, `size`, `mb`, `mode`, `sources`, `profiles`, `folders` | Ouvre le benchmark préconfiguré. **Se lance automatiquement sauf si `mode=manual`** |
 | `bmm://telemetry/consent` | `enabled`* | Consentement télémétrie global ; refuser purge aussi la file locale |
@@ -177,6 +179,23 @@ global (`bmm_deeplink_allow_global = blocked`) les refuse tous.
 | `bmm://replay/export` | — | Exporte la session en `.bmmreplay` |
 | `bmm://replay/import` | `path`, `url` | Importe et joue un `.bmmreplay` |
 | `bmm://discord/rpc` | `enabled`* | Discord Rich Presence |
+
+!!! warning "Pourquoi trois de ces liens demandent, et pourquoi l'un ne demande parfois pas"
+
+    Un lien `bmm://` peut être écrit par n'importe quelle page sur laquelle tu cliques. Les ids
+    de tâches sont créés en `sched-<horodatage en millisecondes>` : ils sont devinables là où
+    un id aléatoire ne l'est pas — et exécuter la tâche de quelqu'un, c'est
+    exécuter ce qu'il y a écrit dedans, jusqu'à une étape de script. Donc `schedule/run`,
+    `schedule/enable` et `hook` demandent tous, et la question nomme la tâche et dit si elle a
+    le droit d'exécuter des programmes.
+
+    Ça aurait laissé chaque tâche planifiée au niveau OS attendre un clic à 3h du matin, parce
+    que le miroir du Planificateur Windows lance exactement ce lien. Il porte `k=`, une clé
+    créée sur ta machine et gardée dans les paramètres — jamais affichée, jamais
+    envoyée nulle part, et volontairement **pas** le token d'API, puisque réinitialiser
+    celui-là est une chose ordinaire à faire et transformerait en silence chaque tâche
+    enregistrée en une question.
+
 | `bmm://data/export-auto` | `dir`*, `name`, `increment` | Sauvegarde de `data.json` sans intervention. `name` accepte `{date}` `{time}` `{datetime}` ; `increment` ∈ `paren` `underscore` `timestamp` `overwrite` |
 | `bmm://settings/layout` | `code`* | Applique une disposition de cartes partagée |
 | `bmm://docs/open` | `article` | Ouvre Aide & autres, éventuellement sur un id d'article |
