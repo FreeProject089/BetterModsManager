@@ -9306,5 +9306,6 @@
   "apps.create.packMissing": "{n} entr(ies) name a file that is not in the folder",
   "repo.extras.addBundle": "Carry a catalogue file…",
   "repo.extras.bundleOf": "A catalogue of {t}, carried inside the repo — the receiver needs no other host.",
-  "repo.extras.bundleEmpty": "That bundle carries no catalogue entries."
+  "repo.extras.bundleEmpty": "That bundle carries no catalogue entries.",
+  "plugins.shipCount": "{n} shipped"
 }

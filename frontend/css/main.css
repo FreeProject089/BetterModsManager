@@ -19546,3 +19546,35 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
     margin-top: 5px;
 }
 .modpack-card-ids { margin-top: 7px; }
+
+/* "What it ships" — three kinds, one shape.
+   They had three: a toggle that revealed a row, a bare button, and another bare button. The
+   toggle hid the import control, and the flag it set is derived from the list anyway. */
+.plug-ships { display: flex; flex-direction: column; gap: 8px; }
+.plug-ship {
+    padding: 9px 11px;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    background: var(--bmm-bg-elevated);
+}
+.plug-ship-head {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px 8px;
+}
+.plug-ship-name { font-size: 12px; font-weight: 700; color: var(--text); }
+.plug-ship-kinds { font-size: 10px; color: var(--text-muted); font-family: var(--font-mono, monospace); }
+/* The count sits between the name and the button, so "what is in here" is answered before
+   "add another" — and pushes the button to the right edge of every row alike. */
+.plug-ship-count { margin-left: auto; font-size: 10.5px; color: var(--text-muted); }
+.plug-ship .plug-scripts-list:not(:empty) { margin-top: 8px; }
+.plug-ship-warn {
+    display: flex;
+    gap: 6px;
+    align-items: flex-start;
+    margin: 7px 0 0;
+    font-size: 10.5px;
+    line-height: 1.4;
+    color: var(--warning);
+}

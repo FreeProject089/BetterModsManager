@@ -3858,6 +3858,15 @@ async function handleQuickTest(method, path, body, btnEl) {
     }
 }
 // ── Tab: Create ────────────────────────────────────────────────────────────
+/** Write "3 shipped" (or nothing at all) beside one kind. */
+function setShipCount(id, n) {
+    const el = document.getElementById(id);
+    if (!el)
+        return;
+    // Empty rather than "0": a zero is a number somebody reads and then works out means
+    // none, and the list underneath already says so in words.
+    el.textContent = n ? (t('plugins.shipCount') || '{n} shipped').replace('{n}', String(n)) : '';
+}
 function renderCreate(container) {
     // Reset edit-carry state — a fresh Create tab starts with no bundled files.
     _editScripts = [];
@@ -3933,6 +3942,53 @@ function renderCreate(container) {
                         </div>
                     </div>
                     <div class="plug-sec-h">${escHtml(t('plugins.secShips') || 'What it ships')}</div>
+                    <!-- Three kinds, ONE shape.
+                         They had three different ones: scripts behind a toggle that revealed
+                         a row, folders as a bare button, automations as another. The toggle
+                         was the worst of it — it hid the import button, and has_scripts is
+                         derived from what is actually in the list anyway, so the switch
+                         decided nothing except whether you could see the thing that does. -->
+                    <div class="plug-ships">
+                        <div class="plug-ship" data-ship="scripts">
+                            <div class="plug-ship-head">
+                                <span class="plug-ship-name">${escHtml(t('plugins.pluginScripts') || 'Scripts')}</span>
+                                <span class="plug-ship-kinds">.bat .ps1 .vbs .py .js</span>
+                                <span class="plug-ship-count" id="pc-count-scripts"></span>
+                                <button class="btn btn-xs btn-ghost" id="pc-import-scripts">${IC.download} ${escHtml(t('common.add') || 'Add')}</button>
+                            </div>
+                            <div id="pc-scripts-list" class="plug-scripts-list"></div>
+                            <p class="plug-ship-warn">${IC.lock}<span>${escHtml(t('plugins.unsafeScriptWarn') || 'Scripts run real programs on your PC. They only execute after you grant the unsafe-plugins permission and confirm.')}</span></p>
+                        </div>
+
+                        <div class="plug-ship" data-ship="folders">
+                            <div class="plug-ship-head">
+                                <span class="plug-ship-name">${escHtml(t('plugins.pluginFolders') || 'Bundled folders')}</span>
+                                <span class="plug-ship-kinds">${escHtml(t('plugins.optional') || '(optional)')}</span>
+                                <span class="plug-ship-count" id="pc-count-folders"></span>
+                                <button class="btn btn-xs btn-ghost" id="pc-import-folders">${IC.folder} ${escHtml(t('common.add') || 'Add')}</button>
+                            </div>
+                            <div id="pc-folders-list" class="plug-scripts-list"></div>
+                        </div>
+
+                        <div class="plug-ship" data-ship="automations">
+                            <div class="plug-ship-head">
+                                <span class="plug-ship-name">${escHtml(t('plugins.pluginAutomations'))}</span>
+                                <span class="plug-ship-kinds">.bmmpa</span>
+                                <span class="plug-ship-count" id="pc-count-automations"></span>
+                                <button class="btn btn-xs btn-ghost" id="pc-import-automations">${IC.download} ${escHtml(t('common.add') || 'Add')}</button>
+                            </div>
+                            <div id="pc-automations-list" class="plug-scripts-list"></div>
+                            <p class="plug-auto-note">${escHtml(t('plugins.automationsNote'))}</p>
+                        </div>
+                    </div>
+
+                    <!-- What happens on apply -->
+                    <div class="plug-sec-h">${escHtml(t('plugins.secDoes') || 'What it does')}</div>
+                    <!-- Strict mode was under "what it ships", which is where it is least
+                         useful: it does not change what is in the plugin at all, it changes
+                         what APPLYING one does — remove everything that is not in the list,
+                         or only add what is. Next to the apply mode, which is the other half
+                         of the same sentence. -->
                     <div class="plug-form-row" style="flex-direction:row;align-items:center;gap:12px;">
                         <label class="plug-form-label" style="margin:0;">${t('plugins.strictMode')}</label>
                         <label class="plug-toggle">
@@ -3941,42 +3997,6 @@ function renderCreate(container) {
                         </label>
                         <span class="plug-toggle-hint" id="pc-strict-hint">${t('plugins.strictOff')}</span>
                     </div>
-
-                    <!-- Contains external scripts -->
-                    <div class="plug-form-row" style="flex-direction:row;align-items:center;gap:12px;">
-                        <label class="plug-form-label" style="margin:0;">${t('plugins.pluginHasScripts') || 'Contains scripts'}</label>
-                        <label class="plug-toggle">
-                            <input type="checkbox" id="pc-has-scripts">
-                            <span class="plug-toggle-slider"></span>
-                        </label>
-                        <span class="plug-toggle-hint" id="pc-has-scripts-hint">${t('plugins.pluginHasScriptsHint') || 'This plugin bundles external scripts'}</span>
-                    </div>
-                    <div class="plug-form-row" id="pc-scripts-row" style="display:none;">
-                        <label class="plug-form-label">${t('plugins.pluginScripts') || 'Scripts'} <span style="color:var(--text-muted);font-size:10px;">(.bat .ps1 .vbs .py .js)</span></label>
-                        <button class="btn btn-xs btn-ghost" id="pc-import-scripts" style="align-self:flex-start;">${IC.download} ${t('plugins.importScripts') || 'Import scripts…'}</button>
-                        <div id="pc-scripts-list" class="plug-scripts-list"></div>
-                        <p style="font-size:10.5px;color:var(--warning);margin:6px 0 0;display:flex;gap:6px;align-items:flex-start;line-height:1.4;">
-                            ${IC.lock}<span>${t('plugins.unsafeScriptWarn') || 'Scripts run real programs on your PC. They only execute after you grant the unsafe-plugins permission and confirm.'}</span>
-                        </p>
-                    </div>
-
-                    <!-- Import folders (bundled with the plugin) -->
-                    <div class="plug-form-row">
-                        <label class="plug-form-label">${t('plugins.pluginFolders') || 'Bundled folders'} <span style="color:var(--text-muted);font-size:10px;">${t('plugins.optional') || '(optional)'}</span></label>
-                        <button class="btn btn-xs btn-ghost" id="pc-import-folders" style="align-self:flex-start;">${IC.folder} ${t('plugins.importFolders') || 'Import folder…'}</button>
-                        <div id="pc-folders-list" class="plug-scripts-list"></div>
-                    </div>
-
-                    <!-- Automations the plugin ships -->
-                    <div class="plug-form-row">
-                        <label class="plug-form-label">${t('plugins.pluginAutomations')} <span style="color:var(--text-muted);font-size:10px;">(.bmmpa)</span></label>
-                        <button class="btn btn-xs btn-ghost" id="pc-import-automations" style="align-self:flex-start;">${IC.download} ${t('plugins.importAutomations')}</button>
-                        <div id="pc-automations-list" class="plug-scripts-list"></div>
-                        <p class="plug-auto-note">${escHtml(t('plugins.automationsNote'))}</p>
-                    </div>
-
-                    <!-- What happens on apply -->
-                    <div class="plug-sec-h">${escHtml(t('plugins.secDoes') || 'What it does')}</div>
                     <div class="plug-form-row">
                         <label class="plug-form-label">${t('plugins.applyMode') || 'On apply'}</label>
                         <select id="pc-apply-mode" class="select select-sm">
@@ -4085,6 +4105,7 @@ function renderCreate(container) {
         }).join('');
         list.innerHTML = (bundled + picked)
             || `<span style="font-size:11px;color:var(--text-muted);">${t('plugins.noScripts') || 'No script imported yet.'}</span>`;
+        setShipCount('pc-count-scripts', _editScripts.filter(x => !_removedScripts.includes(x)).length + scriptPaths.length);
         list.querySelectorAll('.plug-script-rm').forEach(b => b.addEventListener('click', () => {
             scriptPaths.splice(parseInt(b.dataset.i, 10), 1);
             renderScriptsList();
@@ -4102,19 +4123,6 @@ function renderCreate(container) {
         }));
     };
     _renderPcScripts = renderScriptsList;
-    container.querySelector('#pc-has-scripts')?.addEventListener('change', (e) => {
-        const on = e.target.checked;
-        const row = document.getElementById('pc-scripts-row');
-        if (row)
-            row.style.display = on ? '' : 'none';
-        const hint = document.getElementById('pc-has-scripts-hint');
-        if (hint)
-            hint.textContent = on
-                ? (t('plugins.pluginHasScriptsOn') || 'Scripts will be bundled and offered on activation')
-                : (t('plugins.pluginHasScriptsHint') || 'This plugin bundles external scripts');
-        if (on)
-            renderScriptsList();
-    });
     container.querySelector('#pc-import-scripts')?.addEventListener('click', async () => {
         const picked = await pickFile([{ name: 'Scripts', extensions: ['bat', 'cmd', 'ps1', 'vbs', 'py', 'js', 'sh'] }]);
         if (picked) {
@@ -4135,6 +4143,7 @@ function renderCreate(container) {
         }).join('');
         list.innerHTML = (bundled + picked)
             || `<span style="font-size:11px;color:var(--text-muted);">${t('plugins.noFolders') || 'No folder imported yet.'}</span>`;
+        setShipCount('pc-count-folders', _editFolders.filter(x => !_removedFolders.includes(x)).length + folderPaths.length);
         list.querySelectorAll('.plug-folder-rm').forEach(b => b.addEventListener('click', () => {
             folderPaths.splice(parseInt(b.dataset.i, 10), 1);
             renderFoldersList();
@@ -4173,6 +4182,7 @@ function renderCreate(container) {
         }).join('');
         list.innerHTML = (bundled + picked)
             || `<span style="font-size:11px;color:var(--text-muted);">${escHtml(t('plugins.noAutomations'))}</span>`;
+        setShipCount('pc-count-automations', _editAutomations.filter(x => !_removedAutomations.includes(x)).length + automationPaths.length);
         list.querySelectorAll('.plug-auto-rm').forEach(b => b.addEventListener('click', () => {
             automationPaths.splice(parseInt(b.dataset.i, 10), 1);
             renderAutomationsList();
@@ -4412,7 +4422,10 @@ function renderCreate(container) {
             tags: (document.getElementById('pc-tags')?.value || '')
                 .split(',').map(x => x.trim()).filter(Boolean),
             website: document.getElementById('pc-website')?.value.trim() || '',
-            has_scripts: (document.getElementById('pc-has-scripts')?.checked) || keptScripts.length > 0 || scriptPaths.length > 0 || keptFolders.length > 0 || folderPaths.length > 0,
+            // Derived from what is actually in the box. It was ALSO derived from a toggle,
+            // which could say yes when there was nothing — a plugin that warned about
+            // scripts it did not have.
+            has_scripts: keptScripts.length > 0 || scriptPaths.length > 0 || keptFolders.length > 0 || folderPaths.length > 0,
             scripts: keptScripts,
             folders: keptFolders,
             automations: _editAutomations.filter(a => !_removedAutomations.includes(a)),
@@ -10344,19 +10357,14 @@ function prefillCreateTab(manifest) {
     document.querySelectorAll('.pc-perm-cb').forEach((cb) => {
         cb.checked = asked.includes(cb.dataset.perm || '');
     });
-    // Restore "has scripts" toggle and SHOW the scripts/folders already linked to
-    // this plugin (read-only "existing" chips) so editing keeps full context.
+    // Show the scripts/folders already linked to this plugin as chips, so editing keeps
+    // full context. There is no toggle to restore any more — the lists ARE the answer.
     const existingScripts = manifest.scripts || [];
     const existingFolders = manifest.folders || [];
     // Carry them through to save so editing doesn't wipe bundled files.
     _editScripts = existingScripts.slice();
     _editFolders = existingFolders.slice();
     _editAutomations = (manifest.automations || []).slice();
-    const hasScriptsCb = document.getElementById('pc-has-scripts');
-    if (hasScriptsCb) {
-        hasScriptsCb.checked = !!(manifest.has_scripts || existingScripts.length || existingFolders.length);
-        hasScriptsCb.dispatchEvent(new Event('change'));
-    }
     // Render the bundled scripts/folders as removable chips (staged removal + undo)
     // via the create tab's own list renderers, now that _editScripts/_editFolders are set.
     _renderPcScripts?.();

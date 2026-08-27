@@ -9304,5 +9304,6 @@
   "apps.create.packMissing": "{n} entrée(s) nomment un fichier absent du dossier",
   "repo.extras.addBundle": "Emporter un fichier de catalogue…",
   "repo.extras.bundleOf": "Un catalogue de {t}, emporté dans le repo — le destinataire n'a besoin d'aucun autre hébergeur.",
-  "repo.extras.bundleEmpty": "Ce bundle ne contient aucune entrée de catalogue."
+  "repo.extras.bundleEmpty": "Ce bundle ne contient aucune entrée de catalogue.",
+  "plugins.shipCount": "{n} livré(s)"
 }
