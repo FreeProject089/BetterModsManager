@@ -8934,5 +8934,11 @@
   "plugins.contents.autoSteps": "{n} step(s)",
   "plugins.contents.autoAsks": "Written to use: {p}",
   "plugins.contents.autoAsksNothing": "Asks for nothing outside BMM.",
-  "plugins.contents.autoHow": "Applying this plugin adds these tasks, switched off, with everything that reaches outside BMM removed. You grant those yourself, afterwards."
+  "plugins.contents.autoHow": "Applying this plugin adds these tasks, switched off, with everything that reaches outside BMM removed. You grant those yourself, afterwards.",
+  "conflict.bothOnUnknown": "Both are active. The one deployed last is the one on disk — BMM could not read the order for this profile.",
+  "conflict.makeWin": "Make {m} win these files",
+  "conflict.makeWinHint": "Moves it to the end of the deployment order, so its version of every file it shares with anything is the one installed. The files change on disk straight away.",
+  "conflict.flipped": "Done — {n} file(s) changed hands.",
+  "order.errNoProfile": "No profile to reorder.",
+  "order.errNotPermutation": "That order is not the same set of mods that are active — refused rather than applied, because the difference would leave files in the game that nothing claims."
 }

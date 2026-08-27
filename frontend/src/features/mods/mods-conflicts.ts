@@ -459,11 +459,27 @@ export async function openConflictTree(mod1Id, mod2Id) {
       const a = byId.get(mod1Id);
       const b = byId.get(mod2Id);
       const nameOf = (id, m) => (m?.name || id);
-      // "Last activated wins" resolves to the one enabled most recently. When only one is
-      // on, it is that one; when both are, BMM cannot know the order from here, so it says
-      // so rather than picking.
+      // Who wins, for real.
+      //
+      // This used to say "BMM cannot tell which from here" when both were on. That was true
+      // while the deployment order was invisible — it is `Profile.active_mods`, last wins,
+      // and nothing surfaced it. mod_order_get does, so the sentence became a lie the moment
+      // it existed and is gone.
       const bothOn = !!a?.enabled && !!b?.enabled;
-      const winner = bothOn ? null : (a?.enabled ? a : (b?.enabled ? b : null));
+      let order: string[] = [];
+      if (bothOn) {
+          try {
+              const [ordered] = await invoke('mod_order_get', { profileId: null }) as [{ id: string }[], unknown];
+              order = (ordered || []).map((m) => m.id);
+          } catch { order = []; }
+      }
+      const iA = order.indexOf(mod1Id);
+      const iB = order.indexOf(mod2Id);
+      const known = bothOn && iA >= 0 && iB >= 0;
+      const winner = bothOn
+          ? (known ? (iA > iB ? a : b) : null)
+          : (a?.enabled ? a : (b?.enabled ? b : null));
+      const loserId = known ? (iA > iB ? mod2Id : mod1Id) : null;
 
       const chip = (m, id) => `<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border-radius:999px;
             background:${m?.enabled ? 'var(--success-dim, rgba(34,197,94,.15))' : 'var(--bmm-s06)'};
@@ -483,9 +499,17 @@ export async function openConflictTree(mod1Id, mod2Id) {
             ? escHtml((t('conflict.currentlyWins') || '{m} is active, so its version of these files is the one on disk.')
                 .replace('{m}', nameOf(winner.id, winner)))
             : (bothOn
-                ? escHtml(t('conflict.bothOn') || 'Both are active. Whichever was enabled last is the one on disk — BMM cannot tell which from here.')
+                ? escHtml(t('conflict.bothOnUnknown'))
                 : escHtml(t('conflict.noneOn') || 'Neither is active, so none of these files is currently installed.'))}
-        </div>`;
+        </div>
+        ${loserId
+            // Offered only when both are on and the order is known: with one of them off there
+            // is nothing to swap, and the honest fix is to enable it.
+            ? `<div style="margin-bottom:12px"><button type="button" class="btn btn-sm btn-secondary" id="conf-flip">
+                   ${escHtml(t('conflict.makeWin').replace('{m}', nameOf(loserId, byId.get(loserId))))}
+               </button>
+               <p style="font-size:10.5px;color:var(--text-muted);margin:6px 2px 0;line-height:1.45">${escHtml(t('conflict.makeWinHint'))}</p></div>`
+            : ''}`;
 
       container.innerHTML = summary + files.map(f => {
         const base = String(f).replace(/^.*[/\\]/, '');
@@ -502,6 +526,19 @@ export async function openConflictTree(mod1Id, mod2Id) {
         </span>
       </div>`;
       }).join('');
+      container.querySelector('#conf-flip')?.addEventListener('click', async () => {
+          if (!loserId) return;
+          try {
+              // Moving the loser to the END is the whole change: last wins, so the deployment
+              // order IS the answer. Everything that shares a file with it follows, which is
+              // what somebody asking for this actually wants — not just this one pair.
+              const next = [...order.filter((id) => id !== loserId), loserId];
+              const moved = await invoke('mod_order_set', { profileId: null, order: next }) as number;
+              toast(t('conflict.flipped').replace('{n}', String(moved)), 'success', 7000);
+              await openConflictTree(mod1Id, mod2Id);
+          } catch (e) { toast(String(e), 'error', 9000); }
+      });
+
       // Say so when the list was cut, rather than silently implying these are all of them.
       if (truncated) {
         container.innerHTML += `<div style="padding:10px;text-align:center;font-size:11px;color:var(--text-muted)">`

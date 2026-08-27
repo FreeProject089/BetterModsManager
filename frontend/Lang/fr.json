@@ -8932,5 +8932,11 @@
   "plugins.contents.autoSteps": "{n} étape(s)",
   "plugins.contents.autoAsks": "Écrite pour utiliser : {p}",
   "plugins.contents.autoAsksNothing": "Ne demande rien en dehors de BMM.",
-  "plugins.contents.autoHow": "Appliquer ce plugin ajoute ces tâches, éteintes, sans rien de ce qui sort de BMM. C'est toi qui accordes ça, après."
+  "plugins.contents.autoHow": "Appliquer ce plugin ajoute ces tâches, éteintes, sans rien de ce qui sort de BMM. C'est toi qui accordes ça, après.",
+  "conflict.bothOnUnknown": "Les deux sont actifs. Celui déployé en dernier est celui sur le disque — BMM n'a pas pu lire l'ordre de ce profil.",
+  "conflict.makeWin": "Faire gagner {m} sur ces fichiers",
+  "conflict.makeWinHint": "Le déplace à la fin de l'ordre de déploiement : sa version de chaque fichier qu'il partage avec quoi que ce soit devient celle installée. Les fichiers changent sur le disque immédiatement.",
+  "conflict.flipped": "Fait — {n} fichier(s) ont changé de main.",
+  "order.errNoProfile": "Aucun profil à réordonner.",
+  "order.errNotPermutation": "Cet ordre n'est pas le même ensemble de mods que ceux actifs — refusé plutôt qu'appliqué, parce que la différence laisserait dans le jeu des fichiers que plus rien ne revendique."
 }
