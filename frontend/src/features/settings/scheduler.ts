@@ -10,6 +10,7 @@
 // is here so it can reuse every existing invoke() action.
 
 import { sourceAccessHtml, wireSourceAccess } from '../../core/source-access.js';
+import { copyIdButtons, wireCopyIds } from '../../core/copy-id.js';
 import { invoke, pickFiles } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
 import { escHtml, escAttr } from '../../core/utils.js';
@@ -3251,6 +3252,7 @@ export function renderScheduleList(): void {
                 </div>
             </div>
             <div class="sched-row-actions">
+                ${copyIdButtons('task', task.id)}
                 <label class="plug-toggle sched-toggle" data-tooltip="${escAttr(task.enabled ? (t('sched.enabled') || 'Enabled') : (t('sched.disabled') || 'Disabled'))}">
                     <input type="checkbox" ${task.enabled ? 'checked' : ''} data-act="toggle">
                     <span class="plug-toggle-slider"></span>
@@ -3261,6 +3263,7 @@ export function renderScheduleList(): void {
                 <button class="btn btn-xs btn-ghost sched-act" data-act="edit" data-tooltip="${escAttr(t('common.edit') || 'Edit')}">${I('<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>')}</button>
                 <button class="btn btn-xs btn-ghost sched-act sched-act-del" data-act="del" data-tooltip="${escAttr(t('common.delete') || 'Delete')}">${I('<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>')}</button>
             </div>`;
+        wireCopyIds(row);
         row.querySelector('[data-act="toggle"]')?.addEventListener('change', async (e) => {
             task.enabled = (e.target as HTMLInputElement).checked; await saveTasks();
             if (task.osSchedule) await syncOsSchedule(task);
@@ -4396,10 +4399,7 @@ function renderModal(modal: HTMLElement): void {
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M21 21l-4.35-4.35"/><circle cx="11" cy="11" r="7"/></svg>
                             ${escHtml(t('sched.ref.toggle'))}
                         </button>
-                        <button type="button" class="btn btn-xs btn-ghost" id="sched-code-docs">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-                            ${escHtml(t('sched.bmms.openDocs'))}
-                        </button>
+
                     </div>
                     <div class="sched-code-row">
                         <aside class="sched-outline" id="sched-outline" hidden>
@@ -4814,12 +4814,7 @@ function wireCodeMode(modal: HTMLElement): void {
     wireReferencePanel(modal);
     wireOutlineAndHover(modal);
 
-    modal.querySelector('#sched-code-docs')?.addEventListener('click', () => {
-        // Through the deeplink, so it does the same two things clicking Help & other does:
-        // switch view and open the article. The modal closes because the docs are behind it.
-        modal.classList.remove('open');
-        void runDeepLink('bmm://docs/open?article=bmmscript-reference');
-    });
+
     const btns = Array.from(modal.querySelectorAll('.sched-mode-btn')) as HTMLElement[];
     if (!pane || !timeline || !ta || !status || !btns.length) return;
 
@@ -8863,22 +8858,36 @@ function wireReferencePanel(modal: HTMLElement): void {
             list.innerHTML = `<p class="sched-ref-none">${escHtml(t('sched.ref.none'))}</p>`;
             return;
         }
-        // Capped, and it SAYS it is capped. A list that silently stops at 60 reads as "that is
-        // everything", and the thing you were looking for is the one that got cut.
-        const shown = hits.slice(0, 60);
-        list.innerHTML = shown.map((e, i) => {
-            const l = label(e);
-            const d = desc(e);
-            const ps = (e.p || []).join(', ');
-            return `<button type="button" class="sched-ref-row" data-i="${i}" title="${escAttr(d || l || e.n)}">
-                <span class="sched-ref-k sched-ref-k-${e.k}">${escHtml(t(KINDS[e.k]))}</span>
-                <span class="sched-ref-n">${escHtml(e.n)}</span>
-                ${ps ? `<span class="sched-ref-p">${escHtml(ps)}</span>` : ''}
-                ${l ? `<span class="sched-ref-l">${escHtml(l)}</span>` : ''}
-            </button>`;
-        }).join('') + (hits.length > shown.length
-            ? `<p class="sched-ref-more">${escHtml(t('sched.ref.more').replace('{n}', String(hits.length - shown.length)))}</p>`
-            : '');
+        // ALL of them, grouped and sorted.
+        //
+        // It used to stop at 60 of 151 and say so. Saying so is better than lying, and it is
+        // still a reference that does not contain two thirds of the reference — you cannot
+        // find what an action is called by searching for a name you do not know.
+        //
+        // Actions come first because they are what `do` takes and what people are looking for;
+        // within a kind, alphabetical, so the same search reads the same way twice.
+        const ORDER: BmmsEntry['k'][] = ['a', 'c', 'v', 's'];
+        const shown: BmmsEntry[] = [];
+        const chunks: string[] = [];
+        for (const kind of ORDER) {
+            const mine = hits.filter((e) => e.k === kind)
+                .sort((x, y) => x.n.localeCompare(y.n));
+            if (!mine.length) continue;
+            chunks.push(`<h5 class="sched-ref-h">${escHtml(t(KINDS[kind]))}<span>${mine.length}</span></h5>`);
+            for (const e of mine) {
+                const l = label(e);
+                const d = desc(e);
+                const ps = (e.p || []).join(', ');
+                chunks.push(`<button type="button" class="sched-ref-row" data-i="${shown.length}" title="${escAttr(d || l || e.n)}">
+                    <span class="sched-ref-k sched-ref-k-${e.k}">${escHtml(t(KINDS[e.k]))}</span>
+                    <span class="sched-ref-n">${escHtml(e.n)}</span>
+                    ${ps ? `<span class="sched-ref-p">${escHtml(ps)}</span>` : ''}
+                    ${l ? `<span class="sched-ref-l">${escHtml(l)}</span>` : ''}
+                </button>`);
+                shown.push(e);
+            }
+        }
+        list.innerHTML = chunks.join('');
         list.querySelectorAll<HTMLElement>('.sched-ref-row').forEach((row) => {
             row.addEventListener('click', () => insert(shown[parseInt(row.dataset.i || '0', 10)]));
         });

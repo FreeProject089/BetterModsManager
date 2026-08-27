@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { sourceAccessHtml, wireSourceAccess } from '../../core/source-access.js';
+import { copyIdButtons, wireCopyIds } from '../../core/copy-id.js';
 import { invoke, pickFile, saveFile, pickFolder, convertFileSrc, apiBase, apiRunning } from '../../core/api.js';
 import { toast, fetchProfileIconPaths, updateSelectProfileIcon, decorateProfileOptions, toastSaved } from '../../ui/app.js';
 import { t, getLang } from '../../core/i18n.js';
@@ -428,6 +429,7 @@ function buildPluginCard(plugin, source) {
                 ${manifest.tags.map(tag => `<span class="plug-tag">${escHtml(tag)}</span>`).join('')}
             </div>` : ''}
         <div class="plug-card-actions">
+            ${copyIdButtons('plugin', manifest.id)}
             ${source === 'installed' ? `
                 ${hasModlist ? `
                     <button class="btn btn-sm btn-accent plug-btn-compare" data-id="${escHtml(manifest.id)}" data-tooltip="${t('plugins.compareTip')}">
@@ -500,6 +502,7 @@ function buildPluginCard(plugin, source) {
             assetsBtn.addEventListener('click', () => void openPluginAssets(manifest.id, manifest.name));
         })();
     }
+    wireCopyIds(card);
     card.querySelector('.plug-btn-compare')?.addEventListener('click', () => handleCompare(manifest.id));
     card.querySelector('.plug-btn-apply')?.addEventListener('click', () => handleApply(manifest.id));
     card.querySelector('.plug-btn-export')?.addEventListener('click', () => handleExport(manifest.id, manifest.name));

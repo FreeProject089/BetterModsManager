@@ -18793,7 +18793,21 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
    popup covering the code you are writing answers the question and hides the
    place the answer goes. */
 .sched-code-row { display: flex; gap: 10px; align-items: stretch; min-height: 0; }
-.sched-code-row .sched-code { flex: 1 1 auto; min-width: 0; }
+/* The FLEX CHILD is `.code-hl-wrap`, not the textarea.
+   attachHighlight() wraps the textarea and puts the highlighted mirror behind it, so by the
+   time this row lays out, its child is the wrapper. Sizing `.sched-code` therefore styled an
+   element two levels in and left the column with no flex-grow at all — which is why the code
+   ended up a narrow strip between two panels. */
+.sched-code-row > .code-hl-wrap,
+.sched-code-row > .sched-code {
+    flex: 1 1 auto;
+    min-width: 340px;
+}
+/* The wrapper is the box now, so the textarea has to fill it rather than keep its own width. */
+.sched-code-row > .code-hl-wrap > textarea { width: 100%; box-sizing: border-box; }
+/* Belt and braces on the one rule that stops the mirror becoming a second visible box: it is
+   absolutely positioned over the textarea, and a flex context must not talk it out of that. */
+.sched-code-row .code-hl-mirror { position: absolute; inset: 0; }
 .sched-ref {
     flex: 0 0 288px;
     display: flex;
@@ -19126,3 +19140,37 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
 .pv-unknown .pv-eff { color: var(--warning); }
 .pv-maybe { font-size: 10px; padding: 0 6px; border-radius: 999px; background: var(--bg-card); color: var(--warning); }
 .pv-note { font-size: 11px; color: var(--text-muted); flex: 1; line-height: 1.45; }
+
+/* Group headings in the reference. It lists all 151 entries now, so it needs somewhere for the
+   eye to stop. */
+.sched-ref-h {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin: 8px 4px 3px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: var(--text-muted);
+    position: sticky;
+    top: 0;
+    background: var(--bg-card);
+    padding: 3px 0;
+}
+.sched-ref-h span { font-size: 10px; padding: 0 5px; border-radius: 999px; background: var(--bg-hover); }
+
+
+/* Copy-id buttons (core/copy-id.ts).
+   They sit in a row of real actions — Apply, Export, Delete — and must not compete with
+   them: no fill, muted ink, and they only take colour on hover. */
+.bmm-copy-id,
+.bmm-copy-cid {
+    color: var(--text-muted);
+    gap: 4px;
+    padding: 2px 7px;
+    flex: 0 0 auto;
+}
+.bmm-copy-id:hover,
+.bmm-copy-cid:hover { color: var(--accent); }
+.bmm-copy-id svg,
+.bmm-copy-cid svg { opacity: .8; }

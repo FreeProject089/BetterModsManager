@@ -1,3 +1,4 @@
+pub mod content_ids;
 pub mod format_check;
 pub mod task_output;
 pub mod mod_order;

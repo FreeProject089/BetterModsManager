@@ -9169,5 +9169,16 @@
   "plugins.epAbout.repoForget": "Removes a repo from the connected list. The body must carry the repo's URL exactly as it was added. Files already synced are <b>not</b> deleted.",
   "plugins.epAbout.repoSync": "Downloads mods from a remote repo into local BMM profiles. It runs in the background: the reply is immediate (202 Accepted) with a <code>job_id</code>. <b>One sync at a time</b> — a second request is refused while one is running.",
   "plugins.epAbout.repoManifest": "Writes a <code>repo.json</code> for one or more mod folders that are <b>already in place</b>. Unlike <code>/api/repo/gen</code> it asks for no profile and copies nothing: it reads the folder, writes a file, and leaves everything where it was.",
-  "plugins.epAbout.repoGen": "Exports local profiles as a BMM server repo — <code>repo.json</code>, hashed mods, the file structure. With <code>generate_server=true</code> it also writes the mini-server's start scripts; with <code>lightweight=true</code> it does not copy the mod files."
+  "plugins.epAbout.repoGen": "Exports local profiles as a BMM server repo — <code>repo.json</code>, hashed mods, the file structure. With <code>generate_server=true</code> it also writes the mini-server's start scripts; with <code>lightweight=true</code> it does not copy the mod files.",
+  "copyid.local": "ID",
+  "copyid.localHint": "Copy the id this machine uses for it — what a bmm:// link, an API call or a task step needs.",
+  "copyid.content": "Content ID",
+  "copyid.contentHint": "Copy the id of WHAT IT IS. The same thing on another machine has the same one, so this is the one to quote when asking somebody whether they have it.",
+  "copyid.copiedLocal": "Id copied:",
+  "copyid.copiedContent": "Content id copied:",
+  "copyid.errNoContent": "No content id for that:",
+  "cid.errNoModpack": "No modpack with that id.",
+  "cid.errNoPlugin": "No plugin with that id.",
+  "cid.errNoTask": "No task with that id.",
+  "cid.errKind": "Nothing of that kind has a content id."
 }

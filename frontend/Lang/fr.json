@@ -9167,5 +9167,16 @@
   "plugins.epAbout.repoForget": "Retire un repo de la liste des repos connectés. Le corps de la requête doit contenir l'URL exacte du repo tel qu'il a été ajouté. Les fichiers locaux synchronisés ne sont PAS supprimés.",
   "plugins.epAbout.repoSync": "Télécharge les mods depuis un repo distant et les intègre dans des profils locaux BMM. L'opération est démarrée en arrière-plan — la réponse est immédiate (202 Accepted) avec un job_id. <strong>Max 1 sync simultanée</strong> — retourne 409 si une sync est déjà en cours. Annulez avec <code>DELETE /api/repo/sync/cancel</code>.  Équivalent deeplink : bmm://repo/sync?url=&lt;URL&gt;&amp;profile=&lt;repo_profile_id&gt;",
   "plugins.epAbout.repoManifest": "Écrit un <code>repo.json</code> pour un ou plusieurs dossiers de mods <b>déjà en place</b>. Contrairement à <code>/api/repo/gen</code>, il ne demande aucun profil et ne copie rien : il lit le dossier, écrit un fichier, et laisse le dossier intact. Synchrone (il ne fait que hacher), donc un script de publication peut agir directement sur le diff renvoyé. Par défaut <code>reuse_existing</code> conserve l'identité du manifeste précédent : re-générer produit une nouvelle <i>révision du même dépôt</i>, pas un dépôt différent — mettez-le à <code>false</code> seulement si vous voulez délibérément en créer un nouveau.",
-  "plugins.epAbout.repoGen": "Exporte des profils locaux au format repo serveur BMM (repo.json + mods hachés + structure de fichiers). Si <code>generate_server=true</code>, génère les scripts de démarrage du mini-serveur. Si <code>lightweight=true</code>, ne copie pas les fichiers de mods (manifeste seul). Si <code>zip_output=true</code>, compresse le tout dans un .zip. L'opération est démarrée en arrière-plan — réponse immédiate (202). Annulez avec <code>DELETE /api/repo/gen/cancel</code>."
+  "plugins.epAbout.repoGen": "Exporte des profils locaux au format repo serveur BMM (repo.json + mods hachés + structure de fichiers). Si <code>generate_server=true</code>, génère les scripts de démarrage du mini-serveur. Si <code>lightweight=true</code>, ne copie pas les fichiers de mods (manifeste seul). Si <code>zip_output=true</code>, compresse le tout dans un .zip. L'opération est démarrée en arrière-plan — réponse immédiate (202). Annulez avec <code>DELETE /api/repo/gen/cancel</code>.",
+  "copyid.local": "ID",
+  "copyid.localHint": "Copie l'id que cette machine lui donne — ce dont un lien bmm://, un appel API ou une étape de tâche a besoin.",
+  "copyid.content": "ID de contenu",
+  "copyid.contentHint": "Copie l'id de CE QUE C'EST. La même chose sur une autre machine porte le même, c'est donc celui à citer pour demander à quelqu'un s'il l'a.",
+  "copyid.copiedLocal": "Id copié :",
+  "copyid.copiedContent": "Id de contenu copié :",
+  "copyid.errNoContent": "Pas d'id de contenu pour ça :",
+  "cid.errNoModpack": "Aucun modpack avec cet id.",
+  "cid.errNoPlugin": "Aucun plugin avec cet id.",
+  "cid.errNoTask": "Aucune tâche avec cet id.",
+  "cid.errKind": "Rien de ce genre n'a d'id de contenu."
 }
