@@ -18837,8 +18837,18 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
     flex: 1 1 auto;
     min-width: 340px;
 }
-/* The wrapper is the box now, so the textarea has to fill it rather than keep its own width. */
-.sched-code-row > .code-hl-wrap > textarea { width: 100%; box-sizing: border-box; }
+/* The wrapper is the box now, so the textarea has to fill it — in BOTH directions.
+   Height was the half that was missing, and it only showed with a panel open. The row is
+   `align-items: stretch`, so opening the reference makes the row as tall as the panel (455px
+   against the textarea's 340), the wrapper stretches with it, and the mirror follows the
+   WRAPPER because it is `inset: 0`. The textarea did not: 115px of mirror stuck out below
+   it, wearing `.input`'s background and rounded corners, which reads as a second empty code
+   box under the first. Measured in the real modal — 340 vs 455. */
+.sched-code-row > .code-hl-wrap > textarea {
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+}
 /* The mirror's own rule (`.code-hl-wrap > .code-hl-mirror`) now outranks anything the
    shared classes say, so the position no longer needs restating here. */
 .sched-ref {
