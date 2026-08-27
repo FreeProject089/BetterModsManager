@@ -493,36 +493,56 @@ function buildPluginCard(plugin, source) {
                         ${IC.play} ${t('plugins.apply')}
                     </button>` : ''}
                 <div class="plug-card-actions-right">
+                    <!-- The two questions somebody asks before trusting a plugin, as their
+                         own buttons rather than as the eighth and ninth icon in a row.
+                         Everything that CHANGES something is behind the menu; these two only
+                         look. -->
+                    <button class="btn btn-xs btn-ghost plug-btn-perms" data-id="${escHtml(manifest.id)}"
+                        data-name="${escAttr(manifest.name)}" data-tooltip="${escAttr(t('plugins.perm.tip'))}">
+                        ${IC.lock} <span class="plug-btn-word">${escHtml(t('plugins.perm.word'))}</span>
+                    </button>
+                    <button class="btn btn-xs btn-ghost plug-btn-content" data-id="${escHtml(manifest.id)}"
+                        data-name="${escAttr(manifest.name)}" data-tooltip="${escAttr(t('plugins.tree.tip'))}">
+                        ${IC.folder} <span class="plug-btn-word">${escHtml(t('plugins.tree.word'))}</span>
+                    </button>
+                    <button class="btn btn-xs btn-ghost plug-btn-inspect" data-id="${escHtml(manifest.id)}" data-tooltip="${escAttr(t('plugins.inspect'))}">
+                        ${IC.eye} <span class="plug-btn-word">${escHtml(t('plugins.inspectWord'))}</span>
+                    </button>
                     ${plugin.install_dir ? `
                     <span class="plug-sha-badge plug-sha-badge--pending plug-btn-sha" data-id="${escHtml(manifest.id)}" data-tooltip="${t('plugins.checksumTitle')}">
                         ${IC.hash} SHA
                     </span>` : ''}
-                    ${fromCatalog ? `
-                    <button class="btn btn-xs btn-ghost plug-btn-au ${auOn ? 'plug-au-on' : ''}" data-id="${escHtml(manifest.id)}"
-                        data-tooltip="${auOn ? (t('plugins.autoUpdateOn') || 'Auto-update: ON (re-installs when the catalog version changes)') : (t('plugins.autoUpdateOff') || 'Auto-update: OFF')}">
-                        ${IC.refresh}
-                    </button>` : ''}
-                    <button class="btn btn-xs btn-ghost plug-btn-assets" data-id="${escHtml(manifest.id)}" data-tooltip="${t('plugins.assets.tip')}" hidden>
-                        ${IC.paperclip}
-                    </button>
-                    <button class="btn btn-xs btn-ghost plug-btn-folder" data-id="${escHtml(manifest.id)}" data-dir="${escHtml(plugin.install_dir || '')}" data-tooltip="${t('plugins.openFolder')}">
-                        ${IC.folder}
-                    </button>
-                    <button class="btn btn-xs btn-ghost plug-btn-inspect" data-id="${escHtml(manifest.id)}" data-tooltip="${t('plugins.inspect')}">
-                        ${IC.eye}
-                    </button>
-                    <button class="btn btn-xs btn-ghost plug-btn-edit" data-id="${escHtml(manifest.id)}" data-tooltip="${t('plugins.editPlugin')}">
-                        ${IC.editIcon}
-                    </button>
-                    <button class="btn btn-xs btn-ghost plug-btn-duplicate" data-id="${escHtml(manifest.id)}" data-tooltip="${t('plugins.duplicate')}">
-                        ${IC.duplicate}
-                    </button>
-                    <button class="btn btn-xs btn-ghost plug-btn-export" data-id="${escHtml(manifest.id)}" data-tooltip="${t('common.export')}">
-                        ${IC.exportIcon}
-                    </button>
-                    <button class="btn btn-xs btn-danger plug-btn-uninstall" data-id="${escHtml(manifest.id)}" data-tooltip="${t('plugins.uninstall')}">
-                        ${IC.trash}
-                    </button>
+                    <!-- The rest. Seven icons that each did something different and looked
+                         the same; a menu names them. -->
+                    <div class="plug-more" data-id="${escHtml(manifest.id)}">
+                        <button class="btn btn-xs btn-ghost plug-more-btn" data-tooltip="${escAttr(t('plugins.more'))}" aria-haspopup="true" aria-expanded="false">⋮</button>
+                        <div class="plug-more-menu" hidden>
+                            ${fromCatalog ? `
+                            <button class="plug-more-item plug-btn-au ${auOn ? 'plug-au-on' : ''}" data-id="${escHtml(manifest.id)}">
+                                ${IC.refresh} ${escHtml(auOn ? (t('plugins.autoUpdateOn') || 'Auto-update: ON') : (t('plugins.autoUpdateOff') || 'Auto-update: OFF'))}
+                            </button>` : ''}
+                            <button class="plug-more-item plug-btn-assets" data-id="${escHtml(manifest.id)}" hidden>
+                                ${IC.paperclip} ${escHtml(t('plugins.assets.tip'))}
+                            </button>
+                            <button class="plug-more-item plug-btn-folder" data-id="${escHtml(manifest.id)}" data-dir="${escHtml(plugin.install_dir || '')}">
+                                ${IC.folder} ${escHtml(t('plugins.openFolder'))}
+                            </button>
+                            <button class="plug-more-item plug-btn-edit" data-id="${escHtml(manifest.id)}">
+                                ${IC.editIcon} ${escHtml(t('plugins.editPlugin'))}
+                            </button>
+                            <button class="plug-more-item plug-btn-duplicate" data-id="${escHtml(manifest.id)}">
+                                ${IC.duplicate} ${escHtml(t('plugins.duplicate'))}
+                            </button>
+                            <button class="plug-more-item plug-btn-export" data-id="${escHtml(manifest.id)}">
+                                ${IC.exportIcon} ${escHtml(t('common.export'))}
+                            </button>
+                            <!-- Last, behind a separator, and the only one that is red.
+                                 Removing a plugin is not a peer of duplicating one. -->
+                            <button class="plug-more-item plug-more-danger plug-btn-uninstall" data-id="${escHtml(manifest.id)}">
+                                ${IC.trash} ${escHtml(t('plugins.uninstall'))}
+                            </button>
+                        </div>
+                    </div>
                 </div>
             ` : `
                 <button class="btn btn-sm btn-accent plug-btn-install"
@@ -561,6 +581,51 @@ function buildPluginCard(plugin, source) {
     card.querySelector('.plug-btn-export')?.addEventListener('click', () => handleExport(manifest.id, manifest.name));
     card.querySelector('.plug-btn-uninstall')?.addEventListener('click', () => handleUninstall(manifest.id, manifest.name));
     card.querySelector('.plug-btn-inspect')?.addEventListener('click', () => handleInspect(plugin));
+    card.querySelector('.plug-btn-perms')?.addEventListener('click', async (e) => {
+        const b = e.currentTarget;
+        const { openPluginPermissions } = await import('./plugin-inspect.js');
+        await openPluginPermissions(b.dataset.id || '', b.dataset.name || '', (m, k) => toast(m, k));
+    });
+    card.querySelector('.plug-btn-content')?.addEventListener('click', async (e) => {
+        const b = e.currentTarget;
+        const { openPluginContent } = await import('./plugin-inspect.js');
+        await openPluginContent(b.dataset.id || '', b.dataset.name || '');
+    });
+    // The overflow menu. Closes on a second click, on Escape, and on any click outside —
+    // a menu that only closes by re-pressing its own button is one people leave open.
+    {
+        const wrap = card.querySelector('.plug-more');
+        const btn = wrap?.querySelector('.plug-more-btn');
+        const menu = wrap?.querySelector('.plug-more-menu');
+        if (wrap && btn && menu) {
+            const shut = () => {
+                menu.hidden = true;
+                btn.setAttribute('aria-expanded', 'false');
+                document.removeEventListener('click', away, true);
+                document.removeEventListener('keydown', onEsc, true);
+            };
+            const away = (ev) => { if (!wrap.contains(ev.target))
+                shut(); };
+            const onEsc = (ev) => { if (ev.key === 'Escape') {
+                ev.stopPropagation();
+                shut();
+            } };
+            btn.addEventListener('click', (ev) => {
+                ev.stopPropagation();
+                if (!menu.hidden) {
+                    shut();
+                    return;
+                }
+                menu.hidden = false;
+                btn.setAttribute('aria-expanded', 'true');
+                document.addEventListener('click', away, true);
+                document.addEventListener('keydown', onEsc, true);
+            });
+            // Anything chosen closes it: the action opens a dialog or navigates, and a menu
+            // left hanging over the result is the thing people click by accident next.
+            menu.addEventListener('click', () => shut());
+        }
+    }
     card.querySelector('.plug-btn-edit')?.addEventListener('click', () => handleEditPlugin(manifest));
     card.querySelector('.plug-btn-duplicate')?.addEventListener('click', () => handleDuplicatePlugin(manifest));
     card.querySelector('.plug-btn-au')?.addEventListener('click', (e) => {

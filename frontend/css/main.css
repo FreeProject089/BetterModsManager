@@ -19682,3 +19682,67 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
     font-size: 11px;
     padding: 1px 4px;
 }
+
+/* ── The plugin card's actions ───────────────────────────────────────────────
+   Eleven icon buttons in one row, each doing something different and all looking the same.
+   Two of them answered questions ("what may this do", "what is in it") and the other nine
+   changed something; the row gave no way to tell which was which. */
+.plug-btn-word { font-size: 10.5px; }
+.plug-more { position: relative; }
+.plug-more-btn { font-size: 15px; line-height: 1; padding: 2px 7px; }
+.plug-more-menu {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 4px);
+    z-index: 40;
+    min-width: 190px;
+    padding: 4px;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    /* Opaque, never a surface token: a translucent menu renders its text over whatever card
+       is behind it. */
+    background: var(--bmm-bg-elevated);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, .45);
+}
+.plug-more-menu[hidden] { display: none; }
+.plug-more-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 6px 9px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-secondary);
+    font: inherit;
+    font-size: 11.5px;
+    text-align: left;
+    cursor: pointer;
+}
+.plug-more-item:hover { background: var(--bmm-s05); color: var(--text-primary); }
+.plug-more-item[hidden] { display: none; }
+/* Removing a plugin is not a peer of duplicating one. */
+.plug-more-danger { color: var(--danger); margin-top: 4px; border-top: 1px solid var(--border); border-radius: 0 0 6px 6px; }
+.plug-more-danger:hover { background: color-mix(in srgb, var(--danger) 14%, transparent); color: var(--danger); }
+
+/* ── The two modals ── */
+.pi-modal { max-width: 640px; width: 92vw; }
+.pi-sub { margin: 0 0 10px; font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+.pi-body { max-height: 60vh; overflow-y: auto; }
+.pi-none { font-size: 12px; color: var(--text-muted); margin: 8px 0; }
+
+.pi-perms { display: flex; flex-direction: column; gap: 10px; }
+.pi-perm-dom { display: flex; flex-direction: column; gap: 3px; }
+.pi-perm-dom-h { font-size: 9.5px; font-weight: 800; letter-spacing: .5px; text-transform: uppercase; }
+.pi-perm-row { display: grid; grid-template-columns: auto auto 1fr; align-items: baseline; gap: 7px; padding: 2px 0; cursor: pointer; }
+.pi-perm-row code { font-size: 11px; }
+.pi-perm-what { font-size: 10.5px; color: var(--text-muted); line-height: 1.35; }
+
+.pi-tree-sum { margin: 0 0 8px; font-size: 11px; color: var(--text-muted); }
+.pi-tree { font-family: var(--font-mono, monospace); font-size: 11.5px; }
+.pi-tree-row { display: flex; align-items: baseline; gap: 10px; padding: 2px 0; border-radius: 4px; }
+.pi-tree-row:hover { background: var(--bmm-s04); }
+.pi-tree-row.is-dir .pi-tree-name { color: var(--accent); font-weight: 600; }
+.pi-tree-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.pi-tree-size { flex: 0 0 auto; color: var(--text-muted); font-size: 10.5px; }

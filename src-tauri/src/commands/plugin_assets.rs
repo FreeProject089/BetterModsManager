@@ -449,3 +449,145 @@ pub fn plugin_file_read(
     }
     Ok(String::from_utf8_lossy(&std::fs::read(&full_c).map_err(|e| e.to_string())?).to_string())
 }
+
+/// One file in a folder listing.
+#[derive(serde::Serialize)]
+pub struct TreeEntry {
+    /// Relative to the root, always with `/` separators so the two platforms agree.
+    pub path: String,
+    pub size: u64,
+    /// Directories are listed too: an empty `bundle/` folder is a fact about the plugin.
+    pub is_dir: bool,
+}
+
+/// A cap. Not a guess: a plugin that ships a game's worth of files would otherwise build a
+/// list nobody can read and a message nobody can send.
+const TREE_MAX: usize = 5000;
+
+/// Everything under a folder, depth-first, relative paths.
+///
+/// Cannot escape the root: entries are produced by walking it, never by joining a caller's
+/// string onto it. Symlinks are listed but not followed — a link out of the folder would
+/// otherwise let a listing walk the whole disk, and the depth cap would not save it.
+pub fn walk_tree(root: &std::path::Path) -> Vec<TreeEntry> {
+    fn go(base: &std::path::Path, dir: &std::path::Path, out: &mut Vec<TreeEntry>, depth: usize) {
+        if depth > 24 || out.len() >= TREE_MAX {
+            return;
+        }
+        let Ok(rd) = std::fs::read_dir(dir) else { return };
+        let mut items: Vec<_> = rd.flatten().collect();
+        // Sorted, so two readings of the same folder produce the same list. read_dir order
+        // is the filesystem's business and is not stable between machines.
+        items.sort_by_key(|e| e.file_name());
+        for e in items {
+            if out.len() >= TREE_MAX {
+                return;
+            }
+            let p = e.path();
+            let Ok(rel) = p.strip_prefix(base) else { continue };
+            let rel = rel.to_string_lossy().replace('\\', "/");
+            let meta = match std::fs::symlink_metadata(&p) {
+                Ok(m) => m,
+                Err(_) => continue,
+            };
+            if meta.file_type().is_symlink() {
+                // Listed as what it is, and not walked.
+                out.push(TreeEntry { path: rel, size: 0, is_dir: false });
+                continue;
+            }
+            if meta.is_dir() {
+                out.push(TreeEntry { path: rel, size: 0, is_dir: true });
+                go(base, &p, out, depth + 1);
+            } else {
+                out.push(TreeEntry { path: rel, size: meta.len(), is_dir: false });
+            }
+        }
+    }
+    let mut out = Vec::new();
+    go(root, root, &mut out, 0);
+    out
+}
+
+/// Everything a plugin holds, not just its `assets/` folder.
+///
+/// `plugin_assets_list` answers "what did the author put in assets/", which is a different
+/// question from "what IS this plugin". The second one is what somebody asks before running
+/// something they downloaded, and there was no way to ask it: the scripts, the bundled
+/// folders and the automations were all invisible unless you opened the folder yourself.
+#[tauri::command]
+pub fn plugin_tree(
+    state: tauri::State<'_, crate::state::AppState>,
+    plugin_id: String,
+) -> Result<Vec<TreeEntry>, String> {
+    let dir = install_dir_of(&state, &plugin_id)?;
+    let root = std::path::PathBuf::from(&dir);
+    if dir.is_empty() || !root.exists() {
+        return Err("plugins.assets.errNoFolder".to_string());
+    }
+    Ok(walk_tree(&root))
+}
+
+/// The same listing for a folder the user just picked, before it is bundled into a plugin.
+///
+/// The create screen let somebody import a folder and then showed them its NAME. What ends
+/// up inside the plugin — and inside everybody else's copy of it — was invisible until
+/// after it shipped.
+#[tauri::command]
+pub fn folder_tree(path: String) -> Result<Vec<TreeEntry>, String> {
+    let root = std::path::PathBuf::from(&path);
+    if !root.is_dir() {
+        return Err("plugins.assets.errNoFolder".to_string());
+    }
+    Ok(walk_tree(&root))
+}
+
+#[cfg(test)]
+mod tree_tests {
+    use super::walk_tree;
+
+    fn scratch(tag: &str) -> std::path::PathBuf {
+        let d = std::env::temp_dir().join(format!("bmm_tree_{}_{}", tag, std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(d.join("scripts")).unwrap();
+        d
+    }
+
+    #[test]
+    fn it_finds_files_in_sub_folders_and_says_which_are_folders() {
+        let d = scratch("nested");
+        std::fs::write(d.join("readme.md"), "hi").unwrap();
+        std::fs::write(d.join("scripts/run.ps1"), "body").unwrap();
+        let out = walk_tree(&d);
+        let paths: Vec<_> = out.iter().map(|e| e.path.clone()).collect();
+        assert!(paths.contains(&"readme.md".to_string()));
+        assert!(paths.contains(&"scripts".to_string()));
+        assert!(paths.contains(&"scripts/run.ps1".to_string()));
+        assert!(out.iter().find(|e| e.path == "scripts").unwrap().is_dir);
+        assert!(!out.iter().find(|e| e.path == "readme.md").unwrap().is_dir);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn the_same_folder_lists_the_same_way_twice() {
+        // read_dir order is the filesystem's business. A listing that reshuffles between two
+        // reads is one nobody can compare against anything.
+        let d = scratch("stable");
+        for n in ["b.txt", "a.txt", "c.txt"] {
+            std::fs::write(d.join(n), "x").unwrap();
+        }
+        let one: Vec<_> = walk_tree(&d).into_iter().map(|e| e.path).collect();
+        let two: Vec<_> = walk_tree(&d).into_iter().map(|e| e.path).collect();
+        assert_eq!(one, two);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn a_size_is_reported_for_files_and_not_invented_for_folders() {
+        let d = scratch("sizes");
+        std::fs::write(d.join("f.bin"), vec![0u8; 1234]).unwrap();
+        let out = walk_tree(&d);
+        assert_eq!(out.iter().find(|e| e.path == "f.bin").unwrap().size, 1234);
+        assert_eq!(out.iter().find(|e| e.path == "scripts").unwrap().size, 0);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+}

@@ -763,6 +763,8 @@ fn main() {
             commands::modlist::fetch_to_app_data,
             commands::settings::backup_dest_path,
             commands::plugin_assets::plugin_assets_list,
+            commands::plugin_assets::plugin_tree,
+            commands::plugin_assets::folder_tree,
             commands::plugin_assets::plugin_asset_read,
             commands::plugin_assets::plugin_asset_path,
             commands::plugin_assets::plugin_asset_export,

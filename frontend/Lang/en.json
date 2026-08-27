@@ -9334,5 +9334,17 @@
   "sched.dbg.noMatch": "Nothing matches that.",
   "sched.dbg.editTip": "Click to change this value, then Enter. The run continues with what you typed.",
   "cid.errNoBundle": "That bundle has neither a checksum nor a readable path, so there is nothing to identify it by.",
-  "sched.outline.tip": "The shape of the script, line by line. Scanned rather than compiled, so it still works while the script is halfway through being changed — which is when you want it. Click a line to jump to it."
+  "sched.outline.tip": "The shape of the script, line by line. Scanned rather than compiled, so it still works while the script is halfway through being changed — which is when you want it. Click a line to jump to it.",
+  "plugins.perm.word": "Permissions",
+  "plugins.perm.tip": "What this plugin may do to your machine — and change it.",
+  "plugins.perm.title": "What this plugin may do",
+  "plugins.perm.sub": "ticking here GRANTS. Nothing is asked again afterwards.",
+  "plugins.tree.word": "Contents",
+  "plugins.tree.tip": "Everything it holds — scripts, bundled folders, automations, assets.",
+  "plugins.tree.title": "What is in this plugin",
+  "plugins.tree.empty": "Nothing in there.",
+  "plugins.tree.sum": "{f} file(s) in {d} folder(s) · {b}",
+  "plugins.inspectWord": "Analyse",
+  "plugins.more": "Everything else",
+  "plugins.assets.errNoFolder": "That plugin has no folder on this machine to read."
 }
