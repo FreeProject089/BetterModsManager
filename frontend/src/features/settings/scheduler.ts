@@ -3918,6 +3918,39 @@ const PRESETS: { cat: PresetCat; key: string; icon: string; title: string; desc:
         }),
     },
     {
+        // What a content id is FOR, as a task somebody can run.
+        //
+        // A local id says which entry on THIS machine; it says nothing about whether that
+        // entry still holds what it held when you wrote the automation down. Somebody edits
+        // the pack, the id does not change, and the task keeps applying a different thing
+        // under the same name. The content id is what notices.
+        //
+        // Both fields arrive blank on purpose. Filled in with a guess, this would be a task
+        // that looks configured, runs, matches nothing and reports success.
+        cat: 'advanced', key: 'packUnchanged', icon: '<path d="M20 6 9 17l-5-5"/><circle cx="12" cy="12" r="10"/>',
+        title: 'Apply a modpack only if it has not changed',
+        desc: 'Reads what the pack IS and compares it to the id you recorded, so an edited pack stops rather than applying quietly.',
+        make: () => ({
+            name: 'Apply the pack I meant',
+            trigger: { type: 'manual' },
+            steps: [
+                // Copy the pack's Content ID from its card into the value below, once.
+                { kind: 'action', action: { type: 'id.of', params: { kind: 'modpack', id: '', into: 'packNow' } } },
+                {
+                    kind: 'if',
+                    condition: { type: 'textIs', params: { source: 'packNow', op: 'is', value: '' } },
+                    then: [
+                        { kind: 'action', action: { type: 'modpack.enable', params: { id: '' } } },
+                    ],
+                    else: [
+                        { kind: 'action', action: { type: 'notify', params: { message: 'That modpack is not the one this task was written for \u2014 nothing applied.', level: 'warning' } } },
+                        { kind: 'action', action: { type: 'task.stop', params: { reason: 'the pack changed' } } },
+                    ],
+                },
+            ],
+        }),
+    },
+    {
         cat: 'repo', key: 'diskThenSync', icon: '<line x1="22" x2="2" y1="12" y2="12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
         title: 'Only sync if there is room',
         desc: 'Check free space first, and stop with a reason rather than filling the disk.',
