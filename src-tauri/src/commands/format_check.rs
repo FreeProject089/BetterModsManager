@@ -23,8 +23,9 @@ use serde_json::Value;
 /// What a document turned out to be, and what is wrong with it.
 #[derive(Debug, Serialize, Clone, PartialEq)]
 pub struct FormatReport {
-    /// `bmmpa` · `bmmnav` · `bmmreplay` · `bmmplug` · `mm-locked` · `repo` · `mm` · `bmp` ·
-    /// `cbmp` · `bmmcat` · `theme` · `databmm`, or empty when nothing recognised it.
+    /// `bmmpa` · `bmmnav` · `bmmlaunch` · `bmmreplay` · `bmmplug` · `mm-locked` · `repo` ·
+    /// `mm` · `bmp` · `cbmp` · `bmmcat` · `theme` · `databmm`, or empty when nothing
+    /// recognised it.
     pub format: String,
     /// Nothing wrong that this can see.
     pub ok: bool,
@@ -73,6 +74,15 @@ pub fn detect(doc: &Value) -> &'static str {
     }
     if doc.get("format").and_then(|f| f.as_str()) == Some("bmmnav") {
         return "bmmnav";
+    }
+    // A launch pack. `kind` is a marker the writer puts there on purpose, in the same way
+    // `magic: "BMMPA"` is — but the shape alone is enough, and is what decides for a file
+    // written by an older version or trimmed by hand.
+    if doc.get("kind").and_then(|k| k.as_str()) == Some("bmm-launchpack")
+        || (doc.get("exe_paths").map(|x| x.is_array()).unwrap_or(false)
+            && doc.get("name").map(|x| x.is_string()).unwrap_or(false))
+    {
+        return "bmmlaunch";
     }
     if doc.get("events").map(|e| e.is_array()).unwrap_or(false)
         && (doc.get("console").is_some() || doc.get("rustLog").is_some())
@@ -177,6 +187,40 @@ pub fn check(doc: &Value) -> FormatReport {
                 problems.push("valid.errMissingBlock".into());
             }
         }
+        // A launch pack is a list of programs somebody else chose to start on your machine.
+        // The only useful thing to say about one is WHICH, and what will be run through a
+        // shell rather than started directly.
+        "bmmlaunch" => {
+            let exes = arr(doc, "exe_paths");
+            count = exes.len() as u64;
+            if doc.get("name").and_then(|n| n.as_str()).unwrap_or("").trim().is_empty() {
+                problems.push("valid.errNoName".into());
+            }
+            if exes.is_empty() {
+                problems.push("valid.errNoExes".into());
+            }
+            let paths: Vec<String> = exes.iter()
+                .filter_map(|x| x.as_str())
+                .map(|x| x.trim().to_lowercase())
+                .collect();
+            // Run through `powershell -ExecutionPolicy Bypass`, which is the pack's own
+            // launcher doing what it has always done. Worth reading before importing one
+            // somebody sent you; a `.exe` at least announces itself as a program.
+            if paths.iter().any(|p| p.ends_with(".ps1") || p.ends_with(".bat")
+                || p.ends_with(".cmd") || p.ends_with(".vbs"))
+            {
+                problems.push("valid.warnLaunchScript".into());
+            }
+            // Relative here means "resolved against whatever the working directory happens
+            // to be when it fires", which is not a thing a shared file can promise.
+            if paths.iter().any(|p| {
+                !p.is_empty() && !p.starts_with("\\\\")
+                    && !p.get(1..3).map(|c| c == ":\\" || c == ":/").unwrap_or(false)
+                    && !p.starts_with('/')
+            }) {
+                problems.push("valid.warnLaunchRelative".into());
+            }
+        }
         "mm" => {
             count = arr(doc, "mods").len() as u64;
             if count == 0 {
@@ -248,6 +292,51 @@ pub fn check_text(text: &str) -> FormatReport {
 }
 
 #[cfg(test)]
+mod launch_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn a_pack_says_how_many_programs_and_names_the_ones_run_through_a_shell() {
+        let r = check(&json!({
+            "kind": "bmm-launchpack", "version": 1, "name": "Evening",
+            "exe_paths": [r"D:\Games\a.exe", r"D:\tools\setup.ps1"]
+        }));
+        assert_eq!(r.format, "bmmlaunch");
+        assert_eq!(r.count, 2);
+        // A .ps1 in a pack is run with -ExecutionPolicy Bypass. Saying so is the whole
+        // reason somebody inspects a file another person wrote.
+        assert!(r.problems.contains(&"valid.warnLaunchScript".to_string()));
+        assert!(!r.problems.contains(&"valid.warnLaunchRelative".to_string()));
+    }
+
+    #[test]
+    fn a_relative_path_is_flagged_because_it_promises_nothing() {
+        let r = check(&json!({
+            "kind": "bmm-launchpack", "version": 1, "name": "x", "exe_paths": ["game.exe"]
+        }));
+        assert!(r.problems.contains(&"valid.warnLaunchRelative".to_string()));
+    }
+
+    #[test]
+    fn a_unc_path_and_a_drive_letter_are_both_absolute() {
+        let r = check(&json!({
+            "kind": "bmm-launchpack", "version": 1, "name": "x",
+            "exe_paths": [r"\\nas\share\a.exe", r"C:\a.exe", "/usr/bin/a"]
+        }));
+        assert!(!r.problems.contains(&"valid.warnLaunchRelative".to_string()));
+    }
+
+    #[test]
+    fn an_empty_pack_is_reported_rather_than_called_fine() {
+        let r = check(&json!({ "kind": "bmm-launchpack", "version": 1, "name": "", "exe_paths": [] }));
+        assert!(!r.ok);
+        assert!(r.problems.contains(&"valid.errNoExes".to_string()));
+        assert!(r.problems.contains(&"valid.errNoName".to_string()));
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;
@@ -263,6 +352,10 @@ mod tests {
         assert_eq!(detect(&json!({ "magic": "BMMPA", "tasks": [] })), "bmmpa");
         assert_eq!(detect(&json!([{ "name": "t", "steps": [] }])), "bmmpa");
         assert_eq!(detect(&json!({ "format": "bmmnav" })), "bmmnav");
+        assert_eq!(
+            detect(&json!({ "kind": "bmm-launchpack", "name": "Evening", "exe_paths": [] })),
+            "bmmlaunch"
+        );
         assert_eq!(detect(&json!({ "events": [], "console": [] })), "bmmreplay");
         assert_eq!(detect(&json!({ "id": "p", "name": "P", "apply_mode": "modlist" })), "bmmplug");
         assert_eq!(detect(&json!({ "bmm_locked": true, "sealed": {} })), "mm-locked");
