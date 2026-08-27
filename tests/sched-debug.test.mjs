@@ -93,12 +93,27 @@ describe('what moved since the last step', () => {
 
 describe('the report you paste into a bug', () => {
   test('it carries the steps in order and the variables', () => {
-    const out = debugReport('Nightly', ['do mods.scan()', 'do notify(...)'],
-      [['count', 'num', '3']]);
+    const out = debugReport('Nightly', [
+      { label: 'do mods.scan()', done: true },
+      { label: 'do notify(...)', done: false },
+    ], [['count', 'num', '3']]);
     assert.match(out, /Nightly/);
-    assert.match(out, /1\. do mods\.scan\(\)/);
-    assert.match(out, /2\. do notify/);
+    assert.match(out, /1\..*do mods\.scan\(\)/);
+    assert.match(out, /2\..*do notify/);
     assert.match(out, /count \(num\) = 3/);
+  });
+
+  test('the step the run is standing on is the marked one', () => {
+    // The gate runs BEFORE a step, so reaching it again proves the previous one finished.
+    // The entry with no tick is therefore where the run is — or, after a failure, where it
+    // stopped. That is the line somebody reading a pasted report is looking for.
+    const out = debugReport('T', [
+      { label: 'first', done: true },
+      { label: 'second', done: false },
+    ], []);
+    const lines = out.split(String.fromCharCode(10)).filter((l) => /^\s*\d+\./.test(l));
+    assert.ok(!lines[0].includes('>'), 'a finished step carries no mark');
+    assert.ok(lines[1].includes('>'), 'the unfinished one does');
   });
 
   test('an empty session says so rather than printing two blank headings', () => {

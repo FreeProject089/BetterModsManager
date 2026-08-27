@@ -39,7 +39,11 @@ interface Session {
      * and not "how did I get here" — and the second is the question you have when a task
      * took a branch you did not expect. Kept in memory only; it goes with the session.
      */
-    log: string[];
+    log: { label: string; done: boolean }[];
+    /** The run's own context, so a value can be changed at a breakpoint. */
+    ctx: RunCtx | null;
+    /** Substring filter over the variable names. */
+    filter: string;
     /** The last snapshot, so the next one can say what CHANGED rather than just what is. */
     seen: Map<string, string>;
     /**
@@ -72,7 +76,7 @@ export function startDebug(taskId: string, taskName: string): void {
     endDebug();
     _session = {
         taskId, taskName, mode: 'step', release: null, stopped: false, panel: null,
-        log: [], seen: new Map(), breakOn: '',
+        log: [], seen: new Map(), breakOn: '', ctx: null, filter: '',
     };
     openPanel(taskName);
 }
@@ -114,9 +118,15 @@ export function changedSince(
  * Everything somebody would otherwise retype out of a screenshot, in an order that reads:
  * what ran, then what it was holding when it stopped.
  */
-export function debugReport(taskName: string, log: string[], rows: [string, string, string][]): string {
+export function debugReport(
+    taskName: string,
+    log: { label: string; done: boolean }[],
+    rows: [string, string, string][],
+): string {
+    // The mark says which step the run is standing on, which is the first thing anybody
+    // reading a pasted report wants to know.
     const steps = log.length
-        ? log.map((l, i) => `${String(i + 1).padStart(3)}. ${l}`).join('\n')
+        ? log.map((l, i) => `${String(i + 1).padStart(3)}. ${l.done ? ' ' : '>'} ${l.label}`).join('\n')
         : '(nothing ran)';
     const vars = rows.length
         ? rows.map(([k, kind, v]) => `${k} (${kind}) = ${v}`).join('\n')
@@ -143,10 +153,16 @@ export async function gate(taskId: string, label: string, ctx: RunCtx): Promise<
     const s = _session;
     if (!s || s.taskId !== taskId) return;
     if (s.stopped) throw new DebugStopped();
+    // The gate runs BEFORE a step, so reaching it again is proof the previous one finished
+    // without throwing. That is the outcome for free, with no change to the runner: the last
+    // entry stays unmarked, so a step that failed — or the one you are standing on — is the
+    // one without a tick, which is exactly the line worth looking at.
+    if (s.log.length) s.log[s.log.length - 1].done = true;
     // A cap, because a `repeat 10000 times` would otherwise grow this without bound and the
     // interesting part of a long run is the end of it.
-    s.log.push(label);
+    s.log.push({ label, done: false });
     if (s.log.length > 500) s.log.splice(0, s.log.length - 500);
+    s.ctx = ctx;
     paint(s, label, ctx);
     if (s.mode === 'run') {
         if (!hitsBreakpoint(label, s.breakOn)) return;
@@ -200,6 +216,10 @@ function openPanel(taskName: string): void {
             <summary>${escHtml(t('sched.dbg.log'))} <span id="dbg-logn">0</span></summary>
             <ol class="dbg-log" id="dbg-log"></ol>
         </details>
+        <div class="dbg-filter">
+            <input type="search" class="input" id="dbg-filter"
+                placeholder="${escHtml(t('sched.dbg.filter'))}" spellcheck="false">
+        </div>
         <div class="dbg-vars" id="dbg-vars"></div>
         <div class="dbg-brk">
             <label for="dbg-break">${escHtml(t('sched.dbg.breakOn'))}</label>
@@ -238,6 +258,49 @@ function openPanel(taskName: string): void {
     el.querySelector('#dbg-break')?.addEventListener('input', (e) => {
         s.breakOn = (e.target as HTMLInputElement).value;
         markMode(s);
+    });
+    el.querySelector('#dbg-filter')?.addEventListener('input', (e) => {
+        s.filter = (e.target as HTMLInputElement).value;
+        repaintVars(s);
+    });
+    // Changing a value at a breakpoint, which is most of what a debugger is FOR: the point
+    // of stopping before an `if` is to ask what the other branch does without editing the
+    // task, running it again, and hoping the world cooperates.
+    //
+    // Delegated, because the rows are rebuilt on every step.
+    el.querySelector('#dbg-vars')?.addEventListener('click', (e) => {
+        const v = (e.target as HTMLElement).closest('.dbg-v') as HTMLElement | null;
+        if (!v || !s.ctx || v.querySelector('input')) return;
+        const name = v.dataset.name || '';
+        const input = document.createElement('input');
+        input.className = 'input dbg-edit';
+        input.value = v.dataset.raw || '';
+        const commit = (save: boolean) => {
+            if (save && s.ctx) {
+                // Written to the same bag it was read from. A number that came back as text
+                // would stop matching a `value` condition, which is the comparison somebody
+                // stopped here to influence.
+                if (Object.prototype.hasOwnProperty.call(s.ctx.nums || {}, name)) {
+                    const n = Number(input.value);
+                    if (Number.isFinite(n)) s.ctx.nums[name] = n;
+                } else {
+                    s.ctx.text[name] = input.value;
+                }
+                // Not counted as a change by the next paint: the highlight is for what the
+                // TASK did, and colouring your own edit would hide the next real one.
+                s.seen.set(name, input.value);
+            }
+            repaintVars(s);
+        };
+        input.addEventListener('keydown', (ev) => {
+            if (ev.key === 'Enter') { ev.preventDefault(); commit(true); }
+            if (ev.key === 'Escape') { ev.preventDefault(); commit(false); }
+        });
+        input.addEventListener('blur', () => commit(true));
+        v.textContent = '';
+        v.appendChild(input);
+        input.focus();
+        input.select();
     });
     el.querySelector('#dbg-copy-btn')?.addEventListener('click', (e) => {
         const btn = e.currentTarget as HTMLButtonElement;
@@ -317,7 +380,9 @@ function paint(s: Session, label: string, ctx: RunCtx): void {
     const logN = s.panel?.querySelector('#dbg-logn') as HTMLElement | null;
     if (logN) logN.textContent = String(s.log.length);
     if (logEl && (s.panel?.querySelector('#dbg-logwrap') as HTMLDetailsElement | null)?.open) {
-        logEl.innerHTML = s.log.map((l) => `<li>${escHtml(l)}</li>`).join('');
+        // The one without a tick is where the run is standing — or where it stopped.
+        logEl.innerHTML = s.log.map((l) =>
+            `<li class="${l.done ? 'is-done' : 'is-here'}">${escHtml(l.label)}</li>`).join('');
         logEl.scrollTop = logEl.scrollHeight;
     }
 
@@ -326,16 +391,43 @@ function paint(s: Session, label: string, ctx: RunCtx): void {
     _lastRows = rows;
     // Which ones moved. Twenty rows repainted identically hide the one that changed, and the
     // one that changed is the reason somebody is standing here.
+    //
+    // Computed HERE and not in repaintVars: typing in the filter must not count as the task
+    // changing something, and neither must your own edit.
     const { changed, fresh } = changedSince(s.seen, rows);
     s.seen = new Map(rows.map(([k, , v]) => [k, v]));
+    _lastMarks = { changed, fresh };
+    repaintVars(s);
+}
+
+/** What the last paint decided had moved, so a redraw does not have to decide again. */
+let _lastMarks: { changed: Set<string>; fresh: Set<string> } = { changed: new Set(), fresh: new Set() };
+
+/**
+ * Draw the variable list from the last snapshot.
+ *
+ * Separate from `paint` because the filter and an edit redraw it WITHOUT a step having
+ * happened — and re-deciding "what changed" on those would light up rows nothing touched.
+ */
+function repaintVars(s: Session): void {
+    const varsEl = s.panel?.querySelector('#dbg-vars') as HTMLElement | null;
+    if (!varsEl) return;
+    const needle = s.filter.trim().toLowerCase();
+    const rows = needle
+        ? _lastRows.filter(([k]) => k.toLowerCase().includes(needle))
+        : _lastRows;
+    const { changed, fresh } = _lastMarks;
     varsEl.innerHTML = rows.length
         ? rows.map(([k, kind, v]) => {
             const mark = fresh.has(k) ? ' is-new' : changed.has(k) ? ' is-changed' : '';
+            const short = v.length > 200 ? `${v.slice(0, 200)}…` : v;
             return `<div class="dbg-var${mark}">
                <code class="dbg-k">${escHtml(k)}</code>
                <span class="dbg-t">${escHtml(kind)}</span>
-               <span class="dbg-v" title="${escHtml(v)}">${escHtml(v.length > 200 ? `${v.slice(0, 200)}…` : v)}</span>
+               <span class="dbg-v" data-name="${escHtml(k)}" data-raw="${escHtml(v)}"
+                     title="${escHtml(t('sched.dbg.editTip') || v)}">${escHtml(short)}</span>
            </div>`;
         }).join('')
-        : `<p class="dbg-none">${escHtml(t('sched.dbg.noVars'))}</p>`;
+        : `<p class="dbg-none">${escHtml(
+            needle ? (t('sched.dbg.noMatch') || 'Nothing matches that.') : t('sched.dbg.noVars'))}</p>`;
 }

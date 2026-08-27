@@ -9327,5 +9327,8 @@
   "repo.hostLedeClose": "Masquer — « Comment ça marche ? » à l'étape 1 le ramène",
   "repo.extras.kindModpack": "Modpacks",
   "modpack.shareWhitelistPh": "ids, séparés par des virgules",
-  "repo.modpacks.errNoShares": "Pas de `shares` dans la requête. Envoyez la liste complète pour la définir, ou utilisez GET pour la lire — un POST vide dépublierait tout."
+  "repo.modpacks.errNoShares": "Pas de `shares` dans la requête. Envoyez la liste complète pour la définir, ou utilisez GET pour la lire — un POST vide dépublierait tout.",
+  "sched.dbg.filter": "Filtrer les variables…",
+  "sched.dbg.noMatch": "Rien ne correspond.",
+  "sched.dbg.editTip": "Cliquez pour changer cette valeur, puis Entrée. L'exécution continue avec ce que vous avez tapé."
 }

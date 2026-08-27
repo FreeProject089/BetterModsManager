@@ -19654,3 +19654,31 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
 .rx-share .rx-share-mode { font-size: 11px; padding: 3px 7px; flex: 0 0 auto; }
 .rx-share .rx-share-wl { font-size: 11px; padding: 3px 7px; flex: 1 1 160px; min-width: 0; }
 .rx-share .rx-share-wl[hidden] { display: none; }
+
+/* The debugger's filter, the step marks, and an editable value. */
+.dbg-filter { padding: 6px 10px 0; }
+.dbg-filter .input { width: 100%; box-sizing: border-box; font-size: 11px; padding: 4px 8px; }
+
+/* A tick is "this finished". The one WITHOUT it is where the run is standing — or, after a
+   failure, where it stopped. That is the line worth looking at, so it is the marked one. */
+.dbg-log li.is-done::marker { color: var(--success); }
+.dbg-log li.is-here {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+.dbg-log li.is-here::marker { color: var(--warning); }
+
+/* A value you can change. It looks editable before it is clicked, or nobody clicks it. */
+.dbg-v {
+    cursor: text;
+    border-radius: 3px;
+    padding: 0 2px;
+}
+.dbg-v:hover { background: var(--bmm-s05); }
+.dbg-edit {
+    width: 100%;
+    box-sizing: border-box;
+    font-family: var(--font-mono, monospace);
+    font-size: 11px;
+    padding: 1px 4px;
+}
