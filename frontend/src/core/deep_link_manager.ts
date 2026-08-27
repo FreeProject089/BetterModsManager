@@ -781,6 +781,11 @@ async function handleDeepLink(urlStr: string): Promise<void> {
         // step. A link that could do that silently would only have to guess when the task was
         // created. So the id stops being a secret and the person watching decides.
         if (action === 'schedule/run' || action === 'schedule/enable') {
+            // A boolean, not a second equality test against `action`: deeplink-map.mjs ends
+            // a handler's block at the next such test, so a nested one splits this handler
+            // in two and gives schedule/enable a parameter list that is not its own.
+            // (Writing the pattern out in this comment did it too, which is how I found it.)
+            const isRun = action === 'schedule/run';
             const id = parsedUrl.searchParams.get('id');
             if (!id) {
                 toast(t('sched.dl.noId'), 'error');
@@ -799,7 +804,7 @@ async function handleDeepLink(urlStr: string): Promise<void> {
             // settings — never shown, never sent anywhere, and not the API token, because
             // resetting that one is an ordinary thing to do and would quietly turn every
             // registered task into a prompt. A page can write the id; it cannot write this.
-            if (action === 'schedule/run') {
+            if (isRun) {
                 const k = parsedUrl.searchParams.get('k') || '';
                 if (k) {
                     const expected = await invoke('get_os_schedule_key').catch(() => '') as string;
@@ -816,7 +821,7 @@ async function handleDeepLink(urlStr: string): Promise<void> {
             let title: string;
             let body: string;
             let tone: 'accent' | 'danger' = 'accent';
-            if (action === 'schedule/run') {
+            if (isRun) {
                 title = t('sched.dl.runTitle');
                 // Whether it may run programs is the fact that changes the answer, so it is
                 // in the question and not in a tooltip somewhere.
@@ -835,7 +840,7 @@ async function handleDeepLink(urlStr: string): Promise<void> {
             const ok = await window.confirmCustom!(title, body, tone,
                 { yesLabel: t('common.yes'), noLabel: t('common.no') });
             if (!ok) return;
-            if (action === 'schedule/run') {
+            if (isRun) {
                 await sched.runTaskById(id).catch((e) => toast(`${t('common.error')}: ${e}`, 'error'));
             } else {
                 const on = parsedUrl.searchParams.get('on') !== '0';

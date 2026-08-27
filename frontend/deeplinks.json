@@ -89,6 +89,13 @@
     ]
   },
   {
+    "action": "hook",
+    "params": [
+      "name",
+      "data"
+    ]
+  },
+  {
     "action": "import",
     "params": [
       "url",
@@ -258,9 +265,19 @@
     "params": []
   },
   {
+    "action": "schedule/enable",
+    "params": [
+      "id",
+      "k",
+      "on"
+    ]
+  },
+  {
     "action": "schedule/run",
     "params": [
-      "id"
+      "id",
+      "k",
+      "on"
     ]
   },
   {
