@@ -1217,6 +1217,12 @@ function renderCreate() {
             ? `<button class="btn btn-xs btn-ghost btn-danger-ghost" id="cr-clear">${escHtml(t('apps.create.clear') || 'Start again')}</button>`
             : ''}
         </div>
+        <!-- The same panel the Sources tab has. fetchSourceText already asks for a password
+             when a source turns out to be protected, and already reads ssh:// sources by
+             name — but only the Sources tab let you REGISTER either, so opening your own
+             protected catalogue from here was the one place credentials could not be
+             attached. -->
+        ${sourceAccessHtml('appscreate')}
       </div>
 
       <div class="apps-create-section">
@@ -1290,6 +1296,10 @@ function renderCreate() {
     document.getElementById('cr-app-close')?.addEventListener('click', () => {
         document.getElementById('cr-app-modal')!.classList.remove('open');
     });
+
+    wireSourceAccess('appscreate', (m, k) => toast(m, k === 'warning' ? 'warning' : 'success'),
+        () => { (document.getElementById('nav-settings') as HTMLElement | null)?.click(); setTimeout(() => document.getElementById('settings-identity-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 250); },
+        () => (document.getElementById('cr-open-url-input') as HTMLInputElement | null)?.value?.trim() || '');
 
     // Sync name/desc inputs to draft
     document.getElementById('cr-name')?.addEventListener('input', e => { _draft.name = (e.target as HTMLInputElement).value; saveDraft(); });
