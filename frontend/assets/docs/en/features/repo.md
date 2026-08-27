@@ -516,6 +516,29 @@ spring, without regenerating a single mod.
     is opened and checked before it is offered, so a zip that is not a catalogue fails there
     rather than on somebody else's machine.
 
+### Modpacks are on this screen too
+
+They used to be a list on the export form, so a modpack could only be shared while
+re-exporting every mod in the repo. That is the thing this screen exists to avoid.
+
+A modpack is **not** an extra and is not treated as one: an extra is a file under
+`extras/` listed in `repo.extras`, while a modpack is an entry in `repo.modpacks` with its
+own **share mode** — public, the repo's whitelist, or a list of ids you type. The control for
+that rides on the modpack rows only, because the other kinds have nothing like it.
+
+Ticking and unticking is the whole list: this screen shows what the repo publishes and you
+edit it, so unticking the last modpack means the repo stops sharing it.
+
+!!! warning "Re-exporting used to throw all of this away"
+
+    `repo.json` is rebuilt from scratch by an export, and only the **seed** was carried
+    across — because losing that breaks every client at once. Everything this screen
+    published failed quietly instead: plugins, themes, automations, mod lists, catalogues,
+    bundles and shared modpacks simply stopped being offered, with nothing said.
+
+    They are carried over now. An export supplies mods; what it says nothing about, it
+    leaves alone.
+
 ### What arrives, and what it is allowed to do
 
 Nothing installed from a repo runs.

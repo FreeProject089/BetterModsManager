@@ -244,6 +244,16 @@ struct ScheduleEnabledBody {
     enabled: bool,
 }
 
+/// `POST /api/repo/modpacks` — which modpacks a repo FOLDER on this machine shares.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RepoModpacksBody {
+    /// The repo folder, the one that holds repo.json.
+    dir: String,
+    /// The whole list. Absent reads instead of writing.
+    shares: Option<Vec<crate::models::repo::RepoModpackShare>>,
+}
+
 /// `POST /api/content-id` — what a document IS, as a stable name.
 #[derive(Deserialize)]
 struct ContentIdBody {
@@ -3378,6 +3388,57 @@ pub async fn start_api_server(
     // discloses nothing this machine holds. A by-id variant would be an oracle for "does
     // this install have X", and would need modpacks.read, plugins.read and the rest, one
     // route each. That is a different endpoint and it is deliberately not this one.
+    // GET/POST /api/repo/modpacks
+    //
+    // A repo's shared modpacks are a manifest field with their own share rule, not an extra,
+    // and until now they could only be set from the export form — which meant a script could
+    // publish a repo but never say what it shared.
+    //
+    // The folder is LOCAL and the write re-signs the manifest, so this is `repo.write`, the
+    // same grant that generates and publishes one. Reading is `repo.read`: knowing what a
+    // repo on this disk offers is not the same as deciding it.
+    let tok_mp_get = token.clone();
+    let handle_mp_get = app_handle.clone();
+    let repo_modpacks_get = warp::path!("api" / "repo" / "modpacks")
+        .and(warp::get())
+        .and(require_token(tok_mp_get))
+        .and(require_permission(token.clone(), "repo.read"))
+        .and(warp::query::<std::collections::HashMap<String, String>>())
+        .and(with_app_handle(handle_mp_get))
+        .map(|q: std::collections::HashMap<String, String>, _h: tauri::AppHandle| {
+            let dir = q.get("dir").cloned().unwrap_or_default();
+            match crate::commands::repo_extras::repo_modpacks_read(dir) {
+                Ok(v) => warp::reply::with_status(warp::reply::json(&v), StatusCode::OK),
+                Err(e) => warp::reply::with_status(
+                    warp::reply::json(&ApiError { error: e }), StatusCode::BAD_REQUEST),
+            }
+        });
+
+    let tok_mp_set = token.clone();
+    let handle_mp_set = app_handle.clone();
+    let repo_modpacks_set = warp::path!("api" / "repo" / "modpacks")
+        .and(warp::post())
+        .and(require_token(tok_mp_set))
+        .and(require_permission(token.clone(), "repo.write"))
+        .and(warp::body::json::<RepoModpacksBody>())
+        .and(with_app_handle(handle_mp_set))
+        .map(|body: RepoModpacksBody, handle: tauri::AppHandle| {
+            // No `shares` is a read, not "share none". Those are different requests and
+            // folding them together would make an empty POST silently un-publish everything.
+            let Some(shares) = body.shares else {
+                return warp::reply::with_status(
+                    warp::reply::json(&ApiError { error: "repo.modpacks.errNoShares".into() }),
+                    StatusCode::BAD_REQUEST);
+            };
+            match crate::commands::repo_extras::repo_modpacks_apply(handle, body.dir, shares, true) {
+                Ok(n) => warp::reply::with_status(
+                    warp::reply::json(&serde_json::json!({ "ok": true, "modpacks": n })),
+                    StatusCode::OK),
+                Err(e) => warp::reply::with_status(
+                    warp::reply::json(&ApiError { error: e }), StatusCode::BAD_REQUEST),
+            }
+        });
+
     let tok_cid = token.clone();
     let content_id = warp::path!("api" / "content-id")
         .and(warp::post())
@@ -3605,6 +3666,8 @@ pub async fn start_api_server(
         .or(mods_order_set)
         .or(hook_ring)
         .or(content_id)
+        .or(repo_modpacks_get)
+        .or(repo_modpacks_set)
         .or(hook_seen)
         .or(plugin_assets)
         .or(catalogs_get)

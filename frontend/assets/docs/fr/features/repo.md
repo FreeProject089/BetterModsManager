@@ -538,6 +538,30 @@ au printemps dernier, sans regénérer un seul mod.
     catalogue d'applications. Il est ouvert et vérifié avant d'être proposé, donc un zip qui
     n'est pas un catalogue échoue là plutôt que sur la machine de quelqu'un d'autre.
 
+### Les modpacks sont aussi sur cet écran
+
+C'était une liste sur le formulaire d'export, donc un modpack ne pouvait être partagé qu'en
+ré-exportant tous les mods du repo. C'est précisément ce que cet écran existe pour éviter.
+
+Un modpack n'est **pas** un extra et n'est pas traité comme tel : un extra est un fichier sous
+`extras/` listé dans `repo.extras`, alors qu'un modpack est une entrée de `repo.modpacks` avec
+son propre **mode de partage** — public, la whitelist du repo, ou une liste d'ids que vous
+tapez. Le contrôle correspondant n'apparaît que sur les lignes de modpack, les autres types
+n'ayant rien de tel.
+
+Cocher et décocher, c'est toute la liste : cet écran montre ce que le repo publie et vous
+l'éditez, donc décocher le dernier modpack signifie que le repo cesse de le partager.
+
+!!! warning "Un ré-export jetait tout ça"
+
+    `repo.json` est reconstruit de zéro par un export, et seule la **graine** était reportée —
+    parce que la perdre casse tous les clients d'un coup. Tout ce que cet écran publiait
+    échouait en silence : plugins, thèmes, automatisations, listes de mods, catalogues, bundles
+    et modpacks partagés cessaient simplement d'être proposés, sans un mot.
+
+    C'est reporté désormais. Un export fournit les mods ; ce dont il ne dit rien, il n'y
+    touche pas.
+
 ### Ce qui arrive, et ce que ça a le droit de faire
 
 Rien de ce qui vient d'un dépôt ne s'exécute.

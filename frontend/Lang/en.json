@@ -9328,5 +9328,6 @@
   "sched.presetd.packUnchanged": "Reads what the pack IS and compares it to the id you recorded, so an edited pack stops rather than applying quietly. Fill in the modpack id and paste its Content ID from the card.",
   "repo.hostLedeClose": "Hide this — “How does this work?” on step 1 brings it back",
   "repo.extras.kindModpack": "Modpacks",
-  "modpack.shareWhitelistPh": "ids, comma separated"
+  "modpack.shareWhitelistPh": "ids, comma separated",
+  "repo.modpacks.errNoShares": "No `shares` in the request. Send the whole list to set it, or use GET to read it — an empty POST would un-publish everything."
 }

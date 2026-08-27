@@ -58,6 +58,7 @@ This document is the single source of truth for everything that can be driven pr
 | `/api/catalogs` | yes | `{ type, url, follow }` | GET lists followed catalogues, POST follows or unfollows one. |
 | `/api/plugins/assets` | yes | — (GET `?id=&path=`) | What a plugin ships, or one file's text. Copying a file OUT is deliberately not offered. |
 | `/api/repo/extras` | yes | `{ url, kind, name }` | Installs one extra a repo carries. The entry is looked up in the fetched manifest, never described by the caller. |
+| `/api/repo/modpacks` | yes | `GET ?dir=` — which modpacks a repo folder on this machine shares. `POST { dir, shares[] }` sets the whole list and re-signs the manifest; omitting `shares` reads instead of writing, because "tell me" and "share none" are different requests. |
 | `/api/repo/publish-ssh` | yes | `{ dir? }` | Opens the repo screen ready to publish over SSH. Carries no host and no key path — a caller able to name those could point a publish at a server the user never chose. |
 | `/api/repo/fetch-ssh` | yes | `{ dir? }` | The same, for fetching. |
 | `/api/view` | yes | `{ id }` | Switches the open app to a screen, as clicking the sidebar does. |

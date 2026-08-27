@@ -58,6 +58,7 @@ Ce document est la source de vérité unique pour tout ce qui est pilotable par 
 | `/api/catalogs` | oui · `catalog.write` | `{ type, url, follow }` — GET liste, POST (dés)abonne |
 | `/api/plugins/assets` | oui · `plugins.read` | — (GET `?id=&path=`) ce qu'un plugin livre, ou le texte d'un fichier |
 | `/api/repo/extras` | oui · `repo.write` | `{ url, kind, name }` — l'entrée est cherchée dans le manifeste, jamais décrite par l'appelant |
+| `/api/repo/modpacks` | oui · `repo.read` / `repo.write` | `GET ?dir=` — quels modpacks un dossier de repo sur cette machine partage. `POST { dir, shares[] }` définit toute la liste et re-signe le manifeste ; omettre `shares` lit au lieu d'écrire, parce que « dis-moi » et « n'en partage aucun » sont deux requêtes différentes. |
 | `/api/repo/publish-ssh` | oui | `{ dir? }` — ne porte ni hôte ni chemin de clé |
 | `/api/repo/fetch-ssh` | oui | `{ dir? }` — pareil, pour la récupération |
 | `/api/view` | oui | `{ id }` — bascule l'app sur un écran |

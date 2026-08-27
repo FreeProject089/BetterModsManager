@@ -9326,5 +9326,6 @@
   "sched.presetd.packUnchanged": "Lit ce que le pack EST et le compare à l'id que vous avez noté, pour qu'un pack modifié s'arrête au lieu de s'appliquer en silence. Renseignez l'id du modpack et collez son Content ID depuis sa carte.",
   "repo.hostLedeClose": "Masquer — « Comment ça marche ? » à l'étape 1 le ramène",
   "repo.extras.kindModpack": "Modpacks",
-  "modpack.shareWhitelistPh": "ids, séparés par des virgules"
+  "modpack.shareWhitelistPh": "ids, séparés par des virgules",
+  "repo.modpacks.errNoShares": "Pas de `shares` dans la requête. Envoyez la liste complète pour la définir, ou utilisez GET pour la lire — un POST vide dépublierait tout."
 }
