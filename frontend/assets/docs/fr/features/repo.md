@@ -525,6 +525,19 @@ au printemps dernier, sans regénérer un seul mod.
     apercevoir — donc seule l'adresse voyage, et celui qui la suit obtient le catalogue tel
     qu'il sera le jour où il regarde.
 
+!!! tip "D'où vient le bundle"
+
+    Le sélecteur liste chaque catalogue que vous suivez. Un catalogue `https://` apparaît
+    comme une adresse à recommander ; un `.bmmbundle` suivi apparaît comme un fichier à
+    emporter — le format autorisait les deux depuis toujours et le sélecteur n'offrait que le
+    premier, si bien que le seul type de catalogue n'ayant besoin d'aucun hébergeur était le
+    seul qu'un repo ne pouvait pas transmettre.
+
+    **Emporter un fichier de catalogue…** en prend un qui n'est pas du tout dans votre liste :
+    un bundle qu'on vous a envoyé, ou celui que vous venez de publier depuis l'écran Créer du
+    catalogue d'applications. Il est ouvert et vérifié avant d'être proposé, donc un zip qui
+    n'est pas un catalogue échoue là plutôt que sur la machine de quelqu'un d'autre.
+
 ### Ce qui arrive, et ce que ça a le droit de faire
 
 Rien de ce qui vient d'un dépôt ne s'exécute.

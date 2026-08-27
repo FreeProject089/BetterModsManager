@@ -128,6 +128,53 @@ souvent, tu n'as rien à ajouter à la main. Les chaînes de catalogues importé
 jusqu'à un total de **30 sources**, pour qu'une grande toile communautaire de catalogues reste
 bornée.
 
+## Un catalogue qui porte ses applications
+
+Tous les autres types de catalogue BMM pouvaient déjà être un `.bmmbundle` — un zip avec
+`catalog.json` à sa racine et les charges à côté. Les catalogues d'applications étaient le
+seul type qui ne pouvait que pointer vers une adresse, ce qui voulait dire qu'en publier un
+demandait toujours un hébergeur, et qu'en suivre un supposait que cet hébergeur soit toujours
+là.
+
+**Sources → Suivre un .bmmbundle…** en suit un depuis le disque. Il est ouvert avant d'être
+suivi : un fichier qui n'est pas un catalogue d'applications échoue là, avec la raison, au
+lieu de devenir une source qui n'apporte silencieusement rien.
+
+Les deux formes se mélangent dans un même document, entrée par entrée. Un catalogue peut
+porter les trois petits outils et pointer vers celui de 90&nbsp;Mo que quelqu'un héberge déjà.
+
+!!! warning "Un bundle n'est pas plus fiable qu'un téléchargement"
+
+    Une charge arrivée dans un bundle passe la même barrière de somme de contrôle qu'une
+    charge récupérée sur le réseau — même fichier `.part`, même refus de renommer ou
+    d'exécuter ce qui échoue. Elle n'est pas plus digne de confiance ; elle est juste plus
+    proche.
+
+    Une entrée dans un bundle ne peut nommer qu'un **voisin** : chemins absolus, lettres de
+    lecteur, chemins UNC, segments `..` et tout schéma autre que http(s) sont refusés par la
+    même règle qui garde les bundles de plugins et de listes de mods.
+
+## En publier un
+
+Dans **Créer**, une entrée prend une adresse *ou* un fichier. Confiez un fichier et BMM
+remplit le type depuis son extension, la taille et la somme depuis ses octets — les deux
+champs que personne ne peut produire à la main.
+
+**Publier en un seul fichier (.bmmbundle)** prépare un dossier, copie chaque fichier confié à
+côté du document, réécrit ces entrées pour qu'elles nomment leur voisin, et zippe le tout. Une
+entrée avec une adresse la garde. Une entrée sans ni l'un ni l'autre est nommée plutôt
+qu'écartée.
+
+Le nom empaqueté vient de l'id de l'entrée, pas du nom du fichier source : les installeurs de
+deux personnes peuvent tous deux s'appeler `setup.exe`, et l'id est déjà unique dans le
+document.
+
+!!! note "Vos chemins ne quittent jamais votre machine"
+
+    Le fichier choisi est retenu comme chemin absolu pendant que vous travaillez, et cela est
+    retiré du document publié. Un catalogue destiné à des inconnus ne doit pas transporter
+    votre dossier personnel ni votre nom d'utilisateur.
+
 ## Créer le tien
 
 Quand vous ajoutez une application, **Récupérer depuis l'URL** lit le fichier que les gens vont

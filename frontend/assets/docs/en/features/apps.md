@@ -121,6 +121,49 @@ apps merge into the list; remove any that fail to load. The official catalog can
 imported catalogs are followed up to a total of **30 sources**, so a big community web of
 catalogs stays bounded.
 
+## A catalogue that carries its apps
+
+Every other kind of BMM catalogue could already be a `.bmmbundle` — a zip with `catalog.json`
+at its root and the payloads beside it. App catalogues were the one kind that could only ever
+point at an address, which meant publishing one always needed a host and following one meant
+that host still being there.
+
+**Sources → Follow a .bmmbundle…** follows one from disk. It is opened before it is followed:
+a file that is not an app catalogue fails there, with the reason, rather than becoming a
+source that quietly contributes nothing.
+
+The two kinds mix inside one document, per entry. A catalogue can carry the three small tools
+and link the 90&nbsp;MB one somebody already hosts.
+
+!!! warning "A bundle is not more trustworthy than a download"
+
+    A payload that travelled inside a bundle goes through the same checksum gate as one
+    fetched over the network — the same `.part` file, the same refusal to rename or run
+    something that fails it. It is not closer to being trusted; it is just closer.
+
+    An entry inside a bundle may only name a **neighbour**: absolute paths, drive letters,
+    UNC paths, `..` segments and every scheme that is not http(s) are refused by the same
+    rule that guards plugin and mod-list bundles.
+
+## Publishing one
+
+In **Create**, an entry takes an address *or* a file. Hand over a file and BMM fills in the
+type from its extension and the size and checksum from its bytes — the two fields nobody can
+produce by hand.
+
+**Publish as one file (.bmmbundle)** stages a folder, copies every handed-over file beside
+the document, rewrites those entries to name their neighbour, and zips it. An entry with an
+address keeps it. An entry with neither is named rather than dropped.
+
+The packed name comes from the entry's id, not the source file's name: two people's installers
+can both be called `setup.exe`, and the id is already unique in the document.
+
+!!! note "Your paths never leave your machine"
+
+    The file you picked is remembered as an absolute path while you are working, and that is
+    stripped from the published document. A catalogue meant for strangers must not carry your
+    home directory or your username.
+
 ## Making your own
 
 When you add an app, **Fetch from the URL** reads the file people will actually download and

@@ -504,6 +504,18 @@ spring, without regenerating a single mod.
     so only the address travels, and whoever follows it gets the catalogue as it is on the
     day they look.
 
+!!! tip "Where the bundle comes from"
+
+    The picker lists every catalogue you follow. An `https://` one appears as an address to
+    recommend; a `.bmmbundle` you follow appears as a file to carry — the format always
+    allowed both and the picker only ever offered the first, so the one kind of catalogue
+    that needs no host was the one kind a repo could not pass on.
+
+    **Carry a catalogue file…** takes one that is not in your followed list at all: a bundle
+    somebody sent you, or one you just published from the app catalogue's Create screen. It
+    is opened and checked before it is offered, so a zip that is not a catalogue fails there
+    rather than on somebody else's machine.
+
 ### What arrives, and what it is allowed to do
 
 Nothing installed from a repo runs.
