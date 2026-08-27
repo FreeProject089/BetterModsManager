@@ -9093,5 +9093,19 @@
   "sched.bl.inuseBy": "Encore appelé par :",
   "sched.bl.overwriteTitle": "Remplacer le bloc « {n} » ?",
   "sched.bl.overwriteUsed": "Les blocs sont partagés par toutes les tâches : ça remplace donc ce qu'exécutent {n} appelant(s) :",
-  "sched.bl.overwriteFree": "Un bloc porte déjà ce nom. L'enregistrer remplace ses étapes partout — rien ne l'appelle encore."
+  "sched.bl.overwriteFree": "Un bloc porte déjà ce nom. L'enregistrer remplace ses étapes partout — rien ne l'appelle encore.",
+  "sched.why.off": "éteinte",
+  "sched.why.manual": "seulement quand tu lances",
+  "sched.why.watchNoPath": "en surveillance — mais aucun fichier choisi",
+  "sched.why.watchArming": "apprend {v}",
+  "sched.why.watchIdle": "attend que {v} change",
+  "sched.why.eventNone": "en attente — mais aucun événement choisi",
+  "sched.why.eventArming": "à l'écoute de {v}",
+  "sched.why.eventIdle": "attend {v}",
+  "sched.why.appStartDone": "a tourné à ce lancement",
+  "sched.why.appStartSoon": "tournera au prochain lancement",
+  "sched.why.onceDone": "déjà passée",
+  "sched.why.onceBadDate": "sa date est illisible",
+  "sched.why.dueAt": "prévue {v}",
+  "sched.why.noNext": "aucune prochaine fois — vérifie son déclencheur"
 }

@@ -9095,5 +9095,19 @@
   "sched.bl.inuseBy": "Still called by:",
   "sched.bl.overwriteTitle": "Replace the block “{n}”?",
   "sched.bl.overwriteUsed": "Blocks are shared by every task, so this replaces what {n} caller(s) run:",
-  "sched.bl.overwriteFree": "A block with that name already exists. Saving replaces its steps everywhere — nothing calls it yet."
+  "sched.bl.overwriteFree": "A block with that name already exists. Saving replaces its steps everywhere — nothing calls it yet.",
+  "sched.why.off": "switched off",
+  "sched.why.manual": "only when you press Run",
+  "sched.why.watchNoPath": "watching — but no file was picked",
+  "sched.why.watchArming": "learning {v}",
+  "sched.why.watchIdle": "waiting for {v} to change",
+  "sched.why.eventNone": "waiting — but no event was picked",
+  "sched.why.eventArming": "listening for {v}",
+  "sched.why.eventIdle": "waiting for {v}",
+  "sched.why.appStartDone": "ran at this launch",
+  "sched.why.appStartSoon": "runs at the next launch",
+  "sched.why.onceDone": "already ran",
+  "sched.why.onceBadDate": "its date cannot be read",
+  "sched.why.dueAt": "due {v}",
+  "sched.why.noNext": "no next time — check its trigger"
 }

@@ -19097,3 +19097,7 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
 .dbg-v { grid-column: 1 / -1; font-size: 11px; color: var(--text-secondary); font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dbg-none { font-size: 11px; color: var(--text-muted); margin: 6px 4px; }
 .dbg-foot { display: flex; gap: 6px; padding: 8px 10px; border-top: 1px solid var(--border); }
+
+/* The "why not" chip. Muted, never coloured: none of these is an error — a
+   manual task saying "only when you press Run" is working as intended. */
+.sched-chip-why { color: var(--text-muted); font-style: italic; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

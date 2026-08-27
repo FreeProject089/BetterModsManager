@@ -23,6 +23,7 @@ import { outlineOf, offsetOfLine, renderOutline, explain, wordAtPoint, type Outl
 import { BMM_EVENTS, fireEvent, noteTaskRunning } from '../../core/bmm-events.js';
 import { treeOf, foldersOf, renderTree } from './block-tree.js';
 import { showConfirm } from '../../ui/confirm.js';
+import { reasonNotRunning } from './sched-why.js';
 import { debugging, gate, startDebug, endDebug, DebugStopped } from './sched-debug.js';
 import { parsePresetFeed, looksLikePresetFeed, readPresetCatalogs, writePresetCatalogs } from './preset-catalog.js';
 import { mountCompletions } from './bmms-complete.js';
@@ -549,6 +550,21 @@ function isDue(task: Task, now: Date): boolean {
             return calendarDue(tr, now, Math.max(last, task.createdAt || 0), task.catchUp !== false);
     }
     return false;
+}
+
+/**
+ * Why this task has not run, in a sentence.
+ *
+ * The deciding is in sched-why.ts, which knows nothing about the app and can therefore be
+ * tested. This half supplies the four sets the running scheduler keeps and the next due time,
+ * because those are the parts that only exist here.
+ */
+export function whyNotRunning(task: Task, now: Date = new Date()): { key: string; v?: string } {
+    return reasonNotRunning(
+        task as any,
+        { watch: _watchSeen as any, event: _eventSeen as any, appStart: _appStartFired, once: _onceFired },
+        task.enabled && task.trigger.type !== 'manual' ? nextDue(task, now) : null,
+    );
 }
 
 /**
@@ -3284,13 +3300,26 @@ function runSparkline(task: Task): string {
     return `<span class="sched-spark" data-tooltip="${escAttr(label)}">${bars}</span>`;
 }
 
-/** The next-run chip. Absent for manual tasks (nothing to say) and for disabled ones
- *  (the row already reads as off, and "next run in 3 h" under a disabled task is a lie). */
+/**
+ * When this task runs next — or why it does not.
+ *
+ * It used to return nothing at all for a disabled task, a manual one, a file watch or an event
+ * trigger. That is four of the ways a task can be sitting in the list doing nothing, each shown
+ * as an empty space, and "why has this not run" is the most common question anybody asks a
+ * scheduler.
+ *
+ * A time is still a time. Everything else gets the reason, in the same slot.
+ */
 function nextRunChip(task: Task): string {
-    if (!task.enabled || task.trigger.type === 'manual') return '';
-    const at = nextDue(task);
-    if (at === null) return '';
-    return `<span class="sched-chip sched-chip-next" data-tooltip="${escAttr(new Date(at).toLocaleString())}">${escHtml(relTime(at))}</span>`;
+    const at = task.enabled && task.trigger.type !== 'manual' ? nextDue(task) : null;
+    if (at !== null) {
+        return `<span class="sched-chip sched-chip-next" data-tooltip="${escAttr(new Date(at).toLocaleString())}">${escHtml(relTime(at))}</span>`;
+    }
+    const why = whyNotRunning(task);
+    const said = t(why.key).replace('{v}', why.v || '');
+    // Muted, not coloured: none of these is an error. A manual task that says "only when you
+    // press Run" is working exactly as intended, and a red chip would say otherwise.
+    return `<span class="sched-chip sched-chip-why" data-tooltip="${escAttr(said)}">${escHtml(said)}</span>`;
 }
 
 function stepCount(steps: Step[]): number {

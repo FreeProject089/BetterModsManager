@@ -768,6 +768,15 @@ cas pour lequel ça existe.
     porte pas : cette réponse-là EST dans le même document, et sans le contrôle le fichier
     s'importe parfaitement et meurt à cette étape.
 
+!!! tip "Chaque tâche dit quand elle tourne — ou pourquoi elle ne tourne pas"
+
+    La pastille d'une tâche était vide dans quatre des cas où une tâche reste sans rien faire :
+    éteinte, manuelle, en surveillance d'un fichier, en attente d'un événement. Elle dit
+    maintenant lequel.
+
+    Aucun de ces cas n'est une erreur, donc aucun n'est coloré. Une tâche manuelle qui affiche
+    « seulement quand tu lances » fonctionne exactement comme prévu.
+
 ## Quand BMM lui-même fait quelque chose
 
 Tous les autres déclencheurs regardent l'extérieur : une horloge, un fichier écrit par un autre

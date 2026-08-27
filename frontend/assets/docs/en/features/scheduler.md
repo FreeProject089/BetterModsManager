@@ -702,6 +702,14 @@ exists for.
     that answer IS inside the same document, and without the check the file imports perfectly
     and dies on that step.
 
+!!! tip "Every task says when it runs next — or why it does not"
+
+    The chip on a task used to be blank for four of the ways a task can sit doing nothing:
+    switched off, manual, watching a file, waiting for an event. Now it says which one.
+
+    None of those is an error, so none of them is coloured. A manual task that reads “only when
+    you press Run” is working exactly as intended.
+
 ## When BMM itself does something
 
 Every other trigger watches the outside: a clock, a file another program wrote. This one
