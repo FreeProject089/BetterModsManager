@@ -449,8 +449,8 @@ exception est `data/export-auto`.
 | `POST` | `/api/telemetry/consent` | `telemetry.write` | `enabled`* | ✓ |
 | `POST` | `/api/telemetry/settings` | `telemetry.write` | `replay`, `full`, `bench` | ✓ |
 | `POST` | `/api/recorder` | `telemetry.write` | `on`, `full`, `rust`, `js` | ✓ |
-| `POST` | `/api/replay/export` | `telemetry.write` | — | ✓ |
-| `POST` | `/api/replay/import` | `telemetry.write` | `path`, `url` | ✓ |
+| `POST` | `/api/replay/export` | `replay.read` | — | ✓ |
+| `POST` | `/api/replay/import` | `replay.write` | `path`, `url` | ✓ |
 | `POST` | `/api/discord/rpc` | `system.write` | `enabled`* | ✓ |
 | `POST` | `/api/restart` | `system.write` | — · l'API est brièvement indisponible | ✓ |
 | `POST` | `/api/view` | `system.write` | `id`* · affiche un écran. L'id est la valeur `data-view` de la barre latérale (`mapper`, `library`, …) ; un id inconnu ne fait rien et le dit dans la console de l'app, exactement comme le deeplink `bmm://view/open` | ✓ |

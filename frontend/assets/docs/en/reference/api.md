@@ -437,8 +437,8 @@ is `data/export-auto`.
 | `POST` | `/api/telemetry/consent` | `telemetry.write` | `enabled`* | ✓ |
 | `POST` | `/api/telemetry/settings` | `telemetry.write` | `replay`, `full`, `bench` | ✓ |
 | `POST` | `/api/recorder` | `telemetry.write` | `on`, `full`, `rust`, `js` | ✓ |
-| `POST` | `/api/replay/export` | `telemetry.write` | — | ✓ |
-| `POST` | `/api/replay/import` | `telemetry.write` | `path`, `url` | ✓ |
+| `POST` | `/api/replay/export` | `replay.read` | — | ✓ |
+| `POST` | `/api/replay/import` | `replay.write` | `path`, `url` | ✓ |
 | `POST` | `/api/discord/rpc` | `system.write` | `enabled`* | ✓ |
 | `POST` | `/api/restart` | `system.write` | — · the API is briefly unavailable | ✓ |
 | `POST` | `/api/view` | `system.write` | `id`* · show a screen. The id is the sidebar's own `data-view` value (`mapper`, `library`, …); an unknown one is a no-op that says so in the app console, exactly like the `bmm://view/open` deeplink | ✓ |
