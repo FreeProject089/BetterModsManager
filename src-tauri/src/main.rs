@@ -896,6 +896,7 @@ fn main() {
             commands::mod_order::mod_order_set,
             commands::task_output::task_write_file,
             commands::task_output::task_output_dir,
+            commands::format_check::bmm_validate,
             commands::plugins::get_effective_api_port,
             commands::plugins::get_api_status,
             commands::plugins::restart_api_server,

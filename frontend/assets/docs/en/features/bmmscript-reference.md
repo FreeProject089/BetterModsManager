@@ -2,7 +2,7 @@
 
 !!! info ""
 
-    89 actions · 31 conditions · 28 values · 8 loop sources
+    90 actions · 32 conditions · 31 values · 8 loop sources
 
 > Generated from BMM's own registry, so it cannot describe a version of the app that does not exist. If an action is in the block editor, it is in this list.
 
@@ -37,7 +37,7 @@ Written `do <name>(param: value, …)`. An action with no parameters takes empty
 | `mods.clearHistory` | Empties the mod history list. The mods themselves are untouched. | `id` |
 | `mods.exportModpack` | Writes the active profile out as a shareable modpack. | `id` · `dir` |
 | `modlist.apply` | Installs anything the list names that is not here, then turns exactly those on. | `path` · `url` · `install` · `exact` · `passphrase` |
-| `plugin.asset` | Read one into a variable, copy it somewhere, open its folder, or run it. | `pluginId` · `path` · `mode` · `target` · `dir` · `engine` · `workingDir` |
+| `plugin.asset` | Read one into a variable, copy it somewhere, open its folder, or run it. | `pluginId` · `path` · `mode` · `target` · `dir` · `engine` · `workingDir` · `into` |
 
 ### Repo & sharing
 
@@ -49,9 +49,9 @@ Written `do <name>(param: value, …)`. An action with no parameters takes empty
 | `repo.update` | Update an exported repo | `dir` |
 | `repo.host` | Serve a repo over HTTP | `dir` · `port` |
 | `repo.manifest` | Reads the folder, rewrites repo.json, and reports what changed. Pairs with Publish over SSH as the next step. | `dir` · `name` · `author` |
-| `repo.publishSsh` | Uploads the exported folder to the SSH target saved in Server Repo | `dir` · `target` |
-| `repo.fetchSsh` | Fetches the repo from the saved SSH target into a local folder | `dir` · `target` |
-| `repo.syncNow` | Syncs a server repo into a local profile, unattended. | `url` · `gameDir` · `modsDir` · `password` · `repoProfile` · `backupDir` · `targetProfile` · `overwriteAll` · `deleteExtra` · `downloadLimit` · `keepZipped` |
+| `repo.publishSsh` | Uploads the exported folder to the SSH target saved in Server Repo | `dir` · `target` · `into` |
+| `repo.fetchSsh` | Fetches the repo from the saved SSH target into a local folder | `dir` · `target` · `into` |
+| `repo.syncNow` | Syncs a server repo into a local profile, unattended. | `url` · `gameDir` · `modsDir` · `password` · `repoProfile` · `backupDir` · `targetProfile` · `overwriteAll` · `deleteExtra` · `downloadLimit` · `keepZipped` · `into` |
 | `key.create` | Generates a keypair on the ring. A name already taken is left alone, never replaced. | `name` · `kind` · `bindUrl` |
 | `catalog.follow` | Adds a catalogue source through the app's own screens, so it appears in the following list with an origin. | `catType` · `url` · `unfollow` |
 
@@ -60,7 +60,7 @@ Written `do <name>(param: value, …)`. An action with no parameters takes empty
 | Action | What it does | Parameters |
 |---|---|---|
 | `app.launch` | Launch an installed catalog app | `id` · `exePath` |
-| `app.stop` | Terminates a running program, by name or by process id. Needs the “Stop programs” permission. | `name` · `pid` |
+| `app.stop` | Terminates a running program, by name or by process id. Needs the “Stop programs” permission. | `name` · `pid` · `into` |
 | `file.open` | Open or run any file / .exe | `path` |
 | `folder.open` | Open a folder in the explorer | `path` |
 | `app.install` | Install an app from a URL | `id` · `url` · `title` |
@@ -114,6 +114,7 @@ Written `do <name>(param: value, …)`. An action with no parameters takes empty
 | `var.clear` | Removes one shared variable, or all of them. A run’s own values disappear with it anyway. | `name` |
 | `text.extract` | Runs a pattern over a file's last KB, or over a variable, and keeps what it matched. | `target` · `path` · `tailKb` · `source` · `regex` · `group` |
 | `log.print` | Puts a line in the running panel and in the task's run.log. In code this is `print "…"`. | `message` · `text` |
+| `data.validate` | Works out what a document IS from its shape, and what is wrong with it. Use it before acting on something you downloaded. | `path` · `text` · `expect` · `strict` |
 | `file.write` | Write or append text to a file. A relative path lands in the task's output folder. | `path` · `text` · `append` |
 
 ### System & flow
@@ -131,12 +132,12 @@ Written `do <name>(param: value, …)`. An action with no parameters takes empty
 | `task.spawn` | Starts the other task and carries straight on. Use it when the rest of this task does not depend on the result — otherwise use “Run another task”, which waits. | `id` |
 | `restart` | Restart BMM | — |
 | `open.url` | Open a URL or link | `url` |
-| `custom.command` | Run a program with arguments | `args` · `program` · `workingDir` |
-| `custom.script` | Runs PowerShell, CMD, Bash or Python you write. Needs “Run scripts”. | `keepGoing` · `engine` · `code` · `workingDir` |
-| `folder.create` | Creates a folder inside BMM’s own data folder. It cannot reach outside it. | `path` |
+| `custom.command` | Run a program with arguments | `args` · `program` · `workingDir` · `into` |
+| `custom.script` | Runs PowerShell, CMD, Bash or Python you write. Needs “Run scripts”. | `keepGoing` · `engine` · `code` · `workingDir` · `into` |
+| `folder.create` | Creates a folder inside BMM’s own data folder. It cannot reach outside it. | `path` · `into` |
 | `catalog.create` | Write a catalog.json into a folder, plus the files it points at. Tutorials and plugins are linked; themes are embedded. | `dir` · `kind` · `name` · `base` · `bundle` · `bundleOut` |
 | `deeplink` | Trigger any bmm:// deep link | `url` |
-| `http.request` | Sends a request to any address and captures the reply. Needs “Run external programs”. | `url` · `headers` · `method` · `body` · `timeoutMs` · `jsonPath` · `allowAnyStatus` |
+| `http.request` | Sends a request to any address and captures the reply. Needs “Run external programs”. | `url` · `headers` · `method` · `body` · `timeoutMs` · `jsonPath` · `allowAnyStatus` · `into` |
 | `wait.http` | Polls it until it answers, or gives up and says so. | `url` · `everySeconds` · `timeoutSeconds` · `status` · `stopOnTimeout` |
 | `wait.hook` | Sleeps until something posts to /api/hook with this name. | `name` · `everySeconds` · `timeoutSeconds` · `stopOnTimeout` |
 | `import.file` | Takes a file or an address and reads it as whatever BMM format it is. | `path` · `url` · `password` · `kind` · `passphrase` · `apply` · `install` · `exact` · `catType` · `restore` · `sections` |
@@ -158,6 +159,7 @@ Written where a condition goes — after `if`, `case`, `waitfor`, `repeat while`
 | `modEnabled` | Mod is enabled |
 | `modDisabled` | Mod is disabled |
 | `modWins` | Mod wins its shared files |
+| `fileIsValid` | File is a valid BMM document |
 | `modpackActive` | Modpack is active |
 | `modpackInactive` | Modpack is inactive |
 | `allModsActive` | All active-profile mods are on |
@@ -185,7 +187,7 @@ Written where a condition goes — after `if`, `case`, `waitfor`, `repeat while`
 
 Written by an action into the task, and readable afterwards in a comparison or an expression — `if disk.free_gb < 5`, `set total = benchmark.mbps * 2`.
 
-`disk.read_mbps` · `disk.write_mbps` · `disk.suggested_limit` · `disk.free_gb` · `disk.free_percent` · `disk.total_gb` · `benchmark.mbps` · `benchmark.total_ms` · `update.available` · `lasttask.ok` · `lasttask.spawned` · `list.length` · `backup.bytes` · `order.moved` · `wait.ok` · `wait.tries` · `script.code` · `script.ok` · `import.count` · `catalog.entries` · `ssh.files` · `manifest.mods` · `manifest.added` · `manifest.removed` · `manifest.changed` · `http.status` · `map.size` · `map.hit`
+`disk.read_mbps` · `disk.write_mbps` · `disk.suggested_limit` · `disk.free_gb` · `disk.free_percent` · `disk.total_gb` · `benchmark.mbps` · `benchmark.total_ms` · `update.available` · `lasttask.ok` · `lasttask.spawned` · `list.length` · `backup.bytes` · `order.moved` · `valid.ok` · `valid.matched` · `valid.count` · `wait.ok` · `wait.tries` · `script.code` · `script.ok` · `import.count` · `catalog.entries` · `ssh.files` · `manifest.mods` · `manifest.added` · `manifest.removed` · `manifest.changed` · `http.status` · `map.size` · `map.hit`
 
 A value nothing has written yet reads as zero. `lasttask.ok` is 1 or 0, and only means anything after a `run`.
 

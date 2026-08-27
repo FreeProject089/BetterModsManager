@@ -493,6 +493,12 @@
       "group": "logic"
     },
     {
+      "type": "data.validate",
+      "label": "Check what a file is",
+      "needs": "validate",
+      "group": "logic"
+    },
+    {
       "type": "file.write",
       "label": "Write a file",
       "needs": "fileWrite",

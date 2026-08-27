@@ -1486,6 +1486,27 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
             await invoke('toggle_all_mods', { enable: false, bypassSha: false }); break;
         case 'mods.scan':
             await invoke('scan_mods_folder'); break;
+        case 'data.validate': {
+            const r = await invoke('bmm_validate', {
+                path: p.path || null, text: p.text || null,
+            }) as { format: string; ok: boolean; problems: string[]; count: number };
+            ctx.text['valid.format'] = r.format;
+            ctx.text['valid.problems'] = r.problems.map((k) => t(k)).join('; ');
+            ctx.nums['valid.ok'] = r.ok ? 1 : 0;
+            ctx.nums['valid.count'] = r.count;
+            // An expected format that did not arrive fails the step out loud when asked to.
+            // Silently carrying on is what turns "the download was a login page" into a
+            // problem three steps later, about something unrelated.
+            const want = String(p.expect || '').trim();
+            const matched = !want || want === r.format;
+            ctx.nums['valid.matched'] = matched ? 1 : 0;
+            if (want && !matched && p.strict !== false) {
+                throw new Error(t('sched.valid.wrongFormat')
+                    .replace('{want}', want)
+                    .replace('{got}', r.format || t('sched.valid.nothing')));
+            }
+            break;
+        }
         case 'log.print': {
             const line = String(p.message ?? p.text ?? '');
             // Two places, on purpose. The running panel is what somebody watching sees; the
@@ -2625,6 +2646,13 @@ async function evalConditionRaw(cond: Condition, ctx: RunCtx, task?: Task): Prom
         case 'profileActive': {
             const id = await invoke('get_active_profile_id').catch(() => null);
             return id === p.id;
+        }
+        case 'fileIsValid': {
+            const r = await invoke('bmm_validate', { path: p.path || null, text: null })
+                .catch(() => null) as { format: string; ok: boolean } | null;
+            if (!r) return false;
+            const want = String(p.expect || '').trim();
+            return r.ok && (!want || want === r.format);
         }
         case 'modWins': {
             // True when this mod wins EVERY file it contests. Written for `ensure`:
@@ -5450,6 +5478,7 @@ const ACTION_TYPES: { v: string; label: string; needs?: string; group: string }[
     // nothing here knows what DCS is except the one action that installs its hook.
     { v: 'text.extract', label: 'Read a value out of a file or a variable', needs: 'textExtract', group: 'logic' },
     { v: 'log.print', label: 'Write a line to the log', needs: 'message', group: 'logic' },
+    { v: 'data.validate', label: 'Check what a file is', needs: 'validate', group: 'logic' },
     { v: 'file.write', label: 'Write a file', needs: 'fileWrite', group: 'logic' },
     { v: 'modlist.apply', label: 'Apply a mod list (install what is missing)', needs: 'listApply', group: 'mods' },
     // One action for every game. DCS is a CASE inside it — the only one with a supported
@@ -6180,6 +6209,25 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
             </div>
         </div>`;
     }
+    else if (needs === 'validate') {
+        const formats = ['', 'mm', 'bmmpa', 'bmmplug', 'repo', 'bmmcat', 'bmp', 'cbmp', 'theme', 'databmm', 'bmmreplay', 'bmmnav', 'mm-locked'];
+        host.innerHTML = `<div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${escHtml(t('sched.valid.file'))}</label>
+            <div style="display:flex;gap:6px">
+                <input class="input sched-path" spellcheck="false" style="flex:1"
+                    placeholder="${escAttr(t('sched.valid.filePh'))}" value="${escAttr(params.path || '')}">
+                <button type="button" class="btn btn-xs btn-ghost sched-browse-file">${escHtml(t('common.browse') || 'Browse')}</button>
+            </div>
+            <label class="sched-cmd-label">${escHtml(t('sched.valid.orText'))}</label>
+            <input class="input sched-p-vtext" spellcheck="false"
+                placeholder="${escAttr(t('sched.valid.orTextPh'))}" value="${escAttr(params.text || '')}">
+            <label class="sched-cmd-label">${escHtml(t('sched.valid.expect'))}</label>
+            <select class="input sched-p-vexpect" style="max-width:220px">
+                ${formats.map((f) => `<option value="${f}"${(params.expect || '') === f ? ' selected' : ''}>${f ? escHtml(f) : escHtml(t('sched.valid.anything'))}</option>`).join('')}
+            </select>
+            <span class="sched-cmd-hint">${escHtml(t('sched.valid.hint'))}</span>
+        </div>`;
+    }
     else if (needs === 'fileWrite') {
         host.innerHTML = `<div class="sched-cmd-builder">
             <label class="sched-cmd-label">${escHtml(t('sched.fw.path'))}</label>
@@ -6649,6 +6697,8 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
         if (inp) { inp.value = v; inp.focus(); }
     });
     host.querySelector('.sched-p-fwtext')?.addEventListener('input', (e) => { params.text = (e.target as HTMLTextAreaElement).value; });
+    host.querySelector('.sched-p-vtext')?.addEventListener('input', (e) => { params.text = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-vexpect')?.addEventListener('change', (e) => { params.expect = (e.target as HTMLSelectElement).value; });
     host.querySelector('.sched-p-fwappend')?.addEventListener('change', (e) => { params.append = (e.target as HTMLInputElement).checked; });
     host.querySelector('.sched-p-order')?.addEventListener('input', (e) => { params.order = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-p-prog')?.addEventListener('input', (e) => { params.program = (e.target as HTMLInputElement).value; });
@@ -6876,7 +6926,7 @@ function diskOptions(selected: string): string {
 
 /** What `for each` can walk. One list: the editor's dropdown and the code box's suggestions. */
 const LOOP_SOURCES = ['enabledMods', 'disabledMods', 'mods', 'profiles', 'modpacks', 'themes', 'list', 'mapKeys'] as const;
-const COND_TYPES = ['always', 'all', 'any', 'value', 'textIs', 'fileContains', 'enumIs', 'profileActive', 'modEnabled', 'modDisabled', 'modWins', 'modpackActive', 'modpackInactive', 'allModsActive', 'appRunning', 'appNotRunning', 'fileExists', 'pathIsDir', 'fileHash', 'filesMatch', 'fileSize', 'fileType', 'fileName', 'fileNewer', 'online', 'catalogOk', 'repoOk', 'timeReached', 'dayOfWeek', 'timeRange', 'commandSucceeds'];
+const COND_TYPES = ['always', 'all', 'any', 'value', 'textIs', 'fileContains', 'enumIs', 'profileActive', 'modEnabled', 'modDisabled', 'modWins', 'fileIsValid', 'modpackActive', 'modpackInactive', 'allModsActive', 'appRunning', 'appNotRunning', 'fileExists', 'pathIsDir', 'fileHash', 'filesMatch', 'fileSize', 'fileType', 'fileName', 'fileNewer', 'online', 'catalogOk', 'repoOk', 'timeReached', 'dayOfWeek', 'timeRange', 'commandSucceeds'];
 // Values a preceding action can capture (used by the `value` condition).
 // Every variable an action writes into `ctx`, so a `value` condition can read all of
 // them. Four were missing — check_disk_space has always written disk.free_gb,
@@ -6933,6 +6983,11 @@ const VALUE_SOURCES = [
     // ordinary answer and a useful one: it means the order changed and nothing on disk
     // did, so the mods that moved share no file.
     'order.moved',
+    // What the last check found. `valid.ok` and `valid.matched` are 1/0 so a plain `value`
+    // condition can read them; the format itself is text, as {valid.format}.
+    'valid.ok',
+    'valid.matched',
+    'valid.count',
     // Written by the two waits and by a script run with "keep going": what happened,
     // as something a condition can select. Without these a task could wait and could not
     // branch on the outcome of waiting, which is most of the reason to wait.
@@ -7025,6 +7080,15 @@ function renderCondParams(host: HTMLElement, cond: Condition): void {
         return;
     }
     if (cond.type === 'profileActive') host.innerHTML = `<select class="input sched-cp" style="max-width:180px">${pickerOptions(_profiles, p.id)}</select>`;
+    else if (cond.type === 'fileIsValid') {
+        host.innerHTML = `<span style="display:flex;gap:6px;align-items:center;flex:1">
+            <input class="input sched-cp" spellcheck="false" style="flex:1" placeholder="${escAttr(t('sched.valid.filePh'))}" value="${escAttr(p.path || '')}">
+            <input class="input sched-cp2" spellcheck="false" style="max-width:130px" placeholder="${escAttr(t('sched.valid.expectPh'))}" value="${escAttr(p.expect || '')}">
+        </span>`;
+        host.querySelector('.sched-cp')?.addEventListener('input', (e) => { p.path = (e.target as HTMLInputElement).value; });
+        host.querySelector('.sched-cp2')?.addEventListener('input', (e) => { p.expect = (e.target as HTMLInputElement).value; });
+        return;
+    }
     else if (cond.type === 'modEnabled' || cond.type === 'modDisabled' || cond.type === 'modWins') host.innerHTML = `<select class="input sched-cp" style="max-width:200px">${pickerOptions(_mods, p.id)}</select>`;
     else if (cond.type === 'modpackActive' || cond.type === 'modpackInactive') host.innerHTML = `<select class="input sched-cp" style="max-width:200px">${pickerOptions(_modpacks, p.id)}</select>`;
     else if (cond.type === 'appRunning' || cond.type === 'appNotRunning') {

@@ -677,6 +677,49 @@ Coche **Un code de sortie non nul est un résultat, pas un échec** et il arrive
 `{script.code}`, avec `{text.script.stdout}` et `{text.script.stderr}` gardés séparément. Ne
 pas *démarrer* reste une erreur : il n'y a alors aucun code de sortie et rien n'a tourné.
 
+## Vérifier ce qu'est un fichier avant d'agir dessus
+
+Une automatisation qui récupère quelque chose puis agit dessus a une question d'abord : **est-ce
+que ce qui est revenu est bien ce que j'ai demandé.** Sans réponse, elle agit quand même —
+importe un thème comme liste de mods, suit une page de connexion comme un catalogue — et la
+panne apparaît trois étapes plus loin, sur autre chose.
+
+```bmms
+do http.request(url: "https://…/catalog.json", into: "body")
+do data.validate(text: "{body}", expect: "bmmcat")
+print "{valid.count} entrées"
+```
+
+| Laissé derrière | C'est |
+|---|---|
+| `{valid.format}` | Ce que c'est avéré, ou vide |
+| `{valid.ok}` | 1 quand rien ne cloche |
+| `{valid.count}` | Mods, tâches ou entrées — ce que ce format compte |
+| `{valid.problems}` | Ce qui ne va pas, en mots |
+
+Nommer un format attendu fait **échouer** l'étape si autre chose arrive. Il y a aussi une
+condition `fileIsValid`, pour `if` et `ensure`.
+
+**Ça décide par la FORME, jamais par ce que le document prétend être.** Un fichier qui dit
+`format: "mm"` ne prouve rien, et un fichier signé qui ment sur son propre type est justement le
+cas pour lequel ça existe.
+
+!!! note "« Pas du JSON » et « du JSON que je ne reconnais pas » sont deux réponses"
+
+    Elles envoient chercher à des endroits différents. La première est presque toujours une page
+    web qu'un téléchargement a renvoyée à la place du fichier — une redirection de connexion, un
+    lien expiré, un 404 servi en 200.
+
+!!! warning "C'est volontairement superficiel"
+
+    Ça dit ce qu'est un document et si sa propre forme tient debout. Savoir si chaque entrée
+    d'un catalogue se résout vraiment se décide dans ce qui l'installe, sur la machine qui
+    l'exécutera — un deuxième avis ici serait faux le jour où quelqu'un ajoute un champ.
+
+    La seule exception est un `.bmmpa` dont une tâche appelle un bloc partagé que le fichier ne
+    porte pas : cette réponse-là EST dans le même document, et sans le contrôle le fichier
+    s'importe parfaitement et meurt à cette étape.
+
 ## Quand BMM lui-même fait quelque chose
 
 Tous les autres déclencheurs regardent l'extérieur : une horloge, un fichier écrit par un autre

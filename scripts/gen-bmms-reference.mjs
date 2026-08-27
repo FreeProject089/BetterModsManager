@@ -144,7 +144,17 @@ for (let k = 0; k < caseMarks.length; k++) {
   const from = caseMarks[k].index;
   const to = k + 1 < caseMarks.length ? caseMarks[k + 1].index : runner.length;
   const body = runner.slice(from, to);
-  paramsByAction[caseMarks[k][1]] = [...new Set([...body.matchAll(/\bp\.([A-Za-z_][A-Za-z0-9_]*)/g)].map((m) => m[1]))];
+  const names = [...new Set([...body.matchAll(/\bp\.([A-Za-z_][A-Za-z0-9_]*)/g)].map((m) => m[1]))];
+  // `into` is read inside _captureOutput, not in the case body, so the rule above misses it —
+  // and it was missing it for ten of the eleven actions that support it. The reference said
+  // one action could capture its output into a variable; every one of those ten could, and
+  // nothing anywhere said so.
+  //
+  // A named exception rather than following helper calls in general: this is the only helper
+  // that reads `p` on a case's behalf, and a generic version would be a small interpreter that
+  // quietly reports whatever it happens to understand.
+  if (/_captureOutput\(\s*p\b/.test(body) && !names.includes('into')) names.push('into');
+  paramsByAction[caseMarks[k][1]] = names;
 }
 
 const paramsFor = (action) => paramsByAction[action] || [];

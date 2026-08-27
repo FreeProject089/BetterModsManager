@@ -613,6 +613,49 @@ Tick **A non-zero exit is a result, not a failure** and it lands in `{script.cod
 `{text.script.stdout}` and `{text.script.stderr}` kept apart. Failing to *start* is still an
 error, because then there is no exit code and nothing ran.
 
+## Checking what a file is before acting on it
+
+An automation that fetches something and then acts on it has one question first: **is what came
+back the thing I asked for.** Without an answer it acts anyway — imports a theme as a mod list,
+follows a login page as a catalogue — and the failure surfaces three steps later as something
+unrelated.
+
+```bmms
+do http.request(url: "https://…/catalog.json", into: "body")
+do data.validate(text: "{body}", expect: "bmmcat")
+print "{valid.count} entries"
+```
+
+| Left behind | Is |
+|---|---|
+| `{valid.format}` | What it turned out to be, or empty |
+| `{valid.ok}` | 1 when nothing is wrong with it |
+| `{valid.count}` | Mods, tasks or entries — whatever that format counts |
+| `{valid.problems}` | What is wrong, in words |
+
+Naming an expected format makes the step **fail** when something else arrives. There is also a
+`fileIsValid` condition, for `if` and `ensure`.
+
+**It decides by SHAPE, never by what the document says about itself.** A file claiming
+`format: "mm"` proves nothing, and a signed one that lies about its own type is the case this
+exists for.
+
+!!! note "“Not JSON” and “JSON I do not recognise” are different answers"
+
+    They send you to different places. The first is almost always a web page a download
+    returned instead of the file — a login redirect, an expired link, a 404 served with a 200.
+
+!!! warning "It is deliberately shallow"
+
+    It tells you what a document is and whether its own shape holds together. Whether every
+    entry inside a catalogue actually resolves is decided by the thing that installs it, on the
+    machine that will run it — a second opinion here would be wrong the day somebody adds a
+    field.
+
+    The one exception is a `.bmmpa` whose task calls a shared block the file does not carry:
+    that answer IS inside the same document, and without the check the file imports perfectly
+    and dies on that step.
+
 ## When BMM itself does something
 
 Every other trigger watches the outside: a clock, a file another program wrote. This one
