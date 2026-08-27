@@ -780,6 +780,7 @@
     "disabled",
     "do",
     "else",
+    "ensure",
     "every",
     "for",
     "if",

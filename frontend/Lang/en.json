@@ -8877,5 +8877,16 @@
   "sched.ref.kindAction": "do",
   "sched.ref.kindCond": "if",
   "sched.ref.kindValue": "value",
-  "sched.ref.kindSource": "for each"
+  "sched.ref.kindSource": "for each",
+  "sched.ensure": "ENSURE",
+  "sched.addEnsure": "Make sure of",
+  "sched.legendEnsure": "Check something is already true, and only do the work when it is not — then check again.",
+  "sched.ensure.condLabel": "is true:",
+  "sched.ensure.fix": "IF NOT, DO",
+  "sched.ensure.hint": "Runs the steps below only when the condition is false, then checks it again. Still false is a failure — which is how you find out a fix stopped working.",
+  "sched.ensure.orContinue": "carry on if it fails",
+  "sched.ensure.orContinueHint": "For a task that makes sure of several independent things and wants all of them attempted.",
+  "sched.ensure.already": "Already as it should be.",
+  "sched.ensure.fixed": "Put right.",
+  "sched.ensure.stillFalse": "Still not true after the fix ran."
 }

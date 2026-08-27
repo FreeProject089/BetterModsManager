@@ -119,6 +119,16 @@ type Step = (
     // aborting the whole task. Without it, one unreachable path or one missing file
     // killed an eight-step automation on step two.
     | { kind: 'try'; steps: Step[]; onError: Step[] }
+    /**
+     * Make this true, and only do the work when it is not.
+     *
+     * For a task whose job is a STATE rather than a script: it fires on its schedule, finds
+     * everything already as it should be, and does nothing. When something drifts, it fixes
+     * it — and then CHECKS. That last part is why this is not `if not <condition>`: an `if`
+     * runs its block and never looks back, so a fix that failed looks exactly like one that
+     * worked, and a task running hourly is the worst place for that to be invisible.
+     */
+    | { kind: 'ensure'; condition: Condition; steps: Step[]; onFail?: 'abort' | 'continue' }
     // Run every branch AT THE SAME TIME and carry on when all have settled. For the case a
     // sequence gets wrong: three independent downloads, or a sync and a benchmark that have
     // nothing to say to each other, where doing them in order only costs time.
@@ -198,6 +208,7 @@ function normalizeSteps(steps: any[]): Step[] {
         if (st.kind === 'if') { st.then = normalizeSteps(st.then); st.else = normalizeSteps(st.else); }
         else if (st.kind === 'repeat' || st.kind === 'forEach') { st.steps = normalizeSteps(st.steps); }
         else if (st.kind === 'try') { st.steps = normalizeSteps(st.steps); st.onError = normalizeSteps(st.onError); }
+        else if (st.kind === 'ensure') { st.steps = normalizeSteps(st.steps); }
         else if (st.kind === 'switch') {
             st.cases = Array.isArray(st.cases) ? st.cases : [];
             for (const c of st.cases) {
@@ -837,6 +848,22 @@ async function runSteps(steps: Step[], task: Task, ctx: RunCtx, depth = 0): Prom
                 if (!await runLoopBody(substituteItem(step.steps, item), task, ctx)) break;
                 if (gap) await new Promise(r => setTimeout(r, gap));
             }
+        } else if (step.kind === 'ensure') {
+            const already = await evalCondition(step.condition, ctx, task);
+            if (already) {
+                // The ordinary outcome, and it is said rather than skipped in silence: a task
+                // that reports nothing on the ninety-nine runs where all was well is a task
+                // nobody can tell from one that stopped running.
+                if (state) { state.step = t('sched.ensure.already'); renderRunningPanel(); }
+            } else {
+                await runSteps(step.steps, task, ctx, depth + 1);
+                // The re-check. Cheap, and the only thing separating this from an `if`.
+                const fixed = await evalCondition(step.condition, ctx, task);
+                if (state) { state.step = fixed ? t('sched.ensure.fixed') : t('sched.ensure.stillFalse'); renderRunningPanel(); }
+                if (!fixed && step.onFail !== 'continue') {
+                    throw new Error(t('sched.ensure.stillFalse'));
+                }
+            }
         } else if (step.kind === 'try') {
             try {
                 await runSteps(step.steps, task, ctx, depth + 1);
@@ -972,6 +999,11 @@ function substituteItem(steps: Step[], item: any): Step[] {
             return { ...rep(rest), steps: JSON.parse(JSON.stringify(inner || [])) };
         }
         if (st && st.kind === 'if') return { ...rep({ ...st, then: [], else: [] }), then: walk(st.then), else: walk(st.else) };
+        if (st && st.kind === 'ensure') {
+            const copy: any = rep({ ...st, steps: [] });
+            copy.steps = walk(st.steps);
+            return copy;
+        }
         if (st && (st.kind === 'repeat' || st.kind === 'try')) {
             const copy: any = rep({ ...st, steps: [], onError: [] });
             if (st.steps) copy.steps = walk(st.steps);
@@ -2711,6 +2743,7 @@ function stepLabel(step: Step): string {
         repeat: t('sched.addLoop') || 'Loop',
         waitFor: t('sched.addWaitFor') || 'Wait until',
         delay: t('sched.addDelay') || 'Pause',
+        ensure: t('sched.addEnsure'),
     };
     return words[step.kind] || step.kind;
 }
@@ -3033,6 +3066,7 @@ function stepCount(steps: Step[]): number {
         else if (s.kind === 'repeat' || s.kind === 'forEach') n += stepCount(s.steps);
         else if (s.kind === 'switch') n += stepCount(s.default) + (s.cases || []).reduce((acc, c) => acc + stepCount(c.steps), 0);
         else if (s.kind === 'try') n += stepCount(s.steps) + stepCount(s.onError);
+        else if (s.kind === 'ensure') n += stepCount(s.steps);
         else if (s.kind === 'parallel') n += (s.branches || []).reduce((acc, b) => acc + stepCount(b), 0);
     }
     return n;
@@ -3139,6 +3173,7 @@ function _stepHasContent(step: Step): boolean {
     if (step.kind === 'repeat' || step.kind === 'forEach') return (step.steps?.length || 0) > 0;
     if (step.kind === 'switch') return ((step.default?.length || 0) + (step.cases || []).reduce((a, c) => a + (c.steps?.length || 0), 0)) > 0;
     if (step.kind === 'try') return ((step.steps?.length || 0) + (step.onError?.length || 0)) > 0;
+    if (step.kind === 'ensure') return (step.steps?.length || 0) > 0;
     if (step.kind === 'parallel') return (step.branches || []).some((b) => b.length > 0);
     return false;
 }
@@ -4634,6 +4669,23 @@ function renderStepsEditor(host: HTMLElement, steps: Step[], depth = 0): void {
                 renderAddRow(el as HTMLElement, step.branches[bi], depth + 1, host, steps, depth);
             });
             _wireFold(block, step);
+        } else if (step.kind === 'ensure') {
+            block.innerHTML = `<div class="sched-step-head">${_foldBtn(step)}${_kindTile('ensure')}
+                    <span class="sched-step-tag sched-if">${escHtml(t('sched.ensure'))}</span>
+                    <span class="sched-cond-label">${escHtml(t('sched.ensure.condLabel'))}</span>
+                    <div class="sched-cond" style="flex:1"></div>
+                    <label class="sched-ensure-cont"><input type="checkbox" class="sched-ens-cont" ${step.onFail === 'continue' ? 'checked' : ''}>
+                        <span data-tooltip="${escAttr(t('sched.ensure.orContinueHint'))}">${escHtml(t('sched.ensure.orContinue'))}</span></label></div>
+                <p class="sched-ensure-hint">${escHtml(t('sched.ensure.hint'))}</p>
+                <div class="sched-branch"><div class="sched-branch-label">${escHtml(t('sched.ensure.fix'))}</div><div class="sched-ens-body"></div><div class="sched-ens-add"></div></div>`;
+            if (!step.condition) step.condition = { type: 'always', params: {} };
+            block.querySelector('.sched-cond')?.appendChild(conditionEditor(step.condition));
+            block.querySelector('.sched-ens-cont')?.addEventListener('change', (e) => {
+                step.onFail = (e.target as HTMLInputElement).checked ? 'continue' : 'abort';
+            });
+            renderStepsEditor(block.querySelector('.sched-ens-body') as HTMLElement, step.steps, depth + 1);
+            renderAddRow(block.querySelector('.sched-ens-add') as HTMLElement, step.steps, depth + 1, host, steps, depth);
+            _wireFold(block, step);
         } else if (step.kind === 'try') {
             block.innerHTML = `<div class="sched-step-head">${_foldBtn(step)}${_kindTile('try')}
                     <span class="sched-step-tag sched-if">${t('sched.try') || 'TRY'}</span>
@@ -4807,6 +4859,7 @@ function renderAddRow(host: HTMLElement, steps: Step[], depth = 0, rerenderHost?
     host.innerHTML = `
         <button class="btn btn-xs sched-chip sched-add-do" data-add="action" data-tooltip="${escAttr(t('sched.legendDo') || '')}">${KIND_ICON.action} ${t('sched.addAction') || 'Action'}</button>
         <button class="btn btn-xs sched-chip sched-add-if" data-add="if" data-tooltip="${escAttr(t('sched.legendIf') || '')}">${KIND_ICON.if} ${t('sched.addIf') || 'If/Else'}</button>
+        <button class="btn btn-xs sched-chip sched-add-if" data-add="ensure" data-tooltip="${escAttr(t('sched.legendEnsure'))}">${KIND_ICON.ensure} ${escHtml(t('sched.addEnsure'))}</button>
         <button class="btn btn-xs sched-chip sched-add-loop" data-add="repeat" data-tooltip="${escAttr(t('sched.legendLoop') || '')}">${KIND_ICON.repeat} ${t('sched.addLoop') || 'Loop'}</button>
         <button class="btn btn-xs sched-chip sched-add-wait" data-add="waitFor" data-tooltip="${escAttr(t('sched.legendWait') || '')}">${KIND_ICON.waitFor} ${t('sched.addWaitFor') || 'Wait until'}</button>
         <button class="btn btn-xs sched-chip sched-add-delay" data-add="delay" data-tooltip="${escAttr(t('sched.legendDelay') || '')}">${KIND_ICON.delay} ${t('sched.addDelay') || 'Pause'}</button>
@@ -4841,6 +4894,7 @@ function _makeStep(kind: string): Step {
     if (kind === 'forEach') return { kind: 'forEach', source: 'enabledMods', maxIters: 100, everySec: 0, steps: [] } as Step;
     if (kind === 'switch') return { kind: 'switch', cases: [{ condition: { type: 'always', params: {} }, steps: [] }], default: [] } as Step;
     if (kind === 'try') return { kind: 'try', steps: [], onError: [] } as Step;
+    if (kind === 'ensure') return { kind: 'ensure', condition: { type: 'always', params: {} }, steps: [], onFail: 'abort' } as Step;
     // TWO empty branches, not one: a parallel with a single branch is a sequence with extra
     // words, and the shape has to show what the step is for the moment it is added.
     if (kind === 'parallel') return { kind: 'parallel', mode: 'all', branches: [[], []] } as Step;
@@ -4894,6 +4948,7 @@ const KIND_ICON: Record<string, string> = {
     try:     '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>',
     // Two lines running side by side, then meeting: the whole idea of the step.
     parallel: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3"/><path d="M12 6H6v6"/><path d="M12 6h6v6"/><path d="M6 12v3"/><path d="M18 12v3"/><path d="M6 15h12"/><path d="M12 15v6"/></svg>',
+    ensure:  '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 12a8.5 8.5 0 1 1-2.9-6.4"/><path d="M8.5 12.2l2.7 2.7L21 5.5"/></svg>',
     signal:  '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="14" height="14" rx="2"/></svg>',
     // A box with an arrow going into it — the body lives elsewhere and is brought in here.
     call:    '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5V16"/><path d="M13 12H2M6 8.5 2.5 12 6 15.5"/></svg>',
@@ -4913,6 +4968,7 @@ function _foldBtn(step: any): string {
     else if (step.kind === 'repeat' || step.kind === 'forEach') sum = `${step.steps?.length || 0} ${t('sched.stepsInside') || 'inside'}`;
     else if (step.kind === 'switch') sum = `${(step.cases?.length || 0)} cases`;
     else if (step.kind === 'try') sum = `${(step.steps?.length || 0)} + ${(step.onError?.length || 0)}`;
+    else if (step.kind === 'ensure') sum = `${(step.steps?.length || 0)} ${t('sched.stepsInside') || 'inside'}`;
     else if (step.kind === 'parallel') sum = (step.branches || []).map((b: Step[]) => b.length).join(' | ');
     else if (step.kind === 'delay') sum = `${step.seconds || 0}${t('sched.unitSec') || 's'}`;
     const sumHtml = sum ? `<span class="sched-fold-sum">${sum}</span>` : '';

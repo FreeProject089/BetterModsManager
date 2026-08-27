@@ -8875,5 +8875,16 @@
   "sched.ref.kindAction": "do",
   "sched.ref.kindCond": "if",
   "sched.ref.kindValue": "valeur",
-  "sched.ref.kindSource": "for each"
+  "sched.ref.kindSource": "for each",
+  "sched.ensure": "GARANTIR",
+  "sched.addEnsure": "S'assurer que",
+  "sched.legendEnsure": "Vérifier qu'une chose est déjà vraie, ne faire le travail que si elle ne l'est pas — puis revérifier.",
+  "sched.ensure.condLabel": "est vrai :",
+  "sched.ensure.fix": "SINON, FAIRE",
+  "sched.ensure.hint": "Exécute les étapes ci-dessous uniquement quand la condition est fausse, puis la revérifie. Toujours fausse = échec — c'est comme ça que tu apprends qu'une correction ne marche plus.",
+  "sched.ensure.orContinue": "continuer si ça échoue",
+  "sched.ensure.orContinueHint": "Pour une tâche qui s'assure de plusieurs choses indépendantes et veut toutes les tenter.",
+  "sched.ensure.already": "Déjà dans l'état voulu.",
+  "sched.ensure.fixed": "Remis en ordre.",
+  "sched.ensure.stillFalse": "Toujours pas vrai après la correction."
 }

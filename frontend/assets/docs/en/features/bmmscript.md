@@ -225,6 +225,37 @@ waitfor fileExists(path: "x") timeout 2h poll 10s
 waitfor online timeout 30s orcontinue       # carry on instead of failing
 ```
 
+### Making sure of something
+
+For a task whose job is a **state** rather than a script. It fires on its schedule, finds
+everything as it should be, and does nothing at all — then puts it right the day something
+drifts.
+
+```bmms
+ensure modEnabled(id: "big-map-pack") {
+    do mod.enable(id: "big-map-pack")
+}
+
+ensure fileExists(path: "{game}/config/ready.txt") {
+    do script.run(engine: "powershell", code: "New-Item ...")
+} orcontinue
+```
+
+!!! note "Why this is not `if not …`"
+
+    An `if` runs its block and never looks back, so a fix that **failed** looks exactly like
+    one that worked. `ensure` re-checks the condition afterwards, and a condition that is
+    still false is a failure you can see.
+
+    That is the whole value of a task that runs every hour: not that it does the work, but
+    that it tells you the day it stopped being able to.
+
+`orcontinue` keeps the run going after a failed `ensure` — for a task that makes sure of
+several independent things and wants all of them attempted rather than stopping at the first
+one it could not fix.
+
+In the block editor this is the **Make sure of** brick.
+
 ### Errors and branches
 
 ```bmms

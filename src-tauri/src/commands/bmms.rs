@@ -839,6 +839,23 @@ impl P {
                     json!({ "kind": "waitFor", "condition": condition, "timeoutSec": num(timeout), "pollSec": num(poll), "onTimeout": on_timeout }),
                 )
             }
+            // `ensure <cond> { … }` — for a task whose job is a STATE rather than a script.
+            //
+            // Not sugar for `if not <cond>`. An `if` runs its block and never looks back, so a
+            // fix that did not take is indistinguishable from one that did. This re-checks
+            // afterwards and fails loudly when the condition is STILL false: the whole point of
+            // a task that runs every hour is that it tells you when it stopped being able to do
+            // its job, and a silent no-op is the failure nobody sees for a month.
+            //
+            // `orcontinue` keeps the run going after a failed ensure, for a task that ensures
+            // several independent things and wants all of them attempted.
+            "ensure" => {
+                self.next();
+                let condition = self.cond()?;
+                let steps = self.block()?;
+                let on_fail = if self.eat_word("orcontinue") { "continue" } else { "abort" };
+                Ok(json!({ "kind": "ensure", "condition": condition, "steps": steps, "onFail": on_fail }))
+            }
             "try" => {
                 self.next();
                 let steps = self.block()?;
@@ -1733,6 +1750,26 @@ fn steps_str(steps: &[Value], depth: usize, out: &mut String) {
                 out.push_str(&line);
                 out.push('\n');
             }
+            "ensure" => {
+                out.push_str(&format!(
+                    "{}ensure {} {{\n",
+                    pad,
+                    cond_str(st.get("condition").unwrap_or(&Value::Null))
+                ));
+                steps_str(
+                    st.get("steps")
+                        .and_then(|x| x.as_array())
+                        .map(|v| &v[..])
+                        .unwrap_or(&[]),
+                    depth + 1,
+                    out,
+                );
+                out.push_str(&format!("{}}}", pad));
+                if st.get("onFail").and_then(|x| x.as_str()) == Some("continue") {
+                    out.push_str(" orcontinue");
+                }
+                out.push('\n');
+            }
             "try" => {
                 out.push_str(&format!("{}try {{\n", pad));
                 steps_str(
@@ -2052,6 +2089,38 @@ mod tests {
         );
     }
 
+    /// `ensure` is not sugar for `if not`, and the tree has to show that.
+    #[test]
+    fn ensure_compiles_to_its_own_step_and_prints_back() {
+        let src = "task \"State\" {
+    every day at 03:00
+
+    ensure modEnabled(id: \"big\") {
+        do mod.enable(id: \"big\")
+    }
+    ensure online {
+        do notify(message: \"offline\")
+    } orcontinue
+}
+";
+        let first = compile(src);
+        let steps = first["steps"].as_array().unwrap();
+        assert_eq!(steps.len(), 2);
+        assert_eq!(steps[0]["kind"], "ensure");
+        // The condition is kept as written. An `ensure` that stored `not <cond>` would run
+        // its block when the state is FINE, which is the exact inversion this must not have.
+        assert_eq!(steps[0]["condition"]["type"], "modEnabled");
+        assert_eq!(steps[0]["onFail"], "abort");
+        assert_eq!(steps[0]["steps"].as_array().unwrap().len(), 1);
+        assert_eq!(steps[1]["onFail"], "continue");
+
+        // And it survives the printer, `orcontinue` included.
+        let printed = bmms_decompile(first.clone());
+        assert!(printed.contains("ensure modEnabled"), "printed: {}", printed);
+        assert!(printed.contains("} orcontinue"), "printed: {}", printed);
+        assert_eq!(compile(&printed), first, "printed: {}", printed);
+    }
+
     #[test]
     fn round_trip_is_stable() {
         let src = r#"task "Nightly" {
@@ -2172,6 +2241,17 @@ mod tests {
         }
     }
 }
+"#,
+            ),
+            (
+                "bmmscript.md ensure",
+                r#"ensure modEnabled(id: "big-map-pack") {
+    do mod.enable(id: "big-map-pack")
+}
+
+ensure fileExists(path: "{game}/config/ready.txt") {
+    do script.run(engine: "powershell", code: "New-Item ...")
+} orcontinue
 "#,
             ),
             (

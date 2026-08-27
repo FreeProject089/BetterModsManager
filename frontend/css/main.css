@@ -18846,3 +18846,10 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
     .sched-ref { flex: 0 0 auto; }
     .sched-ref-list { max-height: 220px; }
 }
+
+/* ── ENSURE ──────────────────────────────────────────────────────────────────
+   Shares the IF colour: it is a question about the world, not an instruction. */
+.sched-kind-ic.k-ensure { color: var(--accent); }
+.sched-ensure-hint { font-size: 11px; color: var(--text-muted); margin: 4px 0 8px 34px; line-height: 1.45; }
+.sched-ensure-cont { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-secondary); white-space: nowrap; }
+.sched-ensure-cont input { margin: 0; }

@@ -229,6 +229,37 @@ waitfor fileExists(path: "x") timeout 2h poll 10s
 waitfor online timeout 30s orcontinue       # continuer au lieu d'échouer
 ```
 
+### S'assurer d'une chose
+
+Pour une tâche dont le travail est un **état** plutôt qu'un script. Elle se déclenche selon sa
+planification, trouve tout dans l'état voulu, et ne fait absolument rien — puis remet en ordre
+le jour où quelque chose dérive.
+
+```bmms
+ensure modEnabled(id: "big-map-pack") {
+    do mod.enable(id: "big-map-pack")
+}
+
+ensure fileExists(path: "{game}/config/ready.txt") {
+    do script.run(engine: "powershell", code: "New-Item ...")
+} orcontinue
+```
+
+!!! note "Pourquoi ce n'est pas `if not …`"
+
+    Un `if` exécute son bloc et ne se retourne jamais : une correction qui a **échoué**
+    ressemble exactement à une correction qui a marché. `ensure` revérifie la condition
+    ensuite, et une condition toujours fausse devient un échec visible.
+
+    C'est tout l'intérêt d'une tâche qui tourne toutes les heures : pas qu'elle fasse le
+    travail, mais qu'elle te dise le jour où elle n'a plus réussi à le faire.
+
+`orcontinue` laisse le run continuer après un `ensure` en échec — pour une tâche qui s'assure
+de plusieurs choses indépendantes et veut toutes les tenter plutôt que de s'arrêter à la
+première qu'elle n'a pas pu corriger.
+
+Dans l'éditeur en blocs, c'est la brique **S'assurer que**.
+
 ### Erreurs et branches
 
 ```bmms
