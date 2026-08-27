@@ -5776,23 +5776,41 @@ body.tut-docked.tut-min .app-shell {
     caret-color: var(--text-primary, #e6edf3);   /* or the caret vanishes with the text */
 }
 .code-hl-wrap > textarea::selection { background: var(--accent-soft, rgba(59, 130, 246, .35)); color: transparent; }
-.code-hl-mirror {
+/* `.code-hl-wrap >` is load-bearing, not decoration.
+   The mirror is given the TEXTAREA's own class list so their metrics match, which means it
+   inherits whatever those classes say — and a class defined LATER in this file at the same
+   specificity wins. `.sched-code` (further down) sets `resize: vertical` and
+   `overflow-x: auto`, and quietly took both back: the mirror became a scroll container that
+   drew its own horizontal scrollbar and its own resize grip on top of the textarea's. It
+   read as a second, dead code box, and it only appeared once the content was wider than the
+   column — which is exactly what opening the reference panel does.
+   The child combinator puts this rule a specificity above anything the shared classes can
+   say, so it no longer depends on where in the file they happen to sit. */
+.code-hl-wrap > .code-hl-mirror {
+
     position: absolute;
     inset: 0;
     z-index: 0;
     overflow: hidden;             /* scrolled in step with the textarea, never on its own */
     pointer-events: none;
-    /* A textarea soft-wraps; a div does not. This is the ONE metric the shared classes do
-       not equalise, so it is corrected here where it can be seen. */
-    white-space: pre-wrap;
-    overflow-wrap: break-word;
     /* The mirror carries .input, which draws a border and a background of its own. The
        textarea on top draws them too, so the mirror must not double them. */
     border-color: transparent !important;
     background: var(--bg-input, var(--bg-secondary, #0f1523));
     resize: none;
+    /* Not `overflow: hidden` alone: `.sched-code` sets `overflow-x`, which is the
+       more specific property and would survive the shorthand. */
+    overflow-x: hidden;
+    overflow-y: hidden;
     min-height: 0;
 }
+/* Wrapping is a DEFAULT here, deliberately at low specificity.
+   A bare textarea soft-wraps and a div does not, so the mirror needs this to match one that
+   says nothing. But a class CAN say otherwise — `.sched-code` sets `white-space: pre` and
+   scrolls horizontally — and when it does, the mirror has to agree or the colours wrap onto
+   a second line while the text underneath them stays on one. Forcing it from the rule above
+   is what made them disagree. */
+.code-hl-mirror { white-space: pre-wrap; overflow-wrap: break-word; }
 .code-hl-mirror > code { font: inherit; background: none; padding: 0; display: block; }
 
 /* Past the size ceiling the mirror is removed and the textarea has to show its own text
@@ -18821,9 +18839,8 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
 }
 /* The wrapper is the box now, so the textarea has to fill it rather than keep its own width. */
 .sched-code-row > .code-hl-wrap > textarea { width: 100%; box-sizing: border-box; }
-/* Belt and braces on the one rule that stops the mirror becoming a second visible box: it is
-   absolutely positioned over the textarea, and a flex context must not talk it out of that. */
-.sched-code-row .code-hl-mirror { position: absolute; inset: 0; }
+/* The mirror's own rule (`.code-hl-wrap > .code-hl-mirror`) now outranks anything the
+   shared classes say, so the position no longer needs restating here. */
 .sched-ref {
     flex: 0 0 288px;
     display: flex;
