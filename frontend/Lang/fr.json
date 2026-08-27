@@ -8897,5 +8897,18 @@
   "paths.errNotSpec": "Ce n'est pas un endroit que BMM nomme.",
   "paths.errOutside": "Ce chemin sort du dossier qu'on lui a donné.",
   "paths.errAbsolute": "Cette partie doit être relative — un chemin absolu ignorerait le dossier auquel il est joint.",
-  "paths.errNoRoot": "BMM ne connaît pas celui-là sur cette machine."
+  "paths.errNoRoot": "BMM ne connaît pas celui-là sur cette machine.",
+  "plugins.pluginAutomations": "Automatisations",
+  "plugins.importAutomations": "Importer une automatisation…",
+  "plugins.noAutomations": "Aucune automatisation livrée avec ce plugin.",
+  "plugins.automationsNote": "Les automatisations livrées arrivent DÉSACTIVÉES, sans aucune permission qui sort de BMM — exécuter des programmes, ouvrir des liens, arrêter des processus. C'est la personne qui installe qui les accorde, pas toi.",
+  "plugins.applyModeAutomation": "Mettre en place ses automatisations",
+  "plugins.autoBadFile": "Ce fichier n'est pas une automatisation lisible :",
+  "plugins.auto.none": "Ce plugin ne livre aucune automatisation.",
+  "plugins.auto.someFailed": "Illisible :",
+  "plugins.auto.imported": "{n} automatisation(s) ajoutée(s), désactivée(s) — à relire dans le Planificateur :",
+  "plugins.auto.importedOnly": "{n} automatisation(s) ajoutée(s) et laissée(s) éteinte(s).",
+  "plugins.auto.runTitle": "Les lancer maintenant ?",
+  "plugins.auto.runBody": "Ces automatisations viennent du plugin et viennent d'être ajoutées :",
+  "plugins.auto.runSafety": "Elles ne peuvent ni exécuter de programme, ni ouvrir de lien, ni arrêter de processus — ces permissions ont été retirées à l'import. Elles restent éteintes ensuite dans tous les cas."
 }

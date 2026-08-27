@@ -8899,5 +8899,18 @@
   "paths.errNotSpec": "That is not a place BMM names.",
   "paths.errOutside": "That path leads out of the folder it was given.",
   "paths.errAbsolute": "That part must be relative — an absolute path would ignore the folder it was joined to.",
-  "paths.errNoRoot": "BMM does not know that one on this machine."
+  "paths.errNoRoot": "BMM does not know that one on this machine.",
+  "plugins.pluginAutomations": "Automations",
+  "plugins.importAutomations": "Import an automation…",
+  "plugins.noAutomations": "No automation shipped with this plugin.",
+  "plugins.automationsNote": "Shipped automations arrive DISABLED, with every permission that reaches outside BMM removed — running programs, deeplinks, stopping processes. The person installing grants those, not you.",
+  "plugins.applyModeAutomation": "Set up its automations",
+  "plugins.autoBadFile": "That file is not a readable automation:",
+  "plugins.auto.none": "This plugin ships no automation.",
+  "plugins.auto.someFailed": "Could not read:",
+  "plugins.auto.imported": "{n} automation(s) added, disabled — review them in the Scheduler:",
+  "plugins.auto.importedOnly": "{n} automation(s) added and left off.",
+  "plugins.auto.runTitle": "Run them now?",
+  "plugins.auto.runBody": "These automations came with the plugin and have just been added:",
+  "plugins.auto.runSafety": "They cannot run programs, fire links or stop processes — those permissions were removed on import. They stay switched off afterwards either way."
 }

@@ -83,6 +83,9 @@ let _removedScripts = []; // bundled scripts (manifest-rel paths) staged for rem
 let _removedFolders = []; // bundled folders staged for removal — undo until save
 let _renderPcScripts = null; // re-render hooks set by renderCreate() so prefill can refresh the lists
 let _renderPcFolders = null;
+let _editAutomations = []; // .bmmpa files already shipped, carried over when editing
+let _removedAutomations = []; // staged for removal — undo until save
+let _renderPcAutomations = null;
 let _allProfiles = [];
 let _apiToken = '';
 let _exePath = '';
@@ -3805,6 +3808,8 @@ function renderCreate(container) {
     _editFolders = [];
     _removedScripts = [];
     _removedFolders = [];
+    _editAutomations = [];
+    _removedAutomations = [];
     container.innerHTML = `
         <div class="plug-create-layout">
             <div class="plug-create-form-col">
@@ -3888,6 +3893,14 @@ function renderCreate(container) {
                         <div id="pc-folders-list" class="plug-scripts-list"></div>
                     </div>
 
+                    <!-- Automations the plugin ships -->
+                    <div class="plug-form-row">
+                        <label class="plug-form-label">${t('plugins.pluginAutomations')} <span style="color:var(--text-muted);font-size:10px;">(.bmmpa)</span></label>
+                        <button class="btn btn-xs btn-ghost" id="pc-import-automations" style="align-self:flex-start;">${IC.download} ${t('plugins.importAutomations')}</button>
+                        <div id="pc-automations-list" class="plug-scripts-list"></div>
+                        <p class="plug-auto-note">${escHtml(t('plugins.automationsNote'))}</p>
+                    </div>
+
                     <!-- What happens on apply -->
                     <div class="plug-form-row">
                         <label class="plug-form-label">${t('plugins.applyMode') || 'On apply'}</label>
@@ -3895,6 +3908,7 @@ function renderCreate(container) {
                             <option value="modlist">${t('plugins.applyModeModlist') || 'Apply mod list (default)'}</option>
                             <option value="script">${t('plugins.applyModeScript') || 'Run scripts only'}</option>
                             <option value="both">${t('plugins.applyModeBoth') || 'Apply mod list + run scripts'}</option>
+                            <option value="automation">${escHtml(t('plugins.applyModeAutomation'))}</option>
                         </select>
                         <span class="plug-toggle-hint">${t('plugins.applyModeHint') || 'Choose what activating this plugin does.'}</span>
                     </div>
@@ -4048,6 +4062,44 @@ function renderCreate(container) {
         if (dir) {
             folderPaths.push(dir);
             renderFoldersList();
+        }
+    });
+    // ── Automations: .bmmpa files shipped with the plugin ──────────────────────
+    const automationPaths = [];
+    const renderAutomationsList = () => {
+        const list = document.getElementById('pc-automations-list');
+        if (!list)
+            return;
+        const bundled = _editAutomations.map(rel => bundledChip(rel, _removedAutomations.includes(rel), 'automation')).join('');
+        const picked = automationPaths.map((p, i) => {
+            const fname = p.split(/[\\/]/).filter(Boolean).pop() || p;
+            return `<div class="plug-script-chip"><span>${escHtml(fname)}</span><button class="plug-auto-rm" data-i="${i}" data-tooltip="${escAttr(t('common.remove') || 'Remove')}">${IC.x}</button></div>`;
+        }).join('');
+        list.innerHTML = (bundled + picked)
+            || `<span style="font-size:11px;color:var(--text-muted);">${escHtml(t('plugins.noAutomations'))}</span>`;
+        list.querySelectorAll('.plug-auto-rm').forEach(b => b.addEventListener('click', () => {
+            automationPaths.splice(parseInt(b.dataset.i, 10), 1);
+            renderAutomationsList();
+        }));
+        list.querySelectorAll('.plug-bundled-rm').forEach(b => b.addEventListener('click', () => {
+            const rel = b.dataset.rel;
+            if (!_removedAutomations.includes(rel))
+                _removedAutomations.push(rel);
+            renderAutomationsList();
+        }));
+        list.querySelectorAll('.plug-bundled-undo').forEach(b => b.addEventListener('click', () => {
+            const rel = b.dataset.rel;
+            _removedAutomations = _removedAutomations.filter(r => r !== rel);
+            renderAutomationsList();
+        }));
+    };
+    _renderPcAutomations = renderAutomationsList;
+    renderAutomationsList();
+    container.querySelector('#pc-import-automations')?.addEventListener('click', async () => {
+        const f = await pickFile({ filters: [{ name: 'BMM automation', extensions: ['bmmpa', 'json'] }] }).catch(() => null);
+        if (f) {
+            automationPaths.push(f);
+            renderAutomationsList();
         }
     });
     // Icon tab switching
@@ -4233,6 +4285,7 @@ function renderCreate(container) {
             has_scripts: (document.getElementById('pc-has-scripts')?.checked) || keptScripts.length > 0 || scriptPaths.length > 0 || keptFolders.length > 0 || folderPaths.length > 0,
             scripts: keptScripts,
             folders: keptFolders,
+            automations: _editAutomations.filter(a => !_removedAutomations.includes(a)),
             apply_mode: document.getElementById('pc-apply-mode')?.value || 'modlist',
             modlist: {
                 strict: document.getElementById('pc-strict')?.checked || false,
@@ -4255,6 +4308,7 @@ function renderCreate(container) {
                 iconSvg: iconBuiltinSvg || null,
                 scriptSrcPaths: scriptPaths.length ? scriptPaths : null,
                 folderSrcPaths: folderPaths.length ? folderPaths : null,
+                automationSrcPaths: automationPaths.length ? automationPaths : null,
                 removedBundled: removedBundledPayload(),
             });
             _installedPlugins = _installedPlugins.filter(p => p.manifest.id !== manifest.id);
@@ -4279,6 +4333,7 @@ function renderCreate(container) {
                 iconSvg: iconBuiltinSvg || null,
                 scriptSrcPaths: scriptPaths.length ? scriptPaths : null,
                 folderSrcPaths: folderPaths.length ? folderPaths : null,
+                automationSrcPaths: automationPaths.length ? automationPaths : null,
                 removedBundled: removedBundledPayload(),
             });
             await invoke('export_plugin', { pluginId: manifest.id, destPath: path });
@@ -9878,6 +9933,11 @@ async function handleApply(pluginId) {
         await maybeRunPluginScripts(pluginId);
         return;
     }
+    // "Set up its automations": import what the plugin ships, and offer to run it now.
+    if (applyMode === 'automation') {
+        await installPluginAutomations(pluginId, true);
+        return;
+    }
     if (!plugin?.manifest?.modlist?.required_mods?.length) {
         // No mod list: fall back to scripts if the plugin has any.
         if (pluginHasScripts) {
@@ -9947,6 +10007,12 @@ async function doApply(pluginId, cmp) {
         const applyMode = _installedPlugins.find(p => p.manifest.id === pluginId)?.manifest?.apply_mode || 'modlist';
         if (applyMode === 'both')
             await maybeRunPluginScripts(pluginId);
+        // Automations come along with the mod list too, but never start on their own here:
+        // somebody applying a mod list asked for a mod list.
+        if ((_installedPlugins.find(p => p.manifest.id === pluginId)?.manifest?.automations?.length || 0) > 0
+            && applyMode !== 'automation') {
+            await installPluginAutomations(pluginId, false);
+        }
     }
     catch (e) {
         toast(`${t('common.error')}: ${e}`, 'error');
@@ -10085,6 +10151,7 @@ function prefillCreateTab(manifest) {
     // Carry them through to save so editing doesn't wipe bundled files.
     _editScripts = existingScripts.slice();
     _editFolders = existingFolders.slice();
+    _editAutomations = (manifest.automations || []).slice();
     const hasScriptsCb = document.getElementById('pc-has-scripts');
     if (hasScriptsCb) {
         hasScriptsCb.checked = !!(manifest.has_scripts || existingScripts.length || existingFolders.length);
@@ -10094,6 +10161,7 @@ function prefillCreateTab(manifest) {
     // via the create tab's own list renderers, now that _editScripts/_editFolders are set.
     _renderPcScripts?.();
     _renderPcFolders?.();
+    _renderPcAutomations?.();
     // Pre-select mods (resolved against the full all-profiles mod list). Prefer the
     // stored id (survives a rename), fall back to a case-insensitive name match.
     const mods = manifest.modlist?.required_mods || [];
@@ -10185,5 +10253,98 @@ export async function handleApplyViaDeepLink(pluginId) {
     }
     _installedPlugins = plugins;
     await handleApply(pluginId);
+}
+/**
+ * Import the automations a plugin ships, and — when asked — run them once.
+ *
+ * The alternative people were using is what makes this worth having: ship a `.bat`, tell the
+ * person where the folder is, and hope. An automation is the one thing BMM can READ: it has
+ * steps, permissions and a trigger, and all three can be shown before anything happens.
+ *
+ * Every task goes through `sanitiseImportedTask`, the same gate as any other `.bmmpa`. It
+ * arrives DISABLED with every capability that reaches outside BMM stripped — command, script,
+ * deeplink, stopProcess — because those are granted by the person who lives with them, never
+ * by the file's author. A plugin is a file from a stranger like any other.
+ *
+ * Which is exactly what makes `runNow` defensible. A task that cannot run a program, cannot
+ * fire a deeplink and cannot kill a process is a task whose worst case is a change inside BMM
+ * that the person just asked for by applying the plugin. Auto-run without that stripping would
+ * be arbitrary code execution on install, dressed as a convenience.
+ */
+async function installPluginAutomations(pluginId, runNow) {
+    let files;
+    try {
+        files = await invoke('plugin_automations', { pluginId });
+    }
+    catch (e) {
+        toast(`${t('common.error')}: ${e}`, 'error', 8000);
+        return;
+    }
+    if (!files.length) {
+        toast(t('plugins.auto.none'), 'info', 6000);
+        return;
+    }
+    const sched = await import('../settings/scheduler.js');
+    const imported = [];
+    const failed = [];
+    for (const f of files) {
+        let doc;
+        try {
+            doc = JSON.parse(f.text);
+        }
+        catch {
+            failed.push(f.name);
+            continue;
+        }
+        // A .bmmpa may carry reusable BLOCKS its tasks call. They are restored FIRST, or a
+        // task that calls one imports intact and dies on the step that calls it.
+        const tasks = Array.isArray(doc) ? doc : (doc.tasks || []);
+        if (doc && doc.includes) {
+            try {
+                sched.writeBlocks({ ...sched.readBlocks(), ...doc.includes });
+            }
+            catch { /* keep going */ }
+        }
+        if (!tasks.length) {
+            failed.push(f.name);
+            continue;
+        }
+        for (const raw of tasks) {
+            try {
+                const id = await sched.importTaskObject({ ...raw, name: raw?.name || f.name });
+                imported.push({ id: id || '', name: raw?.name || f.name });
+            }
+            catch {
+                failed.push(f.name);
+            }
+        }
+    }
+    if (failed.length) {
+        toast(`${t('plugins.auto.someFailed')} ${failed.join(', ')}`, 'warning', 9000);
+    }
+    if (!imported.length)
+        return;
+    const names = imported.map((i) => i.name).join(', ');
+    if (!runNow) {
+        // Said out loud rather than left to be discovered. A task that appeared in the list
+        // disabled, that nobody was told about, is a task nobody turns on.
+        toast(`${t('plugins.auto.imported').replace('{n}', String(imported.length))} ${names}`, 'success', 9000);
+        return;
+    }
+    const ok = await showConfirm(t('plugins.auto.runTitle'), `${t('plugins.auto.runBody')}\n\n${names}\n\n${t('plugins.auto.runSafety')}`, false);
+    if (!ok) {
+        toast(`${t('plugins.auto.importedOnly').replace('{n}', String(imported.length))}`, 'info', 8000);
+        return;
+    }
+    for (const { id, name } of imported) {
+        if (!id)
+            continue;
+        try {
+            await sched.runTaskById(id);
+        }
+        catch (e) {
+            toast(`${name}: ${e}`, 'error', 8000);
+        }
+    }
 }
 //# sourceMappingURL=plugins.js.map

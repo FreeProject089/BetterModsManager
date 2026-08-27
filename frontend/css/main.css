@@ -18890,3 +18890,13 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
 .pp-sub { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--text-secondary); flex: 1; }
 .pp-sub input { flex: 1; max-width: 260px; }
 .sched-bmm-path { white-space: nowrap; }
+
+/* The note under the shipped-automations list. Warning-coloured, because what it
+   says is a limit on what the author can do to the installer, and reading it as
+   decoration is how somebody ships a task expecting it to run. */
+.plug-auto-note {
+    font-size: 10.5px;
+    color: var(--warning);
+    margin: 6px 0 0;
+    line-height: 1.45;
+}

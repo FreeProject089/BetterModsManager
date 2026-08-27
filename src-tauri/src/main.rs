@@ -889,6 +889,7 @@ fn main() {
             commands::plugins::get_os_schedule_key,
             commands::bmm_paths::bmm_path_roots,
             commands::bmm_paths::bmm_path_resolve,
+            commands::plugins::plugin_automations,
             commands::plugins::get_effective_api_port,
             commands::plugins::get_api_status,
             commands::plugins::restart_api_server,

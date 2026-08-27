@@ -55,6 +55,18 @@ pub struct PluginManifest {
     /// Relative paths of folders bundled inside the plugin (under "bundle/").
     #[serde(default)]
     pub folders: Vec<String>,
+    /// Automations the plugin ships, under `automations/` (`.bmmpa` files).
+    ///
+    /// The alternative was what people were doing instead: ship a `.bat`, tell the person to
+    /// find the folder, and hope. An automation is the thing BMM can actually READ — it has
+    /// steps, permissions and a trigger, all of which can be shown before anything happens.
+    ///
+    /// They are never run as they arrive. Applying the plugin IMPORTS them through the same
+    /// sanitiser as any other `.bmmpa`: disabled, with every capability that reaches outside
+    /// BMM stripped. Which is also what makes the auto-run mode defensible — a task that
+    /// cannot run a program is a task that can be started without asking a second time.
+    #[serde(default)]
+    pub automations: Vec<String>,
     /// What happens when the plugin is applied: "modlist" (default), "script",
     /// or "both".
     #[serde(default = "default_apply_mode")]

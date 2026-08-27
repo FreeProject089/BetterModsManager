@@ -2324,6 +2324,7 @@ pub fn create_local_plugin(
     icon_svg: Option<String>,
     script_src_paths: Option<Vec<String>>,
     folder_src_paths: Option<Vec<String>>,
+    automation_src_paths: Option<Vec<String>>,
     removed_bundled: Option<RemovedBundled>,
 ) -> Result<InstalledPlugin, String> {
     let mut manifest = manifest;
@@ -2395,6 +2396,35 @@ pub fn create_local_plugin(
             }
         }
     }
+    // ── Import automations: `.bmmpa` files copied into the plugin's automations/.
+    //
+    // Checked as they are copied, not as they are applied. A file that is not a readable
+    // .bmmpa is refused HERE, where the author is standing in front of the editor and can fix
+    // it — rather than at apply time on somebody else's machine, where the only thing anybody
+    // learns is that the plugin does not work.
+    if let Some(srcs) = automation_src_paths {
+        let auto_dir = plugin_dir.join("automations");
+        for src in srcs.iter().filter(|s| !s.trim().is_empty()) {
+            let src_path = std::path::Path::new(src);
+            let Some(fname) = src_path.file_name().and_then(|f| f.to_str()) else { continue };
+            let text = match std::fs::read_to_string(src_path) {
+                Ok(t) => t,
+                Err(_) => continue,
+            };
+            if !looks_like_bmmpa(&text) {
+                return Err(format!("plugins.autoBadFile|{}", fname));
+            }
+            let _ = std::fs::create_dir_all(&auto_dir);
+            let safe = super::plugin_assets_core::safe_component(fname);
+            if std::fs::copy(src_path, auto_dir.join(&safe)).is_ok() {
+                let rel = format!("automations/{}", safe);
+                if !manifest.automations.contains(&rel) {
+                    manifest.automations.push(rel);
+                }
+            }
+        }
+    }
+
     if !manifest.scripts.is_empty() {
         manifest.has_scripts = true;
     }
@@ -2608,4 +2638,93 @@ pub fn compute_plugin_checksum(
     }
     let result = hasher.finalize();
     Ok(format!("{:x}", result))
+}
+
+
+/// Is this text a `.bmmpa`, as far as anything here can tell?
+///
+/// Shape, not extension. A file named `.bmmpa` proves nothing, and the author renaming a
+/// `.txt` by accident is the ordinary case this catches.
+///
+/// Deliberately shallow: it checks that the document is one BMM would recognise as carrying
+/// tasks. Whether each task is VALID is the importer's decision, and it is made on the machine
+/// that will run it, against that BMM's own registry — a second opinion written here would be
+/// wrong the day somebody adds an action.
+pub fn looks_like_bmmpa(text: &str) -> bool {
+    let Ok(v) = serde_json::from_str::<serde_json::Value>(text) else { return false };
+    if v.get("magic").and_then(|m| m.as_str()) == Some("BMMPA") {
+        return true;
+    }
+    let has_steps = |x: &serde_json::Value| x.get("steps").map(|s| s.is_array()).unwrap_or(false);
+    if let Some(tasks) = v.get("tasks").and_then(|t| t.as_array()) {
+        return tasks.iter().any(has_steps);
+    }
+    // A bare array of tasks, which is what an older export produced.
+    v.as_array().map(|a| a.iter().any(has_steps)).unwrap_or(false)
+}
+
+/// One automation a plugin ships, read out for the importer.
+#[derive(serde::Serialize, Clone)]
+pub struct PluginAutomation {
+    /// The file name, for showing and for saying which one failed.
+    pub name: String,
+    /// Its contents, verbatim. Parsed by the caller — the scheduler already knows how to read
+    /// a .bmmpa, including the block `includes` a task may depend on, and a second reader here
+    /// would be the one that forgets them.
+    pub text: String,
+}
+
+/// Read the automations a plugin ships.
+///
+/// Through the assets path guard, rooted at `automations/`: the names come from a manifest,
+/// which is a file somebody else wrote.
+#[tauri::command]
+pub fn plugin_automations(
+    state: State<'_, AppState>,
+    plugin_id: String,
+) -> Result<Vec<PluginAutomation>, String> {
+    let (names, dir) = {
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        let p = data
+            .installed_plugins
+            .iter()
+            .find(|p| p.manifest.id == plugin_id)
+            .ok_or_else(|| format!("plugins.assets.errNoPlugin|{}", plugin_id))?;
+        (p.manifest.automations.clone(), p.install_dir.clone())
+    };
+    let root = std::path::PathBuf::from(&dir);
+    let mut out = Vec::new();
+    for rel in names {
+        // Every one must sit directly under automations/. A manifest naming
+        // `automations/../../anything` is the case this exists for.
+        let Some(name) = rel.strip_prefix("automations/") else { continue };
+        let safe = super::plugin_assets_core::safe_component(name);
+        let full = root.join("automations").join(&safe);
+        let Ok(text) = std::fs::read_to_string(&full) else { continue };
+        if !looks_like_bmmpa(&text) {
+            continue;
+        }
+        out.push(PluginAutomation { name: safe, text });
+    }
+    Ok(out)
+}
+
+#[cfg(test)]
+mod plugin_automation_tests {
+    use super::looks_like_bmmpa;
+
+    #[test]
+    fn the_shape_decides_not_the_name() {
+        assert!(looks_like_bmmpa(r#"{"magic":"BMMPA","tasks":[]}"#));
+        assert!(looks_like_bmmpa(r#"{"tasks":[{"name":"x","steps":[]}]}"#));
+        assert!(looks_like_bmmpa(r#"[{"name":"x","steps":[]}]"#), "an older export");
+
+        assert!(!looks_like_bmmpa("not json at all"));
+        assert!(!looks_like_bmmpa("{}"));
+        // Valid JSON that is some OTHER BMM document. Accepting this would import a theme as
+        // an automation and produce a task with no steps, silently.
+        assert!(!looks_like_bmmpa(r#"{"id":"t","name":"A theme","tokens":{}}"#));
+        // Tasks that carry no steps: a shape that reads as a .bmmpa and is not one.
+        assert!(!looks_like_bmmpa(r#"{"tasks":[{"name":"x"}]}"#));
+    }
 }

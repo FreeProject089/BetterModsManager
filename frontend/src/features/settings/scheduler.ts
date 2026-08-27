@@ -631,15 +631,38 @@ export function sanitiseImportedTask(task: any): { task: any; strippedPerms: str
     };
 }
 
-export async function importTaskObject(task: Partial<Task>): Promise<void> {
+export async function importTaskObject(task: Partial<Task>): Promise<string> {
     const { task: safe, strippedPerms } = sanitiseImportedTask(task);
-    safe.id = `sched-${Date.now()}`;
+    safe.id = newTaskId();
     _tasks.push(safe as Task);
     await saveTasks();
     renderScheduleList();
     if (strippedPerms.length) {
         toast((t('sched.importStripped') || 'Imported disabled. It asked for: {p} — grant what you want in its permissions.')
             .replace('{p}', strippedPerms.join(', ')), 'warning', 8000);
+    }
+    return safe.id;
+}
+
+/**
+ * An id no other task has.
+ *
+ * `sched-${Date.now()}` alone is a millisecond stamp, and importing a file with three tasks in
+ * it does all three inside the same millisecond — so they came out sharing an id. Everything
+ * that finds a task by id then finds the FIRST one: running the second runs the first, deleting
+ * the third deletes the first, and nothing anywhere says why.
+ *
+ * Found while making a plugin able to ship several automations, which is the case that turns a
+ * rare collision into the ordinary one.
+ */
+function newTaskId(): string {
+    let id = `sched-${Date.now()}`;
+    if (!_tasks.some((t) => t.id === id)) return id;
+    // A suffix rather than a wait: sleeping a millisecond to make a timestamp unique is a
+    // clock dependency in the middle of an import.
+    for (let n = 2; ; n++) {
+        id = `sched-${Date.now()}-${n}`;
+        if (!_tasks.some((t) => t.id === id)) return id;
     }
 }
 
