@@ -5464,7 +5464,7 @@ async function buildCatalogueInto(kind: string, dir: string, title: string, base
         const entries: any[] = [];
         for (const task of tasks) {
             const file = `${String(task.id).replace(/[^A-Za-z0-9._-]/g, '_')}.bmmpa`;
-            await write(file, JSON.stringify({ magic: 'BMMPA', version: 1, tasks: [{ ...task, perms: {}, enabled: false, osSchedule: false }] }, null, 2));
+            await write(file, JSON.stringify({ magic: 'BMMPA', version: 1, tasks: [forExport(task)] }, null, 2));
             entries.push({
                 id: task.id,
                 name: task.name || task.id,
@@ -7672,6 +7672,27 @@ async function collectIncludes(tasks: Task[]): Promise<Record<string, any[]>> {
  *
  * `suggested` only seeds the save dialog; the person picks the real path.
  */
+/**
+ * One task, stripped of what belongs to THIS machine.
+ *
+ * The export already dropped `perms`, `enabled` and `osSchedule` — three decisions the person
+ * importing has to make for themselves. It kept the run history, which is a different kind of
+ * mistake: it is not a decision, it is a record of what happened here.
+ *
+ * `history` entries carry an error string, and an error string routinely carries a local path:
+ * `error: Could not write C:\Users\<name>\…`. Sharing an automation was therefore sharing
+ * a list of when the author was at their computer and where their files live. Nothing warned,
+ * because nothing was wrong with the automation.
+ *
+ * `lastRun` and `lastResult` go for the same reason and one more: an imported task showing
+ * "last ran 3 hours ago, OK" is describing a run that happened on somebody else's machine.
+ */
+function forExport(task: Task): Task {
+    const { history, lastRun, lastResult, ...rest } = task as any;
+    void history; void lastRun; void lastResult;
+    return { ...rest, perms: {}, enabled: false, osSchedule: false } as Task;
+}
+
 async function writeBmmpa(tasks: Task[], suggested: string): Promise<void> {
     if (!tasks.length) { toast(t('sched.noTasks') || 'No tasks to export', 'info'); return; }
     const { saveFile } = await import('../../core/api.js');
@@ -7679,7 +7700,8 @@ async function writeBmmpa(tasks: Task[], suggested: string): Promise<void> {
     if (!path) return;
     const includes = await collectIncludes(tasks);
     const payload = JSON.stringify({
-        magic: BMMPA_MAGIC, version: 1, exported: new Date().toISOString(), tasks,
+        magic: BMMPA_MAGIC, version: 1, exported: new Date().toISOString(),
+        tasks: tasks.map(forExport),
         // Only when there is something. An empty `includes: {}` in every file
         // invites a reader to render an empty section on every import.
         ...(Object.keys(includes).length ? { includes } : {}),

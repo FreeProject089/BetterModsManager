@@ -691,6 +691,17 @@ pas *démarrer* reste une erreur : il n'y a alors aucun code de sortie et rien n
     Une étape qui a vraiment besoin de plus de deux heures est un programme à LANCER puis à
     attendre avec `wait until`, pas quelque chose à retenir dans une étape où rien ne le voit.
 
+!!! note "Ce qu'un export laisse derrière"
+
+    Un `.bmmpa` partagé arrive désactivé, sans permissions et sans tâche Windows — trois
+    décisions qui appartiennent à la personne qui l'importe.
+
+    Il ne porte pas non plus **l'historique d'exécution**. Ces entrées contiennent des messages
+    d'erreur, et un message d'erreur contient régulièrement un chemin local : partager une
+    automatisation, c'était partager la liste des moments où son auteur était à son ordinateur
+    et l'endroit où vivent ses fichiers. Rien ne prévenait, parce que rien n'allait mal dans
+    l'automatisation.
+
 ## Parcourir une tâche pas à pas
 
 **Déboguer**, à côté de Test. Ça exécute les mêmes étapes dans le même ordre avec les mêmes

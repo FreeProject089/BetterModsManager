@@ -627,6 +627,16 @@ error, because then there is no exit code and nothing ran.
     A step that genuinely needs longer than two hours is a program to START and then wait for
     with `wait until`, not something to hold inside one step where nothing can see it.
 
+!!! note "What an export leaves behind"
+
+    A shared `.bmmpa` arrives disabled, with no permissions and no Windows task — three
+    decisions that belong to the person importing it.
+
+    It also carries **no run history**. Those entries hold error messages, and an error message
+    routinely holds a local path: sharing an automation was sharing a list of when its author
+    was at their computer and where their files live. Nothing warned about it, because nothing
+    was wrong with the automation.
+
 ## Walking a task one step at a time
 
 **Debug**, beside Test run. It runs the same steps in the same order with the same permissions,
