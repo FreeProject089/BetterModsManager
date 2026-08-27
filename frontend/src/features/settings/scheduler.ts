@@ -297,6 +297,20 @@ export async function initScheduler(): Promise<void> {
             void loadTasks().then(() => renderScheduleList());
         });
     }
+    // Tasks registered with Windows BEFORE the OS-schedule key existed carry a command line
+    // with no `k=`, so the deep link would stop and ask — at the hour the task fires, with
+    // nobody there. That is the exact failure the key was added to prevent, arriving to the
+    // people who already had the feature working.
+    //
+    // Re-registered once. Guarded by a flag rather than done every launch, because each one
+    // spawns PowerShell and a machine with a dozen tasks would pay for it at every start.
+    if (localStorage.getItem('bmm_os_sched_keyed') !== '1') {
+        const stale = _tasks.filter((t) => t.osSchedule && t.enabled);
+        for (const task of stale) await syncOsSchedule(task);
+        localStorage.setItem('bmm_os_sched_keyed', '1');
+        if (stale.length) console.log(`[SCHED] re-registered ${stale.length} OS task(s) with the schedule key`);
+    }
+
     const btn = document.getElementById('btn-create-schedule');
     if (btn && !btn.dataset.wired) {
         btn.dataset.wired = '1';
