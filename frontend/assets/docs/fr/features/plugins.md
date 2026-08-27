@@ -221,3 +221,49 @@ renvoie le texte d'un fichier. Les outils MCP sont `bmm_plugin_assets` et
     copie de fichier avec les privilèges de BMM. Tout ce qui peut appeler ces endpoints peut
     déjà lire les octets et les écrire où il veut de ses propres mains : l'endpoint
     ajouterait de la portée sans ajouter de capacité.
+
+## Mettre un fichier dedans, et vérifier le plugin
+
+Lire, lister et copier **hors** d'un plugin existaient déjà. Mettre un README **dedans**
+voulait dire trouver le dossier d'installation dans l'Explorateur — pas quelque chose qu'un
+auteur devrait avoir à savoir sur son propre plugin. L'écran des assets a maintenant les deux
+moitiés, et une vérification.
+
+### Ajouter un fichier… / Retirer
+
+**Ajouter un fichier…** copie ce que tu choisis dans `assets/`. Un chemin avec un dossier
+garde le dossier (`docs/codes.csv` atterrit dans `assets/docs/`).
+
+!!! note "Ça ne remplace jamais en silence"
+
+    Ajouter `README.md` deux fois veut dire que tu l'as modifié et que le second gagne.
+    Ajouter un fichier *différent* qui porte le même nom veut dire que tu viens de perdre le
+    premier — et toi seul peux dire lequel des deux c'était. Donc ça refuse, et ça nomme le
+    fichier.
+
+    Renomme le tien, ou retire d'abord celui qui est là.
+
+**Retirer** supprime le fichier sélectionné du plugin. Ce n'est pas récupérable d'ici : c'est
+pour ça que ça demande d'abord, en nommant ce qui va disparaître.
+
+### Vérifier ce plugin
+
+Tout ce qui est rapporté ici produit un plugin qui **s'installe puis ne fonctionne pas** — la
+panne sans message d'erreur : le manifeste est du JSON valide, l'archive s'ouvre, et la chose
+ne fait simplement rien sur la machine de quelqu'un d'autre.
+
+| Rapporté | Pourquoi |
+|---|---|
+| Un script déclaré absent du dossier | Il s'installe, l'appliquer n'exécute rien, et rien ne dit pourquoi. |
+| **Contient des scripts** coché sans aucun listé | L'appliquer proposera d'exécuter des scripts qui n'existent pas. |
+| Un manifeste qui liste un asset absent | Cette liste est écrite depuis le disque à l'empaquetage : ça veut dire que le manifeste a été édité à la main. |
+| L'appliquer ne ferait rien | Ni liste de mods, ni scripts. |
+| Une liste de mods **stricte** et vide | Strict veut dire « ceux-là et rien d'autre ». Vide, ça se lit *tout désactiver*. |
+| Aucun nom | Il s'affichera partout sous son id. |
+| Aucune description, aucun auteur | Une entrée de catalogue sans description est une entrée que personne n'installe, et tu es la seule personne qui puisse l'écrire. |
+| Un fichier présent que le manifeste ne mentionne pas | Pas une erreur — la copie installée lit le dossier — mais une file de modération n'a que le manifeste pour se prononcer. |
+
+La première liste est ce qui l'empêchera de marcher ailleurs ; la seconde vaut la peine d'être
+lue avant de publier. **« Aucun problème trouvé » est dit à voix haute aussi** — un
+vérificateur qui ne parle que quand il est mécontent est un vérificateur auquel on ne fait
+jamais confiance quand il se tait.

@@ -208,3 +208,46 @@ returns one file's text. The MCP tools are `bmm_plugin_assets` and `bmm_read_plu
     with BMM's privileges. Anything able to call these can already read the bytes and write
     them wherever it likes with its own hands, so the endpoint would add reach without adding
     ability.
+
+## Putting a file in, and checking the plugin
+
+Reading, listing and copying **out** of a plugin all existed. Getting a README **in** meant
+finding the install folder in Explorer, which is not something an author should have to know
+about their own plugin. The assets screen now has both halves, and a check.
+
+### Add a file… / Remove
+
+**Add a file…** copies what you pick into `assets/`. A path with a folder in it keeps the
+folder (`docs/codes.csv` lands in `assets/docs/`).
+
+!!! note "It never silently replaces"
+
+    Adding `README.md` twice means you changed it and the second one wins. Adding a
+    *different* file that happens to share a name means you have just lost the first — and
+    only you can tell which of the two it was. So it refuses, and names the file.
+
+    Rename yours, or remove the one that is there first.
+
+**Remove** deletes the selected file from the plugin. It is not recoverable from here, which
+is why it asks first and names what it is about to delete.
+
+### Check this plugin
+
+Everything this reports produces a plugin that **installs and then does not work** — the
+failure with no error message: the manifest is valid JSON, the archive unpacks, and the thing
+simply does nothing on somebody else's machine.
+
+| Reported | Why |
+|---|---|
+| A declared script that is not in the folder | It installs, applying it runs nothing, and nothing says why. |
+| **Contains scripts** ticked with none listed | Applying it prompts about scripts it does not have. |
+| A manifest listing an asset that is not there | That list is written from disk at pack time, so this means the manifest was edited by hand. |
+| Applying it would do nothing | No mod list and no scripts. |
+| A **strict** mod list that is empty | Strict means "these and nothing else". Empty, that reads as *turn everything off*. |
+| No name | It shows as its id everywhere. |
+| No description, no author | A catalogue entry with no description is one nobody installs, and you are the only person who can write it. |
+| A file present that the manifest does not mention | Not an error — the installed copy reads the folder — but a moderation queue has only the manifest to go on. |
+
+The first list is what stops it working elsewhere; the second is worth reading before you
+publish. **"No problems found" is said out loud too** — a check that only speaks when it is
+unhappy is one you never trust when it is quiet.
