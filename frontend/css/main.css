@@ -19298,3 +19298,67 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
 }
 .plug-req-item { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
 .plug-req-item code { font-size: 10.5px; }
+
+
+/* Server repo — the step groups.
+   `.repo-host-group` existed in the markup with NO rule anywhere, so the wrapper did
+   nothing and the five cards of the Host tab rendered as one flat stack with two small
+   uppercase labels floating in it. Its heading even carried `grid-column: 1 / -1` inline,
+   for a grid that was not there.
+   The group is a real block now: a rail down the left tying its cards together, and a
+   header that says what the step is FOR rather than only numbering it. */
+.repo-host-group {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding-left: 16px;
+    border-left: 2px solid var(--bmm-s06);
+}
+.repo-host-group + .repo-host-group { margin-top: 10px; }
+.repo-host-group[data-host-group="publish"] { border-left-color: color-mix(in srgb, var(--cyan) 45%, transparent); }
+.repo-host-group[data-host-group="serve"] { border-left-color: color-mix(in srgb, var(--success) 45%, transparent); }
+
+.repo-group-h {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 4px 10px;
+    margin-left: -30px;          /* the number sits ON the rail */
+}
+.repo-group-h--loose { margin-left: 0; }
+.repo-group-n {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    font-size: 11px;
+    font-weight: 800;
+    color: var(--bmm-bg-base);
+    background: var(--cyan);
+}
+.repo-group-n--accent { background: var(--accent); }
+.repo-host-group[data-host-group="serve"] .repo-group-n { background: var(--success); }
+.repo-group-t {
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--text);
+}
+.repo-group-sub {
+    flex: 1 1 240px;
+    min-width: 0;
+    font-size: 11px;
+    line-height: 1.4;
+    color: var(--text-muted);
+}
+
+/* An alternative is subordinate to the step it is an alternative TO. It used to sit at the
+   same weight as the numbered card, so "choose one of these" read as "do all three". */
+.repo-host-group .repo-card--optional {
+    margin-left: 18px;
+    border-left: 1px dashed var(--bmm-s07);
+}

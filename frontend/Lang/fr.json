@@ -6864,8 +6864,8 @@
   "repo.discoverUnverified": "Mods non vérifiés",
   "repo.discoverWhy": "Non vérifié signifie que BMM ne peut pas distinguer un bon téléchargement d'un fichier corrompu ou substitué. À n'installer que depuis un serveur de confiance.",
   "repo.discoverEmpty": "Le listing du serveur n'a produit aucun mod",
-  "repo.groupPublish": "1 — Produire le repo.json (choisis une voie)",
-  "repo.groupServe": "2 — Servir les fichiers",
+  "repo.groupPublish": "Produire le repo.json",
+  "repo.groupServe": "Servir les fichiers",
   "repo.badgeAlt": "ALTERNATIVE",
   "mods.unverified": "non vérifié",
   "mods.unverifiedTip": "Installé depuis un repo sans checksums — BMM n'a pas pu vérifier ces fichiers.",
@@ -9247,5 +9247,9 @@
   "plugins.createIdHint": "Lettres, chiffres, - et . — c'est ainsi que chaque catalogue, deeplink et dossier sur le disque le désigne ; le changer plus tard casse les trois.",
   "plugins.createIdBad": "Cet id ne fonctionnera pas — lettres, chiffres, - . et _ uniquement, en commençant par une lettre ou un chiffre.",
   "plugins.createPerms": "Permissions demandées",
-  "plugins.createPermsHint": "Cocher ici ne fait que DEMANDER. La personne qui installe voit la demande pré-cochée et décide. Demandez le minimum qui fonctionne — un plugin qui demande tout est un plugin dont personne ne lit la liste."
+  "plugins.createPermsHint": "Cocher ici ne fait que DEMANDER. La personne qui installe voit la demande pré-cochée et décide. Demandez le minimum qui fonctionne — un plugin qui demande tout est un plugin dont personne ne lit la liste.",
+  "repo.groupPublishSub": "Une seule des trois voies ci-dessous suffit.",
+  "repo.groupServeSub": "Un repo.json ne sert à rien tant que personne ne peut le télécharger.",
+  "repo.groupJoin": "Rejoindre un repo",
+  "repo.groupJoinSub": "Collez l'adresse qu'on vous a donnée. Rien n'est écrit avant l'aperçu."
 }

@@ -6866,8 +6866,8 @@
   "repo.discoverUnverified": "Unverified mods",
   "repo.discoverWhy": "Unverified means BMM cannot tell a good download from a corrupted or substituted one. Install these only from a server you trust.",
   "repo.discoverEmpty": "The server listing produced no mods",
-  "repo.groupPublish": "1 — Produce the repo.json (pick one route)",
-  "repo.groupServe": "2 — Serve the files",
+  "repo.groupPublish": "Produce the repo.json",
+  "repo.groupServe": "Serve the files",
   "repo.badgeAlt": "ALTERNATIVE",
   "mods.unverified": "unverified",
   "mods.unverifiedTip": "Installed from a repo with no checksums — BMM could not verify these files.",
@@ -9249,5 +9249,9 @@
   "plugins.createIdHint": "Letters, digits, - and . — this is how every catalogue, deeplink and folder on disk refers to it, so changing it later breaks all three.",
   "plugins.createIdBad": "That id will not work — letters, digits, - . and _ only, starting with a letter or digit.",
   "plugins.createPerms": "Permissions it requests",
-  "plugins.createPermsHint": "Ticking one here only ASKS. Whoever installs the plugin sees the request pre-ticked and decides. Ask for the least that works — a plugin requesting everything is one nobody reads the list of."
+  "plugins.createPermsHint": "Ticking one here only ASKS. Whoever installs the plugin sees the request pre-ticked and decides. Ask for the least that works — a plugin requesting everything is one nobody reads the list of.",
+  "repo.groupPublishSub": "Any ONE of the three below is enough.",
+  "repo.groupServeSub": "A repo.json does nothing until somebody can download it.",
+  "repo.groupJoin": "Join a repo",
+  "repo.groupJoinSub": "Paste the address somebody gave you. Nothing is written before the preview."
 }
