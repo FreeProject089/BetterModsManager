@@ -1,7 +1,7 @@
 /**
  * launch_packs.ts — Management of application groups (Launch Packs)
  */
-import { invoke, pickFile } from '../../core/api.js';
+import { invoke, pickFile, saveFile } from '../../core/api.js';
 import { copyIdButtons, wireCopyIds } from '../../core/copy-id.js';
 import { t } from '../../core/i18n.js';
 import { toast } from '../../ui/app.js';
@@ -103,6 +103,31 @@ export async function initLaunchPackSettings() {
         });
     }
 
+    // Importing rebuilds the machine-specific half here: a new .vbs, a new .lnk, the
+    // icon re-encoded. What travels is the decision — the name and which programs.
+    const btnImport = document.getElementById('btn-import-launchpack');
+    btnImport?.addEventListener('click', async () => {
+        const path = await pickFile(['bmmlaunch']);
+        if (!path) return;
+        try {
+            const res = await invoke('import_launch_pack', { path: String(path) }) as
+                { pack: { name: string }; missing: string[] };
+            await renderLaunchPacks();
+            if (res.missing?.length) {
+                // Not a failure, and not something to swallow either. A pack whose
+                // programs live on another drive is the normal case for a shared pack,
+                // and it will start nothing until those paths are fixed.
+                toast((t('settings.lpImportedMissing') || 'Imported "{n}" — {c} program(s) were not found at their paths on this PC')
+                    .replace('{n}', res.pack.name)
+                    .replace('{c}', String(res.missing.length)), 'error');
+            } else {
+                toast((t('settings.lpImported') || 'Imported "{n}"').replace('{n}', res.pack.name), 'success');
+            }
+        } catch (err) {
+            toast(String(err), 'error');
+        }
+    });
+
     renderLaunchPacks();
 }
 
@@ -139,6 +164,7 @@ export async function renderLaunchPacks() {
                 <div style="display:flex; gap:8px;">
                     <button class="btn btn-primary btn-xs btn-run-lp" data-id="${pack.id}">${t('settings.launchPackRun')}</button>
                     <button class="btn btn-ghost btn-xs btn-edit-lp" data-id="${pack.id}" data-tooltip="${t('common.edit') || 'Edit'}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+                    <button class="btn btn-ghost btn-xs btn-exp-lp" data-id="${pack.id}" data-name="${escHtml(pack.name)}" data-tooltip="${t('common.export') || 'Export'}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></button>
                     <button class="btn btn-ghost btn-xs btn-open-lp" data-id="${pack.id}" data-tooltip="${t('settings.launchPackOpenFolder') || 'Open folder'}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></button>
                     <button class="btn btn-ghost btn-xs btn-del-lp" data-id="${pack.id}" style="color:var(--error);" data-tooltip="${t('common.delete') || 'Delete'}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
                 </div>
@@ -165,6 +191,23 @@ export async function renderLaunchPacks() {
                 const id = (btn as HTMLElement).dataset.id;
                 const pack = packs.find(p => p.id === id);
                 if (pack) openEditLaunchPackModal(pack);
+            });
+        });
+
+        container.querySelectorAll('.btn-exp-lp').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const el = btn as HTMLElement;
+                const dest = await saveFile({
+                    defaultPath: `${(el.dataset.name || 'launchpack').replace(/[\\/:*?"<>|]/g, '_')}.bmmlaunch`,
+                    filters: [{ name: 'BMM Launch Pack', extensions: ['bmmlaunch'] }],
+                });
+                if (!dest) return;
+                try {
+                    await invoke('export_launch_pack', { id: el.dataset.id, destPath: dest });
+                    toast(t('settings.lpExported') || 'Launch pack exported', 'success');
+                } catch (err) {
+                    toast(String(err), 'error');
+                }
             });
         });
 

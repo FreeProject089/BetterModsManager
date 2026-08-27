@@ -745,6 +745,8 @@ fn main() {
             commands::launch_pack::run_launch_pack,
             commands::launch_pack::delete_launch_pack,
             commands::launch_pack::open_launch_pack_folder,
+            commands::launch_pack::export_launch_pack,
+            commands::launch_pack::import_launch_pack,
             commands::launch_pack::scan_dir_for_exe,
             commands::launch_pack::scan_installed_apps,
             commands::launch_pack::extract_exe_icon,

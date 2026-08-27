@@ -532,3 +532,176 @@ pub fn open_launch_pack_folder(state: State<AppState>, id: String) -> Result<(),
 
     Ok(())
 }
+
+// -- Carrying a launch pack to another machine -------------------------------
+//
+// Everything else in the app can be handed to somebody: modpacks, plugins, profiles,
+// themes, automations, whole catalogues. A launch pack — the one thing people build to
+// start six programs with one double-click — could only ever be rebuilt by hand.
+//
+// What a pack IS on disk is machine-specific: a `.vbs` full of absolute paths, a `.lnk`
+// pointing at a folder under this user's app data, and an `.ico`. None of that travels.
+// So the file carries the DECISIONS — the name, which programs, the icon — and the
+// import regenerates the machine-specific half locally.
+
+/// The on-disk shape of a `.bmmlaunch` file.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LaunchPackFile {
+    /// Refused if it is not ours. A JSON file with the right fields by coincidence would
+    /// otherwise be imported as a list of programs to run.
+    pub kind: String,
+    pub version: u32,
+    pub name: String,
+    pub exe_paths: Vec<String>,
+    /// The icon, inlined. A path would name a file the other machine does not have.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub icon_b64: Option<String>,
+    #[serde(default)]
+    pub exported_at: String,
+}
+
+const LAUNCHPACK_KIND: &str = "bmm-launchpack";
+/// One pack, not a payload. Both caps are far above any real pack.
+const MAX_EXES: usize = 64;
+const MAX_ICON_BYTES: usize = 4 * 1024 * 1024;
+
+/// Write a pack to a `.bmmlaunch` file.
+#[tauri::command]
+pub fn export_launch_pack(state: State<AppState>, id: String, dest_path: String) -> Result<String, AppError> {
+    let pack = {
+        let data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
+        data.launch_packs.iter().find(|p| p.id == id).cloned()
+            .ok_or_else(|| AppError::NotFound("Launch pack not found".to_string()))?
+    };
+
+    // The icon travels as bytes. An unreadable one is not fatal: a pack without its
+    // picture is still the pack, and refusing the whole export over it would be absurd.
+    let icon_b64 = pack.icon_path.as_ref().and_then(|p| std::fs::read(p).ok()).and_then(|bytes| {
+        if bytes.len() > MAX_ICON_BYTES {
+            None
+        } else {
+            use base64::Engine as _;
+            Some(base64::engine::general_purpose::STANDARD.encode(&bytes))
+        }
+    });
+
+    let doc = LaunchPackFile {
+        kind: LAUNCHPACK_KIND.to_string(),
+        version: 1,
+        name: pack.name.clone(),
+        exe_paths: pack.executable_paths.iter().map(|p| p.to_string_lossy().to_string()).collect(),
+        icon_b64,
+        exported_at: Local::now().to_rfc3339(),
+    };
+
+    let mut dest = PathBuf::from(&dest_path);
+    if dest.extension().is_none() {
+        dest.set_extension("bmmlaunch");
+    }
+    let json = serde_json::to_string_pretty(&doc)
+        .map_err(|e| AppError::Internal(format!("Failed to serialise launch pack: {}", e)))?;
+    std::fs::write(&dest, json)
+        .map_err(|e| AppError::Internal(format!("Failed to write launch pack file: {}", e)))?;
+    Ok(dest.to_string_lossy().to_string())
+}
+
+/// What an import produced, and what it could not find.
+#[derive(Debug, Serialize)]
+pub struct ImportedLaunchPack {
+    pub pack: LaunchPack,
+    /// Paths from the file that do not exist on THIS machine.
+    ///
+    /// Reported rather than dropped. A pack whose programs live at one drive here and
+    /// another there is the normal case, and silently importing a pack that starts
+    /// nothing — or silently discarding half of it — are both worse than saying so.
+    pub missing: Vec<String>,
+}
+
+/// Read a `.bmmlaunch` file and build the pack locally.
+#[tauri::command]
+pub fn import_launch_pack(state: State<AppState>, path: String) -> Result<ImportedLaunchPack, AppError> {
+    let raw = std::fs::read_to_string(&path)
+        .map_err(|e| AppError::Internal(format!("Failed to read launch pack file: {}", e)))?;
+    let doc: LaunchPackFile = serde_json::from_str(&raw)
+        .map_err(|e| AppError::Internal(format!("Not a launch pack file: {}", e)))?;
+    if doc.kind != LAUNCHPACK_KIND {
+        return Err(AppError::Internal("Not a launch pack file".to_string()));
+    }
+    if doc.exe_paths.len() > MAX_EXES {
+        return Err(AppError::Internal(format!("Launch pack lists more than {} programs", MAX_EXES)));
+    }
+
+    // The icon is decoded and written to a temp file, then handed to create_launch_pack,
+    // which re-encodes it through the image crate. Bytes out of a shared file are never
+    // written straight in as the icon.
+    let mut icon_tmp: Option<PathBuf> = None;
+    if let Some(b64) = doc.icon_b64.as_ref() {
+        use base64::Engine as _;
+        if let Ok(bytes) = base64::engine::general_purpose::STANDARD.decode(b64.as_bytes()) {
+            if !bytes.is_empty() && bytes.len() <= MAX_ICON_BYTES {
+                let tmp = std::env::temp_dir().join(format!("bmm_lp_icon_{}.bin", Uuid::new_v4()));
+                if std::fs::write(&tmp, &bytes).is_ok() {
+                    icon_tmp = Some(tmp);
+                }
+            }
+        }
+    }
+
+    let missing: Vec<String> = doc.exe_paths.iter()
+        .filter(|p| !Path::new(p).exists())
+        .cloned()
+        .collect();
+
+    let pack = create_launch_pack(
+        state,
+        doc.name,
+        doc.exe_paths,
+        icon_tmp.as_ref().map(|p| p.to_string_lossy().to_string()),
+    );
+    if let Some(tmp) = icon_tmp {
+        let _ = std::fs::remove_file(tmp);
+    }
+    let pack = pack?;
+
+    Ok(ImportedLaunchPack { pack, missing })
+}
+
+#[cfg(test)]
+mod portable_tests {
+    use super::*;
+
+    #[test]
+    fn a_file_that_is_not_ours_is_refused_before_anything_is_created() {
+        // The whole point of `kind`. Without it, any JSON with a name and a list of
+        // strings would be imported as "run these programs".
+        let doc: LaunchPackFile = serde_json::from_str(
+            r#"{"kind":"something-else","version":1,"name":"x","exe_paths":[]}"#,
+        ).unwrap();
+        assert_ne!(doc.kind, LAUNCHPACK_KIND);
+    }
+
+    #[test]
+    fn a_pack_round_trips_through_the_file_shape() {
+        let doc = LaunchPackFile {
+            kind: LAUNCHPACK_KIND.to_string(),
+            version: 1,
+            name: "Evening".to_string(),
+            exe_paths: vec![r"D:\Games\a.exe".to_string()],
+            icon_b64: None,
+            exported_at: String::new(),
+        };
+        let back: LaunchPackFile = serde_json::from_str(&serde_json::to_string(&doc).unwrap()).unwrap();
+        assert_eq!(back.name, "Evening");
+        assert_eq!(back.exe_paths, vec![r"D:\Games\a.exe".to_string()]);
+        // Absent, not null: an importer reading an older file must not trip over it.
+        assert!(back.icon_b64.is_none());
+    }
+
+    #[test]
+    fn a_name_carrying_a_path_cannot_place_the_shortcut_elsewhere() {
+        // The name arrives from a file somebody else wrote and becomes the .lnk filename.
+        // Both separators AND the '..' pairs go; four characters in, one underscore out.
+        assert_eq!(safe_lnk_stem(r"..\..\Startup\evil"), "____Startup_evil");
+        assert_eq!(safe_lnk_stem("   "), "launchpack");
+    }
+}
