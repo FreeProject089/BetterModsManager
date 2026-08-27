@@ -22,6 +22,9 @@ const LANGS = ['frontend/Lang/en.json', 'frontend/Lang/fr.json'];
 
 const src = fs.readFileSync(SRC, 'utf8');
 const nav = fs.readFileSync(NAV, 'utf8');
+// The script generator's catalogue — its labels go through d('key', 'English'), which
+// builds the key from a fragment and is therefore invisible to check-i18n-keys.
+const plugins = fs.readFileSync('frontend/src/features/plugins/plugins.ts', 'utf8');
 const dicts = LANGS.map((f) => ({ f, d: JSON.parse(fs.readFileSync(f, 'utf8')) }));
 
 // NOT covered, and worth saying so rather than leaving a reader to assume the sweep was
@@ -97,6 +100,20 @@ const FAMILIES = [
     prefix: 'navedit.act.',
     values: () => [...new Set([...nav.matchAll(/(?:opener|trigger)\('([a-zA-Z0-9_-]+)'/g)].map((m) => m[1]))],
     what: 'navbar action',
+  },
+  // The script generator's own catalogue.
+  //
+  // Every label and field in it goes through `d('key', 'English')`, which is
+  // `t('plugins.' + k) || fb` — and t() returns the KEY on a miss, so the fallback beside it
+  // never fires. A missing entry renders as `plugins.actionSignal` in the action menu.
+  //
+  // check-i18n-keys cannot see these: it looks for literal `t('…')` and the key here is
+  // built from a fragment. Twenty of them were missing when this was written, all added in
+  // one session, and nothing said a word.
+  {
+    prefix: 'plugins.',
+    values: () => [...new Set([...plugins.matchAll(/\bd\('([A-Za-z0-9_.]+)'/g)].map((m) => m[1]))],
+    what: 'script generator label',
   },
 ];
 

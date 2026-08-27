@@ -7246,6 +7246,64 @@ function _actionCatalog() {
         { id: 'check_mod_updates', cat: 'mods', label: d('actionCheckModUpdates', 'Check mod updates'),
             desc: d('actionCheckModUpdatesDesc', 'Checks every linked mod against its server repo for updates.'),
             iconSvg: sv('<path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>') },
+        // ── Added with the endpoints they call ─────────────────────────────────
+        //
+        // A generated script speaks the same HTTP API the app does, so an endpoint that is
+        // not here is one no script can reach — and the catalogue had drifted a whole
+        // session behind. These are the ones added with the doorbell, the identity keys, the
+        // catalogue sources and what a repo carries besides mods.
+        { id: 'signal', cat: 'system', label: d('actionSignal', 'Send a signal (webhook)'),
+            desc: d('actionSignalDesc', 'Rings a named doorbell a scheduled task may be waiting on. This is how a script tells BMM it has finished.'),
+            iconSvg: sv('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>'),
+            fields: [
+                { key: 'name', label: d('fldSignalName', 'Signal name'), type: 'text', placeholder: 'build-done' },
+                { key: 'data', label: d('fldSignalData', 'Payload (optional)'), type: 'text', placeholder: '{"version":"1.4"}' },
+            ] },
+        { id: 'new_key', cat: 'system', label: d('actionNewKey', 'Make an identity key'),
+            desc: d('actionNewKeyDesc', 'Generates a keypair on the ring. A name already taken is left alone, never replaced. The private half is never returned.'),
+            iconSvg: sv('<circle cx="7.5" cy="15.5" r="4.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/>'),
+            fields: [
+                { key: 'name', label: d('fldKeyName', 'Name it'), type: 'text', placeholder: 'work' },
+                { key: 'kind', label: d('fldKeyKind', 'Type'), type: 'select', default: 'ed25519', half: true, options: [
+                        { value: 'ed25519', label: 'ed25519' },
+                        { value: 'ecdsa', label: 'ECDSA (nistp256)' },
+                        { value: 'rsa', label: 'RSA 4096' },
+                    ] },
+            ] },
+        { id: 'follow_catalog', cat: 'system', label: d('actionFollowCatalog', 'Follow a catalogue'),
+            desc: d('actionFollowCatalogDesc', 'Adds a catalogue source through the app, so it appears in the following list with an origin.'),
+            iconSvg: sv('<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>'),
+            fields: [
+                { key: 'type', label: d('fldCatType', 'Kind'), type: 'select', default: 'plugin', half: true, options: [
+                        { value: 'app', label: 'app' }, { value: 'plugin', label: 'plugin' },
+                        { value: 'theme', label: 'theme' }, { value: 'preset', label: 'preset' },
+                        { value: 'modpack', label: 'modpack' }, { value: 'repo', label: 'repo' },
+                        { value: 'tutorial', label: 'tutorial' }, { value: 'list', label: 'list' },
+                    ] },
+                { key: 'url', label: d('fldCatUrl', 'Address'), type: 'text', placeholder: 'https://…/catalog.json' },
+                { key: 'follow', label: d('fldFollow', 'Follow it'), type: 'switch', default: true },
+            ] },
+        { id: 'repo_take', cat: 'repo', label: d('actionRepoTake', 'Take something a repo carries'),
+            desc: d('actionRepoTakeDesc', 'One plugin, automation, theme, mod list or catalogue from a repo. A plugin or automation arrives DISABLED.'),
+            iconSvg: sv('<path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/>'),
+            fields: [
+                { key: 'url', label: d('fldRepoUrl', 'Repo URL'), type: 'text', placeholder: 'https://…/repo.json' },
+                { key: 'kind', label: d('fldExtraKind', 'Kind'), type: 'select', default: 'theme', half: true, options: [
+                        { value: 'plugin', label: 'plugin' }, { value: 'task', label: 'task' },
+                        { value: 'theme', label: 'theme' }, { value: 'modlist', label: 'modlist' },
+                        { value: 'bundle', label: 'bundle' }, { value: 'catalog', label: 'catalog' },
+                        { value: 'app', label: 'app' },
+                    ] },
+                { key: 'id', label: d('fldExtraId', 'Its id'), type: 'text', half: true },
+                { key: 'password', label: d('fldRepoPassword', 'Download password'), type: 'text', half: true },
+            ] },
+        { id: 'set_schedule', cat: 'system', label: d('actionSetSchedule', 'Arm or disarm a task'),
+            desc: d('actionSetScheduleDesc', 'Switches one saved scheduled task on or off by id.'),
+            iconSvg: sv('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>'),
+            fields: [
+                { key: 'id', label: d('fldTaskId', 'Task id'), type: 'text' },
+                { key: 'enabled', label: d('fldEnabled', 'Enabled'), type: 'switch', default: true },
+            ] },
         { id: 'discord_rpc', cat: 'system', label: d('actionDiscordRpc', 'Discord Rich Presence'),
             desc: d('actionDiscordRpcDesc', 'Enable or disable Discord Rich Presence.'),
             iconSvg: sv('<circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><path d="M7.5 7.2A14 14 0 0 1 12 6.5a14 14 0 0 1 4.5.7l1.8 4.2A9 9 0 0 1 12 13a9 9 0 0 1-6.3-1.6z"/>'),
@@ -8545,6 +8603,28 @@ function _apiBodyFor(a) {
             const dataset = (s('dataset') === 'real' || sources.length) ? 'real' : 'sandbox';
             return { method: 'POST', path: '/api/benchmark', body: { dataset, size: s('size') || 'M', mode: 'auto', sources } };
         }
+        // The endpoints added with the doorbell, the keys, the catalogue sources and what a
+        // repo carries. A generated script speaks this API, so an action in the catalogue
+        // with no case here is one that renders a step and emits nothing.
+        case 'signal': {
+            // The payload is sent as JSON when it parses as JSON and as a string when it
+            // does not — somebody typing a plain word should not have to quote it into one.
+            const raw = s('data');
+            let data = null;
+            if (raw) {
+                try {
+                    data = JSON.parse(raw);
+                }
+                catch {
+                    data = raw;
+                }
+            }
+            return { method: 'POST', path: '/api/hook', body: { name: s('name'), data } };
+        }
+        case 'new_key': return { method: 'POST', path: '/api/keys', body: _prune({ name: s('name'), kind: s('kind') || 'ed25519' }) };
+        case 'follow_catalog': return { method: 'POST', path: '/api/catalogs', body: { type: s('type') || 'plugin', url: s('url'), follow: bool('follow') } };
+        case 'repo_take': return { method: 'POST', path: '/api/repo/extras', body: _prune({ url: s('url'), kind: s('kind'), id: s('id'), password: s('password') }) };
+        case 'set_schedule': return { method: 'POST', path: '/api/schedules/enabled', body: { id: s('id'), enabled: bool('enabled') } };
         case 'discord_rpc': return { method: 'POST', path: '/api/discord/rpc', body: { enabled: bool('enabled') } };
         case 'export_data': return { method: 'POST', path: '/api/data/export-auto', body: _prune({ dir: s('dir'), name: s('name'), increment: s('increment') || 'paren' }) };
         // ── Privacy & telemetry / Session recorder / replay ───────────────

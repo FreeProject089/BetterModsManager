@@ -2032,6 +2032,15 @@ fn action_to_api_call(action: &ScriptAction) -> Option<(String, String, String)>
             Some(("POST".into(), "/api/benchmark".into(),
                 serde_json::json!({ "dataset": dataset, "size": size, "mode": "auto", "sources": sources }).to_string()))
         }
+        // The endpoints added with the doorbell, the keys, the catalogue sources and what a
+        // repo carries. This table and the TypeScript one produce the same call for the same
+        // action — one drives the generated script, the other the in-app quick test, and a
+        // gap here is a step that works in the app and does nothing in the file it wrote.
+        "signal"             => Some(("POST".into(), "/api/hook".into(),                 serde_json::json!({ "name": extra_str(ex, "name"), "data": extra_str(ex, "data") }).to_string())),
+        "new_key"            => Some(("POST".into(), "/api/keys".into(),                 prune(&[("name", extra_str(ex, "name")), ("kind", extra_str(ex, "kind"))]))),
+        "follow_catalog"     => Some(("POST".into(), "/api/catalogs".into(),             serde_json::json!({ "type": extra_str(ex, "type"), "url": extra_str(ex, "url"), "follow": extra_bool(ex, "follow") }).to_string())),
+        "repo_take"          => Some(("POST".into(), "/api/repo/extras".into(),          prune(&[("url", extra_str(ex, "url")), ("kind", extra_str(ex, "kind")), ("id", extra_str(ex, "id")), ("password", extra_str(ex, "password"))]))),
+        "set_schedule"       => Some(("POST".into(), "/api/schedules/enabled".into(),    serde_json::json!({ "id": extra_str(ex, "id"), "enabled": extra_bool(ex, "enabled") }).to_string())),
         "discord_rpc"        => Some(("POST".into(), "/api/discord/rpc".into(),          serde_json::json!({ "enabled": extra_bool(ex, "enabled") }).to_string())),
         "export_data"        => Some(("POST".into(), "/api/data/export-auto".into(),     prune(&[("dir", extra_str(ex, "dir")), ("name", extra_str(ex, "name")), ("increment", extra_str(ex, "increment"))]))),
         // ── Privacy & telemetry / local recorder / replay ──────────────────
