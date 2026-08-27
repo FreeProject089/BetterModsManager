@@ -13,7 +13,7 @@ import { invoke } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { raiseAboveAll } from '../../ui/layer.js';
-import { permDomains } from './plugins.js';
+import { permDomains } from './plugin-perms.js';
 import { humanSize, treeRows, treeSummary, type TreeEntry } from './plugin-tree.js';
 export { humanSize, treeRows, treeSummary, type TreeEntry } from './plugin-tree.js';
 

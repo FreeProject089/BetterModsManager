@@ -4,6 +4,8 @@ import { copyIdButtons, wireCopyIds } from '../../core/copy-id.js';
 import { invoke, pickFile, saveFile, pickFolder, convertFileSrc, apiBase, apiRunning } from '../../core/api.js';
 import { toast, fetchProfileIconPaths, updateSelectProfileIcon, decorateProfileOptions, toastSaved } from '../../ui/app.js';
 import { t, getLang } from '../../core/i18n.js';
+import { permDomains } from './plugin-perms.js';
+export { permDomains } from './plugin-perms.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { bundleEntryKind, resolveBundleEntry } from '../../core/catalog-bundle.js';
 // NOTE: this file is @ts-nocheck, so a wrong name here is a runtime ReferenceError and not a
@@ -48,26 +50,6 @@ import { writeSources } from '../catalogs/catalog-sources.js';
  */
 export function isUsablePluginId(id) {
     return /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(id) && id.length <= 64;
-}
-export function permDomains() {
-    return [
-        { domain: t('plugins.permDomMods') || 'Mods', color: '#3b82f6', scopes: ['mods.read', 'mods.write'] },
-        { domain: t('plugins.permDomProfiles') || 'Profiles', color: '#a855f7', scopes: ['profiles.read', 'profiles.write'] },
-        { domain: t('plugins.permDomModpacks') || 'Modpacks', color: '#8b5cf6', scopes: ['modpacks.read', 'modpacks.write'] },
-        { domain: t('plugins.permDomPlugins') || 'Plugins', color: '#ec4899', scopes: ['plugins.read', 'plugins.write'] },
-        { domain: t('plugins.permDomRepo') || 'Server Repo', color: '#10b981', scopes: ['repo.read', 'repo.write'] },
-        // Its own domain, not folded into Repo. An identity key is what proves you are you
-        // to every protected source; granting "can publish a repo" must not also grant
-        // "can mint the thing I sign with" — nor, now, "can see which identities exist".
-        { domain: t('plugins.permDomKeys') || 'Identity keys', color: '#eab308', scopes: ['keys.read', 'keys.write'] },
-        { domain: t('plugins.permDomApps') || 'App Catalog', color: '#f97316', scopes: ['app.read', 'app.write', 'catalog.read', 'catalog.write'] },
-        // The three that had no checkbox at all, and are the ones worth reading twice.
-        { domain: t('plugins.permDomData') || 'Your data', color: '#ef4444', scopes: ['data.read', 'data.write'] },
-        { domain: t('plugins.permDomSchedules') || 'Automations', color: '#06b6d4', scopes: ['schedules.read', 'schedules.write'] },
-        { domain: t('plugins.permDomHooks') || 'Hooks', color: '#14b8a6', scopes: ['hooks.read', 'hooks.write'] },
-        { domain: t('plugins.permDomSystem') || 'The app itself', color: '#64748b', scopes: ['system.write'] },
-        { domain: t('plugins.permDomTelemetry') || 'Privacy & recording', color: '#f43f5e', scopes: ['telemetry.write'] },
-    ];
 }
 async function fetchModpacks(init) {
     if (!apiRunning())

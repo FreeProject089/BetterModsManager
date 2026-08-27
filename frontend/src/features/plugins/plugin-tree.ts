@@ -1,7 +1,7 @@
 // Reading a folder listing — the part with no browser in it.
 //
 // Split from plugin-inspect.ts for the reason every other pure module here was: that one
-// imports `permDomains` from plugins.ts, which reaches `state.js` and localStorage at import
+// imports plugins.ts for its modal wiring, which reaches `state.js` and localStorage at import
 // time, so nothing in it can be tested without a browser. The decisions worth pinning — what
 // depth a row is drawn at, whether a size is worth printing — live here instead.
 
