@@ -318,6 +318,8 @@ Two shapes sit outside that rule:
 |---|---|---|---|---|
 | `POST` | `/api/mods/enable` | `mods.write` | `mod_id`* | ✓ |
 | `POST` | `/api/mods/disable` | `mods.write` | `mod_id`* | ✓ |
+| `GET` | `/api/mods/order` | `mods.read` | — · the deployment order plus every contested file and who wins it | |
+| `POST` | `/api/mods/order` | `mods.write` | `order[]`*, `profileId` · must be the same set of mods that are active; re-copies the files that change hands | |
 | `PUT` | `/api/mods/:id` | `mods.write` | `name`, `version`, `author`, `description`, `tags[]`, `install_notes` | |
 | `DELETE` | `/api/mods/:id` | `mods.write` | — · removes the entry, **keeps the files** | |
 | `POST` | `/api/mod/config` | `mods.write` | `modId`*, `repoModId`, `updateUrl`, `directUrl`, `updateSources[]` · links a mod to the repos that can update it | |

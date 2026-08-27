@@ -2,7 +2,7 @@
 
 !!! info ""
 
-    86 actions · 30 conditions · 27 values · 8 loop sources
+    87 actions · 31 conditions · 28 values · 8 loop sources
 
 > Generated from BMM's own registry, so it cannot describe a version of the app that does not exist. If an action is in the block editor, it is in this list.
 
@@ -19,6 +19,7 @@ Written `do <name>(param: value, …)`. An action with no parameters takes empty
 | `profile.activate` | Switch the active profile | `id` |
 | `mod.enable` | Activate one mod | `id` |
 | `mod.disable` | Deactivate one mod | `id` |
+| `mods.order` | Move a mod in the deployment order. Two active mods that ship the same file do not merge — the one deployed last is the one on disk. | `order` · `id` · `mode` |
 | `modpack.enable` | Enable all mods in a modpack | `id` |
 | `modpack.disable` | Disable all mods in a modpack | `id` |
 | `modpack.create` | Create a modpack from a profile | `name` · `profile` |
@@ -154,6 +155,7 @@ Written where a condition goes — after `if`, `case`, `waitfor`, `repeat while`
 | `profileActive` | Profile is active |
 | `modEnabled` | Mod is enabled |
 | `modDisabled` | Mod is disabled |
+| `modWins` | Mod wins its shared files |
 | `modpackActive` | Modpack is active |
 | `modpackInactive` | Modpack is inactive |
 | `allModsActive` | All active-profile mods are on |
@@ -181,7 +183,7 @@ Written where a condition goes — after `if`, `case`, `waitfor`, `repeat while`
 
 Written by an action into the task, and readable afterwards in a comparison or an expression — `if disk.free_gb < 5`, `set total = benchmark.mbps * 2`.
 
-`disk.read_mbps` · `disk.write_mbps` · `disk.suggested_limit` · `disk.free_gb` · `disk.free_percent` · `disk.total_gb` · `benchmark.mbps` · `benchmark.total_ms` · `update.available` · `lasttask.ok` · `lasttask.spawned` · `list.length` · `backup.bytes` · `wait.ok` · `wait.tries` · `script.code` · `script.ok` · `import.count` · `catalog.entries` · `ssh.files` · `manifest.mods` · `manifest.added` · `manifest.removed` · `manifest.changed` · `http.status` · `map.size` · `map.hit`
+`disk.read_mbps` · `disk.write_mbps` · `disk.suggested_limit` · `disk.free_gb` · `disk.free_percent` · `disk.total_gb` · `benchmark.mbps` · `benchmark.total_ms` · `update.available` · `lasttask.ok` · `lasttask.spawned` · `list.length` · `backup.bytes` · `order.moved` · `wait.ok` · `wait.tries` · `script.code` · `script.ok` · `import.count` · `catalog.entries` · `ssh.files` · `manifest.mods` · `manifest.added` · `manifest.removed` · `manifest.changed` · `http.status` · `map.size` · `map.hit`
 
 A value nothing has written yet reads as zero. `lasttask.ok` is 1 or 0, and only means anything after a `run`.
 

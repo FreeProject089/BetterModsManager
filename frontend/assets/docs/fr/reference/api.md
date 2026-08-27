@@ -328,6 +328,8 @@ Deux formes échappent à la règle :
 |---|---|---|---|---|
 | `POST` | `/api/mods/enable` | `mods.write` | `mod_id`* | ✓ |
 | `POST` | `/api/mods/disable` | `mods.write` | `mod_id`* | ✓ |
+| `GET` | `/api/mods/order` | `mods.read` | — · l'ordre de déploiement, plus chaque fichier disputé et qui le gagne | |
+| `POST` | `/api/mods/order` | `mods.write` | `order[]`*, `profileId` · doit être le même ensemble de mods que ceux actifs ; recopie les fichiers qui changent de main | |
 | `PUT` | `/api/mods/:id` | `mods.write` | `name`, `version`, `author`, `description`, `tags[]`, `install_notes` | |
 | `DELETE` | `/api/mods/:id` | `mods.write` | — · retire l'entrée, **garde les fichiers** | |
 | `POST` | `/api/mod/config` | `mods.write` | `modId`*, `repoModId`, `updateUrl`, `directUrl`, `updateSources[]` · relie un mod aux dépôts qui peuvent le mettre à jour | |

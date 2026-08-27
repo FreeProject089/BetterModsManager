@@ -226,6 +226,16 @@ struct RepoExtraBody {
     password: Option<String>,
 }
 
+/// `POST /api/mods/order` — set the deployment order.
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct ModOrderBody {
+    /// The full order. Must be the same set of mods that are active.
+    order: Vec<String>,
+    #[serde(default)]
+    profile_id: Option<String>,
+}
+
 /// `POST /api/schedules/enabled` — arm or disarm one saved task.
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -3140,6 +3150,52 @@ pub async fn start_api_server(
             }
         });
 
+    // ── Deployment order ────────────────────────────────
+    //
+    // Two active mods shipping the same file do not merge — one of them is what is on disk,
+    // and it is the one deployed LAST. GET reads that order and every contested file; POST
+    // changes it and re-copies the files that changed hands.
+    //
+    // Read is under `mods.read` and write under `mods.write`, the same split as everything
+    // else here: knowing which mod wins is not the same permission as deciding it.
+    let tok_ord_get = token.clone();
+    let handle_ord_get = app_handle.clone();
+    let mods_order_get = warp::path!("api" / "mods" / "order")
+        .and(warp::get())
+        .and(require_permission(tok_ord_get, "mods.read"))
+        .and(with_app_handle(handle_ord_get))
+        .map(|handle: tauri::AppHandle| {
+            let state = handle.state::<crate::state::AppState>();
+            match crate::commands::mod_order::mod_order_get(state, None) {
+                Ok((mods, contested)) => warp::reply::with_status(
+                    warp::reply::json(&serde_json::json!({ "mods": mods, "contested": contested })),
+                    StatusCode::OK),
+                Err(e) => warp::reply::with_status(
+                    warp::reply::json(&ApiError { error: e }), StatusCode::BAD_REQUEST),
+            }
+        });
+
+    let tok_ord_set = token.clone();
+    let handle_ord_set = app_handle.clone();
+    let mods_order_set = warp::path!("api" / "mods" / "order")
+        .and(warp::post())
+        .and(require_permission(tok_ord_set, "mods.write"))
+        .and(warp::body::json::<ModOrderBody>())
+        .and(with_app_handle(handle_ord_set))
+        .and_then(|body: ModOrderBody, handle: tauri::AppHandle| async move {
+            let state = handle.state::<crate::state::AppState>();
+            let out = crate::commands::mod_order::mod_order_set(state, body.profile_id, body.order).await;
+            Ok::<_, std::convert::Infallible>(match out {
+                Ok(moved) => warp::reply::with_status(
+                    warp::reply::json(&serde_json::json!({ "ok": true, "moved": moved })),
+                    StatusCode::OK),
+                // A non-permutation is the caller's mistake, not a server fault — and the
+                // message says what is wrong with it rather than "bad request".
+                Err(e) => warp::reply::with_status(
+                    warp::reply::json(&ApiError { error: e }), StatusCode::BAD_REQUEST),
+            })
+        });
+
     // ── The doorbell ─────────────────────────────────────────────────
     //
     // A scheduled task could wait for a clock and for a file. This is the third thing:
@@ -3354,6 +3410,8 @@ pub async fn start_api_server(
 
     let group_c = schedules_list
         .or(schedules_set)
+        .or(mods_order_get)
+        .or(mods_order_set)
         .or(hook_ring)
         .or(hook_seen)
         .or(plugin_assets)

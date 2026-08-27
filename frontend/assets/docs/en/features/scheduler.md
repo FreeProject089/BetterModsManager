@@ -613,6 +613,45 @@ Tick **A non-zero exit is a result, not a failure** and it lands in `{script.cod
 `{text.script.stdout}` and `{text.script.stderr}` kept apart. Failing to *start* is still an
 error, because then there is no exit code and nothing ran.
 
+## Which mod wins a shared file
+
+BMM deploys by copying files into the game, so two active mods that ship the same path do not
+merge — one of them is what is on disk. The rule is **last wins**, and the order is the order
+the mods were activated in.
+
+That order is visible now, and changeable. In a conflict view it names the winner and offers to
+flip it; from a task it is the **Set which mod wins shared files** action.
+
+```bmms
+ensure modWins(id: "big-map-pack") {
+    do mods.order(id: "big-map-pack", mode: "last")
+}
+```
+
+That pairing is the point of both features. The task runs on its schedule, finds the mod still
+winning, and does nothing — then puts it back the day something you installed took its files.
+
+| | |
+|---|---|
+| `mode: "last"` | Make it win: deployed last. |
+| `mode: "first"` | Make it lose: deployed first. |
+| `order: "a, b, c"` | Those mods go last, in that order. Anything active you do not name keeps its place in front of them. |
+
+`{order.moved}` is how many files changed hands. Zero is an ordinary answer and a useful one:
+the order changed and nothing on disk did, so the mods that moved share no file.
+
+!!! note "The files change immediately"
+
+    Reordering re-copies the files that changed winner — only those, not every contested file.
+    A list that said one thing while the disk said another would be worse than no list, because
+    it is the one people would trust.
+
+!!! warning "A new order must be the same set of mods"
+
+    Not a subset, not with extras. A caller sending a stale list would otherwise drop a mod out
+    of the deployment order while its files stay in the game, and the profile would be
+    describing a state that does not exist. It is refused, and the message says why.
+
 ## Naming a place instead of typing where it is
 
 Any field that offers **Browse** also offers **BMM…**. It lists the folders BMM already knows

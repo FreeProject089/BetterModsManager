@@ -19,6 +19,12 @@
       "group": "mods"
     },
     {
+      "type": "mods.order",
+      "label": "Set which mod wins shared files",
+      "needs": "modOrder",
+      "group": "mods"
+    },
+    {
       "type": "modpack.enable",
       "label": "Enable modpack",
       "needs": "modpack",

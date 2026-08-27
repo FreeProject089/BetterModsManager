@@ -8940,5 +8940,15 @@
   "conflict.makeWinHint": "Moves it to the end of the deployment order, so its version of every file it shares with anything is the one installed. The files change on disk straight away.",
   "conflict.flipped": "Done — {n} file(s) changed hands.",
   "order.errNoProfile": "No profile to reorder.",
-  "order.errNotPermutation": "That order is not the same set of mods that are active — refused rather than applied, because the difference would leave files in the game that nothing claims."
+  "order.errNotPermutation": "That order is not the same set of mods that are active — refused rather than applied, because the difference would leave files in the game that nothing claims.",
+  "sched.act.mods.order": "Set which mod wins shared files",
+  "sched.actd.mods.order": "Move a mod in the deployment order. Two active mods that ship the same file do not merge — the one deployed last is the one on disk.",
+  "sched.cond.modWins": "Mod wins its shared files",
+  "sched.order.modeLast": "wins (deploy it last)",
+  "sched.order.modeFirst": "loses (deploy it first)",
+  "sched.order.hint": "Files change on disk straight away. Only the ones that actually change hands are rewritten.",
+  "sched.order.exact": "Or an exact order (optional)",
+  "sched.order.exactPh": "mod-id, mod-id, mod-id",
+  "sched.order.exactHint": "Listed mods go last, in this order. Anything active you do not name keeps its place in front of them — so a partial list means “these last”, not “drop the rest”.",
+  "sched.order.notActive": "“{m}” is not active, so it has no place in the deployment order."
 }

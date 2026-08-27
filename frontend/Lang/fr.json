@@ -8938,5 +8938,15 @@
   "conflict.makeWinHint": "Le déplace à la fin de l'ordre de déploiement : sa version de chaque fichier qu'il partage avec quoi que ce soit devient celle installée. Les fichiers changent sur le disque immédiatement.",
   "conflict.flipped": "Fait — {n} fichier(s) ont changé de main.",
   "order.errNoProfile": "Aucun profil à réordonner.",
-  "order.errNotPermutation": "Cet ordre n'est pas le même ensemble de mods que ceux actifs — refusé plutôt qu'appliqué, parce que la différence laisserait dans le jeu des fichiers que plus rien ne revendique."
+  "order.errNotPermutation": "Cet ordre n'est pas le même ensemble de mods que ceux actifs — refusé plutôt qu'appliqué, parce que la différence laisserait dans le jeu des fichiers que plus rien ne revendique.",
+  "sched.act.mods.order": "Définir quel mod gagne les fichiers partagés",
+  "sched.actd.mods.order": "Déplace un mod dans l'ordre de déploiement. Deux mods actifs qui livrent le même fichier ne fusionnent pas — celui déployé en dernier est celui sur le disque.",
+  "sched.cond.modWins": "Le mod gagne ses fichiers partagés",
+  "sched.order.modeLast": "gagne (déployé en dernier)",
+  "sched.order.modeFirst": "perd (déployé en premier)",
+  "sched.order.hint": "Les fichiers changent sur le disque immédiatement. Seuls ceux qui changent vraiment de main sont réécrits.",
+  "sched.order.exact": "Ou un ordre exact (optionnel)",
+  "sched.order.exactPh": "mod-id, mod-id, mod-id",
+  "sched.order.exactHint": "Les mods listés passent en dernier, dans cet ordre. Ce qui est actif et non nommé garde sa place devant — une liste partielle veut donc dire « ceux-là en dernier », pas « jette le reste ».",
+  "sched.order.notActive": "« {m} » n'est pas actif : il n'a pas de place dans l'ordre de déploiement."
 }

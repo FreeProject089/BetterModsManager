@@ -2,7 +2,7 @@
 
 !!! info ""
 
-    86 actions · 30 conditions · 27 valeurs · 8 sources de boucle
+    87 actions · 31 conditions · 28 valeurs · 8 sources de boucle
 
 > Généré depuis le registre de BMM lui-même, donc cette page ne peut pas décrire une version de l'application qui n'existe pas. Si une action est dans l'éditeur de blocs, elle est dans cette liste.
 
@@ -19,6 +19,7 @@ S'écrit `do <nom>(param: valeur, …)`. Une action sans paramètre prend des pa
 | `profile.activate` | Change le profil actif | `id` |
 | `mod.enable` | Active un mod | `id` |
 | `mod.disable` | Désactive un mod | `id` |
+| `mods.order` | Déplace un mod dans l'ordre de déploiement. Deux mods actifs qui livrent le même fichier ne fusionnent pas — celui déployé en dernier est celui sur le disque. | `order` · `id` · `mode` |
 | `modpack.enable` | Active tous les mods d'un modpack | `id` |
 | `modpack.disable` | Désactive tous les mods d'un modpack | `id` |
 | `modpack.create` | Crée un modpack depuis un profil | `name` · `profile` |
@@ -154,6 +155,7 @@ S'écrivent là où une condition va — après `if`, `case`, `waitfor`, `repeat
 | `profileActive` | Profil actif |
 | `modEnabled` | Mod activé |
 | `modDisabled` | Mod désactivé |
+| `modWins` | Le mod gagne ses fichiers partagés |
 | `modpackActive` | Modpack actif |
 | `modpackInactive` | Modpack inactif |
 | `allModsActive` | Tous les mods du profil actif sont activés |
@@ -181,7 +183,7 @@ S'écrivent là où une condition va — après `if`, `case`, `waitfor`, `repeat
 
 Écrites dans la tâche par une action, puis lisibles dans une comparaison ou une expression — `if disk.free_gb < 5`, `set total = benchmark.mbps * 2`.
 
-`disk.read_mbps` · `disk.write_mbps` · `disk.suggested_limit` · `disk.free_gb` · `disk.free_percent` · `disk.total_gb` · `benchmark.mbps` · `benchmark.total_ms` · `update.available` · `lasttask.ok` · `lasttask.spawned` · `list.length` · `backup.bytes` · `wait.ok` · `wait.tries` · `script.code` · `script.ok` · `import.count` · `catalog.entries` · `ssh.files` · `manifest.mods` · `manifest.added` · `manifest.removed` · `manifest.changed` · `http.status` · `map.size` · `map.hit`
+`disk.read_mbps` · `disk.write_mbps` · `disk.suggested_limit` · `disk.free_gb` · `disk.free_percent` · `disk.total_gb` · `benchmark.mbps` · `benchmark.total_ms` · `update.available` · `lasttask.ok` · `lasttask.spawned` · `list.length` · `backup.bytes` · `order.moved` · `wait.ok` · `wait.tries` · `script.code` · `script.ok` · `import.count` · `catalog.entries` · `ssh.files` · `manifest.mods` · `manifest.added` · `manifest.removed` · `manifest.changed` · `http.status` · `map.size` · `map.hit`
 
 Une valeur que rien n'a encore écrite vaut zéro. `lasttask.ok` vaut 1 ou 0, et ne veut dire quelque chose qu'après un `run`.
 

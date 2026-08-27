@@ -677,6 +677,48 @@ Coche **Un code de sortie non nul est un résultat, pas un échec** et il arrive
 `{script.code}`, avec `{text.script.stdout}` et `{text.script.stderr}` gardés séparément. Ne
 pas *démarrer* reste une erreur : il n'y a alors aucun code de sortie et rien n'a tourné.
 
+## Quel mod gagne un fichier partagé
+
+BMM déploie en copiant les fichiers dans le jeu : deux mods actifs qui livrent le même chemin ne
+fusionnent pas — l'un des deux est ce qu'il y a sur le disque. La règle est **le dernier
+gagne**, et l'ordre est celui dans lequel les mods ont été activés.
+
+Cet ordre est visible maintenant, et modifiable. Dans une vue de conflit, il nomme le gagnant et
+propose de l'inverser ; depuis une tâche, c'est l'action **Définir quel mod gagne les fichiers
+partagés**.
+
+```bmms
+ensure modWins(id: "big-map-pack") {
+    do mods.order(id: "big-map-pack", mode: "last")
+}
+```
+
+Cette combinaison est tout l'intérêt des deux fonctionnalités. La tâche se déclenche, trouve le
+mod toujours gagnant, et ne fait rien — puis remet les choses en place le jour où quelque chose
+que tu as installé lui a pris ses fichiers.
+
+| | |
+|---|---|
+| `mode: "last"` | Le faire gagner : déployé en dernier. |
+| `mode: "first"` | Le faire perdre : déployé en premier. |
+| `order: "a, b, c"` | Ces mods passent en dernier, dans cet ordre. Ce qui est actif et non nommé garde sa place devant. |
+
+`{order.moved}` dit combien de fichiers ont changé de main. Zéro est une réponse ordinaire et
+utile : l'ordre a changé et rien sur le disque, donc les mods déplacés ne partagent aucun
+fichier.
+
+!!! note "Les fichiers changent immédiatement"
+
+    Réordonner recopie les fichiers dont le gagnant change — ceux-là seulement, pas tous les
+    fichiers disputés. Une liste qui dirait une chose pendant que le disque en dit une autre
+    serait pire que pas de liste : c'est celle à laquelle les gens se fieraient.
+
+!!! warning "Un nouvel ordre doit être le même ensemble de mods"
+
+    Ni un sous-ensemble, ni avec des ajouts. Un appelant avec une liste périmée sortirait sinon
+    un mod de l'ordre de déploiement pendant que ses fichiers restent dans le jeu, et le profil
+    décrirait un état qui n'existe pas. C'est refusé, et le message dit pourquoi.
+
 ## Nommer un endroit au lieu de taper où il est
 
 Tout champ qui propose **Parcourir** propose aussi **BMM…**. Il liste les dossiers que BMM

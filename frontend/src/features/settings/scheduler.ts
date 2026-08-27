@@ -1103,6 +1103,7 @@ const DIRTIES: Record<string, DirtyArea[]> = {
     'mods.enableAll': ['mods'],
     'mods.disableAll': ['mods'],
     'mods.scan': ['mods'],
+    'mods.order': ['mods'],
     'modpack.enable': ['mods'],
     'modpack.disable': ['mods'],
     // A profile switch swaps what is deployed, so BOTH lists are wrong afterwards.
@@ -1402,6 +1403,31 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
             await invoke('toggle_all_mods', { enable: false, bypassSha: false }); break;
         case 'mods.scan':
             await invoke('scan_mods_folder'); break;
+        case 'mods.order': {
+            // Two shapes, because there are two questions. "Make this one win" is what
+            // somebody has when they are looking at a conflict; "here is the order" is what a
+            // task restoring a known-good setup has.
+            const [current] = await invoke('mod_order_get', { profileId: null }) as [{ id: string }[], unknown];
+            const ids = (current || []).map((m) => m.id);
+            let next: string[];
+            if (p.order) {
+                // An explicit list. Anything active but not named keeps its relative place at
+                // the FRONT, so a partial list means "these last, in this order" rather than
+                // "drop everything else" — which the backend would refuse anyway, loudly.
+                const named = String(p.order).split(/[;,\n]/).map((x) => x.trim()).filter(Boolean);
+                const known = named.filter((id) => ids.includes(id));
+                next = [...ids.filter((id) => !known.includes(id)), ...known];
+            } else {
+                const id = String(p.id || '');
+                if (!ids.includes(id)) throw new Error(t('sched.order.notActive').replace('{m}', id));
+                next = p.mode === 'first'
+                    ? [id, ...ids.filter((x) => x !== id)]
+                    : [...ids.filter((x) => x !== id), id];
+            }
+            const moved = await invoke('mod_order_set', { profileId: null, order: next }) as number;
+            ctx.nums['order.moved'] = moved;
+            break;
+        }
         case 'theme.set':
             await invoke('set_active_theme', { themeId: p.id }); break;
         case 'app.launch':
@@ -2487,6 +2513,21 @@ async function evalConditionRaw(cond: Condition, ctx: RunCtx, task?: Task): Prom
         case 'profileActive': {
             const id = await invoke('get_active_profile_id').catch(() => null);
             return id === p.id;
+        }
+        case 'modWins': {
+            // True when this mod wins EVERY file it contests. Written for `ensure`:
+            //
+            //     ensure modWins(id: "big-map-pack") {
+            //         do mods.order(id: "big-map-pack", mode: "last")
+            //     }
+            //
+            // A mod that contests nothing wins vacuously, which is the right answer — there is
+            // nothing to be losing.
+            const [mods] = await invoke('mod_order_get', { profileId: null })
+                .catch(() => [[], []]) as [{ id: string; contested: number; winning: number }[], unknown];
+            const me = (mods || []).find((m) => m.id === p.id);
+            if (!me) return false;
+            return me.winning >= me.contested;
         }
         case 'modEnabled': {
             const mods: any[] = await invoke('get_all_mods').catch(() => []);
@@ -5160,6 +5201,7 @@ const ACTION_TYPES: { v: string; label: string; needs?: string; group: string }[
     { v: 'profile.activate', label: 'Activate profile', needs: 'profile', group: 'mods' },
     { v: 'mod.enable', label: 'Enable mod', needs: 'mod', group: 'mods' },
     { v: 'mod.disable', label: 'Disable mod', needs: 'mod', group: 'mods' },
+    { v: 'mods.order', label: 'Set which mod wins shared files', needs: 'modOrder', group: 'mods' },
     { v: 'modpack.enable', label: 'Enable modpack', needs: 'modpack', group: 'mods' },
     { v: 'modpack.disable', label: 'Disable modpack', needs: 'modpack', group: 'mods' },
     { v: 'modpack.create', label: 'Create modpack', needs: 'mpCreate', group: 'mods' },
@@ -5545,6 +5587,22 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
     if (!needs) { host.innerHTML = ''; return; }
     if (needs === 'profile') host.innerHTML = _field(needs, `<select class="input sched-p" style="max-width:200px">${pickerOptions(_profiles, params.id)}</select>`);
     else if (needs === 'mod') host.innerHTML = _field(needs, `<select class="input sched-p" style="max-width:240px">${pickerOptions(_mods, params.id)}</select>`);
+    else if (needs === 'modOrder') {
+        const modes = [['last', t('sched.order.modeLast')], ['first', t('sched.order.modeFirst')]] as [string, string][];
+        host.innerHTML = `
+        <div class="sched-cmd-builder">
+            <div class="sched-cmd-row">
+                <select class="input sched-p" style="max-width:240px">${pickerOptions(_mods, params.id)}</select>
+                <select class="input sched-p-mode" style="max-width:190px">
+                    ${modes.map(([v, l]) => `<option value="${v}"${(params.mode || 'last') === v ? ' selected' : ''}>${escHtml(l)}</option>`).join('')}
+                </select>
+            </div>
+            <span class="sched-cmd-hint">${escHtml(t('sched.order.hint'))}</span>
+            <label class="sched-cmd-label">${escHtml(t('sched.order.exact'))}</label>
+            <input class="input sched-p-order" placeholder="${escAttr(t('sched.order.exactPh'))}" value="${escAttr(params.order || '')}">
+            <span class="sched-cmd-hint">${escHtml(t('sched.order.exactHint'))}</span>
+        </div>`;
+    }
     else if (needs === 'modpack') host.innerHTML = _field(needs, `<select class="input sched-p" style="max-width:200px">${pickerOptions(_modpacks, params.id)}</select>`);
     else if (needs === 'theme') host.innerHTML = _field(needs, `<select class="input sched-p" style="max-width:200px">${pickerOptions(_themes, params.id)}</select>`);
     else if (needs === 'appStop') {
@@ -6409,6 +6467,8 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
         sel.addEventListener('change', set);
         sel.addEventListener('input', set);
     }
+    host.querySelector('.sched-p-mode')?.addEventListener('change', (e) => { params.mode = (e.target as HTMLSelectElement).value; });
+    host.querySelector('.sched-p-order')?.addEventListener('input', (e) => { params.order = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-p-prog')?.addEventListener('input', (e) => { params.program = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-p-args')?.addEventListener('input', (e) => { params.args = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-p-wd')?.addEventListener('input', (e) => { params.workingDir = (e.target as HTMLInputElement).value; });
@@ -6634,7 +6694,7 @@ function diskOptions(selected: string): string {
 
 /** What `for each` can walk. One list: the editor's dropdown and the code box's suggestions. */
 const LOOP_SOURCES = ['enabledMods', 'disabledMods', 'mods', 'profiles', 'modpacks', 'themes', 'list', 'mapKeys'] as const;
-const COND_TYPES = ['always', 'all', 'any', 'value', 'textIs', 'fileContains', 'enumIs', 'profileActive', 'modEnabled', 'modDisabled', 'modpackActive', 'modpackInactive', 'allModsActive', 'appRunning', 'appNotRunning', 'fileExists', 'pathIsDir', 'fileHash', 'filesMatch', 'fileSize', 'fileType', 'fileName', 'fileNewer', 'online', 'catalogOk', 'repoOk', 'timeReached', 'dayOfWeek', 'timeRange', 'commandSucceeds'];
+const COND_TYPES = ['always', 'all', 'any', 'value', 'textIs', 'fileContains', 'enumIs', 'profileActive', 'modEnabled', 'modDisabled', 'modWins', 'modpackActive', 'modpackInactive', 'allModsActive', 'appRunning', 'appNotRunning', 'fileExists', 'pathIsDir', 'fileHash', 'filesMatch', 'fileSize', 'fileType', 'fileName', 'fileNewer', 'online', 'catalogOk', 'repoOk', 'timeReached', 'dayOfWeek', 'timeRange', 'commandSucceeds'];
 // Values a preceding action can capture (used by the `value` condition).
 // Every variable an action writes into `ctx`, so a `value` condition can read all of
 // them. Four were missing — check_disk_space has always written disk.free_gb,
@@ -6653,6 +6713,10 @@ const VALUE_SOURCES = [
     // How big the backup came out. A task can then warn when a nightly bundle suddenly
     // triples — which is what a replays section left ticked by accident looks like.
     'backup.bytes',
+    // How many files changed hands when the deployment order last moved. Zero is the
+    // ordinary answer and a useful one: it means the order changed and nothing on disk
+    // did, so the mods that moved share no file.
+    'order.moved',
     // Written by the two waits and by a script run with "keep going": what happened,
     // as something a condition can select. Without these a task could wait and could not
     // branch on the outcome of waiting, which is most of the reason to wait.
@@ -6745,7 +6809,7 @@ function renderCondParams(host: HTMLElement, cond: Condition): void {
         return;
     }
     if (cond.type === 'profileActive') host.innerHTML = `<select class="input sched-cp" style="max-width:180px">${pickerOptions(_profiles, p.id)}</select>`;
-    else if (cond.type === 'modEnabled' || cond.type === 'modDisabled') host.innerHTML = `<select class="input sched-cp" style="max-width:200px">${pickerOptions(_mods, p.id)}</select>`;
+    else if (cond.type === 'modEnabled' || cond.type === 'modDisabled' || cond.type === 'modWins') host.innerHTML = `<select class="input sched-cp" style="max-width:200px">${pickerOptions(_mods, p.id)}</select>`;
     else if (cond.type === 'modpackActive' || cond.type === 'modpackInactive') host.innerHTML = `<select class="input sched-cp" style="max-width:200px">${pickerOptions(_modpacks, p.id)}</select>`;
     else if (cond.type === 'appRunning' || cond.type === 'appNotRunning') {
         // A pid is exact but does not survive a reboot; a name survives but can match
