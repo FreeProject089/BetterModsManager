@@ -16,7 +16,7 @@
 import { invoke } from './api.js';
 import { t } from './i18n.js';
 import { escHtml, escAttr } from './utils.js';
-import { toast } from '../ui/app.js';
+
 
 /** What kinds have a content id. Mirrors `commands::content_ids::content_id_of`. */
 export type IdKind = 'modpack' | 'plugin' | 'task';
@@ -37,28 +37,37 @@ export function copyIdButtons(kind: IdKind, localId: string): string {
                 data-tooltip="${escAttr(t('copyid.contentHint'))}">${COPY_SVG} ${escHtml(t('copyid.content'))}</button>`;
 }
 
-/** Put text on the clipboard and say so, or say why not. */
-async function put(text: string, msgKey: string): Promise<void> {
+/**
+ * How to tell the user something. Injected rather than imported.
+ *
+ * `toast` lives in ui/app.ts, which reaches every feature screen, and every feature screen
+ * reaches this — so importing it here closes an import cycle, statically OR dynamically (the
+ * dep-graph gate counts both, and it is right to). Every caller already has `toast`; passing
+ * it costs one argument and keeps this file at the bottom of the graph.
+ */
+export type Notify = (message: string, kind: 'success' | 'warning' | 'error', ms: number) => void;
+
+async function put(notify: Notify, text: string, msgKey: string): Promise<void> {
     try {
         await navigator.clipboard.writeText(text);
         // The value itself, shortened. "Copied" alone leaves somebody wondering WHICH of the
         // two buttons they pressed, which is the whole distinction this exists to make.
-        toast(`${t(msgKey)} ${text.length > 28 ? `${text.slice(0, 28)}…` : text}`, 'success', 2500);
+        notify(`${t(msgKey)} ${text.length > 28 ? `${text.slice(0, 28)}…` : text}`, 'success', 2500);
     } catch (e) {
-        toast(`${t('common.error')}: ${e}`, 'error', 6000);
+        notify(`${t('common.error')}: ${e}`, 'error', 6000);
     }
 }
 
 /**
  * Wire every copy button inside `host`. Idempotent: safe to call after a repaint.
  */
-export function wireCopyIds(host: ParentNode): void {
+export function wireCopyIds(host: ParentNode, notify: Notify): void {
     host.querySelectorAll<HTMLElement>('.bmm-copy-id').forEach((btn) => {
         if (btn.dataset.wired) return;
         btn.dataset.wired = '1';
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
-            void put(btn.dataset.id || '', 'copyid.copiedLocal');
+            void put(notify, btn.dataset.id || '', 'copyid.copiedLocal');
         });
     });
     host.querySelectorAll<HTMLElement>('.bmm-copy-cid').forEach((btn) => {
@@ -70,7 +79,7 @@ export function wireCopyIds(host: ParentNode): void {
                 const cid = await invoke('content_id_of', {
                     kind: btn.dataset.kind, id: btn.dataset.id,
                 }) as string;
-                await put(cid, 'copyid.copiedContent');
+                await put(notify, cid, 'copyid.copiedContent');
             } catch (err) {
                 // Derived, not stored, so it can fail for a real reason: a pack whose members
                 // have no fingerprints yet, a plugin that was uninstalled between paint and
@@ -83,7 +92,7 @@ export function wireCopyIds(host: ParentNode): void {
                 const raw = String(err);
                 const key = raw.split('|')[0].trim();
                 const said = key.startsWith('cid.') ? t(key) : raw;
-                toast(`${t('copyid.errNoContent')} ${said}`, 'warning', 8000);
+                notify(`${t('copyid.errNoContent')} ${said}`, 'warning', 8000);
             }
         });
     });

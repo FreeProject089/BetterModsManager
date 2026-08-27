@@ -210,12 +210,38 @@ Python keeps its shape through a round trip.
 
 ```bmms
 set count: number = 0
+set tries: whole = 3
+set ratio: decimal = 1.5
+set ready: yesno = 1
 set label: text = "hello"
 ```
 
-Optional, and checked when you write it: `set n: number = "0"` is refused, so is
+Five of them, and four alternative spellings so the habit you already have works: `string`
+for `text`, `integer` or `int` for `whole`, `float` for `decimal`, `boolean` or `bool` for
+`yesno`. What you write is what gets stored under its canonical name, so `int` and `whole`
+give the same task — two people who spelled it differently have not built two automations.
+
+| Type | Holds | Checked |
+|---|---|---|
+| `text` | a value in quotes | refuses an unquoted value |
+| `number` | any unquoted value | refuses quotes |
+| `whole` | a count — 3, 0, 12 | refuses `1.5` |
+| `decimal` | a fraction — 1.5, 0.25 | refuses quotes |
+| `yesno` | 1 or 0 | refuses `true`, `false`, and any other number |
+
+Optional, and checked when you write it — `set n: number = "0"` is refused, so is
 `set s: text = 5`. The runner has no types at run time, so this is the only place the
-mistake can be caught at all — and it says what the variable is for the next reader.
+mistake can be caught at all, and it says what the variable is for the next reader.
+
+Two things worth knowing:
+
+**`yesno` is 1 or 0, not true/false.** A `set` evaluates to a number, and a bare `true`
+reads as the name of a variable that does not exist — which is 0. Writing `true` is refused
+here rather than quietly meaning false for the rest of the task.
+
+**The check stops where the parser stops knowing.** `set n: whole = a / b` is accepted:
+deciding it at write time would mean evaluating an expression whose variables do not exist
+yet. Only a bare literal is judged.
 
 ### Waiting
 
@@ -372,6 +398,39 @@ the structure. This is that convention, made real.
 A `.bmmpa` already carries the blocks a task calls, so exporting one exports its whole tree —
 folders included, since the folders are the names.
 
+
+## Writing it in the app
+
+The code box is not a plain text area.
+
+**It suggests as you type.** Two characters open the list; **Tab** accepts, arrows move,
+Escape closes. **Enter never accepts** — it means newline, and it always will. **Ctrl+Space**
+opens the list on demand, including on an empty word.
+
+What it offers depends on where the caret is:
+
+| Where | What |
+|---|---|
+| after `do ` | action names |
+| inside an action's brackets | **that action's parameters**, from zero characters, minus the ones already written |
+| after `if`, `while`, `case`, `and`… | conditions, values, and the variables this script has set |
+| after `for x in ` | what a loop can walk |
+| after `set n: ` | the five types |
+| after `script ` | the engines |
+| start of a line | keywords, values, variables |
+
+It stays shut inside a string and inside a `script` body — a list of BMM action names over a
+Python body is noise. If nothing matches by prefix or substring, it falls back to letters in
+order: `mss` finds `mods.scan`. The line under the list says what the highlighted item is, in
+your language, from the same wording the block editor uses.
+
+**Reference** opens the full list beside the editor — every action, condition, value and loop
+source this build has, grouped and searchable, with the parameters. Clicking one writes it.
+The panel is generated from BMM's own registry, so it cannot list something the app does not
+have.
+
+**Outline** shows the shape of the script. It is scanned, not compiled, so it still works
+while the script is halfway through being changed — which is when you want it.
 
 ## Comments
 

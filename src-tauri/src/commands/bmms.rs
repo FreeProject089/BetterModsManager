@@ -61,6 +61,74 @@ impl Diagnostic {
 
 type PResult<T> = Result<T, Diagnostic>;
 
+/// The declared types, and every spelling that means one.
+///
+/// Five names and four aliases rather than two names, because `set n: number = 3.5` and
+/// `set n: number = 3` were the same declaration and people write `string`, `int` and `bool`
+/// out of habit and got told they were not types at all.
+///
+/// The canonical name is what gets stored, so a script written `int` prints back `whole` and
+/// two people who spelled it differently end up with the same task.
+fn canonical_type(word: &str) -> Option<&'static str> {
+    Some(match word {
+        "text" | "string" => "text",
+        "number" => "number",
+        "whole" | "integer" | "int" => "whole",
+        "decimal" | "float" => "decimal",
+        "yesno" | "boolean" | "bool" => "yesno",
+        _ => return None,
+    })
+}
+
+/// Every type, canonical name first, for an error message and for the editor's list.
+pub const TYPE_NAMES: [&str; 5] = ["text", "number", "whole", "decimal", "yesno"];
+
+/// What a declared type can still be checked for once the value is known to be unquoted.
+///
+/// ONLY when the value is a bare literal. `set n: whole = a / b` is left alone: refusing it
+/// would mean evaluating the expression at parse time, and parse time does not know what `a`
+/// is. A check that is right about literals and silent about everything else is worth more
+/// than one that guesses.
+fn check_declared_value(ty: &str, expr: &str, tok: &Token) -> PResult<()> {
+    let lit = expr.trim();
+    match ty {
+        "whole" => {
+            if let Ok(v) = lit.parse::<f64>() {
+                if v.fract() != 0.0 {
+                    return Err(Diagnostic::at(
+                        tok,
+                        format!("This is declared `whole`, but {} has a fractional part. Use `decimal`, or round the value.", lit),
+                    ));
+                }
+            }
+        }
+        "yesno" => {
+            // The runner has no booleans: a `set` evaluates to a number, and a bare `true`
+            // reads as the name of a variable that does not exist — which is 0. So `yesno`
+            // holds 1 or 0, and writing `true` is caught HERE rather than silently meaning
+            // false for the rest of the task.
+            if lit.eq_ignore_ascii_case("true") || lit.eq_ignore_ascii_case("false") {
+                return Err(Diagnostic::at(
+                    tok,
+                    "A `yesno` holds 1 or 0. There is no true/false at run time — a bare `true` would read as an empty variable, which is 0.",
+                ));
+            }
+            if let Ok(v) = lit.parse::<f64>() {
+                if v != 0.0 && v != 1.0 {
+                    return Err(Diagnostic::at(
+                        tok,
+                        format!("This is declared `yesno`, so the value is 1 or 0, not {}.", lit),
+                    ));
+                }
+            }
+        }
+        // `number` and `decimal` accept any unquoted value; the quoted case was refused
+        // before this is reached.
+        _ => {}
+    }
+    Ok(())
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Lexer
 // ─────────────────────────────────────────────────────────────────────────────
@@ -969,7 +1037,7 @@ impl P {
                         format!("`{}` is not a usable variable name — letters, digits and _ only, starting with a letter.", name),
                     ));
                 }
-                // An OPTIONAL declared type: `set n: number = 0`. Checked here, where the
+                // An OPTIONAL declared type: `set n: whole = 0`. Checked here, where the
                 // answer is already known from the shape of the value — the runner has no
                 // types at run time, so this is the only place the mistake can be caught at
                 // all. It also documents the variable for the next reader, which is most of
@@ -978,14 +1046,15 @@ impl P {
                     self.next();
                     let tytok = self.peek().clone();
                     let ty = self.word("a type")?;
-                    match ty.as_str() {
-                        "number" | "text" => Some((ty, tytok)),
-                        other => {
+                    match canonical_type(&ty) {
+                        Some(canon) => Some((canon, tytok)),
+                        None => {
                             return Err(Diagnostic::at(
                                 &tytok,
                                 format!(
-                                    "`{}` is not a type. There are two: number and text.",
-                                    other
+                                    "`{}` is not a type. There are five: {}. `string`, `integer`, `int`, `float`, `boolean` and `bool` are accepted spellings of those.",
+                                    ty,
+                                    TYPE_NAMES.join(", ")
                                 ),
                             ))
                         }
@@ -1000,15 +1069,22 @@ impl P {
                 // `set s = "0"` is the character zero.
                 if let Tok::Str(text) = self.peek().tok.clone() {
                     if let Some((ty, tok)) = &declared {
-                        if ty == "number" {
+                        if *ty != "text" {
                             return Err(Diagnostic::at(
                                 tok,
-                                "This is declared `number`, but the value is text in quotes.",
+                                format!("This is declared `{}`, but the value is text in quotes.", ty),
                             ));
                         }
                     }
                     self.next();
                     let mut params = json!({ "name": name, "value": text });
+                    // The annotation is STORED, not just checked. It used to be dropped the
+                    // moment it had been verified, so printing the task back gave you
+                    // `set label = "hello"` — a round trip that silently deleted what you
+                    // wrote, the same way an unprinted trigger silently disarmed a task.
+                    if let Some((ty, _)) = &declared {
+                        params["type"] = Value::String((*ty).to_string());
+                    }
                     if shared {
                         params["scope"] = Value::String("shared".into());
                     }
@@ -1024,7 +1100,7 @@ impl P {
                     ));
                 }
                 if let Some((ty, tok)) = &declared {
-                    if ty == "text" {
+                    if *ty == "text" {
                         return Err(Diagnostic::at(
                             tok,
                             "This is declared `text`, so put the value in quotes.",
@@ -1032,9 +1108,12 @@ impl P {
                     }
                 }
                 let expr = self.raw_expr()?;
-                Ok(
-                    json!({ "kind": "action", "action": { "type": "math.set", "params": { "target": name, "expr": expr } } }),
-                )
+                let mut params = json!({ "target": name, "expr": expr });
+                if let Some((ty, tok)) = &declared {
+                    check_declared_value(ty, params["expr"].as_str().unwrap_or(""), tok)?;
+                    params["type"] = Value::String((*ty).to_string());
+                }
+                Ok(json!({ "kind": "action", "action": { "type": "math.set", "params": params } }))
             }
             "parallel" => {
                 self.next();
@@ -1628,12 +1707,21 @@ fn steps_str(steps: &[Value], depth: usize, out: &mut String) {
                 // correct and would still make the round trip a downgrade every time.
                 let pr = a.get("params").cloned().unwrap_or_else(|| json!({}));
                 let ps = |k: &str| pr.get(k).and_then(|x| x.as_str()).unwrap_or("").to_string();
+                // A declared type prints back as it was written. Verified and then dropped
+                // is how the annotation used to disappear on every save-and-reopen.
+                let declared_ty = |p: &Value| -> String {
+                    match p.get("type").and_then(|x| x.as_str()) {
+                        Some(t) if canonical_type(t).is_some() => format!(": {}", t),
+                        _ => String::new(),
+                    }
+                };
                 if ty == "math.set" && !ps("target").is_empty() {
                     out.push_str(&format!(
-                        "{}set {} = {}
+                        "{}set {}{} = {}
 ",
                         pad,
                         ps("target"),
+                        declared_ty(&pr),
                         ps("expr")
                     ));
                     continue;
@@ -1649,11 +1737,12 @@ fn steps_str(steps: &[Value], depth: usize, out: &mut String) {
                         ""
                     };
                     out.push_str(&format!(
-                        "{}{}set {} = {}
+                        "{}{}set {}{} = {}
 ",
                         pad,
                         sh,
                         ps("name"),
+                        declared_ty(&pr),
                         quote(&ps("value"))
                     ));
                     continue;
@@ -2185,6 +2274,72 @@ mod tests {
     ///
     /// Written as a loop over every type rather than as one case each: the next trigger
     /// somebody adds fails HERE, instead of silently becoming manual in the field.
+
+    /// A whole task around one statement, so the round trip goes through the real printer.
+    fn wrap(line: &str) -> String {
+        format!("task \"T\" {{\n    every day at 03:00\n\n    {}\n}}\n", line)
+    }
+
+    #[test]
+    fn a_declared_type_survives_being_printed_and_read_back() {
+        // It used to be checked and then thrown away, so saving a script and reopening it
+        // deleted every annotation in it — silently, and the script still ran.
+        for line in [
+            "set count: number = 0",
+            "set n: whole = 3",
+            "set ratio: decimal = 1.5",
+            "set flag: yesno = 1",
+            "set label: text = \"hello\"",
+            "shared set team: text = \"red\"",
+        ] {
+            let first = compile(&wrap(line));
+            let printed = bmms_decompile(first.clone());
+            assert!(printed.contains(line), "round trip lost `{line}`:\n{printed}");
+            assert_eq!(compile(&printed), first);
+        }
+    }
+
+    #[test]
+    fn an_alias_prints_back_as_the_name_it_means() {
+        // Two people writing `int` and `whole` must end up with the same task, or one
+        // automation exported twice is two different automations.
+        for (written, canonical) in [
+            ("set n: int = 1", "set n: whole = 1"),
+            ("set n: integer = 1", "set n: whole = 1"),
+            ("set r: float = 1.5", "set r: decimal = 1.5"),
+            ("set s: string = \"x\"", "set s: text = \"x\""),
+            ("set b: bool = 0", "set b: yesno = 0"),
+            ("set b: boolean = 0", "set b: yesno = 0"),
+        ] {
+            let printed = bmms_decompile(compile(&wrap(written)));
+            assert!(printed.contains(canonical), "`{written}` printed as:\n{printed}");
+        }
+    }
+
+    #[test]
+    fn a_value_that_contradicts_its_type_is_refused() {
+        for bad in [
+            "set n: number = \"0\"",       // quoted, but declared numeric
+            "set n: whole = \"0\"",
+            "set s: text = 5",            // unquoted, but declared text
+            "set n: whole = 1.5",         // a literal with a fractional part
+            "set b: yesno = true",        // there is no true at run time
+            "set b: yesno = 7",
+            "set n: colour = 1",          // not a type at all
+        ] {
+            let r = compile_inner(&wrap(bad), false);
+            assert!(!r.ok, "`{bad}` should not compile");
+        }
+    }
+
+    #[test]
+    fn a_type_check_stops_where_parse_time_stops_knowing() {
+        // `a / b` may or may not be whole. Refusing it would mean evaluating an expression
+        // whose variables do not exist yet — guessing, and wrong half the time.
+        assert!(compile_inner(&wrap("set n: whole = a / b"), false).ok);
+        assert!(compile_inner(&wrap("set b: yesno = other"), false).ok);
+    }
+
     #[test]
     fn every_trigger_survives_being_printed_and_read_back() {
         let cases: &[(&str, serde_json::Value)] = &[
@@ -2525,6 +2680,9 @@ script bash {
             (
                 "bmmscript.md 10",
                 r#"set count: number = 0
+set tries: whole = 3
+set ratio: decimal = 1.5
+set ready: yesno = 1
 set label: text = "hello"
 "#,
             ),
@@ -2662,6 +2820,9 @@ script bash {
             (
                 "bmmscript.fr.md 10",
                 r#"set count: number = 0
+set essais: whole = 3
+set ratio: decimal = 1.5
+set pret: yesno = 1
 set label: text = "bonjour"
 "#,
             ),

@@ -17176,8 +17176,8 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 .bmms-ac {
     position: fixed;
     z-index: 12000;
-    min-width: 190px;
-    max-width: 320px;
+    min-width: 220px;
+    max-width: 380px;
     padding: 4px;
     border: 1px solid var(--border);
     border-radius: 8px;
@@ -17203,6 +17203,22 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
     white-space: nowrap;
 }
 .bmms-ac-kind { font-size: 10px; color: var(--text-muted); flex-shrink: 0; }
+/* What the highlighted item is. Two lines at most — a panel that grows to five is a panel
+   covering the code you are writing, which is the thing it is meant to help with. */
+.bmms-ac-doc {
+    margin-top: 3px;
+    padding: 5px 8px;
+    border-top: 1px solid var(--border);
+    font-size: 11px;
+    line-height: 1.35;
+    color: var(--text-secondary);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.bmms-ac-doc + .bmms-ac-foot { border-top: 0; }
+
 /* The one key that accepts, written down. Otherwise the only way to learn it is to press
    Enter, get a newline, and conclude the list is broken. */
 .bmms-ac-foot {

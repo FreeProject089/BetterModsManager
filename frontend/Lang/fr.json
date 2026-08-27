@@ -9178,5 +9178,19 @@
   "cid.errNoModpack": "Aucun modpack avec cet id.",
   "cid.errNoPlugin": "Aucun plugin avec cet id.",
   "cid.errNoTask": "Aucune tâche avec cet id.",
-  "cid.errKind": "Rien de ce genre n'a d'id de contenu."
+  "cid.errKind": "Rien de ce genre n'a d'id de contenu.",
+  "sched.presetCat.mods": "Mods et profils",
+  "sched.presetCat.upkeep": "Sauvegardes et entretien",
+  "sched.presetCat.watch": "Surveiller quelque chose",
+  "sched.presetCat.repo": "Repos et synchronisation",
+  "sched.presetCat.advanced": "Enchaînements et variables",
+  "sched.presetReplaceTitle": "Remplacer cette tâche ?",
+  "sched.presetReplaceBody": "Partir d'un préréglage jette ce que contient cette tâche — {n} étape(s), ainsi que son nom, son déclencheur et ses permissions. L'annulation la ramène.",
+  "sched.bmms.acVariable": "une variable définie par ce script",
+  "sched.bmms.acParam": "un paramètre de cette action",
+  "sched.bmms.type.text": "une valeur entre guillemets",
+  "sched.bmms.type.number": "toute valeur sans guillemets",
+  "sched.bmms.type.whole": "un compte — 3, 0, 12. Refuse 1.5",
+  "sched.bmms.type.decimal": "une fraction — 1.5, 0.25",
+  "sched.bmms.type.yesno": "1 ou 0. Il n'y a pas de true/false à l'exécution"
 }

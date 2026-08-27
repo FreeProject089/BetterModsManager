@@ -3263,7 +3263,7 @@ export function renderScheduleList(): void {
                 <button class="btn btn-xs btn-ghost sched-act" data-act="edit" data-tooltip="${escAttr(t('common.edit') || 'Edit')}">${I('<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>')}</button>
                 <button class="btn btn-xs btn-ghost sched-act sched-act-del" data-act="del" data-tooltip="${escAttr(t('common.delete') || 'Delete')}">${I('<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>')}</button>
             </div>`;
-        wireCopyIds(row);
+        wireCopyIds(row, toast);
         row.querySelector('[data-act="toggle"]')?.addEventListener('change', async (e) => {
             task.enabled = (e.target as HTMLInputElement).checked; await saveTasks();
             if (task.osSchedule) await syncOsSchedule(task);
@@ -3558,7 +3558,18 @@ async function loadPickers(): Promise<void> {
  * what splitting the permissions was for — the two that touch other programs are written
  * so the user has to grant it deliberately, and say so in their description.
  */
-const PRESETS: { key: string; icon: string; title: string; desc: string; make: () => Partial<Task> }[] = [
+/** What a preset is FOR. The picker groups by this, and the order below is the order the
+ *  groups appear in: what you came for first, the housekeeping after it. */
+type PresetCat = 'mods' | 'upkeep' | 'watch' | 'repo' | 'advanced';
+const PRESET_CATS: { cat: PresetCat; label: string; key: string }[] = [
+    { cat: 'mods', key: 'sched.presetCat.mods', label: 'Mods & profiles' },
+    { cat: 'upkeep', key: 'sched.presetCat.upkeep', label: 'Backups & upkeep' },
+    { cat: 'watch', key: 'sched.presetCat.watch', label: 'Watching something' },
+    { cat: 'repo', key: 'sched.presetCat.repo', label: 'Repos & syncing' },
+    { cat: 'advanced', key: 'sched.presetCat.advanced', label: 'Chains & variables' },
+];
+
+const PRESETS: { cat: PresetCat; key: string; icon: string; title: string; desc: string; make: () => Partial<Task> }[] = [
     {
         // Two presets for the same idea: notice which server you are on, put the right mods
         // on before the loading screen decides for you. This one is DCS because DCS can be
@@ -3567,7 +3578,7 @@ const PRESETS: { key: string; icon: string; title: string; desc: string; make: (
         // Both arrive with the path and the list blank on purpose. A preset that filled them
         // in with a guess would be a task that looks configured, runs, finds nothing, and
         // reports success.
-        key: 'dcsServer',
+        cat: 'mods', key: 'dcsServer',
         icon: '<path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/>',
         title: 'DCS: the right mods for the server you joined',
         desc: 'Sets up the DCS watcher, then applies the mod list for whichever server you join.',
@@ -3611,7 +3622,7 @@ const PRESETS: { key: string; icon: string; title: string; desc: string; make: (
         // The same thing for a game with no hook API: watch its log, read the server out of
         // a line, branch. Every game that prints what it connected to can do this, and the
         // only part that changes between them is the pattern.
-        key: 'gameServer',
+        cat: 'mods', key: 'gameServer',
         icon: '<rect width="20" height="8" x="2" y="2" rx="2"/><rect width="20" height="8" x="2" y="14" rx="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/>',
         title: 'Any game: mods for the server in the log',
         desc: 'Watch a game log, read the server name out of a line, apply the matching mod list.',
@@ -3641,7 +3652,7 @@ const PRESETS: { key: string; icon: string; title: string; desc: string; make: (
         }),
     },
     {
-        key: 'backup', icon: '<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>',
+        cat: 'upkeep', key: 'backup', icon: '<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>',
         title: 'Weekly backup',
         desc: 'Every Monday at 09:00, export your BMM data and say so.',
         make: () => ({
@@ -3654,7 +3665,7 @@ const PRESETS: { key: string; icon: string; title: string; desc: string; make: (
         }),
     },
     {
-        key: 'updates', icon: '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>',
+        cat: 'upkeep', key: 'updates', icon: '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>',
         title: 'Tell me about updates',
         desc: 'Every morning, check for mod and BMM updates — and only notify if there is one.',
         make: () => ({
@@ -3675,7 +3686,7 @@ const PRESETS: { key: string; icon: string; title: string; desc: string; make: (
         }),
     },
     {
-        key: 'disk', icon: '<line x1="22" x2="2" y1="12" y2="12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><line x1="6" x2="6.01" y1="16" y2="16"/><line x1="10" x2="10.01" y1="16" y2="16"/>',
+        cat: 'upkeep', key: 'disk', icon: '<line x1="22" x2="2" y1="12" y2="12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><line x1="6" x2="6.01" y1="16" y2="16"/><line x1="10" x2="10.01" y1="16" y2="16"/>',
         title: 'Warn me before the disk fills',
         desc: 'Twice a day, check free space and warn under 20 GB. Silent otherwise.',
         make: () => ({
@@ -3693,7 +3704,7 @@ const PRESETS: { key: string; icon: string; title: string; desc: string; make: (
         }),
     },
     {
-        key: 'scan', icon: '<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
+        cat: 'mods', key: 'scan', icon: '<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
         title: 'Rescan mods when BMM opens',
         desc: 'Picks up anything you added to the mods folder outside BMM.',
         make: () => ({
@@ -3703,7 +3714,7 @@ const PRESETS: { key: string; icon: string; title: string; desc: string; make: (
         }),
     },
     {
-        key: 'aftergame', icon: '<line x1="6" x2="10" y1="11" y2="11"/><line x1="8" x2="8" y1="9" y2="13"/><line x1="15" x2="15.01" y1="12" y2="12"/><line x1="18" x2="18.01" y1="10" y2="10"/><path d="M17.32 5H6.68a4 4 0 0 0-3.978 3.59c-.006.052-.01.101-.017.152C2.604 9.416 2 14.456 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 0 1 9.828 16h4.344a2 2 0 0 1 1.414.586L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.544-.604-6.584-.685-7.258-.007-.05-.011-.1-.017-.151A4 4 0 0 0 17.32 5z"/>',
+        cat: 'mods', key: 'aftergame', icon: '<line x1="6" x2="10" y1="11" y2="11"/><line x1="8" x2="8" y1="9" y2="13"/><line x1="15" x2="15.01" y1="12" y2="12"/><line x1="18" x2="18.01" y1="10" y2="10"/><path d="M17.32 5H6.68a4 4 0 0 0-3.978 3.59c-.006.052-.01.101-.017.152C2.604 9.416 2 14.456 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 0 1 9.828 16h4.344a2 2 0 0 1 1.414.586L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.544-.604-6.584-.685-7.258-.007-.05-.011-.1-.017-.151A4 4 0 0 0 17.32 5z"/>',
         title: 'Tidy up after the game closes',
         desc: 'Waits for the game to exit, then stops its launcher and rescans your mods. Fill in the two names, and grant “Stop programs”.',
         make: () => ({
@@ -3729,7 +3740,7 @@ const PRESETS: { key: string; icon: string; title: string; desc: string; make: (
         }),
     },
     {
-        key: 'diskguard', icon: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+        cat: 'upkeep', key: 'diskguard', icon: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
         title: 'Stop early if the disk is nearly full',
         desc: 'A guard for the TOP of another task: checks free space and stops cleanly under 10 GB, so the real work never starts on a full disk.',
         make: () => ({
@@ -3749,7 +3760,7 @@ const PRESETS: { key: string; icon: string; title: string; desc: string; make: (
         }),
     },
     {
-        key: 'rescan', icon: '<path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/>',
+        cat: 'mods', key: 'rescan', icon: '<path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/>',
         title: 'Rescan the library every morning',
         desc: 'Picks up mods added or removed outside BMM, before you sit down to play.',
         make: () => ({
@@ -3759,7 +3770,7 @@ const PRESETS: { key: string; icon: string; title: string; desc: string; make: (
         }),
     },
     {
-        key: 'watchsite', icon: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+        cat: 'watch', key: 'watchsite', icon: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
         title: 'Tell me when a server stops answering',
         desc: 'Calls an address every 30 minutes and speaks up only when the answer is not 200. Put your own URL in the step — needs “Run external programs”.',
         make: () => ({
@@ -3779,7 +3790,7 @@ const PRESETS: { key: string; icon: string; title: string; desc: string; make: (
         }),
     },
     {
-        key: 'sharedvar', icon: '<path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/>',
+        cat: 'advanced', key: 'sharedvar', icon: '<path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/>',
         title: 'Share a value with your other tasks',
         desc: 'Writes one shared variable that every other task can read as {sharedNote}. A building block rather than a finished job.',
         make: () => ({
@@ -3797,7 +3808,7 @@ const PRESETS: { key: string; icon: string; title: string; desc: string; make: (
     // call, a plugin — are how a task reaches anything else, and they are the ones nobody
     // starts from, because knowing they exist means having read the action list to the end.
     {
-        key: 'apiPing', icon: '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
+        cat: 'watch', key: 'apiPing', icon: '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
         title: 'Watch a service and say when it breaks',
         desc: 'Every 15 minutes, call an HTTP endpoint. Notify only when it stops answering.',
         make: () => ({
@@ -3817,7 +3828,7 @@ const PRESETS: { key: string; icon: string; title: string; desc: string; make: (
         }),
     },
     {
-        key: 'deeplinkOpen', icon: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+        cat: 'advanced', key: 'deeplinkOpen', icon: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
         title: 'Open a BMM screen on a schedule',
         desc: 'Fire a bmm:// link — every screen and action the app exposes has one.',
         make: () => ({
@@ -3830,7 +3841,7 @@ const PRESETS: { key: string; icon: string; title: string; desc: string; make: (
         }),
     },
     {
-        key: 'pluginNight', icon: '<path d="M12 2v4"/><path d="M12 18v4"/><path d="m4.93 4.93 2.83 2.83"/><path d="m16.24 16.24 2.83 2.83"/><path d="M2 12h4"/><path d="M18 12h4"/><path d="m4.93 19.07 2.83-2.83"/><path d="m16.24 7.76 2.83-2.83"/>',
+        cat: 'advanced', key: 'pluginNight', icon: '<path d="M12 2v4"/><path d="M12 18v4"/><path d="m4.93 4.93 2.83 2.83"/><path d="m16.24 16.24 2.83 2.83"/><path d="M2 12h4"/><path d="M18 12h4"/><path d="m4.93 19.07 2.83-2.83"/><path d="m16.24 7.76 2.83-2.83"/>',
         title: 'Compare a plugin, then apply it',
         desc: 'See what a plugin would change before it changes it — and only apply if it differs.',
         make: () => ({
@@ -3848,7 +3859,7 @@ const PRESETS: { key: string; icon: string; title: string; desc: string; make: (
         }),
     },
     {
-        key: 'sshNightly', icon: '<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>',
+        cat: 'repo', key: 'sshNightly', icon: '<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>',
         title: 'Publish the repo over SSH, nightly',
         desc: 'Export, then send it to the saved SSH target. Needs a key with no passphrase.',
         make: () => ({
@@ -3862,7 +3873,7 @@ const PRESETS: { key: string; icon: string; title: string; desc: string; make: (
         }),
     },
     {
-        key: 'unattendedSync', icon: '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>',
+        cat: 'repo', key: 'unattendedSync', icon: '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>',
         title: 'Sync a repo while you sleep',
         desc: 'A real sync, not a screen. Nothing to press at 3am.',
         make: () => ({
@@ -3875,7 +3886,7 @@ const PRESETS: { key: string; icon: string; title: string; desc: string; make: (
         }),
     },
     {
-        key: 'packBackup', icon: '<path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/>',
+        cat: 'upkeep', key: 'packBackup', icon: '<path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/>',
         title: 'Export your modpacks every week',
         desc: 'A .bmp beside your data, so a broken profile is an import away from fixed.',
         make: () => ({
@@ -3887,7 +3898,7 @@ const PRESETS: { key: string; icon: string; title: string; desc: string; make: (
         }),
     },
     {
-        key: 'diskThenSync', icon: '<line x1="22" x2="2" y1="12" y2="12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
+        cat: 'repo', key: 'diskThenSync', icon: '<line x1="22" x2="2" y1="12" y2="12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
         title: 'Only sync if there is room',
         desc: 'Check free space first, and stop with a reason rather than filling the disk.',
         make: () => ({
@@ -3905,7 +3916,7 @@ const PRESETS: { key: string; icon: string; title: string; desc: string; make: (
         }),
     },
     {
-        key: 'apiChain', icon: '<path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/>',
+        cat: 'advanced', key: 'apiChain', icon: '<path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/>',
         title: 'Read a value from an API and keep it',
         desc: 'Pull one field out of a JSON response into a shared variable other tasks can read.',
         make: () => ({
@@ -3926,7 +3937,7 @@ const PRESETS: { key: string; icon: string; title: string; desc: string; make: (
  *  the preset itself — two tasks made from one preset must not share an id. */
 function taskFromPreset(p: (typeof PRESETS)[number]): Task {
     return {
-        id: `sched-${Date.now()}`, enabled: true, createdAt: Date.now(), catchUp: true,
+        id: newTaskId(), enabled: true, createdAt: Date.now(), catchUp: true,
         allowCustomCommands: false, name: '', trigger: { type: 'interval', everyMinutes: 60 }, steps: [],
         ...p.make(),
     } as Task;
@@ -4277,25 +4288,37 @@ function renderModal(modal: HTMLElement): void {
                     // report, so that button stays available the whole time: wanting to look
                     // at what other people published does not stop being reasonable the
                     // moment you have typed a name.
-                    const blank = !_editing && !_draft.steps.length && !_draft.name;
                     const browse = `<button type="button" class="btn btn-sm btn-secondary sched-preset-browse" id="sched-preset-catalog"
                             data-tooltip="${escAttr(t('sched.pc.tip') || 'Automations published by other people. Each one is inspected before anything is imported.')}">
                             ${SVG16('<path d="M12 13v8"/><path d="m8 17 4 4 4-4"/><path d="M4.393 15.269A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.436 8.284"/>')}
                             <span>${escHtml(t('sched.pc.browse') || 'From a catalogue…')}</span>
                         </button>`;
-                    if (!blank) {
-                        return `<label class="sched-label">${t('sched.pc.title') || 'Automations from a catalogue'}</label>
-                            <div class="sched-preset-row">${browse}</div>`;
-                    }
-                    // A select rather than a column of cards. Six cards filled the sidebar
-                    // before the trigger — the thing most people came to set — was on screen
-                    // at all, and the list only grows. The description follows the choice
-                    // instead of living in a tooltip nobody hovers.
+                    // ALWAYS on screen, including while editing.
+                    //
+                    // It used to disappear the moment the draft had a name or a step, because
+                    // applying a preset REPLACES the draft and hiding it made that impossible.
+                    // It also made the presets impossible to FIND: the one moment you want to
+                    // know whether the thing you are building already exists ready-made is
+                    // just after you started building it. So it stays, and the replacement is
+                    // confirmed rather than prevented — with the draft's own step count in the
+                    // question, so "replace" is not an abstraction.
+                    //
+                    // Grouped, and alphabetical inside a group. Nineteen presets in one flat
+                    // list, in the order somebody happened to write them, is a list you read
+                    // top to bottom every single time.
+                    const groups = PRESET_CATS.map((c) => {
+                        const mine = PRESETS.filter((p) => p.cat === c.cat)
+                            .map((p) => ({ p, label: t('sched.preset.' + p.key) || p.title }))
+                            .sort((a, b) => a.label.localeCompare(b.label));
+                        if (!mine.length) return '';
+                        return `<optgroup label="${escAttr(t(c.key) || c.label)}">${mine.map(({ p, label }) =>
+                            `<option value="${escAttr(p.key)}">${escHtml(label)}</option>`).join('')}</optgroup>`;
+                    }).join('');
                     return `<label class="sched-label">${t('sched.presetsTitle') || 'Start from a preset'} <span class="sched-hint-inline">${t('sched.presetsHint') || '— or build your own below'}</span></label>
                     <div class="sched-preset-row">
                         <select class="input sched-preset-pick" id="sched-preset-pick">
                             <option value="">${escHtml(t('sched.presetPick') || 'Pick one…')}</option>
-                            ${PRESETS.map((p) => `<option value="${escAttr(p.key)}">${escHtml(t('sched.preset.' + p.key) || p.title)}</option>`).join('')}
+                            ${groups}
                         </select>
                         ${browse}
                     </div>
@@ -4446,9 +4469,29 @@ function renderModal(modal: HTMLElement): void {
             const p = PRESETS.find((x) => x.key === pick.value);
             if (desc) desc.textContent = p ? (t('sched.presetd.' + p.key) || p.desc) : '';
             if (!p) return;
-            _snapshot();                       // undo covers this like any other edit
-            _draft = taskFromPreset(p);
-            renderModal(modal!);               // re-render: the picker hides now that steps exist
+            void (async () => {
+                // Applying REPLACES the draft. On a blank new task that costs nothing, so it
+                // happens straight away; once there is work in the draft it is a destructive
+                // edit, and it gets asked about with the count of what would go.
+                const has = (_draft.steps?.length || 0) + (_draft.name ? 1 : 0);
+                if (has) {
+                    const ok = await showConfirm(
+                        t('sched.presetReplaceTitle') || 'Replace this task?',
+                        (t('sched.presetReplaceBody') || 'Starting from a preset throws away what is in this task — {n} step(s), and its name, trigger and permissions. Undo brings it back.')
+                            .replace('{n}', String(_draft.steps?.length || 0)),
+                        true,
+                    );
+                    if (!ok) {
+                        // Put the picker back where it was, or it reads as applied.
+                        pick.value = '';
+                        if (desc) desc.textContent = '';
+                        return;
+                    }
+                }
+                _snapshot();                   // undo covers this like any other edit
+                _draft = taskFromPreset(p);
+                renderModal(modal!);
+            })();
         });
     }
     modal.querySelector('#sched-name')?.addEventListener('input', (e) => { _draft.name = (e.target as HTMLInputElement).value; });
@@ -4791,12 +4834,39 @@ function _startStepDrag(ev: MouseEvent, steps: Step[], fromIdx: number, block: H
  * somebody adds an action and does not think of this file.
  */
 function codeVocabulary() {
+    // Parameter names come from the GENERATED index rather than from a second list here:
+    // gen-bmms-reference.mjs already extracts them from the runner, and a copy would be a
+    // list that offers `passphrase` to an action that stopped taking it two versions ago.
+    const params: Record<string, string[]> = {};
+    for (const e of BMMS_INDEX) if (e.p?.length) params[e.n] = e.p;
     return {
         actions: ACTION_TYPES.map((a) => a.v),
         conditions: COND_TYPES.slice(),
         sources: VALUE_SOURCES.slice(),
         loops: LOOP_SOURCES.slice(),
+        params,
     };
+}
+
+/**
+ * One line about the highlighted suggestion, in the reader's language.
+ *
+ * The same keys the reference panel and the block editor use, so the box, the panel and the
+ * bricks cannot describe one action three ways.
+ */
+function describeCompletion(c: { text: string; kind: string }): string {
+    if (c.kind === 'action') {
+        const d = t('sched.actd.' + c.text) || '';
+        const l = t('sched.act.' + c.text) || '';
+        const p = BMMS_INDEX.find((e) => e.k === 'a' && e.n === c.text)?.p || [];
+        const head = [l, d].filter(Boolean).join(' \u2014 ');
+        return p.length ? `${head}${head ? '  ' : ''}(${p.join(', ')})` : head;
+    }
+    if (c.kind === 'condition') return t('sched.cond.' + c.text) || '';
+    if (c.kind === 'type') return t('sched.bmms.type.' + c.text) || '';
+    if (c.kind === 'variable') return t('sched.bmms.acVariable') || 'a variable this script sets';
+    if (c.kind === 'param') return t('sched.bmms.acParam') || 'a parameter of this action';
+    return '';
 }
 
 function wireCodeMode(modal: HTMLElement): void {
@@ -4907,7 +4977,7 @@ function wireCodeMode(modal: HTMLElement): void {
     // Checked as you stop typing, so the Blocks button is never the first thing to tell you
     // there is a mistake.
     let timer: any = null;
-    mountCompletions(ta, codeVocabulary());
+    mountCompletions(ta, codeVocabulary(), describeCompletion);
     // Colour, through the same mirror every other code box in BMM uses. It decides
     // nothing — the live compile below is the thing that judges the code.
     registerBmmsLanguage();

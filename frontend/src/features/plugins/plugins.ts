@@ -482,7 +482,7 @@ function buildPluginCard(plugin: any, source: 'installed' | 'catalog') {
         })();
     }
 
-    wireCopyIds(card);
+    wireCopyIds(card, toast);
     card.querySelector('.plug-btn-compare')?.addEventListener('click', () => handleCompare(manifest.id));
     card.querySelector('.plug-btn-apply')?.addEventListener('click', () => handleApply(manifest.id));
     card.querySelector('.plug-btn-export')?.addEventListener('click', () => handleExport(manifest.id, manifest.name));

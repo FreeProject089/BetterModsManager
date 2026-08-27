@@ -214,12 +214,39 @@ réimprimé, donc Python garde sa forme à travers un aller-retour.
 
 ```bmms
 set count: number = 0
+set essais: whole = 3
+set ratio: decimal = 1.5
+set pret: yesno = 1
 set label: text = "bonjour"
 ```
 
-Optionnels, et vérifiés à l'écriture : `set n: number = "0"` est refusé, `set s: text = 5`
+Cinq types, et quatre orthographes alternatives pour que l'habitude que vous avez déjà
+fonctionne : `string` pour `text`, `integer` ou `int` pour `whole`, `float` pour `decimal`,
+`boolean` ou `bool` pour `yesno`. Ce que vous écrivez est stocké sous le nom canonique, donc
+`int` et `whole` donnent la même tâche — deux personnes qui l'ont écrit différemment n'ont
+pas construit deux automatisations.
+
+| Type | Contient | Vérifié |
+|---|---|---|
+| `text` | une valeur entre guillemets | refuse une valeur sans guillemets |
+| `number` | toute valeur sans guillemets | refuse les guillemets |
+| `whole` | un compte — 3, 0, 12 | refuse `1.5` |
+| `decimal` | une fraction — 1.5, 0.25 | refuse les guillemets |
+| `yesno` | 1 ou 0 | refuse `true`, `false`, et tout autre nombre |
+
+Optionnels, et vérifiés à l'écriture — `set n: number = "0"` est refusé, `set s: text = 5`
 aussi. L'exécuteur n'a pas de types à l'exécution, donc c'est le seul endroit où l'erreur
-peut être attrapée — et ça dit au lecteur suivant à quoi sert la variable.
+peut être attrapée, et ça dit au lecteur suivant à quoi sert la variable.
+
+Deux choses à savoir :
+
+**`yesno` vaut 1 ou 0, pas true/false.** Un `set` s'évalue en nombre, et un `true` nu se lit
+comme le nom d'une variable qui n'existe pas — donc 0. Écrire `true` est refusé ici plutôt
+que de vouloir dire silencieusement faux pour tout le reste de la tâche.
+
+**La vérification s'arrête où l'analyseur cesse de savoir.** `set n: whole = a / b` est
+accepté : trancher à l'écriture supposerait d'évaluer une expression dont les variables
+n'existent pas encore. Seule une valeur littérale est jugée.
 
 ### Attendre
 
@@ -382,6 +409,40 @@ la structure. C'est cette convention, rendue réelle.
 Un `.bmmpa` porte déjà les blocs qu'une tâche appelle : en exporter une exporte tout son arbre —
 dossiers compris, puisque les dossiers sont les noms.
 
+
+## L'écrire dans l'app
+
+La zone de code n'est pas un simple champ texte.
+
+**Elle propose pendant la frappe.** Deux caractères ouvrent la liste ; **Tab** accepte, les
+flèches déplacent, Échap ferme. **Entrée n'accepte jamais** — ça veut dire nouvelle ligne, et
+ça le restera. **Ctrl+Espace** ouvre la liste à la demande, même sur un mot vide.
+
+Ce qu'elle propose dépend de l'endroit où est le curseur :
+
+| Où | Quoi |
+|---|---|
+| après `do ` | les noms d'actions |
+| dans les parenthèses d'une action | **les paramètres de cette action**, dès zéro caractère, moins ceux déjà écrits |
+| après `if`, `while`, `case`, `and`… | conditions, valeurs, et les variables que ce script a définies |
+| après `for x in ` | ce qu'une boucle peut parcourir |
+| après `set n: ` | les cinq types |
+| après `script ` | les moteurs |
+| début de ligne | mots-clés, valeurs, variables |
+
+Elle reste fermée dans une chaîne et dans un corps `script` — une liste de noms d'actions BMM
+par-dessus du Python, c'est du bruit. Si rien ne correspond par préfixe ou par sous-chaîne,
+elle se rabat sur les lettres dans l'ordre : `mss` trouve `mods.scan`. La ligne sous la liste
+dit ce qu'est l'élément sélectionné, dans votre langue, avec les mêmes mots que l'éditeur de
+briques.
+
+**Référence** ouvre la liste complète à côté de l'éditeur — chaque action, condition, valeur et
+source de boucle de cette version, groupées et cherchables, avec les paramètres. Un clic
+l'écrit. Le panneau est généré depuis le registre de BMM : il ne peut pas lister quelque chose
+que l'app n'a pas.
+
+**Plan** montre la forme du script. Il est scanné, pas compilé, donc il fonctionne encore
+pendant que le script est à moitié modifié — c'est-à-dire quand on en a besoin.
 
 ## Commentaires
 

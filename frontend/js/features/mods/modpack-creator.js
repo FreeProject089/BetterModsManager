@@ -390,7 +390,7 @@ function _renderModpackList(container) {
                 <button class="btn btn-icon btn-ghost btn-delete" style="color:var(--danger)" ><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
             </div>
         `;
-        wireCopyIds(card);
+        wireCopyIds(card, toast);
         card.querySelector('.btn-edit').onclick = (e) => { e.stopPropagation(); _openEditor(container, pack); };
         card.querySelector('.btn-apply').onclick = (e) => { e.stopPropagation(); _applyModpack(container, pack); };
         card.querySelector('.btn-export').onclick = (e) => { e.stopPropagation(); _exportModpack(pack); };

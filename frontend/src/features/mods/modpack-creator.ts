@@ -380,7 +380,7 @@ function _renderModpackList(container) {
             </div>
         `;
 
-        wireCopyIds(card);
+        wireCopyIds(card, toast);
         card.querySelector('.btn-edit').onclick = (e) => { e.stopPropagation(); _openEditor(container, pack); };
         card.querySelector('.btn-apply').onclick = (e) => { e.stopPropagation(); _applyModpack(container, pack); };
         card.querySelector('.btn-export').onclick = (e) => { e.stopPropagation(); _exportModpack(pack); };

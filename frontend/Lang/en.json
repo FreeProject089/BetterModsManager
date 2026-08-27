@@ -9180,5 +9180,19 @@
   "cid.errNoModpack": "No modpack with that id.",
   "cid.errNoPlugin": "No plugin with that id.",
   "cid.errNoTask": "No task with that id.",
-  "cid.errKind": "Nothing of that kind has a content id."
+  "cid.errKind": "Nothing of that kind has a content id.",
+  "sched.presetCat.mods": "Mods & profiles",
+  "sched.presetCat.upkeep": "Backups & upkeep",
+  "sched.presetCat.watch": "Watching something",
+  "sched.presetCat.repo": "Repos & syncing",
+  "sched.presetCat.advanced": "Chains & variables",
+  "sched.presetReplaceTitle": "Replace this task?",
+  "sched.presetReplaceBody": "Starting from a preset throws away what is in this task — {n} step(s), and its name, trigger and permissions. Undo brings it back.",
+  "sched.bmms.acVariable": "a variable this script sets",
+  "sched.bmms.acParam": "a parameter of this action",
+  "sched.bmms.type.text": "a value in quotes",
+  "sched.bmms.type.number": "any unquoted value",
+  "sched.bmms.type.whole": "a count — 3, 0, 12. Refuses 1.5",
+  "sched.bmms.type.decimal": "a fraction — 1.5, 0.25",
+  "sched.bmms.type.yesno": "1 or 0. There is no true/false at run time"
 }

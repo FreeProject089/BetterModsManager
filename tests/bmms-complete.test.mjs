@@ -22,6 +22,11 @@ const V = {
   conditions: ['online', 'modEnabled', 'fileExists'],
   sources: ['disk.free_gb', 'lasttask.ok'],
   loops: ['mods', 'enabledMods'],
+  params: {
+    'repo.sync': ['url', 'profile'],
+    'mods.scan': [],
+    notify: ['message', 'level'],
+  },
 };
 
 /** `|` marks the caret, so a case reads as the thing somebody typed. */
@@ -101,6 +106,58 @@ describe('where it stays shut', () => {
   test('a caret outside the text is refused rather than guessed at', () => {
     assert.deepEqual(completionsFor('do mods', 99, V).items, []);
     assert.deepEqual(completionsFor('do mods', -1, V).items, []);
+  });
+});
+
+describe("what the box could not tell you before", () => {
+  test('inside an action\'s brackets, its parameters \u2014 from zero characters', () => {
+    // The half nobody can remember. `do repo.sync(` used to offer keywords, because the
+    // caret was "somewhere we cannot place" and keywords are the fallback.
+    assert.deepEqual(at('do repo.sync(|'), ['url', 'profile']);
+    assert.deepEqual(at('do repo.sync(u|'), ['url']);
+  });
+
+  test('a parameter already written is not offered twice', () => {
+    assert.deepEqual(at('do repo.sync(url: "x", |'), ['profile']);
+  });
+
+  test('but not while typing a VALUE \u2014 that is not a name position', () => {
+    // After the colon you are writing somebody\'s URL, and a list of parameter names over it
+    // is the noise this module exists to avoid.
+    assert.deepEqual(at('do repo.sync(url: htt|'), []);
+  });
+
+  test('an action with no parameters offers nothing rather than the fallback', () => {
+    assert.deepEqual(at('do mods.scan(|'), []);
+  });
+
+  test('after `set n:`, the five types', () => {
+    assert.deepEqual(at('set n: |'), ['text', 'number', 'whole', 'decimal', 'yesno']);
+    assert.deepEqual(at('set n: wh|'), ['whole']);
+    // A colon inside a call is a parameter, not a type.
+    assert.ok(!at('do notify(message: |').includes('whole'));
+  });
+
+  test('variables the script has already named', () => {
+    const src = 'set count = 0\nshared set team = "red"\nfor item in mods {\n    if cou|';
+    assert.ok(at(src).includes('count'), 'a variable set above should be offered');
+    // The line being typed is not a definition: `set tot` must not offer `tot` back.
+    assert.ok(!at('set count = 0\nset tot|').includes('tot'));
+  });
+
+  test('a variable defined BELOW the caret is not offered', () => {
+    // It does not exist yet at that point in the run; offering it is offering 0.
+    const src = 'if lat|\nset later = 1';
+    assert.ok(!at(src).includes('later'));
+  });
+
+  test('in-order letters match, but rank below a real prefix or substring', () => {
+    // `mods.scan` as "mss". Three characters minimum, so two random letters cannot drag in
+    // half the vocabulary.
+    assert.ok(at('do mss|').includes('mods.scan'));
+    assert.deepEqual(at('do ms|'), [], 'two characters do not get the loose tier');
+    // And only as a FALLBACK: a query with real matches is not padded with fuzzy ones.
+    assert.deepEqual(at('if onl|'), ['online']);
   });
 });
 
