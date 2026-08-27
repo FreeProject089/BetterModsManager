@@ -23,6 +23,15 @@
       ]
     },
     {
+      "type": "mods.order",
+      "group": "mods",
+      "params": [
+        "order",
+        "id",
+        "mode"
+      ]
+    },
+    {
       "type": "modpack.enable",
       "group": "mods",
       "params": [
@@ -173,7 +182,8 @@
       "group": "repo",
       "params": [
         "dir",
-        "target"
+        "target",
+        "into"
       ]
     },
     {
@@ -181,7 +191,8 @@
       "group": "repo",
       "params": [
         "dir",
-        "target"
+        "target",
+        "into"
       ]
     },
     {
@@ -197,7 +208,8 @@
       "group": "apps",
       "params": [
         "name",
-        "pid"
+        "pid",
+        "into"
       ]
     },
     {
@@ -456,7 +468,8 @@
       "params": [
         "args",
         "program",
-        "workingDir"
+        "workingDir",
+        "into"
       ]
     },
     {
@@ -466,14 +479,16 @@
         "keepGoing",
         "engine",
         "code",
-        "workingDir"
+        "workingDir",
+        "into"
       ]
     },
     {
       "type": "folder.create",
       "group": "system",
       "params": [
-        "path"
+        "path",
+        "into"
       ]
     },
     {
@@ -509,7 +524,8 @@
         "overwriteAll",
         "deleteExtra",
         "downloadLimit",
-        "keepZipped"
+        "keepZipped",
+        "into"
       ]
     },
     {
@@ -585,7 +601,8 @@
         "body",
         "timeoutMs",
         "jsonPath",
-        "allowAnyStatus"
+        "allowAnyStatus",
+        "into"
       ]
     },
     {
@@ -622,6 +639,33 @@
       ]
     },
     {
+      "type": "log.print",
+      "group": "logic",
+      "params": [
+        "message",
+        "text"
+      ]
+    },
+    {
+      "type": "data.validate",
+      "group": "logic",
+      "params": [
+        "path",
+        "text",
+        "expect",
+        "strict"
+      ]
+    },
+    {
+      "type": "file.write",
+      "group": "logic",
+      "params": [
+        "path",
+        "text",
+        "append"
+      ]
+    },
+    {
       "type": "modlist.apply",
       "group": "mods",
       "params": [
@@ -652,7 +696,8 @@
         "target",
         "dir",
         "engine",
-        "workingDir"
+        "workingDir",
+        "into"
       ]
     },
     {
@@ -702,6 +747,8 @@
     "profileActive",
     "modEnabled",
     "modDisabled",
+    "modWins",
+    "fileIsValid",
     "modpackActive",
     "modpackInactive",
     "allModsActive",
@@ -737,6 +784,11 @@
     "lasttask.spawned",
     "list.length",
     "backup.bytes",
+    "order.moved",
+    "retry.attempts",
+    "valid.ok",
+    "valid.matched",
+    "valid.count",
     "wait.ok",
     "wait.tries",
     "script.code",
@@ -781,7 +833,9 @@
     "do",
     "else",
     "ensure",
+    "event",
     "every",
+    "file",
     "for",
     "if",
     "in",
@@ -794,7 +848,9 @@
     "orcontinue",
     "parallel",
     "poll",
+    "print",
     "repeat",
+    "retry",
     "run",
     "script",
     "set",
