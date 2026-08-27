@@ -289,3 +289,163 @@ pub fn plugin_check(
 
     Ok(out)
 }
+
+
+/// One thing a plugin ships, whatever kind of thing it is.
+///
+/// Assets, scripts, bundled folders and automations were four separate lists on three
+/// separate screens, which is why the whole area read as unfinished: nowhere answered "what
+/// is actually IN this plugin". They differ in what you can DO with one, not in what they
+/// are, so they are one list with a `group` and the answer is one screen.
+#[derive(serde::Serialize, Clone)]
+pub struct PluginItem {
+    /// `asset` · `script` · `folder` · `automation`.
+    pub group: String,
+    /// Path relative to the plugin folder, forward slashes. The id for every action here.
+    pub path: String,
+    /// The last component, for showing.
+    pub name: String,
+    /// For an asset, `kind_of` says what it is; for the rest it repeats the group.
+    pub kind: String,
+    pub size: u64,
+    pub readable: bool,
+    /// Is it actually there? A manifest lists what its author says it ships.
+    ///
+    /// Reported rather than filtered out. A declared script that is missing is the single
+    /// most useful thing this screen can say — it is exactly the plugin that installs and
+    /// then does nothing — and dropping the row would hide it.
+    pub present: bool,
+    /// Files inside, for a folder. Zero for everything else.
+    pub count: u64,
+}
+
+/// Everything a plugin ships.
+#[tauri::command]
+pub fn plugin_contents(
+    state: tauri::State<'_, crate::state::AppState>,
+    plugin_id: String,
+) -> Result<Vec<PluginItem>, String> {
+    let (manifest, dir) = {
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        let p = data
+            .installed_plugins
+            .iter()
+            .find(|p| p.manifest.id == plugin_id)
+            .ok_or_else(|| format!("plugins.assets.errNoPlugin|{}", plugin_id))?;
+        (p.manifest.clone(), p.install_dir.clone())
+    };
+    let root = std::path::PathBuf::from(&dir);
+    let mut out = Vec::new();
+    let last = |rel: &str| rel.rsplit('/').next().unwrap_or(rel).to_string();
+
+    // Assets come from the DISK, not the manifest — the folder is the truth there, and a
+    // file the manifest never mentioned is the one somebody should see.
+    for a in super::plugin_assets_core::list_dir(&root.join("assets")) {
+        out.push(PluginItem {
+            group: "asset".into(),
+            path: format!("assets/{}", a.path),
+            name: a.path.clone(),
+            kind: a.kind,
+            size: a.size,
+            readable: a.readable,
+            present: true,
+            count: 0,
+        });
+    }
+
+    // The other three come from the MANIFEST, and are checked against disk. That asymmetry is
+    // deliberate: an undeclared asset still works, an undeclared script does not exist as far
+    // as anything is concerned, so listing the folder there would invent capability.
+    for rel in &manifest.scripts {
+        let full = root.join(rel);
+        out.push(PluginItem {
+            group: "script".into(),
+            path: rel.clone(),
+            name: last(rel),
+            kind: "script".into(),
+            size: full.metadata().map(|m| m.len()).unwrap_or(0),
+            readable: true,
+            present: full.is_file(),
+            count: 0,
+        });
+    }
+    for rel in &manifest.folders {
+        let full = root.join(rel);
+        let (count, bytes) = dir_stats(&full);
+        out.push(PluginItem {
+            group: "folder".into(),
+            path: rel.clone(),
+            name: last(rel),
+            kind: "folder".into(),
+            size: bytes,
+            readable: false,
+            present: full.is_dir(),
+            count,
+        });
+    }
+    for rel in &manifest.automations {
+        let full = root.join(rel);
+        out.push(PluginItem {
+            group: "automation".into(),
+            path: rel.clone(),
+            name: last(rel),
+            kind: "automation".into(),
+            size: full.metadata().map(|m| m.len()).unwrap_or(0),
+            readable: true,
+            present: full.is_file(),
+            count: 0,
+        });
+    }
+    Ok(out)
+}
+
+/// How many files a bundled folder holds, and how much they weigh.
+///
+/// Depth-capped like the asset walk. "3 files" is what tells somebody whether the folder they
+/// are about to copy is a preset or a mod, and it is the one fact a name never gives.
+fn dir_stats(dir: &std::path::Path) -> (u64, u64) {
+    if !dir.is_dir() {
+        return (0, 0);
+    }
+    let mut n = 0u64;
+    let mut bytes = 0u64;
+    for e in walkdir::WalkDir::new(dir).max_depth(8).into_iter().flatten() {
+        if e.path().is_file() {
+            n += 1;
+            bytes += e.metadata().map(|m| m.len()).unwrap_or(0);
+        }
+    }
+    (n, bytes)
+}
+
+/// Read any text file INSIDE a plugin, for the contents screen.
+///
+/// `plugin_asset_read` is rooted at `assets/` on purpose and stays that way. This one is
+/// rooted at the plugin folder, because the screen also shows scripts and automations — and
+/// the alternative was a third reader per subfolder, which is three chances to write the
+/// traversal guard slightly differently.
+///
+/// Same guard, same size cap, same lossy decode. It can reach `plugin.json`, which is the
+/// plugin's own manifest and already on screen everywhere.
+#[tauri::command]
+pub fn plugin_file_read(
+    state: tauri::State<'_, crate::state::AppState>,
+    plugin_id: String,
+    path: String,
+) -> Result<String, String> {
+    let dir = install_dir_of(&state, &plugin_id)?;
+    let root = std::path::PathBuf::from(&dir);
+    let root_c = root.canonicalize().map_err(|_| "plugins.assets.errNone".to_string())?;
+    let full_c = root
+        .join(&path)
+        .canonicalize()
+        .map_err(|_| "plugins.assets.errMissing".to_string())?;
+    if !full_c.starts_with(&root_c) || !full_c.is_file() {
+        return Err("plugins.assets.errOutside".to_string());
+    }
+    let len = full_c.metadata().map(|m| m.len()).unwrap_or(0);
+    if len > super::plugin_assets_core::MAX_TEXT {
+        return Err(format!("plugins.assets.errTooBig|{}", len / 1024));
+    }
+    Ok(String::from_utf8_lossy(&std::fs::read(&full_c).map_err(|e| e.to_string())?).to_string())
+}

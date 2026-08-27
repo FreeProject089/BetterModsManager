@@ -18900,3 +18900,48 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
     margin: 6px 0 0;
     line-height: 1.45;
 }
+
+/* ── The plugin contents screen ──────────────────────────────────────────────
+   Grouped, because the four kinds differ in what you can do with one. The
+   missing marker is loud on purpose: a declared file that is not there is the
+   single most useful thing this screen says. */
+.pa-group { margin-bottom: 10px; }
+.pa-group-h {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: var(--text-muted);
+    margin: 0 4px 4px;
+}
+.pa-group-h span {
+    font-size: 10px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: var(--bg-hover);
+}
+.pa-row.is-missing .pa-row-name { text-decoration: line-through; opacity: .6; }
+.pa-row-tag.is-bad { color: var(--danger); border-color: var(--danger); }
+.pa-hint-bad { color: var(--danger); }
+.pa-hint-warn { color: var(--warning); }
+.pa-folder-card, .pa-auto { display: flex; flex-direction: column; gap: 8px; padding: 4px 2px; }
+.pa-spec {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    background: var(--bg-hover);
+    color: var(--text-secondary);
+    padding: 6px 9px;
+    border-radius: 6px;
+    word-break: break-all;
+}
+.pa-auto-task {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 9px 11px;
+    background: var(--bg-card);
+}
+.pa-auto-task h5 { margin: 0 0 5px; font-size: 13px; }
+.pa-auto-task .pa-hint { margin: 2px 0; }
+.pa-group-hint { font-size: 10.5px; color: var(--text-muted); margin: 0 4px 6px; line-height: 1.4; }

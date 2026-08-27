@@ -890,6 +890,8 @@ fn main() {
             commands::bmm_paths::bmm_path_roots,
             commands::bmm_paths::bmm_path_resolve,
             commands::plugins::plugin_automations,
+            commands::plugin_assets::plugin_contents,
+            commands::plugin_assets::plugin_file_read,
             commands::plugins::get_effective_api_port,
             commands::plugins::get_api_status,
             commands::plugins::restart_api_server,
