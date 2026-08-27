@@ -762,6 +762,19 @@ la raison même de regarder.
 Le panneau se déplace par son en-tête — il est épinglé dans un coin, et ce coin est parfois
 exactement là où s'affiche l'étape qu'on lit.
 
+**Quelle étape s'est terminée.** Une coche veut dire qu'elle est revenue. L'entrée **sans**
+coche est là où l'exécution se trouve — ou, après un échec, là où elle s'est arrêtée. La
+barrière s'exécute avant chaque étape : y revenir prouve que la précédente a fonctionné, et
+rien n'a eu besoin d'être ajouté à l'exécuteur pour le savoir.
+
+**Un filtre** sur les noms de variables, pour quand il y en a vingt.
+
+**Changer une valeur.** Cliquez dessus, tapez, Entrée. C'est l'essentiel de ce pour quoi on
+s'arrête avant un `if` : demander ce que fait l'autre branche, sans modifier la tâche, la
+relancer et espérer que le monde coopère. Ça réécrit dans le sac d'où la valeur vient, donc un
+nombre reste un nombre et continue de correspondre à une condition `value` — et votre propre
+modification n'est pas surlignée comme un changement, sinon elle masquerait le prochain vrai.
+
 La liste de variables est l'essentiel. Un nom qui est à la fois du texte et un nombre apparaît
 une seule fois, marqué comme les deux — une capture écrit chacun, et deux lignes se liraient
 comme deux variables. Une valeur **partagée** ne s'affiche que si rien dans ce run ne revendique

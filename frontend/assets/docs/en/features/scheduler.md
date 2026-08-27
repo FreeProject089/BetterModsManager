@@ -697,6 +697,19 @@ anybody is watching.
 The panel can be dragged by its header — it is pinned to a corner, and the corner is sometimes
 exactly where the step you are reading is drawn.
 
+**Which step finished.** A tick means it returned. The entry WITHOUT one is where the run is
+standing — or, after a failure, where it stopped. The gate runs before each step, so reaching
+it again is what proves the previous one worked; nothing needed to be added to the runner to
+know that.
+
+**A filter**, over the variable names, for when there are twenty of them.
+
+**Changing a value.** Click one, type, press Enter. This is most of what stopping before an
+`if` is for: asking what the other branch does, without editing the task, running it again
+and hoping the world cooperates. It writes back into the bag it came from, so a number stays
+a number and keeps matching a `value` condition — and your own edit is not highlighted as a
+change, or it would hide the next real one.
+
 !!! note "It is the real run"
 
     Not a simulation and not a second runner. A debugger that runs the task differently from how
