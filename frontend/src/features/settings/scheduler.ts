@@ -19,6 +19,7 @@ import { substituteVars, VAR_NAME_RE, parseList, readNum, readVar, renderVar, ty
 import { parseHeaderLines, readJsonPath, statusIsFailure } from './http-action.js';
 import { inspectBmmpa } from './bmmpa-inspect.js';
 import { BMMS_INDEX, type BmmsEntry } from '../../docs/bmms-reference.gen.js';
+import { outlineOf, offsetOfLine, renderOutline, explain, wordAtPoint, type OutlineRow } from './bmms-editor-aids.js';
 import { parsePresetFeed, looksLikePresetFeed, readPresetCatalogs, writePresetCatalogs } from './preset-catalog.js';
 import { mountCompletions } from './bmms-complete.js';
 import { attachHighlight } from '../../ui/code-editor.js';
@@ -4119,6 +4120,10 @@ function renderModal(modal: HTMLElement): void {
                 <div class="sched-codepane" id="sched-codepane" hidden>
                     <div class="sched-code-bar">
                         <span class="sched-code-bar-hint">${escHtml(t('sched.bmms.barHint'))}</span>
+                        <button type="button" class="btn btn-xs btn-ghost" id="sched-code-outline" aria-pressed="false">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 6h4M4 12h4M4 18h4M11 6h9M11 12h9M11 18h9"/></svg>
+                            ${escHtml(t('sched.outline.toggle'))}
+                        </button>
                         <button type="button" class="btn btn-xs btn-ghost" id="sched-code-ref" aria-pressed="false">
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M21 21l-4.35-4.35"/><circle cx="11" cy="11" r="7"/></svg>
                             ${escHtml(t('sched.ref.toggle'))}
@@ -4129,6 +4134,9 @@ function renderModal(modal: HTMLElement): void {
                         </button>
                     </div>
                     <div class="sched-code-row">
+                        <aside class="sched-outline" id="sched-outline" hidden>
+                            <div class="bo-list" id="sched-outline-list"></div>
+                        </aside>
                         <textarea class="input sched-code" id="sched-code-ta" rows="20" spellcheck="false"></textarea>
                         <aside class="sched-ref" id="sched-ref" hidden>
                             <input type="search" class="input sched-ref-q" id="sched-ref-q"
@@ -4495,6 +4503,7 @@ function wireCodeMode(modal: HTMLElement): void {
     // first. It opens the generated reference — the one built from the registry, so it can
     // never list an action this build does not have.
     wireReferencePanel(modal);
+    wireOutlineAndHover(modal);
 
     modal.querySelector('#sched-code-docs')?.addEventListener('click', () => {
         // Through the deeplink, so it does the same two things clicking Help & other does:
@@ -8530,4 +8539,83 @@ async function pickBmmPath(): Promise<string | null> {
         raiseAboveAll(ov, 11600);
         q.focus();
     });
+}
+
+
+/**
+ * The outline, and the hover that says what a word does.
+ *
+ * Both hang off the same textarea and neither changes what it contains: an editor aid that can
+ * edit is an editor aid that can lose somebody's work.
+ */
+function wireOutlineAndHover(modal: HTMLElement): void {
+    const ta = modal.querySelector('#sched-code-ta') as HTMLTextAreaElement | null;
+    const panel = modal.querySelector('#sched-outline') as HTMLElement | null;
+    const list = modal.querySelector('#sched-outline-list') as HTMLElement | null;
+    const btn = modal.querySelector('#sched-code-outline') as HTMLButtonElement | null;
+    if (!ta || !panel || !list || !btn) return;
+
+    let rows: OutlineRow[] = [];
+    const paint = () => {
+        rows = outlineOf(ta.value);
+        renderOutline(list, rows, (line) => {
+            // Caret first, then scroll. Setting selectionStart on a textarea that is not
+            // focused does nothing visible in some engines, and "it jumped nowhere" reads as
+            // a broken outline rather than a focus rule.
+            ta.focus();
+            const at = offsetOfLine(ta.value, line);
+            ta.setSelectionRange(at, at);
+            // Roughly: line height is not knowable without measuring, and being a line or two
+            // out is fine when the caret is already in the right place.
+            const lh = parseFloat(getComputedStyle(ta).lineHeight) || 18;
+            ta.scrollTop = Math.max(0, (line - 3) * lh);
+        });
+    };
+
+    btn.addEventListener('click', () => {
+        const open = panel.hasAttribute('hidden');
+        if (open) { panel.removeAttribute('hidden'); paint(); }
+        else panel.setAttribute('hidden', '');
+        btn.setAttribute('aria-pressed', open ? 'true' : 'false');
+    });
+    // Repainted on a timer rather than on every keystroke: the outline is a signpost, and one
+    // that re-sorts itself mid-word is a distraction.
+    let timer: number | null = null;
+    ta.addEventListener('input', () => {
+        if (panel.hasAttribute('hidden')) return;
+        if (timer !== null) window.clearTimeout(timer);
+        timer = window.setTimeout(paint, 400);
+    });
+
+    // ── Hover ───────────────────────────────────────────────────
+    let tip: HTMLElement | null = null;
+    let lastWord = '';
+    const hide = () => { tip?.remove(); tip = null; lastWord = ''; };
+
+    ta.addEventListener('mousemove', (e) => {
+        const mirror = ta.parentElement?.querySelector('.code-hl-mirror') as HTMLElement | null;
+        if (!mirror) return;
+        const word = wordAtPoint(mirror, e.clientX, e.clientY);
+        if (!word) { hide(); return; }
+        if (word === lastWord) return;
+        const said = explain(word);
+        hide();
+        if (!said) { lastWord = ''; return; }
+        lastWord = word;
+        tip = document.createElement('div');
+        tip.className = 'bmms-hover';
+        tip.innerHTML = `<b>${escHtml(said.title)}</b>${said.body ? `<span>${escHtml(said.body)}</span>` : ''}`;
+        (document.getElementById('app-window-outer') || document.body).appendChild(tip);
+        raiseAboveAll(tip, 11700);
+        // Placed below-right of the pointer, then pulled back inside the window. A tooltip
+        // that opens off-screen is one nobody knows appeared.
+        const r = tip.getBoundingClientRect();
+        const x = Math.min(e.clientX + 14, window.innerWidth - r.width - 10);
+        const y = e.clientY + 20 + r.height > window.innerHeight ? e.clientY - r.height - 10 : e.clientY + 20;
+        tip.style.left = `${Math.max(8, x)}px`;
+        tip.style.top = `${Math.max(8, y)}px`;
+    });
+    ta.addEventListener('mouseleave', hide);
+    ta.addEventListener('scroll', hide);
+    ta.addEventListener('keydown', hide);
 }

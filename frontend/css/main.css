@@ -18945,3 +18945,81 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
 .pa-auto-task h5 { margin: 0 0 5px; font-size: 13px; }
 .pa-auto-task .pa-hint { margin: 2px 0; }
 .pa-group-hint { font-size: 10.5px; color: var(--text-muted); margin: 0 4px 6px; line-height: 1.4; }
+
+/* ── Outline, beside the code ────────────────────────────────────────────────
+   On the LEFT of the textarea, where a file tree lives in every editor people
+   already use. The reference panel is on the right; putting both on one side
+   would make the code column the narrow one. */
+.sched-outline {
+    flex: 0 0 232px;
+    min-width: 0;
+    padding: 8px 6px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg-card);
+    overflow-y: auto;
+    max-height: 460px;
+}
+.sched-outline[hidden] { display: none; }
+.bo-list { display: flex; flex-direction: column; gap: 1px; }
+.bo-row {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    width: 100%;
+    text-align: left;
+    padding: 3px 6px;
+    border: 0;
+    border-radius: 5px;
+    background: none;
+    color: var(--text-primary);
+    cursor: pointer;
+    font-size: 11.5px;
+}
+.bo-row:hover, .bo-row:focus-visible { background: var(--bg-hover); }
+.bo-kind {
+    flex: 0 0 auto;
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    color: var(--text-muted);
+    min-width: 34px;
+}
+.bo-do { color: var(--accent); }
+.bo-if, .bo-switch, .bo-ensure { color: var(--warning); }
+.bo-loop { color: var(--success); }
+.bo-text {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--font-mono);
+}
+.bo-line { flex: 0 0 auto; font-size: 9.5px; color: var(--text-muted); font-family: var(--font-mono); }
+.bo-none { font-size: 11px; color: var(--text-muted); margin: 6px 4px; }
+
+/* The hover explanation. Fixed, because it is positioned from pointer
+   coordinates, and pointer-events off so it can never sit between the pointer
+   and the word that opened it. */
+.bmms-hover {
+    position: fixed;
+    z-index: 11700;
+    max-width: 340px;
+    padding: 8px 11px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg-solid, var(--bg-card));
+    box-shadow: 0 8px 26px rgba(0, 0, 0, .38);
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.bmms-hover b { font-family: var(--font-mono); font-size: 12px; color: var(--accent); }
+.bmms-hover span { font-size: 11.5px; color: var(--text-secondary); line-height: 1.5; white-space: pre-line; }
+
+@media (max-width: 900px) {
+    .sched-outline { flex: 0 0 auto; max-height: 200px; }
+}
