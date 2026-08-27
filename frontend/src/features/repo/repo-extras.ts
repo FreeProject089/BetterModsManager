@@ -338,21 +338,83 @@ export async function collectExtraCandidates(): Promise<ExtraCandidate[]> {
         }
     } catch { /* see above */ }
 
-    // Catalogues followed here, offered as addresses to recommend.
+    // Catalogues followed here. TWO kinds, and the difference is the whole point:
+    //
+    //   · an https catalogue is RECOMMENDED — the repo names the address and the receiver
+    //     follows it, so what it holds keeps changing after the repo was published.
+    //   · a `.bmmbundle` is CARRIED — the file travels inside the repo, so the receiver
+    //     needs nothing except the repo they already have.
+    //
+    // Only the first was offered. A bundle followed here was skipped by the `https?` filter
+    // and could not be published at all, which meant the one kind of catalogue that needs no
+    // host was the one kind a repo could not pass on.
     for (const [type, key] of Object.entries(STORE_KEY)) {
         let list: string[] = [];
         try { list = JSON.parse(localStorage.getItem(key) || '[]'); } catch { continue; }
-        for (const url of Array.isArray(list) ? list : []) {
-            if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) continue;
-            out.push({
-                kind: 'catalog', id: url, name: shortUrl(url),
-                url, catalog_type: type,
-                description: t('repo.extras.catalogOf').replace('{t}', type),
-            });
+        for (const src of Array.isArray(list) ? list : []) {
+            if (typeof src !== 'string' || !src.trim()) continue;
+            if (/^https?:\/\//i.test(src)) {
+                out.push({
+                    kind: 'catalog', id: src, name: shortUrl(src),
+                    url: src, catalog_type: type,
+                    description: t('repo.extras.catalogOf').replace('{t}', type),
+                });
+                continue;
+            }
+            if (src.startsWith('bundle:')) {
+                const path = src.slice('bundle:'.length);
+                out.push({
+                    kind: 'bundle', id: `${type}-${baseName(path)}`, name: baseName(path),
+                    file_path: path, catalog_type: type,
+                    description: t('repo.extras.bundleOf').replace('{t}', type),
+                });
+            }
         }
     }
 
     return out;
+}
+
+/** The last path segment, on either separator. */
+function baseName(p: string): string {
+    return p.replace(/^.*[/\\]/, '') || p;
+}
+
+/**
+ * A catalogue file to carry, chosen from disk.
+ *
+ * For the bundle somebody was sent and has not followed, and for the one just published from
+ * the Create screen — neither is in a followed-sources list, and both are exactly what a repo
+ * should be able to hand on.
+ */
+export async function pickBundleCandidate(): Promise<ExtraCandidate | null> {
+    const { pickFile } = await import('../../core/api.js');
+    const path = (await pickFile({
+        filters: [{ name: t('catpub.bundleKind') || 'Bundle', extensions: ['bmmbundle', 'zip'] }],
+    }).catch(() => null)) as string;
+    if (!path) return null;
+    // Opened before it is offered: a zip that is not a catalogue must fail here, with a
+    // reason, rather than become an entry that fails on somebody else's machine.
+    try {
+        const res: any = await invoke('catalog_bundle_open', { path });
+        const cat = JSON.parse(String(res?.catalog || '{}'));
+        const kinds = ['apps', 'plugins', 'themes', 'modpacks', 'presets', 'modlists']
+            .filter((k) => Array.isArray(cat?.[k]) && cat[k].length);
+        if (!kinds.length) {
+            toast(t('repo.extras.bundleEmpty') || 'That bundle carries no catalogue entries.', 'warning', 7000);
+            return null;
+        }
+        return {
+            kind: 'bundle', id: baseName(path).replace(/\.[^.]+$/, ''),
+            name: String(cat?.name || baseName(path)),
+            file_path: path,
+            catalog_type: kinds[0].replace(/s$/, ''),
+            description: t('repo.extras.bundleOf').replace('{t}', kinds.join(', ')),
+        };
+    } catch (e) {
+        toast(`${t('common.error')}: ${e}`, 'error', 7000);
+        return null;
+    }
 }
 
 /** A URL as a name: the host and the last path segment, which is what distinguishes two. */
@@ -478,11 +540,23 @@ export async function openExtrasPicker(repoDirHint?: string): Promise<void> {
             <div class="rx-body">${body}</div>
             <div class="cm-foot">
                 <span class="repo-extras-meta">${esc(repoDir)}</span>
+                <!-- A bundle that was sent to you, or one just published from the Create
+                     screen: neither is in a followed-sources list, and both are exactly what
+                     a repo should be able to hand on. -->
+                <button class="btn btn-sm btn-ghost" id="rx-add-bundle">${esc(t('repo.extras.addBundle') || 'Carry a catalogue file…')}</button>
                 <button class="btn btn-sm btn-accent" id="rx-save">${esc(t('repo.extras.pickDone'))}</button>
             </div>
         </div>`;
 
         (ov.querySelector('#rx-close') as HTMLElement)?.addEventListener('click', close);
+        (ov.querySelector('#rx-add-bundle') as HTMLElement)?.addEventListener('click', async () => {
+            const c = await pickBundleCandidate();
+            if (!c) return;
+            const key = `${c.kind}:${c.id}`;
+            if (!candidates.some((x) => `${x.kind}:${x.id}` === key)) candidates.push(c);
+            picked.add(key);      // chosen by the act of picking it
+            draw();
+        });
         ov.querySelectorAll<HTMLInputElement>('input[data-key]').forEach((cb) => {
             cb.addEventListener('change', () => {
                 const k = cb.dataset.key as string;

@@ -9303,5 +9303,8 @@
   "apps.create.publishBundle": "Publish as one file (.bmmbundle)…",
   "apps.create.bundled": "Published — {n} app(s) packed, {f}",
   "apps.create.packFailed": "Could not pack",
-  "apps.create.packMissing": "{n} entr(ies) name a file that is not in the folder"
+  "apps.create.packMissing": "{n} entr(ies) name a file that is not in the folder",
+  "repo.extras.addBundle": "Carry a catalogue file…",
+  "repo.extras.bundleOf": "A catalogue of {t}, carried inside the repo — the receiver needs no other host.",
+  "repo.extras.bundleEmpty": "That bundle carries no catalogue entries."
 }
