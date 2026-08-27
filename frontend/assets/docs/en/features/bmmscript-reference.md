@@ -43,8 +43,8 @@ Written `do <name>(param: value, …)`. An action with no parameters takes empty
 
 | Action | What it does | Parameters |
 |---|---|---|
-| `repo.connect` | Add a remote repo | `url` · `name` |
-| `repo.sync` | Download & integrate a remote profile | `url` · `profile` |
+| `repo.connect` | Add a remote repo | `url` · `name` · `password` |
+| `repo.sync` | Download & integrate a remote profile | `url` · `profile` · `password` |
 | `repo.gen` | Open repo generation | — |
 | `repo.update` | Update an exported repo | `dir` |
 | `repo.host` | Serve a repo over HTTP | `dir` · `port` |
@@ -53,7 +53,7 @@ Written `do <name>(param: value, …)`. An action with no parameters takes empty
 | `repo.fetchSsh` | Fetches the repo from the saved SSH target into a local folder | `dir` · `target` · `into` |
 | `repo.syncNow` | Syncs a server repo into a local profile, unattended. | `url` · `gameDir` · `modsDir` · `password` · `repoProfile` · `backupDir` · `targetProfile` · `overwriteAll` · `deleteExtra` · `downloadLimit` · `keepZipped` · `into` |
 | `key.create` | Generates a keypair on the ring. A name already taken is left alone, never replaced. | `name` · `kind` · `bindUrl` |
-| `catalog.follow` | Adds a catalogue source through the app's own screens, so it appears in the following list with an origin. | `catType` · `url` · `unfollow` |
+| `catalog.follow` | Adds a catalogue source through the app's own screens, so it appears in the following list with an origin. | `catType` · `url` · `unfollow` · `password` |
 
 ### Apps & launch
 

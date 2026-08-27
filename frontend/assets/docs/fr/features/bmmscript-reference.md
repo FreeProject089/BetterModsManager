@@ -43,8 +43,8 @@ S'écrit `do <nom>(param: valeur, …)`. Une action sans paramètre prend des pa
 
 | Action | Ce qu'elle fait | Paramètres |
 |---|---|---|
-| `repo.connect` | Ajoute un repo distant | `url` · `name` |
-| `repo.sync` | Télécharge & intègre un profil distant | `url` · `profile` |
+| `repo.connect` | Ajoute un repo distant | `url` · `name` · `password` |
+| `repo.sync` | Télécharge & intègre un profil distant | `url` · `profile` · `password` |
 | `repo.gen` | Ouvre la génération de repo | — |
 | `repo.update` | Met à jour un repo exporté | `dir` |
 | `repo.host` | Sert un repo en HTTP | `dir` · `port` |
@@ -53,7 +53,7 @@ S'écrit `do <nom>(param: valeur, …)`. Une action sans paramètre prend des pa
 | `repo.fetchSsh` | Récupère le dépôt depuis la cible SSH enregistrée, dans un dossier local | `dir` · `target` · `into` |
 | `repo.syncNow` | Synchronise un dépôt serveur dans un profil local, sans surveillance. | `url` · `gameDir` · `modsDir` · `password` · `repoProfile` · `backupDir` · `targetProfile` · `overwriteAll` · `deleteExtra` · `downloadLimit` · `keepZipped` · `into` |
 | `key.create` | Génère une paire de clés sur le trousseau. Un nom déjà pris est laissé tel quel, jamais remplacé. | `name` · `kind` · `bindUrl` |
-| `catalog.follow` | Ajoute une source de catalogue via les écrans de l'app, pour qu'elle apparaisse dans la liste des suivis avec son origine. | `catType` · `url` · `unfollow` |
+| `catalog.follow` | Ajoute une source de catalogue via les écrans de l'app, pour qu'elle apparaisse dans la liste des suivis avec son origine. | `catType` · `url` · `unfollow` · `password` |
 
 ### Apps & lancement
 
