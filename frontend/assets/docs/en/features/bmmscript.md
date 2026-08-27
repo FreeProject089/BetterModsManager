@@ -312,11 +312,30 @@ A `switch` runs the **first** case whose condition holds, then stops.
 ### Shared blocks
 
 ```bmms
-call "my shared block"
+call "repair/fetch"
 ```
 
 Runs a named block from the scheduler's block store, inside this task and with this task's
 permissions.
+
+### Folders, for when there are eleven of them
+
+A block name can hold a slash. `repair/fetch` and `repair/verify` sit in a `repair` folder in
+the panel, and `call "repair/fetch"` runs it exactly as before.
+
+By the time somebody has eleven blocks they have already invented a naming convention to group
+them — `repair_fetch`, `repair_verify` — because the flat list gave them nowhere else to put
+the structure. This is that convention, made real.
+
+!!! note "Nothing stores the tree"
+
+    It is read from the names every time. So renaming a block MOVES it, deleting the last block
+    in a folder removes the folder, and there is no second structure that can end up disagreeing
+    with the blocks it claims to describe.
+
+A `.bmmpa` already carries the blocks a task calls, so exporting one exports its whole tree —
+folders included, since the folders are the names.
+
 
 ## Comments
 

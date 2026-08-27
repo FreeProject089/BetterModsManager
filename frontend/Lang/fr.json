@@ -9074,5 +9074,8 @@
   "valid.warnNoModsAnywhere": "Aucun profil de ce repo ne porte de mod.",
   "valid.errNoName": "Il n'a pas de nom.",
   "valid.errEmptyCatalog": "Le catalogue n'a aucune entrée.",
-  "valid.errShortReplay": "L'enregistrement ne contient presque aucun événement."
+  "valid.errShortReplay": "L'enregistrement ne contient presque aucun événement.",
+  "sched.tree.none": "Aucun script ici pour l'instant.",
+  "sched.tree.pick": "Choisis-en un pour voir ce qu'il contient.",
+  "sched.tree.folderHint": "Un nom avec une barre oblique crée un dossier : repair/fetch et repair/verify se retrouvent ensemble. Rien ne stocke l'arbre — il est lu depuis les noms, donc renommer un bloc le déplace."
 }

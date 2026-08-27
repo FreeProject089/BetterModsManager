@@ -9076,5 +9076,8 @@
   "valid.warnNoModsAnywhere": "No profile in this repo carries a mod.",
   "valid.errNoName": "It has no name.",
   "valid.errEmptyCatalog": "The catalogue has no entry.",
-  "valid.errShortReplay": "The recording has almost no events in it."
+  "valid.errShortReplay": "The recording has almost no events in it.",
+  "sched.tree.none": "No script in here yet.",
+  "sched.tree.pick": "Pick one to see what it holds.",
+  "sched.tree.folderHint": "A name with a slash makes a folder: repair/fetch and repair/verify sit together. Nothing stores the tree — it is read from the names, so renaming a block moves it."
 }

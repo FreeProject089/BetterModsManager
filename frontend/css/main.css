@@ -19023,3 +19023,37 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
 @media (max-width: 900px) {
     .sched-outline { flex: 0 0 auto; max-height: 200px; }
 }
+
+/* ── The script tree inside a task ───────────────────────────────────────────
+   Rows are buttons, indented by depth. The chevron rotates rather than being
+   two icons, so a folder cannot end up showing the wrong one. */
+.bt-tree { display: flex; flex-direction: column; gap: 1px; max-height: 260px; overflow-y: auto; margin: 6px 0; }
+.bt-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    text-align: left;
+    padding: 4px 6px;
+    border: 0;
+    border-radius: 5px;
+    background: none;
+    color: var(--text-primary);
+    cursor: pointer;
+    font-size: 11.5px;
+}
+.bt-row:hover, .bt-row:focus-visible { background: var(--bg-hover); }
+.bt-leaf.is-on { background: var(--bg-hover); color: var(--accent); }
+.bt-ic { flex: 0 0 auto; display: inline-flex; color: var(--text-muted); }
+.bt-folder .bt-ic { color: var(--accent); }
+.bt-chev { flex: 0 0 auto; display: inline-flex; color: var(--text-muted); transition: transform .12s ease; }
+.bt-chev.is-open { transform: rotate(90deg); }
+.bt-label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); }
+.bt-count { flex: 0 0 auto; font-size: 9.5px; color: var(--text-muted); padding: 0 5px; border-radius: 999px; background: var(--bg-hover); }
+.bt-none { font-size: 11px; color: var(--text-muted); margin: 6px 4px; }
+.sched-bl-picked { margin-bottom: 6px; }
+
+@media (prefers-reduced-motion: reduce) {
+    /* The rotation is decoration; the aria-expanded state and the icon are the answer. */
+    .bt-chev { transition: none; }
+}

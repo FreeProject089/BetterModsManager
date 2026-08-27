@@ -260,9 +260,9 @@ première qu'elle n'a pas pu corriger.
 
 Dans l'éditeur en blocs, c'est la brique **S'assurer que**.
 
-### Values every task has
+### Les valeurs que toute tâche a
 
-| Written | Is |
+| Écrit | C'est |
 |---|---|
 | `{date}` · `{time}` · `{now}` · `{stamp}` | Aujourd'hui, l'heure, un horodatage ISO, et un lisible par un humain. |
 | `{nl}` · `{tab}` | Un vrai saut de ligne et une vraie tabulation — un champ texte ne peut porter ni l'un ni l'autre. |
@@ -313,6 +313,37 @@ switch {
 ```
 
 Un `switch` exécute le **premier** cas dont la condition est vraie, puis s'arrête.
+
+### Blocs partagés
+
+```bmms
+call "repair/fetch"
+```
+
+Exécute un bloc nommé du magasin de blocs du planificateur, dans cette tâche et avec les
+permissions de cette tâche.
+
+Un nom de bloc s'écrit comme un nom de variable — lettres, chiffres, tirets bas — éventuellement
+plusieurs joints par `/`. Un nom avec des espaces n'a jamais pu être enregistré.
+
+### Des dossiers, pour quand il y en a onze
+
+`repair/fetch` et `repair/verify` se retrouvent dans un dossier `repair` dans le panneau, et
+`call "repair/fetch"` l'exécute exactement comme avant.
+
+Quand quelqu'un a onze blocs, il a déjà inventé une convention de nommage pour les grouper —
+`repair_fetch`, `repair_verify` — parce que la liste plate ne lui laissait nulle part où mettre
+la structure. C'est cette convention, rendue réelle.
+
+!!! note "Rien ne stocke l'arbre"
+
+    Il est lu depuis les noms à chaque fois. Renommer un bloc le DÉPLACE donc, supprimer le
+    dernier bloc d'un dossier supprime le dossier, et il n'y a pas de seconde structure qui
+    pourrait finir en désaccord avec les blocs qu'elle prétend décrire.
+
+Un `.bmmpa` porte déjà les blocs qu'une tâche appelle : en exporter une exporte tout son arbre —
+dossiers compris, puisque les dossiers sont les noms.
+
 
 ## Commentaires
 

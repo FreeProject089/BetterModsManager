@@ -178,6 +178,19 @@ export type VarScope = 'run' | 'shared';
 export const VAR_NAME_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 
 /**
+ * What a BLOCK may be called — a variable name, or several joined by `/`.
+ *
+ * Blocks are the scripts inside a task, and a flat list of eleven of them is a flat list of
+ * eleven things. `repair/fetch-mod` and `repair/verify` are the same list with a shape, which
+ * is the whole reason to allow the slash: the tree is not stored anywhere, it is READ from the
+ * names, so there is no second structure to keep in step with the blocks themselves.
+ *
+ * Every segment still has to be a usable name. A block called `../x` or `a//b` would render as
+ * a folder nobody can point at, and `call "…"` takes the name verbatim.
+ */
+export const BLOCK_NAME_RE = /^[a-zA-Z_][a-zA-Z0-9_]*(\/[a-zA-Z_][a-zA-Z0-9_]*)*$/;
+
+/**
  * Replace {var} in every string parameter with what an earlier step captured.
  *
  * At RUN time, unlike substituteItem's {item.x}, which is resolved when a for-each plans

@@ -15,12 +15,13 @@ import { t } from '../../core/i18n.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { toast } from '../../ui/app.js';
 import { calendarDue, nextCalendarDue } from './sched-time.js';
-import { substituteVars, VAR_NAME_RE, parseList, readNum, readVar, renderVar, type RunCtx } from './sched-vars.js';
+import { substituteVars, VAR_NAME_RE, BLOCK_NAME_RE, parseList, readNum, readVar, renderVar, type RunCtx } from './sched-vars.js';
 import { parseHeaderLines, readJsonPath, statusIsFailure } from './http-action.js';
 import { inspectBmmpa } from './bmmpa-inspect.js';
 import { BMMS_INDEX, type BmmsEntry } from '../../docs/bmms-reference.gen.js';
 import { outlineOf, offsetOfLine, renderOutline, explain, wordAtPoint, type OutlineRow } from './bmms-editor-aids.js';
 import { BMM_EVENTS, fireEvent, noteTaskRunning } from '../../core/bmm-events.js';
+import { treeOf, foldersOf, renderTree } from './block-tree.js';
 import { parsePresetFeed, looksLikePresetFeed, readPresetCatalogs, writePresetCatalogs } from './preset-catalog.js';
 import { mountCompletions } from './bmms-complete.js';
 import { attachHighlight } from '../../ui/code-editor.js';
@@ -1288,7 +1289,7 @@ export function readBlocks(): Record<string, Step[]> {
         for (const [k, v] of Object.entries(raw)) {
             // Same filter-on-the-way-out rule as the other two stores: a name no step could
             // reference would sit in the list and never run.
-            if (!VAR_NAME_RE.test(k) || !Array.isArray(v)) continue;
+            if (!BLOCK_NAME_RE.test(k) || !Array.isArray(v)) continue;
             // normalizeSteps because a stored block is JSON somebody may have hand-edited or an
             // older build wrote — the runner expects the same shape it gives a task's steps.
             out[k] = normalizeSteps(v as Step[]);
@@ -3936,6 +3937,11 @@ function renderSharedVarsPanel(modal: HTMLElement): void {
  * this project has paid for that shape enough times today. Building the steps in a task and
  * saving them is the same editor doing the same job.
  */
+/** Which folders are expanded, and which block is selected. Outlives a repaint on purpose:
+ *  a tree that collapses itself every time you touch it is a tree nobody expands twice. */
+const _blOpen = new Set<string>();
+let _blCurrent = '';
+
 function renderBlocksPanel(modal: HTMLElement): void {
     const side = modal.querySelector('.sched-side');
     if (!side) return;
@@ -3948,22 +3954,50 @@ function renderBlocksPanel(modal: HTMLElement): void {
 
     const all = readBlocks();
     const names = Object.keys(all).sort();
-    const rows = names.map((n) => `
-        <div class="sched-sv-row">
-            <code class="sched-sv-name">${escHtml(n)}</code>
-            <span class="sched-sv-val">${(all[n] || []).length} ${escHtml(t('sched.steps') || 'steps')}</span>
-            <button type="button" class="btn btn-ghost btn-xs sched-bl-del" data-name="${escAttr(n)}"
-                data-tooltip="${escAttr(t('sched.bl.del') || 'Delete this block')}">${SCHED_X}</button>
-        </div>`).join('');
 
     host.innerHTML = `
         <div class="sched-sv-title">${t('sched.bl.title') || 'Reusable blocks'}</div>
         <div class="sched-sv-hint">${t('sched.bl.hint') || 'Steps saved once and run from any task with “Run a block”. They use the calling task’s permissions.'}</div>
-        ${names.length ? rows : `<div class="sched-sv-empty">${t('sched.bl.empty') || 'None yet.'}</div>`}
+        <div class="bt-tree" id="sched-bl-tree"></div>
+        <div class="sched-bl-picked" id="sched-bl-picked"></div>
         <div class="sched-en-add">
-            <input class="input sched-bl-name" spellcheck="false" placeholder="${escAttr(t('sched.bl.namePh') || 'block name')}">
+            <input class="input sched-bl-name" spellcheck="false" placeholder="${escAttr(t('sched.bl.namePh'))}">
             <button type="button" class="btn btn-xs btn-secondary sched-bl-save">${t('sched.bl.save') || 'Save these steps'}</button>
-        </div>`;
+        </div>
+        <div class="sched-sv-hint">${escHtml(t('sched.tree.folderHint'))}</div>`;
+
+    // The tree, from the names. Nothing stores it: renaming a block moves it and deleting the
+    // last one in a folder removes the folder, with no second structure that can disagree.
+    const tree = modal.querySelector('#sched-bl-tree') as HTMLElement | null;
+    const picked = modal.querySelector('#sched-bl-picked') as HTMLElement | null;
+    if (tree && picked) {
+        const paint = () => {
+            renderTree(tree, treeOf(names), _blOpen, _blCurrent, (path) => {
+                _blCurrent = path;
+                paint();
+            }, (folder) => {
+                if (_blOpen.has(folder)) _blOpen.delete(folder); else _blOpen.add(folder);
+                paint();
+            });
+            const steps = all[_blCurrent];
+            picked.innerHTML = _blCurrent && steps
+                ? `<div class="sched-sv-row">
+                       <code class="sched-sv-name">${escHtml(_blCurrent)}</code>
+                       <span class="sched-sv-val">${steps.length} ${escHtml(t('sched.steps') || 'steps')}</span>
+                       <button type="button" class="btn btn-ghost btn-xs sched-bl-del" data-name="${escAttr(_blCurrent)}"
+                           data-tooltip="${escAttr(t('sched.bl.del') || 'Delete this block')}">${SCHED_X}</button>
+                   </div>`
+                : `<div class="sched-sv-empty">${escHtml(names.length ? t('sched.tree.pick') : (t('sched.bl.empty') || 'None yet.'))}</div>`;
+            wireDelete();
+        };
+        // Every folder starts open. A tree that hides what is in it on first sight is a tree
+        // whose whole content is one click away and invisible — which is what the flat list
+        // already was.
+        if (!_blOpen.size) for (const f of foldersOf(treeOf(names))) _blOpen.add(f);
+        paint();
+    }
+
+    function wireDelete(): void {
 
     host.querySelectorAll('.sched-bl-del').forEach((btn) => btn.addEventListener('click', () => {
         const name = (btn as HTMLElement).dataset.name || '';
@@ -3978,12 +4012,14 @@ function renderBlocksPanel(modal: HTMLElement): void {
         const store = readBlocks();
         delete store[name];
         writeBlocks(store);
+        _blCurrent = '';
         renderBlocksPanel(modal);
     }));
+    }
 
     host.querySelector('.sched-bl-save')?.addEventListener('click', () => {
         const name = (host.querySelector('.sched-bl-name') as HTMLInputElement).value.trim();
-        if (!VAR_NAME_RE.test(name)) {
+        if (!BLOCK_NAME_RE.test(name)) {
             toast((t('sched.var.badName') || 'Not a usable variable name: {n}').replace('{n}', name || '(empty)'), 'warning');
             return;
         }
