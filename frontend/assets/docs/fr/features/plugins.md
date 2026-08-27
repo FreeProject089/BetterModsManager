@@ -222,6 +222,57 @@ renvoie le texte d'un fichier. Les outils MCP sont `bmm_plugin_assets` et
     déjà lire les octets et les écrire où il veut de ses propres mains : l'endpoint
     ajouterait de la portée sans ajouter de capacité.
 
+## Automatisations livrées par un plugin — `automations/`
+
+Un plugin peut porter des fichiers `.bmmpa`. **Importer une automatisation…** dans l'éditeur en
+met une, et le quatrième mode d'application — **Mettre en place ses automatisations** — fait
+que l'installation du plugin les met en place.
+
+```
+mon-plugin/
+  plugin.json
+  automations/
+    rangement-nocturne.bmmpa
+```
+
+Ça existe à cause de ce que les gens livraient à la place : un `.bat`, et un message qui dit où
+est le dossier. Un script est opaque — BMM ne peut pas dire ce qu'il fait, ne peut pas le
+montrer, et ne peut rien lui retirer : la seule chose honnête à faire avec, c'est te prévenir.
+
+Une automatisation, c'est l'inverse. Elle a des étapes, des permissions et un déclencheur, tout
+ça peut être montré avant que quoi que ce soit arrive — et tout ça peut être **retiré**.
+
+!!! danger "Ce qu'une automatisation livrée ne peut pas faire"
+
+    Chacune passe par la même porte que n'importe quel autre `.bmmpa` : **désactivée**, et
+    privée des quatre capacités qui sortent de BMM — exécuter des programmes, exécuter des
+    scripts, ouvrir des deeplinks, arrêter des processus.
+
+    Elles sont accordées par la personne qui va vivre avec, jamais par l'auteur du plugin. Un
+    plugin est un fichier d'un inconnu comme un autre.
+
+    C'est exactement ce qui permet à **Mettre en place ses automatisations** de proposer de les
+    lancer tout de suite : une tâche qui ne peut pas démarrer de programme a pour pire cas de
+    changer dans BMM quelque chose que tu viens de demander en appliquant le plugin. Sans ce
+    retrait, le même bouton serait de l'exécution de code arbitraire à l'installation sous un
+    nom sympathique — la confirmation dit donc à voix haute ce que les tâches ne peuvent pas
+    faire, plutôt que de te demander de le croire. Elles restent éteintes ensuite dans tous les
+    cas.
+
+Appliquer un plugin pour sa **liste de mods** importe aussi ses automatisations, et ne les lance
+jamais : qui applique une liste de mods a demandé une liste de mods.
+
+!!! note "Vérifié à l'entrée, pas à la sortie"
+
+    Un fichier est validé par sa forme au moment où tu l'ajoutes au plugin — l'extension ne
+    prouve rien, et renommer un `.txt` par erreur est le cas ordinaire. Refusé là, l'auteur
+    corrige ; refusé à l'application, quelqu'un d'autre apprend juste que le plugin ne marche
+    pas.
+
+    Le contrôle est volontairement superficiel. Si chaque tâche est valide se décide sur la
+    machine qui l'exécutera, contre le registre de ce BMM-là — un deuxième avis écrit dans
+    l'empaqueteur serait faux le jour où quelqu'un ajoute une action.
+
 ## Mettre un fichier dedans, et vérifier le plugin
 
 Lire, lister et copier **hors** d'un plugin existaient déjà. Mettre un README **dedans**

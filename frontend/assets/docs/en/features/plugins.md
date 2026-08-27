@@ -209,6 +209,55 @@ returns one file's text. The MCP tools are `bmm_plugin_assets` and `bmm_read_plu
     them wherever it likes with its own hands, so the endpoint would add reach without adding
     ability.
 
+## Automations a plugin ships — `automations/`
+
+A plugin can carry `.bmmpa` files. **Import an automation…** in the plugin editor puts one in,
+and the fourth apply mode — **Set up its automations** — makes installing the plugin set them
+up.
+
+```
+my-plugin/
+  plugin.json
+  automations/
+    nightly-tidy.bmmpa
+```
+
+This exists because of what people were shipping instead: a `.bat`, and a message telling you
+where the folder is. A script is opaque — BMM cannot say what it does, cannot show it, and
+cannot take anything away from it, so the only honest thing to do with one is warn you about it.
+
+An automation is the opposite. It has steps, permissions and a trigger, all of which can be
+shown before anything happens, and all of which can be **taken away**.
+
+!!! danger "What a shipped automation cannot do"
+
+    Every one arrives through the same gate as any other `.bmmpa`: **disabled**, and stripped
+    of the four capabilities that reach outside BMM — running programs, running scripts, firing
+    deeplinks, stopping processes.
+
+    Those are granted by the person who will live with them, never by the plugin's author. A
+    plugin is a file from a stranger like any other.
+
+    That is exactly what makes **Set up its automations** able to offer running them straight
+    away: a task that cannot start a program has a worst case of changing something inside BMM
+    that you just asked for by applying the plugin. Without the stripping, the same button would
+    be arbitrary code execution on install with a friendly label — so the confirmation says out
+    loud what the tasks cannot do rather than asking you to take it on faith. They stay switched
+    off afterwards either way.
+
+Applying a plugin for its **mod list** imports its automations too, and never starts them:
+somebody who applied a mod list asked for a mod list.
+
+!!! note "Checked when it goes IN, not when it comes out"
+
+    A file is validated by its shape as you add it to the plugin — the extension proves
+    nothing, and renaming a `.txt` by accident is the ordinary case. Refused there, the author
+    fixes it; refused at apply time, somebody else just learns the plugin does not work.
+
+    The check is deliberately shallow. Whether each task is valid is decided on the machine
+    that will run it, against that BMM's own registry — a second opinion written into the
+    packer would be wrong the day somebody adds an action.
+
 ## Putting a file in, and checking the plugin
 
 Reading, listing and copying **out** of a plugin all existed. Getting a README **in** meant
