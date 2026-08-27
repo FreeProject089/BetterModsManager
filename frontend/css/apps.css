@@ -1286,24 +1286,37 @@
 
 /* Sticky, and it says what is still missing. Finding that out used to mean saving the
    entry, closing the editor, and reading a list at the bottom of the page. */
+/* Wide enough for the three sections it holds. `apps-modal-sm` caps at 480px, which
+   turned every two-column row into a pair of ~200px boxes and the three-column one into
+   ~130px boxes — the form was legible only because the labels are short. */
+.apps-cr-modal { max-width: 720px; }
+
+/* Sticky, and OPAQUE.
+   It sat on `--bg-primary` while the modal is `--bg-secondary`, so section 3's fields
+   scrolled visibly underneath it and the warning read as overlapping the form. It also
+   stopped at the body's padding, leaving a 24px gutter each side for content to show
+   through — hence the negative margins. */
 .apps-cr-foot {
     position: sticky;
-    bottom: 0;
+    bottom: -24px;
+    z-index: 2;
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding-top: 10px;
-    margin-top: 14px;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding: 12px 24px;
+    margin: 14px -24px -24px;
     border-top: 1px solid var(--border);
-    background: var(--bg-primary);
+    background: var(--bg-secondary);
 }
 .apps-cr-missing {
-    flex: 1;
+    flex: 1 1 180px;
     min-width: 0;
-    font-size: 10px;
+    font-size: 11px;
+    line-height: 1.4;
     color: var(--text-muted);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
 }
+/* Wrapped, not clipped: the whole point of this line is naming what is missing, and an
+   ellipsis in the middle of that list hides the field somebody still has to fill. */
 .apps-cr-missing.is-bad { color: var(--warning, #f59e0b); font-weight: 600; }
+.apps-cr-missing.is-ok { color: var(--success, #10b981); }

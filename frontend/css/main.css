@@ -19687,13 +19687,29 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
    Eleven icon buttons in one row, each doing something different and all looking the same.
    Two of them answered questions ("what may this do", "what is in it") and the other nine
    changed something; the row gave no way to tell which was which. */
-.plug-btn-word { font-size: 10.5px; }
+/* A labelled button is not a 30px square.
+   `.plug-card-actions-right .btn` fixes width AND min-width at 30px for the icon buttons
+   that used to be the only thing in this row. The three question buttons carry a word, so
+   they were squeezed to 30px with the text spilling out — "missi", "onter", "nalys". */
+.plug-card-actions-right .btn:has(.plug-btn-word) {
+    width: auto;
+    min-width: 0;
+    padding: 0 9px;
+    gap: 5px;
+}
+.plug-btn-word { font-size: 10.5px; white-space: nowrap; }
+
 .plug-more { position: relative; }
 .plug-more-btn { font-size: 15px; line-height: 1; padding: 2px 7px; }
+/* Fixed, not absolute.
+   `.plug-card` is `overflow: hidden` — it has a decorative ::before and a border radius to
+   keep — so an absolutely positioned menu inside it was CLIPPED BY THE CARD. It opened
+   correctly and was invisible, which reads exactly like a button that does nothing.
+   Positioned from JS against the button's own rect; see openMoreMenu in plugins.ts. */
 .plug-more-menu {
-    position: absolute;
-    right: 0;
-    top: calc(100% + 4px);
+    position: fixed;
+    top: 0;
+    left: 0;
     z-index: 40;
     min-width: 190px;
     padding: 4px;

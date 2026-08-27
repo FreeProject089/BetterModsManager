@@ -616,7 +616,7 @@ export async function openExtrasPicker(repoDirHint?: string): Promise<void> {
     await seedFrom(repoDir);
 
     const ov = document.createElement('div');
-    ov.className = 'cm-overlay';
+    ov.className = 'modal-overlay open';
     const draw = () => {
         const groups = new Map<string, ExtraCandidate[]>();
         for (const c of candidates) {
@@ -653,10 +653,10 @@ export async function openExtrasPicker(repoDirHint?: string): Promise<void> {
                 </div>`).join('')
             : `<p class="repo-extras-lede">${esc(t('repo.extras.nothing'))}</p>`;
 
-        ov.innerHTML = `<div class="cm-modal rx-modal">
-            <div class="cm-head">
+        ov.innerHTML = `<div class="modal glass cm-modal rx-modal">
+            <div class="modal-header">
                 <h3>${esc(t('repo.extras.pickTitle'))}</h3>
-                <button class="cm-x" id="rx-close" aria-label="${esc(t('common.close'))}">&times;</button>
+                <button class="modal-close" type="button" id="rx-close" aria-label="${esc(t('common.close'))}">&times;</button>
             </div>
             <p class="repo-extras-lede">${esc(t('repo.extras.pickHint'))}</p>
             <div class="rx-body">${body}</div>
@@ -667,7 +667,7 @@ export async function openExtrasPicker(repoDirHint?: string): Promise<void> {
                 <button class="btn btn-sm btn-ghost" id="rx-dest-pick">${esc(t('repo.extras.destPick'))}</button>
             </div>
             ${destError ? `<p class="rx-dest-err">${esc(destError)}</p>` : ''}
-            <div class="cm-foot">
+            <div class="modal-footer">
                 <!-- A bundle that was sent to you, or one just published from the Create
                      screen: neither is in a followed-sources list, and both are exactly what
                      a repo should be able to hand on. -->

@@ -98,7 +98,7 @@ export async function openPluginAssets(pluginId: string, pluginName: string): Pr
     })); }
 
     const ov = document.createElement('div');
-    ov.className = 'cm-overlay';
+    ov.className = 'modal-overlay open';
     // Opens on the README when there is one. It is the file an author writes FOR this moment,
     // and landing on `codes.csv` because it sorts first wastes the one they wrote.
     let current: PluginItem | null =
@@ -142,10 +142,10 @@ export async function openPluginAssets(pluginId: string, pluginName: string): Pr
                 <p class="pa-group-hint">${escHtml(t(grp.hint))}</p>${body}</div>`;
         }).join('');
 
-        ov.innerHTML = `<div class="cm-modal pa-modal">
-            <div class="cm-head">
+        ov.innerHTML = `<div class="modal glass cm-modal pa-modal">
+            <div class="modal-header">
                 <h3>${escHtml(t('plugins.assets.title').replace('{p}', pluginName))}</h3>
-                <button class="cm-x" id="pa-close" aria-label="${escHtml(t('common.close'))}">&times;</button>
+                <button class="modal-close" type="button" id="pa-close" aria-label="${escHtml(t('common.close'))}">&times;</button>
             </div>
             ${items.length ? `
                 <p class="pa-lede">${escHtml(t('plugins.assets.lede'))}</p>
@@ -153,7 +153,7 @@ export async function openPluginAssets(pluginId: string, pluginName: string): Pr
                     <div class="pa-list">${rows}</div>
                     <div class="pa-view" id="pa-view"></div>
                 </div>
-                <div class="cm-foot">
+                <div class="modal-footer">
                     <span class="pa-count">${escHtml(t('plugins.contents.count').replace('{n}', String(items.length)))}</span>
                     <button class="btn btn-sm btn-ghost" id="pa-check">${escHtml(t('plugins.check.run'))}</button>
                     <button class="btn btn-sm btn-secondary" id="pa-add">${escHtml(t('plugins.assets.add'))}</button>
@@ -162,7 +162,7 @@ export async function openPluginAssets(pluginId: string, pluginName: string): Pr
                     <button class="btn btn-sm btn-accent" id="pa-save" ${current?.group === 'asset' ? '' : 'disabled'}>${escHtml(t('plugins.assets.save'))}</button>
                 </div>`
             : `<p class="pa-lede">${escHtml(t('plugins.assets.none'))}</p>
-               <div class="cm-foot">
+               <div class="modal-footer">
                     <button class="btn btn-sm btn-ghost" id="pa-check">${escHtml(t('plugins.check.run'))}</button>
                     <button class="btn btn-sm btn-accent" id="pa-add">${escHtml(t('plugins.assets.add'))}</button>
                     <button class="btn btn-sm btn-secondary" id="pa-folder">${escHtml(t('plugins.openFolder'))}</button>
@@ -342,11 +342,11 @@ export async function runCheck(pluginId: string): Promise<void> {
     const warns = problems.filter((p) => p.level !== 'error');
 
     const ov = document.createElement('div');
-    ov.className = 'cm-overlay';
-    ov.innerHTML = `<div class="cm-modal pa-check">
-        <div class="cm-head">
+    ov.className = 'modal-overlay open';
+    ov.innerHTML = `<div class="modal glass cm-modal pa-check">
+        <div class="modal-header">
             <h3>${escHtml(t('plugins.check.title'))}</h3>
-            <button class="cm-x" id="pc-x" aria-label="${escHtml(t('common.close'))}">&times;</button>
+            <button class="modal-close" type="button" id="pc-x" aria-label="${escHtml(t('common.close'))}">&times;</button>
         </div>
         <div class="pa-check-body">
             ${errors.length ? `<div class="pa-check-group">
@@ -358,7 +358,7 @@ export async function runCheck(pluginId: string): Promise<void> {
                 ${warns.map((p) => `<p class="pa-check-line">${escHtml(say(p))}</p>`).join('')}
             </div>` : ''}
         </div>
-        <div class="cm-foot">
+        <div class="modal-footer">
             <span class="pa-count">${escHtml(errors.length ? t('plugins.check.blocked') : t('plugins.check.onlyWarn'))}</span>
             <button class="btn btn-sm btn-accent" id="pc-ok">${escHtml(t('common.close'))}</button>
         </div>

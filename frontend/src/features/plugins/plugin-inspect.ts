@@ -20,15 +20,15 @@ export { humanSize, treeRows, treeSummary, type TreeEntry } from './plugin-tree.
 /** A modal shell shared by both dialogs. Escape closes; the backdrop closes. */
 function shell(title: string, sub: string, bodyHtml: string, footHtml = ''): HTMLElement {
     const ov = document.createElement('div');
-    ov.className = 'cm-overlay';
-    ov.innerHTML = `<div class="cm-modal pi-modal">
-        <div class="cm-head">
+    ov.className = 'modal-overlay open';
+    ov.innerHTML = `<div class="modal glass cm-modal pi-modal">
+        <div class="modal-header">
             <h3>${escHtml(title)}</h3>
-            <button class="cm-x" data-pi-close aria-label="${escAttr(t('common.close') || 'Close')}">&times;</button>
+            <button class="modal-close" type="button" data-pi-close aria-label="${escAttr(t('common.close') || 'Close')}">&times;</button>
         </div>
         ${sub ? `<p class="pi-sub">${escHtml(sub)}</p>` : ''}
         <div class="pi-body">${bodyHtml}</div>
-        ${footHtml ? `<div class="cm-foot">${footHtml}</div>` : ''}
+        ${footHtml ? `<div class="modal-footer">${footHtml}</div>` : ''}
     </div>`;
     document.body.appendChild(ov);
     raiseAboveAll(ov, 11900);

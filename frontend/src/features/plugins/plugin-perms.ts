@@ -24,6 +24,9 @@ export function permDomains(): { domain: string; color: string; scopes: string[]
         { domain: t('plugins.permDomSchedules') || 'Automations',  color: '#06b6d4', scopes: ['schedules.read', 'schedules.write'] },
         { domain: t('plugins.permDomHooks')     || 'Hooks',        color: '#14b8a6', scopes: ['hooks.read', 'hooks.write'] },
         { domain: t('plugins.permDomSystem')    || 'The app itself', color: '#64748b', scopes: ['system.write'] },
-        { domain: t('plugins.permDomTelemetry') || 'Privacy & recording', color: '#f43f5e', scopes: ['telemetry.write'] },
+        // Recording split from telemetry, and read split from write. Exporting a session is
+        // reading a video of somebody's screen; it must not require — or imply — the power
+        // to switch recording on.
+        { domain: t('plugins.permDomTelemetry') || 'Privacy & recording', color: '#f43f5e', scopes: ['replay.read', 'replay.write', 'telemetry.write'] },
     ];
 }

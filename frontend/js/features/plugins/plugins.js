@@ -593,16 +593,43 @@ function buildPluginCard(plugin, source) {
                 ev.stopPropagation();
                 shut();
             } };
+            /**
+             * Put it where the button is.
+             *
+             * The menu is `position: fixed`, because `.plug-card` is `overflow: hidden` and
+             * an absolutely positioned child was simply CLIPPED BY THE CARD — it opened
+             * every time and was never visible, which reads exactly like a dead button.
+             * Fixed means it is placed against the viewport, so the coordinates have to come
+             * from here.
+             */
+            const place = () => {
+                const r = btn.getBoundingClientRect();
+                menu.style.visibility = 'hidden';
+                menu.hidden = false;
+                const h = menu.offsetHeight || 240;
+                const w = menu.offsetWidth || 190;
+                // Right-aligned to the button, and flipped above it when there is no room
+                // below — a card near the bottom of the list is the ordinary case.
+                const below = window.innerHeight - r.bottom;
+                menu.style.top = `${below < h + 8 && r.top > h + 8 ? r.top - h - 4 : r.bottom + 4}px`;
+                menu.style.left = `${Math.max(8, Math.min(window.innerWidth - w - 8, r.right - w))}px`;
+                menu.style.visibility = '';
+            };
             btn.addEventListener('click', (ev) => {
                 ev.stopPropagation();
                 if (!menu.hidden) {
                     shut();
                     return;
                 }
-                menu.hidden = false;
+                place();
                 btn.setAttribute('aria-expanded', 'true');
                 document.addEventListener('click', away, true);
                 document.addEventListener('keydown', onEsc, true);
+                // A fixed menu does not travel with the card it belongs to, so scrolling
+                // would leave it hanging over unrelated rows. Closed rather than followed:
+                // it is a menu, not a tooltip.
+                window.addEventListener('scroll', shut, { once: true, capture: true });
+                window.addEventListener('resize', shut, { once: true });
             });
             // Anything chosen closes it: the action opens a dialog or navigates, and a menu
             // left hanging over the result is the thing people click by accident next.

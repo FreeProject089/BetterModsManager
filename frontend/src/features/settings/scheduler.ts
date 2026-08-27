@@ -9139,7 +9139,7 @@ async function pickBmmPath(): Promise<string | null> {
 
     return new Promise((resolve) => {
         const ov = document.createElement('div');
-        ov.className = 'cm-overlay';
+        ov.className = 'modal-overlay open';
         const rows = roots.map((r, i) => {
             const spec = r.id ? `${r.kind}:${r.id}` : `${r.kind}:`;
             return `<button type="button" class="pp-row" data-i="${i}" data-spec="${escAttr(spec)}">
@@ -9149,13 +9149,13 @@ async function pickBmmPath(): Promise<string | null> {
                 <span class="pp-path">${escHtml(r.path)}</span>
             </button>`;
         }).join('');
-        ov.innerHTML = `<div class="cm-modal pp-modal">
-            <div class="cm-head"><h3>${escHtml(t('paths.pickTitle'))}</h3>
-                <button class="cm-x" id="pp-x" aria-label="${escAttr(t('common.close'))}">&times;</button></div>
+        ov.innerHTML = `<div class="modal glass cm-modal pp-modal">
+            <div class="modal-header"><h3>${escHtml(t('paths.pickTitle'))}</h3>
+                <button class="modal-close" type="button" id="pp-x" aria-label="${escAttr(t('common.close'))}">&times;</button></div>
             <p class="pp-lede">${escHtml(t('paths.pickLede'))}</p>
             <input type="search" class="input pp-q" id="pp-q" placeholder="${escAttr(t('common.search') || 'Search')}" spellcheck="false">
             <div class="pp-list" id="pp-list">${rows}</div>
-            <div class="cm-foot">
+            <div class="modal-footer">
                 <label class="pp-sub">${escHtml(t('paths.subfolder'))}
                     <input type="text" class="input" id="pp-sub" placeholder="bundle/presets" spellcheck="false"></label>
                 <button class="btn btn-sm btn-ghost" id="pp-cancel">${escHtml(t('common.cancel'))}</button>
@@ -9291,11 +9291,11 @@ async function openPreview(): Promise<void> {
     const maybes = lines.filter((l) => !l.certain).length;
 
     const ov = document.createElement('div');
-    ov.className = 'cm-overlay';
-    ov.innerHTML = `<div class="cm-modal pv-modal">
-        <div class="cm-head">
+    ov.className = 'modal-overlay open';
+    ov.innerHTML = `<div class="modal glass cm-modal pv-modal">
+        <div class="modal-header">
             <h3>${escHtml(t('sched.prev.title'))}</h3>
-            <button class="cm-x" id="pv-x" aria-label="${escAttr(t('common.close'))}">&times;</button>
+            <button class="modal-close" type="button" id="pv-x" aria-label="${escAttr(t('common.close'))}">&times;</button>
         </div>
         <p class="pv-lede">${escHtml(t('sched.prev.lede')
             .replace('{c}', String(changes))
@@ -9308,7 +9308,7 @@ async function openPreview(): Promise<void> {
                 ${l.certain ? '' : `<span class="pv-maybe">${escHtml(t('sched.prev.maybe'))}</span>`}
             </div>`).join('')}
         </div>
-        <div class="cm-foot">
+        <div class="modal-footer">
             <span class="pv-note">${escHtml(maybes ? t('sched.prev.noteMaybe').replace('{m}', String(maybes)) : t('sched.prev.note'))}</span>
             <button class="btn btn-sm btn-accent" id="pv-ok">${escHtml(t('common.close'))}</button>
         </div>

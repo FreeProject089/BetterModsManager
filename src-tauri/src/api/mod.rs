@@ -611,7 +611,7 @@ fn require_token(
 /// Read and write are separate everywhere, because knowing is not the same permission as
 /// changing — and for keys it is the whole point: listing what identities exist is not
 /// minting one that signs on the user's behalf.
-pub const PLUGIN_SCOPES: [&str; 24] = [
+pub const PLUGIN_SCOPES: [&str; 26] = [
     "app.read", "app.write",
     "catalog.read", "catalog.write",
     "data.read", "data.write",
@@ -621,6 +621,12 @@ pub const PLUGIN_SCOPES: [&str; 24] = [
     "mods.read", "mods.write",
     "plugins.read", "plugins.write",
     "profiles.read", "profiles.write",
+    // A session recording is a video of the person's screen inside BMM — their paths,
+    // their profile names, whatever a page happened to be showing. It had no scope of its
+    // own: exporting one was gated by `telemetry.write`, so a plugin that wanted to hand
+    // back a recording had to be granted the power to turn telemetry ON, and a plugin
+    // granted that could quietly export the session without ever asking for it.
+    "replay.read", "replay.write",
     "repo.read", "repo.write",
     "schedules.read", "schedules.write",
     "system.write",
@@ -1671,7 +1677,8 @@ pub async fn start_api_server(
     let replay_export = warp::path!("api" / "replay" / "export")
         .and(warp::post())
         .and(require_token(tok_rex))
-        .and(require_permission(token.clone(), "telemetry.write"))
+        // Reading the recording, not changing what is recorded.
+        .and(require_permission(token.clone(), "replay.read"))
         .and(warp::body::json::<ReplayExportBody>().or(warp::any().map(ReplayExportBody::default)).unify())
         .and(with_app_handle(handle_rex))
         .map(|body: ReplayExportBody, handle: tauri::AppHandle| {
@@ -1691,7 +1698,8 @@ pub async fn start_api_server(
     let replay_import = warp::path!("api" / "replay" / "import")
         .and(warp::post())
         .and(require_token(tok_rim))
-        .and(require_permission(token.clone(), "telemetry.write"))
+        // Playing somebody else's recording inside the app changes what is on screen.
+        .and(require_permission(token.clone(), "replay.write"))
         .and(warp::body::json::<ReplayImportBody>())
         .and(with_app_handle(handle_rim))
         .map(|body: ReplayImportBody, handle: tauri::AppHandle| {

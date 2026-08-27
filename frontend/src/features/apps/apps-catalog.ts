@@ -1361,9 +1361,12 @@ function renderCreate() {
       <div id="cr-json-preview" class="apps-create-json" style="display:none"></div>
     </div>
 
-    <!-- App editor sub-modal -->
+    <!-- App editor sub-modal.
+         NOT apps-modal-sm. That caps it at 480px, and this form holds three sections, two
+         two-column grids and a three-column one — at 480px every column is ~130px and the
+         thing reads as a stack of cramped boxes. -->
     <div class="apps-modal-overlay" id="cr-app-modal" style="z-index:9700">
-      <div class="apps-modal apps-modal-sm">
+      <div class="apps-modal apps-cr-modal">
         <button class="apps-modal-close" id="cr-app-close">${IC.close}</button>
         <div class="apps-modal-body" id="cr-app-body"></div>
       </div>
@@ -1761,11 +1764,25 @@ function openAppEditor(index: number | null) {
         if (!el) return;
         const probs = entryProblems(draftEntry(), (k, f) => t(k) || f)
             .filter((p) => p.key !== 'apps.create.pbFileOnly');
+        // The NAME of the field, not its id. `id, title, dl-url` is what the code calls
+        // them; "ID, Titre, URL de téléchargement" is what the person is looking at, and a
+        // warning that names things the screen does not is a warning nobody can act on.
+        const label = (field: string) => {
+            const lab = document.querySelector<HTMLElement>(`label[for="cr-${field}"]`);
+            const txt = (lab?.textContent || '').replace(/\s*\*\s*$/, '').trim();
+            return txt || field;
+        };
         el.textContent = probs.length
             ? (t('apps.create.stillNeeded') || 'Still needed: {x}')
-                .replace('{x}', probs.map((p) => p.field || '?').join(', '))
-            : '';
+                .replace('{x}', probs.map((p) => (p.field ? label(p.field) : '?')).join(' \u00b7 '))
+            : (t('apps.create.readyToSave') || '');
         el.classList.toggle('is-bad', probs.length > 0);
+        el.classList.toggle('is-ok', probs.length === 0);
+        // Save stays enabled — it is the author's document — but it stops looking like the
+        // obvious next thing while a required field is empty.
+        const save = document.getElementById('cr-app-save');
+        save?.classList.toggle('btn-accent', probs.length === 0);
+        save?.classList.toggle('btn-secondary', probs.length > 0);
     }
     body.addEventListener('input', sayMissing);
     sayMissing();
