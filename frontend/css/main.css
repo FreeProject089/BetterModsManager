@@ -19253,3 +19253,48 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
     line-height: 1.3;
 }
 .plug-perm-domain-row { gap: 4px 14px; }
+
+
+/* The create form was twelve stacked rows with no seam — identity, what it ships, what it
+   does and what it asks for all looked like the same list. */
+.plug-sec-h {
+    margin: 14px 0 2px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid var(--border);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .6px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+.plug-sec-h:first-child { margin-top: 0; }
+
+.plug-field-note {
+    font-size: 10.5px;
+    line-height: 1.4;
+    color: var(--text-muted);
+}
+.plug-field-note.is-bad { color: var(--warning); }
+#pc-id.is-bad { border-color: var(--warning); }
+
+/* The permissions a plugin ASKS for. Compact — it is twenty-four checkboxes and it is not
+   the main event on this screen. */
+.plug-req-perms {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    padding: 9px 11px;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    background: var(--bmm-bg-elevated);
+}
+.plug-req-dom { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+.plug-req-dom-h {
+    font-size: 9.5px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    min-width: 96px;
+}
+.plug-req-item { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+.plug-req-item code { font-size: 10.5px; }

@@ -29,25 +29,45 @@ for a release.
 
 ## What you can grant a plugin
 
-Ten grants, and most of them are **write** capabilities — the power to *change* something.
+Twenty-four grants, in twelve domains, and each domain splits **read** from **write** —
+knowing is not the same permission as changing.
 
-There is no `mods.read` or `profiles.read` to hand out, because those read endpoints are not
-permission-gated at all: the API listens on `127.0.0.1` only, so a plugin that already has
-your token can read your mods and profiles. Reads that *do* need a grant are the three below
-— `app.read`, `catalog.read`, `plugins.read`.
-
-| Grant | Lets the plugin |
-|---|---|
-| `mods.write` | Enable / disable / edit / delete mods |
-| `profiles.write` | Create / activate / edit / delete profiles |
-| `modpacks.write` | Create / enable / disable / edit / delete modpacks |
-| `repo.write` | Connect / disconnect / sync / generate server repos |
-| `plugins.read` · `plugins.write` | Compare a modlist · apply one |
-| `app.read` · `app.write` | Read installed apps · install / launch / uninstall them |
-| `catalog.read` · `catalog.write` | Read the local catalog · create / edit / delete entries |
+| Domain | Read | Write |
+|---|---|---|
+| Mods | list mods, see which one wins a shared file | enable, disable, update, delete, reorder |
+| Profiles | list profiles | create, edit, delete, activate |
+| Modpacks | list and export | create, change, apply, delete |
+| Plugins | list plugins, compare a modlist, read shipped files | install, apply, **delete** — including others |
+| Server repo | see what is connected and what it holds | connect, sync, publish, host |
+| Identity keys | see which keys exist | **mint one** |
+| Apps | list installed apps and their permissions | install, launch, remove |
+| App catalogue | read the local catalogue | add, change, remove entries |
+| Your data | read **everything** BMM holds, and export it | import over what you have |
+| Automations | list saved tasks | run one, arm or disarm one |
+| Hooks | see what has fired | fire one a task may be waiting on |
+| The app itself | — | restart BMM, change the open screen, benchmark, import a language |
+| Privacy | — | change what is recorded and what is sent |
 
 Grant the narrowest set that does the job. A plugin asking for `repo.write` when all it does
-is toggle mods is worth a second look.
+is toggle mods is worth a second look, and one asking for `data.read` is asking to read
+everything at once.
+
+!!! warning "Reads used to be ungated, and now are not"
+
+    Fifty routes needed a token and no permission at all — and a per-plugin token is a valid
+    token, so a plugin with an **empty** permission list could read the full data dump,
+    import data over it, restart BMM, delete other plugins and run any saved automation.
+
+    On upgrade each plugin keeps the read half of every domain it already had write on:
+    trusted to change your mods means still able to list them. Nothing else is carried, so a
+    plugin leaning on a domain it was never granted now fails with a `403` naming the scope
+    — which is one click from granted, in **Plugins & API → Permissions**.
+
+!!! danger "The permission list itself is not something a plugin can touch"
+
+    `PUT /api/apps/permissions/<id>` writes the grants, and it takes the **admin** token. A
+    plugin that could set its own permissions could grant itself all twenty-four, which would
+    make this page a description of nothing.
 
 !!! tip "The API isn't only for plugins"
 
@@ -55,6 +75,21 @@ is toggle mods is worth a second look.
     deeplink on a web page — anything on your PC. The **global** switches in
     **Plugins → Permissions** (and the sandbox mode in [Settings](doc-page:features/settings)) govern *all*
     of those callers at once, not just installed plugins.
+
+## Declaring what your plugin needs
+
+The **Create** tab has a *What it needs* section. Ticking a scope there does not grant it —
+it **asks**. Whoever installs the plugin sees the request pre-ticked on the permission screen
+and decides.
+
+Ask for the least that works. A plugin that requests everything is a plugin whose list nobody
+reads.
+
+The same tab now writes three fields it used to leave empty no matter what you typed:
+**author**, **website** and **tags** — the plugin card renders tags, so it was drawing a row
+that nothing could fill. And the **id** is checked as you type: it becomes a folder on disk,
+a segment of a `bmm://` link and a key in a catalogue, so a space in it fails three different
+ways and used to do so silently.
 
 ## Strict mode
 

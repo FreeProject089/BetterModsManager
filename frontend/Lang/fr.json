@@ -7006,7 +7006,7 @@
   "plugins.edit": "Edit",
   "plugins.export": "catalog.json",
   "plugins.catPublish": ".bmmbundle…",
-  "plugins.createAuthor": "auteur",
+  "plugins.createAuthor": "Auteur",
   "plugins.pcbNoSource": "pas de source",
   "plugins.pcbUrlPacked": "laisse vide pour emballer ce plugin",
   "plugins.pcbUrlNeeded": "https://…/plugin.bmmplug — obligatoire, celui-ci n'est pas installé",
@@ -9235,5 +9235,17 @@
   "plugins.scope.hooks.read": "voir quels hooks ont sonné",
   "plugins.scope.hooks.write": "sonner un hook qu'une automatisation attend peut-être",
   "plugins.scope.system.write": "redémarrer BMM, changer l'écran ouvert, lancer un benchmark, importer une langue",
-  "plugins.scope.telemetry.write": "changer ce qui est enregistré et ce qui est envoyé"
+  "plugins.scope.telemetry.write": "changer ce qui est enregistré et ce qui est envoyé",
+  "plugins.secIdentity": "Ce que c'est",
+  "plugins.secShips": "Ce qu'il livre",
+  "plugins.secDoes": "Ce qu'il fait",
+  "plugins.secAsks": "Ce dont il a besoin",
+  "plugins.createAuthorPh": "votre nom ou votre équipe",
+  "plugins.createWebsite": "Site web",
+  "plugins.createTags": "Tags",
+  "plugins.createTagsPh": "dcs, multijoueur, hebdo — séparés par des virgules",
+  "plugins.createIdHint": "Lettres, chiffres, - et . — c'est ainsi que chaque catalogue, deeplink et dossier sur le disque le désigne ; le changer plus tard casse les trois.",
+  "plugins.createIdBad": "Cet id ne fonctionnera pas — lettres, chiffres, - . et _ uniquement, en commençant par une lettre ou un chiffre.",
+  "plugins.createPerms": "Permissions demandées",
+  "plugins.createPermsHint": "Cocher ici ne fait que DEMANDER. La personne qui installe voit la demande pré-cochée et décide. Demandez le minimum qui fonctionne — un plugin qui demande tout est un plugin dont personne ne lit la liste."
 }

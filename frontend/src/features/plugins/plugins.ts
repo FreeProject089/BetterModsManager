@@ -37,6 +37,22 @@ import { writeSources } from '../catalogs/catalog-sources.js';
 // Read and write are separate in every domain that has something to disclose. Knowing
 // is not the same permission as changing, and for keys that IS the distinction: listing
 // which identities exist is not minting one that signs on the user's behalf.
+/**
+ * Is this a plugin id that will still work everywhere it is about to be used?
+ *
+ * The id is not a label. It becomes a folder name on disk, a segment of a `bmm://` deeplink,
+ * a key in a catalogue, and the thing another plugin names to depend on this one — and it
+ * fails at each of those differently, so a space in it produces four unrelated symptoms and
+ * no message. The form checked that it was non-empty and stopped there.
+ *
+ * Deliberately narrower than "what happens to survive": lowercase-ish ASCII, digits, `-`,
+ * `_` and `.`, starting with a letter or digit. Every id anybody has already published fits
+ * it, and nothing that fits it needs escaping anywhere.
+ */
+export function isUsablePluginId(id: string): boolean {
+    return /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(id) && id.length <= 64;
+}
+
 export function permDomains(): { domain: string; color: string; scopes: string[] }[] {
     return [
         { domain: t('plugins.permDomMods')     || 'Mods',        color: '#3b82f6', scopes: ['mods.read', 'mods.write'] },
@@ -3544,9 +3560,11 @@ function renderCreate(container: HTMLElement) {
             <div class="plug-create-form-col">
                 <h3 class="plug-section-title">${IC.list} ${t('plugins.createTitle')}</h3>
                 <div class="plug-form-grid">
+                    <div class="plug-sec-h">${escHtml(t('plugins.secIdentity') || 'What it is')}</div>
                     <div class="plug-form-row">
                         <label class="plug-form-label">${t('plugins.createId')} *</label>
                         <input type="text" id="pc-id" class="input" placeholder="my-server-modlist">
+                        <span class="plug-field-note" id="pc-id-note">${escHtml(t('plugins.createIdHint') || 'Letters, digits, - and . — this is how every other plugin, catalogue and deeplink refers to it, so it cannot be changed later without breaking them.')}</span>
                     </div>
                     <div class="plug-form-row">
                         <label class="plug-form-label">${t('plugins.createName')} *</label>
@@ -3563,6 +3581,21 @@ function renderCreate(container: HTMLElement) {
                     <div class="plug-form-row">
                         <label class="plug-form-label">${t('plugins.createDesc')}</label>
                         <textarea id="pc-desc" class="input" rows="2" style="resize:vertical"></textarea>
+                    </div>
+                    <!-- Three fields the form could never fill: author, website and tags
+                         were hard-coded empty in buildManifest, and the plugin CARD renders
+                         tags — so it drew a row nothing could ever populate. -->
+                    <div class="plug-form-row">
+                        <label class="plug-form-label">${escHtml(t('plugins.createAuthor') || 'Author')}</label>
+                        <input type="text" id="pc-author" class="input" placeholder="${escAttr(t('plugins.createAuthorPh') || 'your name or your team')}">
+                    </div>
+                    <div class="plug-form-row">
+                        <label class="plug-form-label">${escHtml(t('plugins.createWebsite') || 'Website')}</label>
+                        <input type="text" id="pc-website" class="input" placeholder="https://">
+                    </div>
+                    <div class="plug-form-row">
+                        <label class="plug-form-label">${escHtml(t('plugins.createTags') || 'Tags')}</label>
+                        <input type="text" id="pc-tags" class="input" placeholder="${escAttr(t('plugins.createTagsPh') || 'dcs, multiplayer, weekly — separated by commas')}">
                     </div>
                     <div class="plug-form-row">
                         <label class="plug-form-label">${t('plugins.customIconLabel')}</label>
@@ -3588,6 +3621,7 @@ function renderCreate(container: HTMLElement) {
                             </div>
                         </div>
                     </div>
+                    <div class="plug-sec-h">${escHtml(t('plugins.secShips') || 'What it ships')}</div>
                     <div class="plug-form-row" style="flex-direction:row;align-items:center;gap:12px;">
                         <label class="plug-form-label" style="margin:0;">${t('plugins.strictMode')}</label>
                         <label class="plug-toggle">
@@ -3631,6 +3665,7 @@ function renderCreate(container: HTMLElement) {
                     </div>
 
                     <!-- What happens on apply -->
+                    <div class="plug-sec-h">${escHtml(t('plugins.secDoes') || 'What it does')}</div>
                     <div class="plug-form-row">
                         <label class="plug-form-label">${t('plugins.applyMode') || 'On apply'}</label>
                         <select id="pc-apply-mode" class="select select-sm">
@@ -3640,6 +3675,27 @@ function renderCreate(container: HTMLElement) {
                             <option value="automation">${escHtml(t('plugins.applyModeAutomation'))}</option>
                         </select>
                         <span class="plug-toggle-hint">${t('plugins.applyModeHint') || 'Choose what activating this plugin does.'}</span>
+                    </div>
+
+                    <!-- What it ASKS for. The permissions array was hard-coded empty here,
+                         so no plugin built in this app could declare what it needs — even
+                         though the permission screen reads it to pre-tick the boxes at
+                         install. Ticking one REQUESTS it; the installer still decides. -->
+                    <div class="plug-sec-h">${escHtml(t('plugins.secAsks') || 'What it needs')}</div>
+                    <div class="plug-form-row">
+                        <label class="plug-form-label">${escHtml(t('plugins.createPerms') || 'Permissions it requests')}</label>
+                        <span class="plug-field-note">${escHtml(t('plugins.createPermsHint') || 'Ticking one here only ASKS. Whoever installs the plugin sees the request pre-ticked and decides. Ask for the least that works — a plugin requesting everything is one nobody reads the list of.')}</span>
+                        <div class="plug-req-perms" id="pc-perms">
+                            ${permDomains().map(d => `
+                                <div class="plug-req-dom">
+                                    <span class="plug-req-dom-h" style="color:${d.color};">${escHtml(d.domain)}</span>
+                                    ${d.scopes.map(sc => `
+                                        <label class="plug-req-item" data-tooltip="${escAttr(t('plugins.scope.' + sc) || '')}">
+                                            <input type="checkbox" class="pc-perm-cb" data-perm="${escAttr(sc)}" style="accent-color:${d.color};">
+                                            <code style="color:${d.color};">${escHtml(sc)}</code>
+                                        </label>`).join('')}
+                                </div>`).join('')}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -3980,10 +4036,37 @@ function renderCreate(container: HTMLElement) {
     });
     }
 
+    // Say it while it is being typed, not after Save. The note under the field turns into
+    // the complaint, so there is one place to look rather than a toast that has gone by the
+    // time you look up.
+    {
+        const idEl = container.querySelector('#pc-id') as HTMLInputElement | null;
+        const note = container.querySelector('#pc-id-note') as HTMLElement | null;
+        const good = t('plugins.createIdHint') || '';
+        idEl?.addEventListener('input', () => {
+            const v = idEl.value.trim();
+            const bad = !!v && !isUsablePluginId(v);
+            idEl.classList.toggle('is-bad', bad);
+            if (note) {
+                note.textContent = bad
+                    ? (t('plugins.createIdBad') || 'That id will not work — letters, digits, - and . only.')
+                    : good;
+                note.classList.toggle('is-bad', bad);
+            }
+        });
+    }
+
     function buildManifest() {
         const id = (document.getElementById('pc-id') as HTMLInputElement)?.value.trim();
         const name = (document.getElementById('pc-name') as HTMLInputElement)?.value.trim();
         if (!id || !name) { toast(t('plugins.createIdNameRequired'), 'warning'); return null; }
+        // Checked HERE as well as while typing: the note under the field is advice, and
+        // advice is not a gate. An id with a slash or a space in it becomes a folder name,
+        // a deeplink and a catalogue key, and it fails at each of those differently.
+        if (!isUsablePluginId(id)) {
+            toast(t('plugins.createIdBad') || 'That id will not work — letters, digits, - and . only.', 'warning', 7000);
+            return null;
+        }
         // Bundled files the user KEPT (existing minus staged removals). The backend
         // appends newly-picked files to these and deletes the removed ones.
         const keptScripts = _editScripts.filter(s => !_removedScripts.includes(s));
@@ -3991,10 +4074,18 @@ function renderCreate(container: HTMLElement) {
         return {
             id, name,
             version: (document.getElementById('pc-version') as HTMLInputElement)?.value.trim() || '1.0.0',
-            author: '',
+            author: (document.getElementById('pc-author') as HTMLInputElement)?.value.trim() || '',
             description: (document.getElementById('pc-desc') as HTMLTextAreaElement)?.value.trim() || '',
             game: (document.getElementById('pc-game') as HTMLInputElement)?.value.trim() || '',
-            official: false, permissions: [], tags: [], website: '',
+            official: false,
+            // Requested, not granted. The install screen pre-ticks these and the person
+            // installing decides — which is the only reason it is safe to let an author
+            // name them at all.
+            permissions: Array.from(document.querySelectorAll<HTMLInputElement>('.pc-perm-cb:checked'))
+                .map(cb => cb.dataset.perm || '').filter(Boolean),
+            tags: ((document.getElementById('pc-tags') as HTMLInputElement)?.value || '')
+                .split(',').map(x => x.trim()).filter(Boolean),
+            website: (document.getElementById('pc-website') as HTMLInputElement)?.value.trim() || '',
             has_scripts: ((document.getElementById('pc-has-scripts') as HTMLInputElement)?.checked) || keptScripts.length > 0 || scriptPaths.length > 0 || keptFolders.length > 0 || folderPaths.length > 0,
             scripts: keptScripts,
             folders: keptFolders,
@@ -9891,6 +9982,17 @@ function prefillCreateTab(manifest: any) {
     // Restore apply mode (modlist / scripts / both)
     const applyModeSel = document.getElementById('pc-apply-mode') as HTMLSelectElement | null;
     if (applyModeSel) applyModeSel.value = manifest.apply_mode || 'modlist';
+
+    // The four fields the form gained. Without this, opening a plugin to change one line
+    // would silently blank its author, site, tags and requested permissions on save — which
+    // is the same class of loss as an annotation dropped by a round trip.
+    setVal('pc-author', manifest.author || '');
+    setVal('pc-website', manifest.website || '');
+    setVal('pc-tags', Array.isArray(manifest.tags) ? manifest.tags.join(', ') : '');
+    const asked: string[] = Array.isArray(manifest.permissions) ? manifest.permissions : [];
+    document.querySelectorAll<HTMLInputElement>('.pc-perm-cb').forEach((cb) => {
+        cb.checked = asked.includes(cb.dataset.perm || '');
+    });
 
     // Restore "has scripts" toggle and SHOW the scripts/folders already linked to
     // this plugin (read-only "existing" chips) so editing keeps full context.

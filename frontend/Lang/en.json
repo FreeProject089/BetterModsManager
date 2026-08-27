@@ -7008,7 +7008,7 @@
   "plugins.edit": "Edit",
   "plugins.export": "catalog.json",
   "plugins.catPublish": ".bmmbundle…",
-  "plugins.createAuthor": "author",
+  "plugins.createAuthor": "Author",
   "plugins.pcbNoSource": "no source",
   "plugins.pcbUrlPacked": "leave empty to pack this plugin",
   "plugins.pcbUrlNeeded": "https://…/plugin.bmmplug — required, this one is not installed",
@@ -9237,5 +9237,17 @@
   "plugins.scope.hooks.read": "see which hooks have fired",
   "plugins.scope.hooks.write": "fire a hook an automation may be waiting on",
   "plugins.scope.system.write": "restart BMM, change the open screen, run a benchmark, import a language",
-  "plugins.scope.telemetry.write": "change what is recorded and what is sent"
+  "plugins.scope.telemetry.write": "change what is recorded and what is sent",
+  "plugins.secIdentity": "What it is",
+  "plugins.secShips": "What it ships",
+  "plugins.secDoes": "What it does",
+  "plugins.secAsks": "What it needs",
+  "plugins.createAuthorPh": "your name or your team",
+  "plugins.createWebsite": "Website",
+  "plugins.createTags": "Tags",
+  "plugins.createTagsPh": "dcs, multiplayer, weekly — separated by commas",
+  "plugins.createIdHint": "Letters, digits, - and . — this is how every catalogue, deeplink and folder on disk refers to it, so changing it later breaks all three.",
+  "plugins.createIdBad": "That id will not work — letters, digits, - . and _ only, starting with a letter or digit.",
+  "plugins.createPerms": "Permissions it requests",
+  "plugins.createPermsHint": "Ticking one here only ASKS. Whoever installs the plugin sees the request pre-ticked and decides. Ask for the least that works — a plugin requesting everything is one nobody reads the list of."
 }

@@ -27,36 +27,71 @@ version.
 <div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/plugins.bmmreplay" data-page="features/plugins" data-title="Accorder une permission et utiliser un plugin"></div>
 
 
-## Ce que tu peux accorder à un plugin
+## Ce que vous pouvez accorder à un plugin
 
-Dix autorisations, dont la plupart sont des capacités d'**écriture** — le pouvoir de
-*modifier* quelque chose.
+Vingt-quatre autorisations, en douze domaines, et chaque domaine sépare **lecture** et
+**écriture** — savoir n'est pas la même permission que changer.
 
-Il n'existe pas de `mods.read` ni de `profiles.read` à distribuer, parce que ces points de
-lecture ne sont pas contrôlés du tout : l'API n'écoute que sur `127.0.0.1`, donc un plugin qui
-détient déjà votre jeton peut lire vos mods et vos profils. Les lectures qui, elles, exigent
-une autorisation sont les trois ci-dessous — `app.read`, `catalog.read`, `plugins.read`.
+| Domaine | Lecture | Écriture |
+|---|---|---|
+| Mods | lister les mods, voir lequel gagne un fichier partagé | activer, désactiver, mettre à jour, supprimer, réordonner |
+| Profils | lister les profils | créer, modifier, supprimer, activer |
+| Modpacks | lister et exporter | créer, modifier, appliquer, supprimer |
+| Plugins | lister, comparer une modlist, lire les fichiers livrés | installer, appliquer, **supprimer** — y compris d'autres |
+| Repo serveur | voir ce qui est connecté et ce qu'il contient | connecter, synchroniser, publier, héberger |
+| Clés d'identité | voir quelles clés existent | **en créer une** |
+| Applications | lister les applications installées et leurs permissions | installer, lancer, retirer |
+| Catalogue d'apps | lire le catalogue local | ajouter, modifier, retirer des entrées |
+| Vos données | lire **tout** ce que BMM contient, et l'exporter | importer par-dessus les vôtres |
+| Automatisations | lister les tâches enregistrées | en exécuter une, l'armer ou la désarmer |
+| Hooks | voir ce qui a sonné | en sonner un qu'une tâche attend peut-être |
+| L'application | — | redémarrer BMM, changer l'écran, benchmark, importer une langue |
+| Confidentialité | — | changer ce qui est enregistré et ce qui est envoyé |
 
-| Autorisation | Permet au plugin de |
-|---|---|
-| `mods.write` | Activer / désactiver / éditer / supprimer des mods |
-| `profiles.write` | Créer / activer / éditer / supprimer des profils |
-| `modpacks.write` | Créer / activer / désactiver / éditer / supprimer des modpacks |
-| `repo.write` | Connecter / déconnecter / synchroniser / générer des dépôts serveur |
-| `plugins.read` · `plugins.write` | Comparer une modlist · en appliquer une |
-| `app.read` · `app.write` | Lire les apps installées · installer / lancer / désinstaller |
-| `catalog.read` · `catalog.write` | Lire le catalogue local · créer / éditer / supprimer des entrées |
+Accordez le minimum qui fait le travail. Un plugin qui demande `repo.write` alors qu'il ne
+fait qu'activer des mods mérite un second regard, et un qui demande `data.read` demande à
+tout lire d'un coup.
 
-Accorde l'ensemble le plus étroit qui fait le travail. Un plugin qui réclame `repo.write` alors
-qu'il ne fait qu'activer des mods mérite un second regard.
+!!! warning "Les lectures n'étaient pas protégées, elles le sont"
+
+    Cinquante routes demandaient un jeton et aucune permission — et un jeton de plugin est un
+    jeton valide, donc un plugin avec une liste **vide** pouvait lire le dump complet,
+    importer des données par-dessus, redémarrer BMM, supprimer d'autres plugins et exécuter
+    n'importe quelle automatisation.
+
+    À la mise à jour, chaque plugin conserve la moitié lecture de chaque domaine sur lequel il
+    avait déjà l'écriture. Rien d'autre n'est reporté, donc un plugin qui s'appuyait sur un
+    domaine jamais accordé échoue avec un `403` qui nomme la portée — à un clic d'être
+    accordée, dans **Plugins & API → Permissions**.
+
+!!! danger "La liste des permissions n'est pas quelque chose qu'un plugin peut toucher"
+
+    `PUT /api/apps/permissions/<id>` écrit les autorisations, et exige le jeton **admin**. Un
+    plugin capable de définir ses propres permissions pourrait s'accorder les vingt-quatre, ce
+    qui ferait de cette page la description de rien.
 
 !!! tip "L'API n'est pas réservée aux plugins"
 
-    La même API locale répond à tes propres scripts, un fichier `.bat`, PowerShell, ou un
-    deeplink `bmm://` sur une page web — n'importe quoi sur ton PC. Les interrupteurs
+    La même API locale répond à vos propres scripts, un fichier `.bat`, PowerShell, ou un
+    deeplink `bmm://` sur une page web — n'importe quoi sur votre PC. Les interrupteurs
     **globaux** dans **Plugins → Permissions** (et le mode bac à sable dans
     [Paramètres](doc-page:features/settings)) gouvernent *tous* ces appelants d'un coup, pas seulement les
     plugins installés.
+
+## Déclarer ce dont votre plugin a besoin
+
+L'onglet **Créer** a une section *Ce dont il a besoin*. Y cocher une portée ne l'accorde pas
+— ça la **demande**. La personne qui installe voit la demande pré-cochée sur l'écran des
+permissions et décide.
+
+Demandez le minimum qui fonctionne. Un plugin qui demande tout est un plugin dont personne ne
+lit la liste.
+
+Le même onglet écrit désormais trois champs qu'il laissait vides quoi que vous tapiez :
+**auteur**, **site web** et **tags** — la carte du plugin affiche les tags, elle dessinait
+donc une ligne que rien ne pouvait remplir. Et l'**id** est vérifié pendant la frappe : il
+devient un dossier sur le disque, un segment de lien `bmm://` et une clé de catalogue, donc
+un espace dedans échoue de trois façons différentes — en silence, jusqu'ici.
 
 <a id="strict-mode"></a>
 ## Le mode strict
