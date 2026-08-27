@@ -26,10 +26,45 @@ npm run watch           # compile, and keep compiling
 npm run build           # the full release chain (see below)
 npm run release         # build, then the installer
 npm run build:installer # the installer alone
+npm run gen             # regenerate everything derived from the source
+npm run gen-manifest    # the update manifest alone
+npm run tauri           # the raw Tauri CLI, for anything not wrapped above
 ```
 
-`npm run build` runs, in order: dev-toggle check → security guard → doc sync → encoding check
-→ `tsc` → import check → `tauri build --no-bundle` → update manifest.
+`npm run build` runs, in order: dev-toggle check → security guard → **gen** → doc sync →
+encoding check → `tsc` → import check → `tauri build --no-bundle` → update manifest.
+
+### What `gen` produces
+
+Three generators, and the order between them matters:
+
+| Written | From | Why it is generated |
+|---|---|---|
+| `frontend/src/docs/bmms-reference.gen.ts` and both `bmmscript-reference` pages | the scheduler's own registries | a hand-written reference is the one part of BMMScript that can go stale, and it would keep promising 75 actions while the app grew to 90 |
+| `dist-assets/bmms-vocabulary.json` | the same registries, plus the Rust parser's keywords | BCWEB's `.bmmscript` checker reads it instead of keeping a second list of action names — which would be wrong the day somebody adds one |
+| `src-tauri/src/mcp/actions.gen.json` | the action registry | so an assistant offers exactly the actions that exist |
+| `frontend/deeplinks.json` | `deep_link_manager.ts` | so a builder offers exactly the links the router handles |
+
+`gen-bmms-reference` writes both a `.ts` the compiler reads **and** two pages `sync-docs` copies
+into the app, so it has to run before either. That is why `gen` sits where it does in the chain
+rather than at the end.
+
+!!! note "CI checks them; the build writes them"
+
+    Every one of these has a `--check` mode that runs in `npm run ci` and fails when the
+    committed file no longer matches the source. That catches a stale commit before it is
+    merged.
+
+    `npm run build` regenerates instead, so a release never ships an artifact that disagrees
+    with the code it came from. Both halves are needed: the check keeps git honest, the build
+    keeps the release honest.
+
+!!! warning "The vocabulary still has to be uploaded"
+
+    `dist-assets/bmms-vocabulary.json` is not bundled with the app and is not published
+    anywhere by building. BCWEB reads it as a platform asset that somebody uploads, and nothing
+    on that side can tell that its copy is six months old — the symptom is a checker calling
+    valid action names unknown. Re-upload it after the language grows.
 
 !!! warning "The compiled JavaScript is committed"
     `frontend/js/**` is tracked, so the committed JS must be what the committed TypeScript

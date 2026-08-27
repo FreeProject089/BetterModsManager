@@ -48,6 +48,18 @@ This document is the single source of truth for everything that can be driven pr
 |---|---|---|---|
 | `/api/mods/enable` | yes | `{ mod_id }` | Enables a mod in the active profile (resolves deps). |
 | `/api/mods/disable` | yes | `{ mod_id }` | Disables a mod. |
+| `/api/mods/order` | yes | — (GET) | The deployment order, every contested file, and who wins it. |
+| `/api/mods/order` | yes | `{ order[], profileId? }` | Reorders the active mods and re-copies the files that change hands. `order` must be a permutation of what is active; last in the list wins a shared file. |
+| `/api/schedules` | yes | — (GET) | id, name, enabled and trigger for every saved task. **Not** its steps. |
+| `/api/schedules/enabled` | yes | `{ id, enabled }` | Arms or disarms one task. Only `enabled` is writable — a route that could write a whole task could install one with a script step in it. |
+| `/api/hook` | yes | `{ name, data? }` | Rings a named doorbell a task can wait on (`wait.hook`) or be triggered by (`on event`). `GET ?name=` reads what has rung without consuming it. |
+| `/api/keys` | yes | `{ name, algorithm? }` | GET lists identity keys, POST mints one. The private half never leaves the machine. |
+| `/api/catalogs` | yes | `{ type, url, follow }` | GET lists followed catalogues, POST follows or unfollows one. |
+| `/api/plugins/assets` | yes | — (GET `?id=&path=`) | What a plugin ships, or one file's text. Copying a file OUT is deliberately not offered. |
+| `/api/repo/extras` | yes | `{ url, kind, name }` | Installs one extra a repo carries. The entry is looked up in the fetched manifest, never described by the caller. |
+| `/api/repo/publish-ssh` | yes | `{ dir? }` | Opens the repo screen ready to publish over SSH. Carries no host and no key path — a caller able to name those could point a publish at a server the user never chose. |
+| `/api/repo/fetch-ssh` | yes | `{ dir? }` | The same, for fetching. |
+| `/api/view` | yes | `{ id }` | Switches the open app to a screen, as clicking the sidebar does. |
 
 ### Profiles
 | Path | Auth | Body |

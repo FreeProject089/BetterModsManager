@@ -48,6 +48,18 @@ Ce document est la source de vérité unique pour tout ce qui est pilotable par 
 |---|---|---|
 | `/api/mods/enable` | oui · `mods.write` | `{ mod_id }` |
 | `/api/mods/disable` | oui · `mods.write` | `{ mod_id }` |
+| `/api/mods/order` | oui · `mods.read` | — (GET) l'ordre de déploiement, chaque fichier disputé et qui le gagne |
+| `/api/mods/order` | oui · `mods.write` | `{ order[], profileId? }` — permutation obligatoire ; le dernier gagne un fichier partagé |
+| `/api/schedules` | oui | — (GET) id, nom, activée, déclencheur. **Pas** les étapes |
+| `/api/schedules/enabled` | oui | `{ id, enabled }` — seul `enabled` est modifiable |
+| `/api/hook` | oui | `{ name, data? }` — sonne une clochette ; `GET ?name=` lit sans consommer |
+| `/api/keys` | oui · `keys.write` | `{ name, algorithm? }` — GET liste, POST crée ; la moitié privée ne sort jamais |
+| `/api/catalogs` | oui · `catalog.write` | `{ type, url, follow }` — GET liste, POST (dés)abonne |
+| `/api/plugins/assets` | oui · `plugins.read` | — (GET `?id=&path=`) ce qu'un plugin livre, ou le texte d'un fichier |
+| `/api/repo/extras` | oui · `repo.write` | `{ url, kind, name }` — l'entrée est cherchée dans le manifeste, jamais décrite par l'appelant |
+| `/api/repo/publish-ssh` | oui | `{ dir? }` — ne porte ni hôte ni chemin de clé |
+| `/api/repo/fetch-ssh` | oui | `{ dir? }` — pareil, pour la récupération |
+| `/api/view` | oui | `{ id }` — bascule l'app sur un écran |
 
 ### Profils
 | Chemin | Auth · Perm | Corps |

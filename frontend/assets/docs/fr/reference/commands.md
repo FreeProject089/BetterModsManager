@@ -26,11 +26,46 @@ npm run watch           # compile, et continue de compiler
 npm run build           # la chaîne complète de release (voir ci-dessous)
 npm run release         # build, puis l'installeur
 npm run build:installer # l'installeur seul
+npm run gen             # régénérer tout ce qui dérive du source
+npm run gen-manifest    # le manifeste de mise à jour seul
+npm run tauri           # la CLI Tauri brute, pour ce qui n'est pas enveloppé ci-dessus
 ```
 
-`npm run build` enchaîne : contrôle des interrupteurs de dev → garde de sécurité → sync des
-docs → contrôle d'encodage → `tsc` → contrôle des imports → `tauri build --no-bundle` →
-manifeste de mise à jour.
+`npm run build` enchaîne : contrôle des interrupteurs de dev → garde de sécurité → **gen** →
+sync des docs → contrôle d'encodage → `tsc` → contrôle des imports → `tauri build --no-bundle`
+→ manifeste de mise à jour.
+
+### Ce que produit `gen`
+
+Trois générateurs, et l'ordre entre eux compte :
+
+| Écrit | Depuis | Pourquoi c'est généré |
+|---|---|---|
+| `frontend/src/docs/bmms-reference.gen.ts` et les deux pages `bmmscript-reference` | les registres du planificateur | une référence écrite à la main est la seule partie de BMMScript qui peut périmer, et elle continuerait de promettre 75 actions pendant que l'app en aurait 90 |
+| `dist-assets/bmms-vocabulary.json` | les mêmes registres, plus les mots-clés du parseur Rust | le vérificateur `.bmmscript` de BCWEB le lit au lieu de garder une seconde liste de noms d'actions — qui serait fausse le jour où quelqu'un en ajoute une |
+| `src-tauri/src/mcp/actions.gen.json` | le registre d'actions | pour qu'un assistant propose exactement les actions qui existent |
+| `frontend/deeplinks.json` | `deep_link_manager.ts` | pour qu'un constructeur propose exactement les liens que le routeur traite |
+
+`gen-bmms-reference` écrit à la fois un `.ts` que lit le compilateur **et** deux pages que
+`sync-docs` copie dans l'app : il doit donc passer avant les deux. C'est pour ça que `gen` est
+placé là dans la chaîne et pas à la fin.
+
+!!! note "La CI les vérifie ; le build les écrit"
+
+    Chacun a un mode `--check` qui tourne dans `npm run ci` et échoue quand le fichier commité
+    ne correspond plus au source. Ça attrape un commit périmé avant la fusion.
+
+    `npm run build` régénère à la place, pour qu'une release ne livre jamais un artefact en
+    désaccord avec le code dont il vient. Les deux moitiés sont nécessaires : le contrôle garde
+    git honnête, le build garde la release honnête.
+
+!!! warning "Le vocabulaire doit encore être téléversé"
+
+    `dist-assets/bmms-vocabulary.json` n'est pas embarqué dans l'app et n'est publié nulle part
+    par le build. BCWEB le lit comme un asset de plateforme que quelqu'un téléverse, et rien de
+    ce côté-là ne peut savoir que sa copie a six mois — le symptôme est un vérificateur qui
+    déclare inconnus des noms d'actions valides. Re-téléverse-le après chaque croissance du
+    langage.
 
 !!! warning "Le JavaScript compilé est commité"
     `frontend/js/**` est suivi par git, donc le JS commité doit être ce que produit le
