@@ -8866,5 +8866,14 @@
   "sched.dl.noHook": "Ce lien ne nomme aucun hook.",
   "sched.dl.hookTitle": "Sonner ce hook ?",
   "sched.dl.hookDesc": "Un lien veut sonner un hook. Toute tâche qui attend ce nom repartira de là où elle attend.",
-  "sched.dl.hookRang": "Hook sonné :"
+  "sched.dl.hookRang": "Hook sonné :",
+  "sched.ref.toggle": "Référence",
+  "sched.ref.search": "Chercher une action, condition, valeur…",
+  "sched.ref.insertHint": "Clique dessus pour l'écrire au curseur.",
+  "sched.ref.none": "Rien ne correspond.",
+  "sched.ref.more": "{n} de plus — affine la recherche pour les voir.",
+  "sched.ref.kindAction": "do",
+  "sched.ref.kindCond": "if",
+  "sched.ref.kindValue": "valeur",
+  "sched.ref.kindSource": "for each"
 }

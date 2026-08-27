@@ -18,6 +18,7 @@ import { calendarDue, nextCalendarDue } from './sched-time.js';
 import { substituteVars, VAR_NAME_RE, parseList, readNum, readVar, renderVar, type RunCtx } from './sched-vars.js';
 import { parseHeaderLines, readJsonPath, statusIsFailure } from './http-action.js';
 import { inspectBmmpa } from './bmmpa-inspect.js';
+import { BMMS_INDEX, type BmmsEntry } from '../../docs/bmms-reference.gen.js';
 import { parsePresetFeed, looksLikePresetFeed, readPresetCatalogs, writePresetCatalogs } from './preset-catalog.js';
 import { mountCompletions } from './bmms-complete.js';
 import { attachHighlight } from '../../ui/code-editor.js';
@@ -3973,12 +3974,24 @@ function renderModal(modal: HTMLElement): void {
                 <div class="sched-codepane" id="sched-codepane" hidden>
                     <div class="sched-code-bar">
                         <span class="sched-code-bar-hint">${escHtml(t('sched.bmms.barHint'))}</span>
+                        <button type="button" class="btn btn-xs btn-ghost" id="sched-code-ref" aria-pressed="false">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M21 21l-4.35-4.35"/><circle cx="11" cy="11" r="7"/></svg>
+                            ${escHtml(t('sched.ref.toggle'))}
+                        </button>
                         <button type="button" class="btn btn-xs btn-ghost" id="sched-code-docs">
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
                             ${escHtml(t('sched.bmms.openDocs'))}
                         </button>
                     </div>
-                    <textarea class="input sched-code" id="sched-code-ta" rows="20" spellcheck="false"></textarea>
+                    <div class="sched-code-row">
+                        <textarea class="input sched-code" id="sched-code-ta" rows="20" spellcheck="false"></textarea>
+                        <aside class="sched-ref" id="sched-ref" hidden>
+                            <input type="search" class="input sched-ref-q" id="sched-ref-q"
+                                   placeholder="${escAttr(t('sched.ref.search'))}" spellcheck="false">
+                            <div class="sched-ref-list" id="sched-ref-list"></div>
+                            <p class="sched-ref-foot">${escHtml(t('sched.ref.insertHint'))}</p>
+                        </aside>
+                    </div>
                     <div class="sched-code-status" id="sched-code-status"></div>
                 </div>
             </main>
@@ -4336,6 +4349,8 @@ function wireCodeMode(modal: HTMLElement): void {
     // and the page that lists them was three screens away behind a modal you had to close
     // first. It opens the generated reference — the one built from the registry, so it can
     // never list an action this build does not have.
+    wireReferencePanel(modal);
+
     modal.querySelector('#sched-code-docs')?.addEventListener('click', () => {
         // Through the deeplink, so it does the same two things clicking Help & other does:
         // switch view and open the article. The modal closes because the docs are behind it.
@@ -8031,4 +8046,104 @@ export async function importTasksFile(): Promise<void> {
                 .replace('{p}', [...askedAll].join(', ')), 'warning', 8000);
         }
     } catch (e) { toast(`${t('common.error') || 'Error'}: ${e}`, 'error'); }
+}
+
+
+/**
+ * The reference, BESIDE the code instead of instead of it.
+ *
+ * "Open the docs" switched view and closed this modal, which is the one thing you cannot do
+ * to somebody in the middle of writing a script: the answer arrives and the question is gone.
+ * The full page is still a click away for reading; this is for the other case, which is far
+ * more common — "what is that action called again", answered without leaving the line.
+ *
+ * Entries come from BMMS_INDEX, generated from the same registry as the docs page, so the
+ * panel cannot offer an action the runner does not have. What each one is CALLED comes from
+ * the app's own i18n at render time, so it is in the reader's language and matches the block
+ * editor word for word.
+ */
+function wireReferencePanel(modal: HTMLElement): void {
+    const btn = modal.querySelector('#sched-code-ref') as HTMLButtonElement | null;
+    const panel = modal.querySelector('#sched-ref') as HTMLElement | null;
+    const q = modal.querySelector('#sched-ref-q') as HTMLInputElement | null;
+    const list = modal.querySelector('#sched-ref-list') as HTMLElement | null;
+    const ta = modal.querySelector('#sched-code-ta') as HTMLTextAreaElement | null;
+    if (!btn || !panel || !q || !list || !ta) return;
+
+    const KINDS: Record<string, string> = { a: 'sched.ref.kindAction', c: 'sched.ref.kindCond', v: 'sched.ref.kindValue', s: 'sched.ref.kindSource' };
+
+    /** What this entry is called, and what it does — both empty for the ones with no keys. */
+    const label = (e: BmmsEntry): string =>
+        e.k === 'a' ? (t('sched.act.' + e.n) || '') : e.k === 'c' ? (t('sched.cond.' + e.n) || '') : '';
+    const desc = (e: BmmsEntry): string => (e.k === 'a' ? (t('sched.actd.' + e.n) || '') : '');
+
+    /**
+     * What gets typed for you.
+     *
+     * An action arrives with its parameter names and the cursor on the first value, because
+     * the names are the half nobody remembers. A value source arrives in braces — that is the
+     * only form the runner reads, and writing it bare is the mistake this prevents.
+     */
+    const snippet = (e: BmmsEntry): { text: string; caret: number } => {
+        if (e.k === 'a') {
+            const ps = e.p || [];
+            const body = ps.map((p) => `${p}: `).join(', ');
+            return { text: `do ${e.n}(${body})`, caret: `do ${e.n}(${ps[0] ? ps[0] + ': ' : ''}`.length };
+        }
+        if (e.k === 'v') return { text: `{${e.n}}`, caret: e.n.length + 2 };
+        return { text: e.n, caret: e.n.length };
+    };
+
+    const insert = (e: BmmsEntry): void => {
+        const { text, caret } = snippet(e);
+        const at = ta.selectionStart ?? ta.value.length;
+        const end = ta.selectionEnd ?? at;
+        ta.value = ta.value.slice(0, at) + text + ta.value.slice(end);
+        ta.focus();
+        // Where the value goes, not after the whole thing: landing past the closing bracket
+        // means every insert is followed by the same three arrow presses.
+        ta.setSelectionRange(at + caret, at + caret);
+        ta.dispatchEvent(new Event('input', { bubbles: true }));
+    };
+
+    const paint = (): void => {
+        const needle = q.value.trim().toLowerCase();
+        const hits = BMMS_INDEX.filter((e) => {
+            if (!needle) return true;
+            return e.n.toLowerCase().includes(needle)
+                || label(e).toLowerCase().includes(needle)
+                || desc(e).toLowerCase().includes(needle);
+        });
+        if (!hits.length) {
+            list.innerHTML = `<p class="sched-ref-none">${escHtml(t('sched.ref.none'))}</p>`;
+            return;
+        }
+        // Capped, and it SAYS it is capped. A list that silently stops at 60 reads as "that is
+        // everything", and the thing you were looking for is the one that got cut.
+        const shown = hits.slice(0, 60);
+        list.innerHTML = shown.map((e, i) => {
+            const l = label(e);
+            const d = desc(e);
+            const ps = (e.p || []).join(', ');
+            return `<button type="button" class="sched-ref-row" data-i="${i}" title="${escAttr(d || l || e.n)}">
+                <span class="sched-ref-k sched-ref-k-${e.k}">${escHtml(t(KINDS[e.k]))}</span>
+                <span class="sched-ref-n">${escHtml(e.n)}</span>
+                ${ps ? `<span class="sched-ref-p">${escHtml(ps)}</span>` : ''}
+                ${l ? `<span class="sched-ref-l">${escHtml(l)}</span>` : ''}
+            </button>`;
+        }).join('') + (hits.length > shown.length
+            ? `<p class="sched-ref-more">${escHtml(t('sched.ref.more').replace('{n}', String(hits.length - shown.length)))}</p>`
+            : '');
+        list.querySelectorAll<HTMLElement>('.sched-ref-row').forEach((row) => {
+            row.addEventListener('click', () => insert(shown[parseInt(row.dataset.i || '0', 10)]));
+        });
+    };
+
+    btn.addEventListener('click', () => {
+        const open = panel.hasAttribute('hidden');
+        if (open) { panel.removeAttribute('hidden'); paint(); q.focus(); }
+        else panel.setAttribute('hidden', '');
+        btn.setAttribute('aria-pressed', open ? 'true' : 'false');
+    });
+    q.addEventListener('input', paint);
 }

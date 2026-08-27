@@ -8868,5 +8868,14 @@
   "sched.dl.noHook": "That link does not name a hook.",
   "sched.dl.hookTitle": "Ring this hook?",
   "sched.dl.hookDesc": "A link wants to ring a hook. Any task waiting on this name will carry on from where it is waiting.",
-  "sched.dl.hookRang": "Hook rung:"
+  "sched.dl.hookRang": "Hook rung:",
+  "sched.ref.toggle": "Reference",
+  "sched.ref.search": "Search actions, conditions, values…",
+  "sched.ref.insertHint": "Click one to write it at the cursor.",
+  "sched.ref.none": "Nothing matches that.",
+  "sched.ref.more": "{n} more — narrow the search to see them.",
+  "sched.ref.kindAction": "do",
+  "sched.ref.kindCond": "if",
+  "sched.ref.kindValue": "value",
+  "sched.ref.kindSource": "for each"
 }

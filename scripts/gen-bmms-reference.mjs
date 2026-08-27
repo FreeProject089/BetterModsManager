@@ -412,6 +412,25 @@ export const BMMS_REFERENCE: { en: string; fr: string } = {
  * regeneration, and CI fails if somebody forgets.
  */
 export const BMMS_KEYWORDS: string[] = ${JSON.stringify(keywords)};
+
+/**
+ * The same reference, as data rather than a page.
+ *
+ * The markdown above is for READING. This is for the panel beside the editor, which has to
+ * search it and insert from it — and doing that by parsing the markdown back would mean a
+ * second, worse extractor reading the output of the first.
+ *
+ * \`k\`: \`a\`ction · \`c\`ondition · \`v\`alue · \`s\`ource. Names only. What each one is CALLED
+ * comes from the app's own i18n at render time (\`sched.act.<name>\` and friends), so the
+ * panel says it in the reader's language and cannot drift from the block editor's wording.
+ */
+export interface BmmsEntry { k: 'a' | 'c' | 'v' | 's'; n: string; g?: string; p?: string[] }
+export const BMMS_INDEX: BmmsEntry[] = ${JSON.stringify([
+  ...actions.map((a) => ({ k: 'a', n: a.type, g: a.group, p: paramsFor(a.type) })),
+  ...conditions.map((c) => (typeof c === 'string' ? { k: 'c', n: c } : { k: 'c', n: c.type || c.v, p: c.params })),
+  ...sources.map((s) => ({ k: 'v', n: typeof s === 'string' ? s : (s.type || s.v) })),
+  ...loops.map((s) => ({ k: 's', n: typeof s === 'string' ? s : (s.type || s.v) })),
+])};
 `;
 
 
