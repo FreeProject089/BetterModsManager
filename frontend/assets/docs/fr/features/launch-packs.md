@@ -43,6 +43,48 @@ graph TD
     Modifier un pack régénère son lanceur et son raccourci sur place — le raccourci bureau
     continue de fonctionner. Supprimer un pack retire proprement son dossier et son raccourci.
 
+## En donner un à quelqu'un
+
+Le launch pack a longtemps été la seule chose dans BMM qu'on ne pouvait pas offrir. Les
+modpacks, plugins, profils, thèmes, automatisations et catalogues entiers s'exportent tous ;
+le pack — précisément la chose qu'on construit une fois et que quatre amis voudraient — devait
+être refait à la main sur chaque machine.
+
+**Exporter** écrit un `.bmmlaunch` depuis la carte du pack. **Importer** se trouve à côté de
+*Nouveau launch pack*.
+
+Ce que le fichier transporte, ce sont les **décisions** : le nom, quels programmes, et l'icône
+inline en octets. Il ne transporte volontairement *pas* ce qu'un pack EST sur le disque — le
+`launcher.vbs` est plein de chemins absolus et le `.lnk` pointe dans ton propre dossier de
+données, donc rien de tout ça n'aurait de sens ailleurs. L'import régénère tout ça localement,
+par le même code qui crée un pack de zéro, pour que le raccourci fonctionne sur la machine qui
+l'a reçu.
+
+!!! warning "Deux choses que l'import ne fera pas en silence"
+
+    **Un fichier qui n'est pas des nôtres est refusé.** Un `.bmmlaunch` porte
+    `kind: "bmm-launchpack"`. Un pack est une liste de programmes à lancer ; n'importe quel
+    JSON avec un nom et un tableau de chaînes ne doit pas pouvoir se lire comme tel.
+
+    **Les chemins absents ici sont signalés, pas jetés.** Un pack dont les jeux sont sur `D:`
+    chez l'auteur et sur `C:` chez toi est le cas ordinaire d'un pack partagé. Importer un
+    truc qui ne lance rien, et en jeter la moitié sans le dire, sont deux façons d'être pires
+    que d'annoncer « 3 programmes introuvables à leur chemin sur ce PC ».
+
+L'icône repasse par l'encodeur d'images plutôt que d'être écrite telle quelle en `icon.ico`,
+et le nom par le même nettoyeur de nom de fichier qu'un nom tapé — tous deux arrivent
+désormais d'un fichier écrit par un inconnu.
+
+!!! tip "Le lire avant de le lancer"
+
+    Colle un `.bmmlaunch` dans l'inspecteur de fichiers : il dit combien de programmes il
+    lance, imprime chaque chemin exactement tel qu'écrit (sans jamais en résoudre ni en ouvrir
+    un), et signale **lesquels passent par un shell** — un `.ps1` dans un pack s'exécute avec
+    la stratégie d'exécution PowerShell contournée, et un `.bat` par `cmd`. Un `.exe` annonce
+    qu'il est un programme ; le script de quelqu'un d'autre, non.
+
+Un dépôt peut aussi transporter des launch packs — voir [Dépôts serveur](doc-page:features/repo.fr).
+
 ## Lancer un pack depuis l'extérieur de BMM
 
 Un pack n'est pas seulement un bouton dans les Réglages. Il est adressable, et c'est ce qui le rend

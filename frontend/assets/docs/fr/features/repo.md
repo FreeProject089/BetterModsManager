@@ -507,14 +507,27 @@ recevait la personne en face, c'était un dossier de mods et un exercice de lect
 C'est voulu : ça marche sur un dépôt exporté il y a cinq minutes comme sur un dépôt publié
 au printemps dernier, sans regénérer un seul mod.
 
+### Choisir ce qui y entre
+
+**Inclure dans le dépôt…** ouvre la liste. Avant, ça ouvrait d'abord une boîte de dialogue
+Windows dès que le champ du chemin d'export était vide — donc la réponse à « qu'est-ce que je
+peux inclure ? » était un explorateur de fichiers, et la liste n'apparaissait qu'après s'être
+engagé sur un dossier. La liste n'a jamais dépendu du dossier.
+
+La destination est maintenant une ligne dans l'écran, avec **Choisir un dossier…** à côté.
+Changer de dossier le relit et recoche en conséquence : ces cases sont un fait à propos d'UN
+dépôt, et les reporter depuis le dossier regardé juste avant publierait des choses que
+personne n'a choisies. Un dossier qui n'est pas un dépôt le dit à l'écran, à côté du bouton
+qui permet d'y remédier.
+
 ### Deux formes, et la différence compte
 
 === "Les fichiers voyagent avec le dépôt"
 
-    Un **plugin**, une **automatisation**, un **thème**, une **liste de mods** (`.mm`) et un
-    **bundle de catalogue** (`.bmmbundle`) sont copiés dans `extras/<kind>/` et listés dans
-    `repo.json` avec un sha256. Ils sont vérifiés à l'arrivée exactement comme un fichier de
-    mod.
+    Un **plugin**, une **automatisation**, un **thème**, une **liste de mods** (`.mm`), un
+    **bundle de catalogue** (`.bmmbundle`) et un **launch pack** (`.bmmlaunch`) sont copiés
+    dans `extras/<kind>/` et listés dans `repo.json` avec un sha256. Ils sont vérifiés à
+    l'arrivée exactement comme un fichier de mod.
 
     Ce sont des instantanés par nature. Ce que tu as publié est ce que les autres reçoivent.
 
@@ -605,10 +618,21 @@ Rien de ce qui vient d'un dépôt ne s'exécute.
 }
 ```
 
-`kind` vaut `plugin` · `task` · `theme` · `modlist` · `bundle` · `catalog` · `app`. Une liste
-verrouillée le dit dans le manifeste, pour que l'écran puisse annoncer qu'il faudra une
-phrase secrète *avant* le téléchargement plutôt qu'après — sinon ce qui arrive est un fichier
-qui ne s'ouvre pas, sans moyen de savoir si c'est voulu ou si le transfert a échoué.
+`kind` vaut `plugin` · `task` · `theme` · `modlist` · `bundle` · `launchpack` · `catalog` ·
+`app`. Une liste verrouillée le dit dans le manifeste, pour que l'écran puisse annoncer qu'il
+faudra une phrase secrète *avant* le téléchargement plutôt qu'après — sinon ce qui arrive est
+un fichier qui ne s'ouvre pas, sans moyen de savoir si c'est voulu ou si le transfert a
+échoué.
+
+!!! warning "Un launch pack n'est jamais installé par une synchro"
+
+    Un launch pack est une **liste de programmes à lancer sur ta machine**, choisis par qui a
+    publié le dépôt. Tous les autres extras peuvent s'appliquer en fin de synchro ; celui-ci
+    est écrit puis proposé, avec une confirmation qui dit ce que c'est, et le message qui suit
+    annonce combien de ces programmes ne sont pas là où le fichier le prétend. Un pack dont
+    les jeux sont sur `D:` chez l'auteur et sur `C:` chez toi est le cas ordinaire, et
+    importer en silence un truc qui ne lance rien — comme en jeter la moitié sans le dire —
+    sont deux façons d'être pires que de le signaler.
 
 **Ajouter des extras resigne `repo.json`**, parce qu'ils sont à l'intérieur de ce que la
 signature couvre. Laisser l'ancienne signature publierait un manifeste qui échoue à sa propre

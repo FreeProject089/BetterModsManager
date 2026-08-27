@@ -175,6 +175,53 @@ document.
     retiré du document publié. Un catalogue destiné à des inconnus ne doit pas transporter
     votre dossier personnel ni votre nom d'utilisateur.
 
+## Le remplir, dans un ordre
+
+**Créer** se lit en trois étapes numérotées — le nommer, y mettre des applis, le transmettre —
+et l'éditeur derrière **Ajouter une appli** en compte trois de plus, dans l'ordre où les
+réponses arrivent.
+
+| | |
+|---|---|
+| **1 · Ce que c'est** | id et titre, tous deux marqués obligatoires, puis description, catégorie, prix et version. |
+| **2 · D'où ça vient** | La seule décision de l'écran. Une **adresse** ou un **fichier sur ce PC**, posée comme une question à deux réponses ; choisir l'une masque le champ de l'autre. Puis le type, la taille et la somme de contrôle, avec les deux boutons de sonde. |
+| **3 · Son allure dans la liste** | Tags, prérequis, images, lien de documentation. Marqué *tout est facultatif*, et déplacé à la fin. |
+
+C'était quinze champs identiques en une colonne plate, avec deux fins séparateurs gris. Trois
+décident si l'entrée fonctionne, douze relèvent du goût de l'auteur, et rien ne disait
+lesquels — pendant que la seule décision se trouvait au **milieu**, sous dix champs
+cosmétiques.
+
+Le pied est collant et dit **ce qui manque encore** pendant la frappe. Le savoir obligeait
+avant à enregistrer l'entrée, fermer l'éditeur, et lire une liste en bas de page. C'est la même
+vérification que la liste de la page, pour que les deux ne puissent pas diverger sur le sens
+de « terminé ».
+
+!!! note "Choisir « une adresse » abandonne un fichier déjà choisi"
+
+    La ligne qui nomme le fichier disparaît une fois basculé ; le laisser attaché
+    enregistrerait une entrée portant un fichier que l'auteur venait de refuser — sans que ça
+    se voie.
+
+### Deux sorties, et ce ne sont pas des égales
+
+Les quatre boutons de même poids en bas deviennent deux choix, parce que la différence entre
+eux décide si tu as besoin d'un serveur web :
+
+- **En un seul fichier** — tout dans un `.bmmbundle`, fichiers emballés compris. Rien à
+  héberger, aucune adresse à maintenir en vie ; envoie-le comme n'importe quel fichier.
+- **En `catalog.json`** — un document que tu héberges, et chaque appli qu'il contient doit
+  déjà vivre à sa propre adresse. Télécharger, copier ou prévisualiser.
+
+!!! tip "Une entrée avec un fichier n'est pas une entrée à problème"
+
+    La page signalait une entrée dont la source est un **fichier** comme « *pas d'URL de
+    téléchargement — tous les lecteurs jettent cette entrée en silence* ». C'est précisément ce
+    à quoi sert le bouton fichier : il est emballé à la publication et l'adresse est écrite à
+    ce moment-là. L'avertissement était alarmant, faux, et impossible à corriger sans défaire
+    ce que l'auteur voulait. Il dit maintenant la chose vraie — un `catalog.json` simple ne
+    porte aucune adresse pour cette entrée.
+
 ## Créer le tien
 
 Quand vous ajoutez une application, **Récupérer depuis l'URL** lit le fichier que les gens vont

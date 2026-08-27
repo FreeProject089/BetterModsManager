@@ -293,6 +293,45 @@ somebody who applied a mod list asked for a mod list.
     that will run it, against that BMM's own registry — a second opinion written into the
     packer would be wrong the day somebody adds an action.
 
+## The card, and the two questions people ask
+
+A plugin card offered eleven icon buttons in one row. Each did something different and they
+all looked the same, so there was no way to tell which of them only *looked* and which
+*changed* something — and neither of the questions somebody actually has before trusting a
+plugin could be answered from it at all.
+
+Two verbs stay in the open: **Compare** and **Apply**. Then three buttons that only ask:
+
+| | |
+|---|---|
+| **Permissions** | The twenty-four grants, for THIS plugin, on its card. They lived on a settings screen listing every plugin at once. Ticking here **grants** — nothing is asked again afterwards. |
+| **Contents** | Everything the plugin holds: scripts, bundled folders, automations, assets, the lot. |
+| **Analyse** | What it would change if you applied it. |
+
+Everything that *changes* something moves behind a **⋮** menu that names it in words:
+auto-update, files, open folder, edit, duplicate, export, and **uninstall last, behind a
+separator, in red**. Removing a plugin is not a peer of duplicating one. The menu closes on
+++esc++, on a click outside, and on choosing anything — a menu that only closes by pressing
+its own button again is one people leave open.
+
+!!! note "Contents is not the assets viewer"
+
+    **Add a file…** below shows `assets/`, which answers "what did the author put in assets".
+    **Contents** walks the whole plugin folder, which answers "what IS this" — and the second
+    is the question somebody asks before running something they downloaded. Symbolic links are
+    listed but never followed, the listing is sorted so two readings agree, and it stops at
+    5000 entries or 24 levels deep.
+
+## Seeing a folder before you bundle it
+
+Creating a plugin lets you import a directory. It used to show you its **name** and nothing
+else — how many files, how big, whether `node_modules` or a build output or a `.env` came
+along was invisible until the plugin was built, published, and downloaded by other people.
+
+Each picked folder now carries its own **count and size**, and an eye button opens the same
+listing the Contents modal uses. The facts are fetched per row after the list draws, so a
+folder on a slow drive does not hold up the one beside it.
+
 ## Putting a file in, and checking the plugin
 
 Reading, listing and copying **out** of a plugin all existed. Getting a README **in** meant

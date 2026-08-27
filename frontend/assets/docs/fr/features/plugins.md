@@ -308,6 +308,47 @@ jamais : qui applique une liste de mods a demandé une liste de mods.
     machine qui l'exécutera, contre le registre de ce BMM-là — un deuxième avis écrit dans
     l'empaqueteur serait faux le jour où quelqu'un ajoute une action.
 
+## La carte, et les deux questions qu'on se pose
+
+Une carte de plugin proposait onze boutons-icônes sur une ligne. Chacun faisait autre chose et
+tous se ressemblaient : impossible de dire lesquels ne faisaient que *regarder* et lesquels
+*changeaient* quelque chose — et aucune des deux questions qu'on se pose vraiment avant de
+faire confiance à un plugin ne trouvait de réponse là.
+
+Deux verbes restent visibles : **Comparer** et **Appliquer**. Puis trois boutons qui ne font
+que demander :
+
+| | |
+|---|---|
+| **Permissions** | Les vingt-quatre autorisations, pour CE plugin, sur sa carte. Elles vivaient sur un écran de réglages listant tous les plugins d'un coup. Cocher ici **accorde** — plus rien n'est redemandé ensuite. |
+| **Contenu** | Tout ce que le plugin contient : scripts, dossiers embarqués, automatisations, assets, l'ensemble. |
+| **Analyser** | Ce qu'il changerait si tu l'appliquais. |
+
+Tout ce qui *change* quelque chose passe derrière un menu **⋮** qui le nomme en toutes
+lettres : mise à jour auto, fichiers, ouvrir le dossier, éditer, dupliquer, exporter, et
+**désinstaller en dernier, après un séparateur, en rouge**. Supprimer un plugin n'est pas
+l'égal de le dupliquer. Le menu se ferme avec ++esc++, sur un clic à l'extérieur, et dès qu'on
+choisit quelque chose — un menu qui ne se ferme qu'en repressant son propre bouton est un menu
+qu'on laisse ouvert.
+
+!!! note "Contenu n'est pas la visionneuse d'assets"
+
+    **Ajouter un fichier…** plus bas montre `assets/`, ce qui répond à « qu'a mis l'auteur dans
+    assets ». **Contenu** parcourt tout le dossier du plugin, ce qui répond à « qu'est-ce que
+    c'est » — et c'est la seconde qu'on se pose avant de lancer un truc téléchargé. Les liens
+    symboliques sont listés mais jamais suivis, la liste est triée pour que deux lectures
+    concordent, et elle s'arrête à 5000 entrées ou 24 niveaux de profondeur.
+
+## Voir un dossier avant de l'embarquer
+
+Créer un plugin permet d'importer un répertoire. Ça n'affichait que son **nom** — combien de
+fichiers, quelle taille, si `node_modules` ou une sortie de build ou un `.env` avaient suivi
+restait invisible jusqu'à ce que le plugin soit construit, publié, et téléchargé par d'autres.
+
+Chaque dossier choisi porte maintenant son **nombre de fichiers et sa taille**, et un bouton
+œil ouvre la même liste que la modale Contenu. Les chiffres sont demandés ligne par ligne
+après l'affichage, pour qu'un dossier sur un disque lent ne bloque pas celui d'à côté.
+
 ## Mettre un fichier dedans, et vérifier le plugin
 
 Lire, lister et copier **hors** d'un plugin existaient déjà. Mettre un README **dedans**

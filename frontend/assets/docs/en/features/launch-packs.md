@@ -41,6 +41,47 @@ graph TD
     Editing a pack regenerates its launcher and shortcut in place — the desktop shortcut keeps
     working. Deleting a pack removes its folder and shortcut cleanly.
 
+## Handing one to somebody
+
+A launch pack was, for a long time, the one thing in BMM that could not be given away.
+Modpacks, plugins, profiles, themes, automations and whole catalogues all export; the pack —
+which is precisely the thing you build once and four friends would want — had to be rebuilt
+by hand on every machine.
+
+**Export** writes a `.bmmlaunch` beside the pack's card. **Import** sits next to *New launch
+pack*.
+
+What the file carries is the **decisions**: the name, which programs, and the icon inlined as
+bytes. It deliberately does *not* carry what a pack IS on disk — the `launcher.vbs` is full of
+absolute paths and the `.lnk` points into your own app-data folder, so none of that would mean
+anything on another machine. The import regenerates all of it locally, through the same code
+that creates a pack from scratch, so the shortcut works on the machine that received it.
+
+!!! warning "Two things the import will not do quietly"
+
+    **A file that is not one of ours is refused.** A `.bmmlaunch` carries
+    `kind: "bmm-launchpack"`. A pack is a list of programs to start; any JSON with a name and
+    an array of strings must not be readable as one.
+
+    **Paths that do not exist here are reported, not dropped.** A pack whose games sit on
+    `D:` for the author and `C:` for you is the ordinary case for a shared pack. Importing
+    something that starts nothing, and quietly discarding half of it, are both worse than
+    saying "3 programs were not found at their paths on this PC".
+
+The icon goes back through the image encoder rather than being written straight in as
+`icon.ico`, and the name through the same filename sanitiser a typed name uses — both now
+arrive from a file a stranger wrote.
+
+!!! tip "Read one before you run it"
+
+    Paste a `.bmmlaunch` into the file inspector and it will tell you how many programs it
+    starts, print every path exactly as written (never resolving one, never opening one), and
+    say **which of them go through a shell** — a `.ps1` in a pack is run with PowerShell's
+    execution policy bypassed, and a `.bat` through `cmd`. An `.exe` announces itself as a
+    program; somebody else's script does not.
+
+A repo can carry launch packs too — see [Server repos](doc-page:features/repo).
+
 ## Running one from outside BMM
 
 A pack is not only a button in Settings. It is addressable, which is what makes it useful in a wider

@@ -672,16 +672,26 @@ and stops before each one to show you what the task is holding.
 
 | | |
 |---|---|
-| **Step** | Run the step shown, then stop again. Press it *during* a run to go back to stepping. |
-| **Continue** | Stop stopping — or run to the first step matching the box below. The panel keeps showing variables as they change. |
-| **Copy** | The steps and the variables as text, for a bug report. |
+| **Step** — ++f10++ | Run the step shown, then stop again. Press it *during* a run to go back to stepping. |
+| **Continue** — ++f5++ | Stop stopping — or run to the first step matching the box below. The panel keeps showing variables as they change. |
+| **Copy** | The steps and the variables as text, for a bug report. A failure is stated on the second line, above the log. |
 | **Stop** | End the run here. |
+
+The two keys are ignored while a text field has focus, so typing an F in the filter does not
+advance the run. Nothing is bound to ++esc++: it closes dialogs everywhere else in BMM, and a
+key that sometimes stops a debug run and sometimes shuts the window behind it is worse than no
+key.
 
 **Run until the step mentions …** is the setting between the other two. Step is one at a time
 and Continue is all the way; a task with a hundred steps and one suspect branch used to be a
 choice between a hundred clicks and none. Type any part of a step's description — an action
 name, a mod id — and Continue stops at the first step that contains it, then hands you back
 control. Leave it empty and Continue means what it always did.
+
+It takes a **list**, separated by commas: `download, upload, cleanup`. One needle meant running
+the whole task once per place worth stopping at. Blank entries between commas are dropped —
+every description contains the empty string, so `download,,upload` would otherwise stop at
+every step and look like a broken Continue.
 
 **What already ran** lists every step so far, in order. The panel used to show the current step
 and nothing else, which answers "where am I" and not "how did I get here" — and the second is
@@ -695,10 +705,35 @@ differently: twenty rows repainted identically hide the one that moved, which is
 anybody is watching.
 
 The panel can be dragged by its header — it is pinned to a corner, and the corner is sometimes
-exactly where the step you are reading is drawn.
+exactly where the step you are reading is drawn. Its header also counts **steps run and seconds
+elapsed**: a step that took nine seconds was not visible as one, and it is usually the step
+being looked for.
+
+### When it breaks, the window stays open
+
+This is the whole point and it used to be the one thing missing. A task that threw closed the
+debugger — the panel went, the variables went with it, and what you were left with was a toast
+containing the error message, which is what you had before there was a debugger at all.
+
+Now the run stops **on** the failure: the message across the top, the failing step in red in
+the log (it is already the only entry without a tick), and every variable still readable, still
+filterable, still copyable. Step and Continue go grey, because there is nothing left to
+continue; Stop becomes Close.
+
+### Where a value came from
+
+Click a variable's **name** — not its value, which is the editor — and you get its whole trail:
+every value it has held, and the step number that left it there.
+
+"It is empty now" is half an answer. The half that matters is *which* of two hundred steps
+emptied it, and answering that used to mean stepping the task again and watching one row.
+
+Only changes are recorded, so the trail is the answer rather than a transcript, and the cap
+drops the oldest entries: a variable that changed a thousand times is being changed in a loop,
+and it is the last turn of that loop that broke.
 
 **Which step finished.** A tick means it returned. The entry WITHOUT one is where the run is
-standing — or, after a failure, where it stopped. The gate runs before each step, so reaching
+standing — or, after a failure, where it stopped, and it is marked red there. The gate runs before each step, so reaching
 it again is what proves the previous one worked; nothing needed to be added to the runner to
 know that.
 
@@ -749,6 +784,18 @@ print "{valid.count} entries"
 
 Naming an expected format makes the step **fail** when something else arrives. There is also a
 `fileIsValid` condition, for `if` and `ensure`.
+
+What it can recognise, by SHAPE and never by what the document claims about itself:
+`bmmpa` · `bmmnav` · `bmmlaunch` · `bmmreplay` · `bmmplug` · `mm-locked` · `theme` · `databmm` ·
+`repo` · `mm` · `bmp` · `cbmp` · `bmmcat`. A file that claims `format: "mm"` proves nothing; a
+signed one that lies about its own type is the case this exists for.
+
+!!! tip "A launch pack is worth validating before you run it"
+
+    `bmmlaunch` reports how many programs a pack starts, and flags the ones that go through a
+    shell — a `.ps1` runs with PowerShell's execution policy bypassed — and the ones named by
+    a relative path, which resolve against whatever folder happens to be current when they
+    fire. Neither is visible from the filename.
 
 **It decides by SHAPE, never by what the document says about itself.** A file claiming
 `format: "mm"` proves nothing, and a signed one that lies about its own type is the case this

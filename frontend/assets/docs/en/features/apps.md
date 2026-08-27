@@ -164,6 +164,49 @@ can both be called `setup.exe`, and the id is already unique in the document.
     stripped from the published document. A catalogue meant for strangers must not carry your
     home directory or your username.
 
+## Filling one in, in an order
+
+**Create** is three numbered steps — name it, put apps in it, hand it over — and the editor
+behind **Add app** is three more, in the order the answers arrive.
+
+| | |
+|---|---|
+| **1 · What it is** | id and title, both marked as required, then description, category, price and version. |
+| **2 · Where it comes from** | The one decision on the screen. An **address** or a **file on this PC**, asked as a question with two answers; picking one hides the other's field. Then type, size and checksum, with the two probe buttons. |
+| **3 · How it looks in the list** | Tags, requirements, images, documentation link. Marked *all optional*, and moved to the end. |
+
+It used to be fifteen identical inputs in one flat column with two thin grey separators.
+Three of them decide whether the entry works at all and twelve are the author's taste, and
+nothing said which was which — while the one decision sat in the **middle**, under ten
+cosmetic fields.
+
+The footer is sticky and says **what is still missing** as you type. Finding that out used to
+mean saving the entry, closing the editor, and reading a list at the bottom of the page. It is
+the same check the page's own list runs, so the two cannot drift about what "finished" means.
+
+!!! note "Choosing 'an address' drops a file you had picked"
+
+    The row that names the file is gone once you switch, so leaving it attached would save an
+    entry carrying a file the author had just said they did not want — invisibly.
+
+### Two ways out, and they are not peers
+
+The four equal buttons at the bottom are now two choices, because the difference between them
+decides whether you need a web server at all:
+
+- **As one file** — everything in a single `.bmmbundle`, packed files included. Nothing to
+  host, no address to keep alive; send it like any other file.
+- **As a `catalog.json`** — a document you host yourself, and every app in it must already
+  live at an address of its own. Download, copy or preview it.
+
+!!! tip "An entry with a file is not an entry with a problem"
+
+    The page used to report an entry whose source is a **file** as *"no download URL — every
+    reader drops this entry silently"*. That is exactly what the file button is for: the file
+    is packed in at publish time and the address is written then. The warning was alarming,
+    wrong, and unfixable without undoing what the author meant. It now says the true thing
+    instead — a plain `catalog.json` carries no address for that entry.
+
 ## Making your own
 
 When you add an app, **Fetch from the URL** reads the file people will actually download and

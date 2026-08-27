@@ -739,10 +739,15 @@ permissions, et s'arrête avant chacune pour te montrer ce que la tâche tient.
 
 | | |
 |---|---|
-| **Pas à pas** | Exécuter l'étape affichée, puis s'arrêter à nouveau. Pressez-le *pendant* une exécution pour reprendre pas à pas. |
-| **Continuer** | Arrêter de s'arrêter — ou aller jusqu'à la première étape correspondant au champ ci-dessous. Le panneau continue d'afficher les variables qui changent. |
-| **Copier** | Les étapes et les variables en texte, pour un rapport de bug. |
+| **Pas à pas** — ++f10++ | Exécuter l'étape affichée, puis s'arrêter à nouveau. Pressez-le *pendant* une exécution pour reprendre pas à pas. |
+| **Continuer** — ++f5++ | Arrêter de s'arrêter — ou aller jusqu'à la première étape correspondant au champ ci-dessous. Le panneau continue d'afficher les variables qui changent. |
+| **Copier** | Les étapes et les variables en texte, pour un rapport de bug. Un échec est annoncé dès la deuxième ligne, au-dessus du journal. |
 | **Arrêter** | Terminer l'exécution ici. |
+
+Les deux touches sont ignorées quand un champ texte a le focus, pour que taper un F dans le
+filtre ne fasse pas avancer l'exécution. Rien n'est associé à ++esc++ : elle ferme des
+fenêtres partout ailleurs dans BMM, et une touche qui arrête parfois un débogage et ferme
+parfois la fenêtre derrière est pire que pas de touche.
 
 **Continuer jusqu'à une étape mentionnant…** est le réglage entre les deux autres. Pas à pas
 avance d'une étape, Continuer va jusqu'au bout ; une tâche de cent étapes avec une seule
@@ -750,6 +755,11 @@ branche suspecte, c'était le choix entre cent clics et aucun. Tapez n'importe q
 la description d'une étape — un nom d'action, un id de mod — et Continuer s'arrête à la
 première étape qui la contient, puis vous rend la main. Laissez vide et Continuer veut dire ce
 qu'il a toujours voulu dire.
+
+Le champ accepte une **liste** séparée par des virgules : `download, upload, cleanup`. Un seul
+motif obligeait à relancer toute la tâche une fois par endroit intéressant. Les entrées vides
+entre virgules sont jetées — toute description contient la chaîne vide, donc
+`download,,upload` s'arrêterait sinon à *chaque* étape et passerait pour un Continuer cassé.
 
 **Ce qui a déjà tourné** liste chaque étape jusqu'ici, dans l'ordre. Le panneau n'affichait que
 l'étape courante, ce qui répond à « où suis-je » et pas à « comment suis-je arrivé là » — et
@@ -760,10 +770,37 @@ sont différemment : vingt lignes repeintes à l'identique cachent celle qui a 
 la raison même de regarder.
 
 Le panneau se déplace par son en-tête — il est épinglé dans un coin, et ce coin est parfois
-exactement là où s'affiche l'étape qu'on lit.
+exactement là où s'affiche l'étape qu'on lit. Son en-tête compte aussi les **étapes exécutées
+et les secondes écoulées** : une étape qui a pris neuf secondes n'était visible nulle part, et
+c'est en général celle qu'on cherche.
+
+### Quand ça casse, la fenêtre reste
+
+C'est tout l'intérêt, et c'était la seule chose qui manquait. Une tâche qui échouait fermait le
+débogueur — le panneau partait, les variables avec, et il restait un message d'erreur en
+notification : exactement ce qu'on avait avant qu'un débogueur existe.
+
+Maintenant l'exécution s'arrête **sur** l'échec : le message en haut, l'étape fautive en rouge
+dans le journal (c'est déjà la seule sans coche), et chaque variable encore lisible, filtrable,
+copiable. Pas à pas et Continuer passent en grisé, puisqu'il n'y a plus rien à continuer ;
+Arrêter devient Fermer.
+
+### D'où vient une valeur
+
+Cliquez le **nom** d'une variable — pas sa valeur, qui est l'éditeur — et vous obtenez toute sa
+trace : chaque valeur qu'elle a prise, et le numéro d'étape qui l'y a laissée.
+
+« Elle est vide maintenant » est la moitié d'une réponse. La moitié qui compte, c'est *quelle*
+étape sur deux cents l'a vidée, et y répondre obligeait à refaire tourner la tâche en surveillant
+une seule ligne.
+
+Seuls les changements sont enregistrés, pour que la trace soit la réponse et pas la
+transcription, et le plafond jette les plus anciennes entrées : une variable qui a changé mille
+fois est modifiée dans une boucle, et c'est le dernier tour de cette boucle qui a cassé.
 
 **Quelle étape s'est terminée.** Une coche veut dire qu'elle est revenue. L'entrée **sans**
-coche est là où l'exécution se trouve — ou, après un échec, là où elle s'est arrêtée. La
+coche est là où l'exécution se trouve — ou, après un échec, là où elle s'est arrêtée, et elle
+y est marquée en rouge. La
 barrière s'exécute avant chaque étape : y revenir prouve que la précédente a fonctionné, et
 rien n'a eu besoin d'être ajouté à l'exécuteur pour le savoir.
 
@@ -818,8 +855,21 @@ print "{valid.count} entrées"
 | `{valid.count}` | Mods, tâches ou entrées — ce que ce format compte |
 | `{valid.problems}` | Ce qui ne va pas, en mots |
 
-Nommer un format attendu fait **échouer** l'étape si autre chose arrive. Il y a aussi une
+Nommer un format attendu fait **échouer** l'étape quand autre chose arrive. Il existe aussi une
 condition `fileIsValid`, pour `if` et `ensure`.
+
+Ce qu'elle sait reconnaître, par la FORME et jamais par ce que le document prétend être :
+`bmmpa` · `bmmnav` · `bmmlaunch` · `bmmreplay` · `bmmplug` · `mm-locked` · `theme` · `databmm` ·
+`repo` · `mm` · `bmp` · `cbmp` · `bmmcat`. Un fichier qui annonce `format: "mm"` ne prouve
+rien ; un fichier signé qui ment sur son propre type est précisément le cas pour lequel ça
+existe.
+
+!!! tip "Un launch pack mérite d'être validé avant d'être lancé"
+
+    `bmmlaunch` dit combien de programmes un pack lance, et signale ceux qui passent par un
+    shell — un `.ps1` s'exécute avec la stratégie d'exécution PowerShell contournée — et ceux
+    désignés par un chemin relatif, résolus selon le dossier courant au moment du
+    déclenchement. Ni l'un ni l'autre ne se voit dans le nom du fichier.
 
 **Ça décide par la FORME, jamais par ce que le document prétend être.** Un fichier qui dit
 `format: "mm"` ne prouve rien, et un fichier signé qui ment sur son propre type est justement le

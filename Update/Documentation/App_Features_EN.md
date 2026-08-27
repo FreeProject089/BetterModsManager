@@ -449,6 +449,9 @@ Launch Packs allow you to group multiple applications and scripts into a single 
 | **Windows Shortcuts** | Generate a native `.lnk` file on your desktop or in your start menu that points directly to your invisible launch pack. |
 | **PowerShell Stealth** | PowerShell scripts are executed with the `-WindowStyle Hidden` flag for a non-intrusive background experience. |
 | **Asset Management** | BMM handles the lifecycle of launcher scripts and icons, ensuring clean deletion when a pack is removed. |
+| **Export / Import (`.bmmlaunch`)** | A pack can be handed to somebody. The file carries the decisions — name, programs, icon inlined — never the `launcher.vbs` or the `.lnk`, which are full of paths meaningful only on the machine that made them; the import regenerates those locally. A file without `kind: "bmm-launchpack"` is refused, and programs whose paths do not exist on the receiving PC are **reported**, not silently dropped. |
+| **Carried by a Server Repo** | `launchpack` is an extras kind, so a repo can pass packs on. A sync never installs one silently: it is a list of programs to start on your machine, so it is written out and offered with a confirm. |
+| **Readable before running** | The file inspector recognises `.bmmlaunch` — how many programs, every path printed as written, and which of them go through a shell (a `.ps1` runs with the execution policy bypassed). |
 
 ---
 

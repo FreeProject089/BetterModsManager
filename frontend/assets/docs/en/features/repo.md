@@ -487,13 +487,26 @@ was a folder of mods and a reading exercise.
 deliberate: it works on a repo you exported five minutes ago and on one you published last
 spring, without regenerating a single mod.
 
+### Choosing what goes in
+
+**Include in the repo…** opens the list. It used to open a Windows folder dialog *first*,
+whenever the export-path box happened to be empty — so the answer to "what can I include?"
+was a file explorer, and you only saw the list after committing to a folder. The list never
+depended on the folder.
+
+The destination is now a row inside the screen with **Choose a folder…** beside it. Picking a
+different folder re-reads it and re-seeds what is ticked: those ticks are a fact about ONE
+repo, and carrying them over from the folder you looked at before would publish things nobody
+chose. A folder that is not a repo says so on the screen, next to the button that can fix it.
+
 ### Two shapes, and the difference matters
 
 === "Files travel with the repo"
 
-    A **plugin**, an **automation**, a **theme**, a **mod list** (`.mm`) and a **catalogue
-    bundle** (`.bmmbundle`) are copied into `extras/<kind>/` and listed in `repo.json` with a
-    sha256. They are checked on arrival exactly as a mod file is.
+    A **plugin**, an **automation**, a **theme**, a **mod list** (`.mm`), a **catalogue
+    bundle** (`.bmmbundle`) and a **launch pack** (`.bmmlaunch`) are copied into
+    `extras/<kind>/` and listed in `repo.json` with a sha256. They are checked on arrival
+    exactly as a mod file is.
 
     These are snapshots by nature. What you published is what somebody gets.
 
@@ -581,10 +594,20 @@ Nothing installed from a repo runs.
 }
 ```
 
-`kind` is one of `plugin` · `task` · `theme` · `modlist` · `bundle` · `catalog` · `app`. A
-locked mod list says so in the manifest, so the screen can tell you it needs a passphrase
-*before* the download rather than after — otherwise what arrives is a file that will not open
-and no way to tell whether that is the point or a broken transfer.
+`kind` is one of `plugin` · `task` · `theme` · `modlist` · `bundle` · `launchpack` ·
+`catalog` · `app`. A locked mod list says so in the manifest, so the screen can tell you it
+needs a passphrase *before* the download rather than after — otherwise what arrives is a file
+that will not open and no way to tell whether that is the point or a broken transfer.
+
+!!! warning "A launch pack is never installed by a sync"
+
+    A launch pack is a **list of programs to start on your machine**, chosen by whoever
+    published the repo. Every other extra can be applied at the end of a sync; this one is
+    written out and offered, with a confirm that says what it is, and the toast afterwards
+    names how many of those programs are not where the file claims they are. A pack whose
+    games sit on `D:` for the publisher and `C:` for you is the ordinary case, and both
+    silently importing something that starts nothing and silently dropping half of it are
+    worse than saying so.
 
 **Adding extras re-signs `repo.json`**, because they are inside what the signature covers.
 Leaving the old signature would publish a manifest that fails its own check, which reads to a
