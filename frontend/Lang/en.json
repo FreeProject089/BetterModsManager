@@ -9332,5 +9332,6 @@
   "repo.modpacks.errNoShares": "No `shares` in the request. Send the whole list to set it, or use GET to read it — an empty POST would un-publish everything.",
   "sched.dbg.filter": "Filter the variables…",
   "sched.dbg.noMatch": "Nothing matches that.",
-  "sched.dbg.editTip": "Click to change this value, then Enter. The run continues with what you typed."
+  "sched.dbg.editTip": "Click to change this value, then Enter. The run continues with what you typed.",
+  "cid.errNoBundle": "That bundle has neither a checksum nor a readable path, so there is nothing to identify it by."
 }

@@ -627,7 +627,7 @@
         "en": "Everything BMM holds has a local id — the name this machine gave it. Nine kinds also have a content id, which names what the thing is.",
         "fr": "Tout ce que BMM contient a un id local — le nom que cette machine lui a donné. Neuf types ont aussi un id de contenu, qui nomme ce que la chose est."
       },
-      "words": 372,
+      "words": 672,
       "diagrams": 0,
       "fr": true
     },

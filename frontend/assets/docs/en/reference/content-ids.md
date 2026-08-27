@@ -23,7 +23,8 @@ The rule is the same everywhere: **hash what the thing IS, never what it is call
 |---|---|---|
 | Modpack | its members — each one's sha256, or its mod id when there is none | its name, its description, the order they were added |
 | Mod list | the same | the same |
-| Plugin | its declared id and everything it ships | where it is installed |
+| Plugin | its declared id, and every file in its folder **with that file's bytes** | where it is installed |
+| Bundle | the sha256 of the `.bmmbundle` itself | what the catalogue inside it says |
 | Automation | its steps, as canonical JSON | its id, `lastRun`, `lastResult`, `history`, `enabled`, `osSchedule`, `createdAt` |
 | Profile | the game and what is switched on | its name, colour, icon, and all three paths |
 | Launch pack | its programs, by **file name** | where those programs live |
@@ -39,6 +40,35 @@ the same pack; an automation whose steps are in a different order is a different
 **A launch pack ignores paths on purpose.** `D:\Games\DCS\bin\DCS.exe` and
 `C:\DCS\bin\DCS.exe` are one launcher on two machines. An id that disagreed about that
 would never match anywhere, which is the same as not having one.
+
+## Is it always the same if the file has not changed?
+
+Yes — that is the whole promise, and it holds in both directions: the same content gives the
+same id, and different content gives a different one.
+
+The second half was not true for plugins until recently. The id folded the file **names**, so
+a plugin whose script was rewritten from top to bottom kept the same content id, and two
+plugins with matching filenames and entirely different code shared one. It now folds each
+file's path *and its bytes*, walked from the plugin's folder rather than read from the
+manifest — what the author declared is a claim, what is in the folder is what the plugin
+ships. Editing a script, renaming one, or dropping an extra file beside them all change the
+answer.
+
+A few consequences worth knowing:
+
+- **A modpack** follows its members' checksums, so it changes when a mod's main file changes,
+  and not when you rename the pack.
+- **A bundle** is one file, so its id is that file's sha256. Reading the catalogue inside and
+  folding its entries would keep the id when a packed payload changed — the same mistake the
+  plugin id was making.
+- **An automation** ignores whether it has ever run. Two people with the same steps get the
+  same id even when one of them has run it a hundred times.
+- **A file a plugin declares but does not have** contributes its path with an empty hash.
+  "Declared, not present" is a real state, and it is different from both "absent" and
+  "present with content".
+
+Nothing about it is random, and nothing about it depends on the machine: the same bytes on
+two computers fold to the same id, which is the only reason it is worth quoting to somebody.
 
 ## Copying one
 

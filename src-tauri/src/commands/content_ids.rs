@@ -56,15 +56,69 @@ pub fn modpack_id(mods: &[(String, String)]) -> String {
     fold("modpack", &parts)
 }
 
-/// A plugin's content id.
+/// A plugin's content id: its declared id, and every file it ships WITH THAT FILE'S BYTES.
 ///
-/// Its declared id plus everything it ships. The declared id is included here and NOT for a
-/// modpack, and the difference is real: a plugin author chooses `com.me.tools` and means it to
-/// be the identity, while a modpack's name is a label somebody typed.
-pub fn plugin_id(declared_id: &str, files: &[String]) -> String {
+/// The declared id is included here and NOT for a modpack, and the difference is real: a
+/// plugin author chooses `com.me.tools` and means it to be the identity, while a modpack's
+/// name is a label somebody typed.
+///
+/// Each entry is `path` + the sha256 of what is at that path. That second half was missing:
+/// this used to fold the file NAMES alone, so a plugin whose script was rewritten from top
+/// to bottom kept the same content id, and two plugins with the same filenames and entirely
+/// different code shared one. A content id that cannot tell those apart answers the only
+/// question it exists for — "is this the same thing you have" — with a confident no.
+///
+/// A file the manifest declares but that is not on disk contributes its path and an empty
+/// hash. That is honest: "declared, not present" is a real state and is different from both
+/// "absent" and "present with content".
+pub fn plugin_id(declared_id: &str, entries: &[(String, String)]) -> String {
     let mut parts = vec![declared_id.trim().to_string()];
-    parts.extend(files.iter().cloned());
+    parts.extend(entries.iter().map(|(path, sha)| format!("{path}\u{1f}{sha}")));
     fold("plugin", &parts)
+}
+
+/// The sha256 of one file, or an empty string when it cannot be read.
+///
+/// Unreadable is not fatal here. A plugin folder can be mid-write, on a disconnected drive,
+/// or missing a file the manifest names — and refusing to answer at all would make the
+/// button fail where "this is what I can see" is a useful answer.
+pub fn file_sha(path: &std::path::Path) -> String {
+    use std::io::Read;
+    let Ok(mut f) = std::fs::File::open(path) else { return String::new() };
+    let mut h = Sha256::new();
+    let mut buf = vec![0u8; 64 * 1024];
+    loop {
+        match f.read(&mut buf) {
+            Ok(0) => break,
+            Ok(n) => h.update(&buf[..n]),
+            Err(_) => return String::new(),
+        }
+    }
+    format!("{:x}", h.finalize())
+}
+
+/// Every file a plugin folder actually holds, relative to it, with its hash.
+///
+/// Walked rather than read from the manifest. The manifest lists what the AUTHOR declared;
+/// what is on disk is what the plugin IS, and a file added beside the declared ones is part
+/// of it whether or not anybody wrote it down.
+pub fn plugin_entries(install_dir: &std::path::Path) -> Vec<(String, String)> {
+    fn walk(base: &std::path::Path, dir: &std::path::Path, out: &mut Vec<(String, String)>) {
+        let Ok(rd) = std::fs::read_dir(dir) else { return };
+        for e in rd.flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                walk(base, &p, out);
+            } else if let Ok(rel) = p.strip_prefix(base) {
+                // Separator-normalised, so the same plugin folder read on Windows and on
+                // Linux folds to the same id.
+                out.push((rel.to_string_lossy().replace('\\', "/"), file_sha(&p)));
+            }
+        }
+    }
+    let mut out = Vec::new();
+    walk(install_dir, install_dir, &mut out);
+    out
 }
 
 /// An automation's content id: its steps, as JSON, with the local bookkeeping removed.
@@ -111,6 +165,70 @@ fn canonical_json(v: &serde_json::Value) -> String {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    /// A scratch plugin folder.
+    fn plug_dir(tag: &str) -> std::path::PathBuf {
+        let d = std::env::temp_dir().join(format!("bmm_cid_{}_{}", tag, std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(d.join("scripts")).unwrap();
+        d
+    }
+
+    #[test]
+    fn editing_a_script_changes_the_plugin() {
+        // The bug this replaced: the id folded the file NAMES, so a script rewritten from
+        // top to bottom kept the same content id and two plugins with matching filenames and
+        // entirely different code shared one.
+        let d = plug_dir("edit");
+        std::fs::write(d.join("scripts/run.ps1"), "Write-Host 'one'").unwrap();
+        let before = plugin_id("com.me.tools", &plugin_entries(&d));
+        std::fs::write(d.join("scripts/run.ps1"), "Write-Host 'two'").unwrap();
+        let after = plugin_id("com.me.tools", &plugin_entries(&d));
+        assert_ne!(before, after, "the same name with different bytes is a different plugin");
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn the_same_files_untouched_give_the_same_answer_twice() {
+        // The other half of the promise, and the one somebody actually relies on: nothing
+        // changed, so nothing changes.
+        let d = plug_dir("same");
+        std::fs::write(d.join("scripts/run.ps1"), "same bytes").unwrap();
+        assert_eq!(plugin_id("x", &plugin_entries(&d)), plugin_id("x", &plugin_entries(&d)));
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn renaming_a_file_is_a_change_too() {
+        let d = plug_dir("rename");
+        std::fs::write(d.join("scripts/a.ps1"), "body").unwrap();
+        let before = plugin_id("x", &plugin_entries(&d));
+        std::fs::rename(d.join("scripts/a.ps1"), d.join("scripts/b.ps1")).unwrap();
+        assert_ne!(before, plugin_id("x", &plugin_entries(&d)));
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn a_file_nobody_declared_still_counts() {
+        // Walked, not read from the manifest. What the author wrote down is a claim; what is
+        // in the folder is what the plugin ships.
+        let d = plug_dir("undeclared");
+        std::fs::write(d.join("scripts/run.ps1"), "body").unwrap();
+        let before = plugin_id("x", &plugin_entries(&d));
+        std::fs::write(d.join("scripts/extra.ps1"), "surprise").unwrap();
+        assert_ne!(before, plugin_id("x", &plugin_entries(&d)));
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn a_bundle_is_the_hash_of_its_file() {
+        // One file, and the only honest thing to say about it is what is in it. Folding the
+        // catalogue inside would keep the id when a packed payload changed — the same
+        // mistake the plugin id was making.
+        assert_ne!(bundle_id("aaa"), bundle_id("bbb"));
+        assert_eq!(bundle_id("AAA"), bundle_id("aaa"), "a hash is not case-sensitive");
+        assert!(bundle_id("aaa").starts_with(PREFIX));
+    }
 
     #[test]
     fn the_same_members_in_a_different_order_are_the_same_pack() {
@@ -210,11 +328,27 @@ pub fn content_id_of(
                 .iter()
                 .find(|p| p.manifest.id == id)
                 .ok_or_else(|| "cid.errNoPlugin".to_string())?;
-            let mut files: Vec<String> = p.manifest.scripts.clone();
-            files.extend(p.manifest.folders.clone());
-            files.extend(p.manifest.automations.clone());
-            files.extend(p.manifest.assets.iter().map(|a| a.path.clone()));
-            Ok(plugin_id(&p.manifest.id, &files))
+            // What is ON DISK, not what the manifest lists. See plugin_entries.
+            let dir = std::path::PathBuf::from(&p.install_dir);
+            let entries = if dir.as_os_str().is_empty() || !dir.exists() {
+                // No folder to read — a catalogue entry, or a plugin whose files are gone.
+                // Fall back to the declared names so the button still answers, and it is
+                // still a different answer from a plugin whose files ARE readable.
+                let mut names: Vec<(String, String)> = Vec::new();
+                for n in p.manifest.scripts.iter()
+                    .chain(p.manifest.folders.iter())
+                    .chain(p.manifest.automations.iter())
+                {
+                    names.push((n.clone(), String::new()));
+                }
+                for a in &p.manifest.assets {
+                    names.push((a.path.clone(), String::new()));
+                }
+                names
+            } else {
+                plugin_entries(&dir)
+            };
+            Ok(plugin_id(&p.manifest.id, &entries))
         }
         "task" => {
             drop(data);
@@ -297,6 +431,15 @@ pub fn app_id(sha256: &str, url: &str) -> String {
     fold("app", &[key])
 }
 
+/// A `.bmmbundle`: the sha256 of the archive.
+///
+/// A bundle is one file, and the only honest thing to say about it is what is in that file.
+/// Reading the catalogue inside and folding its entries would give an id that stays the same
+/// when a packed payload changes, which is the same mistake the plugin id was making.
+pub fn bundle_id(sha256: &str) -> String {
+    fold("bundle", &[sha256.trim().to_lowercase()])
+}
+
 /// A mod list (.mmlist): its members, the same rule as a modpack.
 pub fn modlist_id(mods: &[(String, String)]) -> String {
     let parts: Vec<String> = mods
@@ -363,6 +506,23 @@ pub fn content_id_from(kind: String, doc: serde_json::Value) -> Result<String, S
             Ok(app_id(sha, url))
         }
         "modlist" => Ok(modlist_id(&members(&doc))),
+        "bundle" => {
+            // Either the hash, or a path to hash. A caller holding the file is the common
+            // case and should not have to compute it first.
+            let sha = doc.get("sha256").and_then(|x| x.as_str()).unwrap_or("").trim().to_string();
+            let sha = if sha.is_empty() {
+                match doc.get("path").and_then(|x| x.as_str()) {
+                    Some(p) if !p.trim().is_empty() => file_sha(std::path::Path::new(p.trim())),
+                    _ => String::new(),
+                }
+            } else {
+                sha
+            };
+            if sha.is_empty() {
+                return Err("cid.errNoBundle".to_string());
+            }
+            Ok(bundle_id(&sha))
+        }
         "repo" => Ok(repo_id(&members(&doc))),
         "profile" => {
             let mods: Vec<String> = doc

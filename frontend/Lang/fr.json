@@ -9330,5 +9330,6 @@
   "repo.modpacks.errNoShares": "Pas de `shares` dans la requête. Envoyez la liste complète pour la définir, ou utilisez GET pour la lire — un POST vide dépublierait tout.",
   "sched.dbg.filter": "Filtrer les variables…",
   "sched.dbg.noMatch": "Rien ne correspond.",
-  "sched.dbg.editTip": "Cliquez pour changer cette valeur, puis Entrée. L'exécution continue avec ce que vous avez tapé."
+  "sched.dbg.editTip": "Cliquez pour changer cette valeur, puis Entrée. L'exécution continue avec ce que vous avez tapé.",
+  "cid.errNoBundle": "Ce bundle n'a ni somme de contrôle ni chemin lisible : il n'y a rien pour l'identifier."
 }
