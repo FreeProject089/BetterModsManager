@@ -9262,7 +9262,6 @@
   "apps.create.probeBusy": "Reading…",
   "apps.create.probeOk": "Read",
   "apps.create.probeNoUrl": "Put the download URL in first.",
-  "apps.probe.errHttps": "Only https here. A checksum fetched over plain http is a checksum somebody on the path chose.",
   "apps.probe.errFetch": "Could not fetch that URL.",
   "apps.probe.errStatus": "The server answered with an error.",
   "apps.probe.errRead": "The download stopped part-way.",
@@ -9288,5 +9287,9 @@
   "apps.create.pbDupe": "{id} appears {n} times — two entries with one id fight over one install record.",
   "apps.integrity": "Integrity",
   "apps.shaYesShort": "verified before anything runs",
-  "apps.shaNoShort": "the publisher did not provide one"
+  "apps.shaNoShort": "the publisher did not provide one",
+  "apps.http": "http",
+  "apps.httpTip": "Served over plain http. Anyone between you and it can change what arrives — including the file and a checksum that would match it.",
+  "apps.create.probeHttp": "over plain http — this is the checksum of whatever arrived",
+  "apps.probe.errScheme": "Only http and https addresses can be read."
 }

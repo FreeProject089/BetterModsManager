@@ -136,8 +136,18 @@ local…* fait pareil pour l'installeur que vous avez sous la main et n'avez pas
 ce sont les mêmes octets, donc la même empreinte.
 
 C'étaient deux champs de texte libre, ce qui laissait deux issues honnêtes : vide (aucune
-vérification) ou mal tapé (toute installation refusée). Https uniquement pour l'URL : une
-somme récupérée en http clair est une somme choisie par qui est sur le chemin.
+vérification) ou mal tapé (toute installation refusée).
+
+**http est autorisé, et affiché.** Beaucoup de petits catalogues sont servis depuis une machine
+sans certificat, et les refuser signifie seulement que l'entrée n'arrive dans la liste de
+personne. Ce qui n'est pas acceptable, c'est que ça soit invisible : en http clair, qui est sur
+le chemin sert ce qu'il veut — un autre installeur *et* une somme de contrôle qui lui
+correspond. Une adresse `http` porte donc un marqueur ambre `http` partout où elle apparaît :
+dans **Sources**, sur la carte, et sur l'entrée pendant que vous l'écrivez. La sonde dit la
+même chose d'une somme qu'elle vient de lire en http.
+
+Seuls `http` et `https` sont lus. `file://` et les autres sont refusés plutôt que marqués — ce
+n'est pas une façon plus faible de faire la même chose, c'est autre chose.
 
 Une entrée n'a besoin que d'un `id`, d'un `title` et d'une URL. Tout le reste a un défaut
 désormais — sans `tags`, serde refusait l'entrée, ce qui faisait refuser tout le

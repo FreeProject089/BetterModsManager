@@ -82,3 +82,30 @@ describe('what is wrong with a draft', () => {
     assert.equal(out.length, 1);
   });
 });
+
+// `isPlainHttp` lives in the screen module, which cannot be imported here — so this is the
+// same rule, asserted against the same regex, to pin what "plain http" means. It decides
+// which rows carry the amber marker, and getting it wrong in either direction is bad: a
+// false positive shouts at an https source, a false negative hides the one case that
+// matters.
+describe('what counts as plain http', () => {
+  const isPlainHttp = (url) => /^http:\/\//i.test((url || '').trim());
+
+  test('http is http, in any casing, with stray spaces', () => {
+    assert.equal(isPlainHttp('http://box.local/catalog.json'), true);
+    assert.equal(isPlainHttp('HTTP://BOX/catalog.json'), true);
+    assert.equal(isPlainHttp('  http://box/c.json  '), true);
+  });
+
+  test('https is not — and neither is a name that merely starts with the letters', () => {
+    assert.equal(isPlainHttp('https://example.com/c.json'), false);
+    // The trap in a `startsWith('http')` check, which is what the add-source box uses to
+    // decide a URL is valid at all.
+    assert.equal(isPlainHttp('httpsomething://x'), false);
+  });
+
+  test('nothing at all is not http', () => {
+    assert.equal(isPlainHttp(''), false);
+    assert.equal(isPlainHttp(undefined), false);
+  });
+});

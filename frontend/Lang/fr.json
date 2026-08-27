@@ -9260,7 +9260,6 @@
   "apps.create.probeBusy": "Lecture…",
   "apps.create.probeOk": "Lu",
   "apps.create.probeNoUrl": "Mettez d'abord l'URL de téléchargement.",
-  "apps.probe.errHttps": "Https uniquement ici. Une somme de contrôle récupérée en http est une somme choisie par quelqu'un sur le chemin.",
   "apps.probe.errFetch": "Impossible de récupérer cette URL.",
   "apps.probe.errStatus": "Le serveur a répondu par une erreur.",
   "apps.probe.errRead": "Le téléchargement s'est arrêté en route.",
@@ -9286,5 +9285,9 @@
   "apps.create.pbDupe": "{id} apparaît {n} fois — deux entrées avec un seul id se disputent un seul enregistrement d'installation.",
   "apps.integrity": "Intégrité",
   "apps.shaYesShort": "vérifiée avant que quoi que ce soit ne s'exécute",
-  "apps.shaNoShort": "l'éditeur n'en a pas fourni"
+  "apps.shaNoShort": "l'éditeur n'en a pas fourni",
+  "apps.http": "http",
+  "apps.httpTip": "Servi en http clair. N'importe qui entre vous et lui peut changer ce qui arrive — le fichier comme la somme de contrôle qui lui correspondrait.",
+  "apps.create.probeHttp": "en http clair — c'est la somme de ce qui est arrivé",
+  "apps.probe.errScheme": "Seules les adresses http et https peuvent être lues."
 }

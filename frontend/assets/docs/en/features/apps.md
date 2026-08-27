@@ -128,8 +128,18 @@ fills in the size and the checksum. *From a local file…* does the same for the
 have in front of you and have not uploaded yet — it is the same bytes, so it is the same hash.
 
 Both were free-text fields before, which left two honest outcomes: empty (no integrity check
-at all) or mistyped (every install refused). https only for the URL: a checksum fetched over
-plain http is a checksum whoever is on the path chose.
+at all) or mistyped (every install refused).
+
+**http is allowed, and shown.** Plenty of small catalogues are served from a box without a
+certificate, and refusing them only means the entry never reaches anybody's list. What is
+not acceptable is that being invisible: over plain http whoever is on the path serves what
+they like — including a different installer *and* a checksum that matches it. So an `http`
+address wears an amber `http` marker wherever it appears: in **Sources**, on the browse card,
+and on the entry while you are writing it. The probe says the same thing about a checksum it
+just read over http.
+
+Only `http` and `https` are read at all. `file://` and the rest are refused rather than
+marked — they are not a weaker way of doing this, they are a different thing.
 
 An entry only needs an `id`, a `title` and a download URL. Everything else has a default now —
 `tags` without one used to make serde refuse the entry, which made `fetch_app_catalogs` refuse

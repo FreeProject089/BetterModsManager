@@ -19449,3 +19449,24 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
     line-height: 1.5;
     color: var(--text-secondary);
 }
+
+
+/* Plain http, shown rather than blocked.
+   Amber, not red: an http source is allowed and often perfectly fine — the point is that
+   it should never be INVISIBLE, because over http the file and a checksum matching it are
+   both up to whoever is on the path. */
+.apps-tag-http {
+    color: var(--warning);
+    border-color: color-mix(in srgb, var(--warning) 45%, transparent);
+    background: color-mix(in srgb, var(--warning) 10%, transparent);
+    text-transform: lowercase;
+    letter-spacing: .02em;
+}
+.apps-source-label.apps-tag-http {
+    padding: 1px 7px;
+    border-radius: 5px;
+    border-width: 1px;
+    border-style: solid;
+    font-size: 10px;
+}
+.apps-cr-probe-say.is-warn { color: var(--warning); }

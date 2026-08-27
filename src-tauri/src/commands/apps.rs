@@ -1207,20 +1207,37 @@ pub fn clear_app_history(app_handle: AppHandle) -> Result<(), String> {
 pub struct UrlProbe {
     pub size: u64,
     pub sha256: String,
+    /// True when the bytes came over plain http.
+    ///
+    /// Reported rather than refused. Refusing was the wrong call: the person pressing this
+    /// is the AUTHOR reading their own file, the rest of the app already installs over http
+    /// behind a warning, and a catalogue with no checksum at all is worse than one whose
+    /// checksum was read over http — which is what refusing produced.
+    ///
+    /// It still matters, so it is carried out rather than dropped: anyone on the path could
+    /// have served different bytes, and the number would then be the checksum of theirs.
+    pub insecure: bool,
 }
 
 const PROBE_MAX_BYTES: u64 = 4 * 1024 * 1024 * 1024; // 4 GiB
 
 #[tauri::command]
 pub async fn catalog_probe_url(url: String) -> Result<UrlProbe, String> {
-    // The same scheme rule as installing: https always, http never here at all. Installing
-    // over http is a decision the user can take with a warning in front of them; filling in
-    // a form field is not that moment, and a checksum fetched over http is a checksum an
-    // attacker on the path chose.
+    // The same scheme rule as installing: https and http, nothing else. `file://`, `ftp://`
+    // and the rest are refused outright rather than reported — they are not a weaker way of
+    // doing this, they are a different thing.
+    //
+    // http is allowed and FLAGGED. It was refused here at first, on the reasoning that a
+    // checksum read over http is one somebody on the path may have chosen. That is true and
+    // it is still the wrong trade: refusing it left the author with an empty checksum field,
+    // and an entry with no checksum is not verified at all — which is strictly worse than
+    // one verified against a number that was probably right. The warning goes to the screen.
     let scheme = url.split("://").next().unwrap_or("").to_ascii_lowercase();
-    if scheme != "https" {
-        return Err("apps.probe.errHttps".to_string());
-    }
+    let insecure = match scheme.as_str() {
+        "https" => false,
+        "http" => true,
+        _ => return Err("apps.probe.errScheme".to_string()),
+    };
     let resp = crate::commands::net::client()
         .get(&url)
         .header(reqwest::header::USER_AGENT, "BetterModsManager/1.0")
@@ -1248,7 +1265,7 @@ pub async fn catalog_probe_url(url: String) -> Result<UrlProbe, String> {
             Err(e) => return Err(format!("apps.probe.errRead|{}", e)),
         }
     }
-    Ok(UrlProbe { size, sha256: hex::encode(hasher.finalize()) })
+    Ok(UrlProbe { size, sha256: hex::encode(hasher.finalize()), insecure })
 }
 
 /// The same two numbers, for a file already on this machine.
@@ -1271,5 +1288,6 @@ pub fn catalog_probe_file(path: String) -> Result<UrlProbe, String> {
         size += n as u64;
         hasher.update(&buf[..n]);
     }
-    Ok(UrlProbe { size, sha256: hex::encode(hasher.finalize()) })
+    // A file already on this machine did not travel, so there is nothing to warn about.
+    Ok(UrlProbe { size, sha256: hex::encode(hasher.finalize()), insecure: false })
 }

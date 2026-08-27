@@ -432,6 +432,7 @@ function renderAppCard(app: AppEntry) {
             ? `<span class="apps-tag apps-tag-more" data-tooltip="${escAttr(app.tags.slice(2).join(' · '))}">+${app.tags.length - 2}</span>`
             : ''}
           ${integrityChip(app)}
+          ${httpChip(app.download?.url || '')}
         </div>
       </div>
     </div>`;
@@ -455,6 +456,26 @@ function integrityChip(app: AppEntry): string {
     return has
         ? `<span class="apps-tag apps-tag-sha" data-tooltip="${escAttr(t('apps.shaYesTip') || 'The catalogue publishes a checksum for the download. It is verified before anything is run.')}">${escHtml(t('apps.shaYes') || 'checksum')}</span>`
         : `<span class="apps-tag apps-tag-nosha" data-tooltip="${escAttr(t('apps.shaNoTip') || 'No checksum published. The download cannot be verified — BMM will warn you before installing.')}">${escHtml(t('apps.shaNo') || 'unverified')}</span>`;
+}
+
+/** Is this address plain http? Empty, relative and https all answer no. */
+export function isPlainHttp(url: string): boolean {
+    return /^http:\/\//i.test((url || '').trim());
+}
+
+/**
+ * The `http` marker.
+ *
+ * Shown, not blocked. http sources and http downloads are allowed everywhere in this
+ * screen — plenty of small catalogues are served from a box without a certificate, and
+ * refusing them just means the entry is not in the list at all. What is NOT acceptable is
+ * that being invisible: over http anyone on the path serves whatever they like, including
+ * a different installer and a matching checksum, and nothing about the row would have said
+ * so. So it says so, once, in the same place every other fact about the row lives.
+ */
+function httpChip(url: string, cls = 'apps-tag'): string {
+    if (!isPlainHttp(url)) return '';
+    return `<span class="${cls} apps-tag-http" data-tooltip="${escAttr(t('apps.httpTip') || 'Served over plain http. Anyone between you and it can change what arrives — including the file and the checksum that would match it.')}">${escHtml(t('apps.http') || 'http')}</span>`;
 }
 
 /** Loud pill kept for the detail modal (priceBadge); the browse card uses the
@@ -1014,6 +1035,7 @@ function renderSources() {
         <div class="apps-source-row${isDisabled(url) ? ' is-off' : ''}">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
           <span class="apps-source-url" data-tooltip="${escAttr(url)}">${escHtml(url)}</span>
+          ${httpChip(url, 'apps-source-label')}
           ${(() => {
             // Where this source came from. Shown because a list of a dozen URLs gives no
             // way to tell one you chose from one an index brought in — which matters when
@@ -1223,7 +1245,7 @@ function renderCreate() {
                 ? `<span class="apps-tag apps-tag-sha">${escHtml(t('apps.shaYes') || 'checksum')}</span>`
                 : `<span class="apps-tag apps-tag-nosha">${escHtml(t('apps.shaNo') || 'unverified')}</span>`}
               ${((app as any).download?.url || '').trim()
-                ? ''
+                ? httpChip((app as any).download?.url || '')
                 : `<span class="apps-tag apps-tag-bad">${escHtml(t('apps.create.pbNoUrlShort') || 'no URL')}</span>`}
             </span>
             <div style="display:flex;gap:6px;margin-left:auto">
@@ -1438,10 +1460,17 @@ function openAppEditor(index: number | null) {
         const say = document.getElementById('cr-probe-say');
         const sizeEl = document.getElementById('cr-size') as HTMLInputElement | null;
         const shaEl = document.getElementById('cr-sha256') as HTMLInputElement | null;
-        const fill = (r: { size: number; sha256: string }) => {
+        const fill = (r: { size: number; sha256: string; insecure?: boolean }) => {
             if (sizeEl) sizeEl.value = String(r.size);
             if (shaEl) shaEl.value = r.sha256;
-            if (say) say.textContent = `${t('apps.create.probeOk') || 'Read'} — ${(r.size / 1048576).toFixed(1)} MB`;
+            if (!say) return;
+            const read = `${t('apps.create.probeOk') || 'Read'} — ${(r.size / 1048576).toFixed(1)} MB`;
+            // http is allowed and said out loud. The number is probably right; over http it
+            // is the checksum of whatever arrived, and what arrives is not only up to the
+            // publisher.
+            say.textContent = r.insecure ? `${read} · ${t('apps.create.probeHttp') || 'over plain http — this is the checksum of whatever arrived'}` : read;
+            say.classList.toggle('is-warn', !!r.insecure);
+            say.classList.remove('is-bad');
         };
         // The command answers with a KEY on failure, sometimes with a detail after a `|`.
         // Printing it raw would put `apps.probe.errHttps` in front of somebody in both
