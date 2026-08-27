@@ -1082,3 +1082,66 @@
     color: var(--text-muted);
     overflow-wrap: anywhere;
 }
+
+/* ── Badges, by ROLE rather than by hue ──────────────────────────────────────
+   The card wore eight pills of identical shape — trust tier, category, price, three tags,
+   integrity, transport — differing only in colour. Colour alone does not rank anything, and
+   for anybody who does not know the colour system it ranked nothing at all.
+
+   Four shapes now, for four kinds of statement:
+     · the TRUST TIER is a stamp — square-cornered, uppercase, letter-spaced;
+     · the CATEGORY is a quiet label with its icon and no border;
+     · a TAG is a word the publisher chose, and keeps its # and its pill;
+     · a FACT is something BMM worked out, and is monospace with no # at all. */
+
+/* A stamp, not a pill. It is the one badge that says who vouches for this. */
+.apps-official-badge,
+.apps-partner-badge,
+.apps-community-badge {
+    border-radius: 4px;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    padding: 2px 7px;
+    line-height: 1.5;
+}
+
+/* The category is context, not a claim: no border, so it stops competing with the stamp. */
+.apps-cat-badge {
+    border-color: transparent !important;
+    font-weight: 600;
+    padding-left: 5px;
+    padding-right: 7px;
+}
+
+/* A fact is measured, not chosen. Monospace says so, and there is no leading # — these were
+   inheriting `.apps-tag`, which adds one, so "unverified" arrived reading as #unverified:
+   a hashtag the publisher never wrote. */
+.apps-fact-chip {
+    display: inline-flex;
+    align-items: center;
+    font-family: var(--font-mono, ui-monospace, Consolas, monospace);
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: .01em;
+    padding: 2px 7px;
+    border-radius: 5px;
+    border: 1px solid transparent;
+    color: var(--text-muted);
+    background: var(--bmm-s04);
+}
+.apps-fact-sha {
+    color: var(--success);
+    border-color: color-mix(in srgb, var(--success) 40%, transparent);
+    background: color-mix(in srgb, var(--success) 10%, transparent);
+}
+.apps-fact-nosha { border-style: dashed; border-color: var(--bmm-s10); }
+.apps-fact-http {
+    color: var(--warning);
+    border-color: color-mix(in srgb, var(--warning) 45%, transparent);
+    background: color-mix(in srgb, var(--warning) 10%, transparent);
+}
+.apps-fact-bad {
+    color: var(--warning);
+    border-color: color-mix(in srgb, var(--warning) 45%, transparent);
+    background: color-mix(in srgb, var(--warning) 10%, transparent);
+}

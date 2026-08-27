@@ -482,8 +482,8 @@ function renderAppCard(app: AppEntry) {
 function integrityChip(app: AppEntry): string {
     const has = !!(app.download?.sha256 || '').trim();
     return has
-        ? `<span class="apps-tag apps-tag-sha" data-tooltip="${escAttr(t('apps.shaYesTip') || 'The catalogue publishes a checksum for the download. It is verified before anything is run.')}">${escHtml(t('apps.shaYes') || 'checksum')}</span>`
-        : `<span class="apps-tag apps-tag-nosha" data-tooltip="${escAttr(t('apps.shaNoTip') || 'No checksum published. The download cannot be verified — BMM will warn you before installing.')}">${escHtml(t('apps.shaNo') || 'unverified')}</span>`;
+        ? `<span class="apps-fact-chip apps-fact-sha" data-tooltip="${escAttr(t('apps.shaYesTip') || 'The catalogue publishes a checksum for the download. It is verified before anything is run.')}">${escHtml(t('apps.shaYes') || 'checksum')}</span>`
+        : `<span class="apps-fact-chip apps-fact-nosha" data-tooltip="${escAttr(t('apps.shaNoTip') || 'No checksum published. The download cannot be verified — BMM will warn you before installing.')}">${escHtml(t('apps.shaNo') || 'unverified')}</span>`;
 }
 
 /** Is this address plain http? Empty, relative and https all answer no. */
@@ -501,9 +501,9 @@ export function isPlainHttp(url: string): boolean {
  * a different installer and a matching checksum, and nothing about the row would have said
  * so. So it says so, once, in the same place every other fact about the row lives.
  */
-function httpChip(url: string, cls = 'apps-tag'): string {
+function httpChip(url: string, cls = ''): string {
     if (!isPlainHttp(url)) return '';
-    return `<span class="${cls} apps-tag-http" data-tooltip="${escAttr(t('apps.httpTip') || 'Served over plain http. Anyone between you and it can change what arrives — including the file and the checksum that would match it.')}">${escHtml(t('apps.http') || 'http')}</span>`;
+    return `<span class="apps-fact-chip apps-fact-http${cls ? ' ' + cls : ''}" data-tooltip="${escAttr(t('apps.httpTip') || 'Served over plain http. Anyone between you and it can change what arrives — including the file and the checksum that would match it.')}">${escHtml(t('apps.http') || 'http')}</span>`;
 }
 
 /** Loud pill kept for the detail modal (priceBadge); the browse card uses the
@@ -1302,11 +1302,11 @@ function renderCreate() {
               ${app.category ? `<span class="apps-tag">${escHtml(catLabel(app.category))}</span>` : ''}
               ${app.price ? `<span class="apps-tag">${escHtml(priceLabel(app.price))}</span>` : ''}
               ${((app as any).download?.sha256 || '').trim()
-                ? `<span class="apps-tag apps-tag-sha">${escHtml(t('apps.shaYes') || 'checksum')}</span>`
-                : `<span class="apps-tag apps-tag-nosha">${escHtml(t('apps.shaNo') || 'unverified')}</span>`}
+                ? `<span class="apps-fact-chip apps-fact-sha">${escHtml(t('apps.shaYes') || 'checksum')}</span>`
+                : `<span class="apps-fact-chip apps-fact-nosha">${escHtml(t('apps.shaNo') || 'unverified')}</span>`}
               ${((app as any).download?.url || '').trim()
                 ? httpChip((app as any).download?.url || '')
-                : `<span class="apps-tag apps-tag-bad">${escHtml(t('apps.create.pbNoUrlShort') || 'no URL')}</span>`}
+                : `<span class="apps-fact-chip apps-fact-bad">${escHtml(t('apps.create.pbNoUrlShort') || 'no URL')}</span>`}
             </span>
             <div style="display:flex;gap:6px;margin-left:auto">
               <button class="btn btn-xs btn-ghost" data-cr-edit="${i}">${escHtml(t('common.edit') || 'Edit')}</button>
@@ -1821,8 +1821,8 @@ function openDetailModal(appId: string) {
             <div class="adm-info-icon">${IC.lock}</div>
             <div class="adm-info-label">${escHtml(t('apps.integrity') || 'Integrity')}</div>
             <div class="adm-info-value">${(app.download.sha256 || '').trim()
-                ? `<span class="apps-tag apps-tag-sha">${escHtml(t('apps.shaYes') || 'checksum')}</span> <span style="opacity:.6">${escHtml(t('apps.shaYesShort') || 'verified before anything runs')}</span>`
-                : `<span class="apps-tag apps-tag-nosha">${escHtml(t('apps.shaNo') || 'unverified')}</span> <span style="opacity:.6">${escHtml(t('apps.shaNoShort') || 'the publisher did not provide one')}</span>`}</div>
+                ? `<span class="apps-fact-chip apps-fact-sha">${escHtml(t('apps.shaYes') || 'checksum')}</span> <span style="opacity:.6">${escHtml(t('apps.shaYesShort') || 'verified before anything runs')}</span>`
+                : `<span class="apps-fact-chip apps-fact-nosha">${escHtml(t('apps.shaNo') || 'unverified')}</span> <span style="opacity:.6">${escHtml(t('apps.shaNoShort') || 'the publisher did not provide one')}</span>`}</div>
           </div>`,
         app.source_label ? `<div class="adm-info-row">
             <div class="adm-info-icon">${IC.link}</div>
