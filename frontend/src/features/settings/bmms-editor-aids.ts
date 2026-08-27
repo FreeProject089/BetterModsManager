@@ -146,13 +146,27 @@ export function explain(word: string): { title: string; body: string } | null {
  * span covers its children's boxes, so taking the outermost hit would return a whole line.
  */
 export function wordAtPoint(mirror: HTMLElement, x: number, y: number): string | null {
+    return wordBoxAtPoint(mirror, x, y)?.word ?? null;
+}
+
+/**
+ * The same hit test, keeping the box it found.
+ *
+ * The rectangle was already computed and thrown away, and it is the piece that matters for
+ * placing anything: an explanation anchored to the POINTER sits wherever the mouse happened
+ * to stop, which on a wide editor is a long way from the word it is about. Anchored to the
+ * token, it points at the thing it explains.
+ */
+export function wordBoxAtPoint(
+    mirror: HTMLElement, x: number, y: number,
+): { word: string; rect: DOMRect } | null {
     const leaves = mirror.querySelectorAll<HTMLElement>('code *');
     for (const el of leaves) {
         if (el.childElementCount > 0) continue;
         const r = el.getBoundingClientRect();
         if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) {
             const txt = (el.textContent || '').trim();
-            return txt.length && txt.length < 60 ? txt : null;
+            return txt.length && txt.length < 60 ? { word: txt, rect: r } : null;
         }
     }
     return null;

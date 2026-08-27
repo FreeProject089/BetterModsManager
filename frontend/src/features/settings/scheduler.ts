@@ -20,7 +20,7 @@ import { substituteVars, VAR_NAME_RE, BLOCK_NAME_RE, parseList, readNum, readVar
 import { parseHeaderLines, readJsonPath, statusIsFailure } from './http-action.js';
 import { inspectBmmpa } from './bmmpa-inspect.js';
 import { BMMS_INDEX, type BmmsEntry } from '../../docs/bmms-reference.gen.js';
-import { outlineOf, offsetOfLine, renderOutline, explain, wordAtPoint, type OutlineRow } from './bmms-editor-aids.js';
+import { outlineOf, offsetOfLine, renderOutline, explain, wordBoxAtPoint, type OutlineRow } from './bmms-editor-aids.js';
 import { BMM_EVENTS, fireEvent, noteTaskRunning } from '../../core/bmm-events.js';
 import { treeOf, foldersOf, renderTree } from './block-tree.js';
 import { showConfirm } from '../../ui/confirm.js';
@@ -9276,8 +9276,9 @@ function wireOutlineAndHover(modal: HTMLElement): void {
     ta.addEventListener('mousemove', (e) => {
         const mirror = ta.parentElement?.querySelector('.code-hl-mirror') as HTMLElement | null;
         if (!mirror) return;
-        const word = wordAtPoint(mirror, e.clientX, e.clientY);
-        if (!word) { hide(); return; }
+        const hit = wordBoxAtPoint(mirror, e.clientX, e.clientY);
+        const word = hit?.word || null;
+        if (!hit || !word) { hide(); return; }
         if (word === lastWord) return;
         const said = explain(word);
         hide();
@@ -9288,11 +9289,20 @@ function wireOutlineAndHover(modal: HTMLElement): void {
         tip.innerHTML = `<b>${escHtml(said.title)}</b>${said.body ? `<span>${escHtml(said.body)}</span>` : ''}`;
         (document.getElementById('app-window-outer') || document.body).appendChild(tip);
         raiseAboveAll(tip, 11700);
-        // Placed below-right of the pointer, then pulled back inside the window. A tooltip
-        // that opens off-screen is one nobody knows appeared.
+        // Anchored to the WORD, not to the pointer.
+        //
+        // It used to open 14px right and 20px below wherever the mouse happened to stop,
+        // which on a wide editor puts an explanation of `mods.scan` several centimetres from
+        // `mods.scan` — the reader has to work out what it is about. The token's own box was
+        // already computed by the hit test and thrown away.
         const r = tip.getBoundingClientRect();
-        const x = Math.min(e.clientX + 14, window.innerWidth - r.width - 10);
-        const y = e.clientY + 20 + r.height > window.innerHeight ? e.clientY - r.height - 10 : e.clientY + 20;
+        const box = hit.rect;
+        // Left edge of the word, clamped inside the window.
+        const x = Math.min(box.left, window.innerWidth - r.width - 10);
+        // Directly under it, flipping above when there is no room — 4px, so the tooltip and
+        // the word read as one thing.
+        const below = box.bottom + 4;
+        const y = below + r.height > window.innerHeight ? box.top - r.height - 4 : below;
         tip.style.left = `${Math.max(8, x)}px`;
         tip.style.top = `${Math.max(8, y)}px`;
     });
