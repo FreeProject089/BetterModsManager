@@ -902,6 +902,7 @@ fn main() {
             commands::bmm_paths::bmm_path_roots,
             commands::bmm_paths::bmm_path_resolve,
             commands::plugins::plugin_automations,
+            commands::plugins::plugin_bundles,
             commands::plugin_assets::plugin_contents,
             commands::plugin_assets::plugin_file_read,
             commands::mod_order::mod_order_get,

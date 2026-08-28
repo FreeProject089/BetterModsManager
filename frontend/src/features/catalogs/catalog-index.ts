@@ -262,7 +262,9 @@ export function describeKinds(kinds: Record<string, number>): string {
         .join(', ');
 }
 
-const readSources = (key: string): string[] => {
+/** Read one source list. Exported because a second copy of this parse in a caller is a
+ *  second thing that can disagree about what an unreadable store means. */
+export const readSources = (key: string): string[] => {
     try {
         const v = JSON.parse(localStorage.getItem(key) || '[]');
         return Array.isArray(v) ? v.filter((x) => typeof x === 'string') : [];

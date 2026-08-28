@@ -245,7 +245,9 @@ export function describeKinds(kinds) {
         .map(([k, n]) => `${n} ${(NAME[k] || [k, `${k}s`])[n > 1 ? 1 : 0]}`)
         .join(', ');
 }
-const readSources = (key) => {
+/** Read one source list. Exported because a second copy of this parse in a caller is a
+ *  second thing that can disagree about what an unreadable store means. */
+export const readSources = (key) => {
     try {
         const v = JSON.parse(localStorage.getItem(key) || '[]');
         return Array.isArray(v) ? v.filter((x) => typeof x === 'string') : [];

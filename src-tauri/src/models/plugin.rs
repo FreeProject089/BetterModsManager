@@ -67,6 +67,19 @@ pub struct PluginManifest {
     /// cannot run a program is a task that can be started without asking a second time.
     #[serde(default)]
     pub automations: Vec<String>,
+    /// Catalogue bundles the plugin ships, under `bundles/` (`.bmmbundle` files).
+    ///
+    /// A `.bmmbundle` is a whole catalogue in one file — entries plus everything they pack —
+    /// and it is followable as it stands, with nothing to host and no address to keep alive.
+    /// Which made it the obvious thing for a plugin to carry and the one thing it could not:
+    /// a plugin could ship the automation and not the catalogue the automation came from.
+    ///
+    /// Same rules as `automations`. They are never followed as they arrive: applying the
+    /// plugin ADDS each one as a catalogue source, after saying which kind it is and asking.
+    /// A source is a thing BMM reads from later, so adding one silently would be signing the
+    /// person up to a stranger's feed.
+    #[serde(default)]
+    pub bundles: Vec<String>,
     /// What happens when the plugin is applied: "modlist" (default), "script",
     /// or "both".
     #[serde(default = "default_apply_mode")]

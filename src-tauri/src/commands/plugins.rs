@@ -2422,6 +2422,7 @@ pub fn create_local_plugin(
     script_src_paths: Option<Vec<String>>,
     folder_src_paths: Option<Vec<String>>,
     automation_src_paths: Option<Vec<String>>,
+    bundle_src_paths: Option<Vec<String>>,
     removed_bundled: Option<RemovedBundled>,
 ) -> Result<InstalledPlugin, String> {
     let mut manifest = manifest;
@@ -2517,6 +2518,32 @@ pub fn create_local_plugin(
                 let rel = format!("automations/{}", safe);
                 if !manifest.automations.contains(&rel) {
                     manifest.automations.push(rel);
+                }
+            }
+        }
+    }
+
+    // ── Import bundles: `.bmmbundle` files copied into the plugin's bundles/.
+    //
+    // Opened rather than sniffed. A bundle is a zip and the only thing that makes it a BMM
+    // one is a `catalog.json` inside, so the check is to actually open it — through the same
+    // function that will read it later, which is what stops this accepting a file the
+    // follow path then refuses. Checked HERE, where the author can pick a different file,
+    // rather than on the machine of whoever applies the plugin.
+    if let Some(srcs) = bundle_src_paths {
+        let bundle_dir = plugin_dir.join("bundles");
+        for src in srcs.iter().filter(|s| !s.trim().is_empty()) {
+            let src_path = std::path::Path::new(src);
+            let Some(fname) = src_path.file_name().and_then(|f| f.to_str()) else { continue };
+            if crate::commands::catalog_bundle::catalog_bundle_open(src.clone()).is_err() {
+                return Err(format!("plugins.bundleBadFile|{}", fname));
+            }
+            let _ = std::fs::create_dir_all(&bundle_dir);
+            let safe = super::plugin_assets_core::safe_component(fname);
+            if std::fs::copy(src_path, bundle_dir.join(&safe)).is_ok() {
+                let rel = format!("bundles/{}", safe);
+                if !manifest.bundles.contains(&rel) {
+                    manifest.bundles.push(rel);
                 }
             }
         }
@@ -2802,6 +2829,60 @@ pub fn plugin_automations(
             continue;
         }
         out.push(PluginAutomation { name: safe, text });
+    }
+    Ok(out)
+}
+
+/// One bundle a plugin ships, as a path the follow path can take.
+#[derive(serde::Serialize, Clone)]
+pub struct PluginBundle {
+    /// The file name, for showing and for saying which one failed.
+    pub name: String,
+    /// Absolute path on this machine. A PATH and not the contents, unlike an automation:
+    /// following a bundle means recording `bundle:<path>` as a source, and the reader opens
+    /// it when it needs it. Handing back a zip's bytes to write them out again would be a
+    /// copy of a file that is already where it needs to be.
+    pub path: String,
+}
+
+/// Read the bundles a plugin ships.
+///
+/// Through the same path guard as the automations, rooted at `bundles/`: the names come from
+/// a manifest, which is a file somebody else wrote.
+#[tauri::command]
+pub fn plugin_bundles(
+    state: State<'_, AppState>,
+    plugin_id: String,
+) -> Result<Vec<PluginBundle>, String> {
+    let (names, dir) = {
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        let p = data
+            .installed_plugins
+            .iter()
+            .find(|p| p.manifest.id == plugin_id)
+            .ok_or_else(|| format!("plugins.assets.errNoPlugin|{}", plugin_id))?;
+        (p.manifest.bundles.clone(), p.install_dir.clone())
+    };
+    let root = std::path::PathBuf::from(&dir);
+    let mut out = Vec::new();
+    for rel in names {
+        let Some(name) = rel.strip_prefix("bundles/") else { continue };
+        let safe = super::plugin_assets_core::safe_component(name);
+        let full = root.join("bundles").join(&safe);
+        if !full.is_file() {
+            continue;
+        }
+        // Opened again on the way out. The manifest is a claim; the file on disk is the fact,
+        // and a bundle that was valid when packed can arrive corrupted.
+        if crate::commands::catalog_bundle::catalog_bundle_open(full.to_string_lossy().to_string())
+            .is_err()
+        {
+            continue;
+        }
+        out.push(PluginBundle {
+            name: safe,
+            path: full.to_string_lossy().to_string(),
+        });
     }
     Ok(out)
 }

@@ -13,7 +13,8 @@ import { bundleEntryKind, resolveBundleEntry } from '../../core/catalog-bundle.j
 // build error. Checked against the exports in catalog-index.ts by hand.
 import {
     enabledOnly, isDisabled, setDisabled, originOf, originLabel, forgetOrigin, recordHistory,
-    looksLikeIndex, importIndexForType, describeKinds } from '../catalogs/catalog-index.js';
+    looksLikeIndex, importIndexForType, describeKinds,
+    catalogLooksLike, readSources, STORE_KEY } from '../catalogs/catalog-index.js';
 import { writeSources } from '../catalogs/catalog-sources.js';
 
 /**
@@ -125,7 +126,10 @@ let _renderPcScripts: (() => void) | null = null; // re-render hooks set by rend
 let _renderPcFolders: (() => void) | null = null;
 let _editAutomations: string[] = []; // .bmmpa files already shipped, carried over when editing
 let _removedAutomations: string[] = []; // staged for removal — undo until save
+let _editBundles: string[] = [];        // .bmmbundle files already shipped
+let _removedBundles: string[] = [];     // staged for removal — undo until save
 let _renderPcAutomations: (() => void) | null = null;
+let _renderPcBundles: (() => void) | null = null;
 let _allProfiles = [];
 let _apiToken = '';
 let _exePath = '';
@@ -529,6 +533,10 @@ function buildPluginCard(plugin: any, source: 'installed' | 'catalog') {
                             <button class="plug-more-item plug-btn-assets" data-id="${escHtml(manifest.id)}" hidden>
                                 ${IC.paperclip} ${escHtml(t('plugins.assets.tip'))}
                             </button>
+                            ${manifest.bundles?.length ? `
+                            <button class="plug-more-item plug-btn-bundles" data-id="${escHtml(manifest.id)}">
+                                ${IC.download} ${escHtml(t('plugins.bundle.follow'))}
+                            </button>` : ''}
                             <button class="plug-more-item plug-btn-folder" data-id="${escHtml(manifest.id)}" data-dir="${escHtml(plugin.install_dir || '')}">
                                 ${IC.folder} ${escHtml(t('plugins.openFolder'))}
                             </button>
@@ -587,6 +595,7 @@ function buildPluginCard(plugin: any, source: 'installed' | 'catalog') {
     card.querySelector('.plug-btn-export')?.addEventListener('click', () => handleExport(manifest.id, manifest.name));
     card.querySelector('.plug-btn-uninstall')?.addEventListener('click', () => handleUninstall(manifest.id, manifest.name));
     card.querySelector('.plug-btn-inspect')?.addEventListener('click', () => handleInspect(plugin));
+    card.querySelector('.plug-btn-bundles')?.addEventListener('click', () => void installPluginBundles(manifest.id));
     card.querySelector('.plug-btn-perms')?.addEventListener('click', async (e) => {
         const b = e.currentTarget as HTMLElement;
         const { openPluginPermissions } = await import('./plugin-inspect.js');
@@ -3678,6 +3687,8 @@ function renderCreate(container: HTMLElement) {
     _removedFolders = [];
     _editAutomations = [];
     _removedAutomations = [];
+    _editBundles = [];
+    _removedBundles = [];
     container.innerHTML = `
         <div class="plug-create-layout">
             <div class="plug-create-form-col">
@@ -3782,6 +3793,20 @@ function renderCreate(container: HTMLElement) {
                             </div>
                             <div id="pc-automations-list" class="plug-scripts-list"></div>
                             <p class="plug-auto-note">${escHtml(t('plugins.automationsNote'))}</p>
+                        </div>
+
+                        <!-- A catalogue in one file. The plugin could already ship the
+                             automation and not the catalogue the automation came from, which
+                             is the half that keeps working next month. -->
+                        <div class="plug-ship" data-ship="bundles">
+                            <div class="plug-ship-head">
+                                <span class="plug-ship-name">${escHtml(t('plugins.pluginBundles'))}</span>
+                                <span class="plug-ship-kinds">.bmmbundle</span>
+                                <span class="plug-ship-count" id="pc-count-bundles"></span>
+                                <button class="btn btn-xs btn-ghost" id="pc-import-bundles">${IC.download} ${escHtml(t('common.add') || 'Add')}</button>
+                            </div>
+                            <div id="pc-bundles-list" class="plug-scripts-list"></div>
+                            <p class="plug-auto-note">${escHtml(t('plugins.bundlesNote'))}</p>
                         </div>
                     </div>
 
@@ -3911,7 +3936,7 @@ function renderCreate(container: HTMLElement) {
 
     // A chip for a file/folder ALREADY bundled with the plugin (edit mode). Removal is
     // STAGED (struck-through + Undo) so nothing is lost until the user saves.
-    const bundledChip = (rel: string, removed: boolean, kind: 'script' | 'folder' | 'automation') => {
+    const bundledChip = (rel: string, removed: boolean, kind: 'script' | 'folder' | 'automation' | 'bundle') => {
         const fname = (rel.split('/').pop() || rel) + (kind === 'folder' ? '/' : '');
         const label = removed
             ? `<span style="text-decoration:line-through;opacity:.55;">${escHtml(fname)}</span>`
@@ -4042,6 +4067,41 @@ function renderCreate(container: HTMLElement) {
     container.querySelector('#pc-import-automations')?.addEventListener('click', async () => {
         const f = await pickFile({ filters: [{ name: 'BMM automation', extensions: ['bmmpa', 'json'] }] }).catch(() => null);
         if (f) { automationPaths.push(f as string); renderAutomationsList(); }
+    });
+
+    // ── Bundles: .bmmbundle catalogues shipped with the plugin ────────────────
+    const bundlePaths: string[] = [];
+    const renderBundlesList = () => {
+        const list = document.getElementById('pc-bundles-list');
+        if (!list) return;
+        const bundled = _editBundles.map(rel => bundledChip(rel, _removedBundles.includes(rel), 'bundle')).join('');
+        const picked = bundlePaths.map((p, i) => {
+            const fname = p.split(/[\\/]/).filter(Boolean).pop() || p;
+            return `<div class="plug-script-chip"><span>${escHtml(fname)}</span><button class="plug-bundle-rm" data-i="${i}" data-tooltip="${escAttr(t('common.remove') || 'Remove')}">${IC.x}</button></div>`;
+        }).join('');
+        list.innerHTML = (bundled + picked)
+            || `<span style="font-size:11px;color:var(--text-muted);">${escHtml(t('plugins.noBundles'))}</span>`;
+        setShipCount('pc-count-bundles', _editBundles.filter(x => !_removedBundles.includes(x)).length + bundlePaths.length);
+        list.querySelectorAll('.plug-bundle-rm').forEach(b => b.addEventListener('click', () => {
+            bundlePaths.splice(parseInt((b as HTMLElement).dataset.i!, 10), 1);
+            renderBundlesList();
+        }));
+        list.querySelectorAll('.plug-bundled-rm').forEach(b => b.addEventListener('click', () => {
+            const rel = (b as HTMLElement).dataset.rel!;
+            if (!_removedBundles.includes(rel)) _removedBundles.push(rel);
+            renderBundlesList();
+        }));
+        list.querySelectorAll('.plug-bundled-undo').forEach(b => b.addEventListener('click', () => {
+            const rel = (b as HTMLElement).dataset.rel!;
+            _removedBundles = _removedBundles.filter(r => r !== rel);
+            renderBundlesList();
+        }));
+    };
+    _renderPcBundles = renderBundlesList;
+    renderBundlesList();
+    container.querySelector('#pc-import-bundles')?.addEventListener('click', async () => {
+        const f = await pickFile({ filters: [{ name: t('catpub.bundleKind'), extensions: ['bmmbundle', 'zip'] }] }).catch(() => null);
+        if (f) { bundlePaths.push(f as string); renderBundlesList(); }
     });
 
     // Icon tab switching
@@ -4262,6 +4322,7 @@ function renderCreate(container: HTMLElement) {
             scripts: keptScripts,
             folders: keptFolders,
             automations: _editAutomations.filter(a => !_removedAutomations.includes(a)),
+            bundles: _editBundles.filter(b => !_removedBundles.includes(b)),
             apply_mode: (document.getElementById('pc-apply-mode') as HTMLSelectElement)?.value || 'modlist',
             modlist: {
                 strict: (document.getElementById('pc-strict') as HTMLInputElement)?.checked || false,
@@ -4285,6 +4346,7 @@ function renderCreate(container: HTMLElement) {
                 scriptSrcPaths: scriptPaths.length ? scriptPaths : null,
                 folderSrcPaths: folderPaths.length ? folderPaths : null,
                 automationSrcPaths: automationPaths.length ? automationPaths : null,
+                bundleSrcPaths: bundlePaths.length ? bundlePaths : null,
                 removedBundled: removedBundledPayload(),
             });
             _installedPlugins = _installedPlugins.filter(p => p.manifest.id !== manifest.id);
@@ -4306,6 +4368,7 @@ function renderCreate(container: HTMLElement) {
                 scriptSrcPaths: scriptPaths.length ? scriptPaths : null,
                 folderSrcPaths: folderPaths.length ? folderPaths : null,
                 automationSrcPaths: automationPaths.length ? automationPaths : null,
+                bundleSrcPaths: bundlePaths.length ? bundlePaths : null,
                 removedBundled: removedBundledPayload(),
             });
             await invoke('export_plugin', { pluginId: manifest.id, destPath: path });
@@ -10474,11 +10537,13 @@ function prefillCreateTab(manifest: any) {
     _editScripts = existingScripts.slice();
     _editFolders = existingFolders.slice();
     _editAutomations = (manifest.automations || []).slice();
+    _editBundles = (manifest.bundles || []).slice();
     // Render the bundled scripts/folders as removable chips (staged removal + undo)
     // via the create tab's own list renderers, now that _editScripts/_editFolders are set.
     _renderPcScripts?.();
     _renderPcFolders?.();
     _renderPcAutomations?.();
+    _renderPcBundles?.();
 
     // Pre-select mods (resolved against the full all-profiles mod list). Prefer the
     // stored id (survives a rename), fall back to a case-insensitive name match.
@@ -10593,6 +10658,79 @@ export async function handleApplyViaDeepLink(pluginId: string): Promise<void> {
  * that the person just asked for by applying the plugin. Auto-run without that stripping would
  * be arbitrary code execution on install, dressed as a convenience.
  */
+/**
+ * Follow the catalogues a plugin ships.
+ *
+ * The counterpart of `installPluginAutomations`, and it stops in the same place: a bundle is
+ * ADDED as a source, never read into anything. A source is something BMM fetches from later,
+ * so adding one without asking would be signing somebody up to a stranger's feed on their
+ * behalf — which is a bigger act than applying a plugin, and a longer-lived one.
+ *
+ * The kind is read from the catalogue itself rather than from anything the plugin claims.
+ * A manifest is a file somebody else wrote; `catalog.json` inside the bundle is the document
+ * that will actually be parsed, and its shape is what every catalogue browser already
+ * decides by. A plugin cannot get its own bundle filed under Themes by mislabelling it.
+ */
+async function installPluginBundles(pluginId: string): Promise<void> {
+    let files: { name: string; path: string }[];
+    try {
+        files = await invoke('plugin_bundles', { pluginId }) as typeof files;
+    } catch (e) { toast(`${t('common.error')}: ${e}`, 'error', 8000); return; }
+    if (!files.length) { toast(t('plugins.bundle.none'), 'info', 6000); return; }
+
+    // Read them ALL before asking anything. Half a dialog, then a second dialog because the
+    // third file turned out to be unreadable, is worse than one question with the real list
+    // in it — and the person answering deserves to see what they are agreeing to.
+    const found: { name: string; path: string; kind: string }[] = [];
+    const failed: string[] = [];
+    for (const f of files) {
+        try {
+            const res: any = await invoke('catalog_bundle_open', { path: f.path });
+            const doc = JSON.parse(String(res?.catalog || ''));
+            const kind = ['plugin', 'theme', 'preset', 'modpack', 'repo', 'app']
+                .find((k) => catalogLooksLike(doc, k)) || '';
+            // A bundle whose catalogue is of a kind with nowhere to put it is named, not
+            // dropped. "Nothing happened" is the report that costs an evening.
+            if (!kind || (kind !== 'app' && !STORE_KEY[kind])) { failed.push(f.name); continue; }
+            found.push({ name: f.name, path: f.path, kind });
+        } catch { failed.push(f.name); }
+    }
+    if (failed.length) toast(`${t('plugins.bundle.someBad')} ${failed.join(', ')}`, 'warning', 9000);
+    if (!found.length) return;
+
+    const lines = found.map((f) => `${f.name} — ${t('plugins.catKind.' + f.kind) || f.kind}`).join('\n');
+    const ok = await showConfirm(
+        t('plugins.bundle.followTitle'),
+        `${t('plugins.bundle.followBody')}\n\n${lines}\n\n${t('plugins.bundle.followSafety')}`,
+        false,
+    );
+    if (!ok) return;
+
+    let added = 0;
+    let already = 0;
+    for (const f of found) {
+        // `bundle:<path>` is the address form every catalogue reader here already
+        // understands — the same one the "add a catalogue from a file" button writes.
+        const src = `bundle:${f.path}`;
+        try {
+            if (f.kind === 'app') {
+                await invoke('add_community_source', { url: src });
+                added += 1;
+                continue;
+            }
+            const key = STORE_KEY[f.kind];
+            const list = readSources(key);
+            if (list.includes(src)) { already += 1; continue; }
+            list.push(src);
+            writeSources(key, list);
+            recordHistory({ action: 'add', type: f.kind, url: src, via: `plugin:${pluginId}` });
+            added += 1;
+        } catch (e) { toast(`${f.name}: ${e}`, 'error', 8000); }
+    }
+    if (added) toast(`${t('plugins.bundle.followed').replace('{n}', String(added))}`, 'success', 9000);
+    else if (already) toast(t('plugins.bundle.allAlready'), 'info', 7000);
+}
+
 async function installPluginAutomations(pluginId: string, runNow: boolean): Promise<void> {
     let files: { name: string; text: string }[];
     try {

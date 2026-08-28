@@ -281,8 +281,9 @@ Une automatisation, c'est l'inverse. Elle a des étapes, des permissions et un d
 !!! danger "Ce qu'une automatisation livrée ne peut pas faire"
 
     Chacune passe par la même porte que n'importe quel autre `.bmmpa` : **désactivée**, et
-    privée des quatre capacités qui sortent de BMM — exécuter des programmes, exécuter des
-    scripts, ouvrir des deeplinks, arrêter des processus.
+    privée de toutes les capacités qui doivent être accordées — exécuter des programmes,
+    exécuter des scripts, ouvrir des deeplinks, arrêter des processus, et supprimer des
+    profils, des modpacks ou des dossiers de mods.
 
     Elles sont accordées par la personne qui va vivre avec, jamais par l'auteur du plugin. Un
     plugin est un fichier d'un inconnu comme un autre.
@@ -308,6 +309,40 @@ jamais : qui applique une liste de mods a demandé une liste de mods.
     Le contrôle est volontairement superficiel. Si chaque tâche est valide se décide sur la
     machine qui l'exécutera, contre le registre de ce BMM-là — un deuxième avis écrit dans
     l'empaqueteur serait faux le jour où quelqu'un ajoute une action.
+
+
+## Catalogues livrés par un plugin — `bundles/`
+
+Un plugin peut porter des fichiers `.bmmbundle` : un catalogue entier en un seul fichier,
+entrées et tout ce qu'elles emballent. **Catalogues**, dans l'éditeur de plugin, en ajoute un.
+
+```
+mon-plugin/
+  plugin.json
+  bundles/
+    mes-packs-serveur.bmmbundle
+```
+
+Ça comble le trou laissé par les automatisations. Un plugin pouvait livrer l'automatisation
+mais pas le catalogue d'où elle venait — la moitié qui marche encore le mois prochain, quand
+il y a une nouvelle version de ce qu'elle installe.
+
+**Suivre ses catalogues**, dans le menu ⋮ du plugin, les ajoute comme sources. Il demande
+d'abord, toujours, et c'est voulu : appliquer un plugin est un geste ponctuel, alors que suivre
+un catalogue est quelque chose que BMM continue de lire ensuite. En ajouter un en silence
+reviendrait à t'inscrire au flux d'un inconnu à ta place.
+
+Le type est lu dans le catalogue lui-même, jamais dans ce que le plugin prétend. `plugin.json`
+est un fichier écrit par quelqu'un d'autre ; le `catalog.json` à l'intérieur du bundle est le
+document qui sera réellement lu, et sa forme est ce sur quoi tous les navigateurs de catalogues
+d'ici se décident déjà. Un plugin ne peut pas faire classer son bundle dans Thèmes en le
+déclarant mal.
+
+!!! note "Rien n'est téléchargé"
+
+    Le bundle est un fichier dans le plugin : le suivre ne touche pas au réseau. Ça veut dire
+    aussi que **supprimer le plugin ne les retire pas** — les sources restent jusqu'à ce que tu
+    les enlèves, comme n'importe quel autre catalogue que tu as suivi.
 
 ## La carte, et les deux questions qu'on se pose
 

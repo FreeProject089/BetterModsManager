@@ -268,8 +268,8 @@ shown before anything happens, and all of which can be **taken away**.
 !!! danger "What a shipped automation cannot do"
 
     Every one arrives through the same gate as any other `.bmmpa`: **disabled**, and stripped
-    of the four capabilities that reach outside BMM — running programs, running scripts, firing
-    deeplinks, stopping processes.
+    of every capability that has to be granted — running programs, running scripts, firing
+    deeplinks, stopping processes, and deleting profiles, modpacks or mod folders.
 
     Those are granted by the person who will live with them, never by the plugin's author. A
     plugin is a file from a stranger like any other.
@@ -293,6 +293,39 @@ somebody who applied a mod list asked for a mod list.
     The check is deliberately shallow. Whether each task is valid is decided on the machine
     that will run it, against that BMM's own registry — a second opinion written into the
     packer would be wrong the day somebody adds an action.
+
+
+## Catalogues a plugin ships — `bundles/`
+
+A plugin can carry `.bmmbundle` files: a whole catalogue in one file, entries and everything
+they pack. **Catalogues** in the plugin editor puts one in.
+
+```
+my-plugin/
+  plugin.json
+  bundles/
+    my-server-packs.bmmbundle
+```
+
+It closes the gap the automations left. A plugin could ship the automation and not the
+catalogue the automation came from — the half that keeps working next month, when there is a
+new version of the thing it installs.
+
+**Follow its catalogues** on the plugin's ⋮ menu adds them as sources. It asks first, always,
+and that is deliberate: applying a plugin is a one-off act, while following a catalogue is
+something BMM keeps reading from afterwards. Adding one silently would be signing you up to a
+stranger's feed on your behalf.
+
+The kind is read from the catalogue itself, never from anything the plugin claims.
+`plugin.json` is a file somebody else wrote; the `catalog.json` inside the bundle is the
+document that will actually be parsed, and its shape is what every catalogue browser here
+already decides by. A plugin cannot get its bundle filed under Themes by mislabelling it.
+
+!!! note "Nothing is downloaded"
+
+    The bundle is a file inside the plugin, so following it reaches no network at all. It also
+    means **removing the plugin does not unfollow them** — the sources stay until you remove
+    them yourself, the same as any other catalogue you followed.
 
 ## The card, and the two questions people ask
 
