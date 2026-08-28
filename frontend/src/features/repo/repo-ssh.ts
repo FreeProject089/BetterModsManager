@@ -328,6 +328,10 @@ function setBusy(on: boolean): void {
         const b = el<HTMLButtonElement>(id);
         if (b) b.disabled = on;
     }
+    // Re-apply the reasons that are not "busy". Without this, finishing a transfer would
+    // re-enable Publish even with no folder to publish — two rules writing one property, and
+    // the last one to run wins.
+    if (!on) renderRoute();
 }
 
 // ── connection test ──────────────────────────────────────────────────────────
@@ -695,6 +699,21 @@ function renderRoute(): void {
     const dir = (document.getElementById('repo-export-path') as HTMLInputElement | null)?.value.trim() || '';
     from.textContent = dir || (t('repo.ssh.routeNoDir') || 'no exported folder yet');
     from.classList.toggle('is-empty', !dir);
+
+    // The two buttons that MOVE that folder are off until there is one, and say why.
+    //
+    // They used to be pressable and answer "pick an export first" afterwards, which puts the
+    // requirement on the far side of a click — on a card that mentions the folder nowhere
+    // except this line. Untouched while a transfer runs: `busy` owns them then, and
+    // re-enabling mid-upload would be worse than either.
+    if (!busy) {
+        for (const id of ['repo-ssh-publish', 'repo-ssh-pull']) {
+            const b = el<HTMLButtonElement>(id);
+            if (!b) continue;
+            b.disabled = !dir;
+            b.title = dir ? '' : (t('repo.ssh.pickExportFirst') || '');
+        }
+    }
 
     const host = val('repo-ssh-host');
     const user = val('repo-ssh-user');

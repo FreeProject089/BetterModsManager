@@ -2697,6 +2697,12 @@ export function initRepo() {
             const folder = await pickFolder();
             if (folder) {
                 elements.inputExportPath.value = folder;
+                // Assigning `.value` fires NOTHING. The SSH card listens for `input` on this
+                // field to redraw its "this folder -> that server" line, so without this the
+                // line said "no exported folder yet" for ever — on a screen whose Publish
+                // button sends exactly this folder. The same trap is commented two files
+                // over, where it was found and fixed for the saved-target chips.
+                elements.inputExportPath.dispatchEvent(new Event('input', { bubbles: true }));
                 try {
                     if (window.__TAURI__) {
                         const content = await invoke('read_file_text', { path: folder + '/repo.json' });
