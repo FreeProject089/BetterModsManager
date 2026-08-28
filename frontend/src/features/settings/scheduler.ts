@@ -5376,9 +5376,21 @@ function renderTriggerEditor(host: HTMLElement): void {
     } else if (tr.type === 'once') {
         ph.innerHTML = `<input type="datetime-local" class="input" id="sched-tr-at" value="${escAttr(tr.at.slice(0, 16))}" style="max-width:220px">`;
         ph.querySelector('#sched-tr-at')?.addEventListener('input', (e) => { (_draft.trigger as any).at = new Date((e.target as HTMLInputElement).value).toISOString(); });
-    } else {
+    } else if (tr.type === 'appStart') {
         ph.innerHTML = `<span style="font-size:12px;color:var(--text-muted)">${t('sched.trAppStartHint') || 'Runs once each time BMM launches.'}</span>`;
     }
+    // Named, not a catch-all — and that one word was the whole bug.
+    //
+    // `onEvent`, `condition`, `script` and `afterTask` build their editors ABOVE, in their own
+    // `if` blocks, before this chain starts. None of them is named IN the chain, so a bare
+    // `else` fired for all four and overwrote what they had just built with "Runs once each
+    // time BMM launches." Four of the thirteen triggers had no configuration at all, told you
+    // they were something else entirely, and had their change handlers attached to elements
+    // that were removed a line later.
+    //
+    // It hid because `appStart` had no branch of its own: it reached that sentence through the
+    // catch-all, so the one trigger the catch-all was written for looked perfectly fine.
+    // check-trigger-editors.mjs now refuses a trigger type with no branch of its own.
 }
 
 // Recursive step list editor.
