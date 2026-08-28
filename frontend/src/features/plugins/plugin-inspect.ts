@@ -32,7 +32,14 @@ function shell(title: string, sub: string, bodyHtml: string, footHtml = ''): HTM
         </div>
         ${footHtml ? `<div class="modal-footer">${footHtml}</div>` : ''}
     </div>`;
-    document.body.appendChild(ov);
+    // Inside the app's window frame, like every other dialog here.
+    //
+    // `#app-window-outer` is `position: relative; overflow: hidden` and carries BMM's rounded
+    // corners. An overlay on `document.body` is laid over the whole OS window instead — its
+    // backdrop and the dialog's shadow paint past the rounded edge, which is what "a shadow
+    // on an invisible div" looks like and why it read as BMM's frame being broken. Every
+    // other modal in the codebase already mounted here; these two were the exception.
+    (document.getElementById('app-window-outer') || document.body).appendChild(ov);
     raiseAboveAll(ov, 11900);
     const close = () => { ov.remove(); document.removeEventListener('keydown', onKey, true); };
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };

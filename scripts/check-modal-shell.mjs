@@ -72,6 +72,29 @@ for (const [file, src] of sources) {
   }
 }
 
+// ── Not checked here: where a dialog is mounted ─────────────────────────────
+//
+// `#app-window-outer` is `position: relative; overflow: hidden` and carries BMM's rounded
+// corners; a `.modal-overlay` appended to `document.body` is laid over the whole OS window
+// instead, so its backdrop and shadow paint past that edge. Two dialogs shipped that way and
+// looked, precisely, like the app's frame was broken.
+//
+// I wrote a check for it and took it out again. Three attempts:
+//
+//   1. flag any `document.body.appendChild` in a file that mentions an overlay
+//      → 21 hits across eight files, nearly all deliberate. The tutorial spotlight has to
+//        cover the frame; the Ko-fi card and the debug windows are their own shells.
+//   2. pair the className with the append via a built RegExp
+//      → escaped one level too far, matched nothing, and reported SUCCESS with the bug
+//        planted in front of it.
+//   3. the same pairing with a literal `includes`
+//      → the condition is true when run by hand and the loop still did not fire.
+//
+// A gate that says green while the defect is present is worse than no gate: it is the thing
+// people trust instead of looking. The rule is real and worth keeping in mind — every modal
+// in this codebase mounts inside the frame — but it is written here rather than enforced,
+// because I could not make the enforcement honest.
+
 if (problems.length) {
   console.error('✗ modal shells with no CSS:\n');
   for (const p of problems) console.error(`  ${p}`);
