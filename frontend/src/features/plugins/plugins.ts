@@ -6839,6 +6839,26 @@ function getEndpointDefs(): EndpointDef[] {
             ],
         },
         {
+            method: 'POST', path: '/api/repo/sync-now', auth: true,
+            desc: t('plugins.ep.syncNow'),
+            about: t('plugins.epAbout.syncNow'),
+            fields: [
+                { name: 'url', type: 'string', required: true, desc: t('plugins.epF.snUrl') },
+                { name: 'repoProfile', type: 'string', required: true, desc: t('plugins.epF.snRepoProfile') },
+                { name: 'targetProfile', type: 'string', required: true, desc: t('plugins.epF.snTarget') },
+                { name: 'gameDir', type: 'string', required: true, desc: t('plugins.epF.snGame') },
+                { name: 'modsDir', type: 'string', required: true, desc: t('plugins.epF.snMods') },
+                { name: 'backupDir', type: 'string', required: false, desc: t('plugins.epF.snBackup') },
+                { name: 'password', type: 'string', required: false, desc: t('plugins.epF.snPassword') },
+                { name: 'overwriteAll', type: 'boolean', required: false, desc: t('plugins.epF.snOverwrite') },
+                { name: 'deleteExtra', type: 'boolean', required: false, desc: t('plugins.epF.snDelete') },
+            ],
+            responseStatuses: [
+                { code: 202, label: 'Accepted', body: '{ "ok": true, "driven_by": "bmm-ui", "action": "repo/sync-now" }' },
+                e401,
+            ],
+        },
+        {
             method: 'POST', path: '/api/content-id', auth: true,
             desc: t('plugins.ep.contentId'),
             about: t('plugins.epAbout.contentId'),

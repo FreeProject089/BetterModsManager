@@ -277,6 +277,54 @@ export async function initApiActivity(): Promise<void> {
                 break;
             }
             case 'repo/sync': driveRepo('sync', params); break;
+            // The one that RUNS. `repo/sync` fills the form in and waits for a person;
+            // this calls the same command the app itself calls, with the caller's
+            // parameters, and reports what happened.
+            //
+            // Deliberately not a deeplink: a link is something you click before you know
+            // what it does, and this writes to a mods folder unattended. It needs a token
+            // and `repo.write`.
+            case 'repo/sync-now': {
+                try {
+                    const info: any = await invoke('fetch_repo_info', {
+                        url: params.url,
+                        creatorId: await invoke('get_creator_id').catch(() => null),
+                        password: params.password || null,
+                    });
+                    const wanted = String(params.repoProfile || '').trim().toLowerCase();
+                    const chosen = (info?.profiles || []).find((rp: any) =>
+                        String(rp.id).toLowerCase() === wanted || String(rp.name || '').toLowerCase() === wanted);
+                    if (!chosen) {
+                        // Never guess which profile. Picking one from several would install
+                        // somebody's whole mod set into a folder nobody named.
+                        toast((t('sched.syncPickProfile') || 'Name which repo profile to sync. Available: {list}')
+                            .replace('{list}', (info?.profiles || []).map((rp: any) => rp.name || rp.id).join(', ') || '—'),
+                            'error', 9000);
+                        break;
+                    }
+                    const summary: any = await invoke('sync_server_repo', { args: {
+                        url: params.url,
+                        creatorId: await invoke('get_creator_id').catch(() => null),
+                        password: params.password || null,
+                        gameDir: params.gameDir,
+                        modsDir: params.modsDir,
+                        backupDir: params.backupDir || '',
+                        choices: [{
+                            repoProfileId: chosen.id,
+                            // An existing profile, never null: null means "create new", and a
+                            // caller able to do that on every call fills the list with them.
+                            targetLocalProfileId: params.targetProfile,
+                            selectedModIds: null,
+                        }],
+                        overwriteAll: params.overwriteAll === true,
+                        deleteExtra: params.deleteExtra === true,
+                    } });
+                    toast(`${t('repo.syncDone') || 'Sync finished'} — +${summary?.downloaded ?? 0} / -${summary?.removed ?? 0}`, 'success', 8000);
+                } catch (e) {
+                    toast(String((e as Error)?.message || e), 'error', 9000);
+                }
+                break;
+            }
             case 'repo/gen':  driveRepo('gen', params);  break;
             case 'repo/update':
                 // Drive the BMM UI exactly like gen/sync — opens the update modal,

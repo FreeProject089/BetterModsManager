@@ -308,6 +308,36 @@ struct NewKeyBody {
     kind: Option<String>,
 }
 
+/// `POST /api/repo/sync-now` — a sync that actually runs.
+///
+/// `/api/repo/sync` fills the form in and waits for somebody to press Sync, which is the
+/// right answer for a caller sitting next to the app and no answer at all for one that is
+/// not. This is the API's half of the same split the scheduler already makes between
+/// `repo.sync` and `repo.syncNow`.
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct RepoSyncNowBody {
+    url: String,
+    /// Which profile INSIDE the repo. Named, never guessed: a repo with several and no name
+    /// given would otherwise install somebody's whole mod set into a folder on a timer.
+    repo_profile: String,
+    /// An existing local profile. Creating one is deliberately not offered here — a caller
+    /// that could mint a profile per call is a caller that fills the list with them.
+    target_profile: String,
+    game_dir: String,
+    mods_dir: String,
+    #[serde(default)]
+    backup_dir: String,
+    #[serde(default)]
+    password: Option<String>,
+    /// Both default OFF and stay off unless the caller says otherwise. These two are what
+    /// turn a sync into data loss.
+    #[serde(default)]
+    overwrite_all: bool,
+    #[serde(default)]
+    delete_extra: bool,
+}
+
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct RepoSyncBody {
@@ -2315,6 +2345,49 @@ pub async fn start_api_server(
             )
         });
 
+    // POST /api/repo/sync-now  (auth) — a sync that runs, rather than a form that opens.
+    let tok_sync_now = token.clone();
+    let handle_sync_now = app_handle.clone();
+    let repo_sync_now = warp::path!("api" / "repo" / "sync-now")
+        .and(warp::post())
+        .and(require_token(tok_sync_now))
+        .and(require_permission(token.clone(), "repo.write"))
+        .and(warp::body::json::<RepoSyncNowBody>())
+        .and(with_app_handle(handle_sync_now))
+        .map(|body: RepoSyncNowBody, handle: tauri::AppHandle| {
+            // Refused before anything starts rather than half-done. Each of these is a way
+            // to sync into somewhere nobody chose.
+            for (field, value) in [
+                ("url", &body.url), ("repoProfile", &body.repo_profile),
+                ("targetProfile", &body.target_profile),
+                ("gameDir", &body.game_dir), ("modsDir", &body.mods_dir),
+            ] {
+                if value.trim().is_empty() {
+                    return warp::reply::with_status(
+                        warp::reply::json(&ApiError { error: format!("{field} is required") }),
+                        StatusCode::BAD_REQUEST,
+                    );
+                }
+            }
+            let _ = handle.emit("bmm://api-exec", serde_json::json!({
+                "action": "repo/sync-now",
+                "params": {
+                    "url": body.url,
+                    "repoProfile": body.repo_profile,
+                    "targetProfile": body.target_profile,
+                    "gameDir": body.game_dir,
+                    "modsDir": body.mods_dir,
+                    "backupDir": body.backup_dir,
+                    "password": body.password,
+                    "overwriteAll": body.overwrite_all,
+                    "deleteExtra": body.delete_extra,
+                }
+            }));
+            warp::reply::with_status(warp::reply::json(&serde_json::json!({
+                "ok": true, "driven_by": "bmm-ui", "action": "repo/sync-now"
+            })), StatusCode::ACCEPTED)
+        });
+
     // POST /api/repo/sync  (auth, max 1 concurrent) — background download task
     let data_repo_sync    = data.clone();
     let path_repo_sync    = data_path.clone();
@@ -3305,6 +3378,7 @@ pub async fn start_api_server(
         .or(get_profiles)
         .or(get_plugins)
         .or(get_creator_id_route)
+        .or(repo_sync_now)
         .boxed();
 
     let group_b = enable_mod

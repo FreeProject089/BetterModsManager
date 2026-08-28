@@ -9493,5 +9493,16 @@
   "plugins.dl.sshAbout": "Envoie vers le serveur SSH déjà enregistré dans Dépôt Serveur, et répond quand le transfert est fini — il n’ouvre aucun écran. Ne porte ni hôte, ni utilisateur, ni chemin de clé : un lien capable de les nommer pourrait faire lire à BMM une clé privée de son choix et expédier un dépôt vers une machine de son choix. <code>bmm://repo/fetch-ssh</code> est l’inverse, et demande confirmation — publier écrase des fichiers sur un serveur que vous avez configuré, récupérer écrase les vôtres.",
   "plugins.dl.hookName": "Le nom du hook, tel qu’une tâche l’attend.",
   "plugins.dl.hookDesc": "Faire sonner un hook",
-  "plugins.dl.hookAbout": "Réveille toute tâche planifiée qui attend ce nom. C’est la façon dont quelque chose d’extérieur à BMM — un launcher, un script, un bouton sur une page — déclenche une automatisation sans avoir à connaître son id."
+  "plugins.dl.hookAbout": "Réveille toute tâche planifiée qui attend ce nom. C’est la façon dont quelque chose d’extérieur à BMM — un launcher, un script, un bouton sur une page — déclenche une automatisation sans avoir à connaître son id.",
+  "plugins.ep.syncNow": "Synchroniser un dépôt — s’exécute immédiatement",
+  "plugins.epAbout.syncNow": "`/api/repo/sync` remplit le formulaire et attend que quelqu’un presse Synchroniser — la bonne réponse pour un appelant assis à côté de l’app, et aucune réponse pour un autre. Celle-ci exécute la synchro, avec les paramètres donnés, et dit ce qui s’est passé. Chaque chemin est obligatoire et refusé avant que rien ne commence, parce que chaque oubli est une façon de synchroniser vers un endroit que personne n’a choisi. Créer un profil local n’est volontairement pas proposé : un appelant capable d’en frapper un par appel est un appelant qui remplit la liste. `overwriteAll` et `deleteExtra` sont à OFF par défaut et y restent sauf mention — ce sont eux qui transforment une synchro en perte de données.",
+  "plugins.epF.snUrl": "L’adresse du repo.json.",
+  "plugins.epF.snRepoProfile": "Quel profil DANS le dépôt, par nom ou id. Jamais deviné — un dépôt qui en a plusieurs, sans nom donné, installerait un jeu de mods que personne n’a choisi.",
+  "plugins.epF.snTarget": "L’id d’un profil local EXISTANT où installer.",
+  "plugins.epF.snGame": "Le dossier du jeu.",
+  "plugins.epF.snMods": "Le dossier des mods.",
+  "plugins.epF.snBackup": "Le dossier de sauvegarde. Facultatif.",
+  "plugins.epF.snPassword": "Le mot de passe de téléchargement, si le dépôt est protégé.",
+  "plugins.epF.snOverwrite": "Re-télécharger les fichiers déjà identiques. Désactivé par défaut.",
+  "plugins.epF.snDelete": "Supprimer du dossier des mods tout ce que le dépôt n’a pas. Désactivé par défaut."
 }

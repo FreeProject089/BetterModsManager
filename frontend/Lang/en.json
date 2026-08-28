@@ -9495,5 +9495,16 @@
   "plugins.dl.sshAbout": "Sends to the SSH server already saved in Server Repo, and answers when the transfer is done — it opens no screen. Carries no host, user or key path: a link able to name those could make BMM read a private key of its choosing and ship a repo to a machine of its choosing. <code>bmm://repo/fetch-ssh</code> is the reverse, and asks first — publishing overwrites files on a server you configured, fetching overwrites your own.",
   "plugins.dl.hookName": "The hook’s name, as a task waits for it.",
   "plugins.dl.hookDesc": "Ring a hook",
-  "plugins.dl.hookAbout": "Wakes any scheduled task waiting on that name. It is how something outside BMM — a launcher, a script, a button on a page — triggers an automation without having to know its id."
+  "plugins.dl.hookAbout": "Wakes any scheduled task waiting on that name. It is how something outside BMM — a launcher, a script, a button on a page — triggers an automation without having to know its id.",
+  "plugins.ep.syncNow": "Sync a repo — runs now",
+  "plugins.epAbout.syncNow": "`/api/repo/sync` fills the sync form in and waits for somebody to press Sync — the right answer for a caller sitting next to the app, and no answer at all for one that is not. This runs the sync, with the parameters you give, and reports what happened. Every path is required and refused before anything starts, because each missing one is a way to sync into somewhere nobody chose. Creating a local profile is deliberately not offered: a caller able to mint one per call is a caller that fills the list with them. `overwriteAll` and `deleteExtra` default OFF and stay off unless you say otherwise — those two are what turn a sync into data loss.",
+  "plugins.epF.snUrl": "The repo.json address.",
+  "plugins.epF.snRepoProfile": "Which profile INSIDE the repo, by name or id. Never guessed — a repo with several and no name given would install a whole mod set nobody chose.",
+  "plugins.epF.snTarget": "An EXISTING local profile id to install into.",
+  "plugins.epF.snGame": "The game folder.",
+  "plugins.epF.snMods": "The mods folder.",
+  "plugins.epF.snBackup": "The backup folder. Optional.",
+  "plugins.epF.snPassword": "The download password, if the repo is protected.",
+  "plugins.epF.snOverwrite": "Re-download files that already match. Off by default.",
+  "plugins.epF.snDelete": "Remove anything in the mods folder the repo does not have. Off by default."
 }
