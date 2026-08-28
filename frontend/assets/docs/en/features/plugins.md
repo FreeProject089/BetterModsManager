@@ -80,8 +80,23 @@ everything at once.
 ## Declaring what your plugin needs
 
 The **Create** tab has a *What it needs* section. Ticking a scope there does not grant it —
-it **asks**. Whoever installs the plugin sees the request pre-ticked on the permission screen
-and decides.
+it **asks**. Installing the plugin grants **none** of them, and the request is put to whoever
+installed it, once, right after the install: the scopes the plugin asked for are tagged, and
+*Grant what it asks for* ticks exactly those.
+
+Nothing is granted by dismissing that dialog. It opens with what is currently granted —
+nothing, on a fresh install — rather than with the request, so closing it leaves the plugin
+with the permissions it had, which is none. The same screen is on the plugin's card
+afterwards, and it also names any scope granted **without** having been asked for: usually
+left over from an older version of the plugin.
+
+!!! note "There is no “grant everything” switch, on purpose"
+
+    There used to be one — *Global plugin trust: skip all permission dialogs for every plugin,
+    every time* — and it did nothing at all: the dialog it claimed to skip had no callers, so
+    the switch wrote a setting nothing read. It is gone. A control describing a posture the app
+    does not have is worse than no control: somebody who left it off to be careful gained
+    exactly nothing, and believed otherwise.
 
 Ask for the least that works. A plugin that requests everything is a plugin whose list nobody
 reads.

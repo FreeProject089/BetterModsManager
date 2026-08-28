@@ -82,8 +82,24 @@ tout lire d'un coup.
 ## Déclarer ce dont votre plugin a besoin
 
 L'onglet **Créer** a une section *Ce dont il a besoin*. Y cocher une portée ne l'accorde pas
-— ça la **demande**. La personne qui installe voit la demande pré-cochée sur l'écran des
-permissions et décide.
+— ça la **demande**. Installer le plugin n'en accorde **aucune**, et la demande est posée à
+la personne qui l'a installé, une fois, juste après l'installation : les portées demandées
+sont étiquetées, et *Accorder ce qu'il demande* coche exactement celles-là.
+
+Fermer ce dialogue n'accorde rien. Il s'ouvre sur ce qui est accordé aujourd'hui — rien, sur
+une installation neuve — et non sur la demande : le fermer laisse donc le plugin avec les
+permissions qu'il avait, c'est-à-dire aucune. Le même écran reste sur la carte du plugin
+ensuite, et il nomme aussi toute portée accordée **sans** avoir été demandée : en général un
+reste d'une version précédente du plugin.
+
+!!! note "Il n'existe volontairement aucun interrupteur « tout accorder »"
+
+    Il y en avait un — *Confiance globale : sauter tous les dialogues de permission, pour tous
+    les plugins, à chaque fois* — et il ne faisait strictement rien : le dialogue qu'il
+    prétendait sauter n'avait aucun appelant, donc l'interrupteur écrivait un réglage que
+    personne ne lisait. Il a été retiré. Un contrôle qui décrit une posture que l'app n'a pas
+    est pire que pas de contrôle : qui le laissait éteint par prudence ne gagnait rien, et
+    croyait le contraire.
 
 Demandez le minimum qui fonctionne. Un plugin qui demande tout est un plugin dont personne ne
 lit la liste.
