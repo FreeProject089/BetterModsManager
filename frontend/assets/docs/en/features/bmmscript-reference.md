@@ -2,7 +2,7 @@
 
 !!! info ""
 
-    93 actions · 32 conditions · 32 values · 8 loop sources
+    94 actions · 32 conditions · 32 values · 8 loop sources
 
 > Generated from BMM's own registry, so it cannot describe a version of the app that does not exist. If an action is in the block editor, it is in this list.
 
@@ -46,6 +46,7 @@ Written `do <name>(param: value, …)`. An action with no parameters takes empty
 | `repo.connect` | Add a remote repo | `url` · `name` · `password` |
 | `repo.sync` | Download & integrate a remote profile | `url` · `profile` · `password` |
 | `repo.gen` | Open repo generation | — |
+| `repo.genNow` | Generate a server repo (unattended) | `outputDir` · `authorName` · `profileIds` · `seed` · `zipOutput` · `zipMods` |
 | `repo.update` | Update an exported repo | `dir` |
 | `repo.host` | Serve a repo over HTTP | `dir` · `port` |
 | `repo.manifest` | Reads the folder, rewrites repo.json, and reports what changed. Pairs with Publish over SSH as the next step. | `dir` · `name` · `author` |

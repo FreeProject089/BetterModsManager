@@ -163,6 +163,18 @@
       "params": []
     },
     {
+      "type": "repo.genNow",
+      "group": "repo",
+      "params": [
+        "outputDir",
+        "authorName",
+        "profileIds",
+        "seed",
+        "zipOutput",
+        "zipMods"
+      ]
+    },
+    {
       "type": "repo.update",
       "group": "repo",
       "params": [

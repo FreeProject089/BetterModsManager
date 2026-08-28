@@ -19953,3 +19953,18 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
     color: var(--accent);
     vertical-align: middle;
 }
+
+/* The profile checkboxes in the generate action. A scrolling box rather than an unbounded
+   column: a machine with twenty profiles would otherwise push the rest of the form out of
+   reach of the step that comes after it. */
+.sched-gen-profs {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 190px;
+    overflow-y: auto;
+    padding: 4px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bmm-s03);
+}

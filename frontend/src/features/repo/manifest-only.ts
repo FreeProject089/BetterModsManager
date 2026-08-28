@@ -298,8 +298,8 @@ async function generate() {
         // into yet. Applied HERE rather than by that screen, so choosing and
         // publishing stop being the same act in the wrong order.
         try {
-            const { applyPendingExtras } = await import('./repo-extras.js');
-            const n = await applyPendingExtras(outDir || '');
+            const { applyPendingExtras } = await import('./repo-pending.js');
+            const n = await applyPendingExtras(outDir || '', (m, k) => toast(m, k));
             if (n) toast(t('repo.extras.applied').replace('{n}', String(n)), 'success', 6000);
         } catch { /* the repo itself succeeded; an extra must not undo that */ }
         toast(t('repo.manifestDone') || 'repo.json generated', 'success');

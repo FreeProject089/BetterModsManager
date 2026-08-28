@@ -2,7 +2,7 @@
 
 !!! info ""
 
-    93 actions · 32 conditions · 32 valeurs · 8 sources de boucle
+    94 actions · 32 conditions · 32 valeurs · 8 sources de boucle
 
 > Généré depuis le registre de BMM lui-même, donc cette page ne peut pas décrire une version de l'application qui n'existe pas. Si une action est dans l'éditeur de blocs, elle est dans cette liste.
 
@@ -46,6 +46,7 @@ S'écrit `do <nom>(param: valeur, …)`. Une action sans paramètre prend des pa
 | `repo.connect` | Ajoute un repo distant | `url` · `name` · `password` |
 | `repo.sync` | Télécharge & intègre un profil distant | `url` · `profile` · `password` |
 | `repo.gen` | Ouvre la génération de repo | — |
+| `repo.genNow` | Générer un dépôt serveur (sans surveillance) | `outputDir` · `authorName` · `profileIds` · `seed` · `zipOutput` · `zipMods` |
 | `repo.update` | Met à jour un repo exporté | `dir` |
 | `repo.host` | Sert un repo en HTTP | `dir` · `port` |
 | `repo.manifest` | Lit le dossier, réécrit repo.json, et rapporte ce qui a changé. Se combine avec Publier par SSH à l'étape suivante. | `dir` · `name` · `author` |

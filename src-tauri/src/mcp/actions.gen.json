@@ -140,8 +140,14 @@
     },
     {
       "type": "repo.gen",
-      "label": "Generate repo",
+      "label": "Generate repo (opens the screen)",
       "needs": null,
+      "group": "repo"
+    },
+    {
+      "type": "repo.genNow",
+      "label": "Generate a server repo (unattended)",
+      "needs": "repoGen",
       "group": "repo"
     },
     {

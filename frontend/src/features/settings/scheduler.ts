@@ -2491,6 +2491,44 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
             break;
         }
         case 'repo.gen':         dl('repo/gen'); break;
+        // A REAL export. Everything the screen collects, from the task's own parameters —
+        // nothing is read from "whatever is on screen", because on a schedule there is no
+        // screen and a repo built from a stale form is worse than one not built at all.
+        case 'repo.genNow': {
+            const out = String(p.outputDir || '').trim();
+            const author = String(p.authorName || '').trim().slice(0, 25);
+            const ids: string[] = Array.isArray(p.profileIds) ? p.profileIds.map(String) : [];
+            if (!out) throw new Error(t('sched.gen.errNoOut') || 'Name the folder to write the repo into.');
+            if (!author) throw new Error(t('sched.gen.errNoAuthor') || 'A repo carries an author name.');
+            // Never "all of them" as a fallback. A task that quietly published every profile
+            // on the machine because a box was left unticked is the accident this refuses.
+            if (!ids.length) throw new Error(t('sched.gen.errNoProfiles') || 'Tick at least one profile to publish.');
+            const gone = ids.filter((id) => !(_profiles as any[]).some((pr) => String(pr.id) === id));
+            if (gone.length) {
+                // Named rather than skipped: a profile deleted since the task was written
+                // means the repo it publishes is not the repo somebody configured.
+                throw new Error((t('sched.gen.errGone') || 'Profile(s) no longer here: {n}').replace('{n}', gone.join(', ')));
+            }
+            await invoke('export_server_repo', {
+                profileIds: ids,
+                outputDir: out,
+                authorName: author,
+                seed: String(p.seed || '').trim() || null,
+                modpacksShareConfig: null,
+                zipOutput: p.zipOutput === true,
+                zipMods: p.zipMods === true,
+                serverOptions: null,
+            });
+            // Whatever "Include in the repo\u2026" is holding goes in, the same as when a
+            // person generates one.
+            try {
+                const { applyPendingExtras } = await import('../repo/repo-pending.js');
+                const n = await applyPendingExtras(out, (m, k) => toast(m, k));
+                if (n) toast(`${task.name}: ${t('repo.extras.applied').replace('{n}', String(n))}`, 'success', 6000);
+            } catch { /* the repo is built; an extra must not undo that */ }
+            toast(`${task.name}: ${(t('sched.gen.done') || 'Repo written to {n}').replace('{n}', out)}`, 'success', 8000);
+            break;
+        }
         case 'repo.update':      dl('repo/update', { dir: p.dir }); break;
         case 'repo.host':        dl('repo/host', { dir: p.dir, port: p.port }); break;
         case 'repo.publishSsh': {
@@ -5801,7 +5839,11 @@ const ACTION_TYPES: { v: string; label: string; needs?: string; group: string }[
     // report that says "it broke" without saying on which build, are both this question
     // unanswered — and until now it could not be asked from an automation at all.
     { v: 'app.buildInfo', label: 'Read this BMM\u2019s version', needs: 'buildInfo', group: 'app' },
-    { v: 'repo.gen', label: 'Generate repo', group: 'repo' },
+    { v: 'repo.gen', label: 'Generate repo (opens the screen)', group: 'repo' },
+    // The one that actually produces a repo without anybody there. `repo.gen` opens the
+    // screen prefilled, which is the right answer for a person and no answer at all for a
+    // schedule — the same split `repo.sync` / `repo.syncNow` already makes.
+    { v: 'repo.genNow', label: 'Generate a server repo (unattended)', needs: 'repoGen', group: 'repo' },
     { v: 'repo.update', label: 'Update repo', needs: 'repoUpdate', group: 'repo' },
     { v: 'repo.host', label: 'Host repo (HTTP)', needs: 'repoHost', group: 'repo' },
     // The repo action that actually RUNS unattended. `repo.gen`, `repo.update` and
@@ -6302,6 +6344,53 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
             name?.addEventListener('input', () => { params.newProfile = name.value; });
             if (params.newProfile && sel) sel.value = '__new__';
         }
+    }
+    else if (needs === 'repoGen') {
+        const profOpts = _profiles.map((pr: any) => {
+            const on = Array.isArray(params.profileIds) && params.profileIds.includes(pr.id);
+            return `<label class="sched-opt"><input type="checkbox" class="sched-g-prof" value="${escAttr(pr.id)}"${on ? ' checked' : ''}>
+                <div><b>${escHtml(pr.name || pr.id)}</b></div></label>`;
+        }).join('');
+        host.innerHTML = `<div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${escHtml(t('sched.gen.out'))}</label>
+            <div class="sched-cmd-row">
+                <input class="input sched-g-out" placeholder="${escAttr(t('sched.gen.outPh'))}" value="${escAttr(params.outputDir || '')}">
+                <button type="button" class="btn btn-sm btn-secondary sched-browse-dir">${escHtml(t('sched.choose') || 'Choose\u2026')}</button>
+            </div>
+            <label class="sched-cmd-label">${escHtml(t('sched.gen.author'))}</label>
+            <input class="input sched-g-author" style="max-width:260px" maxlength="25"
+                placeholder="${escAttr(t('sched.gen.authorPh'))}" value="${escAttr(params.authorName || '')}">
+            <label class="sched-cmd-label">${escHtml(t('sched.gen.profiles'))}</label>
+            <div class="sched-gen-profs">${profOpts || `<span class="sched-cmd-hint">${escHtml(t('sched.gen.noProfiles'))}</span>`}</div>
+            <details class="sched-cmd-adv">
+                <summary>${escHtml(t('sched.gen.more'))}</summary>
+                <label class="sched-cmd-label">${escHtml(t('sched.gen.seed'))}</label>
+                <input class="input sched-g-seed" style="max-width:260px"
+                    placeholder="${escAttr(t('sched.gen.seedPh'))}" value="${escAttr(params.seed || '')}">
+                <span class="sched-cmd-hint">${escHtml(t('sched.gen.seedHint'))}</span>
+                <label class="sched-opt" style="margin-top:8px"><input type="checkbox" class="sched-g-zip"${params.zipOutput ? ' checked' : ''}>
+                    <div><b>${escHtml(t('sched.gen.zipT'))}</b><span>${escHtml(t('sched.gen.zip'))}</span></div></label>
+                <label class="sched-opt"><input type="checkbox" class="sched-g-zipmods"${params.zipMods ? ' checked' : ''}>
+                    <div><b>${escHtml(t('sched.gen.zipModsT'))}</b><span>${escHtml(t('sched.gen.zipMods'))}</span></div></label>
+            </details>
+            <span class="sched-cmd-hint">${escHtml(t('sched.gen.hint'))}</span>
+        </div>`;
+        const g = (sel: string) => host.querySelector(sel) as HTMLInputElement | null;
+        g('.sched-g-out')?.addEventListener('input', (e) => { params.outputDir = (e.target as HTMLInputElement).value; });
+        g('.sched-g-author')?.addEventListener('input', (e) => { params.authorName = (e.target as HTMLInputElement).value; });
+        g('.sched-g-seed')?.addEventListener('input', (e) => { params.seed = (e.target as HTMLInputElement).value; });
+        g('.sched-g-zip')?.addEventListener('change', (e) => { params.zipOutput = (e.target as HTMLInputElement).checked; });
+        g('.sched-g-zipmods')?.addEventListener('change', (e) => { params.zipMods = (e.target as HTMLInputElement).checked; });
+        host.querySelectorAll('.sched-g-prof').forEach((cb) => cb.addEventListener('change', () => {
+            params.profileIds = Array.from(host.querySelectorAll<HTMLInputElement>('.sched-g-prof:checked')).map((x) => x.value);
+        }));
+        host.querySelector('.sched-browse-dir')?.addEventListener('click', async () => {
+            const { pickFolder } = await import('../../core/api.js');
+            const dir = await pickFolder().catch(() => null);
+            if (!dir) return;
+            params.outputDir = String(dir);
+            const el = g('.sched-g-out'); if (el) el.value = String(dir);
+        });
     }
     else if (needs === 'taskArm') {
         // The list is other tasks, by name. An id typed by hand is a millisecond timestamp

@@ -2410,8 +2410,8 @@ export function initRepo() {
                 // into yet. Applied HERE rather than by that screen, so choosing and
                 // publishing stop being the same act in the wrong order.
                 try {
-                    const { applyPendingExtras } = await import('./repo-extras.js');
-                    const n = await applyPendingExtras(repoDir);
+                    const { applyPendingExtras } = await import('./repo-pending.js');
+                    const n = await applyPendingExtras(repoDir, (m, k) => toast(m, k));
                     if (n) toast(t('repo.extras.applied').replace('{n}', String(n)), 'success', 6000);
                 } catch { /* the repo itself succeeded; an extra must not undo that */ }
 
@@ -2799,8 +2799,8 @@ export function initRepo() {
                 // into yet. Applied HERE rather than by that screen, so choosing and
                 // publishing stop being the same act in the wrong order.
                 try {
-                    const { applyPendingExtras } = await import('./repo-extras.js');
-                    const n = await applyPendingExtras(outPath);
+                    const { applyPendingExtras } = await import('./repo-pending.js');
+                    const n = await applyPendingExtras(outPath, (m, k) => toast(m, k));
                     if (n) toast(t('repo.extras.applied').replace('{n}', String(n)), 'success', 6000);
                 } catch { /* the repo itself succeeded; an extra must not undo that */ }
                 elements.exportStatus.textContent = t('repo.exportDone');
@@ -2862,7 +2862,7 @@ export function initRepo() {
          * the button that produced it, and disappears the moment it has been written.
          */
         const showPending = async () => {
-            const { pendingExtras } = await import('./repo-extras.js');
+            const { pendingExtras } = await import('./repo-pending.js');
             const n = pendingExtras().chosen.length;
             let tag = document.getElementById('repo-extras-pending');
             if (!n) { tag?.remove(); return; }
