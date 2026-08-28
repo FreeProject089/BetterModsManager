@@ -489,21 +489,29 @@ function buildPluginCard(plugin, source) {
         ? `<span class="plug-badge-official">${IC.star} ${t('plugins.official')}</span>`
         : `<span class="plug-badge-community">${t('plugins.community')}</span>`}
                 </div>
-                <div class="plug-card-sub">v${escHtml(manifest.version || '1.0.0')}${manifest.author ? ` · ${escHtml(manifest.author)}` : ''}</div>
-                ${manifest.game ? `<div class="plug-card-game">${escHtml(manifest.game)}</div>` : ''}
-                <!-- The two ids belong WITH the name, not in the row of verbs. They were
-                     sitting between "Compare" and "Apply" as two labelled buttons, which
-                     made the widest thing on the card the one nobody presses most. -->
-                <div class="plug-card-ids">${copyIdButtons('plugin', manifest.id, { compact: true })}</div>
+                <!-- Everything KNOWN about the plugin, on one line.
+                     It used to be four stacked bands — version, game, the two id buttons,
+                     and the checksum away at the bottom beside the ⋮ — so a card carrying a
+                     name, a version and one fact about itself was seven rows tall. None of
+                     these is an action, and none is worth a line of its own. -->
+                <div class="plug-card-facts">
+                    <span class="plug-card-sub">v${escHtml(manifest.version || '1.0.0')}${manifest.author ? ` · ${escHtml(manifest.author)}` : ''}</span>
+                    ${manifest.game ? `<span class="plug-card-game">${escHtml(manifest.game)}</span>` : ''}
+                    ${source === 'installed' && hasModlist ? `
+                        <span class="plug-card-fact">${IC.list} ${manifest.modlist.required_mods.length} ${escHtml(t('plugins.modsRequired'))}</span>
+                        ${manifest.modlist.strict ? `<span class="plug-badge-strict">${escHtml(t('plugins.strict'))}</span>` : ''}` : ''}
+                    ${source === 'installed' && plugin.install_dir ? `
+                    <!-- The checksum is a FACT about the plugin, like its id. It sat in the
+                         row of verbs, where it pushed the ⋮ onto a third line at any narrow
+                         column width — which is the "bouton cut dans la card". -->
+                    <span class="plug-sha-badge plug-sha-badge--pending plug-btn-sha" data-id="${escHtml(manifest.id)}" data-tooltip="${t('plugins.checksumTitle')}">
+                        ${IC.hash} SHA
+                    </span>` : ''}
+                    <span class="plug-card-ids">${copyIdButtons('plugin', manifest.id, { compact: true })}</span>
+                </div>
             </div>
         </div>
         ${manifest.description ? `<p class="plug-card-desc">${escHtml(manifest.description)}</p>` : ''}
-        ${source === 'installed' && hasModlist ? `
-            <div class="plug-card-modlist-info">
-                ${IC.list}
-                <span class="plug-modlist-count">${manifest.modlist.required_mods.length} ${t('plugins.modsRequired')}</span>
-                ${manifest.modlist.strict ? `<span class="plug-badge-strict">${t('plugins.strict')}</span>` : ''}
-            </div>` : ''}
         ${manifest.tags?.length ? `
             <div class="plug-card-tags">
                 ${manifest.tags.map(tag => `<span class="plug-tag">${escHtml(tag)}</span>`).join('')}
@@ -545,15 +553,10 @@ function buildPluginCard(plugin, source) {
                     <button class="btn btn-xs btn-ghost plug-btn-inspect" data-id="${escHtml(manifest.id)}" data-tooltip="${escAttr(t('plugins.inspect'))}">
                         ${IC.eye} <span class="plug-btn-word">${escHtml(t('plugins.inspectWord'))}</span>
                     </button>
-                    <!-- The checksum and the overflow menu are pushed to the end: one is a
-                         FACT about the plugin rather than a button, the other is everything
-                         that did not earn a place. Neither belongs in the middle of three
-                         buttons that all open something. -->
+                    <!-- Everything that did not earn a place on the card, at the end. The
+                         checksum used to be here as well and is a FACT, not a verb — moving
+                         it up to the header is also what stopped this row wrapping. -->
                     <div class="plug-card-actions-end">
-                    ${plugin.install_dir ? `
-                    <span class="plug-sha-badge plug-sha-badge--pending plug-btn-sha" data-id="${escHtml(manifest.id)}" data-tooltip="${t('plugins.checksumTitle')}">
-                        ${IC.hash} SHA
-                    </span>` : ''}
                     <!-- The rest. Seven icons that each did something different and looked
                          the same; a menu names them. -->
                     <div class="plug-more" data-id="${escHtml(manifest.id)}">

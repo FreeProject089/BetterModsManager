@@ -12809,6 +12809,31 @@ body.sched-drag-live .sched-branch .sched-drop-zone:empty {
 .plug-card-icon-wrap { position: relative; flex-shrink: 0; }
 
 /* Tags */
+/* Everything known about a plugin, on one line.
+   Version, game, what it requires, its checksum and its two ids were five separate bands,
+   so a card holding a name and one fact was seven rows tall and the eye had nothing to
+   land on. None of them is an action; all of them are the same KIND of thing. */
+.plug-card-facts {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px 8px;
+    margin-top: 3px;
+    min-width: 0;
+}
+.plug-card-facts .plug-card-sub { margin-top: 0; }
+.plug-card-facts .plug-card-game { margin-top: 0; }
+.plug-card-fact {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10.5px;
+    color: var(--text-secondary);
+}
+.plug-card-fact svg { width: 11px; height: 11px; }
+/* The ids end the line rather than starting a new one. */
+.plug-card-facts .plug-card-ids { margin-left: auto; }
+
 .plug-card-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
 .plug-tag { font-size: 10px; padding: 2px 7px; border-radius: 20px; background: var(--bmm-s06); color: var(--text-secondary); border: 1px solid var(--border); }
 
