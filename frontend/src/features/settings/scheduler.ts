@@ -4504,7 +4504,43 @@ function draftSummary(): string {
 function refreshSummary(modal: HTMLElement): void {
     const el = modal.querySelector('#sched-summary');
     if (el) el.textContent = draftSummary();
+    void paintCodeHeader(modal);
 }
+
+/**
+ * The task's header — name, trigger, permissions — above the code box, always current.
+ *
+ * Hung off refreshSummary because that is already the single place every trigger edit lands:
+ * the params host fires it on `input`, and choosing a different trigger card fires it too. So
+ * changing the trigger updates the script you are looking at, with nothing new to remember to
+ * call, and no second path that could be forgotten.
+ *
+ * Printed by `bmms_decompile`, the same printer the box below uses. Writing these three lines
+ * by hand here would be a second BMMScript printer, and the day the two disagree the one that
+ * is wrong is the one on screen.
+ */
+async function paintCodeHeader(modal: HTMLElement): Promise<void> {
+    const el = modal.querySelector('#sched-code-head') as HTMLElement | null;
+    if (!el) return;
+    try {
+        const full = await invoke('bmms_decompile', {
+            task: { name: _draft.name, trigger: _draft.trigger, steps: _draft.steps, perms: (_draft as any).perms },
+        }) as string;
+        el.textContent = taskHeaderOf(full);
+    } catch {
+        // A printer that cannot print is not worth a message here — the box below is the
+        // thing being edited, and an error strip over it would be louder than the fault.
+        el.textContent = '';
+    }
+}
+
+/**
+ * The header half of a printed task — literally the other half of what the code box gets.
+ *
+ * Not a second scanner: it is the same split, so what this shows is exactly what the box below
+ * does not, with no line belonging to both or to neither.
+ */
+const taskHeaderOf = (src: string): string => splitPrintedTask(src).header;
 
 /**
  * The shared variables, listed.
@@ -4956,6 +4992,14 @@ function renderModal(modal: HTMLElement): void {
                         </button>
 
                     </div>
+                    <!-- The header of the task, live.
+                         The box below holds the STEPS only — stripTaskWrapper removes the
+                         header on the way in, so the trigger was the one thing you could not
+                         see while writing the script that runs on it. It is shown here rather
+                         than made editable: the live compile, its line numbers and its caret
+                         handling are all indexed on the body, and a second editable copy of
+                         the trigger is two places to change one value. Copy takes both. -->
+                    <pre class="sched-code-head" id="sched-code-head" aria-live="polite"></pre>
                     <div class="sched-code-row">
                         <aside class="sched-outline" id="sched-outline" hidden>
                             <div class="bo-list" id="sched-outline-list"></div>
@@ -5634,6 +5678,7 @@ function wireCodeMode(modal: HTMLElement): void {
                 // Assigning .value fires no input event, so nothing would repaint and the
                 // mirror would keep showing the previous task.
                 hl?.refresh();
+                void paintCodeHeader(modal);
                 say((t('sched.bmms.ok') || '{n} step(s)').replace('{n}', String(stepCount(_draft.steps))), false);
                 show('code');
                 return;
@@ -5676,18 +5721,81 @@ function wireCodeMode(modal: HTMLElement): void {
 }
 
 /** The body of a printed task, without its `task "…" { … }` wrapper and header lines. */
-function stripTaskWrapper(src: string): string {
+/**
+ * The first word of the line each trigger PRINTS. One table, because it is one fact.
+ *
+ * It was written as a single regex naming four keywords — every, once, manual, on app — out of
+ * the thirteen triggers. The other nine print `on file`, `on event`, `after task`, `when` and
+ * `probe`, none of which it recognised, so for five trigger types the header line was left in
+ * the code box AS A STEP. A `script` trigger was worse than one stray line: it prints as a
+ * BLOCK, so the box showed
+ *
+ *     probe powershell every 5m {
+ *         Test-Path C:/dcs/Logs/dcs.log
+ *     }
+ *     allow script
+ *
+ *     do mods.scan()
+ *
+ * — the trigger, its code, and the permission line, all offered as steps. Press Blocks and
+ * that is what gets compiled and assigned to the task's steps.
+ *
+ * A Record keyed by the union type, so a new trigger does not compile until its keyword is
+ * here, and check-trigger-editors.mjs re-checks it from the union at build time.
+ */
+const TRIGGER_HEAD: Record<Trigger['type'], RegExp> = {
+    once: /^once\b/, interval: /^every\b/, hourly: /^every\b/, dailyAt: /^every\b/,
+    weeklyAt: /^every\b/, monthlyAt: /^every\b/, appStart: /^on\s+app\b/,
+    watchFile: /^on\s+file\b/, onEvent: /^on\s+event\b/, afterTask: /^after\s+task\b/,
+    condition: /^when\b/, script: /^probe\b/, manual: /^manual\b/,
+};
+/** The header lines that are not the trigger: what the task is called, and what it may do. */
+const HEADER_WORDS = /^(describe|disabled|allow)\b/;
+
+const isTaskHeaderLine = (line: string): boolean => {
+    const l = line.trim();
+    return HEADER_WORDS.test(l) || Object.values(TRIGGER_HEAD).some((re) => re.test(l));
+};
+
+/**
+ * Split a printed task into the part the sidebar owns and the part the code box edits.
+ *
+ * ONE function, because the two halves have to cut in the same place. They were two
+ * independent keyword lists, and the day they disagreed the code box showed a trigger as a
+ * step — which is not a display bug, because that text is what gets compiled back.
+ *
+ * `probe … {` opens a block, so the header consumes lines until its braces balance rather
+ * than stopping at the next one.
+ */
+function splitPrintedTask(src: string): { header: string; body: string } {
     const open = src.indexOf('{');
     const close = src.lastIndexOf('}');
-    if (open < 0 || close <= open) return src;
-    const body = src.slice(open + 1, close).split('\n');
-    // The header lines the sidebar owns. Dropped by NAME rather than by counting lines,
-    // because how many there are depends on the task.
-    const HEADER = /^\s*(every|once|manual|on\s+app|describe|disabled|allow)\b/;
-    while (body.length && (!body[0].trim() || HEADER.test(body[0]))) body.shift();
+    if (open < 0 || close <= open) return { header: '', body: src };
+    const head = [src.slice(0, open + 1)];
+    const lines = src.slice(open + 1, close).split('\n');
+    let i = 0;
+    while (i < lines.length) {
+        const l = lines[i];
+        if (!l.trim()) { i += 1; continue; }
+        if (!isTaskHeaderLine(l)) break;
+        head.push(l);
+        // A block-shaped header line (the script trigger) takes its body with it.
+        let depth = (l.match(/\{/g) || []).length - (l.match(/\}/g) || []).length;
+        i += 1;
+        while (depth > 0 && i < lines.length) {
+            head.push(lines[i]);
+            depth += (lines[i].match(/\{/g) || []).length - (lines[i].match(/\}/g) || []).length;
+            i += 1;
+        }
+    }
+    const body = lines.slice(i);
     while (body.length && !body[body.length - 1].trim()) body.pop();
     // One indent level removed, so the text starts at the left margin like an editor's does.
-    return body.map((l) => (l.startsWith('    ') ? l.slice(4) : l)).join('\n');
+    return { header: head.join('\n'), body: body.map((l) => (l.startsWith('    ') ? l.slice(4) : l)).join('\n') };
+}
+
+function stripTaskWrapper(src: string): string {
+    return splitPrintedTask(src).body;
 }
 
 function renderStepsEditor(host: HTMLElement, steps: Step[], depth = 0): void {

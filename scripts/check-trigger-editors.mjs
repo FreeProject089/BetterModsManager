@@ -71,6 +71,25 @@ if (/\}\s*else\s*\{[\s\S]{0,200}?ph\.innerHTML/.test(fn)) {
   problems.push('renderTriggerEditor still ends in a catch-all `else` that writes the params host — a new trigger would silently inherit it');
 }
 
+// ── and the keyword each trigger PRINTS ────────────────────────────────────
+//
+// The code box shows the task's steps; the sidebar owns its header. Which lines are which was
+// decided by a regex naming four keywords out of thirteen, so for `watchFile`, `onEvent`,
+// `afterTask`, `condition` and `script` the trigger line was left in the box AS A STEP — and
+// that text is what gets compiled back when you press Blocks, so it was not a display bug.
+//
+// TRIGGER_HEAD is a Record keyed by the union, so tsc already refuses a missing key. This
+// checks the thing tsc cannot: that the table has not been widened to `Record<string, …>`,
+// which would make every future omission compile.
+const table = fn.length && src.slice(src.indexOf('const TRIGGER_HEAD'));
+if (!/const TRIGGER_HEAD: Record<Trigger\['type'\], RegExp>/.test(src)) {
+  problems.push("TRIGGER_HEAD is no longer typed as Record<Trigger['type'], RegExp> — a missing trigger would stop being a compile error");
+} else {
+  const lit = table.slice(0, table.indexOf('};') + 1);
+  const keys = new Set([...lit.matchAll(/(?:^|[{,]\s*)([a-zA-Z][\w]*)\s*:\s*\//g)].map((m) => m[1]));
+  for (const t of types) if (!keys.has(t)) problems.push(`TRIGGER_HEAD has no entry for "${t}" — its header line would be read as a step`);
+}
+
 if (problems.length) {
   console.error('✗ trigger editors:');
   for (const p of problems) console.error(`  ${p}`);
