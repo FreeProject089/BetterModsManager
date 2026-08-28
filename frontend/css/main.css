@@ -11754,7 +11754,7 @@ body.tasky-hidden #app-mascot-container {
     box-shadow:0 0 0 1px var(--accent) inset; }
 .sched-tr-card-icon { display:flex; color:var(--accent); flex-shrink:0; }
 .sched-tr-card-label { line-height:1.25; }
-.sched-tr-params { margin-top:10px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+/* superseded by the column rule above — kept out of the cascade rather than left to fight it */
 /* Options as descriptive rows. */
 .sched-opt { display:flex; align-items:flex-start; gap:10px; padding:10px 12px; cursor:pointer;
     border:1px solid var(--border); border-radius:10px; background:var(--bmm-s03, rgba(255,255,255,0.03)); margin-top:8px; }
@@ -11986,6 +11986,15 @@ body.sched-drag-live .sched-branch .sched-drop-zone:empty {
    second question is the one you have when the answer to the first is "a bit". Indentation
    carries the shape, because three actions in a row and three inside a hundred-iteration
    loop are the same list and very different automations. */
+/* The inspector's body. Had no rule at all, so it was a bare div and its children set their
+   own spacing — which is why the panel's rhythm changed depending on what was in it. */
+.sched-insp { display: flex; flex-direction: column; gap: 10px; }
+/* A checkbox and its label on one line with whatever follows.
+   Unstyled, the box sat on the text baseline and the label wrapped under it, which is the
+   misaligned « NON » beside its dropdown in the condition editor. */
+.sched-cp-chk { display: inline-flex; align-items: center; gap: 6px; font-size: 12px;
+    color: var(--text-secondary); white-space: nowrap; }
+.sched-cp-chk input { margin: 0; flex-shrink: 0; }
 .sched-insp-steps { margin-top: 10px; }
 .sched-insp-steps summary { font-size: 12px; cursor: pointer; color: var(--bmm-accent); }
 .sched-insp-tree { margin-top: 6px; display: flex; flex-direction: column; gap: 2px; }
@@ -12307,7 +12316,7 @@ body.sched-drag-live .sched-branch .sched-drop-zone:empty {
 .sched-add-row .sched-chip:active { transform:none; }
 /* Trigger + condition selects/inputs line up neatly */
 #sched-trigger { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-#sched-trigger #sched-tr-params { display:inline-flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:0 !important; }
+#sched-trigger #sched-tr-params { margin-top:0 !important; }
 .sched-cond { gap:7px; }
 /* Footer buttons a touch larger so Save reads as primary */
 .sched-footer .btn { padding:8px 18px; border-radius:9px; font-weight:600; }
@@ -19622,6 +19631,37 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
 }
 
 /* Folded, and the bar is what stays. */
+/* The explanation under a trigger's fields.
+
+   `.sched-hint` was written nine times in scheduler.ts and defined in no stylesheet, so every
+   one of them rendered as a bare <p>: body size, default paragraph margins, and more visual
+   weight than the controls it was explaining. Three trigger editors were mostly explanation
+   by area.
+
+   A rule on the left rather than a box: it reads as an aside beside the field it belongs to,
+   and it does not add a second border inside a panel that already has one. */
+.sched-hint {
+    margin: 0;
+    padding-left: 9px;
+    border-left: 2px solid var(--border);
+    font-size: 11.5px;
+    line-height: 1.5;
+    color: var(--text-muted);
+}
+/* The one that is not advice but a refusal: this task cannot run as configured. */
+.sched-hint-bad {
+    border-left-color: var(--danger, #ef4444);
+    color: var(--danger, #ef4444);
+}
+
+/* The fields themselves stack; only the genuinely one-line editors are a row.
+
+   This was `display:flex; align-items:center; flex-wrap:wrap` — a ROW — while most editors
+   emit a select, then an input, then a paragraph. They became wrapping flex items, which is
+   why each of those files carried an inline `margin-top:6px` to push itself off the previous
+   one, and why the result still looked cramped. */
+.sched-tr-params { display:flex; flex-direction:column; align-items:stretch; gap:8px; margin-top:10px; }
+.sched-tr-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 /* The trigger's current condition, above its editor. */
 .sched-tr-now {
     margin: 0 0 8px;

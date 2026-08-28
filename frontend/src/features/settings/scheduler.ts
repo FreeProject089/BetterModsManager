@@ -5312,7 +5312,7 @@ function renderTriggerEditor(host: HTMLElement): void {
             <select class="input" id="sched-tr-ev" data-csel-search="1" style="max-width:100%">
                 ${BMM_EVENTS.map((e) => `<option value="${escAttr(e)}"${tr.event === e ? ' selected' : ''}>${escAttr(e)} — ${escHtml(t('sched.ev.' + e))}</option>`).join('')}
             </select>
-            <input class="input" id="sched-tr-ev-custom" spellcheck="false" style="margin-top:6px"
+            <input class="input" id="sched-tr-ev-custom" spellcheck="false"
                 placeholder="${escAttr(t('sched.trEventCustomPh'))}" value="${escAttr(BMM_EVENTS.includes(tr.event) ? '' : (tr.event || ''))}">
             <p class="sched-hint">${escHtml(t('sched.trEventHint'))}</p>`;
         ph.querySelector('#sched-tr-ev')?.addEventListener('change', (e) => {
@@ -5339,7 +5339,7 @@ function renderTriggerEditor(host: HTMLElement): void {
                 <option value="">${escHtml(t('sched.trAfterPick'))}</option>
                 ${others.map((x) => `<option value="${escAttr(x.id)}"${tr.taskId === x.id ? ' selected' : ''}>${escHtml(x.name)}</option>`).join('')}
             </select>
-            <select class="input" id="sched-tr-after-out" style="max-width:100%;margin-top:6px">
+            <select class="input" id="sched-tr-after-out" style="max-width:100%">
                 ${outcomes.map(([v, l]) => `<option value="${v}"${(tr.outcome || 'any') === v ? ' selected' : ''}>${escHtml(l)}</option>`).join('')}
             </select>
             <p class="sched-hint">${escHtml(t('sched.trAfterHint'))}</p>`
@@ -5369,7 +5369,7 @@ function renderTriggerEditor(host: HTMLElement): void {
         ];
         const granted = taskPerms(_draft as Task).script;
         ph.innerHTML = `
-            <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <div class="sched-tr-row">
                 <select class="input" id="sched-tr-eng" style="max-width:190px">
                     ${engines.map(([v, l]) => `<option value="${v}"${(tr.engine || 'powershell') === v ? ' selected' : ''}>${escHtml(l)}</option>`).join('')}
                 </select>
@@ -5379,7 +5379,7 @@ function renderTriggerEditor(host: HTMLElement): void {
                 <span style="font-size:12px;color:var(--text-muted)">${escHtml(t('sched.unitMin') || 'min')}</span>
             </div>
             <textarea class="input" id="sched-tr-code" rows="5" spellcheck="false"
-                style="margin-top:6px;resize:vertical;font-family:var(--font-mono)"
+                style="resize:vertical;font-family:var(--font-mono)"
                 placeholder="${escAttr(t('sched.trScriptPh'))}">${escHtml(tr.code || '')}</textarea>
             <p class="sched-hint">${escHtml(t('sched.trScriptHint'))}</p>
             ${granted ? '' : `<p class="sched-hint sched-hint-bad">${escHtml(t('sched.trScriptNoPerm'))}</p>`}`;
@@ -5394,10 +5394,10 @@ function renderTriggerEditor(host: HTMLElement): void {
         });
     }
     if (tr.type === 'interval') {
-        ph.innerHTML = `<input type="number" class="input" id="sched-tr-min" min="1" value="${tr.everyMinutes}" style="max-width:120px"> ${t('sched.unitMin') || 'min'}`;
+        ph.innerHTML = `<div class="sched-tr-row"><input type="number" class="input" id="sched-tr-min" min="1" value="${tr.everyMinutes}" style="max-width:120px"><span>${t('sched.unitMin') || 'min'}</span></div>`;
         ph.querySelector('#sched-tr-min')?.addEventListener('input', (e) => { (_draft.trigger as any).everyMinutes = parseInt((e.target as HTMLInputElement).value) || 1; });
     } else if (tr.type === 'hourly') {
-        ph.innerHTML = `<input type="number" class="input" id="sched-tr-h" min="1" value="${tr.everyHours}" style="max-width:120px"> ${t('sched.unitH') || 'h'}`;
+        ph.innerHTML = `<div class="sched-tr-row"><input type="number" class="input" id="sched-tr-h" min="1" value="${tr.everyHours}" style="max-width:120px"><span>${t('sched.unitH') || 'h'}</span></div>`;
         ph.querySelector('#sched-tr-h')?.addEventListener('input', (e) => { (_draft.trigger as any).everyHours = parseInt((e.target as HTMLInputElement).value) || 1; });
     } else if (tr.type === 'monthlyAt') {
         ph.innerHTML = `<span style="font-size:12px;color:var(--text-muted)">${t('sched.day') || 'Day'}</span>
@@ -6206,15 +6206,15 @@ function renderAddRow(host: HTMLElement, steps: Step[], depth = 0, rerenderHost?
         <button class="btn btn-xs sched-chip sched-add-loop" data-add="repeat" data-tooltip="${escAttr(t('sched.legendLoop') || '')}">${KIND_ICON.repeat} ${t('sched.addLoop') || 'Loop'}</button>
         <button class="btn btn-xs sched-chip sched-add-wait" data-add="waitFor" data-tooltip="${escAttr(t('sched.legendWait') || '')}">${KIND_ICON.waitFor} ${t('sched.addWaitFor') || 'Wait until'}</button>
         <button class="btn btn-xs sched-chip sched-add-delay" data-add="delay" data-tooltip="${escAttr(t('sched.legendDelay') || '')}">${KIND_ICON.delay} ${t('sched.addDelay') || 'Pause'}</button>
-        <button class="btn btn-xs sched-chip sched-add-foreach" data-add="forEach" data-tooltip="${escAttr(t('sched.legendForEach') || '')}">${KIND_ICON.forEach} ${t('sched.addForEach') || 'For each'}</button>
-        <button class="btn btn-xs sched-chip sched-add-switch" data-add="switch" data-tooltip="${escAttr(t('sched.legendSwitch') || '')}">${KIND_ICON.switch} ${t('sched.addSwitch') || 'Switch'}</button>
-        <button class="btn btn-xs sched-chip sched-add-try" data-add="parallel" data-tooltip="${escAttr(t('sched.legendPar') || 'Run several branches at the same time')}">${KIND_ICON.parallel} ${t('sched.addParallel') || 'At the same time'}</button>
+        <button class="btn btn-xs sched-chip" data-add="forEach" data-tooltip="${escAttr(t('sched.legendForEach') || '')}">${KIND_ICON.forEach} ${t('sched.addForEach') || 'For each'}</button>
+        <button class="btn btn-xs sched-chip" data-add="switch" data-tooltip="${escAttr(t('sched.legendSwitch') || '')}">${KIND_ICON.switch} ${t('sched.addSwitch') || 'Switch'}</button>
+        <button class="btn btn-xs sched-chip" data-add="parallel" data-tooltip="${escAttr(t('sched.legendPar') || 'Run several branches at the same time')}">${KIND_ICON.parallel} ${t('sched.addParallel') || 'At the same time'}</button>
         <button class="btn btn-xs sched-chip sched-add-loop" data-add="retry" data-tooltip="${escAttr(t('sched.retry.hint'))}">${KIND_ICON.retry} ${escHtml(t('sched.addRetry'))}</button>
-        <button class="btn btn-xs sched-chip sched-add-try" data-add="try" data-tooltip="${escAttr(t('sched.legendTry') || '')}">${KIND_ICON.try} ${t('sched.addTry') || 'Try / on error'}</button>
-        <button class="btn btn-xs sched-chip sched-add-call" data-add="call" data-tooltip="${escAttr(t('sched.legendCall') || '')}">${KIND_ICON.call} ${t('sched.addCall') || 'Run a block'}</button>
-        <button class="btn btn-xs sched-chip sched-add-break" data-add="break" data-tooltip="${escAttr(t('sched.legendBreak') || '')}">${KIND_ICON.signal} ${t('sched.addBreak') || 'Break'}</button>
-        <button class="btn btn-xs sched-chip sched-add-continue" data-add="continue" data-tooltip="${escAttr(t('sched.legendContinue') || '')}">${KIND_ICON.signal} ${t('sched.addContinue') || 'Continue'}</button>
-        <button class="btn btn-xs sched-chip sched-add-stop" data-add="stop" data-tooltip="${escAttr(t('sched.legendStop') || '')}">${KIND_ICON.signal} ${t('sched.addStop') || 'Stop'}</button>`;
+        <button class="btn btn-xs sched-chip" data-add="try" data-tooltip="${escAttr(t('sched.legendTry') || '')}">${KIND_ICON.try} ${t('sched.addTry') || 'Try / on error'}</button>
+        <button class="btn btn-xs sched-chip" data-add="call" data-tooltip="${escAttr(t('sched.legendCall') || '')}">${KIND_ICON.call} ${t('sched.addCall') || 'Run a block'}</button>
+        <button class="btn btn-xs sched-chip" data-add="break" data-tooltip="${escAttr(t('sched.legendBreak') || '')}">${KIND_ICON.signal} ${t('sched.addBreak') || 'Break'}</button>
+        <button class="btn btn-xs sched-chip" data-add="continue" data-tooltip="${escAttr(t('sched.legendContinue') || '')}">${KIND_ICON.signal} ${t('sched.addContinue') || 'Continue'}</button>
+        <button class="btn btn-xs sched-chip" data-add="stop" data-tooltip="${escAttr(t('sched.legendStop') || '')}">${KIND_ICON.signal} ${t('sched.addStop') || 'Stop'}</button>`;
     const rerender = () => {
         // Preserve the modal's scroll position so adding a step deep in a big task
         // doesn't yank the view back to the top (a real annoyance with lots of content).
@@ -6698,7 +6698,7 @@ function credsFields(params: Record<string, any>, want: { password?: boolean; ke
             <span class="sched-cmd-hint">${escHtml(t('sched.creds.passphraseHint'))}</span>`);
     }
     if (!rows.length) return '';
-    return `<details class="sched-cmd-adv sched-creds">
+    return `<details class="sched-cmd-adv">
         <summary>${escHtml(t('sched.creds.title'))}</summary>
         ${rows.join('')}
     </details>`;
