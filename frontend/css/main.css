@@ -19968,3 +19968,20 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
     border-radius: 8px;
     background: var(--bmm-s03);
 }
+
+/* The order, on the card. Three lines beat a paragraph here: what somebody needs is not a
+   description of SFTP, it is knowing that the folder has to exist first. */
+.repo-ssh-steps {
+    margin: 0 0 10px;
+    padding-left: 20px;
+    font-size: 11px;
+    line-height: 1.7;
+    color: var(--text-secondary);
+}
+.repo-ssh-steps li::marker { color: var(--accent); font-weight: 700; }
+.repo-ssh-note code {
+    font-size: 10.5px;
+    padding: 1px 4px;
+    border-radius: 4px;
+    background: var(--bmm-s06);
+}
