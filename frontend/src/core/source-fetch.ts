@@ -87,7 +87,10 @@ async function fetchHttp(url: string, quiet: boolean): Promise<string> {
         // The one code both fetch_repo_info and fetch_remote_json return for this, so there
         // is a single rule rather than one per transport.
         if (String((e as Error)?.message ?? e) !== 'repo.errPasswordRequired') throw e;
-        const { promptRepoPassword } = await import('../features/repo/repo-sync.js');
+        // ui/ask-one, not features/repo/repo-sync: the dialog is the app's one-field box, and
+        // importing the repo feature to reach it pulled ui/app + profiles + mod-updates into
+        // a cycle with core — seven of them, through this single line.
+        const { promptRepoPassword } = await import('../ui/ask-one.js');
         const pw = await promptRepoPassword();
         // Cancelled: re-throw the original, so the caller's normal error path runs and the
         // user is not told something different from what actually happened.
