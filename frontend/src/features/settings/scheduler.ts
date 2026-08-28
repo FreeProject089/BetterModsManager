@@ -2490,6 +2490,12 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
                 report.removed.length ? 'warning' : 'success', report.removed.length ? 12000 : 8000);
             break;
         }
+        case 'view.open': {
+            const id = String(p.id || '').trim();
+            if (!id) { toast(`${task.name}: ${t('sched.view.noId')}`, 'warning', 6000); break; }
+            dl('view/open', { id });
+            break;
+        }
         case 'repo.gen':         dl('repo/gen'); break;
         // A REAL export. Everything the screen collects, from the task's own parameters —
         // nothing is read from "whatever is on screen", because on a schedule there is no
@@ -5902,6 +5908,10 @@ const ACTION_TYPES: { v: string; label: string; needs?: string; group: string }[
     // it and a task could not — so "stop the nightly sync while I am away" meant either
     // clicking a toggle by hand or firing a raw deeplink through the generic action.
     { v: 'task.setEnabled', label: 'Arm or disarm another task', needs: 'taskArm', group: 'system' },
+    // Switching screens. `bmm://view/open` and `POST /api/view` have both done this for a
+    // while; a task could only reach it through the generic deeplink action, which meant
+    // typing a screen id nothing validates.
+    { v: 'view.open', label: 'Open a screen', needs: 'viewPick', group: 'system' },
     { v: 'restart', label: 'Restart BMM', group: 'system' },
     { v: 'open.url', label: 'Open a URL / link', needs: 'url', group: 'system' },
     { v: 'custom.command', label: 'Run custom command', needs: 'command', group: 'system' },
@@ -6344,6 +6354,27 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
             name?.addEventListener('input', () => { params.newProfile = name.value; });
             if (params.newProfile && sel) sel.value = '__new__';
         }
+    }
+    else if (needs === 'viewPick') {
+        // Read from the navbar rather than typed here. A list written in this file is a list
+        // that goes stale the first time a screen is added or renamed, and the failure is
+        // silent: view/open warns to the console and does nothing.
+        const views = Array.from(document.querySelectorAll<HTMLElement>('.nav-item[data-view]'))
+            .map((el) => ({ id: el.dataset.view || '', label: (el.textContent || '').trim() || el.dataset.view || '' }))
+            .filter((v) => v.id);
+        host.innerHTML = `<div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${escHtml(t('sched.view.which'))}</label>
+            <select class="input sched-p-view" style="max-width:260px">
+                <option value="">${escHtml(t('sched.view.pick'))}</option>
+                ${views.map((v) => `<option value="${escAttr(v.id)}"${params.id === v.id ? ' selected' : ''}>${escHtml(v.label)}</option>`).join('')}
+                ${params.id && !views.some((v) => v.id === params.id)
+                    ? `<option value="${escAttr(params.id)}" selected>${escHtml(t('sched.view.gone').replace('{n}', params.id))}</option>` : ''}
+            </select>
+            <span class="sched-cmd-hint">${escHtml(t('sched.view.hint'))}</span>
+        </div>`;
+        host.querySelector('.sched-p-view')?.addEventListener('change', (e) => {
+            params.id = (e.target as HTMLSelectElement).value;
+        });
     }
     else if (needs === 'repoGen') {
         const profOpts = _profiles.map((pr: any) => {

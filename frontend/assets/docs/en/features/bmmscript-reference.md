@@ -2,7 +2,7 @@
 
 !!! info ""
 
-    94 actions · 32 conditions · 32 values · 8 loop sources
+    95 actions · 32 conditions · 32 values · 8 loop sources
 
 > Generated from BMM's own registry, so it cannot describe a version of the app that does not exist. If an action is in the block editor, it is in this list.
 
@@ -133,6 +133,7 @@ Written `do <name>(param: value, …)`. An action with no parameters takes empty
 | `task.run` | Trigger another scheduled task | `id` |
 | `task.spawn` | Starts the other task and carries straight on. Use it when the rest of this task does not depend on the result — otherwise use “Run another task”, which waits. | `id` |
 | `task.setEnabled` | Arm or disarm another task | `taskId` · `armOn` |
+| `view.open` | Open a screen | `id` |
 | `restart` | Restart BMM | — |
 | `open.url` | Open a URL or link | `url` |
 | `custom.command` | Run a program with arguments | `args` · `program` · `workingDir` · `into` |

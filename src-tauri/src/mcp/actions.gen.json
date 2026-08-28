@@ -385,6 +385,12 @@
       "group": "system"
     },
     {
+      "type": "view.open",
+      "label": "Open a screen",
+      "needs": "viewPick",
+      "group": "system"
+    },
+    {
       "type": "restart",
       "label": "Restart BMM",
       "needs": null,
