@@ -774,6 +774,32 @@ change, or it would hide the next real one.
     stays the active one. **Sync a server repo (unattended)** and **Import from a URL** are
     the two that do the work themselves, so those offer the key and the passphrase as well.
 
+### Taking somebody there, and asking what is already true
+
+**Open a screen or a window** covers both kinds of place. The screens come from the navbar
+itself, so the list cannot name one that is not there; the five things that are *not* screens —
+the theme editor, the layout and navbar editors, the benchmark, and a documentation article —
+each had their own `bmm://` link and no action at all, so opening one from a task meant
+hand-writing a URL.
+
+Two conditions close loops that actions had left open:
+
+| Condition | Why it had to exist |
+|---|---|
+| **Plugin is installed** | A task could install a plugin and could not ask whether one was there. "Install it only if it is missing" had to be written as "install it every time", which re-downloads and re-applies on every run. |
+| **Another task is armed** | The other half of *Arm or disarm another task*. Without it a task could set another one's state and never branch on it. |
+
+Both pick from a list rather than taking a typed id — a plugin id is `com.someone.thing` and a
+task id is a millisecond timestamp, and typed by hand each is a silent `false` that reads as
+"not true" rather than "you named something that is not here".
+
+!!! note "Three actions used to wait for a window nobody would see"
+
+    **Export a mod list**, **Import a mod list** and **Export replay** all accept a path at the
+    endpoint and offered no way to give one, so each opened a file dialog. Fine in front of a
+    person; on a timer the task simply waits. They take a path now, and the hint says what
+    empty means: *ask me*.
+
 ## Checking what a file is before acting on it
 
 An automation that fetches something and then acts on it has one question first: **is what came

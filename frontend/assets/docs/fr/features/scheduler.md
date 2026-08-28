@@ -848,6 +848,35 @@ le nom, parce que c'est celle que la substitution utilisera.
     et **Importer depuis une URL** font le travail eux-mêmes, et proposent donc aussi la clé
     et la phrase secrète.
 
+### Emmener quelqu'un quelque part, et demander ce qui est déjà vrai
+
+**Ouvrir un écran ou une fenêtre** couvre les deux sortes d'endroits. Les écrans viennent de la
+barre de navigation elle-même, la liste ne peut donc pas en nommer un absent ; les cinq choses
+qui ne *sont pas* des écrans — l'éditeur de thème, ceux de disposition et de barre de
+navigation, le banc d'essai, et un article de documentation — avaient chacune leur lien
+`bmm://` et aucune action, donc en ouvrir une depuis une tâche demandait d'écrire une URL à la
+main.
+
+Deux conditions referment des boucles que des actions avaient laissées ouvertes :
+
+| Condition | Pourquoi elle devait exister |
+|---|---|
+| **Le plugin est installé** | Une tâche pouvait installer un plugin sans pouvoir demander s'il était là. « Ne l'installer que s'il manque » s'écrivait donc « l'installer à chaque fois », ce qui re-télécharge et ré-applique à chaque exécution. |
+| **Une autre tâche est armée** | L'autre moitié d'*Armer ou désarmer une autre tâche*. Sans elle, une tâche pouvait fixer l'état d'une autre sans jamais pouvoir s'y brancher. |
+
+Les deux choisissent dans une liste plutôt que de prendre un id tapé — un id de plugin est
+`com.quelquun.chose` et un id de tâche un horodatage à la milliseconde ; tapés à la main,
+chacun est un `false` silencieux qui se lit « ce n'est pas vrai » au lieu de « vous avez nommé
+quelque chose qui n'est pas là ».
+
+!!! note "Trois actions attendaient une fenêtre que personne ne verrait"
+
+    **Exporter une liste de mods**, **Importer une liste de mods** et **Exporter le rejeu**
+    acceptent toutes un chemin côté endpoint et n'offraient aucun moyen d'en donner un : chacune
+    ouvrait donc une boîte de dialogue. Parfait devant une personne ; sur une minuterie, la
+    tâche attend, simplement. Elles prennent un chemin maintenant, et l'indice dit ce que vide
+    veut dire : *demande-moi*.
+
 ## Vérifier ce qu'est un fichier avant d'agir dessus
 
 Une automatisation qui récupère quelque chose puis agit dessus a une question d'abord : **est-ce
