@@ -56,7 +56,7 @@ connection error if the BMM window is not open.
 
 ## The tools
 
-63 of them. `*` marks a required parameter; a slash-separated list is the set of accepted
+68 of them. `*` marks a required parameter; a slash-separated list is the set of accepted
 values.
 
 ### Finding things
@@ -140,9 +140,42 @@ values.
 | `bmm_list_schedules` | — |  | List the saved Scheduling & automation tasks (works offline) |
 | `bmm_create_schedule` | `task` | ✓ | Create or update an automation (same shape the in-app builder saves; if/repeat/doWhile/forEach/switch blocks). Created DISABLED unless enabled:true |
 | `bmm_delete_schedule` | `id` | ✓ | Delete an automation |
+| `bmm_bmms_reference` | — |  | The whole BMMScript vocabulary as JSON: every action with its parameter names, the conditions, value sources, loop sources, keywords, permissions and script engines |
+| `bmm_compile_bmms` | `source`\* |  | Compile BMMScript into the object `bmm_create_schedule` takes — returns `{ ok, task, errors:[{line,col,message}] }` |
+| `bmm_decompile_bmms` | `task`\* |  | Print a saved task back as BMMScript, so it can be edited as text and recompiled |
 | `bmm_create_plugin_scaffold` | `manifest` | ✓ | Writes a plugin DRAFT (plugin.json + README) into plugin-drafts/ — authoring only, installation stays the app's normal flow |
+| `bmm_list_actions` | — |  | Every action type a step may use (`{ type, label, needs, group }`) — the same registry the in-app builder shows, generated from the app's source at build time |
+| `bmm_set_schedule_enabled` | `id`\*, `enabled`\* | app | Arm or disarm one saved task. Only `enabled` — nothing here can rewrite a task's steps |
+| `bmm_signal` | `name`\*, `data` | app | Ring a named doorbell a task may be waiting on (`wait.hook`), e.g. to say a build has finished |
 | `bmm_run_schedule` | `id`\* | app | Trigger a saved scheduler task by id in the running BMM app |
 | `bmm_run_benchmark` | `dataset` (sandbox/real), `size` (S/M/L/XL/CUSTOM), `mb`, `sources`, `profiles`, `mode` (manual/auto) | app | Launch a BMM benchmark in the running app |
+
+#### Writing an automation, rather than assembling one
+
+`bmm_create_schedule` takes the shape the app **saves**: a nested tree of steps, conditions
+and loops. That is the right shape to store and a poor one to write. A five-step task with a
+loop in it means building that tree by hand, and a mistake in it is not reported — the task
+saves, and then does the wrong thing at 03:00.
+
+[BMMScript](doc-page:features/bmmscript-reference) is the same task as text, and its compiler
+names the line and column that is wrong. So there is a loop that ends with something known to
+be valid:
+
+1. `bmm_bmms_reference` — what the words are. Generated from the same table the in-app
+   builder renders, so it cannot offer an action the runner does not have.
+2. `bmm_compile_bmms` — write the source, read the diagnostics, fix, repeat.
+3. `bmm_create_schedule` — save the `task` the compiler returned.
+
+To **edit** an existing task, run it the other way: `bmm_list_schedules` →
+`bmm_decompile_bmms` → change the text → compile → save under the same id.
+
+All three work with BMM closed: the compiler and the vocabulary are both inside the server.
+
+The same executable exposes them on the command line, for a shell rather than an agent:
+`bmm-mcp-server bmms-reference`, `bmms-compile --file t.bmms`, `bmms-decompile --file t.json`.
+`bmms-compile` writes diagnostics to stderr and **nothing** to stdout when the source does not
+compile, so `bmms-compile --file t.bmms | bmm-mcp-server create-schedule --file -` cannot save
+a half-parsed task.
 
 ### Privacy, recorder & sessions
 
@@ -211,12 +244,13 @@ pointed at another host.
 
 The tables above are generated from the `Tool::new(...)` declarations in
 `src-tauri/src/mcp/server.rs` — the same ones the server registers at startup — rather than
-written by hand, because 63 tools with their parameters is exactly the list that rots the
+written by hand, because 68 tools with their parameters is exactly the list that rots the
 first time someone adds one.
 
 One cross-check is worth repeating after any change: every tool the server **declares** must
 also be **dispatched**, or a client sees a tool that errors when called. At the time of
-writing both sets are 63 and identical.
+writing both sets are 68 and identical, and `scripts/check-mcp-tools.mjs` fails the
+build if they ever stop being.
 
 ---
 

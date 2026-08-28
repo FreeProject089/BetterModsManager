@@ -58,7 +58,7 @@ l'API locale et échouent sur une erreur de connexion si la fenêtre de BMM n'es
 
 ## Les outils
 
-63 au total. `*` marque un paramètre obligatoire ; une liste séparée par des barres obliques
+68 au total. `*` marque un paramètre obligatoire ; une liste séparée par des barres obliques
 donne les valeurs acceptées.
 
 ### Recherche
@@ -142,9 +142,43 @@ donne les valeurs acceptées.
 | `bmm_list_schedules` | — |  | Liste les tâches de Planification & automatisation enregistrées (fonctionne hors ligne) |
 | `bmm_create_schedule` | `task` | ✓ | Crée ou met à jour une automatisation (même forme que le builder in-app ; blocs if/repeat/doWhile/forEach/switch). Créée DÉSACTIVÉE sans enabled:true |
 | `bmm_delete_schedule` | `id` | ✓ | Supprime une automatisation |
+| `bmm_bmms_reference` | — |  | Tout le vocabulaire BMMScript en JSON : chaque action avec ses noms de paramètres, les conditions, sources de valeurs, sources de boucle, mots-clés, permissions et moteurs de script |
+| `bmm_compile_bmms` | `source`\* |  | Compile du BMMScript vers l'objet attendu par `bmm_create_schedule` — renvoie `{ ok, task, errors:[{line,col,message}] }` |
+| `bmm_decompile_bmms` | `task`\* |  | Réimprime une tâche enregistrée en BMMScript, pour l'éditer comme du texte puis la recompiler |
 | `bmm_create_plugin_scaffold` | `manifest` | ✓ | Écrit un BROUILLON de plugin (plugin.json + README) dans plugin-drafts/ — autorat seulement, l'installation reste le flux normal de l'app |
+| `bmm_list_actions` | — |  | Tous les types d'action qu'une étape peut utiliser (`{ type, label, needs, group }`) — le registre que le builder in-app affiche, généré depuis la source de l'app au build |
+| `bmm_set_schedule_enabled` | `id`\*, `enabled`\* | app | Arme ou désarme une tâche enregistrée. `enabled` uniquement — rien ici ne peut réécrire ses étapes |
+| `bmm_signal` | `name`\*, `data` | app | Sonne une cloche nommée qu'une tâche attend (`wait.hook`), p. ex. pour dire qu'un build est fini |
 | `bmm_run_schedule` | `id`\* | app | Déclenche une tâche du planificateur par son id, dans l'app BMM ouverte |
 | `bmm_run_benchmark` | `dataset` (sandbox/real), `size` (S/M/L/XL/CUSTOM), `mb`, `sources`, `profiles`, `mode` (manual/auto) | app | Lance un benchmark BMM dans l'app ouverte |
+
+#### Écrire une automatisation, plutôt que l'assembler
+
+`bmm_create_schedule` prend la forme que l'app **enregistre** : un arbre imbriqué d'étapes, de
+conditions et de boucles. C'est la bonne forme pour stocker, et une mauvaise pour écrire. Une
+tâche de cinq étapes avec une boucle, c'est cet arbre construit à la main — et une erreur
+dedans n'est signalée nulle part : la tâche s'enregistre, puis fait la mauvaise chose à 03:00.
+
+[BMMScript](doc-page:features/bmmscript-reference), c'est la même tâche en texte, et son
+compilateur nomme la ligne et la colonne fautives. D'où une boucle qui se termine par quelque
+chose dont on sait qu'il est valide :
+
+1. `bmm_bmms_reference` — quels sont les mots. Généré depuis la table que le builder in-app
+   affiche, donc il ne peut pas proposer une action que le runner n'a pas.
+2. `bmm_compile_bmms` — écrire la source, lire les diagnostics, corriger, recommencer.
+3. `bmm_create_schedule` — enregistrer le `task` renvoyé par le compilateur.
+
+Pour **modifier** une tâche existante, prendre le chemin inverse : `bmm_list_schedules` →
+`bmm_decompile_bmms` → changer le texte → compiler → enregistrer sous le même id.
+
+Les trois fonctionnent BMM fermé : le compilateur et le vocabulaire sont tous deux dans le
+serveur.
+
+Le même exécutable les expose en ligne de commande, pour un shell plutôt qu'un agent :
+`bmm-mcp-server bmms-reference`, `bmms-compile --file t.bmms`, `bmms-decompile --file t.json`.
+`bmms-compile` écrit ses diagnostics sur stderr et **rien** sur stdout quand la source ne
+compile pas, donc `bmms-compile --file t.bmms | bmm-mcp-server create-schedule --file -` ne
+peut pas enregistrer une tâche à moitié analysée.
 
 ### Confidentialité, enregistreur & sessions
 
@@ -213,12 +247,13 @@ Il est volontairement étroit : seulement `GET` et `POST`, et seulement vers
 
 Les tableaux ci-dessus sont générés depuis les déclarations `Tool::new(...)` de
 `src-tauri/src/mcp/server.rs` — celles-là mêmes que le serveur enregistre au démarrage —
-plutôt qu'écrits à la main, parce que 63 outils avec leurs paramètres, c'est exactement le
+plutôt qu'écrits à la main, parce que 68 outils avec leurs paramètres, c'est exactement le
 genre de liste qui pourrit dès qu'on en ajoute un.
 
 Une vérification vaut le coup après chaque changement : tout outil **déclaré** par le serveur
 doit aussi être **dispatché**, sinon un client voit un outil qui échoue à l'appel. À l'heure
-où ces lignes sont écrites, les deux ensembles font 63 et sont identiques.
+où ces lignes sont écrites, les deux ensembles font 68 et sont identiques,
+et `scripts/check-mcp-tools.mjs` casse le build s'ils cessent de l'être.
 
 ---
 

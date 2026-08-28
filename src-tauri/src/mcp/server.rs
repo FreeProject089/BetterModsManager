@@ -4,6 +4,13 @@ use serde_json::json;
 use crate::mcp::tools::{profiles, mods, diagnostics, launch_packs, search};
 use crate::mcp::state_bridge;
 
+/// The BMMScript vocabulary, as `scripts/gen-bmms-reference.mjs` generates it.
+///
+/// Baked into the binary because an MCP client is usually somewhere else entirely — reading
+/// it from a path beside the executable would make the one tool whose whole job is "tell me
+/// what the words are" the one that fails when it is needed.
+pub const BMMS_VOCABULARY: &str = include_str!("../../../dist-assets/bmms-vocabulary.json");
+
 #[derive(Clone)]
 pub struct BmmMcpServer;
 
@@ -488,9 +495,55 @@ impl ServerHandler for BmmMcpServer {
                 std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": {} })).unwrap()),
             ),
 
+            // Writing an automation as CODE, reading one back as code, and being told the
+            // vocabulary rather than guessing it.
+            //
+            // `bmm_create_schedule` takes the shape the app SAVES: a nested tree of steps,
+            // conditions and loops. That is the right shape to store and a poor one to
+            // AUTHOR — composing a five-step task with a loop in it means assembling a tree
+            // by hand and finding out whether it was right only when the task runs.
+            //
+            // BMMScript is the same task as text, and its compiler reports the line and
+            // column that is wrong. So the loop becomes: read the vocabulary, write the
+            // source, compile it, fix what it names, save what compiled. None of these three
+            // needs BMM to be running — the compiler and the vocabulary are both in this
+            // binary.
+            Tool::new(
+                "bmm_bmms_reference",
+                "The complete BMMScript vocabulary: every action type with its parameter names, every condition, every value source, the loop sources, the reserved keywords, the five permissions and the script engines. Read this BEFORE writing a task — it is generated from the same table the app's builder renders, so it cannot name an action the runner does not have, while a guessed action name produces a task that compiles and then fails at run time. It is a VOCABULARY, not a grammar: for the syntax see the shape described on bmm_compile_bmms. Works with BMM closed.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": {}
+                })).unwrap()),
+            ),
+
+            Tool::new(
+                "bmm_compile_bmms",
+                "Compile BMMScript into the task object bmm_create_schedule takes. Returns { ok, task?, tasks?, errors:[{line,col,message}] } — pass `task` straight to bmm_create_schedule. This is the way to AUTHOR an automation: the saved JSON is a nested tree that is easy to get subtly wrong and reports nothing until the task runs, while this names the line and the column. A source file looks like: task \"Nightly scan\" { every day at 03:00 / allow script / do mods.scan() / if file exists \"C:/x\" { do app.launch(id: \"dcs\") } } — one statement per line, braces as shown. Triggers: manual | on app start | once at \"ISO\" | every 30m | every 2h | every day at HH:MM | every week on mon,tue at HH:MM | every month on 1 at HH:MM | on file \"path\" | on event \"name\" | after task \"id\" [ok|failed] | when <condition> | probe powershell every 5m { code }. Get the action and condition names from bmm_bmms_reference. Works with BMM closed.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": {
+                        "source": { "type": "string", "description": "BMMScript source: one whole `task \"...\" { ... }` block, or several." }
+                    },
+                    "required": ["source"]
+                })).unwrap()),
+            ),
+
+            Tool::new(
+                "bmm_decompile_bmms",
+                "Print a saved task back as BMMScript. The inverse of bmm_compile_bmms, and the way to EDIT an existing automation without rebuilding its tree by hand: read it with bmm_list_schedules, decompile it, change the text, compile it, then save it with bmm_create_schedule under the SAME id. Works with BMM closed.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": {
+                        "task": { "type": "object", "description": "A task object, in the shape bmm_list_schedules returns." }
+                    },
+                    "required": ["task"]
+                })).unwrap()),
+            ),
+
             Tool::new(
                 "bmm_create_schedule",
-                "Create or update a scheduler automation (upsert by id into schedules.json). `task` is the same shape the in-app builder saves: { id?, name, description?, enabled?, trigger, steps[], allowCustomCommands? }. trigger: {type:'manual'|'appStart'|'hourly'|'daily'|'weekly'|'once', ...}. steps[] nest freely: {kind:'action', action:{type, params}} | {kind:'delay', seconds} | {kind:'waitFor', condition, timeoutSec} | {kind:'if', condition, then[], else[]} | {kind:'repeat', mode:'while'|'until'|'doWhile'|'times', condition?, times?, maxIters, everySec, steps[]} | {kind:'forEach', source:'mods'|'enabledMods'|'disabledMods'|'profiles'|'modpacks'|'themes', maxIters, everySec, steps[]} (use {item.id}/{item.name} placeholders in the body's action params) | {kind:'switch', cases:[{condition, steps[]}], default[]}. Use bmm_list_actions / bmm_list_schedules to discover action types and existing tasks. SAFETY: without an explicit enabled:true the task is created DISABLED for the user to inspect and switch on.",
+                "Create or update a scheduler automation (upsert by id into schedules.json). `task` is the same shape the in-app builder saves: { id?, name, description?, enabled?, trigger, steps[], perms? }. perms is { command?, script?, deeplink?, stopProcess?, delete? } — each one false unless set, and a step needing a capability the task was not granted FAILS with a message instead of running. `allowCustomCommands` is the older single flag and means command+deeplink. trigger, one of: {type:'manual'} | {type:'appStart'} | {type:'once', at:'2026-01-01T09:00'} | {type:'interval', everyMinutes:30} | {type:'hourly', everyHours:2} | {type:'dailyAt', time:'03:00'} | {type:'weeklyAt', time:'08:00', days:[1,3]} (0=Sunday) | {type:'monthlyAt', day:1, time:'00:00'} | {type:'watchFile', path:'C:/.../dcs.log'} | {type:'onEvent', event:'...'} | {type:'afterTask', taskId:'...', outcome:'any'|'ok'|'fail'} | {type:'condition', condition:{type,params}} (fires on the CHANGE to true, not repeatedly while it is true) | {type:'script', engine:'powershell'|'cmd'|'bash'|'python'|'node'|'rust', everyMinutes:5, code:'...'} (exit code 0 runs the task; needs the `script` permission). steps[] nest freely: {kind:'action', action:{type, params}} | {kind:'delay', seconds} | {kind:'waitFor', condition, timeoutSec} | {kind:'if', condition, then[], else[]} | {kind:'repeat', mode:'while'|'until'|'doWhile'|'times', condition?, times?, maxIters, everySec, steps[]} | {kind:'forEach', source:'mods'|'enabledMods'|'disabledMods'|'profiles'|'modpacks'|'themes', maxIters, everySec, steps[]} (use {item.id}/{item.name} placeholders in the body's action params) | {kind:'switch', cases:[{condition, steps[]}], default[]}. Use bmm_list_actions / bmm_list_schedules to discover action types and existing tasks. SAFETY: without an explicit enabled:true the task is created DISABLED for the user to inspect and switch on.",
                 std::sync::Arc::new(serde_json::from_value(json!({
                     "type": "object",
                     "properties": {
@@ -1320,6 +1373,34 @@ impl ServerHandler for BmmMcpServer {
 
                 // Scheduling & automation
                 "bmm_list_schedules" => self.tool_list_schedules(),
+                "bmm_bmms_reference" => {
+                    // Compiled in rather than read from disk: the generator writes this file
+                    // and a gate keeps it in step with the action table, so baking it into the
+                    // binary makes "the vocabulary is missing" unrepresentable — and this
+                    // server is routinely run with no BMM install beside it.
+                    match serde_json::from_str::<serde_json::Value>(BMMS_VOCABULARY) {
+                        Ok(v) => ok_json(&v),
+                        Err(e) => err_result(&format!(
+                            "the bundled BMMScript vocabulary is not valid JSON: {e}"
+                        )),
+                    }
+                }
+                "bmm_compile_bmms" => {
+                    let src = match args.get("source").and_then(|v| v.as_str()) {
+                        Some(x) => x.to_string(),
+                        None => return err_result("`source` is required"),
+                    };
+                    ok_json(&crate::commands::bmms::bmms_compile(src))
+                }
+                "bmm_decompile_bmms" => {
+                    let task = args.get("task").cloned().unwrap_or(serde_json::Value::Null);
+                    if !task.is_object() {
+                        return err_result("`task` must be a JSON object");
+                    }
+                    ok_json(&serde_json::Value::String(
+                        crate::commands::bmms::bmms_decompile(task),
+                    ))
+                }
                 "bmm_create_schedule" => {
                     let task = args.get("task").cloned().unwrap_or(serde_json::Value::Null);
                     if !task.is_object() { return err_result("`task` must be a JSON object"); }

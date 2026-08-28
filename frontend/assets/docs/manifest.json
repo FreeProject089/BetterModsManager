@@ -762,7 +762,7 @@
         "en": "BMM ships an MCP server: the same capabilities the app has, exposed as Model Context Protocol tools so an AI assistant can drive BMM directly — list your…",
         "fr": "BMM embarque un serveur MCP : les mêmes capacités que l'application, exposées comme des outils Model Context Protocol pour qu'une IA puisse piloter BMM…"
       },
-      "words": 613,
+      "words": 876,
       "diagrams": 0,
       "fr": true
     },

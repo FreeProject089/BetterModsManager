@@ -15,6 +15,19 @@
 //   · declared twice   → the client sees a name twice and the dispatch is ambiguous
 //   · declared, never dispatched → a tool that errors when called
 //   · dispatched, never declared → dead code no client can reach
+//
+// And a fourth, which is a different KIND of wrong. `bmm_create_schedule` listed its trigger
+// types in prose, and the prose said 'daily' and 'weekly' — names that have never existed —
+// while omitting nine that do, `interval` and `dailyAt` and `watchFile` among them. Nothing
+// was broken in the ordinary sense: it compiled, it dispatched, it was declared exactly once.
+//
+// But a tool description is not a comment. It is the only thing a model reads before calling
+// the tool, so a wrong one is a wrong instruction: an agent asked for a nightly task wrote
+// {type:'daily'}, the runner did not recognise it, and the task simply never fired. Silent,
+// and blamed on the scheduler.
+//
+// So: every variant of the Trigger union must appear in that description. Prose is checked
+// against the type, because the type is the thing that is true.
 import { readFileSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -60,6 +73,85 @@ const noArm = [...declSet].filter((n) => !dispSet.has(n));
 const noDecl = [...dispSet].filter((n) => !declSet.has(n));
 if (noArm.length) problems.push(`declared but never dispatched (errors when called): ${noArm.join(', ')}`);
 if (noDecl.length) problems.push(`dispatched but never declared (no client can reach it): ${noDecl.join(', ')}`);
+
+// ── The trigger vocabulary in `bmm_create_schedule`'s description ──────────
+//
+// Read from the TS union rather than a list kept here: a second list is the same failure one
+// level up, and it goes stale the day somebody adds a trigger.
+const SCHED = join(ROOT, 'frontend/src/features/settings/scheduler.ts');
+if (!existsSync(SCHED)) {
+  console.error(`\u2717 ${SCHED} is missing \u2014 refusing to report success`);
+  process.exit(2);
+}
+const schedSrc = readFileSync(SCHED, 'utf8');
+const union = schedSrc.slice(schedSrc.indexOf('type Trigger ='));
+// Up to the `;` that closes the union \u2014 the doc comments inside it contain no semicolons at
+// the start of a line, but the member fields do, so cut at the first `};` instead.
+const unionBody = union.slice(0, union.indexOf('};') + 1);
+const triggers = [...unionBody.matchAll(/\{\s*type:\s*'([a-zA-Z]+)'/g)].map((m) => m[1]);
+
+if (triggers.length < 8) {
+  console.error(
+    `\u2717 read ${triggers.length} trigger type(s) from scheduler.ts \u2014 too few to be right, so this check cannot be trusted`,
+  );
+  process.exit(2);
+}
+
+// The description is the second argument of `Tool::new("bmm_create_schedule", "...")`.
+const declBlock = src.slice(src.indexOf('"bmm_create_schedule",'));
+const descEnd = declBlock.indexOf('std::sync::Arc::new');
+const desc = descEnd > 0 ? declBlock.slice(0, descEnd) : '';
+const missing = triggers.filter((tt) => !desc.includes(`'${tt}'`));
+if (missing.length) {
+  problems.push(
+    `bmm_create_schedule's description never names these trigger type(s), so an agent cannot use them: ${missing.join(', ')}`,
+  );
+}
+// And the reverse: a name in the prose that the union does not have is what shipped for
+// months. It reads as available and produces a task that never fires.
+const known = new Set(triggers);
+const invented = [...new Set([...desc.matchAll(/\{type:'([a-zA-Z]+)'/g)].map((m) => m[1]))]
+  .filter((tt) => !known.has(tt));
+if (invented.length) {
+  problems.push(
+    `bmm_create_schedule's description offers trigger type(s) that do not exist: ${invented.join(', ')}`,
+  );
+}
+
+// ── The reference page, against the server ───────────────────────────────
+//
+// reference/mcp.md says its tables are generated from the `Tool::new(...)` declarations
+// "rather than written by hand, because N tools with their parameters is exactly the list
+// that rots the first time someone adds one". It then rotted: it claimed 63 while the server
+// declared 68, and five tools an agent could call appeared nowhere on the page.
+//
+// A claim about being generated is not a generator. This is the generator's missing half.
+const DOCS = ['BMM Docs/docs/reference/mcp.md', 'BMM Docs/docs/reference/mcp.fr.md'];
+for (const rel of DOCS) {
+  const p = join(ROOT, rel);
+  if (!existsSync(p)) {
+    console.error(`\u2717 ${rel} is missing \u2014 refusing to report success`);
+    process.exit(2);
+  }
+  const doc = readFileSync(p, 'utf8');
+  const undocumented = [...declSet].filter((n) => !doc.includes(`\`${n}\``));
+  if (undocumented.length) {
+    problems.push(`${rel} never mentions: ${undocumented.join(', ')}`);
+  }
+  // Every number the page states about how many tools there are. Three sentences say it, and
+  // the last time they were wrong they were wrong together.
+  const claims = [...doc.matchAll(/(\d+)(?= of them\.| au total\.| tools with their| outils avec leurs)/g)]
+    .map((m) => Number(m[1]));
+  const both = [...doc.matchAll(/(?:sets are|ensembles font) (\d+)/g)].map((m) => Number(m[1]));
+  const all = [...claims, ...both];
+  if (all.length < 3) {
+    problems.push(`${rel}: found ${all.length} tool-count claim(s), expected at least 3 \u2014 the wording moved and this check no longer reads it`);
+  }
+  const wrong = [...new Set(all)].filter((n) => n !== declSet.size);
+  if (wrong.length) {
+    problems.push(`${rel} claims ${wrong.join('/')} tool(s); the server declares ${declSet.size}`);
+  }
+}
 
 if (problems.length) {
   console.error('✗ MCP tools:');

@@ -22,6 +22,9 @@
 //!   bmm-mcp-server export-config <path>   # Export data.json
 //!   bmm-mcp-server info                   # Show BMM environment info
 //!   bmm-mcp-server api [--reveal]         # Show Plugin API URL/port/token
+//!   bmm-mcp-server bmms-reference         # Every action/condition/keyword BMMScript knows
+//!   bmm-mcp-server bmms-compile --file t.bmms   # BMMScript -> task JSON (+ diagnostics)
+//!   bmm-mcp-server bmms-decompile --file t.json # task JSON -> BMMScript
 
 #[path = "../mcp/mod.rs"]
 mod mcp;
@@ -36,6 +39,11 @@ mod commands {
     // does, and a second guard is the one that gets forgotten.
     #[path = "../../commands/plugin_assets_core.rs"]
     pub mod plugin_assets_core;
+    // The BMMScript compiler. Mounted, not reimplemented — there is one compiler for this
+    // language and a second one is the thing it exists to avoid. It pulls in nothing but
+    // serde, so the CLI can compile a task with no app, no state and no HTTP.
+    #[path = "../../commands/bmms.rs"]
+    pub mod bmms;
 }
 
 use clap::{Parser, Subcommand};
@@ -492,6 +500,39 @@ enum Commands {
     /// in-app builder shows. Use with `create-schedule`: a step is
     /// {kind:'action', action:{type:<one of these>, params:{...}}}.
     Actions,
+
+    /// Print the whole BMMScript vocabulary as JSON: actions and their parameter names,
+    /// conditions, value sources, loop sources, keywords, permissions, script engines.
+    /// Generated from the same table the in-app builder renders, so it cannot name an
+    /// action the runner does not have. Needs no running app.
+    BmmsReference,
+
+    /// Compile BMMScript into the task JSON `create-schedule` takes.
+    ///
+    /// The pairing is the point: writing the JSON by hand means assembling a nested tree
+    /// and learning it was wrong when the task runs, while this names the line and column.
+    ///   bmm-mcp-server bmms-compile --file nightly.bmms | bmm-mcp-server create-schedule --file -
+    /// Exits non-zero, and prints nothing on stdout, when the source does not compile — so
+    /// that pipe cannot save a half-parsed task. Needs no running app.
+    BmmsCompile {
+        /// Path to a .bmms/.bmmscript source file, or '-' to read stdin
+        #[arg(long, conflicts_with = "source")]
+        file: Option<String>,
+        /// Inline BMMScript source
+        #[arg(long)]
+        source: Option<String>,
+    },
+
+    /// Print a saved task back as BMMScript — the inverse of `bmms-compile`, and the way
+    /// to edit a task as text rather than as a tree. Needs no running app.
+    BmmsDecompile {
+        /// Path to a task .json file, or '-' to read stdin
+        #[arg(long, conflicts_with = "json")]
+        file: Option<String>,
+        /// Inline task JSON
+        #[arg(long)]
+        json: Option<String>,
+    },
 
     /// Launch a benchmark (running app)
     Benchmark {
@@ -1140,6 +1181,43 @@ async fn run_cli_command(cmd: Commands) -> anyhow::Result<()> {
                 println!("    {:<28} {}", a.get("type").and_then(|x| x.as_str()).unwrap_or("").green(),
                     a.get("label").and_then(|x| x.as_str()).unwrap_or(""));
             }
+        }
+
+        Commands::BmmsReference => {
+            // Printed verbatim rather than re-serialised: the generator's field order groups
+            // actions the way the builder does, and re-emitting it would sort that away.
+            println!("{}", mcp::server::BMMS_VOCABULARY.trim_end());
+        }
+
+        Commands::BmmsCompile { file, source } => {
+            let src = read_json_arg(file, source, "source.bmms")?;
+            let out = commands::bmms::bmms_compile(src);
+            if !out.ok || out.task.is_none() {
+                // Diagnostics on stderr, nothing on stdout. This command is meant to sit in
+                // a pipe, and a shell pipe does not care about an exit code — if the errors
+                // went to stdout, `bmms-compile | create-schedule` would hand a parse error
+                // to the saver and the saver would reject it with a message about JSON.
+                for d in &out.errors {
+                    eprintln!("  {} {}:{} {}", "✗".red().bold(), d.line, d.col, d.message);
+                }
+                if out.errors.is_empty() {
+                    eprintln!("  {} the source compiled to nothing — is there a `task \"…\" {{ … }}` block?", "✗".red().bold());
+                }
+                std::process::exit(1);
+            }
+            // Every task in the file, when there is more than one; otherwise the single task
+            // on its own, which is what `create-schedule` reads.
+            let payload = match &out.tasks {
+                Some(list) if list.len() > 1 => serde_json::Value::Array(list.clone()),
+                _ => out.task.clone().unwrap_or(serde_json::Value::Null),
+            };
+            println!("{}", serde_json::to_string_pretty(&payload)?);
+        }
+
+        Commands::BmmsDecompile { file, json } => {
+            let raw = read_json_arg(file, json, "task.json")?;
+            let task: serde_json::Value = serde_json::from_str(&raw)?;
+            print!("{}", commands::bmms::bmms_decompile(task));
         }
 
         Commands::RunSchedule { id } => {
