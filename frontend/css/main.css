@@ -11910,8 +11910,12 @@ body.sched-drag-live .sched-branch .sched-drop-zone:empty {
     color:var(--accent);
     background:var(--accent-dim, rgba(124,140,255,0.16));
 }
+/* Shrinkable to nothing rather than 140px. The head is nowrap (see below), so a floor here
+   would push the hover toolbar off the right edge in a narrow panel instead of letting the
+   <select> truncate — and a select that shows half its label still works, while a delete
+   button hanging outside its card does not. */
 .sched-act-card .sched-act-type {
-    flex:1; min-width:140px; max-width:none !important;
+    flex:1; min-width:0; max-width:none !important;
     font-weight:600;
 }
 .sched-act-card .sched-del { margin-left:auto; color:var(--danger); flex-shrink:0; }
@@ -12112,6 +12116,7 @@ body.sched-drag-live .sched-branch .sched-drop-zone:empty {
 .sched-step.collapsed .sched-fold-sum { display:inline-block; }
 /* Collapsed → hide every step body, whatever the kind. */
 .sched-step.collapsed > .sched-branch,
+.sched-step.collapsed > .sched-opts,
 .sched-step.collapsed > .sched-wait-opts,
 .sched-step.collapsed .sched-loop,
 .sched-step.collapsed .sched-loop-add,
@@ -12128,12 +12133,45 @@ body.sched-drag-live .sched-branch .sched-drop-zone:empty {
 .sched-step-waitFor:hover { border-left-color:#10b981; }
 .sched-step-delay:hover { border-left-color:#94a3b8; }
 .sched-step .sched-step-head { gap:8px; row-gap:6px; }
+/* Measured: a FOR EACH head in a 363px panel is 24 + 8 + 71 + a 190px select + gaps = 325,
+   and its 98px toolbar does not fit — so the toolbar wrapped onto its own line, alone,
+   right-aligned under the step it belongs to. `flex-wrap:nowrap` (set once, further down,
+   for both head kinds) removes the second line; these two rules decide who absorbs the
+   overflow instead. The identity of the step — chevron, icon, tag — and the toolbar never
+   give; the select does, and a truncated select label still works. */
+.sched-step-head > .sched-tools,
+.sched-step-head > .sched-fold,
+.sched-step-head > .sched-kind-ic,
+.sched-step-head > .sched-step-tag,
+.sched-step-head > .sched-cond-label { flex-shrink:0; }
+/* Shrinkable, and allowed to go below their content width — without min-width:0 a flex item
+   refuses to shrink past its content and the row overflows instead. */
+.sched-step-head > .input,
+.sched-step-head > .sched-cond,
+.sched-step-head > .sched-rep-cond-wrap,
+.sched-step-head > .sched-rep-times-wrap { min-width:0; }
 .sched-step .sched-del { margin-left:auto; display:inline-flex; align-items:center; justify-content:center;
     width:24px; height:24px; padding:0; border-radius:6px; flex-shrink:0; }
 .sched-step .sched-del:hover { background:rgba(239,68,68,0.14); }
-/* WAIT UNTIL options row (poll interval / timeout / on-timeout) */
-.sched-wait-opts { display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-top:8px; padding-top:8px; border-top:1px solid var(--border); }
+/* A step's options row — the numbers and switches that are not the step's headline.
+   WAIT UNTIL had one; REPEAT, FOR EACH and RETRY crammed theirs into the head instead, and
+   the head is a wrapping flex row that also holds the hover toolbar. Six controls plus a
+   sentence of hint text in there means the row wraps, and what lands on the second line is
+   whatever happened to be last — usually the toolbar, floated right, under everything. */
+.sched-opts, .sched-wait-opts {
+    display:flex; align-items:center; gap:6px 12px; flex-wrap:wrap;
+    margin-top:8px; padding-top:8px; border-top:1px solid var(--border);
+}
 .sched-wait-lbl { font-size:11px; color:var(--text-muted); }
+/* A label and its input are ONE thing. As two flex children of a wrapping row they are free
+   to be split across the wrap, which is how "max" ended a line and its box started the next
+   — a number with no name above it and a word with no number after it. */
+.sched-pair { display:inline-flex; align-items:center; gap:6px; white-space:nowrap; }
+.sched-pair .input { flex-shrink:0; }
+/* The sentence explaining what a block does. Under the head, not inside it: it is the one
+   child with no natural width, so in the head it either squeezed the controls or wrapped. */
+.sched-step-hint { font-size:11px; color:var(--text-muted); margin:6px 0 0 34px; line-height:1.45; }
+.sched-step.collapsed > .sched-step-hint { display:none; }
 /* Themed checkboxes everywhere in the scheduler (NOT, allow-cmd, toggles…) */
 .sched-body input[type="checkbox"] {
     appearance:none; -webkit-appearance:none;
@@ -12185,7 +12223,15 @@ body.sched-drag-live .sched-branch .sched-drop-zone:empty {
 .sched-steps { min-width:100%; }
 .sched-act-card .sched-act-type { min-width:140px; }
 /* The action card head/params can wrap their controls instead of overflowing. */
-.sched-act-head, .sched-step-head { flex-wrap:wrap; row-gap:6px; }
+/* Neither head wraps. Both end with a hover toolbar pinned right by `margin-left:auto`, and
+   in a wrapping row that toolbar is the item most likely to be pushed onto a second line —
+   alone, right-aligned, under the step it acts on. Measured at 363px: FOR EACH did exactly
+   that. The overflow now goes into the one child that can absorb it, the <select>. */
+.sched-act-head, .sched-step-head { flex-wrap:nowrap; row-gap:6px; }
+.sched-act-head > .sched-act-icon,
+.sched-act-head > .sched-step-tag,
+.sched-act-head > .sched-fold,
+.sched-act-head > .sched-tools { flex-shrink:0; }
 /* Benchmark "real" sources: clean chip row (no stray span/tab look) */
 .sched-b-sources { padding:8px 10px; border:1px dashed var(--border); border-radius:8px;
     background:var(--bmm-s02, rgba(255,255,255,0.02)); }

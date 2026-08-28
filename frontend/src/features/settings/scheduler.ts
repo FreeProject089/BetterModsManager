@@ -5703,16 +5703,16 @@ function renderStepsEditor(host: HTMLElement, steps: Step[], depth = 0): void {
             block.innerHTML = `<div class="sched-step-head">${_foldBtn(step)}${_kindTile('waitFor')}<span class="sched-step-tag sched-wait">${t('sched.waitUntil') || 'WAIT UNTIL'}</span>
                 <span class="sched-cond-label">${t('sched.condition') || 'condition:'}</span>
                 <div class="sched-cond" style="flex:1"></div></div>
-                <div class="sched-wait-opts">
-                    <span class="sched-wait-lbl">${t('sched.checkEvery') || 'check every'}</span>
-                    <input type="number" class="input sched-wait-poll" min="1" value="${step.pollSec || 2}" style="max-width:70px"> ${t('sched.unitSec') || 's'}
-                    <span class="sched-wait-lbl">${t('sched.timeout') || 'timeout'}</span>
-                    <input type="number" class="input sched-wait-to" min="1" value="${step.timeoutSec}" style="max-width:80px"> ${t('sched.unitSec') || 's'}
-                    <span class="sched-wait-lbl">${t('sched.onTimeout') || 'on timeout'}</span>
+                <div class="sched-opts sched-wait-opts">
+                    <span class="sched-pair"><span class="sched-wait-lbl">${t('sched.checkEvery') || 'check every'}</span>
+                        <input type="number" class="input sched-wait-poll" min="1" value="${step.pollSec || 2}" style="max-width:70px"> ${t('sched.unitSec') || 's'}</span>
+                    <span class="sched-pair"><span class="sched-wait-lbl">${t('sched.timeout') || 'timeout'}</span>
+                        <input type="number" class="input sched-wait-to" min="1" value="${step.timeoutSec}" style="max-width:80px"> ${t('sched.unitSec') || 's'}</span>
+                    <span class="sched-pair"><span class="sched-wait-lbl">${t('sched.onTimeout') || 'on timeout'}</span>
                     <select class="input sched-wait-ot" style="max-width:150px">
                         <option value="abort"${toMode === 'abort' ? ' selected' : ''}>${t('sched.timeoutAbort') || 'stop the task (error)'}</option>
                         <option value="continue"${toMode === 'continue' ? ' selected' : ''}>${t('sched.timeoutContinue') || 'continue anyway'}</option>
-                    </select>
+                    </select></span>
                 </div>`;
             block.querySelector('.sched-cond')?.appendChild(conditionEditor(step.condition));
             block.querySelector('.sched-wait-to')?.addEventListener('input', (e) => { step.timeoutSec = parseInt((e.target as HTMLInputElement).value) || 60; });
@@ -5738,9 +5738,11 @@ function renderStepsEditor(host: HTMLElement, steps: Step[], depth = 0): void {
                     <span class="sched-step-tag sched-repeat">${t('sched.repeat') || 'REPEAT'}</span>
                     <select class="input sched-rep-mode" style="max-width:130px">${modeSel}</select>
                     <span class="sched-rep-cond-wrap" style="display:${step.mode === 'times' ? 'none' : 'flex'};align-items:center;gap:6px;flex:1"><div class="sched-cond" style="flex:1"></div></span>
-                    <span class="sched-rep-times-wrap" style="display:${step.mode === 'times' ? 'inline-flex' : 'none'};align-items:center;gap:6px"><input type="number" class="input sched-rep-times" min="1" value="${step.times || 3}" style="max-width:90px"> ${t('sched.loopTimes') || 'times'}</span>
-                    <span style="font-size:11px;color:var(--text-muted)">${t('sched.loopMax') || 'max'}</span><input type="number" class="input sched-rep-max" min="1" value="${step.maxIters || 100}" style="max-width:90px">
-                    <span style="font-size:11px;color:var(--text-muted)">${t('sched.loopEvery') || 'every'}</span><input type="number" class="input sched-rep-every" min="0" value="${step.everySec || 1}" style="max-width:80px"> ${t('sched.unitSec') || 's'}</div>
+                    <span class="sched-rep-times-wrap sched-pair" style="display:${step.mode === 'times' ? 'inline-flex' : 'none'}"><input type="number" class="input sched-rep-times" min="1" value="${step.times || 3}" style="max-width:90px"> ${t('sched.loopTimes') || 'times'}</span></div>
+                <div class="sched-opts">
+                    <span class="sched-pair"><span class="sched-wait-lbl">${t('sched.loopMax') || 'max'}</span><input type="number" class="input sched-rep-max" min="1" value="${step.maxIters || 100}" style="max-width:90px"></span>
+                    <span class="sched-pair"><span class="sched-wait-lbl">${t('sched.loopEvery') || 'every'}</span><input type="number" class="input sched-rep-every" min="0" value="${step.everySec || 1}" style="max-width:80px"> ${t('sched.unitSec') || 's'}</span>
+                </div>
                 <div class="sched-branch"><div class="sched-branch-label">${t('sched.loopBody') || 'LOOP'}</div><div class="sched-loop"></div><div class="sched-loop-add"></div></div>`;
             if (!step.condition) step.condition = { type: 'always', params: {} };
             block.querySelector('.sched-cond')?.appendChild(conditionEditor(step.condition));
@@ -5764,10 +5766,12 @@ function renderStepsEditor(host: HTMLElement, steps: Step[], depth = 0): void {
                     value="${escAttr(step.listName || '')}">` : '';
             block.innerHTML = `<div class="sched-step-head">${_foldBtn(step)}${_kindTile('forEach')}
                     <span class="sched-step-tag sched-repeat">${t('sched.forEach') || 'FOR EACH'}</span>
-                    <select class="input sched-fe-src" style="max-width:190px">${srcSel}</select>${nameBox}
-                    <span style="font-size:11px;color:var(--text-muted)">${t('sched.loopMax') || 'max'}</span><input type="number" class="input sched-fe-max" min="1" value="${step.maxIters || 100}" style="max-width:90px">
-                    <span style="font-size:11px;color:var(--text-muted)">${t('sched.loopEvery') || 'every'}</span><input type="number" class="input sched-fe-every" min="0" value="${step.everySec || 0}" style="max-width:80px"> ${t('sched.unitSec') || 's'}
-                    <span style="font-size:10px;color:var(--text-muted)">${t('sched.fe.hint') || '{item.id} / {item.name} in the body'}</span></div>
+                    <select class="input sched-fe-src" style="max-width:190px">${srcSel}</select>${nameBox}</div>
+                <div class="sched-opts">
+                    <span class="sched-pair"><span class="sched-wait-lbl">${t('sched.loopMax') || 'max'}</span><input type="number" class="input sched-fe-max" min="1" value="${step.maxIters || 100}" style="max-width:90px"></span>
+                    <span class="sched-pair"><span class="sched-wait-lbl">${t('sched.loopEvery') || 'every'}</span><input type="number" class="input sched-fe-every" min="0" value="${step.everySec || 0}" style="max-width:80px"> ${t('sched.unitSec') || 's'}</span>
+                </div>
+                <p class="sched-step-hint">${escHtml(t('sched.fe.hint') || '{item.id} / {item.name} in the body')}</p>
                 <div class="sched-branch"><div class="sched-branch-label">${t('sched.fe.body') || 'PER ITEM'}</div><div class="sched-fe-body"></div><div class="sched-fe-add"></div></div>`;
             block.querySelector('.sched-fe-src')?.addEventListener('change', (e) => {
                 step.source = (e.target as HTMLSelectElement).value as any;
@@ -5788,9 +5792,9 @@ function renderStepsEditor(host: HTMLElement, steps: Step[], depth = 0): void {
             block.innerHTML = `<div class="sched-step-head">${_foldBtn(step)}${_kindTile('parallel')}
                     <span class="sched-step-tag sched-repeat">${t('sched.parallel') || 'AT THE SAME TIME'}</span>
                     <select class="input sched-par-mode" style="max-width:190px">${modeSel}</select>
-                    <span style="font-size:11px;color:var(--text-muted);flex:1">${t('sched.parHint') || 'branches share the task\u2019s variables \u2014 use them for work that does not depend on each other'}</span>
                     <button type="button" class="btn btn-xs sched-par-add-branch">+ ${escHtml(t('sched.par.addBranch') || 'branch')}</button>
                 </div>
+                <p class="sched-step-hint">${escHtml(t('sched.parHint') || 'branches share the task\u2019s variables \u2014 use them for work that does not depend on each other')}</p>
                 ${step.branches.map((_b, bi) => `
                 <div class="sched-branch">
                     <div class="sched-branch-label">
@@ -5825,15 +5829,17 @@ function renderStepsEditor(host: HTMLElement, steps: Step[], depth = 0): void {
             _wireFold(block, step);
         } else if (step.kind === 'retry') {
             block.innerHTML = `<div class="sched-step-head">${_foldBtn(step)}${_kindTile('retry')}
-                    <span class="sched-step-tag sched-repeat">${escHtml(t('sched.retry'))}</span>
-                    <input type="number" class="input sched-rt-times" min="1" max="99" value="${step.times || 3}" style="max-width:80px">
-                    <span style="font-size:11px;color:var(--text-muted)">${escHtml(t('sched.retry.timesWord'))}</span>
-                    <span style="font-size:11px;color:var(--text-muted)">${escHtml(t('sched.loopEvery') || 'every')}</span>
-                    <input type="number" class="input sched-rt-every" min="0" value="${step.everySec ?? 30}" style="max-width:80px">
-                    <span style="font-size:11px;color:var(--text-muted)">${t('sched.unitSec') || 's'}</span>
+                    <span class="sched-step-tag sched-repeat">${escHtml(t('sched.retry'))}</span></div>
+                <div class="sched-opts">
+                    <span class="sched-pair"><input type="number" class="input sched-rt-times" min="1" max="99" value="${step.times || 3}" style="max-width:80px">
+                        <span class="sched-wait-lbl">${escHtml(t('sched.retry.timesWord'))}</span></span>
+                    <span class="sched-pair"><span class="sched-wait-lbl">${escHtml(t('sched.loopEvery') || 'every')}</span>
+                        <input type="number" class="input sched-rt-every" min="0" value="${step.everySec ?? 30}" style="max-width:80px">
+                        <span class="sched-wait-lbl">${t('sched.unitSec') || 's'}</span></span>
                     <label class="sched-ensure-cont"><input type="checkbox" class="sched-rt-cont" ${step.onFail === 'continue' ? 'checked' : ''}>
-                        <span data-tooltip="${escAttr(t('sched.retry.orContinueHint'))}">${escHtml(t('sched.ensure.orContinue'))}</span></label></div>
-                <p class="sched-ensure-hint">${escHtml(t('sched.retry.hint'))}</p>
+                        <span data-tooltip="${escAttr(t('sched.retry.orContinueHint'))}">${escHtml(t('sched.ensure.orContinue'))}</span></label>
+                </div>
+                <p class="sched-step-hint">${escHtml(t('sched.retry.hint'))}</p>
                 <div class="sched-branch"><div class="sched-branch-label">${escHtml(t('sched.retry.body'))}</div><div class="sched-rt-body"></div><div class="sched-rt-add"></div></div>`;
             block.querySelector('.sched-rt-times')?.addEventListener('input', (e) => { step.times = Math.max(1, parseInt((e.target as HTMLInputElement).value, 10) || 1); });
             block.querySelector('.sched-rt-every')?.addEventListener('input', (e) => { step.everySec = Math.max(0, parseInt((e.target as HTMLInputElement).value, 10) || 0); });
@@ -5845,10 +5851,12 @@ function renderStepsEditor(host: HTMLElement, steps: Step[], depth = 0): void {
             block.innerHTML = `<div class="sched-step-head">${_foldBtn(step)}${_kindTile('ensure')}
                     <span class="sched-step-tag sched-if">${escHtml(t('sched.ensure'))}</span>
                     <span class="sched-cond-label">${escHtml(t('sched.ensure.condLabel'))}</span>
-                    <div class="sched-cond" style="flex:1"></div>
+                    <div class="sched-cond" style="flex:1;min-width:0"></div></div>
+                <div class="sched-opts">
                     <label class="sched-ensure-cont"><input type="checkbox" class="sched-ens-cont" ${step.onFail === 'continue' ? 'checked' : ''}>
-                        <span data-tooltip="${escAttr(t('sched.ensure.orContinueHint'))}">${escHtml(t('sched.ensure.orContinue'))}</span></label></div>
-                <p class="sched-ensure-hint">${escHtml(t('sched.ensure.hint'))}</p>
+                        <span data-tooltip="${escAttr(t('sched.ensure.orContinueHint'))}">${escHtml(t('sched.ensure.orContinue'))}</span></label>
+                </div>
+                <p class="sched-step-hint">${escHtml(t('sched.ensure.hint'))}</p>
                 <div class="sched-branch"><div class="sched-branch-label">${escHtml(t('sched.ensure.fix'))}</div><div class="sched-ens-body"></div><div class="sched-ens-add"></div></div>`;
             if (!step.condition) step.condition = { type: 'always', params: {} };
             block.querySelector('.sched-cond')?.appendChild(conditionEditor(step.condition));
@@ -5860,8 +5868,8 @@ function renderStepsEditor(host: HTMLElement, steps: Step[], depth = 0): void {
             _wireFold(block, step);
         } else if (step.kind === 'try') {
             block.innerHTML = `<div class="sched-step-head">${_foldBtn(step)}${_kindTile('try')}
-                    <span class="sched-step-tag sched-if">${t('sched.try') || 'TRY'}</span>
-                    <span style="font-size:11px;color:var(--text-muted)">${t('sched.tryHint') || 'if anything below fails, run ON ERROR instead of aborting the task'}</span></div>
+                    <span class="sched-step-tag sched-if">${t('sched.try') || 'TRY'}</span></div>
+                <p class="sched-step-hint">${escHtml(t('sched.tryHint') || 'if anything below fails, run ON ERROR instead of aborting the task')}</p>
                 <div class="sched-branch"><div class="sched-branch-label">${t('sched.tryDo') || 'TRY'}</div><div class="sched-try-body"></div><div class="sched-try-add"></div></div>
                 <div class="sched-branch"><div class="sched-branch-label">${t('sched.tryCatch') || 'ON ERROR'}</div><div class="sched-catch-body"></div><div class="sched-catch-add"></div></div>`;
             renderStepsEditor(block.querySelector('.sched-try-body') as HTMLElement, step.steps, depth + 1);
@@ -5885,8 +5893,8 @@ function renderStepsEditor(host: HTMLElement, steps: Step[], depth = 0): void {
                 : `<span style="font-size:11px;color:var(--text-muted)">${escHtml(t('sched.call.none') || 'No block yet — build some steps, then use “Save as block” in the sidebar.')}</span>`;
             block.innerHTML = `<div class="sched-step-head">${_kindTile('call')}
                     <span class="sched-step-tag sched-repeat">${t('sched.call') || 'RUN BLOCK'}</span>
-                    ${body}
-                    <span style="font-size:10px;color:var(--text-muted)">${t('sched.call.perm') || 'runs with THIS task’s permissions'}</span></div>`;
+                    ${body}</div>
+                <p class="sched-step-hint">${escHtml(t('sched.call.perm') || 'runs with THIS task9s permissions')}</p>`;
             block.querySelector('.sched-call-block')?.addEventListener('change', (e) => {
                 (step as any).block = (e.target as HTMLSelectElement).value;
             });
@@ -5898,13 +5906,13 @@ function renderStepsEditor(host: HTMLElement, steps: Step[], depth = 0): void {
                        : step.kind === 'continue' ? (t('sched.continueHint') || 'skip to the next iteration')
                        : (t('sched.stopHint') || 'end the whole task, successfully');
             block.innerHTML = `<div class="sched-step-head">${_kindTile('signal')}
-                    <span class="sched-step-tag sched-repeat">${label}</span>
-                    <span style="font-size:11px;color:var(--text-muted)">${hint}</span></div>`;
+                    <span class="sched-step-tag sched-repeat">${label}</span></div>
+                <p class="sched-step-hint">${escHtml(hint)}</p>`;
         } else if (step.kind === 'switch') {
             block.innerHTML = `<div class="sched-step-head">${_foldBtn(step)}${_kindTile('switch')}
                     <span class="sched-step-tag sched-if">${t('sched.switch') || 'SWITCH'}</span>
-                    <span style="font-size:11px;color:var(--text-muted)">${t('sched.switchHint') || 'first matching case runs'}</span>
-                    <button class="btn btn-xs sched-chip sched-sw-addcase" style="margin-left:auto">${t('sched.switchAddCase') || '+ case'}</button></div>
+                    <button class="btn btn-xs sched-chip sched-sw-addcase">${t('sched.switchAddCase') || '+ case'}</button></div>
+                <p class="sched-step-hint">${escHtml(t('sched.switchHint') || 'first matching case runs')}</p>
                 ${(() => {
                     const gap = switchGaps(step);
                     if (!gap) return '';
