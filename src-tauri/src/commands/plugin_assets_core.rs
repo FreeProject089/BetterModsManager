@@ -117,7 +117,25 @@ pub fn list_dir(dir: &std::path::Path) -> Vec<PluginAsset> {
 /// the assets folder, which is what `..` and an absolute path both fail. `starts_with` on
 /// canonical paths is a component-prefix match, so `assets-evil/` cannot pass as `assets/`.
 pub fn resolve(install_dir: &str, rel: &str) -> Result<std::path::PathBuf, String> {
-    let root = std::path::PathBuf::from(install_dir).join("assets");
+    resolve_under(&std::path::PathBuf::from(install_dir).join("assets"), rel)
+}
+
+/// The same guard, rooted at the whole plugin folder rather than at `assets/`.
+///
+/// The contents screen lists everything a plugin ships — the manifest, the scripts, the
+/// bundle folders — and could copy out only the files under `assets/`, because the only
+/// resolver was rooted there. So a screen whose whole purpose is "what is IN this plugin"
+/// answered "you may have this one" for a minority of what it showed.
+///
+/// Deliberately the SAME function underneath, with the root as a parameter. A second
+/// canonicalise-and-compare written next to the first is the one that ends up missing the
+/// `starts_with` check, and it is the check that stops `..` walking out of the folder.
+pub fn resolve_in(install_dir: &str, rel: &str) -> Result<std::path::PathBuf, String> {
+    resolve_under(std::path::Path::new(install_dir), rel)
+}
+
+fn resolve_under(root: &std::path::Path, rel: &str) -> Result<std::path::PathBuf, String> {
+    let root = root.to_path_buf();
     let root_c = root.canonicalize().map_err(|_| "plugins.assets.errNone".to_string())?;
     let full = root.join(rel);
     let full_c = full.canonicalize().map_err(|_| "plugins.assets.errMissing".to_string())?;

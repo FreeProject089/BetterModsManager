@@ -12,7 +12,7 @@
 //! the standalone CLI and the MCP server mount the same code rather than a second copy of
 //! the guard. What is here is the part that needs BMM's state: where a plugin is installed.
 
-pub use super::plugin_assets_core::{list_dir, read_text, resolve, PluginAsset};
+pub use super::plugin_assets_core::{list_dir, read_text, resolve, resolve_in, PluginAsset};
 
 fn install_dir_of(state: &crate::state::AppState, plugin_id: &str) -> Result<String, String> {
     let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
@@ -70,31 +70,59 @@ pub fn plugin_asset_export(
     dest_dir: String,
 ) -> Result<String, String> {
     let dir = install_dir_of(&state, &plugin_id)?;
-    let src = resolve(&dir, &path)?;
+    copy_out(&resolve(&dir, &path)?, &dest_dir)
+}
+
+/// Copy ONE file out of a plugin — any file it ships, not only one under `assets/`.
+///
+/// `plugin_asset_export` is rooted at `assets/`, which is right for the assets screen and
+/// wrong for the contents screen: that one lists the manifest, the scripts and the bundle
+/// folders too, and offered to save none of them. Somebody looking at a script and wanting
+/// to read it properly, or keep a copy of the manifest, had to find the install folder in
+/// Explorer — which is the thing this screen exists to make unnecessary.
+///
+/// `path` is relative to the plugin folder and is guarded exactly as an asset path is, by
+/// the same function with a different root. Files only: a folder is not something
+/// `fs::copy` can do, and silently copying nothing would be worse than saying so.
+#[tauri::command]
+pub fn plugin_file_export(
+    state: tauri::State<'_, crate::state::AppState>,
+    plugin_id: String,
+    path: String,
+    dest_dir: String,
+) -> Result<String, String> {
+    let dir = install_dir_of(&state, &plugin_id)?;
+    let src = resolve_in(&dir, &path)?;
+    copy_out(&src, &dest_dir)
+}
+
+/// Copy `src` into `dest_dir` without ever overwriting what is already there.
+///
+/// Shared by both exporters, because "never overwrite" is the decision in them and a rule
+/// written twice is a rule that is right once. The destination is a folder the user chose,
+/// full of their own files, and a plugin gets to pick the name inside it.
+fn copy_out(src: &std::path::Path, dest_dir: &str) -> Result<String, String> {
     let name = src
         .file_name()
         .map(|n| n.to_string_lossy().to_string())
-        .unwrap_or_else(|| "asset".to_string());
-    let dest = std::path::PathBuf::from(&dest_dir);
+        .unwrap_or_else(|| "file".to_string());
+    let dest = std::path::PathBuf::from(dest_dir);
     std::fs::create_dir_all(&dest).map_err(|e| e.to_string())?;
-
-    // Never overwrite. The destination is a folder the user chose, full of their own files,
-    // and a plugin gets to pick the name inside it.
-    let mut target = dest.join(&name);
     let stem = std::path::Path::new(&name)
         .file_stem()
         .map(|s| s.to_string_lossy().to_string())
-        .unwrap_or_else(|| "asset".into());
+        .unwrap_or_else(|| "file".into());
     let ext = std::path::Path::new(&name)
         .extension()
         .map(|e| format!(".{}", e.to_string_lossy()))
         .unwrap_or_default();
+    let mut target = dest.join(&name);
     let mut n = 2;
     while target.exists() {
         target = dest.join(format!("{} ({}){}", stem, n, ext));
         n += 1;
     }
-    std::fs::copy(&src, &target).map_err(|e| e.to_string())?;
+    std::fs::copy(src, &target).map_err(|e| e.to_string())?;
     Ok(target.to_string_lossy().to_string())
 }
 
@@ -122,6 +150,41 @@ mod tests {
 
         assert_eq!(std::fs::read(dest.path().join("README.md")).unwrap(), b"MINE");
         assert_eq!(std::fs::read(dest.path().join("README (2).md")).unwrap(), b"THEIRS");
+    }
+
+    /// The whole point of the second root: a script is not under `assets/`, and the contents
+    /// screen lists it. With only the assets-rooted resolver it could be shown and not saved.
+    #[test]
+    fn a_file_outside_assets_resolves_from_the_plugin_root() {
+        let d = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(d.path().join("scripts")).unwrap();
+        std::fs::write(d.path().join("scripts").join("go.ps1"), b"echo hi").unwrap();
+        let dir = d.path().to_string_lossy().to_string();
+
+        assert!(resolve_in(&dir, "scripts/go.ps1").is_ok());
+        // And the assets-rooted one still cannot reach it, which is what keeps the two
+        // callers honest about which one they mean.
+        assert!(resolve(&dir, "scripts/go.ps1").is_err());
+    }
+
+    /// Widening the root must not widen the guard. `..` is the case that matters: `path`
+    /// reaches this from a screen, an automation or an HTTP caller, and a resolver that let
+    /// it out would be a file-read primitive with BMM's privileges.
+    #[test]
+    fn the_wider_root_still_refuses_to_leave_the_plugin() {
+        let outer = tempfile::tempdir().unwrap();
+        let plugin = outer.path().join("plugin");
+        std::fs::create_dir_all(&plugin).unwrap();
+        std::fs::write(outer.path().join("secret.txt"), b"not yours").unwrap();
+        let dir = plugin.to_string_lossy().to_string();
+
+        assert_eq!(resolve_in(&dir, "../secret.txt").unwrap_err(), "plugins.assets.errOutside");
+        // A sibling whose name merely STARTS with the root's is the case a string compare
+        // gets wrong; `starts_with` on canonical paths matches whole components.
+        let evil = outer.path().join("plugin-evil");
+        std::fs::create_dir_all(&evil).unwrap();
+        std::fs::write(evil.join("x.txt"), b"nope").unwrap();
+        assert!(resolve_in(&dir, "../plugin-evil/x.txt").is_err());
     }
 }
 

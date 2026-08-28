@@ -87,6 +87,15 @@ export async function listAssets(pluginId: string): Promise<PluginAsset[]> {
  * first thing read — and a screen that opens on an empty right-hand pane teaches people
  * that clicking is required before anything is worth looking at.
  */
+/**
+ * Can this one be saved out?
+ *
+ * Every file the plugin ships, which is the whole list except two cases that are not files:
+ * a folder, which `fs::copy` cannot do, and something DECLARED but not present — the row
+ * this screen marks "missing", where offering a copy would promise a file that is not there.
+ */
+const savable = (i: PluginItem | null): boolean => !!i && i.present && i.group !== 'folder';
+
 export async function openPluginAssets(pluginId: string, pluginName: string): Promise<void> {
     // Everything the plugin ships, not only `assets/`. Four lists on three screens is why
     // this area read as unfinished: nowhere answered "what is actually IN this plugin".
@@ -161,7 +170,8 @@ export async function openPluginAssets(pluginId: string, pluginName: string): Pr
                     <button class="btn btn-sm btn-secondary" id="pa-add">${escHtml(t('plugins.assets.add'))}</button>
                     <button class="btn btn-sm btn-ghost" id="pa-del" ${current?.group === 'asset' ? '' : 'disabled'}>${escHtml(t('plugins.assets.remove'))}</button>
                     <button class="btn btn-sm btn-secondary" id="pa-folder">${escHtml(t('plugins.openFolder'))}</button>
-                    <button class="btn btn-sm btn-accent" id="pa-save" ${current?.group === 'asset' ? '' : 'disabled'}>${escHtml(t('plugins.assets.save'))}</button>
+                    <button class="btn btn-sm btn-accent" id="pa-save" ${savable(current) ? '' : 'disabled'}
+                        title="${escAttr(savable(current) ? t('plugins.assets.save') : t('plugins.assets.saveWhy'))}">${escHtml(t('plugins.assets.save'))}</button>
                 </div>`
             : `<div class="modal-body"><p class="pa-lede">${escHtml(t('plugins.assets.none'))}</p></div>
                <div class="modal-footer">
@@ -234,8 +244,12 @@ export async function openPluginAssets(pluginId: string, pluginName: string): Pr
             const dir = await pickFolder().catch(() => null);
             if (!dir) return;
             try {
-                const where = await invoke('plugin_asset_export', {
-                    pluginId, path: current.name, destDir: dir,
+                // plugin_file_export, rooted at the PLUGIN rather than at assets/, and
+                // `path` rather than `name`: the old pair could only reach assets/, so a
+                // screen listing eleven files offered to save the two that happened to live
+                // there. Same guard underneath, one root up.
+                const where = await invoke('plugin_file_export', {
+                    pluginId, path: current.path, destDir: dir,
                 }) as string;
                 toast(t('plugins.assets.saved').replace('{f}', where.replace(/^.*[/\\]/, '')), 'success', 7000);
             } catch (e) { toast(String(e), 'error', 9000); }

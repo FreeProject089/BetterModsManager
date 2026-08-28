@@ -270,7 +270,16 @@ export async function openCatalogModal<T>(spec: CatalogKindSpec<T>): Promise<voi
         if (!spec.indexType) return false;
         let doc: unknown;
         try {
-            doc = JSON.parse(await invoke('fetch_remote_json', { url }, { quiet: true }) as string);
+            // fetchSourceText, so a PROTECTED index is asked for its password instead of
+            // being mistaken for "not an index". Read with fetch_remote_json, a 401 landed in
+            // the catch below — which reports nothing and returns false — so a protected index
+            // was silently followed as an ordinary catalogue and then read as one. Wrong,
+            // quietly, on an address that was perfectly good.
+            //
+            // Asking here costs nothing: this runs on an explicit Follow click, and the answer
+            // is kept for the run, so the fetch that follows does not ask a second time.
+            const { fetchSourceText } = await import('../core/source-fetch.js');
+            doc = JSON.parse(await fetchSourceText(url, true));
         } catch { return false; }
         const ix = await import('../features/catalogs/catalog-index.js');
         if (!ix.looksLikeIndex(doc)) return false;

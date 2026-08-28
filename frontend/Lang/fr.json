@@ -9861,5 +9861,6 @@
   "sched.permsN": "{n} sur 5 accordées",
   "sched.permsNone": "aucune accordée — elle ne peut agir que dans BMM",
   "sched.permsOutside": "Sort de BMM",
-  "sched.permsInside": "Détruit tes propres données"
+  "sched.permsInside": "Détruit tes propres données",
+  "plugins.assets.saveWhy": "Choisis un fichier à enregistrer. Les dossiers, et les fichiers que le plugin déclare sans les livrer, ne peuvent pas être copiés."
 }

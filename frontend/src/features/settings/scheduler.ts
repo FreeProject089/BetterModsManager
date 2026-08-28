@@ -9471,7 +9471,9 @@ function showPresetCatalog(data: { presets: any[]; sources: PresetSource[] }): v
             if (followBtn) followBtn.disabled = true;
             say('ok', t('sched.pc.checking') || 'Checking that address…');
             try {
-                const text: string = await invoke('fetch_remote_json', { url }) as string;
+                // fetchSourceText, not fetch_remote_json: a protected preset catalogue was
+                // rejected here as unreachable rather than asked for its password.
+                const text = await fetchSourceText(url);
                 const doc = JSON.parse(text);
                 // An INDEX pasted here is the common mistake and deserves its own sentence:
                 // it would parse, contain no presets, and look like an empty catalogue.
@@ -9574,9 +9576,12 @@ function showPresetCatalog(data: { presets: any[]; sources: PresetSource[] }): v
                 // Inside a bundle it is a file BMM extracted itself, so it is read rather
                 // than fetched. Reaching for the network with a path produces an error that
                 // names neither the file nor the reason.
+                // A protected catalogue's DOWNLOADS are protected too, and this is the one
+                // that hands the file over — the session password from following the
+                // catalogue applies to it, so nobody is asked twice.
                 const text: string = p.local
                     ? await invoke('read_file_text', { path: p.downloadUrl }) as string
-                    : await invoke('fetch_remote_json', { url: p.downloadUrl }) as string;
+                    : await fetchSourceText(p.downloadUrl);
                 const report = inspectBmmpa(JSON.parse(text));
                 if (!report.ok) { toast(report.error || t('sched.inspectFailed') || 'Could not read that file', 'error'); return; }
                 close();

@@ -772,6 +772,7 @@ fn main() {
             commands::plugin_assets::plugin_asset_read,
             commands::plugin_assets::plugin_asset_path,
             commands::plugin_assets::plugin_asset_export,
+            commands::plugin_assets::plugin_file_export,
             commands::plugin_assets::plugin_asset_add,
             commands::plugin_assets::plugin_asset_remove,
             commands::plugin_assets::plugin_check,

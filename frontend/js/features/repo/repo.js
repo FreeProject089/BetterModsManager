@@ -390,7 +390,10 @@ async function openCatalogBuilder(onScreen) {
         paint();
         try {
             const sep = url.includes('?') ? '&' : '?';
-            const raw = await invoke('fetch_remote_json', { url: `${url}${sep}t=${Date.now()}` });
+            // Through fetchSourceText, like every other source. Calling fetch_remote_json
+            // directly skipped the 401 handling, so a password-protected repo catalogue
+            // reported "could not be read" and never asked for the password that opens it.
+            const raw = await fetchSourceText(`${url}${sep}t=${Date.now()}`);
             const list = normaliseRepoFeed(JSON.parse(raw));
             if (!list.length) {
                 // Told apart from unreachable on purpose: an address that answers with the

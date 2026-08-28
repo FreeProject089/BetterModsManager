@@ -9863,5 +9863,6 @@
   "sched.permsN": "{n} of 5 granted",
   "sched.permsNone": "none granted — it can only do things inside BMM",
   "sched.permsOutside": "Reaches outside BMM",
-  "sched.permsInside": "Destroys your own data"
+  "sched.permsInside": "Destroys your own data",
+  "plugins.assets.saveWhy": "Pick a file to save. Folders and files the plugin declares but does not ship cannot be copied out."
 }
