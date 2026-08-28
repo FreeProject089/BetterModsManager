@@ -9850,5 +9850,8 @@
   "plugins.tree.cut": "Only the beginning is shown.",
   "plugins.tree.archive": "An archive holding {n} file(s)",
   "plugins.tree.binary": "Not text — nothing to show here. Open the folder to look at it.",
-  "plugins.tree.noRoot": "This listing can name files but not open them."
+  "plugins.tree.noRoot": "This listing can name files but not open them.",
+  "sched.syncGame": "Game folder",
+  "sched.syncMods": "Mods folder",
+  "sched.syncBackup": "Backup folder (optional)"
 }

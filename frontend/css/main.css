@@ -11940,6 +11940,16 @@ body.sched-drag-live .sched-branch .sched-drop-zone:empty {
 .sched-cmd-adv > summary { font-size:11px; color:var(--text-secondary); cursor:pointer; padding:7px 0; opacity:.85; }
 .sched-cmd-adv { margin-top:2px; }
 .sched-cmd-adv > summary:hover { opacity:1; }
+/* A field and the word for it, as one thing.
+   The builder spaces every child by `gap`, which is right between GROUPS and wrong inside
+   one: a label 8px above its input and 8px below the previous input groups nothing. A
+   wrapper makes the pair a single child, so the gap falls between pairs where it belongs. */
+.sched-cmd-field { display: flex; flex-direction: column; gap: 3px; }
+.sched-cmd-sub {
+    font-size: 10.5px;
+    color: var(--text-secondary);
+}
+
 .sched-cmd-hint { font-size:11px; color: var(--accent); opacity:.95; margin-top:4px; }
 /* Preset picker, shown only on a blank new task.
    Chips in a wrapping row, not a column of cards. Five full-width cards each carrying a

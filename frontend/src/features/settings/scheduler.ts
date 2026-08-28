@@ -6751,9 +6751,24 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
                 <span class="sched-cmd-hint">${escHtml(t('sched.syncNewHint'))}</span>
             </div>
             <label class="sched-cmd-label">${t('sched.syncFolders') || '4. Folders'}</label>
-            <div class="sched-cmd-row"><input class="input sched-rs-game" placeholder="${escAttr(t('sched.syncGamePh') || 'game folder')}" value="${escAttr(params.gameDir || '')}"><button type="button" class="btn btn-sm btn-secondary sched-rs-browse" data-for="game">${t('sched.choose') || 'Choose…'}</button></div>
-            <div class="sched-cmd-row" style="margin-top:6px"><input class="input sched-rs-mods" placeholder="${escAttr(t('sched.syncModsPh') || 'mods folder')}" value="${escAttr(params.modsDir || '')}"><button type="button" class="btn btn-sm btn-secondary sched-rs-browse" data-for="mods">${t('sched.choose') || 'Choose…'}</button></div>
-            <div class="sched-cmd-row" style="margin-top:6px"><input class="input sched-rs-backup" placeholder="${escAttr(t('sched.syncBackupPh') || 'backup folder (optional)')}" value="${escAttr(params.backupDir || '')}"><button type="button" class="btn btn-sm btn-secondary sched-rs-browse" data-for="backup">${t('sched.choose') || 'Choose…'}</button></div>
+            <!-- Each row says which folder it is, beside the field rather than inside it.
+                 The three were identified by their placeholders alone — grey text that
+                 disappears the moment somebody types, so a filled form was three identical
+                 paths in three identical boxes and no way to tell which was which without
+                 clearing one. That is the whole of "les champs sont collés": they are not
+                 too close together, they are indistinguishable. -->
+            <div class="sched-cmd-field">
+                <span class="sched-cmd-sub">${escHtml(t('sched.syncGame'))}</span>
+                <div class="sched-cmd-row"><input class="input sched-rs-game" placeholder="${escAttr(t('sched.syncGamePh') || 'game folder')}" value="${escAttr(params.gameDir || '')}"><button type="button" class="btn btn-sm btn-secondary sched-rs-browse" data-for="game">${t('sched.choose') || 'Choose…'}</button></div>
+            </div>
+            <div class="sched-cmd-field">
+                <span class="sched-cmd-sub">${escHtml(t('sched.syncMods'))}</span>
+                <div class="sched-cmd-row"><input class="input sched-rs-mods" placeholder="${escAttr(t('sched.syncModsPh') || 'mods folder')}" value="${escAttr(params.modsDir || '')}"><button type="button" class="btn btn-sm btn-secondary sched-rs-browse" data-for="mods">${t('sched.choose') || 'Choose…'}</button></div>
+            </div>
+            <div class="sched-cmd-field">
+                <span class="sched-cmd-sub">${escHtml(t('sched.syncBackup'))}</span>
+                <div class="sched-cmd-row"><input class="input sched-rs-backup" placeholder="${escAttr(t('sched.syncBackupPh') || 'backup folder (optional)')}" value="${escAttr(params.backupDir || '')}"><button type="button" class="btn btn-sm btn-secondary sched-rs-browse" data-for="backup">${t('sched.choose') || 'Choose…'}</button></div>
+            </div>
             <details class="sched-cmd-adv">
                 <summary>${t('sched.syncDanger') || 'Destructive options — off by default'}</summary>
                 <label class="sched-opt" style="margin-top:6px"><input type="checkbox" class="sched-rs-overwrite" ${params.overwriteAll ? 'checked' : ''}><div><b>${t('sched.syncOverwriteT') || 'Overwrite every file'}</b><span>${t('sched.syncOverwrite') || 'Re-downloads and replaces files that already match. Slower, and your local edits are lost.'}</span></div></label>

@@ -9848,5 +9848,8 @@
   "plugins.tree.cut": "Seul le début est affiché.",
   "plugins.tree.archive": "Une archive contenant {n} fichier(s)",
   "plugins.tree.binary": "Ce n’est pas du texte — rien à montrer ici. Ouvre le dossier pour l’examiner.",
-  "plugins.tree.noRoot": "Cette liste peut nommer les fichiers mais pas les ouvrir."
+  "plugins.tree.noRoot": "Cette liste peut nommer les fichiers mais pas les ouvrir.",
+  "sched.syncGame": "Dossier du jeu",
+  "sched.syncMods": "Dossier des mods",
+  "sched.syncBackup": "Dossier de sauvegarde (optionnel)"
 }
