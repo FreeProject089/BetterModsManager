@@ -234,12 +234,16 @@ de la synchro delta côté téléchargement. Le pas-à-pas côté auteur vit dan
 L'export écrit un dossier. **Publier par SSH**, sur le même écran, est ce qui dépose ce dossier
 sur la machine qui l'héberge — sans programme de transfert de fichiers entre les deux.
 
-L'ordre compte et la carte le dit désormais, parce que le formulaire réclame un hôte avant que
-quoi que ce soit n'annonce qu'un dossier doit exister :
+La carte s'ouvre sur le trajet : **le dossier exporté → `user@hôte:/dossier/distant`**, rempli
+depuis les champs à mesure que tu tapes. Cette ligne fait le travail qu'une liste numérotée
+faisait avant : le formulaire réclame un hôte avant que quoi que ce soit n'annonce qu'un
+dossier doit exister, et les deux moitiés de « où est-ce que ça part » n'étaient jamais côte à
+côte — la source se configure sur une autre carte, et la destination est un hôte et un dossier
+distant séparés de quatre lignes.
 
-1. **Générez le dépôt** au-dessus — c'est ce dossier qui part.
-2. **Renseignez le serveur** ici, puis testez.
-3. **Publiez.** Les envois suivants réutilisent ce qui est enregistré.
+Il n'y a donc rien à retenir. Génère le dépôt au-dessus, renseigne le serveur ici, et la ligne
+te dit ce qui va partir et vers où avant que tu appuies sur quoi que ce soit. Les envois
+suivants réutilisent ce qui est enregistré.
 
 !!! note "Cet écran est aussi ce que réutilisent les automatisations"
 

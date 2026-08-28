@@ -223,12 +223,15 @@ walkthrough lives in the developer guide *Making your mod updatable*.
 Exporting writes a folder. **Publish over SSH**, on the same screen, is what puts that folder
 on the machine that serves it — no separate file-transfer program in between.
 
-The order matters and the card now says so, because the form asks for a host before anything
-says a folder has to exist:
+The card opens with the route: **the exported folder → `user@host:/remote/dir`**, filled in
+from the fields as you type. That line is doing the job a numbered list used to: the form asks
+for a host before anything says a folder has to exist, and the two halves of "where does this
+go" were never next to each other — the source is configured on a different card, and the
+destination is a host and a remote directory four rows apart.
 
-1. **Generate the repo** above — that folder is what gets sent.
-2. **Fill in the server** here, then test it.
-3. **Publish.** Later uploads reuse what is saved.
+So there is nothing to memorise. Generate the repo above, fill the server in here, and the
+line tells you what will move where before you press anything. Later uploads reuse what is
+saved.
 
 !!! note "This screen is also what automations reuse"
 
