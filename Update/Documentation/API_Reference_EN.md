@@ -108,6 +108,7 @@ This document is the single source of truth for everything that can be driven pr
 | `/api/apps/launch` | yes · `app.write` | `{ appId, exePath }` |
 | `/api/catalog/new` | yes · `catalog.write` | `{ name?, description?, partner_catalogs?, community_imports?, apps? }` |
 | `/api/catalog/apps` | yes · `catalog.write` | `{ id, title, description?, category?, price?, tags?, download:{url,file_type,size?}, requirements?, md_link?, images?, official?, partner? }` |
+| `/api/catalog/entries` | yes · `catalog.write` | `{ type?, entry }` — `type` ∈ `app`·`plugin`·`theme`·`preset`·`modpack`·`repo`·`tutorial`·`list` (default `app`); the entry is written under the array name that kind’s format uses. It must carry an `id`: update and delete both match on it |
 
 ### Data / Language / Mod lists
 | Path | Auth | Body |
@@ -155,6 +156,7 @@ This document is the single source of truth for everything that can be driven pr
 | `/api/profiles/:id` | yes | `{ name?, game_name?, color?, icon?, game_path?, mods_path?, backup_path? }` |
 | `/api/modpacks/:id` | yes | `{ name?, description?, game_name?, sr_link?, mod_ids?, multi_profile?, skip_integrity_check?, dependency_mode?, mod_overrides? }` |
 | `/api/catalog/apps/:id` | yes · `catalog.write` | Any catalog-app fields to patch (only sent fields change) |
+| `/api/catalog/entries/:id` | yes · `catalog.write` | `{ type?, …fields }` — merged into the entry with that id. `type` picks the catalogue and is never written into the entry |
 | `/api/apps/permissions/:id` | yes | `{ permissions:[…] }` — replaces the plugin's full permission list |
 
 ---
@@ -172,6 +174,8 @@ This document is the single source of truth for everything that can be driven pr
 | `/api/modpacks/:id` | yes | delete a modpack |
 | `/api/apps/:id` | yes · `app.write` | uninstall an app from the registry (files kept) |
 | `/api/catalog/apps/:id` | yes · `catalog.write` | remove an app from the local catalog |
+| `/api/catalog/entries/:id` | yes · `catalog.write` | query `type` · remove an entry from any authored catalogue. `404` when there is none, rather than reporting a removal that did not happen |
+| `/api/catalog` | yes · `catalog.write` | query `type` · delete the whole authored catalogue of that kind. `404` when there never was one. Does NOT touch what you follow — that is `/api/catalogs` |
 
 ---
 

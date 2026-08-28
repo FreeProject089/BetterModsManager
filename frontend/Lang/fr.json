@@ -9892,5 +9892,17 @@
   "plugins.epAbout.schedEnabled": "Seul `enabled` est modifiable. Rien ici ne peut écrire les étapes d’une tâche : installer une automatisation contenant une étape script est une décision qui appartient à quelqu’un qui la lit à l’écran.",
   "plugins.epF.seId": "L’id de la tâche, via /api/schedules.",
   "plugins.epF.seOn": "true pour l’armer, false pour la désarmer.",
-  "plugins.apiNoHandler": "non pris en charge par cette version"
+  "plugins.apiNoHandler": "non pris en charge par cette version",
+  "plugins.ep.catEntryAdd": "Ajouter une entrée à un catalogue que tu écris",
+  "plugins.epAbout.catEntryAdd": "Fonctionne pour chaque type — app, plugin, thème, preset, modpack, dépôt, tutoriel, liste — et écrit sous le nom de tableau que le format de ce type utilise. `type` vaut app par défaut. L’entrée doit porter un `id` : la mise à jour et la suppression s’y réfèrent toutes les deux, donc une entrée sans id serait ajoutée dans un cul-de-sac — elle est refusée.",
+  "plugins.epF.ceType": "app · plugin · theme · preset · modpack · repo · tutorial · list. app par défaut.",
+  "plugins.epF.ceEntry": "L’entrée elle-même, telle que le format du catalogue la définit. Doit porter un id.",
+  "plugins.ep.catEntryUpd": "Modifier une entrée d’un catalogue que tu écris",
+  "plugins.epAbout.catEntryUpd": "Fusionne les champs envoyés dans l’entrée portant cet id. `type` choisit quel catalogue ouvrir et n’est jamais écrit dans l’entrée — le format n’a pas de place pour lui.",
+  "plugins.epF.ceFields": "Les champs à fusionner. Ce qui n’est pas nommé est laissé tel quel.",
+  "plugins.ep.catEntryDel": "Retirer une entrée d’un catalogue que tu écris",
+  "plugins.epAbout.catEntryDel": "Repérée par son id. Répond 404 quand l’entrée n’existe pas, plutôt que d’annoncer une suppression qui n’a pas eu lieu.",
+  "plugins.epF.ceTypeQ": "Paramètre de requête. app · plugin · theme · preset · modpack · repo · tutorial · list. app par défaut.",
+  "plugins.ep.catDrop": "Supprimer un catalogue que tu écris",
+  "plugins.epAbout.catDrop": "Jette tout le catalogue écrit pour ce type. Répond 404 s’il n’y en a jamais eu — « supprimé » et « il n’y avait rien » sont deux réponses différentes, et un script qui branche dessus mérite de savoir laquelle. Ceci ne touche pas les catalogues que tu SUIS ; ceux-là sont sur /api/catalogs."
 }

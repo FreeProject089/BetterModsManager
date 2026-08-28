@@ -896,28 +896,94 @@ struct PermissionDenied { required: &'static str, plugin_id: String }
 impl warp::reject::Reject for PermissionDenied {}
 
 // ── Local catalog helpers (module-level so they can be called from warp closures) ──
-fn catalog_path(h: &tauri::AppHandle) -> std::path::PathBuf {
-    h.path().app_data_dir().ok().unwrap_or_default().join("apps-catalog.json")
+/// Which catalogue kinds can be authored here, and the array each one keeps its entries in.
+///
+/// The names are the ones the FORMAT uses — `apps`, `plugins`, `themes` — and they are checked
+/// against the interface's CATALOG_SHAPES by check-catalog-kinds.mjs, because a catalogue
+/// written under the wrong array name parses as an empty one of the right kind: valid JSON,
+/// zero entries, and nothing anywhere says why.
+pub const CATALOG_KINDS: &[(&str, &str)] = &[
+    ("app", "apps"),
+    ("plugin", "plugins"),
+    ("theme", "themes"),
+    ("preset", "presets"),
+    ("modpack", "modpacks"),
+    ("repo", "repos"),
+    ("tutorial", "tutorials"),
+    ("list", "lists"),
+];
+
+/// The entries array for a kind, or None if it is not a kind.
+///
+/// Returning None rather than defaulting to `apps` on purpose: a typo'd type that silently
+/// edited the app catalogue is the worst outcome available here.
+fn catalog_entries_key(kind: &str) -> Option<&'static str> {
+    CATALOG_KINDS.iter().find(|(k, _)| *k == kind).map(|(_, v)| *v)
 }
 
-fn catalog_read(h: &tauri::AppHandle) -> serde_json::Value {
-    let p = catalog_path(h);
+/// Where one kind's authored catalogue lives.
+///
+/// `app` keeps `apps-catalog.json` because that file already exists on every installation and
+/// moving it would lose what is in it. Everything else is a sibling under the same folder.
+fn catalog_path_for(h: &tauri::AppHandle, kind: &str) -> std::path::PathBuf {
+    let dir = h.path().app_data_dir().ok().unwrap_or_default();
+    if kind == "app" { dir.join("apps-catalog.json") } else { dir.join(format!("{kind}-catalog.json")) }
+}
+
+fn catalog_path(h: &tauri::AppHandle) -> std::path::PathBuf {
+    catalog_path_for(h, "app")
+}
+
+fn catalog_read_kind(h: &tauri::AppHandle, kind: &str) -> serde_json::Value {
+    let p = catalog_path_for(h, kind);
     if let Ok(s) = std::fs::read_to_string(&p) {
-        serde_json::from_str(&s).unwrap_or_else(|_| catalog_empty())
+        serde_json::from_str(&s).unwrap_or_else(|_| catalog_empty_kind(kind))
     } else {
-        catalog_empty()
+        catalog_empty_kind(kind)
     }
 }
 
-fn catalog_empty() -> serde_json::Value {
-    serde_json::json!({"version":"1.0","name":"Local Catalog","description":"","partner_catalogs":[],"community_imports":[],"apps":[]})
+fn catalog_read(h: &tauri::AppHandle) -> serde_json::Value {
+    catalog_read_kind(h, "app")
 }
 
-fn catalog_write(h: &tauri::AppHandle, cat: &serde_json::Value) -> Result<(), String> {
-    let p = catalog_path(h);
+fn catalog_empty_kind(kind: &str) -> serde_json::Value {
+    let key = catalog_entries_key(kind).unwrap_or("apps");
+    let mut v = serde_json::json!({
+        "version": "1.0", "name": "Local Catalog", "description": "",
+        "partner_catalogs": [], "community_imports": []
+    });
+    v[key] = serde_json::json!([]);
+    v
+}
+
+fn catalog_empty() -> serde_json::Value {
+    catalog_empty_kind("app")
+}
+
+fn catalog_write_kind(h: &tauri::AppHandle, kind: &str, cat: &serde_json::Value) -> Result<(), String> {
+    let p = catalog_path_for(h, kind);
     if let Some(parent) = p.parent() { let _ = std::fs::create_dir_all(parent); }
     serde_json::to_string_pretty(cat).map_err(|e| e.to_string())
         .and_then(|s| std::fs::write(&p, s).map_err(|e| e.to_string()))
+}
+
+fn catalog_write(h: &tauri::AppHandle, cat: &serde_json::Value) -> Result<(), String> {
+    catalog_write_kind(h, "app", cat)
+}
+
+/// The `type` a request asked for, defaulting to `app`, or an error naming what is allowed.
+///
+/// One place, because eight kinds and four verbs is thirty-two chances to spell the default
+/// differently.
+fn catalog_kind_of(v: Option<&str>) -> Result<String, String> {
+    let kind = v.unwrap_or("app");
+    if catalog_entries_key(kind).is_some() { return Ok(kind.to_string()); }
+    Err(format!(
+        "unknown catalogue type '{}'. One of: {}",
+        kind,
+        CATALOG_KINDS.iter().map(|(k, _)| *k).collect::<Vec<_>>().join(", ")
+    ))
 }
 
 fn require_permission(
@@ -3397,6 +3463,10 @@ pub async fn start_api_server(
         #[serde(default)] partner_catalogs: Vec<String>,
         #[serde(default)] community_imports: Vec<String>,
         #[serde(default)] apps: Vec<serde_json::Value>,
+        /// Which kind of catalogue. Absent = `app`, which is what this route has always made.
+        #[serde(default, rename = "type")] kind: Option<String>,
+        /// The entries, whatever this kind calls them. `apps` still works for the app kind.
+        #[serde(default)] entries: Vec<serde_json::Value>,
     }
     let (tok_cat_new, perm_cat_new, h_cat_new) = (token.clone(), data.clone(), app_handle.clone());
     let cat_new = warp::path!("api" / "catalog" / "new")
@@ -3404,15 +3474,26 @@ pub async fn start_api_server(
         .and(warp::body::json::<CatalogCreateBody>())
         .and(with_app_handle(h_cat_new))
         .map(|body: CatalogCreateBody, h: tauri::AppHandle| {
-            let cat = serde_json::json!({
+            let kind = match catalog_kind_of(body.kind.as_deref()) {
+                Ok(k) => k,
+                Err(e) => return warp::reply::with_status(
+                    warp::reply::json(&ApiError { error: e }), StatusCode::BAD_REQUEST),
+            };
+            // `apps` stays accepted for the app kind: it is what every caller of this route
+            // has sent since it was written, and renaming it for tidiness would break them.
+            let entries = if body.entries.is_empty() { body.apps } else { body.entries };
+            let mut cat = serde_json::json!({
                 "version": "1.0",
                 "name": body.name.unwrap_or_else(|| "My Catalog".into()),
                 "description": body.description.unwrap_or_default(),
                 "partner_catalogs": body.partner_catalogs,
                 "community_imports": body.community_imports,
-                "apps": body.apps,
             });
-            match catalog_write(&h, &cat) {
+            // Under the array name the FORMAT expects for this kind. Entries written under
+            // the wrong name give a document that parses as an EMPTY catalogue of the right
+            // kind: valid JSON, nothing in it, and nothing anywhere saying why.
+            cat[catalog_entries_key(&kind).unwrap_or("apps")] = serde_json::Value::Array(entries);
+            match catalog_write_kind(&h, &kind, &cat) {
                 Ok(_) => warp::reply::with_status(warp::reply::json(&serde_json::json!({"ok":true,"catalog":cat})), StatusCode::CREATED),
                 Err(e) => warp::reply::with_status(warp::reply::json(&ApiError { error: e }), StatusCode::INTERNAL_SERVER_ERROR),
             }
@@ -3483,12 +3564,151 @@ pub async fn start_api_server(
             }
         });
 
+    // ── Entries, for every kind ─────────────────────────────────────────────
+    //
+    // `/api/catalog/apps` above does this for apps and only apps: the path names the kind and
+    // the handler is written against `cat["apps"]`. Authoring a plugin, theme, preset, modpack,
+    // repo, tutorial or list catalogue was not possible over the API at all.
+    //
+    // The kind travels as DATA here, not as a path segment — the same shape `/api/catalogs`
+    // already uses for follow/unfollow, and it keeps this at three routes instead of
+    // three-times-eight. `/api/catalog/apps` stays exactly as it was; nothing that works today
+    // stops working.
+    #[derive(serde::Deserialize, Clone)]
+    struct CatalogEntryBody {
+        #[serde(default, rename = "type")] kind: Option<String>,
+        /// The entry itself. Needs an `id`, because that is what update and delete match on.
+        entry: serde_json::Value,
+    }
+    let (tok_ce_add, perm_ce_add, h_ce_add) = (token.clone(), data.clone(), app_handle.clone());
+    let cat_entry_add = warp::path!("api" / "catalog" / "entries")
+        .and(warp::post()).and(require_token(tok_ce_add)).and(require_permission(perm_ce_add, "catalog.write"))
+        .and(warp::body::json::<CatalogEntryBody>())
+        .and(with_app_handle(h_ce_add))
+        .map(|body: CatalogEntryBody, h: tauri::AppHandle| {
+            let kind = match catalog_kind_of(body.kind.as_deref()) {
+                Ok(k) => k,
+                Err(e) => return warp::reply::with_status(warp::reply::json(&ApiError { error: e }), StatusCode::BAD_REQUEST),
+            };
+            let key = catalog_entries_key(&kind).unwrap_or("apps");
+            let mut cat = catalog_read_kind(&h, &kind);
+            // An entry with no id can be added and then never updated or removed, because both
+            // of those match on it. Refused rather than accepted into a dead end.
+            if body.entry.get("id").and_then(|v| v.as_str()).unwrap_or("").is_empty() {
+                return warp::reply::with_status(
+                    warp::reply::json(&ApiError { error: "entry.id is required — update and delete match on it".into() }),
+                    StatusCode::BAD_REQUEST);
+            }
+            match cat[key].as_array_mut() {
+                Some(arr) => arr.push(body.entry),
+                None => { cat[key] = serde_json::json!([body.entry]); }
+            }
+            match catalog_write_kind(&h, &kind, &cat) {
+                Ok(_) => warp::reply::with_status(
+                    warp::reply::json(&serde_json::json!({"ok":true,"type":kind,"total":cat[key].as_array().map(|a| a.len()).unwrap_or(0)})),
+                    StatusCode::CREATED),
+                Err(e) => warp::reply::with_status(warp::reply::json(&ApiError { error: e }), StatusCode::INTERNAL_SERVER_ERROR),
+            }
+        });
+
+    let (tok_ce_upd, perm_ce_upd, h_ce_upd) = (token.clone(), data.clone(), app_handle.clone());
+    let cat_entry_upd = warp::path!("api" / "catalog" / "entries" / String)
+        .and(warp::put()).and(require_token(tok_ce_upd)).and(require_permission(perm_ce_upd, "catalog.write"))
+        .and(warp::body::json::<serde_json::Value>())
+        .and(with_app_handle(h_ce_upd))
+        .map(|entry_id: String, fields: serde_json::Value, h: tauri::AppHandle| {
+            let kind = match catalog_kind_of(fields.get("type").and_then(|v| v.as_str())) {
+                Ok(k) => k,
+                Err(e) => return warp::reply::with_status(warp::reply::json(&ApiError { error: e }), StatusCode::BAD_REQUEST),
+            };
+            let key = catalog_entries_key(&kind).unwrap_or("apps");
+            let mut cat = catalog_read_kind(&h, &kind);
+            let mut found = false;
+            if let Some(arr) = cat[key].as_array_mut() {
+                for e in arr.iter_mut() {
+                    if e.get("id").and_then(|v| v.as_str()) == Some(&entry_id) {
+                        if let (Some(obj), Some(upd)) = (e.as_object_mut(), fields.as_object()) {
+                            // `type` said WHICH catalogue to open. Writing it into the entry
+                            // would put a field there that the format has no place for.
+                            for (k, v) in upd { if k != "type" { obj.insert(k.clone(), v.clone()); } }
+                        }
+                        found = true; break;
+                    }
+                }
+            }
+            if !found {
+                return warp::reply::with_status(
+                    warp::reply::json(&ApiError { error: format!("no '{entry_id}' in the {kind} catalogue") }),
+                    StatusCode::NOT_FOUND);
+            }
+            match catalog_write_kind(&h, &kind, &cat) {
+                Ok(_) => warp::reply::with_status(warp::reply::json(&serde_json::json!({"ok":true,"type":kind})), StatusCode::OK),
+                Err(e) => warp::reply::with_status(warp::reply::json(&ApiError { error: e }), StatusCode::INTERNAL_SERVER_ERROR),
+            }
+        });
+
+    let (tok_ce_del, perm_ce_del, h_ce_del) = (token.clone(), data.clone(), app_handle.clone());
+    let cat_entry_del = warp::path!("api" / "catalog" / "entries" / String)
+        .and(warp::delete()).and(require_token(tok_ce_del)).and(require_permission(perm_ce_del, "catalog.write"))
+        .and(warp::query::<std::collections::HashMap<String, String>>())
+        .and(with_app_handle(h_ce_del))
+        .map(|entry_id: String, q: std::collections::HashMap<String, String>, h: tauri::AppHandle| {
+            let kind = match catalog_kind_of(q.get("type").map(|x| x.as_str())) {
+                Ok(k) => k,
+                Err(e) => return warp::reply::with_status(warp::reply::json(&ApiError { error: e }), StatusCode::BAD_REQUEST),
+            };
+            let key = catalog_entries_key(&kind).unwrap_or("apps");
+            let mut cat = catalog_read_kind(&h, &kind);
+            let before = cat[key].as_array().map(|a| a.len()).unwrap_or(0);
+            if let Some(arr) = cat[key].as_array_mut() {
+                arr.retain(|e| e.get("id").and_then(|v| v.as_str()) != Some(&entry_id));
+            }
+            if cat[key].as_array().map(|a| a.len()).unwrap_or(0) == before {
+                return warp::reply::with_status(
+                    warp::reply::json(&ApiError { error: format!("no '{entry_id}' in the {kind} catalogue") }),
+                    StatusCode::NOT_FOUND);
+            }
+            match catalog_write_kind(&h, &kind, &cat) {
+                Ok(_) => warp::reply::with_status(warp::reply::json(&serde_json::json!({"ok":true,"type":kind,"removed":entry_id})), StatusCode::OK),
+                Err(e) => warp::reply::with_status(warp::reply::json(&ApiError { error: e }), StatusCode::INTERNAL_SERVER_ERROR),
+            }
+        });
+
+    // DELETE /api/catalog?type=… — throw the whole authored catalogue away.
+    //
+    // Answers 404 when there is nothing there, rather than 200. "Deleted" and "there was
+    // never one" are different answers and a script branching on it deserves to know which.
+    let (tok_cat_drop, perm_cat_drop, h_cat_drop) = (token.clone(), data.clone(), app_handle.clone());
+    let cat_drop = warp::path!("api" / "catalog")
+        .and(warp::delete()).and(require_token(tok_cat_drop)).and(require_permission(perm_cat_drop, "catalog.write"))
+        .and(warp::query::<std::collections::HashMap<String, String>>())
+        .and(with_app_handle(h_cat_drop))
+        .map(|q: std::collections::HashMap<String, String>, h: tauri::AppHandle| {
+            let kind = match catalog_kind_of(q.get("type").map(|x| x.as_str())) {
+                Ok(k) => k,
+                Err(e) => return warp::reply::with_status(warp::reply::json(&ApiError { error: e }), StatusCode::BAD_REQUEST),
+            };
+            let p = catalog_path_for(&h, &kind);
+            if !p.exists() {
+                return warp::reply::with_status(
+                    warp::reply::json(&ApiError { error: format!("no {kind} catalogue here") }), StatusCode::NOT_FOUND);
+            }
+            match std::fs::remove_file(&p) {
+                Ok(_) => warp::reply::with_status(warp::reply::json(&serde_json::json!({"ok":true,"type":kind})), StatusCode::OK),
+                Err(e) => warp::reply::with_status(warp::reply::json(&ApiError { error: e.to_string() }), StatusCode::INTERNAL_SERVER_ERROR),
+            }
+        });
+
     // Order matters: specific sub-paths BEFORE the base GET /api/catalog
     let group_catalog = lang_template  // GET  /api/language/template (no auth needed)
         .or(cat_new)                   // POST /api/catalog/new
         .or(cat_add_app)               // POST /api/catalog/apps
         .or(cat_upd_app)               // PUT  /api/catalog/apps/:id
         .or(cat_del_app)               // DELETE /api/catalog/apps/:id
+        .or(cat_entry_add)             // POST /api/catalog/entries
+        .or(cat_entry_upd)             // PUT  /api/catalog/entries/:id
+        .or(cat_entry_del)             // DELETE /api/catalog/entries/:id
+        .or(cat_drop)                  // DELETE /api/catalog?type=…
         .or(cat_get)                   // GET  /api/catalog
         .boxed();
 

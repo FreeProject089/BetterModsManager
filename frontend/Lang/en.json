@@ -9894,5 +9894,17 @@
   "plugins.epAbout.schedEnabled": "Only `enabled` can be changed. Nothing here can write a task’s steps: installing an automation with a script step in it is a decision that belongs to somebody reading it on screen.",
   "plugins.epF.seId": "The task id, from /api/schedules.",
   "plugins.epF.seOn": "true to arm it, false to disarm.",
-  "plugins.apiNoHandler": "not handled by this version"
+  "plugins.apiNoHandler": "not handled by this version",
+  "plugins.ep.catEntryAdd": "Add an entry to a catalogue you author",
+  "plugins.epAbout.catEntryAdd": "Works for every kind — app, plugin, theme, preset, modpack, repo, tutorial, list — and writes under the array name that kind’s format uses. `type` defaults to app. The entry needs an `id`: update and delete both match on it, so one without would be added into a dead end and is refused.",
+  "plugins.epF.ceType": "app · plugin · theme · preset · modpack · repo · tutorial · list. Defaults to app.",
+  "plugins.epF.ceEntry": "The entry itself, as the catalogue format defines it. Must carry an id.",
+  "plugins.ep.catEntryUpd": "Change an entry in a catalogue you author",
+  "plugins.epAbout.catEntryUpd": "Merges the fields you send into the entry with that id. `type` picks which catalogue to open and is never written into the entry — the format has no place for it.",
+  "plugins.epF.ceFields": "The fields to merge in. Anything not named is left alone.",
+  "plugins.ep.catEntryDel": "Remove an entry from a catalogue you author",
+  "plugins.epAbout.catEntryDel": "Matched on id. Answers 404 when there is no such entry, rather than reporting a removal that did not happen.",
+  "plugins.epF.ceTypeQ": "Query parameter. app · plugin · theme · preset · modpack · repo · tutorial · list. Defaults to app.",
+  "plugins.ep.catDrop": "Delete a catalogue you author",
+  "plugins.epAbout.catDrop": "Throws away the whole authored catalogue for that kind. Answers 404 when there was never one — \"deleted\" and \"there was nothing\" are different answers, and a script branching on it deserves to know which. This does not touch the catalogues you FOLLOW; those are /api/catalogs."
 }

@@ -108,6 +108,7 @@ Ce document est la source de vérité unique pour tout ce qui est pilotable par 
 | `/api/apps/launch` | oui · `app.write` | `{ appId, exePath }` |
 | `/api/catalog/new` | oui · `catalog.write` | `{ name?, description?, partner_catalogs?, community_imports?, apps? }` |
 | `/api/catalog/apps` | oui · `catalog.write` | `{ id, title, description?, category?, price?, tags?, download:{url,file_type,size?}, requirements?, md_link?, images?, official?, partner? }` |
+| `/api/catalog/entries` | oui · `catalog.write` | `{ type?, entry }` — `type` ∈ `app`·`plugin`·`theme`·`preset`·`modpack`·`repo`·`tutorial`·`list` (`app` par défaut) ; l’entrée est écrite sous le nom de tableau du format de ce type. Elle doit porter un `id` : la mise à jour et la suppression s’y réfèrent |
 
 ### Données / Langue / Listes de mods
 | Chemin | Auth | Corps |
@@ -155,6 +156,7 @@ Ce document est la source de vérité unique pour tout ce qui est pilotable par 
 | `/api/profiles/:id` | oui · `profiles.write` | `{ name?, game_name?, color?, icon?, game_path?, mods_path?, backup_path? }` |
 | `/api/modpacks/:id` | oui · `modpacks.write` | `{ name?, description?, game_name?, sr_link?, mod_ids?, multi_profile?, skip_integrity_check?, dependency_mode?, mod_overrides? }` |
 | `/api/catalog/apps/:id` | oui · `catalog.write` | Champs catalogue à modifier (seuls les champs envoyés changent) |
+| `/api/catalog/entries/:id` | oui · `catalog.write` | `{ type?, …champs }` — fusionnés dans l’entrée portant cet id. `type` choisit le catalogue et n’est jamais écrit dans l’entrée |
 | `/api/apps/permissions/:id` | oui | `{ permissions:[…] }` — remplace toute la liste de permissions du plugin |
 
 ---
@@ -172,6 +174,8 @@ Ce document est la source de vérité unique pour tout ce qui est pilotable par 
 | `/api/modpacks/:id` | oui · `modpacks.write` | supprime un modpack |
 | `/api/apps/:id` | oui · `app.write` | désinstalle une app du registre (fichiers conservés) |
 | `/api/catalog/apps/:id` | oui · `catalog.write` | retire une app du catalogue local |
+| `/api/catalog/entries/:id` | oui · `catalog.write` | requête `type` · retire une entrée de n'importe quel catalogue écrit. `404` s'il n'y en a pas, plutôt qu'annoncer une suppression qui n'a pas eu lieu |
+| `/api/catalog` | oui · `catalog.write` | requête `type` · supprime tout le catalogue écrit de ce type. `404` s'il n'y en a jamais eu. Ne touche PAS ce que tu suis — ça, c'est `/api/catalogs` |
 
 ---
 

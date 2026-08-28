@@ -424,6 +424,10 @@ Deux formes échappent à la règle :
 | `POST` | `/api/catalog/apps` | `catalog.write` | `id`*, `title`*, `download`* `{url, file_type}`, `description`, `category`, `price`, `tags` (≤3), `requirements`, `md_link` → `201` | |
 | `PUT` | `/api/catalog/apps/:id` | `catalog.write` | `title`, `description`, `version`, `category`, `download` | |
 | `DELETE` | `/api/catalog/apps/:id` | `catalog.write` | — | |
+| `POST` | `/api/catalog/entries` | `catalog.write` | `type` (`app` · `plugin` · `theme` · `preset` · `modpack` · `repo` · `tutorial` · `list`, `app` par défaut), `entry`* → `201`. Écrite sous le nom de tableau qu'utilise le format de ce type. L'entrée doit porter un `id` — la mise à jour et la suppression s'y réfèrent, donc une entrée sans id serait ajoutée dans un cul-de-sac | |
+| `PUT` | `/api/catalog/entries/:id` | `catalog.write` | `type`, plus les champs à fusionner. `type` dit quel catalogue ouvrir et n'est jamais écrit dans l'entrée | |
+| `DELETE` | `/api/catalog/entries/:id` | `catalog.write` | Requête `type` · `404` si l'entrée n'existe pas, plutôt qu'annoncer une suppression qui n'a pas eu lieu | |
+| `DELETE` | `/api/catalog` | `catalog.write` | Requête `type` · jette tout le catalogue écrit pour ce type. `404` s'il n'y en a jamais eu. Ne touche PAS ce que tu SUIS — ça, c'est `/api/catalogs` | |
 
 ### Import / export — ceux-ci pilotent l'interface
 

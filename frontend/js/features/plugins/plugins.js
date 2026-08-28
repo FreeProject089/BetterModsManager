@@ -7371,6 +7371,62 @@ function getEndpointDefs() {
                 e401,
             ],
         },
+        // Authoring a catalogue of ANY kind.
+        //
+        // /api/catalog/apps does this for apps and only apps — the path names the kind and the
+        // handler is written against cat["apps"]. The kind travels as data on these three, the
+        // same shape /api/catalogs already uses, which keeps it at three routes instead of
+        // three-times-eight. The apps routes are untouched.
+        {
+            method: 'POST', path: '/api/catalog/entries', auth: true,
+            desc: t('plugins.ep.catEntryAdd'),
+            about: t('plugins.epAbout.catEntryAdd'),
+            fields: [
+                { name: 'type', type: 'string', required: false, desc: t('plugins.epF.ceType') },
+                { name: 'entry', type: 'object', required: true, desc: t('plugins.epF.ceEntry') },
+            ],
+            responseStatuses: [
+                { code: 201, label: 'Created', body: '{ "ok": true, "type": "plugin", "total": 3 }' },
+                e400, e401, e500,
+            ],
+        },
+        {
+            method: 'PUT', path: '/api/catalog/entries/:id', auth: true,
+            desc: t('plugins.ep.catEntryUpd'),
+            about: t('plugins.epAbout.catEntryUpd'),
+            fields: [
+                { name: 'type', type: 'string', required: false, desc: t('plugins.epF.ceType') },
+                { name: 'fields', type: 'object', required: true, desc: t('plugins.epF.ceFields') },
+            ],
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "ok": true, "type": "plugin" }' },
+                e400, e401, e404,
+            ],
+        },
+        {
+            method: 'DELETE', path: '/api/catalog/entries/:id', auth: true,
+            desc: t('plugins.ep.catEntryDel'),
+            about: t('plugins.epAbout.catEntryDel'),
+            fields: [
+                { name: 'type', type: 'string', required: false, desc: t('plugins.epF.ceTypeQ') },
+            ],
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "ok": true, "type": "plugin", "removed": "my-plugin" }' },
+                e400, e401, e404,
+            ],
+        },
+        {
+            method: 'DELETE', path: '/api/catalog', auth: true,
+            desc: t('plugins.ep.catDrop'),
+            about: t('plugins.epAbout.catDrop'),
+            fields: [
+                { name: 'type', type: 'string', required: false, desc: t('plugins.epF.ceTypeQ') },
+            ],
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "ok": true, "type": "plugin" }' },
+                e400, e401, e404,
+            ],
+        },
         // The five the panel never listed.
         //
         // Measured against the router: 80 routes, and these had no entry here at all. Two of
