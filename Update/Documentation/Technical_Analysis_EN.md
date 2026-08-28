@@ -689,7 +689,7 @@ Implemented in `src-tauri/src/commands/plugins.rs` with models in `models/plugin
 
 | Aspect | Detail |
 | :--- | :--- |
-| **Routes** | ~80 endpoints via `path!("api" / ...)`: `health`, `status`, `mods` (+ `active`/`enable`/`disable`/`{id}`), `profiles` (+ `activate`/`{id}`), `plugins` (+ `compare`/`apply`), `modpacks` (+ `create`/`enable`/`disable`/`import`/`{id}`), `repo` (`info`/`connect`/`list`/`sync`/`gen`/`host`), `data` (`export`/`import`), `modlists` (`export`/`import`), `creator-id`, `check-update`, `restart`. |
+| **Routes** | ~81 endpoints via `path!("api" / ...)`: `health`, `status`, `mods` (+ `active`/`enable`/`disable`/`{id}`), `profiles` (+ `activate`/`{id}`), `plugins` (+ `compare`/`apply`), `modpacks` (+ `create`/`enable`/`disable`/`import`/`{id}`), `repo` (`info`/`connect`/`list`/`sync`/`gen`/`host`), `data` (`export`/`import`), `modlists` (`export`/`import`), `creator-id`, `check-update`, `restart`. |
 | **Auth** | A per-install token (`get_api_token` / `reset_api_token`) guards mutating routes; SHA-256 is used for token handling. |
 | **Concurrency** | Shares `AppData` via `Arc`; uses a `oneshot` channel + `AtomicBool` for graceful shutdown. |
 | **Consumers** | The in-app API explorer, generated automation scripts, and external companion tools. |
