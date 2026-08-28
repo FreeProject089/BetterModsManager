@@ -689,7 +689,7 @@ Implemented in `src-tauri/src/commands/plugins.rs` with models in `models/plugin
 
 | Aspect | Detail |
 | :--- | :--- |
-| **Routes** | ~75 endpoints via `path!("api" / ...)`: `health`, `status`, `mods` (+ `active`/`enable`/`disable`/`{id}`), `profiles` (+ `activate`/`{id}`), `plugins` (+ `compare`/`apply`), `modpacks` (+ `create`/`enable`/`disable`/`import`/`{id}`), `repo` (`info`/`connect`/`list`/`sync`/`gen`/`host`), `data` (`export`/`import`), `modlists` (`export`/`import`), `creator-id`, `check-update`, `restart`. |
+| **Routes** | ~80 endpoints via `path!("api" / ...)`: `health`, `status`, `mods` (+ `active`/`enable`/`disable`/`{id}`), `profiles` (+ `activate`/`{id}`), `plugins` (+ `compare`/`apply`), `modpacks` (+ `create`/`enable`/`disable`/`import`/`{id}`), `repo` (`info`/`connect`/`list`/`sync`/`gen`/`host`), `data` (`export`/`import`), `modlists` (`export`/`import`), `creator-id`, `check-update`, `restart`. |
 | **Auth** | A per-install token (`get_api_token` / `reset_api_token`) guards mutating routes; SHA-256 is used for token handling. |
 | **Concurrency** | Shares `AppData` via `Arc`; uses a `oneshot` channel + `AtomicBool` for graceful shutdown. |
 | **Consumers** | The in-app API explorer, generated automation scripts, and external companion tools. |
@@ -1160,7 +1160,8 @@ editor's forms, and `needs` is a form SHAPE shared by several actions — `list.
 and `list.clear` share one, so a form-derived table gave all three the union of all three, and
 `open.url` came out with forty-six parameters. They come from the RUNNER's switch, one case per
 action, where `p.<name>` reads are the parameters by definition. The form version agreed with
-the runner on 49 of 59 actions: exactly the hit rate that survives spot-checking and fails
+the runner on 49 of the 59 actions that existed at the time: exactly the hit rate that
+survives spot-checking and fails
 diffing.
 
 **The lesson:** when a feature must never fall behind another, do not synchronise them —

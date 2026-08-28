@@ -615,7 +615,7 @@ Implémenté dans `src-tauri/src/commands/plugins.rs` avec les modèles dans `mo
 
 | Aspect | Détail |
 | :--- | :--- |
-| **Routes** | ~75 endpoints via `path!("api" / ...)` : `health`, `status`, `mods` (+ `active`/`enable`/`disable`/`{id}`), `profiles` (+ `activate`/`{id}`), `plugins` (+ `compare`/`apply`), `modpacks` (+ `create`/`enable`/`disable`/`import`/`{id}`), `repo` (`info`/`connect`/`list`/`sync`/`gen`/`host`), `data` (`export`/`import`), `modlists` (`export`/`import`), `creator-id`, `check-update`, `restart`. |
+| **Routes** | ~80 endpoints via `path!("api" / ...)` : `health`, `status`, `mods` (+ `active`/`enable`/`disable`/`{id}`), `profiles` (+ `activate`/`{id}`), `plugins` (+ `compare`/`apply`), `modpacks` (+ `create`/`enable`/`disable`/`import`/`{id}`), `repo` (`info`/`connect`/`list`/`sync`/`gen`/`host`), `data` (`export`/`import`), `modlists` (`export`/`import`), `creator-id`, `check-update`, `restart`. |
 | **Auth** | Un token par installation (`get_api_token` / `reset_api_token`) protège les routes mutantes ; SHA-256 est utilisé pour la gestion du token. |
 | **Concurrence** | Partage `AppData` via `Arc` ; utilise un canal `oneshot` + `AtomicBool` pour un arrêt propre. |
 | **Consommateurs** | L'explorateur d'API intégré, les scripts d'automatisation générés et les outils compagnons externes. |
@@ -1112,7 +1112,8 @@ actions — `list.push`, `list.set` et `list.clear` en partagent une, donc une t
 formulaire donnait aux trois l'union des trois, et `open.url` sortait avec quarante-six
 paramètres. Ils viennent du `switch` de l'EXÉCUTEUR, un cas par action, où les lectures
 `p.<nom>` sont les paramètres par définition. La version formulaire concordait avec l'exécuteur
-sur 49 actions sur 59 : exactement le taux qui survit à un sondage et échoue à une comparaison.
+sur 49 des 59 actions qui existaient alors : exactement le taux qui survit à un sondage et
+échoue à une comparaison.
 
 **La leçon :** quand une fonctionnalité ne doit jamais prendre de retard sur une autre, ne les
 synchronisez pas — faites de l'une la sortie de l'autre.

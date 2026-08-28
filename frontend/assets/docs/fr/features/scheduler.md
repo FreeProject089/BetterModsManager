@@ -93,7 +93,7 @@ une minuterie et devient utile. Les conditions :
 
 ### 3. Action — quoi
 
-Il y a ~60 actions réparties en huit groupes :
+Il y a ~95 actions réparties en huit groupes :
 
 | Groupe | Quelques actions |
 |---|---|

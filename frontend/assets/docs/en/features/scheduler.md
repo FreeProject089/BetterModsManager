@@ -88,7 +88,7 @@ timer and starts being useful. Conditions:
 
 ### 3. Action — what
 
-There are ~60 actions across eight groups:
+There are ~95 actions across eight groups:
 
 | Group | A few of the actions |
 |---|---|

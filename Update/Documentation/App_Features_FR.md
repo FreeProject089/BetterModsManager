@@ -545,7 +545,7 @@ BMM lance un serveur HTTP local sur `127.0.0.1:51274`, permettant aux outils ext
 
 | Fonctionnalité | Description |
 | :--- | :--- |
-| **~75 endpoints** | Mods, profils, plugins, modpacks, dépôt et import/export de données sont tous contrôlables via `/api/`. |
+| **~80 endpoints** | Mods, profils, plugins, modpacks, dépôt et import/export de données sont tous contrôlables via `/api/`. |
 | **Auth par token** | Un token d'API par installation protège les endpoints ; il peut être consulté ou régénéré depuis la vue Plugins. |
 | **Prêt pour l'automatisation** | Alimente les outils compagnons et les configurations de macros (ex : Stream Deck), ainsi que l'explorateur d'API intégré. |
 | **Aides aux scripts** | Un clic génère des extraits de requêtes authentifiées pour n'importe quelle action. |

@@ -755,7 +755,7 @@ La référence complète champ par champ, avec chaque clé optionnelle et un tab
       {
         id: 'scheduler', view: 'settings', diagram: 'scheduler', docsPath: 'features/scheduler/',
         title: { en: 'Scheduling & automation', fr: 'Planification & automatisation' },
-        summary: { en: 'A real automation builder — triggers, conditions, loops and 75 actions.', fr: 'Un vrai constructeur d’automatisations — déclencheurs, conditions, boucles et 75 actions.' },
+        summary: { en: 'A real automation builder — triggers, conditions, loops and 95 actions.', fr: 'Un vrai constructeur d’automatisations — déclencheurs, conditions, boucles et 95 actions.' },
         keywords: 'scheduler cron automate task timer trigger loop condition bmmpa planificateur automatiser boucle',
         body: {
           en: `The **Scheduler** turns BMM into an automation tool: a task pairs a **trigger** (when) with a **workflow** (what) — and workflows can branch, loop and wait, not just run a flat list.
