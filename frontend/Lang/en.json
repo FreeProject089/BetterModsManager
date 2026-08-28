@@ -9855,5 +9855,13 @@
   "sched.syncMods": "Mods folder",
   "sched.syncBackup": "Backup folder (optional)",
   "lib.cancelNothing": "Nothing is running to cancel.",
-  "plugins.epField.connectPw": "Only used to READ the repo’s name when `name` is omitted: the request that fetches repo.json carries it as X-Repo-Password. It is not stored, and connecting still works without it — the URL becomes the display name."
+  "plugins.epField.connectPw": "Only used to READ the repo’s name when `name` is omitted: the request that fetches repo.json carries it as X-Repo-Password. It is not stored, and connecting still works without it — the URL becomes the display name.",
+  "sched.trGrp.clock": "On a schedule",
+  "sched.trGrp.event": "When something happens",
+  "sched.trGrp.manual": "Never on its own",
+  "sched.trChange": "Change",
+  "sched.permsN": "{n} of 5 granted",
+  "sched.permsNone": "none granted — it can only do things inside BMM",
+  "sched.permsOutside": "Reaches outside BMM",
+  "sched.permsInside": "Destroys your own data"
 }

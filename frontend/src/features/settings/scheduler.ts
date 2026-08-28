@@ -24,7 +24,7 @@ import { outlineOf, offsetOfLine, renderOutline, explain, wordBoxAtPoint, type O
 import { BMM_EVENTS, fireEvent, noteTaskRunning } from '../../core/bmm-events.js';
 import { treeOf, foldersOf, renderTree } from './block-tree.js';
 import { showConfirm } from '../../ui/confirm.js';
-import { reasonNotRunning } from './sched-why.js';
+import { reasonNotRunning } from './sched-why.js';
 import { condSubject, condChildCount, scriptFirstLine } from './sched-summary.js';
 import { planOf, previewAgainst } from './sched-preview.js';
 import { debugging, gate, startDebug, endDebug, failDebug, DebugStopped } from './sched-debug.js';
@@ -4850,18 +4850,35 @@ function renderModal(modal: HTMLElement): void {
                     // what it unlocked, and it silently covered deeplinks, which can
                     // reach anything the app exposes. One box per real capability, so
                     // consent is given to something legible.
+                    //
+                    // Ordered and split by WHAT IT COSTS, not by when it was added.
+                    // Five checkboxes in one flat list makes "may run PowerShell you wrote"
+                    // and "may open a bmm:// link" look like the same size of decision, and
+                    // the two groups are read by somebody asking two different questions:
+                    // can this reach my machine, and can this destroy my data.
                     const pm = taskPerms(_draft as Task);
                     const row = (key: string, on: boolean, title: string, desc: string) => `
                         <label class="sched-opt sched-perm">
                             <input type="checkbox" data-perm="${key}" ${on ? 'checked' : ''}>
                             <div><b>${title}</b><span>${desc}</span></div>
                         </label>`;
+                    const granted = ['command', 'script', 'deeplink', 'stopProcess', 'delete']
+                        .filter((k) => (pm as any)[k]).length;
                     return `<div class="sched-perm-group">
-                        <div class="sched-perm-head">${t('sched.permsTitle') || 'Permissions'}<span>${t('sched.permsHint') || '— what this task may do outside BMM'}</span></div>
+                        <div class="sched-perm-head">
+                            ${t('sched.permsTitle') || 'Permissions'}
+                            <span>${escHtml(granted
+                                ? (t('sched.permsN') || '{n} of 5 granted').replace('{n}', String(granted))
+                                : (t('sched.permsNone') || 'none granted \u2014 it can only do things inside BMM'))}</span>
+                        </div>
+
+                        <div class="sched-perm-sub">${escHtml(t('sched.permsOutside') || 'Reaches outside BMM')}</div>
                         ${row('command', !!pm.command, t('sched.allowCmdTitle') || 'Run external programs', t('sched.allowCmd') || 'This task may launch real programs on your PC.')}
                         ${row('script', !!pm.script, t('sched.allowScriptTitle') || 'Run scripts', t('sched.allowScript') || 'This task may run PowerShell, CMD, Bash or Python code you write.')}
                         ${row('deeplink', !!pm.deeplink, t('sched.allowDeeplinkTitle') || 'Fire deeplinks', t('sched.allowDeeplink') || 'This task may trigger bmm:// links, which can reach anything the app exposes.')}
                         ${row('stopProcess', !!pm.stopProcess, t('sched.allowStopTitle') || 'Stop programs', t('sched.allowStop') || 'This task may terminate running programs. Unsaved work in them is lost, with no warning and nothing to undo.')}
+
+                        <div class="sched-perm-sub">${escHtml(t('sched.permsInside') || 'Destroys your own data')}</div>
                         ${row('delete', !!pm.delete, t('sched.allowDeleteTitle') || 'Delete things', t('sched.allowDelete') || 'This task may delete profiles, modpacks and mod folders. Nothing here goes to the recycle bin.')}
                     </div>`;
                 })()}
@@ -5104,10 +5121,34 @@ function renderModal(modal: HTMLElement): void {
     renderAddRow(modal.querySelector('#sched-root-add') as HTMLElement, _draft.steps);
 }
 
+/**
+ * Is the trigger picker open?
+ *
+ * Module state rather than per-render, because re-rendering is how this editor updates
+ * everything — picking a weekday redraws it — and a flag inside would reopen the grid on
+ * every keystroke.
+ *
+ * Closed once something is chosen. Eleven equal cards in a two-column sidebar is six rows
+ * before anything else is visible, and the parameters for the one you picked were BELOW all
+ * of them: choosing a trigger meant scrolling past the ten you did not choose to configure
+ * the one you did. Somebody who opens a saved task wants to see what it does, not the menu
+ * they used once.
+ */
+let _trPickerOpen = false;
+
 function renderTriggerEditor(host: HTMLElement): void {
     const tr = _draft.trigger;
-    // Visual trigger picker: one card per trigger type (icon + label) instead of a
-    // bare <select> — the WHEN choice is the heart of a schedule, make it scannable.
+    // Grouped, because the eleven answer two different questions: "on a clock" and "when
+    // something happens". Ungrouped they read as a list of eleven equally-likely things,
+    // and the two halves are chosen by people with completely different problems.
+    const GROUPS: Array<{ g: string; label: string; kinds: string[] }> = [
+        { g: 'clock', label: t('sched.trGrp.clock') || 'On a schedule',
+          kinds: ['interval', 'hourly', 'dailyAt', 'weeklyAt', 'monthlyAt', 'once'] },
+        { g: 'event', label: t('sched.trGrp.event') || 'When something happens',
+          kinds: ['appStart', 'watchFile', 'onEvent', 'afterTask', 'condition', 'script'] },
+        { g: 'manual', label: t('sched.trGrp.manual') || 'Never on its own',
+          kinds: ['manual'] },
+    ];
     const kinds: Array<[string, string]> = [
         ['interval',  t('sched.trEvery')   || 'Every N minutes'],
         ['hourly',    t('sched.trHourly')  || 'Every N hours'],
@@ -5123,15 +5164,38 @@ function renderTriggerEditor(host: HTMLElement): void {
         ['script',    t('sched.trScript')],
         ['manual',    t('sched.trManual')  || 'Manual only'],
     ];
-    host.innerHTML = `
-        <div class="sched-tr-grid">
-            ${kinds.map(([v, label]) => `
-                <button type="button" class="sched-tr-card ${tr.type === v ? 'active' : ''}" data-tr="${v}">
-                    <span class="sched-tr-card-icon">${triggerIcon({ type: v } as Trigger)}</span>
-                    <span class="sched-tr-card-label">${escHtml(label)}</span>
-                </button>`).join('')}
-        </div>
-        <div id="sched-tr-params" class="sched-tr-params"></div>`;
+    const labelOf = (v: string) => (kinds.find(([k]) => k === v) || [v, v])[1];
+    // The chosen one, as a row, with what it is actually set to. Same sentence the task
+    // list shows, so the editor and the list cannot describe one trigger two ways.
+    const chosen = `
+        <button type="button" class="sched-tr-chosen" id="sched-tr-change">
+            <span class="sched-tr-card-icon">${triggerIcon(tr)}</span>
+            <span class="sched-tr-chosen-text">
+                <b>${escHtml(labelOf(tr.type))}</b>
+                <span>${escHtml(triggerLabel(tr))}</span>
+            </span>
+            <span class="sched-tr-change">${escHtml(t('sched.trChange') || 'Change')}</span>
+        </button>`;
+
+    const grid = GROUPS.map((grp) => `
+        <div class="sched-tr-group">
+            <span class="sched-tr-group-h">${escHtml(grp.label)}</span>
+            <div class="sched-tr-grid">
+                ${grp.kinds.map((v) => `
+                    <button type="button" class="sched-tr-card ${tr.type === v ? 'active' : ''}" data-tr="${v}">
+                        <span class="sched-tr-card-icon">${triggerIcon({ type: v } as Trigger)}</span>
+                        <span class="sched-tr-card-label">${escHtml(labelOf(v))}</span>
+                    </button>`).join('')}
+            </div>
+        </div>`).join('');
+
+    host.innerHTML = (_trPickerOpen ? grid : chosen)
+        + `<div id="sched-tr-params" class="sched-tr-params"></div>`;
+
+    host.querySelector('#sched-tr-change')?.addEventListener('click', () => {
+        _trPickerOpen = true;
+        renderTriggerEditor(host);
+    });
     host.querySelectorAll('.sched-tr-card').forEach(card => card.addEventListener('click', () => {
         const v = (card as HTMLElement).dataset.tr!;
         if (v === 'interval') _draft.trigger = { type: 'interval', everyMinutes: 60 };
@@ -5147,6 +5211,9 @@ function renderTriggerEditor(host: HTMLElement): void {
         else if (v === 'script') _draft.trigger = { type: 'script', engine: 'powershell', code: '', everyMinutes: 5 };
         else if (v === 'manual') _draft.trigger = { type: 'manual' };
         else _draft.trigger = { type: 'appStart' };
+        // Closed again: the answer replaces the menu, and the parameters for what was just
+        // chosen are the next thing on screen instead of being ten rows down.
+        _trPickerOpen = false;
         renderTriggerEditor(host);
         const m = document.getElementById('modal-scheduler'); if (m) refreshSummary(m);
     }));

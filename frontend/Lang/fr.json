@@ -9853,5 +9853,13 @@
   "sched.syncMods": "Dossier des mods",
   "sched.syncBackup": "Dossier de sauvegarde (optionnel)",
   "lib.cancelNothing": "Aucune opération en cours à annuler.",
-  "plugins.epField.connectPw": "Sert uniquement à LIRE le nom du dépôt quand `name` est omis : la requête qui récupère repo.json le porte en X-Repo-Password. Il n’est pas conservé, et la connexion fonctionne sans — l’URL devient alors le nom affiché."
+  "plugins.epField.connectPw": "Sert uniquement à LIRE le nom du dépôt quand `name` est omis : la requête qui récupère repo.json le porte en X-Repo-Password. Il n’est pas conservé, et la connexion fonctionne sans — l’URL devient alors le nom affiché.",
+  "sched.trGrp.clock": "Sur un horaire",
+  "sched.trGrp.event": "Quand quelque chose arrive",
+  "sched.trGrp.manual": "Jamais tout seul",
+  "sched.trChange": "Changer",
+  "sched.permsN": "{n} sur 5 accordées",
+  "sched.permsNone": "aucune accordée — elle ne peut agir que dans BMM",
+  "sched.permsOutside": "Sort de BMM",
+  "sched.permsInside": "Détruit tes propres données"
 }
