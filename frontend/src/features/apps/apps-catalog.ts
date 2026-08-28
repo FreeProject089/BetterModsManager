@@ -1339,14 +1339,23 @@ function renderCreate() {
         <!-- Two ways out, and they are NOT peers. One file needs no hosting at all; a
              catalog.json needs somewhere to live and an address that stays alive. Four
              buttons of equal weight in a row said nothing about that, so the choice that
-             decides whether you need a web host looked like a choice of file format. -->
+             decides whether you need a web host looked like a choice of file format.
+
+             The difference is carried by a BADGE and by the sentence under each title. It
+             used to be carried by colour — a permanent accent border on the left card and
+             the only accent button on the screen — and a card outlined in blue that nothing
+             ever un-outlines reads as the one you already picked. -->
         <div class="apps-create-ways">
-          <div class="apps-create-way is-first">
+          <div class="apps-create-way">
+            <span class="apps-create-way-tag">${escHtml(t('apps.create.waySimplest'))}</span>
             <b>${escHtml(t('apps.create.wayBundle'))}</b>
             <p>${escHtml(t('apps.create.wayBundleWhy'))}</p>
-            <button class="btn btn-accent" id="cr-bundle">${escHtml(t('apps.create.publishBundle') || 'Publish as one file (.bmmbundle)…')}</button>
+            <div class="apps-create-actions">
+              <button class="btn btn-secondary" id="cr-bundle">${escHtml(t('apps.create.publishBundle') || 'Publish as one file (.bmmbundle)…')}</button>
+            </div>
           </div>
           <div class="apps-create-way">
+            <span class="apps-create-way-tag">${escHtml(t('apps.create.wayHosted'))}</span>
             <b>${escHtml(t('apps.create.wayJson'))}</b>
             <p>${escHtml(t('apps.create.wayJsonWhy'))}</p>
             <div class="apps-create-actions">

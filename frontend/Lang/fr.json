@@ -9643,5 +9643,10 @@
   "sched.kw.ok": "Restreint `after task` aux exécutions réussies.",
   "sched.kw.failed": "Restreint `after task` aux exécutions échouées.",
   "sched.kw.when": "Déclencheur : au moment où une condition devient vraie — `when file exists \"C:/x\"`. Le changement, pas l’état.",
-  "sched.kw.probe": "Déclencheur : exécute un script à intervalle régulier et lance la tâche quand il sort avec 0 — `probe python every 5m { … }`."
+  "sched.kw.probe": "Déclencheur : exécute un script à intervalle régulier et lance la tâche quand il sort avec 0 — `probe python every 5m { … }`.",
+  "apps.create.waySimplest": "Sans hébergement",
+  "apps.create.wayHosted": "Demande une adresse web",
+  "plugins.createPermsN": "{n} sur {all} demandées",
+  "plugins.createPermsNone0": "Ne demande rien — le plugin le plus sûr qui soit",
+  "plugins.createPermsNone": "Tout décocher"
 }

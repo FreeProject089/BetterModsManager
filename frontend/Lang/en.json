@@ -9645,5 +9645,10 @@
   "sched.kw.ok": "Narrows `after task` to runs that succeeded.",
   "sched.kw.failed": "Narrows `after task` to runs that failed.",
   "sched.kw.when": "Trigger: run the moment a condition becomes true — `when file exists \"C:/x\"`. The change, not the state.",
-  "sched.kw.probe": "Trigger: run a script on a timer and start the task when it exits 0 — `probe python every 5m { … }`."
+  "sched.kw.probe": "Trigger: run a script on a timer and start the task when it exits 0 — `probe python every 5m { … }`.",
+  "apps.create.waySimplest": "No hosting needed",
+  "apps.create.wayHosted": "Needs a web address",
+  "plugins.createPermsN": "{n} of {all} requested",
+  "plugins.createPermsNone0": "Asks for nothing — the safest plugin there is",
+  "plugins.createPermsNone": "Clear all"
 }

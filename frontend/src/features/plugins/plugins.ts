@@ -3778,15 +3778,38 @@ function renderCreate(container: HTMLElement) {
                     <div class="plug-form-row">
                         <label class="plug-form-label">${escHtml(t('plugins.createPerms') || 'Permissions it requests')}</label>
                         <span class="plug-field-note">${escHtml(t('plugins.createPermsHint') || 'Ticking one here only ASKS. Whoever installs the plugin sees the request pre-ticked and decides. Ask for the least that works — a plugin requesting everything is one nobody reads the list of.')}</span>
+                        <!-- One block per domain, and inside it a grid rather than a wrap.
+                             Every scope used to be an inline chip flowing after a 96px label,
+                             so twenty-six of them across seven domains came out as a ragged
+                             wall where nothing lined up with anything and the eye had no
+                             column to run down.
+
+                             The description is on the ROW now, not in a tooltip. This is the
+                             one screen where "what does mods.write actually let it do" is the
+                             question being answered, and a hover is invisible to somebody
+                             scanning — which is everybody, the first time. -->
                         <div class="plug-req-perms" id="pc-perms">
+                            <div class="plug-req-bar">
+                                <span class="plug-req-count" id="pc-perm-count"></span>
+                                <button type="button" class="btn btn-xs btn-ghost" id="pc-perm-none">${escHtml(t('plugins.createPermsNone'))}</button>
+                            </div>
                             ${permDomains().map(d => `
                                 <div class="plug-req-dom">
-                                    <span class="plug-req-dom-h" style="color:${d.color};">${escHtml(d.domain)}</span>
-                                    ${d.scopes.map(sc => `
-                                        <label class="plug-req-item" data-tooltip="${escAttr(t('plugins.scope.' + sc) || '')}">
-                                            <input type="checkbox" class="pc-perm-cb" data-perm="${escAttr(sc)}" style="accent-color:${d.color};">
-                                            <code style="color:${d.color};">${escHtml(sc)}</code>
-                                        </label>`).join('')}
+                                    <div class="plug-req-dom-h" style="color:${d.color};">
+                                        <span>${escHtml(d.domain)}</span>
+                                        <span class="plug-req-dom-n" data-dom-n="${escAttr(d.domain)}"></span>
+                                    </div>
+                                    <div class="plug-req-scopes">
+                                        ${d.scopes.map(sc => `
+                                            <label class="plug-req-item">
+                                                <input type="checkbox" class="pc-perm-cb" data-perm="${escAttr(sc)}"
+                                                    data-dom="${escAttr(d.domain)}" style="accent-color:${d.color};">
+                                                <span class="plug-req-text">
+                                                    <code style="color:${d.color};">${escHtml(sc)}</code>
+                                                    <em>${escHtml(t('plugins.scope.' + sc) || '')}</em>
+                                                </span>
+                                            </label>`).join('')}
+                                    </div>
                                 </div>`).join('')}
                         </div>
                     </div>
@@ -3886,6 +3909,8 @@ function renderCreate(container: HTMLElement) {
         }));
     };
     _renderPcScripts = renderScriptsList;
+    // The requested-permissions block, once the form exists in the DOM.
+    wireReqPerms();
     container.querySelector('#pc-import-scripts')?.addEventListener('click', async () => {
         const picked = await pickFile([{ name: 'Scripts', extensions: ['bat', 'cmd', 'ps1', 'vbs', 'py', 'js', 'sh'] }]);
         if (picked) { scriptPaths.push(picked); renderScriptsList(); }
@@ -10200,6 +10225,57 @@ async function doApply(pluginId: string, cmp?: any) {
 
 // ── Unsafe plugin scripts ───────────────────────────────────────────────────
 const UNSAFE_PLUGINS_KEY = 'bmm_unsafe_plugins_allow';
+/**
+ * How many permissions this plugin asks for, per domain and in total.
+ *
+ * Derived from the checkboxes rather than tracked alongside them: a second copy of "what is
+ * ticked" is a second thing that can be wrong, and this one would be wrong in the direction
+ * that matters — a form that says "asks for 2" while asking for nine.
+ *
+ * A domain with none ticked shows nothing at all. A zero beside every heading is seven
+ * zeroes of noise on a form somebody has only just opened.
+ */
+export function refreshReqPermCounts(): void {
+    const boxes = Array.from(document.querySelectorAll<HTMLInputElement>('.pc-perm-cb'));
+    if (!boxes.length) return;
+    const per = new Map<string, number>();
+    for (const cb of boxes) {
+        if (!cb.checked) continue;
+        const dom = cb.dataset.dom || '';
+        per.set(dom, (per.get(dom) || 0) + 1);
+    }
+    document.querySelectorAll<HTMLElement>('[data-dom-n]').forEach((el) => {
+        const n = per.get(el.dataset.domN || '') || 0;
+        el.textContent = n ? String(n) : '';
+    });
+    const total = boxes.filter((b) => b.checked).length;
+    const out = document.getElementById('pc-perm-count');
+    if (out) {
+        out.textContent = total
+            ? (t('plugins.createPermsN') || '{n} of {all} requested')
+                .replace('{n}', String(total)).replace('{all}', String(boxes.length))
+            : (t('plugins.createPermsNone0') || 'Asks for nothing \u2014 the safest plugin there is');
+        out.classList.toggle('is-none', total === 0);
+    }
+    const clear = document.getElementById('pc-perm-none') as HTMLButtonElement | null;
+    if (clear) clear.hidden = total === 0;
+}
+
+/** Wired once for the whole block, so a scope added later needs no second edit here. */
+function wireReqPerms(): void {
+    const host = document.getElementById('pc-perms');
+    if (!host || host.dataset.wired) return;
+    host.dataset.wired = '1';
+    host.addEventListener('change', (e) => {
+        if ((e.target as HTMLElement)?.classList?.contains('pc-perm-cb')) refreshReqPermCounts();
+    });
+    document.getElementById('pc-perm-none')?.addEventListener('click', () => {
+        host.querySelectorAll<HTMLInputElement>('.pc-perm-cb').forEach((cb) => { cb.checked = false; });
+        refreshReqPermCounts();
+    });
+    refreshReqPermCounts();
+}
+
 export function unsafePluginsAllowed(): boolean {
     return localStorage.getItem(UNSAFE_PLUGINS_KEY) === 'allowed';
 }
@@ -10338,6 +10414,9 @@ function prefillCreateTab(manifest: any) {
     document.querySelectorAll<HTMLInputElement>('.pc-perm-cb').forEach((cb) => {
         cb.checked = asked.includes(cb.dataset.perm || '');
     });
+    // The tallies are derived from the boxes, so they have to be recomputed after anything
+    // sets the boxes from outside — which loading a plugin for editing is.
+    refreshReqPermCounts();
 
     // Show the scripts/folders already linked to this plugin as chips, so editing keeps
     // full context. There is no toggle to restore any more — the lists ARE the answer.

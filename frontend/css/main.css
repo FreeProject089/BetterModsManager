@@ -19363,16 +19363,78 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
     border-radius: 9px;
     background: var(--bmm-bg-elevated);
 }
-.plug-req-dom { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+/* One block per domain, its scopes in a grid.
+   These were inline chips flowing after a 96px label inside a wrap-flex row, so twenty-six
+   scopes over seven domains came out ragged: nothing lined up with anything below it, and
+   there was no column for the eye to run down. A grid gives every row the same left edge,
+   which is the whole of what "arrange this better" asks for. */
+.plug-req-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding-bottom: 7px;
+    border-bottom: 1px solid var(--border);
+}
+.plug-req-count { font-size: 11px; color: var(--text-secondary); }
+.plug-req-count.is-none { color: var(--text-muted); font-style: italic; }
+
+.plug-req-dom { display: flex; flex-direction: column; gap: 5px; }
+.plug-req-dom + .plug-req-dom { padding-top: 7px; border-top: 1px solid var(--bmm-s06); }
 .plug-req-dom-h {
+    display: flex;
+    align-items: center;
+    gap: 6px;
     font-size: 9.5px;
     font-weight: 800;
     text-transform: uppercase;
     letter-spacing: .5px;
-    min-width: 96px;
 }
-.plug-req-item { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+/* Nothing at all when none is ticked. A zero beside all seven headings is seven pieces of
+   noise on a form somebody has only just opened. */
+.plug-req-dom-n:empty { display: none; }
+.plug-req-dom-n {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    border-radius: 999px;
+    background: currentColor;
+    font-size: 9px;
+    font-weight: 800;
+    /* The pill takes the domain's colour as its BACKGROUND, so the number itself has to come
+       back off the card behind it rather than inheriting the same colour and vanishing. */
+    color: var(--bmm-bg-elevated);
+}
+.plug-req-scopes {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 2px 14px;
+}
+.plug-req-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 3px 5px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+.plug-req-item:hover { background: var(--bmm-s06); }
+.plug-req-item input { margin-top: 2px; flex-shrink: 0; }
+.plug-req-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .plug-req-item code { font-size: 10.5px; }
+/* The description was a tooltip. This is the one screen where "what does mods.write actually
+   let it do" is the question being answered, and a hover is invisible to somebody scanning —
+   which is everybody, the first time through. */
+.plug-req-text em {
+    font-style: normal;
+    font-size: 10px;
+    line-height: 1.35;
+    color: var(--text-muted);
+}
+.plug-req-text em:empty { display: none; }
 
 
 /* Server repo — the step groups.

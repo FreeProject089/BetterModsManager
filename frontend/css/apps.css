@@ -1219,7 +1219,23 @@
     flex-direction: column;
     gap: 6px;
 }
-.apps-create-way.is-first { border-color: var(--accent); }
+/* The recommendation is a WORD now, not a colour.
+   This card carried `border-color: var(--accent)` permanently, and its button was the only
+   accent button of the four. Two cards side by side, one outlined in blue and never
+   un-outlined by anything, do not read as "start with this one" — they read as "this one is
+   selected", which is a state the screen has no way to leave. The badge says the same thing
+   and cannot be mistaken for a selection. */
+.apps-create-way-tag {
+    align-self: flex-start;
+    font-size: 10px;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    padding: 2px 7px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--bg-hover);
+    color: var(--text-secondary);
+}
 .apps-create-way > b { font-size: 12px; color: var(--text-bright); }
 .apps-create-way > p {
     margin: 0;
