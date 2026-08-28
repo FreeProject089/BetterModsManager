@@ -991,6 +991,8 @@ Grouped exactly as the action dropdown groups them.
 | Auto-import Open Mod Manager mods | Imports mods from an OMM setup | — |
 | Clear profile activity history | Wipes the profile's history | profile |
 | Export modpack (.bmp) | Writes a modpack file | modpack, destination |
+| \`GET\` | \`/api/mods/order\` | \`mods.read\` | — · the deployment order plus every contested file and who wins it | |
+| \`POST\` | \`/api/mods/order\` | \`mods.write\` | \`order[]\`*, \`profileId\` · must be the same set of mods that are active; re-copies the files that change hands | |
 
 :::warning[Enable actions skip the integrity check]
 *Enable mod*, *Enable modpack* and *Enable all mods* run with the SHA check bypassed — a scheduled run can't stop to ask you about a missing hash. Enable by hand if you want the prompt.
@@ -1277,6 +1279,8 @@ Regroupées exactement comme dans le menu déroulant des actions.
 | Auto-importer les mods Open Mod Manager | Importe depuis une install OMM | — |
 | Effacer l’historique d’activité du profil | Vide l’historique du profil | profil |
 | Exporter un modpack (.bmp) | Écrit un fichier modpack | modpack, destination |
+| \`GET\` | \`/api/mods/order\` | \`mods.read\` | — · l'ordre de déploiement et chaque fichier disputé, avec qui l'emporte | |
+| \`POST\` | \`/api/mods/order\` | \`mods.write\` | \`order[]\`*, \`profileId\` · doit être le même ensemble de mods que ceux actifs ; recopie les fichiers qui changent de main | |
 
 :::warning[Les actions d’activation sautent le contrôle d’intégrité]
 *Activer un mod*, *Activer un modpack* et *Activer tous les mods* tournent avec le contrôle SHA contourné — une exécution planifiée ne peut pas s’arrêter pour te parler d’un hash manquant. Active à la main si tu veux la question.
@@ -1668,6 +1672,8 @@ start "" "bmm://mod/enable?id=my-mod-folder"
 | Deeplink | Params | Does |
 |---|---|---|
 | \`bmm://schedule/run\` | \`id\`* | Runs a scheduled task — the hook the Windows Scheduler uses |
+| \`bmm://schedule/enable\` | \`id\`*, \`on\` (\`0\` disarms) | Arms or disarms one task. **Asks first**, and names the task's steps in the question |
+| \`bmm://hook\` | \`name\`*, \`data\` | Rings a named hook a task may be waiting on. **Asks first** — a task waiting on a hook runs when the hook rings, so ringing one is running that task at one remove |
 | \`bmm://launchpack/run\` | \`id\`* | Runs a Launch Pack |
 | \`bmm://benchmark/run\` | \`dataset\`, \`size\`, \`mb\`, \`mode\`, \`sources\`, \`profiles\`, \`folders\` | Opens the benchmark pre-configured. **Auto-runs unless \`mode=manual\`** |
 | \`bmm://telemetry/consent\` | \`enabled\`* | Global telemetry consent; declining also purges the local queue |
@@ -1680,6 +1686,19 @@ start "" "bmm://mod/enable?id=my-mod-folder"
 | \`bmm://settings/layout\` | \`code\`* | Applies a shared card layout |
 | \`bmm://docs/open\` | \`article\` | Opens Help & other, optionally at an article id |
 | \`bmm://restart\` | — | Restarts the app |
+
+
+#### Catalogues you author, and the ones you follow
+
+| Deeplink | Params | Does |
+|---|---|---|
+| \`bmm://catalog/import\` | \`url\`*, \`type\`, \`password\` | Reads the document at that address and follows it — **without being told what kind it is**. Whoever has a link usually does not know which of the eight it is; the document does |
+| \`bmm://catalog/follow\` | \`type\`*, \`url\`*, \`password\` | Adds one source of a known kind |
+| \`bmm://catalog/unfollow\` | \`type\`*, \`url\`* | Removes it again |
+| \`bmm://catalog/entry\` | \`type\`, \`mode\` (\`add\` · \`update\` · \`delete\`), \`id\`, \`fields\` (JSON) | Writes one entry of the catalogue **you author on this machine**. Invalid JSON in \`fields\` is refused rather than stored as a string |
+| \`bmm://catalog/delete\` | \`type\` | Throws away the authored catalogue of that kind. **Asks first** |
+
+A \`password\` on the first three is remembered **for this run only** — the rule the source-access panel already states, and the reason a protected catalogue can be followed from a link at all.
 
 #### Also works — previously undocumented
 
@@ -1779,6 +1798,8 @@ It returns everything, \`settings\` included — and \`settings\` holds the admi
 | \`POST\` | \`/api/plugins/compare\` | \`plugins.read\` | \`plugin_id\`* → \`missing_required\`, \`strict_extra\` | ✓ |
 | \`POST\` | \`/api/plugins/apply\` | \`plugins.write\` | \`plugin_id\`*, \`force_strict\` → \`enabled\`, \`not_found\` | ✓ |
 | \`DELETE\` | \`/api/plugins/:id\` | token | — · registry + permissions + files | ✓ |
+| \`GET\` | \`/api/plugins/assets\` | \`plugins.read\` | Query \`id\`* · the files a plugin ships in \`assets/\`. Add \`path\` and it returns that file's TEXT instead of the list. Text kinds only — an image is refused by kind rather than returned as noise | |
+| \`GET\` | \`/api/plugins/assets\` | \`plugins.read\` | Query \`id\`* · les fichiers qu'un plugin embarque dans \`assets/\`. Ajoute \`path\` et il renvoie le TEXTE de ce fichier au lieu de la liste. Types texte seulement — une image est refusée par type plutôt que renvoyée en bruit | |
 
 #### Server repo
 
@@ -1795,6 +1816,10 @@ It returns everything, \`settings\` included — and \`settings\` holds the admi
 | \`DELETE\` | \`/api/repo/host\` | token | — | |
 | \`POST\` | \`/api/mod/check-updates\` | token | — → \`202\` | ✓ |
 | \`POST\` | \`/api/mod/update\` | token | \`repoUrl\` → \`202\` | ✓ |
+| \`POST\` | \`/api/repo/manifest\` | \`repo.write\` | \`dir\`* · writes \`repo.json\` for a folder that is already hosted. No profile, copies nothing, returns the diff — synchronous, so a publish script can act on it | |
+| \`POST\` | \`/api/repo/extras\` | \`repo.write\` | \`url\`*, \`kind\`*, \`id\`*, \`password\` · takes ONE thing a repo carries besides mods. The entry is looked up in the manifest BMM fetches — a caller cannot describe its own \`{kind, url, sha256}\`. A plugin or automation arrives **disabled** | |
+| \`GET\` | \`/api/repo/modpacks\` | \`repo.read\` | \`dir\`* · which modpacks a repo FOLDER on this machine shares, with each one's share mode | |
+| \`POST\` | \`/api/repo/modpacks\` | \`repo.write\` | \`dir\`*, \`shares[]\`* · sets the whole list and re-signs the manifest. Omitting \`shares\` is a read, not "share none" | |
 
 #### Apps & catalog
 
@@ -1808,6 +1833,12 @@ It returns everything, \`settings\` included — and \`settings\` holds the admi
 | \`POST\` | \`/api/catalog/apps\` | \`catalog.write\` | \`id\`*, \`title\`*, \`download\`* (\`url\`, \`file_type\`), \`description\`, \`category\`, \`price\`, \`tags\` (max 3), \`requirements\`, \`md_link\` → \`201\` | |
 | \`PUT\` | \`/api/catalog/apps/:id\` | \`catalog.write\` | \`title\`, \`description\`, \`version\`, \`category\`, \`download\` | |
 | \`DELETE\` | \`/api/catalog/apps/:id\` | \`catalog.write\` | — | |
+| \`POST\` | \`/api/catalog/entries\` | \`catalog.write\` | \`type\`, \`entry\`* (needs an \`id\`) · authors an entry of ANY kind — app, plugin, theme, preset, modpack, repo, tutorial, list. The kind travels as data, which is what keeps this at three routes instead of twenty-four | |
+| \`PUT\` | \`/api/catalog/entries/:id\` | \`catalog.write\` | the fields to merge, plus \`type\` | |
+| \`DELETE\` | \`/api/catalog/entries/:id\` | \`catalog.write\` | Query \`type\` | |
+| \`POST\` | \`/api/catalog/import\` | \`catalog.write\` | \`url\`*, \`type\`, \`password\` → \`202\` · follows whatever is at an address **without being told what kind it is** — the document says so, and a link carrying the wrong type is how a theme catalogue ends up in the plugin list | ✓ |
+| \`GET\` | \`/api/catalogs\` | \`catalog.read\` | — · what BMM follows, by type, plus \`written_at\`. A MIRROR the interface pushes: no \`written_at\` means the app has not run since this existed, which is not the same fact as following nothing | |
+| \`POST\` | \`/api/catalogs\` | \`catalog.write\` | \`type\`*, \`url\`*, \`follow\` (default true) → \`202\` · driven through the app's own screens, so the reply means "the app was told" | ✓ |
 
 #### Import / export — these drive the UI
 
@@ -1840,6 +1871,13 @@ Each opens the matching in-app flow and returns \`202\`. They are **not** headle
 | \`POST\` | \`/api/replay/import\` | token | \`path\`, \`url\` | ✓ |
 | \`POST\` | \`/api/discord/rpc\` | token | \`enabled\`* | ✓ |
 | \`POST\` | \`/api/restart\` | token | — · the API is briefly unavailable | ✓ |
+| \`GET\` | \`/api/schedules\` | \`schedules.read\` | — · a summary of every saved task: id, name, whether it is on, its trigger. **Not** its steps | |
+| \`POST\` | \`/api/schedules/enabled\` | \`schedules.write\` | \`id\`*, \`enabled\`* · arm or disarm one task. Only \`enabled\` can be changed — a route that could write a whole task could install one with a script step in it | ✓ |
+| \`POST\` | \`/api/hook\` | \`hooks.write\` | \`name\`*, \`data\` · rings a named doorbell a task may be waiting on with \`wait.hook\`, or be triggered by with \`on event\` | ✓ |
+| \`GET\` | \`/api/hook\` | \`hooks.read\` | \`name\` · what has rung, without consuming it | |
+| \`GET\` | \`/api/keys\` | \`keys.read\` | — · names and paths only. There is no endpoint that reads a private key | |
+| \`POST\` | \`/api/keys\` | \`keys.write\` | \`name\`*, \`kind\` (\`ed25519\` default · \`ecdsa\` · \`rsa\`) → \`201 {path, public, ring}\`. The response carries the **public** line and where the private half went — never the private half, because replies are logged, proxied and read in browser tabs | |
+| \`POST\` | \`/api/content-id\` | token | the DOCUMENT itself · the id that says what a document IS rather than what this machine calls it — the same pack assembled twice gets the same one. Token-level rather than behind a read scope, because the caller supplies the content | |
 
 ## Known inconsistencies
 
@@ -1989,6 +2027,8 @@ start "" "bmm://mod/enable?id=mon-dossier-de-mod"
 | Deeplink | Params | Effet |
 |---|---|---|
 | \`bmm://schedule/run\` | \`id\`* | Exécute une tâche planifiée — le hook utilisé par le Planificateur Windows |
+| \`bmm://schedule/enable\` | \`id\`*, \`on\` (\`0\` désarme) | Arme ou désarme une tâche. **Demande confirmation**, et nomme les étapes de la tâche dans la question |
+| \`bmm://hook\` | \`name\`*, \`data\` | Sonne un hook nommé qu'une tâche attend peut-être. **Demande confirmation** — une tâche qui attend un hook s'exécute quand il sonne : le faire sonner, c'est exécuter cette tâche à un niveau de distance |
 | \`bmm://launchpack/run\` | \`id\`* | Exécute un Launch Pack |
 | \`bmm://benchmark/run\` | \`dataset\`, \`size\`, \`mb\`, \`mode\`, \`sources\`, \`profiles\`, \`folders\` | Ouvre le benchmark préconfiguré. **Se lance automatiquement sauf si \`mode=manual\`** |
 | \`bmm://telemetry/consent\` | \`enabled\`* | Consentement télémétrie global ; refuser purge aussi la file locale |
@@ -2001,6 +2041,19 @@ start "" "bmm://mod/enable?id=mon-dossier-de-mod"
 | \`bmm://settings/layout\` | \`code\`* | Applique une disposition de cartes partagée |
 | \`bmm://docs/open\` | \`article\` | Ouvre Aide & autres, éventuellement sur un id d’article |
 | \`bmm://restart\` | — | Redémarre l’app |
+
+
+#### Les catalogues que vous rédigez, et ceux que vous suivez
+
+| Deeplink | Params | Effet |
+|---|---|---|
+| \`bmm://catalog/import\` | \`url\`*, \`type\`, \`password\` | Lit le document à cette adresse et le suit — **sans qu'on lui dise de quel type il s'agit**. Celui qui a un lien ignore en général lequel des huit c'est ; le document, lui, le sait |
+| \`bmm://catalog/follow\` | \`type\`*, \`url\`*, \`password\` | Ajoute une source d'un type connu |
+| \`bmm://catalog/unfollow\` | \`type\`*, \`url\`* | La retire |
+| \`bmm://catalog/entry\` | \`type\`, \`mode\` (\`add\` · \`update\` · \`delete\`), \`id\`, \`fields\` (JSON) | Écrit une entrée du catalogue **que vous rédigez sur cette machine**. Un JSON invalide dans \`fields\` est refusé plutôt qu'enregistré comme chaîne |
+| \`bmm://catalog/delete\` | \`type\` | Jette le catalogue rédigé de ce type. **Demande confirmation** |
+
+Un \`password\` sur les trois premiers est retenu **pour cette session seulement** — la règle que le panneau d'accès aux sources énonce déjà, et la raison pour laquelle un catalogue protégé peut être suivi depuis un lien.
 
 #### Fonctionnent aussi — jusqu’ici non documentés
 
@@ -2116,6 +2169,10 @@ Il renvoie tout, \`settings\` inclus — et \`settings\` contient le token admin
 | \`DELETE\` | \`/api/repo/host\` | token | — | |
 | \`POST\` | \`/api/mod/check-updates\` | token | — → \`202\` | ✓ |
 | \`POST\` | \`/api/mod/update\` | token | \`repoUrl\` → \`202\` | ✓ |
+| \`POST\` | \`/api/repo/manifest\` | \`repo.write\` | \`dir\`* · écrit \`repo.json\` pour un dossier déjà hébergé. Pas de profil, ne copie rien, renvoie le diff — synchrone, pour qu'un script de publication puisse agir dessus | |
+| \`POST\` | \`/api/repo/extras\` | \`repo.write\` | \`url\`*, \`kind\`*, \`id\`*, \`password\` · prend UNE chose qu'un dépôt porte en plus des mods. L'entrée est cherchée dans le manifeste que BMM récupère — un appelant ne peut pas décrire son propre \`{kind, url, sha256}\`. Un plugin ou une automatisation arrive **désactivé** | |
+| \`GET\` | \`/api/repo/modpacks\` | \`repo.read\` | \`dir\`* · quels modpacks un DOSSIER de dépôt de cette machine partage, avec le mode de partage de chacun | |
+| \`POST\` | \`/api/repo/modpacks\` | \`repo.write\` | \`dir\`*, \`shares[]\`* · fixe toute la liste et resigne le manifeste. Omettre \`shares\` est une lecture, pas « ne rien partager » | |
 
 #### Apps & catalogue
 
@@ -2129,6 +2186,12 @@ Il renvoie tout, \`settings\` inclus — et \`settings\` contient le token admin
 | \`POST\` | \`/api/catalog/apps\` | \`catalog.write\` | \`id\`*, \`title\`*, \`download\`* (\`url\`, \`file_type\`), \`description\`, \`category\`, \`price\`, \`tags\` (3 max), \`requirements\`, \`md_link\` → \`201\` | |
 | \`PUT\` | \`/api/catalog/apps/:id\` | \`catalog.write\` | \`title\`, \`description\`, \`version\`, \`category\`, \`download\` | |
 | \`DELETE\` | \`/api/catalog/apps/:id\` | \`catalog.write\` | — | |
+| \`POST\` | \`/api/catalog/entries\` | \`catalog.write\` | \`type\`, \`entry\`* (avec un \`id\`) · rédige une entrée de N'IMPORTE quel type — app, plugin, thème, preset, modpack, dépôt, tutoriel, liste. Le type voyage en données, ce qui tient ceci en trois routes au lieu de vingt-quatre | |
+| \`PUT\` | \`/api/catalog/entries/:id\` | \`catalog.write\` | les champs à fusionner, plus \`type\` | |
+| \`DELETE\` | \`/api/catalog/entries/:id\` | \`catalog.write\` | Query \`type\` | |
+| \`POST\` | \`/api/catalog/import\` | \`catalog.write\` | \`url\`*, \`type\`, \`password\` → \`202\` · suit ce qui se trouve à une adresse **sans qu'on lui dise de quel type il s'agit** — le document le dit, et un lien portant le mauvais type est la façon dont un catalogue de thèmes atterrit dans la liste des plugins | ✓ |
+| \`GET\` | \`/api/catalogs\` | \`catalog.read\` | — · ce que BMM suit, par type, plus \`written_at\`. Un MIROIR poussé par l'interface : pas de \`written_at\` signifie que l'app n'a pas tourné depuis que ceci existe, ce qui n'est pas le même fait que ne rien suivre | |
+| \`POST\` | \`/api/catalogs\` | \`catalog.write\` | \`type\`*, \`url\`*, \`follow\` (vrai par défaut) → \`202\` · piloté par les écrans de l'app : la réponse veut dire « l'app a été prévenue » | ✓ |
 
 #### Import / export — ceux-ci pilotent l’interface
 
@@ -2161,6 +2224,13 @@ Chacun ouvre le flux in-app correspondant et renvoie \`202\`. Ils ne sont **pas*
 | \`POST\` | \`/api/replay/import\` | token | \`path\`, \`url\` | ✓ |
 | \`POST\` | \`/api/discord/rpc\` | token | \`enabled\`* | ✓ |
 | \`POST\` | \`/api/restart\` | token | — · l’API est brièvement indisponible | ✓ |
+| \`GET\` | \`/api/schedules\` | \`schedules.read\` | — · un résumé de chaque tâche enregistrée : id, nom, activée ou non, son déclencheur. **Pas** ses étapes | |
+| \`POST\` | \`/api/schedules/enabled\` | \`schedules.write\` | \`id\`*, \`enabled\`* · arme ou désarme une tâche. Seul \`enabled\` est modifiable — une route capable d'écrire une tâche entière pourrait en installer une contenant un script | ✓ |
+| \`POST\` | \`/api/hook\` | \`hooks.write\` | \`name\`*, \`data\` · sonne une cloche nommée qu'une tâche attend peut-être avec \`wait.hook\`, ou par laquelle elle est déclenchée avec \`on event\` | ✓ |
+| \`GET\` | \`/api/hook\` | \`hooks.read\` | \`name\` · ce qui a sonné, sans le consommer | |
+| \`GET\` | \`/api/keys\` | \`keys.read\` | — · noms et chemins seulement. Aucun endpoint ne lit une clé privée | |
+| \`POST\` | \`/api/keys\` | \`keys.write\` | \`name\`*, \`kind\` (\`ed25519\` par défaut · \`ecdsa\` · \`rsa\`) → \`201 {path, public, ring}\`. La réponse porte la ligne **publique** et l'endroit où la moitié privée est allée — jamais la moitié privée, parce que les réponses sont journalisées, relayées et lues dans des onglets | |
+| \`POST\` | \`/api/content-id\` | token | le DOCUMENT lui-même · l'id qui dit ce QU'EST un document plutôt que le nom que cette machine lui donne — le même pack assemblé deux fois obtient le même. Au niveau du token plutôt que derrière une portée de lecture, parce que c'est l'appelant qui fournit le contenu | |
 
 ## Incohérences connues
 

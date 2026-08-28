@@ -25,6 +25,13 @@ const PAGES = [
   'BMM Docs/docs/reference/api.fr.md',
   'Update/Documentation/API_Reference_EN.md',
   'Update/Documentation/API_Reference_FR.md',
+  // FIVE, not four. docs-hub.ts is the reference BMM SHIPS and opens from its own Help
+  // screen — the copy a user is most likely to read — and it was the only one nothing
+  // compared to the router. It had 69 of 82 routes: both catalogue-entry routes, the
+  // universal import, the whole of /api/keys, /api/hook, /api/schedules and five more.
+  //
+  // It carries EN and FR in one file, so one pass covers both tables.
+  'frontend/src/docs/docs-hub.ts',
 ];
 
 const rs = fs.readFileSync(ROUTER, 'utf8');
