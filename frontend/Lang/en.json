@@ -9506,5 +9506,13 @@
   "plugins.epF.snBackup": "The backup folder. Optional.",
   "plugins.epF.snPassword": "The download password, if the repo is protected.",
   "plugins.epF.snOverwrite": "Re-download files that already match. Off by default.",
-  "plugins.epF.snDelete": "Remove anything in the mods folder the repo does not have. Off by default."
+  "plugins.epF.snDelete": "Remove anything in the mods folder the repo does not have. Off by default.",
+  "plugins.ep.genNow": "Generate a repo — runs now",
+  "plugins.epAbout.genNow": "`/api/repo/gen` opens the hosting screen. This writes the repo, with the parameters you give rather than whatever a form happens to hold — there is no form in front of a caller, and a repo built from a stale one is worse than none. A profile named here and since deleted stops the call rather than being skipped: publishing the rest would mean the repo is not the one you asked for. Anything waiting in \"Include in the repo\" goes in at the end, as it does when a person generates one.",
+  "plugins.epF.gnOut": "The folder to write the repo into.",
+  "plugins.epF.gnAuthor": "Shown to whoever follows it. Capped at 25 characters.",
+  "plugins.epF.gnProfiles": "Which profiles to publish, as a JSON array. An empty list is REFUSED, never read as \"all of them\" — publishing every profile on somebody’s machine because a field was omitted is not a thing an API should do by accident.",
+  "plugins.epF.gnSeed": "Keeps the repo’s existing one when absent. Changing it publishes a different repo under the same address, to everyone following it.",
+  "plugins.epF.gnZip": "One archive instead of a folder tree.",
+  "plugins.epF.gnZipMods": "Zip each mod — smaller downloads, unpacked by the receiver."
 }

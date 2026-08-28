@@ -308,6 +308,32 @@ struct NewKeyBody {
     kind: Option<String>,
 }
 
+/// `POST /api/repo/gen-now` — an export that actually runs.
+///
+/// `/api/repo/gen` opens the hosting screen. That is the right answer for a caller sitting
+/// next to the app and nothing at all for one that is not, which is the same split the
+/// scheduler makes between `repo.gen` and `repo.genNow`.
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct RepoGenNowBody {
+    /// Where the repo is written.
+    output_dir: String,
+    /// Shown to whoever follows it. Capped at 25 characters, as the screen caps it.
+    author_name: String,
+    /// Which profiles to publish. NEVER "all of them" when absent \u2014 a caller that
+    /// published every profile on the machine because a field was left out is the accident
+    /// this refuses.
+    profile_ids: Vec<String>,
+    /// Keeps the repo's existing one when absent. Changing it publishes a different repo
+    /// under the same address, to everyone following it.
+    #[serde(default)]
+    seed: Option<String>,
+    #[serde(default)]
+    zip_output: bool,
+    #[serde(default)]
+    zip_mods: bool,
+}
+
 /// `POST /api/repo/sync-now` — a sync that actually runs.
 ///
 /// `/api/repo/sync` fills the form in and waits for somebody to press Sync, which is the
@@ -2345,6 +2371,45 @@ pub async fn start_api_server(
             )
         });
 
+    // POST /api/repo/gen-now  (auth) — an export that runs, rather than a screen that opens.
+    let tok_gen_now = token.clone();
+    let handle_gen_now = app_handle.clone();
+    let repo_gen_now = warp::path!("api" / "repo" / "gen-now")
+        .and(warp::post())
+        .and(require_token(tok_gen_now))
+        .and(require_permission(token.clone(), "repo.write"))
+        .and(warp::body::json::<RepoGenNowBody>())
+        .and(with_app_handle(handle_gen_now))
+        .map(|body: RepoGenNowBody, handle: tauri::AppHandle| {
+            let bad = if body.output_dir.trim().is_empty() { Some("outputDir is required") }
+                else if body.author_name.trim().is_empty() { Some("authorName is required") }
+                // An empty list is refused rather than treated as "everything". Publishing
+                // every profile on somebody's machine because a field was omitted is not a
+                // thing an API should be able to do by accident.
+                else if body.profile_ids.is_empty() { Some("profileIds must name at least one profile") }
+                else { None };
+            if let Some(msg) = bad {
+                return warp::reply::with_status(
+                    warp::reply::json(&ApiError { error: msg.into() }),
+                    StatusCode::BAD_REQUEST,
+                );
+            }
+            let _ = handle.emit("bmm://api-exec", serde_json::json!({
+                "action": "repo/gen-now",
+                "params": {
+                    "outputDir": body.output_dir,
+                    "authorName": body.author_name.chars().take(25).collect::<String>(),
+                    "profileIds": body.profile_ids,
+                    "seed": body.seed,
+                    "zipOutput": body.zip_output,
+                    "zipMods": body.zip_mods,
+                }
+            }));
+            warp::reply::with_status(warp::reply::json(&serde_json::json!({
+                "ok": true, "driven_by": "bmm-ui", "action": "repo/gen-now"
+            })), StatusCode::ACCEPTED)
+        });
+
     // POST /api/repo/sync-now  (auth) — a sync that runs, rather than a form that opens.
     let tok_sync_now = token.clone();
     let handle_sync_now = app_handle.clone();
@@ -3379,6 +3444,7 @@ pub async fn start_api_server(
         .or(get_plugins)
         .or(get_creator_id_route)
         .or(repo_sync_now)
+        .or(repo_gen_now)
         .boxed();
 
     let group_b = enable_mod

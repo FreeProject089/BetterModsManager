@@ -92,6 +92,7 @@ Ce document est la source de vérité unique pour tout ce qui est pilotable par 
 | Chemin | Auth · Perm | Corps |
 |---|---|---|
 | `/api/repo/connect` | oui · `repo.write` | `{ url, name?, password? }` |
+| `/api/repo/gen-now` | oui · `repo.write` | `{ outputDir, authorName, profileIds[], seed?, zipOutput?, zipMods? }` — **écrit le dépôt** au lieu d’ouvrir l’écran. Une liste de profils vide est refusée, jamais « tous » |
 | `/api/repo/sync-now` | oui · `repo.write` | `{ url, repoProfile, targetProfile, gameDir, modsDir, backupDir?, password?, overwriteAll?, deleteExtra? }` — **exécute la synchro** au lieu d'ouvrir le formulaire. Les cinq premiers champs sont obligatoires ; aucun profil n'est créé ; les deux options destructrices sont à off par défaut |
 | `/api/repo/sync` | oui · `repo.write` | `{ url, game_dir?, mods_dir?, backup_dir?, choices?, download_limit?, password? }` (UI-driven ; `password` = mot de passe de téléchargement optionnel d'un dépôt protégé). **`creator_id` n'est pas accepté** — c'est l'identité de cette installation face à un dépôt, pas un choix de l'appelant |
 | `/api/repo/gen` | oui · `repo.write` | `{ profileIds[], outputDir, authorName, … }` (UI-driven) |

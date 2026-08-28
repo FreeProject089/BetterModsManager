@@ -326,6 +326,43 @@ export async function initApiActivity(): Promise<void> {
                 break;
             }
             case 'repo/gen':  driveRepo('gen', params);  break;
+            // The one that RUNS. Same command the hosting screen calls, with the caller's
+            // parameters rather than whatever a form happens to hold \u2014 there is no form
+            // in front of a caller, and a repo built from a stale one is worse than none.
+            case 'repo/gen-now': {
+                try {
+                    const ids: string[] = Array.isArray(params.profileIds) ? params.profileIds.map(String) : [];
+                    const known = (await (invoke('get_profiles') as Promise<any[]>).catch(() => [])) as any[];
+                    const gone = ids.filter((id) => !known.some((pr) => String(pr.id) === id));
+                    if (gone.length) {
+                        // Named rather than skipped: publishing the rest would mean the repo
+                        // is not the repo the caller asked for.
+                        toast((t('sched.gen.errGone') || 'Profile(s) no longer here: {n}').replace('{n}', gone.join(', ')), 'error', 9000);
+                        break;
+                    }
+                    await invoke('export_server_repo', {
+                        profileIds: ids,
+                        outputDir: params.outputDir,
+                        authorName: params.authorName,
+                        seed: String(params.seed || '').trim() || null,
+                        modpacksShareConfig: null,
+                        zipOutput: params.zipOutput === true,
+                        zipMods: params.zipMods === true,
+                        serverOptions: null,
+                    });
+                    // Whatever "Include in the repo\u2026" is holding goes in, as it does when
+                    // a person generates one.
+                    try {
+                        const { applyPendingExtras } = await import('../features/repo/repo-pending.js');
+                        const n = await applyPendingExtras(String(params.outputDir || ''), (m, k) => toast(m, k));
+                        if (n) toast(t('repo.extras.applied').replace('{n}', String(n)), 'success', 6000);
+                    } catch { /* the repo is built; an extra must not undo that */ }
+                    toast((t('sched.gen.done') || 'Repo written to {n}').replace('{n}', String(params.outputDir || '')), 'success', 8000);
+                } catch (e) {
+                    toast(String((e as Error)?.message || e), 'error', 9000);
+                }
+                break;
+            }
             case 'repo/update':
                 // Drive the BMM UI exactly like gen/sync — opens the update modal,
                 // pre-fills the repo dir and profile list, then lets the user confirm.

@@ -7177,6 +7177,23 @@ function getEndpointDefs() {
             ],
         },
         {
+            method: 'POST', path: '/api/repo/gen-now', auth: true,
+            desc: t('plugins.ep.genNow'),
+            about: t('plugins.epAbout.genNow'),
+            fields: [
+                { name: 'outputDir', type: 'string', required: true, desc: t('plugins.epF.gnOut') },
+                { name: 'authorName', type: 'string', required: true, desc: t('plugins.epF.gnAuthor') },
+                { name: 'profileIds', type: 'string', required: true, desc: t('plugins.epF.gnProfiles') },
+                { name: 'seed', type: 'string', required: false, desc: t('plugins.epF.gnSeed') },
+                { name: 'zipOutput', type: 'boolean', required: false, desc: t('plugins.epF.gnZip') },
+                { name: 'zipMods', type: 'boolean', required: false, desc: t('plugins.epF.gnZipMods') },
+            ],
+            responseStatuses: [
+                { code: 202, label: 'Accepted', body: '{ "ok": true, "driven_by": "bmm-ui", "action": "repo/gen-now" }' },
+                e401,
+            ],
+        },
+        {
             method: 'POST', path: '/api/repo/sync-now', auth: true,
             desc: t('plugins.ep.syncNow'),
             about: t('plugins.epAbout.syncNow'),

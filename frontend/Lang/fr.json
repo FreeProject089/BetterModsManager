@@ -9504,5 +9504,13 @@
   "plugins.epF.snBackup": "Le dossier de sauvegarde. Facultatif.",
   "plugins.epF.snPassword": "Le mot de passe de téléchargement, si le dépôt est protégé.",
   "plugins.epF.snOverwrite": "Re-télécharger les fichiers déjà identiques. Désactivé par défaut.",
-  "plugins.epF.snDelete": "Supprimer du dossier des mods tout ce que le dépôt n’a pas. Désactivé par défaut."
+  "plugins.epF.snDelete": "Supprimer du dossier des mods tout ce que le dépôt n’a pas. Désactivé par défaut.",
+  "plugins.ep.genNow": "Générer un dépôt — s’exécute immédiatement",
+  "plugins.epAbout.genNow": "`/api/repo/gen` ouvre l’écran d’hébergement. Celle-ci écrit le dépôt, avec les paramètres donnés plutôt qu’avec ce qu’un formulaire contient — il n’y a pas de formulaire devant un appelant, et un dépôt construit à partir d’un formulaire périmé est pire qu’aucun. Un profil nommé ici et supprimé depuis arrête l’appel au lieu d’être sauté : publier le reste voudrait dire que le dépôt n’est pas celui demandé. Ce qui attend dans « Inclure dans le dépôt » y entre à la fin, comme quand une personne génère.",
+  "plugins.epF.gnOut": "Le dossier où écrire le dépôt.",
+  "plugins.epF.gnAuthor": "Affiché à qui le suit. Limité à 25 caractères.",
+  "plugins.epF.gnProfiles": "Quels profils publier, en tableau JSON. Une liste vide est REFUSÉE, jamais lue comme « tous » — publier tous les profils d’une machine parce qu’un champ a été omis n’est pas quelque chose qu’une API doit pouvoir faire par accident.",
+  "plugins.epF.gnSeed": "Garde celle du dépôt si absente. La changer publie un autre dépôt à la même adresse, pour tous ceux qui le suivent.",
+  "plugins.epF.gnZip": "Une archive au lieu d’une arborescence.",
+  "plugins.epF.gnZipMods": "Zipper chaque mod — téléchargements plus légers, décompressés par le destinataire."
 }
