@@ -493,6 +493,16 @@ function buildPluginCard(plugin: any, source: 'installed' | 'catalog') {
             </div>` : ''}
         <div class="plug-card-actions">
             ${source === 'installed' ? `
+                <!-- Two rows, because this was three different kinds of thing in one.
+                     What the plugin DOES (compare, apply), what it IS (permissions,
+                     contents, inspect), and what is KNOWN about it (the checksum) sat side
+                     by side in a single wrapping flex row — so where the line broke was
+                     decided by how long the plugin's name was and how wide the grid column
+                     happened to be, and the same card looked different beside its neighbour.
+
+                     Split, each row wraps within its own kind and the card reads the same
+                     at every width. -->
+                <div class="plug-card-actions-main">
                 ${hasModlist ? `
                     <button class="btn btn-sm btn-accent plug-btn-compare" data-id="${escHtml(manifest.id)}" data-tooltip="${t('plugins.compareTip')}">
                         ${IC.search} ${t('plugins.compare')}
@@ -501,6 +511,7 @@ function buildPluginCard(plugin: any, source: 'installed' | 'catalog') {
                     <button class="btn btn-sm btn-secondary plug-btn-apply" data-id="${escHtml(manifest.id)}" data-tooltip="${t('plugins.applyTip')}">
                         ${IC.play} ${t('plugins.apply')}
                     </button>` : ''}
+                </div>
                 <div class="plug-card-actions-right">
                     <!-- The two questions somebody asks before trusting a plugin, as their
                          own buttons rather than as the eighth and ninth icon in a row.
@@ -517,6 +528,11 @@ function buildPluginCard(plugin: any, source: 'installed' | 'catalog') {
                     <button class="btn btn-xs btn-ghost plug-btn-inspect" data-id="${escHtml(manifest.id)}" data-tooltip="${escAttr(t('plugins.inspect'))}">
                         ${IC.eye} <span class="plug-btn-word">${escHtml(t('plugins.inspectWord'))}</span>
                     </button>
+                    <!-- The checksum and the overflow menu are pushed to the end: one is a
+                         FACT about the plugin rather than a button, the other is everything
+                         that did not earn a place. Neither belongs in the middle of three
+                         buttons that all open something. -->
+                    <div class="plug-card-actions-end">
                     ${plugin.install_dir ? `
                     <span class="plug-sha-badge plug-sha-badge--pending plug-btn-sha" data-id="${escHtml(manifest.id)}" data-tooltip="${t('plugins.checksumTitle')}">
                         ${IC.hash} SHA
@@ -555,6 +571,7 @@ function buildPluginCard(plugin: any, source: 'installed' | 'catalog') {
                                 ${IC.trash} ${escHtml(t('plugins.uninstall'))}
                             </button>
                         </div>
+                    </div>
                     </div>
                 </div>
             ` : `

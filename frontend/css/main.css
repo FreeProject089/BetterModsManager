@@ -11462,18 +11462,42 @@ body.tasky-hidden #app-mascot-container {
     padding-top: 10px;
     border-top: 1px solid var(--bmm-s05);
 }
+/* An installed card stacks its two rows; a catalogue card keeps the single row it has
+   always had, with one Install button in it. Selected by what the card CONTAINS rather
+   than by a second class on the container, so the markup cannot say "installed" in one
+   place and "catalogue" in another. */
+.plug-card-actions:has(.plug-card-actions-right) {
+    flex-direction: column;
+    align-items: stretch;
+    flex-wrap: nowrap;
+    gap: 8px;
+}
+.plug-card-actions-main {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+/* A plugin with no mod list and no scripts has neither button, and an empty flex row is
+   still a gap. */
+.plug-card-actions-main:empty { display: none; }
 .plug-card-actions-right {
     display: flex;
     gap: 5px;
-    margin-left: auto;
     align-items: center;
     /* The card is `overflow: hidden`, so anything this row cannot fit is CUT rather than
        pushed — which is how the checksum badge ended up sliced down the middle. It wraps
-       onto a second line now, right-aligned so the row still reads from the right. */
+       onto a second line now. */
     flex-wrap: wrap;
-    justify-content: flex-end;
     min-width: 0;
     row-gap: 6px;
+}
+.plug-card-actions-end {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    /* Last, and pinned to the end even when the row is half empty — so the ⋮ is in the
+       same place on every card, which is the only thing that makes it findable. */
+    margin-left: auto;
 }
 /* Clean square icon buttons in the installed-plugin action row */
 .plug-card-actions-right .btn {
@@ -11489,8 +11513,12 @@ body.tasky-hidden #app-mascot-container {
 .plug-card-actions-right .btn svg { width: 14px; height: 14px; }
 .plug-card-actions-right .btn-danger-ghost:hover,
 .plug-card-actions-right .btn.btn-danger:hover { background: rgba(239,68,68,0.15); color: var(--danger); border-color: rgba(239,68,68,0.35); }
-/* Primary actions (Compare / Apply) keep a clear filled/secondary look */
-.plug-card-actions > .btn-accent, .plug-card-actions > .btn-secondary { height: 30px; border-radius: 8px; font-weight: 600; }
+/* Primary actions (Compare / Apply) keep a clear filled/secondary look.
+   Matched inside the row they moved into as well as directly, so a catalogue card's lone
+   Install button keeps the same height as the buttons it used to sit beside. */
+.plug-card-actions > .btn-accent,
+.plug-card-actions > .btn-secondary,
+.plug-card-actions-main > .btn { height: 30px; border-radius: 8px; font-weight: 600; }
 
 /* ── Plugin checksum badge (matches mod SHA badge style) ── */
 .plug-sha-badge {
