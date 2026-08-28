@@ -125,6 +125,48 @@ function renderTracker(json: string, title: string): string {
         + `</div>${catHtml}</div>`;
 }
 
+/**
+ * `:::stage` children → the JSON `renderTracker` reads.
+ *
+ * The website builds this from its own mdast and BMM has to build it from lines, but the SHAPE
+ * has to be identical or the same post renders two different roadmaps — which it did: the app
+ * fell through to its compact phase rows, with no overall percentage and no category bars.
+ *
+ * The rules are the site's, deliberately, down to the awkward one:
+ *   · a stage's items are the bullets under it,
+ *   · each item INHERITS the stage's status and percent (a stage is the unit of progress here,
+ *     not the line),
+ *   · `done` is 100 by definition, and
+ *   · a stage with no bullets is dropped rather than drawn empty.
+ */
+function stagesToTrackerJson(inner: string[]): string {
+    const cats: { name: string; items: any[] }[] = [];
+    let cur: { name: string; items: any[] } | null = null;
+    let status = 'planned';
+    let pct = 0;
+    let depth = 0;
+    for (const line of inner) {
+        const open = line.match(/^(:{3,})(stage|phase)(\[[^\]]*\])?(\{[^}]*\})?\s*$/i);
+        if (open && depth === 0) {
+            const a = parseDirAttrs(open[4] ? open[4].slice(1, -1) : '');
+            const raw = String(a.state || a.status || '').toLowerCase();
+            status = ['done', 'shipped', 'complete'].includes(raw) ? 'done'
+                : ['doing', 'active', 'wip', 'progress', 'in-progress'].includes(raw) ? 'progress' : 'planned';
+            pct = status === 'done' ? 100 : Math.max(0, Math.min(100, parseInt(a.percent, 10) || 0));
+            cur = { name: open[3] ? open[3].slice(1, -1) : String(a.title || ''), items: [] };
+            cats.push(cur);
+            depth = 1;
+            continue;
+        }
+        if (/^:{3,}[\w-]/.test(line)) { depth++; continue; }
+        if (/^:{3,}\s*$/.test(line)) { if (depth > 0) depth--; if (depth === 0) cur = null; continue; }
+        const li = line.match(/^\s*[-*+]\s+(.+)$/);
+        if (li && cur) cur.items.push({ label: li[1].trim(), status, percent: pct });
+    }
+    const kept = cats.filter((c) => c.items.length);
+    return kept.length ? JSON.stringify({ categories: kept }) : '';
+}
+
 export function expandDocBlocks(md: string, opts: ExpandOpts = {}, _top = true): string {
   const baseUrl = (opts.baseUrl || '').replace(/\/+$/, '');
   const abs = (u: string) => (u && u.startsWith('/') && baseUrl) ? `${baseUrl}${u}` : u; // relative site URL → absolute
@@ -244,7 +286,10 @@ export function expandDocBlocks(md: string, opts: ExpandOpts = {}, _top = true):
       const vertical = String(attrs.orientation || attrs.dir || 'vertical') !== 'horizontal';
       const title = label || attrs.title || '';
       const jsonBlock = inner.join('\n').match(/```(?:json)?\s*([\s\S]*?)```/);
-      const tracker = jsonBlock ? renderTracker(jsonBlock[1], title) : '';
+      // A `json` block wins; failing that, the `:::stage` children ARE the data. Without this
+      // second source the app fell through to its own compact phase rows for the shape the
+      // guide teaches, so the same post looked like two different features.
+      const tracker = renderTracker(jsonBlock ? jsonBlock[1] : stagesToTrackerJson(inner), title);
       if (tracker) { out.push('', tracker, ''); }
       else {
         out.push('', `<div class="community-roadmap ${vertical ? 'community-roadmap-v' : 'community-roadmap-h'}">`

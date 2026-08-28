@@ -147,17 +147,30 @@ describe('a roadmap written the way the docs teach it', () => {
     ':::',
   ].join('\n');
 
-  test('stages are phases, not steps', () => {
+  test('a roadmap made of stages draws the tracker', () => {
+    // This used to assert `community-roadmap` and a column of `community-phase` rows, which
+    // is what the app drew and the website did not. The site builds the tracker's JSON from
+    // the same stages, so the same post had two renderings and the app had the poorer one:
+    // no category bars, no overall figure.
     const html = expandDocBlocks(ROADMAP);
-    assert.match(html, /community-roadmap/);
+    assert.match(html, /community-tracker/);
     assert.ok(!/community-step"/.test(html), 'a stage rendered as a step is the bug');
+    assert.ok(!/community-phase/.test(html), 'the compact phase rows are the old rendering');
   });
 
-  test('each state is drawn', () => {
+  test('each state reaches the tracker', () => {
     const html = expandDocBlocks(ROADMAP);
-    assert.match(html, /community-phase-done/);
+    assert.match(html, /community-track-done/);
+    assert.match(html, /community-track-progress/);
+    assert.match(html, /community-track-planned/, 'the site writes `planned`');
+  });
+
+  test('a stage on its own is still a phase row', () => {
+    // Outside a roadmap there is no tracker to build, and `:::stage` remains its own block.
+    // Changing the roadmap must not take that with it.
+    const html = expandDocBlocks(':::stage[Alone]{state=doing percent=25}\nBody.\n:::');
     assert.match(html, /community-phase-doing/);
-    assert.match(html, /community-phase-todo/, 'the site writes `planned`; this file called it `todo`');
+    assert.match(html, /width:25%/);
   });
 
   test('the words people actually type are understood', () => {
@@ -233,6 +246,38 @@ describe('what the website writes, rendered the same way here', () => {
   test('a step colour reaches the marker', () => {
     const html = expandDocBlocks('::::steps{color="#7c3aed"}\n:::step[A]\nx\n:::\n::::');
     assert.match(html, /--stepc:#7c3aed/);
+  });
+
+  test('a roadmap written as :::stage children draws the tracker, not phase rows', () => {
+    // The website accepts three sources for a roadmap and BMM knew two: a `json` block and a
+    // `src=`. The third — `:::stage` children, which is the short way and the one the guide
+    // teaches — fell through to "render the body plainly", so the app drew its own compact
+    // phase rows: a thin bar, a tick, no category bars and no overall figure. Same post, two
+    // renderings, and the app had the poorer one.
+    const html = expandDocBlocks([
+      ':::roadmap[Where we are]',
+      ':::stage[Shipped]{state=done}',
+      '- The block system',
+      ':::',
+      ':::stage[Under way]{state=doing percent=40}',
+      '- The page builder',
+      ':::',
+      ':::',
+    ].join('\n'));
+    assert.match(html, /community-tracker/);
+    // The exact summary the site prints for this input. Two categories, two items, and the
+    // mean of 100 and 40 — if this number moves, the two renderers have drifted apart.
+    assert.match(html, /<b>70%<\/b> overall · 1 done · 1 active · 0 planned/);
+    assert.equal((html.match(/community-track-cathead/g) || []).length, 2);
+    assert.ok(!/community-phase/.test(html), 'fell back to the compact phase rows');
+  });
+
+  test('a stage with no bullets is dropped rather than drawn empty', () => {
+    // The site filters those out (`.filter(c => c.items.length)`). A category with no rows is
+    // a heading with a 0% bar under it, which reads as "nothing done" rather than "nothing
+    // said" — and those are different claims.
+    const html = expandDocBlocks(':::roadmap\n:::stage[Empty]{state=done}\n:::\n:::');
+    assert.ok(!/community-tracker/.test(html));
   });
 
   test('a step with a status still gets its number', () => {
