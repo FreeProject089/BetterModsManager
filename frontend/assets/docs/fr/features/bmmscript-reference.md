@@ -2,7 +2,7 @@
 
 !!! info ""
 
-    95 actions · 34 conditions · 32 valeurs · 8 sources de boucle
+    100 actions · 34 conditions · 32 valeurs · 8 sources de boucle
 
 > Généré depuis le registre de BMM lui-même, donc cette page ne peut pas décrire une version de l'application qui n'existe pas. Si une action est dans l'éditeur de blocs, elle est dans cette liste.
 
@@ -17,6 +17,11 @@ S'écrit `do <nom>(param: valeur, …)`. Une action sans paramètre prend des pa
 | Action | Ce qu'elle fait | Paramètres |
 |---|---|---|
 | `profile.activate` | Change le profil actif | `id` |
+| `profile.create` | Crée un profil et retient son id pour l’étape suivante. Réutilise celui du même nom. | `name` · `into` · `gameDir` · `modsDir` · `backupDir` |
+| `profile.rename` | Renomme un profil, en gardant ses dossiers et ses mods. | `id` · `name` |
+| `profile.delete` | Supprime un profil. Refuse le profil actif sauf indication contraire. | `id` · `evenIfActive` |
+| `mod.remove` | Sort un mod de la liste, et supprime son dossier si demandé. | `id` · `disableFirst` · `deleteFiles` |
+| `modpack.delete` | Supprime un fichier de modpack. Les mods qu’il liste ne sont pas touchés. | `id` |
 | `mod.enable` | Active un mod | `id` |
 | `mod.disable` | Désactive un mod | `id` |
 | `mods.order` | Déplace un mod dans l'ordre de déploiement. Deux mods actifs qui livrent le même fichier ne fusionnent pas — celui déployé en dernier est celui sur le disque. | `order` · `id` · `mode` |
@@ -46,7 +51,7 @@ S'écrit `do <nom>(param: valeur, …)`. Une action sans paramètre prend des pa
 | `repo.connect` | Ajoute un repo distant | `url` · `name` · `password` |
 | `repo.sync` | Télécharge & intègre un profil distant | `url` · `profile` · `password` |
 | `repo.gen` | Ouvre la génération de repo | — |
-| `repo.genNow` | Générer un dépôt serveur (sans surveillance) | `outputDir` · `authorName` · `profileIds` · `seed` · `zipOutput` · `zipMods` |
+| `repo.genNow` | Génère le dépôt sur place, sans ouvrir la page — contrairement à « Générer un dépôt », qui ne fait que t’y emmener. | `outputDir` · `authorName` · `profileIds` · `seed` · `zipOutput` · `zipMods` |
 | `repo.update` | Met à jour un repo exporté | `dir` |
 | `repo.host` | Sert un repo en HTTP | `dir` · `port` |
 | `repo.manifest` | Lit le dossier, réécrit repo.json, et rapporte ce qui a changé. Se combine avec Publier par SSH à l'étape suivante. | `dir` · `name` · `author` |
@@ -132,8 +137,8 @@ S'écrit `do <nom>(param: valeur, …)`. Une action sans paramètre prend des pa
 | `system.clearResourceRecords` | Vide les relevés CPU/mémoire enregistrés. | — |
 | `task.run` | Déclenche une autre tâche | `id` |
 | `task.spawn` | Lance l’autre tâche et continue immédiatement. À utiliser quand la suite ne dépend pas du résultat — sinon prenez « Exécuter une autre tâche », qui attend. | `id` |
-| `task.setEnabled` | Armer ou désarmer une autre tâche | `taskId` · `armOn` |
-| `view.open` | Ouvrir un écran | `place` · `id` · `arg` |
+| `task.setEnabled` | Active ou désactive une autre tâche planifiée. Une tâche peut armer celle qui la suit et se désarmer elle-même. | `taskId` · `armOn` |
+| `view.open` | Ouvre un écran ou une fenêtre de BMM — n’importe lequel, par son nom. | `place` · `id` · `arg` |
 | `restart` | Redémarre BMM | — |
 | `open.url` | Ouvre une URL ou un lien | `url` |
 | `custom.command` | Lance un programme avec arguments | `args` · `program` · `workingDir` · `into` |

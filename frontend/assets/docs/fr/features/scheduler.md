@@ -53,6 +53,10 @@ l'action est *quoi*.
 | `monthlyAt` | Un jour du mois (1–31) à une heure. |
 | `appStart` | Une fois par lancement de BMM (quelques secondes après le démarrage). |
 | `watchFile` | Un fichier a changé. |
+| `onEvent` | BMM lui-même a signalé quelque chose — un mod manquant, une synchro ratée. Se déclenche aussi sur tout ce qui fait un `POST` vers `/api/hook` avec ce nom : un webhook et un événement BMM sont la même chose. |
+| `afterTask` | Une autre tâche s'est terminée. Éventuellement seulement si elle a réussi, ou seulement si elle a échoué. |
+| `condition` | L'une des 34 conditions est devenue vraie. |
+| `script` | Un script que tu as écrit est sorti avec le code 0. |
 | `manual` | Jamais tout seul — seulement le bouton ▶ **Lancer maintenant** ou `bmm://schedule/run`. |
 
 !!! warning "Les déclencheurs horaires ne partent que si BMM est éveillé"
@@ -60,6 +64,68 @@ l'action est *quoi*.
     `dailyAt` / `weeklyAt` / `monthlyAt` sont vérifiés par la boucle interne de BMM, qui se réveille
     environ toutes les 20 secondes. Si BMM est **fermé** à cette minute précise, l'exécution est
     manquée et **non** rattrapée. C'est à ça que sert *Exécuter même quand BMM est fermé* (plus bas).
+
+
+#### Les trois qui attendent quelque chose que BMM ignore
+
+`afterTask`, `condition` et `script` existent parce que les autres déclencheurs ne savent
+répondre qu'à des questions dont BMM a déjà la réponse.
+
+**Après une autre tâche.** Choisis une tâche et, si tu veux, une issue : *quelle qu'elle
+soit*, *seulement si elle a réussi*, *seulement si elle a échoué*. Ce qu'a fait l'autre tâche
+arrive dans `{event.name}`, `{event.ok}` et `{event.ms}`, pour qu'une tâche de réparation
+puisse dire quelle exécution elle répare.
+
+Ce n'est pas un cas particulier greffé sur la boucle. Chaque exécution terminée fait sonner
+`bmm.task.done` sur l'anneau de hooks que lisent déjà `onEvent` et `wait.hook`, et ce
+déclencheur n'en est qu'un lecteur — c'est pourquoi tu peux aussi attraper toutes les fins de
+tâches avec un simple `onEvent`.
+
+!!! warning "Une chaîne s'arrête après 8 tâches"
+
+    Deux tâches qui s'attendent l'une l'autre forment une boucle que rien d'autre n'arrêterait :
+    chaque étape prise séparément se comporte correctement. Chaque exécution transporte donc un
+    compteur de maillons, et la neuvième refuse avec un message qui nomme la tâche. Une tâche
+    qui s'attend **elle-même** est refusée d'emblée.
+
+**Quand une condition devient vraie.** Les mêmes 34 conditions qu'utilise une règle `SI`, en
+*quand* au lieu de *si* : `quand l'espace libre passe sous 10 Go`, `quand cette app ne tourne
+pas`.
+
+Elle se déclenche sur le **changement**, pas sur l'état. Une version qui partirait tant que la
+condition tient lancerait cent nettoyages avant que le premier ait fini de faire de la place —
+elle part donc une fois au passage faux→vrai, et pas de nouveau tant qu'elle n'est pas
+redevenue fausse entre-temps.
+
+**Quand un script le dit.** Le libre : PowerShell, CMD, Bash, Python, Node ou Rust, exécuté à
+l'intervalle de ton choix. **Le code de sortie 0 lance la tâche** ; toute autre valeur veut
+dire pas encore. Ce qu'il a affiché arrive dans `{event.stdout}`.
+
+Ce déclencheur exécute du code : il demande donc la permission **Exécuter des scripts** —
+vérifiée avant que la sonde tourne, pas au moment où la tâche s'exécute. Sans cette règle,
+une tâche dont les étapes ne demandent rien exécuterait quand même le code de son auteur
+toutes les quelques minutes. Une sonde encore en cours quand la suivante est due est sautée
+plutôt qu'empilée.
+
+En BMMScript, les trois s'écrivent :
+
+```
+task "Réparer après la synchro de nuit" {
+    after task "t-42" failed
+}
+
+task "Nettoyer quand le disque se remplit" {
+    when file exists "C:/games/.full"
+}
+
+task "Surveiller le serveur" {
+    probe python every 5m {
+        import sys, urllib.request
+        n = len(urllib.request.urlopen("http://server/players").read().split())
+        sys.exit(0 if n > 20 else 1)
+    }
+}
+```
 
 ### 2. Règles — si
 
@@ -93,11 +159,11 @@ une minuterie et devient utile. Les conditions :
 
 ### 3. Action — quoi
 
-Il y a ~95 actions réparties en huit groupes :
+Il y a ~100 actions réparties en huit groupes :
 
 | Groupe | Quelques actions |
 |---|---|
-| **Mods & profils** | Activer un profil · activer/désactiver un mod · activer/désactiver un modpack · créer un modpack · ajouter un mod depuis une URL · exporter/importer une liste · tout activer/désactiver · scanner le dossier · vérifier les MàJ de mods |
+| **Mods & profils** | Activer un profil · **créer / renommer / supprimer un profil** · activer/désactiver un mod · **retirer un mod** · activer/désactiver un modpack · créer un modpack · **supprimer un modpack** · ajouter un mod depuis une URL · exporter/importer une liste · tout activer/désactiver · scanner le dossier · vérifier les MàJ de mods |
 | **Dépôt & partage** | Connecter · synchroniser · générer · mettre à jour · héberger un dépôt |
 | **Apps & lancement** | Lancer une app · installer une app · ouvrir un fichier/dossier · **lancer un [Launch Pack](doc-page:features/launch-packs)** |
 | **Apparence** | Appliquer un thème |
@@ -146,7 +212,7 @@ alors… » n'avait aucun moyen d'être exprimé.
 
 ## Les permissions
 
-Chaque tâche accorde quatre choses séparément, et chacune dit ce qu'elle débloque :
+Chaque tâche accorde cinq choses séparément, et chacune dit ce qu'elle débloque :
 
 | Autorisation | Ce qu'elle permet |
 |---|---|
@@ -154,16 +220,23 @@ Chaque tâche accorde quatre choses séparément, et chacune dit ce qu'elle déb
 | **Exécuter des scripts** | Exécuter du PowerShell / CMD / Bash / Python que tu as écrit |
 | **Déclencher des deeplinks** | Déclencher des liens `bmm://` |
 | **Arrêter un programme** | Terminer un processus en cours |
+| **Supprimer des choses** | Supprimer un profil, un modpack, ou le dossier d'un mod |
 
-Les quatre sont désactivées tant que tu ne les actives pas, et une étape dont la permission
+Les cinq sont désactivées tant que tu ne les actives pas, et une étape dont la permission
 manque échoue avec un message indiquant laquelle accorder — elle ne s'exécute jamais en
 silence.
+
+**Supprimer des choses** est l'intruse. Les quatre autres concernent ce qui sort de BMM ;
+celle-ci détruit tes propres données de l'intérieur, là où aucune barrière externe ne la
+verrait passer. Elle couvre la suppression d'un profil, celle d'un fichier de modpack, et —
+seulement si tu coches la deuxième case — celle du dossier d'un mod sur le disque. Rien ici ne
+passe par la corbeille.
 
 Arrêter un programme est séparé de le lancer parce que le risque est d'une autre nature :
 démarrer quelque chose s'annule, tuer quelque chose peut perdre un travail non enregistré sans
 rien pour revenir en arrière.
 
-!!! warning "Les deeplinks sont la plus large des quatre"
+!!! warning "Les deeplinks sont la plus large d'entre elles"
 
     Un lien `bmm://` atteint tout ce que l'app expose, y compris des actions sans étape dédiée
     dans le planificateur. Auparavant, rien ne les gardait.
@@ -171,9 +244,9 @@ rien pour revenir en arrière.
 !!! note "Migration depuis l'ancienne case unique"
 
     Une tâche construite avant la séparation garde tout ce qu'elle avait — mais aucune ne gagne
-    **Exécuter des scripts** ni **Arrêter un programme**. Ces capacités n'existaient pas quand
-    tu as coché *Autoriser les commandes personnalisées* : te les accorder maintenant
-    reviendrait à inventer ton consentement plutôt qu'à l'honorer.
+    **Exécuter des scripts**, **Arrêter un programme** ni **Supprimer des choses**. Aucune de
+    ces capacités n'existait quand tu as coché *Autoriser les commandes personnalisées* : te
+    les accorder maintenant reviendrait à inventer ton consentement plutôt qu'à l'honorer.
 
 !!! danger "Une tâche qui arrive dans un FICHIER n'en reçoit aucune"
 

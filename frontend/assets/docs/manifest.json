@@ -222,7 +222,7 @@
         "en": "Schedule BMM actions (one-time or recurring) — activate a mod, modpack, profile… with conditions (if/else), your own scripts and external programs.",
         "fr": "Planifiez des actions BMM (ponctuelles ou récurrentes) — activer un mod, un modpack, un profil… avec conditions (si/sinon), tes propres scripts et des…"
       },
-      "words": 7130,
+      "words": 7562,
       "diagrams": 0,
       "fr": true
     },
@@ -249,8 +249,8 @@
         "fr": "BMMScript — toutes les actions, conditions et valeurs"
       },
       "summary": {
-        "en": "95 actions · 34 conditions · 32 values · 8 loop sources",
-        "fr": "95 actions · 34 conditions · 32 valeurs · 8 sources de boucle"
+        "en": "100 actions · 34 conditions · 32 values · 8 loop sources",
+        "fr": "100 actions · 34 conditions · 32 valeurs · 8 sources de boucle"
       },
       "words": 447,
       "diagrams": 0,

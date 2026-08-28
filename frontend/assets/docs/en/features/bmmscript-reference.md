@@ -2,7 +2,7 @@
 
 !!! info ""
 
-    95 actions · 34 conditions · 32 values · 8 loop sources
+    100 actions · 34 conditions · 32 values · 8 loop sources
 
 > Generated from BMM's own registry, so it cannot describe a version of the app that does not exist. If an action is in the block editor, it is in this list.
 
@@ -17,6 +17,11 @@ Written `do <name>(param: value, …)`. An action with no parameters takes empty
 | Action | What it does | Parameters |
 |---|---|---|
 | `profile.activate` | Switch the active profile | `id` |
+| `profile.create` | Makes a profile and remembers its id for the next step. Reuses one of the same name. | `name` · `into` · `gameDir` · `modsDir` · `backupDir` |
+| `profile.rename` | Renames a profile, keeping its folders and its mods. | `id` · `name` |
+| `profile.delete` | Deletes a profile. Refuses the active one unless told otherwise. | `id` · `evenIfActive` |
+| `mod.remove` | Takes a mod out of the list, and optionally deletes its folder. | `id` · `disableFirst` · `deleteFiles` |
+| `modpack.delete` | Deletes a modpack file. The mods it lists are left alone. | `id` |
 | `mod.enable` | Activate one mod | `id` |
 | `mod.disable` | Deactivate one mod | `id` |
 | `mods.order` | Move a mod in the deployment order. Two active mods that ship the same file do not merge — the one deployed last is the one on disk. | `order` · `id` · `mode` |
@@ -46,7 +51,7 @@ Written `do <name>(param: value, …)`. An action with no parameters takes empty
 | `repo.connect` | Add a remote repo | `url` · `name` · `password` |
 | `repo.sync` | Download & integrate a remote profile | `url` · `profile` · `password` |
 | `repo.gen` | Open repo generation | — |
-| `repo.genNow` | Generate a server repo (unattended) | `outputDir` · `authorName` · `profileIds` · `seed` · `zipOutput` · `zipMods` |
+| `repo.genNow` | Generates the repo where it stands, without opening the page — unlike “Generate a repo”, which only takes you there. | `outputDir` · `authorName` · `profileIds` · `seed` · `zipOutput` · `zipMods` |
 | `repo.update` | Update an exported repo | `dir` |
 | `repo.host` | Serve a repo over HTTP | `dir` · `port` |
 | `repo.manifest` | Reads the folder, rewrites repo.json, and reports what changed. Pairs with Publish over SSH as the next step. | `dir` · `name` · `author` |
@@ -132,8 +137,8 @@ Written `do <name>(param: value, …)`. An action with no parameters takes empty
 | `system.clearResourceRecords` | Empties the recorded CPU/memory samples. | — |
 | `task.run` | Trigger another scheduled task | `id` |
 | `task.spawn` | Starts the other task and carries straight on. Use it when the rest of this task does not depend on the result — otherwise use “Run another task”, which waits. | `id` |
-| `task.setEnabled` | Arm or disarm another task | `taskId` · `armOn` |
-| `view.open` | Open a screen | `place` · `id` · `arg` |
+| `task.setEnabled` | Turns another scheduled task on or off. A task can arm the one that follows it and disarm itself. | `taskId` · `armOn` |
+| `view.open` | Opens a BMM screen or window — any of them, by name. | `place` · `id` · `arg` |
 | `restart` | Restart BMM | — |
 | `open.url` | Open a URL or link | `url` |
 | `custom.command` | Run a program with arguments | `args` · `program` · `workingDir` · `into` |

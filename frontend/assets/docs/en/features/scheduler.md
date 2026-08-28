@@ -51,6 +51,10 @@ you driving it.
 | `monthlyAt` | On a day-of-month (1–31) at a time. |
 | `appStart` | Once per BMM launch (a few seconds after start). |
 | `watchFile` | A file changed. |
+| `onEvent` | BMM itself said something happened — a mod turned out to be missing, a sync failed. Also fires on anything that `POST`s to `/api/hook` with that name, so a webhook and a BMM event are the same thing. |
+| `afterTask` | Another task finished. Optionally only when it succeeded, or only when it failed. |
+| `condition` | One of the 34 conditions became true. |
+| `script` | A script you wrote exited 0. |
 | `manual` | Never on its own — only the ▶ **Run now** button or `bmm://schedule/run`. |
 
 !!! warning "Time triggers only fire while BMM is awake"
@@ -58,6 +62,62 @@ you driving it.
     `dailyAt` / `weeklyAt` / `monthlyAt` are checked by BMM's own loop, which wakes about every 20
     seconds. If BMM is **closed** at that exact minute the run is missed and **not** backfilled.
     That's what *Run even when BMM is closed* (below) is for.
+
+
+#### The three that wait on something BMM does not know about
+
+`afterTask`, `condition` and `script` exist because the other triggers can only answer
+questions BMM already knows the answer to.
+
+**After another task.** Pick a task and, if you want, an outcome: *however it ended*, *only if
+it succeeded*, *only if it failed*. What the other task did arrives as `{event.name}`,
+`{event.ok}` and `{event.ms}`, so a repair task can say which run it is repairing.
+
+It is not a special case bolted to the loop. Every finished run rings `bmm.task.done` on the
+same hook ring `onEvent` and `wait.hook` read, and this trigger is a reader of it — which is
+why you can also catch task completions with a plain `onEvent` if you want all of them.
+
+!!! warning "A chain stops after 8 tasks"
+
+    Two tasks each waiting for the other is a loop, and nothing else would end it: every
+    individual step behaves correctly. So each run carries a hop count, and the ninth refuses
+    with a message naming the task. A task waiting for **itself** is refused outright.
+
+**When a condition becomes true.** The same 34 conditions an `IF` rule uses, as a *when*
+instead of a *whether*: `when free space drops below 10 GB`, `when this app is not running`.
+
+It fires on the **change**, not the state. A version that fired while the condition merely
+held would start a hundred cleanups before the first had finished making room — so it fires
+once on false→true, and not again until it has been false in between.
+
+**When a script says so.** The free one: PowerShell, CMD, Bash, Python, Node or Rust, run on
+an interval you choose. **Exit 0 runs the task**; anything else means not yet. Whatever it
+printed arrives as `{event.stdout}`.
+
+This trigger runs code, so it needs the **Run scripts** permission — checked before the probe
+runs, not when the task does. Without that rule a task whose steps ask for nothing would still
+execute its author's code every few minutes. A probe still running when the next one is due is
+skipped rather than stacked.
+
+In BMMScript the three are written:
+
+```
+task "Repair after the nightly sync" {
+    after task "t-42" failed
+}
+
+task "Clean up when the disk fills" {
+    when file exists "C:/games/.full"
+}
+
+task "Watch the server" {
+    probe python every 5m {
+        import sys, urllib.request
+        n = len(urllib.request.urlopen("http://server/players").read().split())
+        sys.exit(0 if n > 20 else 1)
+    }
+}
+```
 
 ### 2. Rules — whether
 
@@ -88,11 +148,11 @@ timer and starts being useful. Conditions:
 
 ### 3. Action — what
 
-There are ~95 actions across eight groups:
+There are ~100 actions across eight groups:
 
 | Group | A few of the actions |
 |---|---|
-| **Mods & profiles** | Activate a profile · enable/disable a mod · enable/disable a modpack · create a modpack · add a mod from a URL · export/import a mod list · enable/disable all · scan the folder · check mod updates |
+| **Mods & profiles** | Activate a profile · **create / rename / delete a profile** · enable/disable a mod · **remove a mod** · enable/disable a modpack · create a modpack · **delete a modpack** · add a mod from a URL · export/import a mod list · enable/disable all · scan the folder · check mod updates |
 | **Repo & sharing** | Connect · sync · generate · update · host a repo |
 | **Apps & launch** | Launch an app · install an app · open a file/folder · **run a [Launch Pack](doc-page:features/launch-packs)** |
 | **Appearance** | Set a theme |
@@ -140,7 +200,7 @@ had no way to be expressed.
 
 ## Permissions
 
-Each task grants four things separately, and each says what it unlocks:
+Each task grants five things separately, and each says what it unlocks:
 
 | Grant | What it allows |
 |---|---|
@@ -148,14 +208,20 @@ Each task grants four things separately, and each says what it unlocks:
 | **Run scripts** | Run PowerShell / CMD / Bash / Python you wrote |
 | **Fire deeplinks** | Trigger `bmm://` links |
 | **Stop a program** | Terminate a running process |
+| **Delete things** | Delete a profile, a modpack, or a mod's folder |
 
-All four are off until you turn them on, and a step whose permission is missing fails with a
+All five are off until you turn them on, and a step whose permission is missing fails with a
 message naming the one to grant — it never runs quietly.
+
+**Delete things** is the odd one out. The other four are about reaching *outside* BMM; this one
+is about destroying your own data from the inside, where no external gate would ever see it. It
+covers deleting a profile, deleting a modpack file, and — only when you tick the second box —
+deleting a mod's folder from disk. Nothing here goes to the recycle bin.
 
 Stopping a program is separate from launching one because the risk differs in kind: starting
 something is undoable, killing something can lose unsaved work with nothing to undo.
 
-!!! warning "Deeplinks are the widest of the four"
+!!! warning "Deeplinks are the widest of them"
 
     A `bmm://` link reaches anything the app exposes, including actions that have no scheduler
     step of their own. It used to be gated by nothing at all.
@@ -163,13 +229,14 @@ something is undoable, killing something can lose unsaved work with nothing to u
 !!! note "Upgrading from the old single checkbox"
 
     A task you built before the split keeps everything it already had — but none gains **Run
-    scripts** or **Stop a program**. Neither capability existed when you ticked *Allow custom
-    commands*, so granting them now would be inventing your consent rather than honouring it.
+    scripts**, **Stop a program** or **Delete things**. None of those capabilities existed when
+    you ticked *Allow custom commands*, so granting them now would be inventing your consent
+    rather than honouring it.
 
 !!! danger "A task that arrives in a FILE gets none of them"
 
-    Importing a `.bmmpa`, or adding a shared `.bmmscript` to your tasks, removes all four
-    grants and leaves the task **disabled** — then tells you what the file had asked for.
+    Importing a `.bmmpa`, or adding a shared `.bmmscript` to your tasks, removes every one of
+    the grants and leaves the task **disabled** — then tells you what the file had asked for.
 
     The automation is intact and one toggle away from working. What it cannot do is arrive
     already holding permission to run programs on a timer, which is what used to happen: only
