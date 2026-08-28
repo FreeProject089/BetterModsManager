@@ -674,6 +674,46 @@ async function fillKeyRing(): Promise<void> {
 }
 
 /** Wire the panel. Idempotent — a second call attaches nothing twice. */
+/**
+ * Keep the "this folder → that place" line in step with the form.
+ *
+ * The two halves of the answer were never next to each other: the SOURCE is the export
+ * folder, which lives on a different card, and the DESTINATION is a host and a remote
+ * directory four rows apart with a user and a port between them. The panel explained the
+ * ORDER to do things in and never once said where the files land.
+ *
+ * Read from the inputs on every keystroke rather than from the saved target: the saved one
+ * is what a scheduled publish will use, and this line is about the button under it.
+ */
+function renderRoute(): void {
+    const val = (id: string) => el<HTMLInputElement>(id)?.value.trim() || '';
+    const from = el('repo-ssh-route-from');
+    const to = el('repo-ssh-route-to');
+    if (!from || !to) return;
+
+    // The folder the export card is pointed at — the same one Publish sends.
+    const dir = (document.getElementById('repo-export-path') as HTMLInputElement | null)?.value.trim() || '';
+    from.textContent = dir || (t('repo.ssh.routeNoDir') || 'no exported folder yet');
+    from.classList.toggle('is-empty', !dir);
+
+    const host = val('repo-ssh-host');
+    const user = val('repo-ssh-user');
+    const port = val('repo-ssh-port');
+    const remote = val('repo-ssh-remote');
+    if (!host) {
+        to.textContent = t('repo.ssh.routeNoHost') || 'no server yet';
+        to.classList.add('is-empty');
+        return;
+    }
+    // `user@host:port/path` — the form somebody would type into an ssh command, so it is
+    // recognisable rather than being a sentence assembled out of four labels. The port is
+    // shown only when it is not 22, which is the whole reason the field is usually empty.
+    const at = user ? `${user}@` : '';
+    const p = port && port !== '22' ? `:${port}` : '';
+    to.textContent = `${at}${host}${p}${remote ? ` ${remote}` : ''}`;
+    to.classList.remove('is-empty');
+}
+
 export function initRepoSsh(): void {
     const card = el('repo-ssh-card');
     if (!card || card.dataset.bound) return;
@@ -689,9 +729,20 @@ export function initRepoSsh(): void {
         if (!n?.dataset.target) return;
         fillForm(n.dataset.target);
         renderSavedTargets();
+        // Setting .value from code fires no `input` event, so the line would keep showing
+        // the previous target until somebody typed a character.
+        renderRoute();
         status('');
     });
     el('repo-ssh-name')?.addEventListener('input', renderSavedTargets);
+
+    // The route line, and everything that changes it. `repo-export-path` lives on the
+    // generate card and is what Publish actually sends, so it is watched too — otherwise
+    // the line would claim a folder that had been changed since.
+    renderRoute();
+    for (const id of ['repo-ssh-host', 'repo-ssh-user', 'repo-ssh-port', 'repo-ssh-remote', 'repo-export-path']) {
+        document.getElementById(id)?.addEventListener('input', renderRoute);
+    }
 
     void fillKeyRing();
     el<HTMLSelectElement>('repo-ssh-key-ring')?.addEventListener('change', (e) => {

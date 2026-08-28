@@ -1637,34 +1637,28 @@
                                         <div id="repo-ssh-body" class="repo-ssh-body" hidden>
                                         <p class="repo-ssh-desc" data-i18n="repo.ssh.desc">
                                             Envoie le dossier exporté vers le serveur qui l’héberge, par SFTP.
-                                            BMM lit votre clé privée au moment de l’envoi — elle n’est jamais copiée
-                                            ni enregistrée.
-                                        </p>
-                                        <!-- The order, and what else uses this. Neither was written down
-                                             anywhere: somebody arriving at a host/port/user form has no way
-                                             to know it sends a folder that must already exist, and somebody
-                                             whose scheduled publish says "no SSH server saved" has no way to
-                                             know that THIS is the screen that saves one. -->
-                                        <ol class="repo-ssh-steps">
-                                            <li data-i18n="repo.ssh.step1">Générez le dépôt ci-dessus — c’est ce dossier qui part.</li>
-                                            <li data-i18n="repo.ssh.step2">Renseignez le serveur ici, puis testez.</li>
-                                            <li data-i18n="repo.ssh.step3">Publiez. Les envois suivants réutilisent ce qui est enregistré.</li>
-                                        </ol>
-                                        <p class="repo-ssh-note" data-i18n="repo.ssh.reused">
-                                            Ce qui est enregistré ici est ce que réutilisent l’action planifiée
-                                            « Publier le dépôt par SSH » et <code>POST /api/repo/publish-ssh</code> —
-                                            ils ne peuvent pas nommer d’hôte ni de clé eux-mêmes, exprès. Une clé
-                                            protégée par une phrase secrète ne peut donc pas servir sans
-                                            surveillance : rien de cette phrase n’est conservé, il n’y aurait
-                                            personne à qui la demander.
                                         </p>
 
-                                        <!-- Key or password. Two buttons rather than a dropdown: there are
-                                             exactly two answers, and which one is active must be readable
-                                             without opening anything. -->
-                                        <div class="repo-ssh-auth" role="group" aria-label="Authentification">
-                                            <button class="repo-ssh-authbtn" id="repo-ssh-auth-key" type="button" aria-pressed="true" data-i18n="repo.ssh.authKey">Clé privée</button>
-                                            <button class="repo-ssh-authbtn" id="repo-ssh-auth-pass" type="button" aria-pressed="false" data-i18n="repo.ssh.authPassword">Mot de passe</button>
+                                        <!-- WHERE it goes, in one line, kept in step with the fields.
+                                             Everything needed to answer "where does this publish to" was on
+                                             the screen and no two parts of it were next to each other: the
+                                             SOURCE is a folder on a different card, and the DESTINATION is a
+                                             host and a remote directory four rows apart. So the question was
+                                             answerable only by reading the whole form and assembling it in
+                                             your head, which is what "jsp où ça publish" is. -->
+                                        <div class="repo-ssh-route" id="repo-ssh-route">
+                                            <span class="repo-ssh-route-part">
+                                                <span class="repo-ssh-route-lbl" data-i18n="repo.ssh.routeFrom">Ce dossier</span>
+                                                <span class="repo-ssh-route-val" id="repo-ssh-route-from">—</span>
+                                            </span>
+                                            <svg class="repo-ssh-route-arrow" width="16" height="16" viewBox="0 0 24 24"
+                                                fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
+                                                <path d="M5 12h14"/><path d="m13 6 6 6-6 6"/>
+                                            </svg>
+                                            <span class="repo-ssh-route-part">
+                                                <span class="repo-ssh-route-lbl" data-i18n="repo.ssh.routeTo">Vers</span>
+                                                <span class="repo-ssh-route-val" id="repo-ssh-route-to">—</span>
+                                            </span>
                                         </div>
 
                                         <!-- Saved targets. One SSH server was enough until a second repo or a
@@ -1673,85 +1667,82 @@
                                         <div class="repo-ssh-saved" id="repo-ssh-saved" hidden></div>
 
                                         <div class="repo-ssh-grid">
-                                            <label class="repo-ssh-field">
-                                                <span data-i18n="repo.ssh.targetName">Nom</span>
-                                                <input type="text" class="form-input" id="repo-ssh-name" placeholder="default" spellcheck="false">
-                                            </label>
-                                            <label class="repo-ssh-field" style="grid-column:span 2">
+                                            <label class="repo-ssh-field" style="grid-column:span 4">
                                                 <span data-i18n="repo.ssh.host">Hôte</span>
                                                 <input type="text" class="form-input" id="repo-ssh-host" data-i18n-placeholder="repo.ssh.hostPh" placeholder="repo.example.com or 203.0.113.4" spellcheck="false">
                                             </label>
-                                            <label class="repo-ssh-field">
+                                            <label class="repo-ssh-field" style="grid-column:span 2">
                                                 <span data-i18n="repo.ssh.port">Port</span>
                                                 <input type="number" class="form-input" id="repo-ssh-port" placeholder="22" min="1" max="65535">
                                             </label>
-                                            <label class="repo-ssh-field" style="grid-column:span 2">
+                                            <label class="repo-ssh-field" style="grid-column:span 3">
                                                 <span data-i18n="repo.ssh.user">Utilisateur</span>
                                                 <input type="text" class="form-input" id="repo-ssh-user" data-i18n-placeholder="repo.ssh.userPh" placeholder="your login on the server" spellcheck="false">
                                             </label>
-                                            <label class="repo-ssh-field" style="grid-column:span 2">
+                                            <label class="repo-ssh-field" style="grid-column:span 3">
+                                                <span data-i18n="repo.ssh.targetName">Nom</span>
+                                                <input type="text" class="form-input" id="repo-ssh-name" placeholder="default" spellcheck="false">
+                                            </label>
+                                            <label class="repo-ssh-field" style="grid-column:span 6">
                                                 <span data-i18n="repo.ssh.remoteDir">Dossier distant</span>
                                                 <div class="repo-ssh-keyrow">
                                                     <input type="text" class="form-input" id="repo-ssh-remote" data-i18n-placeholder="repo.ssh.remotePh" placeholder="/var/www/repo — an absolute path" spellcheck="false">
                                                     <button class="btn btn-secondary btn-sm" id="repo-ssh-remote-pick" type="button" data-i18n="repo.ssh.browseRemote">Parcourir…</button>
                                                 </div>
                                             </label>
-
-                                            <!-- Key mode -->
-                                            <label class="repo-ssh-field repo-ssh-keyonly" style="grid-column:span 3">
-                                                <span data-i18n="repo.ssh.keyPath">Clé privée</span>
-                                                <div class="repo-ssh-keyrow">
-                                                    <input type="text" class="form-input" id="repo-ssh-key" data-i18n-placeholder="repo.ssh.keyPh" placeholder="id_ed25519, or a PuTTY .ppk" spellcheck="false">
-                                                    <button class="btn btn-secondary btn-sm" id="repo-ssh-key-pick" type="button" data-i18n="repo.ssh.browse">Parcourir…</button>
-                                                </div>
-                                                <!-- The keys already configured under Identity & API.
-                                                     A key is a PATH on this machine, which is exactly what
-                                                     SFTP needs, so the ring that a catalogue knows you by can
-                                                     open a shell too. Typing the same path a second time — and
-                                                     getting it subtly wrong — was the only way to reuse one.
-                                                     Picking one FILLS the field above rather than replacing it:
-                                                     what will be read at send time stays visible and editable. -->
-                                                <div class="repo-ssh-keyrow" style="margin-top:6px">
-                                                    <select class="form-input" id="repo-ssh-key-ring"></select>
-                                                    <button class="btn btn-ghost btn-sm" id="repo-ssh-key-manage" type="button" data-i18n="repo.ssh.manageKeys">Gérer les clés</button>
-                                                </div>
-                                            </label>
-                                            <label class="repo-ssh-field repo-ssh-keyonly">
-                                                <span data-i18n="repo.ssh.passphrase">Phrase secrète</span>
-                                                <input type="password" class="form-input" id="repo-ssh-pass" placeholder="—" autocomplete="off">
-                                            </label>
-
-                                            <!-- Password mode -->
-                                            <label class="repo-ssh-field repo-ssh-passonly" style="grid-column:span 2" hidden>
-                                                <span data-i18n="repo.ssh.password">Mot de passe</span>
-                                                <input type="password" class="form-input" id="repo-ssh-pw" placeholder="—" autocomplete="off">
-                                            </label>
                                         </div>
 
-                                        <p class="repo-ssh-note repo-ssh-keyonly" data-i18n="repo.ssh.keyNote">
-                                            Les clés OpenSSH et PuTTY (.ppk) sont acceptées telles quelles. La phrase
-                                            secrète sert à cet envoi et n’est pas conservée.
-                                        </p>
-                                        <!-- The subscriber side is discoverable from here, because this is where
-                                             the target is configured. Typing ssh:// in the sync URL field means
-                                             "use the target above" — the field never carries a host. -->
-                                        <p class="repo-ssh-note" data-i18n="repo.ssh.syncHint">
-                                            Pour synchroniser DEPUIS ce dépôt, saisissez ssh:// comme URL dans la
-                                            synchronisation : BMM utilisera la cible ci-dessus.
-                                        </p>
-                                        <p class="repo-ssh-note repo-ssh-passonly" data-i18n="repo.ssh.passwordNote" hidden>
-                                            Le mot de passe sert à cette connexion et n’est jamais enregistré : il faut
-                                            le retaper à chaque session. Certains serveurs refusent l’authentification
-                                            par mot de passe — dans ce cas, utilisez une clé.
-                                        </p>
+                                        <!-- How it authenticates, with its fields under it rather than mixed
+                                             into the server grid. Two buttons and not a dropdown: there are
+                                             exactly two answers and which is active must be readable without
+                                             opening anything. -->
+                                        <div class="repo-ssh-authbox">
+                                            <div class="repo-ssh-auth" role="group" aria-label="Authentification">
+                                                <button class="repo-ssh-authbtn" id="repo-ssh-auth-key" type="button" aria-pressed="true" data-i18n="repo.ssh.authKey">Clé privée</button>
+                                                <button class="repo-ssh-authbtn" id="repo-ssh-auth-pass" type="button" aria-pressed="false" data-i18n="repo.ssh.authPassword">Mot de passe</button>
+                                            </div>
+
+                                            <div class="repo-ssh-grid repo-ssh-keyonly">
+                                                <label class="repo-ssh-field" style="grid-column:span 4">
+                                                    <span data-i18n="repo.ssh.keyPath">Clé privée</span>
+                                                    <div class="repo-ssh-keyrow">
+                                                        <input type="text" class="form-input" id="repo-ssh-key" data-i18n-placeholder="repo.ssh.keyPh" placeholder="id_ed25519, or a PuTTY .ppk" spellcheck="false">
+                                                        <button class="btn btn-secondary btn-sm" id="repo-ssh-key-pick" type="button" data-i18n="repo.ssh.browse">Parcourir…</button>
+                                                    </div>
+                                                    <!-- The keys already configured under Identity & API. Picking one
+                                                         FILLS the field above rather than replacing it: what will be
+                                                         read at send time stays visible and editable. -->
+                                                    <div class="repo-ssh-keyrow" style="margin-top:6px">
+                                                        <select class="form-input" id="repo-ssh-key-ring"></select>
+                                                        <button class="btn btn-ghost btn-sm" id="repo-ssh-key-manage" type="button" data-i18n="repo.ssh.manageKeys">Gérer les clés</button>
+                                                    </div>
+                                                </label>
+                                                <label class="repo-ssh-field" style="grid-column:span 2">
+                                                    <span data-i18n="repo.ssh.passphrase">Phrase secrète</span>
+                                                    <input type="password" class="form-input" id="repo-ssh-pass" placeholder="—" autocomplete="off">
+                                                    <span class="repo-ssh-inline" data-i18n="repo.ssh.keyNote">OpenSSH et PuTTY (.ppk) acceptées. La phrase sert à cet envoi et n’est pas conservée.</span>
+                                                </label>
+                                            </div>
+
+                                            <div class="repo-ssh-grid repo-ssh-passonly" hidden>
+                                                <label class="repo-ssh-field" style="grid-column:span 6">
+                                                    <span data-i18n="repo.ssh.password">Mot de passe</span>
+                                                    <input type="password" class="form-input" id="repo-ssh-pw" placeholder="—" autocomplete="off">
+                                                    <span class="repo-ssh-inline" data-i18n="repo.ssh.passwordNote">Sert à cette connexion et n’est jamais enregistré — à retaper à chaque session. Certains serveurs refusent le mot de passe : utilisez alors une clé.</span>
+                                                </label>
+                                            </div>
+                                        </div>
 
                                         <div class="repo-ssh-actions">
-                                            <button class="btn btn-secondary btn-sm" id="repo-ssh-test" type="button">
-                                                <span data-i18n="repo.ssh.test">Tester la connexion</span>
-                                            </button>
                                             <button class="btn btn-primary btn-sm" id="repo-ssh-publish" type="button">
                                                 <span data-i18n="repo.ssh.publish">Publier le dossier exporté</span>
                                             </button>
+                                            <button class="btn btn-secondary btn-sm" id="repo-ssh-test" type="button">
+                                                <span data-i18n="repo.ssh.test">Tester la connexion</span>
+                                            </button>
+                                            <!-- The other direction, pushed to the far end. Publish and pull sat
+                                                 side by side as peers, which is two opposite acts one slip apart. -->
+                                            <span class="repo-ssh-actions-gap"></span>
                                             <button class="btn btn-secondary btn-sm" id="repo-ssh-pull" type="button">
                                                 <span data-i18n="repo.ssh.pull">Récupérer depuis le serveur</span>
                                             </button>
@@ -1759,6 +1750,26 @@
                                                 <span data-i18n="repo.ssh.forget">Oublier l’empreinte</span>
                                             </button>
                                         </div>
+
+                                        <!-- The three things worth knowing and not worth reading every time.
+                                             They used to be three paragraphs ABOVE the fields, so the form began
+                                             with an ordered list, a note about scheduled tasks and a note about
+                                             passphrases — roughly as much text as there are inputs. -->
+                                        <details class="repo-ssh-more">
+                                            <summary data-i18n="repo.ssh.moreTitle">Ce qui réutilise cette cible</summary>
+                                            <p class="repo-ssh-note" data-i18n="repo.ssh.reused">
+                                                Ce qui est enregistré ici est ce que réutilisent l’action planifiée
+                                                « Publier le dépôt par SSH » et <code>POST /api/repo/publish-ssh</code> —
+                                                ils ne peuvent pas nommer d’hôte ni de clé eux-mêmes, exprès. Une clé
+                                                protégée par une phrase secrète ne peut donc pas servir sans
+                                                surveillance : rien de cette phrase n’est conservé, il n’y aurait
+                                                personne à qui la demander.
+                                            </p>
+                                            <p class="repo-ssh-note" data-i18n="repo.ssh.syncHint">
+                                                Pour synchroniser DEPUIS ce dépôt, saisissez ssh:// comme URL dans la
+                                                synchronisation : BMM utilisera la cible ci-dessus.
+                                            </p>
+                                        </details>
 
                                         <!-- The diagnosis, when there is one.
                                              The verdict lives in the pill beside the title, which is 10px and

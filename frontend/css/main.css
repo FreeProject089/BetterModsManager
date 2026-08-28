@@ -20142,6 +20142,77 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
 
 /* What is waiting to go into the next repo. Beside the button that chose it, because a
    selection applied later is one people forget they made. */
+/* ── Publier par SSH: where it goes, said once ──────────────────────────────
+   Everything needed to answer "where does this publish to" was already on screen and no
+   two parts of it were adjacent: the SOURCE is a folder on a different card, the
+   DESTINATION is a host and a remote directory four rows apart. One line, kept in step
+   with the fields, replaces the ordered list that used to explain the order instead. */
+.repo-ssh-route {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin: 0 0 12px;
+    padding: 9px 11px;
+    border: 1px solid var(--bmm-s08);
+    border-radius: 8px;
+    background: var(--bmm-bg-base);
+}
+.repo-ssh-route-part { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 auto; }
+.repo-ssh-route-lbl {
+    font-size: 9.5px;
+    font-weight: 800;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+.repo-ssh-route-val {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--text-primary);
+    overflow-wrap: anywhere;
+}
+/* Nothing chosen yet reads as muted rather than as a value. */
+.repo-ssh-route-val:empty::before,
+.repo-ssh-route-val.is-empty { color: var(--text-muted); }
+.repo-ssh-route-arrow { flex-shrink: 0; color: var(--text-muted); }
+
+/* The auth half, boxed so its fields belong to the choice above them rather than
+   floating into the server grid. */
+.repo-ssh-authbox {
+    margin: 12px 0;
+    padding: 10px 11px;
+    border: 1px solid var(--bmm-s06);
+    border-radius: 8px;
+}
+.repo-ssh-authbox .repo-ssh-auth { margin: 0 0 10px; }
+.repo-ssh-authbox .repo-ssh-grid { margin: 0; }
+/* A caveat under the field it is about, not a paragraph three rows below it. */
+.repo-ssh-inline {
+    display: block;
+    margin-top: 5px;
+    font-size: 10px;
+    line-height: 1.45;
+    color: var(--text-muted);
+}
+
+/* Publish and pull are opposite acts; they sat side by side as peers. */
+.repo-ssh-actions-gap { flex: 1 1 auto; }
+
+/* The three notes that are worth knowing and not worth reading every time. */
+.repo-ssh-more { margin-top: 12px; }
+.repo-ssh-more > summary {
+    cursor: pointer;
+    font-size: 11px;
+    color: var(--text-secondary);
+    list-style: none;
+}
+.repo-ssh-more > summary::-webkit-details-marker { display: none; }
+.repo-ssh-more > summary::before { content: '\25B8'; margin-right: 6px; color: var(--text-muted); }
+.repo-ssh-more[open] > summary::before { content: '\25BE'; }
+.repo-ssh-more > summary:hover { color: var(--text-primary); }
+.repo-ssh-more .repo-ssh-note { margin-top: 8px; }
+
 .repo-extras-pending {
     display: inline-block;
     margin-left: 8px;
