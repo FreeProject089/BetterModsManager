@@ -9557,5 +9557,7 @@
   "plugins.fldCidKind": "Kind",
   "plugins.fldCidId": "Its id in BMM",
   "plugins.fldCidPath": "Or a file to read",
-  "plugins.fldViewId": "Screen"
+  "plugins.fldViewId": "Screen",
+  "repo.extras.anyKind": "Anything a repo can carry",
+  "repo.extras.fromFile": "From a file on this machine"
 }

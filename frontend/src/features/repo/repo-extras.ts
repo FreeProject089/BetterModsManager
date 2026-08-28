@@ -408,12 +408,50 @@ function baseName(p: string): string {
  * the Create screen — neither is in a followed-sources list, and both are exactly what a repo
  * should be able to hand on.
  */
+/**
+ * Which extras kind a file on disk is, by its extension.
+ *
+ * The picker offered `.bmmbundle` and nothing else, so the one door for "something somebody
+ * sent me" only opened for one of the six kinds a repo can carry. A `.bmmpa` in your
+ * downloads could not be published without importing it into BMM first and picking it out of
+ * the list again.
+ *
+ * Extension, not content: `repo_extras_apply` reads the bytes and the receiving side checks
+ * the hash, so a mislabelled file fails there with a reason. Guessing harder here would be a
+ * second opinion about what a file is, and there is already one.
+ */
+const FILE_KIND: Record<string, string> = {
+    bmmbundle: 'bundle', zip: 'bundle',
+    bmmpa: 'task',
+    bmmplug: 'plugin',
+    bmmtheme: 'theme',
+    bmmlaunch: 'launchpack',
+    mm: 'modlist', mmlist: 'modlist',
+    json: 'catalog',
+};
+
 export async function pickBundleCandidate(): Promise<ExtraCandidate | null> {
     const { pickFile } = await import('../../core/api.js');
     const path = (await pickFile({
-        filters: [{ name: t('catpub.bundleKind') || 'Bundle', extensions: ['bmmbundle', 'zip'] }],
+        filters: [{
+            name: t('repo.extras.anyKind') || 'Anything a repo can carry',
+            extensions: Object.keys(FILE_KIND),
+        }],
     }).catch(() => null)) as string;
     if (!path) return null;
+    const ext = baseName(path).split('.').pop()?.toLowerCase() || '';
+    const kind = FILE_KIND[ext] || '';
+    // A `catalog.json` is carried as a FILE, unlike a followed catalogue which travels as an
+    // address — the difference the repo format already makes, and the reason the two are
+    // different kinds rather than one with a flag.
+    if (kind && kind !== 'bundle') {
+        return {
+            kind, id: baseName(path).replace(/\.[^.]+$/, ''),
+            name: baseName(path),
+            file_path: path,
+            description: t('repo.extras.fromFile') || 'From a file on this machine',
+        };
+    }
     // Opened before it is offered: a zip that is not a catalogue must fail here, with a
     // reason, rather than become an entry that fails on somebody else's machine.
     try {
@@ -485,6 +523,15 @@ export async function openExtrasPicker(repoDirHint?: string): Promise<void> {
     let already: RepoExtra[] = [];
 
     const picked = new Set<string>();
+    /**
+     * The ticks the PERSON made, as opposed to the ones a destination brought with it.
+     *
+     * Changing the destination re-reads that repo and re-seeds what is ticked — and the
+     * first version of that wiped everything, including the twelve boxes somebody had just
+     * gone through before choosing where to put them. They pressed Save and were told
+     * "0 added". Kept apart so a re-seed replaces only the seeded half.
+     */
+    const userPicked = new Set<string>();
     // Per-modpack share rule, seeded from what the destination repo already publishes so
     // opening the screen and saving without touching anything leaves it exactly as it was.
     const shareModes: Record<string, string> = {};
@@ -501,11 +548,25 @@ export async function openExtrasPicker(repoDirHint?: string): Promise<void> {
      */
     const seedFrom = async (dir: string): Promise<void> => {
         picked.clear();
+        // Whatever was ticked by hand comes straight back. Only the destination's own
+        // contribution is being replaced here.
+        for (const k of userPicked) picked.add(k);
         for (const k of Object.keys(shareModes)) delete shareModes[k];
         for (const k of Object.keys(whitelists)) delete whitelists[k];
         destError = '';
         already = [];
-        if (!dir) return;
+        if (!dir) {
+            // No destination: what is waiting for the next generated repo IS the answer to
+            // "what is already included", so reopening shows it ticked rather than blank.
+            // Without this a selection made yesterday looked like no selection at all, and
+            // the only way to see it was the badge beside the button.
+            for (const c of pendingExtras().chosen) {
+                const key = `${c.kind}:${c.id}`;
+                picked.add(key);
+                if (!candidates.some((x) => x.kind === c.kind && x.id === c.id)) candidates.push(c);
+            }
+            return;
+        }
         try {
             const manifest = await invoke('read_local_repo', { repoDir: dir }) as any;
             already = (manifest?.extras || []) as RepoExtra[];
@@ -640,7 +701,8 @@ export async function openExtrasPicker(repoDirHint?: string): Promise<void> {
         ov.querySelectorAll<HTMLInputElement>('input[data-key]').forEach((cb) => {
             cb.addEventListener('change', () => {
                 const k = cb.dataset.key as string;
-                if (cb.checked) picked.add(k); else picked.delete(k);
+                if (cb.checked) { picked.add(k); userPicked.add(k); }
+                else { picked.delete(k); userPicked.delete(k); }
             });
         });
         ov.querySelectorAll<HTMLSelectElement>('.rx-share-mode').forEach((sel) => {
@@ -663,6 +725,10 @@ export async function openExtrasPicker(repoDirHint?: string): Promise<void> {
     };
 
     const close = () => { ov.remove(); document.removeEventListener('keydown', onKey, true); };
+    // Clicking the dimmed area closes it, like every other dialog in BMM. `e.target === ov`
+    // and not `contains`: a click that STARTED inside and drifted out while dragging a
+    // whitelist field would otherwise close the screen mid-edit.
+    ov.addEventListener('click', (e) => { if (e.target === ov) close(); });
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
 
     const save = async () => {

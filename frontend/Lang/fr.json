@@ -9555,5 +9555,7 @@
   "plugins.fldCidKind": "Type",
   "plugins.fldCidId": "Son id dans BMM",
   "plugins.fldCidPath": "Ou un fichier à lire",
-  "plugins.fldViewId": "Écran"
+  "plugins.fldViewId": "Écran",
+  "repo.extras.anyKind": "Tout ce qu’un dépôt peut transporter",
+  "repo.extras.fromFile": "Depuis un fichier de cette machine"
 }
