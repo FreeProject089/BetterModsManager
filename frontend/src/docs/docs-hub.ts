@@ -1585,6 +1585,39 @@ It does **not** fall back to another port. If something already holds 51274 — 
 
 The panel is two decisions, not one. **Allow any origin** is the switch at the top; the bordered box under it is the allow-list you build yourself. Turning the switch on does not empty that list — it stops it being consulted, and the box says so rather than merely greying out, because a control that dims without explanation reads as broken rather than as not applicable. Turn the switch off and your list is live again, exactly as you left it.
 
+## Which routes do the work, and which open a screen
+
+Twenty of the eighty answer \`driven_by: bmm-ui\`, and that does **not** mean "opens a screen":
+publishing over SSH, exporting a replay and setting telemetry all do the real work through
+that layer, because that is where the code lives.
+
+Five only navigate. Four of them now have a twin that runs:
+
+| Opens a screen | Does the work |
+|---|---|
+| \`POST /api/repo/sync\` | \`POST /api/repo/sync-now\` |
+| \`POST /api/repo/gen\` | \`POST /api/repo/gen-now\` |
+| \`POST /api/repo/host\` | \`POST /api/repo/host-now\` |
+| \`POST /api/repo/update\` | \`POST /api/repo/update-now\` |
+| \`POST /api/mod/update\` | — |
+
+:::tip[The one with no twin, on purpose]
+\`mod/update\` opens the sync flow and stays that way. The other four each had a command that
+already did exactly what their name promised; this one does not. "Update a mod" with no repo
+named has no definition to implement — from which source, to which version, into which
+profile. An endpoint that claims work it cannot define is worse than one that opens a screen
+and admits it. Name the repo and call \`repo/sync-now\`, which does exactly that.
+:::
+
+The \`-now\` routes carry two things their screen-opening twins could not express: a
+**download password** for a protected repo, and — on \`host-now\` — the **public keys allowed
+to fetch**. Hosting a protected repo was not reachable over the API at all.
+
+Each refuses rather than guesses, and every refusal is a way to write somewhere nobody chose:
+an empty profile list is never read as *all of them*, a repo profile is named and never
+picked from several, a profile deleted since the call was written stops it instead of being
+skipped, and the two destructive sync options default off.
+
 ## Authenticating
 
 \`\`\`bash
@@ -1871,6 +1904,40 @@ Elle ne **bascule pas** sur un autre port. Si quelque chose occupe déjà 51274 
 **CORS.** En build release, les origines sont limitées à \`https://tauri.localhost\`, \`tauri://localhost\`, \`http://tauri.localhost\`, \`https://bettercommunity.ch\`, plus ce que tu ajoutes sous **CORS** sur cette page (une entrée \`*\` seule = tout autoriser). La liste est lue **une seule fois au démarrage de l’API** : un changement demande donc de redémarrer BMM (ou l’API) pour prendre effet — le panneau le rappelle sous la liste. \`curl\` et les deeplinks n’envoient pas d’\`Origin\`, rien de tout ça ne les concerne.
 
 Le panneau porte deux décisions, pas une. **Autoriser toute origine** est l’interrupteur du haut ; le cadre en dessous est la liste que vous constituez vous-même. Activer l’interrupteur ne vide pas cette liste — il cesse de la consulter, et le cadre le dit au lieu de simplement griser, parce qu’un contrôle qui pâlit sans explication se lit comme cassé plutôt que comme sans objet. Désactivez l’interrupteur et votre liste reprend effet, telle que vous l’aviez laissée.
+
+## Quelles routes font le travail, et lesquelles ouvrent un écran
+
+Vingt sur quatre-vingts répondent \`driven_by: bmm-ui\`, et ça ne veut **pas** dire « ouvre un
+écran » : publier par SSH, exporter un rejeu et régler la télémétrie font tous le vrai travail
+à travers cette couche, parce que c’est là que vit le code.
+
+Cinq ne font que naviguer. Quatre ont désormais une jumelle qui s’exécute :
+
+| Ouvre un écran | Fait le travail |
+|---|---|
+| \`POST /api/repo/sync\` | \`POST /api/repo/sync-now\` |
+| \`POST /api/repo/gen\` | \`POST /api/repo/gen-now\` |
+| \`POST /api/repo/host\` | \`POST /api/repo/host-now\` |
+| \`POST /api/repo/update\` | \`POST /api/repo/update-now\` |
+| \`POST /api/mod/update\` | — |
+
+:::tip[Celle sans jumelle, exprès]
+\`mod/update\` ouvre le flux de synchronisation et le restera. Les quatre autres avaient chacune
+une commande qui faisait déjà exactement ce que leur nom promettait ; celle-ci n’en a pas.
+« Mettre à jour un mod » sans dépôt nommé n’a pas de définition — depuis quelle source, vers
+quelle version, dans quel profil. Un endpoint qui prétend un travail qu’il ne sait pas définir
+est pire qu’un qui ouvre un écran et l’admet. Nommez le dépôt et appelez \`repo/sync-now\`,
+qui fait exactement ça.
+:::
+
+Les routes \`-now\` portent deux choses que leurs jumelles ne savaient pas exprimer : un
+**mot de passe de téléchargement** pour un dépôt protégé, et — sur \`host-now\` — les
+**clés publiques autorisées**. Héberger un dépôt protégé n’était pas atteignable par l’API.
+
+Chacune refuse au lieu de deviner, et chaque refus couvre une façon d’écrire quelque part que
+personne n’a choisi : une liste de profils vide n’est jamais lue comme *tous*, un profil de
+dépôt est nommé et jamais pioché parmi plusieurs, un profil supprimé depuis l’écriture de
+l’appel l’arrête au lieu d’être sauté, et les deux options destructrices de synchro sont à off.
 
 ## S’authentifier
 
