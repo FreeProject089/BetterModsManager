@@ -7129,6 +7129,46 @@ function getEndpointDefs() {
             ],
         },
         {
+            method: 'POST', path: '/api/content-id', auth: true,
+            desc: t('plugins.ep.contentId'),
+            about: t('plugins.epAbout.contentId'),
+            fields: [
+                { name: 'kind', type: 'string', required: true, desc: t('plugins.epF.cidKind') },
+                { name: 'id', type: 'string', required: false, desc: t('plugins.epF.cidId') },
+                { name: 'path', type: 'string', required: false, desc: t('plugins.epF.cidPath') },
+                { name: 'doc', type: 'string', required: false, desc: t('plugins.epF.cidDoc') },
+            ],
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "ok": true, "content_id": "plugin-3f221aad\u2026" }' },
+                e401,
+            ],
+        },
+        {
+            method: 'GET', path: '/api/repo/modpacks', auth: true,
+            desc: t('plugins.ep.repoModpacksGet'),
+            about: t('plugins.epAbout.repoModpacks'),
+            fields: [
+                { name: 'dir', type: 'string', required: true, desc: t('plugins.epF.rmDirGet') },
+            ],
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "ok": true, "shares": [ { "modpack": { "id": "\u2026" }, "share_mode": "public" } ] }' },
+                e401,
+            ],
+        },
+        {
+            method: 'POST', path: '/api/repo/modpacks', auth: true,
+            desc: t('plugins.ep.repoModpacksSet'),
+            about: t('plugins.epAbout.repoModpacksSet'),
+            fields: [
+                { name: 'dir', type: 'string', required: true, desc: t('plugins.epF.rmDirSet') },
+                { name: 'shares', type: 'string', required: false, desc: t('plugins.epF.rmShares') },
+            ],
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "ok": true, "written": 2 }' },
+                e401,
+            ],
+        },
+        {
             method: 'GET', path: '/api/plugins/assets', auth: true,
             desc: t('plugins.ep.pluginAssets'),
             about: t('plugins.epAbout.pluginAssets'),

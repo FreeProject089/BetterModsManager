@@ -9253,6 +9253,12 @@
   "plugins.ep.orderSet": "Définir l'ordre de déploiement",
   "plugins.epAbout.orderSet": "Réordonne les mods actifs et recopie les fichiers qui changent de main. La liste doit être une <b>permutation</b> de ce qui est actif — une liste plus courte sortirait un mod de l'ordre pendant que ses fichiers restent dans le jeu.",
   "plugins.ep.pluginAssets": "Lire ce qu'un plugin livre",
+  "plugins.ep.contentId": "Savoir ce qu’une chose EST",
+  "plugins.epAbout.contentId": "L’id qui est le même partout où le contenu est le même. Pas celui que BMM lui a donné sur cette machine — deux personnes ayant installé le même modpack ont deux ids locaux différents et un seul id de contenu, c’est donc avec ça qu’on demande « as-tu la même chose que moi ? ». Donnez-lui quelque chose déjà dans BMM par son id, un fichier par son chemin, ou le document lui-même.",
+  "plugins.ep.repoModpacksGet": "Quels modpacks un dépôt partage",
+  "plugins.epAbout.repoModpacks": "Lit ce qu’un dossier de dépôt de cette machine publie, avec la règle de partage de chacun — public, la liste blanche du dépôt, ou une liste d’ids.",
+  "plugins.ep.repoModpacksSet": "Définir quels modpacks un dépôt partage",
+  "plugins.epAbout.repoModpacksSet": "Remplace TOUTE la liste et resigne le manifeste. Omettre `shares` lit au lieu d’écrire, parce que « dis-moi ce qu’il partage » et « ne partage rien » sont deux demandes différentes et qu’une liste vide doit pouvoir vouloir dire la seconde.",
   "plugins.epAbout.pluginAssets": "Les fichiers sous le <code>assets/</code> d'un plugin, lus depuis le disque et non depuis son manifeste. Avec <code>path</code>, renvoie le texte d'un fichier. Copier un fichier VERS l'extérieur n'est volontairement pas proposé : un appelant qui nommerait à la fois la source et la destination serait une primitive de copie avec les privilèges de BMM.",
   "plugins.ep.publishSsh": "Publier un dépôt en SSH — téléverse immédiatement",
   "plugins.epAbout.publishSsh": "Téléverse un dossier de dépôt exporté vers le serveur SSH déjà enregistré dans Dépôt Serveur → Publier par SSH, et répond quand le transfert est terminé. L’hôte, l’utilisateur et la clé ne sont volontairement PAS des paramètres : un appelant capable de les nommer pourrait faire lire à BMM une clé privée de son choix et expédier un dépôt vers une machine de son choix. Une cible enregistrée qui réclame une phrase secrète tapée est refusée plutôt qu’à moitié tentée — il n’y a personne ici pour la taper.",
@@ -9462,5 +9468,12 @@
   "plugins.tree.chip": "{f} fichier(s) · {b}",
   "plugins.inspectWord": "Analyser",
   "plugins.more": "Tout le reste",
-  "plugins.assets.errNoFolder": "Ce plugin n'a pas de dossier lisible sur cette machine."
+  "plugins.assets.errNoFolder": "Ce plugin n'a pas de dossier lisible sur cette machine.",
+  "plugins.epF.cidKind": "modpack · plugin · task · profile · theme · launchpack · repo · app · modlist · bundle",
+  "plugins.epF.cidId": "Quelque chose déjà dans BMM — son propre id.",
+  "plugins.epF.cidPath": "Ou un fichier sur le disque à lire à la place.",
+  "plugins.epF.cidDoc": "Ou le document lui-même, en JSON.",
+  "plugins.epF.rmDirGet": "Un dossier de dépôt de cette machine. En chaîne de requête.",
+  "plugins.epF.rmDirSet": "Le dossier de dépôt à réécrire.",
+  "plugins.epF.rmShares": "TOUTE la liste, en JSON. L’omettre lit au lieu d’écrire — « dis-moi » et « ne partage rien » sont deux demandes différentes."
 }
