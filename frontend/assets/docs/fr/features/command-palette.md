@@ -69,3 +69,27 @@ d'**effacer**.
     <kbd>Shift</kbd> ne compte pas ici. <kbd>Shift</kbd>+<kbd>S</kbd> est traité comme une lettre
     seule : il ne se déclenchera pas pendant la saisie — pratique si c'est ce que tu voulais, et
     surprenant si tu l'attendais partout.
+
+## Arrêter quelque chose qui tourne déjà
+
+Activer ou désactiver un mod copie des fichiers, et un gros mod prend du temps. Deux commandes
+l'arrêtent :
+
+| Commande | Par défaut | Ce qu'elle arrête |
+|---|---|---|
+| **Annuler l'opération en cours** | <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Z</kbd> | Celle qui copie en ce moment. Ce qui attend derrière continue. |
+| **Annuler toutes les opérations** | <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Maj</kbd>+<kbd>Z</kbd> | Tout, y compris ce qui n'a pas commencé. |
+
+Les deux défont ce qu'elles arrêtent — une activation à moitié faite est remise comme avant,
+pas laissée à moitié appliquée — et ce sont les mêmes actions que le clic et le clic droit du
+bouton Annuler.
+
+!!! note "Pourquoi pas Ctrl+Z"
+
+    Les raccourcis sont distribués à la capture, et un accord avec modificateur part même
+    pendant que tu tapes dans un champ. <kbd>Ctrl</kbd>+<kbd>Z</kbd> lié globalement irait donc
+    dans l'éditeur de tâches du planificateur annuler une étape de ton automatisation au lieu
+    d'arrêter une copie. Relié-le si tu veux — c'est ton clavier — mais c'est pour ça que ce
+    n'est pas le défaut.
+
+    Appuyer dessus sans rien en cours te le dit, plutôt que de ne rien faire en silence.

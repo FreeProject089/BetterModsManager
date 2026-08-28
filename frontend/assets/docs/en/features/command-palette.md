@@ -63,3 +63,25 @@ want, and it's bound; the row's buttons also **reset to default** or **clear** i
     <kbd>Shift</kbd> does not count here. <kbd>Shift</kbd>+<kbd>S</kbd> is treated like a bare
     letter, so it will not fire while you are typing — useful if that is what you wanted, and a
     surprise if you expected it to work everywhere.
+
+## Stopping something that is already running
+
+Enabling or disabling a mod copies files, and a big one takes a while. Two commands stop it:
+
+| Command | Default | What it stops |
+|---|---|---|
+| **Cancel the running mod operation** | <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Z</kbd> | The one currently copying. Anything queued behind it carries on. |
+| **Cancel every queued mod operation** | <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> | All of it, including what has not started. |
+
+Both undo what they stop — a half-finished enable is put back the way it was, not left
+half-applied — and both are the same actions as the cancel button's click and right-click.
+
+!!! note "Why not Ctrl+Z"
+
+    Shortcuts are dispatched on capture and modified chords fire even while you are typing in a
+    field. <kbd>Ctrl</kbd>+<kbd>Z</kbd> bound globally would therefore reach into the
+    scheduler's task editor and undo a step of your automation instead of cancelling a copy.
+    Rebind it there if you want it — it is your keyboard — but that is why it is not the
+    default.
+
+    Pressing either with nothing running says so rather than doing nothing quietly.
