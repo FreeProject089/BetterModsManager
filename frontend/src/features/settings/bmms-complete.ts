@@ -40,7 +40,17 @@ export interface Vocabulary {
 /** The declared types, mirroring `canonical_type` in bmms.rs. */
 export const TYPES = ['text', 'number', 'whole', 'decimal', 'yesno'];
 
-/** Statement keywords. Fixed, because the grammar is fixed — unlike the action list. */
+/**
+ * The words offered at the start of a statement.
+ *
+ * A deliberate SUBSET of `BMMS_KEYWORDS`, not a copy of it: that list is every word the
+ * parser treats as grammar, `at` and `times` and `in` included, and offering those where a
+ * statement begins would bury the twelve that belong there under thirty that do not.
+ *
+ * The cost is that it has to be edited when the grammar grows, and it once said it never
+ * would — "fixed, because the grammar is fixed" — right up until the day three triggers
+ * were added and it silently stopped offering them.
+ */
 export const KEYWORDS = [
     'do', 'if', 'else', 'for', 'in', 'repeat', 'times', 'while', 'until',
     'wait', 'waitfor', 'timeout', 'poll', 'orcontinue',
@@ -48,6 +58,9 @@ export const KEYWORDS = [
     'break', 'continue', 'stop', 'set', 'shared', 'clear',
     'parallel', 'branch', 'settle', 'run', 'spawn', 'script',
     'and', 'or', 'not',
+    // The trigger words. They sit at the same position as a statement — the first thing
+    // inside `task "…" { … }` — which is where this list is offered.
+    'after', 'when', 'probe',
 ];
 
 /** Engines the `script` block accepts. */

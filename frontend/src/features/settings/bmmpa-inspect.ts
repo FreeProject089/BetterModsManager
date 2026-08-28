@@ -19,7 +19,7 @@
  *  hands out English prose forces every view to print English, which is what the BCWEB
  *  copy of this actually did until its French moderation screen showed it. One client
  *  today is not a reason to build the shape that breaks with two. */
-export const RISK_KEYS = ['command', 'script', 'deeplink', 'stopProcess'] as const;
+export const RISK_KEYS = ['command', 'script', 'deeplink', 'stopProcess', 'delete'] as const;
 
 /** Action types that reach outside BMM whatever the permissions say.
  *

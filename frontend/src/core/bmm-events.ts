@@ -31,6 +31,10 @@ export const BMM_EVENTS = [
     'bmm.repo.synced',
     'bmm.profile.activated',
     'bmm.error',
+    // Rung by the scheduler itself at the end of every run, carrying which task, whether
+    // it worked, how long it took and how many chained runs led to it. The "after another
+    // task" trigger is a reader of this and nothing more.
+    'bmm.task.done',
 ];
 
 /**

@@ -9,6 +9,49 @@
       ]
     },
     {
+      "type": "profile.create",
+      "group": "mods",
+      "params": [
+        "name",
+        "into",
+        "gameDir",
+        "modsDir",
+        "backupDir"
+      ]
+    },
+    {
+      "type": "profile.rename",
+      "group": "mods",
+      "params": [
+        "id",
+        "name"
+      ]
+    },
+    {
+      "type": "profile.delete",
+      "group": "mods",
+      "params": [
+        "id",
+        "evenIfActive"
+      ]
+    },
+    {
+      "type": "mod.remove",
+      "group": "mods",
+      "params": [
+        "id",
+        "disableFirst",
+        "deleteFiles"
+      ]
+    },
+    {
+      "type": "modpack.delete",
+      "group": "mods",
+      "params": [
+        "id"
+      ]
+    },
+    {
       "type": "mod.enable",
       "group": "mods",
       "params": [
@@ -872,6 +915,7 @@
     "mapKeys"
   ],
   "keywords": [
+    "after",
     "allow",
     "and",
     "app",
@@ -892,6 +936,7 @@
     "ensure",
     "event",
     "every",
+    "failed",
     "file",
     "for",
     "if",
@@ -899,6 +944,7 @@
     "manual",
     "month",
     "not",
+    "ok",
     "on",
     "once",
     "or",
@@ -906,6 +952,7 @@
     "parallel",
     "poll",
     "print",
+    "probe",
     "repeat",
     "retry",
     "run",
@@ -925,13 +972,15 @@
     "wait",
     "waitfor",
     "week",
+    "when",
     "while"
   ],
   "permissions": [
     "command",
     "script",
     "deeplink",
-    "stopProcess"
+    "stopProcess",
+    "delete"
   ],
   "scriptEngines": [
     "powershell",

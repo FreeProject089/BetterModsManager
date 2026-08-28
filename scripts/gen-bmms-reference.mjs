@@ -480,9 +480,9 @@ const vocabulary = JSON.stringify({
   values: sources,
   loopSources: loops,
   keywords,
-  // The four capabilities a task can grant itself. Hard-coded because they are the runner's
-  // permission model rather than a registry — the same four the review screen names.
-  permissions: ['command', 'script', 'deeplink', 'stopProcess'],
+  // The capabilities a task can grant itself. Hard-coded because they are the runner's
+  // permission model rather than a registry — the same set the review screen names.
+  permissions: ['command', 'script', 'deeplink', 'stopProcess', 'delete'],
   scriptEngines: ['powershell', 'cmd', 'bash', 'python', 'node', 'rust'],
 }, null, 2) + '\n';
 

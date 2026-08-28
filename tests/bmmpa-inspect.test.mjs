@@ -119,5 +119,5 @@ test('counts every step, including nested ones', () => {
 test("RISK_KEYS is the permission vocabulary", () => {
   // Pins the contract a view relies on to translate them. A key added to TaskPerms without
   // one here would be silently unreportable.
-  assert.deepEqual([...RISK_KEYS], ["command", "script", "deeplink", "stopProcess"]);
+  assert.deepEqual([...RISK_KEYS], ["command", "script", "deeplink", "stopProcess", "delete"]);
 });

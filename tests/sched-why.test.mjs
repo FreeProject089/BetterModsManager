@@ -25,7 +25,8 @@ const task = (over = {}) => ({
 
 /** Nothing has fired yet, unless a test says otherwise. */
 const fired = (over = {}) => ({
-    watch: new Set(), event: new Set(), appStart: new Set(), once: new Set(), ...over,
+    watch: new Set(), event: new Set(), appStart: new Set(), once: new Set(),
+    after: new Set(), cond: new Set(), probe: new Set(), ...over,
 });
 
 describe('reasonNotRunning', () => {
@@ -109,5 +110,87 @@ describe('reasonNotRunning', () => {
         // is replacing.
         const r = reasonNotRunning(task({ trigger: { type: 'weeklyAt', time: '08:00', days: [] } }), fired(), null);
         assert.equal(r.key, 'sched.why.noNext');
+    });
+});
+
+describe('the triggers that wait on something other than a clock', () => {
+    test('after another task: no task picked, and a task that has been deleted', () => {
+        assert.equal(
+            reasonNotRunning(task({ trigger: { type: 'afterTask', taskId: '' } }), fired(), null).key,
+            'sched.why.afterNone',
+        );
+        // The one that matters: a chain whose first half was deleted looks exactly like a
+        // working chain from the outside, and says nothing at all without this.
+        assert.equal(
+            reasonNotRunning(
+                task({ trigger: { type: 'afterTask', taskId: 'gone' } }), fired(), null,
+                { nameOf: () => null },
+            ).key,
+            'sched.why.afterGone',
+        );
+    });
+
+    test('after another task: the NAME is reported, never the id', () => {
+        const r = reasonNotRunning(
+            task({ trigger: { type: 'afterTask', taskId: 't2' } }),
+            fired({ after: new Set(['t1']) }),
+            null,
+            { nameOf: (id) => (id === 't2' ? 'Nightly sync' : null) },
+        );
+        assert.equal(r.key, 'sched.why.afterIdle');
+        assert.equal(r.v, 'Nightly sync');
+    });
+
+    test('a script probe with no permission says so instead of quoting an interval', () => {
+        // The failure this exists for: "next check in 5 min" about a probe that will never
+        // run once, because the grant it needs was never given.
+        const r = reasonNotRunning(
+            task({ trigger: { type: 'script', code: 'exit 0', everyMinutes: 5 } }),
+            fired({ probe: new Set(['t1']) }),
+            null,
+            { mayRunScripts: false },
+        );
+        assert.equal(r.key, 'sched.why.probeNoPerm');
+
+        const ok = reasonNotRunning(
+            task({ trigger: { type: 'script', code: 'exit 0', everyMinutes: 5 } }),
+            fired({ probe: new Set(['t1']) }),
+            null,
+            { mayRunScripts: true },
+        );
+        assert.equal(ok.key, 'sched.why.probeIdle');
+        assert.equal(ok.v, '5');
+    });
+
+    test('an empty script is reported as empty, permission or not', () => {
+        assert.equal(
+            reasonNotRunning(
+                task({ trigger: { type: 'script', code: '   ' } }), fired(), null,
+                { mayRunScripts: true },
+            ).key,
+            'sched.why.probeNone',
+        );
+    });
+
+    test('a condition trigger distinguishes "never read" from "read and false"', () => {
+        const arming = reasonNotRunning(
+            task({ trigger: { type: 'condition', condition: { type: 'fileExists', params: {} } } }),
+            fired(), null,
+        );
+        assert.equal(arming.key, 'sched.why.condArming');
+        const idle = reasonNotRunning(
+            task({ trigger: { type: 'condition', condition: { type: 'fileExists', params: {} } } }),
+            fired({ cond: new Set(['t1']) }), null,
+        );
+        assert.equal(idle.key, 'sched.why.condIdle');
+    });
+
+    test('disabled still beats every one of them', () => {
+        assert.equal(
+            reasonNotRunning(
+                task({ enabled: false, trigger: { type: 'afterTask', taskId: '' } }), fired(), null,
+            ).key,
+            'sched.why.off',
+        );
     });
 });

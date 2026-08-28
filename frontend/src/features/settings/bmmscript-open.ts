@@ -26,14 +26,19 @@ import { toast } from '../../ui/app.js';
 import { raiseAboveAll } from '../../ui/layer.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 
-/** The four capabilities that reach outside BMM. Mirrors TaskPerms / RISK_KEYS. */
-const RISKY = ['command', 'script', 'deeplink', 'stopProcess'] as const;
+/** The capabilities a task must be granted. Mirrors TaskPerms / RISK_KEYS.
+ *
+ *  Four of them are about reaching OUTSIDE BMM; `delete` is the odd one, and the reason
+ *  this comment no longer says "the four that reach outside" — it destroys the user's own
+ *  data from the inside, which no external gate would ever see. */
+const RISKY = ['command', 'script', 'deeplink', 'stopProcess', 'delete'] as const;
 
 const PERM_LABEL: Record<string, () => string> = {
     command: () => t('bms.perm.command') || 'run external programs',
     script: () => t('bms.perm.script') || 'run scripts (PowerShell, Python, Bash…)',
     deeplink: () => t('bms.perm.deeplink') || 'fire bmm:// links, which reach anything the app exposes',
     stopProcess: () => t('bms.perm.stopProcess') || 'stop running programs',
+    delete: () => t('bms.perm.delete') || 'delete profiles, modpacks and mod folders',
 };
 
 interface Compiled { ok: boolean; task?: any; errors?: { line: number; col: number; message: string }[] }

@@ -7,6 +7,36 @@
       "group": "mods"
     },
     {
+      "type": "profile.create",
+      "label": "Create a profile",
+      "needs": "profileNew",
+      "group": "mods"
+    },
+    {
+      "type": "profile.rename",
+      "label": "Rename a profile",
+      "needs": "profileRename",
+      "group": "mods"
+    },
+    {
+      "type": "profile.delete",
+      "label": "Delete a profile",
+      "needs": "profileDel",
+      "group": "mods"
+    },
+    {
+      "type": "mod.remove",
+      "label": "Remove a mod",
+      "needs": "modRemove",
+      "group": "mods"
+    },
+    {
+      "type": "modpack.delete",
+      "label": "Delete a modpack",
+      "needs": "modpackDel",
+      "group": "mods"
+    },
+    {
       "type": "mod.enable",
       "label": "Enable mod",
       "needs": "mod",

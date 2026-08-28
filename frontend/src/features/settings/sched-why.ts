@@ -33,6 +33,26 @@ export interface FiredState {
     appStart: Set<string>;
     /** `once` tasks that have fired. */
     once: Set<string>;
+    /** Tasks whose after-a-task ring has been read at least once. */
+    after?: Set<string>;
+    /** Condition triggers that have been evaluated at least once. */
+    cond?: Set<string>;
+    /** Script probes whose clock has been armed. */
+    probe?: Set<string>;
+}
+
+/**
+ * The two things an answer needs that a task does not carry.
+ *
+ * Both belong to the caller: which task an id refers to, and whether this one is allowed to
+ * run a script. Passed in rather than looked up, so this file stays a pure function of its
+ * arguments — the property that makes it testable at all.
+ */
+export interface Env {
+    /** The name behind a task id, or null if there is no such task any more. */
+    nameOf?: (id: string) => string | null;
+    /** Whether this task holds the `script` grant its probe needs. */
+    mayRunScripts?: boolean;
 }
 
 /** A reason, as a key and something to put in it. Never a finished sentence. */
@@ -55,6 +75,7 @@ export function reasonNotRunning(
     task: TaskLike,
     fired: FiredState,
     next: number | null,
+    env: Env = {},
 ): Reason {
     if (!task.enabled) return { key: 'sched.why.off' };
 
@@ -79,6 +100,36 @@ export function reasonNotRunning(
         return fired.event.has(task.id)
             ? { key: 'sched.why.eventIdle', v: ev }
             : { key: 'sched.why.eventArming', v: ev };
+    }
+
+    if (tr.type === 'afterTask') {
+        if (!String(tr.taskId || '').trim()) return { key: 'sched.why.afterNone' };
+        // The NAME of the task it waits for, never the id. An id in this line is a line
+        // nobody can act on, and the whole point of the panel is to say what to go and fix.
+        const other = env.nameOf?.(String(tr.taskId)) || null;
+        if (!other) return { key: 'sched.why.afterGone' };
+        return fired.after?.has(task.id)
+            ? { key: 'sched.why.afterIdle', v: other }
+            : { key: 'sched.why.afterArming', v: other };
+    }
+
+    if (tr.type === 'condition') {
+        const c = tr.condition as { type?: string } | undefined;
+        if (!c?.type) return { key: 'sched.why.condNone' };
+        return fired.cond?.has(task.id)
+            ? { key: 'sched.why.condIdle' }
+            : { key: 'sched.why.condArming' };
+    }
+
+    if (tr.type === 'script') {
+        if (!String(tr.code || '').trim()) return { key: 'sched.why.probeNone' };
+        // The grant, before the schedule. A probe without permission never runs at all, and
+        // "next check in 4 min" about something that will not happen is the kind of
+        // true-looking line that costs somebody an evening.
+        if (!env.mayRunScripts) return { key: 'sched.why.probeNoPerm' };
+        return fired.probe?.has(task.id)
+            ? { key: 'sched.why.probeIdle', v: String(Math.max(1, Number(tr.everyMinutes) || 5)) }
+            : { key: 'sched.why.probeArming' };
     }
 
     if (tr.type === 'appStart') {

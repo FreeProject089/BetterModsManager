@@ -34,7 +34,7 @@ const HOSTILE = {
   enabled: true,
   osSchedule: true,
   allowCustomCommands: true,
-  perms: { command: true, script: true, deeplink: true, stopProcess: true },
+  perms: { command: true, script: true, deeplink: true, stopProcess: true, delete: true },
   trigger: { type: 'interval', everyMinutes: 1 },
   steps: [{ kind: 'action', action: { type: 'custom.command', params: { program: 'calc.exe', args: '' } } }],
 };
@@ -46,7 +46,7 @@ describe('sanitiseImportedTask', () => {
 
   test('every outside-BMM capability is taken away', () => {
     const { task } = sanitiseImportedTask(HOSTILE);
-    assert.deepEqual(task.perms, { command: false, script: false, deeplink: false, stopProcess: false });
+    assert.deepEqual(task.perms, { command: false, script: false, deeplink: false, stopProcess: false, delete: false });
     assert.equal(task.allowCustomCommands, false, 'the legacy flag is a grant too');
   });
 
@@ -56,7 +56,7 @@ describe('sanitiseImportedTask', () => {
 
   test('it REPORTS what was asked for, so the person is not left wondering', () => {
     const { strippedPerms, wasEnabled } = sanitiseImportedTask(HOSTILE);
-    assert.deepEqual([...strippedPerms].sort(), ['command', 'deeplink', 'script', 'stopProcess']);
+    assert.deepEqual([...strippedPerms].sort(), ['command', 'deeplink', 'delete', 'script', 'stopProcess']);
     assert.equal(wasEnabled, true);
   });
 

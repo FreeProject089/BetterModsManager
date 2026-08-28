@@ -1230,6 +1230,9 @@ impl P {
                 || self.at_word("once")
                 || self.at_word("manual")
                 || self.at_word("on")
+                || self.at_word("after")
+                || self.at_word("when")
+                || self.at_word("probe")
             {
                 trigger = self.trigger()?;
                 continue;
@@ -1247,11 +1250,11 @@ impl P {
                     let tok = self.peek().clone();
                     let p = self.word("a permission")?;
                     match p.as_str() {
-                        "command" | "script" | "deeplink" | "stopProcess" => { perms.insert(p, Value::Bool(true)); }
+                        "command" | "script" | "deeplink" | "stopProcess" | "delete" => { perms.insert(p, Value::Bool(true)); }
                         other => {
                             return Err(Diagnostic::at(
                                 &tok,
-                                format!("`{}` is not a permission. They are: command, script, deeplink, stopProcess.", other),
+                                format!("`{}` is not a permission. They are: command, script, deeplink, stopProcess, delete.", other),
                             ))
                         }
                     }
@@ -1318,6 +1321,72 @@ impl P {
                 &got,
                 "After `on`, expected `app start`, `file \"…\"` or `event \"…\"`.",
             ));
+        }
+        // `after task "…"`, and optionally only when it worked or only when it did not
+        if self.eat_word("after") {
+            if !self.eat_word("task") {
+                let got = self.peek().clone();
+                return Err(Diagnostic::at(
+                    &got,
+                    "After `after`, expected `task \"…\"`.",
+                ));
+            }
+            let id = self.string("the id of the task to wait for")?;
+            // No word means "however it ended". Written rather than assumed, because "after
+            // the nightly sync" and "after the nightly sync FAILED" are two automations and
+            // the second one is the one nobody remembers to build.
+            let outcome = if self.eat_word("ok") {
+                "ok"
+            } else if self.eat_word("failed") {
+                "fail"
+            } else {
+                "any"
+            };
+            return Ok(json!({ "type": "afterTask", "taskId": id, "outcome": outcome }));
+        }
+        // `when <condition>` — the same condition grammar `if` uses, so every condition in
+        // the language is a trigger without one line of new syntax.
+        if self.eat_word("when") {
+            let c = self.cond()?;
+            return Ok(json!({ "type": "condition", "condition": c }));
+        }
+        // `probe <language> every <interval> { … }`
+        if self.eat_word("probe") {
+            let engtok = self.peek().clone();
+            let engine = self.word("a language")?;
+            const ENGINES: [&str; 6] = ["powershell", "cmd", "bash", "python", "node", "rust"];
+            if !ENGINES.contains(&engine.as_str()) {
+                return Err(Diagnostic::at(
+                    &engtok,
+                    format!(
+                        "`{}` is not a script language. They are: {}.",
+                        engine,
+                        ENGINES.join(", ")
+                    ),
+                ));
+            }
+            if !self.eat_word("every") {
+                let got = self.peek().clone();
+                return Err(Diagnostic::at(
+                    &got,
+                    "A probe needs how often to run it, like `probe python every 5m { … }`.",
+                ));
+            }
+            let dtok = self.peek().clone();
+            let secs = self.duration("how often to probe")?;
+            if secs <= 0.0 {
+                return Err(Diagnostic::at(&dtok, "An interval has to be more than zero."));
+            }
+            let code = self.raw_block()?;
+            if code.trim().is_empty() {
+                return Err(Diagnostic::at(&engtok, "This probe block is empty."));
+            }
+            return Ok(json!({
+                "type": "script",
+                "engine": engine,
+                "everyMinutes": num((secs / 60.0).max(1.0)),
+                "code": code,
+            }));
         }
         // every …
         self.next(); // 'every'
@@ -2072,6 +2141,35 @@ fn trigger_str(tr: &Value) -> String {
         // trigger, so nothing errored and nothing looked wrong.
         "watchFile" => format!("on file {}", quote(&s("path"))),
         "onEvent" => format!("on event {}", quote(&s("event"))),
+        "afterTask" => {
+            let suffix = match tr.get("outcome").and_then(|x| x.as_str()).unwrap_or("any") {
+                "ok" => " ok",
+                "fail" => " failed",
+                _ => "",
+            };
+            format!("after task {}{}", quote(&s("taskId")), suffix)
+        }
+        "condition" => format!(
+            "when {}",
+            cond_str(tr.get("condition").unwrap_or(&Value::Null))
+        ),
+        // The only trigger that prints as more than one line. The caller writes ind(1) before
+        // the first, so every line after it carries its own — and the closing brace lines up
+        // with the word `probe` rather than with the body.
+        "script" => {
+            let eng = if s("engine").is_empty() {
+                "powershell".to_string()
+            } else {
+                s("engine")
+            };
+            let mins = (n("everyMinutes") as i64).max(1);
+            let mut out = format!("probe {} every {}m {{\n", eng, mins);
+            for line in tr.get("code").and_then(|x| x.as_str()).unwrap_or("").lines() {
+                out.push_str(&format!("{}{}\n", ind(2), line));
+            }
+            out.push_str(&format!("{}}}", ind(1)));
+            out
+        }
         _ => "manual".to_string(),
     }
 }
@@ -2105,7 +2203,7 @@ pub fn bmms_decompile(task: Value) -> String {
     // `perms` would silently drop permissions it really has.
     let mut granted: Vec<&str> = Vec::new();
     if let Some(p) = task.get("perms").and_then(|x| x.as_object()) {
-        for k in ["command", "script", "deeplink", "stopProcess"] {
+        for k in ["command", "script", "deeplink", "stopProcess", "delete"] {
             if p.get(k) == Some(&Value::Bool(true)) {
                 granted.push(k);
             }
@@ -2353,6 +2451,15 @@ mod tests {
             ("once", json!({ "type": "once", "at": "2026-01-01T09:00" })),
             ("watchFile", json!({ "type": "watchFile", "path": "C:/games/dcs.log" })),
             ("onEvent", json!({ "type": "onEvent", "event": "bmm.mod.missing" })),
+            ("afterTask", json!({ "type": "afterTask", "taskId": "t-42", "outcome": "fail" })),
+            (
+                "condition",
+                json!({ "type": "condition", "condition": { "type": "fileExists", "params": { "path": "C:/x.txt" } } }),
+            ),
+            (
+                "script",
+                json!({ "type": "script", "engine": "python", "everyMinutes": 5, "code": "import sys\nsys.exit(0)" }),
+            ),
         ];
         for (name, trigger) in cases {
             let task = json!({ "name": "T", "trigger": trigger, "steps": [] });
@@ -2365,7 +2472,10 @@ mod tests {
             );
             // The type alone is not enough: `on file` with no path is still a watchFile, and
             // still a task that watches nothing.
-            for key in ["path", "event", "time", "at", "everyMinutes", "everyHours", "day"] {
+            for key in [
+                "path", "event", "time", "at", "everyMinutes", "everyHours", "day", "taskId",
+                "outcome", "engine", "code",
+            ] {
                 if let Some(want) = trigger.get(key) {
                     assert_eq!(&back["trigger"][key], want, "{} lost its {}", name, key);
                 }

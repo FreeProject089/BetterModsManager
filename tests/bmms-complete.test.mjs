@@ -165,7 +165,13 @@ describe('the vocabulary itself', () => {
   test('the grammar keywords are all there', () => {
     // Not an exhaustive list — a spot check that the constant was not emptied by an edit,
     // which would leave every statement-start case silently offering nothing.
-    for (const k of ['do', 'if', 'for', 'repeat', 'parallel', 'try', 'switch', 'call', 'set']) {
+    // The trigger words are in here on purpose: they are the ones a hand-maintained list
+    // forgets, because nothing breaks when it does — the language accepts them, the editor
+    // just never suggests them.
+    for (const k of [
+      'do', 'if', 'for', 'repeat', 'parallel', 'try', 'switch', 'call', 'set',
+      'after', 'when', 'probe',
+    ]) {
       assert.ok(KEYWORDS.includes(k), `missing keyword: ${k}`);
     }
   });

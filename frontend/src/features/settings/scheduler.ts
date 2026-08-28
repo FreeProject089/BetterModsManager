@@ -83,15 +83,58 @@ type Trigger =
      * same kind of thing and everything that works for one works for the other.
      */
     | { type: 'onEvent'; event: string }
+    /**
+     * Fires when ANOTHER task finishes.
+     *
+     * Built on the same ring as everything else: a finished run brings up `bmm.task.done`
+     * carrying which task, whether it worked and how long it took, and this reads that. So a
+     * chain is not a new mechanism — it is one automation listening to another the way it
+     * already listens to a webhook.
+     *
+     * `outcome` is the half that makes it useful. "After the nightly sync" and "after the
+     * nightly sync FAILED" are different automations, and without the filter the second one
+     * has to start by re-deriving what the first already knew.
+     *
+     * A chain has a depth limit, because two tasks each waiting for the other is a loop that
+     * nothing else here would stop. See CHAIN_MAX.
+     */
+    | { type: 'afterTask'; taskId: string; outcome?: 'any' | 'ok' | 'fail' }
+    /**
+     * Fires when a script you wrote says so — exit 0 means run.
+     *
+     * The free trigger. Every other one answers a question BMM already knows the answer to;
+     * this one asks a question BMM has never heard of. "When the server I play on has more
+     * than twenty people", "when my NAS finished its backup", "when the mod author pushed a
+     * tag" — all of them are three lines of Python and none of them could be a trigger.
+     *
+     * It runs code on a timer, so it needs the `script` grant, checked before it runs and not
+     * only when the task does. Without that check a task whose STEPS ask for nothing would
+     * still execute its author's code every few minutes.
+     */
+    | { type: 'script'; engine: string; code: string; everyMinutes: number }
+    /**
+     * Fires when one of the scheduler's own CONDITIONS becomes true.
+     *
+     * The other free trigger, in BMM's vocabulary instead of a shell's: all thirty-four
+     * conditions, the same ones an `if` step uses, now usable as a "when". "When free space
+     * drops below 10 GB", "when this app is not running", "when that file changed hash".
+     *
+     * Edge-triggered, and that is the whole design. A level-triggered version fires on every
+     * poll for as long as the condition holds — low disk space would start a hundred cleanups
+     * before the first one had finished making room.
+     */
+    | { type: 'condition'; condition: Condition }
     | { type: 'manual' };                                           // only via Run button / deeplink
 
 interface Action { type: string; params: Record<string, any>; }
 
 
-/** The three things a task can do that reach OUTSIDE its own automation.
- *  Everything else a step can do is a BMM action the user could perform by hand;
- *  these three are not, so each is granted on its own rather than bundled behind
- *  one "allow unsafe" box that says nothing about what it unlocks. */
+/** The things a task must be granted one at a time.
+ *  Four of them reach OUTSIDE the automation — everything else a step can do is a BMM
+ *  action the user could perform by hand. The fifth, `delete`, is the opposite: it is
+ *  something the buttons do too, but they do it with somebody watching. Each is granted
+ *  on its own rather than bundled behind one "allow unsafe" box that says nothing about
+ *  what it unlocks. */
 interface TaskPerms {
     /** Spawn an external program with arguments. */
     command?: boolean;
@@ -107,6 +150,14 @@ interface TaskPerms {
      *  every existing task — the capability did not exist when their consent was
      *  given, which is the same reason `script` is not inherited either. */
     stopProcess?: boolean;
+    /** Delete a profile, a modpack, or a mod's files.
+     *
+     *  Not covered by any of the four above: every one of those is about reaching OUTSIDE
+     *  BMM, and this is the opposite — it destroys the user's own data from the inside,
+     *  where no external gate ever sees it. Off for every existing task, because a task
+     *  written before these actions existed was consented to on the understanding that
+     *  nothing it did could lose a mod folder. */
+    delete?: boolean;
 }
 
 /** A task's effective permissions. An old task has no `perms`, only the single
@@ -570,14 +621,22 @@ function isDue(task: Task, now: Date): boolean {
  * Why this task has not run, in a sentence.
  *
  * The deciding is in sched-why.ts, which knows nothing about the app and can therefore be
- * tested. This half supplies the four sets the running scheduler keeps and the next due time,
- * because those are the parts that only exist here.
+ * tested. This half supplies the sets the running scheduler keeps, the next due time, and the
+ * two lookups only this side can do — because those are the parts that only exist here.
  */
 export function whyNotRunning(task: Task, now: Date = new Date()): { key: string; v?: string } {
     return reasonNotRunning(
         task as any,
-        { watch: _watchSeen as any, event: _eventSeen as any, appStart: _appStartFired, once: _onceFired },
+        {
+            watch: _watchSeen as any, event: _eventSeen as any,
+            appStart: _appStartFired, once: _onceFired,
+            after: _afterSeen as any, cond: _condWas as any, probe: _probeNext as any,
+        },
         task.enabled && task.trigger.type !== 'manual' ? nextDue(task, now) : null,
+        {
+            nameOf: (id) => _tasks.find((x) => x.id === id)?.name || null,
+            mayRunScripts: !!taskPerms(task).script,
+        },
     );
 }
 
@@ -636,6 +695,118 @@ async function eventFired(task: Task): Promise<boolean> {
     return true;
 }
 
+/**
+ * How many after-a-task hops led to this run, and the point past which it stops.
+ *
+ * Two tasks each waiting for the other is a loop, and nothing else here would end it: every
+ * individual step behaves correctly, the ring is doing its job, and the app runs the pair
+ * forever. A depth carried on the event and refused past eight lets a real chain of four
+ * work while a cycle dies with a message that names it.
+ */
+const _chain = new Map<string, number>();
+const CHAIN_MAX = 8;
+
+/** The last `bmm.task.done` ring each after-a-task trigger has already considered. */
+const _afterSeen = new Map<string, number>();
+
+async function afterTaskFired(task: Task): Promise<boolean> {
+    const tr = task.trigger as { type: 'afterTask'; taskId: string; outcome?: string };
+    const watched = String(tr.taskId || '').trim();
+    if (!watched) return false;
+    // A task waiting for ITSELF re-arms the instant it finishes, at whatever speed the loop
+    // runs. Refused here and not only in the editor, because a .bmmpa arrives with whatever
+    // trigger its author saved.
+    if (watched === task.id) return false;
+    const since = _afterSeen.get(task.id);
+    const now = Date.now();
+    if (since === undefined) { _afterSeen.set(task.id, now); return false; }
+    const hits = await (invoke('hook_poll', { name: 'bmm.task.done', since: since + 1 }) as Promise<any[]>).catch(() => []);
+    if (!hits.length) return false;
+    // Advanced past every hit, including the ones for other tasks: they have been considered
+    // and rejected, and re-reading them next tick would only reject them again.
+    _afterSeen.set(task.id, Number(hits[hits.length - 1]?.at) || now);
+    const want = String(tr.outcome || 'any');
+    const mine = hits.filter((h) => String(h?.data?.id) === watched
+        && (want === 'any' || (want === 'ok') === (h?.data?.ok === true)));
+    if (!mine.length) return false;
+    const last = mine[mine.length - 1];
+    const depth = (Number(last?.data?.chain) || 0) + 1;
+    if (depth > CHAIN_MAX) {
+        toast((t('sched.chainLoop') || 'Chain stopped after {n} tasks — “{name}” is waiting on something that waits on it.')
+            .replace('{n}', String(CHAIN_MAX)).replace('{name}', task.name), 'error', 12000);
+        return false;
+    }
+    _chain.set(task.id, depth);
+    _eventData.set(task.id, (last?.data as Record<string, unknown>) || {});
+    return true;
+}
+
+/** When each script trigger may next run its probe, and which are running one now. */
+const _probeNext = new Map<string, number>();
+const _probeBusy = new Set<string>();
+
+async function scriptFired(task: Task): Promise<boolean> {
+    const tr = task.trigger as { type: 'script'; engine: string; code: string; everyMinutes: number };
+    const code = String(tr.code || '').trim();
+    if (!code) return false;
+    // The grant is checked BEFORE the probe runs, not when the task does. Otherwise a task
+    // whose steps ask for nothing would still run its author's code every few minutes.
+    if (!taskPerms(task).script) return false;
+    const now = Date.now();
+    const every = Math.max(1, Number(tr.everyMinutes) || 5) * 60000;
+    const due = _probeNext.get(task.id);
+    // The first poll after a start only arms the clock. A probe that ran the moment BMM
+    // opened would fire every task with this trigger at every launch.
+    if (due === undefined) { _probeNext.set(task.id, now + every); return false; }
+    if (now < due) return false;
+    // A probe slower than its own interval must not stack up behind itself.
+    if (_probeBusy.has(task.id)) return false;
+    _probeBusy.add(task.id);
+    try {
+        const r = await invoke('run_scheduled_script_full', {
+            engine: tr.engine || 'powershell',
+            code,
+            workingDir: null,
+            allow: true,
+            timeoutSecs: 60,
+        }) as { code: number; stdout: string; stderr: string; ok: boolean };
+        if (!r.ok) return false;
+        // Whatever it printed reaches the task as {event.stdout}, so a probe can say WHICH
+        // thing it noticed rather than only that it noticed something.
+        _eventData.set(task.id, { stdout: String(r.stdout || '').trim().slice(0, 400) });
+        return true;
+    } catch {
+        return false;
+    } finally {
+        // In a finally, and measured from NOW rather than from `due`: a probe that took two
+        // minutes must not immediately be due again.
+        _probeNext.set(task.id, Date.now() + every);
+        _probeBusy.delete(task.id);
+    }
+}
+
+/** What each condition trigger saw last time, so it can fire on the CHANGE. */
+const _condWas = new Map<string, boolean>();
+
+async function conditionFired(task: Task): Promise<boolean> {
+    const tr = task.trigger as { type: 'condition'; condition: Condition };
+    if (!tr.condition?.type) return false;
+    let hit = false;
+    try {
+        hit = await evalCondition(tr.condition, { nums: {}, text: {}, shared: readSharedVars() }, task);
+    } catch {
+        // A condition that needs a permission the task does not hold throws. Swallowed
+        // rather than allowed to end the tick, because one misconfigured task must not stop
+        // every other task in the list from being polled. The editor says so instead.
+        return false;
+    }
+    const was = _condWas.get(task.id);
+    _condWas.set(task.id, hit);
+    // The EDGE, not the state — see the type. `was === undefined` is the first poll after a
+    // start, which arms and does not fire.
+    return was === false && hit;
+}
+
 async function tick(): Promise<void> {
     const now = new Date();
     for (const task of _tasks) {
@@ -644,6 +815,12 @@ async function tick(): Promise<void> {
             if (!(await watchFired(task))) continue;
         } else if (task.trigger.type === 'onEvent') {
             if (!(await eventFired(task))) continue;
+        } else if (task.trigger.type === 'afterTask') {
+            if (!(await afterTaskFired(task))) continue;
+        } else if (task.trigger.type === 'script') {
+            if (!(await scriptFired(task))) continue;
+        } else if (task.trigger.type === 'condition') {
+            if (!(await conditionFired(task))) continue;
         } else if (!isDue(task, now)) continue;
         if (task.trigger.type === 'appStart') _appStartFired.add(task.id);
         if (task.trigger.type === 'once') _onceFired.add(task.id);
@@ -697,8 +874,8 @@ export async function runTaskOnce(task: Partial<Task>): Promise<void> {
  *
  * Three things are taken away, and the person is told which:
  *   · **enabled** — nothing from a file runs before somebody looks at it;
- *   · **perms / allowCustomCommands** — the four capabilities that reach OUTSIDE BMM are
- *     granted by the person who will live with them, never by the file's author;
+ *   · **perms / allowCustomCommands** — every capability that has to be granted is
+ *     granted by the person who will live with it, never by the file's author;
  *   · **osSchedule** — registering a Windows scheduled task is not a file's decision.
  *
  * Everything else is kept, so the automation is intact and one toggle away from working.
@@ -706,7 +883,7 @@ export async function runTaskOnce(task: Partial<Task>): Promise<void> {
  * why the imported task does nothing.
  */
 export function sanitiseImportedTask(task: any): { task: any; strippedPerms: string[]; wasEnabled: boolean } {
-    const RISKY = ['command', 'script', 'deeplink', 'stopProcess'] as const;
+    const RISKY = ['command', 'script', 'deeplink', 'stopProcess', 'delete'] as const;
     const asked: string[] = [];
     for (const k of RISKY) if (task?.perms?.[k] === true) asked.push(k);
     // The legacy single flag means command + deeplink; a file written by an older BMM carries
@@ -720,7 +897,7 @@ export function sanitiseImportedTask(task: any): { task: any; strippedPerms: str
             enabled: false,
             osSchedule: false,
             allowCustomCommands: false,
-            perms: { command: false, script: false, deeplink: false, stopProcess: false },
+            perms: { command: false, script: false, deeplink: false, stopProcess: false, delete: false },
         },
         strippedPerms: asked,
         wasEnabled,
@@ -868,6 +1045,18 @@ async function runTask(task: Task): Promise<void> {
     // Run history (last 20): timestamp, outcome, duration — shown in the editor.
     const ok = task.lastResult === 'ok';
     (task.history = task.history || []).push({ at: t0, ok, ms: Date.now() - t0, err: ok ? undefined : task.lastResult });
+    // Rung after the history entry, so whatever reacts to it sees a finished record rather
+    // than a run that is still being written down. The same ring `wait.hook` and `onEvent`
+    // use: a task finishing is an event like any other, which is what lets "after task X" be
+    // a trigger instead of a special case bolted to the side of the loop.
+    //
+    // `chain` is the hop count this run arrived with, passed on so a cycle can be counted.
+    const hops = _chain.get(task.id) || 0;
+    _chain.delete(task.id);
+    fireEvent('bmm.task.done', {
+        id: task.id, name: task.name, ok, ms: Date.now() - t0,
+        result: String(task.lastResult || ''), chain: hops,
+    });
     if (task.history.length > 20) task.history = task.history.slice(-20);
     await saveTasks();
     renderScheduleList();
@@ -2505,6 +2694,88 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
             }
             break;
         }
+        // Creating one is the only of these that is not destructive, and the only one
+        // that asks for no permission. An existing profile of the same name is REUSED
+        // rather than joined by a second: two profiles with one name is a state nobody
+        // untangles from a dropdown, and a weekly task would mint one every week.
+        case 'profile.create': {
+            const name = String(p.name || '').trim();
+            if (!name) throw new Error(t('sched.prof.errNoName') || 'Name the profile to create.');
+            const existing = _profiles.find(
+                (pr) => String(pr.name || '').toLowerCase() === name.toLowerCase());
+            const into = String(p.into || 'profile');
+            if (existing) {
+                ctx.text[`${into}.id`] = String(existing.id);
+                toast(`${task.name}: ${(t('sched.prof.reused') || 'Profile “{n}” already exists — reused').replace('{n}', name)}`, 'info', 7000);
+                break;
+            }
+            const made = await invoke('create_profile', { payload: {
+                name, gameName: '', gamePath: p.gameDir || '', modsPath: p.modsDir || '',
+                backupPath: p.backupDir || '', color: '#3b82f6', icon: 'star',
+            } }) as { id: string };
+            // Left behind under a name the next step can reference. Without it a task that
+            // creates a profile has no way to say "and now activate the one you just made".
+            ctx.text[`${into}.id`] = String(made.id);
+            if ((window as any)._refreshProfilesFn) await (window as any)._refreshProfilesFn();
+            toast(`${task.name}: ${(t('sched.prof.made') || 'Created “{n}”').replace('{n}', name)}`, 'success', 7000);
+            break;
+        }
+        case 'profile.rename': {
+            const id = String(p.id || '').trim();
+            const name = String(p.name || '').trim();
+            if (!id || !name) throw new Error(t('sched.prof.errRename') || 'Say which profile, and what to call it.');
+            const cur = _profiles.find((pr) => String(pr.id) === id);
+            if (!cur) throw new Error((t('sched.prof.errGone') || 'No profile with the id {n}').replace('{n}', id));
+            // Everything else about the profile is carried through unchanged. update_profile
+            // takes a WHOLE payload, so sending only the new name would blank the three
+            // folder paths — and the profile reads snake_case while the payload is written
+            // camelCase, which is the same round-trip that has bitten this file before.
+            await invoke('update_profile', { profileId: id, payload: {
+                name, gameName: cur.game_name || '', gamePath: cur.game_path || '',
+                modsPath: cur.mods_path || '', backupPath: cur.backup_path || '',
+                color: cur.color || '#3b82f6', icon: cur.icon || 'star',
+            } });
+            if ((window as any)._refreshProfilesFn) await (window as any)._refreshProfilesFn();
+            break;
+        }
+        case 'profile.delete': {
+            const id = String(p.id || '').trim();
+            if (!id) throw new Error(t('sched.prof.errNoId') || 'Say which profile to delete.');
+            requirePerm(task, 'delete', t('sched.permDelete') || 'delete things');
+            // Deleting the ACTIVE profile does not break anything — the command falls back
+            // to the first profile left. That fallback is the problem: every later step, and
+            // every task after this one, quietly starts working on a profile nobody chose.
+            // Allowed, but only when the task says out loud that it means to.
+            const active = await invoke('get_active_profile_id').catch(() => null);
+            if (active && String(active) === id && p.evenIfActive !== true) {
+                throw new Error(t('sched.prof.errActive') || 'That is the active profile. Deleting it silently moves BMM to another one — tick “even if it is the active profile” if that is what you want.');
+            }
+            await invoke('delete_profile', { profileId: id });
+            if ((window as any)._refreshProfilesFn) await (window as any)._refreshProfilesFn();
+            break;
+        }
+        case 'mod.remove': {
+            const id = String(p.id || '').trim();
+            if (!id) throw new Error(t('sched.mod.errNoId') || 'Say which mod to remove.');
+            requirePerm(task, 'delete', t('sched.permDelete') || 'delete things');
+            // remove_mod refuses a mod that is still enabled. A person reads that message and
+            // clicks disable; an unattended task at 3am just fails, so it does the disabling
+            // itself unless told not to. Disabling is reversible, which is why this one
+            // defaults ON while deleting the files defaults OFF.
+            if (p.disableFirst !== false) {
+                const m = _mods.find((x) => String(x.id) === id);
+                if (m && m.enabled) await invoke('disable_mod', { modId: id });
+            }
+            await invoke('remove_mod', { modId: id, deleteFiles: p.deleteFiles === true });
+            break;
+        }
+        case 'modpack.delete': {
+            const id = String(p.id || '').trim();
+            if (!id) throw new Error(t('sched.mp.errNoId') || 'Say which modpack to delete.');
+            requirePerm(task, 'delete', t('sched.permDelete') || 'delete things');
+            await invoke('delete_modpack', { id });
+            break;
+        }
         case 'repo.gen':         dl('repo/gen'); break;
         // A REAL export. Everything the screen collects, from the task's own parameters —
         // nothing is read from "whatever is on screen", because on a schedule there is no
@@ -3266,6 +3537,12 @@ function triggerIcon(tr: Trigger): string {
         // A bell: BMM telling you, rather than you going to look.
         case 'onEvent': return P('<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>');
         case 'appStart':  return P('<path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/>');
+        // A link in a chain: this one hangs off another task.
+        case 'afterTask': return P('<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>');
+        // A terminal prompt: you wrote the question, BMM only asks it.
+        case 'script':    return P('<polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>');
+        // A branch: true one way, false the other.
+        case 'condition': return P('<line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>');
         case 'manual':    return P('<path d="M18 11V6a2 2 0 0 0-4 0v5"/><path d="M14 10V4a2 2 0 0 0-4 0v2"/><path d="M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/>');
     }
 }
@@ -3593,6 +3870,24 @@ function triggerLabel(tr: Trigger): string {
         case 'onEvent': {
             const ev = String(tr.event || '').trim();
             return ev ? `${t('sched.trEvent')}: ${ev}` : t('sched.trEventNone');
+        }
+        case 'afterTask': {
+            const other = _tasks.find((x) => x.id === tr.taskId);
+            if (!other) return t('sched.trAfterNone');
+            const suffix = tr.outcome === 'ok' ? t('sched.trAfterOk')
+                : tr.outcome === 'fail' ? t('sched.trAfterFail') : '';
+            return `${t('sched.trAfter')}: ${other.name}${suffix}`;
+        }
+        case 'script': {
+            const eng = String(tr.engine || 'powershell');
+            return String(tr.code || '').trim()
+                ? `${t('sched.trScript')} (${eng}, ${t('sched.lblEvery') || 'every'} ${Math.max(1, Number(tr.everyMinutes) || 5)} ${t('sched.unitMin') || 'min'})`
+                : t('sched.trScriptNone');
+        }
+        case 'condition': {
+            return tr.condition?.type
+                ? `${t('sched.trCondition')}: ${t('sched.cond.' + tr.condition.type) || tr.condition.type}`
+                : t('sched.trConditionNone');
         }
         case 'manual': return t('sched.trManual') || 'Manual only';
     }
@@ -4527,8 +4822,8 @@ function renderModal(modal: HTMLElement): void {
                     // One box called "allow custom commands" answered the wrong
                     // question: it told you a permission was being granted but not
                     // what it unlocked, and it silently covered deeplinks, which can
-                    // reach anything the app exposes. Three boxes, each naming a real
-                    // capability, so consent is given to something legible.
+                    // reach anything the app exposes. One box per real capability, so
+                    // consent is given to something legible.
                     const pm = taskPerms(_draft as Task);
                     const row = (key: string, on: boolean, title: string, desc: string) => `
                         <label class="sched-opt sched-perm">
@@ -4541,6 +4836,7 @@ function renderModal(modal: HTMLElement): void {
                         ${row('script', !!pm.script, t('sched.allowScriptTitle') || 'Run scripts', t('sched.allowScript') || 'This task may run PowerShell, CMD, Bash or Python code you write.')}
                         ${row('deeplink', !!pm.deeplink, t('sched.allowDeeplinkTitle') || 'Fire deeplinks', t('sched.allowDeeplink') || 'This task may trigger bmm:// links, which can reach anything the app exposes.')}
                         ${row('stopProcess', !!pm.stopProcess, t('sched.allowStopTitle') || 'Stop programs', t('sched.allowStop') || 'This task may terminate running programs. Unsaved work in them is lost, with no warning and nothing to undo.')}
+                        ${row('delete', !!pm.delete, t('sched.allowDeleteTitle') || 'Delete things', t('sched.allowDelete') || 'This task may delete profiles, modpacks and mod folders. Nothing here goes to the recycle bin.')}
                     </div>`;
                 })()}
                 <label class="sched-opt">
@@ -4796,6 +5092,9 @@ function renderTriggerEditor(host: HTMLElement): void {
         ['appStart',  t('sched.trAppStart')|| 'On BMM start'],
         ['watchFile', t('sched.trWatch')   || 'When a file changes'],
         ['onEvent',   t('sched.trEvent')],
+        ['afterTask', t('sched.trAfter')],
+        ['condition', t('sched.trCondition')],
+        ['script',    t('sched.trScript')],
         ['manual',    t('sched.trManual')  || 'Manual only'],
     ];
     host.innerHTML = `
@@ -4817,6 +5116,9 @@ function renderTriggerEditor(host: HTMLElement): void {
         else if (v === 'once') _draft.trigger = { type: 'once', at: new Date(Date.now() + 3600000).toISOString().slice(0, 16) };
         else if (v === 'watchFile') _draft.trigger = { type: 'watchFile', path: '' };
         else if (v === 'onEvent') _draft.trigger = { type: 'onEvent', event: 'bmm.mod.missing' };
+        else if (v === 'afterTask') _draft.trigger = { type: 'afterTask', taskId: '', outcome: 'any' };
+        else if (v === 'condition') _draft.trigger = { type: 'condition', condition: { type: 'fileExists', params: {} } };
+        else if (v === 'script') _draft.trigger = { type: 'script', engine: 'powershell', code: '', everyMinutes: 5 };
         else if (v === 'manual') _draft.trigger = { type: 'manual' };
         else _draft.trigger = { type: 'appStart' };
         renderTriggerEditor(host);
@@ -4843,6 +5145,67 @@ function renderTriggerEditor(host: HTMLElement): void {
         ph.querySelector('#sched-tr-ev-custom')?.addEventListener('input', (e) => {
             const v = (e.target as HTMLInputElement).value.trim();
             if (v) (_draft.trigger as any).event = v;
+        });
+    }
+    if (tr.type === 'afterTask') {
+        // Only the OTHER tasks. A task offered itself would be offering a loop that runs at
+        // the speed of the poll, and the runtime refuses it anyway — better not to show it.
+        const others = _tasks.filter((x) => x.id !== (_editing?.id || ''));
+        const outcomes: [string, string][] = [
+            ['any', t('sched.trAfterAny')], ['ok', t('sched.trAfterOkOpt')], ['fail', t('sched.trAfterFailOpt')],
+        ];
+        ph.innerHTML = others.length ? `
+            <select class="input" id="sched-tr-after" style="max-width:100%">
+                <option value="">${escHtml(t('sched.trAfterPick'))}</option>
+                ${others.map((x) => `<option value="${escAttr(x.id)}"${tr.taskId === x.id ? ' selected' : ''}>${escHtml(x.name)}</option>`).join('')}
+            </select>
+            <select class="input" id="sched-tr-after-out" style="max-width:100%;margin-top:6px">
+                ${outcomes.map(([v, l]) => `<option value="${v}"${(tr.outcome || 'any') === v ? ' selected' : ''}>${escHtml(l)}</option>`).join('')}
+            </select>
+            <p class="sched-hint">${escHtml(t('sched.trAfterHint'))}</p>`
+            : `<p class="sched-hint">${escHtml(t('sched.trAfterEmpty'))}</p>`;
+        ph.querySelector('#sched-tr-after')?.addEventListener('change', (e) => {
+            (_draft.trigger as any).taskId = (e.target as HTMLSelectElement).value;
+        });
+        ph.querySelector('#sched-tr-after-out')?.addEventListener('change', (e) => {
+            (_draft.trigger as any).outcome = (e.target as HTMLSelectElement).value;
+        });
+    }
+    if (tr.type === 'condition') {
+        ph.innerHTML = `<div class="sched-tr-cond"></div><p class="sched-hint">${escHtml(t('sched.trConditionHint'))}</p>`;
+        // The very same editor an `if` step uses. All thirty-four conditions, for free, and
+        // one place to fix when a thirty-fifth arrives.
+        ph.querySelector('.sched-tr-cond')?.appendChild(conditionEditor((_draft.trigger as any).condition));
+    }
+    if (tr.type === 'script') {
+        const engines: [string, string][] = [
+            ['powershell', 'PowerShell'], ['cmd', 'CMD / Batch'], ['bash', 'Bash'],
+            ['python', 'Python'], ['node', 'JavaScript (Node)'], ['rust', 'Rust'],
+        ];
+        const granted = taskPerms(_draft as Task).script;
+        ph.innerHTML = `
+            <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+                <select class="input" id="sched-tr-eng" style="max-width:190px">
+                    ${engines.map(([v, l]) => `<option value="${v}"${(tr.engine || 'powershell') === v ? ' selected' : ''}>${escHtml(l)}</option>`).join('')}
+                </select>
+                <span style="font-size:12px;color:var(--text-muted)">${escHtml(t('sched.lblEvery') || 'every')}</span>
+                <input type="number" class="input" id="sched-tr-scr-min" min="1" style="max-width:90px"
+                    value="${Math.max(1, Number(tr.everyMinutes) || 5)}">
+                <span style="font-size:12px;color:var(--text-muted)">${escHtml(t('sched.unitMin') || 'min')}</span>
+            </div>
+            <textarea class="input" id="sched-tr-code" rows="5" spellcheck="false"
+                style="margin-top:6px;resize:vertical;font-family:var(--font-mono)"
+                placeholder="${escAttr(t('sched.trScriptPh'))}">${escHtml(tr.code || '')}</textarea>
+            <p class="sched-hint">${escHtml(t('sched.trScriptHint'))}</p>
+            ${granted ? '' : `<p class="sched-hint sched-hint-bad">${escHtml(t('sched.trScriptNoPerm'))}</p>`}`;
+        ph.querySelector('#sched-tr-eng')?.addEventListener('change', (e) => {
+            (_draft.trigger as any).engine = (e.target as HTMLSelectElement).value;
+        });
+        ph.querySelector('#sched-tr-scr-min')?.addEventListener('input', (e) => {
+            (_draft.trigger as any).everyMinutes = Math.max(1, parseInt((e.target as HTMLInputElement).value) || 5);
+        });
+        ph.querySelector('#sched-tr-code')?.addEventListener('input', (e) => {
+            (_draft.trigger as any).code = (e.target as HTMLTextAreaElement).value;
         });
     }
     if (tr.type === 'interval') {
@@ -5846,6 +6209,15 @@ async function buildCatalogueInto(kind: string, dir: string, title: string, base
 const ACTION_TYPES: { v: string; label: string; needs?: string; group: string }[] = [
     // ── Mods & profiles ──
     { v: 'profile.activate', label: 'Activate profile', needs: 'profile', group: 'mods' },
+    // The rest of a profile's life, and a mod's, and a modpack's. A task could switch to a
+    // profile and never make, rename or remove one — so "set up a fresh profile each
+    // season, retire last season's" was automation that stopped halfway and waited for a
+    // person, which is the half it was supposed to remove.
+    { v: 'profile.create', label: 'Create a profile', needs: 'profileNew', group: 'mods' },
+    { v: 'profile.rename', label: 'Rename a profile', needs: 'profileRename', group: 'mods' },
+    { v: 'profile.delete', label: 'Delete a profile', needs: 'profileDel', group: 'mods' },
+    { v: 'mod.remove', label: 'Remove a mod', needs: 'modRemove', group: 'mods' },
+    { v: 'modpack.delete', label: 'Delete a modpack', needs: 'modpackDel', group: 'mods' },
     { v: 'mod.enable', label: 'Enable mod', needs: 'mod', group: 'mods' },
     { v: 'mod.disable', label: 'Disable mod', needs: 'mod', group: 'mods' },
     { v: 'mods.order', label: 'Set which mod wins shared files', needs: 'modOrder', group: 'mods' },
@@ -6409,6 +6781,71 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
             const el = host.querySelector('.sched-p-path') as HTMLInputElement | null;
             if (el) el.value = String(picked);
         });
+    }
+    else if (needs === 'profileNew') {
+        host.innerHTML = `<div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${escHtml(t('sched.prof.name'))}</label>
+            <input class="input sched-p-pname" style="max-width:280px" value="${escAttr(params.name || '')}"
+                placeholder="${escAttr(t('sched.prof.namePh'))}">
+            <label class="sched-cmd-label">${escHtml(t('sched.prof.folders'))}</label>
+            <input class="input sched-p-pgame" placeholder="${escAttr(t('sched.prof.gamePh'))}" value="${escAttr(params.gameDir || '')}">
+            <input class="input sched-p-pmods" placeholder="${escAttr(t('sched.prof.modsPh'))}" value="${escAttr(params.modsDir || '')}">
+            <input class="input sched-p-pbackup" placeholder="${escAttr(t('sched.prof.backupPh'))}" value="${escAttr(params.backupDir || '')}">
+            <span class="sched-cmd-hint">${escHtml(t('sched.prof.foldersHint'))}</span>
+            <label class="sched-cmd-label">${escHtml(t('sched.prof.into'))}</label>
+            <input class="input sched-p-pinto" style="max-width:220px" placeholder="profile" value="${escAttr(params.into || '')}">
+            <span class="sched-cmd-hint">${escHtml(t('sched.prof.intoHint'))}</span>
+        </div>`;
+        const bind = (sel: string, key: string) => host.querySelector(sel)?.addEventListener('input', (e) => {
+            params[key] = (e.target as HTMLInputElement).value;
+        });
+        bind('.sched-p-pname', 'name'); bind('.sched-p-pgame', 'gameDir');
+        bind('.sched-p-pmods', 'modsDir'); bind('.sched-p-pbackup', 'backupDir');
+        bind('.sched-p-pinto', 'into');
+    }
+    else if (needs === 'profileRename') {
+        host.innerHTML = `<div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${escHtml(t('sched.prof.which'))}</label>
+            <select class="input sched-p" style="max-width:280px">${pickerOptions(_profiles, params.id)}</select>
+            <label class="sched-cmd-label">${escHtml(t('sched.prof.newName'))}</label>
+            <input class="input sched-p-pname" style="max-width:280px" value="${escAttr(params.name || '')}"
+                placeholder="${escAttr(t('sched.prof.namePh'))}">
+        </div>`;
+        host.querySelector('.sched-p')?.addEventListener('change', (e) => { params.id = (e.target as HTMLSelectElement).value; });
+        host.querySelector('.sched-p-pname')?.addEventListener('input', (e) => { params.name = (e.target as HTMLInputElement).value; });
+    }
+    else if (needs === 'profileDel') {
+        host.innerHTML = `<div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${escHtml(t('sched.prof.which'))}</label>
+            <select class="input sched-p" style="max-width:280px">${pickerOptions(_profiles, params.id)}</select>
+            <label class="sched-opt" style="margin-top:10px"><input type="checkbox" class="sched-p-pactive"${params.evenIfActive ? ' checked' : ''}>
+                <div><b>${escHtml(t('sched.prof.evenActiveT'))}</b><span>${escHtml(t('sched.prof.evenActive'))}</span></div></label>
+            <span class="sched-cmd-hint">${escHtml(t('sched.prof.delHint'))}</span>
+        </div>`;
+        host.querySelector('.sched-p')?.addEventListener('change', (e) => { params.id = (e.target as HTMLSelectElement).value; });
+        host.querySelector('.sched-p-pactive')?.addEventListener('change', (e) => { params.evenIfActive = (e.target as HTMLInputElement).checked; });
+    }
+    else if (needs === 'modRemove') {
+        host.innerHTML = `<div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${escHtml(t('sched.mod.which'))}</label>
+            <select class="input sched-p" style="max-width:280px">${pickerOptions(_mods, params.id)}</select>
+            <label class="sched-opt" style="margin-top:10px"><input type="checkbox" class="sched-p-mdis"${params.disableFirst === false ? '' : ' checked'}>
+                <div><b>${escHtml(t('sched.mod.disFirstT'))}</b><span>${escHtml(t('sched.mod.disFirst'))}</span></div></label>
+            <label class="sched-opt"><input type="checkbox" class="sched-p-mdel"${params.deleteFiles ? ' checked' : ''}>
+                <div><b>${escHtml(t('sched.mod.delFilesT'))}</b><span>${escHtml(t('sched.mod.delFiles'))}</span></div></label>
+            <span class="sched-cmd-hint">${escHtml(t('sched.mod.remHint'))}</span>
+        </div>`;
+        host.querySelector('.sched-p')?.addEventListener('change', (e) => { params.id = (e.target as HTMLSelectElement).value; });
+        host.querySelector('.sched-p-mdis')?.addEventListener('change', (e) => { params.disableFirst = (e.target as HTMLInputElement).checked; });
+        host.querySelector('.sched-p-mdel')?.addEventListener('change', (e) => { params.deleteFiles = (e.target as HTMLInputElement).checked; });
+    }
+    else if (needs === 'modpackDel') {
+        host.innerHTML = `<div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${escHtml(t('sched.mp.which'))}</label>
+            <select class="input sched-p" style="max-width:280px">${pickerOptions(_modpacks, params.id)}</select>
+            <span class="sched-cmd-hint">${escHtml(t('sched.mp.delHint'))}</span>
+        </div>`;
+        host.querySelector('.sched-p')?.addEventListener('change', (e) => { params.id = (e.target as HTMLSelectElement).value; });
     }
     else if (needs === 'viewPick') {
         // The screens come from the navbar rather than a list written here: a list here goes
@@ -9074,6 +9511,7 @@ function showBmmpaReport(report: ReturnType<typeof inspectBmmpa>, path: string):
         script: t('bmi.p.script') || 'Runs scripts (PowerShell / CMD / Bash / Python)',
         deeplink: t('bmi.p.deeplink') || 'Fires bmm:// deeplinks',
         stopProcess: t('bmi.p.stop') || 'Stops running programs',
+        delete: t('bmi.p.delete') || 'Deletes profiles, modpacks or mod folders',
     };
     const REACH: Record<string, string> = {
         'custom.command': t('bmi.r.command') || 'Runs an external program',

@@ -398,7 +398,7 @@ async function paintAutomation(view: HTMLElement, pluginId: string, item: Plugin
         view.innerHTML = `<p class="pa-hint pa-hint-bad">${escHtml(t('plugins.contents.autoNoTasks'))}</p>`;
         return;
     }
-    const RISKY = ['command', 'script', 'deeplink', 'stopProcess'];
+    const RISKY = ['command', 'script', 'deeplink', 'stopProcess', 'delete'];
     const countSteps = (steps: any[]): number => (steps || []).reduce((n, st) => {
         const inner = [st?.steps, st?.then, st?.else, st?.onError, st?.default]
             .filter(Array.isArray) as any[][];
