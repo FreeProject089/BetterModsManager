@@ -6268,10 +6268,10 @@ function getEndpointDefs(): EndpointDef[] {
         },
         {
             method: 'POST', path: '/api/mod/update', auth: true,
-            desc: t('plugins.ep.modUpdate') || 'Apply a mod update',
-            about: 'Applies an update by jumping to the sync flow pre-filled with the origin repo, where the delta-sync downloads only the changed files. Pass <code>repoUrl</code> to target a specific repo; omit it to just open the update check.',
+            desc: t('plugins.ep.modUpdate'),
+            about: t('plugins.epAbout.modUpdate'),
             fields: [
-                { name: 'repoUrl', type: 'string', required: false, desc: 'Origin repo URL to re-sync from. Omit to open the update check instead.' },
+                { name: 'repoUrl', type: 'string', required: false, desc: t('plugins.epF.muRepoUrl') },
             ],
             responseStatuses: [
                 { code: 202, label: 'Accepted', body: '{ "ok": true, "driven_by": "bmm-ui", "action": "mod/update" }' },
@@ -7522,6 +7522,81 @@ function _actionCatalog(): _ActionDef[] {
             ] },
             { key: 'id', label: d('fldExtraId', 'Its id'), type: 'text', half: true },
             { key: 'password', label: d('fldRepoPassword', 'Download password'), type: 'text', half: true },
+          ] },
+        // The four that RUN. Their screen-opening twins were already here; these are what a
+        // generated script needs, because a script has nobody to press a button.
+        { id: 'repo_sync_now', cat: 'repo', label: d('actionRepoSyncNow', 'Sync a repo (runs now)'),
+          desc: d('actionRepoSyncNowDesc', 'Downloads and installs, rather than opening the sync form. Every field is required: each one missing is a way to sync into somewhere nobody chose.'),
+          iconSvg: sv('<path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 3 21 9 15 9"/>'),
+          fields: [
+            { key: 'url', label: d('fldRepoUrl', 'Repo URL'), type: 'text', placeholder: 'https://\u2026/repo.json' },
+            { key: 'repoProfile', label: d('fldRepoProfile', 'Profile in the repo'), type: 'text', half: true },
+            { key: 'targetProfile', label: d('fldTargetProfile', 'Into this local profile'), type: 'text', half: true },
+            { key: 'gameDir', label: d('fldGameDir', 'Game folder'), type: 'text' },
+            { key: 'modsDir', label: d('fldModsDir', 'Mods folder'), type: 'text' },
+            { key: 'backupDir', label: d('fldBackupDir', 'Backup folder'), type: 'text', half: true },
+            { key: 'password', label: d('fldRepoPassword', 'Download password'), type: 'text', half: true },
+            { key: 'overwriteAll', label: d('fldOverwriteAll', 'Overwrite every file'), type: 'switch', default: false },
+            { key: 'deleteExtra', label: d('fldDeleteExtra', 'Delete mods the repo does not have'), type: 'switch', default: false },
+          ] },
+        { id: 'repo_gen_now', cat: 'repo', label: d('actionRepoGenNow', 'Generate a repo (runs now)'),
+          desc: d('actionRepoGenNowDesc', 'Writes the repo. An empty profile list is refused, never read as every profile on the machine.'),
+          iconSvg: sv('<path d="M12 2v20"/><path d="M2 12h20"/>'),
+          fields: [
+            { key: 'outputDir', label: d('fldOutputDir', 'Write it here'), type: 'text' },
+            { key: 'authorName', label: d('fldAuthorName', 'Author name'), type: 'text', half: true },
+            { key: 'profileIds', label: d('fldProfileIds', 'Profile ids, comma separated'), type: 'text', half: true },
+            { key: 'seed', label: d('fldSeed', 'Seed'), type: 'text', half: true },
+            { key: 'zipOutput', label: d('fldZipOutput', 'Zip the whole repo'), type: 'switch', default: false },
+            { key: 'zipMods', label: d('fldZipMods', 'Zip each mod'), type: 'switch', default: false },
+          ] },
+        { id: 'repo_host_now', cat: 'repo', label: d('actionRepoHostNow', 'Host a repo (starts now)'),
+          desc: d('actionRepoHostNowDesc', 'Starts serving. The only way to host a PROTECTED repo without a person: it carries the download password and the allowed keys.'),
+          iconSvg: sv('<rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/>'),
+          fields: [
+            { key: 'path', label: d('fldServeDir', 'Folder to serve'), type: 'text' },
+            { key: 'port', label: d('fldPort', 'Port'), type: 'text', half: true },
+            { key: 'downloadPassword', label: d('fldRepoPassword', 'Download password'), type: 'text', half: true },
+          ] },
+        { id: 'repo_update_now', cat: 'repo', label: d('actionRepoUpdateNow', 'Update a repo (runs now)'),
+          desc: d('actionRepoUpdateNowDesc', 'Rewrites the repo and re-signs its manifest. Naming no ops re-signs and changes nothing else, which is what you want after touching files by hand.'),
+          iconSvg: sv('<path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/>'),
+          fields: [
+            { key: 'repoDir', label: d('fldRepoDir', 'Repo folder'), type: 'text' },
+            { key: 'authorName', label: d('fldAuthorName', 'Author name'), type: 'text', half: true },
+          ] },
+        { id: 'content_id', cat: 'system', label: d('actionContentId', 'Work out what something IS'),
+          desc: d('actionContentIdDesc', 'The id that is the same wherever the content is the same, which is what do-you-have-what-I-have is asked with.'),
+          iconSvg: sv('<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>'),
+          fields: [
+            { key: 'kind', label: d('fldCidKind', 'Kind'), type: 'select', default: 'modpack', half: true, options: [
+                { value: 'modpack', label: 'modpack' }, { value: 'plugin', label: 'plugin' },
+                { value: 'task', label: 'task' }, { value: 'profile', label: 'profile' },
+                { value: 'theme', label: 'theme' }, { value: 'launchpack', label: 'launchpack' },
+                { value: 'repo', label: 'repo' }, { value: 'app', label: 'app' },
+                { value: 'modlist', label: 'modlist' }, { value: 'bundle', label: 'bundle' },
+            ] },
+            { key: 'id', label: d('fldCidId', 'Its id in BMM'), type: 'text', half: true },
+            { key: 'path', label: d('fldCidPath', 'Or a file to read'), type: 'text' },
+          ] },
+        { id: 'open_view', cat: 'system', label: d('actionOpenView', 'Open a screen'),
+          desc: d('actionOpenViewDesc', 'Switches BMM to a screen. Useful at the end of a script somebody is watching.'),
+          iconSvg: sv('<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/>'),
+          fields: [
+            { key: 'id', label: d('fldViewId', 'Screen'), type: 'select', default: 'library', options: [
+                { value: 'library', label: 'library' }, { value: 'profiles', label: 'profiles' },
+                { value: 'modpacks', label: 'modpacks' }, { value: 'modlist', label: 'modlist' },
+                { value: 'mapper', label: 'mapper' }, { value: 'repo', label: 'repo' },
+                { value: 'apps', label: 'apps' }, { value: 'plugins', label: 'plugins' },
+                { value: 'community', label: 'community' }, { value: 'docs', label: 'docs' },
+                { value: 'settings', label: 'settings' }, { value: 'credits', label: 'credits' },
+            ] },
+          ] },
+        { id: 'repo_manifest', cat: 'repo', label: d('actionRepoManifest', 'Rebuild a repo manifest'),
+          desc: d('actionRepoManifestDesc', 'Re-reads the folder and rewrites repo.json for a repo that is already hosted.'),
+          iconSvg: sv('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>'),
+          fields: [
+            { key: 'dir', label: d('fldRepoDir', 'Repo folder'), type: 'text' },
           ] },
         { id: 'set_schedule', cat: 'system', label: d('actionSetSchedule', 'Arm or disarm a task'),
           desc: d('actionSetScheduleDesc', 'Switches one saved scheduled task on or off by id.'),
@@ -8826,6 +8901,15 @@ function _apiBodyFor(a: any): { method: string; path: string; body: Record<strin
         case 'new_key':            return { method: 'POST', path: '/api/keys',                  body: _prune({ name: s('name'), kind: s('kind') || 'ed25519' }) };
         case 'follow_catalog':     return { method: 'POST', path: '/api/catalogs',              body: { type: s('type') || 'plugin', url: s('url'), follow: bool('follow') } };
         case 'repo_take':          return { method: 'POST', path: '/api/repo/extras',           body: _prune({ url: s('url'), kind: s('kind'), id: s('id'), password: s('password') }) };
+        case 'repo_sync_now':      return { method: 'POST', path: '/api/repo/sync-now',         body: _prune({ url: s('url'), repoProfile: s('repoProfile'), targetProfile: s('targetProfile'), gameDir: s('gameDir'), modsDir: s('modsDir'), backupDir: s('backupDir'), password: s('password'), overwriteAll: bool('overwriteAll'), deleteExtra: bool('deleteExtra') }) };
+        // Typed as a comma-separated list, because a generated script has no place for a
+        // multi-select. Split here so the body carries the array the route expects.
+        case 'repo_gen_now':       return { method: 'POST', path: '/api/repo/gen-now',          body: _prune({ outputDir: s('outputDir'), authorName: s('authorName'), profileIds: s('profileIds').split(',').map((x) => x.trim()).filter(Boolean), seed: s('seed'), zipOutput: bool('zipOutput'), zipMods: bool('zipMods') }) };
+        case 'repo_host_now':      return { method: 'POST', path: '/api/repo/host-now',         body: _prune({ path: s('path'), port: parseInt(s('port'), 10) || 0, downloadPassword: s('downloadPassword') }) };
+        case 'repo_update_now':    return { method: 'POST', path: '/api/repo/update-now',       body: _prune({ repoDir: s('repoDir'), authorName: s('authorName') }) };
+        case 'content_id':         return { method: 'POST', path: '/api/content-id',            body: _prune({ kind: s('kind'), id: s('id'), path: s('path') }) };
+        case 'open_view':          return { method: 'POST', path: '/api/view',                  body: { id: s('id') } };
+        case 'repo_manifest':      return { method: 'POST', path: '/api/repo/manifest',         body: _prune({ dir: s('dir') }) };
         case 'set_schedule':       return { method: 'POST', path: '/api/schedules/enabled',     body: { id: s('id'), enabled: bool('enabled') } };
         case 'discord_rpc':        return { method: 'POST', path: '/api/discord/rpc',          body: { enabled: bool('enabled') } };
         case 'export_data':        return { method: 'POST', path: '/api/data/export-auto',     body: _prune({ dir: s('dir'), name: s('name'), increment: s('increment') || 'paren' }) };
