@@ -2324,6 +2324,18 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
         case 'folder.open':      if (p.path) await invoke('open_folder', { path: p.path }); break;
         // The password travels with the link. Dropping it here is what made a protected
         // repo unreachable from a task however carefully the form was filled in.
+        // Written into the run's variables rather than printed, so the next step can
+        // compare it. Printing it would answer the question for a human reading a log and
+        // for nobody else.
+        case 'app.buildInfo': {
+            const info = await invoke('app_build_info') as Record<string, unknown>;
+            const at = String(p.into || 'bmm').trim() || 'bmm';
+            for (const [k, v] of Object.entries(info)) {
+                if (typeof v === 'boolean') ctx.nums[`${at}.${k}`] = v ? 1 : 0;
+                else ctx.text[`${at}.${k}`] = String(v);
+            }
+            break;
+        }
         case 'repo.connect':     dl('repo/connect', { url: p.url, name: p.name, password: p.password }); break;
         case 'repo.sync':        dl('repo/sync', { url: p.url, profile: p.profile, password: p.password }); break;
         case 'repo.syncNow': {
@@ -5735,6 +5747,10 @@ const ACTION_TYPES: { v: string; label: string; needs?: string; group: string }[
     // ── Repo & sharing ──
     { v: 'repo.connect', label: 'Connect repo', needs: 'repoConnect', group: 'repo' },
     { v: 'repo.sync', label: 'Sync repo', needs: 'repoSync', group: 'repo' },
+    // Which BMM is running this. A task that installs something built for a newer BMM, or a
+    // report that says "it broke" without saying on which build, are both this question
+    // unanswered — and until now it could not be asked from an automation at all.
+    { v: 'app.buildInfo', label: 'Read this BMM\u2019s version', needs: 'buildInfo', group: 'app' },
     { v: 'repo.gen', label: 'Generate repo', group: 'repo' },
     { v: 'repo.update', label: 'Update repo', needs: 'repoUpdate', group: 'repo' },
     { v: 'repo.host', label: 'Host repo (HTTP)', needs: 'repoHost', group: 'repo' },
@@ -6200,6 +6216,17 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
         // The password used to live inside "Destructive options", which it is not. It is now
         // in the block every action that reaches a protected source shares, next to the key.
         wireCreds(host, params);
+    }
+    else if (needs === 'buildInfo') {
+        host.innerHTML = `<div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${escHtml(t('sched.bi.into'))}</label>
+            <input class="input sched-p-bi" spellcheck="false" style="max-width:220px"
+                placeholder="bmm" value="${escAttr(params.into || '')}">
+            <span class="sched-cmd-hint">${escHtml(t('sched.bi.hint'))}</span>
+        </div>`;
+        host.querySelector('.sched-p-bi')?.addEventListener('input', (e) => {
+            params.into = (e.target as HTMLInputElement).value;
+        });
     }
     else if (needs === 'bmmfolder') host.innerHTML = _field(needs,
         `<input class="input sched-p-bmmdir" placeholder="${escAttr(t('sched.bmmFolderPh') || 'e.g. backups/weekly')}" value="${escAttr(params.path || '')}">`)

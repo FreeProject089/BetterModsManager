@@ -548,6 +548,7 @@ fn main() {
             commands::settings::is_dev_build,
             commands::settings::is_fsdm_mode,
             commands::settings::is_ptb_mode,
+            commands::settings::app_build_info,
             commands::settings::legal_fingerprint,
             commands::settings::is_update_disabled,
             commands::settings::is_auto_eula_enabled,

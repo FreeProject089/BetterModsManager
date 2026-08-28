@@ -21,7 +21,7 @@ Ce document est la source de vérité unique pour tout ce qui est pilotable par 
 | Chemin | Auth | Description | Retourne |
 |---|---|---|---|
 | `/api/health` | non | Sonde de disponibilité | `{ ok, service, port }` |
-| `/api/status` | non | Version de l'app, profil actif, compteurs | `{ ok, version, active_profile, mod_count, profile_count, plugin_count }` |
+| `/api/status` | non | Quelle build, profil actif, compteurs | `{ ok, version, channel, built, os, arch, active_profile, mod_count, profile_count, plugin_count }` — `channel` vaut `Release`, `PTB` ou `FTB` ; `built` est la date de fabrication du binaire |
 | `/api/check-update` | non | Compare la version en cours à la dernière release GitHub | `{ ok, has_update, current_version, latest_version, release_url }` |
 | `/api/mods` | non | Tous les mods du profil actif | `{ ok, data:[{id,name,active,enabled,path}] }` |
 | `/api/mods/active` | non | Uniquement les mods activés du profil actif | `{ ok, data:[…] }` |

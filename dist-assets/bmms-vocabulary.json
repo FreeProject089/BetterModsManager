@@ -151,6 +151,13 @@
       ]
     },
     {
+      "type": "app.buildInfo",
+      "group": "app",
+      "params": [
+        "into"
+      ]
+    },
+    {
       "type": "repo.gen",
       "group": "repo",
       "params": []

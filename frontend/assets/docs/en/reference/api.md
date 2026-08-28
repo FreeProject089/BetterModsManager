@@ -311,7 +311,7 @@ Two shapes sit outside that rule:
 | Method | Path | Auth | Returns |
 |---|---|---|---|
 | `GET` | `/api/health` | — | `{ok, service, port}` — the liveness probe, and how to learn the real port |
-| `GET` | `/api/status` | — | App version, active profile, mod/profile/plugin counts |
+| `GET` | `/api/status` | — | Which BMM this is — `version`, `channel` (`Release` / `PTB` / `FTB`), `built` (the date the binary was made), `os`, `arch` — plus the active profile and the mod/profile/plugin counts. `1.0.0` is three different binaries, and a report that cannot tell them apart sends somebody chasing a fixed bug. |
 | `GET` | `/api/check-update` | — | Latest GitHub release vs current: `has_update`, `release_url` |
 | `GET` | `/api/mods` | `mods.read` | Visible mods of the active profile |
 | `GET` | `/api/mods/active` | `mods.read` | Only the enabled ones |

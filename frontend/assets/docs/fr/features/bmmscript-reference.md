@@ -2,7 +2,7 @@
 
 !!! info ""
 
-    91 actions · 32 conditions · 32 valeurs · 8 sources de boucle
+    92 actions · 32 conditions · 32 valeurs · 8 sources de boucle
 
 > Généré depuis le registre de BMM lui-même, donc cette page ne peut pas décrire une version de l'application qui n'existe pas. Si une action est dans l'éditeur de blocs, elle est dans cette liste.
 

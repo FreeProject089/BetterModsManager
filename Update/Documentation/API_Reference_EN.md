@@ -21,7 +21,7 @@ This document is the single source of truth for everything that can be driven pr
 | Path | Auth | Description | Returns |
 |---|---|---|---|
 | `/api/health` | no | Liveness probe | `{ ok, service, port }` |
-| `/api/status` | no | App version, active profile, counts | `{ ok, version, active_profile, mod_count, profile_count, plugin_count }` |
+| `/api/status` | no | Which build, active profile, counts | `{ ok, version, channel, built, os, arch, active_profile, mod_count, profile_count, plugin_count }` — `channel` is `Release`, `PTB` or `FTB`; `built` is the date the binary was made |
 | `/api/check-update` | no | Compare running version to latest GitHub release | `{ ok, has_update, current_version, latest_version, release_url }` |
 | `/api/mods` | no | All mods in the active profile | `{ ok, data:[{id,name,active,enabled,path}] }` |
 | `/api/mods/active` | no | Only enabled mods of active profile | `{ ok, data:[…] }` |

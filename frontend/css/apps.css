@@ -1231,6 +1231,33 @@
 .apps-create-way .apps-create-actions { margin: 0; flex-wrap: wrap; }
 
 /* ── The editor ─────────────────────────────────────────────────────────── */
+/* Every field is a block: label on its own line, input under it, full width.
+   `.apps-install-label` is inline and `.apps-path-input` carries `flex: 1` — both correct
+   inside `.apps-path-row`, which is a flex row. Outside one they flow as inline boxes, so
+   "ID" sat above its input and "Titre" beside its input, and a long label pushed the field
+   after it onto the next line. That is the whole of "the layout is really bad". */
+.apps-cr-form .apps-install-label {
+    display: block;
+    margin: 0 0 5px;
+    font-size: 11px;
+    letter-spacing: .01em;
+}
+.apps-cr-form .apps-path-input,
+.apps-cr-form .apps-filter,
+.apps-cr-form select.apps-cr-sel {
+    display: block;
+    width: 100%;
+    flex: none;
+    box-sizing: border-box;
+}
+.apps-cr-form .apps-path-input { margin-bottom: 12px; }
+/* The last field in a grid cell must not add a gap the grid already provides. */
+.apps-cr-form .apps-cr-grid2 > div > .apps-path-input:last-child,
+.apps-cr-form .apps-cr-grid3 > div > .apps-path-input:last-child { margin-bottom: 0; }
+.apps-cr-form .apps-cr-grid2,
+.apps-cr-form .apps-cr-grid3 { margin-bottom: 12px; align-items: end; }
+.apps-cr-form .apps-cr-ta { margin-bottom: 12px; min-height: 58px; }
+
 .apps-cr-form .apps-cr-step {
     border-top: 1px solid var(--border);
     padding-top: 12px;

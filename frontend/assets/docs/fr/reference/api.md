@@ -323,7 +323,7 @@ Deux formes échappent à la règle :
 | Méthode | Chemin | Auth | Renvoie |
 |---|---|---|---|
 | `GET` | `/api/health` | — | `{ok, service, port}` — la sonde de vie, et le moyen de connaître le vrai port |
-| `GET` | `/api/status` | — | Version de l'app, profil actif, nombre de mods/profils/plugins |
+| `GET` | `/api/status` | — | Quel BMM c'est — `version`, `channel` (`Release` / `PTB` / `FTB`), `built` (la date de fabrication du binaire), `os`, `arch` — plus le profil actif et le nombre de mods/profils/plugins. `1.0.0` désigne trois binaires différents, et un rapport incapable de les distinguer envoie quelqu'un chasser un bug déjà corrigé. |
 | `GET` | `/api/check-update` | — | Dernière release GitHub vs actuelle : `has_update`, `release_url` |
 | `GET` | `/api/mods` | `mods.read` | Mods visibles du profil actif |
 | `GET` | `/api/mods/active` | `mods.read` | Uniquement les activés |

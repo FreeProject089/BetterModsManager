@@ -619,6 +619,19 @@ fn require_token(
 /// Read and write are separate everywhere, because knowing is not the same permission as
 /// changing — and for keys it is the whole point: listing what identities exist is not
 /// minting one that signs on the user's behalf.
+/// Does `app.cfg` contain this flag?
+///
+/// The routes have no `AppHandle`, so they cannot call the settings command. Same file, same
+/// lowercase substring rule the rest of the flags use — including the trap that rule carries:
+/// there is no comment syntax, so `#ptb=true` still contains `ptb=true`.
+pub fn cfg_has(flag: &str) -> bool {
+    std::env::current_exe().ok()
+        .and_then(|p| p.parent().map(|d| d.join("app.cfg")))
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .map(|c| c.to_lowercase().contains(flag))
+        .unwrap_or(false)
+}
+
 pub const PLUGIN_SCOPES: [&str; 26] = [
     "app.read", "app.write",
     "catalog.read", "catalog.write",
@@ -838,6 +851,20 @@ pub async fn start_api_server(
             warp::reply::json(&serde_json::json!({
                 "ok": true,
                 "version": env!("CARGO_PKG_VERSION"),
+                // Which build, not only which version. `1.0.0` is three different binaries
+                // — a release, a public test build and an in-house one — and a bug report
+                // that cannot tell them apart sends somebody chasing a fixed bug.
+                //
+                // Read here rather than through app_build_info: this route has no
+                // AppHandle, and the two flags come from the same app.cfg either way.
+                "channel": if crate::api::cfg_has("ftb=true") { "FTB" }
+                           else if crate::api::cfg_has("ptb=true") { "PTB" }
+                           else { "Release" },
+                // Stamped by build.rs, which has done it since the beginning; nothing had
+                // ever read it back out.
+                "built": option_env!("BMM_BUILD_DATE").unwrap_or("unknown"),
+                "os": std::env::consts::OS,
+                "arch": std::env::consts::ARCH,
                 "active_profile": active_profile,
                 "mod_count": data.mods.len(),
                 "profile_count": data.profiles.len(),

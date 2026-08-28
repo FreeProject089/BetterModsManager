@@ -658,8 +658,10 @@ export async function openExtrasPicker(repoDirHint?: string): Promise<void> {
                 <h3>${esc(t('repo.extras.pickTitle'))}</h3>
                 <button class="modal-close" type="button" id="rx-close" aria-label="${esc(t('common.close'))}">&times;</button>
             </div>
-            <p class="repo-extras-lede">${esc(t('repo.extras.pickHint'))}</p>
-            <div class="rx-body">${body}</div>
+            <div class="modal-body rx-body">
+                <p class="repo-extras-lede">${esc(t('repo.extras.pickHint'))}</p>
+                ${body}
+            </div>
             <div class="rx-dest">
                 <span class="rx-dest-label">${esc(t('repo.extras.dest'))}</span>
                 <span class="rx-dest-path${repoDir ? '' : ' is-empty'}">${

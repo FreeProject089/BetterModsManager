@@ -2,7 +2,7 @@
 
 !!! info ""
 
-    91 actions · 32 conditions · 32 values · 8 loop sources
+    92 actions · 32 conditions · 32 values · 8 loop sources
 
 > Generated from BMM's own registry, so it cannot describe a version of the app that does not exist. If an action is in the block editor, it is in this list.
 

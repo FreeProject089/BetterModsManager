@@ -26,8 +26,10 @@ function shell(title: string, sub: string, bodyHtml: string, footHtml = ''): HTM
             <h3>${escHtml(title)}</h3>
             <button class="modal-close" type="button" data-pi-close aria-label="${escAttr(t('common.close') || 'Close')}">&times;</button>
         </div>
-        ${sub ? `<p class="pi-sub">${escHtml(sub)}</p>` : ''}
-        <div class="pi-body">${bodyHtml}</div>
+        <div class="modal-body pi-body">
+            ${sub ? `<p class="pi-sub">${escHtml(sub)}</p>` : ''}
+            ${bodyHtml}
+        </div>
         ${footHtml ? `<div class="modal-footer">${footHtml}</div>` : ''}
     </div>`;
     document.body.appendChild(ov);

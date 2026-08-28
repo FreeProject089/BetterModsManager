@@ -133,6 +133,12 @@
       "group": "repo"
     },
     {
+      "type": "app.buildInfo",
+      "label": "Read this BMM\\u2019s version",
+      "needs": "buildInfo",
+      "group": "app"
+    },
+    {
       "type": "repo.gen",
       "label": "Generate repo",
       "needs": null,

@@ -520,6 +520,40 @@ pub fn legal_fingerprint(app_handle: tauri::AppHandle) -> serde_json::Value {
     })
 }
 
+/// Which build this is, in one answer.
+///
+/// The version was reachable (`/api/status`), the channel was reachable (`is_ptb_mode`) and
+/// the build date was reachable from nowhere at all — so "which BMM produced this" could not
+/// be answered by a task, by a script, or by anything driving the API, which is exactly the
+/// question a bug report is trying to answer.
+///
+/// `channel` is a NAME, not a flag: an automation branching on `= "PTB"` reads, and one
+/// branching on `ptb = 1` has to be remembered. `Release` is the ordinary build.
+#[tauri::command]
+pub fn app_build_info(app_handle: tauri::AppHandle) -> serde_json::Value {
+    let ptb = is_ptb_mode(app_handle.clone());
+    // FTB is the in-house build: the debug menu exists and updates are off, which is not a
+    // thing a release ever is. Read from the same app.cfg the rest of the flags come from,
+    // so a build cannot describe itself one way here and behave another way elsewhere.
+    let cfg = resolve_path(&app_handle, "app.cfg")
+        .and_then(|p| std::fs::read_to_string(&p).ok())
+        .unwrap_or_default()
+        .to_lowercase();
+    let ftb = cfg.contains("ftb=true");
+    serde_json::json!({
+        "version": app_handle.package_info().version.to_string(),
+        "channel": if ftb { "FTB" } else if ptb { "PTB" } else { "Release" },
+        "ptb": ptb,
+        "ftb": ftb,
+        // Stamped by build.rs at compile time. `env!` would be the compiler's own build, and
+        // an installed copy would report the day its SOURCE was written rather than the day
+        // the binary somebody is running was made.
+        "built": option_env!("BMM_BUILD_DATE").unwrap_or("unknown"),
+        "target": std::env::consts::OS,
+        "arch": std::env::consts::ARCH,
+    })
+}
+
 #[tauri::command]
 pub fn is_ptb_mode(app_handle: tauri::AppHandle) -> bool {
     if let Some(path) = resolve_path(&app_handle, "app.cfg") {

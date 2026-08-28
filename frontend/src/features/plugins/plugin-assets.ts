@@ -148,10 +148,12 @@ export async function openPluginAssets(pluginId: string, pluginName: string): Pr
                 <button class="modal-close" type="button" id="pa-close" aria-label="${escHtml(t('common.close'))}">&times;</button>
             </div>
             ${items.length ? `
-                <p class="pa-lede">${escHtml(t('plugins.assets.lede'))}</p>
-                <div class="pa-body">
-                    <div class="pa-list">${rows}</div>
-                    <div class="pa-view" id="pa-view"></div>
+                <div class="modal-body pa-wrap">
+                    <p class="pa-lede">${escHtml(t('plugins.assets.lede'))}</p>
+                    <div class="pa-body">
+                        <div class="pa-list">${rows}</div>
+                        <div class="pa-view" id="pa-view"></div>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <span class="pa-count">${escHtml(t('plugins.contents.count').replace('{n}', String(items.length)))}</span>
@@ -161,7 +163,7 @@ export async function openPluginAssets(pluginId: string, pluginName: string): Pr
                     <button class="btn btn-sm btn-secondary" id="pa-folder">${escHtml(t('plugins.openFolder'))}</button>
                     <button class="btn btn-sm btn-accent" id="pa-save" ${current?.group === 'asset' ? '' : 'disabled'}>${escHtml(t('plugins.assets.save'))}</button>
                 </div>`
-            : `<p class="pa-lede">${escHtml(t('plugins.assets.none'))}</p>
+            : `<div class="modal-body"><p class="pa-lede">${escHtml(t('plugins.assets.none'))}</p></div>
                <div class="modal-footer">
                     <button class="btn btn-sm btn-ghost" id="pa-check">${escHtml(t('plugins.check.run'))}</button>
                     <button class="btn btn-sm btn-accent" id="pa-add">${escHtml(t('plugins.assets.add'))}</button>
@@ -348,7 +350,7 @@ export async function runCheck(pluginId: string): Promise<void> {
             <h3>${escHtml(t('plugins.check.title'))}</h3>
             <button class="modal-close" type="button" id="pc-x" aria-label="${escHtml(t('common.close'))}">&times;</button>
         </div>
-        <div class="pa-check-body">
+        <div class="modal-body pa-check-body">
             ${errors.length ? `<div class="pa-check-group">
                 <h5 class="pa-check-h is-error">${escHtml(t('plugins.check.errors'))} <span>${errors.length}</span></h5>
                 ${errors.map((p) => `<p class="pa-check-line">${escHtml(say(p))}</p>`).join('')}
