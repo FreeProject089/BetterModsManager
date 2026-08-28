@@ -9851,5 +9851,6 @@
   "plugins.tree.noRoot": "Cette liste peut nommer les fichiers mais pas les ouvrir.",
   "sched.syncGame": "Dossier du jeu",
   "sched.syncMods": "Dossier des mods",
-  "sched.syncBackup": "Dossier de sauvegarde (optionnel)"
+  "sched.syncBackup": "Dossier de sauvegarde (optionnel)",
+  "lib.cancelNothing": "Aucune opération en cours à annuler."
 }

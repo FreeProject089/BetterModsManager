@@ -40,9 +40,18 @@ export function consumeAndClearOp(modId) {
     }
     return state;
 }
+/**
+ * Is anything running that a cancel would reach?
+ *
+ * The cancel BUTTON has always known this — it is what decides whether it is lit. Exported
+ * so a keyboard shortcut can know it too: a shortcut that silently does nothing is worse
+ * than no shortcut, because the person presses it again harder.
+ */
+export function hasCancellableOps() {
+    return S.isGlobalProcessing || _opState.size > 0 || _queueRunning;
+}
 function _updateCancelBtn() {
-    const hasOps = S.isGlobalProcessing || _opState.size > 0 || _queueRunning;
-    _setCancelBtnState(hasOps, _queueRunning);
+    _setCancelBtnState(hasCancellableOps(), _queueRunning);
 }
 /** "Cancel current op only" — kill the running worker, let any queued
  *  ops continue (used by the main cancel button's default click).        */

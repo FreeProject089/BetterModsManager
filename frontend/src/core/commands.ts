@@ -517,6 +517,43 @@ function registerCore() {
   registerCommand({ id: 'mods.history', category: 'mods', title: { en: 'Show mod history', fr: 'Afficher l’historique des mods' }, keywords: 'history log recent activity historique', run: clickAfterNav('library', 'btn-show-history'), defaultChord: null });
   registerCommand({ id: 'mods.enableAll', category: 'mods', title: { en: 'Enable all mods', fr: 'Activer tous les mods' }, keywords: 'enable all activate deploy tout activer', run: clickAfterNav('library', 'btn-enable-all'), defaultChord: null });
   registerCommand({ id: 'mods.disableAll', category: 'mods', title: { en: 'Disable all mods', fr: 'Désactiver tous les mods' }, keywords: 'disable all off remove tout désactiver', run: clickAfterNav('library', 'btn-disable-all-alt'), defaultChord: null });
+  // ── Cancelling what is running ──────────────────────────────────────────────
+  //
+  // Both of these existed and could only be reached with the mouse: the cancel button's
+  // click is "stop the current one", and its right-click is "stop everything". A long
+  // enable that is going to the wrong profile is exactly the moment somebody's hand is not
+  // on the mouse.
+  //
+  // NOT Ctrl+Z. The dispatcher runs on capture and fires modified chords even while typing,
+  // so binding it here would reach into the scheduler's editor and undo a step of somebody's
+  // task instead. Ctrl+Alt+Z is free, and every one of these is rebindable in Settings.
+  const cancelOps = (all: boolean) => () => {
+    void import('../features/mods/mods-actions.js').then((m) => {
+      if (!m.hasCancellableOps()) {
+        // Said out loud. A shortcut that does nothing when there is nothing to do is
+        // indistinguishable from one that is broken, and people press it again harder.
+        // window.toast, like the clash warning above: commands.ts is imported by the app
+        // shell, and reaching ui/app.js from here closes a cycle.
+        try { (window as any).toast?.(t('lib.cancelNothing') || 'Nothing is running to cancel.', 'info'); } catch { /* ignore */ }
+        return;
+      }
+      if (all) void m.requestCancelModOps(); else m.requestCancelCurrentOnly();
+    });
+  };
+  registerCommand({
+    id: 'mods.cancelLast', category: 'mods',
+    title: { en: 'Cancel the running mod operation', fr: 'Annuler l\u2019op\u00e9ration en cours' },
+    keywords: 'cancel stop abort undo last current annuler arr\u00eater stopper derni\u00e8re',
+    run: cancelOps(false),
+    defaultChord: { ctrl: true, alt: true, key: 'z' },
+  });
+  registerCommand({
+    id: 'mods.cancelAll', category: 'mods',
+    title: { en: 'Cancel every queued mod operation', fr: 'Annuler toutes les op\u00e9rations' },
+    keywords: 'cancel all stop everything abort queue annuler tout tous file',
+    run: cancelOps(true),
+    defaultChord: { ctrl: true, alt: true, shift: true, key: 'z' },
+  });
   registerCommand({ id: 'mods.checkUpdates', category: 'mods', title: { en: 'Check mods for updates', fr: 'Vérifier les mises à jour des mods' }, keywords: 'update updates check mods mise à jour', run: clickAfterNav('library', 'btn-lib-check-updates'), defaultChord: null });
 
   // ── Profiles ────────────────────────────────────────────────────────────────
