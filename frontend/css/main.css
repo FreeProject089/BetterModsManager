@@ -19907,6 +19907,11 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
     box-shadow: 0 10px 28px rgba(0, 0, 0, .45);
 }
 .plug-more-menu[hidden] { display: none; }
+/* The original stays in the card as a TEMPLATE: the portal clones it on open, and the
+   clone is what carries .open. Hidden by a class rather than by [hidden], because the
+   attribute would ride along on the copy and hide the menu the person actually sees. */
+.plug-more-menu.is-template { display: none; }
+.plug-more-menu.is-template.open { display: block; }
 .plug-more-item {
     display: flex;
     align-items: center;

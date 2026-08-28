@@ -543,31 +543,31 @@ function buildPluginCard(plugin: any, source: 'installed' | 'catalog') {
                         <button class="btn btn-xs btn-ghost plug-more-btn" data-tooltip="${escAttr(t('plugins.more'))}" aria-haspopup="true" aria-expanded="false">⋮</button>
                         <div class="plug-more-menu" hidden>
                             ${fromCatalog ? `
-                            <button class="plug-more-item plug-btn-au ${auOn ? 'plug-au-on' : ''}" data-id="${escHtml(manifest.id)}">
+                            <button class="plug-more-item plug-btn-au ${auOn ? 'plug-au-on' : ''}" data-plug-act="${escAttr(manifest.id)}:au" data-id="${escHtml(manifest.id)}">
                                 ${IC.refresh} ${escHtml(auOn ? (t('plugins.autoUpdateOn') || 'Auto-update: ON') : (t('plugins.autoUpdateOff') || 'Auto-update: OFF'))}
                             </button>` : ''}
-                            <button class="plug-more-item plug-btn-assets" data-id="${escHtml(manifest.id)}" hidden>
+                            <button class="plug-more-item plug-btn-assets" data-plug-act="${escAttr(manifest.id)}:assets" data-id="${escHtml(manifest.id)}" hidden>
                                 ${IC.paperclip} ${escHtml(t('plugins.assets.tip'))}
                             </button>
                             ${manifest.bundles?.length ? `
-                            <button class="plug-more-item plug-btn-bundles" data-id="${escHtml(manifest.id)}">
+                            <button class="plug-more-item plug-btn-bundles" data-plug-act="${escAttr(manifest.id)}:bundles" data-id="${escHtml(manifest.id)}">
                                 ${IC.download} ${escHtml(t('plugins.bundle.follow'))}
                             </button>` : ''}
-                            <button class="plug-more-item plug-btn-folder" data-id="${escHtml(manifest.id)}" data-dir="${escHtml(plugin.install_dir || '')}">
+                            <button class="plug-more-item plug-btn-folder" data-plug-act="${escAttr(manifest.id)}:folder" data-id="${escHtml(manifest.id)}" data-dir="${escHtml(plugin.install_dir || '')}">
                                 ${IC.folder} ${escHtml(t('plugins.openFolder'))}
                             </button>
-                            <button class="plug-more-item plug-btn-edit" data-id="${escHtml(manifest.id)}">
+                            <button class="plug-more-item plug-btn-edit" data-plug-act="${escAttr(manifest.id)}:edit" data-id="${escHtml(manifest.id)}">
                                 ${IC.editIcon} ${escHtml(t('plugins.editPlugin'))}
                             </button>
-                            <button class="plug-more-item plug-btn-duplicate" data-id="${escHtml(manifest.id)}">
+                            <button class="plug-more-item plug-btn-duplicate" data-plug-act="${escAttr(manifest.id)}:duplicate" data-id="${escHtml(manifest.id)}">
                                 ${IC.duplicate} ${escHtml(t('plugins.duplicate'))}
                             </button>
-                            <button class="plug-more-item plug-btn-export" data-id="${escHtml(manifest.id)}">
+                            <button class="plug-more-item plug-btn-export" data-plug-act="${escAttr(manifest.id)}:export" data-id="${escHtml(manifest.id)}">
                                 ${IC.exportIcon} ${escHtml(t('common.export'))}
                             </button>
                             <!-- Last, behind a separator, and the only one that is red.
                                  Removing a plugin is not a peer of duplicating one. -->
-                            <button class="plug-more-item plug-more-danger plug-btn-uninstall" data-id="${escHtml(manifest.id)}">
+                            <button class="plug-more-item plug-more-danger plug-btn-uninstall" data-plug-act="${escAttr(manifest.id)}:uninstall" data-id="${escHtml(manifest.id)}">
                                 ${IC.trash} ${escHtml(t('plugins.uninstall'))}
                             </button>
                         </div>
@@ -602,17 +602,15 @@ function buildPluginCard(plugin: any, source: 'installed' | 'catalog') {
             if (!found.length) return;
             assetsBtn.hidden = false;
             assetsBtn.dataset.count = String(found.length);
-            assetsBtn.addEventListener('click', () => void openPluginAssets(manifest.id, manifest.name));
+            _plugActions.set(`${manifest.id}:assets`, () => void openPluginAssets(manifest.id, manifest.name));
         })();
     }
 
     wireCopyIds(card, toast);
     card.querySelector('.plug-btn-compare')?.addEventListener('click', () => handleCompare(manifest.id));
     card.querySelector('.plug-btn-apply')?.addEventListener('click', () => handleApply(manifest.id));
-    card.querySelector('.plug-btn-export')?.addEventListener('click', () => handleExport(manifest.id, manifest.name));
-    card.querySelector('.plug-btn-uninstall')?.addEventListener('click', () => handleUninstall(manifest.id, manifest.name));
+    // Inspect stays a real button on the card, so it keeps a real listener.
     card.querySelector('.plug-btn-inspect')?.addEventListener('click', () => handleInspect(plugin));
-    card.querySelector('.plug-btn-bundles')?.addEventListener('click', () => void installPluginBundles(manifest.id));
     card.querySelector('.plug-btn-perms')?.addEventListener('click', async (e) => {
         const b = e.currentTarget as HTMLElement;
         const { openPluginPermissions } = await import('./plugin-inspect.js');
@@ -624,77 +622,60 @@ function buildPluginCard(plugin: any, source: 'installed' | 'catalog') {
         const { openPluginContent } = await import('./plugin-inspect.js');
         await openPluginContent(b.dataset.id || '', b.dataset.name || '');
     });
-    // The overflow menu. Closes on a second click, on Escape, and on any click outside —
-    // a menu that only closes by re-pressing its own button is one people leave open.
+    // The overflow menu, through the app's own dropdown portal.
+    //
+    // It used to place ITSELF: `position: fixed`, coordinates from the button's
+    // getBoundingClientRect. That is correct reasoning and it cannot work here, because
+    // `.plug-card:hover` sets `transform: translateY(-1px)` — and a transformed ancestor
+    // becomes the containing block for every `position: fixed` descendant. You are
+    // necessarily hovering the card at the moment you click its ⋮, so the menu was being
+    // positioned relative to the CARD using viewport coordinates, landing far outside it,
+    // and the card is `overflow: hidden`. It opened every time and was never visible —
+    // which reads exactly like a button that does nothing, and was reported as one twice.
+    //
+    // The portal appends to document.body, outside every transform in the page, and owns
+    // opening, closing, click-outside and viewport clamping. Same thing the scheduler's
+    // Files… menu uses.
     {
         const wrap = card.querySelector('.plug-more') as HTMLElement | null;
         const btn = wrap?.querySelector('.plug-more-btn') as HTMLElement | null;
         const menu = wrap?.querySelector('.plug-more-menu') as HTMLElement | null;
         if (wrap && btn && menu) {
-            const shut = () => {
-                menu.hidden = true;
-                btn.setAttribute('aria-expanded', 'false');
-                document.removeEventListener('click', away, true);
-                document.removeEventListener('keydown', onEsc, true);
-            };
-            const away = (ev: Event) => { if (!wrap.contains(ev.target as Node)) shut(); };
-            const onEsc = (ev: KeyboardEvent) => { if (ev.key === 'Escape') { ev.stopPropagation(); shut(); } };
-            /**
-             * Put it where the button is.
-             *
-             * The menu is `position: fixed`, because `.plug-card` is `overflow: hidden` and
-             * an absolutely positioned child was simply CLIPPED BY THE CARD — it opened
-             * every time and was never visible, which reads exactly like a dead button.
-             * Fixed means it is placed against the viewport, so the coordinates have to come
-             * from here.
-             */
-            const place = () => {
-                const r = btn.getBoundingClientRect();
-                menu.style.visibility = 'hidden';
-                menu.hidden = false;
-                const h = menu.offsetHeight || 240;
-                const w = menu.offsetWidth || 190;
-                // Right-aligned to the button, and flipped above it when there is no room
-                // below — a card near the bottom of the list is the ordinary case.
-                const below = window.innerHeight - r.bottom;
-                menu.style.top = `${below < h + 8 && r.top > h + 8 ? r.top - h - 4 : r.bottom + 4}px`;
-                menu.style.left = `${Math.max(8, Math.min(window.innerWidth - w - 8, r.right - w))}px`;
-                menu.style.visibility = '';
-            };
+            // Not `hidden`: the portal clones whatever it is handed, and a `hidden`
+            // attribute rides along on the copy. `.is-template` keeps the original out of
+            // the card's layout without travelling.
+            menu.hidden = false;
+            menu.classList.add('is-template');
+            _wirePlugMenuDelegation();
             btn.addEventListener('click', (ev) => {
                 ev.stopPropagation();
-                if (!menu.hidden) { shut(); return; }
-                place();
-                btn.setAttribute('aria-expanded', 'true');
-                document.addEventListener('click', away, true);
-                document.addEventListener('keydown', onEsc, true);
-                // A fixed menu does not travel with the card it belongs to, so scrolling
-                // would leave it hanging over unrelated rows. Closed rather than followed:
-                // it is a menu, not a tooltip.
-                window.addEventListener('scroll', shut, { once: true, capture: true });
-                window.addEventListener('resize', shut, { once: true });
+                (window as any).showGlobalDropdown?.(btn, menu);
             });
-            // Anything chosen closes it: the action opens a dialog or navigates, and a menu
-            // left hanging over the result is the thing people click by accident next.
-            menu.addEventListener('click', () => shut());
         }
     }
-    card.querySelector('.plug-btn-edit')?.addEventListener('click', () => handleEditPlugin(manifest));
-    card.querySelector('.plug-btn-duplicate')?.addEventListener('click', () => handleDuplicatePlugin(manifest));
-    card.querySelector('.plug-btn-au')?.addEventListener('click', (e) => {
-        const btn = e.currentTarget as HTMLElement;
-        const nowOn = localStorage.getItem('bmm_plugin_au_' + manifest.id) === 'off'; // toggling to ON
-        if (nowOn) localStorage.removeItem('bmm_plugin_au_' + manifest.id);
+    const act = (name: string, fn: () => void) => _plugActions.set(`${manifest.id}:${name}`, fn);
+    act('edit', () => handleEditPlugin(manifest));
+    act('duplicate', () => handleDuplicatePlugin(manifest));
+    act('export', () => handleExport(manifest.id, manifest.name));
+    act('uninstall', () => handleUninstall(manifest.id, manifest.name));
+    act('bundles', () => void installPluginBundles(manifest.id));
+    act('au', () => {
+        const on = localStorage.getItem('bmm_plugin_au_' + manifest.id) === 'off'; // toggling to ON
+        if (on) localStorage.removeItem('bmm_plugin_au_' + manifest.id);
         else localStorage.setItem('bmm_plugin_au_' + manifest.id, 'off');
-        btn.classList.toggle('plug-au-on', nowOn);
-        btn.setAttribute('data-tooltip', nowOn
-            ? (t('plugins.autoUpdateOn') || 'Auto-update: ON (re-installs when the catalog version changes)')
-            : (t('plugins.autoUpdateOff') || 'Auto-update: OFF'));
-        toast(nowOn
+        // The ORIGINAL entry in the card, not the clone that was clicked — the clone is
+        // thrown away when the menu closes, so styling it would look like nothing happened
+        // the next time the menu opens.
+        const row = card.querySelector('.plug-btn-au') as HTMLElement | null;
+        row?.classList.toggle('plug-au-on', on);
+        if (row) row.innerHTML = `${IC.refresh} ${escHtml(on
+            ? (t('plugins.autoUpdateOn') || 'Auto-update: ON')
+            : (t('plugins.autoUpdateOff') || 'Auto-update: OFF'))}`;
+        toast(on
             ? (t('plugins.autoUpdateEnabledP') || 'Auto-update enabled for this plugin')
             : (t('plugins.autoUpdateDisabledP') || 'Auto-update disabled for this plugin'), 'info');
     });
-    card.querySelector('.plug-btn-folder')?.addEventListener('click', () => {
+    act('folder', () => {
         const dir = (card.querySelector('.plug-btn-folder') as HTMLElement)?.dataset.dir || plugin.install_dir || '';
         if (dir) invoke('open_folder', { path: dir }).catch(() => {});
     });
@@ -717,6 +698,36 @@ function buildPluginCard(plugin: any, source: 'installed' | 'catalog') {
     });
 
     return card;
+}
+
+/**
+ * What each ⋮ entry does, keyed `<pluginId>:<action>`.
+ *
+ * A registry rather than listeners on the buttons, because the dropdown portal CLONES the
+ * menu and `cloneNode(true)` does not copy event listeners — a handler bound to an entry is
+ * lost on the copy the person actually clicks. A data attribute survives the clone; a
+ * listener does not.
+ *
+ * Keyed by plugin id so re-rendering the grid REPLACES each entry instead of stacking a
+ * second one: renderTab() runs again on every language change, install and uninstall, and a
+ * map that only ever grew would run one click as many times as the list had been drawn.
+ */
+const _plugActions = new Map<string, () => void>();
+let _plugDelegated = false;
+
+function _wirePlugMenuDelegation(): void {
+    if (_plugDelegated) return;
+    _plugDelegated = true;
+    document.addEventListener('click', (ev: any) => {
+        const hit = ev.target?.closest?.('[data-plug-act]');
+        if (!hit) return;
+        const fn = _plugActions.get(hit.dataset.plugAct);
+        if (!fn) return;
+        // Closed first: every one of these opens a dialog or a folder, and a menu left
+        // hanging over the result is the thing people click by accident next.
+        (window as any).closeGlobalDropdown?.(true);
+        fn();
+    });
 }
 
 // ── Tab: Catalog ───────────────────────────────────────────────────────────
