@@ -383,6 +383,33 @@ export async function initApiActivity(): Promise<void> {
                 }
                 break;
             }
+            // The one that RUNS. `repo/update` opens the update modal prefilled.
+            case 'repo/update-now': {
+                try {
+                    const ops = (params.ops && typeof params.ops === 'object') ? params.ops : {};
+                    const res: any = await invoke('update_server_repo', {
+                        repoDir: params.repoDir,
+                        authorName: params.authorName || null,
+                        ops: {
+                            remove_mod_ids: ops.removeModIds || ops.remove_mod_ids || [],
+                            remove_profile_ids: ops.removeProfileIds || ops.remove_profile_ids || [],
+                            add_profiles: ops.addProfiles || ops.add_profiles || [],
+                            mod_changelogs: ops.modChangelogs || ops.mod_changelogs || {},
+                        },
+                    });
+                    // Whatever is waiting in "Include in the repo…" goes in, as it does when
+                    // a person updates one from the screen.
+                    try {
+                        const { applyPendingExtras } = await import('../features/repo/repo-pending.js');
+                        const n = await applyPendingExtras(String(params.repoDir || ''), (m, k) => toast(m, k));
+                        if (n) toast(t('repo.extras.applied').replace('{n}', String(n)), 'success', 6000);
+                    } catch { /* the repo updated; an extra must not undo that */ }
+                    toast(`${t('repo.update.done') || 'Repo updated'} — +${res?.mods_added ?? 0} / ~${res?.mods_updated ?? 0} / -${res?.mods_removed ?? 0}`, 'success', 8000);
+                } catch (e) {
+                    toast(String((e as Error)?.message || e), 'error', 9000);
+                }
+                break;
+            }
             case 'repo/update':
                 // Drive the BMM UI exactly like gen/sync — opens the update modal,
                 // pre-fills the repo dir and profile list, then lets the user confirm.

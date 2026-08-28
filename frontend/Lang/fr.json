@@ -9520,5 +9520,10 @@
   "plugins.epF.hnLimit": "Mo par téléversement. 0 garde la valeur par défaut.",
   "plugins.epF.hnPw": "Absent ou vide = dépôt ouvert.",
   "plugins.epF.hnKeys": "Une ligne de clé publique OpenSSH par entrée, en tableau JSON. Absent = aucune clé exigée.",
-  "repo.serverStarted": "En service"
+  "repo.serverStarted": "En service",
+  "plugins.ep.updateNow": "Mettre à jour un dépôt — s’exécute immédiatement",
+  "plugins.epAbout.updateNow": "`/api/repo/update` ouvre la modale de mise à jour préremplie. Celle-ci réécrit le dépôt et resigne son manifeste, et répond avec ce qui a changé. Chaque opération est facultative : un corps qui n’en nomme aucune resigne le manifeste et ne change rien d’autre, ce qui est une demande légitime après avoir touché des fichiers du dossier à la main. Ce qui attend dans « Inclure dans le dépôt » y entre à la fin, comme depuis l’écran.",
+  "plugins.epF.unDir": "Un dossier de dépôt de cette machine. Il doit déjà contenir un repo.json.",
+  "plugins.epF.unAuthor": "Absent garde ce que le manifeste dit déjà.",
+  "plugins.epF.unOps": "Ce qu’il faut changer, en JSON : removeModIds[], removeProfileIds[], addProfiles[{profileId, modIds[]?}], modChangelogs{}. Tout est facultatif — une liste omise ne change rien plutôt que de tout vider."
 }

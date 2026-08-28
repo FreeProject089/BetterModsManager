@@ -9522,5 +9522,10 @@
   "plugins.epF.hnLimit": "MB per upload. 0 keeps the default.",
   "plugins.epF.hnPw": "Absent or empty = an open repo.",
   "plugins.epF.hnKeys": "One OpenSSH public-key line each, as a JSON array. Absent = no key requirement.",
-  "repo.serverStarted": "Serving"
+  "repo.serverStarted": "Serving",
+  "plugins.ep.updateNow": "Update a repo — runs now",
+  "plugins.epAbout.updateNow": "`/api/repo/update` opens the update modal prefilled. This rewrites the repo and re-signs its manifest, and answers with what changed. Every op is optional: a body naming none re-signs the manifest and changes nothing else, which is a legitimate thing to ask for after files under the folder were touched by hand. Anything waiting in \"Include in the repo\" goes in at the end, as it does from the screen.",
+  "plugins.epF.unDir": "A repo folder on this machine. Must already hold a repo.json.",
+  "plugins.epF.unAuthor": "Absent keeps whatever the manifest already says.",
+  "plugins.epF.unOps": "What to change, as JSON: removeModIds[], removeProfileIds[], addProfiles[{profileId, modIds[]?}], modChangelogs{}. All optional — an omitted list changes nothing rather than clearing everything."
 }

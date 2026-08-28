@@ -92,6 +92,7 @@ Ce document est la source de vérité unique pour tout ce qui est pilotable par 
 | Chemin | Auth · Perm | Corps |
 |---|---|---|
 | `/api/repo/connect` | oui · `repo.write` | `{ url, name?, password? }` |
+| `/api/repo/update-now` | oui · `repo.write` | `{ repoDir, authorName?, ops? }` — **réécrit le dépôt** et resigne son manifeste au lieu d’ouvrir la modale. `ops` = `{ removeModIds[], removeProfileIds[], addProfiles[], modChangelogs{} }`, tout facultatif |
 | `/api/repo/host-now` | oui · `repo.write` | `{ path, port, uploadLimit?, downloadPassword?, authorizedKeys[]? }` — **démarre le service**. Aussi le seul moyen d’héberger un dépôt protégé par l’API |
 | `/api/repo/gen-now` | oui · `repo.write` | `{ outputDir, authorName, profileIds[], seed?, zipOutput?, zipMods? }` — **écrit le dépôt** au lieu d’ouvrir l’écran. Une liste de profils vide est refusée, jamais « tous » |
 | `/api/repo/sync-now` | oui · `repo.write` | `{ url, repoProfile, targetProfile, gameDir, modsDir, backupDir?, password?, overwriteAll?, deleteExtra? }` — **exécute la synchro** au lieu d'ouvrir le formulaire. Les cinq premiers champs sont obligatoires ; aucun profil n'est créé ; les deux options destructrices sont à off par défaut |

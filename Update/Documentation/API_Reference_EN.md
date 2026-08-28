@@ -92,6 +92,7 @@ This document is the single source of truth for everything that can be driven pr
 | Path | Auth | Body |
 |---|---|---|
 | `/api/repo/connect` | yes | `{ url, name?, password? }` |
+| `/api/repo/update-now` | yes | `{ repoDir, authorName?, ops? }` — **rewrites the repo** and re-signs its manifest instead of opening the modal. `ops` = `{ removeModIds[], removeProfileIds[], addProfiles[], modChangelogs{} }`, all optional |
 | `/api/repo/host-now` | yes | `{ path, port, uploadLimit?, downloadPassword?, authorizedKeys[]? }` — **starts serving**. Also the only way to host a protected repo over the API |
 | `/api/repo/gen-now` | yes | `{ outputDir, authorName, profileIds[], seed?, zipOutput?, zipMods? }` — **writes the repo** instead of opening the screen. An empty profile list is refused, never “all of them” |
 | `/api/repo/sync-now` | yes | `{ url, repoProfile, targetProfile, gameDir, modsDir, backupDir?, password?, overwriteAll?, deleteExtra? }` — **runs the sync** instead of opening the form. All five first fields required; no profile is created; the two destructive options default off |

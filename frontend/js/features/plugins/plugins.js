@@ -7177,6 +7177,20 @@ function getEndpointDefs() {
             ],
         },
         {
+            method: 'POST', path: '/api/repo/update-now', auth: true,
+            desc: t('plugins.ep.updateNow'),
+            about: t('plugins.epAbout.updateNow'),
+            fields: [
+                { name: 'repoDir', type: 'string', required: true, desc: t('plugins.epF.unDir') },
+                { name: 'authorName', type: 'string', required: false, desc: t('plugins.epF.unAuthor') },
+                { name: 'ops', type: 'string', required: false, desc: t('plugins.epF.unOps') },
+            ],
+            responseStatuses: [
+                { code: 202, label: 'Accepted', body: '{ "ok": true, "driven_by": "bmm-ui", "action": "repo/update-now" }' },
+                e401,
+            ],
+        },
+        {
             method: 'POST', path: '/api/repo/host-now', auth: true,
             desc: t('plugins.ep.hostNow'),
             about: t('plugins.epAbout.hostNow'),

@@ -308,6 +308,27 @@ struct NewKeyBody {
     kind: Option<String>,
 }
 
+/// `POST /api/repo/update-now` — rewrite an existing repo, rather than open the screen.
+///
+/// `RepoUpdateOps` and `ProfileAddSpec` have carried `#[serde(alias = "profileId")]` with the
+/// comment "camelCase from external API callers" since they were written. They were built for
+/// this call and nothing ever made it.
+///
+/// The ops are all optional and all default empty, which is deliberate: a body naming nothing
+/// re-signs the manifest and changes nothing else, and that is a legitimate thing to ask for
+/// after files under the folder were touched by hand.
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct RepoUpdateNowBody {
+    /// A repo folder on this machine. Must already hold a `repo.json`.
+    repo_dir: String,
+    /// Absent keeps whatever the manifest already says.
+    #[serde(default)]
+    author_name: Option<String>,
+    #[serde(default)]
+    ops: Option<serde_json::Value>,
+}
+
 /// `POST /api/repo/host-now` — start serving, rather than open the screen.
 ///
 /// `/api/repo/host` navigates and prefills, while its own sibling `/api/repo/host-stop`
@@ -2397,6 +2418,37 @@ pub async fn start_api_server(
             )
         });
 
+    // POST /api/repo/update-now  (auth) — rewrite an existing repo.
+    let tok_upd_now = token.clone();
+    let handle_upd_now = app_handle.clone();
+    let repo_update_now = warp::path!("api" / "repo" / "update-now")
+        .and(warp::post())
+        .and(require_token(tok_upd_now))
+        .and(require_permission(token.clone(), "repo.write"))
+        .and(warp::body::json::<RepoUpdateNowBody>())
+        .and(with_app_handle(handle_upd_now))
+        .map(|body: RepoUpdateNowBody, handle: tauri::AppHandle| {
+            if body.repo_dir.trim().is_empty() {
+                return warp::reply::with_status(
+                    warp::reply::json(&ApiError { error: "repoDir is required".into() }),
+                    StatusCode::BAD_REQUEST,
+                );
+            }
+            let _ = handle.emit("bmm://api-exec", serde_json::json!({
+                "action": "repo/update-now",
+                "params": {
+                    "repoDir": body.repo_dir,
+                    "authorName": body.author_name,
+                    // Passed through as given. The ops shape is the command's, and
+                    // re-describing it here would be a second definition to keep in step.
+                    "ops": body.ops,
+                }
+            }));
+            warp::reply::with_status(warp::reply::json(&serde_json::json!({
+                "ok": true, "driven_by": "bmm-ui", "action": "repo/update-now"
+            })), StatusCode::ACCEPTED)
+        });
+
     // POST /api/repo/host-now  (auth) — start serving.
     let tok_host_now = token.clone();
     let handle_host_now = app_handle.clone();
@@ -3503,6 +3555,7 @@ pub async fn start_api_server(
         .or(repo_sync_now)
         .or(repo_gen_now)
         .or(repo_host_now)
+        .or(repo_update_now)
         .boxed();
 
     let group_b = enable_mod
