@@ -294,6 +294,14 @@ async function generate() {
             },
         })) as ManifestReport;
         renderReport(report);
+        // Whatever was chosen in "Include in the repo…" but had no folder to go
+        // into yet. Applied HERE rather than by that screen, so choosing and
+        // publishing stop being the same act in the wrong order.
+        try {
+            const { applyPendingExtras } = await import('./repo-extras.js');
+            const n = await applyPendingExtras(outDir || '');
+            if (n) toast(t('repo.extras.applied').replace('{n}', String(n)), 'success', 6000);
+        } catch { /* the repo itself succeeded; an extra must not undo that */ }
         toast(t('repo.manifestDone') || 'repo.json generated', 'success');
     } catch (e) {
         toast(String(e), 'error');

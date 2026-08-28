@@ -511,6 +511,76 @@ export async function applyExtrasToRepo(
     return await invoke('repo_extras_apply', { repoDir, sources, replace }) as RepoExtra[];
 }
 
+/** Where a selection waits between choosing it and generating the repo. */
+const PENDING_KEY = 'bmm_repo_extras_pending';
+
+/**
+ * What the next generated repo should carry.
+ *
+ * The picker used to WRITE, immediately, into a repo folder that had to exist already — so
+ * the only way to publish a plugin with a repo was to generate the repo, then remember to
+ * come back and add it, then generate again if you changed a profile. Choosing and
+ * publishing were the same act, in the wrong order.
+ *
+ * A selection is a decision; applying it is a step. They are separate now: this holds the
+ * decision, and every flow that produces or refreshes a repo folder applies it at the end.
+ */
+export function pendingExtras(): { chosen: ExtraCandidate[]; shares: unknown[] } {
+    try {
+        const raw = JSON.parse(localStorage.getItem(PENDING_KEY) || 'null');
+        if (raw && Array.isArray(raw.chosen)) {
+            return { chosen: raw.chosen, shares: Array.isArray(raw.shares) ? raw.shares : [] };
+        }
+    } catch { /* corrupt or absent: nothing is pending, which is a valid answer */ }
+    return { chosen: [], shares: [] };
+}
+
+/** Remember it. An empty selection CLEARS rather than storing an empty list. */
+export function setPendingExtras(chosen: ExtraCandidate[], shares: unknown[]): void {
+    try {
+        if (!chosen.length && !shares.length) localStorage.removeItem(PENDING_KEY);
+        else localStorage.setItem(PENDING_KEY, JSON.stringify({ chosen, shares }));
+    } catch { /* private mode: the selection lives for this screen only */ }
+    // The repo screen shows a count beside the button. It has to hear about a change it
+    // did not make — an export clearing the selection is exactly that case.
+    try { document.dispatchEvent(new CustomEvent('bmm:repo-extras-changed')); } catch { /* no DOM */ }
+}
+
+/**
+ * Write whatever is pending into a repo folder that has just been produced or refreshed.
+ *
+ * Called by generate, by manifest-only, by update-from-server and by update-an-existing-repo
+ * — the four things that leave a repo folder in a state worth publishing. Returns how many
+ * entries landed, so the caller can say so; never throws, because a repo that was generated
+ * correctly must not report failure over an extra.
+ */
+export async function applyPendingExtras(repoDir: string): Promise<number> {
+    const { chosen, shares } = pendingExtras();
+    if (!repoDir || (!chosen.length && !shares.length)) return 0;
+    let n = 0;
+    try {
+        const packs = chosen.filter((c) => c.kind === 'modpack');
+        const extras = chosen.filter((c) => c.kind !== 'modpack');
+        if (extras.length) n += (await applyExtrasToRepo(repoDir, extras, true)).length;
+        // `replace` is false here: generating does not un-publish what a previous run of
+        // this same selection already put in, and the export has just rebuilt repo.json
+        // from scratch anyway.
+        if (shares.length) {
+            n += await invoke('repo_modpacks_apply', { repoDir, shares, replace: true }) as number;
+        }
+    } catch (e) {
+        // Kept, deliberately. A failure here is usually a file that has moved or a folder
+        // that is not writable, and clearing the selection would make the fix "choose all
+        // fourteen again" instead of "generate again".
+        toast(`${t('repo.extras.pendingFailed')} — ${String(e).slice(0, 140)}`, 'error', 9000);
+        return n;
+    }
+    // Applied, so it stops being pending. Without this the same selection would be written
+    // into every repo generated afterwards, including ones it was never meant for.
+    setPendingExtras([], []);
+    return n;
+}
+
 /**
  * The picker: what goes into this repo.
  *
@@ -665,7 +735,7 @@ export async function openExtrasPicker(repoDirHint?: string): Promise<void> {
             <div class="rx-dest">
                 <span class="rx-dest-label">${esc(t('repo.extras.dest'))}</span>
                 <span class="rx-dest-path${repoDir ? '' : ' is-empty'}">${
-                    esc(repoDir || t('repo.extras.destNone'))}</span>
+                    esc(repoDir || t('repo.extras.destLater'))}</span>
                 <button class="btn btn-sm btn-ghost" id="rx-dest-pick">${esc(t('repo.extras.destPick'))}</button>
             </div>
             ${destError ? `<p class="rx-dest-err">${esc(destError)}</p>` : ''}
@@ -674,7 +744,8 @@ export async function openExtrasPicker(repoDirHint?: string): Promise<void> {
                      screen: neither is in a followed-sources list, and both are exactly what
                      a repo should be able to hand on. -->
                 <button class="btn btn-sm btn-ghost" id="rx-add-bundle">${esc(t('repo.extras.addBundle') || 'Carry a catalogue file…')}</button>
-                <button class="btn btn-sm btn-accent" id="rx-save">${esc(t('repo.extras.pickDone'))}</button>
+                <button class="btn btn-sm btn-accent" id="rx-save">${
+                    esc(repoDir ? t('repo.extras.pickDone') : t('repo.extras.pickLater'))}</button>
             </div>
         </div>`;
 
@@ -686,13 +757,10 @@ export async function openExtrasPicker(repoDirHint?: string): Promise<void> {
             await seedFrom(repoDir);
             draw();
         });
-        // Nowhere to save to is a disabled button that says why, not a click that opens a
-        // file explorer and loses the ticks behind it.
+        // No folder is no longer a dead end: the selection is kept and applied by whatever
+        // produces the repo next. The button says which of the two it is doing.
         const saveBtn = ov.querySelector('#rx-save') as HTMLButtonElement | null;
-        if (saveBtn && !repoDir) {
-            saveBtn.disabled = true;
-            saveBtn.title = t('repo.extras.destNone');
-        }
+        if (saveBtn && !repoDir) saveBtn.title = t('repo.extras.destLaterTip');
         (ov.querySelector('#rx-add-bundle') as HTMLElement)?.addEventListener('click', async () => {
             const c = await pickBundleCandidate();
             if (!c) return;
@@ -734,6 +802,21 @@ export async function openExtrasPicker(repoDirHint?: string): Promise<void> {
         if (btn) { btn.disabled = true; btn.textContent = t('common.saving'); }
         try {
             const chosen = candidates.filter((c) => picked.has(`${c.kind}:${c.id}`));
+            // No folder chosen: this is a DECISION, kept until something produces a repo.
+            // Generating, manifest-only, update-from-server and update-an-existing-repo all
+            // apply it at the end.
+            if (!repoDir) {
+                const packs0 = chosen.filter((c) => c.kind === 'modpack');
+                setPendingExtras(chosen, packs0.map((c) => ({
+                    modpack: c.inline,
+                    share_mode: shareModes[c.id] || 'public',
+                    custom_whitelist: (shareModes[c.id] === 'whitelist_custom' && whitelists[c.id]?.length)
+                        ? whitelists[c.id] : null,
+                })));
+                toast(t('repo.extras.pending').replace('{n}', String(chosen.length)), 'success', 7000);
+                close();
+                return;
+            }
             // Two destinations, because they are two different things in the manifest: an
             // extra is a file under `extras/` listed in `repo.extras`, a modpack is an entry
             // in `repo.modpacks` with its own share rule. Both re-sign the manifest.

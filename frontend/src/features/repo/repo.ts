@@ -2406,6 +2406,15 @@ export function initRepo() {
                 _ru.summary = `${t('repo.update.done') || 'Repo updated'} — +${res.mods_added} / ~${res.mods_updated} / -${res.mods_removed}`;
                 syncProgressUI();
                 toast(_ru.summary, 'success');
+                // Whatever was chosen in "Include in the repo…" but had no folder to go
+                // into yet. Applied HERE rather than by that screen, so choosing and
+                // publishing stop being the same act in the wrong order.
+                try {
+                    const { applyPendingExtras } = await import('./repo-extras.js');
+                    const n = await applyPendingExtras(repoDir);
+                    if (n) toast(t('repo.extras.applied').replace('{n}', String(n)), 'success', 6000);
+                } catch { /* the repo itself succeeded; an extra must not undo that */ }
+
                 // Reload the modal content to reflect the new post-update state
                 await reloadCurrentRepo();
             } catch (e) {
@@ -2786,6 +2795,14 @@ export function initRepo() {
                     serverOptions: serverOptions
                 });
                 saveHostHistory(outPath);
+                // Whatever was chosen in "Include in the repo…" but had no folder to go
+                // into yet. Applied HERE rather than by that screen, so choosing and
+                // publishing stop being the same act in the wrong order.
+                try {
+                    const { applyPendingExtras } = await import('./repo-extras.js');
+                    const n = await applyPendingExtras(outPath);
+                    if (n) toast(t('repo.extras.applied').replace('{n}', String(n)), 'success', 6000);
+                } catch { /* the repo itself succeeded; an extra must not undo that */ }
                 elements.exportStatus.textContent = t('repo.exportDone');
                 toastSaved(t('repo.exportSuccess'));
             } catch (err) {
@@ -2837,10 +2854,36 @@ export function initRepo() {
 
     const btnExtras = document.getElementById('btn-repo-extras');
     if (btnExtras) {
+        /**
+         * Say what is waiting.
+         *
+         * A selection that is applied later is a selection people forget they made — and
+         * then a repo generated for something else quietly carries it. The count sits on
+         * the button that produced it, and disappears the moment it has been written.
+         */
+        const showPending = async () => {
+            const { pendingExtras } = await import('./repo-extras.js');
+            const n = pendingExtras().chosen.length;
+            let tag = document.getElementById('repo-extras-pending');
+            if (!n) { tag?.remove(); return; }
+            if (!tag) {
+                tag = document.createElement('span');
+                tag.id = 'repo-extras-pending';
+                tag.className = 'repo-extras-pending';
+                btnExtras.insertAdjacentElement('afterend', tag);
+            }
+            tag.textContent = (t('repo.extras.pendingTag') || '{n} waiting').replace('{n}', String(n));
+            tag.title = t('repo.extras.destLaterTip') || '';
+        };
+        void showPending();
+        // The export and the two update flows clear it, so the tag has to be able to
+        // notice. Cheaper than a store: this screen is the only thing that shows it.
+        document.addEventListener('bmm:repo-extras-changed', () => { void showPending(); });
         btnExtras.addEventListener('click', async () => {
             const { openExtrasPicker } = await import('./repo-extras.js');
             const hint = (elements.inputExportPath as HTMLInputElement | null)?.value?.trim() || '';
             await openExtrasPicker(hint || undefined);
+            void showPending();
         });
     }
 

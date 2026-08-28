@@ -19939,3 +19939,17 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
 /* The panes sit inside the padded body now; the wrapper only has to stop growing. */
 .pa-wrap { display: flex; flex-direction: column; min-height: 0; }
 .pa-lede { margin: 0 0 12px; }
+
+/* What is waiting to go into the next repo. Beside the button that chose it, because a
+   selection applied later is one people forget they made. */
+.repo-extras-pending {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 700;
+    background: var(--accent-dim);
+    color: var(--accent);
+    vertical-align: middle;
+}
