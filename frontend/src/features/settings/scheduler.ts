@@ -2383,6 +2383,10 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
             const url = String(p.url || '').trim();
             if (!url) { toast(`${task.name}: ${t('sched.cat.noUrl')}`, 'warning', 8000); break; }
             requirePerm(task, 'deeplink', t('sched.permDeeplink') || 'fire deeplinks');
+            // Before the deeplink, not after: on a protected catalogue the document itself is
+            // behind the gate, so binding the key afterwards binds it for the request that
+            // already failed.
+            await applyCredsFor(url, p);
             await runDeepLink(`bmm://catalog/${p.unfollow ? 'unfollow' : 'follow'}`
                 + `?type=${encodeURIComponent(type)}&url=${encodeURIComponent(url)}`
                 // Only when there is one, so an unprotected catalogue's link stays the short
@@ -2398,6 +2402,7 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
             const url = String(p.url || '').trim();
             if (!url) { toast(`${task.name}: ${t('sched.cat.noUrl')}`, 'warning', 8000); break; }
             requirePerm(task, 'deeplink', t('sched.permDeeplink') || 'fire deeplinks');
+            await applyCredsFor(url, p);
             await runDeepLink('bmm://catalog/import'
                 + `?url=${encodeURIComponent(url)}`
                 + (p.catType ? `&type=${encodeURIComponent(String(p.catType))}` : '')
@@ -7437,8 +7442,10 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
             <!-- A catalogue can be protected too. Every catalogue SCREEN has offered the
                  password and the key for a while, through the shared source-access block;
                  this form offered neither, so a task following a protected catalogue simply
-                 failed with "could not read it". -->
-            ${credsFields(params, { password: true })}
+                 failed with "could not read it". A password is not the only way a source is
+                 protected: this form asked for one and never for a KEY, which is the half an
+                 ed25519-gated catalogue actually needs. -->
+            ${credsFields(params, { password: true, key: true })}
         </div>`;
         wireCreds(host, params);
     }
@@ -8123,7 +8130,8 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
         });
         void check();
     }
-    else if (needs === 'catImport') host.innerHTML = `
+    else if (needs === 'catImport') {
+        host.innerHTML = `
         <div class="sched-field" style="flex:1;min-width:260px"><label class="sched-flabel">${t('sched.catImp.url') || 'Address of the catalogue or index'}</label>
             <input class="input sched-cat-url" spellcheck="false" placeholder="https://…/catalog.json" value="${escAttr(params.url || '')}"></div>
         <div class="sched-field"><label class="sched-flabel">${t('sched.catImp.type') || 'Only this kind (optional)'}</label>
@@ -8131,9 +8139,11 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
                 <option value="">${escHtml(t('sched.catImp.any') || 'whatever it is')}</option>
                 ${KINDS.map(([v, l]) => `<option value="${v}"${params.catType === v ? ' selected' : ''}>${escHtml(l)}</option>`).join('')}
             </select></div>
-        <div class="sched-field"><label class="sched-flabel">${t('sched.catImp.pw') || 'Password (protected source)'}</label>
-            <input type="password" class="input sched-cat-pw" autocomplete="new-password" value="${escAttr(params.password || '')}" style="min-width:150px"></div>
-        <p class="sched-hint">${escHtml(t('sched.catImp.hint') || 'An index follows everything it lists; a single catalogue is matched against the eight kinds. One that fits none is refused rather than guessed at.')}</p>`;
+        <p class="sched-hint">${escHtml(t('sched.catImp.hint') || 'An index follows everything it lists; a single catalogue is matched against the eight kinds. One that fits none is refused rather than guessed at.')}</p>
+        ${credsFields(params, { password: true, key: true })}`;
+        // Without this the key chooser renders empty and the password lands nowhere.
+        wireCreds(host, params);
+    }
 
     else if (needs === 'catEntry') host.innerHTML = `
         <div class="sched-field"><label class="sched-flabel">${t('sched.catEnt.mode') || 'What to do'}</label>
@@ -8433,7 +8443,9 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
     host.querySelector('.sched-cat-kind')?.addEventListener('change', (e) => { params.kind = (e.target as HTMLSelectElement).value; });
     host.querySelector('.sched-cat-url')?.addEventListener('input', (e) => { params.url = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-cat-type')?.addEventListener('change', (e) => { params.catType = (e.target as HTMLSelectElement).value; });
-    host.querySelector('.sched-cat-pw')?.addEventListener('input', (e) => { params.password = (e.target as HTMLInputElement).value; });
+    // `.sched-cat-pw` was catImport's own password box. It uses the shared credentials
+    // block now — same password field as every other action, plus the key it never had —
+    // so this listener had nothing left to bind to.
     host.querySelector('.sched-cat-mode')?.addEventListener('change', (e) => { params.mode = (e.target as HTMLSelectElement).value; });
     host.querySelector('.sched-cat-id')?.addEventListener('input', (e) => { params.id = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-cat-json')?.addEventListener('input', (e) => { params.json = (e.target as HTMLInputElement).value; });
