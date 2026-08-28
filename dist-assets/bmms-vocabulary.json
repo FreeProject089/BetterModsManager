@@ -64,12 +64,16 @@
     {
       "type": "modlist.export",
       "group": "mods",
-      "params": []
+      "params": [
+        "path"
+      ]
     },
     {
       "type": "modlist.import",
       "group": "mods",
-      "params": []
+      "params": [
+        "path"
+      ]
     },
     {
       "type": "mods.enableAll",
@@ -353,7 +357,9 @@
     {
       "type": "replay.export",
       "group": "privacy",
-      "params": []
+      "params": [
+        "path"
+      ]
     },
     {
       "type": "replay.import",
@@ -483,7 +489,9 @@
       "type": "view.open",
       "group": "system",
       "params": [
-        "id"
+        "place",
+        "id",
+        "arg"
       ]
     },
     {
@@ -799,6 +807,8 @@
     "modpackActive",
     "modpackInactive",
     "allModsActive",
+    "pluginInstalled",
+    "taskArmed",
     "appRunning",
     "appNotRunning",
     "fileExists",

@@ -2,7 +2,7 @@
 
 !!! info ""
 
-    95 actions · 32 conditions · 32 valeurs · 8 sources de boucle
+    95 actions · 34 conditions · 32 valeurs · 8 sources de boucle
 
 > Généré depuis le registre de BMM lui-même, donc cette page ne peut pas décrire une version de l'application qui n'existe pas. Si une action est dans l'éditeur de blocs, elle est dans cette liste.
 
@@ -24,8 +24,8 @@ S'écrit `do <nom>(param: valeur, …)`. Une action sans paramètre prend des pa
 | `modpack.disable` | Désactive tous les mods d'un modpack | `id` |
 | `modpack.create` | Crée un modpack depuis un profil | `name` · `profile` |
 | `mod.add` | Télécharge & installe un mod depuis une URL | `url` · `name` |
-| `modlist.export` | Enregistre les mods actuels en .mmlist | — |
-| `modlist.import` | Charge des mods depuis un fichier .mmlist | — |
+| `modlist.export` | Enregistre les mods actuels en .mmlist | `path` |
+| `modlist.import` | Charge des mods depuis un fichier .mmlist | `path` |
 | `mods.enableAll` | Active tous les mods | — |
 | `mods.disableAll` | Désactive tous les mods | — |
 | `mods.scan` | Rescanne le dossier des mods | — |
@@ -93,7 +93,7 @@ S'écrit `do <nom>(param: valeur, …)`. Une action sans paramètre prend des pa
 | `telemetry.consent` | Active/désactive le consentement | `enabled` |
 | `telemetry.set` | Règle les options de télémétrie | `replay` · `full` · `bench` |
 | `recorder.set` | Configure l'enregistreur de session | `on` · `full` · `rust` · `js` |
-| `replay.export` | Exporte la session en cours | — |
+| `replay.export` | Exporte la session en cours | `path` |
 | `replay.import` | Importe & lit un replay | `path` · `url` |
 
 ### Logique & maths
@@ -133,7 +133,7 @@ S'écrit `do <nom>(param: valeur, …)`. Une action sans paramètre prend des pa
 | `task.run` | Déclenche une autre tâche | `id` |
 | `task.spawn` | Lance l’autre tâche et continue immédiatement. À utiliser quand la suite ne dépend pas du résultat — sinon prenez « Exécuter une autre tâche », qui attend. | `id` |
 | `task.setEnabled` | Armer ou désarmer une autre tâche | `taskId` · `armOn` |
-| `view.open` | Ouvrir un écran | `id` |
+| `view.open` | Ouvrir un écran | `place` · `id` · `arg` |
 | `restart` | Redémarre BMM | — |
 | `open.url` | Ouvre une URL ou un lien | `url` |
 | `custom.command` | Lance un programme avec arguments | `args` · `program` · `workingDir` · `into` |
@@ -167,6 +167,8 @@ S'écrivent là où une condition va — après `if`, `case`, `waitfor`, `repeat
 | `modpackActive` | Modpack actif |
 | `modpackInactive` | Modpack inactif |
 | `allModsActive` | Tous les mods du profil actif sont activés |
+| `pluginInstalled` | Le plugin est installé |
+| `taskArmed` | Une autre tâche est armée |
 | `appRunning` | L’app est lancée |
 | `appNotRunning` | L’app n’est PAS lancée |
 | `fileExists` | Le fichier/dossier existe |

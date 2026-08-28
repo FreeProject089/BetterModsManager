@@ -2319,8 +2319,10 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
         // ── New script-generator actions (executed via bmm:// deeplinks) ────────
         case 'modpack.create':   dl('modpack/create', { name: p.name, profile: p.profile }); break;
         case 'mod.add':          dl('install', { url: p.url, name: p.name }); break;
-        case 'modlist.export':   dl('api', { method: 'POST', path: '/api/modlists/export' }); break;
-        case 'modlist.import':   dl('api', { method: 'POST', path: '/api/modlists/import' }); break;
+        // A path, or the dialog. Without one these opened a file picker — fine for a
+        // person, and on a schedule a task that waits forever for a window nobody sees.
+        case 'modlist.export':   dl('api', { method: 'POST', path: '/api/modlists/export', body: p.path ? JSON.stringify({ path: p.path }) : '' }); break;
+        case 'modlist.import':   dl('api', { method: 'POST', path: '/api/modlists/import', body: p.path ? JSON.stringify({ path: p.path }) : '' }); break;
         case 'plugin.apply':     dl('plugin/activate', { id: p.id }); break;
         case 'plugin.compare':   dl('plugin/compare', { id: p.id }); break;
         case 'plugin.delete':    if (p.id) await invoke('uninstall_plugin', { pluginId: p.id }); break;
@@ -2491,9 +2493,16 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
             break;
         }
         case 'view.open': {
-            const id = String(p.id || '').trim();
-            if (!id) { toast(`${task.name}: ${t('sched.view.noId')}`, 'warning', 6000); break; }
-            dl('view/open', { id });
+            // `place` is `view:<id>` or `dl:<deeplink>`. A task saved before windows existed
+            // has only `id`, and still works.
+            const place = String(p.place || (p.id ? `view:${p.id}` : '')).trim();
+            if (!place) { toast(`${task.name}: ${t('sched.view.noId')}`, 'warning', 6000); break; }
+            if (place.startsWith('dl:')) {
+                const name = place.slice(3);
+                dl(name, name === 'docs/open' ? { article: p.arg } : {});
+            } else {
+                dl('view/open', { id: place.replace(/^view:/, '') });
+            }
             break;
         }
         case 'repo.gen':         dl('repo/gen'); break;
@@ -2698,7 +2707,7 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
         case 'telemetry.consent': dl('telemetry/consent', { enabled: b(p.enabled) }); break;
         case 'telemetry.set':    dl('telemetry/set', { replay: b(p.replay), full: b(p.full), bench: b(p.bench) }); break;
         case 'recorder.set':     dl('recorder/set', { on: b(p.on), full: b(p.full), rust: b(p.rust), js: b(p.js) }); break;
-        case 'replay.export':    dl('replay/export'); break;
+        case 'replay.export':    dl('replay/export', { path: p.path }); break;
         case 'replay.import':    dl('replay/import', { path: p.path, url: p.url }); break;
         case 'discord.rpc':      dl('discord/rpc', { enabled: b(p.enabled) }); break;
         case 'data.exportAuto':  dl('data/export-auto', { dir: p.dir, name: p.name, increment: p.increment }); break;
@@ -2950,6 +2959,24 @@ async function evalConditionRaw(cond: Condition, ctx: RunCtx, task?: Task): Prom
         case 'timeReached': {
             const [h, m] = String(p.time || '00:00').split(':').map((n: string) => parseInt(n, 10) || 0);
             return now.getHours() > h || (now.getHours() === h && now.getMinutes() >= m);
+        }
+        // A task can install a plugin and could not ask whether one is installed — so
+        // "install it only if it is not there" had to be written as "install it every time",
+        // which re-downloads and re-applies on every run.
+        case 'pluginInstalled': {
+            const want = String(p.id || '').trim().toLowerCase();
+            if (!want) return false;
+            const list: any[] = await invoke('get_installed_plugins').catch(() => []);
+            return list.some((x) => String(x?.manifest?.id || x?.id || '').toLowerCase() === want);
+        }
+        // The other half of "arm or disarm another task". Without it a task could set another
+        // one's state and never branch on it, so "turn the nightly sync back on if it is off"
+        // meant turning it on unconditionally and hoping that was harmless.
+        case 'taskArmed': {
+            const want = String(p.id || '').trim();
+            if (!want) return false;
+            const other = await findTask(want);
+            return !!other && other.enabled !== false;
         }
         case 'modpackActive': {
             const packs: any[] = await invoke('load_modpacks').catch(() => []);
@@ -5826,8 +5853,8 @@ const ACTION_TYPES: { v: string; label: string; needs?: string; group: string }[
     { v: 'modpack.disable', label: 'Disable modpack', needs: 'modpack', group: 'mods' },
     { v: 'modpack.create', label: 'Create modpack', needs: 'mpCreate', group: 'mods' },
     { v: 'mod.add', label: 'Add a mod (from URL)', needs: 'modAdd', group: 'mods' },
-    { v: 'modlist.export', label: 'Export a mod list (.mmlist)', group: 'mods' },
-    { v: 'modlist.import', label: 'Import a mod list (.mmlist)', group: 'mods' },
+    { v: 'modlist.export', label: 'Export a mod list (.mmlist)', needs: 'savePath', group: 'mods' },
+    { v: 'modlist.import', label: 'Import a mod list (.mmlist)', needs: 'openPath', group: 'mods' },
     { v: 'mods.enableAll', label: 'Enable all mods', group: 'mods' },
     { v: 'mods.disableAll', label: 'Disable all mods', group: 'mods' },
     { v: 'mods.scan', label: 'Scan mods folder', group: 'mods' },
@@ -5883,7 +5910,7 @@ const ACTION_TYPES: { v: string; label: string; needs?: string; group: string }[
     { v: 'telemetry.consent', label: 'Telemetry consent', needs: 'toggle', group: 'privacy' },
     { v: 'telemetry.set', label: 'Telemetry options', needs: 'telemetry', group: 'privacy' },
     { v: 'recorder.set', label: 'Session recorder', needs: 'recorder', group: 'privacy' },
-    { v: 'replay.export', label: 'Export replay', group: 'privacy' },
+    { v: 'replay.export', label: 'Export replay', needs: 'savePath', group: 'privacy' },
     { v: 'replay.import', label: 'Import replay', needs: 'replayImport', group: 'privacy' },
     // ── System & flow ──
     { v: 'notify', label: 'Show notification', needs: 'message', group: 'system' },
@@ -5911,7 +5938,7 @@ const ACTION_TYPES: { v: string; label: string; needs?: string; group: string }[
     // Switching screens. `bmm://view/open` and `POST /api/view` have both done this for a
     // while; a task could only reach it through the generic deeplink action, which meant
     // typing a screen id nothing validates.
-    { v: 'view.open', label: 'Open a screen', needs: 'viewPick', group: 'system' },
+    { v: 'view.open', label: 'Open a screen or a window', needs: 'viewPick', group: 'system' },
     { v: 'restart', label: 'Restart BMM', group: 'system' },
     { v: 'open.url', label: 'Open a URL / link', needs: 'url', group: 'system' },
     { v: 'custom.command', label: 'Run custom command', needs: 'command', group: 'system' },
@@ -6355,25 +6382,86 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
             if (params.newProfile && sel) sel.value = '__new__';
         }
     }
+    else if (needs === 'savePath' || needs === 'openPath') {
+        // One field, and it says what happens when it is empty — which is the whole point:
+        // empty means "ask me", and asking is what a schedule cannot do.
+        const saving = needs === 'savePath';
+        host.innerHTML = `<div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${escHtml(t(saving ? 'sched.path.save' : 'sched.path.open'))}</label>
+            <div class="sched-cmd-row">
+                <input class="input sched-p-path" spellcheck="false"
+                    placeholder="${escAttr(t(saving ? 'sched.path.savePh' : 'sched.path.openPh'))}"
+                    value="${escAttr(params.path || '')}">
+                <button type="button" class="btn btn-sm btn-secondary sched-path-browse">${escHtml(t('sched.choose') || 'Choose\u2026')}</button>
+            </div>
+            <span class="sched-cmd-hint">${escHtml(t('sched.path.hint'))}</span>
+        </div>`;
+        host.querySelector('.sched-p-path')?.addEventListener('input', (e) => {
+            params.path = (e.target as HTMLInputElement).value;
+        });
+        host.querySelector('.sched-path-browse')?.addEventListener('click', async () => {
+            const api = await import('../../core/api.js');
+            const picked = saving
+                ? await api.saveFile({}).catch(() => null)
+                : await api.pickFile([]).catch(() => null);
+            if (!picked) return;
+            params.path = String(picked);
+            const el = host.querySelector('.sched-p-path') as HTMLInputElement | null;
+            if (el) el.value = String(picked);
+        });
+    }
     else if (needs === 'viewPick') {
-        // Read from the navbar rather than typed here. A list written in this file is a list
-        // that goes stale the first time a screen is added or renamed, and the failure is
-        // silent: view/open warns to the console and does nothing.
+        // The screens come from the navbar rather than a list written here: a list here goes
+        // stale the first time a screen is added or renamed, and the failure is silent —
+        // view/open warns to the console and does nothing.
         const views = Array.from(document.querySelectorAll<HTMLElement>('.nav-item[data-view]'))
             .map((el) => ({ id: el.dataset.view || '', label: (el.textContent || '').trim() || el.dataset.view || '' }))
             .filter((v) => v.id);
+        // The windows that are NOT screens. These have their own deeplinks and had no action
+        // at all, so "open the theme editor at the end of this task" meant hand-writing a
+        // bmm:// link into the generic action. Each one is `deeplink|params`, because that is
+        // what distinguishes them — there is no id that covers both kinds.
+        const WINDOWS: [string, string][] = [
+            ['theme/editor', 'sched.view.w.themeEditor'],
+            ['settings/layout', 'sched.view.w.layout'],
+            ['settings/navbar', 'sched.view.w.navbar'],
+            ['benchmark/open', 'sched.view.w.benchmark'],
+            ['docs/open', 'sched.view.w.docs'],
+        ];
+        const chosen = String(params.place || (params.id ? `view:${params.id}` : ''));
         host.innerHTML = `<div class="sched-cmd-builder">
             <label class="sched-cmd-label">${escHtml(t('sched.view.which'))}</label>
-            <select class="input sched-p-view" style="max-width:260px">
+            <select class="input sched-p-view" style="max-width:300px">
                 <option value="">${escHtml(t('sched.view.pick'))}</option>
-                ${views.map((v) => `<option value="${escAttr(v.id)}"${params.id === v.id ? ' selected' : ''}>${escHtml(v.label)}</option>`).join('')}
-                ${params.id && !views.some((v) => v.id === params.id)
-                    ? `<option value="${escAttr(params.id)}" selected>${escHtml(t('sched.view.gone').replace('{n}', params.id))}</option>` : ''}
+                <optgroup label="${escAttr(t('sched.view.gScreens'))}">
+                    ${views.map((v) => `<option value="view:${escAttr(v.id)}"${chosen === `view:${v.id}` ? ' selected' : ''}>${escHtml(v.label)}</option>`).join('')}
+                </optgroup>
+                <optgroup label="${escAttr(t('sched.view.gWindows'))}">
+                    ${WINDOWS.map(([dlName, key]) => `<option value="dl:${escAttr(dlName)}"${chosen === `dl:${dlName}` ? ' selected' : ''}>${escHtml(t(key))}</option>`).join('')}
+                </optgroup>
+                ${chosen.startsWith('view:') && !views.some((v) => `view:${v.id}` === chosen)
+                    ? `<option value="${escAttr(chosen)}" selected>${escHtml(t('sched.view.gone').replace('{n}', chosen.slice(5)))}</option>` : ''}
             </select>
+            <!-- Only one of the windows takes anything, so the field appears with it rather
+                 than sitting there greyed out for the other four. -->
+            <div class="sched-view-arg"${chosen === 'dl:docs/open' ? '' : ' hidden'}>
+                <label class="sched-cmd-label">${escHtml(t('sched.view.article'))}</label>
+                <input class="input sched-p-viewarg" style="max-width:280px"
+                    placeholder="${escAttr(t('sched.view.articlePh'))}" value="${escAttr(params.arg || '')}">
+            </div>
             <span class="sched-cmd-hint">${escHtml(t('sched.view.hint'))}</span>
         </div>`;
+        const argBox = host.querySelector('.sched-view-arg') as HTMLElement | null;
         host.querySelector('.sched-p-view')?.addEventListener('change', (e) => {
-            params.id = (e.target as HTMLSelectElement).value;
+            const v = (e.target as HTMLSelectElement).value;
+            params.place = v;
+            // `id` is kept in step for tasks saved before windows existed — dropping it
+            // would make an old task open nothing without saying why.
+            params.id = v.startsWith('view:') ? v.slice(5) : '';
+            if (argBox) argBox.hidden = v !== 'dl:docs/open';
+        });
+        host.querySelector('.sched-p-viewarg')?.addEventListener('input', (e) => {
+            params.arg = (e.target as HTMLInputElement).value;
         });
     }
     else if (needs === 'repoGen') {
@@ -7602,7 +7690,7 @@ function diskOptions(selected: string): string {
 
 /** What `for each` can walk. One list: the editor's dropdown and the code box's suggestions. */
 const LOOP_SOURCES = ['enabledMods', 'disabledMods', 'mods', 'profiles', 'modpacks', 'themes', 'list', 'mapKeys'] as const;
-const COND_TYPES = ['always', 'all', 'any', 'value', 'textIs', 'fileContains', 'enumIs', 'profileActive', 'modEnabled', 'modDisabled', 'modWins', 'fileIsValid', 'modpackActive', 'modpackInactive', 'allModsActive', 'appRunning', 'appNotRunning', 'fileExists', 'pathIsDir', 'fileHash', 'filesMatch', 'fileSize', 'fileType', 'fileName', 'fileNewer', 'online', 'catalogOk', 'repoOk', 'timeReached', 'dayOfWeek', 'timeRange', 'commandSucceeds'];
+const COND_TYPES = ['always', 'all', 'any', 'value', 'textIs', 'fileContains', 'enumIs', 'profileActive', 'modEnabled', 'modDisabled', 'modWins', 'fileIsValid', 'modpackActive', 'modpackInactive', 'allModsActive', 'pluginInstalled', 'taskArmed', 'appRunning', 'appNotRunning', 'fileExists', 'pathIsDir', 'fileHash', 'filesMatch', 'fileSize', 'fileType', 'fileName', 'fileNewer', 'online', 'catalogOk', 'repoOk', 'timeReached', 'dayOfWeek', 'timeRange', 'commandSucceeds'];
 // Values a preceding action can capture (used by the `value` condition).
 // Every variable an action writes into `ctx`, so a `value` condition can read all of
 // them. Four were missing — check_disk_space has always written disk.free_gb,
@@ -7799,6 +7887,40 @@ function renderCondParams(host: HTMLElement, cond: Condition): void {
     }
     else if (cond.type === 'modEnabled' || cond.type === 'modDisabled' || cond.type === 'modWins') host.innerHTML = `<select class="input sched-cp" style="max-width:200px">${pickerOptions(_mods, p.id)}</select>`;
     else if (cond.type === 'modpackActive' || cond.type === 'modpackInactive') host.innerHTML = `<select class="input sched-cp" style="max-width:200px">${pickerOptions(_modpacks, p.id)}</select>`;
+    // Both pick from a list rather than taking a typed id. A plugin id is `com.someone.thing`
+    // and a task id is a millisecond timestamp: typed by hand, both are a silent `false`
+    // that reads as "the condition is not true" rather than "you named something that is
+    // not there".
+    else if (cond.type === 'pluginInstalled') {
+        // Filled after render: reading the installed list is a command, and this returns
+        // markup. Until it answers the box holds whatever the condition already names, so
+        // reopening a saved task never shows an empty picker for a plugin that is there.
+        host.innerHTML = `<select class="input sched-cp" style="max-width:240px">
+            <option value="">${escHtml(t('sched.cond.pickPlugin'))}</option>
+            ${p.id ? `<option value="${escAttr(p.id)}" selected>${escHtml(p.id)}</option>` : ''}
+        </select>`;
+        const sel = host.querySelector('.sched-cp') as HTMLSelectElement | null;
+        void (async () => {
+            const list = (await (invoke('get_installed_plugins') as Promise<any[]>).catch(() => [])) as any[];
+            if (!sel) return;
+            const chosen = String(p.id || '');
+            sel.innerHTML = `<option value="">${escHtml(t('sched.cond.pickPlugin'))}</option>`
+                + list.map((pl) => {
+                    const id = String(pl?.manifest?.id || pl?.id || '');
+                    return `<option value="${escAttr(id)}"${chosen === id ? ' selected' : ''}>${escHtml(String(pl?.manifest?.name || id))}</option>`;
+                }).join('')
+                // Named by the condition and not installed here: shown as absent rather than
+                // silently reset to nothing, which would turn "is it installed" into
+                // "is nothing installed" the next time the task was saved.
+                + (chosen && !list.some((pl) => String(pl?.manifest?.id || pl?.id || '') === chosen)
+                    ? `<option value="${escAttr(chosen)}" selected>${escHtml(t('sched.cond.gonePlugin').replace('{n}', chosen))}</option>` : '');
+        })();
+    }
+    else if (cond.type === 'taskArmed') host.innerHTML = `<select class="input sched-cp" style="max-width:240px">
+        <option value="">${escHtml(t('sched.cond.pickTask'))}</option>
+        ${_tasks.filter((tk) => tk.id !== _draft.id).map((tk) =>
+            `<option value="${escAttr(tk.id)}"${p.id === tk.id ? ' selected' : ''}>${escHtml(tk.name || tk.id)}</option>`).join('')}
+    </select>`;
     else if (cond.type === 'appRunning' || cond.type === 'appNotRunning') {
         // A pid is exact but does not survive a reboot; a name survives but can match
         // several processes or none. Both are offered, and the backend prefers the pid when

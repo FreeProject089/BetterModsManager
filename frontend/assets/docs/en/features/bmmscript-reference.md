@@ -2,7 +2,7 @@
 
 !!! info ""
 
-    95 actions · 32 conditions · 32 values · 8 loop sources
+    95 actions · 34 conditions · 32 values · 8 loop sources
 
 > Generated from BMM's own registry, so it cannot describe a version of the app that does not exist. If an action is in the block editor, it is in this list.
 
@@ -24,8 +24,8 @@ Written `do <name>(param: value, …)`. An action with no parameters takes empty
 | `modpack.disable` | Disable all mods in a modpack | `id` |
 | `modpack.create` | Create a modpack from a profile | `name` · `profile` |
 | `mod.add` | Download & install a mod from a URL | `url` · `name` |
-| `modlist.export` | Save the current mods as a .mmlist | — |
-| `modlist.import` | Load mods from a .mmlist file | — |
+| `modlist.export` | Save the current mods as a .mmlist | `path` |
+| `modlist.import` | Load mods from a .mmlist file | `path` |
 | `mods.enableAll` | Activate every mod | — |
 | `mods.disableAll` | Deactivate every mod | — |
 | `mods.scan` | Rescan the mods folder | — |
@@ -93,7 +93,7 @@ Written `do <name>(param: value, …)`. An action with no parameters takes empty
 | `telemetry.consent` | Enable/disable telemetry consent | `enabled` |
 | `telemetry.set` | Tune telemetry options | `replay` · `full` · `bench` |
 | `recorder.set` | Configure the session recorder | `on` · `full` · `rust` · `js` |
-| `replay.export` | Export the current session | — |
+| `replay.export` | Export the current session | `path` |
 | `replay.import` | Import & play a replay | `path` · `url` |
 
 ### Logic & math
@@ -133,7 +133,7 @@ Written `do <name>(param: value, …)`. An action with no parameters takes empty
 | `task.run` | Trigger another scheduled task | `id` |
 | `task.spawn` | Starts the other task and carries straight on. Use it when the rest of this task does not depend on the result — otherwise use “Run another task”, which waits. | `id` |
 | `task.setEnabled` | Arm or disarm another task | `taskId` · `armOn` |
-| `view.open` | Open a screen | `id` |
+| `view.open` | Open a screen | `place` · `id` · `arg` |
 | `restart` | Restart BMM | — |
 | `open.url` | Open a URL or link | `url` |
 | `custom.command` | Run a program with arguments | `args` · `program` · `workingDir` · `into` |
@@ -167,6 +167,8 @@ Written where a condition goes — after `if`, `case`, `waitfor`, `repeat while`
 | `modpackActive` | Modpack is active |
 | `modpackInactive` | Modpack is inactive |
 | `allModsActive` | All active-profile mods are on |
+| `pluginInstalled` | Plugin is installed |
+| `taskArmed` | Another task is armed |
 | `appRunning` | App is running |
 | `appNotRunning` | App is NOT running |
 | `fileExists` | File/folder exists |

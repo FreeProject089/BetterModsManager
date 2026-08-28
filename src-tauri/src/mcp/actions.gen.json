@@ -51,13 +51,13 @@
     {
       "type": "modlist.export",
       "label": "Export a mod list (.mmlist)",
-      "needs": null,
+      "needs": "savePath",
       "group": "mods"
     },
     {
       "type": "modlist.import",
       "label": "Import a mod list (.mmlist)",
-      "needs": null,
+      "needs": "openPath",
       "group": "mods"
     },
     {
@@ -285,7 +285,7 @@
     {
       "type": "replay.export",
       "label": "Export replay",
-      "needs": null,
+      "needs": "savePath",
       "group": "privacy"
     },
     {
@@ -386,7 +386,7 @@
     },
     {
       "type": "view.open",
-      "label": "Open a screen",
+      "label": "Open a screen or a window",
       "needs": "viewPick",
       "group": "system"
     },
