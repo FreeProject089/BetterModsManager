@@ -624,6 +624,20 @@ fn require_token(
 /// The routes have no `AppHandle`, so they cannot call the settings command. Same file, same
 /// lowercase substring rule the rest of the flags use — including the trap that rule carries:
 /// there is no comment syntax, so `#ptb=true` still contains `ptb=true`.
+/// This installation's creator id, remembered when the server starts.
+///
+/// It is WHO BMM says it is to a repo — the value a whitelist and a ban list are keyed on.
+/// It used to be a field in two request bodies, which meant a caller could present somebody
+/// else's identity to a server that decides access by it. A OnceLock rather than threading
+/// it through: the handlers that need it are free functions with no router state in scope,
+/// and it is one value that never changes for the life of the process.
+static CREATOR_ID: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+
+/// `None` before the server has started, which no request can be.
+pub fn this_creator_id() -> Option<String> {
+    CREATOR_ID.get().filter(|s| !s.is_empty()).cloned()
+}
+
 pub fn cfg_has(flag: &str) -> bool {
     std::env::current_exe().ok()
         .and_then(|p| p.parent().map(|d| d.join("app.cfg")))
@@ -817,6 +831,9 @@ pub async fn start_api_server(
     shutdown_rx: oneshot::Receiver<()>,
     app_handle: tauri::AppHandle,
 ) {
+    // Remembered once, so the two routes that reach a repo present THIS installation's
+    // identity rather than one a caller supplied.
+    let _ = CREATOR_ID.set(creator_id.as_ref().clone());
     // Token filters now read the LIVE token from `data` per-request (see
     // require_token), so this is just a clonable handle to the shared state.
     let token = data.clone();

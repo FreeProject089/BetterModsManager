@@ -92,7 +92,7 @@ Ce document est la source de vérité unique pour tout ce qui est pilotable par 
 | Chemin | Auth · Perm | Corps |
 |---|---|---|
 | `/api/repo/connect` | oui · `repo.write` | `{ url, name?, password? }` |
-| `/api/repo/sync` | oui · `repo.write` | `{ url, creator_id?, game_dir?, mods_dir?, backup_dir?, choices?, download_limit?, password? }` (UI-driven ; `password` = mot de passe de téléchargement optionnel d'un dépôt protégé) |
+| `/api/repo/sync` | oui · `repo.write` | `{ url, game_dir?, mods_dir?, backup_dir?, choices?, download_limit?, password? }` (UI-driven ; `password` = mot de passe de téléchargement optionnel d'un dépôt protégé). **`creator_id` n'est pas accepté** — c'est l'identité de cette installation face à un dépôt, pas un choix de l'appelant |
 | `/api/repo/gen` | oui · `repo.write` | `{ profileIds[], outputDir, authorName, … }` (UI-driven) |
 | `/api/repo/update` | oui | `{ repoDir }` — ouvre le modal de mise à jour incrémentale pré-rempli |
 | `/api/repo/host` | oui · `repo.write` | `{ serveDir, port?, uploadLimit? }` |
