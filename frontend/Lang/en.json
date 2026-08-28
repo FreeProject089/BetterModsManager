@@ -9906,5 +9906,14 @@
   "plugins.epAbout.catEntryDel": "Matched on id. Answers 404 when there is no such entry, rather than reporting a removal that did not happen.",
   "plugins.epF.ceTypeQ": "Query parameter. app · plugin · theme · preset · modpack · repo · tutorial · list. Defaults to app.",
   "plugins.ep.catDrop": "Delete a catalogue you author",
-  "plugins.epAbout.catDrop": "Throws away the whole authored catalogue for that kind. Answers 404 when there was never one — \"deleted\" and \"there was nothing\" are different answers, and a script branching on it deserves to know which. This does not touch the catalogues you FOLLOW; those are /api/catalogs."
+  "plugins.epAbout.catDrop": "Throws away the whole authored catalogue for that kind. Answers 404 when there was never one — \"deleted\" and \"there was nothing\" are different answers, and a script branching on it deserves to know which. This does not touch the catalogues you FOLLOW; those are /api/catalogs.",
+  "cat.importFailed": "Could not read that address",
+  "cat.importedN": "{n} catalogue(s) followed",
+  "cat.importedNone": "Nothing new in that index",
+  "cat.importUnknown": "That address is not a catalogue this app knows",
+  "plugins.ep.catImport": "Follow a catalogue without knowing its kind",
+  "plugins.epAbout.catImport": "Reads the document and decides. An index follows every kind it lists, or just `type` when you name one; a single catalogue is matched against the eight shapes and followed under the one it fits. A document that fits none is refused rather than guessed at — following it would put an address in a list that fetches it for ever. Protected catalogues are asked for their password like any other source.",
+  "plugins.epF.ciUrl": "The address. An index or a catalogue — it works out which.",
+  "plugins.epF.ciType": "Only this kind, out of an index. Absent = every kind the index lists.",
+  "plugins.epF.ciPw": "For a protected catalogue. Kept for the run, never written down."
 }

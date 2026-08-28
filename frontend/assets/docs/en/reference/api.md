@@ -412,6 +412,7 @@ Two shapes sit outside that rule:
 | `POST` | `/api/catalog/apps` | `catalog.write` | `id`*, `title`*, `download`* `{url, file_type}`, `description`, `category`, `price`, `tags` (≤3), `requirements`, `md_link` → `201` | |
 | `PUT` | `/api/catalog/apps/:id` | `catalog.write` | `title`, `description`, `version`, `category`, `download` | |
 | `DELETE` | `/api/catalog/apps/:id` | `catalog.write` | — | |
+| `POST` | `/api/catalog/import` | `catalog.write` | `url`*, `type`, `password` → `202`. Reads the document and decides: an index follows every kind it lists (or just `type`), a single catalogue is matched against the eight shapes. One that fits none is refused rather than guessed at | ✓ |
 | `POST` | `/api/catalog/entries` | `catalog.write` | `type` (`app` · `plugin` · `theme` · `preset` · `modpack` · `repo` · `tutorial` · `list`, default `app`), `entry`* → `201`. Written under the array name that kind's format uses. The entry must carry an `id` — update and delete both match on it, so one without would be added into a dead end | |
 | `PUT` | `/api/catalog/entries/:id` | `catalog.write` | `type`, plus the fields to merge. `type` says which catalogue to open and is never written into the entry | |
 | `DELETE` | `/api/catalog/entries/:id` | `catalog.write` | Query `type` · `404` when there is no such entry, rather than reporting a removal that did not happen | |

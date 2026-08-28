@@ -3564,6 +3564,45 @@ pub async fn start_api_server(
             }
         });
 
+    // Follow whatever is at an address, without being told what kind it is.
+    //
+    // `/api/catalogs` takes a `type` and follows blindly: a link carrying the wrong one lands
+    // a theme catalogue in the plugin list, where it is fetched on every start and shows
+    // nothing. Whoever has the address usually does not know which of the eight it is. The
+    // document does, so this reads it and decides.
+    //
+    // Driven through the interface, like follow/unfollow, because the source lists belong to
+    // it — and because the reading side already knows how to ask for a password, tell an index
+    // from a catalogue, and refuse a document that is neither.
+    #[derive(serde::Deserialize, Clone)]
+    struct CatalogImportBody {
+        url: String,
+        /// Only this kind, out of an index. Absent = every kind the index lists.
+        #[serde(default, rename = "type")] kind: Option<String>,
+        /// For a protected catalogue. Kept for the run, never written down.
+        #[serde(default)] password: Option<String>,
+    }
+    let (tok_ci, perm_ci, h_ci) = (token.clone(), data.clone(), app_handle.clone());
+    let cat_import = warp::path!("api" / "catalog" / "import")
+        .and(warp::post()).and(require_token(tok_ci)).and(require_permission(perm_ci, "catalog.write"))
+        .and(warp::body::json::<CatalogImportBody>())
+        .and(with_app_handle(h_ci))
+        .map(|body: CatalogImportBody, h: tauri::AppHandle| {
+            if !(body.url.starts_with("http://") || body.url.starts_with("https://")) {
+                return warp::reply::with_status(
+                    warp::reply::json(&ApiError { error: "url must be http(s)".into() }),
+                    StatusCode::BAD_REQUEST);
+            }
+            if let Some(k) = body.kind.as_deref() {
+                if let Err(e) = catalog_kind_of(Some(k)) {
+                    return warp::reply::with_status(warp::reply::json(&ApiError { error: e }), StatusCode::BAD_REQUEST);
+                }
+            }
+            api_exec_reply(&h, "catalog/import", serde_json::json!({
+                "url": body.url, "type": body.kind, "password": body.password,
+            }))
+        });
+
     // ── Entries, for every kind ─────────────────────────────────────────────
     //
     // `/api/catalog/apps` above does this for apps and only apps: the path names the kind and
@@ -3705,6 +3744,7 @@ pub async fn start_api_server(
         .or(cat_add_app)               // POST /api/catalog/apps
         .or(cat_upd_app)               // PUT  /api/catalog/apps/:id
         .or(cat_del_app)               // DELETE /api/catalog/apps/:id
+        .or(cat_import)                // POST /api/catalog/import
         .or(cat_entry_add)             // POST /api/catalog/entries
         .or(cat_entry_upd)             // PUT  /api/catalog/entries/:id
         .or(cat_entry_del)             // DELETE /api/catalog/entries/:id

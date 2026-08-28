@@ -734,6 +734,75 @@ async function handleDeepLink(urlStr: string): Promise<void> {
             return;
         }
 
+        // Follow whatever is at this address, without being told what it is.
+        //
+        //   bmm://catalog/import?url=https://…/something.json
+        //   bmm://catalog/import?url=…&type=plugin      (only that kind, out of an index)
+        //   bmm://catalog/import?url=…&password=…       (a protected source)
+        //
+        // `catalog/follow` needs the kind in the link, and a link that carries the wrong one
+        // is followed into the wrong list — a theme catalogue sitting in the plugin browser,
+        // fetched on every start, showing nothing. Whoever pastes an address usually does not
+        // know which of the eight kinds it is; the DOCUMENT does.
+        //
+        // Reads through fetchSourceText, so a protected catalogue is asked for its password
+        // exactly as everywhere else, and then hands off to the same importer and the same
+        // writer the screens use. Nothing about what a catalogue IS is decided here.
+        if (action === 'catalog/import') {
+            const url = parsedUrl.searchParams.get('url') || '';
+            const want = parsedUrl.searchParams.get('type') || '';
+            const password = parsedUrl.searchParams.get('password') || '';
+            if (!/^https?:\/\//i.test(url)) { toast(t('cat.badUrl'), 'warning', 8000); return; }
+            if (password) {
+                const { rememberSourcePassword } = await import('./source-fetch.js');
+                try { rememberSourcePassword(url, password); } catch { /* try anyway */ }
+            }
+            let doc: unknown;
+            try {
+                const { fetchSourceText } = await import('./source-fetch.js');
+                doc = JSON.parse(await fetchSourceText(url));
+            } catch (e) {
+                // The address, and why. "Could not import" on its own is the message that
+                // sends somebody to check their internet when the file was not JSON.
+                toast(`${t('cat.importFailed') || 'Could not read that address'} — ${String(e).slice(0, 120)}`, 'error', 9000);
+                return;
+            }
+            const ix = await import('../features/catalogs/catalog-index.js');
+            const cs = await import('../features/catalogs/catalog-sources.js');
+
+            if (ix.looksLikeIndex(doc)) {
+                // An index lists catalogues for several kinds. With no `type` every routable
+                // one is taken, which is what "import this index" means; with a `type`, only
+                // that one — the same restraint importIndexForType already applies.
+                const kinds = want ? [want] : (ix.ROUTABLE as readonly string[]);
+                let added = 0;
+                for (const k of kinds) {
+                    try {
+                        const r = await ix.importIndexForType(doc as any, k as any, url, undefined, cs.writeSources);
+                        added += r.added || 0;
+                    } catch { /* one kind failing must not stop the rest */ }
+                }
+                toast(added
+                    ? (t('cat.importedN') || '{n} catalogue(s) followed').replace('{n}', String(added))
+                    : (t('cat.importedNone') || 'Nothing new in that index'), added ? 'success' : 'info', 7000);
+                return;
+            }
+
+            // Not an index: one catalogue. Work out which kind it is from its own shape, and
+            // refuse rather than guess — a document that matches nothing is not a catalogue,
+            // and following it would put an address in a list that fetches it for ever.
+            const kind = want || (ix.INDEX_TYPES as readonly string[])
+                .find((k) => ix.catalogLooksLike(doc, k)) || '';
+            if (!kind || !ix.catalogLooksLike(doc, kind)) {
+                toast(t('cat.importUnknown') || 'That address is not a catalogue this app knows', 'warning', 9000);
+                return;
+            }
+            // Followed through the same path the link with a type takes, so there is one
+            // implementation of "follow", with its history entry and its origin.
+            await handleDeepLink(`bmm://catalog/follow?type=${encodeURIComponent(kind)}&url=${encodeURIComponent(url)}`);
+            return;
+        }
+
         // Open a Help & Other article in-app. Lets BMM Docs (the website) link straight
         // into the integrated docs: bmm://docs/open?article=<id> (or no id → docs home).
         if (action === 'docs/open') {

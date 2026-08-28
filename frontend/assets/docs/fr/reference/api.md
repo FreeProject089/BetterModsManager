@@ -424,6 +424,7 @@ Deux formes échappent à la règle :
 | `POST` | `/api/catalog/apps` | `catalog.write` | `id`*, `title`*, `download`* `{url, file_type}`, `description`, `category`, `price`, `tags` (≤3), `requirements`, `md_link` → `201` | |
 | `PUT` | `/api/catalog/apps/:id` | `catalog.write` | `title`, `description`, `version`, `category`, `download` | |
 | `DELETE` | `/api/catalog/apps/:id` | `catalog.write` | — | |
+| `POST` | `/api/catalog/import` | `catalog.write` | `url`*, `type`, `password` → `202`. Lit le document et décide : un index fait suivre chaque type qu'il liste (ou seulement `type`), un catalogue seul est confronté aux huit formes. Celui qui n'en suit aucune est refusé plutôt que deviné | ✓ |
 | `POST` | `/api/catalog/entries` | `catalog.write` | `type` (`app` · `plugin` · `theme` · `preset` · `modpack` · `repo` · `tutorial` · `list`, `app` par défaut), `entry`* → `201`. Écrite sous le nom de tableau qu'utilise le format de ce type. L'entrée doit porter un `id` — la mise à jour et la suppression s'y réfèrent, donc une entrée sans id serait ajoutée dans un cul-de-sac | |
 | `PUT` | `/api/catalog/entries/:id` | `catalog.write` | `type`, plus les champs à fusionner. `type` dit quel catalogue ouvrir et n'est jamais écrit dans l'entrée | |
 | `DELETE` | `/api/catalog/entries/:id` | `catalog.write` | Requête `type` · `404` si l'entrée n'existe pas, plutôt qu'annoncer une suppression qui n'a pas eu lieu | |

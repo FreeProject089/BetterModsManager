@@ -9904,5 +9904,14 @@
   "plugins.epAbout.catEntryDel": "Repérée par son id. Répond 404 quand l’entrée n’existe pas, plutôt que d’annoncer une suppression qui n’a pas eu lieu.",
   "plugins.epF.ceTypeQ": "Paramètre de requête. app · plugin · theme · preset · modpack · repo · tutorial · list. app par défaut.",
   "plugins.ep.catDrop": "Supprimer un catalogue que tu écris",
-  "plugins.epAbout.catDrop": "Jette tout le catalogue écrit pour ce type. Répond 404 s’il n’y en a jamais eu — « supprimé » et « il n’y avait rien » sont deux réponses différentes, et un script qui branche dessus mérite de savoir laquelle. Ceci ne touche pas les catalogues que tu SUIS ; ceux-là sont sur /api/catalogs."
+  "plugins.epAbout.catDrop": "Jette tout le catalogue écrit pour ce type. Répond 404 s’il n’y en a jamais eu — « supprimé » et « il n’y avait rien » sont deux réponses différentes, et un script qui branche dessus mérite de savoir laquelle. Ceci ne touche pas les catalogues que tu SUIS ; ceux-là sont sur /api/catalogs.",
+  "cat.importFailed": "Impossible de lire cette adresse",
+  "cat.importedN": "{n} catalogue(s) suivi(s)",
+  "cat.importedNone": "Rien de nouveau dans cet index",
+  "cat.importUnknown": "Cette adresse n'est pas un catalogue que l'app reconnaît",
+  "plugins.ep.catImport": "Suivre un catalogue sans connaître son type",
+  "plugins.epAbout.catImport": "Lit le document et décide. Un index fait suivre chaque type qu’il liste, ou seulement `type` si tu en nommes un ; un catalogue seul est confronté aux huit formes et suivi sous celle qui correspond. Un document qui n’en suit aucune est refusé plutôt que deviné — le suivre mettrait une adresse dans une liste qui la récupère à chaque démarrage. Les catalogues protégés se voient demander leur mot de passe comme n’importe quelle source.",
+  "plugins.epF.ciUrl": "L’adresse. Un index ou un catalogue — il détermine lequel.",
+  "plugins.epF.ciType": "Seulement ce type, dans un index. Absent = tous les types que l’index liste.",
+  "plugins.epF.ciPw": "Pour un catalogue protégé. Gardé pour la session, jamais écrit."
 }

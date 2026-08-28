@@ -7036,6 +7036,21 @@ function getEndpointDefs(): EndpointDef[] {
                 e401,
             ],
         },
+        {
+            method: 'POST', path: '/api/catalog/import', auth: true,
+            desc: t('plugins.ep.catImport'),
+            about: t('plugins.epAbout.catImport'),
+            fields: [
+                { name: 'url', type: 'string', required: true, desc: t('plugins.epF.ciUrl') },
+                { name: 'type', type: 'string', required: false, desc: t('plugins.epF.ciType') },
+                { name: 'password', type: 'string', required: false, desc: t('plugins.epF.ciPw') },
+            ],
+            responseStatuses: [
+                { code: 202, label: 'Accepted', body: '{ "ok": true, "driven_by": "bmm-ui", "action": "catalog/import" }' },
+                e400, e401,
+            ],
+        },
+
         // Authoring a catalogue of ANY kind.
         //
         // /api/catalog/apps does this for apps and only apps — the path names the kind and the

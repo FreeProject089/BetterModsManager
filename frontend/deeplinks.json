@@ -56,6 +56,14 @@
     ]
   },
   {
+    "action": "catalog/import",
+    "params": [
+      "url",
+      "type",
+      "password"
+    ]
+  },
+  {
     "action": "catalog/unfollow",
     "params": [
       "type",

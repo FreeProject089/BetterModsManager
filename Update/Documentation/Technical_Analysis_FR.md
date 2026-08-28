@@ -615,7 +615,7 @@ Implémenté dans `src-tauri/src/commands/plugins.rs` avec les modèles dans `mo
 
 | Aspect | Détail |
 | :--- | :--- |
-| **Routes** | ~81 endpoints via `path!("api" / ...)` : `health`, `status`, `mods` (+ `active`/`enable`/`disable`/`{id}`), `profiles` (+ `activate`/`{id}`), `plugins` (+ `compare`/`apply`), `modpacks` (+ `create`/`enable`/`disable`/`import`/`{id}`), `repo` (`info`/`connect`/`list`/`sync`/`gen`/`host`), `data` (`export`/`import`), `modlists` (`export`/`import`), `creator-id`, `check-update`, `restart`. |
+| **Routes** | ~82 endpoints via `path!("api" / ...)` : `health`, `status`, `mods` (+ `active`/`enable`/`disable`/`{id}`), `profiles` (+ `activate`/`{id}`), `plugins` (+ `compare`/`apply`), `modpacks` (+ `create`/`enable`/`disable`/`import`/`{id}`), `repo` (`info`/`connect`/`list`/`sync`/`gen`/`host`), `data` (`export`/`import`), `modlists` (`export`/`import`), `creator-id`, `check-update`, `restart`. |
 | **Auth** | Un token par installation (`get_api_token` / `reset_api_token`) protège les routes mutantes ; SHA-256 est utilisé pour la gestion du token. |
 | **Concurrence** | Partage `AppData` via `Arc` ; utilise un canal `oneshot` + `AtomicBool` pour un arrêt propre. |
 | **Consommateurs** | L'explorateur d'API intégré, les scripts d'automatisation générés et les outils compagnons externes. |

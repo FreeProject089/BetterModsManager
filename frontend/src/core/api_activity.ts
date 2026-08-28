@@ -265,6 +265,7 @@ export async function initApiActivity(): Promise<void> {
             // as the others, it special-cases `app` (whose sources live in the backend), and
             // it takes a password for a protected catalogue. A second implementation here
             // would be a second set of those rules.
+            case 'catalog/import':
             case 'catalog/follow':
             case 'catalog/unfollow': {
                 const qs = new URLSearchParams();
