@@ -7371,6 +7371,106 @@ function getEndpointDefs() {
                 e401,
             ],
         },
+        // The five the panel never listed.
+        //
+        // Measured against the router: 80 routes, and these had no entry here at all. Two of
+        // them take a credential, which is the visible half of it — there can be no field for
+        // a protected source on an endpoint the screen does not know exists. The
+        // generated-script side already spoke all five (`follow_catalog`, `new_key`,
+        // `repo_take`, `signal`), so the API was reachable from a script and not from the
+        // panel whose whole job is to document the API.
+        {
+            method: 'POST', path: '/api/repo/extras', auth: true,
+            desc: t('plugins.ep.repoExtras'),
+            about: t('plugins.epAbout.repoExtras'),
+            fields: [
+                { name: 'url', type: 'string', required: true, desc: t('plugins.epF.rxUrl') },
+                { name: 'kind', type: 'string', required: true, desc: t('plugins.epF.rxKind') },
+                { name: 'id', type: 'string', required: true, desc: t('plugins.epF.rxId') },
+                { name: 'password', type: 'string', required: false, desc: t('plugins.epF.rxPw') },
+            ],
+            responseStatuses: [
+                { code: 202, label: 'Accepted', body: '{ "ok": true, "action": "repo/extras" }' },
+                { code: 401, label: 'Unauthorized', body: '{ "error": "Repo password required (401)" }' },
+                e400, e500,
+            ],
+        },
+        {
+            method: 'GET', path: '/api/catalogs', auth: true,
+            desc: t('plugins.ep.catalogsGet'),
+            about: t('plugins.epAbout.catalogsGet'),
+            fields: null,
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "sources": { "plugin": ["https://.../catalog.json"], "theme": [] }, "written_at": "2026-01-01T00:00:00Z" }' },
+                e401,
+            ],
+        },
+        {
+            method: 'POST', path: '/api/catalogs', auth: true,
+            desc: t('plugins.ep.catalogsPost'),
+            about: t('plugins.epAbout.catalogsPost'),
+            fields: [
+                // `type` on the wire, `kind` in the Rust — the struct renames it. Written as
+                // the wire name, because that is what somebody types into this box.
+                { name: 'type', type: 'string', required: true, desc: t('plugins.epF.cfType') },
+                { name: 'url', type: 'string', required: true, desc: t('plugins.epF.cfUrl') },
+                { name: 'follow', type: 'boolean', required: false, desc: t('plugins.epF.cfFollow') },
+            ],
+            responseStatuses: [
+                { code: 202, label: 'Accepted', body: '{ "ok": true, "action": "catalog/follow" }' },
+                e400, e401,
+            ],
+        },
+        {
+            method: 'GET', path: '/api/hook', auth: true,
+            desc: t('plugins.ep.hookGet'),
+            about: t('plugins.epAbout.hookGet'),
+            fields: null,
+            responseStatuses: [{ code: 200, label: 'OK', body: '{ "hooks": [] }' }, e401],
+        },
+        {
+            method: 'POST', path: '/api/hook', auth: true,
+            desc: t('plugins.ep.hookPost'),
+            about: t('plugins.epAbout.hookPost'),
+            fields: [
+                { name: 'name', type: 'string', required: true, desc: t('plugins.epF.hkName') },
+                { name: 'data', type: 'string', required: false, desc: t('plugins.epF.hkData') },
+            ],
+            responseStatuses: [{ code: 200, label: 'OK', body: '{ "ok": true }' }, e400, e401],
+        },
+        {
+            method: 'GET', path: '/api/keys', auth: true,
+            desc: t('plugins.ep.keysGet'),
+            about: t('plugins.epAbout.keysGet'),
+            fields: null,
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "keys": [{ "name": "BMM", "path": "C:/Users/.../bmm.key" }] }' },
+                e401,
+            ],
+        },
+        {
+            method: 'POST', path: '/api/keys', auth: true,
+            desc: t('plugins.ep.keysPost'),
+            about: t('plugins.epAbout.keysPost'),
+            fields: [
+                { name: 'name', type: 'string', required: true, desc: t('plugins.epF.nkName') },
+                { name: 'kind', type: 'string', required: false, desc: t('plugins.epF.nkKind') },
+            ],
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "ok": true, "public": "ssh-ed25519 AAAAC3... bmm" }' },
+                e400, e401,
+            ],
+        },
+        {
+            method: 'POST', path: '/api/schedules/enabled', auth: true,
+            desc: t('plugins.ep.schedEnabled'),
+            about: t('plugins.epAbout.schedEnabled'),
+            fields: [
+                { name: 'id', type: 'string', required: true, desc: t('plugins.epF.seId') },
+                { name: 'enabled', type: 'boolean', required: true, desc: t('plugins.epF.seOn') },
+            ],
+            responseStatuses: [{ code: 200, label: 'OK', body: '{ "ok": true }' }, e400, e401],
+        },
         {
             method: 'POST', path: '/api/repo/host-now', auth: true,
             desc: t('plugins.ep.hostNow'),
