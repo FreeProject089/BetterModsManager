@@ -19368,6 +19368,35 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
    scopes over seven domains came out ragged: nothing lined up with anything below it, and
    there was no column for the eye to run down. A grid gives every row the same left edge,
    which is the whole of what "arrange this better" asks for. */
+/* Deeplink group headings.
+   Forty-eight links used to arrive as one flat list in the order they were written, which
+   gives the eye nothing to skip with. Same visual weight as the endpoint list's method
+   separators, so the two lists on this page read the same way. */
+.plug-dl-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 14px 0 4px;
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--text-secondary);
+}
+.plug-dl-group:first-child { margin-top: 2px; }
+.plug-dl-group::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+}
+.plug-dl-group-n {
+    order: 3;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-muted);
+}
+
 .plug-req-bar {
     display: flex;
     align-items: center;

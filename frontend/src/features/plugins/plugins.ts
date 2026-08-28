@@ -172,9 +172,50 @@ function epListHtml(): string {
     _epListHtmlCache = { lang: getLang(), html };
     return html;
 }
+/**
+ * Which group a deeplink belongs to, by subject rather than by prefix.
+ *
+ * The prefix would be the cheap answer and the wrong one: `install`, `download` and `import`
+ * have no prefix at all and are three ways to do the same thing to a mod, while `theme/`,
+ * `language/` and `settings/` are three prefixes for one subject. Somebody looking for "the
+ * link that installs a mod" is not looking under I.
+ *
+ * Anything unlisted lands in `other`, which is the honest place for it — better than a
+ * silently-dropped row or a group of one.
+ */
+const DL_GROUPS: Array<{ g: string; label: string; is: (s: string) => boolean }> = [
+    { g: 'mods', label: 'Mods & profiles', is: (s) => /^(mod|profile|modpack)\//.test(s) || ['install', 'download', 'import'].includes(s) },
+    { g: 'plugins', label: 'Plugins', is: (s) => s.startsWith('plugin/') },
+    { g: 'repo', label: 'Repos & sharing', is: (s) => s.startsWith('repo/') || s.startsWith('catalog/') },
+    { g: 'apps', label: 'Apps', is: (s) => s.startsWith('app/') || s.startsWith('launchpack/') },
+    { g: 'look', label: 'Appearance & language', is: (s) => /^(theme|language|settings)\//.test(s) },
+    { g: 'auto', label: 'Automation', is: (s) => /^(schedule|view)\//.test(s) || s === 'hook' || s === 'api' },
+    { g: 'diag', label: 'Measuring & recording', is: (s) => /^(benchmark|telemetry|recorder|replay|data)\//.test(s) },
+    { g: 'other', label: 'The rest', is: () => true },
+];
+
+/** The group a scheme falls in. First match wins, and the last one matches everything. */
+function dlGroupOf(scheme: string): { g: string; label: string } {
+    const hit = DL_GROUPS.find((x) => x.is(scheme))!;
+    return { g: hit.g, label: hit.label };
+}
+
 function dlListHtml(): string {
     if (_dlListHtmlCache && _dlListHtmlCache.lang === getLang()) return _dlListHtmlCache.html;
-    const html = getDeepLinkDefs().map(dl => buildDeepLinkRow(dl)).join('');
+    // Grouped, and alphabetical inside a group. Forty-eight rows in the order they were
+    // written is a list you read top to bottom every single time, because there is no
+    // structure to skip with — the same reasoning the scheduler's presets got.
+    const defs = getDeepLinkDefs();
+    let html = '';
+    for (const grp of DL_GROUPS) {
+        const mine = defs.filter((d) => dlGroupOf(d.scheme).g === grp.g)
+            .sort((a, b) => a.scheme.localeCompare(b.scheme));
+        if (!mine.length) continue;
+        html += `<div class="plug-dl-group" data-dlgrp="${escAttr(grp.g)}">
+            <span>${escHtml(t('plugins.dlGrp.' + grp.g) || grp.label)}</span>
+            <span class="plug-dl-group-n">${mine.length}</span>
+        </div>` + mine.map((dl) => buildDeepLinkRow(dl)).join('');
+    }
     _dlListHtmlCache = { lang: getLang(), html };
     return html;
 }
@@ -4577,6 +4618,13 @@ function renderScripts(container: HTMLElement) {
             w.style.display = match ? '' : 'none';
             if (match) shown++;
         });
+        // A heading with nothing under it is worse than no heading: it reads as a group
+        // whose rows failed to render. Hidden when its own rows are all filtered out.
+        dlList.querySelectorAll<HTMLElement>('.plug-dl-group').forEach((h) => {
+            const g = h.dataset.dlgrp || '';
+            const any = rows.some((w) => w.dataset.dlgrp === g && w.style.display !== 'none');
+            h.style.display = any ? '' : 'none';
+        });
         if (dlSearchClr) dlSearchClr.style.display = q ? '' : 'none';
         if (dlCount) dlCount.textContent = q ? `${shown}/${rows.length}` : '';
     };
@@ -5381,98 +5429,98 @@ function getDeepLinkDefs(): DeepLinkDef[] {
     return [
         {
             scheme: 'mod/enable',
-            params: [{ name: 'id', required: true, desc: 'ID du mod à activer (UUID ou nom de dossier).' }],
-            desc: 'Activer un mod',
-            about: 'Active un mod spécifique dans le profil actif. BMM doit être en cours d\'exécution. Fonctionne depuis un .bat, un script ou n\'importe quelle application.',
+            params: [{ name: 'id', required: true, desc: t('plugins.dl.mod_enable.p.id') }],
+            desc: t('plugins.dl.mod_enable.d'),
+            about: t('plugins.dl.mod_enable.a'),
             example: 'bmm://mod/enable?id=my-mod-folder',
         },
         {
             scheme: 'mod/disable',
-            params: [{ name: 'id', required: true, desc: 'ID du mod à désactiver.' }],
-            desc: 'Désactiver un mod',
-            about: 'Désactive un mod spécifique dans le profil actif.',
+            params: [{ name: 'id', required: true, desc: t('plugins.dl.mod_disable.p.id') }],
+            desc: t('plugins.dl.mod_disable.d'),
+            about: t('plugins.dl.mod_disable.a'),
             example: 'bmm://mod/disable?id=my-mod-folder',
         },
         {
             scheme: 'profile/activate',
-            params: [{ name: 'id', required: true, desc: 'UUID du profil à activer.' }],
-            desc: 'Activer un profil',
-            about: 'Bascule le profil actif de BMM. Les mods du profil cible sont chargés automatiquement.',
+            params: [{ name: 'id', required: true, desc: t('plugins.dl.profile_activate.p.id') }],
+            desc: t('plugins.dl.profile_activate.d'),
+            about: t('plugins.dl.profile_activate.a'),
             example: 'bmm://profile/activate?id=prof-uuid',
         },
         {
             scheme: 'plugin/activate',
-            params: [{ name: 'id', required: true, desc: 'ID du plugin à appliquer (champ "id" dans plugin.json).' }],
-            desc: 'Appliquer un plugin',
-            about: 'Applique la modlist du plugin : active les mods requis et (si strict:true) désactive les autres.',
+            params: [{ name: 'id', required: true, desc: t('plugins.dl.plugin_activate.p.id') }],
+            desc: t('plugins.dl.plugin_activate.d'),
+            about: t('plugins.dl.plugin_activate.a'),
             example: 'bmm://plugin/activate?id=my-server-pack',
         },
         {
             scheme: 'plugin/compare',
-            params: [{ name: 'id', required: true, desc: 'ID du plugin à comparer.' }],
-            desc: 'Comparer un plugin',
-            about: 'Ouvre le panneau de comparaison entre la modlist du plugin et les mods actuellement actifs.',
+            params: [{ name: 'id', required: true, desc: t('plugins.dl.plugin_compare.p.id') }],
+            desc: t('plugins.dl.plugin_compare.d'),
+            about: t('plugins.dl.plugin_compare.a'),
             example: 'bmm://plugin/compare?id=my-server-pack',
         },
         {
             scheme: 'plugin/delete',
-            params: [{ name: 'id', required: true, desc: 'ID du plugin à désinstaller.' }],
-            desc: 'Supprimer un plugin',
-            about: 'Désinstalle définitivement un plugin (registre + permissions + fichiers). Équivalent à DELETE /api/plugins/:id.',
+            params: [{ name: 'id', required: true, desc: t('plugins.dl.plugin_delete.p.id') }],
+            desc: t('plugins.dl.plugin_delete.d'),
+            about: t('plugins.dl.plugin_delete.a'),
             example: 'bmm://plugin/delete?id=my-server-pack',
         },
         {
             scheme: 'modpack/enable',
-            params: [{ name: 'id', required: true, desc: 'ID du modpack (LocalModpack.id).' }],
-            desc: 'Activer un modpack',
-            about: 'Active tous les mods appartenant au modpack spécifié dans le profil courant.',
+            params: [{ name: 'id', required: true, desc: t('plugins.dl.modpack_enable.p.id') }],
+            desc: t('plugins.dl.modpack_enable.d'),
+            about: t('plugins.dl.modpack_enable.a'),
             example: 'bmm://modpack/enable?id=modpack-uuid',
         },
         {
             scheme: 'modpack/disable',
-            params: [{ name: 'id', required: true, desc: 'ID du modpack.' }],
-            desc: 'Désactiver un modpack',
-            about: 'Désactive tous les mods appartenant au modpack spécifié.',
+            params: [{ name: 'id', required: true, desc: t('plugins.dl.modpack_disable.p.id') }],
+            desc: t('plugins.dl.modpack_disable.d'),
+            about: t('plugins.dl.modpack_disable.a'),
             example: 'bmm://modpack/disable?id=modpack-uuid',
         },
         {
             scheme: 'install',
             params: [
-                { name: 'url',  required: true,  desc: 'URL directe vers le fichier du mod à installer.' },
-                { name: 'name', required: false, desc: 'Nom affiché dans BMM après l\'installation.' },
+                { name: 'url',  required: true,  desc: t('plugins.dl.install.p.url') },
+                { name: 'name', required: false, desc: t('plugins.dl.install.p.name') },
             ],
-            desc: 'Installer un mod depuis une URL',
-            about: 'Déclenche le téléchargement et l\'installation d\'un mod directement depuis une URL externe. BMM ouvre la boîte de dialogue d\'installation.',
+            desc: t('plugins.dl.install.d'),
+            about: t('plugins.dl.install.a'),
             example: 'bmm://install?url=https://example.com/mod.zip&name=MyMod',
         },
         // ── Server Repo ──────────────────────────────────────────────────────
         {
             scheme: 'repo/connect',
             params: [
-                { name: 'url',  required: true,  desc: 'URL vers le repo.json du serveur à connecter.' },
-                { name: 'name', required: false, desc: 'Nom affiché dans BMM (récupéré automatiquement si omis).' },
+                { name: 'url',  required: true,  desc: t('plugins.dl.repo_connect.p.url') },
+                { name: 'name', required: false, desc: t('plugins.dl.repo_connect.p.name') },
             ],
-            desc: 'Connecter un repo distant',
-            about: 'Enregistre l\'URL d\'un repo distant dans la liste des repos connectés de BMM. Équivalent à POST /api/repo/connect. BMM doit être en cours d\'exécution. Utile depuis un installateur, un launcher, ou un lien de partage.',
+            desc: t('plugins.dl.repo_connect.d'),
+            about: t('plugins.dl.repo_connect.a'),
             example: 'bmm://repo/connect?url=https://monserveur.com/repo.json&name=Mon+Serveur',
         },
         {
             scheme: 'repo/sync',
             params: [
-                { name: 'url',      required: true,  desc: 'URL vers le repo.json distant.' },
-                { name: 'profile',  required: true,  desc: 'ID du profil dans le repo distant (visible dans repo.json).' },
+                { name: 'url',      required: true,  desc: t('plugins.dl.repo_sync.p.url') },
+                { name: 'profile',  required: true,  desc: t('plugins.dl.repo_sync.p.profile') },
                 // The PARAMETER keeps its name. `game_dir` is the wire contract every
                 // existing script, deeplink and scheduled task already sends; renaming it
                 // to match a UI label would break all of them, silently. Only the prose
                 // follows the app.
                 { name: 'game_dir', required: false, desc: t('plugins.apiGameDirDesc') },
-                { name: 'mods_dir', required: false, desc: 'Dossier des mods (requis si nouveau profil).' },
-                { name: 'backup_dir', required: false, desc: 'Dossier de backup (requis si nouveau profil).' },
-                { name: 'local_profile', required: false, desc: 'UUID d\'un profil local existant à mettre à jour (omis = crée un nouveau profil).' },
-                { name: 'password', required: false, desc: 'Mot de passe de téléchargement, si le repo auto-hébergé est protégé (envoyé en header X-Repo-Password).' },
+                { name: 'mods_dir', required: false, desc: t('plugins.dl.repo_sync.p.mods_dir') },
+                { name: 'backup_dir', required: false, desc: t('plugins.dl.repo_sync.p.backup_dir') },
+                { name: 'local_profile', required: false, desc: t('plugins.dl.repo_sync.p.local_profile') },
+                { name: 'password', required: false, desc: t('plugins.dl.repo_sync.p.password') },
             ],
-            desc: 'Synchroniser depuis un repo distant',
-            about: 'Déclenche le téléchargement et l\'intégration d\'un profil du repo distant dans BMM. Équivalent à POST /api/repo/sync. BMM ouvre l\'interface de synchronisation avec les paramètres pré-remplis (et lance automatiquement le fetch). Utile depuis un launcher pour forcer la mise à jour des mods avant lancement.',
+            desc: t('plugins.dl.repo_sync.d'),
+            about: t('plugins.dl.repo_sync.a'),
             example: 'bmm://repo/sync?url=https://monserveur.com/repo.json&profile=prof-uuid&mods_dir=C:/Mods&password=secret',
         },
         {
@@ -5526,293 +5574,293 @@ function getDeepLinkDefs(): DeepLinkDef[] {
         {
             scheme: 'download',
             params: [
-                { name: 'url',  required: true,  desc: 'URL directe de l\'archive du mod à télécharger.' },
-                { name: 'name', required: false, desc: 'Nom affiché pendant le téléchargement. Défaut : « Mod Inconnu ».' },
+                { name: 'url',  required: true,  desc: t('plugins.dl.download.p.url') },
+                { name: 'name', required: false, desc: t('plugins.dl.download.p.name') },
             ],
-            desc: 'Télécharger et importer un mod depuis une URL',
-            about: 'Télécharge l\'archive puis l\'importe dans la bibliothèque. <code>bmm://import</code> est un alias strict du même gestionnaire — les deux existent parce que les sites de mods emploient l\'un ou l\'autre verbe ; il n\'y a pas de différence de comportement.',
+            desc: t('plugins.dl.download.d'),
+            about: t('plugins.dl.download.a'),
             example: 'bmm://download?url=https://exemple.com/mon-mod.zip&name=Mon%20Mod',
         },
         {
             scheme: 'import',
             params: [
-                { name: 'url',  required: true,  desc: 'URL directe de l\'archive du mod.' },
-                { name: 'name', required: false, desc: 'Nom affiché pendant le téléchargement.' },
+                { name: 'url',  required: true,  desc: t('plugins.dl.import.p.url') },
+                { name: 'name', required: false, desc: t('plugins.dl.import.p.name') },
             ],
-            desc: 'Alias de bmm://download',
-            about: 'Strictement le même gestionnaire que <code>bmm://download</code>. Conservé parce que les sites de mods publient l\'un ou l\'autre verbe.',
+            desc: t('plugins.dl.import.d'),
+            about: t('plugins.dl.import.a'),
             example: 'bmm://import?url=https://exemple.com/mon-mod.zip',
         },
         {
             scheme: 'benchmark/open',
             params: [
-                { name: 'dataset', required: false, desc: '<code>sandbox</code> (défaut) ou <code>real</code>.' },
-                { name: 'size',    required: false, desc: 'Préréglage S / M / L / XL. Défaut M.' },
-                { name: 'mb',      required: false, desc: 'Taille explicite en Mo, si vous ne voulez pas d\'un préréglage.' },
+                { name: 'dataset', required: false, desc: t('plugins.dl.benchmark_open.p.dataset') },
+                { name: 'size',    required: false, desc: t('plugins.dl.benchmark_open.p.size') },
+                { name: 'mb',      required: false, desc: t('plugins.dl.benchmark_open.p.mb') },
             ],
-            desc: 'Ouvrir le banc d\'essai pré-réglé',
-            about: 'Ouvre l\'outil de benchmark avec le jeu de données et la taille déjà choisis. N\'exécute rien de lui-même : le lancement reste un geste explicite, parce qu\'un benchmark écrit sur le disque.',
+            desc: t('plugins.dl.benchmark_open.d'),
+            about: t('plugins.dl.benchmark_open.a'),
             example: 'bmm://benchmark/open?dataset=sandbox&size=L',
         },
         {
             scheme: 'theme/import-inline',
             params: [
-                { name: 'data', required: true, desc: 'Thème JSON encodé en base64 (URL-encodé).' },
+                { name: 'data', required: true, desc: t('plugins.dl.theme_import_inline.p.data') },
             ],
-            desc: 'Importer un thème contenu dans le lien lui-même',
-            about: 'Le thème voyage <b>dans</b> le lien : rien à héberger, rien à télécharger, et le lien fonctionne hors-ligne. À l\'inverse d\'une URL de fichier, ce que vous partagez ne peut pas changer après coup — c\'est l\'intérêt, et la limite : un lien trop long est refusé par certains clients de messagerie.',
+            desc: t('plugins.dl.theme_import_inline.d'),
+            about: t('plugins.dl.theme_import_inline.a'),
             example: 'bmm://theme/import-inline?data=<base64>',
         },
         {
             scheme: 'language/import-inline',
             params: [
-                { name: 'data', required: true,  desc: 'Dictionnaire JSON encodé en base64 (URL-encodé).' },
-                { name: 'code', required: false, desc: 'Code de langue. Défaut <code>custom</code>.' },
-                { name: 'gz',   required: false, desc: '<code>1</code> si les données sont compressées en gzip avant l\'encodage base64 — un dictionnaire complet dépasse sinon la longueur d\'URL acceptée.' },
+                { name: 'data', required: true,  desc: t('plugins.dl.language_import_inline.p.data') },
+                { name: 'code', required: false, desc: t('plugins.dl.language_import_inline.p.code') },
+                { name: 'gz',   required: false, desc: t('plugins.dl.language_import_inline.p.gz') },
             ],
-            desc: 'Importer une traduction contenue dans le lien',
-            about: 'Même principe que <code>theme/import-inline</code>, appliqué à un dictionnaire de traduction. L\'option <code>gz</code> existe parce qu\'une langue entière est bien plus volumineuse qu\'un thème.',
+            desc: t('plugins.dl.language_import_inline.d'),
+            about: t('plugins.dl.language_import_inline.a'),
             example: 'bmm://language/import-inline?code=fr-QC&gz=1&data=<base64>',
         },
         {
             scheme: 'settings/navbar',
             params: [
-                { name: 'code', required: true, desc: 'Code de partage d\'une configuration de navigation.' },
+                { name: 'code', required: true, desc: t('plugins.dl.settings_navbar.p.code') },
             ],
-            desc: 'Appliquer une configuration de barre de navigation',
-            about: 'Applique une disposition de navigation partagée (boutons, ordre, pages personnalisées). Le code est validé avant d\'être appliqué ; un code invalide ne modifie rien.',
+            desc: t('plugins.dl.settings_navbar.d'),
+            about: t('plugins.dl.settings_navbar.a'),
             example: 'bmm://settings/navbar?code=<code>',
         },
         {
             scheme: 'repo/gen',
             params: [],
-            desc: 'Ouvrir la génération de repo',
-            about: 'Ouvre l\'onglet Repo sur la section Génération pour exporter votre repo.',
+            desc: t('plugins.dl.repo_gen.d'),
+            about: t('plugins.dl.repo_gen.a'),
             example: 'bmm://repo/gen',
         },
         {
             scheme: 'repo/update',
-            params: [{ name: 'dir', required: false, desc: 'Chemin du dossier du repo à mettre à jour (pré-rempli).' }],
-            desc: 'Mettre à jour un repo',
-            about: 'Ouvre l\'onglet Repo sur la section Mise à jour, pré-rempli avec le dossier fourni.',
+            params: [{ name: 'dir', required: false, desc: t('plugins.dl.repo_update.p.dir') }],
+            desc: t('plugins.dl.repo_update.d'),
+            about: t('plugins.dl.repo_update.a'),
             example: 'bmm://repo/update?dir=C:/BMM/MyRepo',
         },
         {
             scheme: 'repo/host',
             params: [
-                { name: 'dir',  required: false, desc: 'Dossier à servir en HTTP.' },
-                { name: 'port', required: false, desc: 'Port d\'écoute (ex : 8080).' },
+                { name: 'dir',  required: false, desc: t('plugins.dl.repo_host.p.dir') },
+                { name: 'port', required: false, desc: t('plugins.dl.repo_host.p.port') },
             ],
-            desc: 'Héberger un repo en HTTP',
-            about: 'Ouvre l\'onglet Repo sur la section Hébergement, pré-rempli avec le dossier et le port.',
+            desc: t('plugins.dl.repo_host.d'),
+            about: t('plugins.dl.repo_host.a'),
             example: 'bmm://repo/host?dir=C:/BMM/Export&port=8080',
         },
         // ── Mods : mises à jour ──────────────────────────────────────────────
         {
             scheme: 'mod/check-updates',
             params: [],
-            desc: 'Vérifier les mises à jour de mods',
-            about: 'Ouvre l\'onglet Repo et lance la vérification des mises à jour disponibles pour vos mods.',
+            desc: t('plugins.dl.mod_check_updates.d'),
+            about: t('plugins.dl.mod_check_updates.a'),
             example: 'bmm://mod/check-updates',
         },
         {
             scheme: 'mod/update',
-            params: [{ name: 'url', required: false, desc: 'URL du repo source à pré-remplir (sinon vérifie les mises à jour).' }],
-            desc: 'Mettre à jour des mods',
-            about: 'Ouvre l\'onglet Repo. Avec une url, pré-remplit la connexion ; sinon lance la vérification des mises à jour.',
+            params: [{ name: 'url', required: false, desc: t('plugins.dl.mod_update.p.url') }],
+            desc: t('plugins.dl.mod_update.d'),
+            about: t('plugins.dl.mod_update.a'),
             example: 'bmm://mod/update?url=https://monserveur.com/repo.json',
         },
         // ── Modpacks ─────────────────────────────────────────────────────────
         {
             scheme: 'modpack/create',
             params: [
-                { name: 'name',    required: true,  desc: 'Nom du nouveau modpack.' },
-                { name: 'profile', required: false, desc: 'UUID du profil source (mods actifs copiés dans le modpack).' },
+                { name: 'name',    required: true,  desc: t('plugins.dl.modpack_create.p.name') },
+                { name: 'profile', required: false, desc: t('plugins.dl.modpack_create.p.profile') },
             ],
-            desc: 'Créer un modpack',
-            about: 'Crée un modpack via l\'API locale, optionnellement à partir des mods actifs d\'un profil.',
+            desc: t('plugins.dl.modpack_create.d'),
+            about: t('plugins.dl.modpack_create.a'),
             example: 'bmm://modpack/create?name=MyPack&profile=prof-uuid',
         },
         // ── App Catalog ──────────────────────────────────────────────────────
         {
             scheme: 'app/install',
             params: [
-                { name: 'id',    required: true,  desc: 'Identifiant de l\'app.' },
-                { name: 'url',   required: true,  desc: 'URL de téléchargement.' },
-                { name: 'title', required: false, desc: 'Nom affiché.' },
-                { name: 'type',  required: false, desc: 'Type de fichier : exe (défaut), msi, zip…' },
-                { name: 'path',  required: false, desc: 'Dossier d\'installation.' },
+                { name: 'id',    required: true,  desc: t('plugins.dl.app_install.p.id') },
+                { name: 'url',   required: true,  desc: t('plugins.dl.app_install.p.url') },
+                { name: 'title', required: false, desc: t('plugins.dl.app_install.p.title') },
+                { name: 'type',  required: false, desc: t('plugins.dl.app_install.p.type') },
+                { name: 'path',  required: false, desc: t('plugins.dl.app_install.p.path') },
             ],
-            desc: 'Installer une app du catalogue',
-            about: 'Télécharge et installe une application depuis une URL via le catalogue d\'apps de BMM.',
+            desc: t('plugins.dl.app_install.d'),
+            about: t('plugins.dl.app_install.a'),
             example: 'bmm://app/install?id=my-app&url=https://example.com/app.exe&title=My+App',
         },
         {
             scheme: 'app/launch',
             params: [
-                { name: 'id',  required: true, desc: 'Identifiant de l\'app installée.' },
-                { name: 'exe', required: true, desc: 'Chemin de l\'exécutable à lancer.' },
+                { name: 'id',  required: true, desc: t('plugins.dl.app_launch.p.id') },
+                { name: 'exe', required: true, desc: t('plugins.dl.app_launch.p.exe') },
             ],
-            desc: 'Lancer une app',
-            about: 'Lance une application déjà installée via le catalogue.',
+            desc: t('plugins.dl.app_launch.d'),
+            about: t('plugins.dl.app_launch.a'),
             example: 'bmm://app/launch?id=my-app&exe=C:/Apps/MyApp/app.exe',
         },
         // ── Langue / interface ───────────────────────────────────────────────
         {
             scheme: 'language/import',
-            params: [{ name: 'path', required: false, desc: 'Chemin du fichier de langue (ouvre le sélecteur si omis).' }],
-            desc: 'Importer une langue',
-            about: 'Importe un fichier de traduction <code>.json</code> dans BMM.',
+            params: [{ name: 'path', required: false, desc: t('plugins.dl.language_import.p.path') }],
+            desc: t('plugins.dl.language_import.d'),
+            about: t('plugins.dl.language_import.a'),
             example: 'bmm://language/import?path=C:/BMM/de.json',
         },
         {
             scheme: 'settings/layout',
-            params: [{ name: 'code', required: true, desc: 'Code de disposition des cartes (généré par le partage de layout).' }],
-            desc: 'Appliquer une disposition',
-            about: 'Ouvre les Réglages et applique une disposition de cartes partagée.',
+            params: [{ name: 'code', required: true, desc: t('plugins.dl.settings_layout.p.code') }],
+            desc: t('plugins.dl.settings_layout.d'),
+            about: t('plugins.dl.settings_layout.a'),
             example: 'bmm://settings/layout?code=AbC123',
         },
         {
             scheme: 'restart',
             params: [],
-            desc: 'Redémarrer BMM',
-            about: 'Redémarre proprement l\'application via l\'API locale. Équivalent à POST /api/restart.',
+            desc: t('plugins.dl.restart.d'),
+            about: t('plugins.dl.restart.a'),
             example: 'bmm://restart',
         },
         // ── Thèmes ───────────────────────────────────────────────────────────
         {
             scheme: 'theme/apply',
-            params: [{ name: 'id', required: true, desc: 'ID du thème installé à activer.' }],
-            desc: 'Appliquer un thème',
-            about: 'Active un thème déjà installé par son ID.',
+            params: [{ name: 'id', required: true, desc: t('plugins.dl.theme_apply.p.id') }],
+            desc: t('plugins.dl.theme_apply.d'),
+            about: t('plugins.dl.theme_apply.a'),
             example: 'bmm://theme/apply?id=bmm-void',
         },
         {
             scheme: 'theme/import',
-            params: [{ name: 'url', required: true, desc: 'URL d\'un fichier .bmmtheme.json à importer.' }],
-            desc: 'Importer un thème',
-            about: 'Télécharge et installe un thème depuis une URL.',
+            params: [{ name: 'url', required: true, desc: t('plugins.dl.theme_import.p.url') }],
+            desc: t('plugins.dl.theme_import.d'),
+            about: t('plugins.dl.theme_import.a'),
             example: 'bmm://theme/import?url=https://example.com/cool.bmmtheme.json',
         },
         {
             scheme: 'theme/editor',
             params: [],
-            desc: 'Ouvrir l\'éditeur de thème',
-            about: 'Ouvre l\'éditeur de thème intégré.',
+            desc: t('plugins.dl.theme_editor.d'),
+            about: t('plugins.dl.theme_editor.a'),
             example: 'bmm://theme/editor',
         },
         {
             scheme: 'docs/open',
-            params: [{ name: 'article', required: false, desc: 'ID de l\'article Help & Other à ouvrir (ex. conflicts, first-profile, server-host). Omis = page d\'accueil de la doc.' }],
-            desc: 'Ouvrir la documentation intégrée',
-            about: 'Ouvre la page Help & Other de BMM, éventuellement sur un article précis. Utilisé par le site BMM Docs pour renvoyer vers la doc intégrée dans l\'app.',
+            params: [{ name: 'article', required: false, desc: t('plugins.dl.docs_open.p.article') }],
+            desc: t('plugins.dl.docs_open.d'),
+            about: t('plugins.dl.docs_open.a'),
             example: 'bmm://docs/open?article=conflicts',
         },
         // ── Automatisation / exécution ───────────────────────────────────────
         {
             scheme: 'schedule/run',
-            params: [{ name: 'id', required: true, desc: 'ID de la tâche planifiée à exécuter.' }],
-            desc: 'Exécuter une tâche planifiée',
-            about: 'Déclenche immédiatement une tâche du planificateur. Conçu pour le hook du Planificateur de tâches Windows. Équivalent à POST /api/schedule/run.',
+            params: [{ name: 'id', required: true, desc: t('plugins.dl.schedule_run.p.id') }],
+            desc: t('plugins.dl.schedule_run.d'),
+            about: t('plugins.dl.schedule_run.a'),
             example: 'bmm://schedule/run?id=task-uuid',
         },
         {
             scheme: 'launchpack/run',
-            params: [{ name: 'id', required: true, desc: 'ID du launch pack.' }],
-            desc: 'Exécuter un launch pack',
-            about: 'Lance un Launch Pack enregistré. Équivalent à POST /api/launchpack/run.',
+            params: [{ name: 'id', required: true, desc: t('plugins.dl.launchpack_run.p.id') }],
+            desc: t('plugins.dl.launchpack_run.d'),
+            about: t('plugins.dl.launchpack_run.a'),
             example: 'bmm://launchpack/run?id=lp-uuid',
         },
         {
             scheme: 'benchmark/run',
             params: [
-                { name: 'dataset',  required: false, desc: '"sandbox" (défaut) ou "real".' },
-                { name: 'size',     required: false, desc: 'S, M (défaut) ou L.' },
-                { name: 'mb',       required: false, desc: 'Taille en Mo (jeu sandbox).' },
-                { name: 'mode',     required: false, desc: '"manual" (ouvre, attend Run) ou "auto" (démarre).' },
-                { name: 'sources',  required: false, desc: 'Dossiers de mods séparés par ; (dataset="real").' },
-                { name: 'profiles', required: false, desc: 'IDs de profils séparés par ;.' },
+                { name: 'dataset',  required: false, desc: t('plugins.dl.benchmark_run.p.dataset') },
+                { name: 'size',     required: false, desc: t('plugins.dl.benchmark_run.p.size') },
+                { name: 'mb',       required: false, desc: t('plugins.dl.benchmark_run.p.mb') },
+                { name: 'mode',     required: false, desc: t('plugins.dl.benchmark_run.p.mode') },
+                { name: 'sources',  required: false, desc: t('plugins.dl.benchmark_run.p.sources') },
+                { name: 'profiles', required: false, desc: t('plugins.dl.benchmark_run.p.profiles') },
             ],
-            desc: 'Lancer un benchmark',
-            about: 'Ouvre le benchmark pré-configuré et le démarre (mode auto par défaut pour ce deeplink). Équivalent à POST /api/benchmark.',
+            desc: t('plugins.dl.benchmark_run.d'),
+            about: t('plugins.dl.benchmark_run.a'),
             example: 'bmm://benchmark/run?dataset=sandbox&size=M&mode=auto',
         },
         // ── Confidentialité / enregistreur ───────────────────────────────────
         {
             scheme: 'telemetry/consent',
-            params: [{ name: 'enabled', required: true, desc: '1/true pour activer, 0/false pour couper et purger.' }],
-            desc: 'Consentement télémétrie',
-            about: 'Active/désactive le consentement global à la télémétrie. Équivalent à POST /api/telemetry/consent.',
+            params: [{ name: 'enabled', required: true, desc: t('plugins.dl.telemetry_consent.p.enabled') }],
+            desc: t('plugins.dl.telemetry_consent.d'),
+            about: t('plugins.dl.telemetry_consent.a'),
             example: 'bmm://telemetry/consent?enabled=1',
         },
         {
             scheme: 'telemetry/set',
             params: [
-                { name: 'replay', required: false, desc: 'Capture rrweb (1/0).' },
-                { name: 'full',   required: false, desc: 'Replay non masqué (1/0).' },
-                { name: 'bench',  required: false, desc: 'Envoi des benchmarks (1/0).' },
+                { name: 'replay', required: false, desc: t('plugins.dl.telemetry_set.p.replay') },
+                { name: 'full',   required: false, desc: t('plugins.dl.telemetry_set.p.full') },
+                { name: 'bench',  required: false, desc: t('plugins.dl.telemetry_set.p.bench') },
             ],
-            desc: 'Réglages télémétrie',
-            about: 'Règle les sous-options de télémétrie. Équivalent à POST /api/telemetry/settings.',
+            desc: t('plugins.dl.telemetry_set.d'),
+            about: t('plugins.dl.telemetry_set.a'),
             example: 'bmm://telemetry/set?replay=1&full=0&bench=1',
         },
         {
             scheme: 'recorder/set',
             params: [
-                { name: 'on',   required: false, desc: 'Active/désactive l\'enregistreur (1/0).' },
-                { name: 'full', required: false, desc: 'Capture non masquée (1/0).' },
-                { name: 'rust', required: false, desc: 'Inclure les logs Rust (1/0).' },
-                { name: 'js',   required: false, desc: 'Inclure les logs JS (1/0).' },
+                { name: 'on',   required: false, desc: t('plugins.dl.recorder_set.p.on') },
+                { name: 'full', required: false, desc: t('plugins.dl.recorder_set.p.full') },
+                { name: 'rust', required: false, desc: t('plugins.dl.recorder_set.p.rust') },
+                { name: 'js',   required: false, desc: t('plugins.dl.recorder_set.p.js') },
             ],
-            desc: 'Configurer l\'enregistreur',
-            about: 'Configure l\'enregistreur de session local. Équivalent à POST /api/recorder.',
+            desc: t('plugins.dl.recorder_set.d'),
+            about: t('plugins.dl.recorder_set.a'),
             example: 'bmm://recorder/set?on=1&full=0&rust=1&js=1',
         },
         {
             scheme: 'replay/export',
             params: [],
-            desc: 'Exporter le replay',
-            about: 'Exporte la session en cours en .bmmreplay. Équivalent à POST /api/replay/export.',
+            desc: t('plugins.dl.replay_export.d'),
+            about: t('plugins.dl.replay_export.a'),
             example: 'bmm://replay/export',
         },
         {
             scheme: 'replay/import',
             params: [
-                { name: 'path', required: false, desc: 'Chemin local du .bmmreplay.' },
-                { name: 'url',  required: false, desc: 'URL distante du .bmmreplay.' },
+                { name: 'path', required: false, desc: t('plugins.dl.replay_import.p.path') },
+                { name: 'url',  required: false, desc: t('plugins.dl.replay_import.p.url') },
             ],
-            desc: 'Importer un replay',
-            about: 'Importe et lit un .bmmreplay (ouvre le sélecteur si aucun paramètre). Équivalent à POST /api/replay/import.',
+            desc: t('plugins.dl.replay_import.d'),
+            about: t('plugins.dl.replay_import.a'),
             example: 'bmm://replay/import?path=C:/BMM/session.bmmreplay',
         },
         {
             scheme: 'discord/rpc',
-            params: [{ name: 'enabled', required: true, desc: '1/true pour activer la Rich Presence.' }],
-            desc: 'Discord Rich Presence',
-            about: 'Active/désactive la présence Discord. Équivalent à POST /api/discord/rpc.',
+            params: [{ name: 'enabled', required: true, desc: t('plugins.dl.discord_rpc.p.enabled') }],
+            desc: t('plugins.dl.discord_rpc.d'),
+            about: t('plugins.dl.discord_rpc.a'),
             example: 'bmm://discord/rpc?enabled=1',
         },
         {
             scheme: 'data/export-auto',
             params: [
-                { name: 'dir',       required: true,  desc: 'Dossier de destination.' },
-                { name: 'name',      required: false, desc: 'Modèle de nom : {date}, {time}, {datetime}.' },
-                { name: 'increment', required: false, desc: 'paren · underscore · timestamp · overwrite.' },
+                { name: 'dir',       required: true,  desc: t('plugins.dl.data_export_auto.p.dir') },
+                { name: 'name',      required: false, desc: t('plugins.dl.data_export_auto.p.name') },
+                { name: 'increment', required: false, desc: t('plugins.dl.data_export_auto.p.increment') },
             ],
-            desc: 'Sauvegarde automatique des données',
-            about: 'Sauvegarde data.json sans surveillance. Équivalent à POST /api/data/export-auto.',
+            desc: t('plugins.dl.data_export_auto.d'),
+            about: t('plugins.dl.data_export_auto.a'),
             example: 'bmm://data/export-auto?dir=C:/BMM/Backups&name=bmm-backup-{date}&increment=paren',
         },
         // ── Passe-plat API générique ─────────────────────────────────────────
         {
             scheme: 'api',
             params: [
-                { name: 'method', required: false, desc: 'GET (défaut), POST, PUT, DELETE.' },
-                { name: 'path',   required: true,  desc: 'Chemin de l\'API, doit commencer par /api/.' },
-                { name: '…',      required: false, desc: 'Tout autre paramètre devient query (GET/DELETE) ou corps JSON (POST/PUT).' },
+                { name: 'method', required: false, desc: t('plugins.dl.api.p.method') },
+                { name: 'path',   required: true,  desc: t('plugins.dl.api.p.path') },
+                { name: '…',      required: false, desc: t('plugins.dl.api.p.rest') },
             ],
-            desc: 'Appeler n\'importe quelle API',
-            about: 'Passe-plat universel : appelle n\'importe quel endpoint de l\'API locale depuis un lien. Le token est ajouté automatiquement. Permet d\'atteindre tout endpoint sans deeplink dédié.',
+            desc: t('plugins.dl.api.d'),
+            about: t('plugins.dl.api.a'),
             example: 'bmm://api?method=POST&path=/api/mods/enable&mod_id=my-mod',
         },
     ];
@@ -5860,7 +5908,7 @@ function buildDeepLinkRow(dl: DeepLinkDef): string {
     const apiEq = (about.match(/\b(GET|POST|PUT|DELETE)\s+\/api\/[^\s.,;]+/) || [])[0] || '';
 
     return `
-        <div class="plug-ep-wrap plug-dl-wrap" id="epw-${safeId}">
+        <div class="plug-ep-wrap plug-dl-wrap" id="epw-${safeId}" data-dlgrp="${escAttr(dlGroupOf(dl.scheme).g)}">
             <div class="plug-endpoint-row plug-dl-row" data-method="DL" data-path="${escHtml(fullUrl)}" data-ep-id="${safeId}">
                 <button class="plug-ep-chevron" id="epchev-${safeId}" aria-label="expand">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
