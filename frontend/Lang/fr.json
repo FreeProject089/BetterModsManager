@@ -9839,5 +9839,14 @@
   "repo.ssh.routeTo": "Va vers",
   "repo.ssh.routeNoDir": "aucun dossier exporté",
   "repo.ssh.routeNoHost": "aucun serveur",
-  "repo.ssh.moreTitle": "Ce qui réutilise cette cible"
+  "repo.ssh.moreTitle": "Ce qui réutilise cette cible",
+  "plugins.tree.find": "Filtrer par nom…",
+  "plugins.tree.expandAll": "Tout déplier",
+  "plugins.tree.collapseAll": "Tout replier",
+  "plugins.tree.noMatch": "Aucune correspondance.",
+  "plugins.tree.holds": "{n} fichiers · {b}",
+  "plugins.tree.cut": "Seul le début est affiché.",
+  "plugins.tree.archive": "Une archive contenant {n} fichier(s)",
+  "plugins.tree.binary": "Ce n’est pas du texte — rien à montrer ici. Ouvre le dossier pour l’examiner.",
+  "plugins.tree.noRoot": "Cette liste peut nommer les fichiers mais pas les ouvrir."
 }

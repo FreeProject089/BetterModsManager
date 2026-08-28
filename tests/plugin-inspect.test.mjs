@@ -14,7 +14,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const { humanSize, treeRows, treeSummary } = await import(
+const { humanSize, treeRows, treeSummary, visibleRows, allFolders, countUnder } = await import(
   pathToFileURL(join(ROOT, 'frontend/js/features/plugins/plugin-tree.js')).href
 );
 
@@ -64,5 +64,70 @@ describe('the summary line', () => {
 
   test('an empty folder summarises to zeroes rather than throwing', () => {
     assert.deepEqual(treeSummary([]), { files: 0, folders: 0, bytes: 0 });
+  });
+});
+
+describe('folding a listing that is 2693 rows long', () => {
+  // A slice of what a real mods folder looks like: nested folders, files at several depths.
+  const TREE = [
+    f('mods', 0, true),
+    f('mods/alpha', 0, true),
+    f('mods/alpha/main.lua', 100),
+    f('mods/alpha/data', 0, true),
+    f('mods/alpha/data/x.json', 200),
+    f('mods/beta', 0, true),
+    f('mods/beta/readme.txt', 50),
+    f('top.txt', 10),
+  ];
+
+  test('nothing collapsed changes nothing', () => {
+    assert.equal(visibleRows(TREE, new Set()).length, TREE.length);
+  });
+
+  test('a collapsed folder hides everything under it, at every depth', () => {
+    const rows = visibleRows(TREE, new Set(['mods/alpha'])).map((e) => e.path);
+    assert.ok(rows.includes('mods/alpha'), 'the folder itself stays — it is what you click to reopen');
+    // Both the file directly inside AND the one two levels down. A filter that only hid
+    // direct children would leave grandchildren floating with no parent above them.
+    assert.ok(!rows.includes('mods/alpha/main.lua'));
+    assert.ok(!rows.includes('mods/alpha/data'));
+    assert.ok(!rows.includes('mods/alpha/data/x.json'));
+    assert.ok(rows.includes('mods/beta/readme.txt'), 'a sibling is untouched');
+  });
+
+  test('a prefix that is not a path segment does not count as being inside', () => {
+    // 'mods/alpha' must not swallow 'mods/alphabet/…'. The slash in the comparison is the
+    // whole of that, and leaving it out is the bug that hides a folder nobody collapsed.
+    const t = [f('mods/alpha', 0, true), f('mods/alphabet', 0, true), f('mods/alphabet/z.txt', 1)];
+    const rows = visibleRows(t, new Set(['mods/alpha'])).map((e) => e.path);
+    assert.deepEqual(rows, ['mods/alpha', 'mods/alphabet', 'mods/alphabet/z.txt']);
+  });
+
+  test('a filter beats a collapse, and drops folders', () => {
+    // Somebody who typed a name wants the match, not a lecture about which folder is
+    // hiding it — so a collapsed parent does not suppress a hit.
+    const rows = visibleRows(TREE, new Set(['mods/alpha']), 'x.json').map((e) => e.path);
+    assert.deepEqual(rows, ['mods/alpha/data/x.json']);
+    // And a folder that merely CONTAINS a match is not itself a match.
+    assert.deepEqual(visibleRows(TREE, new Set(), 'alpha').map((e) => e.path),
+      ['mods/alpha/main.lua', 'mods/alpha/data/x.json']);
+  });
+
+  test('the filter is case-insensitive and matches anywhere in the path', () => {
+    assert.deepEqual(visibleRows(TREE, new Set(), 'README').map((e) => e.path), ['mods/beta/readme.txt']);
+    assert.deepEqual(visibleRows(TREE, new Set(), 'BETA/').map((e) => e.path), ['mods/beta/readme.txt']);
+  });
+
+  test('allFolders names every folder and no file', () => {
+    assert.deepEqual(allFolders(TREE), ['mods', 'mods/alpha', 'mods/alpha/data', 'mods/beta']);
+  });
+
+  test('a collapsed folder can say what it is hiding', () => {
+    // Counted at every depth, so folding the top of a tree does not report "2 files".
+    assert.deepEqual(countUnder(TREE, 'mods/alpha'), { files: 2, bytes: 300 });
+    assert.deepEqual(countUnder(TREE, 'mods'), { files: 3, bytes: 350 });
+    assert.deepEqual(countUnder(TREE, 'mods/beta'), { files: 1, bytes: 50 });
+    // A folder with nothing in it reports nothing rather than throwing.
+    assert.deepEqual(countUnder(TREE, 'nope'), { files: 0, bytes: 0 });
   });
 });

@@ -9841,5 +9841,14 @@
   "repo.ssh.routeTo": "Goes to",
   "repo.ssh.routeNoDir": "no exported folder yet",
   "repo.ssh.routeNoHost": "no server yet",
-  "repo.ssh.moreTitle": "What else reuses this target"
+  "repo.ssh.moreTitle": "What else reuses this target",
+  "plugins.tree.find": "Filter by name…",
+  "plugins.tree.expandAll": "Expand all",
+  "plugins.tree.collapseAll": "Collapse all",
+  "plugins.tree.noMatch": "Nothing matches.",
+  "plugins.tree.holds": "{n} files · {b}",
+  "plugins.tree.cut": "Only the beginning is shown.",
+  "plugins.tree.archive": "An archive holding {n} file(s)",
+  "plugins.tree.binary": "Not text — nothing to show here. Open the folder to look at it.",
+  "plugins.tree.noRoot": "This listing can name files but not open them."
 }

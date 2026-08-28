@@ -48,3 +48,62 @@ export function treeSummary(entries: TreeEntry[]): { files: number; folders: num
     }
     return { files, folders, bytes };
 }
+
+/**
+ * Which rows survive a set of collapsed folders and a filter.
+ *
+ * A listing of 2693 files across 660 folders is what a real mods folder looks like, and it
+ * was drawn as 2693 indented lines. Collapsing is not decoration there — it is the
+ * difference between a listing and a wall.
+ *
+ * Kept as a pure function over the FLAT list rather than by building a nested structure: the
+ * walk produces a flat list because that is what a cap can be applied to, and a row's
+ * children are exactly the rows whose path starts with its own plus a slash. Two
+ * representations of one tree is the thing that goes out of step.
+ *
+ * A filter beats a collapse on purpose. Somebody who typed a name wants the match, not a
+ * lecture about which folder it is hiding in — so matching rows show whatever their parents
+ * are set to.
+ */
+export function visibleRows(
+    entries: TreeEntry[],
+    collapsed: Set<string>,
+    query = '',
+): TreeEntry[] {
+    const q = query.trim().toLowerCase();
+    if (q) {
+        // Folders drop out entirely while filtering: a folder that merely CONTAINS a match is
+        // not itself a match, and showing it puts empty-looking rows between the hits.
+        return entries.filter((e) => !e.is_dir && e.path.toLowerCase().includes(q));
+    }
+    if (!collapsed.size) return entries;
+    return entries.filter((e) => {
+        for (const dir of collapsed) {
+            if (e.path.startsWith(dir + '/')) return false;
+        }
+        return true;
+    });
+}
+
+/**
+ * Every folder in the listing, for "collapse all".
+ *
+ * The default state of a big tree: opening a modal on 660 expanded folders is the wall this
+ * exists to avoid, and a person who wants one of them open can say so in one click.
+ */
+export function allFolders(entries: TreeEntry[]): string[] {
+    return entries.filter((e) => e.is_dir).map((e) => e.path);
+}
+
+/** How many files sit under one folder, so a collapsed row can say what it is hiding. */
+export function countUnder(entries: TreeEntry[], dir: string): { files: number; bytes: number } {
+    let files = 0;
+    let bytes = 0;
+    const prefix = dir + '/';
+    for (const e of entries) {
+        if (e.is_dir || !e.path.startsWith(prefix)) continue;
+        files += 1;
+        bytes += e.size;
+    }
+    return { files, bytes };
+}

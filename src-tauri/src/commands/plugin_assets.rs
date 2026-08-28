@@ -541,6 +541,200 @@ pub fn folder_tree(path: String) -> Result<Vec<TreeEntry>, String> {
     Ok(walk_tree(&root))
 }
 
+/// One file, looked at rather than merely named.
+///
+/// `kind` is the only field a caller should branch on. The rest is whichever half of the
+/// answer that kind has: `text` for something readable, `entries` for an archive, and neither
+/// for a binary — where the size and the verdict ARE the answer, and a screenful of
+/// replacement characters would not be.
+#[derive(serde::Serialize)]
+pub struct FilePreview {
+    /// `text` · `archive` · `binary`
+    pub kind: String,
+    pub text: Option<String>,
+    pub entries: Option<Vec<TreeEntry>>,
+    pub size: u64,
+    /// True when what came back is only the beginning. Said out loud, because a file that
+    /// stops mid-line looks corrupted rather than cut.
+    pub truncated: bool,
+}
+
+/// Text is read up to here. A log can be hundreds of megabytes and nobody reads the end of
+/// one in a modal.
+const PREVIEW_MAX: u64 = 256 * 1024;
+/// And an archive lists up to here, for the same reason `walk_tree` has a cap.
+const PREVIEW_ENTRIES: usize = 2000;
+
+/// Resolve `rel` under `root`, refusing anything that leaves it.
+///
+/// Its own function rather than `resolve`, which is rooted at `<plugin>/assets` — the tree
+/// this serves covers the whole plugin folder, `plugin.json` included, and a folder the
+/// person picked in a dialog has no assets subfolder at all.
+///
+/// Canonicalised on both sides before comparing: a `..` that stays inside after
+/// normalisation is fine, and one that does not is refused. Comparing the strings before
+/// resolving them is the version of this check that does not work.
+fn confine(root: &str, rel: &str) -> Result<std::path::PathBuf, String> {
+    let root_c = std::path::PathBuf::from(root)
+        .canonicalize()
+        .map_err(|_| "plugins.assets.errNoFolder".to_string())?;
+    let full_c = root_c
+        .join(rel)
+        .canonicalize()
+        .map_err(|_| "plugins.assets.errMissing".to_string())?;
+    if !full_c.starts_with(&root_c) {
+        return Err("plugins.assets.errOutside".to_string());
+    }
+    Ok(full_c)
+}
+
+/// Look inside one file of a tree that was already listed.
+///
+/// The two "what is in this" screens could name a file and never open one, which makes the
+/// listing a table of contents for a book nobody can read — and the question people actually
+/// have about a plugin they downloaded is what is IN the script, not that there is one.
+///
+/// Deliberately three answers and not a download: a preview that saved the file to disk to
+/// show it would be an install with extra steps.
+#[tauri::command]
+pub fn preview_under(root: String, rel: String) -> Result<FilePreview, String> {
+    let full = confine(&root, &rel)?;
+    if full.is_dir() {
+        return Err("plugins.assets.errMissing".to_string());
+    }
+    let size = full.metadata().map(|m| m.len()).unwrap_or(0);
+
+    // An archive first: a .zip is not text, and sniffing it for NUL bytes would say
+    // "binary" — true, and the least useful of the three answers we can give.
+    if crate::archive::is_archive(&full) {
+        let mut entries: Vec<TreeEntry> = crate::archive::archive_entries(&full)
+            .map_err(|e| e.to_string())?
+            .into_iter()
+            .map(|(path, size)| TreeEntry { path, size, is_dir: false })
+            .collect();
+        let truncated = entries.len() > PREVIEW_ENTRIES;
+        entries.truncate(PREVIEW_ENTRIES);
+        return Ok(FilePreview { kind: "archive".into(), text: None, entries: Some(entries), size, truncated });
+    }
+
+    // Sniffed, not decided by extension. A `.cfg`, a `.lua` and a file with no extension at
+    // all are the ordinary contents of a mod folder, and an extension allowlist answers
+    // "this is not text" about all three.
+    let want = std::cmp::min(size, PREVIEW_MAX) as usize;
+    let bytes = read_head(&full, want).map_err(|e| e.to_string())?;
+    if bytes.contains(&0) {
+        return Ok(FilePreview { kind: "binary".into(), text: None, entries: None, size, truncated: false });
+    }
+    match String::from_utf8(bytes) {
+        Ok(text) => Ok(FilePreview {
+            kind: "text".into(),
+            text: Some(text),
+            entries: None,
+            size,
+            truncated: size > PREVIEW_MAX,
+        }),
+        // Valid bytes that are not UTF-8 — a Windows-1252 readme, say. Reported as binary
+        // rather than mangled: half-right text is harder to disbelieve than none.
+        Err(_) => Ok(FilePreview { kind: "binary".into(), text: None, entries: None, size, truncated: false }),
+    }
+}
+
+/// The first `n` bytes, without reading the rest into memory first.
+fn read_head(path: &std::path::Path, n: usize) -> std::io::Result<Vec<u8>> {
+    use std::io::Read;
+    let mut f = std::fs::File::open(path)?;
+    let mut buf = vec![0u8; n];
+    let mut got = 0;
+    while got < n {
+        match f.read(&mut buf[got..])? {
+            0 => break,
+            k => got += k,
+        }
+    }
+    buf.truncate(got);
+    Ok(buf)
+}
+
+#[cfg(test)]
+mod preview_tests {
+    use super::{confine, preview_under};
+
+    fn scratch(tag: &str) -> std::path::PathBuf {
+        let d = std::env::temp_dir().join(format!("bmm_prev_{}_{}", tag, std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        d
+    }
+
+    /// The one that matters. Everything else here is a convenience; this is the difference
+    /// between a preview and a way to read any file on the disk.
+    #[test]
+    fn it_cannot_be_walked_out_of() {
+        let root = scratch("escape");
+        let inside = root.join("in");
+        std::fs::create_dir_all(&inside).unwrap();
+        std::fs::write(inside.join("ok.txt"), b"fine").unwrap();
+        // A real file OUTSIDE the root, next to it rather than deep in the system: if the
+        // guard is wrong, this is what comes back.
+        let outside = root.parent().unwrap().join("bmm_prev_secret.txt");
+        std::fs::write(&outside, b"not yours").unwrap();
+
+        assert!(confine(root.to_str().unwrap(), "in/ok.txt").is_ok());
+        for probe in [
+            "../bmm_prev_secret.txt",
+            "in/../../bmm_prev_secret.txt",
+            "in/./../../bmm_prev_secret.txt",
+        ] {
+            assert!(
+                confine(root.to_str().unwrap(), probe).is_err(),
+                "escaped with {probe}",
+            );
+        }
+        // And a `..` that stays inside is NOT refused — over-refusing is the same bug
+        // pointing the other way, and it would break any tree with a relative path in it.
+        assert!(confine(root.to_str().unwrap(), "in/../in/ok.txt").is_ok());
+
+        let _ = std::fs::remove_file(&outside);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn text_comes_back_as_text_and_a_nul_makes_it_binary() {
+        let root = scratch("kinds");
+        std::fs::write(root.join("a.lua"), b"-- no extension allowlist saw this coming\n").unwrap();
+        // No extension at all, which is ordinary inside a mod folder.
+        std::fs::write(root.join("README"), b"plain").unwrap();
+        std::fs::write(root.join("b.dat"), [0x00u8, 0x01, 0x02]).unwrap();
+
+        let r = preview_under(root.to_string_lossy().into(), "a.lua".into()).unwrap();
+        assert_eq!(r.kind, "text");
+        assert!(r.text.unwrap().contains("allowlist"));
+
+        assert_eq!(preview_under(root.to_string_lossy().into(), "README".into()).unwrap().kind, "text");
+
+        let b = preview_under(root.to_string_lossy().into(), "b.dat".into()).unwrap();
+        assert_eq!(b.kind, "binary");
+        assert!(b.text.is_none(), "binary must not carry mangled text");
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_directory_is_refused_rather_than_previewed_as_empty() {
+        let root = scratch("dir");
+        std::fs::create_dir_all(root.join("sub")).unwrap();
+        assert!(preview_under(root.to_string_lossy().into(), "sub".into()).is_err());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_missing_file_says_missing_instead_of_returning_nothing() {
+        let root = scratch("missing");
+        assert!(preview_under(root.to_string_lossy().into(), "nope.txt".into()).is_err());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+}
+
 #[cfg(test)]
 mod tree_tests {
     use super::walk_tree;
