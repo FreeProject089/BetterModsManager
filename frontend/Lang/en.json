@@ -9837,5 +9837,7 @@
   "plugins.perm.grantAsked": "Grant what it asks for",
   "plugins.perm.grantNone": "Grant nothing",
   "plugins.perm.extra": "Granted but not asked for: {x}",
-  "plugins.perm.later": "Not now"
+  "plugins.perm.later": "Not now",
+  "sched.trCondNow": "Fires when this becomes true:",
+  "sched.condNot": "not"
 }

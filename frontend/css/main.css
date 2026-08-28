@@ -19444,6 +19444,34 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
     color: var(--text-muted);
 }
 
+/* Folded, and the bar is what stays. */
+/* The trigger's current condition, above its editor. */
+.sched-tr-now {
+    margin: 0 0 8px;
+    font-size: 11.5px;
+    line-height: 1.45;
+    color: var(--text-secondary);
+}
+.sched-tr-now b { color: var(--text-primary); font-weight: 600; }
+
+.plug-req-fold {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+}
+.plug-req-chev { flex-shrink: 0; color: var(--text-muted); transition: transform .15s; }
+.plug-req-perms:not(.is-folded) .plug-req-chev { transform: rotate(90deg); }
+.plug-req-perms.is-folded .plug-req-bar { padding-bottom: 0; border-bottom: 0; }
+.plug-req-perms.is-folded .plug-req-dom,
+.plug-req-perms.is-folded .plug-req-extra { display: none; }
+
 .plug-req-bar {
     display: flex;
     align-items: center;

@@ -24,7 +24,8 @@ import { outlineOf, offsetOfLine, renderOutline, explain, wordBoxAtPoint, type O
 import { BMM_EVENTS, fireEvent, noteTaskRunning } from '../../core/bmm-events.js';
 import { treeOf, foldersOf, renderTree } from './block-tree.js';
 import { showConfirm } from '../../ui/confirm.js';
-import { reasonNotRunning } from './sched-why.js';
+import { reasonNotRunning } from './sched-why.js';
+import { condSubject, condChildCount, scriptFirstLine } from './sched-summary.js';
 import { planOf, previewAgainst } from './sched-preview.js';
 import { debugging, gate, startDebug, endDebug, failDebug, DebugStopped } from './sched-debug.js';
 import { parsePresetFeed, looksLikePresetFeed, readPresetCatalogs, writePresetCatalogs } from './preset-catalog.js';
@@ -545,6 +546,26 @@ function startEngine(): void {
         const c = document.getElementById('scheduler-list-container');
         if (c && c.offsetParent !== null) renderScheduleList();
     }, 30000);
+}
+
+/**
+ * A condition in one line, WITH the thing it is about.
+ *
+ * `t('sched.cond.fileExists')` alone reads "File exists" — true of the type and useless
+ * about the task, which is watching one particular file. Every summary in this file that
+ * named only the type was answering a question nobody asked.
+ *
+ * The label is translated here; picking WHICH parameter identifies the condition is in
+ * sched-summary.ts, where it has no i18n and can be tested.
+ */
+function condSummary(cond: Condition | undefined): string {
+    if (!cond?.type) return '';
+    const label = t('sched.cond.' + cond.type) || cond.type;
+    const kids = condChildCount(cond);
+    if (kids >= 0) return kids ? `${label} (${kids})` : label;
+    const subject = condSubject(cond);
+    if (subject) return `${label} \u2014 ${subject}`;
+    return cond.negate ? `${label} (${t('sched.condNot') || 'not'})` : label;
 }
 
 function nextLocalMidnightOffset(time: string): { h: number; m: number } {
@@ -3880,13 +3901,18 @@ function triggerLabel(tr: Trigger): string {
         }
         case 'script': {
             const eng = String(tr.engine || 'powershell');
-            return String(tr.code || '').trim()
-                ? `${t('sched.trScript')} (${eng}, ${t('sched.lblEvery') || 'every'} ${Math.max(1, Number(tr.everyMinutes) || 5)} ${t('sched.unitMin') || 'min'})`
-                : t('sched.trScriptNone');
+            if (!String(tr.code || '').trim()) return t('sched.trScriptNone');
+            const every = `${eng}, ${t('sched.lblEvery') || 'every'} ${Math.max(1, Number(tr.everyMinutes) || 5)} ${t('sched.unitMin') || 'min'}`;
+            // The first real line of the script, so two probes on the same engine and the
+            // same interval do not read as the same trigger in the list.
+            const head = scriptFirstLine(tr.code, eng);
+            return head
+                ? `${t('sched.trScript')} — ${head} (${every})`
+                : `${t('sched.trScript')} (${every})`;
         }
         case 'condition': {
             return tr.condition?.type
-                ? `${t('sched.trCondition')}: ${t('sched.cond.' + tr.condition.type) || tr.condition.type}`
+                ? `${t('sched.trCondition')}: ${condSummary(tr.condition)}`
                 : t('sched.trConditionNone');
         }
         case 'manual': return t('sched.trManual') || 'Manual only';
@@ -5172,7 +5198,12 @@ function renderTriggerEditor(host: HTMLElement): void {
         });
     }
     if (tr.type === 'condition') {
-        ph.innerHTML = `<div class="sched-tr-cond"></div><p class="sched-hint">${escHtml(t('sched.trConditionHint'))}</p>`;
+        // The condition it currently holds, spelled out above its editor. The editor shows
+        // the same thing in dropdowns and fields, which is precise and takes reading; one
+        // sentence is what somebody scanning the task needs.
+        const now = condSummary((_draft.trigger as any).condition);
+        ph.innerHTML = `${now ? `<p class="sched-tr-now">${escHtml(t('sched.trCondNow'))} <b>${escHtml(now)}</b></p>` : ''}
+            <div class="sched-tr-cond"></div><p class="sched-hint">${escHtml(t('sched.trConditionHint'))}</p>`;
         // The very same editor an `if` step uses. All thirty-four conditions, for free, and
         // one place to fix when a thirty-fifth arrives.
         ph.querySelector('.sched-tr-cond')?.appendChild(conditionEditor((_draft.trigger as any).condition));

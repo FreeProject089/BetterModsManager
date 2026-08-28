@@ -4188,9 +4188,19 @@ function renderCreate(container) {
                              one screen where "what does mods.write actually let it do" is the
                              question being answered, and a hover is invisible to somebody
                              scanning — which is everybody, the first time. -->
-                        <div class="plug-req-perms" id="pc-perms">
+                        <!-- Folded by default. Seven domains and twenty-six rows is the
+                             tallest block on this form, and most plugins ask for nothing at
+                             all — so it pushed everything that IS being filled in off the
+                             screen for the common case. The bar stays visible either way,
+                             because "asks for nothing" is the answer people need to see
+                             without opening anything. -->
+                        <div class="plug-req-perms is-folded" id="pc-perms">
                             <div class="plug-req-bar">
-                                <span class="plug-req-count" id="pc-perm-count"></span>
+                                <button type="button" class="plug-req-fold" id="pc-perm-fold" aria-expanded="false">
+                                    <svg class="plug-req-chev" width="13" height="13" viewBox="0 0 24 24" fill="none"
+                                        stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+                                    <span class="plug-req-count" id="pc-perm-count"></span>
+                                </button>
                                 <button type="button" class="btn btn-xs btn-ghost" id="pc-perm-none">${escHtml(t('plugins.createPermsNone'))}</button>
                             </div>
                             ${permDomains().map(d => `
@@ -10710,6 +10720,12 @@ export function refreshReqPermCounts() {
     const clear = document.getElementById('pc-perm-none');
     if (clear)
         clear.hidden = total === 0;
+    // See the fold handler: something ticked means something to look at.
+    if (total > 0) {
+        const host = document.getElementById('pc-perms');
+        host?.classList.remove('is-folded');
+        document.getElementById('pc-perm-fold')?.setAttribute('aria-expanded', 'true');
+    }
 }
 /** Wired once for the whole block, so a scope added later needs no second edit here. */
 function wireReqPerms() {
@@ -10725,6 +10741,14 @@ function wireReqPerms() {
         host.querySelectorAll('.pc-perm-cb').forEach((cb) => { cb.checked = false; });
         refreshReqPermCounts();
     });
+    const fold = document.getElementById('pc-perm-fold');
+    fold?.addEventListener('click', () => {
+        const folded = host.classList.toggle('is-folded');
+        fold.setAttribute('aria-expanded', folded ? 'false' : 'true');
+    });
+    // Opened for you when the form is loaded with a plugin that already asks for something:
+    // a folded block over a non-zero count is a thing somebody has to discover before they
+    // can check what they are about to publish.
     refreshReqPermCounts();
 }
 export function unsafePluginsAllowed() {

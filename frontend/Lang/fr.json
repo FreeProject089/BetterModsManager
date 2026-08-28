@@ -9835,5 +9835,7 @@
   "plugins.perm.grantAsked": "Accorder ce qu’il demande",
   "plugins.perm.grantNone": "N’accorder aucune",
   "plugins.perm.extra": "Accordées sans être demandées : {x}",
-  "plugins.perm.later": "Pas maintenant"
+  "plugins.perm.later": "Pas maintenant",
+  "sched.trCondNow": "Se déclenche quand ceci devient vrai :",
+  "sched.condNot": "pas"
 }
