@@ -520,6 +520,10 @@ function buildPluginCard(plugin: any, source: 'installed' | 'catalog') {
                         ${IC.play} ${t('plugins.apply')}
                     </button>` : ''}
                 </div>
+                <!-- The look-at-it buttons and the ⋮ are siblings in a NOWRAP row.
+                     Nested, the ⋮ was a wrap participant and landed on a line of its own
+                     as soon as the three buttons filled the width. -->
+                <div class="plug-card-actions-row">
                 <div class="plug-card-actions-right">
                     <!-- The two questions somebody asks before trusting a plugin, as their
                          own buttons rather than as the eighth and ninth icon in a row.
@@ -536,10 +540,12 @@ function buildPluginCard(plugin: any, source: 'installed' | 'catalog') {
                     <button class="btn btn-xs btn-ghost plug-btn-inspect" data-id="${escHtml(manifest.id)}" data-tooltip="${escAttr(t('plugins.inspect'))}">
                         ${IC.eye} <span class="plug-btn-word">${escHtml(t('plugins.inspectWord'))}</span>
                     </button>
-                    <!-- Everything that did not earn a place on the card, at the end. The
-                         checksum used to be here as well and is a FACT, not a verb — moving
-                         it up to the header is also what stopped this row wrapping. -->
-                    <div class="plug-card-actions-end">
+                </div>
+                <!-- Everything that did not earn a place on the card, at the end — a SIBLING
+                     of the button row, not a member of it. Inside, it was a wrap participant
+                     and dropped onto a line of its own the moment the three buttons filled
+                     the width. -->
+                <div class="plug-card-actions-end">
                     <!-- The rest. Seven icons that each did something different and looked
                          the same; a menu names them. -->
                     <div class="plug-more" data-id="${escHtml(manifest.id)}">

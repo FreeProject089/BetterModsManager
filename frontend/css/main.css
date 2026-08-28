@@ -11485,19 +11485,35 @@ body.tasky-hidden #app-mascot-container {
     gap: 5px;
     align-items: center;
     /* The card is `overflow: hidden`, so anything this row cannot fit is CUT rather than
-       pushed — which is how the checksum badge ended up sliced down the middle. It wraps
-       onto a second line now. */
+       pushed — which is how the checksum badge ended up sliced down the middle. The three
+       look-at-it buttons wrap among themselves. */
     flex-wrap: wrap;
     min-width: 0;
     row-gap: 6px;
+    /* Takes the width, so the ⋮ beside it is pushed to the end without an auto margin —
+       see below for why that matters. */
+    flex: 1;
 }
 .plug-card-actions-end {
     display: flex;
     align-items: center;
     gap: 5px;
-    /* Last, and pinned to the end even when the row is half empty — so the ⋮ is in the
-       same place on every card, which is the only thing that makes it findable. */
-    margin-left: auto;
+    /* NOT `margin-left: auto` inside the wrapping row.
+       It was a wrap participant there, so the moment the three buttons filled the line it
+       was pushed onto one of its own — right-aligned and alone, which is what "le bouton
+       dropdown sur sa propre ligne" is. It is a sibling of that row now and never wraps:
+       whatever the buttons do, the ⋮ is at the end of the first line, in the same place on
+       every card. That is the only thing that makes it findable. */
+    flex-shrink: 0;
+    align-self: flex-start;
+}
+/* The row that holds both. */
+.plug-card-actions-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    flex-wrap: nowrap;
+    min-width: 0;
 }
 /* Clean square icon buttons in the installed-plugin action row */
 .plug-card-actions-right .btn {
