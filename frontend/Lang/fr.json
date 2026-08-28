@@ -9891,5 +9891,6 @@
   "plugins.ep.schedEnabled": "Armer ou désarmer une tâche enregistrée",
   "plugins.epAbout.schedEnabled": "Seul `enabled` est modifiable. Rien ici ne peut écrire les étapes d’une tâche : installer une automatisation contenant une étape script est une décision qui appartient à quelqu’un qui la lit à l’écran.",
   "plugins.epF.seId": "L’id de la tâche, via /api/schedules.",
-  "plugins.epF.seOn": "true pour l’armer, false pour la désarmer."
+  "plugins.epF.seOn": "true pour l’armer, false pour la désarmer.",
+  "plugins.apiNoHandler": "non pris en charge par cette version"
 }

@@ -251,6 +251,32 @@ export async function initApiActivity(): Promise<void> {
         };
 
         switch (action) {
+            // ── Catalogues ────────────────────────────────────────────
+            //
+            // `POST /api/catalogs` has dispatched these two since it was written, and this
+            // switch has never had a case for either — so the route answered 202
+            // {"ok":true,"driven_by":"bmm-ui"} and the interface did nothing at all. No
+            // toast, no error, no log. The one caller who would notice is somebody checking
+            // afterwards whether the catalogue is followed.
+            //
+            // Through the deeplink handler rather than reimplemented: `bmm://catalog/follow`
+            // already does this correctly — it goes through the screens' own store so the
+            // source appears in the list with an origin and is removable by the same button
+            // as the others, it special-cases `app` (whose sources live in the backend), and
+            // it takes a password for a protected catalogue. A second implementation here
+            // would be a second set of those rules.
+            case 'catalog/follow':
+            case 'catalog/unfollow': {
+                const qs = new URLSearchParams();
+                if (params.type) qs.set('type', String(params.type));
+                if (params.url) qs.set('url', String(params.url));
+                if (params.password) qs.set('password', String(params.password));
+                const go = (window as any).__bmmDeeplink;
+                if (go) await go(`bmm://${action}?${qs.toString()}`);
+                else console.warn('[api-exec] no deeplink handler yet:', action);
+                break;
+            }
+
             // ── Repo (existing UI-driven flows) ──────────────────────────────
             case 'repo/host': driveRepo('host', params); break;
             // The working half of the pair. `repo/host-stop` has always really stopped the
@@ -600,6 +626,21 @@ export async function initApiActivity(): Promise<void> {
                 } catch (e) { console.warn('[api-exec] plugin/export', e); }
                 break;
             }
+
+            // An action the API dispatches and this switch does not know.
+            //
+            // There was no default, so `catalog/follow` fell straight through for as long as
+            // it existed while the route reported success. A caller cannot tell "done" from
+            // "ignored" over HTTP — the 202 is sent before the interface has been asked — so
+            // the only place that can say so is here.
+            //
+            // check-api-exec.mjs makes this unreachable by keeping the two lists in step; it
+            // stays because a gate proves the code in the repository, and this runs in the
+            // copy somebody is actually using.
+            default:
+                console.warn('[api-exec] no handler for action:', action, params);
+                toast(`${t('plugins.apiActionPrefix') || 'API'}: ${action} — ${t('plugins.apiNoHandler') || 'not handled by this version'}`, 'warning', 6000);
+                break;
         }
     });
 

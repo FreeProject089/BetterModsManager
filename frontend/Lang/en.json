@@ -9893,5 +9893,6 @@
   "plugins.ep.schedEnabled": "Arm or disarm a saved task",
   "plugins.epAbout.schedEnabled": "Only `enabled` can be changed. Nothing here can write a task’s steps: installing an automation with a script step in it is a decision that belongs to somebody reading it on screen.",
   "plugins.epF.seId": "The task id, from /api/schedules.",
-  "plugins.epF.seOn": "true to arm it, false to disarm."
+  "plugins.epF.seOn": "true to arm it, false to disarm.",
+  "plugins.apiNoHandler": "not handled by this version"
 }
