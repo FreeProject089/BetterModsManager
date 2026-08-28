@@ -223,6 +223,25 @@ walkthrough lives in the developer guide *Making your mod updatable*.
 Exporting writes a folder. **Publish over SSH**, on the same screen, is what puts that folder
 on the machine that serves it — no separate file-transfer program in between.
 
+The order matters and the card now says so, because the form asks for a host before anything
+says a folder has to exist:
+
+1. **Generate the repo** above — that folder is what gets sent.
+2. **Fill in the server** here, then test it.
+3. **Publish.** Later uploads reuse what is saved.
+
+!!! note "This screen is also what automations reuse"
+
+    What you save here is the connection the scheduled action **Publish repo over SSH** and
+    `POST /api/repo/publish-ssh` both use. Neither can name a host or a key of its own, on
+    purpose: a task or a caller able to name those could make BMM read a private key of its
+    choosing and ship a repo to a machine of its choosing.
+
+    Which means a key protected by a **passphrase cannot run unattended** — nothing about that
+    passphrase is kept, so there would be nobody to ask. A scheduled publish against one fails
+    with a message rather than hanging on a prompt no one will see.
+
+
 ### What you fill in
 
 | Field | Notes |

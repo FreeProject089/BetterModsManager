@@ -234,6 +234,25 @@ de la synchro delta côté téléchargement. Le pas-à-pas côté auteur vit dan
 L'export écrit un dossier. **Publier par SSH**, sur le même écran, est ce qui dépose ce dossier
 sur la machine qui l'héberge — sans programme de transfert de fichiers entre les deux.
 
+L'ordre compte et la carte le dit désormais, parce que le formulaire réclame un hôte avant que
+quoi que ce soit n'annonce qu'un dossier doit exister :
+
+1. **Générez le dépôt** au-dessus — c'est ce dossier qui part.
+2. **Renseignez le serveur** ici, puis testez.
+3. **Publiez.** Les envois suivants réutilisent ce qui est enregistré.
+
+!!! note "Cet écran est aussi ce que réutilisent les automatisations"
+
+    Ce que vous enregistrez ici est la connexion qu'utilisent l'action planifiée **Publier le
+    dépôt par SSH** et `POST /api/repo/publish-ssh`. Aucun des deux ne peut nommer d'hôte ni de
+    clé, exprès : une tâche ou un appelant capable de les nommer pourrait faire lire à BMM une
+    clé privée de son choix et expédier un dépôt vers une machine de son choix.
+
+    Ce qui veut dire qu'une clé protégée par une **phrase secrète ne peut pas tourner sans
+    surveillance** — rien de cette phrase n'est conservé, il n'y aurait personne à qui la
+    demander. Une publication planifiée contre une telle clé échoue avec un message plutôt que
+    de rester bloquée sur une invite que personne ne verra.
+
 ### Ce que tu renseignes
 
 | Champ | Remarques |
