@@ -25,7 +25,12 @@ let lastRepoPassword: string | null = null;
  * config into a cycle with it. Re-exported rather than moved-and-renamed so the callers that
  * know it by this name keep working.
  */
-export { promptRepoPassword } from '../../ui/ask-one.js';
+// Imported AND re-exported, not `export … from`. A re-export forwards the name to importers
+// and does NOT bind it locally — and this file calls it itself (line ~175). Under @ts-nocheck
+// tsc says nothing, so the first 401 would have been a ReferenceError. check-undefined-names
+// caught it; that is the gate's whole job.
+import { promptRepoPassword } from '../../ui/ask-one.js';
+export { promptRepoPassword };
 
 // Pre-seed the session download password (e.g. from a deeplink / API-driven sync that
 // already carries it), so the auto-driven fetch doesn't have to prompt the user.
