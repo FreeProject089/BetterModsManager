@@ -186,7 +186,7 @@ Start-Process "bmm://mod/enable?id=my-mod-folder"
 | `bmm://schedule/enable` | `id`*, `on` | Arms (`on=1`, the default) or disarms (`on=0`) a saved task. Asks first |
 | `bmm://catalog/follow` | `type`*, `url`* | Follow a catalogue — `plugin`, `theme`, `preset`, `modpack`, `repo`, `tutorial`, `list`, `app` |
 | `bmm://catalog/unfollow` | `type`*, `url`* | Stop following it |
-| `bmm://repo/publish-ssh` | `dir` | Opens the repo screen ready to publish over SSH. Carries no host and no key path — a link able to name those could point a publish at a server the user never chose |
+| `bmm://repo/publish-ssh` | `dir`* | **Uploads now**, to the SSH server already saved in the app — it does not open a screen. Carries no host and no key path: a link able to name those could point a publish at a server the user never chose |
 | `bmm://repo/fetch-ssh` | `dir` | The same, for fetching |
 | `bmm://hook` | `name`*, `data` | Rings a hook a task may be waiting on. `data` is parsed as JSON, or passed as text. Asks first |
 | `bmm://launchpack/run` | `id`* | Runs a Launch Pack |

@@ -193,7 +193,7 @@ global (`bmm_deeplink_allow_global = blocked`) les refuse tous.
 | `bmm://schedule/enable` | `id`*, `on` | Arme (`on=1`, par défaut) ou désarme (`on=0`) une tâche enregistrée. Demande d'abord |
 | `bmm://catalog/follow` | `type`*, `url`* | Suivre un catalogue — `plugin`, `theme`, `preset`, `modpack`, `repo`, `tutorial`, `list`, `app` |
 | `bmm://catalog/unfollow` | `type`*, `url`* | Cesser de le suivre |
-| `bmm://repo/publish-ssh` | `dir` | Ouvre l'écran repo prêt à publier en SSH. Ne porte ni hôte ni chemin de clé — un lien capable de les nommer pourrait diriger une publication vers un serveur que l'utilisateur n'a jamais choisi |
+| `bmm://repo/publish-ssh` | `dir`* | **Téléverse immédiatement** vers le serveur SSH déjà enregistré dans l'app — il n'ouvre aucun écran. Ne porte ni hôte ni chemin de clé : un lien capable de les nommer pourrait diriger une publication vers un serveur que l'utilisateur n'a jamais choisi |
 | `bmm://repo/fetch-ssh` | `dir` | Pareil, pour récupérer |
 | `bmm://hook` | `name`*, `data` | Sonne un hook qu'une tâche peut attendre. `data` est lu en JSON, sinon passé en texte. Demande d'abord |
 | `bmm://launchpack/run` | `id`* | Exécute un Launch Pack |

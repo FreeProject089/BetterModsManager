@@ -2382,6 +2382,40 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
                     .replace('{list}', repoProfiles.map(rp => rp.name || rp.id).join(', ') || '—'));
             }
 
+            // Where it installs. A task can name an existing profile, or ask for one to be
+            // made — and "made" happens exactly once: the new id replaces `newProfile` in
+            // the saved task, so the second run installs into the profile the first run
+            // created rather than beside it.
+            let targetProfileId = String(p.targetProfile || '');
+            if (!targetProfileId && p.newProfile) {
+                const wanted = String(p.newProfile).trim() || 'Repo';
+                // An existing profile of that name wins over making another. Two profiles
+                // with one name is the state nobody can undo by looking at a list.
+                const existing = (_profiles as any[]).find(
+                    (pr) => String(pr.name || '').toLowerCase() === wanted.toLowerCase());
+                if (existing) {
+                    targetProfileId = String(existing.id);
+                } else {
+                    const made = await invoke('create_profile', { payload: {
+                        name: wanted,
+                        gameName: '',
+                        gamePath: p.gameDir || '',
+                        modsPath: p.modsDir || '',
+                        backupPath: p.backupDir || '',
+                        color: '#3b82f6',
+                        icon: 'star',
+                    } }) as { id: string };
+                    targetProfileId = String(made.id);
+                    toast(`${task.name}: ${(t('sched.syncMadeProfile') || 'Created the profile \u201c{n}\u201d').replace('{n}', wanted)}`, 'success', 7000);
+                }
+                // Written back so this only ever happens once. Both fields: leaving
+                // `newProfile` set would make a renamed profile spawn a second one.
+                p.targetProfile = targetProfileId;
+                delete p.newProfile;
+                await saveTasks();
+                if ((window as any)._refreshProfilesFn) await (window as any)._refreshProfilesFn();
+            }
+
             const summary = await invoke('sync_server_repo', { args: {
                 url: p.url,
                 creatorId: await invoke('get_creator_id').catch(() => null),
@@ -2391,9 +2425,11 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
                 backupDir: p.backupDir || '',
                 choices: [{
                     repoProfileId: chosen.id,
-                    // An existing local profile, never null. Null means "create new",
-                    // which on a schedule would mint a fresh profile every single run.
-                    targetLocalProfileId: p.targetProfile || null,
+                    // An existing local profile, never null. Null WOULD mean "create new"
+                    // inside the sync, which on a schedule mints a fresh profile every
+                    // single run — so a profile the task is meant to create is created
+                    // ONCE, above, and its id written back into the task.
+                    targetLocalProfileId: targetProfileId || null,
                     selectedModIds: null,
                 }],
                 // BOTH default OFF and stay off unless the task says otherwise. These
@@ -5760,7 +5796,7 @@ const ACTION_TYPES: { v: string; label: string; needs?: string; group: string }[
     { v: 'repo.manifest', label: 'Rebuild a repo\'s manifest (unattended)', needs: 'repoManifest', group: 'repo' },
     // Uses the SSH target saved in Server Repo. A scheduled task cannot answer a passphrase
     // prompt at 04:00, so a key with one fails with a message instead of hanging forever.
-    { v: 'repo.publishSsh', label: 'Publish repo over SSH', needs: 'repoSshDir', group: 'repo' },
+    { v: 'repo.publishSsh', label: 'Publish repo over SSH (uploads now)', needs: 'repoSshDir', group: 'repo' },
     // The other direction: keep a local folder in step with what the server actually serves.
     // Same target, same passphrase constraint.
     { v: 'repo.fetchSsh', label: 'Fetch repo over SSH', needs: 'repoSshPullDir', group: 'repo' },
@@ -6201,7 +6237,19 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
             <label class="sched-cmd-label">${t('sched.syncRepoProfile') || '2. Which profile inside the repo'}</label>
             <input class="input sched-rs-rprof" placeholder="${escAttr(t('sched.syncRepoProfilePh') || 'its name, e.g. Main — required when the repo has several')}" value="${escAttr(params.repoProfile || '')}">
             <label class="sched-cmd-label">${t('sched.syncTarget') || '3. Install into this local profile'}</label>
-            <select class="input sched-rs-target"><option value="">${escHtml(t('sched.syncTargetNone') || '— pick one —')}</option>${profOpts}</select>
+            <select class="input sched-rs-target">
+                <option value="">${escHtml(t('sched.syncTargetNone') || '\u2014 pick one \u2014')}</option>
+                ${profOpts}
+                <!-- Creating one was refused outright, for a reason that was right about
+                     the wrong thing: a task that creates a profile every run mints one per
+                     run. Creating it ONCE and remembering it does not. -->
+                <option value="__new__"${params.newProfile ? ' selected' : ''}>${escHtml(t('sched.syncTargetNew'))}</option>
+            </select>
+            <div class="sched-rs-newprof" ${params.newProfile ? '' : 'hidden'}>
+                <input class="input sched-rs-newname" placeholder="${escAttr(t('sched.syncNewNamePh'))}"
+                    value="${escAttr(params.newProfile || '')}">
+                <span class="sched-cmd-hint">${escHtml(t('sched.syncNewHint'))}</span>
+            </div>
             <label class="sched-cmd-label">${t('sched.syncFolders') || '4. Folders'}</label>
             <div class="sched-cmd-row"><input class="input sched-rs-game" placeholder="${escAttr(t('sched.syncGamePh') || 'game folder')}" value="${escAttr(params.gameDir || '')}"><button type="button" class="btn btn-sm btn-secondary sched-rs-browse" data-for="game">${t('sched.choose') || 'Choose…'}</button></div>
             <div class="sched-cmd-row" style="margin-top:6px"><input class="input sched-rs-mods" placeholder="${escAttr(t('sched.syncModsPh') || 'mods folder')}" value="${escAttr(params.modsDir || '')}"><button type="button" class="btn btn-sm btn-secondary sched-rs-browse" data-for="mods">${t('sched.choose') || 'Choose…'}</button></div>
@@ -6216,6 +6264,26 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
         // The password used to live inside "Destructive options", which it is not. It is now
         // in the block every action that reaches a protected source shares, next to the key.
         wireCreds(host, params);
+        {
+            const sel = host.querySelector('.sched-rs-target') as HTMLSelectElement | null;
+            const box = host.querySelector('.sched-rs-newprof') as HTMLElement | null;
+            const name = host.querySelector('.sched-rs-newname') as HTMLInputElement | null;
+            const sync = () => {
+                const making = sel?.value === '__new__';
+                if (box) box.hidden = !making;
+                if (making) {
+                    params.targetProfile = '';
+                    params.newProfile = name?.value || (t('sched.syncNewDefault') || 'Repo');
+                    if (name && !name.value) name.value = params.newProfile;
+                } else {
+                    params.targetProfile = sel?.value || '';
+                    delete params.newProfile;
+                }
+            };
+            sel?.addEventListener('change', sync);
+            name?.addEventListener('input', () => { params.newProfile = name.value; });
+            if (params.newProfile && sel) sel.value = '__new__';
+        }
     }
     else if (needs === 'buildInfo') {
         host.innerHTML = `<div class="sched-cmd-builder">

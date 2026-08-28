@@ -11863,13 +11863,25 @@ body.sched-drag-live .sched-branch .sched-drop-zone:empty {
 .sched-act-params .sched-cmd-builder { width:100%; }
 .sched-cond-label { font-size:10px; text-transform:uppercase; letter-spacing:.04em; color:var(--text-muted); font-weight:700; }
 .sched-row-desc { font-size:11px; color:var(--text-secondary); opacity:.85; }
-.sched-cmd-builder { display:flex; flex-direction:column; gap:5px; flex:1; min-width:260px;
-    background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:8px; padding:10px 11px; }
+/* Room to read.
+   `gap: 5px` and a 4px label margin put a numbered step's heading almost against the field
+   above it, so a form with four steps and eight inputs read as one undifferentiated block —
+   which is most of "it's too cramped". The gap does the spacing between fields; the label
+   gets a bigger top margin so each STEP is visibly a step. */
+.sched-cmd-builder { display:flex; flex-direction:column; gap:8px; flex:1; min-width:260px;
+    background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:8px; padding:14px 14px 13px; }
 .sched-cmd-row { display:flex; gap:6px; align-items:center; }
 .sched-cmd-row .input { flex:1; }
-.sched-cmd-label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--text-muted); margin-top:4px; }
+.sched-cmd-label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--text-muted); margin:8px 0 -2px; }
+/* The first one starts the box; it needs no separation from a heading that isn't there. */
+.sched-cmd-builder > .sched-cmd-label:first-child { margin-top:0; }
+/* A block that appears when an option is chosen, indented so it reads as belonging to it. */
+.sched-rs-newprof { display:flex; flex-direction:column; gap:4px; padding-left:10px;
+    border-left:2px solid var(--accent); margin-top:2px; }
+.sched-rs-newprof[hidden] { display:none; }
 .sched-cmd-opt { font-weight:500; text-transform:none; letter-spacing:0; opacity:.7; }
-.sched-cmd-adv > summary { font-size:11px; color:var(--text-secondary); cursor:pointer; padding:4px 0; opacity:.85; }
+.sched-cmd-adv > summary { font-size:11px; color:var(--text-secondary); cursor:pointer; padding:7px 0; opacity:.85; }
+.sched-cmd-adv { margin-top:2px; }
 .sched-cmd-adv > summary:hover { opacity:1; }
 .sched-cmd-hint { font-size:11px; color: var(--accent); opacity:.95; margin-top:4px; }
 /* Preset picker, shown only on a blank new task.

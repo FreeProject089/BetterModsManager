@@ -164,7 +164,7 @@
     },
     {
       "type": "repo.publishSsh",
-      "label": "Publish repo over SSH",
+      "label": "Publish repo over SSH (uploads now)",
       "needs": "repoSshDir",
       "group": "repo"
     },
