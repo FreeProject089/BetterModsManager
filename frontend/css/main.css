@@ -13259,22 +13259,41 @@ body.sched-drag-live .sched-branch .sched-drop-zone:empty {
     border: 1px solid var(--border);
 }
 .plug-perm-always input { cursor: pointer; }
-.plug-perm-dialog { display: flex; flex-direction: column; gap: 12px; }
-.plug-perm-dialog-info { display: flex; align-items: flex-start; gap: 10px; color: var(--text-secondary); font-size: 13px; }
-.plug-perm-dialog-list {
-    margin: 0;
-    padding: 0 0 0 8px;
-    list-style: none;
+/* The permission modal's request half.
+   A plugin declares what it wants and installing grants none of it, so the two facts have to
+   be readable apart: what it ASKED for is a tag on the row, what is GRANTED is the tick. */
+.pi-perm-bar {
     display: flex;
-    flex-direction: column;
-    gap: 4px;
-    font-size: 12px;
-    color: var(--text-secondary);
-    max-height: 160px;
-    overflow-y: auto;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding-bottom: 8px;
+    margin-bottom: 4px;
+    border-bottom: 1px solid var(--border);
 }
-.plug-perm-dialog-list li { display: flex; align-items: center; gap: 6px; }
-.plug-perm-dialog-buttons { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+.pi-perm-sum { font-size: 12px; color: var(--text-secondary); }
+.pi-perm-sum.is-none { color: var(--text-muted); font-style: italic; }
+.pi-perm-acts { display: flex; gap: 6px; flex-shrink: 0; }
+.pi-perm-extra {
+    margin: 0 0 6px;
+    font-size: 11px;
+    line-height: 1.4;
+    color: var(--text-muted);
+}
+.pi-perm-row.is-asked { background: var(--bmm-s06); border-radius: 6px; }
+.pi-perm-tag {
+    margin-left: auto;
+    flex-shrink: 0;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    padding: 1px 6px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+}
+
 .plug-perm-deny { color: var(--danger) !important; }
 
 /* ═══════════════════════════════════════════════════════════════════════════

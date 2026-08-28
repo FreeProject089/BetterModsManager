@@ -615,7 +615,7 @@ function buildPluginCard(plugin, source) {
     card.querySelector('.plug-btn-perms')?.addEventListener('click', async (e) => {
         const b = e.currentTarget;
         const { openPluginPermissions } = await import('./plugin-inspect.js');
-        await openPluginPermissions(b.dataset.id || '', b.dataset.name || '', (m, k) => toast(m, k));
+        await openPluginPermissions(b.dataset.id || '', b.dataset.name || '', (m, k) => toast(m, k), { requested: manifest.permissions || [] });
     });
     card.querySelector('.plug-btn-content')?.addEventListener('click', async (e) => {
         const b = e.currentTarget;
@@ -10136,7 +10136,6 @@ async function renderPerms(container) {
     // checks in src-tauri/src/api/mod.rs. Granting one here actually unlocks the
     const PERM_GROUPS = permDomains();
     const ALL_PERMS = PERM_GROUPS.flatMap(g => g.scopes);
-    const globalAllowed = localStorage.getItem('bmm_plug_allow_global') === 'always';
     const deepLinkAllowed = localStorage.getItem('bmm_deeplink_allow_global') !== 'blocked';
     const apiNoAuthAllow = localStorage.getItem('bmm_api_public_allow') !== 'blocked';
     const unsafeAllowed = localStorage.getItem('bmm_unsafe_plugins_allow') === 'allowed';
@@ -10152,6 +10151,12 @@ async function renderPerms(container) {
             <h3 class="plug-section-title" style="margin-bottom:10px;">${IC.globe} ${t('plugins.globalApiPermTitle') || 'Permissions globales (API & Deep Links)'}</h3>
             <p style="font-size:11px;color:var(--text-muted);margin:0 0 12px;line-height:1.5;">${t('plugins.globalApiPermDesc') || 'Ces paramètres s\'appliquent à tous les appelants externes : plugins, scripts .bat, PowerShell, applications tierces, etc.'}</p>
 
+            <!-- "Global plugin trust — skip all permission dialogs for every plugin" used to
+                 live here, with a red warning under it. It did nothing: the dialog it claimed
+                 to skip had no callers, so the switch wrote a key nothing read. A security
+                 control that describes a posture the app does not have is worse than no
+                 control — somebody who left it OFF to be careful gained exactly nothing, and
+                 believed otherwise. Replaced by a line that is true. -->
             <div class="plug-perm-global-card" style="margin-bottom:8px;">
                 <div class="plug-perm-global-inner">
                     <div class="plug-perm-global-icon">${IC.shield}</div>
@@ -10159,10 +10164,6 @@ async function renderPerms(container) {
                         <strong>${t('plugins.globalPermTitle')}</strong>
                         <span class="plug-perm-global-sub">${t('plugins.globalPermDesc')}</span>
                     </div>
-                    <label class="plug-toggle" style="margin-left:auto;">
-                        <input type="checkbox" id="plug-global-allow" ${globalAllowed ? 'checked' : ''}>
-                        <span class="plug-toggle-slider"></span>
-                    </label>
                 </div>
                 <p class="plug-perm-global-warn">${IC.alert} ${t('plugins.globalPermWarn')}</p>
             </div>
@@ -10323,14 +10324,6 @@ async function renderPerms(container) {
             }
         }
     });
-    container.querySelector('#plug-global-allow')?.addEventListener('change', (e) => {
-        if (e.target.checked) {
-            localStorage.setItem('bmm_plug_allow_global', 'always');
-        }
-        else {
-            localStorage.removeItem('bmm_plug_allow_global');
-        }
-    });
     container.querySelector('#plug-deeplink-allow')?.addEventListener('change', (e) => {
         if (e.target.checked) {
             localStorage.removeItem('bmm_deeplink_allow_global');
@@ -10360,17 +10353,12 @@ async function renderPerms(container) {
     list.innerHTML = _installedPlugins.map((plugin, i) => {
         const currentPerms = permsArr[i] || [];
         const id = plugin.manifest.id;
-        const alwaysAllowed = localStorage.getItem(`bmm_plug_allow_${id}`) === 'always';
         return `
             <div class="plug-perm-block" data-pid="${escHtml(id)}">
                 <div class="plug-perm-header">
                     <div class="plug-card-icon-default" style="width:28px;height:28px;font-size:14px;">${IC.puzzle}</div>
                     <strong>${escHtml(plugin.manifest.name)}</strong>
                     <span class="plug-perm-id">${escHtml(id)}</span>
-                    <label class="plug-perm-always" data-tooltip="${t('plugins.alwaysAllow')}">
-                        <input type="checkbox" class="plug-perm-always-cb" ${alwaysAllowed ? 'checked' : ''}>
-                        <span>${t('plugins.alwaysAllow')}</span>
-                    </label>
                 </div>
                 <div class="plug-perm-domains">
                     ${PERM_GROUPS.map(g => `
@@ -10398,12 +10386,6 @@ async function renderPerms(container) {
     // Wire listeners once (single pass over the rendered blocks).
     list.querySelectorAll('.plug-perm-block').forEach(block => {
         const id = block.dataset.pid || '';
-        block.querySelector('.plug-perm-always-cb')?.addEventListener('change', (e) => {
-            if (e.target.checked)
-                localStorage.setItem(`bmm_plug_allow_${id}`, 'always');
-            else
-                localStorage.removeItem(`bmm_plug_allow_${id}`);
-        });
         block.querySelector('.plug-perm-all')?.addEventListener('click', () => block.querySelectorAll('.plug-perm-check').forEach(c => c.checked = true));
         block.querySelector('.plug-perm-none')?.addEventListener('click', () => block.querySelectorAll('.plug-perm-check').forEach(c => c.checked = false));
         block.querySelector('.plug-save-perms')?.addEventListener('click', async () => {
@@ -10418,59 +10400,32 @@ async function renderPerms(container) {
         });
     });
 }
-// ── Permission Dialog ──────────────────────────────────────────────────────
-async function requestPermission(pluginId, pluginName, modNames) {
-    if (localStorage.getItem('bmm_plug_allow_global') === 'always')
-        return true;
-    const alwaysKey = `bmm_plug_allow_${pluginId}`;
-    if (localStorage.getItem(alwaysKey) === 'always')
-        return true;
-    const modList = modNames.length
-        ? `<ul class="plug-perm-dialog-list">${modNames.map(n => `<li>${IC.check} ${escHtml(n)}</li>`).join('')}</ul>`
-        : '';
-    const content = `
-        <div class="plug-perm-dialog">
-            <div class="plug-perm-dialog-info">${IC.shield}<p>${t('plugins.permDialogDesc', { plugin: pluginName })}</p></div>
-            ${modList}
-            <div class="plug-perm-dialog-buttons">
-                <button class="btn btn-accent" id="ppd-once">${t('plugins.permOnce')}</button>
-                <button class="btn btn-ghost" id="ppd-always">${t('plugins.permAlways')}</button>
-                <button class="btn btn-ghost plug-perm-deny" id="ppd-deny">${t('plugins.permDeny')}</button>
-            </div>
-        </div>`;
-    return new Promise(resolve => {
-        const modal = document.getElementById('modal-confirm-generic');
-        const titleEl = document.getElementById('confirm-title');
-        const msgEl = document.getElementById('confirm-message');
-        const btnYes = document.getElementById('btn-confirm-yes');
-        const btnCancel = document.getElementById('btn-confirm-cancel');
-        const customArea = document.getElementById('confirm-custom-content');
-        if (!modal || !titleEl || !btnYes || !btnCancel) {
-            resolve(false);
-            return;
-        }
-        titleEl.textContent = t('plugins.permDialogTitle');
-        if (msgEl)
-            msgEl.textContent = '';
-        if (customArea)
-            customArea.innerHTML = content;
-        else if (msgEl)
-            msgEl.innerHTML = content;
-        btnYes.style.display = 'none';
-        btnCancel.style.display = 'none';
-        modal.classList.add('open');
-        const cleanup = () => {
-            modal.classList.remove('open');
-            btnYes.style.display = '';
-            btnCancel.style.display = '';
-        };
-        const onOnce = () => { cleanup(); resolve(true); };
-        const onAlways = () => { localStorage.setItem(alwaysKey, 'always'); cleanup(); resolve(true); };
-        const onDeny = () => { cleanup(); resolve(false); };
-        (customArea || msgEl)?.querySelector('#ppd-once')?.addEventListener('click', onOnce, { once: true });
-        (customArea || msgEl)?.querySelector('#ppd-always')?.addEventListener('click', onAlways, { once: true });
-        (customArea || msgEl)?.querySelector('#ppd-deny')?.addEventListener('click', onDeny, { once: true });
-    });
+// ── Asking for what a plugin requested ─────────────────────────────────
+/**
+ * Show the permission request a freshly installed plugin makes.
+ *
+ * What was here before: `requestPermission`, a three-button "Allow once / Always / Deny"
+ * dialog with markup, CSS and five translated strings — and **no callers**. Two settings fed
+ * it, a per-plugin "always allow" tick and a global "skip all permission dialogs" switch with
+ * a red warning under it, and both wrote keys that only that function read. A security
+ * control describing a posture the app does not have is worse than none: somebody who left
+ * the global switch OFF to be careful gained nothing and believed otherwise.
+ *
+ * The real gap it was standing in front of: a plugin declares `permissions` in its manifest,
+ * installing grants exactly none of them (the Rust side logs "disabled, no permissions" and
+ * means it), and the request was then shown to NOBODY. The only way to learn what a plugin
+ * wanted was to grant something and see whether it stopped erroring.
+ *
+ * So this asks, once, at the moment it is the question. It grants nothing by itself — the
+ * dialog opens with today's grants ticked, not the request — and a plugin that asks for
+ * nothing is never interrupted.
+ */
+async function askForRequestedPerms(plugin) {
+    const asked = Array.isArray(plugin?.manifest?.permissions) ? plugin.manifest.permissions : [];
+    if (!asked.length)
+        return;
+    const { openPluginPermissions } = await import('./plugin-inspect.js');
+    await openPluginPermissions(plugin.manifest.id, plugin.manifest.name, (m, k) => toast(m, k), { requested: asked, firstRun: true });
 }
 // ── Plugin Checksum Modal ─────────────────────────────────────────────────
 function handlePluginChecksumModal(manifest, installDir, hash) {
@@ -10550,6 +10505,7 @@ async function handleInstall(downloadUrl, name, local = false) {
         toast(t('plugins.installSuccess', { name }), 'success');
         dispatchBmmAction(BMM_ACTIONS.PLUGIN_INSTALLED, { name });
         renderTab(_tab);
+        await askForRequestedPerms(plugin);
     }
     catch (e) {
         toast(`${t('plugins.installError')}: ${e}`, 'error');
@@ -10566,6 +10522,7 @@ async function handleImportFile() {
         _installedPlugins.push(plugin);
         toast(t('plugins.importSuccess'), 'success');
         renderTab(_tab);
+        await askForRequestedPerms(plugin);
     }
     catch (e) {
         toast(`${t('plugins.importError')}: ${e}`, 'error');
@@ -10992,23 +10949,6 @@ export async function handleApplyViaDeepLink(pluginId) {
     await handleApply(pluginId);
 }
 /**
- * Import the automations a plugin ships, and — when asked — run them once.
- *
- * The alternative people were using is what makes this worth having: ship a `.bat`, tell the
- * person where the folder is, and hope. An automation is the one thing BMM can READ: it has
- * steps, permissions and a trigger, and all three can be shown before anything happens.
- *
- * Every task goes through `sanitiseImportedTask`, the same gate as any other `.bmmpa`. It
- * arrives DISABLED with every capability that reaches outside BMM stripped — command, script,
- * deeplink, stopProcess — because those are granted by the person who lives with them, never
- * by the file's author. A plugin is a file from a stranger like any other.
- *
- * Which is exactly what makes `runNow` defensible. A task that cannot run a program, cannot
- * fire a deeplink and cannot kill a process is a task whose worst case is a change inside BMM
- * that the person just asked for by applying the plugin. Auto-run without that stripping would
- * be arbitrary code execution on install, dressed as a convenience.
- */
-/**
  * Follow the catalogues a plugin ships.
  *
  * The counterpart of `installPluginAutomations`, and it stops in the same place: a bundle is
@@ -11097,6 +11037,23 @@ async function installPluginBundles(pluginId) {
     else if (already)
         toast(t('plugins.bundle.allAlready'), 'info', 7000);
 }
+/**
+ * Import the automations a plugin ships, and — when asked — run them once.
+ *
+ * The alternative people were using is what makes this worth having: ship a `.bat`, tell the
+ * person where the folder is, and hope. An automation is the one thing BMM can READ: it has
+ * steps, permissions and a trigger, and all three can be shown before anything happens.
+ *
+ * Every task goes through `sanitiseImportedTask`, the same gate as any other `.bmmpa`. It
+ * arrives DISABLED with every capability that reaches outside BMM stripped — command, script,
+ * deeplink, stopProcess — because those are granted by the person who lives with them, never
+ * by the file's author. A plugin is a file from a stranger like any other.
+ *
+ * Which is exactly what makes `runNow` defensible. A task that cannot run a program, cannot
+ * fire a deeplink and cannot kill a process is a task whose worst case is a change inside BMM
+ * that the person just asked for by applying the plugin. Auto-run without that stripping would
+ * be arbitrary code execution on install, dressed as a convenience.
+ */
 async function installPluginAutomations(pluginId, runNow) {
     let files;
     try {

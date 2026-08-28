@@ -51,37 +51,82 @@ function shell(title: string, sub: string, bodyHtml: string, footHtml = ''): HTM
 }
 
 /**
- * What this plugin may do, and the chance to change it.
+ * What this plugin may do, the chance to change it, and — the part that was missing — what
+ * it ASKED for.
  *
- * The same twenty-four scopes the settings screen lists, for ONE plugin, opened from its
- * card. Ticking here is granting — unlike the create form, where ticking is asking.
+ * A plugin declares `permissions` in its manifest, and installing grants exactly none of
+ * them: the Rust side logs "installed, disabled, no permissions" and means it. That is the
+ * right default and it left a hole, because the request was then shown to nobody. Twenty-six
+ * scopes in a flat list say nothing about which two this plugin actually wants, so the only
+ * way to find out was to grant something and see whether it stopped erroring.
+ *
+ * Asked and granted are kept visibly apart. Ticking still GRANTS — unlike the create form,
+ * where ticking is asking — and a scope granted that was never requested is worth seeing too:
+ * it is usually left over from an older version of the plugin.
  */
 export async function openPluginPermissions(
     pluginId: string,
     pluginName: string,
     notify: (m: string, k: 'success' | 'error') => void,
+    opts: { requested?: string[]; firstRun?: boolean } = {},
 ): Promise<void> {
     const granted = await invoke('get_plugin_permissions', { pluginId }).catch(() => []) as string[];
+    const asked = (opts.requested || []).filter((x) => typeof x === 'string');
     const domains = permDomains();
-    const body = `<div class="pi-perms">${domains.map((d) => `
+    const all = domains.flatMap((d) => d.scopes);
+    // Only what this BMM knows about. A manifest can name a scope from a newer version, and
+    // counting it would report "asks for 3" beside two rows.
+    const askedHere = asked.filter((x) => all.includes(x));
+    const extra = granted.filter((g) => askedHere.length && !askedHere.includes(g));
+
+    const summary = askedHere.length
+        ? (t('plugins.perm.asksN') || 'Asks for {n} of {all}')
+            .replace('{n}', String(askedHere.length)).replace('{all}', String(all.length))
+        : (t('plugins.perm.asksNone') || 'Asks for nothing — the safest plugin there is');
+
+    const body = `<div class="pi-perms">
+        <div class="pi-perm-bar">
+            <span class="pi-perm-sum${askedHere.length ? '' : ' is-none'}">${escHtml(summary)}</span>
+            <span class="pi-perm-acts">
+                ${askedHere.length ? `<button type="button" class="btn btn-xs btn-ghost" id="pi-perm-asked">${escHtml(t('plugins.perm.grantAsked'))}</button>` : ''}
+                <button type="button" class="btn btn-xs btn-ghost" id="pi-perm-none">${escHtml(t('plugins.perm.grantNone'))}</button>
+            </span>
+        </div>
+        ${extra.length ? `<p class="pi-perm-extra">${escHtml((t('plugins.perm.extra') || 'Granted but not asked for: {x}').replace('{x}', extra.join(', ')))}</p>` : ''}
+        ${domains.map((d) => `
         <div class="pi-perm-dom">
             <span class="pi-perm-dom-h" style="color:${d.color};">${escHtml(d.domain)}</span>
             ${d.scopes.map((sc) => `
-                <label class="pi-perm-row">
+                <label class="pi-perm-row${askedHere.includes(sc) ? ' is-asked' : ''}">
                     <input type="checkbox" data-scope="${escAttr(sc)}"${granted.includes(sc) ? ' checked' : ''}
                         style="accent-color:${d.color};">
                     <code style="color:${d.color};">${escHtml(sc)}</code>
                     <span class="pi-perm-what">${escHtml(t('plugins.scope.' + sc) || '')}</span>
+                    ${askedHere.includes(sc) ? `<span class="pi-perm-tag">${escHtml(t('plugins.perm.askedTag'))}</span>` : ''}
                 </label>`).join('')}
         </div>`).join('')}</div>`;
 
     const ov = shell(
-        t('plugins.perm.title') || 'What this plugin may do',
+        opts.firstRun
+            ? (t('plugins.perm.titleAsk') || 'This plugin is asking for permissions')
+            : (t('plugins.perm.title') || 'What this plugin may do'),
         `${pluginName} — ${t('plugins.perm.sub') || 'ticking here GRANTS. Nothing is asked again afterwards.'}`,
         body,
-        `<button class="btn btn-sm btn-ghost" data-pi-close>${escHtml(t('common.cancel') || 'Cancel')}</button>
+        `<button class="btn btn-sm btn-ghost" data-pi-close>${escHtml(
+            opts.firstRun ? (t('plugins.perm.later') || 'Not now') : (t('common.cancel') || 'Cancel'))}</button>
          <button class="btn btn-sm btn-accent" id="pi-perm-save">${escHtml(t('plugins.savePerms') || 'Save')}</button>`,
     );
+    // Both set the boxes and leave saving to the Save button. A shortcut that WROTE would be
+    // a second way to grant a permission, and one of the two would eventually skip a check
+    // the other has.
+    ov.querySelector('#pi-perm-asked')?.addEventListener('click', () => {
+        ov.querySelectorAll<HTMLInputElement>('input[data-scope]').forEach((cb) => {
+            cb.checked = askedHere.includes(cb.dataset.scope || '');
+        });
+    });
+    ov.querySelector('#pi-perm-none')?.addEventListener('click', () => {
+        ov.querySelectorAll<HTMLInputElement>('input[data-scope]').forEach((cb) => { cb.checked = false; });
+    });
     ov.querySelectorAll('[data-pi-close]').forEach((b) => b.addEventListener('click', () => (ov as any)._close()));
     ov.querySelector('#pi-perm-save')?.addEventListener('click', async () => {
         const perms = Array.from(ov.querySelectorAll<HTMLInputElement>('input[data-scope]:checked'))
