@@ -228,8 +228,11 @@ struct RepoExtraBody {
     /// Which entry, matched against what `/api/repo/info` returned under `extras`.
     kind: String,
     id: String,
-    #[serde(default)]
-    creator_id: Option<String>,
+    // `creator_id` used to be a field here, and should never have been one. It is WHO BMM
+    // says it is to a repo — the value a repo's whitelist and its ban list are keyed on — so
+    // a caller able to supply it could present somebody else's identity to a server that
+    // decides access by it, including one that had banned the caller's own. This
+    // installation's id is used instead; there is nothing to send.
     #[serde(default)]
     password: Option<String>,
 }
@@ -309,8 +312,7 @@ struct NewKeyBody {
 #[serde(rename_all = "camelCase")]
 struct RepoSyncBody {
     url: String,
-    #[serde(default)]
-    creator_id: Option<String>,
+    // Deliberately absent — see RepoExtraBody. This installation's own id is used.
     #[serde(default)]
     game_dir: String,
     #[serde(default)]
@@ -667,6 +669,34 @@ pub const PLUGIN_SCOPES: [&str; 26] = [
     "system.write",
     "telemetry.write",
 ];
+
+#[cfg(test)]
+mod identity_tests {
+    use super::{RepoSyncBody, RepoExtraBody};
+
+    /// A caller sending `creatorId` gets it IGNORED, not honoured.
+    ///
+    /// It is the identity BMM presents to a repo — the value a whitelist and a ban list are
+    /// keyed on — so a caller able to supply it could present somebody else's, including one
+    /// that had banned its own. serde drops unknown fields, so the proof is that the request
+    /// still parses and the value has nowhere to land: the field does not exist on the struct,
+    /// and this stops compiling the day somebody puts it back.
+    #[test]
+    fn a_caller_cannot_name_whose_identity_is_presented() {
+        let body: RepoSyncBody = serde_json::from_str(
+            r#"{"url":"https://e/repo.json","creatorId":"somebody-elses-id","choices":[]}"#,
+        ).expect("the request is still accepted");
+        assert_eq!(body.url, "https://e/repo.json");
+
+        let extra: RepoExtraBody = serde_json::from_str(
+            r#"{"url":"https://e/repo.json","kind":"plugin","id":"p","creatorId":"somebody-elses-id"}"#,
+        ).expect("the request is still accepted");
+        assert_eq!(extra.id, "p");
+        // Not a compile error only because serde ignores it. If either struct ever regains
+        // the field, the two lines above start meaning something again and this comment is
+        // the reason they must not.
+    }
+}
 
 #[cfg(test)]
 mod scope_tests {
@@ -3655,7 +3685,7 @@ pub async fn start_api_server(
             // through BMM's own installer, which is not what "take what this repo carries"
             // means — and the hash check would be checking the attacker's own number.
             let repo = match crate::commands::repo::fetch_repo_info(
-                body.url.clone(), body.creator_id.clone(), body.password.clone(),
+                body.url.clone(), this_creator_id(), body.password.clone(),
             ).await {
                 Ok(r) => r,
                 Err(e) => return Ok::<_, warp::Rejection>(warp::reply::with_status(
@@ -3672,7 +3702,7 @@ pub async fn start_api_server(
             let state = handle.state::<crate::state::AppState>();
             match crate::commands::repo_extras::install_extra(
                 &handle, &state, &body.url, entry,
-                body.creator_id.as_deref(), body.password.as_deref(),
+                this_creator_id().as_deref(), body.password.as_deref(),
             ).await {
                 Ok(v) => Ok(warp::reply::with_status(warp::reply::json(&v), StatusCode::OK)),
                 Err(e) => Ok(warp::reply::with_status(
@@ -3966,9 +3996,10 @@ async fn do_api_repo_sync(
     let mut cb = reqwest::Client::builder()
         .user_agent("BetterModManager")
         .timeout(std::time::Duration::from_secs(60));
-    if let Some(ref cid) = body.creator_id {
+    // This installation's id, never one the caller chose.
+    if let Some(cid) = this_creator_id() {
         let mut headers = reqwest::header::HeaderMap::new();
-        if let Ok(hv) = reqwest::header::HeaderValue::from_str(cid) {
+        if let Ok(hv) = reqwest::header::HeaderValue::from_str(&cid) {
             headers.insert("X-Creator-ID", hv);
         }
         cb = cb.default_headers(headers);
