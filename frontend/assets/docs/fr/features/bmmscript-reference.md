@@ -2,7 +2,7 @@
 
 !!! info ""
 
-    100 actions · 34 conditions · 32 valeurs · 8 sources de boucle
+    103 actions · 34 conditions · 32 valeurs · 8 sources de boucle
 
 > Généré depuis le registre de BMM lui-même, donc cette page ne peut pas décrire une version de l'application qui n'existe pas. Si une action est dans l'éditeur de blocs, elle est dans cette liste.
 
@@ -57,6 +57,9 @@ S'écrit `do <nom>(param: valeur, …)`. Une action sans paramètre prend des pa
 | `repo.manifest` | Lit le dossier, réécrit repo.json, et rapporte ce qui a changé. Se combine avec Publier par SSH à l'étape suivante. | `dir` · `name` · `author` |
 | `repo.publishSsh` | Envoie le dossier exporté vers la cible SSH enregistrée dans Server Repo | `dir` · `target` · `into` |
 | `repo.fetchSsh` | Récupère le dépôt depuis la cible SSH enregistrée, dans un dossier local | `dir` · `target` · `into` |
+| `catalog.import` | Lit le document à cette adresse et décide : un index fait suivre tout ce qu'il liste, un catalogue seul est confronté aux huit types. Celui qui n'en suit aucun est refusé plutôt que deviné — le suivre mettrait une adresse dans une liste qui la récupère à chaque démarrage, pour toujours. | `url` · `catType` · `password` |
+| `catalog.entry` | Une entrée d'un catalogue que cette machine ÉCRIT, pas un qu'elle suit. L'id est ce sur quoi modifier et retirer s'appuient : une entrée sans id pourrait être écrite puis jamais retouchée — elle est refusée. | `mode` · `catType` · `id` · `json` |
+| `catalog.delete` | Jette tout le catalogue écrit d'un type. Demande confirmation, et exige la permission « supprimer » comme toute étape qui détruit quelque chose à toi. Ne touche pas aux catalogues que tu suis. | `catType` |
 | `repo.syncNow` | Synchronise un dépôt serveur dans un profil local, sans surveillance. | `url` · `gameDir` · `modsDir` · `password` · `repoProfile` · `targetProfile` · `newProfile` · `backupDir` · `overwriteAll` · `deleteExtra` · `downloadLimit` · `keepZipped` · `into` |
 | `key.create` | Génère une paire de clés sur le trousseau. Un nom déjà pris est laissé tel quel, jamais remplacé. | `name` · `kind` · `bindUrl` |
 | `catalog.follow` | Ajoute une source de catalogue via les écrans de l'app, pour qu'elle apparaisse dans la liste des suivis avec son origine. | `catType` · `url` · `unfollow` · `password` |

@@ -46,6 +46,7 @@ pub mod repo_credentials;
 pub mod repo_extras;
 pub mod game_watch;
 pub mod catalog_sources;
+pub mod catalog_store;
 pub mod plugin_assets_core;
 pub mod plugin_assets;
 pub mod hooks;

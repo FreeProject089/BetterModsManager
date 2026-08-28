@@ -457,6 +457,24 @@
       "group": "system"
     },
     {
+      "type": "catalog.import",
+      "label": "Follow a catalogue (works out its kind)",
+      "needs": "catImport",
+      "group": "repo"
+    },
+    {
+      "type": "catalog.entry",
+      "label": "Add, change or remove one catalogue entry",
+      "needs": "catEntry",
+      "group": "repo"
+    },
+    {
+      "type": "catalog.delete",
+      "label": "Delete a catalogue you author",
+      "needs": "catDelete",
+      "group": "repo"
+    },
+    {
       "type": "code.run",
       "label": "Run BMMScript (advanced)",
       "needs": "bmms",

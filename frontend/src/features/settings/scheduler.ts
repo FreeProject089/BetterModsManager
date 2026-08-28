@@ -2391,6 +2391,49 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
             break;
         }
 
+        // Follow whatever is at an address, without being told its kind. The deciding
+        // happens once, in the deeplink handler, so a scheduled import and a clicked link
+        // cannot disagree about what a document is.
+        case 'catalog.import': {
+            const url = String(p.url || '').trim();
+            if (!url) { toast(`${task.name}: ${t('sched.cat.noUrl')}`, 'warning', 8000); break; }
+            requirePerm(task, 'deeplink', t('sched.permDeeplink') || 'fire deeplinks');
+            await runDeepLink('bmm://catalog/import'
+                + `?url=${encodeURIComponent(url)}`
+                + (p.catType ? `&type=${encodeURIComponent(String(p.catType))}` : '')
+                + (p.password ? `&password=${encodeURIComponent(String(p.password))}` : ''));
+            break;
+        }
+
+        // One entry of a catalogue this machine AUTHORS — not one it follows.
+        case 'catalog.entry': {
+            const mode = String(p.mode || 'add');
+            const kind = String(p.catType || 'app');
+            const id = String(p.id || '').trim();
+            if (!id) { toast(`${task.name}: ${t('sched.cat.noId')}`, 'warning', 8000); break; }
+            requirePerm(task, 'deeplink', t('sched.permDeeplink') || 'fire deeplinks');
+            let body: any = {};
+            if (mode !== 'remove') {
+                // Parsed HERE so a bad field list fails the step with a message, rather than
+                // travelling as text and writing an entry whose fields are the string "{…}".
+                try { body = p.json ? JSON.parse(String(p.json)) : {}; }
+                catch { throw new Error(t('sched.cat.badJson') || 'The fields are not valid JSON.'); }
+            }
+            await runDeepLink('bmm://catalog/entry'
+                + `?mode=${encodeURIComponent(mode)}&type=${encodeURIComponent(kind)}&id=${encodeURIComponent(id)}`
+                + (mode === 'remove' ? '' : `&fields=${encodeURIComponent(JSON.stringify(body))}`));
+            break;
+        }
+
+        // The whole authored catalogue of one kind. Under `delete`, like every other step
+        // that destroys something of yours.
+        case 'catalog.delete': {
+            const kind = String(p.catType || 'app');
+            requirePerm(task, 'delete', t('sched.permDelete') || 'delete things');
+            await runDeepLink(`bmm://catalog/delete?type=${encodeURIComponent(kind)}`);
+            break;
+        }
+
         // Set a game up to be watched.
         //
         // For DCS that means installing the hook, because DCS can be ASKED. For everything
@@ -6543,6 +6586,12 @@ const ACTION_TYPES: { v: string; label: string; needs?: string; group: string }[
     { v: 'custom.script', label: 'Run a script', needs: 'script', group: 'system' },
     { v: 'folder.create', label: 'Create a folder (BMM data)', needs: 'bmmfolder', group: 'system' },
     { v: 'catalog.create', label: 'Publish a catalogue', needs: 'catCreate', group: 'system' },
+    // The three verbs a task had no way to reach. It could publish a catalogue and follow
+    // one, and could neither change nor remove either — so an automation keeping a catalogue
+    // up to date could add to it for ever and never take anything out.
+    { v: 'catalog.import', label: 'Follow a catalogue (works out its kind)', needs: 'catImport', group: 'repo' },
+    { v: 'catalog.entry', label: 'Add, change or remove one catalogue entry', needs: 'catEntry', group: 'repo' },
+    { v: 'catalog.delete', label: 'Delete a catalogue you author', needs: 'catDelete', group: 'repo' },
     { v: 'code.run', label: 'Run BMMScript (advanced)', needs: 'bmms', group: 'logic' },
     { v: 'repo.syncNow', label: 'Sync a server repo (unattended)', needs: 'reposync', group: 'repo' },
     { v: 'deeplink', label: 'Run bmm:// deeplink', needs: 'url', group: 'system' },
@@ -6847,6 +6896,12 @@ async function paintEngineStatus(host: HTMLElement, engine: string): Promise<voi
             : (t('sched.scrEngNo') || 'Not available on this computer — this task will fail until it is installed.');
     }
 }
+
+/** The catalogue kinds, for the pickers. Same eight the Rust side accepts. */
+const KINDS: [string, string][] = [
+    ['app', 'app'], ['plugin', 'plugin'], ['theme', 'theme'], ['preset', 'preset'],
+    ['modpack', 'modpack'], ['repo', 'repo'], ['tutorial', 'tutorial'], ['list', 'list'],
+];
 
 function renderParams(host: HTMLElement, needs: string | undefined, params: Record<string, any>): void {
     if (!needs) { host.innerHTML = ''; return; }
@@ -8068,6 +8123,43 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
         });
         void check();
     }
+    else if (needs === 'catImport') host.innerHTML = `
+        <div class="sched-field" style="flex:1;min-width:260px"><label class="sched-flabel">${t('sched.catImp.url') || 'Address of the catalogue or index'}</label>
+            <input class="input sched-cat-url" spellcheck="false" placeholder="https://…/catalog.json" value="${escAttr(params.url || '')}"></div>
+        <div class="sched-field"><label class="sched-flabel">${t('sched.catImp.type') || 'Only this kind (optional)'}</label>
+            <select class="input sched-cat-type" style="min-width:150px">
+                <option value="">${escHtml(t('sched.catImp.any') || 'whatever it is')}</option>
+                ${KINDS.map(([v, l]) => `<option value="${v}"${params.catType === v ? ' selected' : ''}>${escHtml(l)}</option>`).join('')}
+            </select></div>
+        <div class="sched-field"><label class="sched-flabel">${t('sched.catImp.pw') || 'Password (protected source)'}</label>
+            <input type="password" class="input sched-cat-pw" autocomplete="new-password" value="${escAttr(params.password || '')}" style="min-width:150px"></div>
+        <p class="sched-hint">${escHtml(t('sched.catImp.hint') || 'An index follows everything it lists; a single catalogue is matched against the eight kinds. One that fits none is refused rather than guessed at.')}</p>`;
+
+    else if (needs === 'catEntry') host.innerHTML = `
+        <div class="sched-field"><label class="sched-flabel">${t('sched.catEnt.mode') || 'What to do'}</label>
+            <select class="input sched-cat-mode" style="min-width:150px">${
+                ([['add', t('sched.catEnt.add') || 'Add it'],
+                  ['update', t('sched.catEnt.update') || 'Change it'],
+                  ['remove', t('sched.catEnt.remove') || 'Remove it']] as [string, string][])
+                    .map(([v, l]) => `<option value="${v}"${(params.mode || 'add') === v ? ' selected' : ''}>${escHtml(l)}</option>`).join('')
+            }</select></div>
+        <div class="sched-field"><label class="sched-flabel">${t('sched.catEnt.type') || 'Which catalogue'}</label>
+            <select class="input sched-cat-type" style="min-width:150px">${
+                KINDS.map(([v, l]) => `<option value="${v}"${(params.catType || 'app') === v ? ' selected' : ''}>${escHtml(l)}</option>`).join('')
+            }</select></div>
+        <div class="sched-field"><label class="sched-flabel">${t('sched.catEnt.id') || 'Entry id'}</label>
+            <input class="input sched-cat-id" spellcheck="false" value="${escAttr(params.id || '')}" style="min-width:150px"></div>
+        <div class="sched-field" style="flex:1;min-width:240px"><label class="sched-flabel">${t('sched.catEnt.json') || 'Fields, as JSON'}</label>
+            <input class="input sched-cat-json" spellcheck="false" placeholder='{"name": "…", "version": "1.0"}' value="${escAttr(params.json || '')}"></div>
+        <p class="sched-hint">${escHtml(t('sched.catEnt.hint') || 'The id is what change and remove match on. Removing ignores the fields.')}</p>`;
+
+    else if (needs === 'catDelete') host.innerHTML = `
+        <div class="sched-field"><label class="sched-flabel">${t('sched.catDel.type') || 'Which catalogue to delete'}</label>
+            <select class="input sched-cat-type" style="min-width:150px">${
+                KINDS.map(([v, l]) => `<option value="${v}"${(params.catType || 'app') === v ? ' selected' : ''}>${escHtml(l)}</option>`).join('')
+            }</select></div>
+        <p class="sched-hint">${escHtml(t('sched.catDel.hint') || 'The catalogue this machine AUTHORS, not one you follow. It asks before it goes.')}</p>`;
+
     else if (needs === 'catCreate') host.innerHTML = `
         <div class="sched-field"><label class="sched-flabel">${t('sched.catKindLbl') || 'What to publish'}</label>
             <select class="input sched-cat-kind" style="min-width:170px">${
@@ -8339,6 +8431,12 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
     host.querySelector('.sched-ea-dir')?.addEventListener('input', (e) => { params.dir = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-ea-name')?.addEventListener('input', (e) => { params.name = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-cat-kind')?.addEventListener('change', (e) => { params.kind = (e.target as HTMLSelectElement).value; });
+    host.querySelector('.sched-cat-url')?.addEventListener('input', (e) => { params.url = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-cat-type')?.addEventListener('change', (e) => { params.catType = (e.target as HTMLSelectElement).value; });
+    host.querySelector('.sched-cat-pw')?.addEventListener('input', (e) => { params.password = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-cat-mode')?.addEventListener('change', (e) => { params.mode = (e.target as HTMLSelectElement).value; });
+    host.querySelector('.sched-cat-id')?.addEventListener('input', (e) => { params.id = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-cat-json')?.addEventListener('input', (e) => { params.json = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-cat-name')?.addEventListener('input', (e) => { params.name = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-cat-base')?.addEventListener('input', (e) => { params.base = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-ea-inc')?.addEventListener('change', (e) => { params.increment = (e.target as HTMLSelectElement).value; });

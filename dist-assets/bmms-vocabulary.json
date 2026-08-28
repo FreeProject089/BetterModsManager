@@ -591,6 +591,32 @@
       ]
     },
     {
+      "type": "catalog.import",
+      "group": "repo",
+      "params": [
+        "url",
+        "catType",
+        "password"
+      ]
+    },
+    {
+      "type": "catalog.entry",
+      "group": "repo",
+      "params": [
+        "mode",
+        "catType",
+        "id",
+        "json"
+      ]
+    },
+    {
+      "type": "catalog.delete",
+      "group": "repo",
+      "params": [
+        "catType"
+      ]
+    },
+    {
       "type": "code.run",
       "group": "logic",
       "params": [

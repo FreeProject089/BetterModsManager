@@ -48,6 +48,21 @@
     ]
   },
   {
+    "action": "catalog/delete",
+    "params": [
+      "type"
+    ]
+  },
+  {
+    "action": "catalog/entry",
+    "params": [
+      "mode",
+      "type",
+      "id",
+      "fields"
+    ]
+  },
+  {
     "action": "catalog/follow",
     "params": [
       "type",

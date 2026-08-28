@@ -2,7 +2,7 @@
 
 !!! info ""
 
-    100 actions · 34 conditions · 32 values · 8 loop sources
+    103 actions · 34 conditions · 32 values · 8 loop sources
 
 > Generated from BMM's own registry, so it cannot describe a version of the app that does not exist. If an action is in the block editor, it is in this list.
 
@@ -57,6 +57,9 @@ Written `do <name>(param: value, …)`. An action with no parameters takes empty
 | `repo.manifest` | Reads the folder, rewrites repo.json, and reports what changed. Pairs with Publish over SSH as the next step. | `dir` · `name` · `author` |
 | `repo.publishSsh` | Uploads the exported folder to the SSH target saved in Server Repo | `dir` · `target` · `into` |
 | `repo.fetchSsh` | Fetches the repo from the saved SSH target into a local folder | `dir` · `target` · `into` |
+| `catalog.import` | Reads the document at that address and decides: an index makes it follow everything it lists, a single catalogue is matched against the eight kinds. One that fits none is refused rather than guessed at — following it would put an address in a list that fetches it on every start for ever. | `url` · `catType` · `password` |
+| `catalog.entry` | One entry of a catalogue this machine AUTHORS, not one it follows. The id is what change and remove match on, so an entry without one could be written and never touched again — it is refused. | `mode` · `catType` · `id` · `json` |
+| `catalog.delete` | Throws away the whole authored catalogue of one kind. Asks first, and needs the delete permission like every other step that destroys something of yours. Does not touch the catalogues you follow. | `catType` |
 | `repo.syncNow` | Syncs a server repo into a local profile, unattended. | `url` · `gameDir` · `modsDir` · `password` · `repoProfile` · `targetProfile` · `newProfile` · `backupDir` · `overwriteAll` · `deleteExtra` · `downloadLimit` · `keepZipped` · `into` |
 | `key.create` | Generates a keypair on the ring. A name already taken is left alone, never replaced. | `name` · `kind` · `bindUrl` |
 | `catalog.follow` | Adds a catalogue source through the app's own screens, so it appears in the following list with an origin. | `catType` · `url` · `unfollow` · `password` |

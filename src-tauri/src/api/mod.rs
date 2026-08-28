@@ -896,95 +896,18 @@ struct PermissionDenied { required: &'static str, plugin_id: String }
 impl warp::reject::Reject for PermissionDenied {}
 
 // ── Local catalog helpers (module-level so they can be called from warp closures) ──
-/// Which catalogue kinds can be authored here, and the array each one keeps its entries in.
-///
-/// The names are the ones the FORMAT uses — `apps`, `plugins`, `themes` — and they are checked
-/// against the interface's CATALOG_SHAPES by check-catalog-kinds.mjs, because a catalogue
-/// written under the wrong array name parses as an empty one of the right kind: valid JSON,
-/// zero entries, and nothing anywhere says why.
-pub const CATALOG_KINDS: &[(&str, &str)] = &[
-    ("app", "apps"),
-    ("plugin", "plugins"),
-    ("theme", "themes"),
-    ("preset", "presets"),
-    ("modpack", "modpacks"),
-    ("repo", "repos"),
-    ("tutorial", "tutorials"),
-    ("list", "lists"),
-];
+// The authored catalogues moved to `commands::catalog_store`, so the interface, a deeplink
+// and a scheduled task can reach them without an HTTP round trip through this API's token.
+// These are the same functions under the names this file already used.
+use crate::commands::catalog_store as catstore;
 
-/// The entries array for a kind, or None if it is not a kind.
-///
-/// Returning None rather than defaulting to `apps` on purpose: a typo'd type that silently
-/// edited the app catalogue is the worst outcome available here.
-fn catalog_entries_key(kind: &str) -> Option<&'static str> {
-    CATALOG_KINDS.iter().find(|(k, _)| *k == kind).map(|(_, v)| *v)
-}
-
-/// Where one kind's authored catalogue lives.
-///
-/// `app` keeps `apps-catalog.json` because that file already exists on every installation and
-/// moving it would lose what is in it. Everything else is a sibling under the same folder.
-fn catalog_path_for(h: &tauri::AppHandle, kind: &str) -> std::path::PathBuf {
-    let dir = h.path().app_data_dir().ok().unwrap_or_default();
-    if kind == "app" { dir.join("apps-catalog.json") } else { dir.join(format!("{kind}-catalog.json")) }
-}
-
-fn catalog_path(h: &tauri::AppHandle) -> std::path::PathBuf {
-    catalog_path_for(h, "app")
-}
-
-fn catalog_read_kind(h: &tauri::AppHandle, kind: &str) -> serde_json::Value {
-    let p = catalog_path_for(h, kind);
-    if let Ok(s) = std::fs::read_to_string(&p) {
-        serde_json::from_str(&s).unwrap_or_else(|_| catalog_empty_kind(kind))
-    } else {
-        catalog_empty_kind(kind)
-    }
-}
-
-fn catalog_read(h: &tauri::AppHandle) -> serde_json::Value {
-    catalog_read_kind(h, "app")
-}
-
-fn catalog_empty_kind(kind: &str) -> serde_json::Value {
-    let key = catalog_entries_key(kind).unwrap_or("apps");
-    let mut v = serde_json::json!({
-        "version": "1.0", "name": "Local Catalog", "description": "",
-        "partner_catalogs": [], "community_imports": []
-    });
-    v[key] = serde_json::json!([]);
-    v
-}
-
-fn catalog_empty() -> serde_json::Value {
-    catalog_empty_kind("app")
-}
-
-fn catalog_write_kind(h: &tauri::AppHandle, kind: &str, cat: &serde_json::Value) -> Result<(), String> {
-    let p = catalog_path_for(h, kind);
-    if let Some(parent) = p.parent() { let _ = std::fs::create_dir_all(parent); }
-    serde_json::to_string_pretty(cat).map_err(|e| e.to_string())
-        .and_then(|s| std::fs::write(&p, s).map_err(|e| e.to_string()))
-}
-
-fn catalog_write(h: &tauri::AppHandle, cat: &serde_json::Value) -> Result<(), String> {
-    catalog_write_kind(h, "app", cat)
-}
-
-/// The `type` a request asked for, defaulting to `app`, or an error naming what is allowed.
-///
-/// One place, because eight kinds and four verbs is thirty-two chances to spell the default
-/// differently.
-fn catalog_kind_of(v: Option<&str>) -> Result<String, String> {
-    let kind = v.unwrap_or("app");
-    if catalog_entries_key(kind).is_some() { return Ok(kind.to_string()); }
-    Err(format!(
-        "unknown catalogue type '{}'. One of: {}",
-        kind,
-        CATALOG_KINDS.iter().map(|(k, _)| *k).collect::<Vec<_>>().join(", ")
-    ))
-}
+fn catalog_entries_key(kind: &str) -> Option<&'static str> { catstore::entries_key(kind) }
+fn catalog_kind_of(v: Option<&str>) -> Result<String, String> { catstore::kind_of(v) }
+fn catalog_path_for(h: &tauri::AppHandle, kind: &str) -> std::path::PathBuf { catstore::path_for(h, kind) }
+fn catalog_read_kind(h: &tauri::AppHandle, kind: &str) -> serde_json::Value { catstore::read_kind(h, kind) }
+fn catalog_read(h: &tauri::AppHandle) -> serde_json::Value { catstore::read_kind(h, "app") }
+fn catalog_write_kind(h: &tauri::AppHandle, kind: &str, cat: &serde_json::Value) -> Result<(), String> { catstore::write_kind(h, kind, cat) }
+fn catalog_write(h: &tauri::AppHandle, cat: &serde_json::Value) -> Result<(), String> { catstore::write_kind(h, "app", cat) }
 
 fn require_permission(
     data: Arc<std::sync::Mutex<AppData>>,

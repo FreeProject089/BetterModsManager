@@ -882,6 +882,63 @@ async function handleDeepLink(urlStr) {
             await handleDeepLink(`bmm://catalog/follow?type=${encodeURIComponent(kind)}&url=${encodeURIComponent(url)}`);
             return;
         }
+        // One entry of a catalogue this machine AUTHORS — not one it follows.
+        //
+        //   bmm://catalog/entry?mode=add&type=plugin&id=my-plugin&fields={"name":"…"}
+        //   bmm://catalog/entry?mode=update&type=plugin&id=my-plugin&fields={"version":"2"}
+        //   bmm://catalog/entry?mode=remove&type=plugin&id=my-plugin
+        //
+        // The two senses of "catalogue" are worth keeping apart: the ones you FOLLOW are
+        // addresses and live with the screens, the ones you AUTHOR are documents on this disk.
+        // This is the second kind. `catalog/follow` is the first.
+        if (action === 'catalog/entry') {
+            const mode = parsedUrl.searchParams.get('mode') || 'add';
+            const kind = parsedUrl.searchParams.get('type') || 'app';
+            const id = parsedUrl.searchParams.get('id') || '';
+            const raw = parsedUrl.searchParams.get('fields') || '';
+            let fields = null;
+            if (raw) {
+                // Refused rather than sent on as text. A catalogue entry whose fields are the
+                // STRING "{...}" is valid JSON and installs nothing.
+                try {
+                    fields = JSON.parse(raw);
+                }
+                catch {
+                    toast(t('cat.badFields') || 'The fields are not valid JSON', 'warning', 8000);
+                    return;
+                }
+            }
+            try {
+                const r = await invoke('catalog_entry', { kind, mode, id, fields });
+                toast((t('cat.entryOk') || '{mode}: {id} — {n} entr(ies)')
+                    .replace('{mode}', mode).replace('{id}', id).replace('{n}', String(r?.total ?? '?')), 'success');
+            }
+            catch (e) {
+                toast(String(e), 'error', 9000);
+            }
+            return;
+        }
+        // Throw away a whole authored catalogue.
+        //
+        //   bmm://catalog/delete?type=plugin
+        //
+        // Asks first. It is one click from a link somebody else wrote, and the thing it
+        // removes is a document this machine authored rather than an address it can follow
+        // again in a second.
+        if (action === 'catalog/delete') {
+            const kind = parsedUrl.searchParams.get('type') || 'app';
+            const ok = await askConfirm((t('cat.deleteAsk') || 'Delete the {k} catalogue you author on this machine?').replace('{k}', kind), { title: t('cat.deleteTitle') || 'Delete a catalogue', type: 'warning' });
+            if (!ok)
+                return;
+            try {
+                await invoke('catalog_drop', { kind });
+                toast((t('cat.deleted') || '{k} catalogue deleted').replace('{k}', kind), 'success');
+            }
+            catch (e) {
+                toast(String(e), 'error', 9000);
+            }
+            return;
+        }
         // Open a Help & Other article in-app. Lets BMM Docs (the website) link straight
         // into the integrated docs: bmm://docs/open?article=<id> (or no id → docs home).
         if (action === 'docs/open') {
