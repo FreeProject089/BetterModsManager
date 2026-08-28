@@ -11791,7 +11791,36 @@ body.sched-drag-live .sched-branch .sched-drop-zone:empty {
 .sched-add-row .sched-chip:hover { border-style:solid; border-color:var(--accent); background:var(--bmm-accent-dim, rgba(var(--bmm-accent-r,245), var(--bmm-accent-g,158), var(--bmm-accent-b,11), 0.10)); }
 .sched-cond { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
 .sched-cond-params { display:inline-flex; align-items:center; gap:4px; flex-wrap:wrap; }
-.sched-act-params { display:inline-flex; align-items:center; gap:4px; flex-wrap:wrap; }
+/* One box for every action's parameters.
+   Thirty-one of the sixty-eight forms wrapped themselves in `.sched-cmd-builder` — a padded
+   card — and thirty-seven emitted bare inputs into an inline-flex row with a 4px gap. Same
+   screen, two presentations, decided by which branch happened to be written when. The box
+   moves up here so every form gets it, and the builder loses its own so nothing is drawn
+   twice. */
+.sched-act-params {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    flex: 1;
+    min-width: 260px;
+    padding: 14px 14px 13px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+}
+/* Nothing to draw a box around: an action with no parameters must not leave an empty card. */
+.sched-act-params:empty { display: none; }
+.sched-act-params > .sched-cmd-builder {
+    padding: 0;
+    border: 0;
+    background: none;
+    border-radius: 0;
+}
+/* A row of small controls stays a row — stacking a checkbox under its own label is worse
+   than the inconsistency this replaces. */
+.sched-act-params > .sched-field,
+.sched-act-params > .sched-cmd-row { align-self: stretch; }
 .sched-body .input { font-size:12px; }
 .sched-hint-inline { font-weight:500; text-transform:none; letter-spacing:0; color:var(--text-muted); opacity:.7; font-size:10px; }
 .sched-legend { display:flex; flex-direction:column; gap:5px; margin:0 0 10px; padding:10px 12px;
