@@ -184,8 +184,11 @@ Start-Process "bmm://mod/enable?id=my-mod-folder"
 |---|---|---|
 | `bmm://schedule/run` | `id`*, `k` | Runs a scheduled task — the hook the Windows Scheduler uses. **Asks first**, unless `k` is this machine's OS-schedule key |
 | `bmm://schedule/enable` | `id`*, `on` | Arms (`on=1`, the default) or disarms (`on=0`) a saved task. Asks first |
-| `bmm://catalog/follow` | `type`*, `url`* | Follow a catalogue — `plugin`, `theme`, `preset`, `modpack`, `repo`, `tutorial`, `list`, `app` |
+| `bmm://catalog/follow` | `type`*, `url`*, `password` | Follow a catalogue — `plugin`, `theme`, `preset`, `modpack`, `repo`, `tutorial`, `list`, `app`. A `password` is remembered for this run only, never written to disk |
 | `bmm://catalog/unfollow` | `type`*, `url`* | Stop following it |
+| `bmm://catalog/import` | `url`*, `type`, `password` | Reads the document at that address and follows it **without being told what kind it is**. Whoever has a link usually does not know which of the eight it is; the document does. `type` narrows an index to one kind |
+| `bmm://catalog/entry` | `type`, `mode` (`add` · `update` · `delete`), `id`, `fields` (JSON) | Writes one entry of the catalogue **you author on this machine**. Invalid JSON in `fields` is refused rather than stored as the string it is |
+| `bmm://catalog/delete` | `type` | Throws away the authored catalogue of that kind. **Asks first** — and does not touch what you FOLLOW |
 | `bmm://repo/publish-ssh` | `dir`* | **Uploads now**, to the SSH server already saved in the app — it does not open a screen. Carries no host and no key path: a link able to name those could point a publish at a server the user never chose |
 | `bmm://repo/fetch-ssh` | `dir` | The same, for fetching |
 | `bmm://hook` | `name`*, `data` | Rings a hook a task may be waiting on. `data` is parsed as JSON, or passed as text. Asks first |

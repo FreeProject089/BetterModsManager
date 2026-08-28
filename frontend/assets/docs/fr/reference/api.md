@@ -191,8 +191,11 @@ global (`bmm_deeplink_allow_global = blocked`) les refuse tous.
 |---|---|---|
 | `bmm://schedule/run` | `id`*, `k` | Exécute une tâche planifiée — c'est le hook utilisé par le Planificateur Windows. **Demande d'abord**, sauf si `k` est la clé de planification OS de cette machine |
 | `bmm://schedule/enable` | `id`*, `on` | Arme (`on=1`, par défaut) ou désarme (`on=0`) une tâche enregistrée. Demande d'abord |
-| `bmm://catalog/follow` | `type`*, `url`* | Suivre un catalogue — `plugin`, `theme`, `preset`, `modpack`, `repo`, `tutorial`, `list`, `app` |
+| `bmm://catalog/follow` | `type`*, `url`*, `password` | Suivre un catalogue — `plugin`, `theme`, `preset`, `modpack`, `repo`, `tutorial`, `list`, `app`. Un `password` est retenu pour cette session seulement, jamais écrit sur le disque |
 | `bmm://catalog/unfollow` | `type`*, `url`* | Cesser de le suivre |
+| `bmm://catalog/import` | `url`*, `type`, `password` | Lit le document à cette adresse et le suit **sans qu'on lui dise de quel type il s'agit**. Celui qui a un lien ignore en général lequel des huit c'est ; le document, lui, le sait. `type` restreint un index à un seul type |
+| `bmm://catalog/entry` | `type`, `mode` (`add` · `update` · `delete`), `id`, `fields` (JSON) | Écrit une entrée du catalogue **que vous rédigez sur cette machine**. Un JSON invalide dans `fields` est refusé plutôt qu'enregistré comme la chaîne qu'il est |
+| `bmm://catalog/delete` | `type` | Jette le catalogue rédigé de ce type. **Demande confirmation** — et ne touche pas à ce que vous SUIVEZ |
 | `bmm://repo/publish-ssh` | `dir`* | **Téléverse immédiatement** vers le serveur SSH déjà enregistré dans l'app — il n'ouvre aucun écran. Ne porte ni hôte ni chemin de clé : un lien capable de les nommer pourrait diriger une publication vers un serveur que l'utilisateur n'a jamais choisi |
 | `bmm://repo/fetch-ssh` | `dir` | Pareil, pour récupérer |
 | `bmm://hook` | `name`*, `data` | Sonne un hook qu'une tâche peut attendre. `data` est lu en JSON, sinon passé en texte. Demande d'abord |
