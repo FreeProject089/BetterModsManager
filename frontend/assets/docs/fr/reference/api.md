@@ -360,7 +360,10 @@ Deux formes échappent à la règle :
 | `GET` | `/api/schedules` | `schedules.read` | — · un résumé de chaque tâche enregistrée : id, nom, activée ou non, son déclencheur. **Pas** ses étapes | |
 | `POST` | `/api/schedules/enabled` | `schedules.write` | `id`*, `enabled`* · armer ou désarmer une tâche. Seul `enabled` est modifiable — une route qui pourrait écrire une tâche entière pourrait en installer une avec une étape de script dedans | |
 | `POST` | `/api/hook` | `hooks.write` | `name`*, `data` · sonner une clochette nommée qu'une tâche peut attendre avec `wait.hook`, ou par laquelle elle peut être déclenchée avec `on event` | |
-| `GET` | `/api/hook` | `hooks.read` | `name` · ce qui a sonné, sans le consommer — pour l'écran qui demande « est-ce que mon webhook arrive vraiment ? » | |
+| `GET` | `/api/hook` | `hooks.read` | — · chaque nom qui a sonné pendant la session, avec le nombre de fois — pour l'écran qui demande « est-ce que mon webhook arrive vraiment ? » | |
+| `GET` | `/api/hook/:name` | `hooks.read` | `?since=<ms>` · les sonneries elles-mêmes, avec leur contenu et leur horodatage — la même vue qu'obtient une tâche en attente, pour que « ça n'a jamais sonné » et « ça a sonné avec le mauvais contenu » cessent de se ressembler. La lecture ne consomme pas : deux tâches peuvent attendre la même clochette | |
+| `DELETE` | `/api/hook` | `hooks.write` | — · oublier toutes les sonneries. Répond combien ont été supprimées | |
+| `DELETE` | `/api/hook/:name` | `hooks.write` | — · oublier un seul nom | |
 | `POST` | `/api/content-id` | token | `kind`*, `doc`* · l'id qui dit ce qu'un document EST plutôt que le nom que cette machine lui donne. Prend le document, donc il ne révèle rien de ce que cette installation contient — d'où le simple jeton plutôt qu'une portée de lecture par type |
 | `GET` | `/api/catalogs` | `catalog.read` | — · les catalogues suivis, par type | |
 | `POST` | `/api/catalogs` | `catalog.write` | `type`*, `url`*, `follow` · suivre ou cesser de suivre un catalogue | |

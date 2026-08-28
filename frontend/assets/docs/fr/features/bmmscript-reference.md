@@ -150,8 +150,8 @@ S'écrit `do <nom>(param: valeur, …)`. Une action sans paramètre prend des pa
 | `catalog.create` | Écrit un catalog.json dans un dossier, avec les fichiers qu’il référence. Tutoriels et plugins sont liés ; les thèmes sont intégrés. | `dir` · `kind` · `name` · `base` · `bundle` · `bundleOut` |
 | `deeplink` | Déclenche n'importe quel deep link bmm:// | `url` |
 | `http.request` | Envoie une requête à n’importe quelle adresse et capture la réponse. Exige « Exécuter des programmes externes ». | `url` · `headers` · `method` · `body` · `timeoutMs` · `jsonPath` · `allowAnyStatus` · `into` |
-| `wait.http` | L'interroge jusqu'à ce qu'elle réponde, ou abandonne et le dit. | `url` · `everySeconds` · `timeoutSeconds` · `status` · `stopOnTimeout` |
-| `wait.hook` | Dort jusqu'à ce que quelque chose poste sur /api/hook avec ce nom. | `name` · `everySeconds` · `timeoutSeconds` · `stopOnTimeout` |
+| `wait.http` | L'interroge jusqu'à ce qu'elle réponde — au statut, ou à ce que dit la réponse — ou abandonne et le dit. | `url` · `everySeconds` · `timeoutSeconds` · `status` · `bodyContains` · `stopOnTimeout` |
+| `wait.hook` | Dort jusqu'à ce que quelque chose poste sur /api/hook avec ce nom, ou que BMM elle-même lève cet événement. | `name` · `everySeconds` · `timeoutSeconds` · `stopOnTimeout` |
 | `import.file` | Prend un fichier ou une adresse et le lit dans le format BMM qui est le sien. | `path` · `url` · `password` · `kind` · `passphrase` · `apply` · `install` · `exact` · `catType` · `restore` · `sections` |
 
 ## Conditions

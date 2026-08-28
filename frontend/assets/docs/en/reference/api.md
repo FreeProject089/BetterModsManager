@@ -348,7 +348,10 @@ Two shapes sit outside that rule:
 | `GET` | `/api/schedules` | `schedules.read` | — · a summary of every saved task: id, name, whether it is on, its trigger. **Not** its steps | |
 | `POST` | `/api/schedules/enabled` | `schedules.write` | `id`*, `enabled`* · arm or disarm one task. Only `enabled` can be changed — a route that could write a whole task could install one with a script step in it | |
 | `POST` | `/api/hook` | `hooks.write` | `name`*, `data` · ring a named doorbell a task may be waiting on with `wait.hook`, or be triggered by with `on event` | |
-| `GET` | `/api/hook` | `hooks.read` | `name` · what has rung, without consuming it — for the screen that asks “is my webhook actually arriving?” | |
+| `GET` | `/api/hook` | `hooks.read` | — · every name that has rung this session, with how many times — for the screen that asks “is my webhook actually arriving?” | |
+| `GET` | `/api/hook/:name` | `hooks.read` | `?since=<ms>` · the rings themselves, with their payloads and timestamps — the same view a waiting task gets, so “it never fired” and “it fired the wrong body” stop looking alike. Reading does not consume: two tasks can wait on one doorbell | |
+| `DELETE` | `/api/hook` | `hooks.write` | — · forget every ring. Answers how many were dropped | |
+| `DELETE` | `/api/hook/:name` | `hooks.write` | — · forget one name | |
 | `POST` | `/api/content-id` | token | `kind`*, `doc`* · the id that says what a document IS rather than what this machine calls it. Takes the document, so it discloses nothing this install holds — which is why it is token-level and not behind a per-kind read scope |
 | `POST` | `/api/mods/order` | `mods.write` | `order[]`*, `profileId` · must be the same set of mods that are active; re-copies the files that change hands | |
 | `PUT` | `/api/mods/:id` | `mods.write` | `name`, `version`, `author`, `description`, `tags[]`, `install_notes` | |

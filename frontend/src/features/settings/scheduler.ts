@@ -2490,9 +2490,11 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
             const everyMs = Math.max(1000, Number(p.everySeconds || 5) * 1000);
             const untilMs = Date.now() + Math.max(everyMs, Number(p.timeoutSeconds || 300) * 1000);
             const wantStatus = Number(p.status || 0);
+            const wantBody = String(p.bodyContains || '').trim();
             let tries = 0;
             let ok = false;
             let lastStatus = 0;
+            let lastBody = '';
             while (Date.now() < untilMs) {
                 tries += 1;
                 try {
@@ -2504,9 +2506,15 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
                         timeoutMs: Math.min(everyMs, 15000),
                     }) as any;
                     lastStatus = Number(r?.status || 0);
+                    lastBody = String(r?.body ?? '');
                     // Any 2xx by default; an exact code when the task named one — a service
                     // that answers 503 while starting is the case this exists for.
                     ok = wantStatus ? lastStatus === wantStatus : (lastStatus >= 200 && lastStatus < 300);
+                    // And the BODY, when the task named something to look for. The common
+                    // shape is an endpoint that answers 200 throughout and says which state
+                    // it is in — on status alone that wait ends on the first poll, and the
+                    // steps after it run against a job that has not finished.
+                    if (ok && wantBody) ok = lastBody.toLowerCase().includes(wantBody.toLowerCase());
                 } catch { ok = false; }
                 if (ok) break;
                 if (Date.now() + everyMs >= untilMs) break;
@@ -2515,6 +2523,9 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
             ctx.nums['wait.tries'] = tries;
             ctx.nums['wait.ok'] = ok ? 1 : 0;
             ctx.nums['http.status'] = lastStatus;
+            // What it finally answered. Waiting for a job to report "done" and then not being
+            // able to read WHICH id it finished is half an answer.
+            ctx.text['http.body'] = lastBody;
             if (!ok) {
                 // Said out loud, with the last status. A silent give-up leaves the steps
                 // after this running against something that never came up.
@@ -7716,13 +7727,22 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
         host.innerHTML = `<div class="sched-cmd-builder">
             <label class="sched-cmd-label">${escHtml(isHook ? t('sched.wait.name') : t('sched.wait.url'))}</label>
             <input class="input ${isHook ? 'sched-p-wname' : 'sched-p-wurl'}" spellcheck="false"
+                ${isHook ? 'list="sched-wait-events"' : ''}
                 placeholder="${escAttr(isHook ? 'build-done' : 'https://…/health')}"
                 value="${escAttr((isHook ? params.name : params.url) || '')}">
+            ${isHook ? `<datalist id="sched-wait-events">
+                ${BMM_EVENTS.map((e) => `<option value="${escAttr(e)}">${escAttr(e)} — ${escAttr(t('sched.ev.' + e))}</option>`).join('')}
+            </datalist>` : ''}
             <span class="sched-cmd-hint">${escHtml(isHook ? t('sched.wait.nameHint') : t('sched.wait.urlHint'))}</span>
+            ${isHook ? `<span class="sched-cmd-hint">${escHtml(t('sched.wait.eventHint'))}</span>` : ''}
             ${isHook ? '' : `<label class="sched-cmd-label">${escHtml(t('sched.wait.status'))}</label>
                 <input type="number" class="input sched-p-wstatus" min="0" max="599" style="max-width:120px"
                     placeholder="200" value="${escAttr(params.status ?? '')}">
-                <span class="sched-cmd-hint">${escHtml(t('sched.wait.statusHint'))}</span>`}
+                <span class="sched-cmd-hint">${escHtml(t('sched.wait.statusHint'))}</span>
+                <label class="sched-cmd-label">${escHtml(t('sched.wait.body'))}</label>
+                <input class="input sched-p-wbody" spellcheck="false" placeholder="\"state\":\"done\""
+                    value="${escAttr(params.bodyContains || '')}">
+                <span class="sched-cmd-hint">${escHtml(t('sched.wait.bodyHint'))}</span>`}
             <label class="sched-cmd-label">${escHtml(t('sched.wait.timing'))}</label>
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
                 <span class="sched-cmd-hint">${escHtml(t('sched.wait.every'))}</span>
@@ -8344,6 +8364,7 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
     host.querySelector('.sched-p-wurl')?.addEventListener('input', (e) => { params.url = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-p-wname')?.addEventListener('input', (e) => { params.name = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-p-wstatus')?.addEventListener('input', (e) => { params.status = parseInt((e.target as HTMLInputElement).value, 10) || 0; });
+    host.querySelector('.sched-p-wbody')?.addEventListener('input', (e) => { params.bodyContains = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-p-wevery')?.addEventListener('input', (e) => { params.everySeconds = parseInt((e.target as HTMLInputElement).value, 10) || 1; });
     host.querySelector('.sched-p-wtimeout')?.addEventListener('input', (e) => { params.timeoutSeconds = parseInt((e.target as HTMLInputElement).value, 10) || 1; });
     host.querySelector('.sched-p-wstop')?.addEventListener('change', (e) => { params.stopOnTimeout = (e.target as HTMLInputElement).checked; });

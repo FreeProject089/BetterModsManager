@@ -150,8 +150,8 @@ Written `do <name>(param: value, …)`. An action with no parameters takes empty
 | `catalog.create` | Write a catalog.json into a folder, plus the files it points at. Tutorials and plugins are linked; themes are embedded. | `dir` · `kind` · `name` · `base` · `bundle` · `bundleOut` |
 | `deeplink` | Trigger any bmm:// deep link | `url` |
 | `http.request` | Sends a request to any address and captures the reply. Needs “Run external programs”. | `url` · `headers` · `method` · `body` · `timeoutMs` · `jsonPath` · `allowAnyStatus` · `into` |
-| `wait.http` | Polls it until it answers, or gives up and says so. | `url` · `everySeconds` · `timeoutSeconds` · `status` · `stopOnTimeout` |
-| `wait.hook` | Sleeps until something posts to /api/hook with this name. | `name` · `everySeconds` · `timeoutSeconds` · `stopOnTimeout` |
+| `wait.http` | Polls it until it answers — by status, or by what the reply says — or gives up and says so. | `url` · `everySeconds` · `timeoutSeconds` · `status` · `bodyContains` · `stopOnTimeout` |
+| `wait.hook` | Sleeps until something posts to /api/hook with this name, or until BMM itself raises that event. | `name` · `everySeconds` · `timeoutSeconds` · `stopOnTimeout` |
 | `import.file` | Takes a file or an address and reads it as whatever BMM format it is. | `path` · `url` · `password` · `kind` · `passphrase` · `apply` · `install` · `exact` · `catType` · `restore` · `sections` |
 
 ## Conditions

@@ -708,6 +708,22 @@ N'importe quel statut compte comme une réponse par défaut : c'est ce qui rend 
 *attendre qu'elle cesse de renvoyer 503*. Indique un code précis quand un service répond 503
 pendant son démarrage.
 
+Elle peut aussi attendre ce que **dit** la réponse. Remplis *attendre que la réponse
+contienne* avec un bout de texte — cherché n'importe où dans le corps, sans tenir compte de la
+casse — et les deux doivent être vrais. C'est le cas courant, pas l'exotique : une adresse de
+tâche répond `200` dès qu'elle accepte le travail, donc au statut seul l'attente se termine
+dès la première interrogation et toutes les étapes suivantes travaillent contre une tâche
+encore en cours.
+
+```
+{"id":"a91","state":"running"}   ← 200, et pas ce que tu attends
+{"id":"a91","state":"done"}      ← 200, et celle-là si
+```
+
+Avec `"state":"done"` dans ce champ, l'attente se termine à la deuxième. La réponse
+elle-même arrive dans `{text.http.body}`, pour que les étapes suivantes puissent lire
+*quelle* tâche s'est terminée.
+
 L'abandon est annoncé avec le dernier statut, et arrête la tâche sauf si tu décoches — sinon
 les étapes suivantes travaillent contre quelque chose qui n'est jamais arrivé. Teste
 `{wait.ok}` d'abord si tu décoches.
@@ -725,6 +741,20 @@ curl -X POST http://127.0.0.1:51274/api/hook \
 
 Ce que tu envoies arrive dans `{text.hook.data}`. Une sonnette qui ne saurait dire que
 « quelqu'un a sonné » aurait besoin d'un second canal pour dire de quoi.
+
+**Les événements de BMM sonnent les mêmes clochettes.** La case du nom propose la liste — les
+mêmes noms que propose le déclencheur *sur événement* — donc une tâche peut attendre en cours
+de route `bmm.repo.synced` ou `bmm.profile.activated`, au lieu de seulement être démarrée par
+lui. `{text.hook.data}` porte alors ce que portait l'événement.
+
+C'est là toute la différence entre les deux : le déclencheur dit *lance cette tâche quand X
+arrive*, l'attente dit *arrête-toi ici jusqu'à ce que X arrive*. Une tâche qui doit faire
+quelque chose avant X et quelque chose après a besoin de la seconde.
+
+Pour déboguer une attente qui ne finit jamais : `GET /api/hook` liste chaque nom qui a sonné
+avec son compte, et `GET /api/hook/:name` donne les sonneries elles-mêmes avec leur contenu —
+ce qui sépare « rien n'est jamais arrivé » de « quelque chose est arrivé sous un autre nom »,
+ou de « c'est arrivé et le contenu n'était pas celui que je croyais ».
 
 !!! note "C'est une sonnette LOCALE"
 

@@ -284,6 +284,14 @@ struct HookBody {
     data: Option<serde_json::Value>,
 }
 
+/// `GET /api/hook/:name?since=<ms>` — read the rings, optionally only recent ones.
+#[derive(Deserialize, Clone)]
+struct HookSinceQuery {
+    /// Unix milliseconds. Absent means every ring still held for that name.
+    #[serde(default)]
+    since: Option<u64>,
+}
+
 /// `POST /api/catalogs` — follow or stop following a catalogue.
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -4017,6 +4025,55 @@ pub async fn start_api_server(
             warp::reply::with_status(warp::reply::json(&serde_json::json!({ "hooks": seen })), StatusCode::OK)
         });
 
+    // GET /api/hook/:name — what actually arrived, not just how often.
+    let tok_hook_read = token.clone();
+    let hook_read = warp::path!("api" / "hook" / String)
+        .and(warp::get())
+        .and(require_token(tok_hook_read))
+        .and(require_permission(token.clone(), "hooks.read"))
+        .and(warp::query::<HookSinceQuery>())
+        .map(|name: String, q: HookSinceQuery| {
+            // The same call a waiting task makes, so what you read here is what the task
+            // will see — the point of the route is that "my wait ended and the data was
+            // wrong" and "my wait never ended" stop looking like the same problem.
+            //
+            // Reading does not consume: two tasks can wait on one doorbell.
+            let hits: Vec<serde_json::Value> = crate::commands::hooks::hook_poll(name.clone(), q.since)
+                .into_iter()
+                .map(|h| serde_json::json!({ "at": h.at, "data": h.data }))
+                .collect();
+            warp::reply::with_status(
+                // The narrowed name, echoed, for the same reason POST echoes it: a caller
+                // reading "build/done" is reading a doorbell that does not exist.
+                warp::reply::json(&serde_json::json!({
+                    "name": crate::commands::hooks::safe_hook_name(&name),
+                    "count": hits.len(),
+                    "hits": hits,
+                })),
+                StatusCode::OK)
+        });
+
+    // DELETE /api/hook  ·  DELETE /api/hook/:name — forget the rings.
+    let tok_hook_clr = token.clone();
+    let hook_clear_all = warp::path!("api" / "hook")
+        .and(warp::delete())
+        .and(require_token(tok_hook_clr))
+        .and(require_permission(token.clone(), "hooks.write"))
+        .map(|| {
+            let n = crate::commands::hooks::hook_clear(None);
+            warp::reply::with_status(warp::reply::json(&serde_json::json!({ "ok": true, "cleared": n })), StatusCode::OK)
+        });
+
+    let tok_hook_clr1 = token.clone();
+    let hook_clear_one = warp::path!("api" / "hook" / String)
+        .and(warp::delete())
+        .and(require_token(tok_hook_clr1))
+        .and(require_permission(token.clone(), "hooks.write"))
+        .map(|name: String| {
+            let n = crate::commands::hooks::hook_clear(Some(name));
+            warp::reply::with_status(warp::reply::json(&serde_json::json!({ "ok": true, "cleared": n })), StatusCode::OK)
+        });
+
     // ── What a plugin ships ─────────────────────────────────────────
     //
     // Read only, and that is the whole decision. Copying one OUT is not exposed: a caller
@@ -4197,6 +4254,9 @@ pub async fn start_api_server(
         .or(repo_modpacks_get)
         .or(repo_modpacks_set)
         .or(hook_seen)
+        .or(hook_read)
+        .or(hook_clear_all)
+        .or(hook_clear_one)
         .or(plugin_assets)
         .or(catalogs_get)
         .or(catalogs_set)

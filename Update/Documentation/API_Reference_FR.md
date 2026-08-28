@@ -52,7 +52,8 @@ Ce document est la source de vérité unique pour tout ce qui est pilotable par 
 | `/api/mods/order` | oui · `mods.write` | `{ order[], profileId? }` — permutation obligatoire ; le dernier gagne un fichier partagé |
 | `/api/schedules` | oui | — (GET) id, nom, activée, déclencheur. **Pas** les étapes |
 | `/api/schedules/enabled` | oui | `{ id, enabled }` — seul `enabled` est modifiable |
-| `/api/hook` | oui | `{ name, data? }` — sonne une clochette ; `GET ?name=` lit sans consommer |
+| `/api/hook` | oui | `{ name, data? }` — sonne une clochette ; `GET` liste les noms et leur compte ; `DELETE` oublie tout |
+| `/api/hook/:name` | oui | `GET` lit les sonneries d'un nom, contenu compris, sans les consommer (`?since=<ms>` pour les récentes) ; `DELETE` oublie ce nom |
 | `/api/content-id` | oui | `{ kind, doc }` — l'id qui dit ce qu'un document EST plutôt que le nom que cette machine lui donne. `kind` vaut modpack, plugin, task, profile, theme, launchpack, repo, app ou modlist. Il prend le DOCUMENT, donc la réponse ne révèle rien de ce que cette installation contient ; une variante par id serait un oracle « cette machine a-t-elle X » et exigerait la portée de lecture de chaque type. |
 | `/api/keys` | oui · `keys.write` | `{ name, algorithm? }` — GET liste, POST crée ; la moitié privée ne sort jamais |
 | `/api/catalogs` | oui · `catalog.write` | `{ type, url, follow }` — GET liste, POST (dés)abonne |

@@ -1874,7 +1874,10 @@ Each opens the matching in-app flow and returns \`202\`. They are **not** headle
 | \`GET\` | \`/api/schedules\` | \`schedules.read\` | — · a summary of every saved task: id, name, whether it is on, its trigger. **Not** its steps | |
 | \`POST\` | \`/api/schedules/enabled\` | \`schedules.write\` | \`id\`*, \`enabled\`* · arm or disarm one task. Only \`enabled\` can be changed — a route that could write a whole task could install one with a script step in it | ✓ |
 | \`POST\` | \`/api/hook\` | \`hooks.write\` | \`name\`*, \`data\` · rings a named doorbell a task may be waiting on with \`wait.hook\`, or be triggered by with \`on event\` | ✓ |
-| \`GET\` | \`/api/hook\` | \`hooks.read\` | \`name\` · what has rung, without consuming it | |
+| \`GET\` | \`/api/hook\` | \`hooks.read\` | — · every name that has rung, with a count | |
+| \`GET\` | \`/api/hook/:name\` | \`hooks.read\` | \`?since=<ms>\` · the rings themselves, payloads included, without consuming them — the same view a waiting task gets | |
+| \`DELETE\` | \`/api/hook\` | \`hooks.write\` | — · forget every ring | |
+| \`DELETE\` | \`/api/hook/:name\` | \`hooks.write\` | — · forget one name | |
 | \`GET\` | \`/api/keys\` | \`keys.read\` | — · names and paths only. There is no endpoint that reads a private key | |
 | \`POST\` | \`/api/keys\` | \`keys.write\` | \`name\`*, \`kind\` (\`ed25519\` default · \`ecdsa\` · \`rsa\`) → \`201 {path, public, ring}\`. The response carries the **public** line and where the private half went — never the private half, because replies are logged, proxied and read in browser tabs | |
 | \`POST\` | \`/api/content-id\` | token | the DOCUMENT itself · the id that says what a document IS rather than what this machine calls it — the same pack assembled twice gets the same one. Token-level rather than behind a read scope, because the caller supplies the content | |
@@ -2227,7 +2230,10 @@ Chacun ouvre le flux in-app correspondant et renvoie \`202\`. Ils ne sont **pas*
 | \`GET\` | \`/api/schedules\` | \`schedules.read\` | — · un résumé de chaque tâche enregistrée : id, nom, activée ou non, son déclencheur. **Pas** ses étapes | |
 | \`POST\` | \`/api/schedules/enabled\` | \`schedules.write\` | \`id\`*, \`enabled\`* · arme ou désarme une tâche. Seul \`enabled\` est modifiable — une route capable d'écrire une tâche entière pourrait en installer une contenant un script | ✓ |
 | \`POST\` | \`/api/hook\` | \`hooks.write\` | \`name\`*, \`data\` · sonne une cloche nommée qu'une tâche attend peut-être avec \`wait.hook\`, ou par laquelle elle est déclenchée avec \`on event\` | ✓ |
-| \`GET\` | \`/api/hook\` | \`hooks.read\` | \`name\` · ce qui a sonné, sans le consommer | |
+| \`GET\` | \`/api/hook\` | \`hooks.read\` | — · chaque nom qui a sonné, avec son compte | |
+| \`GET\` | \`/api/hook/:name\` | \`hooks.read\` | \`?since=<ms>\` · les sonneries elles-mêmes, contenu compris, sans les consommer — la même vue qu'obtient une tâche en attente | |
+| \`DELETE\` | \`/api/hook\` | \`hooks.write\` | — · oublier toutes les sonneries | |
+| \`DELETE\` | \`/api/hook/:name\` | \`hooks.write\` | — · oublier un seul nom | |
 | \`GET\` | \`/api/keys\` | \`keys.read\` | — · noms et chemins seulement. Aucun endpoint ne lit une clé privée | |
 | \`POST\` | \`/api/keys\` | \`keys.write\` | \`name\`*, \`kind\` (\`ed25519\` par défaut · \`ecdsa\` · \`rsa\`) → \`201 {path, public, ring}\`. La réponse porte la ligne **publique** et l'endroit où la moitié privée est allée — jamais la moitié privée, parce que les réponses sont journalisées, relayées et lues dans des onglets | |
 | \`POST\` | \`/api/content-id\` | token | le DOCUMENT lui-même · l'id qui dit ce QU'EST un document plutôt que le nom que cette machine lui donne — le même pack assemblé deux fois obtient le même. Au niveau du token plutôt que derrière une portée de lecture, parce que c'est l'appelant qui fournit le contenu | |

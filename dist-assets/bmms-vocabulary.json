@@ -736,6 +736,7 @@
         "everySeconds",
         "timeoutSeconds",
         "status",
+        "bodyContains",
         "stopOnTimeout"
       ]
     },

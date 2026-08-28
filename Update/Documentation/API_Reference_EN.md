@@ -52,7 +52,8 @@ This document is the single source of truth for everything that can be driven pr
 | `/api/mods/order` | yes | `{ order[], profileId? }` | Reorders the active mods and re-copies the files that change hands. `order` must be a permutation of what is active; last in the list wins a shared file. |
 | `/api/schedules` | yes | — (GET) | id, name, enabled and trigger for every saved task. **Not** its steps. |
 | `/api/schedules/enabled` | yes | `{ id, enabled }` | Arms or disarms one task. Only `enabled` is writable — a route that could write a whole task could install one with a script step in it. |
-| `/api/hook` | yes | `{ name, data? }` | Rings a named doorbell a task can wait on (`wait.hook`) or be triggered by (`on event`). `GET ?name=` reads what has rung without consuming it. |
+| `/api/hook` | yes | `{ name, data? }` | Rings a named doorbell a task can wait on (`wait.hook`) or be triggered by (`on event`). `GET` lists every name with a count; `DELETE` forgets them all. |
+| `/api/hook/:name` | yes | — | `GET` reads the rings for one name, payloads included, without consuming them — add `?since=<ms>` for recent ones only. `DELETE` forgets that name. |
 | `/api/content-id` | yes | `{ kind, doc }` — the id that says what a document IS rather than what this machine calls it. `kind` is one of modpack, plugin, task, profile, theme, launchpack, repo, app, modlist. It takes the DOCUMENT, so the answer discloses nothing this install holds; a by-id variant would be an oracle for "does this machine have X" and would need each kind's read scope. |
 | `/api/keys` | yes | `{ name, algorithm? }` | GET lists identity keys, POST mints one. The private half never leaves the machine. |
 | `/api/catalogs` | yes | `{ type, url, follow }` | GET lists followed catalogues, POST follows or unfollows one. |

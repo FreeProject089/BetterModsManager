@@ -639,6 +639,20 @@ forever and a scheduler that never runs the next one — and "still waiting" loo
 Any status counts as an answer by default, which is what makes *wait until it stops returning
 503* expressible. Name an exact code when a service answers 503 while it is starting.
 
+It can also wait on what the reply **says**. Fill *wait until the reply contains* with a
+piece of text — matched anywhere in the body, ignoring case — and both have to be true. This
+is the common case rather than the exotic one: a job endpoint answers `200` from the moment
+it accepts the work, so on status alone the wait ends on the first poll and every step after
+it runs against a job that is still running.
+
+```
+{"id":"a91","state":"running"}   ← 200, and not what you are waiting for
+{"id":"a91","state":"done"}      ← 200, and this one is
+```
+
+With `"state":"done"` in that field, the wait ends on the second. The reply itself lands in
+`{text.http.body}`, so the steps after it can read *which* job finished.
+
 Giving up is said out loud with the last status, and stops the task unless you untick it —
 otherwise the steps after this run against something that never came up. Check `{wait.ok}`
 first if you do untick it.
@@ -656,6 +670,20 @@ curl -X POST http://127.0.0.1:51274/api/hook \
 
 Whatever you send arrives as `{text.hook.data}`. A doorbell that could only say "somebody
 rang" would need a second channel for the thing it rang about.
+
+**BMM's own events ring the same doorbells.** The name box offers the list — the same names
+the *on event* trigger offers — so a task can wait mid-run for `bmm.repo.synced` or
+`bmm.profile.activated` instead of only being started by one. `{text.hook.data}` then carries
+what the event carried.
+
+That is the difference between the two: the trigger asks *start this task when X happens*,
+the wait asks *stop here until X happens*. A task that has to do something before X and
+something after it needs the second.
+
+Debugging one that never ends: `GET /api/hook` lists every name that has rung with a count,
+and `GET /api/hook/:name` gives the rings themselves with their payloads — which separates
+"nothing ever arrived" from "something arrived under a different name", or from "it arrived
+and the body was not what I thought".
 
 !!! note "It is a LOCAL doorbell"
 
