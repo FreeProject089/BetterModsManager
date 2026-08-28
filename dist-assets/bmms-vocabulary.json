@@ -460,6 +460,14 @@
       ]
     },
     {
+      "type": "task.setEnabled",
+      "group": "system",
+      "params": [
+        "taskId",
+        "armOn"
+      ]
+    },
+    {
       "type": "restart",
       "group": "system",
       "params": []

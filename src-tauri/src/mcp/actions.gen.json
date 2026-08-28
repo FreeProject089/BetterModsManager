@@ -373,6 +373,12 @@
       "group": "system"
     },
     {
+      "type": "task.setEnabled",
+      "label": "Arm or disarm another task",
+      "needs": "taskArm",
+      "group": "system"
+    },
+    {
       "type": "restart",
       "label": "Restart BMM",
       "needs": null,

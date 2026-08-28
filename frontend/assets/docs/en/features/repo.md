@@ -499,6 +499,36 @@ different folder re-reads it and re-seeds what is ticked: those ticks are a fact
 repo, and carrying them over from the folder you looked at before would publish things nobody
 chose. A folder that is not a repo says so on the screen, next to the button that can fix it.
 
+### Choosing now, publishing later
+
+The picker records a **decision**. It used to write, immediately, into a repo folder that had
+to exist already — so publishing a plugin alongside a repo meant generating the repo,
+remembering to come back, adding the plugin, and generating again if a profile had changed.
+Choosing and publishing were the same act, in the wrong order.
+
+Open it with no folder chosen and what you tick is kept. It goes in when the repo is made,
+and **every** path that leaves a folder worth publishing applies it:
+
+| | |
+|---|---|
+| **Generate** | a fresh repo, at the end of the export |
+| **Manifest only** | after `repo.json` is written |
+| **Update an existing repo** | after the update finishes |
+| **Update from the server** | the same handler as above |
+
+A badge beside the button says how many are waiting, because a selection applied later is one
+people forget they made — and it disappears the moment they are written.
+
+!!! note "It clears once, and not on a failure"
+
+    Applied, it stops being pending: otherwise the same selection lands in every repo you
+    generate afterwards, including ones it was never meant for. A **failure** keeps it — that
+    is usually a file that has moved or a folder that is not writable, and clearing would make
+    the fix "choose all fourteen again" instead of "generate again".
+
+Choosing a folder still writes into it straight away, which is the right thing when the repo
+is already published and you are adding to it. The button says which of the two it will do.
+
 ### Two shapes, and the difference matters
 
 === "Files travel with the repo"

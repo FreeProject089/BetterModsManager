@@ -520,6 +520,36 @@ dépôt, et les reporter depuis le dossier regardé juste avant publierait des c
 personne n'a choisies. Un dossier qui n'est pas un dépôt le dit à l'écran, à côté du bouton
 qui permet d'y remédier.
 
+### Choisir maintenant, publier plus tard
+
+Le sélecteur enregistre une **décision**. Il écrivait immédiatement dans un dossier de dépôt
+qui devait déjà exister — publier un plugin à côté d'un dépôt obligeait donc à générer le
+dépôt, penser à revenir, ajouter le plugin, et regénérer si un profil avait changé. Choisir et
+publier étaient le même geste, dans le mauvais ordre.
+
+Ouvrez-le sans choisir de dossier et ce que vous cochez est gardé. Ça entre quand le dépôt est
+fait, et **tous** les chemins qui laissent un dossier publiable l'appliquent :
+
+| | |
+|---|---|
+| **Générer** | un dépôt neuf, à la fin de l'export |
+| **Manifeste seul** | après l'écriture de `repo.json` |
+| **Mettre à jour un dépôt existant** | à la fin de la mise à jour |
+| **Mettre à jour depuis le serveur** | le même gestionnaire que ci-dessus |
+
+Un badge à côté du bouton dit combien attendent, parce qu'une sélection appliquée plus tard
+est une sélection qu'on oublie avoir faite — et il disparaît dès qu'elles sont écrites.
+
+!!! note "Ça se vide une fois, et pas sur un échec"
+
+    Appliquée, la sélection cesse d'être en attente : sinon la même atterrit dans chaque dépôt
+    généré ensuite, y compris ceux auxquels elle n'était pas destinée. Un **échec** la garde —
+    c'est en général un fichier qui a bougé ou un dossier non inscriptible, et la vider
+    ferait de la correction « recocher les quatorze » au lieu de « regénérer ».
+
+Choisir un dossier écrit toujours dedans immédiatement, ce qui est juste quand le dépôt est
+déjà publié et qu'on y ajoute. Le bouton dit lequel des deux il va faire.
+
 ### Deux formes, et la différence compte
 
 === "Les fichiers voyagent avec le dépôt"

@@ -2299,6 +2299,20 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
             break;
         }
 
+        case 'task.setEnabled': {
+            const id = String(p.taskId || '').trim();
+            if (!id) { toast(`${task.name}: ${t('sched.dl.noId')}`, 'warning', 7000); break; }
+            // A task cannot arm or disarm ITSELF. Disarming yourself mid-run leaves a task
+            // that is off and still running, and arming yourself is a no-op that reads as
+            // one — both are states nobody can reason about from the list.
+            if (id === task.id) { toast(`${task.name}: ${t('sched.arm.notSelf')}`, 'warning', 8000); break; }
+            const on = p.armOn !== false && p.armOn !== 0 && p.armOn !== '0';
+            const ok = await setTaskEnabled(id, on);
+            toast(`${task.name}: ${(ok ? t('sched.arm.done') : t('sched.arm.gone'))
+                .replace('{n}', id).replace('{s}', on ? t('sched.arm.on') : t('sched.arm.off'))}`,
+                ok ? 'success' : 'warning', 7000);
+            break;
+        }
         case 'task.stop':                          // guard clause / early exit (clean)
             throw new _StopTask(String(p.reason || ''));
 
@@ -5842,6 +5856,10 @@ const ACTION_TYPES: { v: string; label: string; needs?: string; group: string }[
     { v: 'task.stop', label: 'Stop the task (guard clause)', needs: 'stopReason', group: 'logic' },
     { v: 'task.run', label: 'Run another scheduled task', needs: 'taskId', group: 'system' },
     { v: 'task.spawn', label: 'Start another task WITHOUT waiting (async)', needs: 'taskId', group: 'system' },
+    // Arming and disarming another task. `bmm://schedule/enable` has always been able to do
+    // it and a task could not — so "stop the nightly sync while I am away" meant either
+    // clicking a toggle by hand or firing a raw deeplink through the generic action.
+    { v: 'task.setEnabled', label: 'Arm or disarm another task', needs: 'taskArm', group: 'system' },
     { v: 'restart', label: 'Restart BMM', group: 'system' },
     { v: 'open.url', label: 'Open a URL / link', needs: 'url', group: 'system' },
     { v: 'custom.command', label: 'Run custom command', needs: 'command', group: 'system' },
@@ -6284,6 +6302,30 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
             name?.addEventListener('input', () => { params.newProfile = name.value; });
             if (params.newProfile && sel) sel.value = '__new__';
         }
+    }
+    else if (needs === 'taskArm') {
+        // The list is other tasks, by name. An id typed by hand is a millisecond timestamp
+        // nobody recognises, and picking the wrong one silently disarms the wrong automation.
+        const opts = _tasks.filter((tk) => tk.id !== _draft.id).map((tk) =>
+            `<option value="${escAttr(tk.id)}"${params.taskId === tk.id ? ' selected' : ''}>${escHtml(tk.name || tk.id)}</option>`).join('');
+        host.innerHTML = `<div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${escHtml(t('sched.arm.which'))}</label>
+            <select class="input sched-p-armid">
+                <option value="">${escHtml(t('sched.arm.pick'))}</option>${opts}
+            </select>
+            <label class="sched-cmd-label">${escHtml(t('sched.arm.what'))}</label>
+            <select class="input sched-p-armon" style="max-width:200px">
+                <option value="1"${params.armOn !== false ? ' selected' : ''}>${escHtml(t('sched.arm.on'))}</option>
+                <option value="0"${params.armOn === false ? ' selected' : ''}>${escHtml(t('sched.arm.off'))}</option>
+            </select>
+            <span class="sched-cmd-hint">${escHtml(t('sched.arm.hint'))}</span>
+        </div>`;
+        host.querySelector('.sched-p-armid')?.addEventListener('change', (e) => {
+            params.taskId = (e.target as HTMLSelectElement).value;
+        });
+        host.querySelector('.sched-p-armon')?.addEventListener('change', (e) => {
+            params.armOn = (e.target as HTMLSelectElement).value === '1';
+        });
     }
     else if (needs === 'buildInfo') {
         host.innerHTML = `<div class="sched-cmd-builder">

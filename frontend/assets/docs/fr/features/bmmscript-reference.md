@@ -2,7 +2,7 @@
 
 !!! info ""
 
-    92 actions · 32 conditions · 32 valeurs · 8 sources de boucle
+    93 actions · 32 conditions · 32 valeurs · 8 sources de boucle
 
 > Généré depuis le registre de BMM lui-même, donc cette page ne peut pas décrire une version de l'application qui n'existe pas. Si une action est dans l'éditeur de blocs, elle est dans cette liste.
 
@@ -131,6 +131,7 @@ S'écrit `do <nom>(param: valeur, …)`. Une action sans paramètre prend des pa
 | `system.clearResourceRecords` | Vide les relevés CPU/mémoire enregistrés. | — |
 | `task.run` | Déclenche une autre tâche | `id` |
 | `task.spawn` | Lance l’autre tâche et continue immédiatement. À utiliser quand la suite ne dépend pas du résultat — sinon prenez « Exécuter une autre tâche », qui attend. | `id` |
+| `task.setEnabled` | Armer ou désarmer une autre tâche | `taskId` · `armOn` |
 | `restart` | Redémarre BMM | — |
 | `open.url` | Ouvre une URL ou un lien | `url` |
 | `custom.command` | Lance un programme avec arguments | `args` · `program` · `workingDir` · `into` |
