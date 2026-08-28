@@ -11,6 +11,7 @@
 
 import { invoke } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
+import { escHtml } from '../../core/utils.js';
 import { STORE_KEY, addSource, rememberOrigin, recordHistory } from '../catalogs/catalog-index.js';
 import { writeSources } from '../catalogs/catalog-sources.js';
 import { toast } from '../../ui/app.js';
@@ -494,6 +495,73 @@ function shortUrl(url: string): string {
  * already ticked is a screen whose default is "publish my whole machine", and the person
  * reading it has not yet been told that catalogues travel as addresses.
  */
+/**
+ * Wire an "Include in the repo…" button, wherever it sits.
+ *
+ * There are four surfaces that end with a repo on disk — generating one, writing a
+ * manifest on its own, updating one locally, and pulling one from a server to edit and put
+ * back — and the extras belong to all four. Only the first had the button, so anybody using
+ * the other three had to go to the generate card, pick, come back, and hope the selection
+ * survived; and adding a theme to a repo published months ago meant re-generating it.
+ *
+ * The wiring lives here rather than being repeated per surface. The pending tag, the
+ * cross-surface refresh and the destination hint are three things that have to agree, and
+ * three copies of them is three chances for one to be right and the others stale — which is
+ * the shape that produced "0 element(s) added" in the first place.
+ *
+ * `dirHint` is a FUNCTION, not a string: the destination field is typed into after this runs,
+ * and reading it at wire time would pin the hint to whatever was there when the page drew.
+ */
+export function wireExtrasButton(btn: HTMLElement, dirHint: () => string): void {
+    if (btn.dataset.extrasWired) return;
+    btn.dataset.extrasWired = '1';
+
+    const showPending = async (): Promise<void> => {
+        const n = pendingExtras().chosen.length;
+        let tag = btn.nextElementSibling as HTMLElement | null;
+        if (tag && !tag.classList.contains('repo-extras-pending')) tag = null;
+        if (!n) { tag?.remove(); return; }
+        if (!tag) {
+            tag = document.createElement('span');
+            tag.className = 'repo-extras-pending';
+            btn.insertAdjacentElement('afterend', tag);
+        }
+        tag.textContent = (t('repo.extras.pendingTag') || '{n} waiting').replace('{n}', String(n));
+        tag.title = t('repo.extras.destLaterTip') || '';
+    };
+
+    void showPending();
+    // Every surface that WRITES the extras fires this, so a tag on a card nobody is looking
+    // at is still correct when they look.
+    document.addEventListener('bmm:repo-extras-changed', () => { void showPending(); });
+    btn.addEventListener('click', async () => {
+        await openExtrasPicker(dirHint() || undefined);
+        void showPending();
+    });
+}
+
+/**
+ * Build one and put it in `host`.
+ *
+ * Same markup as the generate card's, which is in index.html because the tutorial anchors on
+ * it by id. Built here for the other three so the copy that exists in HTML stays the only
+ * one anybody has to keep in step with the stylesheet.
+ */
+export function mountExtrasButton(host: HTMLElement | null, dirHint: () => string): void {
+    if (!host || host.querySelector('.repo-extras-btn')) return;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn btn-secondary btn-sm repo-extras-btn';
+    btn.style.cssText = 'width:100%;justify-content:center;margin-top:8px;';
+    btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+            <path d="M20 7h-9"/><path d="M14 17H5"/>
+            <circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/>
+        </svg><span>${escHtml(t('repo.extras.pick') || 'Include in the repo\u2026')}</span>`;
+    host.appendChild(btn);
+    wireExtrasButton(btn, dirHint);
+}
+
 export async function openExtrasPicker(repoDirHint?: string): Promise<void> {
     const { pickFolder } = await import('../../core/api.js');
     const { raiseAboveAll } = await import('../../ui/layer.js');

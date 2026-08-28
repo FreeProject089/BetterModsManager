@@ -354,6 +354,16 @@ export function initManifestOnly() {
             if (input) input.value = picked;
         }
     });
+    // Extras belong here as much as on the generate card. Writing a manifest on its own
+    // already applies whatever is waiting (see applyPendingExtras below) — there was simply
+    // no way to CHOOSE from this screen, so the only route was to open the generate card,
+    // pick, and come back hoping the selection survived.
+    void import('./repo-extras.js').then((m) => {
+        m.mountExtrasButton(
+            $('manifest-result')?.parentElement || null,
+            () => ($('manifest-output-dir') as HTMLInputElement | null)?.value?.trim() || '',
+        );
+    });
     $('btn-generate-manifest')?.addEventListener('click', () => void generate());
     setMode('folder');
     renderFolders();

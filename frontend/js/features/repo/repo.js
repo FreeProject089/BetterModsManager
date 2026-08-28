@@ -2206,6 +2206,16 @@ export function initRepo() {
         document.getElementById('repo-update-mode-local')?.addEventListener('click', () => setMode(false));
         document.getElementById('repo-update-mode-remote')?.addEventListener('click', () => setMode(true));
         setMode(false);
+        // Extras, on both update modes. Adding a theme or a bundle to a repo published
+        // months ago used to mean re-generating the whole thing; this is the screen where
+        // that repo is already open, and it applies what is waiting when it saves.
+        //
+        // One button for both modes on purpose: the destination is the folder either way —
+        // a pulled repo lands there first and is pushed back from there — so two buttons
+        // would be two names for one act.
+        void import('./repo-extras.js').then((m) => {
+            m.mountExtrasButton(document.getElementById('repo-update-ssh-mount')?.parentElement || null, () => document.getElementById('repo-update-path')?.value?.trim() || '');
+        });
         // The SSH credentials block, mounted and wired in one place so markup with no
         // listeners cannot ship — the failure that has now bitten three separate screens.
         const sshMount = document.getElementById('repo-update-ssh-mount');
@@ -2920,41 +2930,13 @@ export function initRepo() {
             catch { /* nothing to undo */ }
         });
     }
+    // The generate card's button. Its markup is in index.html because the tutorial anchors
+    // on the id; the behaviour is shared with the three surfaces that mount their own.
     const btnExtras = document.getElementById('btn-repo-extras');
     if (btnExtras) {
-        /**
-         * Say what is waiting.
-         *
-         * A selection that is applied later is a selection people forget they made — and
-         * then a repo generated for something else quietly carries it. The count sits on
-         * the button that produced it, and disappears the moment it has been written.
-         */
-        const showPending = async () => {
-            const { pendingExtras } = await import('./repo-pending.js');
-            const n = pendingExtras().chosen.length;
-            let tag = document.getElementById('repo-extras-pending');
-            if (!n) {
-                tag?.remove();
-                return;
-            }
-            if (!tag) {
-                tag = document.createElement('span');
-                tag.id = 'repo-extras-pending';
-                tag.className = 'repo-extras-pending';
-                btnExtras.insertAdjacentElement('afterend', tag);
-            }
-            tag.textContent = (t('repo.extras.pendingTag') || '{n} waiting').replace('{n}', String(n));
-            tag.title = t('repo.extras.destLaterTip') || '';
-        };
-        void showPending();
-        // The export and the two update flows clear it, so the tag has to be able to
-        // notice. Cheaper than a store: this screen is the only thing that shows it.
-        document.addEventListener('bmm:repo-extras-changed', () => { void showPending(); });
-        btnExtras.addEventListener('click', async () => {
-            const { openExtrasPicker } = await import('./repo-extras.js');
-            const hint = elements.inputExportPath?.value?.trim() || '';
-            await openExtrasPicker(hint || undefined);
-            void showPending();
+        // initRepo is not async, so the import is a promise rather than an await.
+        void import('./repo-extras.js').then((m) => {
+            m.wireExtrasButton(btnExtras, () => elements.inputExportPath?.value?.trim() || '');
         });
     }
     if (elements.btnCancelExport) {
