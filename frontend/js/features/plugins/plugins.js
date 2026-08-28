@@ -6639,6 +6639,7 @@ function getEndpointDefs() {
             fields: [
                 { name: 'url', type: 'string', required: true, desc: 'URL complète vers le repo.json distant (ou le dossier parent — /repo.json sera ajouté automatiquement).' },
                 { name: 'name', type: 'string', required: false, desc: 'Nom affiché dans BMM. Si omis, récupéré depuis le champ "name" du repo.json distant.' },
+                { name: 'password', type: 'string', required: false, desc: t('plugins.epField.connectPw') },
             ],
             responseStatuses: [
                 { code: 200, label: 'OK', body: '{ "ok": true, "url": "https://...", "name": "Mon Serveur" }' },

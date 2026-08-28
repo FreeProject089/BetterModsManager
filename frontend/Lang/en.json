@@ -9854,5 +9854,6 @@
   "sched.syncGame": "Game folder",
   "sched.syncMods": "Mods folder",
   "sched.syncBackup": "Backup folder (optional)",
-  "lib.cancelNothing": "Nothing is running to cancel."
+  "lib.cancelNothing": "Nothing is running to cancel.",
+  "plugins.epField.connectPw": "Only used to READ the repo’s name when `name` is omitted: the request that fetches repo.json carries it as X-Repo-Password. It is not stored, and connecting still works without it — the URL becomes the display name."
 }
