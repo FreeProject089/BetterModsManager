@@ -308,6 +308,32 @@ struct NewKeyBody {
     kind: Option<String>,
 }
 
+/// `POST /api/repo/host-now` — start serving, rather than open the screen.
+///
+/// `/api/repo/host` navigates and prefills, while its own sibling `/api/repo/host-stop`
+/// really stops the server — so one half of the pair worked and the other asked a person
+/// to press something. This is the working half.
+///
+/// It also carries what the old one could not express at all: a download password and the
+/// public keys allowed to fetch. Hosting a PROTECTED repo was simply not reachable over the
+/// API, which is the case most worth automating — an open repo needs no help.
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct RepoHostNowBody {
+    /// The folder to serve. Must already hold a `repo.json`.
+    path: String,
+    port: u16,
+    /// MB per upload. 0 keeps the command's own default.
+    #[serde(default)]
+    upload_limit: u32,
+    /// Absent or empty = an open repo, as before.
+    #[serde(default)]
+    download_password: Option<String>,
+    /// One OpenSSH public-key line each. Absent = no key requirement.
+    #[serde(default)]
+    authorized_keys: Option<Vec<String>>,
+}
+
 /// `POST /api/repo/gen-now` — an export that actually runs.
 ///
 /// `/api/repo/gen` opens the hosting screen. That is the right answer for a caller sitting
@@ -2371,6 +2397,37 @@ pub async fn start_api_server(
             )
         });
 
+    // POST /api/repo/host-now  (auth) — start serving.
+    let tok_host_now = token.clone();
+    let handle_host_now = app_handle.clone();
+    let repo_host_now = warp::path!("api" / "repo" / "host-now")
+        .and(warp::post())
+        .and(require_token(tok_host_now))
+        .and(require_permission(token.clone(), "repo.write"))
+        .and(warp::body::json::<RepoHostNowBody>())
+        .and(with_app_handle(handle_host_now))
+        .map(|body: RepoHostNowBody, handle: tauri::AppHandle| {
+            if body.path.trim().is_empty() || body.port == 0 {
+                return warp::reply::with_status(
+                    warp::reply::json(&ApiError { error: "path and a non-zero port are required".into() }),
+                    StatusCode::BAD_REQUEST,
+                );
+            }
+            let _ = handle.emit("bmm://api-exec", serde_json::json!({
+                "action": "repo/host-now",
+                "params": {
+                    "path": body.path,
+                    "port": body.port,
+                    "uploadLimit": body.upload_limit,
+                    "downloadPassword": body.download_password,
+                    "authorizedKeys": body.authorized_keys,
+                }
+            }));
+            warp::reply::with_status(warp::reply::json(&serde_json::json!({
+                "ok": true, "driven_by": "bmm-ui", "action": "repo/host-now"
+            })), StatusCode::ACCEPTED)
+        });
+
     // POST /api/repo/gen-now  (auth) — an export that runs, rather than a screen that opens.
     let tok_gen_now = token.clone();
     let handle_gen_now = app_handle.clone();
@@ -3445,6 +3502,7 @@ pub async fn start_api_server(
         .or(get_creator_id_route)
         .or(repo_sync_now)
         .or(repo_gen_now)
+        .or(repo_host_now)
         .boxed();
 
     let group_b = enable_mod

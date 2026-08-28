@@ -9512,5 +9512,13 @@
   "plugins.epF.gnProfiles": "Quels profils publier, en tableau JSON. Une liste vide est REFUSÉE, jamais lue comme « tous » — publier tous les profils d’une machine parce qu’un champ a été omis n’est pas quelque chose qu’une API doit pouvoir faire par accident.",
   "plugins.epF.gnSeed": "Garde celle du dépôt si absente. La changer publie un autre dépôt à la même adresse, pour tous ceux qui le suivent.",
   "plugins.epF.gnZip": "Une archive au lieu d’une arborescence.",
-  "plugins.epF.gnZipMods": "Zipper chaque mod — téléchargements plus légers, décompressés par le destinataire."
+  "plugins.epF.gnZipMods": "Zipper chaque mod — téléchargements plus légers, décompressés par le destinataire.",
+  "plugins.ep.hostNow": "Héberger un dépôt — démarre immédiatement",
+  "plugins.epAbout.hostNow": "`/api/repo/host` navigue et préremplit, alors que son propre jumeau `/api/repo/host-stop` arrête réellement le serveur — une moitié de la paire fonctionnait, l’autre demandait à quelqu’un d’appuyer. Voici la moitié qui fonctionne. Elle porte aussi ce que l’ancienne ne savait pas exprimer : un mot de passe de téléchargement et les clés publiques autorisées. Héberger un dépôt PROTÉGÉ n’était tout simplement pas atteignable par l’API, et c’est le cas qui mérite le plus d’être automatisé — un dépôt ouvert n’a besoin de personne.",
+  "plugins.epF.hnPath": "Le dossier à servir. Il doit déjà contenir un repo.json.",
+  "plugins.epF.hnPort": "Le port d’écoute.",
+  "plugins.epF.hnLimit": "Mo par téléversement. 0 garde la valeur par défaut.",
+  "plugins.epF.hnPw": "Absent ou vide = dépôt ouvert.",
+  "plugins.epF.hnKeys": "Une ligne de clé publique OpenSSH par entrée, en tableau JSON. Absent = aucune clé exigée.",
+  "repo.serverStarted": "En service"
 }

@@ -9514,5 +9514,13 @@
   "plugins.epF.gnProfiles": "Which profiles to publish, as a JSON array. An empty list is REFUSED, never read as \"all of them\" — publishing every profile on somebody’s machine because a field was omitted is not a thing an API should do by accident.",
   "plugins.epF.gnSeed": "Keeps the repo’s existing one when absent. Changing it publishes a different repo under the same address, to everyone following it.",
   "plugins.epF.gnZip": "One archive instead of a folder tree.",
-  "plugins.epF.gnZipMods": "Zip each mod — smaller downloads, unpacked by the receiver."
+  "plugins.epF.gnZipMods": "Zip each mod — smaller downloads, unpacked by the receiver.",
+  "plugins.ep.hostNow": "Host a repo — starts serving now",
+  "plugins.epAbout.hostNow": "`/api/repo/host` navigates and prefills, while its own sibling `/api/repo/host-stop` really stops the server — so one half of the pair worked and the other asked a person to press something. This is the working half. It also carries what the old one could not express at all: a download password and the public keys allowed to fetch. Hosting a PROTECTED repo was simply not reachable over the API, which is the case most worth automating — an open repo needs no help.",
+  "plugins.epF.hnPath": "The folder to serve. Must already hold a repo.json.",
+  "plugins.epF.hnPort": "The port to listen on.",
+  "plugins.epF.hnLimit": "MB per upload. 0 keeps the default.",
+  "plugins.epF.hnPw": "Absent or empty = an open repo.",
+  "plugins.epF.hnKeys": "One OpenSSH public-key line each, as a JSON array. Absent = no key requirement.",
+  "repo.serverStarted": "Serving"
 }

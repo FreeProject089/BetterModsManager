@@ -92,6 +92,7 @@ This document is the single source of truth for everything that can be driven pr
 | Path | Auth | Body |
 |---|---|---|
 | `/api/repo/connect` | yes | `{ url, name?, password? }` |
+| `/api/repo/host-now` | yes | `{ path, port, uploadLimit?, downloadPassword?, authorizedKeys[]? }` — **starts serving**. Also the only way to host a protected repo over the API |
 | `/api/repo/gen-now` | yes | `{ outputDir, authorName, profileIds[], seed?, zipOutput?, zipMods? }` — **writes the repo** instead of opening the screen. An empty profile list is refused, never “all of them” |
 | `/api/repo/sync-now` | yes | `{ url, repoProfile, targetProfile, gameDir, modsDir, backupDir?, password?, overwriteAll?, deleteExtra? }` — **runs the sync** instead of opening the form. All five first fields required; no profile is created; the two destructive options default off |
 | `/api/repo/sync` | yes | `{ url, game_dir?, mods_dir?, backup_dir?, choices?, download_limit?, password? }` (UI-driven; `password` = optional download password for a protected repo). **`creator_id` is not accepted** — it is this installation's identity to a repo, not a caller's choice |

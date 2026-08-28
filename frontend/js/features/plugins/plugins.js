@@ -7177,6 +7177,22 @@ function getEndpointDefs() {
             ],
         },
         {
+            method: 'POST', path: '/api/repo/host-now', auth: true,
+            desc: t('plugins.ep.hostNow'),
+            about: t('plugins.epAbout.hostNow'),
+            fields: [
+                { name: 'path', type: 'string', required: true, desc: t('plugins.epF.hnPath') },
+                { name: 'port', type: 'number', required: true, desc: t('plugins.epF.hnPort') },
+                { name: 'uploadLimit', type: 'number', required: false, desc: t('plugins.epF.hnLimit') },
+                { name: 'downloadPassword', type: 'string', required: false, desc: t('plugins.epF.hnPw') },
+                { name: 'authorizedKeys', type: 'string', required: false, desc: t('plugins.epF.hnKeys') },
+            ],
+            responseStatuses: [
+                { code: 202, label: 'Accepted', body: '{ "ok": true, "driven_by": "bmm-ui", "action": "repo/host-now" }' },
+                e401,
+            ],
+        },
+        {
             method: 'POST', path: '/api/repo/gen-now', auth: true,
             desc: t('plugins.ep.genNow'),
             about: t('plugins.epAbout.genNow'),

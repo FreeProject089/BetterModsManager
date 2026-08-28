@@ -318,6 +318,10 @@ export function initRepoServer(elements) {
         }
     };
     restoreServerStatus();
+    // The API can start the server without this screen doing it (POST /api/repo/host-now),
+    // and the button would sit there offering to start one that already is. Same refresher
+    // the page runs on load — there is no second version of "is it running" to drift.
+    document.addEventListener('bmm:repo-server-changed', () => { void restoreServerStatus(); });
     // --- Mini-Server Generation ---
     if (btnPickMiniRepo) {
         btnPickMiniRepo.addEventListener('click', async () => {

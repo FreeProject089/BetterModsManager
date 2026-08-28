@@ -253,6 +253,26 @@ export async function initApiActivity(): Promise<void> {
         switch (action) {
             // ── Repo (existing UI-driven flows) ──────────────────────────────
             case 'repo/host': driveRepo('host', params); break;
+            // The working half of the pair. `repo/host-stop` has always really stopped the
+            // server; starting it asked a person to press a button.
+            case 'repo/host-now': {
+                try {
+                    const res: any = await invoke('start_repo_server', {
+                        path: String(params.path || ''),
+                        port: Number(params.port) || 0,
+                        uploadLimit: Number(params.uploadLimit) || 0,
+                        downloadPassword: params.downloadPassword || null,
+                        authorizedKeys: Array.isArray(params.authorizedKeys) ? params.authorizedKeys : null,
+                    });
+                    // The screen shows what is running; it has to hear about a server it did
+                    // not start, or it sits there offering to start one that already is.
+                    document.dispatchEvent(new CustomEvent('bmm:repo-server-changed'));
+                    toast(`${t('repo.serverStarted') || 'Serving'} — ${res?.url || params.path}`, 'success', 8000);
+                } catch (e) {
+                    toast(String((e as Error)?.message || e), 'error', 9000);
+                }
+                break;
+            }
             // Publishes to the target saved in Server Repo. The API cannot name one — see
             // the route's comment in src-tauri/src/api/mod.rs for why that is deliberate.
             case 'repo/publish-ssh': {
