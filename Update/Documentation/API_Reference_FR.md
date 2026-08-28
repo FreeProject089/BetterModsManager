@@ -109,7 +109,7 @@ Ce document est la source de vérité unique pour tout ce qui est pilotable par 
 | `/api/catalog/new` | oui · `catalog.write` | `{ name?, description?, partner_catalogs?, community_imports?, apps? }` |
 | `/api/catalog/apps` | oui · `catalog.write` | `{ id, title, description?, category?, price?, tags?, download:{url,file_type,size?}, requirements?, md_link?, images?, official?, partner? }` |
 | `/api/catalog/import` | oui · `catalog.write` | `{ url, type?, password? }` — suit ce qui se trouve à cette adresse sans qu'on lui dise le type. Piloté par l'interface |
-| `/api/catalog/entries` | oui · `catalog.write` | `{ type?, entry }` — `type` ∈ `app`·`plugin`·`theme`·`preset`·`modpack`·`repo`·`tutorial`·`list` (`app` par défaut) ; l’entrée est écrite sous le nom de tableau du format de ce type. Elle doit porter un `id` : la mise à jour et la suppression s’y réfèrent |
+| `/api/catalog/entries` | oui · `catalog.write` | `{ type?, entry }` — `type` ∈ `app`·`plugin`·`theme`·`preset`·`modpack`·`repo`·`tutorial`·`list`·`index` (`app` par défaut) ; l’entrée est écrite sous le nom de tableau du format de ce type. Elle doit porter un `id` : la mise à jour et la suppression s’y réfèrent |
 
 ### Données / Langue / Listes de mods
 | Chemin | Auth | Corps |

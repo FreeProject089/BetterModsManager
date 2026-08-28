@@ -34,6 +34,12 @@ pub const CATALOG_KINDS: &[(&str, &str)] = &[
     ("repo", "repos"),
     ("tutorial", "tutorials"),
     ("list", "lists"),
+    // The ninth: an INDEX of catalogues, whose entries are `{ type, url, name }` rather than
+    // downloadable things. The reader has understood one for a long time — `looksLikeIndex`,
+    // `parseCatalogIndex`, `importIndexForType` — and nothing could WRITE one, so a group
+    // running four catalogues could not publish the document that ties them together without
+    // writing the JSON by hand.
+    ("index", "catalogs"),
 ];
 
 /// The entries array for a kind, or None if it is not a kind.
@@ -69,6 +75,16 @@ pub fn path_for(app: &tauri::AppHandle, kind: &str) -> std::path::PathBuf {
 
 pub fn empty_for(kind: &str) -> Value {
     let key = entries_key(kind).unwrap_or("apps");
+    // An index says so about itself. `looksLikeIndex` accepts a document without the marker
+    // — a hand-written one still works — but an EMPTY index has no entries to recognise it
+    // by, so one we write ourselves and leave unmarked would be read as a catalogue of
+    // nothing rather than an index of nothing.
+    if kind == "index" {
+        return serde_json::json!({
+            "version": "1.0", "kind": "catalog-index", "name": "Local Index",
+            "description": "", "catalogs": []
+        });
+    }
     let mut v = serde_json::json!({
         "version": "1.0", "name": "Local Catalog", "description": "",
         "partner_catalogs": [], "community_imports": []
@@ -201,6 +217,21 @@ mod tests {
             assert!(empty_for(kind)[*key].is_array(), "{kind} has no {key} array");
         }
         assert_eq!(entries_key("nope"), None);
+    }
+
+    #[test]
+    fn an_empty_index_says_it_is_an_index() {
+        // `looksLikeIndex` accepts an unmarked document by looking at its entries — a
+        // hand-written index still works — but an EMPTY one has no entries to look at. Without
+        // the marker, an index we wrote ourselves and had not filled in yet would be read back
+        // as a catalogue of nothing rather than an index of nothing.
+        let v = empty_for("index");
+        assert_eq!(v["kind"], "catalog-index");
+        assert!(v["catalogs"].is_array());
+        // And the eight others must NOT claim to be one.
+        for (kind, _) in CATALOG_KINDS.iter().filter(|(k, _)| *k != "index") {
+            assert!(empty_for(kind)["kind"].is_null(), "{kind} claims to be an index");
+        }
     }
 
     #[test]

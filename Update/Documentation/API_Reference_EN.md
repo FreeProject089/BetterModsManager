@@ -109,7 +109,7 @@ This document is the single source of truth for everything that can be driven pr
 | `/api/catalog/new` | yes · `catalog.write` | `{ name?, description?, partner_catalogs?, community_imports?, apps? }` |
 | `/api/catalog/apps` | yes · `catalog.write` | `{ id, title, description?, category?, price?, tags?, download:{url,file_type,size?}, requirements?, md_link?, images?, official?, partner? }` |
 | `/api/catalog/import` | yes · `catalog.write` | `{ url, type?, password? }` — follows whatever is at that address without being told its kind. UI-driven |
-| `/api/catalog/entries` | yes · `catalog.write` | `{ type?, entry }` — `type` ∈ `app`·`plugin`·`theme`·`preset`·`modpack`·`repo`·`tutorial`·`list` (default `app`); the entry is written under the array name that kind’s format uses. It must carry an `id`: update and delete both match on it |
+| `/api/catalog/entries` | yes · `catalog.write` | `{ type?, entry }` — `type` ∈ `app`·`plugin`·`theme`·`preset`·`modpack`·`repo`·`tutorial`·`list`·`index` (default `app`); the entry is written under the array name that kind’s format uses. It must carry an `id`: update and delete both match on it |
 
 ### Data / Language / Mod lists
 | Path | Auth | Body |

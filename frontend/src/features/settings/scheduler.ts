@@ -6903,9 +6903,13 @@ async function paintEngineStatus(host: HTMLElement, engine: string): Promise<voi
 }
 
 /** The catalogue kinds, for the pickers. Same eight the Rust side accepts. */
+// The kinds this machine can AUTHOR — not the kinds it can follow, which is the list three
+// other places here keep and which deliberately has eight. The ninth is the INDEX: a catalogue
+// of catalogues, readable since forever and writable as of now.
 const KINDS: [string, string][] = [
     ['app', 'app'], ['plugin', 'plugin'], ['theme', 'theme'], ['preset', 'preset'],
     ['modpack', 'modpack'], ['repo', 'repo'], ['tutorial', 'tutorial'], ['list', 'list'],
+    ['index', 'index'],
 ];
 
 function renderParams(host: HTMLElement, needs: string | undefined, params: Record<string, any>): void {
