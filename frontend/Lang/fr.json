@@ -10044,5 +10044,9 @@
   "plugins.fldInstallPath": "Dossier d'installation",
   "plugins.phDefaultApps": "vide = le dossier Apps par défaut",
   "plugins.epF.genLightweight": "N'écrit que repo.json, sans copier les fichiers de mods. À associer à <code>filesBaseUrl</code> pour publier un manifeste de mods déjà hébergés ailleurs.",
-  "plugins.epF.genFilesBaseUrl": "Où vivent les fichiers quand ce n'est pas à côté de repo.json. Écrit dans le manifeste ; les clients résolvent <code>&lt;ceci&gt;/mods/&lt;id&gt;/&lt;chemin&gt;</code>."
+  "plugins.epF.genFilesBaseUrl": "Où vivent les fichiers quand ce n'est pas à côté de repo.json. Écrit dans le manifeste ; les clients résolvent <code>&lt;ceci&gt;/mods/&lt;id&gt;/&lt;chemin&gt;</code>.",
+  "sched.syncLimit": "Limite de téléchargement",
+  "sched.syncLimitPh": "Ko/s (vide = illimité)",
+  "sched.syncKeepZipT": "Garder les archives zippées",
+  "sched.syncKeepZip": "Laisse les .zip et .7z tels quels au lieu de les décompresser. Pour un dépôt dont les mods doivent rester empaquetés."
 }

@@ -7229,6 +7229,16 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
                 <summary>${t('sched.syncDanger') || 'Destructive options — off by default'}</summary>
                 <label class="sched-opt" style="margin-top:6px"><input type="checkbox" class="sched-rs-overwrite" ${params.overwriteAll ? 'checked' : ''}><div><b>${t('sched.syncOverwriteT') || 'Overwrite every file'}</b><span>${t('sched.syncOverwrite') || 'Re-downloads and replaces files that already match. Slower, and your local edits are lost.'}</span></div></label>
                 <label class="sched-opt"><input type="checkbox" class="sched-rs-delete" ${params.deleteExtra ? 'checked' : ''}><div><b>${t('sched.syncDeleteT') || 'Delete mods the repo does not have'}</b><span>${t('sched.syncDelete') || 'Removes anything in the mods folder that is not in the repo. On a schedule this runs with nobody watching — leave it off unless the folder is only ever filled by this repo.'}</span></div></label>
+                <!-- Both of these were read by the runner and written by nothing, so an
+                     unattended sync always ran uncapped and always unzipped. The cap is the
+                     option that matters MOST unattended: the whole reason to schedule a sync
+                     is that it runs while somebody is using the same line for something else. -->
+                <div class="sched-cmd-row" style="margin-top:6px">
+                    <label class="sched-cmd-label" style="margin:0">${escHtml(t('sched.syncLimit'))}</label>
+                    <input class="input sched-rs-limit" type="number" min="0" style="max-width:150px"
+                        placeholder="${escAttr(t('sched.syncLimitPh'))}" value="${escAttr(params.downloadLimit || '')}">
+                </div>
+                <label class="sched-opt"><input type="checkbox" class="sched-rs-keepzip" ${params.keepZipped ? 'checked' : ''}><div><b>${escHtml(t('sched.syncKeepZipT'))}</b><span>${escHtml(t('sched.syncKeepZip'))}</span></div></label>
             </details>
             ${credsFields(params, { password: true, key: true })}
         </div>`;
@@ -8470,6 +8480,8 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
     // binds it. This selector now matches nothing and would be a binding nobody can see.
     rsBind('.sched-rs-overwrite', 'overwriteAll', 'checked');
     rsBind('.sched-rs-delete', 'deleteExtra', 'checked');
+    rsBind('.sched-rs-limit', 'downloadLimit');
+    rsBind('.sched-rs-keepzip', 'keepZipped', 'checked');
     host.querySelectorAll('.sched-rs-browse').forEach((b) => b.addEventListener('click', async () => {
         const which = (b as HTMLElement).dataset.for!;
         // Imported here, like the other browse buttons in this file do — the dialog
