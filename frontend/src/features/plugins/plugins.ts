@@ -6486,8 +6486,8 @@ function getEndpointDefs(): EndpointDef[] {
                 // Accepted since it was written, offered by the scheduler's own action, and
                 // never shown here — so the one screen that exists to try a route could not
                 // try the option that changes what the route DOES.
-                { name: 'lightweight',   type: 'boolean', required: false, desc: 'N\'écrit que repo.json, sans copier les fichiers de mods. À associer à <code>filesBaseUrl</code> pour publier un manifeste de mods déjà hébergés ailleurs.' },
-                { name: 'filesBaseUrl',  type: 'string',  required: false, desc: 'Où vivent les fichiers quand ce n\'est pas à côté de repo.json. Écrit dans le manifeste ; les clients résolvent <code>&lt;ceci&gt;/mods/&lt;id&gt;/&lt;chemin&gt;</code>.' },
+                { name: 'lightweight',   type: 'boolean', required: false, desc: t('plugins.epF.genLightweight') },
+                { name: 'filesBaseUrl',  type: 'string',  required: false, desc: t('plugins.epF.genFilesBaseUrl') },
             ],
             responseStatuses: [
                 { code: 202, label: 'Accepted', body: '{ "ok": true, "message": "Gen started in background", "job_id": "uuid", "cancel_endpoint": "DELETE /api/repo/gen/cancel" }' },

@@ -10044,5 +10044,7 @@
   "plugins.fldCatPassphrase": "Key passphrase",
   "plugins.phKeyRef": "id or name",
   "plugins.fldInstallPath": "Install folder",
-  "plugins.phDefaultApps": "blank = the default Apps folder"
+  "plugins.phDefaultApps": "blank = the default Apps folder",
+  "plugins.epF.genLightweight": "Write only repo.json, without copying the mod files. Pair it with <code>filesBaseUrl</code> to publish a manifest for mods you already host elsewhere.",
+  "plugins.epF.genFilesBaseUrl": "Where the mod files live, when that is not next to repo.json. Written into the manifest; clients resolve <code>&lt;this&gt;/mods/&lt;id&gt;/&lt;path&gt;</code>."
 }
